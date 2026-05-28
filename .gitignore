@@ -1,0 +1,224 @@
+# =============================================================================
+# Smart Core Assistant v2 — .gitignore (monorepo)
+# Stacks: Rust (Cargo workspace) + Flutter/Dart + Python (ai_orchestrator)
+# Infra local: PostgreSQL, Redis, MinIO/S3, Evolution Go, mídia + SQLite local
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Pasta de apoio local (referência durante a construção da v2 — NÃO versionar)
+# -----------------------------------------------------------------------------
+old/
+
+# -----------------------------------------------------------------------------
+# Segredos / ambiente (NUNCA versionar tokens, chaves, credenciais)
+# -----------------------------------------------------------------------------
+.env
+.env.*
+!.env.example
+!.env.sample
+*.env
+secrets/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+credentials.json
+service-account*.json
+
+# =============================================================================
+# RUST (Cargo workspace: apps/* e crates/*)
+# =============================================================================
+target/
+**/target/
+**/*.rs.bk
+*.pdb
+# Cargo.lock: MANTIDO no repositório (workspace com binários — apps/*).
+# Não ignorar Cargo.lock.
+
+# sqlx (query metadata offline) — manter .sqlx/ versionado por padrão.
+# Descomente se optar por gerar localmente:
+# .sqlx/
+
+# flutter_rust_bridge (artefatos gerados de bridge, se gerados em build)
+# Mantemos o código gerado versionado por padrão; ajuste conforme o fluxo.
+
+# =============================================================================
+# FLUTTER / DART (clients/flutter_app)
+# =============================================================================
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/.pub-cache/
+**/.pub/
+**/build/
+**/doc/api/
+.flutter-versions
+*.lock.flutter
+
+# Flutter/Dart — gerados
+**/generated_plugin_registrant.*
+**/*.g.dart
+**/*.freezed.dart
+**/*.mocks.dart
+
+# Flutter — plataformas (manter código versionado, ignorar gerados/build)
+# Android
+**/android/.gradle/
+**/android/captures/
+**/android/local.properties
+**/android/key.properties
+**/android/app/debug
+**/android/app/profile
+**/android/app/release
+*.keystore
+*.jks
+# iOS / macOS
+**/ios/Flutter/.last_build_id
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/flutter_export_environment.sh
+**/macos/Pods/
+**/macos/Flutter/ephemeral/
+# Windows / Linux (desktop)
+**/windows/flutter/ephemeral/
+**/linux/flutter/ephemeral/
+# Web
+**/web/.dart_tool/
+
+# Symbols / coverage
+**/coverage/
+*.symbols
+
+# =============================================================================
+# PYTHON (services/ai_orchestrator)
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Ambientes virtuais
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# Gerenciadores / cache
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.dmypy.json
+.ipynb_checkpoints/
+# Poetry / uv / pdm (manter lockfile versionado)
+# poetry.lock e uv.lock são versionados.
+
+# gRPC / protobuf gerados em Python (se gerados em build)
+*_pb2.py
+*_pb2_grpc.py
+*_pb2.pyi
+
+# =============================================================================
+# DADOS LOCAIS / RUNTIME (não versionar)
+# =============================================================================
+# Cache de mídia local (motor FFI Windows) e storage transitório de dev
+media/
+media_cache/
+storage/
+uploads/
+tmp/
+temp/
+
+# SQLite local (índice do local_engine)
+*.sqlite
+*.sqlite3
+*.db
+*.db-shm
+*.db-wal
+
+# Volumes/dados de serviços de infra em desenvolvimento
+data/
+pgdata/
+postgres-data/
+redis-data/
+minio-data/
+evolution-data/
+.docker-data/
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# =============================================================================
+# DOCKER / INFRA
+# =============================================================================
+# Override local de compose (manter docker-compose.yml versionado)
+docker-compose.override.yml
+docker-compose.*.local.yml
+.env.docker
+
+# =============================================================================
+# EDITORES / IDEs
+# =============================================================================
+# VS Code (mantém configs compartilhadas; ignora locais)
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+# JetBrains (IntelliJ / RustRover / PyCharm / Android Studio)
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# Outros editores
+*.swp
+*.swo
+*~
+.history/
+*.bak
+*.orig
+
+# =============================================================================
+# SISTEMA OPERACIONAL
+# =============================================================================
+# Windows
+Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+$RECYCLE.BIN/
+*.lnk
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+# Linux
+.directory
+.Trash-*
+.nfs*
