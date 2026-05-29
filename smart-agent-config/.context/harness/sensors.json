@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "generatedAt": "2026-05-29T14:36:24.293Z",
+  "source": "manual",
+  "stack": {
+    "primaryLanguage": "rust",
+    "languages": ["rust", "dart", "python"],
+    "frameworks": ["tokio", "axum", "tonic", "sqlx", "flutter", "langchain"],
+    "buildTools": ["cargo", "flutter", "uv"],
+    "testFrameworks": ["cargo-test", "pytest", "flutter-test"],
+    "packageManager": "cargo"
+  },
+  "sensors": [
+    {
+      "id": "rust-build",
+      "name": "Rust Build",
+      "command": "cargo build",
+      "description": "Compila o workspace Rust completo",
+      "type": "build"
+    },
+    {
+      "id": "rust-test",
+      "name": "Rust Tests",
+      "command": "cargo test",
+      "description": "Executa todos os testes Rust",
+      "type": "test"
+    },
+    {
+      "id": "rust-lint",
+      "name": "Rust Lint",
+      "command": "cargo clippy -- -D warnings",
+      "description": "Lint do workspace Rust",
+      "type": "lint"
+    },
+    {
+      "id": "rust-fmt",
+      "name": "Rust Format Check",
+      "command": "cargo fmt --check",
+      "description": "Verifica formatação do código Rust",
+      "type": "format"
+    },
+    {
+      "id": "python-test",
+      "name": "Python Tests",
+      "command": "uv run pytest services/ai_orchestrator/tests/",
+      "description": "Executa testes do ai_orchestrator",
+      "type": "test"
+    },
+    {
+      "id": "flutter-test",
+      "name": "Flutter Tests",
+      "command": "flutter test",
+      "description": "Executa testes do app Flutter",
+      "type": "test",
+      "workdir": "clients/flutter_app"
+    },
+    {
+      "id": "infra-up",
+      "name": "Start Local Infra",
+      "command": "docker compose -f docker/compose/data.yml up -d",
+      "description": "Sobe PostgreSQL, Redis e MinIO localmente",
+      "type": "infra"
+    }
+  ]
+}
