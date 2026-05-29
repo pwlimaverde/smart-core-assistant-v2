@@ -1,2 +1,17 @@
 # Claude Code — configuração local de máquina (não versionar)
 .claude/settings.local.json
+
+# Dotcontext — artefatos de runtime (não versionar)
+# Conforme classificação do bootstrapStatus: sessions, traces, artifacts,
+# workflows, replays, datasets, archives e cache são runtime-only.
+.context/harness/sessions/
+.context/harness/traces/
+.context/harness/artifacts/
+.context/harness/contracts/
+.context/harness/workflows/
+.context/harness/replays/
+.context/harness/datasets/
+.context/cache/
+.context/workflow/
+.context/**/archive/
+.context/plans/
