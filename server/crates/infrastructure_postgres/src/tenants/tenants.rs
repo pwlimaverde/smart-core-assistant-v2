@@ -1,0 +1,323 @@
+use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+use sqlx::{PgPool, Postgres, Transaction};
+use uuid::Uuid;
+
+use crate::{errors::DbError, security::RequestContext};
+
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+pub struct Tenant {
+    pub id: Uuid,
+    pub name: String,
+    pub slug: String,
+    pub api_key: String,
+    pub owner_id: i32,
+    pub email: String,
+    pub phone: Option<String>,
+    pub active: bool,
+    pub setup_completed: bool,
+    pub onboarding_step: i32,
+    pub access_code: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+pub struct TenantUser {
+    pub id: i32,
+    pub user_id: i32,
+    pub tenant_id: Uuid,
+    pub role: String,
+    pub module_permissions: serde_json::Value,
+    pub flow_permissions: serde_json::Value,
+    pub is_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub created_by_id: Option<i32>,
+}
+
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+pub struct TenantInvite {
+    pub id: Uuid,
+    pub tenant_id: Uuid,
+    pub email: String,
+    pub name: String,
+    pub role: String,
+    pub module_permissions: serde_json::Value,
+    pub flow_permissions: serde_json::Value,
+    pub token: String,
+    pub expires_at: DateTime<Utc>,
+    pub used: bool,
+    pub created_at: DateTime<Utc>,
+    pub created_by_id: Option<i32>,
+}
+
+#[async_trait]
+pub trait TenantRepository: Send + Sync {
+    async fn buscar_por_id(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        tenant_id: Uuid,
+    ) -> Result<Option<Tenant>, DbError>;
+
+    async fn buscar_por_slug(
+        &self,
+        pool: &PgPool,
+        slug: &str,
+    ) -> Result<Option<Tenant>, DbError>;
+
+    async fn criar(
+        &self,
+        pool: &PgPool,
+        name: &str,
+        slug: &str,
+        api_key: &str,
+        owner_id: i32,
+    ) -> Result<Tenant, DbError>;
+
+    async fn atualizar_setup(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        setup_completed: bool,
+        onboarding_step: i32,
+    ) -> Result<(), DbError>;
+}
+
+#[async_trait]
+pub trait TenantUserRepository: Send + Sync {
+    async fn buscar_por_user_id(
+        &self,
+        pool: &PgPool,
+        user_id: i32,
+    ) -> Result<Option<TenantUser>, DbError>;
+
+    async fn criar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        user_id: i32,
+        role: &str,
+    ) -> Result<TenantUser, DbError>;
+}
+
+#[async_trait]
+pub trait TenantInviteRepository: Send + Sync {
+    async fn criar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        email: &str,
+        name: &str,
+        role: &str,
+        token: &str,
+        expires_at: DateTime<Utc>,
+    ) -> Result<TenantInvite, DbError>;
+
+    async fn buscar_por_token(
+        &self,
+        pool: &PgPool,
+        token: &str,
+    ) -> Result<Option<TenantInvite>, DbError>;
+
+    async fn marcar_usado(
+        &self,
+        pool: &PgPool,
+        invite_id: Uuid,
+    ) -> Result<(), DbError>;
+}
+
+// ---- Implementações concretas ----
+
+pub struct PostgresTenantRepository;
+pub struct PostgresTenantUserRepository;
+pub struct PostgresTenantInviteRepository;
+
+#[async_trait]
+impl TenantRepository for PostgresTenantRepository {
+    async fn buscar_por_id(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        tenant_id: Uuid,
+    ) -> Result<Option<Tenant>, DbError> {
+        let row = sqlx::query_as!(
+            Tenant,
+            r#"SELECT id, name, slug, api_key, owner_id, email, phone,
+                      active, setup_completed, onboarding_step, access_code,
+                      created_at, updated_at
+               FROM tenants_tenant
+               WHERE id = $1"#,
+            tenant_id
+        )
+        .fetch_optional(&mut **tx)
+        .await?;
+        Ok(row)
+    }
+
+    async fn buscar_por_slug(
+        &self,
+        pool: &PgPool,
+        slug: &str,
+    ) -> Result<Option<Tenant>, DbError> {
+        let row = sqlx::query_as!(
+            Tenant,
+            r#"SELECT id, name, slug, api_key, owner_id, email, phone,
+                      active, setup_completed, onboarding_step, access_code,
+                      created_at, updated_at
+               FROM tenants_tenant WHERE slug = $1"#,
+            slug
+        )
+        .fetch_optional(pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn criar(
+        &self,
+        pool: &PgPool,
+        name: &str,
+        slug: &str,
+        api_key: &str,
+        owner_id: i32,
+    ) -> Result<Tenant, DbError> {
+        let row = sqlx::query_as!(
+            Tenant,
+            r#"INSERT INTO tenants_tenant (name, slug, api_key, owner_id)
+               VALUES ($1, $2, $3, $4)
+               RETURNING id, name, slug, api_key, owner_id, email, phone,
+                         active, setup_completed, onboarding_step, access_code,
+                         created_at, updated_at"#,
+            name, slug, api_key, owner_id
+        )
+        .fetch_one(pool)
+        .await
+        .map_err(DbError::from_sqlx_unique)?;
+        Ok(row)
+    }
+
+    async fn atualizar_setup(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        setup_completed: bool,
+        onboarding_step: i32,
+    ) -> Result<(), DbError> {
+        if !ctx.has_permission("configuracoes:write") && !ctx.has_permission("tenant:admin") {
+            return Err(DbError::PermissionDenied);
+        }
+        sqlx::query!(
+            r#"UPDATE tenants_tenant
+               SET setup_completed = $1, onboarding_step = $2, updated_at = NOW()
+               WHERE id = $3"#,
+            setup_completed, onboarding_step, ctx.tenant_id
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl TenantUserRepository for PostgresTenantUserRepository {
+    async fn buscar_por_user_id(
+        &self,
+        pool: &PgPool,
+        user_id: i32,
+    ) -> Result<Option<TenantUser>, DbError> {
+        let row = sqlx::query_as!(
+            TenantUser,
+            r#"SELECT id, user_id, tenant_id, role, module_permissions,
+                      flow_permissions, is_active, created_at, created_by_id
+               FROM tenants_tenantuser WHERE user_id = $1"#,
+            user_id
+        )
+        .fetch_optional(pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn criar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        user_id: i32,
+        role: &str,
+    ) -> Result<TenantUser, DbError> {
+        if !ctx.has_permission("tenant:admin") {
+            return Err(DbError::PermissionDenied);
+        }
+        let row = sqlx::query_as!(
+            TenantUser,
+            r#"INSERT INTO tenants_tenantuser (user_id, tenant_id, role, created_by_id)
+               VALUES ($1, $2, $3, $4)
+               RETURNING id, user_id, tenant_id, role, module_permissions,
+                         flow_permissions, is_active, created_at, created_by_id"#,
+            user_id, ctx.tenant_id, role, ctx.user_id
+        )
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(DbError::from_sqlx_unique)?;
+        Ok(row)
+    }
+}
+
+#[async_trait]
+impl TenantInviteRepository for PostgresTenantInviteRepository {
+    async fn criar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        email: &str,
+        name: &str,
+        role: &str,
+        token: &str,
+        expires_at: DateTime<Utc>,
+    ) -> Result<TenantInvite, DbError> {
+        if !ctx.has_permission("tenant:admin") {
+            return Err(DbError::PermissionDenied);
+        }
+        let row = sqlx::query_as!(
+            TenantInvite,
+            r#"INSERT INTO tenants_tenantinvite
+                   (tenant_id, email, name, role, token, expires_at, created_by_id)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)
+               RETURNING id, tenant_id, email, name, role, module_permissions,
+                         flow_permissions, token, expires_at, used, created_at, created_by_id"#,
+            ctx.tenant_id, email, name, role, token, expires_at, ctx.user_id
+        )
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(DbError::from_sqlx_unique)?;
+        Ok(row)
+    }
+
+    async fn buscar_por_token(
+        &self,
+        pool: &PgPool,
+        token: &str,
+    ) -> Result<Option<TenantInvite>, DbError> {
+        let row = sqlx::query_as!(
+            TenantInvite,
+            r#"SELECT id, tenant_id, email, name, role, module_permissions,
+                      flow_permissions, token, expires_at, used, created_at, created_by_id
+               FROM tenants_tenantinvite WHERE token = $1"#,
+            token
+        )
+        .fetch_optional(pool)
+        .await?;
+        Ok(row)
+    }
+
+    async fn marcar_usado(
+        &self,
+        pool: &PgPool,
+        invite_id: Uuid,
+    ) -> Result<(), DbError> {
+        sqlx::query!(
+            "UPDATE tenants_tenantinvite SET used = true WHERE id = $1",
+            invite_id
+        )
+        .execute(pool)
+        .await?;
+        Ok(())
+    }
+}

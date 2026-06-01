@@ -1,0 +1,204 @@
+use async_trait::async_trait;
+use chrono::{DateTime, Utc};
+use sqlx::{Postgres, Transaction};
+use uuid::Uuid;
+
+use crate::{errors::DbError, security::RequestContext};
+
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+pub struct Atendente {
+    pub id: i32,
+    pub tenant_id: Uuid,
+    pub nome: String,
+    pub slug: String,
+    pub telefone: Option<String>,
+    pub cargo: String,
+    pub email: String,
+    pub departamento_id: Option<i32>,
+    pub fluxo_id: i32,
+    pub usuario_id: Option<i32>,
+    pub usuario_sistema: Option<String>,
+    pub ativo: bool,
+    pub disponivel: bool,
+    pub max_atendimentos_simultaneos: i32,
+    pub data_ultima_atribuicao: Option<DateTime<Utc>>,
+    pub horario_trabalho: serde_json::Value,
+    pub especialidades: serde_json::Value,
+    pub metadados: serde_json::Value,
+    pub data_cadastro: DateTime<Utc>,
+    pub ultima_atividade: DateTime<Utc>,
+}
+
+#[async_trait]
+pub trait AtendenteRepository: Send + Sync {
+    async fn criar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        nome: &str,
+        email: &str,
+        cargo: &str,
+        fluxo_id: i32,
+        departamento_id: Option<i32>,
+    ) -> Result<Atendente, DbError>;
+
+    async fn buscar_por_id(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<Option<Atendente>, DbError>;
+
+    /// Seleciona o próximo atendente disponível pelo algoritmo Round-Robin (menor carga, mais antigo na fila).
+    async fn buscar_disponivel_round_robin(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        departamento_id: Option<i32>,
+    ) -> Result<Option<Atendente>, DbError>;
+
+    async fn atualizar_ultima_atribuicao(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendente_id: i32,
+    ) -> Result<(), DbError>;
+
+    async fn atualizar_disponibilidade(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendente_id: i32,
+        disponivel: bool,
+    ) -> Result<(), DbError>;
+}
+
+pub struct PostgresAtendenteRepository;
+
+#[async_trait]
+impl AtendenteRepository for PostgresAtendenteRepository {
+    async fn criar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        nome: &str,
+        email: &str,
+        cargo: &str,
+        fluxo_id: i32,
+        departamento_id: Option<i32>,
+    ) -> Result<Atendente, DbError> {
+        if !ctx.has_permission("operacional:admin") && !ctx.has_permission("tenant:admin") {
+            return Err(DbError::PermissionDenied);
+        }
+        let row = sqlx::query_as!(
+            Atendente,
+            r#"INSERT INTO oraculo_atendente
+                   (tenant_id, nome, email, cargo, fluxo_id, departamento_id)
+               VALUES ($1, $2, $3, $4, $5, $6)
+               RETURNING id, tenant_id, nome, slug, telefone, cargo, email,
+                         departamento_id, fluxo_id, usuario_id, usuario_sistema,
+                         ativo, disponivel, max_atendimentos_simultaneos,
+                         data_ultima_atribuicao, horario_trabalho, especialidades,
+                         metadados, data_cadastro, ultima_atividade"#,
+            ctx.tenant_id, nome, email, cargo, fluxo_id, departamento_id
+        )
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(DbError::from_sqlx_unique)?;
+        Ok(row)
+    }
+
+    async fn buscar_por_id(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<Option<Atendente>, DbError> {
+        let row = sqlx::query_as!(
+            Atendente,
+            r#"SELECT id, tenant_id, nome, slug, telefone, cargo, email,
+                      departamento_id, fluxo_id, usuario_id, usuario_sistema,
+                      ativo, disponivel, max_atendimentos_simultaneos,
+                      data_ultima_atribuicao, horario_trabalho, especialidades,
+                      metadados, data_cadastro, ultima_atividade
+               FROM oraculo_atendente
+               WHERE tenant_id = $1 AND id = $2"#,
+            ctx.tenant_id, id
+        )
+        .fetch_optional(&mut **tx)
+        .await?;
+        Ok(row)
+    }
+
+    async fn buscar_disponivel_round_robin(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        departamento_id: Option<i32>,
+    ) -> Result<Option<Atendente>, DbError> {
+        // Seleciona o atendente com menor carga e mais antigo na fila de atribuição.
+        // Subquery conta atendimentos ativos para respeitar o limite configurado.
+        let row = sqlx::query_as!(
+            Atendente,
+            r#"SELECT a.id, a.tenant_id, a.nome, a.slug, a.telefone, a.cargo, a.email,
+                      a.departamento_id, a.fluxo_id, a.usuario_id, a.usuario_sistema,
+                      a.ativo, a.disponivel, a.max_atendimentos_simultaneos,
+                      a.data_ultima_atribuicao, a.horario_trabalho, a.especialidades,
+                      a.metadados, a.data_cadastro, a.ultima_atividade
+               FROM oraculo_atendente a
+               WHERE a.tenant_id = $1
+                 AND a.ativo = true
+                 AND a.disponivel = true
+                 AND ($2::int IS NULL OR a.departamento_id = $2)
+                 AND (
+                     SELECT COUNT(*)::int
+                     FROM oraculo_atendimento at
+                     WHERE at.atendente_humano_id = a.id
+                       AND at.status IN ('fila', 'em_atendimento', 'pendencia')
+                 ) < a.max_atendimentos_simultaneos
+               ORDER BY a.data_ultima_atribuicao ASC NULLS FIRST
+               LIMIT 1"#,
+            ctx.tenant_id, departamento_id
+        )
+        .fetch_optional(&mut **tx)
+        .await?;
+        Ok(row)
+    }
+
+    async fn atualizar_ultima_atribuicao(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendente_id: i32,
+    ) -> Result<(), DbError> {
+        sqlx::query!(
+            r#"UPDATE oraculo_atendente
+               SET data_ultima_atribuicao = NOW(), ultima_atividade = NOW()
+               WHERE tenant_id = $1 AND id = $2"#,
+            ctx.tenant_id, atendente_id
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
+    async fn atualizar_disponibilidade(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendente_id: i32,
+        disponivel: bool,
+    ) -> Result<(), DbError> {
+        if !ctx.has_permission("operacional:admin") && !ctx.has_permission("tenant:admin") {
+            return Err(DbError::PermissionDenied);
+        }
+        sqlx::query!(
+            r#"UPDATE oraculo_atendente SET disponivel = $1, ultima_atividade = NOW()
+               WHERE tenant_id = $2 AND id = $3"#,
+            disponivel, ctx.tenant_id, atendente_id
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+}
