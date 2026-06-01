@@ -1,4 +1,4 @@
-# Padrão Arquitetural de Persistência (Repository Pattern com Crate `db_access`)
+# Padrão Arquitetural de Persistência (Repository Pattern com Crate `infrastructure_postgres`)
 
 Este documento estabelece as diretrizes de design de software para a camada de persistência de dados do **Smart Core Assistant v2** em **Rust** sob uma arquitetura de **banco de dados único com isolamento lógico via Row-Level Security (RLS)**.
 
@@ -6,22 +6,28 @@ Este documento estabelece as diretrizes de design de software para a camada de p
 
 ## 1. Organização de Crates e Isolamento Lógico
 
-A camada de persistência física é unificada dentro do Cargo Workspace na crate **`db_access`**. Esta biblioteca encapsula todos os acessos SQL, definições de modelos, migrações e o gerenciamento do cache de configurações, servindo como uma dependência direta para o aplicativo executável principal (`web_api` ou workers).
+A camada de persistência física é unificada dentro do Cargo Workspace na crate **`infrastructure_postgres`** (`server/crates/infrastructure_postgres/`). Esta biblioteca encapsula todos os acessos SQL, definições de modelos, migrações e o gerenciamento do cache de configurações, servindo como dependência de infraestrutura consumida pelos binários (`apps/`) e pela crate de aplicação (`crates/application/`).
 
 ### O Fluxo Unidirecional de Dependência:
 
 ```
-   ┌────────────────────────────────────────────────┐
-   │             Core App (web_api / workers)       │
-   │   Consome modelos, traits e funções de banco.  │
-   └───────────────────────┬────────────────────────┘
-                           │ Depende de
-                           ▼
-   ┌────────────────────────────────────────────────┐
-   │             Crate `db_access` (Biblioteca)     │
-   │  Define modelos de dados, traits, migrations,  │
-   │  TenantConfigCache e transações RLS.           │
-   └────────────────────────────────────────────────┘
+   ┌──────────────────────────────────────────────────────────────────┐
+   │         Binários (control_plane / runtime_api / worker)          │
+   │   Consome modelos, traits e funções de banco via crate/application│
+   └─────────────────────────────┬────────────────────────────────────┘
+                                 │ Depende de
+                                 ▼
+   ┌──────────────────────────────────────────────────────────────────┐
+   │                   Crate `application`                            │
+   │   Orquestra casos de uso; consome repositórios de infra.        │
+   └─────────────────────────────┬────────────────────────────────────┘
+                                 │ Depende de
+                                 ▼
+   ┌──────────────────────────────────────────────────────────────────┐
+   │         Crate `infrastructure_postgres` (Biblioteca)             │
+   │  Define modelos de dados, traits de repositório, migrations,    │
+   │  TenantConfigCache (DashMap) e transações RLS via SQLx.         │
+   └──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -37,7 +43,7 @@ Para garantir que toda query do SQLx seja executada sob o escopo correto, **a ca
 A struct `RequestContext` trafega informações de escopo do usuário e do inquilino requisitante:
 
 ```rust
-// Localização: db_access/src/security.rs
+// Localização: server/crates/infrastructure_postgres/src/security.rs
 use uuid::Uuid;
 
 #[derive(Debug, Clone)]
@@ -45,11 +51,22 @@ pub struct RequestContext {
     pub tenant_id: Uuid,
     pub user_id: i32,
     pub user_scopes: Vec<String>,
+    /// IDs de FluxoAtendimento liberados para o usuário (de TenantUser.flow_permissions).
+    /// Carregado pelo middleware de JWT para evitar query extra por request.
+    pub flow_permissions: Vec<i32>,
 }
 
 impl RequestContext {
     pub fn has_permission(&self, permission: &str) -> bool {
         self.user_scopes.iter().any(|p| p == permission)
+    }
+
+    pub fn has_flow_permission(&self, flow_id: i32) -> bool {
+        // Admins com escopo total têm acesso a todos os fluxos
+        if self.has_permission("kanban:admin") {
+            return true;
+        }
+        self.flow_permissions.contains(&flow_id)
     }
 }
 ```
@@ -58,12 +75,12 @@ impl RequestContext {
 
 ## 3. Estrutura de Repositório com Transação RLS
 
-Diferente de consultas em banco aberto, os repositórios concretos do `db_access` recebem uma referência mutável da transação SQLx (`&mut Transaction<'_, Postgres>`) que já teve seu contexto de tenant inicializado.
+Diferente de consultas em banco aberto, os repositórios concretos da `infrastructure_postgres` recebem uma referência mutável da transação SQLx (`&mut Transaction<'_, Postgres>`) que já teve seu contexto de tenant inicializado.
 
 ### 3.1 Definição da Trait de Repositório
 
 ```rust
-// Localização: db_access/src/tenant/clientes.rs
+// Localização: server/crates/infrastructure_postgres/src/clientes/contatos.rs
 use async_trait::async_trait;
 use sqlx::{Postgres, Transaction};
 use chrono::{DateTime, Utc};
@@ -104,7 +121,7 @@ pub trait ContatoRepository: Send + Sync {
 Como as queries rodam na transação em que configuramos `SET LOCAL app.current_tenant`, não é estritamente obrigatório adicionar a cláusula `WHERE tenant_id = $1` em todas as leituras comuns (o Postgres filtra nativamente). No entanto, **como boa prática de performance e indexação do planejador do Postgres, incluímos o tenant_id explicitamente**:
 
 ```rust
-// Localização: db_access/src/tenant/clientes.rs
+// Localização: server/crates/infrastructure_postgres/src/clientes/contatos.rs
 pub struct PostgresContatoRepository;
 
 #[async_trait]
@@ -170,13 +187,13 @@ impl ContatoRepository for PostgresContatoRepository {
 Os handlers de rotas do aplicativo inicializam a transação de RLS através de uma função helper e injetam a transação no repositório de dados:
 
 ```rust
-// Localização: web_api/src/handlers/contato.rs
+// Localização: server/apps/runtime_api/src/handlers/contato.rs
 use std::sync::Arc;
 use axum::{extract::State, Extension, Json, response::IntoResponse, http::StatusCode};
 use sqlx::PgPool;
-use db_access::security::RequestContext;
-use db_access::tenant::clientes::{Contato, ContatoRepository};
-use db_access::connection::run_in_tenant_transaction; // Helper de transação RLS
+use infrastructure_postgres::security::RequestContext;
+use infrastructure_postgres::clientes::contatos::{Contato, ContatoRepository};
+use infrastructure_postgres::connection::run_in_tenant_transaction;
 
 pub async fn criar_contato_handler(
     State(pool): State<PgPool>,                            // Pool global unificado

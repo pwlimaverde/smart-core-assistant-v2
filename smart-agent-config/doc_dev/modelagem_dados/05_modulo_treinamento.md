@@ -68,12 +68,12 @@ Chunks/blocos de texto recortados a partir do conteúdo bruto do `Treinamento`. 
     *   `embedding` (VECTOR(1536), Opcional/Nulo): Vetor de 1536 posições gerado pela API de embeddings (OpenAI ou similar).
     *   `ordem` (INTEGER, Padrão: `1`): Sequência de ordenação do chunk no documento original.
     *   `data_criacao` (TIMESTAMPTZ, Não Nulo): Data de geração.
-*   **Métodos e Lógica de Negócio (Camada `db_access`):**
-    *   `buscar_documentos_similares(tenant_id, query_vec, top_k, distance_threshold) [Classmethod]`:
-        1.  Realiza cálculo de similaridade cosseno utilizando `CosineDistance("embedding", query_vec)` filtrando obrigatoriamente por `tenant_id`.
-        2.  Filtra apenas documentos cujo treinamento pai possua `treinamento_finalizado = True`.
+*   **Métodos e Lógica de Negócio (Crate `infrastructure_postgres` — `treinamento/documentos.rs`):**
+    *   `buscar_documentos_similares(tx, tenant_id, query_vec, top_k, distance_threshold) -> Result<Vec<(Documento, f64)>>`:
+        1.  Realiza cálculo de similaridade cosseno usando o operador `<=>` do pgvector, filtrando obrigatoriamente por `tenant_id`.
+        2.  Filtra apenas documentos cujo treinamento pai possua `treinamento_finalizado = true`.
         3.  Filtra por distância menor ou igual a `distance_threshold`.
-        4.  Retorna o contexto formatado em blocos textuais e lista de IDs de auditoria.
+        4.  Retorna a lista de documentos com suas distâncias para composição do contexto RAG.
 *   **Índices:**
     *   `oraculo_documento_tenant_trein_ordem` (tenant, treinamento, ordem)
 *   **Ordenação:** Ordenado por `treinamento` e pelo campo `ordem`.
@@ -121,15 +121,15 @@ Cadastro de intenções (Intents). Mapeia frases e descrições semânticas para
     *   `updated_at` (TIMESTAMPTZ, Não Nulo): Data da última modificação.
 *   **Restrições e Unicidade:**
     *   Unicidade composta: A combinação de `tenant_id`, `tag` e `grupo` deve ser única.
-*   **Métodos e Lógica de Negócio (Camada `db_access`):**
-    *   `to_embedding_text() -> str`: Gera o texto padronizado para enviar à API de embeddings. Concatena de forma estruturada:
+*   **Métodos e Lógica de Negócio (Crate `infrastructure_postgres` — `treinamento/query_compose.rs`):**
+    *   `to_embedding_text(tag, descricao, exemplo) -> String`: Gera o texto padronizado para enviar à API de embeddings. Concatena de forma estruturada:
         *   `"Categoria: <tag>"`
         *   `<descricao>`
         *   `"Exemplo: <exemplo>"`
-    *   `buscar_comportamento_similar(tenant_id, query_vec, top_k, distance_threshold) [Classmethod]`:
+    *   `buscar_comportamento_similar(tx, tenant_id, query_vec, top_k, distance_threshold) -> Result<Option<String>>`:
         1.  Realiza busca de similaridade cosseno no banco de dados filtrando por `tenant_id`.
-        2.  Aplica o filtro de distância diretamente no banco (`distance <= distance_threshold`) para otimização de performance.
-        3.  Retorna o prompt formatado com as diretrizes da intenção mais próxima.
+        2.  Aplica o filtro de distância diretamente no banco (`embedding <=> $1 <= distance_threshold`) para otimização de performance.
+        3.  Retorna o prompt de comportamento (`comportamento`) da intenção mais próxima se encontrada.
 *   **Índices:**
     *   `treinamento_querycompose_tenant_tag` (tenant, tag)
     *   `treinamento_querycompose_tenant_date` (tenant, created_at)

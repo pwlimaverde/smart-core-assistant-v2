@@ -73,78 +73,105 @@ O backend em Rust (Control Plane / Runtime API / Worker) é o único agente resp
 
 
 ### 3.2 O Cache em Memória no Módulo Python (`ia_engine`)
-O módulo Python (`ia_engine`) mantém na memória RAM de seu próprio processo um cache de dicionário thread-safe contendo as configurações de cada tenant.
+
+O módulo Python (`ia_engine`) mantém na memória RAM de seu próprio processo um cache contendo as configurações de cada tenant. O `ia_engine` **não se conecta ao PostgreSQL**; lê exclusivamente do Redis (publicado pelo backend Rust).
+
+**Thread-safety:** O servidor gRPC pode ser executado com múltiplos workers (multi-process via `grpc.server` com `ThreadPoolExecutor`). O cache usa `threading.Lock()` para garantir atomicidade nas operações de leitura/escrita/invalidação.
 
 ```python
 # ia_engine/src/config/cache.py
 import json
 import logging
-from typing import Dict, Optional
+import threading
+from typing import Dict, Optional, Any
 import redis
 from pydantic import BaseModel
 
 logger = logging.getLogger(__name__)
 
-class LlmProviderConfig(BaseModel):
-    provider: str
-    model: str
-    temperature: float
-    api_key: str
 
 class RuntimeConfig(BaseModel):
+    """Espelha o RuntimeConfig Rust publicado no Redis pelo backend.
+    Todos os campos chegam já resolvidos (fallbacks aplicados no Rust).
+    """
     tenant_id: str
-    openai_api_key: str
-    groq_api_key: str
-    google_api_key: str
-    llm_provider: LlmProviderConfig
+
+    # Prompts de IA
     dados_empresa: str
     persona_bot: str
+    bot_agent_name: str
+
+    # Mensagens automáticas
     msg_fallback: str
     msg_sem_info: str
     msg_transferencia: str
-    similarity_threshold: float
-    vector_distance_threshold: float
+
+    # LLM
+    llm_class: str           # ex: "ChatGroq", "ChatOpenAI", "ChatOllama"
+    model: str               # ex: "llama-3.3-70b-versatile", "gpt-4o-mini"
+    llm_temperature: float
+
+    # Transcrição de áudio
+    transcription_provider: str   # ex: "groq", "openai"
+    transcription_model: str      # ex: "whisper-large-v3-turbo", "whisper-1"
+
+    # Visão computacional
+    vision_provider: str    # ex: "google", "openai"
+    vision_model: str       # ex: "gemini-2.5-flash", "gpt-4o"
+
+    # Embeddings e RAG
+    embeddings_class: str   # ex: "OpenAIEmbeddings", "HuggingFaceEmbeddings"
+    embeddings_model: str   # ex: "text-embedding-3-small"
     chunk_size: int
     chunk_overlap: int
+
+    # Thresholds de similaridade
+    similarity_threshold: float
+    vector_distance_threshold: float
+
+    # Chaves de API (descriptografadas pelo Rust antes de publicar no Redis)
+    openai_api_key: str
+    groq_api_key: str
+    google_api_key: str
+
 
 class TenantConfigCache:
     def __init__(self, redis_client: redis.Redis):
         self.redis = redis_client
-        # Cache local quente em memória RAM
+        self._lock = threading.Lock()
         self._local_cache: Dict[str, RuntimeConfig] = {}
-        # Cache de instâncias LangChain prontas por tenant
-        self._llm_instances: Dict[str, any] = {}
+        # Cache de instâncias LangChain prontas por tenant (evita reinstanciar a cada request)
+        self._llm_instances: Dict[str, Any] = {}
 
     def get_config(self, tenant_id: str) -> Optional[RuntimeConfig]:
-        # 1. Tenta leitura direta do cache local
-        if tenant_id in self._local_cache:
-            return self._local_cache[tenant_id]
+        with self._lock:
+            if tenant_id in self._local_cache:
+                return self._local_cache[tenant_id]
 
-        # 2. Cache Miss: Busca do Redis
+        # Cache miss: busca do Redis (fora do lock para não bloquear durante I/O)
         redis_key = f"tenant:config:{tenant_id}"
         config_data = self.redis.get(redis_key)
-        
+
         if not config_data:
-            logger.warning(f"Configuração não encontrada no Redis para o tenant {tenant_id}")
+            logger.warning("Configuração não encontrada no Redis para o tenant %s", tenant_id)
             return None
 
-        # 3. Parseia e popula cache local
         try:
             config_dict = json.loads(config_data)
             config = RuntimeConfig(**config_dict)
-            self._local_cache[tenant_id] = config
+            with self._lock:
+                self._local_cache[tenant_id] = config
             return config
         except Exception as e:
-            logger.error(f"Erro ao deserializar configuração do tenant {tenant_id}: {e}")
+            logger.error("Erro ao deserializar configuração do tenant %s: %s", tenant_id, e)
             return None
 
-    def invalidate(self, tenant_id: str):
+    def invalidate(self, tenant_id: str) -> None:
         """Remove as configurações da memória RAM para forçar reload no próximo request."""
-        if tenant_id in self._local_cache:
-            del self._local_cache[tenant_id]
-        if tenant_id in self._llm_instances:
-            del self._llm_instances[tenant_id]
-        logger.info(f"Cache em memória invalidado para o tenant {tenant_id}")
+        with self._lock:
+            self._local_cache.pop(tenant_id, None)
+            self._llm_instances.pop(tenant_id, None)
+        logger.info("Cache em memória invalidado para o tenant %s", tenant_id)
 ```
 
 ### 3.3 Mecanismo de Invalidação de Cache via Pub/Sub

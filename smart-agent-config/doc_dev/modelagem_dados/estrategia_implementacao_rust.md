@@ -1,6 +1,6 @@
-# Estratégia de Implementação de Banco de Dados em Rust (Crate `db_access`)
+# Estratégia de Implementação de Banco de Dados em Rust (Crate `infrastructure_postgres`)
 
-Este documento descreve a arquitetura técnica revisada e detalhada para a implementação da persistência de dados em um **banco de dados único com Row-Level Security (RLS)**, mapeamento de modelos, gerenciamento de cache de configurações em memória e busca vetorial (IA) em **Rust**.
+Este documento descreve a arquitetura técnica revisada e detalhada para a implementação da persistência de dados na crate `server/crates/infrastructure_postgres/`, cobrindo banco de dados único com Row-Level Security (RLS), mapeamento de modelos, gerenciamento de cache de configurações em memória e busca vetorial (IA) em **Rust**.
 
 ---
 
@@ -10,12 +10,13 @@ A stack do backend Rust foi selecionada para priorizar a validação estática d
 
 | Crate Rust | Versão | Função Principal | Justificativa Técnica |
 | :--- | :--- | :--- | :--- |
-| **`sqlx`** | `0.7.3` | Driver PostgreSQL Assíncrono | Validação estática de queries SQL em tempo de compilação. Sem overhead de ORM tradicional. |
-| **`pgvector`** | `0.3.0` | Integração Vetorial | Suporte nativo ao tipo `vector` no PostgreSQL e compatibilidade com macros do SQLx. |
-| **`dashmap`** | `5.5.3` | Cache Concorrente em Memória | Usado para manter as configurações ativas de IA de cada tenant (`TenantConfig`) em memória de forma thread-safe, evitando queries repetidas. |
-| **`rust_decimal`**| `1.32.0`| Precisão Monetária | Manipulação de valores financeiros (`NUMERIC` no PostgreSQL) nas tabelas de faturamento. |
-| **`chrono`** | `0.4.31`| Controle Temporal | Mapeamento nativo de campos `TIMESTAMPTZ` com fuso horário UTC consistente. |
-| **`serde` / `json`**| `1.0.108`| Serialização | Processamento de campos estruturados JSONB (`metadata` do RAG e payloads de integrações). |
+| **`sqlx`** | `0.8.2` | Driver PostgreSQL Assíncrono | Validação estática de queries SQL em tempo de compilação. Sem overhead de ORM tradicional. |
+| **`pgvector`** | `0.4.0` | Integração Vetorial | Suporte nativo ao tipo `vector` no PostgreSQL e compatibilidade com macros do SQLx. |
+| **`dashmap`** | `6.1.0` | Cache Concorrente em Memória | Usado para manter as configurações resolvidas de IA de cada tenant em memória de forma thread-safe, evitando queries repetidas ao PostgreSQL. |
+| **`redis`** | `0.27.5` | Ponte Redis para `ia_engine` | Publica configs resolvidas no Redis para consumo do Python; gerenciado pela crate `infrastructure_redis`. |
+| **`rust_decimal`**| `1.36.0`| Precisão Monetária | Manipulação de valores financeiros (`NUMERIC` no PostgreSQL) nas tabelas de faturamento. |
+| **`chrono`** | `0.4.38`| Controle Temporal | Mapeamento nativo de campos `TIMESTAMPTZ` com fuso horário UTC consistente. |
+| **`serde` / `serde_json`**| `1.0.219`| Serialização | Processamento de campos estruturados JSONB (`metadata` do RAG e payloads de integrações). |
 | **`aes-gcm`** | `0.10.3`| Criptografia | Descriptografia simétrica das chaves de API locais salvas na tabela `TenantConfig`. |
 
 ---
@@ -31,7 +32,7 @@ Antes de executar qualquer leitura ou escrita que afete tabelas de negócio do t
 ```mermaid
 sequenceDiagram
     participant App as Handler HTTP / Event Consumer
-    participant DB as Crate db_access
+    participant DB as infrastructure_postgres
     participant Pool as PgPool (Global)
     participant PG as PostgreSQL (Banco Único)
 
@@ -40,7 +41,7 @@ sequenceDiagram
     Pool-->>DB: Retorna Transação local
     DB->>PG: SET LOCAL app.current_tenant = tenant_id
     Note over PG: O PostgreSQL ativa o filtro de RLS<br/>para todas as queries seguintes nesta transação
-    DB->>PG: SELECT * FROM clientes_contato WHERE...
+    DB->>PG: SELECT * FROM oraculo_contato WHERE...
     PG-->>DB: Retorna apenas dados do tenant_id
     DB->>Pool: Commit / Rollback
     DB-->>App: Retorna resultado
@@ -90,49 +91,106 @@ where
 
 ## 3. Cache Concorrente de Configurações (`TenantConfigCache`)
 
-Como as requisições HTTP e webhooks consultam constantemente os dados de persona, chaves de API locais e thresholds de IA, buscar esses parâmetros no banco a cada mensagem geraria latência excessiva. A biblioteca `db_access` mantém um cache concorrente em memória via `DashMap`:
+Como as requisições HTTP e webhooks consultam constantemente os dados de persona, chaves de API locais e thresholds de IA, buscar esses parâmetros no banco a cada mensagem geraria latência excessiva. A crate `infrastructure_postgres` mantém um cache concorrente em memória via `DashMap`.
+
+**Responsabilidades duplas do cache:**
+1. **Cache local DashMap** — serve as próprias queries Rust com latência zero.
+2. **Ponte Redis** — publica o `RuntimeConfig` resolvido no Redis para consumo do `ia_engine` Python (que não acessa o PostgreSQL diretamente). Este papel pertence formalmente à crate `infrastructure_redis`, mas a resolução de fallbacks (Tenant > CoreSettings) acontece aqui.
 
 ```rust
+// Localização: server/crates/infrastructure_postgres/src/config_cache.rs
 use std::sync::Arc;
 use dashmap::DashMap;
 use sqlx::PgPool;
 use uuid::Uuid;
+use serde::{Deserialize, Serialize};
+use crate::errors::DbError;
 
-pub struct TenantConfigCache {
-    pool: PgPool,
-    // ID do Tenant -> Struct com configurações resolvidas em memória
-    cache: DashMap<Uuid, Arc<RuntimeConfig>>,
-}
-
-#[derive(Debug, Clone)]
+/// Config completa resolvida após aplicar a cascata Tenant > CoreSettings.
+/// Todos os campos são Not-Null aqui — os fallbacks já foram aplicados.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuntimeConfig {
+    pub tenant_id: Uuid,
+
+    // --- Prompts de IA ---
     pub dados_empresa: String,
     pub persona_bot: String,
     pub bot_agent_name: String,
+
+    // --- Mensagens automáticas ---
+    pub msg_fallback: String,
+    pub msg_sem_info: String,
+    pub msg_transferencia: String,
+
+    // --- LLM ---
+    pub llm_class: String,       // ex: "ChatGroq", "ChatOpenAI"
+    pub model: String,           // ex: "llama-3.3-70b-versatile"
+    pub llm_temperature: f64,
+
+    // --- Transcrição ---
+    pub transcription_provider: String,  // ex: "groq", "openai"
+    pub transcription_model: String,     // ex: "whisper-large-v3-turbo"
+
+    // --- Visão ---
+    pub vision_provider: String,   // ex: "google", "openai"
+    pub vision_model: String,      // ex: "gemini-2.5-flash"
+
+    // --- Embeddings e RAG ---
+    pub embeddings_class: String,  // ex: "OpenAIEmbeddings"
+    pub embeddings_model: String,  // ex: "text-embedding-3-small"
+    pub chunk_size: i32,
+    pub chunk_overlap: i32,
+
+    // --- Thresholds ---
     pub similarity_threshold: f64,
     pub vector_distance_threshold: f64,
-    pub groq_api_key: String,
+
+    // --- Chaves de API (descriptografadas, prontas para uso) ---
     pub openai_api_key: String,
+    pub groq_api_key: String,
+    pub google_api_key: String,
+}
+
+pub struct TenantConfigCache {
+    pool: PgPool,
+    cache: DashMap<Uuid, Arc<RuntimeConfig>>,
 }
 
 impl TenantConfigCache {
     pub fn new(pool: PgPool) -> Self {
-        Self {
-            pool,
-            cache: DashMap::new(),
-        }
+        Self { pool, cache: DashMap::new() }
     }
 
-    /// Obtém as configurações do tenant. Caso não estejam no cache, busca do banco.
+    /// Obtém configurações do tenant com fallback Tenant > CoreSettings.
+    /// Primeiro tenta o DashMap local; em cache miss, busca do PostgreSQL.
     pub async fn get_config(&self, tenant_id: Uuid) -> Result<Arc<RuntimeConfig>, DbError> {
         if let Some(config_ref) = self.cache.get(&tenant_id) {
             return Ok(config_ref.clone());
         }
 
-        // Busca do banco de dados unificado
-        let db_config = sqlx::query!(
+        let config = Arc::new(self.resolve_from_db(tenant_id).await?);
+        self.cache.insert(tenant_id, config.clone());
+        Ok(config)
+    }
+
+    /// Resolve a configuração do banco aplicando a cascata Tenant > CoreSettings.
+    /// Chamado em cache miss ou após invalidação.
+    async fn resolve_from_db(&self, tenant_id: Uuid) -> Result<RuntimeConfig, DbError> {
+        // 1. Lê CoreSettings (base global)
+        let core = self.load_core_settings().await?;
+
+        // 2. Lê TenantConfig (sobrescreve campos não nulos)
+        let tenant = sqlx::query!(
             r#"
-            SELECT dados_empresa, persona_bot, bot_agent_name, similarity_threshold, vector_distance_threshold, api_keys
+            SELECT dados_empresa, persona_bot, bot_agent_name,
+                   msg_fallback, msg_sem_info, msg_transferencia,
+                   llm_class, model, llm_temperature,
+                   transcription_provider, transcription_model,
+                   vision_provider, vision_model,
+                   embeddings_class, embeddings_model,
+                   chunk_size, chunk_overlap,
+                   similarity_threshold, vector_distance_threshold,
+                   api_keys
             FROM tenants_tenantconfig
             WHERE tenant_id = $1
             "#,
@@ -140,27 +198,81 @@ impl TenantConfigCache {
         )
         .fetch_one(&self.pool)
         .await
-        .map_err(DbError::from)?;
+        .map_err(DbError::SqlxError)?;
 
-        // Decodificação de chaves locais do JSONB seria realizada aqui
-        let config = Arc::new(RuntimeConfig {
-            dados_empresa: db_config.dados_empresa.unwrap_or_default(),
-            persona_bot: db_config.persona_bot.unwrap_or_default(),
-            bot_agent_name: db_config.bot_agent_name.unwrap_or_default(),
-            similarity_threshold: db_config.similarity_threshold.unwrap_or(0.40).to_f64().unwrap_or(0.40),
-            vector_distance_threshold: db_config.vector_distance_threshold.unwrap_or(0.25).to_f64().unwrap_or(0.25),
-            groq_api_key: "".to_string(), // Extraído do JSONB e decodificado
-            openai_api_key: "".to_string(),
-        });
+        // 3. Aplica precedência: usa valor do tenant se preenchido, caso contrário usa o global
+        let api_keys: serde_json::Value = tenant.api_keys.unwrap_or_default();
 
-        self.cache.insert(tenant_id, config.clone());
-        Ok(config)
+        Ok(RuntimeConfig {
+            tenant_id,
+            dados_empresa: tenant.dados_empresa.unwrap_or_default(),
+            persona_bot: tenant.persona_bot.unwrap_or_default(),
+            bot_agent_name: tenant.bot_agent_name.unwrap_or_default(),
+            msg_fallback: tenant.msg_fallback.unwrap_or_else(|| core.msg_fallback.clone()),
+            msg_sem_info: tenant.msg_sem_info.unwrap_or_else(|| core.msg_sem_info.clone()),
+            msg_transferencia: tenant.msg_transferencia.unwrap_or_else(|| core.msg_transferencia.clone()),
+            llm_class: tenant.llm_class.filter(|s| !s.is_empty()).unwrap_or(core.llm_class),
+            model: tenant.model.filter(|s| !s.is_empty()).unwrap_or(core.model),
+            llm_temperature: tenant.llm_temperature.map(|v| v.to_f64().unwrap_or(0.7)).unwrap_or(core.llm_temperature),
+            transcription_provider: tenant.transcription_provider.filter(|s| !s.is_empty()).unwrap_or(core.transcription_provider),
+            transcription_model: tenant.transcription_model.filter(|s| !s.is_empty()).unwrap_or(core.transcription_model),
+            vision_provider: tenant.vision_provider.filter(|s| !s.is_empty()).unwrap_or(core.vision_provider),
+            vision_model: tenant.vision_model.filter(|s| !s.is_empty()).unwrap_or(core.vision_model),
+            embeddings_class: tenant.embeddings_class.filter(|s| !s.is_empty()).unwrap_or(core.embeddings_class),
+            embeddings_model: tenant.embeddings_model.filter(|s| !s.is_empty()).unwrap_or(core.embeddings_model),
+            chunk_size: tenant.chunk_size.unwrap_or(core.chunk_size),
+            chunk_overlap: tenant.chunk_overlap.unwrap_or(core.chunk_overlap),
+            similarity_threshold: tenant.similarity_threshold.map(|v| v.to_f64().unwrap_or(0.40)).unwrap_or(core.similarity_threshold),
+            vector_distance_threshold: tenant.vector_distance_threshold.map(|v| v.to_f64().unwrap_or(0.25)).unwrap_or(core.vector_distance_threshold),
+            // Chave local do tenant tem prioridade; fallback para a global
+            openai_api_key: decrypt_from_jsonb(&api_keys, "openai_api_key").unwrap_or(core.openai_api_key),
+            groq_api_key: decrypt_from_jsonb(&api_keys, "groq_api_key").unwrap_or(core.groq_api_key),
+            google_api_key: decrypt_from_jsonb(&api_keys, "google_api_key").unwrap_or(core.google_api_key),
+        })
     }
 
-    /// Invalida o cache do tenant (acionado por webhook de alteração de configurações no painel)
+    /// Invalida o DashMap local. Deve ser chamado pela crate infrastructure_redis
+    /// ao receber o evento de invalidação do Redis Pub/Sub.
     pub fn invalidate(&self, tenant_id: &Uuid) {
         self.cache.remove(tenant_id);
     }
+}
+```
+
+### 3.1 Publicação no Redis (Ponte para o `ia_engine` Python)
+
+Após resolver a configuração do banco, o backend Rust publica o `RuntimeConfig` no Redis para que o `ia_engine` Python o consuma sem acesso direto ao PostgreSQL. Esta lógica fica na crate `infrastructure_redis`:
+
+```rust
+// Localização: server/crates/infrastructure_redis/src/config_publisher.rs
+use infrastructure_postgres::config_cache::RuntimeConfig;
+use uuid::Uuid;
+
+pub async fn publish_config(
+    redis: &mut redis::aio::MultiplexedConnection,
+    config: &RuntimeConfig,
+) -> Result<(), redis::RedisError> {
+    let tenant_id = config.tenant_id;
+    let key = format!("tenant:config:{}", tenant_id);
+    let json = serde_json::to_string(config).expect("RuntimeConfig é sempre serializável");
+
+    // Salva a config resolvida (TTL de 24h, renovado a cada leitura do Python)
+    redis::cmd("SET")
+        .arg(&key)
+        .arg(&json)
+        .arg("EX")
+        .arg(86400_u64)
+        .query_async(redis)
+        .await?;
+
+    // Notifica o ia_engine para invalidar o cache local em memória
+    redis::cmd("PUBLISH")
+        .arg("tenant:config:invalidate")
+        .arg(tenant_id.to_string())
+        .query_async(redis)
+        .await?;
+
+    Ok(())
 }
 ```
 
@@ -186,7 +298,7 @@ pub async fn inicializar_banco_dados(pool: &PgPool) -> Result<(), sqlx::migrate:
 
 ## 5. Implementação de pgvector no Banco Único
 
-Embora o RLS esteja ativo na transação, a busca de similaridade vetorial deve incluir explicitamente a cláusula `tenant_id = $1` para garantir a máxima performance usando índices vetoriais do PostgreSQL (como HNSW indexado com escopo do tenant).
+Embora o RLS esteja ativo na transação, a busca de similaridade vetorial **deve** incluir explicitamente `tenant_id = $1` para garantir uso dos índices HNSW criados com escopo do tenant. O filtro duplo (RLS + cláusula explícita) é a única forma de garantir performance adequada em buscas vetoriais multi-tenant.
 
 ### Exemplo de Busca de Similaridade Vetorial:
 
@@ -231,14 +343,21 @@ pub async fn buscar_documentos_similares(
 
 ---
 
-## 6. Próximos Passos de Desenvolvimento
+## 6. Próximos Passos de Implementação
 
-1. **Scripts de Migrações do PostgreSQL:**
-   Configurar a criação e habilitação do RLS nas tabelas do tenant no arquivo de migração:
+1. **Scripts de Migrações do PostgreSQL (`infrastructure_postgres/migrations/`):**
+   Cada tabela de negócio de tenant deve ter RLS habilitado e a política de isolamento criada:
    ```sql
+   -- Exemplo: 0004_clientes_contatos.sql
+   CREATE TABLE oraculo_contato ( ... );
+
    ALTER TABLE oraculo_contato ENABLE ROW LEVEL SECURITY;
-   CREATE POLICY contato_tenant_isolation ON oraculo_contato 
+   CREATE POLICY contato_tenant_isolation ON oraculo_contato
    USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid);
    ```
-2. **Middleware do Axum de Contexto:**
-   Construir o middleware responsável por capturar o `tenant_id` da requisição HTTP, instanciar o `RequestContext` correspondente e preparar a transação local do SQLx para ser injetada nos handlers da API.
+2. **Middleware Axum de Contexto (`apps/runtime_api/src/middleware/auth.rs`):**
+   Decodifica o JWT da requisição, extrai `tenant_id` e `user_id`, carrega `user_scopes` e `flow_permissions` do `TenantUser` no banco, constrói o `RequestContext` completo e o injeta como `Extension` nos handlers via `axum::middleware::from_fn`.
+3. **Pre-warm de Cache na Inicialização:**
+   Na inicialização dos binários `worker` e `runtime_api`, o `TenantConfigCache` deve carregar e resolver as configurações de todos os tenants ativos de uma vez, publicando no Redis. Isso garante que a primeira mensagem de cada inquilino não sofra latência de cache-miss.
+4. **Listener de Invalidação Redis no `ia_engine`:**
+   Implementar o subscriber Pub/Sub em `ia_engine/src/config/listener.py` para escutar o canal `tenant:config:invalidate` e chamar `cache.invalidate(tenant_id)` a cada notificação publicada pelo Rust.
