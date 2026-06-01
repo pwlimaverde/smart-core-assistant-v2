@@ -6,6 +6,8 @@
 # Gerenciamento remoto: cd infra && .\manage.ps1
 # ============================================
 
+name: smartcore-v2-data
+
 networks:
   smartcore_v2_network:
     name: smartcore_v2_network

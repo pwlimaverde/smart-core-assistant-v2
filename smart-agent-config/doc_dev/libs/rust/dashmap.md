@@ -1,26 +1,26 @@
 # DashMap
 
-- **Versão Recomendada:** 5.5.3
+- **Versão Recomendada:** 6.1.0
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-05-31
-- **Propósito no Projeto:** Cache concorrente de alto desempenho e thread-safe em memória para gerenciar múltiplos pools de conexão dos bancos de dados dos tenants de forma dinâmica.
+- **Última Verificação:** 2026-06-01
+- **Propósito no Projeto:** Cache concorrente, thread-safe e de baixa latência em memória para as configurações resolvidas de cada tenant (`TenantConfigCache`), evitando consultas repetidas ao PostgreSQL a cada mensagem.
 - **Documentação Oficial:** [https://github.com/xacrimon/dashmap](https://github.com/xacrimon/dashmap)
+- **Library ID (Context7):** `/xacrimon/dashmap`
 
 ---
 
 ## 1. Contexto e Uso no Projeto
 
-No Smart Core Assistant v2, operamos sob uma arquitetura de múltiplos bancos de dados PostgreSQL (um para cada tenant). A criação de conexões com bancos de dados é uma operação lenta e custosa. Portanto, não podemos criar um novo pool a cada requisição.
+> [!IMPORTANT]
+> **Correção arquitetural (2026-06-01):** a arquitetura do projeto passou a ser **banco de dados único com RLS** — **não** há mais múltiplos `PgPool` por tenant. Portanto o DashMap **não** guarda pools de conexão; ele guarda o `RuntimeConfig` resolvido de cada tenant.
 
-Para resolver isso, mantemos um cache dos pools de conexão ativos (`PgPool`) em memória. Como a aplicação atende a requisições HTTP e eventos assíncronos em paralelo (usando `Tokio`), este cache precisa ser thread-safe e altamente concorrente. A crate `dashmap` fornece um `DashMap` que funciona como um `HashMap` seguro para concorrência, subdividindo internamente as travas (locks) para evitar gargalos de performance comuns em travas globais (`Mutex<HashMap>`).
+No Smart Core Assistant v2, requisições HTTP e webhooks consultam constantemente persona, chaves de API locais e thresholds de IA de cada tenant. Buscar isso no banco a cada mensagem geraria latência excessiva. A crate `infrastructure_postgres` mantém um cache concorrente em memória via `DashMap<Uuid, Arc<RuntimeConfig>>`. O `DashMap` subdivide internamente as travas por shard, evitando o gargalo de um `Mutex<HashMap>` global.
 
 ---
 
 ## 2. Padrões de Implementação e Boas Práticas
 
-### 2.1 Estrutura do Gerenciador de Pools (TenantPoolManager)
-
-Abaixo está o padrão recomendado para encapsular o `DashMap` dentro da estrutura que gerencia os pools de conexão.
+### 2.1 Estrutura do `TenantConfigCache`
 
 ```rust
 use std::sync::Arc;
@@ -28,105 +28,49 @@ use dashmap::DashMap;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-pub struct TenantPoolManager {
-    // Banco padrão (contém o mapeamento de credenciais dos inquilinos)
-    core_pool: PgPool,
-    // Cache de pools ativos: Tenant ID -> Pool do Postgres específico do inquilino
-    tenant_pools: DashMap<Uuid, PgPool>,
+pub struct TenantConfigCache {
+    pool: PgPool,
+    cache: DashMap<Uuid, Arc<RuntimeConfig>>,
 }
 
-impl TenantPoolManager {
-    pub fn new(core_pool: PgPool) -> Self {
-        Self {
-            core_pool,
-            tenant_pools: DashMap::new(),
+impl TenantConfigCache {
+    pub fn new(pool: PgPool) -> Self {
+        Self { pool, cache: DashMap::new() }
+    }
+
+    /// Leitura rápida no cache; em miss, resolve do banco e popula.
+    pub async fn get_config(&self, tenant_id: Uuid) -> Result<Arc<RuntimeConfig>, DbError> {
+        if let Some(entry) = self.cache.get(&tenant_id) {
+            return Ok(entry.clone()); // Arc::clone é O(1); o Ref é descartado já aqui
         }
+        let config = Arc::new(self.resolve_from_db(tenant_id).await?);
+        self.cache.insert(tenant_id, config.clone());
+        Ok(config)
     }
 
-    /// Obtém ou inicializa o PgPool para o tenant correspondente
-    pub async fn get_or_create_pool(&self, tenant_id: Uuid) -> Result<PgPool, sqlx::Error> {
-        // 1. Tentar leitura rápida no cache
-        if let Some(pool) = self.tenant_pools.get(&tenant_id) {
-            return Ok(pool.clone());
-        }
-
-        // 2. Resolver conexão a partir das credenciais no banco core
-        let connection_string = self.resolve_connection_string(tenant_id).await?;
-        
-        // 3. Estabelecer o PgPool (configurando limites baixos para otimizar conexões do cluster)
-        let new_pool = PgPool::connect_with(
-            connection_string.parse().map_err(|e| sqlx::Error::Configuration(Box::new(e)))?
-        ).await?;
-
-        // 4. Inserir no DashMap e retornar
-        // DashMap cuida da inserção concorrente segura
-        self.tenant_pools.insert(tenant_id, new_pool.clone());
-
-        Ok(new_pool)
+    /// Invalida a entrada local (chamado pela ponte Redis ao receber Pub/Sub).
+    pub fn invalidate(&self, tenant_id: &Uuid) {
+        self.cache.remove(tenant_id);
     }
-
-    /// Remove o pool do cache para forçar reconexão ou liberar recursos
-    pub fn remove_pool(&self, tenant_id: &Uuid) -> Option<(Uuid, PgPool)> {
-        self.tenant_pools.remove(tenant_id)
-    }
-
-    /// Resolve a string de conexão no banco central
-    async fn resolve_connection_string(&self, tenant_id: Uuid) -> Result<String, sqlx::Error> {
-        // Query de exemplo na base Core
-        let db_record = sqlx::query!(
-            r#"
-            SELECT db_name, db_user, db_password, db_host, db_port 
-            FROM tenants_tenantdatabase 
-            WHERE tenant_id = $1
-            "#,
-            tenant_id
-        )
-        .fetch_one(&self.core_pool)
-        .await?;
-
-        // Decodificação da senha (AES-GCM) deve ser feita aqui
-        let decrypted_password = decrypt_password(&db_record.db_password);
-
-        let conn_str = format!(
-            "postgres://{}:{}@{}:{}/{}",
-            db_record.db_user,
-            decrypted_password,
-            db_record.db_host,
-            db_record.db_port,
-            db_record.db_name
-        );
-
-        Ok(conn_str)
-    }
-}
-
-// Stub para simular descriptografia
-fn decrypt_password(encrypted: &str) -> String {
-    // Implementação real com AES-GCM
-    encrypted.to_string()
 }
 ```
 
-### 2.2 Prevenção de Deadlocks
+### 2.2 Prevenção de Deadlocks (regras críticas)
 
-Embora o `DashMap` seja extremamente rápido, ele realiza o bloqueio (locking) das entradas retornadas por referências inteligentes como `Ref` ou `RefMut`. Segurar essas referências por muito tempo ou através de limites de pontos `.await` assíncronos pode causar deadlocks ou bloquear outras threads que tentam ler ou gravar no mapa.
+O `DashMap` retorna guardas inteligentes (`Ref`/`RefMut`) que mantêm a trava do shard. Segurá-los através de um `.await` causa erro de compilação (`Ref` não é `Send`) ou deadlock.
 
-*Regras críticas:*
-1. **Nunca segure um `Ref` ou `RefMut` do DashMap através de um ponto `.await`**:
-   O compilador do Rust emitirá alertas ou erros de que o tipo retornado não implementa `Send`, impedindo seu envio entre threads do Tokio. Sempre libere ou extraia a informação e deixe o `Ref` sair de escopo antes de realizar operações assíncronas.
-2. **Use `.clone()` em tipos baratos**:
-   O `PgPool` do SQLx é internamente envolto em um `Arc`. Cloná-lo é uma operação muito barata que incrementa apenas um contador de referência. Em vez de retornar um `Ref<'_, Uuid, PgPool>`, clone o pool e retorne `PgPool`.
+1. **Nunca segure um `Ref`/`RefMut` através de um ponto `.await`.** Extraia/clone o valor e deixe o guard sair de escopo antes de qualquer I/O assíncrono.
+2. **Clone tipos baratos.** `Arc<RuntimeConfig>` e `PgPool` são `Arc` internamente — clonar incrementa apenas o contador de referência.
 
-*Exemplo Correto:*
 ```rust
-// CORRETO: O Ref temporário é descartado imediatamente após clonar o pool
-let pool = {
-    self.tenant_pools.get(&tenant_id).map(|r| r.clone())
-};
+// CORRETO: o Ref temporário é descartado imediatamente após o clone
+let config = { self.cache.get(&tenant_id).map(|r| r.clone()) };
+// ... agora pode fazer .await com segurança
 ```
 
 ---
 
 ## 3. Histórico de Atualizações
 
-- **2026-05-31:** Inclusão da biblioteca na documentação inicial do projeto para apoiar o design dinâmico de conexões multitenant.
+- **2026-06-01:** Bump 5.5.3 → 6.1.0 (alinhamento com a `estrategia_implementacao_rust.md`). A major 6 é **backward-compatible** com 5.x nas APIs usadas (`new`/`insert`/`get`/`remove`); apenas otimizações internas de sharding. **Correção arquitetural:** removido o padrão obsoleto `TenantPoolManager` com `DashMap<Uuid, PgPool>` e a tabela `tenants_tenantdatabase` (eram da arquitetura antiga de múltiplos bancos). O uso canônico agora é `DashMap<Uuid, Arc<RuntimeConfig>>` no `TenantConfigCache`.
+- **2026-05-31:** Documentação inicial da biblioteca.

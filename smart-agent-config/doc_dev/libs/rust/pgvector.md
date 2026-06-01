@@ -1,117 +1,95 @@
 # Pgvector Rust (pgvector)
 
-- **Versão Recomendada:** 0.3.0
+- **Versão Recomendada:** 0.4.0
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-05-31
-- **Propósito no Projeto:** Suporte a tipos vetoriais no SQLx para salvar e consultar embeddings de busca semântica (RAG) diretamente no PostgreSQL.
+- **Última Verificação:** 2026-06-01
+- **Propósito no Projeto:** Suporte ao tipo vetorial no SQLx para salvar e consultar embeddings (1536 dimensões) da busca semântica (RAG) no PostgreSQL único.
 - **Documentação Oficial:** [https://github.com/pgvector/pgvector-rust](https://github.com/pgvector/pgvector-rust)
+- **Library ID (Context7):** `/pgvector/pgvector`
 
 ---
 
 ## 1. Contexto e Uso no Projeto
 
-O RAG (Retrieval-Augmented Generation) do chatbot requer a persistência de chunks de conhecimento vetorizados. No banco de dados do tenant, o campo `embedding` na tabela `oraculo_documento` e o campo `embedding` na tabela `treinamento_querycompose` são do tipo `vector(1536)` (dimensão correspondente aos embeddings da OpenAI, `text-embedding-3-small` ou similar).
+O RAG do chatbot persiste chunks de conhecimento vetorizados. As colunas `embedding` em `oraculo_documento` e `treinamento_querycompose` são `vector(1536)` (compatível com `text-embedding-3-small`). A crate `pgvector` estende o **SQLx 0.8** com a struct `Vector` (implementa `Encode`/`Decode`), permitindo enviar/ler `Vec<f32>` diretamente.
 
-A crate Rust **`pgvector`** estende o **SQLx**, fornecendo a struct `Vector` que implementa `Encode` e `Decode` nativos, permitindo enviar e ler arrays de floats (`Vec<f32>`) nas queries do SQLx de forma direta e limpa.
+### Operadores de distância
+
+| Operador | Métrica | Observação |
+|---|---|---|
+| `<=>` | Cosseno | **Usado no projeto** (`vector_cosine_ops` no índice HNSW) |
+| `<->` | L2 (euclidiana) | — |
+| `<#>` | Produto interno | Retorna o negativo |
 
 ---
 
 ## 2. Padrões de Implementação e Boas Práticas
 
-### 2.1 Inserindo Documentos com Embeddings
-Ao salvar chunks de conhecimento no banco do tenant, converta o `Vec<f32>` obtido na API da OpenAI em `pgvector::Vector`:
+### 2.1 Inserindo embeddings
 
 ```rust
 use pgvector::Vector;
-use sqlx::PgPool;
 
-pub async fn insert_documento_chunk(
-    tenant_pool: &PgPool,
-    treinamento_id: i32,
-    conteudo: &str,
-    embedding: Vec<f32>,
-    ordem: i32,
-) -> Result<(), sqlx::Error> {
-    // 1. Converter Vec<f32> para o tipo Vector do pgvector
-    let vector_payload = Vector::from(embedding);
-
-    // 2. Executar inserção no banco de dados isolado do tenant
-    sqlx::query!(
-        r#"
-        INSERT INTO oraculo_documento (treinamento_id, conteudo, embedding, ordem, data_criacao) 
-        VALUES ($1, $2, $3, $4, NOW())
-        "#,
-        treinamento_id,
-        conteudo,
-        vector_payload as _, // Necessário 'as _' para coercionar o tipo customizado no macro
-        ordem
-    )
-    .execute(tenant_pool)
-    .await?;
-
-    Ok(())
-}
+let vector_payload = Vector::from(embedding); // embedding: Vec<f32>
+sqlx::query!(
+    r#"INSERT INTO oraculo_documento (tenant_id, treinamento_id, conteudo, embedding, ordem, data_criacao)
+       VALUES ($1, $2, $3, $4, $5, NOW())"#,
+    tenant_id,
+    treinamento_id,
+    conteudo,
+    vector_payload as _, // 'as _' coerciona o tipo customizado dentro da macro
+    ordem
+)
+.execute(&mut **tx)
+.await?;
 ```
 
-### 2.2 Busca por Similaridade Vetorial (Cosine Distance)
-Para realizar a busca semântica em Rust, usamos o operador de distância de cosseno `<=>` da extensão `pgvector`. A query é executada no pool de conexões do tenant e filtra apenas chunks cujos treinamentos pais foram finalizados.
+### 2.2 Busca por similaridade (cosseno) — sempre com `tenant_id` explícito
+
+> [!IMPORTANT]
+> Mesmo com o RLS ativo, inclua `d.tenant_id = $2` explicitamente: garante o uso dos índices compostos e a performance da busca vetorial multi-tenant.
 
 ```rust
-pub struct SimilarChunk {
-    pub id: i32,
-    pub conteudo: Option<String>,
-    pub distancia: f64,
-}
-
 pub async fn buscar_documentos_similares(
-    tenant_pool: &PgPool,
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
     query_embedding: Vec<f32>,
     limit: i64,
     distance_threshold: f64,
-) -> Result<Vec<SimilarChunk>, sqlx::Error> {
+) -> Result<Vec<(i32, f64)>, sqlx::Error> {
     let query_vector = Vector::from(query_embedding);
-
-    // <=> calcula a distância de cosseno. 
-    // Filtramos pela distância máxima aceitável (threshold)
     let records = sqlx::query!(
         r#"
-        SELECT 
-            d.id, 
-            d.conteudo, 
-            (d.embedding <=> $1) as "distancia!"
+        SELECT d.id, (d.embedding <=> $1) AS "distancia!"
         FROM oraculo_documento d
         INNER JOIN oraculo_treinamento t ON d.treinamento_id = t.id
-        WHERE t.treinamento_finalizado = true
+        WHERE d.tenant_id = $2
+          AND t.treinamento_finalizado = true
           AND d.embedding IS NOT NULL
-          AND (d.embedding <=> $1) <= $2
+          AND (d.embedding <=> $1) <= $3
         ORDER BY d.embedding <=> $1
-        LIMIT $3
+        LIMIT $4
         "#,
-        query_vector as _,
-        distance_threshold,
-        limit
+        query_vector as _, tenant_id, distance_threshold, limit
     )
-    .fetch_all(tenant_pool)
+    .fetch_all(&mut **tx)
     .await?;
-
-    let chunks = records.into_iter()
-        .map(|r| SimilarChunk {
-            id: r.id,
-            conteudo: r.conteudo,
-            distancia: r.distancia,
-        })
-        .collect();
-
-    Ok(chunks)
+    Ok(records.into_iter().map(|r| (r.id, r.distancia)).collect())
 }
 ```
 
-### 2.3 Cuidado com a Dimensão do Vetor
-A dimensão da coluna vetorial é fixada na criação do banco de dados (ex: `embedding vector(1536)`). Se o Rust tentar enviar um vetor com tamanho diferente (ex: 768 ou 384) para a query, o PostgreSQL rejeitará a gravação retornando erro. Garanta que o payload gerado no Python (AI Engine) utilize o mesmo modelo configurado.
+### 2.3 Dimensão fixa e índice HNSW
+
+A dimensão é fixada no schema (`vector(1536)`); enviar tamanho diferente causa erro no Postgres. Crie o índice HNSW para acelerar a busca:
+
+```sql
+CREATE INDEX oraculo_documento_embedding_hnsw
+    ON oraculo_documento USING hnsw (embedding vector_cosine_ops);
+```
 
 ---
 
 ## 3. Histórico de Atualizações
 
-- **2026-05-31:** Atualização da documentação para remover colunas e tabelas legadas redundantes (como `tenant_id` no banco do tenant) e alinhar com a nova arquitetura física separada.
-
+- **2026-06-01:** Bump 0.3.0 → 0.4.0 (compatível com SQLx 0.8; sem breaking changes na API `Vector`). Exemplos corrigidos para a arquitetura de **banco único**: filtro `tenant_id = $2` explícito na busca vetorial e uso de transação (`&mut **tx`) em vez de `PgPool` por tenant.
+- **2026-05-31:** Documentação inicial da biblioteca.

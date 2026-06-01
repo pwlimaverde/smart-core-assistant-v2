@@ -1,0 +1,123 @@
+{
+  "version": 2,
+  "workflowType": "prevc",
+  "updatedAt": "2026-06-01T10:23:24.959Z",
+  "status": {
+    "project": {
+      "name": "infrastructure-postgres",
+      "scale": 3,
+      "started": "2026-06-01T05:15:01.786Z",
+      "current_phase": "E",
+      "settings": {
+        "autonomous_mode": false,
+        "require_plan": true,
+        "require_approval": true
+      },
+      "plan": "infrastructure-postgres"
+    },
+    "phases": {
+      "P": {
+        "status": "completed",
+        "started_at": "2026-06-01T05:15:01.786Z",
+        "completed_at": "2026-06-01T10:17:02.191Z",
+        "outputs": [
+          {
+            "path": ".context/plans/infrastructure-postgres.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/infrastructure-postgres/plano_completo_infrastructure-postgres.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/infrastructure-postgres/info_aux_infrastructure-postgres.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "R": {
+        "status": "completed",
+        "started_at": "2026-06-01T10:17:02.196Z",
+        "completed_at": "2026-06-01T10:17:58.663Z",
+        "outputs": [
+          {
+            "path": ".context/plans/infrastructure-postgres/plano_completo_infrastructure-postgres.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/infrastructure-postgres/info_aux_infrastructure-postgres.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "E": {
+        "status": "in_progress",
+        "started_at": "2026-06-01T10:17:58.665Z"
+      },
+      "V": {
+        "status": "pending"
+      },
+      "C": {
+        "status": "pending"
+      }
+    },
+    "agents": {},
+    "roles": {},
+    "approval": {
+      "plan_created": true,
+      "plan_approved": true,
+      "approved_by": "architect",
+      "approved_at": "2026-06-01T10:17:54.055Z",
+      "approval_notes": "Plano reestruturado e validado contra docs atuais (sqlx 0.8.2, pgvector 0.4.0, dashmap 6.1.0). Decisões de RLS (set_config), cripto (AES-GCM/secrecy) e schema (migrations 0001..0009) consolidadas no plano completo. Liberado para a fase de execução."
+    },
+    "execution": {
+      "history": [
+        {
+          "timestamp": "2026-06-01T05:15:01.786Z",
+          "phase": "P",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-01T10:16:21.756Z",
+          "phase": "P",
+          "action": "plan_linked",
+          "plan": "infrastructure-postgres"
+        },
+        {
+          "timestamp": "2026-06-01T10:17:02.191Z",
+          "phase": "P",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-01T10:17:02.196Z",
+          "phase": "R",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-01T10:17:54.055Z",
+          "phase": "R",
+          "action": "plan_approved",
+          "approved_by": "architect"
+        },
+        {
+          "timestamp": "2026-06-01T10:17:58.663Z",
+          "phase": "R",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-01T10:17:58.665Z",
+          "phase": "E",
+          "action": "started"
+        }
+      ],
+      "last_activity": "2026-06-01T10:17:58.665Z",
+      "resume_context": "Fase E (Execução) em progresso"
+    }
+  },
+  "binding": {
+    "workflowName": "infrastructure-postgres",
+    "sessionId": "a6c50303-54f6-40da-82cd-84a219fd534f",
+    "createdAt": "2026-06-01T05:15:01.795Z",
+    "updatedAt": "2026-06-01T10:17:58.672Z"
+  }
+}
