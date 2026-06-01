@@ -1,7 +1,7 @@
 ---
 type: skill
 name: Plan Restructuring
-description: Etapa final de qualquer planejamento. Normaliza a origem do plano (conversa, doc_dev ou .context/plans) em um diretório próprio dentro de .context/plans/{feature}/, levanta libs internas e serviços externos, coleta documentação atual (context7 + WebSearch/WebFetch) em info_aux_{feature}.md, reestrutura o plano completo, e por fim cria o plano canônico via MCP dotcontext (scaffoldPlan + workflow-init) referenciando esses arquivos e deixando o workflow pronto para implementação. Na conclusão, consolida o canônico dentro da pasta e move tudo para archive/.
+description: Etapa final de qualquer planejamento. Normaliza a origem do plano (conversa, doc_dev ou .context/plans) em um diretório próprio dentro de .context/plans/{feature}/, levanta libs internas e serviços externos, coleta documentação atual (PRIMEIRO consulta a central local doc_dev/libs/; só recorre a context7 quando o doc local falta/está desatualizado, e nesse caso atualiza o doc local; WebSearch/WebFetch para serviços externos) em info_aux_{feature}.md, reestrutura o plano completo, e por fim cria o plano canônico via MCP dotcontext (scaffoldPlan + workflow-init) referenciando esses arquivos e deixando o workflow pronto para implementação. Na conclusão, consolida o canônico dentro da pasta e move tudo para archive/.
 skillSlug: plan-restructuring
 phases: [P]
 skills: [feature-breakdown]
@@ -22,6 +22,14 @@ inicial já existe. O objetivo duplo é:
    serviços externos envolvidos (evitando APIs/sintaxe/endpoints desatualizados).
 2. **Normalizar** a origem do plano para um formato único e rastreável,
    independente de onde o plano nasceu.
+
+> **Central de libs local primeiro.** O projeto mantém documentação curada das
+> bibliotecas em `doc_dev/libs/{rust,python,flutter}/<lib>.md` (ver
+> `doc_dev/libs/README.md`). Essa é a **fonte preferencial** para libs: cada doc
+> traz versão, status (`✅ ATUALIZADA` / `⚠️ DESATUALIZADA` / `🔍 EM_HOMOLOGACAO`)
+> e a data da última verificação. **Sempre cheque a central antes de gastar
+> Context7** — ele só entra quando o doc local não existe ou está
+> desatualizado/vencido, e o resultado realimenta a central.
 
 NÃO é para criar o plano do zero — para isso use `/plan` / `feature-breakdown`.
 
@@ -80,8 +88,9 @@ subagente com modelo fixo, via ferramenta `Agent` (parâmetro `model`):
 | Etapa | Trabalho | Executor | Modelo |
 |-------|----------|----------|--------|
 | 1. Normalização + levantamento | Identifica origem, slug, libs, serviços | Sessão principal | (atual) |
-| 2a. Docs de libs (packages) | Context7 — coleta/sumarização | Subagente(s) paralelos | `haiku` |
-| 2b. Docs de serviços externos | WebSearch + WebFetch — coleta | Subagente(s) paralelos | `haiku` |
+| 2a. Triagem da central local | Lê `doc_dev/libs/` e classifica cada lib (usar local / atualizar / criar) | Sessão principal | (atual) |
+| 2b. Docs de libs (packages) | Context7 — **só** para libs sem doc local válido; atualiza a central | Subagente(s) paralelos | `haiku` |
+| 2c. Docs de serviços externos | WebSearch + WebFetch — coleta | Subagente(s) paralelos | `haiku` |
 | 3. Consolidar info_aux | Gravar `{feature}/info_aux_{feature}.md` | Sessão principal | (atual) |
 | 4. Reestruturação | Plano completo detalhado | Subagente | `opus` |
 | 5. Canonização MCP | scaffoldPlan + workflow-init + link | Sessão principal | (atual) |
@@ -120,7 +129,9 @@ Rust:
 - serde (1.x)         -> serialization/deserialization
 ```
 
-Para cada lib, anote **quais recursos/APIs específicos** o plano usa.
+Para cada lib, anote **quais recursos/APIs específicos** o plano usa, e a stack
+(`rust` / `python` / `flutter`) — isso define onde procurar na central local
+(`doc_dev/libs/{stack}/<lib>.md`) na etapa 2a.
 
 #### Grupo B — Serviços Externos e APIs de Terceiros
 
@@ -143,10 +154,34 @@ autenticação e versão/release (cruzando com `.env`/configs do projeto). Forma
     -> Auth: key + token query params
 ```
 
-### 2a. Docs de Libs — Context7 (subagentes `haiku` paralelos)
+### 2a. Triagem da Central Local de Libs (sessão principal)
 
-Para cada lib do Grupo A, dispare um subagente barato. Faça as chamadas paralelas
-em uma única mensagem com vários blocos `Agent`.
+**Antes de qualquer chamada ao Context7**, consulte a central local
+`doc_dev/libs/`. Para cada lib do Grupo A, abra
+`doc_dev/libs/{stack}/<lib>.md` e leia o cabeçalho padrão (`Versão Recomendada`,
+`Status de Atualização`, `Última Verificação`). Classifique a lib em um de três
+estados:
+
+| Estado | Condição | Ação |
+|--------|----------|------|
+| **USAR LOCAL** | Doc existe, `Status: ✅ ATUALIZADA`, versão bate com o manifest e `Última Verificação` é recente (≤ ~90 dias) e cobre os recursos/APIs que o plano usa | Reaproveita o conteúdo do doc local direto no `info_aux`. **Não** chama Context7. |
+| **ATUALIZAR** | Doc existe mas está `⚠️ DESATUALIZADA` / `🔍 EM_HOMOLOGACAO`, versão divergente do manifest, verificação vencida, ou não cobre os recursos que o plano precisa | Chama Context7 (etapa 2b) só para essa lib e **atualiza o doc local**. |
+| **CRIAR** | Não existe `doc_dev/libs/{stack}/<lib>.md` | Chama Context7 (etapa 2b) e **cria** o doc local seguindo o cabeçalho padrão do `doc_dev/libs/README.md`. |
+
+Monte a lista de libs que seguem para o Context7 = (ATUALIZAR ∪ CRIAR). As libs
+em USAR LOCAL **pulam** a etapa 2b — apenas registre, para o `info_aux`, o trecho
+relevante do doc local e a referência (`doc_dev/libs/{stack}/<lib>.md`, com data).
+
+> Regra de bom senso sobre frescor: trate `Última Verificação` como vencida se
+> for anterior à última atualização conhecida da lib ou se ultrapassar ~90 dias.
+> Na dúvida entre USAR LOCAL e ATUALIZAR, prefira ATUALIZAR (custa um Context7,
+> mas mantém a central confiável).
+
+### 2b. Docs de Libs — Context7 (subagentes `haiku` paralelos)
+
+Para cada lib marcada como **ATUALIZAR** ou **CRIAR** na etapa 2a, dispare um
+subagente barato. Faça as chamadas paralelas em uma única mensagem com vários
+blocos `Agent`. (Libs em **USAR LOCAL** não entram aqui.)
 
 ```
 Agent({
@@ -167,14 +202,28 @@ Agent({
        - Breaking changes que afetem a implementação.
        - O library ID usado (rastreabilidade).
     Seja conciso. Relatório em Português.
+
+    4. ATUALIZE A CENTRAL LOCAL: grave/atualize doc_dev/libs/<stack>/<lib>.md
+       seguindo o cabeçalho padrão de doc_dev/libs/README.md
+       (Versão Recomendada, Status de Atualização = ✅ ATUALIZADA,
+       Última Verificação = data de hoje, Propósito no Projeto, Documentação
+       Oficial) + um Guia de Uso Rápido com os recursos pesquisados. Se o
+       arquivo já existia (caso ATUALIZAR), preserve sumário/seções úteis e só
+       corrija o que mudou, registrando o motivo em "## Histórico de
+       Atualizações". Se não existia (caso CRIAR), crie do zero e adicione o
+       link no README da linguagem, se houver tabela/lista.
   `
 })
 ```
 
-### 2b. Docs de Serviços Externos — WebSearch/WebFetch (subagentes `haiku` paralelos)
+> Assim a central local fica progressivamente mais completa e confiável: cada
+> reestruturação que toca uma lib desatualizada/ausente deixa o doc curado para
+> as próximas vezes (e para os agentes de implementação).
+
+### 2c. Docs de Serviços Externos — WebSearch/WebFetch (subagentes `haiku` paralelos)
 
 Para cada serviço do Grupo B, dispare um subagente barato **em paralelo** com os
-da 2a. Foco: endpoints, exemplos de código e formas corretas de acesso —
+da 2b. Foco: endpoints, exemplos de código e formas corretas de acesso —
 especialmente para serviços que o Context7 não indexa (Evolution Go, APIs
 proprietárias, etc.).
 
@@ -213,12 +262,15 @@ Agent({
 })
 ```
 
-Colete os relatórios de todos os subagentes (2a + 2b) antes de seguir.
+Colete os relatórios de todos os subagentes (2b + 2c) antes de seguir.
 
 ### 3. Consolidar `info_aux.md` (sessão principal)
 
-Consolide todos os relatórios das etapas 2a/2b em
-`.context/plans/{feature}/info_aux_{feature}.md`:
+Consolide em `.context/plans/{feature}/info_aux_{feature}.md`: os trechos das
+libs **USAR LOCAL** (extraídos da central na etapa 2a), os relatórios das libs
+que passaram pelo Context7 (2b) e os relatórios de serviços externos (2c). Para
+libs vindas da central, cite a fonte (`doc_dev/libs/{stack}/<lib>.md`, com a data
+de `Última Verificação`).
 
 ```markdown
 # Documentação Auxiliar — {Nome do Plano}
@@ -405,9 +457,11 @@ fechadas / workflow finalizado). O objetivo é manter tudo de um plano junto.
 
 - [ ] Origem do plano identificada (conversa / doc_dev / .context) e conteúdo-base obtido.
 - [ ] Slug `{feature}` definido e diretório `.context/plans/{feature}/` criado.
-- [ ] Grupo A (libs Python/Rust) levantado com versões do `pyproject.toml`/`Cargo.toml`.
+- [ ] Grupo A (libs Python/Rust/Flutter) levantado com versões do `pyproject.toml`/`Cargo.toml`/`pubspec.yaml` e stack de cada lib.
 - [ ] Grupo B (serviços externos) levantado com endpoints e tipo de auth.
-- [ ] Docs de libs coletados via Context7 (subagentes `haiku`).
+- [ ] Central local `doc_dev/libs/` consultada; cada lib classificada em USAR LOCAL / ATUALIZAR / CRIAR (etapa 2a).
+- [ ] Context7 chamado **apenas** para libs ATUALIZAR/CRIAR (subagentes `haiku`); libs USAR LOCAL reaproveitadas da central.
+- [ ] Docs locais em `doc_dev/libs/{stack}/<lib>.md` criados/atualizados (cabeçalho padrão + data) para as libs que passaram pelo Context7.
 - [ ] Docs de serviços externos coletados via WebSearch/WebFetch (subagentes `haiku`).
 - [ ] `.context/plans/{feature}/info_aux_{feature}.md` consolidado e salvo.
 - [ ] Plano completo reestruturado por `opus` salvo em `.context/plans/{feature}/plano_completo_{feature}.md`.
