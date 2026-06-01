@@ -85,7 +85,10 @@ A documentação detalhada da modelagem foi dividida por módulos funcionais:
 11. **[Estratégia de Implementação Rust](./estrategia_implementacao_rust.md)**
     * Stack de crates, padrão de transação RLS, cache `TenantConfigCache` com DashMap + Redis e busca vetorial pgvector.
 12. **[Diretrizes de Segurança para Armazenamento de Dados Sensíveis](./08_diretrizes_seguranca.md)**
-    * Diretrizes de segurança detalhadas: isolamento RLS, criptografia AES-256-GCM, proteção de PII (LGPD) e controle de logs de auditoria.
+    * Isolamento RLS, criptografia AES-256-GCM com `OsRng`, proteção de PII (LGPD), segurança do Redis e checklist de code review.
+13. **[Diretrizes de Controle de Acesso e Permissões (RBAC)](./09_diretrizes_permissoes_acesso.md)**
+    * Catálogo canônico de escopos, `RequestContext` com `flow_permissions`, middleware JWT (HS256 explícito, `flow_permissions` via Redis), mitigações OWASP e checklist.
+
 
 
 ---
