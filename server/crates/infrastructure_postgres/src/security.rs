@@ -30,3 +30,46 @@ impl RequestContext {
         self.flow_permissions.contains(&flow_id)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn get_test_context(scopes: Vec<&str>, flows: Vec<i32>) -> RequestContext {
+        RequestContext {
+            tenant_id: Uuid::new_v4(),
+            user_id: 42,
+            user_scopes: scopes.into_iter().map(String::from).collect(),
+            flow_permissions: flows,
+        }
+    }
+
+    #[test]
+    fn test_request_context_has_permission() {
+        let ctx = get_test_context(vec!["atendimentos:read", "atendimentos:write"], vec![]);
+        
+        assert!(ctx.has_permission("atendimentos:read"));
+        assert!(ctx.has_permission("atendimentos:write"));
+        assert!(!ctx.has_permission("tenant:admin"));
+    }
+
+    #[test]
+    fn test_request_context_has_flow_permission() {
+        // 1. Permissão de fluxo normal
+        let ctx = get_test_context(vec!["atendimentos:read"], vec![1, 2]);
+        assert!(ctx.has_flow_permission(1));
+        assert!(ctx.has_flow_permission(2));
+        assert!(!ctx.has_flow_permission(3));
+
+        // 2. Acesso irrestrito via kanban:admin
+        let ctx_kanban_admin = get_test_context(vec!["kanban:admin"], vec![1]);
+        assert!(ctx_kanban_admin.has_flow_permission(1));
+        assert!(ctx_kanban_admin.has_flow_permission(99));
+
+        // 3. Acesso irrestrito via tenant:admin
+        let ctx_tenant_admin = get_test_context(vec!["tenant:admin"], vec![1]);
+        assert!(ctx_tenant_admin.has_flow_permission(1));
+        assert!(ctx_tenant_admin.has_flow_permission(99));
+    }
+}
+

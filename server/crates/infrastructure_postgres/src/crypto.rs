@@ -103,3 +103,82 @@ impl CipherManager {
             .map_err(|e| DbError::CryptoError(format!("plaintext não é UTF-8: {e}")))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn get_test_cipher() -> CipherManager {
+        // MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE= é base64 de 32 bytes válidos
+        let key_str = "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=";
+        std::env::set_var("ENCRYPTION_KEY", key_str);
+        CipherManager::new_from_env().unwrap()
+    }
+
+    #[test]
+    fn test_cipher_manager_encrypt_decrypt_success() {
+        let cipher = get_test_cipher();
+        let original_text = b"Texto ultra secreto de teste!";
+        
+        let (ct, nonce, tag) = cipher.encrypt(original_text).unwrap();
+        assert!(!ct.is_empty());
+        assert!(!nonce.is_empty());
+        assert!(!tag.is_empty());
+
+        let decrypted = cipher.decrypt(&ct, &nonce, &tag).unwrap();
+        assert_eq!(decrypted, original_text);
+    }
+
+    #[test]
+    fn test_cipher_manager_decrypt_invalid_tag() {
+        let cipher = get_test_cipher();
+        let original_text = b"Mensagem secreta";
+        
+        let (ct, nonce, tag) = cipher.encrypt(original_text).unwrap();
+        
+        // Adultera a tag (altera o primeiro caractere)
+        let invalid_tag = if tag.starts_with('A') {
+            format!("B{}", &tag[1..])
+        } else {
+            format!("A{}", &tag[1..])
+        };
+
+        let result = cipher.decrypt(&ct, &nonce, &invalid_tag);
+        assert!(result.is_err());
+        match result {
+            Err(DbError::CryptoError(msg)) => assert!(msg.contains("integridade violada") || msg.contains("chave inválida")),
+            _ => panic!("Esperado erro de integridade violada"),
+        }
+    }
+
+    #[test]
+    fn test_cipher_manager_decrypt_from_jsonb() {
+        let cipher = get_test_cipher();
+        let secret_key = "sk-live-123456789";
+        
+        let (ct, nonce, tag) = cipher.encrypt(secret_key.as_bytes()).unwrap();
+        
+        let api_keys_json = json!({
+            "openai_api_key": {
+                "ciphertext": ct,
+                "nonce": nonce,
+                "tag": tag
+            },
+            "groq_api_key": null
+        });
+
+        // 1. Recupera chave existente
+        let decrypted = cipher.decrypt_from_jsonb(&api_keys_json, "openai_api_key").unwrap();
+        assert_eq!(decrypted, secret_key);
+
+        // 2. Chave nula deve retornar string vazia
+        let decrypted_null = cipher.decrypt_from_jsonb(&api_keys_json, "groq_api_key").unwrap();
+        assert!(decrypted_null.is_empty());
+
+        // 3. Chave inexistente deve retornar string vazia
+        let decrypted_missing = cipher.decrypt_from_jsonb(&api_keys_json, "google_api_key").unwrap();
+        assert!(decrypted_missing.is_empty());
+    }
+}
+

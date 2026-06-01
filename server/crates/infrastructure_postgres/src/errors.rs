@@ -36,3 +36,37 @@ impl DbError {
         Self::SqlxError(e)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_db_error_display() {
+        let err = DbError::PermissionDenied;
+        assert_eq!(err.to_string(), "permissão negada para a operação solicitada");
+
+        let err = DbError::NotFound;
+        assert_eq!(err.to_string(), "registro não encontrado");
+
+        let err = DbError::UniqueViolation("campo duplicado".into());
+        assert_eq!(err.to_string(), "violação de restrição de unicidade: campo duplicado");
+
+        let err = DbError::CryptoError("falha na tag".into());
+        assert_eq!(err.to_string(), "erro de criptografia: falha na tag");
+
+        let err = DbError::ConfigError("porta inválida".into());
+        assert_eq!(err.to_string(), "erro de configuração: porta inválida");
+    }
+
+    #[test]
+    fn test_db_error_from_sqlx_non_unique() {
+        let sqlx_err = sqlx::Error::RowNotFound;
+        let db_err = DbError::from_sqlx_unique(sqlx_err);
+        match db_err {
+            DbError::SqlxError(sqlx::Error::RowNotFound) => {}
+            _ => panic!("Esperado DbError::SqlxError(RowNotFound)"),
+        }
+    }
+}
+

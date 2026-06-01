@@ -15,13 +15,13 @@ pgvector      = { version = "0.4.0", features = ["sqlx"] }
 dashmap       = "6.1.0"
 aes-gcm       = "0.10.3"
 rust_decimal  = { version = "1.36.0", features = ["serde-with-str"] }
-chrono        = { version = "0.4.38", features = ["serde"] }
-serde         = { version = "1.0.219", features = ["derive"] }
-serde_json    = "1.0.219"
+chrono        = { version = "0.4", features = ["serde"] }
+serde         = { version = "1.0", features = ["derive"] }
+serde_json    = "1.0"
 thiserror     = "1.0"
 tokio         = { version = "1.38", features = ["full"] }
 tracing       = "0.1.40"
-uuid          = { version = "1.10.0", features = ["v4", "serde"] }
+uuid          = { version = "1.0", features = ["v4", "serde"] }
 async-trait   = "0.1.83"
 base64        = "0.22.1"
 secrecy       = "0.10.3"
