@@ -45,60 +45,63 @@ Armazena a entidade raiz de cada cliente corporativo (inquilino) do sistema. Tod
 ---
 
 ### `TenantConfig`
-Configurações de IA, parâmetros do LLM/RAG, prompts do sistema e branding personalizado por Tenant. Os parâmetros de chaves de API locais sobrescrevem as chaves globais da tabela `CoreSettings` quando preenchidos.
+Configurações de IA, parâmetros do LLM/RAG, prompts do sistema e branding personalizado por Tenant. Os campos são opcionais/nullables; se estiverem em branco ou nulos, o sistema aplica automaticamente a lógica de fallback carregando as configurações correspondentes da tabela `CoreSettings` (ou constantes padrões do código).
 
 *   **Nome da Tabela:** `tenants_tenantconfig`
 *   **Campos:**
     *   `id` (INT, Chave Primária): ID incremental automático.
     *   `tenant_id` (UUID, Chave Estrangeira, Não Nulo, Único): Vínculo um para um com `Tenant`. Cascade ao deletar.
     
-    *   **=== PROMPTS DE IA ===**
+    *   **=== PROMPTS DE IA (CAMPOS EXPLÍCITOS) ===**
     *   `dados_empresa` (TEXT, Opcional/Vazio): Informações gerais da empresa para base do RAG contextual.
-    *   `persona_bot` (TEXT, Opcional/Vazio): Persona e diretrizes de tom de voz/comportamento da LLM.
+    *   `persona_bot` (TEXT, Opcional/Vazio): Persona e diretrizes de tom de voz/comportamento da LLM (sobrescreve o prompt padrão do sistema).
     *   `bot_agent_name` (VARCHAR(80), Opcional/Vazio): Nome de exibição do bot nos chats (ex: `*Íris:*`).
     
     *   **=== MENSAGENS AUTOMÁTICAS E FALLBACKS ===**
-    *   `msg_fallback` (VARCHAR(500), Padrão: `"Recebemos sua mensagem. Em breve retornaremos."`): Mensagem de erro de processamento.
-    *   `msg_sem_info` (VARCHAR(500), Padrão: `"Desculpe, não encontrei informações sobre isso."`): Mensagem de ausência de informações úteis no RAG.
-    *   `msg_transferencia` (VARCHAR(500), Padrão: `"Vou transferir seu atendimento para o setor responsável."`): Mensagem exibida antes de desativar o bot e acionar humano.
+    *   `msg_fallback` (VARCHAR(500), Opcional/Nulo): Mensagem de erro de processamento. Se nula, usa o valor global do Core.
+    *   `msg_sem_info` (VARCHAR(500), Opcional/Nulo): Mensagem de ausência de informações úteis no RAG. Se nula, usa o valor global do Core.
+    *   `msg_transferencia` (VARCHAR(500), Opcional/Nulo): Mensagem de aviso de transição para humano. Se nula, usa o valor global do Core.
     
     *   **=== EXTRAÇÃO DE ENTIDADES ===**
     *   `entity_types` (JSONB, Padrão: `{}`): Tipos de entidades dinâmicas que o bot deve extrair (ex: `{"documento": "Extraia o CPF ou CNPJ"}`).
     
     *   **=== CONFIGURAÇÕES DO LLM (IA) ===**
-    *   `llm_class` (VARCHAR(50), Opcional/Vazio): Classe da LLM (ex: `ChatGroq`, `ChatOpenAI`, `ChatOllama`).
-    *   `model` (VARCHAR(100), Opcional/Vazio): Nome do modelo da LLM (ex: `gpt-4o-mini`, `llama-3.3-70b-versatile`).
-    *   `llm_temperature` (NUMERIC(3, 2), Padrão: `0.00`): Temperatura de criatividade do LLM.
+    *   `llm_class` (VARCHAR(50), Opcional/Vazio): Classe da LLM (ex: `ChatGroq`, `ChatOpenAI`, `ChatOllama`). Se vazia, usa a global.
+    *   `model` (VARCHAR(100), Opcional/Vazio): Nome do modelo da LLM (ex: `gpt-4o-mini`, `llama-3.3-70b-versatile`). Se vazio, usa o global.
+    *   `llm_temperature` (NUMERIC(3, 2), Opcional/Nulo): Temperatura de criatividade do LLM. Se nula, usa a global.
     
     *   **=== TRANSCRIÇÃO E VISÃO ===**
-    *   `transcription_provider` (VARCHAR(50), Opcional/Vazio): Provedor de transcrição de áudios (ex: `openai`, `groq`).
-    *   `transcription_model` (VARCHAR(100), Opcional/Vazio): Modelo para transcrição (ex: `whisper-1`).
-    *   `vision_provider` (VARCHAR(50), Opcional/Vazio): Provedor de visão computacional (ex: `google`, `openai`).
-    *   `vision_model` (VARCHAR(100), Opcional/Vazio): Modelo para interpretar mídias visuais (ex: `gemini-2.5-flash`).
+    *   `transcription_provider` (VARCHAR(50), Opcional/Vazio): Provedor de transcrição de áudios (ex: `openai`, `groq`). Se vazio, usa o global.
+    *   `transcription_model` (VARCHAR(100), Opcional/Vazio): Modelo para transcrição (ex: `whisper-1`). Se vazio, usa o global.
+    *   `vision_provider` (VARCHAR(50), Opcional/Vazio): Provedor de visão computacional (ex: `google`, `openai`). Se vazio, usa o global.
+    *   `vision_model` (VARCHAR(100), Opcional/Vazio): Modelo para interpretar mídias visuais (ex: `gemini-2.5-flash`). Se vazio, usa o global.
     
     *   **=== EMBEDDINGS E RAG ===**
-    *   `embeddings_class` (VARCHAR(50), Padrão: `"OpenAIEmbeddings"`): Classe para geração de embeddings vetoriais.
-    *   `embeddings_model` (VARCHAR(100), Opcional/Vazio): Modelo de embeddings (ex: `text-embedding-3-small`).
-    *   `chunk_size` (INTEGER, Padrão: `1000`): Tamanho dos blocos de corte de texto (chunks).
-    *   `chunk_overlap` (INTEGER, Padrão: `200`): Sobreposição de caracteres entre chunks.
+    *   `embeddings_class` (VARCHAR(50), Opcional/Vazio): Classe para geração de embeddings vetoriais. Se vazia, usa a global.
+    *   `embeddings_model` (VARCHAR(100), Opcional/Vazio): Modelo de embeddings (ex: `text-embedding-3-small`). Se vazio, usa o global.
+    *   `chunk_size` (INTEGER, Opcional/Nulo): Tamanho dos blocos de corte de texto (chunks). Se nulo, usa o global.
+    *   `chunk_overlap` (INTEGER, Opcional/Nulo): Sobreposição de caracteres entre chunks. Se nulo, usa o global.
     
     *   **=== THRESHOLDS E PARAMETRIZAÇÃO ===**
-    *   `similarity_threshold` (NUMERIC(3, 2), Padrão: `0.40`): Limite mínimo de similaridade para intenções.
-    *   `vector_distance_threshold` (NUMERIC(3, 2), Padrão: `0.25`): Limite de distância de cosseno máximo aceitável para o pgvector.
+    *   `similarity_threshold` (NUMERIC(3, 2), Opcional/Nulo): Limite mínimo de similaridade para intenções. Se nulo, usa o global.
+    *   `vector_distance_threshold` (NUMERIC(3, 2), Opcional/Nulo): Limite de distância de cosseno máximo aceitável para o pgvector. Se nulo, usa o global.
     
     *   **=== API KEYS LOCAIS ===**
     *   `api_keys` (JSONB, Padrão: `{}`): Dicionário de chaves de API locais criptografadas que sobrescrevem o global (ex: `{"groq_api_key": "...", "openai_api_key": "..."}`).
     
     *   **=== BRANDING E REGIONALIZAÇÃO ===**
-    *   `brand_name` (VARCHAR(100), Opcional/Vazio): Nome do painel personalizado.
+    *   `brand_name` (VARCHAR(100), Opcional/Vazio): Nome do painel personalizado do inquilino.
     *   `primary_color` (VARCHAR(7), Padrão: `"#0d6efd"`): Cor primária do painel.
     *   `secondary_color` (VARCHAR(7), Padrão: `"#6c757d"`): Cor secundária do painel.
     *   `timezone` (VARCHAR(50), Padrão: `"America/Sao_Paulo"`): Fuso horário do tenant.
     *   `language_code` (VARCHAR(10), Padrão: `"pt-br"`): Idioma padrão do painel.
     *   `updated_at` (TIMESTAMPTZ, Não Nulo): Data da última atualização cadastral.
+
 *   **Métodos de Código:**
-    *   `set_api_key(service, key)`: Criptografa a chave usando AES-GCM e a insere no dicionário JSONB.
-    *   `get_api_key(service)`: Descriptografa e retorna a chave de API do serviço.
+    *   `set_api_key(service, key)`: Criptografa a chave usando AES-GCM-256 e a insere no dicionário JSONB `api_keys`.
+    *   `get_api_key(service)`: Descriptografa e retorna a chave de API do serviço a partir do JSONB.
+
+
 
 ---
 

@@ -75,9 +75,11 @@ A documentação detalhada da modelagem foi dividida por módulos funcionais:
 6. **[Módulo Sincronizadores & Integrações (WhatsApp)](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/06_modulo_integracoes.md)**
    * Rastreamento de instâncias e contatos conectados ao único servidor Evolution API central.
 7. **[Módulo Configurações Globais](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/07_modulo_configuracoes.md)**
-   * Parâmetros de funcionamento gerais do sistema, tokens e chaves de API globais do Core (`CoreSettings`).
+   * Definições de chaves de API globais, flags operacionais mestres do sistema e parametrizações comuns do CoreSettings.
+8. **[Design de Gerenciamento de Configurações e IA](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/gerenciamento_configuracoes_ia.md)**
+   * Avaliação do gerenciamento legado de configurações e LLM (`ServiceHub`), e detalhamento da arquitetura em Rust com cache concorrente (`DashMap`) e polimorfismo tipado (`LlmProvider`).
 
----
+
 
 ## 4. Convenções de Banco de Dados
 
