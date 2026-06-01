@@ -4,72 +4,57 @@ Este diretório contém a especificação detalhada do modelo de dados do **Smar
 
 ---
 
-## 1. Arquitetura Multitenant (Cross-Database)
+## 1. Arquitetura de Banco de Dados Único (Logical Multitenancy)
 
-O sistema utiliza uma arquitetura **SaaS Multitenant com Bancos de Dados Separados** para garantir o isolamento e a segurança dos dados de cada cliente (Tenant). O banco de dados é dividido em duas camadas lógicas:
+O sistema adota uma arquitetura **SaaS Multitenant com Base de Dados Única** compartilhada. O isolamento lógico de dados de cada cliente (Tenant) é garantido por duas barreiras robustas:
 
-### Camada Core (Banco de Dados `default`)
-Armazena dados globais do SaaS, informações administrativas e controle de acessos globais. Esta camada reside em um único banco de dados centralizado.
-*   **Modelos contidos:** [Tenant](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/01_modulo_tenants.md#tenant), [TenantDatabase](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/01_modulo_tenants.md#tenantdatabase), [TenantEvolution](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/01_modulo_tenants.md#tenantevolution), [TenantTrello](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/01_modulo_tenants.md#tenanttrello), [TenantConfig](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/01_modulo_tenants.md#tenantconfig), [Plan](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/01_modulo_tenants.md#plan), [Subscription](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/01_modulo_tenants.md#subscription), [PaymentRecord](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/01_modulo_tenants.md#paymentrecord), [TenantInvite](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/01_modulo_tenants.md#tenantinvite), [TenantUser](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/01_modulo_tenants.md#tenantuser), [CoreSettings](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/01_modulo_tenants.md#coresettings) e o modelo nativo de usuários do Django (`auth_user`).
-
-### Camada Tenant (Banco de Dados Específico)
-Cada inquilino ativo possui seu próprio banco de dados PostgreSQL. Toda a lógica de negócio, contatos, atendimentos, integrações e dados processados para IA rodam exclusivamente nessa base isolada.
-*   **Modelos contidos:** Todos os demais modelos dos apps `clientes`, `operacional`, `atendimentos`, `treinamento`, `trello_sync` e `evolution_sync`.
+1. **Filtro obrigatório por `tenant_id`:** Todas as tabelas de negócio do inquilino possuem uma chave estrangeira física (`tenant_id`) apontando para a tabela central de inquilinos.
+2. **Row-Level Security (RLS) no PostgreSQL:** A nível de banco de dados, políticas de RLS barram acessos cruzados. Em cada transação, a aplicação configura o contexto local (`SET LOCAL app.current_tenant = tenant_id`), forçando o PostgreSQL a filtrar todas as operações DML de forma nativa e automática.
 
 ```mermaid
 graph TD
-    subgraph Banco Central [Banco Central / Core - default]
-        User[django.contrib.auth.models.User]
-        Tenant[Tenant]
-        DBConfig[TenantDatabase]
-        EvoConfig[TenantEvolution]
-        TrlConfig[TenantTrello]
-        Config[TenantConfig]
-        Plan[Plan]
-        Sub[Subscription]
-        Pay[PaymentRecord]
-        Invite[TenantInvite]
-        TUser[TenantUser]
-        CoreSettings[CoreSettings]
+    subgraph Banco de Dados Unificado (Single DB)
+        subgraph Camada Core (SaaS global)
+            User[django.contrib.auth.models.User]
+            Tenant[Tenant]
+            Config[TenantConfig]
+            Plan[Plan]
+            Sub[Subscription]
+            Pay[PaymentRecord]
+            Invite[TenantInvite]
+            TUser[TenantUser]
+            CoreSettings[CoreSettings]
+        end
+
+        subgraph Camada Tenant (Dados isolados logicamente por tenant_id e RLS)
+            Contato[Contato]
+            Cliente[Cliente]
+            Atendimento[Atendimento]
+            Mensagem[Mensagem]
+            Dept[Departamento]
+            Agent[Atendente]
+            Train[Treinamento]
+            Doc[Documento]
+            EvoInst[EvolutionInstance]
+        end
     end
 
-    subgraph Banco Tenant A [Banco do Tenant A - Isolado]
-        ContatoA[Contato]
-        ClienteA[Cliente]
-        AtendimentoA[Atendimento]
-        MensagemA[Mensagem]
-        DeptA[Departamento]
-        AgentA[Atendente]
-        TrainA[Treinamento]
-    end
-
-    subgraph Banco Tenant B [Banco do Tenant B - Isolado]
-        ContatoB[Contato]
-        ClienteB[Cliente]
-        AtendimentoB[Atendimento]
-        MensagemB[Mensagem]
-        DeptB[Departamento]
-        AgentB[Atendente]
-        TrainB[Treinamento]
-    end
-
-    Tenant -->|Conexão DB| DBConfig
-    DBConfig -->|Acessa| Banco Tenant A
-    DBConfig -->|Acessa| Banco Tenant B
+    Tenant ||--|| Config : "has configuration"
+    Tenant ||--o{ Contato : "owns (logical isolation)"
+    Tenant ||--o{ Atendimento : "owns (logical isolation)"
+    Tenant ||--o{ EvoInst : "owns (logical isolation)"
 ```
 
 ---
 
-## 2. Restrições e Chaves Estrangeiras Lógicas (Cross-Database)
+## 2. Restrições e Chaves Estrangeiras Físicas (Integridade Garantida)
 
-Para manter a integridade referencial sem criar dependências físicas impossíveis no nível do banco de dados (já que as tabelas estão em bancos diferentes), o sistema adota duas abordagens:
+Como todas as tabelas residem na **mesma base de dados física**, a integridade referencial é mantida e imposta pelo próprio motor do PostgreSQL:
 
-1.  **Chaves Estrangeiras Lógicas (Sem Constraints Físicas):**
-    Campos armazenados como inteiros normais (`BigIntegerField` ou `UUIDField`) que guardam o ID de uma tabela em outro banco de dados ou app isolado. A validação destas referências ocorre na camada de aplicação (no ORM ou nas regras de negócio).
-    *   *Exemplo 1:* O `Atendente` (no banco do tenant) possui um campo `usuario_id` apontando para `auth_user` (no banco default). No ORM Django, é usado `db_constraint=False`.
-    *   *Exemplo 2:* `EvolutionInstance` possui um campo `tenant_id` (UUID) para referenciar o Tenant proprietário que está na base default.
-2.  **Consolidação de Tabelas de Domínio Coeso:**
-    Toda a modelagem de informação de atendimento que antes se dividia entre `atendimento_unificado` e `atendimentos` foi consolidada no app central `atendimentos` para evitar acoplamento desnecessário e facilitar queries.
+1. **Constraints Físicas (`FOREIGN KEY`):**
+   Relacionamentos entre tabelas de negócio do tenant (ex: `Mensagem` para `Atendimento`, `EtapaFluxo` para `FluxoAtendimento`) utilizam chaves estrangeiras físicas com comportamento `ON DELETE CASCADE` ou `ON DELETE PROTECT` ativas, garantindo consistência referencial absoluta.
+2. **Relacionamento com Usuários (auth_user):**
+   A tabela `operacional_atendente` e `tenants_tenantuser` possuem relacionamentos de chaves estrangeiras físicas com a tabela padrão de usuários do Django (`auth_user`), garantindo que não haja registros órfãos de colaboradores.
 
 ---
 
@@ -77,23 +62,25 @@ Para manter a integridade referencial sem criar dependências físicas impossív
 
 A documentação detalhada da modelagem foi dividida por módulos funcionais:
 
-1.  **[Módulo Tenants & Configurações Globais](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/01_modulo_tenants.md)**
-    *   Gerenciamento de Tenants, infraestrutura de conexão de bancos, planos, assinaturas, controle de acesso e configurações de IA globais.
-2.  **[Módulo Clientes & Contatos](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/02_modulo_clientes.md)**
-    *   Cadastro de contatos vindos do WhatsApp (com validações de telefone) e de clientes corporativos com dados fiscais (CNPJ, CPF, CEP).
-3.  **[Módulo Operacional (Estrutura de Trabalho)](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/03_modulo_operacional.md)**
-    *   Departamentos, atendentes humanos, capacidade de atendimento simultâneo, fluxos de trabalho e etapas do Kanban.
-4.  **[Módulo Atendimentos & Mensageria](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/04_modulo_atendimentos.md)**
-    *   Atendimentos ativos, mensagens inbound/outbound, suporte a mídias, histórico de status, campos personalizados dinâmicos, tags e notas internas.
-5.  **[Módulo Treinamento & IA (RAG)](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/05_modulo_treinamento.md)**
-    *   Modelos de chunks de conhecimento vetorizados com `pgvector` (1536 dimensões), feedbacks de testes e controle semântico de intenções (Query Compose).
-6.  **[Módulo Sincronizadores & Integrações (Trello/WhatsApp)](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/06_modulo_integracoes.md)**
-    *   Sincronização bidirecional com quadros do Trello e rastreamento de instâncias e eventos da Evolution API.
+1. **[Módulo Tenants & Assinaturas](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/01_modulo_tenants.md)**
+   * Gerenciamento de Tenants, planos, assinaturas, convites, controle de acessos de funcionários e tabelas de configuração local do Tenant (`TenantConfig`).
+2. **[Módulo Clientes & Contatos](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/02_modulo_clientes.md)**
+   * Cadastro de contatos do WhatsApp (com normalização de telefone) e de clientes corporativos com dados fiscais (CNPJ, CPF, CEP) sob isolamento lógico.
+3. **[Módulo Operacional (Estrutura de Trabalho)](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/03_modulo_operacional.md)**
+   * Departamentos, atendentes humanos, filas e canais Kanban locais de cada inquilino.
+4. **[Módulo Atendimentos & Mensageria](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/04_modulo_atendimentos.md)**
+   * Atendimentos ativos, mensagens inbound/outbound, suporte a mídias, histórico de transições do Kanban e campos personalizados.
+5. **[Módulo Treinamento & IA (RAG)](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/05_modulo_treinamento.md)**
+   * Chunks de texto vetorizados com `pgvector` (1536 dimensões), logs de feedbacks e mapeador semântico de intenções (`QueryCompose`) com filtro de tenant.
+6. **[Módulo Sincronizadores & Integrações (WhatsApp)](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/06_modulo_integracoes.md)**
+   * Rastreamento de instâncias e contatos conectados ao único servidor Evolution API central.
+7. **[Módulo Configurações Globais](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/07_modulo_configuracoes.md)**
+   * Parâmetros de funcionamento gerais do sistema, tokens e chaves de API globais do Core (`CoreSettings`).
 
 ---
 
 ## 4. Convenções de Banco de Dados
 
-*   **Banco de Dados Recomendado:** PostgreSQL 16+.
-*   **Módulo Vetorial:** Extensão `pgvector` habilitada na base do tenant para busca semântica em embeddings de 1536 dimensões (OpenAI/text-embedding-3-small ou similar).
-*   **Criptografia de Credenciais:** Informações sensíveis (senhas de banco, chaves de API do Trello e Evolution) são criptografadas antes de serem salvas no banco com chave simétrica definida em variáveis de ambiente (`ENCRYPTION_KEY`).
+* **Banco de Dados Recomendado:** PostgreSQL 16+.
+* **Módulo Vetorial:** Extensão `pgvector` habilitada na base de dados para busca semântica em embeddings de 1536 dimensões.
+* **Criptografia de Credenciais:** Informações sensíveis (como tokens de instâncias da Evolution API e chaves de API locais em JSONB) são criptografadas antes de serem salvas no banco com chave simétrica definida em variáveis de ambiente (`ENCRYPTION_KEY`).

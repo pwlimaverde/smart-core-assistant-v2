@@ -1,6 +1,6 @@
 # Módulo Atendimentos & Mensageria
 
-Este documento descreve os modelos residentes no **Banco de Dados do Tenant** responsáveis pelo ciclo de vida dos atendimentos, envio e recepção de mensagens, controle de histórico de movimentação física no Kanban, anotações internas dos atendentes e gerenciamento de metadados dinâmicos (campos personalizados).
+Este documento descreve os modelos de atendimentos, mensagens, transições no Kanban, anotações internas e campos personalizados dinâmicos, todos residentes no **banco de dados único** do sistema, protegidos por isolamento lógico via `tenant_id` e utilizando chaves estrangeiras físicas para garantir a integridade.
 
 ---
 
@@ -8,6 +8,15 @@ Este documento descreve os modelos residentes no **Banco de Dados do Tenant** re
 
 ```mermaid
 erDiagram
+    Tenant ||--o{ Atendimento : "owns"
+    Tenant ||--o{ Mensagem : "owns"
+    Tenant ||--o{ MovimentoFluxo : "owns"
+    Tenant ||--o{ CampoPersonalizado : "owns"
+    Tenant ||--o{ ValorCampoAtendimento : "owns"
+    Tenant ||--o{ Etiqueta : "owns"
+    Tenant ||--o{ EtiquetaAtendimento : "owns"
+    Tenant ||--o{ Nota : "owns"
+
     Contato ||--o{ Atendimento : "has"
     Departamento ||--o{ Atendimento : "belongs to"
     FluxoAtendimento ||--o{ Atendimento : "belongs to"
@@ -76,11 +85,12 @@ Identifica quem originou o disparo da mensagem.
 ---
 
 ### `Atendimento`
-A entidade principal que une o cliente final ao departamento, fluxo e operador responsável.
+A entidade principal que une o cliente final ao departamento, fluxo e operador responsável no banco centralizado.
 
 *   **Nome da Tabela:** `oraculo_atendimento`
 *   **Campos:**
     *   `id` (INT, Chave Primária): ID incremental automático.
+    *   `tenant_id` (UUID, Chave Estrangeira, Não Nulo): Relacionamento com `Tenant`. Cascade ao deletar.
     *   `contato_id` (INT, Chave Estrangeira, Não Nulo): Relação com `Contato`. Cascade ao deletar.
     *   `departamento_id` (INT, Chave Estrangeira, Opcional/Nulo): Departamento atual do atendimento. Seta nulo em deleção.
     *   `fluxo_atendimento_id` (INT, Chave Estrangeira, Opcional/Nulo): Fluxo ativo no qual o card reside. Seta nulo em deleção.
@@ -119,15 +129,10 @@ A entidade principal que une o cliente final ao departamento, fluxo e operador r
     *   `touch_last_message(quando)`: Atualiza o campo `data_ultima_mensagem`.
     *   `transferir_para_humano_com_saudacao(atendente_id, observacao)`: Transfere o atendimento e cria automaticamente uma mensagem de saudação do atendente, injetando sua respectiva API key da instância do Evolution para envio.
 *   **Índices:**
-    *   `oraculo_atendimento_status_dept` (status, departamento)
-    *   `oraculo_atendimento_dept_msg` (departamento, data_ultima_mensagem)
-    *   `oraculo_atendimento_atendente_status` (atendente_humano, status)
-    *   `oraculo_atendimento_etapa_atendente` (etapa_atual, atendente_humano)
-    *   `oraculo_atendimento_dept_etapa` (departamento, etapa_atual)
-    *   `oraculo_atendimento_fluxo` (fluxo_atendimento)
-    *   `oraculo_atendimento_prioridade` (prioridade)
-    *   `oraculo_atendimento_tags` (tags)
-    *   `oraculo_atendimento_bot_pode` (bot_pode_atender)
+    *   `oraculo_atendimento_tenant_status_dept` (tenant, status, departamento)
+    *   `oraculo_atendimento_tenant_dept_msg` (tenant, departamento, data_ultima_mensagem)
+    *   `oraculo_atendimento_tenant_atendente_status` (tenant, atendente_humano, status)
+    *   `oraculo_atendimento_tenant_etapa_atendente` (tenant, etapa_atual, atendente_humano)
 *   **Ordenação:** Ordenado descrescentemente por `data_inicio`.
 
 ---
@@ -138,56 +143,59 @@ Armazena todo o histórico de mensagens inbound/outbound do atendimento.
 *   **Nome da Tabela:** `oraculo_mensagem`
 *   **Campos:**
     *   `id` (INT, Chave Primária): ID incremental automático.
+    *   `tenant_id` (UUID, Chave Estrangeira, Não Nulo): Relacionamento com `Tenant`. Cascade ao deletar.
     *   `atendimento_id` (INT, Chave Estrangeira, Não Nulo): Relação com `Atendimento`. Cascade ao deletar.
     *   `tipo` (VARCHAR(25), Padrão: `"extendedTextMessage"`): Tipo de mídia da mensagem (Enum `TipoMensagem`).
     *   `conteudo` (TEXT, Não Nulo): Texto da mensagem recebida do cliente. Em mídias binárias, pode armazenar transcrição, links ou legenda.
     *   `remetente` (VARCHAR(20), Padrão: `"contato"`): Enum `TipoRemetente`.
     *   `timestamp` (TIMESTAMPTZ, Não Nulo): Registra a data/hora de envio/recebimento.
     *   `message_id_whatsapp` (VARCHAR(100), Opcional/Nulo): Identificador da mensagem gerado pelo WhatsApp (`messageId`/`stanzaId`).
-    *   `metadados` (JSONB, Padrão: `{}`): Estrutura com payloads nativos recebidos pelo webhook (Evolution API) incluindo detalhes de áudio, imagem e localizações.
+    *   `metadados` (JSONB, Padrão: `{}`): Payload nativo recebido pelo webhook (Evolution API) incluindo detalhes de áudio, imagem e localizações.
     *   `respondida` (BOOLEAN, Padrão: `False`): Se o bot já processou e disparou retorno físico para esta mensagem.
     *   `lido` (BOOLEAN, Padrão: `False`, Indexado): Se a mensagem inbound já foi visualizada por um atendente humano no painel do chat.
-    *   `resposta_bot` (TEXT, Opcional/Nulo): Armazena a resposta em texto sugerida/gerada pelo Bot inteligente.
-    *   `intent_detectado` (JSONB, Padrão: `[]`): Lista com as intenções extraídas da mensagem pela IA (ex: `[{"saudacao": "Olá"}]`).
-    *   `entidades_extraidas` (JSONB, Padrão: `[]`): Lista de entidades extraídas pela IA (ex: `[{"cnpj": "00.000.000/0001-00"}]`).
-    *   `confianca_resposta` (FLOAT, Opcional/Nulo): Score de confiabilidade da resposta gerada pela LLM (entre 0.0 e 1.0).
-    *   `arquivo_midia` (VARCHAR(255) / FILE, Opcional/Nulo): Campo para armazenamento binário físico da mídia decodificada (imagens, áudios, PDFs). Salvo no storage local/S3 do tenant sob o caminho gerado por `media_upload_to`.
-    *   `analise_midia` (TEXT, Opcional/Nulo): Texto completo da transcrição de áudio, análise OCR ou interpretação visual gerada por LLM multimodal. Usado exclusivamente como contexto da IA.
-    *   `resumo_midia` (TEXT, Opcional/Nulo): Resumo sucinto exibido ao atendente no painel do chat (ex: *"Áudio falando sobre atraso no boleto"*).
-    *   `mensagem_citada_id` (INT, Chave Estrangeira, Opcional/Nulo): Autorreferência apontando para a `Mensagem` original que foi respondida (Reply). Seta nulo em deleção.
-    *   `quoted_preview` (JSONB, Opcional/Nulo): Contém o preview em texto/mídia da mensagem citada caso a mensagem citada seja muito antiga e não exista no banco local.
+    *   `resposta_bot` (TEXT, Opcional/Nulo): Resposta em texto sugerida/gerada pelo Bot de IA.
+    *   `intent_detectado` (JSONB, Padrão: `[]`): Lista com as intenções extraídas da mensagem pela IA.
+    *   `entidades_extraidas` (JSONB, Padrão: `[]`): Lista de entidades extraídas pela IA.
+    *   `confianca_resposta` (FLOAT, Opcional/Nulo): Score de confiabilidade da resposta gerada pela LLM.
+    *   `arquivo_midia` (VARCHAR(255) / FILE, Opcional/Nulo): Campo para armazenamento do arquivo físico local.
+    *   `analise_midia` (TEXT, Opcional/Nulo): Texto completo de transcrição ou descrição por multimodal.
+    *   `resumo_midia` (TEXT, Opcional/Nulo): Resumo curto da mídia para o atendente.
+    *   `mensagem_citada_id` (INT, Chave Estrangeira, Opcional/Nulo): Referência física à mensagem original citada no mesmo banco de dados. Seta nulo em deleção.
+    *   `quoted_preview` (JSONB, Opcional/Nulo): Preview da mensagem citada se ela não estiver mais no banco local.
     *   `status_envio` (VARCHAR(15), Padrão: `"pending"`, Indexado): Rastreamento de leitura do WhatsApp para mensagens outbound.
         *   *Opções:* `pending` (Pendente), `sent` (Enviada), `delivered` (Entregue), `read` (Lida/azul), `failed` (Falhou).
-    *   `data_entregue` (TIMESTAMPTZ, Opcional/Nulo): Timestamp de entrega no dispositivo do cliente.
-    *   `data_lida` (TIMESTAMPTZ, Opcional/Nulo): Timestamp de leitura azul no aplicativo do cliente.
+    *   `data_entregue` (TIMESTAMPTZ, Opcional/Nulo): Timestamp de entrega.
+    *   `data_lida` (TIMESTAMPTZ, Opcional/Nulo): Timestamp de leitura.
 *   **Métodos Auxiliares:**
-    *   `registrar_resposta_bot(resposta, confianca)`: Helper de gravação da resposta da LLM, com validações de consistência do score e atualização de SLA de primeira resposta.
+    *   `registrar_resposta_bot(resposta, confianca)`: Helper de gravação da resposta da LLM e atualização de SLA de primeira resposta.
+*   **Índices:**
+    *   `oraculo_mensagem_tenant_atend` (tenant, atendimento_id, timestamp)
 *   **Ordenação:** Ordenado por `timestamp`.
 
 ---
 
 ### `MovimentoFluxo`
-Tabela histórica de transições de colunas do Kanban. Usada para auditar a jornada do cliente e calcular SLAs por etapa do fluxo.
+Tabela histórica de transições de colunas do Kanban. Usada para calcular SLAs de permanência em cada etapa.
 
 *   **Nome da Tabela:** `oraculo_movimento_fluxo`
 *   **Campos:**
     *   `id` (INT, Chave Primária): ID incremental automático.
-    *   `atendimento_id` (INT, Chave Estrangeira, Não Nulo): Relação com `Atendimento`. Cascade ao deletar.
-    *   `etapa_origem_id` (INT, Chave Estrangeira, Opcional/Nulo): Coluna de onde o card saiu (nulo para novos atendimentos). Seta nulo em deleção.
-    *   `etapa_destino_id` (INT, Chave Estrangeira, Não Nulo): Coluna para onde o card entrou. Cascade ao deletar.
-    *   `atendente_origem_id` (INT, Chave Estrangeira, Opcional/Nulo): Atendente que efetuou a movimentação de arraste. Seta nulo em deleção.
-    *   `atendente_destino_id` (INT, Chave Estrangeira, Opcional/Nulo): Atendente que foi atribuído como responsável no momento da transição. Seta nulo em deleção.
-    *   `motivo` (TEXT, Opcional/Nulo): Motivo informado pelo operador para a mudança de etapa.
+    *   `tenant_id` (UUID, Chave Estrangeira, Não Nulo): Relacionamento com `Tenant`. Cascade ao deletar.
+    *   `atendimento_id` (INT, Chave Estrangeira, Não Nulo): Relação física com `Atendimento`. Cascade ao deletar.
+    *   `etapa_origem_id` (INT, Chave Estrangeira, Opcional/Nulo): Coluna de origem da transição. Seta nulo em deleção.
+    *   `etapa_destino_id` (INT, Chave Estrangeira, Não Nulo): Coluna de destino da transição. Cascade ao deletar.
+    *   `atendente_origem_id` (INT, Chave Estrangeira, Opcional/Nulo): Atendente físico que arrastou. Seta nulo em deleção.
+    *   `atendente_destino_id` (INT, Chave Estrangeira, Opcional/Nulo): Atendente físico responsável na entrada. Seta nulo em deleção.
+    *   `motivo` (TEXT, Opcional/Nulo): Motivo informado para a mudança de etapa.
     *   `dados_complementares` (JSONB, Padrão: `{}`): Metadados complementares.
-    *   `automatico` (BOOLEAN, Padrão: `False`): Se a movimentação foi efetuada por regras de IA do bot.
+    *   `automatico` (BOOLEAN, Padrão: `False`): Se a movimentação foi efetuada pelo bot.
     *   `data_movimento` (TIMESTAMPTZ, Não Nulo): Data/hora da transição (gerado no insert).
-    *   `duracao_segundos` (INTEGER, Opcional/Nulo): Registra a quantidade de segundos em que o card permaneceu na coluna anterior (etapa_origem) até ser arrastado para a atual.
+    *   `duracao_segundos` (INTEGER, Opcional/Nulo): Tempo de permanência do card na etapa de origem antes da transição.
 *   **Métodos Auxiliares:**
     *   `criar_movimento(atendimento, etapa_destino, atendente_destino, motivo, automatico, atendente_origem, etapa_origem) [Classmethod]`: Cria o registro de movimentação, calcula de forma automática os segundos de permanência da etapa anterior (por diferença de datas), atualiza a etapa atual e o responsável no `Atendimento` e persiste na base.
 *   **Índices:**
-    *   `oraculo_mov_fluxo_atend_date` (atendimento, data_movimento DESC)
-    *   `oraculo_mov_fluxo_dest_date` (etapa_destino, data_movimento DESC)
-    *   `oraculo_mov_fluxo_date` (data_movimento)
+    *   `oraculo_movimento_fluxo_tenant_atend` (tenant, atendimento_id, data_movimento DESC)
+    *   `oraculo_movimento_fluxo_tenant_dest` (tenant, etapa_destino_id, data_movimento DESC)
 *   **Ordenação:** Ordenado decrescentemente por `data_movimento`.
 
 ---
@@ -198,21 +206,16 @@ Tabela histórica de transições de colunas do Kanban. Usada para auditar a jor
 Escopo do campo personalizado configurável.
 
 *   *Opções (TextChoices):*
-    *   `GLOBAL` $\rightarrow$ Aplica-se a todos os atendimentos do sistema.
+    *   `GLOBAL` $\rightarrow$ Aplica-se a todos os atendimentos do inquilino.
     *   `FLUXO` $\rightarrow$ Exibido apenas quando o atendimento estiver em um `FluxoAtendimento` específico.
 
 ---
 
 ### `TipoCampo`
-Tipos primitivos e complexos suportados pelos campos personalizados.
+Tipos suportados pelos campos personalizados.
 
 *   *Opções (TextChoices):*
-    *   `texto` (Texto)
-    *   `numero` (Número)
-    *   `data` (Data)
-    *   `escolha` (Escolha única - Dropdown)
-    *   `multipla_escolha` (Múltipla escolha)
-    *   `booleano` (Booleano)
+    *   `texto` (Texto), `numero` (Número), `data` (Data), `escolha` (Dropdown), `multipla_escolha` (Checkbox), `booleano` (Booleano).
 
 ---
 
@@ -220,9 +223,9 @@ Tipos primitivos e complexos suportados pelos campos personalizados.
 Identifica quem inseriu o dado no campo personalizado.
 
 *   *Opções (TextChoices):*
-    *   `MANUAL` $\rightarrow$ Inserido manualmente pelo atendente.
-    *   `BOT` $\rightarrow$ Extraído automaticamente pela IA durante a conversa.
-    *   `IMPORT` $\rightarrow$ Migrado ou importado via API.
+    *   `MANUAL` $\rightarrow$ Operador humano.
+    *   `BOT` $\rightarrow$ Extraído pelo LLM.
+    *   `IMPORT` $\rightarrow$ Importado via API.
 
 ---
 
@@ -232,26 +235,26 @@ Catálogo de definição de campos extras que o atendente ou o bot podem preench
 *   **Nome da Tabela:** `atu_campo_personalizado`
 *   **Campos:**
     *   `id` (BIGINT, Chave Primária): ID automático.
+    *   `tenant_id` (UUID, Chave Estrangeira, Não Nulo): Relacionamento com `Tenant`. Cascade ao deletar.
     *   `slug` (SLUG, Não Nulo): Slug de sistema (ex: `valor_orcamento`, `nome_pet`).
     *   `nome` (VARCHAR(120), Não Nulo): Nome amigável do campo exibido na interface.
-    *   `descricao` (TEXT, Opcional/Vazio): Descrição detalhada do campo. Serve como dica contextual RAG para a IA compreender o que deve extrair.
+    *   `descricao` (TEXT, Opcional/Vazio): Descrição detalhada (serve como contexto para extração do bot).
     *   `escopo` (VARCHAR(10), Padrão: `"GLOBAL"`): Enum `EscopoCampo`.
-    *   `fluxo_id` (BIGINT, Opcional/Nulo): Referência lógica ao ID do `FluxoAtendimento` do app `operacional`. Sem constraint de chave estrangeira física.
+    *   `fluxo_id` (INT, Chave Estrangeira, Opcional/Nulo): Referência física para `FluxoAtendimento`. Seta nulo em deleção.
     *   `tipo` (VARCHAR(20), Padrão: `"texto"`): Tipo de dados do campo (Enum `TipoCampo`).
-    *   `opcoes` (JSONB, Padrão: `[]`): Lista com strings de opções válidas (exclusivo para tipos `escolha` e `multipla_escolha`).
-    *   `obrigatorio` (BOOLEAN, Padrão: `False`): Se marcado, impede transição no Kanban para etapas que exijam este campo caso esteja em branco.
-    *   `extrair_automaticamente` (BOOLEAN, Padrão: `True`): Se marcado, a rotina de NLP da IA tentará de forma proativa identificar e extrair o dado a partir do texto do cliente.
-    *   `extrair_hint` (VARCHAR(500), Opcional/Vazio): Instruções específicas em português para ajudar o prompt de extração da IA (ex: *"Extrair apenas números com DDD"*).
-    *   `mostrar_no_card` (BOOLEAN, Padrão: `True`): Exibe o valor do campo em formato de tag diretamente no card Kanban.
-    *   `ordem` (INTEGER, Padrão: `0`): Prioridade de renderização na aba lateral do chat.
-    *   `ativo` (BOOLEAN, Padrão: `True`): Define se o campo está ativo.
+    *   `opcoes` (JSONB, Padrão: `[]`): Opções de dropdown.
+    *   `obrigatorio` (BOOLEAN, Padrão: `False`): Se é obrigatório para travar transições Kanban.
+    *   `extrair_automaticamente` (BOOLEAN, Padrão: `True`): Se o bot deve extrair do chat.
+    *   `extrair_hint` (VARCHAR(500), Opcional/Vazio): Dicas contextuais para a extração do LLM.
+    *   `mostrar_no_card` (BOOLEAN, Padrão: `True`): Renderiza tag no card Kanban.
+    *   `ordem` (INTEGER, Padrão: `0`): Renderização na aba lateral.
+    *   `ativo` (BOOLEAN, Padrão: `True`): Status.
     *   `data_criacao` (TIMESTAMPTZ, Não Nulo): Data de inclusão.
     *   `data_atualizacao` (TIMESTAMPTZ, Não Nulo): Data da última modificação.
 *   **Restrições e Unicidade:**
-    *   `unique_together`: `[["slug", "escopo", "fluxo_id"]]` (Evita duplicação do mesmo slug no mesmo escopo/fluxo).
+    *   Unicidade composta: A combinação de `tenant_id`, `slug`, `escopo` e `fluxo_id` deve ser única.
 *   **Índices:**
-    *   `atu_campo_escopo_fluxo_idx` (escopo, fluxo_id, ativo)
-    *   `atu_campo_extrair_idx` (extrair_automaticamente, ativo)
+    *   `atu_campo_personalizado_tenant_escopo` (tenant, escopo, fluxo_id, ativo)
 *   **Ordenação:** Ordenado por `ordem` e depois alfabeticamente por `nome`.
 
 ---
@@ -262,52 +265,57 @@ Armazena o valor preenchido de um campo personalizado para um determinado atendi
 *   **Nome da Tabela:** `atu_valor_campo`
 *   **Campos:**
     *   `id` (BIGINT, Chave Primária): ID automático.
-    *   `atendimento_id` (BIGINT, Não Nulo): ID lógico do `Atendimento` (sem constraint física de FK).
-    *   `campo_id` (INT, Chave Estrangeira, Não Nulo): Relação física com `CampoPersonalizado`. Cascade ao deletar.
-    *   `valor` (JSONB, Não Nulo): Valor armazenado em formato estruturado coerente com o tipo (ex: string, número, array, booleano).
+    *   `tenant_id` (UUID, Chave Estrangeira, Não Nulo): Relacionamento com `Tenant`. Cascade ao deletar.
+    *   `atendimento_id` (INT, Chave Estrangeira, Não Nulo): Relação física com `Atendimento`. Cascade ao deletar.
+    *   `campo_id` (BIGINT, Chave Estrangeira, Não Nulo): Relação física com `CampoPersonalizado`. Cascade ao deletar.
+    *   `valor` (JSONB, Não Nulo): Valor armazenado.
     *   `origem` (VARCHAR(10), Padrão: `"MANUAL"`): Enum `OrigemValor`.
-    *   `confianca` (FLOAT, Opcional/Nulo): Nível de confiança da extração da IA (válido apenas quando `origem = BOT`).
-    *   `mensagem_origem_id` (BIGINT, Opcional/Nulo): ID lógico da `Mensagem` a partir da qual a IA efetuou a extração (útil para auditoria).
-    *   `editado_por_id` (BIGINT, Opcional/Nulo): ID lógico do `Atendente` que sobrescreveu o campo manualmente.
-    *   `data_atualizacao` (TIMESTAMPTZ, Não Nulo): Última atualização do valor.
+    *   `confianca` (FLOAT, Opcional/Nulo): Nível de confiança do bot.
+    *   `mensagem_origem_id` (INT, Chave Estrangeira, Opcional/Nulo): Vínculo físico com a `Mensagem` da extração. Seta nulo em deleção.
+    *   `editado_por_id` (INT, Chave Estrangeira, Opcional/Nulo): Vínculo físico com `Atendente` que alterou. Seta nulo em deleção.
+    *   `data_atualizacao` (TIMESTAMPTZ, Não Nulo): Última atualização.
 *   **Restrições e Unicidade:**
-    *   `unique_together`: `[["atendimento_id", "campo"]]` (Garante que cada atendimento possua apenas um registro de valor por campo personalizado).
+    *   Unicidade composta: A combinação de `tenant_id`, `atendimento_id` e `campo_id` deve ser única.
 *   **Índices:**
-    *   `atu_valor_atend_campo_idx` (atendimento_id, campo)
+    *   `atu_valor_campo_tenant_atend` (tenant, atendimento_id, campo_id)
 
 ---
 
 ## 3. Módulo: `etiquetas_notas` (Consolidados)
 
 ### `Etiqueta`
-Catálogo de tags e marcadores coloridos criados pelo administrador do inquilino para categorizar conversas.
+Catálogo de tags e marcadores coloridos de conversas por Tenant.
 
 *   **Nome da Tabela:** `atu_etiqueta`
 *   **Campos:**
     *   `id` (BIGINT, Chave Primária): ID automático.
-    *   `nome` (VARCHAR(50), Não Nulo, Único): Nome legível (ex: "Lead Frio", "Cliente VIP").
-    *   `cor` (VARCHAR(7), Padrão: `"#a98f71"`): Código de cor hexadecimal do chip.
-    *   `descricao` (VARCHAR(200), Opcional/Vazio): Tooltip de explicação da tag.
-    *   `ativo` (BOOLEAN, Padrão: `True`): Status de ativação da etiqueta.
+    *   `tenant_id` (UUID, Chave Estrangeira, Não Nulo): Relacionamento com `Tenant`. Cascade ao deletar.
+    *   `nome` (VARCHAR(50), Não Nulo): Nome legível (ex: "Lead Frio", "Cliente VIP").
+    *   `cor` (VARCHAR(7), Padrão: `"#a98f71"`): Cor hexadecimal.
+    *   `descricao` (VARCHAR(200), Opcional/Vazio): Descrição.
+    *   `ativo` (BOOLEAN, Padrão: `True`): Status.
     *   `data_criacao` (TIMESTAMPTZ, Não Nulo): Data de inclusão.
+*   **Restrições e Unicidade:**
+    *   Unicidade composta: A combinação de `tenant_id` e `nome` deve ser única.
 *   **Ordenação:** Ordenado alfabeticamente por `nome`.
 
 ---
 
 ### `EtiquetaAtendimento`
-Tabela associativa Muitos para Muitos manual entre Atendimentos e Etiquetas, contendo dados de auditoria do operador que aplicou a tag.
+Tabela associativa Muitos para Muitos física entre Atendimentos e Etiquetas.
 
 *   **Nome da Tabela:** `atu_etiqueta_atendimento`
 *   **Campos:**
     *   `id` (BIGINT, Chave Primária): ID automático.
-    *   `atendimento_id` (BIGINT, Não Nulo, Indexado): ID lógico do `Atendimento`.
-    *   `etiqueta_id` (INT, Chave Estrangeira, Não Nulo): Relação com `Etiqueta`. Cascade ao deletar.
-    *   `aplicada_em` (TIMESTAMPTZ, Não Nulo): Data/hora de aplicação (gerado no insert).
-    *   `aplicada_por_id` (BIGINT, Opcional/Nulo): ID lógico do `Atendente` que adicionou o marcador.
+    *   `tenant_id` (UUID, Chave Estrangeira, Não Nulo): Relacionamento com `Tenant`. Cascade ao deletar.
+    *   `atendimento_id` (INT, Chave Estrangeira, Não Nulo): Relação física com `Atendimento`. Cascade ao deletar.
+    *   `etiqueta_id` (BIGINT, Chave Estrangeira, Não Nulo): Relação física com `Etiqueta`. Cascade ao deletar.
+    *   `aplicada_em` (TIMESTAMPTZ, Não Nulo): Data de inclusão (gerado no insert).
+    *   `aplicada_por_id` (INT, Chave Estrangeira, Opcional/Nulo): Vínculo físico com `Atendente` que associou. Seta nulo em deleção.
 *   **Restrições e Unicidade:**
-    *   `unique_together`: `[["atendimento_id", "etiqueta"]]` (Garante que a mesma etiqueta não seja aplicada em duplicidade no mesmo atendimento).
+    *   Unicidade composta: A combinação de `tenant_id`, `atendimento_id` e `etiqueta_id` deve ser única.
 *   **Índices:**
-    *   `atu_etiq_atend_idx` (atendimento_id)
+    *   `atu_etiqueta_atendimento_tenant_atend` (tenant, atendimento_id)
 
 ---
 
@@ -317,10 +325,11 @@ Anotações e comentários internos textuais adicionados pelos operadores sobre 
 *   **Nome da Tabela:** `atu_nota`
 *   **Campos:**
     *   `id` (BIGINT, Chave Primária): ID automático.
-    *   `atendimento_id` (BIGINT, Não Nulo, Indexado): ID lógico do `Atendimento`.
-    *   `texto` (TEXT, Não Nulo): Conteúdo em texto da nota interna.
-    *   `criado_por_id` (BIGINT, Opcional/Nulo): ID lógico do `Atendente` autor da anotação.
-    *   `criado_em` (TIMESTAMPTZ, Não Nulo): Data de inserção da nota.
+    *   `tenant_id` (UUID, Chave Estrangeira, Não Nulo): Relacionamento com `Tenant`. Cascade ao deletar.
+    *   `atendimento_id` (INT, Chave Estrangeira, Não Nulo): Relação física com `Atendimento`. Cascade ao deletar.
+    *   `texto` (TEXT, Não Nulo): Conteúdo da nota.
+    *   `criado_por_id` (INT, Chave Estrangeira, Opcional/Nulo): Vínculo físico com `Atendente` autor. Seta nulo em deleção.
+    *   `criado_em` (TIMESTAMPTZ, Não Nulo): Data de inserção.
 *   **Índices:**
-    *   `atu_nota_atend_idx` (atendimento_id, criado_em DESC)
+    *   `atu_nota_tenant_atend` (tenant, atendimento_id, criado_em DESC)
 *   **Ordenação:** Notas mais recentes primeiro (`-criado_em`).

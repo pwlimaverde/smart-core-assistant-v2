@@ -1,6 +1,6 @@
 # Módulo Operacional (Estrutura de Trabalho)
 
-Este documento descreve os modelos residentes no **Banco de Dados do Tenant** responsáveis pela estrutura organizacional, incluindo departamentos, atendentes humanos, canais de mensageria (instâncias) e o fluxo kanban personalizado.
+Este documento descreve os modelos de departamentos, atendentes humanos, instâncias de canais de mensageria e colunas do fluxo Kanban no painel, todos residentes no **banco de dados único** do sistema e isolados logicamente por `tenant_id`.
 
 ---
 
@@ -8,12 +8,17 @@ Este documento descreve os modelos residentes no **Banco de Dados do Tenant** re
 
 ```mermaid
 erDiagram
+    Tenant ||--o{ Departamento : "has"
+    Tenant ||--o{ Atendente : "has"
+    Tenant ||--o{ AppInstance : "has"
+    Tenant ||--o{ FluxoAtendimento : "has"
+    Tenant ||--o{ EtapaFluxo : "has"
     Departamento ||--o{ Atendente : "has"
     Departamento ||--o{ FluxoAtendimento : "has"
     Departamento ||--o{ AppInstance : "has"
     Atendente ||--|| AppInstance : "owns"
     FluxoAtendimento ||--o{ EtapaFluxo : "has"
-    Atendente }o--|| FluxoAtendimento : "is assigned to a Trello Board"
+    Atendente }o--|| FluxoAtendimento : "is assigned to a Kanban Flow"
     User ||--|| Atendente : "relates logically (db_constraint=False)"
 ```
 
@@ -22,54 +27,57 @@ erDiagram
 ## 1. Módulo: `operacional`
 
 ### `Departamento`
-Define as divisões operacionais ou setores comerciais do inquilino (ex: Comercial, Suporte, Financeiro).
+Define as divisões operacionais ou setores comerciais do inquilino (ex: Comercial, Suporte, Financeiro) no escopo do Tenant.
 
 *   **Nome da Tabela:** `oraculo_departamento`
 *   **Campos:**
     *   `id` (INT, Chave Primária): ID incremental automático.
-    *   `nome` (VARCHAR(100), Não Nulo, Único): Nome legível do departamento.
-    *   `slug` (SLUG, Opcional/Nulo, Único): Slug gerado a partir do nome.
+    *   `tenant_id` (UUID, Chave Estrangeira, Não Nulo): Relacionamento com `Tenant`. Cascade ao deletar.
+    *   `nome` (VARCHAR(100), Não Nulo): Nome legível do departamento.
+    *   `slug` (SLUG, Opcional/Nulo): Slug gerado a partir do nome.
     *   `descricao` (TEXT, Opcional/Nulo): Detalhamento do departamento.
     *   `ativo` (BOOLEAN, Padrão: `True`): Determina se o setor está operacional.
     *   `telefone_instancia` (VARCHAR(20), Opcional/Nulo): Número do WhatsApp cadastrado como instância para este departamento.
         *   *Validador:* `validate_telefone_instancia`. Valida se tem pelo menos 10 e no máximo 15 dígitos.
     *   `api_key` (VARCHAR(100), Opcional/Nulo): API Key de acesso da instância vinculada no Evolution API.
-        *   *Validador:* `validate_api_key`. Garante que não esteja vazia e contenha ao menos 8 caracteres.
     *   `configuracoes` (JSONB, Padrão: `{}`): Configurações operacionais flexíveis (ex: mensagens automáticas de fora do horário de atendimento).
     *   `metadados` (JSONB, Padrão: `{}`): Estrutura para integração com APIs externas.
     *   `data_criacao` (TIMESTAMPTZ, Não Nulo): Data/hora de cadastro do departamento.
+*   **Restrições e Unicidade:**
+    *   Unicidade composta: A combinação de `tenant_id` e `nome` deve ser única. A combinação de `tenant_id` e `slug` deve ser única.
 *   **Regras de Negócio (no Método `save`):**
     *   **Slug:** Gera slug automaticamente a partir do nome se não estiver preenchido.
     *   **Telefone:** Normaliza o campo `telefone_instancia` removendo quaisquer caracteres não numéricos.
 *   **Métodos Auxiliares:**
-    *   `validar_api_key(data) [Classmethod]`: Valida as credenciais recebidas via webhook da Evolution API (apikey e instance) e retorna o departamento ativo correspondente.
+    *   `validar_api_key(data) [Classmethod]`: Valida as credenciais recebidas via webhook da Evolution API (apikey e instance) e retorna o departamento correspondente no tenant.
     *   `get_fluxo() -> Optional[FluxoAtendimento]`: Retorna o primeiro fluxo de atendimento ativo ordenado por data de criação.
     *   `get_fluxo_etapas() -> QuerySet[EtapaFluxo]`: Retorna todas as etapas do fluxo do departamento ordenadas pela ordem de sequência.
     *   `ensure_fluxo(nome) -> FluxoAtendimento`: Helper que garante que o departamento tenha ao menos um fluxo padrão cadastrado, criando-o se necessário.
 *   **Índices:**
-    *   `oraculo_departamento_slug` (slug)
-    *   `oraculo_departamento_ativo_nome` (ativo, nome)
+    *   `oraculo_departamento_tenant_slug` (tenant, slug)
+    *   `oraculo_departamento_tenant_ativo_nome` (tenant, ativo, nome)
 *   **Ordenação:** Ordenado alfabeticamente por `nome`.
 
 ---
 
 ### `Atendente`
-Cadastro dos atendentes humanos que operarão os chats no painel. Controla limites de atendimento simultâneo (Fairness) e horário de trabalho.
+Cadastro dos atendentes humanos que operarão os chats no painel do Tenant. Controla limites de atendimento simultâneo (Fairness) e horário de trabalho.
 
 *   **Nome da Tabela:** `oraculo_atendente`
 *   **Alias de Compatibilidade:** `AtendenteHumano` (utilizado nos testes legados)
 *   **Campos:**
     *   `id` (INT, Chave Primária): ID incremental automático.
+    *   `tenant_id` (UUID, Chave Estrangeira, Não Nulo): Relacionamento com `Tenant`. Cascade ao deletar.
     *   `nome` (VARCHAR(100), Não Nulo): Nome completo do operador.
-    *   `slug` (SLUG, Opcional/Nulo, Único, Padrão: `""`): Slug URL-friendly para identificação do perfil.
-    *   `telefone` (VARCHAR(20), Opcional/Nulo, Único): Telefone do atendente.
+    *   `slug` (SLUG, Opcional/Nulo, Padrão: `""`): Slug URL-friendly para identificação do perfil.
+    *   `telefone` (VARCHAR(20), Opcional/Nulo): Telefone do atendente.
         *   *Validador:* `validate_telefone`.
         *   *Normalização (no save):* Converte o número de telefone removendo não numéricos, prefixando com `"55"` e salvando com o prefixo `"+"`. (ex: `11999999999` vira `+5511999999999`).
     *   `cargo` (VARCHAR(100), Não Nulo, Padrão: `""`): Cargo ocupado pelo atendente.
     *   `email` (VARCHAR(254), Não Nulo): E-mail corporativo. Obrigatório na validação.
     *   `departamento_id` (INT, Chave Estrangeira, Opcional/Nulo): Departamento ao qual pertence. Seta nulo em deleção.
-    *   `fluxo_id` (INT, Chave Estrangeira, Não Nulo): Relação com `FluxoAtendimento` (quadro Kanban do Trello) ao qual o atendente será inserido. Protegido contra deleção (`on_delete=PROTECT`).
-    *   `usuario_id` (INT, Chave Estrangeira lógica, Opcional/Nulo): Vínculo com a tabela `auth_user` (banco default). Possui `db_constraint=False` para evitar erro de cross-database.
+    *   `fluxo_id` (INT, Chave Estrangeira, Não Nulo): Relação com `FluxoAtendimento` (quadro Kanban da interface) ao qual o atendente será inserido. Protegido contra deleção (`on_delete=PROTECT`).
+    *   `usuario_id` (INT, Chave Estrangeira lógica, Opcional/Nulo): Vínculo com a tabela `auth_user` (banco padrão/Core). Possui `db_constraint=False` para evitar erro de cross-database.
     *   `usuario_sistema` (VARCHAR(50), Opcional/Nulo): Nome de usuário para logins em sistemas legados.
     *   `ativo` (BOOLEAN, Padrão: `True`): Indica se o operador está habilitado a acessar o sistema.
     *   `disponivel` (BOOLEAN, Padrão: `True`): Se o operador está aceitando novos atendimentos no momento (Fairness/Round-Robin).
@@ -78,10 +86,12 @@ Cadastro dos atendentes humanos que operarão os chats no painel. Controla limit
     *   `horario_trabalho` (JSONB, Padrão: `{}`): Horários permitidos de login/atendimento por dia da semana.
     *   `especialidades` (JSONB, Padrão: `[]`): Lista de tags com especialidades do operador (ex: `["segunda_via", "suporte_tecnico"]`).
     *   `metadados` (JSONB, Padrão: `{}`): Preferências adicionais do operador.
-    *   `data_cadastro` (TIMESTAMPTZ, Não Nulo): Data/hora de inclusão.
+    *   `data_cadastro` (TIMESTAMPTZ, Não Nulo): Data/hora de lançamento.
     *   `ultima_atividade` (TIMESTAMPTZ, Não Nulo): Última ação registrada do operador no sistema.
+*   **Restrições e Unicidade:**
+    *   Unicidade composta: A combinação de `tenant_id` e `email` deve ser única. A combinação de `tenant_id` e `telefone` deve ser única se preenchido.
 *   **Regras de Negócio (no Método `save` e `clean`):**
-    *   **Slug:** Gerado automaticamente de forma única a partir do nome.
+    *   **Slug:** Gerado automaticamente de forma única a partir do nome dentro do tenant.
     *   **Validações manuais (`clean()`):**
         *   `email` é obrigatório.
         *   `fluxo` é obrigatório na criação de novos registros.
@@ -91,21 +101,22 @@ Cadastro dos atendentes humanos que operarão os chats no painel. Controla limit
     *   `is_available() -> bool`: Retorna `True` se o atendente estiver ativo, disponível e o número de atendimentos ativos for menor que `max_atendimentos_simultaneos`.
     *   `current_load() -> int`: Alias de `get_atendimentos_ativos()`.
 *   **Índices:**
-    *   `oraculo_atendente_dept_disp_idx` (departamento, disponível)
-    *   `oraculo_atendente_disp_max_idx` (disponível, max_atendimentos_simultaneos)
-    *   `oraculo_atendente_last_assign_idx` (data_ultima_atribuicao)
-    *   `oraculo_atendente_fluxo_idx` (fluxo)
+    *   `oraculo_atendente_tenant_dept_disp` (tenant, departamento, disponível)
+    *   `oraculo_atendente_tenant_disp_max` (tenant, disponível, max_atendimentos_simultaneos)
+    *   `oraculo_atendente_tenant_last_assign` (tenant, data_ultima_atribuicao)
+    *   `oraculo_atendente_tenant_fluxo` (tenant, fluxo)
 *   **Ordenação:** Ordenado alfabeticamente por `nome`.
 
 ---
 
 ### `AppInstance`
-Configuração de instâncias de comunicação ( Evolution API) conectadas a canais de mensagem do Tenant.
+Configuração de instâncias de comunicação (WhatsApp via Evolution API) conectadas a canais de mensagem do Tenant. Todas as instâncias conectam-se ao servidor Evolution centralizado.
 
 *   **Nome da Tabela:** `oraculo_app_instance`
 *   **Campos:**
     *   `id` (INT, Chave Primária): ID incremental automático.
-    *   `api_key` (VARCHAR(128), Não Nulo, Único): Chave de API da instância vinculada.
+    *   `tenant_id` (UUID, Chave Estrangeira, Não Nulo): Relacionamento com `Tenant`. Cascade ao deletar.
+    *   `api_key` (VARCHAR(128), Não Nulo, Único): Chave de API da instância vinculada no Evolution API.
     *   `channel` (VARCHAR(32), Não Nulo): Canal de integração (ex: `"whatsapp"`).
     *   `display_name` (VARCHAR(100), Opcional/Nulo): Nome de exibição amigável.
     *   `departamento_id` (INT, Chave Estrangeira, Opcional/Nulo): Setor padrão associado às mensagens inbound recebidas nesta instância. Seta nulo em deleção.
@@ -115,9 +126,9 @@ Configuração de instâncias de comunicação ( Evolution API) conectadas a can
     *   `metadata` (JSONB, Padrão: `{}`): Parâmetros adicionais da instância.
     *   `created_at` (TIMESTAMPTZ, Não Nulo): Data de conexão da instância.
 *   **Índices:**
-    *   `oraculo_app_instance_api_key_idx` (api_key)
-    *   `oraculo_app_instance_channel_idx` (channel)
-    *   `oraculo_app_instance_dept_idx` (departamento)
+    *   `oraculo_app_instance_tenant_api_key` (tenant, api_key)
+    *   `oraculo_app_instance_tenant_channel` (tenant, channel)
+    *   `oraculo_app_instance_tenant_dept` (tenant, departamento)
 *   **Ordenação:** Ordenado descrescentemente por `created_at` (instâncias novas primeiro).
 
 ---
@@ -126,19 +137,20 @@ Configuração de instâncias de comunicação ( Evolution API) conectadas a can
 Enumeração de tipos de etapas válidos para o fluxo Kanban.
 
 *   *Opções do Enum (TextChoices):*
-    *   `fila` (Fila de Entrada): Etapa de entrada onde os clientes aguardam triagem/bot.
-    *   `trabalho` (Em Trabalho): Atendimento sendo operado ativamente.
-    *   `espera` (Aguardando Resposta): Aguardando alguma ação ou retorno do cliente.
+    *   `fila` (Fila de Entrada): Etapa de entrada onde os clientes aguardam triagem ou resposta do bot.
+    *   `trabalho` (Em Trabalho): Atendimento sendo operado ativamente por atendente humano.
+    *   `espera` (Aguardando Resposta): Aguardando alguma ação ou retorno do cliente final.
     *   `finalizacao` (Finalização): Etapa conclusiva do atendimento.
 
 ---
 
 ### `FluxoAtendimento`
-Define fluxos de trabalho personalizados por departamento. Mapeia a lógica de um quadro Kanban.
+Define fluxos de trabalho personalizados por departamento, mapeando a lógica de um quadro Kanban.
 
 *   **Nome da Tabela:** `oraculo_fluxo_atendimento`
 *   **Campos:**
     *   `id` (INT, Chave Primária): ID incremental automático.
+    *   `tenant_id` (UUID, Chave Estrangeira, Não Nulo): Relacionamento com `Tenant`. Cascade ao deletar.
     *   `departamento_id` (INT, Chave Estrangeira, Não Nulo): Departamento ao qual este fluxo pertence. Cascade ao deletar.
     *   `nome` (VARCHAR(100), Não Nulo): Nome descritivo do fluxo.
     *   `descricao` (TEXT, Opcional/Nulo): Detalhamento do propósito do fluxo.
@@ -158,6 +170,7 @@ Representa uma coluna física no Kanban do departamento. Cada atendimento ativo 
 *   **Nome da Tabela:** `oraculo_etapa_fluxo`
 *   **Campos:**
     *   `id` (INT, Chave Primária): ID incremental automático.
+    *   `tenant_id` (UUID, Chave Estrangeira, Não Nulo): Relacionamento com `Tenant`. Cascade ao deletar.
     *   `fluxo_id` (INT, Chave Estrangeira, Não Nulo): Fluxo Kanban ao qual esta coluna pertence. Cascade ao deletar.
     *   `nome` (VARCHAR(50), Não Nulo): Nome da coluna no Kanban (ex: "Aguardando Vendedor", "Orçamento Enviado").
     *   `descricao` (VARCHAR(200), Opcional/Nulo): Explicação curta do propósito da etapa.
@@ -172,9 +185,9 @@ Representa uma coluna física no Kanban do departamento. Cada atendimento ativo 
     *   `ativo` (BOOLEAN, Padrão: `True`): Define se a coluna está visível no Kanban.
     *   `data_criacao` (TIMESTAMPTZ, Não Nulo): Data de criação da coluna.
 *   **Restrições e Unicidade:**
-    *   `unique_together`: `[["fluxo", "ordem"]]` (Não é permitido que duas etapas no mesmo fluxo tenham o mesmo número de ordem).
+    *   Unicidade composta: `unique_together` `[["fluxo", "ordem"]]` (Não é permitido que duas etapas no mesmo fluxo tenham o mesmo número de ordem).
 *   **Índices:**
-    *   `oraculo_etapa_fluxo_ordem_idx` (fluxo, ordem)
-    *   `oraculo_etapa_fluxo_tipo_idx` (tipo_etapa)
-    *   `oraculo_etapa_fluxo_ativo_idx` (ativo)
+    *   `oraculo_etapa_fluxo_tenant_ordem` (tenant, fluxo, ordem)
+    *   `oraculo_etapa_fluxo_tenant_tipo` (tenant, tipo_etapa)
+    *   `oraculo_etapa_fluxo_tenant_ativo` (tenant, ativo)
 *   **Ordenação:** Ordenado por `fluxo` e depois pelo campo `ordem`.
