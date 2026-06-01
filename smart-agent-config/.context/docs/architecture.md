@@ -26,8 +26,8 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
                     ┌─────────▼──────────┐
                     │      worker         │  ← debounce, conversa, ticket, kanban, IA, outbound
                     └──────┬─────┬───────┘
-                           │     │ gRPC/HTTP
-                    ┌──────▼──┐  └──► ai_orchestrator (Python / LangChain / RAG)
+                           │     │ gRPC (não FFI/PyO3 — ver §13.1 do planejamento)
+                    ┌──────▼──┐  └──► ia_engine (Python / LangChain / RAG; núcleo = FeaturesCompose)
                     │PostgreSQL│
                     │+ pgvector│
                     └──────────┘
@@ -52,8 +52,8 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
 - **`crates/contracts`**: DTOs, eventos, contratos gRPC, envelopes — todos carregam `tenant_id`.
 - **`crates/infrastructure_*`**: Adaptadores de banco (sqlx), Redis, Evolution Go, storage.
 - **`crates/local_engine`**: Crate dual-target: lib dos binários-servidor **e** `cdylib`/`staticlib` para FFI do Flutter Windows.
-- **`services/ai_orchestrator`**: Serviço Python (LangChain) chamado via gRPC/HTTP pelo worker.
-- **`clients/flutter_app`**: App Flutter com camada `DataSource` abstrata (`LocalEngineFFI` no Windows, `RemoteOnly` na Web).
+- **`ia_engine/`**: Serviço Python separado (LangChain) chamado via **gRPC** pelo worker. Núcleo é a facade `FeaturesCompose` reaproveitada da v1 (só muda o ponto de entrada: task Celery → handler gRPC). FFI/PyO3 foi descartado (§13.1 do planejamento).
+- **`clients/flutter_windows` + `clients/flutter_web`**: Dois apps Flutter separados + pacotes em `clients/packages/`, com camada `DataSource` abstrata (`LocalEngineFFI` no Windows, `RemoteOnly` na Web).
 
 ## Detected Design Patterns
 
@@ -61,9 +61,9 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
 |---------|-----------|-------------|-----------|
 | Event-Driven | Alta | `messaging_gateway` → Redis Streams → `worker` | Webhook publica evento; worker consome assincronamente |
 | Domain-Driven Design | Alta | `crates/domain_*` | Crates por bounded context; regras puras sem I/O |
-| CQRS (leve) | Média | `runtime_api` | Comandos via gRPC/HTTP; realtime via WebSocket |
+| CQRS (leve) | Média | `runtime_api` | Comandos via gRPC/HTTP (Flutter↔servidor, em aberto); realtime via WebSocket |
 | Repository | Alta | `crates/infrastructure_postgres` | Adaptadores isolados do domínio |
-| Strategy | Alta | `clients/flutter_app` DataSource | `LocalEngineFFI` vs `RemoteOnly` trocáveis sem mudar lógica |
+| Strategy | Alta | `clients/packages/api_client` DataSource | `LocalEngineFFI` vs `RemoteOnly` trocáveis sem mudar lógica |
 | Dual-Target Crate | Alta | `crates/local_engine` | Compilável como lib-servidor e cdylib/FFI |
 
 ## Entry Points
@@ -72,8 +72,8 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
 - `apps/worker/src/main.rs` — processamento de eventos de domínio
 - `apps/runtime_api/src/main.rs` — API + WebSocket para o Flutter
 - `apps/control_plane/src/main.rs` — back office / gestão de tenants
-- `services/ai_orchestrator/main.py` — orquestrador de IA (Python)
-- `clients/flutter_app/lib/main.dart` — app Flutter
+- `ia_engine/src/server.py` — serviço gRPC de IA (Python)
+- `clients/flutter_windows/lib/main.dart` — app Flutter Windows
 
 > **Nota:** projeto greenfield — estrutura planejada em `doc_dev/planejamento/00-planejamento-inicial.md`.
 
@@ -91,7 +91,7 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
 ## Internal System Boundaries
 
 - **Gateway ↔ Worker**: Redis Streams com `tenant_id` no envelope. Gateway nunca conhece regras de domínio.
-- **Worker ↔ AI Orchestrator**: gRPC/HTTP. Rust nunca depende de detalhes do LangChain; contratos em `domain_ai`.
+- **Worker ↔ ia_engine**: **gRPC** (processos separados; FFI/PyO3 descartado — §13.1). Rust nunca depende de detalhes do LangChain; contrato `.proto`/`domain_ai`. O worker também substitui o Celery da v1 (fila via Redis Streams + agendamento de feedback/retenção).
 - **Worker ↔ Runtime API**: PostgreSQL + Redis pub/sub para fan-out de eventos realtime por tenant.
 - **Flutter ↔ local_engine**: FFI via `flutter_rust_bridge` (somente Windows). Web usa `RemoteOnly`.
 
@@ -101,7 +101,7 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
 - **PostgreSQL + pgvector**: banco unificado com RLS. `tenant_id` obrigatório em todas as tabelas.
 - **Redis Streams**: event bus com consumer groups. Namespace por tenant para cache/presença.
 - **MinIO/S3**: storage transitório de mídia (TTL curto; cache permanente no cliente).
-- **OpenAI / Groq / Ollama**: provedores de LLM abstraídos pelo LangChain no `ai_orchestrator`.
+- **OpenAI / Groq / Ollama**: provedores de LLM abstraídos pelo LangChain no `ia_engine`.
 
 ## Key Decisions & Trade-offs
 
@@ -109,7 +109,7 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
 |---------|---------|----------|
 | Granularidade | Modular monolith (Cargo workspace) | Isolamento lógico agora; promoção futura sem reescrever |
 | Banco multi-tenant | Um PostgreSQL + RLS | Sem provisionamento por tenant; migrations únicas |
-| IA | Serviço Python separado | Ecossistema maduro; isola a parte imatura em Rust |
+| IA (`ia_engine`) | Serviço Python separado via **gRPC** (não FFI/PyO3) | Ecossistema maduro; isola a parte imatura; isolamento de processo + escala por réplicas (vence o GIL) |
 | Flutter ↔ Rust | Híbrido (gRPC/WS + FFI local) | Servidor é fonte da verdade; FFI dá performance/offline no Windows |
 | Ordem de entrega | Windows primeiro | Foco; port Web limpo via abstração `DataSource` |
 

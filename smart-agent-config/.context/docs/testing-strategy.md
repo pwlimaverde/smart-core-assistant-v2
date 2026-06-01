@@ -15,8 +15,8 @@ scaffoldVersion: "2.0.0"
 ## Test Organization
 
 - **Rust**: unitários em `crates/domain_*/src/` (`#[cfg(test)]`); integração em `crates/*/tests/`; contratos em `crates/contracts/tests/`.
-- **Python**: testes em `services/ai_orchestrator/tests/` com pytest.
-- **Flutter**: unitários em `clients/flutter_app/test/`; widget e integration tests conforme necessário.
+- **Python**: testes em `ia_engine/tests/` com pytest (gerenciado por `uv`).
+- **Flutter**: unitários em `clients/flutter_windows/test/` e `clients/flutter_web/test/` + `clients/packages/*/test/`; widget e integration tests conforme necessário.
 
 ## Testing Priorities
 
@@ -24,7 +24,7 @@ scaffoldVersion: "2.0.0"
 2. **`crates/application`** — casos de uso com mocks de infraestrutura. Cobrir `TicketPolicy`, `BotRulesEngine`, debounce.
 3. **`crates/infrastructure_postgres`** — integração com banco real (não mock). Lição da v1: mocks escondem divergências de schema.
 4. **`messaging_gateway`** — validação de webhook, resolução de tenant, idempotência.
-5. **`ai_orchestrator`** — cada feature (transcrição, RAG, geração de resposta).
+5. **`ia_engine`** — cada feature (transcrição, RAG, geração de resposta); reaproveitar fixtures da v1 ao portar o `FeaturesCompose`.
 
 ## Domain Rules to Test Explicitly
 
@@ -41,7 +41,7 @@ scaffoldVersion: "2.0.0"
 |-------|-----------|-----------|
 | Rust | `cargo test` | Unitários + integração |
 | Rust (integração) | `cargo test --test '*'` | Com PostgreSQL real — não usar mocks de banco |
-| Python | `pytest` + `pytest-asyncio` | Para ai_orchestrator async |
+| Python | `pytest` + `pytest-asyncio` | Para `ia_engine` async (via `uv run pytest`) |
 | Flutter | `flutter test` | Unitário + widget |
 
 ## Related Resources

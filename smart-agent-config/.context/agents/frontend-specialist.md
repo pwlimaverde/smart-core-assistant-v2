@@ -13,7 +13,7 @@ scaffoldVersion: "2.0.0"
 
 - Implementar a UI do app Flutter para Windows (desktop) e depois Web.
 - Implementar camada `DataSource` abstrata: `LocalEngineFFI` (Windows) e `RemoteOnly` (Web).
-- Integrar com `runtime_api` via gRPC/HTTP (comandos) e WebSocket (realtime).
+- Integrar com `runtime_api` via gRPC/HTTP (comandos) e WebSocket (realtime) — sempre pela interface `DataSource` em `clients/packages/api_client/`.
 - Garantir que toda lógica de dados passa pela interface `DataSource`.
 - Implementar stores reativos (Riverpod/Bloc) que respondem a eventos WebSocket.
 

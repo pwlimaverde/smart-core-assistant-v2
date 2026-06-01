@@ -19,7 +19,7 @@ scaffoldVersion: "2.0.0"
 
 ## Key Bottlenecks
 
-- **AI Orchestrator**: chamada gRPC/HTTP ao Python é o passo mais lento do pipeline.
+- **ia_engine**: a chamada à LLM domina o pipeline (200–5000ms); o transporte gRPC é desprezível. Escalar por N réplicas do `ia_engine` (vence o GIL) em vez de otimizar o transporte.
 - **pgvector RAG**: busca de embeddings pode ser lenta sem índice HNSW/IVFFlat.
 - **Download de mídia**: Evolution Go com retry/backoff pode bloquear o worker.
 - **Debounce**: lock por contato pode serializar excessivamente sob alta carga.

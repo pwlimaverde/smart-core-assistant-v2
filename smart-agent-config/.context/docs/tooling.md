@@ -16,7 +16,7 @@ scaffoldVersion: "2.0.0"
 |-------|-----------|------------------|
 | Rust | Cargo workspace | `cargo build` / `cargo test` |
 | Flutter | Flutter SDK + Dart | `flutter build windows` / `flutter run` |
-| Python (IA) | uv / Poetry | `uv run pytest` / `uv run python` |
+| Python (IA) | uv | `uv run pytest` / `uv run python` |
 | Infra local | Docker Compose | `docker compose -f docker/compose/data.yml up -d` |
 | gRPC | tonic-build (Rust) + grpcio (Python) | gerado em build |
 | FFI | flutter_rust_bridge | `flutter_rust_bridge_codegen` |
@@ -33,12 +33,12 @@ scaffoldVersion: "2.0.0"
 - Arquivos gerados (`*.g.dart`, `*.freezed.dart`) git-ignored; regenerar com `flutter pub run build_runner build`.
 - Build Windows: `flutter build windows --release`.
 
-## Python (ai_orchestrator)
+## Python (ia_engine)
 
-- Python 3.11+. Gerenciador: `uv` (preferido); lockfile versionado.
+- Python 3.13+. Gerenciador: `uv`; `uv.lock` versionado.
 - `.venv/` git-ignored.
 - Arquivos gRPC gerados (`*_pb2.py`) git-ignored; gerados em build.
-- Linting: `ruff` + `mypy` (strict).
+- Linting: `ruff` + `pyright` (strict).
 
 ## Local Infrastructure
 

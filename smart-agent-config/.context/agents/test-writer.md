@@ -14,7 +14,7 @@ scaffoldVersion: "2.0.0"
 - Escrever testes unitários para regras de domínio em `crates/domain_*` (sem I/O, sem mocks).
 - Escrever testes de integração com banco real para `crates/infrastructure_postgres`.
 - Cobrir os casos críticos: política de ticket, bot bloqueado, janela de reabertura, idempotência, RLS.
-- Escrever testes para o `ai_orchestrator` com pytest.
+- Escrever testes para o `ia_engine` com pytest (via `uv`); reaproveitar fixtures da v1 ao portar o `FeaturesCompose`.
 
 ## Critical Test Cases
 

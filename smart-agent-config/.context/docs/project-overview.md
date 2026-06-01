@@ -27,8 +27,8 @@ Smart Core Assistant v2 é uma plataforma SaaS multi-tenant de atendimento intel
 - `apps/worker/src/main.rs` — processamento de eventos de domínio
 - `apps/runtime_api/src/main.rs` — API + WebSocket para Flutter
 - `apps/control_plane/src/main.rs` — gestão de tenants e planos
-- `services/ai_orchestrator/main.py` — orquestrador de IA (Python)
-- `clients/flutter_app/lib/main.dart` — app Flutter Windows/Web
+- `ia_engine/src/server.py` — serviço gRPC de IA (Python; núcleo `FeaturesCompose`)
+- `clients/flutter_windows/lib/main.dart` — app Flutter Windows (Web: `flutter_web/`)
 
 ## Key Exports (planejados)
 
@@ -57,7 +57,7 @@ Smart Core Assistant v2 é uma plataforma SaaS multi-tenant de atendimento intel
 
 **Frontend**: Flutter/Dart, Windows desktop primeiro. FFI via `flutter_rust_bridge` com `local_engine`. Port Web usa `RemoteOnly` sem FFI.
 
-**IA**: Python com LangChain, pgvector para RAG, provedores OpenAI/Groq/Ollama via gRPC/HTTP.
+**IA**: serviço Python `ia_engine` separado, consumido pelo worker via **gRPC** (não FFI/PyO3). LangChain, pgvector para RAG, provedores OpenAI/Groq/Ollama. Reaproveita a facade `FeaturesCompose` da v1.
 
 **Infra**: PostgreSQL + pgvector (RLS), Redis Streams (event bus), Evolution Go (WhatsApp), MinIO/S3 (mídia transitória).
 

@@ -42,8 +42,12 @@ Terminologia extraída da v1 em produção e do planejamento da v2. Termos em po
 | **Evolution Go** | Gateway de WhatsApp multi-instância. Um cluster gerencia N instâncias. |
 | **EvolutionInstance** | Instância WhatsApp vinculada a um tenant. Controla `resposta_bot`. |
 | **RLS** | Row-Level Security do PostgreSQL. Segunda barreira de isolamento multi-tenant. |
-| **FFI** | Foreign Function Interface: `flutter_rust_bridge` embarca `local_engine` como lib nativa no Windows. |
+| **FFI** | Foreign Function Interface: `flutter_rust_bridge` embarca `local_engine` como lib nativa no Windows. **Não** usado para o `ia_engine`. |
 | **Local Engine** | Crate Rust dual-target: cache local de conversas/mídia (SQLite) + fila offline. |
+| **ia_engine** | Serviço Python separado de IA (LangChain/RAG), consumido pelo worker via **gRPC**. Núcleo: `FeaturesCompose`. |
+| **FeaturesCompose** | Facade de IA da v1 (transcrição, intents, resposta, embeddings) reaproveitada como núcleo do `ia_engine`. |
+| **gRPC** | RPC com contrato `.proto` (Protobuf binário); canal worker ↔ ia_engine (e candidato para Flutter ↔ servidor). |
+| **PyO3** | Ponte Python↔Rust in-process (FFI). **Descartada** para o canal de IA (ver §13.1 do planejamento). |
 | **RAG** | Retrieval-Augmented Generation: busca de documentos similares via pgvector. |
 | **Debounce por contato** | Acumular mensagens em rajada antes de processá-las como um lote. |
 | **EtapaFluxo** | Coluna/etapa do Kanban dentro de um fluxo de um departamento. |

@@ -12,7 +12,7 @@ scaffoldVersion: "2.0.0"
 ## Responsibilities
 
 - Manter `docker/compose/data.yml` para infra local (PostgreSQL, Redis, MinIO).
-- Configurar build e deploy dos quatro binários Rust + Python + Flutter.
+- Configurar build e deploy dos quatro binários Rust + `ia_engine` (Python, container isolado) + Flutter.
 - Configurar proxy reverso (Nginx/Caddy/Traefik) com TLS e `proxy_buffering off` (WebSocket/SSE).
 - Gerenciar variáveis de ambiente e segredos (`.env.example` mantido; `.env` git-ignored).
 - Monitorar observabilidade: logs estruturados, métricas, tracing.
@@ -21,7 +21,7 @@ scaffoldVersion: "2.0.0"
 
 - Nginx/Caddy → TLS + proxy reverso
 - `runtime_api`, `worker`, `messaging_gateway`, `control_plane` (Rust)
-- `ai_orchestrator` (Python)
+- `ia_engine` (Python, serviço gRPC; escalável por N réplicas — com o worker substitui o Celery da v1)
 - PostgreSQL + pgvector, Redis, Evolution Go + MinIO
 
 ## Quality Checks

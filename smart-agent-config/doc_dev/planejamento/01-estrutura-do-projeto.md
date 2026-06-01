@@ -95,7 +95,10 @@ smart-core-assistant-v2/                    # raiz do monorepo / git root
 │   │   │   ├── analyse_sentiment/          # análise de sentimento/avaliação
 │   │   │   └── generate_embeddings/        # geração de embeddings para pgvector
 │   │   ├── llm/                            # abstração de provedores (OpenAI, Groq, Ollama)
-│   │   └── server.py                       # servidor gRPC/HTTP (ponto de entrada)
+│   │   ├── contracts/                      # DTOs Pydantic espelhando o .proto
+│   │   ├── features_compose.py             # facade (núcleo de IA herdado da v1)
+│   │   └── server.py                       # servidor gRPC (ponto de entrada; handlers)
+│   ├── proto/                              # .proto do serviço (espelhado em domain_ai)
 │   ├── tests/
 │   ├── pyproject.toml                      # gerenciado com uv
 │   └── uv.lock                             # versionado
@@ -113,7 +116,8 @@ smart-core-assistant-v2/                    # raiz do monorepo / git root
 │   └── doc_dev/                            # documentação técnica de desenvolvimento
 │       └── planejamento/
 │           ├── 00-planejamento-inicial.md  # visão arquitetural completa da v2
-│           └── 01-estrutura-do-projeto.md # este documento
+│           ├── 01-estrutura-do-projeto.md # este documento
+│           └── 02-fases-desenvolvimento.md # guia de fases/etapas de construção
 │
 ├── .gitignore
 └── .env.example                            # template de variáveis de ambiente
@@ -189,7 +193,16 @@ smart-core-assistant-v2/                    # raiz do monorepo / git root
 
 **Responsabilidade:** todas as operações de inteligência artificial — transcrição, análise de mídia, classificação de intents, geração de resposta, RAG e análise de sentimento.
 
-- Exposto como serviço gRPC/HTTP chamado pelo `server/apps/worker`.
+- Exposto como **serviço gRPC** (processo separado) chamado pelo
+  `server/apps/worker`. Transporte gRPC escolhido sobre FFI/PyO3 — ver
+  [00-planejamento-inicial.md §13.1](./00-planejamento-inicial.md#131-decisão-de-transporte-grpc-vs-ffipyo3).
+- **Núcleo herdado da v1:** a facade `FeaturesCompose` (toda a IA pura da v1) é
+  reaproveitada quase intacta; só o ponto de entrada muda (task Celery → handler
+  gRPC). A orquestração de domínio (ex.: `AttendanceOrchestrator`) **não** vem
+  para cá — vai para o `worker` + `domain_*`/`application` em Rust.
+- **Escala:** stateless quanto a tenant (recebe `tenant_id` em cada request);
+  escalável por N réplicas atrás de balanceamento gRPC (vence o GIL com
+  processos, não threads).
 - Contratos de interface definidos em `server/crates/domain_ai/` (Rust) e espelhados aqui como protobuf/pydantic.
 - Provedores de LLM (OpenAI, Groq, Ollama) abstraídos via LangChain. Tokens isolados em variáveis de ambiente.
 - Cada feature em `src/features/<nome>/` é independente — pode ser testada e evoluída isoladamente.
@@ -253,7 +266,7 @@ clients/packages/local_engine_ffi
 | Fronteira | Protocolo | Definição do contrato |
 |-----------|-----------|----------------------|
 | Flutter → server | gRPC/HTTP + WebSocket | `server/crates/contracts/` (proto + DTOs) |
-| server/worker → ia_engine | gRPC/HTTP | `server/crates/domain_ai/` (interfaces Rust) + protobuf em `ia_engine/` |
+| server/worker → ia_engine | **gRPC** | `server/crates/domain_ai/` (interfaces Rust) + `.proto`/protobuf em `ia_engine/proto/` |
 | Evolution Go → server | Webhook HTTP | Payload normalizado em `server/crates/domain_whatsapp/` |
 | server/worker → Evolution Go | HTTP REST | `server/crates/infrastructure_evolution/` |
 | Flutter Windows → local_engine | FFI nativo | `clients/packages/local_engine_ffi/` (gerado pelo flutter_rust_bridge) |
@@ -282,7 +295,7 @@ Commits em inglês, sem `Co-Authored-By` nem rodapés de ferramenta de IA.
 | Stack | Build | Lint/Format | Testes |
 |-------|-------|-------------|--------|
 | `server/` | `cargo build` | `cargo clippy -- -D warnings` + `cargo fmt --check` | `cargo test` (banco real para infra) |
-| `ia_engine/` | `uv run python` | `ruff check` + `mypy` | `uv run pytest` |
+| `ia_engine/` | `uv run python` | `ruff check` + `pyright` | `uv run pytest` |
 | `clients/flutter_windows/` | `flutter build windows` | `flutter analyze` | `flutter test` |
 | `clients/flutter_web/` | `flutter build web` | `flutter analyze` | `flutter test` |
 | `clients/packages/*` | (biblioteca) | `flutter analyze` | `flutter test` |

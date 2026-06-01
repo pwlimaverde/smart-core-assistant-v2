@@ -16,11 +16,12 @@ scaffoldVersion: "2.0.0"
 - Escrever adaptadores em `crates/infrastructure_postgres` e `crates/infrastructure_redis`.
 - Garantir idempotência no worker: `wa_message_id` duplicado não reprocessado.
 - Implementar debounce por contato com lock de agendamento.
-- Definir contratos gRPC com `ai_orchestrator` em `crates/domain_ai` / `crates/contracts`.
+- Definir o contrato **gRPC** com o `ia_engine` (Python) em `crates/domain_ai` / `crates/contracts` + `.proto`. FFI/PyO3 descartado (§13.1).
+- No `worker`: cliente gRPC para o `ia_engine` (timeout/retry) + scheduler que substitui o Celery da v1 (Redis Streams + agendamento de feedback/retenção).
 
 ## Stack
 
-Rust: tokio (async), axum (HTTP), tonic (gRPC), sqlx (PostgreSQL), redis (streams).
+Rust: tokio (async), axum (HTTP), tonic (gRPC), sqlx (PostgreSQL), redis (streams). O `ia_engine` é serviço Python separado (gRPC), não embarcado.
 
 ## Quality Checks
 

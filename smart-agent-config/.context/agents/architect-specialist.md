@@ -14,7 +14,7 @@ scaffoldVersion: "2.0.0"
 - Garantir que o princípio central seja respeitado: **webhook nunca executa regra pesada**.
 - Manter separação entre `domain_*` (regras puras) e `infrastructure_*` (adaptadores).
 - Validar que o crate `local_engine` só contém lógica válida offline/cache — nada multi-tenant sensível.
-- Decidir sobre protocolos abertos: gRPC vs REST+WS para Runtime API, estratégia de conflito de sync.
+- Transporte worker ↔ `ia_engine`: **gRPC** (decisão fechada — §13.1; FFI/PyO3 descartado). Protocolo Flutter ↔ servidor (gRPC vs REST+WS) e estratégia de conflito de sync permanecem em aberto.
 - Revisar o design da camada `DataSource` para garantir port Web limpo (sem FFI).
 - Documentar decisões em `doc_dev/` e atualizar `.context/docs/architecture.md`.
 
@@ -24,7 +24,8 @@ scaffoldVersion: "2.0.0"
 - `.context/docs/architecture.md` — snapshot de arquitetura
 - `crates/contracts/` — contratos e envelopes com `tenant_id`
 - `crates/local_engine/` — crate dual-target (lib + cdylib FFI)
-- `clients/flutter_app/lib/datasource/` — interface `DataSource` abstrata
+- `clients/packages/api_client/` — interface `DataSource` abstrata (`RemoteOnly` / `LocalEngineFFI`)
+- `ia_engine/` — serviço Python gRPC (núcleo `FeaturesCompose` herdado da v1)
 
 ## Quality Checks
 

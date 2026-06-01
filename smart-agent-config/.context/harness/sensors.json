@@ -42,17 +42,17 @@
     {
       "id": "python-test",
       "name": "Python Tests",
-      "command": "uv run pytest services/ai_orchestrator/tests/",
-      "description": "Executa testes do ai_orchestrator",
+      "command": "uv run pytest ia_engine/tests/",
+      "description": "Executa testes do ia_engine",
       "type": "test"
     },
     {
       "id": "flutter-test",
       "name": "Flutter Tests",
       "command": "flutter test",
-      "description": "Executa testes do app Flutter",
+      "description": "Executa testes do app Flutter Windows",
       "type": "test",
-      "workdir": "clients/flutter_app"
+      "workdir": "clients/flutter_windows"
     },
     {
       "id": "infra-up",

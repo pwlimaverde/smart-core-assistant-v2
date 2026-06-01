@@ -73,7 +73,7 @@ Evolution). A v2 nasce do zero para:
 |---|---------|---------|----------|
 | D1 | Conexão Flutter ↔ Rust | **Híbrida** (servidor de rede + FFI local) | Servidor Rust é a fonte da verdade multi-tenant; FFI local dá desempenho/offline e cache de mídia no Windows |
 | D2 | Granularidade dos serviços | **Modular monolith** (crates por domínio + poucos binários) | Isolamento lógico agora; promoção a microserviço depois sem reescrever; barato para 1 VM |
-| D3 | Camada de IA | **Manter serviço Python** (LangChain/RAG) chamado via gRPC/HTTP | Ecossistema de IA maduro em Python; isola a parte imatura em Rust |
+| D3 | Camada de IA | **Serviço Python separado** (LangChain/RAG) exposto por **gRPC** | Ecossistema de IA maduro em Python; isola a parte imatura em Rust. gRPC dá contrato forte poliglota com isolamento de processo (FFI/PyO3 **descartado** — ver §13.1) |
 | D4 | Isolamento do banco | **`tenant_id` + Row-Level Security (RLS)** do PostgreSQL | Melhor custo/segurança; banco recusa query sem `tenant_id` no contexto |
 | D5 | Modelo de projeto | **Greenfield** (v1 como referência de domínio) | Sem migração incremental nem big-bang sobre o legado |
 | D6 | Ordem de entrega | **Windows primeiro**, depois **Web** | Foco em uma plataforma; abstração de dados garante port limpo |
@@ -112,11 +112,12 @@ Evolution). A v2 nasce do zero para:
         │  (Rust)         │        conversa → política de ticket →
         │                 │        kanban → automação → IA
         └───┬────────┬────┘
-            │        │ gRPC/HTTP
+            │        │ gRPC
             │        ▼
             │   ┌──────────────────────┐
-            │   │ AI ORCHESTRATOR      │  (Python: LangChain, RAG,
-            │   │ (Python)             │   transcrição, sentimento)
+            │   │ ia_engine            │  (Python: LangChain, RAG,
+            │   │ (Python, serviço     │   transcrição, sentimento).
+            │   │  gRPC separado)      │   Núcleo = FeaturesCompose
             │   └──────────────────────┘
             ▼
    ┌────────────────────────┐         ┌────────────────────────┐
@@ -165,9 +166,22 @@ Consome eventos do bus e executa o domínio:
 - Resolve/cria a conversa/atendimento.
 - Aplica **política de ticket** (reaproveita ativo, reabre, cria).
 - Atualiza **Kanban** (etapa/fluxo/departamento), **automações**.
-- Chama o **AI Orchestrator** (Python) para mídia, intents, resposta e
+- Chama o **`ia_engine`** (Python, via gRPC) para mídia, intents, resposta e
   sentimento.
 - Registra a resposta do bot e dispara o envio outbound via Evolution.
+
+**Substitui o Celery da v1.** Na v1, o Celery acumulava dois papéis: (a) fila de
+trabalho + worker assíncrono (`process_contact_response_task`) e (b) agendamento
+temporal (`verificar_feedback_atendimento` após `RESOLVIDO`,
+`purge_old_media_all_tenants` periódico). Na v2 ambos vivem no `worker` Rust:
+- **Fila + processamento assíncrono** → consumo de **Redis Streams** (consumer
+  groups) pelo `worker`.
+- **Agendamento temporal** → scheduler interno do `worker` (tarefas com atraso
+  via stream com `ETA`/sorted-set no Redis, ou `tokio` timers para o processo
+  vivo) para timeout de feedback e jobs de retenção/manutenção.
+- **Debounce** → `application::DebounceByContact` (buffer + lock no Redis,
+  herdando a lógica do `message_buffer` da v1), em vez do `time.sleep()` dentro
+  da task Celery.
 
 ### 4.4 Runtime API + Realtime (App Delivery)
 - **gRPC/HTTP** para comandos e consultas (abrir ticket, listar colunas, buscar
@@ -205,11 +219,14 @@ crates/
   realtime/             # subscriptions, sessões conectadas, fan-out
   observability/        # logs estruturados, métricas, tracing
   local_engine/         # crate dual-target: lib server + cdylib FFI (cache local)
-clients/
-  flutter_app/          # app Flutter (Windows → Web)
-services/
-  ai_orchestrator/      # serviço Python (LangChain, RAG, transcrição)
 ```
+
+> A estrutura completa do monorepo (todas as stacks, não só o workspace Rust)
+> está detalhada em [01-estrutura-do-projeto.md](./01-estrutura-do-projeto.md).
+> O frontend são **dois apps Flutter** (`clients/flutter_windows` e
+> `clients/flutter_web`) + pacotes compartilhados em `clients/packages/`. A IA é
+> o serviço Python independente **`ia_engine/`** (na raiz do monorepo, fora do
+> workspace Rust), comunicando-se por **gRPC** (ver §13).
 
 **Camadas:**
 - `domain_*`: regras puras de negócio (sem I/O).
@@ -259,15 +276,33 @@ camada `infrastructure_postgres`.
   departamento/atendente — equivalente ao `AppInstance` atual).
 - O **Messaging Gateway** resolve o `tenant_id` a partir da instância
   (`apikey`/`instance`) que recebeu o webhook.
-- Mídia: o Evolution Go com S3/MinIO já entrega `mediaUrl` no webhook (sem custo
-  de CPU no servidor). Quando vier apenas a referência cifrada do CDN do
-  WhatsApp, o worker reconstrói o objeto e baixa/descriptografa via Evolution
-  (precisa de `mediaKey`, `directPath`, etc.), com **retry/backoff** (o Go às
-  vezes retorna 403/500 transitório logo após o recebimento).
+- Mídia: **a config de referência da v1 (`old/paulo-ecoprint-server`) NÃO usa
+  S3/MinIO** e roda com `DATABASE_SAVE_MESSAGES=false`. Logo, o webhook tende a
+  trazer apenas a referência cifrada do CDN do WhatsApp: o worker reconstrói o
+  objeto e baixa/descriptografa via Evolution (precisa de `mediaKey`,
+  `directPath`, etc.), com **retry/backoff** (o Go às vezes retorna 403/500
+  transitório logo após o recebimento). **Decisão em aberto:** habilitar S3/MinIO
+  no Evolution Go (entrega `mediaUrl` direto, sem custo de CPU) **ou** manter o
+  download/descriptografia no worker. Ver §17.
+- **Gerência de instâncias via API REST do Evolution Go** (não por container por
+  tenant): `POST /instance/create` (com `name` + `token`), `POST
+  /instance/connect` (define webhook + eventos), `GET /instance/qr` ou `POST
+  /instance/pair`, `GET /instance/status`. O **Control Plane** orquestra isso.
+- **Envio outbound:** `POST /message/sendText` e `POST /message/sendMedia`,
+  autenticados com o **token da instância** (não a global key).
+- **Autenticação dupla:** *global API key* (admin: criar/listar/deletar
+  instâncias) × *token por instância* (enviar, conectar, status, webhook).
+- O Evolution Go **não precisa de Redis** e usa **dois bancos PostgreSQL
+  próprios** (`evogo_auth`, `evogo_users`), separados do banco da aplicação.
 
-**Eventos relevantes do webhook (a tratar):** `MESSAGE` (recebida),
-`MESSAGE_UPDATE` (read receipts: sent/delivered/read), `CONTACTS`,
-`CONNECTION`, `QRCODE`, `PRESENCE`.
+**Eventos relevantes do webhook (nomes reais do Evolution Go):**
+`MESSAGES_UPSERT` (mensagem recebida — payload `event: "messages.upsert"`),
+`MESSAGES_UPDATE` (read receipts: sent/delivered/read), `MESSAGES_DELETE`,
+`CONNECTION_UPDATE`, `QRCODE_UPDATED`, `CONTACTS_UPSERT`, `GROUP_UPDATE`.
+> A v1 normalizava o tipo de mídia por chave JSON (`conversation`,
+> `extendedTextMessage`, `imageMessage`, `audioMessage`, `documentMessage`,
+> `videoMessage`, `stickerMessage`, `locationMessage`, etc.) — manter esse
+> mapeamento em `domain_whatsapp`.
 
 ---
 
@@ -365,7 +400,7 @@ preservadas como **casos de uso explícitos** nos crates `domain_*`/`application
 | **Mensagem = ticket?** | **Não.** `Atendimento` é a unidade (ticket + conversa unidos na v1). `Mensagem` pertence a um `Atendimento` |
 | **Vários tickets abertos por contato?** | **Não.** Reaproveita o `Atendimento` ativo (status `FILA`/`EM_ATENDIMENTO`/`PENDENCIA`); só cria novo se não houver ativo |
 | **Ticket pertence à conversa ou ao contato?** | Ao **contato** (FK `Atendimento.contato`). Atendimentos anteriores alimentam o contexto da IA |
-| **Reabertura** | Janela de **feedback de 10 min** após `RESOLVIDO`/`ARQUIVADO`: nova mensagem vira feedback do atendimento anterior (com análise de sentimento); fora da janela, abre novo atendimento |
+| **Reabertura** | Janela de **feedback configurável** após `RESOLVIDO`/`ARQUIVADO` (na v1, o timeout agendado é de **5 min** — `verificar_feedback_atendimento`): nova mensagem dentro da janela vira feedback do atendimento anterior (com análise de sentimento); fora da janela, abre novo atendimento |
 | **IA × humano no mesmo thread** | Qualquer mensagem de `ATENDENTE_HUMANO` **bloqueia o bot permanentemente** naquele atendimento. Controle por flag `bot_pode_atender` + `AppInstance.resposta_bot` (por instância) |
 | **Distribuição** | Por **departamento → fluxo → etapa** (Kanban via `EtapaFluxo`). A instância Evolution define departamento/fluxo/atendente. Transferência por intenção detectada ou decisão da LLM |
 | **Responder "por fora"** | Sim — `from_me=True` cria `Mensagem` como `ATENDENTE_HUMANO` e sincroniza (e isso bloqueia o bot). Read receipts via `MESSAGE_UPDATE` |
@@ -439,7 +474,7 @@ ativo por contato").
 4. Worker aplica DEBOUNCE por contato (acumula rajada).
 5. Worker (domain_conversation) normaliza e atualiza a thread da conversa.
 6. Worker (domain_ticket) aplica POLÍTICA: reaproveita ativo / reabre / cria novo / só registra.
-7. Worker chama AI Orchestrator: converte mídia (resumo/análise), classifica intents,
+7. Worker chama o `ia_engine` (gRPC): converte mídia (resumo/análise), classifica intents,
    extrai entidades, gera resposta sugerida, detecta sentimento (feedback).
 8. Worker (domain_kanban) aplica etapa/fluxo/transferência; registra MovimentoFluxo.
 9. BotRulesEngine decide se o bot responde; se sim, registra resposta e dispara envio
@@ -457,10 +492,27 @@ O webhook vira **apenas a porta de entrada**; o domínio interno depende de
 > Esboço inicial — todas as tabelas de domínio carregam `tenant_id UUID NOT NULL`
 > e policies RLS.
 
-- **tenant** (Control Plane): id, name, slug, plan, quotas, feature_flags,
-  status, branding.
-- **evolution_instance**: id, tenant_id, name, api_key, base_url, department_id?,
-  owner_agent_id?, allows_bot (bool), status.
+- **tenant** (Control Plane): id (UUID), name, slug, api_key, owner_user_id,
+  email, phone, active, setup_completed, onboarding_step, access_code.
+- **tenant_config** (config de IA/branding por tenant — herdado de `TenantConfig`
+  da v1): tenant_id, dados_empresa, persona_bot, bot_agent_name, msg_fallback,
+  msg_sem_info, msg_transferencia, entity_types (json), llm_class, model,
+  transcription_provider/model, vision_provider/model, api_keys (cifradas:
+  groq/openai/huggingface), brand_name, primary_color, secondary_color,
+  timezone, language_code. **As API keys de provedores e credenciais ficam
+  cifradas em repouso** (a v1 usa `encrypt_value`/`decrypt_value`).
+- **plan / subscription / payment_record** (billing — herdado de `Plan`,
+  `Subscription`, `PaymentRecord`): planos com limites (`max_instances`,
+  `max_departments`), assinatura com status/período, pagamentos manuais
+  (PIX/boleto/transferência) e gateway externo (asaas/stripe).
+- **tenant_user / tenant_invite** (RBAC por tenant — herdado de `TenantUser`,
+  `TenantInvite`): role (admin/manager/staff/viewer), `module_permissions`
+  (json) e `flow_permissions` (lista de IDs de fluxo liberados no workspace),
+  token de convite com validade.
+- **evolution_instance** (≈ `AppInstance` + credenciais Evolution da v1): id,
+  tenant_id, name/instance_token, api_key, base_url, channel, department_id?,
+  owner_agent_id?, resposta_bot (bool — permite resposta automática), active,
+  status, metadata (json).
 - **contact**: id, tenant_id, phone, profile_name, display_name, metadata,
   last_interaction.
 - **conversation**: id, tenant_id, contact_id, channel, state, last_message_at,
@@ -487,19 +539,157 @@ O webhook vira **apenas a porta de entrada**; o domínio interno depende de
 
 ## 13. Camada de IA
 
-- Serviço **`ai_orchestrator` em Python** (decisão D3), exposto por **gRPC/HTTP**
-  e chamado pelo `worker`.
+O motor de IA é o serviço Python **`ia_engine`** (decisão D3), **processo
+separado** exposto por **gRPC** e consumido pelo `worker` (Rust).
+
 - Responsabilidades: conversão de mídia (transcrição de áudio, descrição de
   imagem/vídeo, leitura de documento → `resumo_midia` + `analise_midia`),
   classificação de intents, extração de entidades, geração de resposta
   (multi-turn com histórico), RAG (pgvector), análise de sentimento/avaliação.
-- Provedores: OpenAI / Groq / Ollama (abstraídos via LangChain). Tokens isolados
-  em variáveis de ambiente (`.env`), nunca no código.
+- Provedores: OpenAI / Groq / Ollama (abstraídos via LangChain). Tokens globais
+  isolados em variáveis de ambiente (`.env`), nunca no código. **Override por
+  tenant** via `tenant_config.api_keys` (cifradas) e campos `llm_class`/`model`/
+  `transcription_*`/`vision_*` — quando preenchidos, têm prioridade sobre o
+  global (comportamento herdado da v1).
+- **Embeddings:** dimensão **1536** (OpenAI `text-embedding`) na v1 — fixar a
+  dimensão da coluna `pgvector` desde a primeira migration. Busca por
+  `CosineDistance` com `distance_threshold` configurável (RAG de documentos e
+  de `intent_behavior`/`QueryCompose`).
 - **Fronteira limpa:** o Rust nunca depende de detalhes do LangChain; conversa
-  por contratos (`domain_ai` define as interfaces; `contracts` os DTOs).
+  por contratos (`domain_ai` define as interfaces; `contracts` os DTOs; o
+  `.proto` é a fonte única de tipos).
 - Possível evolução: portar partes simples (chamada direta de LLM via `reqwest`
   + pgvector) para Rust quando fizer sentido, mantendo o serviço Python para o
   que for complexo.
+
+### 13.1 Decisão de transporte: gRPC vs FFI/PyO3
+
+Avaliamos duas formas de o `worker` (Rust) invocar a IA (Python): **gRPC**
+(processos separados falando por rede local) e **FFI via PyO3** (interpretador
+Python embarcado no processo Rust, "chamada direta de função"). **Escolha:
+gRPC.**
+
+> **Princípio que decide:** FFI ("chamada direta") só existe **no mesmo
+> processo**. "Serviço separado" significa **outro processo**, e entre processos
+> a comunicação é sempre por rede. Os dois desejos — *serviço Python isolado* e
+> *FFI direto* — são mutuamente exclusivos. Uma "ponte Rust+PyO3 que serve as
+> funções Python" **não agrega valor**: ou o Python roda dentro do worker (aí não
+> há serviço separado), ou a ponte vira uma indireção que ainda paga rede **e**
+> carrega o custo do PyO3.
+
+| Critério | gRPC (escolhido) | FFI / PyO3 |
+|----------|------------------|------------|
+| Latência de transporte | ~0,1–1 ms (loopback) | ~0 (microsegundos) |
+| **Relevância da latência** | Irrelevante: a chamada à LLM domina (200–5000 ms; mídia 1–10 s). O transporte é < 0,5% do tempo total | — |
+| Concorrência / workers | ✅ Escala por **N processos/réplicas** do `ia_engine` | ❌ Limitada pelo **GIL** (1 thread Python por vez serializa a orquestração) |
+| Isolamento de falha | ✅ Crash no Python não derruba o worker Rust | ❌ Segfault em lib nativa derruba o worker inteiro |
+| Isolamento de memória | ✅ Espaços separados (dado sensível protegido) | ❌ Memória compartilhada no mesmo processo |
+| `unsafe` em Rust | ✅ 100% safe | ❌ Introduz fronteira `unsafe` (proibida fora do `local_engine`) |
+| Deploy / escala | ✅ Container Python isolado; atualiza/reinicia/escala sozinho; pode ir para host com GPU | ❌ Binário Rust precisa do venv Python exato embarcado |
+| Contrato poliglota | ✅ `.proto` gera stubs Rust/Python (e Dart) — erro de schema pega em build | ⚠️ Acoplamento no mesmo binário |
+
+**Nota de mercado:** o uso idiomático e atual do PyO3 é o **inverso** desta
+proposta — escrever uma **lib Rust consumida por Python** para acelerar trechos
+quentes (ex.: `pydantic-core`, `polars`, `tokenizers`, `orjson`). Embutir um app
+Python inteiro (LangChain + dezenas de libs nativas) dentro de um serviço Rust é
+um antipadrão. Para **servir IA entre serviços**, o padrão de mercado é rede
+(gRPC/HTTP — Ray Serve, BentoML, Triton, FastAPI). PyO3 fica **reservado** para o
+caso legítimo: se um trecho de pré/pós-processamento virar gargalo de CPU,
+escreve-se uma extensão Rust chamada **de dentro** do Python — sem inverter a
+arquitetura.
+
+### 13.2 Núcleo reaproveitado: a facade `FeaturesCompose`
+
+A v1 já concentra **toda** a lógica de IA na facade estática
+`FeaturesCompose` (`modules/ai_engine/features/features_compose.py`), com cada
+feature em clean architecture (`usecase → datasource → LangChain`). Esse código é
+**reaproveitado quase integralmente** no `ia_engine` da v2 — muda apenas o
+**ponto de entrada**: do que hoje é chamado por uma task Celery, passa a ser
+chamado por um **handler gRPC**.
+
+Métodos da facade (v1) → RPCs do `ia_engine` (v2):
+
+| `FeaturesCompose` (v1) | RPC gRPC (v2) | Feature em `src/features/` |
+|------------------------|---------------|----------------------------|
+| `analise_previa_mensagem` | `AnalisePreviaMensagem` | `analyse_message` |
+| `analise_mensage` | `AnaliseMensage` | `generate_response` |
+| `converter_contexto` / `_transcribe_audio` | `TranscribeAudio` | `transcribe_audio` |
+| `converter_contexto` / `_interpret_media` | `InterpretMedia` | `interpret_media` |
+| `analise_avaliacao` | `AnaliseSentimento` | `analyse_sentiment` |
+| `generate_embeddings` | `GenerateEmbeddings` | `generate_embeddings` |
+| `extracao_campos` | `ExtracaoCampos` | `analyse_message` (campos) |
+| `generate_chunks` / `load_document_*` | `LoadDocument` | (treinamento/RAG) |
+
+> A lógica de domínio que na v1 vivia **junto** da IA (o
+> `AttendanceOrchestrator`, política de ticket, transferência) **não** vai para o
+> `ia_engine`. Ela migra para o `worker` + crates `domain_*`/`application` em
+> Rust (ver §10 e §11). O `ia_engine` fica com **IA pura** (in → LLM → out), sem
+> regra de negócio nem acesso ao banco multi-tenant.
+
+### 13.3 Esboço do contrato e da implementação
+
+**Contrato (`.proto` — fonte única de tipos, espelhado em Pydantic):**
+```protobuf
+service AiEngine {
+  rpc AnalisePreviaMensagem(AnalisePreviaRequest) returns (AnalisePreviaResponse);
+  rpc AnaliseMensage(AnaliseMensageRequest)       returns (AnaliseMensageResponse);
+  rpc TranscribeAudio(TranscribeRequest)          returns (MediaAnalysis);
+  rpc InterpretMedia(InterpretMediaRequest)       returns (MediaAnalysis);
+  rpc GenerateEmbeddings(EmbeddingsRequest)       returns (EmbeddingsResponse);
+}
+
+message AnalisePreviaRequest {
+  string tenant_id      = 1;   // sempre presente; isola contexto e escolhe a key
+  string historico_json = 2;
+  string context        = 3;
+  string valid_intents  = 4;
+}
+```
+
+**Servidor Python (`ia_engine`) — reusa a facade quase intacta:**
+```python
+class AiEngineServicer(ai_pb2_grpc.AiEngineServicer):
+    async def AnalisePreviaMensagem(self, request, context):
+        # FeaturesCompose praticamente como na v1 — só muda o ponto de entrada
+        result = FeaturesCompose.analise_previa_mensagem(
+            json.loads(request.historico_json),
+            request.context,
+            request.valid_intents,
+        )
+        return ai_pb2.AnalisePreviaResponse(
+            intents=result.intents, entities=result.entities
+        )
+```
+
+**Cliente Rust (`worker`) — async nativo, sem GIL, sem unsafe:**
+```rust
+let mut client = AiEngineClient::connect("http://127.0.0.1:50051").await?;
+let resp = client
+    .analise_previa_mensagem(AnalisePreviaRequest {
+        tenant_id,
+        historico_json,
+        context,
+        valid_intents,
+    })
+    .await?;
+```
+
+### 13.4 Configuração, segurança e resiliência
+
+- **`tenant_id` em todo request** — o `ia_engine` é stateless quanto a tenant: o
+  `worker` envia o `tenant_id` (e a config/credenciais já resolvidas) em cada
+  chamada. A key do tenant A nunca é usada para o tenant B.
+- **Segredos:** as API keys de provedor são decifradas pelo lado que detém a
+  master key e passadas no request; o `ia_engine` não acessa o banco
+  multi-tenant. Conteúdo do cliente é **input não confiável** (anti prompt
+  injection). Ver diretrizes em
+  [padroes_linguagens/seguranca.md](../padroes_linguagens/seguranca.md).
+- **Resiliência (no `worker`):** `tokio::time::timeout` em toda chamada gRPC +
+  retry/backoff para erros transitórios; o worker degrada graciosamente (ex.:
+  fallback fixo) se a IA estiver indisponível.
+- **Escala:** sob carga, sobem-se **N réplicas** do `ia_engine` (cada uma com seu
+  GIL) atrás de balanceamento gRPC — é assim que se escala Python em produção
+  (processos, não threads).
 
 ---
 
@@ -511,10 +701,11 @@ facilitar futura distribuição sem reescrever:
 - **Proxy reverso** (Nginx/Caddy/Traefik) com TLS e `proxy_buffering off` para
   WebSocket/SSE.
 - **runtime_api** (Rust) — API + realtime.
-- **worker** (Rust) — processamento assíncrono.
+- **worker** (Rust) — processamento assíncrono + agendamento (substitui o Celery
+  da v1).
 - **messaging_gateway** (Rust) — ingestão de webhooks.
 - **control_plane** (Rust) — gestão.
-- **ai_orchestrator** (Python) — IA.
+- **ia_engine** (Python) — IA (serviço gRPC separado; escalável por réplicas).
 - **PostgreSQL** (+ pgvector) — banco unificado.
 - **Redis** — Streams (bus), cache, presença, pub/sub.
 - **Evolution Go** — gateway de WhatsApp (multi-instância) + S3/MinIO para mídia.
@@ -529,9 +720,11 @@ facilitar futura distribuição sem reescrever:
 |--------|------------|
 | Backend | Rust (tokio, axum, tonic/gRPC, sqlx) |
 | Event bus | Redis Streams (consumer groups) |
+| Agendamento | `worker` Rust (tokio timers + Redis delayed) — substitui Celery |
 | Banco | PostgreSQL + pgvector, RLS |
 | Cache/Realtime | Redis (namespace por tenant), WebSocket |
-| IA/NLP | Python (LangChain), OpenAI/Groq/Ollama |
+| IA/NLP | `ia_engine` Python (serviço gRPC; LangChain), OpenAI/Groq/Ollama |
+| IA ↔ Backend | gRPC (tonic no Rust, grpcio no Python); FFI/PyO3 descartado (§13.1) |
 | WhatsApp | Evolution Go (multi-instância) + S3/MinIO |
 | Frontend | Flutter (Windows → Web) |
 | FFI | flutter_rust_bridge + SQLite local |
@@ -553,8 +746,9 @@ facilitar futura distribuição sem reescrever:
 3. **Runtime API + Realtime + shell Flutter (Windows)**
    - gRPC/HTTP + WebSocket. Camada `DataSource` abstrata (modo `RemoteOnly`).
    - Primeiros casos de uso de leitura + realtime.
-4. **Worker + AI Orchestrator (Python)**
+4. **Worker + `ia_engine` (Python, gRPC)**
    - Debounce, conversa, política de ticket, kanban, IA, envio outbound.
+   - Worker assume também o agendamento que era do Celery (feedback, retenção).
 5. **Regras de domínio explícitas**
    - Casos de uso das §10.1–10.4 nos crates `domain_*`.
 6. **Local Engine (FFI) + mídia local**
@@ -574,14 +768,29 @@ fora do caminho crítico.)*
   abstração `DataSource` desde o dia 1 para não comprometer o port Web.
 - **Sincronização de cache local** (conflitos, invalidação) precisa de
   estratégia explícita.
-- **Maturidade de IA em Rust** — mitigado mantendo o serviço Python.
+- **Maturidade de IA em Rust** — mitigado mantendo o serviço Python `ia_engine`
+  isolado, falando por gRPC (decisão D3/§13.1).
+- **Reaproveitamento do `FeaturesCompose`** — risco baixo: o código de IA da v1 é
+  portado quase intacto; o esforço está em trocar o ponto de entrada (Celery →
+  handler gRPC) e extrair a orquestração para o `worker` Rust.
+- **Agendamento sem Celery** — o `worker` Rust precisa cobrir os jobs temporais
+  que eram do Celery (timeout de feedback, purga de mídia); validar a estratégia
+  de delayed tasks no Redis para não perder agendamentos.
 - **Retenção de mídia** — política de expiração precisa equilibrar custo de
   storage × disponibilidade multi-operador/Web.
 - **Migração mental DB-por-tenant → único** — RLS precisa ser testada
   rigorosamente para garantir isolamento.
 
+**Decisões já fechadas (antes em aberto):**
+- ✅ **Transporte `worker` (Rust) ↔ `ia_engine` (Python): gRPC** (não FFI/PyO3).
+  Racional completo em §13.1. Garante isolamento de processo, escala por réplicas
+  (sem teto do GIL) e mantém o Rust 100% safe.
+
 **Decisões em aberto (a definir antes/durante o planejamento):**
-- Protocolo final: **gRPC vs REST+WS** para o Runtime API (e codegen Dart).
+- Protocolo final: **gRPC vs REST+WS** para o Runtime API (Flutter ↔ servidor; e
+  codegen Dart). *Atenção:* gRPC não roda nativo no navegador — o `flutter_web`
+  exigiria gRPC-Web + proxy. Isto é independente da decisão §13.1 (que trata só
+  do canal interno backend ↔ IA).
 - **Redis Streams vs NATS JetStream** para o bus (recomendação atual: Redis
   Streams para começar simples).
 - Estratégia de **conflito de sync** (last-write-wins vs versionamento por
@@ -590,7 +799,17 @@ fora do caminho crítico.)*
 - Manter `Atendimento` unificado (como v1) **ou** separar conversa × ticket
   (recomendado) na v2.
 - Modelo de **autenticação/autorização** do Flutter (tokens, refresh, RBAC por
-  tenant).
+  tenant) — reaproveitar o modelo da v1: `TenantUser`/`TenantInvite` com
+  `role` + `module_permissions` + `flow_permissions`.
+- **Mídia no Evolution Go:** habilitar S3/MinIO (entrega `mediaUrl` direta) ou
+  manter download + descriptografia no worker (`mediaKey`/`directPath`). A config
+  de referência da v1 não tem S3 e usa `DATABASE_SAVE_MESSAGES=false`.
+- **Cifragem em repouso** de credenciais/tokens (api keys de provedores,
+  Evolution, etc.): definir o mecanismo (a v1 usa Fernet via
+  `encrypt_value`/`decrypt_value`).
+- **Provisionamento de instâncias Evolution:** o Control Plane chama a API REST
+  (`/instance/create`, `/connect`, `/qr`, `/pair`, `/status`) — definir guarda de
+  quota por plano (`max_instances`).
 
 ---
 
@@ -601,12 +820,23 @@ fora do caminho crítico.)*
   política, garantindo isolamento por `tenant_id` no nível do banco.
 - **Messaging Gateway:** serviço que recebe webhooks do Evolution e publica
   eventos internos.
-- **Worker / Support Core:** serviço que executa o domínio (conversa, ticket,
-  kanban, IA).
+- **Worker / Support Core:** serviço Rust que executa o domínio (conversa,
+  ticket, kanban, IA) + agendamento. Substitui o Celery da v1.
 - **Runtime API:** API + realtime que serve o app Flutter.
 - **Control Plane:** gestão de tenants, planos, credenciais, instâncias.
+- **ia_engine:** serviço Python independente de IA (LangChain/RAG), consumido
+  pelo `worker` via **gRPC**. Tem como núcleo a facade `FeaturesCompose`.
+- **FeaturesCompose:** facade da v1 que concentra toda a lógica de IA pura
+  (`analise_mensage`, `transcribe_audio`, `generate_embeddings`, etc.);
+  reaproveitada no `ia_engine` da v2 trocando o ponto de entrada (Celery → gRPC).
+- **gRPC:** protocolo de RPC com contrato `.proto` e payload binário (Protobuf),
+  usado no canal `worker` ↔ `ia_engine` (e candidato para Flutter ↔ servidor).
 - **FFI (Foreign Function Interface):** ponte que embarca o Rust como biblioteca
-  nativa no app Flutter (via flutter_rust_bridge).
+  nativa no app Flutter (via flutter_rust_bridge). Usada **apenas** entre Flutter
+  e `local_engine` — **não** entre o backend e o `ia_engine` (ver §13.1).
+- **PyO3:** crate que embarca o interpretador Python no Rust (FFI). **Descartado**
+  para o canal backend ↔ IA; reservado para eventuais extensões Rust chamadas de
+  dentro do Python.
 - **Local Engine:** crate Rust de cache/offline embarcado no app Windows.
 - **Atendimento:** unidade operacional de atendimento (ticket) na v1.
 - **EtapaFluxo:** coluna/etapa do Kanban dentro de um fluxo de um departamento.
