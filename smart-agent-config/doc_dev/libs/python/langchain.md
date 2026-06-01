@@ -10,7 +10,7 @@
 
 ## 1. Contexto e Uso no Projeto
 
-O motor de IA (`ai-engine` escrito em Python) utiliza a stack do **LangChain** para encapsular e padronizar toda a lógica cognitiva do chatbot:
+O motor de IA (`ia_engine` escrito em Python) utiliza a stack do **LangChain** para encapsular e padronizar toda a lógica cognitiva do chatbot:
 - **Intents e Entidades:** Classificação semântica da intenção do contato e extração de chaves.
 - **RAG (Busca Vetorial):** Busca de dados em documentos de treinamento do tenant (armazenados via pgvector) para enriquecer o contexto de resposta da LLM.
 - **Geração de Resposta:** Prompt chains com histórico de mensagens e persona do bot configurado.

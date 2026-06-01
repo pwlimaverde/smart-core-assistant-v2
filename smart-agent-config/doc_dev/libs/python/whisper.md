@@ -10,7 +10,7 @@
 
 ## 1. Contexto e Uso no Projeto
 
-No Smart Core Assistant v2, o `worker` Rust identifica áudios recebidos (`audioMessage`) e aciona a transcrição. Se o inquilino preferir processamento local para evitar latência e custos de nuvem, o `ai-engine` pode inicializar o modelo **Whisper** localmente.
+No Smart Core Assistant v2, o `worker` Rust identifica áudios recebidos (`audioMessage`) e aciona a transcrição. Se o inquilino preferir processamento local para evitar latência e custos de nuvem, o `ia_engine` pode inicializar o modelo **Whisper** localmente.
 
 Dada a restrição de recursos da VM Hostinger (CPU-only, sem placas GPU Nvidia dedicadas), recomenda-se o uso da biblioteca **`faster-whisper`** (implementação otimizada em C++ usando CTranslate2) com o modelo **`base`** ou **`tiny`** para reduzir consumo de RAM e CPU.
 

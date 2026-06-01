@@ -3,7 +3,7 @@
 - **Versão Recomendada:** 0.7.2
 - **Status de Atualização:** ✅ ATUALIZADA
 - **Última Verificação:** 2026-05-31
-- **Propósito no Projeto:** Logging estruturado e formatado para o motor de IA (`ai-engine`), substituindo o módulo de log padrão do Python.
+- **Propósito no Projeto:** Logging estruturado e formatado para o motor de IA (`ia_engine`), substituindo o módulo de log padrão do Python.
 - **Documentação Oficial:** [https://github.com/Delgan/loguru](https://github.com/Delgan/loguru)
 
 ---
@@ -23,7 +23,7 @@ Evite classificar tudo como `INFO` ou `ERROR`. Siga a matriz de criticidade:
 *   **`INFO`**: Eventos marcantes no fluxo normal do sistema. Ex: Inicialização do servidor gRPC, carregamento de chaves de um novo tenant, finalização de processamento de áudio.
 *   **`WARNING`**: Situações incomuns que não quebram o fluxo, mas exigem atenção. Ex: Fallback automático de modelo (ex: OpenAI caiu e mudou para Groq), lentidão incomum na API de LLM.
 *   **`ERROR`**: Falhas graves no processamento de um request individual que afetam a resposta do usuário. Ex: Chave de API inválida fornecida pelo tenant, falha de validação irreversível.
-*   **`CRITICAL`**: Falhas que impedem o funcionamento de todo o serviço do `ai-engine`. Ex: Sem portas de rede disponíveis, falha de variáveis de ambiente do sistema geral no bootstrap.
+*   **`CRITICAL`**: Falhas que impedem o funcionamento de todo o serviço do `ia_engine`. Ex: Sem portas de rede disponíveis, falha de variáveis de ambiente do sistema geral no bootstrap.
 
 ### 2.2 Proibição Absoluta do `print()`
 Nunca utilize a função nativa `print()` em código de produção. Prints ignoram o controle de níveis de log do sistema e prejudicam a leitura no painel de observabilidade da VM Hostinger.

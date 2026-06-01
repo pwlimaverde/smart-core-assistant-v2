@@ -10,7 +10,7 @@
 
 ## 1. Contexto e Uso no Projeto
 
-Quando um cliente envia um documento PDF, Word ou uma foto no WhatsApp, o `worker` Rust faz o download da mídia e envia o buffer para o `ai-engine` (Python) gerar uma descrição e análise.
+Quando um cliente envia um documento PDF, Word ou uma foto no WhatsApp, o `worker` Rust faz o download da mídia e envia o buffer para o `ia_engine` (Python) gerar uma descrição e análise.
 - **`pypdf`**: Extrai texto puro de arquivos PDF de orçamentos, termos e documentação técnica.
 - **`python-docx`**: Extrai texto de arquivos do Word.
 - **`pillow`**: Lida com imagens, fazendo redimensionamentos para reduzir custos de token de LLMs de visão e validar integridade.

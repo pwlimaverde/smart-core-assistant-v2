@@ -10,7 +10,7 @@
 
 ## 1. Contexto e Uso no Projeto
 
-No `ai-engine` (Python), a geração de embeddings (representação numérica de palavras/textos de 1536 floats) é realizada após a entrada de novos documentos de treinamento de um tenant. 
+No `ia_engine` (Python), a geração de embeddings (representação numérica de palavras/textos de 1536 floats) é realizada após a entrada de novos documentos de treinamento de um tenant. 
 
 O pacote **`pgvector`** em Python estende o driver psycopg3/asyncpg, permitindo ler e gravar vetores em listas float nativas do Python nas consultas do banco de dados PostgreSQL.
 
@@ -50,7 +50,7 @@ async fn save_embedding_to_db(
 ```
 
 ### 2.2 Busca Semântica de Documentos no Python
-Embora o `worker` Rust possa fazer a busca vetorial diretamente com SQLx, o `ai-engine` pode precisar realizar a busca vetorial internamente em seus algoritmos de RAG.
+Embora o `worker` Rust possa fazer a busca vetorial diretamente com SQLx, o `ia_engine` pode precisar realizar a busca vetorial internamente em seus algoritmos de RAG.
 
 ```python
 async fn fetch_similar_docs(

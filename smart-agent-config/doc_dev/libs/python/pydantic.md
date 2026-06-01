@@ -10,7 +10,7 @@
 
 ## 1. Contexto e Uso no Projeto
 
-No módulo `ai-engine` (Python), a validação de tipos é crítica porque os dados de entrada e saída serão trocados localmente ou via gRPC com o backend escrito em Rust. Divergências de schemas na camada FFI/gRPC causariam erros catastróficos no backend. 
+No módulo `ia_engine` (Python), a validação de tipos é crítica porque os dados de entrada e saída serão trocados localmente ou via gRPC com o backend escrito em Rust. Divergências de schemas na camada FFI/gRPC causariam erros catastróficos no backend. 
 
 O **Pydantic** garante que:
 - Contratos (Requests/Responses) recebidos da FFI em formato JSON sejam validados estritamente e convertidos em tipos Python nativos.
