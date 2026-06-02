@@ -10,7 +10,6 @@ serde_json.workspace = true
 chrono.workspace     = true
 uuid.workspace       = true
 thiserror.workspace  = true
-tracing.workspace    = true
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

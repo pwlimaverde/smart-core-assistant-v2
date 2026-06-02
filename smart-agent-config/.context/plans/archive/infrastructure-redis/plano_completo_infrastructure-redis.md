@@ -73,7 +73,8 @@ JWT) é plano separado e consome esta fundação.
   `[workspace.dependencies]` com features `aio, tokio-comp, connection-manager, streams`; somar a
   feature `v7` ao `uuid` (aditivo — `infrastructure_postgres` segue compilando).
 - `server/crates/infrastructure_redis/Cargo.toml`: deps `redis, serde, serde_json, chrono, uuid,
-  thiserror, tracing` (workspace) + dev-dep `tokio` (`macros`, `rt-multi-thread`).
+  thiserror` (workspace) + dev-dep `tokio` (`macros`, `rt-multi-thread`). *(O final-review removeu
+  `tracing`, declarado mas não usado; re-adicionar quando houver instrumentação.)*
 
 ### (b) Módulos (`src/`)
 

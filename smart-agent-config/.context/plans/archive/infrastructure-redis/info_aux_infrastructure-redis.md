@@ -51,8 +51,10 @@ infrastructure_redis`), passa `clippy --all-targets -D warnings` + `fmt --check`
 - `#[derive(thiserror::Error)]` no enum único `RedisError`, espelhando o padrão de `DbError`.
   Variantes com `#[from]` para `redis::RedisError` e `serde_json::Error`.
 
-### tracing (0.1.40) — (central local, `tracing.md`, verif. 2026-05-31)
-- Disponível para instrumentação dos fluxos (sem logar tokens/segredos/PII).
+### tracing (0.1.40) — (central local, `tracing.md`, verif. 2026-05-31) — REMOVIDO no final-review
+- Disponível para instrumentação dos fluxos (sem logar tokens/segredos/PII). **Não usado nesta
+  entrega** — o gate de final-review removeu a dependência por estar declarada sem uso; re-adicionar
+  `tracing.workspace = true` quando a instrumentação for implementada.
 
 ### tokio (1.x) — (central local, `tokio.md`, verif. 2026-05-31)
 - Apenas em `[dev-dependencies]` (`macros`, `rt-multi-thread`) para os testes `#[tokio::test]`.
