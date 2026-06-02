@@ -1,0 +1,135 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO treinamento_querycompose\n                   (tenant_id, tag, grupo, descricao, exemplo, comportamento, embedding)\n               VALUES ($1, $2, $3, $4, $5, $6, $7)\n               RETURNING id, tenant_id, tag, grupo, descricao, exemplo, comportamento,\n                         created_at, updated_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "treinamento_querycompose",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "treinamento_querycompose",
+            "name": "tenant_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "tag",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "treinamento_querycompose",
+            "name": "tag"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "grupo",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "treinamento_querycompose",
+            "name": "grupo"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "descricao",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "treinamento_querycompose",
+            "name": "descricao"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "exemplo",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "treinamento_querycompose",
+            "name": "exemplo"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "comportamento",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "treinamento_querycompose",
+            "name": "comportamento"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "treinamento_querycompose",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "treinamento_querycompose",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Text",
+        "Text",
+        "Text",
+        {
+          "Custom": {
+            "name": "vector",
+            "kind": "Simple"
+          }
+        }
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "06ae8c83cf4472917ecc1b031a121156574654128f2614996643beb5d1c07fb7"
+}

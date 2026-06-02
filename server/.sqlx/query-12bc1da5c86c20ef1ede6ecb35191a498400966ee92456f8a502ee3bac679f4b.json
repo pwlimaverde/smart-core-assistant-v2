@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO oraculo_cliente_contatos (tenant_id, cliente_id, contato_id)\n               VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "12bc1da5c86c20ef1ede6ecb35191a498400966ee92456f8a502ee3bac679f4b"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oraculo_mensagem SET lido = true\n               WHERE tenant_id = $1 AND atendimento_id = $2 AND lido = false",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3f7d0da1f98afa375d740f6683c1db02bd5b880cc15f42518f568024c8b8cea7"
+}

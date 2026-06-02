@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO atu_etiqueta_atendimento (tenant_id, atendimento_id, etiqueta_id)\n               VALUES ($1, $2, $3) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "01a1bad69f3b4291bd6f0f75ec7d015553b62d5cab3788c94dfa275fab8b1094"
+}

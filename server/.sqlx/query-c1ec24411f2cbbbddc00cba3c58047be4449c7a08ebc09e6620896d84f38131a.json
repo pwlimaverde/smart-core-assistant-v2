@@ -1,0 +1,161 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, tenant_id, atendimento_id, etapa_origem_id, etapa_destino_id,\n                      atendente_origem_id, atendente_destino_id, motivo, dados_complementares,\n                      automatico, data_movimento, duracao_segundos\n               FROM oraculo_movimento_fluxo\n               WHERE tenant_id = $1 AND atendimento_id = $2\n               ORDER BY data_movimento DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_movimento_fluxo",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "oraculo_movimento_fluxo",
+            "name": "tenant_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "atendimento_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_movimento_fluxo",
+            "name": "atendimento_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "etapa_origem_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_movimento_fluxo",
+            "name": "etapa_origem_id"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "etapa_destino_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_movimento_fluxo",
+            "name": "etapa_destino_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "atendente_origem_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_movimento_fluxo",
+            "name": "atendente_origem_id"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "atendente_destino_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_movimento_fluxo",
+            "name": "atendente_destino_id"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "motivo",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oraculo_movimento_fluxo",
+            "name": "motivo"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "dados_complementares",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "oraculo_movimento_fluxo",
+            "name": "dados_complementares"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "automatico",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "oraculo_movimento_fluxo",
+            "name": "automatico"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "data_movimento",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_movimento_fluxo",
+            "name": "data_movimento"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "duracao_segundos",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_movimento_fluxo",
+            "name": "duracao_segundos"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "c1ec24411f2cbbbddc00cba3c58047be4449c7a08ebc09e6620896d84f38131a"
+}

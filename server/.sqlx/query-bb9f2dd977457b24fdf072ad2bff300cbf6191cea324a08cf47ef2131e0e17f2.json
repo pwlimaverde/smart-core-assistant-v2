@@ -1,0 +1,225 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO atu_campo_personalizado (tenant_id, slug, nome, escopo, tipo, fluxo_id)\n               VALUES ($1, $2, $3, $4, $5, $6)\n               RETURNING id, tenant_id, slug, nome, descricao, escopo, fluxo_id, tipo,\n                         opcoes, obrigatorio, extrair_automaticamente, extrair_hint,\n                         mostrar_no_card, ordem, ativo, data_criacao, data_atualizacao",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "atu_campo_personalizado",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "atu_campo_personalizado",
+            "name": "tenant_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "slug",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "atu_campo_personalizado",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "nome",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "atu_campo_personalizado",
+            "name": "nome"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "descricao",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "atu_campo_personalizado",
+            "name": "descricao"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "escopo",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "atu_campo_personalizado",
+            "name": "escopo"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "fluxo_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "atu_campo_personalizado",
+            "name": "fluxo_id"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "tipo",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "atu_campo_personalizado",
+            "name": "tipo"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "opcoes",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "atu_campo_personalizado",
+            "name": "opcoes"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "obrigatorio",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "atu_campo_personalizado",
+            "name": "obrigatorio"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "extrair_automaticamente",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "atu_campo_personalizado",
+            "name": "extrair_automaticamente"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "extrair_hint",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "atu_campo_personalizado",
+            "name": "extrair_hint"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "mostrar_no_card",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "atu_campo_personalizado",
+            "name": "mostrar_no_card"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "ordem",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "atu_campo_personalizado",
+            "name": "ordem"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "ativo",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "atu_campo_personalizado",
+            "name": "ativo"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "data_criacao",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "atu_campo_personalizado",
+            "name": "data_criacao"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "data_atualizacao",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "atu_campo_personalizado",
+            "name": "data_atualizacao"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "bb9f2dd977457b24fdf072ad2bff300cbf6191cea324a08cf47ef2131e0e17f2"
+}

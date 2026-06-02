@@ -1,0 +1,256 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT dados_empresa, persona_bot, bot_agent_name,\n                  msg_fallback, msg_sem_info, msg_transferencia,\n                  llm_class, model, llm_temperature,\n                  transcription_provider, transcription_model,\n                  vision_provider, vision_model,\n                  embeddings_class, embeddings_model,\n                  chunk_size, chunk_overlap,\n                  similarity_threshold, vector_distance_threshold,\n                  api_keys\n           FROM tenants_tenantconfig\n           WHERE tenant_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "dados_empresa",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "dados_empresa"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "persona_bot",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "persona_bot"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "bot_agent_name",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "bot_agent_name"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "msg_fallback",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "msg_fallback"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "msg_sem_info",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "msg_sem_info"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "msg_transferencia",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "msg_transferencia"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "llm_class",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "llm_class"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "model",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "model"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "llm_temperature",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "llm_temperature"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "transcription_provider",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "transcription_provider"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "transcription_model",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "transcription_model"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "vision_provider",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "vision_provider"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "vision_model",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "vision_model"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "embeddings_class",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "embeddings_class"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "embeddings_model",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "embeddings_model"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "chunk_size",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "chunk_size"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "chunk_overlap",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "chunk_overlap"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "similarity_threshold",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "similarity_threshold"
+          }
+        }
+      },
+      {
+        "ordinal": 18,
+        "name": "vector_distance_threshold",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "vector_distance_threshold"
+          }
+        }
+      },
+      {
+        "ordinal": 19,
+        "name": "api_keys",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "api_keys"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "c5c92d762a317dbfe401eb0ae5190ebf85b3bab2933c1b508e2e29238843e0db"
+}
