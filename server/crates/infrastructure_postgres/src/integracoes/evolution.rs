@@ -110,7 +110,9 @@ impl EvolutionInstanceRepository for PostgresEvolutionInstanceRepository {
                RETURNING id, tenant_id, name, instance_id, api_key, phone_number, active,
                          connection_state, last_state_check, media_storage_backend,
                          subscribed_events, last_connection_state, created_at"#,
-            ctx.tenant_id, name, api_key
+            ctx.tenant_id,
+            name,
+            api_key
         )
         .fetch_one(&mut **tx)
         .await
@@ -131,7 +133,8 @@ impl EvolutionInstanceRepository for PostgresEvolutionInstanceRepository {
                       subscribed_events, last_connection_state, created_at
                FROM evolution_sync_instance
                WHERE tenant_id = $1 AND name = $2"#,
-            ctx.tenant_id, name
+            ctx.tenant_id,
+            name
         )
         .fetch_optional(&mut **tx)
         .await?;
@@ -151,7 +154,9 @@ impl EvolutionInstanceRepository for PostgresEvolutionInstanceRepository {
                    last_connection_state = $1,
                    last_state_check = NOW()
                WHERE tenant_id = $2 AND instance_id = $3"#,
-            connection_state, ctx.tenant_id, instance_id_str
+            connection_state,
+            ctx.tenant_id,
+            instance_id_str
         )
         .execute(&mut **tx)
         .await?;
@@ -218,7 +223,8 @@ impl EvolutionContactRepository for PostgresEvolutionContactRepository {
                FROM evolution_sync_contact
                WHERE tenant_id = $1 AND jid = $2
                ORDER BY updated_at DESC LIMIT 1"#,
-            ctx.tenant_id, jid
+            ctx.tenant_id,
+            jid
         )
         .fetch_optional(&mut **tx)
         .await?;

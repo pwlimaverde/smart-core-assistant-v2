@@ -1,7 +1,8 @@
-mod common;
-mod tenants;
-mod clientes;
-mod operacional;
 mod atendimentos;
-mod treinamento;
+mod clientes;
+mod common;
+mod e2e;
 mod integracoes;
+mod operacional;
+mod tenants;
+mod treinamento;

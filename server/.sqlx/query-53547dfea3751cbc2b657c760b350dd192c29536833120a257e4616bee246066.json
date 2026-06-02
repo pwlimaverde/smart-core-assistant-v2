@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oraculo_atendimento\n               SET etapa_atual_id = $1,\n                   atendente_humano_id = COALESCE($2, atendente_humano_id)\n               WHERE tenant_id = $3 AND id = $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "53547dfea3751cbc2b657c760b350dd192c29536833120a257e4616bee246066"
+}

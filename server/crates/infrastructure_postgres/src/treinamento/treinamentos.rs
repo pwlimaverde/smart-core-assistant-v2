@@ -80,7 +80,10 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
                RETURNING id, tenant_id, tag, grupo, conteudo,
                          treinamento_finalizado, treinamento_vetorizado,
                          data_criacao, data_atualizacao"#,
-            ctx.tenant_id, tag, grupo, conteudo
+            ctx.tenant_id,
+            tag,
+            grupo,
+            conteudo
         )
         .fetch_one(&mut **tx)
         .await
@@ -102,7 +105,9 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
                       data_criacao, data_atualizacao
                FROM oraculo_treinamento
                WHERE tenant_id = $1 AND tag = $2 AND grupo = $3"#,
-            ctx.tenant_id, tag, grupo
+            ctx.tenant_id,
+            tag,
+            grupo
         )
         .fetch_optional(&mut **tx)
         .await?;
@@ -122,7 +127,8 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
             r#"UPDATE oraculo_treinamento
                SET treinamento_finalizado = true, data_atualizacao = NOW()
                WHERE tenant_id = $1 AND id = $2"#,
-            ctx.tenant_id, treinamento_id
+            ctx.tenant_id,
+            treinamento_id
         )
         .execute(&mut **tx)
         .await?;
@@ -139,7 +145,8 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
             r#"UPDATE oraculo_treinamento
                SET treinamento_vetorizado = true, data_atualizacao = NOW()
                WHERE tenant_id = $1 AND id = $2"#,
-            ctx.tenant_id, treinamento_id
+            ctx.tenant_id,
+            treinamento_id
         )
         .execute(&mut **tx)
         .await?;

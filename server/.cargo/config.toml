@@ -1,0 +1,4 @@
+# Configuração de ambiente para testes de integração
+# Limita a 1 thread para evitar conflitos de transações concorrentes no banco
+[env]
+RUST_TEST_THREADS = "1"

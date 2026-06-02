@@ -100,7 +100,12 @@ impl AtendenteRepository for PostgresAtendenteRepository {
                          ativo, disponivel, max_atendimentos_simultaneos,
                          data_ultima_atribuicao, horario_trabalho, especialidades,
                          metadados, data_cadastro, ultima_atividade"#,
-            ctx.tenant_id, nome, email, cargo, fluxo_id, departamento_id
+            ctx.tenant_id,
+            nome,
+            email,
+            cargo,
+            fluxo_id,
+            departamento_id
         )
         .fetch_one(&mut **tx)
         .await
@@ -123,7 +128,8 @@ impl AtendenteRepository for PostgresAtendenteRepository {
                       metadados, data_cadastro, ultima_atividade
                FROM oraculo_atendente
                WHERE tenant_id = $1 AND id = $2"#,
-            ctx.tenant_id, id
+            ctx.tenant_id,
+            id
         )
         .fetch_optional(&mut **tx)
         .await?;
@@ -158,7 +164,8 @@ impl AtendenteRepository for PostgresAtendenteRepository {
                  ) < a.max_atendimentos_simultaneos
                ORDER BY a.data_ultima_atribuicao ASC NULLS FIRST
                LIMIT 1"#,
-            ctx.tenant_id, departamento_id
+            ctx.tenant_id,
+            departamento_id
         )
         .fetch_optional(&mut **tx)
         .await?;
@@ -175,7 +182,8 @@ impl AtendenteRepository for PostgresAtendenteRepository {
             r#"UPDATE oraculo_atendente
                SET data_ultima_atribuicao = NOW(), ultima_atividade = NOW()
                WHERE tenant_id = $1 AND id = $2"#,
-            ctx.tenant_id, atendente_id
+            ctx.tenant_id,
+            atendente_id
         )
         .execute(&mut **tx)
         .await?;
@@ -195,7 +203,9 @@ impl AtendenteRepository for PostgresAtendenteRepository {
         sqlx::query!(
             r#"UPDATE oraculo_atendente SET disponivel = $1, ultima_atividade = NOW()
                WHERE tenant_id = $2 AND id = $3"#,
-            disponivel, ctx.tenant_id, atendente_id
+            disponivel,
+            ctx.tenant_id,
+            atendente_id
         )
         .execute(&mut **tx)
         .await?;

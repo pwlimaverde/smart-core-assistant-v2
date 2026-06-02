@@ -110,7 +110,9 @@ impl FluxoAtendimentoRepository for PostgresFluxoAtendimentoRepository {
                VALUES ($1, $2, $3)
                RETURNING id, tenant_id, departamento_id, nome, descricao, ativo,
                          data_criacao, data_atualizacao"#,
-            ctx.tenant_id, departamento_id, nome
+            ctx.tenant_id,
+            departamento_id,
+            nome
         )
         .fetch_one(&mut **tx)
         .await?;
@@ -130,7 +132,8 @@ impl FluxoAtendimentoRepository for PostgresFluxoAtendimentoRepository {
                FROM oraculo_fluxo_atendimento
                WHERE tenant_id = $1 AND departamento_id = $2 AND ativo = true
                ORDER BY nome"#,
-            ctx.tenant_id, departamento_id
+            ctx.tenant_id,
+            departamento_id
         )
         .fetch_all(&mut **tx)
         .await?;
@@ -149,7 +152,8 @@ impl FluxoAtendimentoRepository for PostgresFluxoAtendimentoRepository {
                       data_criacao, data_atualizacao
                FROM oraculo_fluxo_atendimento
                WHERE tenant_id = $1 AND id = $2"#,
-            ctx.tenant_id, id
+            ctx.tenant_id,
+            id
         )
         .fetch_optional(&mut **tx)
         .await?;
@@ -180,7 +184,12 @@ impl EtapaFluxoRepository for PostgresEtapaFluxoRepository {
                RETURNING id, tenant_id, fluxo_id, nome, descricao, ordem, cor, tipo_etapa,
                          permite_atribuicao, automatico, regras_transicao, campos_obrigatorios,
                          ativo, data_criacao"#,
-            ctx.tenant_id, fluxo_id, nome, ordem, tipo_etapa, cor_val
+            ctx.tenant_id,
+            fluxo_id,
+            nome,
+            ordem,
+            tipo_etapa,
+            cor_val
         )
         .fetch_one(&mut **tx)
         .await
@@ -202,7 +211,8 @@ impl EtapaFluxoRepository for PostgresEtapaFluxoRepository {
                FROM oraculo_etapa_fluxo
                WHERE tenant_id = $1 AND fluxo_id = $2 AND ativo = true
                ORDER BY ordem"#,
-            ctx.tenant_id, fluxo_id
+            ctx.tenant_id,
+            fluxo_id
         )
         .fetch_all(&mut **tx)
         .await?;
@@ -225,7 +235,8 @@ impl EtapaFluxoRepository for PostgresEtapaFluxoRepository {
                  AND tipo_etapa = 'fila' AND ativo = true
                ORDER BY ordem ASC
                LIMIT 1"#,
-            ctx.tenant_id, fluxo_id
+            ctx.tenant_id,
+            fluxo_id
         )
         .fetch_optional(&mut **tx)
         .await?;

@@ -1,0 +1,124 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, tenant_id, tag, grupo, conteudo,\n                      treinamento_finalizado, treinamento_vetorizado,\n                      data_criacao, data_atualizacao\n               FROM oraculo_treinamento\n               WHERE tenant_id = $1\n                 AND treinamento_finalizado = true AND treinamento_vetorizado = false\n               ORDER BY data_criacao",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_treinamento",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "oraculo_treinamento",
+            "name": "tenant_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "tag",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_treinamento",
+            "name": "tag"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "grupo",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_treinamento",
+            "name": "grupo"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "conteudo",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oraculo_treinamento",
+            "name": "conteudo"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "treinamento_finalizado",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "oraculo_treinamento",
+            "name": "treinamento_finalizado"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "treinamento_vetorizado",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "oraculo_treinamento",
+            "name": "treinamento_vetorizado"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "data_criacao",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_treinamento",
+            "name": "data_criacao"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "data_atualizacao",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_treinamento",
+            "name": "data_atualizacao"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6e57179870b6d87b50d4285953785a9dda57dc5a1fdca3f3088f3bdf3545a8b0"
+}

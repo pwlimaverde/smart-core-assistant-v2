@@ -53,26 +53,43 @@ pub struct TenantInvite {
 
 #[async_trait]
 pub trait TenantRepository: Send + Sync {
+    /// Busca um tenant pelo ID dentro de uma transação com RLS configurado.
     async fn buscar_por_id(
         &self,
         tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
         tenant_id: Uuid,
     ) -> Result<Option<Tenant>, DbError>;
 
+    /// Busca um tenant pelo slug dentro de uma transação com RLS configurado.
     async fn buscar_por_slug(
         &self,
-        pool: &PgPool,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
         slug: &str,
     ) -> Result<Option<Tenant>, DbError>;
 
+    /// Cria um novo tenant dentro de uma transação.
+    /// Gera UUID e api_key automaticamente e configura app.current_tenant para satisfazer RLS.
+    /// owner_id padrão é 1 (auth_user de testes/admin) quando None.
     async fn criar(
         &self,
-        pool: &PgPool,
+        tx: &mut Transaction<'_, Postgres>,
         name: &str,
         slug: &str,
-        api_key: &str,
-        owner_id: i32,
+        owner_id: Option<i32>,
+        email: Option<&str>,
+        phone: Option<&str>,
     ) -> Result<Tenant, DbError>;
+
+    /// Ativa ou desativa um tenant.
+    async fn atualizar_status(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        tenant_id: Uuid,
+        active: bool,
+    ) -> Result<(), DbError>;
 
     async fn atualizar_setup(
         &self,
@@ -119,11 +136,7 @@ pub trait TenantInviteRepository: Send + Sync {
         token: &str,
     ) -> Result<Option<TenantInvite>, DbError>;
 
-    async fn marcar_usado(
-        &self,
-        pool: &PgPool,
-        invite_id: Uuid,
-    ) -> Result<(), DbError>;
+    async fn marcar_usado(&self, pool: &PgPool, invite_id: Uuid) -> Result<(), DbError>;
 }
 
 // ---- Implementações concretas ----
@@ -137,6 +150,7 @@ impl TenantRepository for PostgresTenantRepository {
     async fn buscar_por_id(
         &self,
         tx: &mut Transaction<'_, Postgres>,
+        _ctx: &RequestContext,
         tenant_id: Uuid,
     ) -> Result<Option<Tenant>, DbError> {
         let row = sqlx::query_as!(
@@ -155,7 +169,8 @@ impl TenantRepository for PostgresTenantRepository {
 
     async fn buscar_por_slug(
         &self,
-        pool: &PgPool,
+        tx: &mut Transaction<'_, Postgres>,
+        _ctx: &RequestContext,
         slug: &str,
     ) -> Result<Option<Tenant>, DbError> {
         let row = sqlx::query_as!(
@@ -166,32 +181,70 @@ impl TenantRepository for PostgresTenantRepository {
                FROM tenants_tenant WHERE slug = $1"#,
             slug
         )
-        .fetch_optional(pool)
+        .fetch_optional(&mut **tx)
         .await?;
         Ok(row)
     }
 
     async fn criar(
         &self,
-        pool: &PgPool,
+        tx: &mut Transaction<'_, Postgres>,
         name: &str,
         slug: &str,
-        api_key: &str,
-        owner_id: i32,
+        owner_id: Option<i32>,
+        email: Option<&str>,
+        phone: Option<&str>,
     ) -> Result<Tenant, DbError> {
+        let new_id = Uuid::new_v4();
+        let api_key = Uuid::new_v4().to_string();
+        let owner = owner_id.unwrap_or(1);
+        let email_val = email.unwrap_or("");
+
+        // Configura app.current_tenant para o novo ID antes do INSERT (satisfaz RLS FORCE)
+        sqlx::query("SELECT set_config('app.current_tenant', $1, true)")
+            .bind(new_id.to_string())
+            .execute(&mut **tx)
+            .await?;
+
         let row = sqlx::query_as!(
             Tenant,
-            r#"INSERT INTO tenants_tenant (name, slug, api_key, owner_id)
-               VALUES ($1, $2, $3, $4)
+            r#"INSERT INTO tenants_tenant (id, name, slug, api_key, owner_id, email, phone)
+               VALUES ($1, $2, $3, $4, $5, $6, $7)
                RETURNING id, name, slug, api_key, owner_id, email, phone,
                          active, setup_completed, onboarding_step, access_code,
                          created_at, updated_at"#,
-            name, slug, api_key, owner_id
+            new_id,
+            name,
+            slug,
+            api_key,
+            owner,
+            email_val,
+            phone
         )
-        .fetch_one(pool)
+        .fetch_one(&mut **tx)
         .await
         .map_err(DbError::from_sqlx_unique)?;
         Ok(row)
+    }
+
+    async fn atualizar_status(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        tenant_id: Uuid,
+        active: bool,
+    ) -> Result<(), DbError> {
+        if !ctx.has_permission("tenant:admin") {
+            return Err(DbError::PermissionDenied);
+        }
+        sqlx::query!(
+            "UPDATE tenants_tenant SET active = $1, updated_at = NOW() WHERE id = $2",
+            active,
+            tenant_id
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
     }
 
     async fn atualizar_setup(
@@ -208,7 +261,9 @@ impl TenantRepository for PostgresTenantRepository {
             r#"UPDATE tenants_tenant
                SET setup_completed = $1, onboarding_step = $2, updated_at = NOW()
                WHERE id = $3"#,
-            setup_completed, onboarding_step, ctx.tenant_id
+            setup_completed,
+            onboarding_step,
+            ctx.tenant_id
         )
         .execute(&mut **tx)
         .await?;
@@ -251,7 +306,10 @@ impl TenantUserRepository for PostgresTenantUserRepository {
                VALUES ($1, $2, $3, $4)
                RETURNING id, user_id, tenant_id, role, module_permissions,
                          flow_permissions, is_active, created_at, created_by_id"#,
-            user_id, ctx.tenant_id, role, ctx.user_id
+            user_id,
+            ctx.tenant_id,
+            role,
+            ctx.user_id
         )
         .fetch_one(&mut **tx)
         .await
@@ -282,7 +340,13 @@ impl TenantInviteRepository for PostgresTenantInviteRepository {
                VALUES ($1, $2, $3, $4, $5, $6, $7)
                RETURNING id, tenant_id, email, name, role, module_permissions,
                          flow_permissions, token, expires_at, used, created_at, created_by_id"#,
-            ctx.tenant_id, email, name, role, token, expires_at, ctx.user_id
+            ctx.tenant_id,
+            email,
+            name,
+            role,
+            token,
+            expires_at,
+            ctx.user_id
         )
         .fetch_one(&mut **tx)
         .await
@@ -307,11 +371,7 @@ impl TenantInviteRepository for PostgresTenantInviteRepository {
         Ok(row)
     }
 
-    async fn marcar_usado(
-        &self,
-        pool: &PgPool,
-        invite_id: Uuid,
-    ) -> Result<(), DbError> {
+    async fn marcar_usado(&self, pool: &PgPool, invite_id: Uuid) -> Result<(), DbError> {
         sqlx::query!(
             "UPDATE tenants_tenantinvite SET used = true WHERE id = $1",
             invite_id

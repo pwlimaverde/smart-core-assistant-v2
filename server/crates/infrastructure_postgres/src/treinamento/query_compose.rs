@@ -81,7 +81,13 @@ impl QueryComposeRepository for PostgresQueryComposeRepository {
                VALUES ($1, $2, $3, $4, $5, $6, $7)
                RETURNING id, tenant_id, tag, grupo, descricao, exemplo, comportamento,
                          created_at, updated_at"#,
-            ctx.tenant_id, tag, grupo, descricao, exemplo, comportamento, vec as _
+            ctx.tenant_id,
+            tag,
+            grupo,
+            descricao,
+            exemplo,
+            comportamento,
+            vec as _
         )
         .fetch_one(&mut **tx)
         .await

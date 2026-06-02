@@ -101,7 +101,11 @@ impl ClienteRepository for PostgresClienteRepository {
                          cnpj, cpf, telefone, site, ramo_atividade, observacoes,
                          cep, logradouro, numero, complemento, bairro, cidade, uf, pais,
                          data_cadastro, ultima_atualizacao, ativo, metadados"#,
-            ctx.tenant_id, nome_fantasia, tipo, cnpj, cpf
+            ctx.tenant_id,
+            nome_fantasia,
+            tipo,
+            cnpj,
+            cpf
         )
         .fetch_one(&mut **tx)
         .await
@@ -123,7 +127,8 @@ impl ClienteRepository for PostgresClienteRepository {
                       data_cadastro, ultima_atualizacao, ativo, metadados
                FROM oraculo_cliente
                WHERE tenant_id = $1 AND id = $2"#,
-            ctx.tenant_id, id
+            ctx.tenant_id,
+            id
         )
         .fetch_optional(&mut **tx)
         .await?;
@@ -143,7 +148,9 @@ impl ClienteRepository for PostgresClienteRepository {
         sqlx::query!(
             r#"INSERT INTO oraculo_cliente_contatos (tenant_id, cliente_id, contato_id)
                VALUES ($1, $2, $3) ON CONFLICT DO NOTHING"#,
-            ctx.tenant_id, cliente_id, contato_id
+            ctx.tenant_id,
+            cliente_id,
+            contato_id
         )
         .execute(&mut **tx)
         .await?;
@@ -163,7 +170,9 @@ impl ClienteRepository for PostgresClienteRepository {
         sqlx::query!(
             "DELETE FROM oraculo_cliente_contatos
              WHERE tenant_id = $1 AND cliente_id = $2 AND contato_id = $3",
-            ctx.tenant_id, cliente_id, contato_id
+            ctx.tenant_id,
+            cliente_id,
+            contato_id
         )
         .execute(&mut **tx)
         .await?;
@@ -190,7 +199,9 @@ impl ClienteRepository for PostgresClienteRepository {
                WHERE tenant_id = $1 AND ativo = true
                ORDER BY nome_fantasia
                LIMIT $2 OFFSET $3"#,
-            ctx.tenant_id, limit, offset
+            ctx.tenant_id,
+            limit,
+            offset
         )
         .fetch_all(&mut **tx)
         .await?;

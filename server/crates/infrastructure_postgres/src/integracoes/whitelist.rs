@@ -62,7 +62,10 @@ impl WhiteListRepository for PostgresWhiteListRepository {
             r#"INSERT INTO evolution_sync_whitelist (tenant_id, name, phone_number, contact_id)
                VALUES ($1, $2, $3, $4)
                RETURNING id, tenant_id, contact_id, name, phone_number, active, created_at"#,
-            ctx.tenant_id, name, phone_number, contact_id
+            ctx.tenant_id,
+            name,
+            phone_number,
+            contact_id
         )
         .fetch_one(&mut **tx)
         .await
@@ -79,7 +82,8 @@ impl WhiteListRepository for PostgresWhiteListRepository {
         let count = sqlx::query_scalar!(
             r#"SELECT COUNT(*) FROM evolution_sync_whitelist
                WHERE tenant_id = $1 AND phone_number = $2 AND active = true"#,
-            ctx.tenant_id, phone_number
+            ctx.tenant_id,
+            phone_number
         )
         .fetch_one(&mut **tx)
         .await?;

@@ -7,6 +7,11 @@
 //! REGRA: esta é a ÚNICA crate do workspace que usa SQLx diretamente.
 //! Toda query em tabela de tenant DEVE correr dentro de run_in_tenant_transaction.
 
+// Lints permitidos por design desta camada de persistência:
+// - too_many_arguments: os repositórios recebem tx + ctx + os campos da entidade.
+// - module_inception: a estrutura é um-arquivo-por-domínio (ex.: tenants/tenants.rs).
+#![allow(clippy::too_many_arguments, clippy::module_inception)]
+
 pub mod atendimentos;
 pub mod clientes;
 pub mod config_cache;

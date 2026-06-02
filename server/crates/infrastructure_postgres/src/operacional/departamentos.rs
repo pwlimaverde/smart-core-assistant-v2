@@ -72,7 +72,9 @@ impl DepartamentoRepository for PostgresDepartamentoRepository {
                VALUES ($1, $2, $3)
                RETURNING id, tenant_id, nome, slug, descricao, ativo,
                          telefone_instancia, api_key, configuracoes, metadados, data_criacao"#,
-            ctx.tenant_id, nome, descricao
+            ctx.tenant_id,
+            nome,
+            descricao
         )
         .fetch_one(&mut **tx)
         .await
@@ -92,7 +94,8 @@ impl DepartamentoRepository for PostgresDepartamentoRepository {
                       telefone_instancia, api_key, configuracoes, metadados, data_criacao
                FROM oraculo_departamento
                WHERE tenant_id = $1 AND id = $2"#,
-            ctx.tenant_id, id
+            ctx.tenant_id,
+            id
         )
         .fetch_optional(&mut **tx)
         .await?;
@@ -133,7 +136,8 @@ impl DepartamentoRepository for PostgresDepartamentoRepository {
                       telefone_instancia, api_key, configuracoes, metadados, data_criacao
                FROM oraculo_departamento
                WHERE tenant_id = $1 AND api_key = $2"#,
-            ctx.tenant_id, api_key
+            ctx.tenant_id,
+            api_key
         )
         .fetch_optional(&mut **tx)
         .await?;

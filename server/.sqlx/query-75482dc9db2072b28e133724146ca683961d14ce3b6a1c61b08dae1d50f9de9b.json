@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tenants_tenant\n               SET setup_completed = $1, onboarding_step = $2, updated_at = NOW()\n               WHERE id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Int4",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "75482dc9db2072b28e133724146ca683961d14ce3b6a1c61b08dae1d50f9de9b"
+}

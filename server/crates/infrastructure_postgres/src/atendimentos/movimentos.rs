@@ -66,7 +66,7 @@ impl MovimentoFluxoRepository for PostgresMovimentoFluxoRepository {
                     atendente_destino_id, motivo, automatico,
                     duracao_segundos)
                VALUES ($1, $2, $3, $4, $5, $6, $7,
-                   CASE WHEN $3 IS NOT NULL THEN
+                   CASE WHEN $3::int4 IS NOT NULL THEN
                        EXTRACT(EPOCH FROM (NOW() - (
                            SELECT data_movimento FROM oraculo_movimento_fluxo
                            WHERE tenant_id = $1 AND atendimento_id = $2
@@ -77,8 +77,13 @@ impl MovimentoFluxoRepository for PostgresMovimentoFluxoRepository {
                RETURNING id, tenant_id, atendimento_id, etapa_origem_id, etapa_destino_id,
                          atendente_origem_id, atendente_destino_id, motivo, dados_complementares,
                          automatico, data_movimento, duracao_segundos"#,
-            ctx.tenant_id, atendimento_id, etapa_origem_id, etapa_destino_id,
-            atendente_destino_id, motivo, automatico
+            ctx.tenant_id,
+            atendimento_id,
+            etapa_origem_id,
+            etapa_destino_id,
+            atendente_destino_id,
+            motivo,
+            automatico
         )
         .fetch_one(&mut **tx)
         .await?;
@@ -99,7 +104,8 @@ impl MovimentoFluxoRepository for PostgresMovimentoFluxoRepository {
                FROM oraculo_movimento_fluxo
                WHERE tenant_id = $1 AND atendimento_id = $2
                ORDER BY data_movimento DESC"#,
-            ctx.tenant_id, atendimento_id
+            ctx.tenant_id,
+            atendimento_id
         )
         .fetch_all(&mut **tx)
         .await?;

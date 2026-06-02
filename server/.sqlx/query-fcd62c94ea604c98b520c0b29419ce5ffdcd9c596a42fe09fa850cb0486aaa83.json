@@ -1,0 +1,152 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO oraculo_app_instance\n                   (tenant_id, api_key, channel, display_name, departamento_id)\n               VALUES ($1, $2, $3, $4, $5)\n               RETURNING id, tenant_id, api_key, channel, display_name,\n                         departamento_id, owner_id, active, resposta_bot, metadata, created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_app_instance",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "oraculo_app_instance",
+            "name": "tenant_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "api_key",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_app_instance",
+            "name": "api_key"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "channel",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_app_instance",
+            "name": "channel"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "display_name",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_app_instance",
+            "name": "display_name"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "departamento_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_app_instance",
+            "name": "departamento_id"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "owner_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_app_instance",
+            "name": "owner_id"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "active",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "oraculo_app_instance",
+            "name": "active"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "resposta_bot",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "oraculo_app_instance",
+            "name": "resposta_bot"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "metadata",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "oraculo_app_instance",
+            "name": "metadata"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_app_instance",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "fcd62c94ea604c98b520c0b29419ce5ffdcd9c596a42fe09fa850cb0486aaa83"
+}

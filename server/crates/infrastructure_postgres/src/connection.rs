@@ -29,8 +29,8 @@ pub async fn run_in_tenant_transaction<F, T, Fut>(
     callback: F,
 ) -> Result<T, DbError>
 where
-    F: FnOnce(Transaction<'_, Postgres>) -> Fut,
-    Fut: std::future::Future<Output = Result<(T, Transaction<'_, Postgres>), DbError>>,
+    F: FnOnce(Transaction<'static, Postgres>) -> Fut,
+    Fut: std::future::Future<Output = Result<(T, Transaction<'static, Postgres>), DbError>>,
 {
     let mut tx = pool.begin().await?;
 

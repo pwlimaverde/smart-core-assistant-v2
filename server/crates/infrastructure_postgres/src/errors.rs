@@ -44,13 +44,19 @@ mod tests {
     #[test]
     fn test_db_error_display() {
         let err = DbError::PermissionDenied;
-        assert_eq!(err.to_string(), "permissão negada para a operação solicitada");
+        assert_eq!(
+            err.to_string(),
+            "permissão negada para a operação solicitada"
+        );
 
         let err = DbError::NotFound;
         assert_eq!(err.to_string(), "registro não encontrado");
 
         let err = DbError::UniqueViolation("campo duplicado".into());
-        assert_eq!(err.to_string(), "violação de restrição de unicidade: campo duplicado");
+        assert_eq!(
+            err.to_string(),
+            "violação de restrição de unicidade: campo duplicado"
+        );
 
         let err = DbError::CryptoError("falha na tag".into());
         assert_eq!(err.to_string(), "erro de criptografia: falha na tag");
@@ -69,4 +75,3 @@ mod tests {
         }
     }
 }
-

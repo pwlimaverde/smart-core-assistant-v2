@@ -86,7 +86,9 @@ impl ContatoRepository for PostgresContatoRepository {
                RETURNING id, tenant_id, telefone, nome_contato, slug, email,
                          nome_perfil_whatsapp, data_cadastro, ultima_interacao,
                          ativo, metadados, foto_perfil, foto_perfil_url_origem"#,
-            ctx.tenant_id, telefone, nome_contato
+            ctx.tenant_id,
+            telefone,
+            nome_contato
         )
         .fetch_one(&mut **tx)
         .await
@@ -107,7 +109,8 @@ impl ContatoRepository for PostgresContatoRepository {
                       ativo, metadados, foto_perfil, foto_perfil_url_origem
                FROM oraculo_contato
                WHERE tenant_id = $1 AND telefone = $2"#,
-            ctx.tenant_id, telefone
+            ctx.tenant_id,
+            telefone
         )
         .fetch_optional(&mut **tx)
         .await?;
@@ -127,7 +130,8 @@ impl ContatoRepository for PostgresContatoRepository {
                       ativo, metadados, foto_perfil, foto_perfil_url_origem
                FROM oraculo_contato
                WHERE tenant_id = $1 AND id = $2"#,
-            ctx.tenant_id, id
+            ctx.tenant_id,
+            id
         )
         .fetch_optional(&mut **tx)
         .await?;
@@ -152,7 +156,8 @@ impl ContatoRepository for PostgresContatoRepository {
                WHERE tenant_id = $1 AND ativo = true
                ORDER BY ultima_interacao DESC
                LIMIT $2"#,
-            ctx.tenant_id, limit
+            ctx.tenant_id,
+            limit
         )
         .fetch_all(&mut **tx)
         .await?;
@@ -168,7 +173,8 @@ impl ContatoRepository for PostgresContatoRepository {
         sqlx::query!(
             "UPDATE oraculo_contato SET ultima_interacao = NOW()
              WHERE tenant_id = $1 AND id = $2",
-            ctx.tenant_id, contato_id
+            ctx.tenant_id,
+            contato_id
         )
         .execute(&mut **tx)
         .await?;

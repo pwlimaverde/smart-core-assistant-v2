@@ -1,0 +1,173 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, tenant_id, telefone, nome_contato, slug, email,\n                      nome_perfil_whatsapp, data_cadastro, ultima_interacao,\n                      ativo, metadados, foto_perfil, foto_perfil_url_origem\n               FROM oraculo_contato\n               WHERE tenant_id = $1 AND id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "tenant_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "telefone",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "telefone"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "nome_contato",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "nome_contato"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "slug",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "email",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "nome_perfil_whatsapp",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "nome_perfil_whatsapp"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "data_cadastro",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "data_cadastro"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "ultima_interacao",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "ultima_interacao"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "ativo",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "ativo"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "metadados",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "metadados"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "foto_perfil",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "foto_perfil"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "foto_perfil_url_origem",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_contato",
+            "name": "foto_perfil_url_origem"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "c7e0aeb54a292143c5449633878cc5c8245ced20a82cf3f9c14574288efda450"
+}

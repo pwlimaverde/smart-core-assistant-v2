@@ -123,7 +123,8 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
             r#"UPDATE tenants_subscription
                SET status = $1, updated_at = NOW()
                WHERE tenant_id = $2"#,
-            status, ctx.tenant_id
+            status,
+            ctx.tenant_id
         )
         .execute(&mut **tx)
         .await?;
@@ -155,8 +156,14 @@ impl PaymentRecordRepository for PostgresPaymentRecordRepository {
                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                RETURNING id, tenant_id, amount, payment_date, payment_method,
                          period_start, period_end, notes, recorded_by_id, created_at"#,
-            ctx.tenant_id, amount, payment_date, payment_method,
-            period_start, period_end, notes, ctx.user_id
+            ctx.tenant_id,
+            amount,
+            payment_date,
+            payment_method,
+            period_start,
+            period_end,
+            notes,
+            ctx.user_id
         )
         .fetch_one(&mut **tx)
         .await?;

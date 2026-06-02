@@ -1,6 +1,6 @@
 # SQLx
 
-- **Versão Recomendada:** 0.8.2
+- **Versão Recomendada:** 0.9.0
 - **Status de Atualização:** ✅ ATUALIZADA
 - **Última Verificação:** 2026-06-01
 - **Propósito no Projeto:** Driver assíncrono para conexão, execução de consultas validadas em tempo de compilação, transações e migrações do PostgreSQL único (com RLS).
@@ -135,5 +135,6 @@ async fn rls_bloqueia_acesso_cross_tenant() {
 
 ## 3. Histórico de Atualizações
 
-- **2026-06-01:** Bump 0.7.3 → 0.8.2 (alinhamento com a `estrategia_implementacao_rust.md` do projeto). Sem breaking changes nas APIs utilizadas (macros, pool, transações, migrate permanecem compatíveis). **Correção de padrão:** substituído o anti-padrão `SET LOCAL app.current_tenant = $1` (que falha por `SET` não aceitar bind) por `SELECT set_config('app.current_tenant', $1, true)`.
+- **2026-06-01 (b):** Bump 0.8.2 → **0.9.0**. Necessário para unificar a versão de `sqlx` no grafo: `pgvector 0.4.2` exige `sqlx >= 0.8, < 0.10` e o Cargo resolvia `pgvector` para `sqlx 0.9.0`, gerando duas versões de `sqlx-core` no mesmo build. Validado contra o banco real (migrations + `cargo sqlx prepare --workspace --all-targets` + suíte de integração). APIs utilizadas (macros, `PgPool`, `Transaction`, `migrate`, `set_config`) permanecem compatíveis.
+- **2026-06-01 (a):** Bump 0.7.3 → 0.8.2 (alinhamento com a `estrategia_implementacao_rust.md` do projeto). **Correção de padrão:** substituído o anti-padrão `SET LOCAL app.current_tenant = $1` (que falha por `SET` não aceitar bind) por `SELECT set_config('app.current_tenant', $1, true)`.
 - **2026-05-31:** Documentação inicial da biblioteca.

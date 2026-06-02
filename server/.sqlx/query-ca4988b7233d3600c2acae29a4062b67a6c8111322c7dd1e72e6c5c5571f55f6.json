@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oraculo_treinamento\n               SET treinamento_finalizado = true, data_atualizacao = NOW()\n               WHERE tenant_id = $1 AND id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ca4988b7233d3600c2acae29a4062b67a6c8111322c7dd1e72e6c5c5571f55f6"
+}

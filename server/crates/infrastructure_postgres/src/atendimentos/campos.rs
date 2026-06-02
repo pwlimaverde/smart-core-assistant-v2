@@ -108,7 +108,12 @@ impl CampoPersonalizadoRepository for PostgresCampoPersonalizadoRepository {
                RETURNING id, tenant_id, slug, nome, descricao, escopo, fluxo_id, tipo,
                          opcoes, obrigatorio, extrair_automaticamente, extrair_hint,
                          mostrar_no_card, ordem, ativo, data_criacao, data_atualizacao"#,
-            ctx.tenant_id, slug, nome, escopo, tipo, fluxo_id
+            ctx.tenant_id,
+            slug,
+            nome,
+            escopo,
+            tipo,
+            fluxo_id
         )
         .fetch_one(&mut **tx)
         .await
@@ -132,7 +137,9 @@ impl CampoPersonalizadoRepository for PostgresCampoPersonalizadoRepository {
                WHERE tenant_id = $1 AND escopo = $2
                  AND ($3::int IS NULL OR fluxo_id = $3) AND ativo = true
                ORDER BY ordem, nome"#,
-            ctx.tenant_id, escopo, fluxo_id
+            ctx.tenant_id,
+            escopo,
+            fluxo_id
         )
         .fetch_all(&mut **tx)
         .await?;
@@ -164,7 +171,12 @@ impl ValorCampoRepository for PostgresValorCampoRepository {
                        data_atualizacao = NOW()
                RETURNING id, tenant_id, atendimento_id, campo_id, valor, origem,
                          confianca, mensagem_origem_id, editado_por_id, data_atualizacao"#,
-            ctx.tenant_id, atendimento_id, campo_id, valor, origem, confianca
+            ctx.tenant_id,
+            atendimento_id,
+            campo_id,
+            valor,
+            origem,
+            confianca
         )
         .fetch_one(&mut **tx)
         .await?;
@@ -183,7 +195,8 @@ impl ValorCampoRepository for PostgresValorCampoRepository {
                       confianca, mensagem_origem_id, editado_por_id, data_atualizacao
                FROM atu_valor_campo
                WHERE tenant_id = $1 AND atendimento_id = $2"#,
-            ctx.tenant_id, atendimento_id
+            ctx.tenant_id,
+            atendimento_id
         )
         .fetch_all(&mut **tx)
         .await?;

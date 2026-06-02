@@ -99,7 +99,9 @@ impl EtiquetaRepository for PostgresEtiquetaRepository {
             r#"INSERT INTO atu_etiqueta (tenant_id, nome, cor)
                VALUES ($1, $2, $3)
                RETURNING id, tenant_id, nome, cor, descricao, ativo, data_criacao"#,
-            ctx.tenant_id, nome, cor_val
+            ctx.tenant_id,
+            nome,
+            cor_val
         )
         .fetch_one(&mut **tx)
         .await
@@ -135,7 +137,9 @@ impl EtiquetaRepository for PostgresEtiquetaRepository {
         sqlx::query!(
             r#"INSERT INTO atu_etiqueta_atendimento (tenant_id, atendimento_id, etiqueta_id)
                VALUES ($1, $2, $3) ON CONFLICT DO NOTHING"#,
-            ctx.tenant_id, atendimento_id, etiqueta_id
+            ctx.tenant_id,
+            atendimento_id,
+            etiqueta_id
         )
         .execute(&mut **tx)
         .await?;
@@ -152,7 +156,9 @@ impl EtiquetaRepository for PostgresEtiquetaRepository {
         sqlx::query!(
             r#"DELETE FROM atu_etiqueta_atendimento
                WHERE tenant_id = $1 AND atendimento_id = $2 AND etiqueta_id = $3"#,
-            ctx.tenant_id, atendimento_id, etiqueta_id
+            ctx.tenant_id,
+            atendimento_id,
+            etiqueta_id
         )
         .execute(&mut **tx)
         .await?;
@@ -175,7 +181,10 @@ impl NotaRepository for PostgresNotaRepository {
             r#"INSERT INTO atu_nota (tenant_id, atendimento_id, texto, criado_por_id)
                VALUES ($1, $2, $3, $4)
                RETURNING id, tenant_id, atendimento_id, texto, criado_por_id, criado_em"#,
-            ctx.tenant_id, atendimento_id, texto, criado_por_id
+            ctx.tenant_id,
+            atendimento_id,
+            texto,
+            criado_por_id
         )
         .fetch_one(&mut **tx)
         .await?;
@@ -194,7 +203,8 @@ impl NotaRepository for PostgresNotaRepository {
                FROM atu_nota
                WHERE tenant_id = $1 AND atendimento_id = $2
                ORDER BY criado_em DESC"#,
-            ctx.tenant_id, atendimento_id
+            ctx.tenant_id,
+            atendimento_id
         )
         .fetch_all(&mut **tx)
         .await?;

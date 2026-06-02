@@ -98,8 +98,13 @@ impl MensagemRepository for PostgresMensagemRepository {
                          resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
                          arquivo_midia, analise_midia, resumo_midia, mensagem_citada_id,
                          quoted_preview, status_envio, data_entregue, data_lida"#,
-            ctx.tenant_id, atendimento_id, tipo, conteudo, remetente,
-            message_id_whatsapp, mensagem_citada_id
+            ctx.tenant_id,
+            atendimento_id,
+            tipo,
+            conteudo,
+            remetente,
+            message_id_whatsapp,
+            mensagem_citada_id
         )
         .fetch_one(&mut **tx)
         .await?;
@@ -128,7 +133,10 @@ impl MensagemRepository for PostgresMensagemRepository {
                WHERE tenant_id = $1 AND atendimento_id = $2
                ORDER BY timestamp ASC
                LIMIT $3 OFFSET $4"#,
-            ctx.tenant_id, atendimento_id, limit, offset
+            ctx.tenant_id,
+            atendimento_id,
+            limit,
+            offset
         )
         .fetch_all(&mut **tx)
         .await?;
@@ -147,7 +155,10 @@ impl MensagemRepository for PostgresMensagemRepository {
             r#"UPDATE oraculo_mensagem
                SET resposta_bot = $1, confianca_resposta = $2, respondida = true
                WHERE tenant_id = $3 AND id = $4"#,
-            resposta, confianca, ctx.tenant_id, mensagem_id
+            resposta,
+            confianca,
+            ctx.tenant_id,
+            mensagem_id
         )
         .execute(&mut **tx)
         .await?;
@@ -163,7 +174,8 @@ impl MensagemRepository for PostgresMensagemRepository {
         sqlx::query!(
             r#"UPDATE oraculo_mensagem SET lido = true
                WHERE tenant_id = $1 AND atendimento_id = $2 AND lido = false"#,
-            ctx.tenant_id, atendimento_id
+            ctx.tenant_id,
+            atendimento_id
         )
         .execute(&mut **tx)
         .await?;

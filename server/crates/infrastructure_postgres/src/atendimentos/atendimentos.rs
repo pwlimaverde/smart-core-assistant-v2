@@ -116,7 +116,11 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                          assunto, prioridade, atendente_humano_id, contexto_conversa,
                          historico_status, tags, avaliacao, feedback,
                          data_primeira_resposta, bot_pode_atender"#,
-            ctx.tenant_id, contato_id, departamento_id, fluxo_id, etapa_inicial_id
+            ctx.tenant_id,
+            contato_id,
+            departamento_id,
+            fluxo_id,
+            etapa_inicial_id
         )
         .fetch_one(&mut **tx)
         .await?;
@@ -138,7 +142,8 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                       data_primeira_resposta, bot_pode_atender
                FROM oraculo_atendimento
                WHERE tenant_id = $1 AND id = $2"#,
-            ctx.tenant_id, id
+            ctx.tenant_id,
+            id
         )
         .fetch_optional(&mut **tx)
         .await?;
@@ -168,7 +173,10 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                  AND ($3::int IS NULL OR departamento_id = $3)
                ORDER BY data_inicio DESC
                LIMIT $4"#,
-            ctx.tenant_id, status, departamento_id, limit
+            ctx.tenant_id,
+            status,
+            departamento_id,
+            limit
         )
         .fetch_all(&mut **tx)
         .await?;
@@ -187,11 +195,13 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         }
         sqlx::query!(
             r#"UPDATE oraculo_atendimento
-               SET status = $1,
-                   data_fim = CASE WHEN $1 IN ('resolvido','cancelado','arquivado')
+               SET status = $1::text,
+                   data_fim = CASE WHEN $1::text IN ('resolvido','cancelado','arquivado')
                                    THEN NOW() ELSE data_fim END
                WHERE tenant_id = $2 AND id = $3"#,
-            novo_status, ctx.tenant_id, atendimento_id
+            novo_status,
+            ctx.tenant_id,
+            atendimento_id
         )
         .execute(&mut **tx)
         .await?;
@@ -214,7 +224,10 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                SET etapa_atual_id = $1,
                    atendente_humano_id = COALESCE($2, atendente_humano_id)
                WHERE tenant_id = $3 AND id = $4"#,
-            etapa_id, atendente_id, ctx.tenant_id, atendimento_id
+            etapa_id,
+            atendente_id,
+            ctx.tenant_id,
+            atendimento_id
         )
         .execute(&mut **tx)
         .await?;
@@ -238,7 +251,9 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                    bot_pode_atender = false,
                    status = 'em_atendimento'
                WHERE tenant_id = $2 AND id = $3"#,
-            atendente_id, ctx.tenant_id, atendimento_id
+            atendente_id,
+            ctx.tenant_id,
+            atendimento_id
         )
         .execute(&mut **tx)
         .await?;
@@ -255,7 +270,8 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
             r#"UPDATE oraculo_atendimento
                SET data_ultima_mensagem = NOW()
                WHERE tenant_id = $1 AND id = $2"#,
-            ctx.tenant_id, atendimento_id
+            ctx.tenant_id,
+            atendimento_id
         )
         .execute(&mut **tx)
         .await?;

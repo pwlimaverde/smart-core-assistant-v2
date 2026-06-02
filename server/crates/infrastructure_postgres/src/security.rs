@@ -47,7 +47,7 @@ mod tests {
     #[test]
     fn test_request_context_has_permission() {
         let ctx = get_test_context(vec!["atendimentos:read", "atendimentos:write"], vec![]);
-        
+
         assert!(ctx.has_permission("atendimentos:read"));
         assert!(ctx.has_permission("atendimentos:write"));
         assert!(!ctx.has_permission("tenant:admin"));
@@ -72,4 +72,3 @@ mod tests {
         assert!(ctx_tenant_admin.has_flow_permission(99));
     }
 }
-

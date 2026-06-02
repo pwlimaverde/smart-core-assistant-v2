@@ -1,0 +1,127 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO tenants_tenantuser (user_id, tenant_id, role, created_by_id)\n               VALUES ($1, $2, $3, $4)\n               RETURNING id, user_id, tenant_id, role, module_permissions,\n                         flow_permissions, is_active, created_at, created_by_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantuser",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantuser",
+            "name": "user_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantuser",
+            "name": "tenant_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "role",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantuser",
+            "name": "role"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "module_permissions",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantuser",
+            "name": "module_permissions"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "flow_permissions",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantuser",
+            "name": "flow_permissions"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "is_active",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantuser",
+            "name": "is_active"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantuser",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "created_by_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantuser",
+            "name": "created_by_id"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Uuid",
+        "Varchar",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "517390399f2d90cee5c6a455dfc31538d35630e8f47dd3235c8abe7aebd6c6a8"
+}

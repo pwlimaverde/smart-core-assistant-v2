@@ -4,10 +4,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::{
-    config_cache::RuntimeConfig,
-    crypto::CipherManager,
-    errors::DbError,
-    tenants::settings,
+    config_cache::RuntimeConfig, crypto::CipherManager, errors::DbError, tenants::settings,
 };
 
 /// Linha bruta do banco para tenants_tenantconfig (todos os campos nullable).
@@ -42,10 +39,19 @@ pub async fn resolve_runtime_config(
     cipher: &CipherManager,
     tenant_id: Uuid,
 ) -> Result<RuntimeConfig, DbError> {
-    // 1. Carrega todas as CoreSettings globais (fonte de fallback)
+    // 1. Carrega todas as CoreSettings globais (tabela sem RLS — leitura direta no pool)
     let core = settings::load_all_settings(pool, cipher).await?;
 
-    // 2. Carrega o TenantConfig (pode não existir para novos tenants)
+    // 2. Carrega o TenantConfig sob contexto RLS do tenant.
+    // tenants_tenantconfig tem RLS: sem configurar app.current_tenant, a política
+    // fail-closed bloqueia a leitura (a role de runtime é NOBYPASSRLS). Por isso a
+    // consulta roda numa transação que define o tenant via set_config.
+    let mut tx = pool.begin().await?;
+    sqlx::query("SELECT set_config('app.current_tenant', $1, true)")
+        .bind(tenant_id.to_string())
+        .execute(&mut *tx)
+        .await?;
+
     let tc = sqlx::query_as!(
         TenantConfigRow,
         r#"SELECT dados_empresa, persona_bot, bot_agent_name,
@@ -61,8 +67,10 @@ pub async fn resolve_runtime_config(
            WHERE tenant_id = $1"#,
         tenant_id
     )
-    .fetch_optional(pool)
+    .fetch_optional(&mut *tx)
     .await?;
+
+    tx.commit().await?;
 
     // Helper: usa campo do tenant se não nulo/vazio; senão usa o global
     let fallback = |tenant_val: Option<String>, core_key: &str| -> String {
@@ -72,13 +80,11 @@ pub async fn resolve_runtime_config(
     };
 
     let fallback_dec = |tenant_val: Option<rust_decimal::Decimal>, core_key: &str| -> f64 {
-        tenant_val
-            .and_then(|d| d.to_f64())
-            .unwrap_or_else(|| {
-                core.get(core_key)
-                    .and_then(|s| s.parse::<f64>().ok())
-                    .unwrap_or(0.0)
-            })
+        tenant_val.and_then(|d| d.to_f64()).unwrap_or_else(|| {
+            core.get(core_key)
+                .and_then(|s| s.parse::<f64>().ok())
+                .unwrap_or(0.0)
+        })
     };
 
     let fallback_i32 = |tenant_val: Option<i32>, core_key: &str| -> i32 {

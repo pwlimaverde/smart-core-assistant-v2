@@ -1,6 +1,6 @@
 # Pgvector Rust (pgvector)
 
-- **Versão Recomendada:** 0.4.0
+- **Versão Recomendada:** 0.4.2
 - **Status de Atualização:** ✅ ATUALIZADA
 - **Última Verificação:** 2026-06-01
 - **Propósito no Projeto:** Suporte ao tipo vetorial no SQLx para salvar e consultar embeddings (1536 dimensões) da busca semântica (RAG) no PostgreSQL único.

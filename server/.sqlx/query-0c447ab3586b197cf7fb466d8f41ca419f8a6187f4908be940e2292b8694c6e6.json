@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tenants_subscription\n               SET status = $1, updated_at = NOW()\n               WHERE tenant_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0c447ab3586b197cf7fb466d8f41ca419f8a6187f4908be940e2292b8694c6e6"
+}

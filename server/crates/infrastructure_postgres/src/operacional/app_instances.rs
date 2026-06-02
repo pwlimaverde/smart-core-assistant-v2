@@ -69,7 +69,11 @@ impl AppInstanceRepository for PostgresAppInstanceRepository {
                VALUES ($1, $2, $3, $4, $5)
                RETURNING id, tenant_id, api_key, channel, display_name,
                          departamento_id, owner_id, active, resposta_bot, metadata, created_at"#,
-            ctx.tenant_id, api_key, channel, display_name, departamento_id
+            ctx.tenant_id,
+            api_key,
+            channel,
+            display_name,
+            departamento_id
         )
         .fetch_one(&mut **tx)
         .await
@@ -89,7 +93,8 @@ impl AppInstanceRepository for PostgresAppInstanceRepository {
                       departamento_id, owner_id, active, resposta_bot, metadata, created_at
                FROM oraculo_app_instance
                WHERE tenant_id = $1 AND api_key = $2"#,
-            ctx.tenant_id, api_key
+            ctx.tenant_id,
+            api_key
         )
         .fetch_optional(&mut **tx)
         .await?;

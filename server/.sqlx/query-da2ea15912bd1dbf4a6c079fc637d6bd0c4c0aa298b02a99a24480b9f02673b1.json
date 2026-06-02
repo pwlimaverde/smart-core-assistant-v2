@@ -1,0 +1,115 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT d.id, d.tenant_id, d.treinamento_id, d.conteudo,\n                   d.metadata, d.ordem, d.data_criacao,\n                   (d.embedding <=> $1) AS \"distancia!\"\n            FROM oraculo_documento d\n            INNER JOIN oraculo_treinamento t ON d.treinamento_id = t.id\n            WHERE d.tenant_id = $2\n              AND t.treinamento_finalizado = true\n              AND d.embedding IS NOT NULL\n              AND (d.embedding <=> $1) <= $3\n            ORDER BY d.embedding <=> $1\n            LIMIT $4\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_documento",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "oraculo_documento",
+            "name": "tenant_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "treinamento_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_documento",
+            "name": "treinamento_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "conteudo",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oraculo_documento",
+            "name": "conteudo"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "metadata",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "oraculo_documento",
+            "name": "metadata"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "ordem",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_documento",
+            "name": "ordem"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "data_criacao",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_documento",
+            "name": "data_criacao"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "distancia!",
+        "type_info": "Float8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "vector",
+            "kind": "Simple"
+          }
+        },
+        "Uuid",
+        "Float8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "da2ea15912bd1dbf4a6c079fc637d6bd0c4c0aa298b02a99a24480b9f02673b1"
+}

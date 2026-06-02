@@ -1,0 +1,110 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO oraculo_documento\n                   (tenant_id, treinamento_id, conteudo, embedding, ordem, metadata)\n               VALUES ($1, $2, $3, $4, $5, $6)\n               RETURNING id, tenant_id, treinamento_id, conteudo, metadata, ordem, data_criacao",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_documento",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "oraculo_documento",
+            "name": "tenant_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "treinamento_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_documento",
+            "name": "treinamento_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "conteudo",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oraculo_documento",
+            "name": "conteudo"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "metadata",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "oraculo_documento",
+            "name": "metadata"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "ordem",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_documento",
+            "name": "ordem"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "data_criacao",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_documento",
+            "name": "data_criacao"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Text",
+        {
+          "Custom": {
+            "name": "vector",
+            "kind": "Simple"
+          }
+        },
+        "Int4",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "30cf7d5b126910645a01e7e9fab0698e181e9f9a17e51d9ad30be08618411050"
+}
