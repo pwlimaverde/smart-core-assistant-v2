@@ -1,5 +1,10 @@
 # 03 — Comunicação Front↔Back e Encaixe da Autenticação
 
+> **Histórico.** Este documento foi canonizado pela skill `plan-restructuring` para o dotcontext.
+> A fonte da verdade passa a ser o plano canônico em
+> `.context/plans/user-auth-module.md` (+ `plano_completo` e `info_aux` na pasta
+> `.context/plans/user-auth-module/`). Mantido aqui como registro original.
+
 > Status: **Atualizado & Detalhado** (Junho de 2026).
 > A fundação Redis (`infrastructure_redis`) já está implementada e validada (incluindo rotação de Refresh Tokens e Blocklist de Access Tokens).
 > Este documento consolida a arquitetura de transporte, o modelo de segurança e resolve as decisões em aberto para a implementação da autenticação.

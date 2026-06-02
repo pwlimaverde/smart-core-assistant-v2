@@ -1,0 +1,12 @@
+{
+  // Faz o rust-analyzer validar as macros sqlx::query!/query_as! contra o cache
+  // offline versionado em server/.sqlx, sem exigir conexão ao PostgreSQL.
+  // Sem isto, o macro tenta conectar ao banco em tempo de compilação e falha com
+  // "os error 10061" (conexão recusada) quando o banco/túnel não está no ar.
+  "rust-analyzer.cargo.extraEnv": {
+    "SQLX_OFFLINE": "true"
+  },
+  "rust-analyzer.check.extraEnv": {
+    "SQLX_OFFLINE": "true"
+  }
+}
