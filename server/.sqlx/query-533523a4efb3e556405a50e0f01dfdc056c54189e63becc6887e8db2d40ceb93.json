@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, tenant_id, atendimento_id, tipo, conteudo, remetente,\n                      timestamp, message_id_whatsapp, metadados, respondida, lido,\n                      resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,\n                      arquivo_midia, analise_midia, resumo_midia, mensagem_citada_id,\n                      quoted_preview, status_envio, data_entregue, data_lida\n               FROM oraculo_mensagem\n               WHERE tenant_id = $1 AND atendimento_id = $2\n               ORDER BY timestamp ASC\n               LIMIT $3 OFFSET $4",
+  "query": "SELECT id, tenant_id, atendimento_id, tipo, conteudo, remetente,\n                      timestamp, message_id_whatsapp, metadados, respondida, lido,\n                      resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,\n                      arquivo_midia, analise_midia, resumo_midia, mensagem_citada_id,\n                      quoted_preview, status_envio, data_entregue, data_lida\n               FROM oraculo_mensagem\n               WHERE tenant_id = $1 AND atendimento_id = $2\n               ORDER BY timestamp ASC, id ASC\n               LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -291,5 +291,5 @@
       true
     ]
   },
-  "hash": "7123152f882d9ee39f7e8550c0154c2fbfd6ef4bcf9bcf8a071331526b0cf037"
+  "hash": "533523a4efb3e556405a50e0f01dfdc056c54189e63becc6887e8db2d40ceb93"
 }

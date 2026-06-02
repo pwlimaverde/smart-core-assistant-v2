@@ -1,4 +1,5 @@
 mod atendimentos;
+mod auth;
 mod clientes;
 mod common;
 mod e2e;

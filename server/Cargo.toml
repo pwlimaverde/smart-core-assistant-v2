@@ -25,3 +25,4 @@ uuid          = { version = "1.0", features = ["v4", "serde"] }
 async-trait   = "0.1.83"
 base64        = "0.22.1"
 secrecy       = "0.10.3"
+argon2        = { version = "0.5", features = ["std"] }

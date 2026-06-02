@@ -7,6 +7,19 @@ use sqlx::postgres::PgPoolOptions;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
+/// Cria um pool conectado ao `DATABASE_ADMIN_URL` (role com BYPASSRLS).
+/// Necessário para os 3 lookups pré-auth que operam sem contexto de tenant.
+pub async fn obter_admin_pool_teste() -> PgPool {
+    carregar_env_teste();
+    let url = std::env::var("DATABASE_ADMIN_URL")
+        .expect("DATABASE_ADMIN_URL não configurada para testes de admin");
+    PgPoolOptions::new()
+        .max_connections(2)
+        .connect(&url)
+        .await
+        .expect("Falha ao conectar com DATABASE_ADMIN_URL")
+}
+
 /// Carrega de forma resiliente as variáveis de ambiente a partir de arquivos .env locais ou na raiz.
 pub fn carregar_env_teste() {
     let caminhos = vec![
@@ -72,6 +85,16 @@ pub async fn obter_pool_teste() -> PgPool {
         .execute(&admin_pool)
         .await
         .expect("Falha ao garantir auth_user de teste");
+
+        // INSERT com id explícito não avança a sequência; sincroniza para evitar
+        // colisão de PK quando os testes criarem novos usuários via SERIAL.
+        sqlx::query(
+            "SELECT setval('auth_user_id_seq', \
+             COALESCE((SELECT MAX(id) FROM auth_user), 1))",
+        )
+        .execute(&admin_pool)
+        .await
+        .expect("Falha ao sincronizar auth_user_id_seq");
 
         admin_pool.close().await;
     }

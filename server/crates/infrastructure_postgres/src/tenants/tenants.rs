@@ -102,20 +102,13 @@ pub trait TenantRepository: Send + Sync {
 
 #[async_trait]
 pub trait TenantUserRepository: Send + Sync {
-    /// Resolve o vínculo TenantUser a partir do `user_id`, ANTES de qualquer contexto
-    /// de tenant existir (é justamente esta consulta que descobre a qual tenant o
-    /// usuário pertence). Por isso recebe `&PgPool` e roda fora de transação de tenant.
-    ///
-    /// ATENÇÃO RLS (consumidor futuro — middleware JWT, fora do escopo desta crate):
-    /// `tenants_tenantuser` tem `FORCE ROW LEVEL SECURITY` e a role de runtime é
-    /// `NOBYPASSRLS`. Sem `app.current_tenant` setado, a policy fail-closed faz esta
-    /// query retornar SEMPRE `None`. É uma busca legitimamente cross-tenant (bootstrap
-    /// de autenticação), então o middleware que a consumir DEVE executá-la por um
-    /// caminho com privilégio de bypass — p.ex. conexão administrativa dedicada ou
-    /// função `SECURITY DEFINER` — decisão a ser fechada na fase de auth/JWT.
+    /// Resolve o vínculo TenantUser a partir do `user_id` antes de qualquer contexto
+    /// de tenant existir (bootstrap de autenticação). Requer `admin_pool` com
+    /// BYPASSRLS, pois `tenants_tenantuser` tem FORCE RLS e sem `app.current_tenant`
+    /// a policy fail-closed retornaria sempre None.
     async fn buscar_por_user_id(
         &self,
-        pool: &PgPool,
+        admin_pool: &PgPool,
         user_id: i32,
     ) -> Result<Option<TenantUser>, DbError>;
 
@@ -141,23 +134,18 @@ pub trait TenantInviteRepository: Send + Sync {
         expires_at: DateTime<Utc>,
     ) -> Result<TenantInvite, DbError>;
 
-    /// Resolve um convite pelo `token`, ANTES de o convidado ter contexto de tenant
-    /// (o aceite de convite é um fluxo pré-autenticação). Recebe `&PgPool` por isso.
-    ///
-    /// ATENÇÃO RLS (consumidor futuro): assim como `buscar_por_user_id`, esta é uma
-    /// busca cross-tenant sob `FORCE RLS` + role `NOBYPASSRLS`; sem `app.current_tenant`
-    /// a policy fail-closed devolve sempre `None`. O fluxo de aceite de convite deve
-    /// executá-la por caminho com bypass legítimo (conexão admin ou `SECURITY DEFINER`).
+    /// Resolve um convite pelo `token` antes de o convidado ter contexto de tenant
+    /// (fluxo de aceite de convite é pré-autenticação). Requer `admin_pool` com
+    /// BYPASSRLS pelo mesmo motivo de `buscar_por_user_id`.
     async fn buscar_por_token(
         &self,
-        pool: &PgPool,
+        admin_pool: &PgPool,
         token: &str,
     ) -> Result<Option<TenantInvite>, DbError>;
 
-    /// Marca o convite como usado. Mesma ressalva de RLS de `buscar_por_token`:
-    /// como o `invite_id` é resolvido fora do contexto de tenant, o UPDATE precisa
-    /// rodar por caminho com bypass legítimo para não ser silenciosamente no-op.
-    async fn marcar_usado(&self, pool: &PgPool, invite_id: Uuid) -> Result<(), DbError>;
+    /// Marca o convite como usado. Requer `admin_pool` com BYPASSRLS — o invite_id
+    /// é resolvido fora do contexto de tenant.
+    async fn marcar_usado(&self, admin_pool: &PgPool, invite_id: Uuid) -> Result<(), DbError>;
 }
 
 // ---- Implementações concretas ----
@@ -296,7 +284,7 @@ impl TenantRepository for PostgresTenantRepository {
 impl TenantUserRepository for PostgresTenantUserRepository {
     async fn buscar_por_user_id(
         &self,
-        pool: &PgPool,
+        admin_pool: &PgPool,
         user_id: i32,
     ) -> Result<Option<TenantUser>, DbError> {
         let row = sqlx::query_as!(
@@ -306,7 +294,7 @@ impl TenantUserRepository for PostgresTenantUserRepository {
                FROM tenants_tenantuser WHERE user_id = $1"#,
             user_id
         )
-        .fetch_optional(pool)
+        .fetch_optional(admin_pool)
         .await?;
         Ok(row)
     }
@@ -377,7 +365,7 @@ impl TenantInviteRepository for PostgresTenantInviteRepository {
 
     async fn buscar_por_token(
         &self,
-        pool: &PgPool,
+        admin_pool: &PgPool,
         token: &str,
     ) -> Result<Option<TenantInvite>, DbError> {
         let row = sqlx::query_as!(
@@ -387,17 +375,17 @@ impl TenantInviteRepository for PostgresTenantInviteRepository {
                FROM tenants_tenantinvite WHERE token = $1"#,
             token
         )
-        .fetch_optional(pool)
+        .fetch_optional(admin_pool)
         .await?;
         Ok(row)
     }
 
-    async fn marcar_usado(&self, pool: &PgPool, invite_id: Uuid) -> Result<(), DbError> {
+    async fn marcar_usado(&self, admin_pool: &PgPool, invite_id: Uuid) -> Result<(), DbError> {
         sqlx::query!(
             "UPDATE tenants_tenantinvite SET used = true WHERE id = $1",
             invite_id
         )
-        .execute(pool)
+        .execute(admin_pool)
         .await?;
         Ok(())
     }

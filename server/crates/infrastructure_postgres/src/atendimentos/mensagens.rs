@@ -131,7 +131,7 @@ impl MensagemRepository for PostgresMensagemRepository {
                       quoted_preview, status_envio, data_entregue, data_lida
                FROM oraculo_mensagem
                WHERE tenant_id = $1 AND atendimento_id = $2
-               ORDER BY timestamp ASC
+               ORDER BY timestamp ASC, id ASC
                LIMIT $3 OFFSET $4"#,
             ctx.tenant_id,
             atendimento_id,

@@ -38,12 +38,18 @@ server/crates/infrastructure_postgres/
 │   ├── 0007_treinamento_rag.sql
 │   ├── 0008_evolution_sync.sql
 │   └── 0009_settings_manager.sql
+│   # Nota: auth_user completo (senha/argon2id) e os timeouts de confiabilidade
+│   # nascem na 0001; a FK real oraculo_atendente→auth_user, na 0005.
 └── src/
     ├── lib.rs              # Exporta sub-módulos, pool global e TenantConfigCache
     ├── errors.rs           # DbError: mapeia sqlx::Error, violações de constraint, permissões
     ├── connection.rs       # run_in_tenant_transaction + inicializar_banco_dados
     ├── security.rs         # RequestContext (tenant_id, user_id, user_scopes)
     ├── config_cache.rs     # TenantConfigCache (DashMap) + RuntimeConfig
+    ├── auth/               # Autenticação e gestão de usuários globais (auth_user, sem RLS)
+    │   ├── mod.rs
+    │   ├── password.rs    # hash_password / verify_password (argon2id)
+    │   └── users.rs       # AuthUser + AuthUserRepository (CRUD via pool direto)
     ├── tenants/            # Repositórios do módulo de tenants e configurações
     │   ├── mod.rs
     │   ├── tenants.rs      # CRUD de Tenant, TenantUser, TenantInvite

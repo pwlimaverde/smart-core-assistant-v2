@@ -357,6 +357,7 @@ pub async fn buscar_documentos_similares(
    ```
 2. **Middleware Axum de Contexto (`apps/runtime_api/src/middleware/auth.rs`):**
    Decodifica o JWT da requisição, extrai `tenant_id` e `user_id`, carrega `user_scopes` e `flow_permissions` do `TenantUser` no banco, constrói o `RequestContext` completo e o injeta como `Extension` nos handlers via `axum::middleware::from_fn`.
+   > **Atenção (bootstrap de auth):** a resolução do `TenantUser` antes de existir contexto de tenant é feita por `TenantUserRepository::buscar_por_user_id`, que recebe um `admin_pool` (conexão com `BYPASSRLS`). É uma leitura legitimamente cross-tenant; nunca expor esse pool fora do middleware. O mesmo vale para o aceite de convite (`buscar_por_token` / `marcar_usado`).
 3. **Pre-warm de Cache na Inicialização:**
    Na inicialização dos binários `worker` e `runtime_api`, o `TenantConfigCache` deve carregar e resolver as configurações de todos os tenants ativos de uma vez, publicando no Redis. Isso garante que a primeira mensagem de cada inquilino não sofra latência de cache-miss.
 4. **Listener de Invalidação Redis no `ia_engine`:**

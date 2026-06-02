@@ -225,7 +225,63 @@ pub async fn criar_contato_handler(
 
 ---
 
-## 5. Prós da Mudança para Banco Único com RLS
+## 5. Configuração do PostgreSQL para Produção
+
+### 5.1 Timeouts de segurança (versionados via migration)
+
+Os timeouts abaixo são aplicados pela migration inicial `0001_create_rls_function.sql` em nível de DATABASE/ROLE, sobrevivem a `pg_dump/restore` e não requerem reinício do servidor:
+
+| Setting | Valor | Nível | Motivo |
+|---|---|---|---|
+| `idle_in_transaction_session_timeout` | `30s` | DATABASE | Mata transação idle; libera locks e conexão de volta ao pool |
+| `lock_timeout` | `15s` | DATABASE | Aborta espera por lock; evita deadlock silencioso em cascata |
+| `statement_timeout` | `30s` | ROLE `smartcore_app` | Mata queries longas; não afeta migrations rodando como admin |
+
+### 5.2 `postgresql.conf` — tuning por tamanho de servidor
+
+Estas settings exigem reload (`SELECT pg_reload_conf()`) ou restart (`shared_buffers`). Aplicar via `ALTER SYSTEM` ou editando o arquivo diretamente.
+
+```ini
+# ---------- Memória (ajustar pelo RAM disponível) ----------
+# VPS 2 GB:  shared_buffers=512MB  effective_cache_size=1536MB  work_mem=8MB
+# VPS 4 GB:  shared_buffers=1GB    effective_cache_size=3GB     work_mem=16MB
+shared_buffers            = 512MB          # 25% da RAM
+effective_cache_size      = 1536MB         # 75% da RAM
+work_mem                  = 8MB            # por operação de sort/hash
+maintenance_work_mem      = 128MB          # VACUUM, CREATE INDEX
+
+# ---------- WAL / Checkpoint ----------
+wal_buffers               = 16MB           # default auto é ~4MB, insuficiente
+checkpoint_completion_target = 0.9         # default — manter
+max_wal_size              = 1GB            # default — manter
+
+# ---------- Planner (armazenamento SSD/cloud) ----------
+random_page_cost          = 1.1            # SSD; default 4.0 é para HDD
+effective_io_concurrency  = 200            # SSD; default 1
+
+# ---------- Paralelismo (pgvector usa parallel workers) ----------
+max_parallel_workers_per_gather = 2
+
+# ---------- Logging ----------
+log_min_duration_statement = 1000          # loga queries > 1s; útil para tuning
+log_line_prefix = '%t [%p] user=%u db=%d app=%a '
+```
+
+### 5.3 Supervisão do processo (produção)
+
+O Postgres deve ser gerenciado pelo systemd com restart automático. Sem isso, uma
+queda do processo (OOM, kill) deixa o serviço fora até intervenção manual.
+
+```ini
+# /etc/systemd/system/postgresql@16-main.service.d/override.conf
+[Service]
+Restart=always
+RestartSec=5s
+```
+
+---
+
+## 6. Prós da Mudança para Banco Único com RLS
 
 1. **Simplicidade de Infraestrutura:** A aplicação Rust não precisa lidar com centenas de pools de conexão dinâmicos simultâneos em memória. Um único pool robusto do PostgreSQL atende a toda a carga.
 2. **Consistência de Testabilidade:** Para mockar o banco em testes de unidade, basta mockar a transação ou injetar o repositório in-memory convencional. A lógica de RLS é imposta de forma isolada na camada de infraestrutura SQLx.

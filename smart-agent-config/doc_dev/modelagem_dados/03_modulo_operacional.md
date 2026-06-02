@@ -19,7 +19,7 @@ erDiagram
     Atendente ||--|| AppInstance : "owns"
     FluxoAtendimento ||--o{ EtapaFluxo : "has"
     Atendente }o--|| FluxoAtendimento : "is assigned to a Kanban Flow"
-    User ||--|| Atendente : "relates logically (db_constraint=False)"
+    User ||--o| Atendente : "vínculo opcional (FK real, ON DELETE SET NULL)"
 ```
 
 ---
@@ -77,7 +77,7 @@ Cadastro dos atendentes humanos que operarão os chats no painel do Tenant. Cont
     *   `email` (VARCHAR(254), Não Nulo): E-mail corporativo. Obrigatório na validação.
     *   `departamento_id` (INT, Chave Estrangeira, Opcional/Nulo): Departamento ao qual pertence. Seta nulo em deleção.
     *   `fluxo_id` (INT, Chave Estrangeira, Não Nulo): Relação com `FluxoAtendimento` (quadro Kanban da interface) ao qual o atendente será inserido. Protegido contra deleção (`on_delete=PROTECT`).
-    *   `usuario_id` (INT, Chave Estrangeira lógica, Opcional/Nulo): Vínculo com a tabela `auth_user` (banco padrão/Core). Possui `db_constraint=False` para evitar erro de cross-database.
+    *   `usuario_id` (INT, Chave Estrangeira, Opcional/Nulo): Vínculo com a tabela `auth_user`. No legado era FK lógica (`db_constraint=False`) por causa do isolamento cross-database; no banco único atual é **FK real** com `ON DELETE SET NULL` (definida na própria criação da tabela em `0005_operacional.sql`), com índice parcial em `usuario_id` para acelerar a verificação ao deletar o usuário.
     *   `usuario_sistema` (VARCHAR(50), Opcional/Nulo): Nome de usuário para logins em sistemas legados.
     *   `ativo` (BOOLEAN, Padrão: `True`): Indica se o operador está habilitado a acessar o sistema.
     *   `disponivel` (BOOLEAN, Padrão: `True`): Se o operador está aceitando novos atendimentos no momento (Fairness/Round-Robin).

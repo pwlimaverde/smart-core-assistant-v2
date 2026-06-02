@@ -88,6 +88,8 @@ A documentação detalhada da modelagem foi dividida por módulos funcionais:
     * Isolamento RLS, criptografia AES-256-GCM com `OsRng`, proteção de PII (LGPD), segurança do Redis e checklist de code review.
 13. **[Diretrizes de Controle de Acesso e Permissões (RBAC)](./09_diretrizes_permissoes_acesso.md)**
     * Catálogo canônico de escopos, `RequestContext` com `flow_permissions`, middleware JWT (HS256 explícito, `flow_permissions` via Redis), mitigações OWASP e checklist.
+14. **[Módulo Auth — Autenticação e Gestão de Usuários](./10_modulo_auth_usuarios.md)**
+    * Schema completo de `auth_user`, hierarquia superuser/owner/funcionário, argon2id, JWT Claims, fluxos de login/registro/convite e distinção entre lookups normais (RLS) e pré-auth (admin_pool).
 
 
 

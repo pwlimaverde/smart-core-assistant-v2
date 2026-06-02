@@ -78,8 +78,9 @@ CREATE INDEX oraculo_etapa_fluxo_tenant_ordem ON oraculo_etapa_fluxo (tenant_id,
 CREATE INDEX oraculo_etapa_fluxo_tenant_tipo  ON oraculo_etapa_fluxo (tenant_id, tipo_etapa);
 CREATE INDEX oraculo_etapa_fluxo_tenant_ativo ON oraculo_etapa_fluxo (tenant_id, ativo);
 
--- Atendente: operador humano que atende chats no painel
--- usuario_id é FK lógica (sem db_constraint) para compatibilidade cross-banco do legado
+-- Atendente: operador humano que atende chats no painel.
+-- usuario_id é FK real para auth_user (banco único); ON DELETE SET NULL preserva
+-- o atendente mesmo se o login vinculado for removido.
 CREATE TABLE oraculo_atendente (
     id                          SERIAL PRIMARY KEY,
     tenant_id                   UUID NOT NULL REFERENCES tenants_tenant(id) ON DELETE CASCADE,
@@ -90,7 +91,7 @@ CREATE TABLE oraculo_atendente (
     email                       VARCHAR(254) NOT NULL,
     departamento_id             INT REFERENCES oraculo_departamento(id) ON DELETE SET NULL,
     fluxo_id                    INT NOT NULL REFERENCES oraculo_fluxo_atendimento(id) ON DELETE RESTRICT,
-    usuario_id                  INT,   -- FK lógica para auth_user; sem db_constraint
+    usuario_id                  INT REFERENCES auth_user(id) ON DELETE SET NULL,
     usuario_sistema             VARCHAR(50),
     ativo                       BOOLEAN NOT NULL DEFAULT TRUE,
     disponivel                  BOOLEAN NOT NULL DEFAULT TRUE,
@@ -118,6 +119,8 @@ CREATE INDEX oraculo_atendente_tenant_dept_disp    ON oraculo_atendente (tenant_
 CREATE INDEX oraculo_atendente_tenant_disp_max     ON oraculo_atendente (tenant_id, disponivel, max_atendimentos_simultaneos);
 CREATE INDEX oraculo_atendente_tenant_last_assign  ON oraculo_atendente (tenant_id, data_ultima_atribuicao);
 CREATE INDEX oraculo_atendente_tenant_fluxo        ON oraculo_atendente (tenant_id, fluxo_id);
+-- Índice na coluna FK: acelera a verificação do ON DELETE SET NULL ao remover um auth_user.
+CREATE INDEX oraculo_atendente_usuario_id_idx      ON oraculo_atendente (usuario_id) WHERE usuario_id IS NOT NULL;
 
 -- AppInstance: instância de canal WhatsApp conectada à Evolution API centralizada
 CREATE TABLE oraculo_app_instance (
