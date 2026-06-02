@@ -1,11 +1,13 @@
 ---
-status: in_progress
+status: completed
 generated: 2026-06-01
+completed: 2026-06-01
 slug: infrastructure-postgres
 scale: LARGE
 artifacts:
   plano_completo: "./infrastructure-postgres/plano_completo_infrastructure-postgres.md"
   info_aux: "./infrastructure-postgres/info_aux_infrastructure-postgres.md"
+  final_review: "../../workflow/docs/final-review.md"
 phases:
   - id: "phase-p"
     name: "Planning — consolidação de schema e decisões"
@@ -16,22 +18,22 @@ phases:
     name: "Review — validação de RLS, modelagem e cripto"
     prevc: "R"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-e"
     name: "Execution — workspace + crate infrastructure_postgres"
     prevc: "E"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-v"
     name: "Validation — migrations, build offline e testes de integração"
     prevc: "V"
     agent: "test-writer"
-    status: "pending"
+    status: "completed"
   - id: "phase-c"
     name: "Confirmation — final-review, commit gitflow e arquivamento"
     prevc: "C"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
 ---
 
 # Fundação Rust de Persistência — crate `infrastructure_postgres`

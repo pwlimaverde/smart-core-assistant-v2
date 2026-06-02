@@ -1,13 +1,13 @@
 {
   "version": 2,
   "workflowType": "prevc",
-  "updatedAt": "2026-06-01T10:23:24.959Z",
+  "updatedAt": "2026-06-02T01:06:25.884Z",
   "status": {
     "project": {
       "name": "infrastructure-postgres",
       "scale": 3,
       "started": "2026-06-01T05:15:01.786Z",
-      "current_phase": "E",
+      "current_phase": "C",
       "settings": {
         "autonomous_mode": false,
         "require_plan": true,
@@ -51,14 +51,38 @@
         ]
       },
       "E": {
-        "status": "in_progress",
-        "started_at": "2026-06-01T10:17:58.665Z"
+        "status": "completed",
+        "started_at": "2026-06-01T10:17:58.665Z",
+        "completed_at": "2026-06-02T01:06:21.259Z",
+        "outputs": [
+          {
+            "path": "server/crates/infrastructure_postgres",
+            "status": "filled"
+          },
+          {
+            "path": "server/.sqlx",
+            "status": "filled"
+          },
+          {
+            "path": "server/crates/infrastructure_postgres/tests",
+            "status": "filled"
+          }
+        ]
       },
       "V": {
-        "status": "pending"
+        "status": "completed",
+        "started_at": "2026-06-02T01:06:21.266Z",
+        "completed_at": "2026-06-02T01:06:25.856Z",
+        "outputs": [
+          {
+            "path": ".context/workflow/docs/final-review.md",
+            "status": "filled"
+          }
+        ]
       },
       "C": {
-        "status": "pending"
+        "status": "in_progress",
+        "started_at": "2026-06-02T01:06:25.863Z"
       }
     },
     "agents": {},
@@ -108,16 +132,36 @@
           "timestamp": "2026-06-01T10:17:58.665Z",
           "phase": "E",
           "action": "started"
+        },
+        {
+          "timestamp": "2026-06-02T01:06:21.259Z",
+          "phase": "E",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-02T01:06:21.266Z",
+          "phase": "V",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-02T01:06:25.856Z",
+          "phase": "V",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-02T01:06:25.863Z",
+          "phase": "C",
+          "action": "started"
         }
       ],
-      "last_activity": "2026-06-01T10:17:58.665Z",
-      "resume_context": "Fase E (Execução) em progresso"
+      "last_activity": "2026-06-02T01:06:25.863Z",
+      "resume_context": "Fase C (Confirmação) em progresso"
     }
   },
   "binding": {
     "workflowName": "infrastructure-postgres",
     "sessionId": "a6c50303-54f6-40da-82cd-84a219fd534f",
     "createdAt": "2026-06-01T05:15:01.795Z",
-    "updatedAt": "2026-06-01T10:17:58.672Z"
+    "updatedAt": "2026-06-02T01:06:25.875Z"
   }
 }
