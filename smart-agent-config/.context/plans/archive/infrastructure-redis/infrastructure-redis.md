@@ -7,6 +7,7 @@ scale: MEDIUM
 artifacts:
   plano_completo: "./infrastructure-redis/plano_completo_infrastructure-redis.md"
   info_aux: "./infrastructure-redis/info_aux_infrastructure-redis.md"
+  final_review: "../../workflow/docs/final-review-infrastructure-redis.md"
 phases:
   - id: "phase-p"
     name: "Planning — escopo do cache/barramento e decisões"
