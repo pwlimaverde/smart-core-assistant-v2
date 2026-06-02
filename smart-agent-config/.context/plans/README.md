@@ -3,8 +3,7 @@
 This directory contains plans for coordinating work across documentation and playbooks.
 
 ## Plan Queue
-1. [Infrastructure Postgres](./archive/infrastructure-postgres/infrastructure-postgres.md) — ✅ concluído
-2. [Infrastructure Redis](./archive/infrastructure-redis/infrastructure-redis.md) — ✅ concluído
+1. [User Auth Module](./user-auth-module.md)
 
 ## How To Create Or Update Plans
 - Run "dotcontext plan <name>" to scaffold a new plan template.
