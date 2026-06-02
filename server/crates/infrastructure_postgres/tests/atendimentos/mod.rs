@@ -310,3 +310,55 @@ async fn test_campos_personalizados_etiquetas_e_notas() {
 
     tx.rollback().await.unwrap();
 }
+
+/// Prova o isolamento RLS do domínio de atendimentos: um atendimento criado no
+/// Tenant A não pode ser lido (por id) nem listado (por status) sob o Tenant B.
+/// Executa com a role de runtime (NOBYPASSRLS), então a policy fail-closed é exercida
+/// de verdade — sem o filtro `tenant_id` explícito + RLS, Tenant B veria os dados.
+#[tokio::test]
+async fn test_atendimentos_rls_isolation() {
+    let pool = obter_pool_teste().await;
+    let mut tx = pool.begin().await.unwrap();
+
+    let contato_repo = PostgresContatoRepository;
+    let atendimento_repo = PostgresAtendimentoRepository;
+
+    // 1. Tenant A cria contato + atendimento
+    let tenant_a = criar_tenant_para_teste(&mut tx, "Tenant A Atend").await;
+    configurar_tenant_transacao(&mut tx, tenant_a.id).await;
+    let ctx_a = criar_contexto_teste(tenant_a.id);
+
+    let contato_a = contato_repo
+        .salvar(&mut tx, &ctx_a, "5511900001111", Some("Contato A"))
+        .await
+        .unwrap();
+    let atendimento_a = atendimento_repo
+        .criar(&mut tx, &ctx_a, contato_a.id, None, None, None)
+        .await
+        .unwrap();
+
+    // 2. Tenant B tenta acessar o atendimento do Tenant A
+    let tenant_b = criar_tenant_para_teste(&mut tx, "Tenant B Atend").await;
+    configurar_tenant_transacao(&mut tx, tenant_b.id).await;
+    let ctx_b = criar_contexto_teste(tenant_b.id);
+
+    let busca_b = atendimento_repo
+        .buscar_por_id(&mut tx, &ctx_b, atendimento_a.id)
+        .await
+        .unwrap();
+    assert!(
+        busca_b.is_none(),
+        "Tenant B acessou atendimento do Tenant A por id!"
+    );
+
+    let lista_b = atendimento_repo
+        .listar_por_status(&mut tx, &ctx_b, "fila", None, 100)
+        .await
+        .unwrap();
+    assert!(
+        lista_b.iter().all(|a| a.id != atendimento_a.id),
+        "Tenant B listou atendimento do Tenant A por status!"
+    );
+
+    tx.rollback().await.unwrap();
+}

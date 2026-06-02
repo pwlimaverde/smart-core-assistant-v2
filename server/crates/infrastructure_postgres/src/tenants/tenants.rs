@@ -102,6 +102,17 @@ pub trait TenantRepository: Send + Sync {
 
 #[async_trait]
 pub trait TenantUserRepository: Send + Sync {
+    /// Resolve o vínculo TenantUser a partir do `user_id`, ANTES de qualquer contexto
+    /// de tenant existir (é justamente esta consulta que descobre a qual tenant o
+    /// usuário pertence). Por isso recebe `&PgPool` e roda fora de transação de tenant.
+    ///
+    /// ATENÇÃO RLS (consumidor futuro — middleware JWT, fora do escopo desta crate):
+    /// `tenants_tenantuser` tem `FORCE ROW LEVEL SECURITY` e a role de runtime é
+    /// `NOBYPASSRLS`. Sem `app.current_tenant` setado, a policy fail-closed faz esta
+    /// query retornar SEMPRE `None`. É uma busca legitimamente cross-tenant (bootstrap
+    /// de autenticação), então o middleware que a consumir DEVE executá-la por um
+    /// caminho com privilégio de bypass — p.ex. conexão administrativa dedicada ou
+    /// função `SECURITY DEFINER` — decisão a ser fechada na fase de auth/JWT.
     async fn buscar_por_user_id(
         &self,
         pool: &PgPool,
@@ -130,12 +141,22 @@ pub trait TenantInviteRepository: Send + Sync {
         expires_at: DateTime<Utc>,
     ) -> Result<TenantInvite, DbError>;
 
+    /// Resolve um convite pelo `token`, ANTES de o convidado ter contexto de tenant
+    /// (o aceite de convite é um fluxo pré-autenticação). Recebe `&PgPool` por isso.
+    ///
+    /// ATENÇÃO RLS (consumidor futuro): assim como `buscar_por_user_id`, esta é uma
+    /// busca cross-tenant sob `FORCE RLS` + role `NOBYPASSRLS`; sem `app.current_tenant`
+    /// a policy fail-closed devolve sempre `None`. O fluxo de aceite de convite deve
+    /// executá-la por caminho com bypass legítimo (conexão admin ou `SECURITY DEFINER`).
     async fn buscar_por_token(
         &self,
         pool: &PgPool,
         token: &str,
     ) -> Result<Option<TenantInvite>, DbError>;
 
+    /// Marca o convite como usado. Mesma ressalva de RLS de `buscar_por_token`:
+    /// como o `invite_id` é resolvido fora do contexto de tenant, o UPDATE precisa
+    /// rodar por caminho com bypass legítimo para não ser silenciosamente no-op.
     async fn marcar_usado(&self, pool: &PgPool, invite_id: Uuid) -> Result<(), DbError>;
 }
 
