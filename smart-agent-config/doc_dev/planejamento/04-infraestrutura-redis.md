@@ -1,5 +1,10 @@
 # 04 — Infraestrutura Redis (`infrastructure_redis`)
 
+> **Histórico.** Este documento foi canonizado pela skill `plan-restructuring` para o dotcontext.
+> A fonte da verdade passa a ser o plano canônico em
+> `.context/plans/archive/infrastructure-redis/infrastructure-redis.md` (+ `plano_completo` e
+> `info_aux` na mesma pasta). Mantido aqui como registro original.
+
 > Registro de planejamento do crate de cache/barramento. Documenta a arquitetura, o que está
 > implementado nesta entrega e o que fica para fases futuras. Idioma: pt-br; identificadores e
 > nomes de função seguem o estilo do `infrastructure_postgres` (verbos em pt-br: `criar_*`,
