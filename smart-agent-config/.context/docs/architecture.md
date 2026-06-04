@@ -32,9 +32,9 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
                     │+ pgvector│
                     └──────────┘
                            ▲
-              gRPC/HTTP + WebSocket
+       gRPC único: unário (comandos/consultas) + Server Streaming (realtime)
                     ┌──────┴──────────┐
-                    │  runtime_api    │  ← API + realtime para Flutter
+                    │  runtime_api    │  ← API + realtime p/ Flutter (desktop HTTP/2; web gRPC-Web)
                     └─────────────────┘
                            ▲
                     Flutter (Windows → Web)
@@ -61,7 +61,7 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
 |---------|-----------|-------------|-----------|
 | Event-Driven | Alta | `messaging_gateway` → Redis Streams → `worker` | Webhook publica evento; worker consome assincronamente |
 | Domain-Driven Design | Alta | `crates/domain_*` | Crates por bounded context; regras puras sem I/O |
-| CQRS (leve) | Média | `runtime_api` | Comandos via gRPC/HTTP (Flutter↔servidor, em aberto); realtime via WebSocket |
+| CQRS (leve) | Média | `runtime_api` | Comandos/consultas via gRPC unário; realtime via gRPC Server Streaming (transporte único — decisão D7) |
 | Repository | Alta | `crates/infrastructure_postgres` | Adaptadores isolados do domínio |
 | Strategy | Alta | `clients/packages/api_client` DataSource | `LocalEngineFFI` vs `RemoteOnly` trocáveis sem mudar lógica |
 | Dual-Target Crate | Alta | `crates/local_engine` | Compilável como lib-servidor e cdylib/FFI |
@@ -70,12 +70,12 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
 
 - `apps/messaging_gateway/src/main.rs` — ingestão de webhooks
 - `apps/worker/src/main.rs` — processamento de eventos de domínio
-- `apps/runtime_api/src/main.rs` — API + WebSocket para o Flutter
+- `apps/runtime_api/src/main.rs` — API gRPC (unário + Server Streaming) para o Flutter
 - `apps/control_plane/src/main.rs` — back office / gestão de tenants
 - `ia_engine/src/server.py` — serviço gRPC de IA (Python)
 - `clients/flutter_windows/lib/main.dart` — app Flutter Windows
 
-> **Nota:** projeto greenfield — estrutura planejada em `doc_dev/planejamento/00-planejamento-inicial.md`.
+> **Nota:** em desenvolvimento. A **fundação já está implementada** — `infrastructure_postgres` (RLS, migrations 0001–0009, crypto, auth, `RequestContext`) e `infrastructure_redis` (event bus, auth_tokens, cache); o **auth** (`contracts`/`application`/`runtime_api`) está em andamento. Os demais entry points acima ainda **não foram criados**. Status real por etapa: `doc_dev/planejamento/02-fases-desenvolvimento.md`.
 
 ## Public API
 
@@ -92,7 +92,8 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
 
 - **Gateway ↔ Worker**: Redis Streams com `tenant_id` no envelope. Gateway nunca conhece regras de domínio.
 - **Worker ↔ ia_engine**: **gRPC** (processos separados; FFI/PyO3 descartado — §13.1). Rust nunca depende de detalhes do LangChain; contrato `.proto`/`domain_ai`. O worker também substitui o Celery da v1 (fila via Redis Streams + agendamento de feedback/retenção).
-- **Worker ↔ Runtime API**: PostgreSQL + Redis pub/sub para fan-out de eventos realtime por tenant.
+- **Worker ↔ Runtime API**: PostgreSQL + Redis pub/sub para fan-out de eventos realtime por tenant; o `runtime_api` empurra cada evento pelo **stream gRPC** aberto pelo cliente.
+- **Flutter ↔ Runtime API**: **gRPC único** — unário (comandos/consultas) + Server Streaming (realtime). Desktop usa gRPC nativo HTTP/2; Web usa gRPC-Web (`tonic-web`). Sem WebSocket (decisão D7).
 - **Flutter ↔ local_engine**: FFI via `flutter_rust_bridge` (somente Windows). Web usa `RemoteOnly`.
 
 ## External Service Dependencies
@@ -110,8 +111,9 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
 | Granularidade | Modular monolith (Cargo workspace) | Isolamento lógico agora; promoção futura sem reescrever |
 | Banco multi-tenant | Um PostgreSQL + RLS | Sem provisionamento por tenant; migrations únicas |
 | IA (`ia_engine`) | Serviço Python separado via **gRPC** (não FFI/PyO3) | Ecossistema maduro; isola a parte imatura; isolamento de processo + escala por réplicas (vence o GIL) |
-| Flutter ↔ Rust | Híbrido (gRPC/WS + FFI local) | Servidor é fonte da verdade; FFI dá performance/offline no Windows |
+| Flutter ↔ Rust | Híbrido: gRPC único (unário + Server Streaming) + FFI local | Servidor é fonte da verdade; FFI dá performance/offline no Windows |
 | Ordem de entrega | Windows primeiro | Foco; port Web limpo via abstração `DataSource` |
+| Construção da UI | Incremental, colada a cada feature (decisão D8) | A tela nasce junto da feature que valida (ex.: auth → login/cadastro); 2 apps Flutter + design system `core_ui` (tema dark) |
 
 ## Top Directories Snapshot
 
@@ -125,7 +127,7 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
 - `smart-agent-config/` — planejamento e orquestração de agentes (esta pasta)
 - `old/` — v1 Django (referência de domínio, git-ignored)
 
-> Estrutura detalhada com regras de acoplamento: `doc_dev/01-estrutura-do-projeto.md`
+> Estrutura detalhada com regras de acoplamento: `doc_dev/planejamento/01-estrutura-do-projeto.md`
 
 ## Related Resources
 

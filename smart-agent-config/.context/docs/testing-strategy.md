@@ -10,7 +10,7 @@ scaffoldVersion: "2.0.0"
 
 ## Testing Strategy
 
-> Projeto greenfield — estratégia a ser refinada durante a implementação. Diretrizes baseadas no design arquitetural e nas lições da v1.
+> Em desenvolvimento — estratégia refinada incrementalmente. Já há **testes de integração reais** contra Postgres (isolamento multi-tenant/RLS) na crate `infrastructure_postgres` e cobertura do event bus/auth_tokens em `infrastructure_redis`. As diretrizes abaixo valem para os crates/apps ainda não criados.
 
 ## Test Organization
 

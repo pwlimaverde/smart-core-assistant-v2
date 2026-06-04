@@ -1,0 +1,8 @@
+{
+  "tests": "src/**/*.test.ts",
+  "config": [],
+  "types": [],
+  "mainLogic": [
+    "src"
+  ]
+}

@@ -17,24 +17,39 @@ Smart Core Assistant v2 é uma plataforma SaaS multi-tenant de atendimento intel
 - **Raiz do monorepo**: `smart-core-assistant-v2/`
 - **Esta pasta**: `smart-agent-config/` — planejamento e orquestração de agentes
 - **Linguagens**: Rust (backend), Dart/Flutter (frontend), Python (IA)
-- **Estado**: greenfield — somente planejamento; código de produção ainda não existe
-- **Estrutura de diretórios e diretrizes**: `doc_dev/01-estrutura-do-projeto.md`
+- **Estado**: em desenvolvimento — **fundação de persistência, barramento e segurança já implementada**; módulo de autenticação em andamento. Demais apps/crates ainda não criados. Snapshot real por etapa em `doc_dev/planejamento/02-fases-desenvolvimento.md`.
+- **Estrutura de diretórios e diretrizes**: `doc_dev/planejamento/01-estrutura-do-projeto.md`
 - **Planejamento arquitetural completo**: `doc_dev/planejamento/00-planejamento-inicial.md`
+
+## Status de implementação (resumo)
+
+> Fonte de verdade: `doc_dev/planejamento/02-fases-desenvolvimento.md` (§Estado atual).
+
+- ✅ **`server/crates/infrastructure_postgres`** — PostgreSQL único multi-tenant com **RLS**, migrations **0001–0009**, crypto AES-256-GCM (`CipherManager`), auth (Argon2, `AuthUser`), `RequestContext` (RLS por transação), cache de config.
+- ✅ **`server/crates/infrastructure_redis`** — event bus (Streams + consumer groups + `TenantEnvelope`), `auth_tokens` (refresh com rotação/reuse-detection + blocklist), cache.
+- ✅ **Storage Cloudflare R2** configurado e validado; **infra local** (`docker/compose/data.yml`: PG+pgvector, Redis, MinIO) + scripts de deploy.
+- 🚧 **Auth** (`user-auth-module`) — cria `contracts` (`auth.proto`), `application` (`AuthService`) e o app `runtime_api` (Tonic + interceptor JWT). PREVC: P concluído; R/E/V/C pendentes.
+- ⬜ **Pendentes** — apps `messaging_gateway`/`worker`/`control_plane`, `ia_engine` (Python), `realtime`, `local_engine` (FFI), clients Flutter, `evolution/`, crates `observability`/`error_core`, CI/CD.
 
 ## Entry Points (planejados)
 
 - `apps/messaging_gateway/src/main.rs` — ingestão de webhooks do Evolution Go
 - `apps/worker/src/main.rs` — processamento de eventos de domínio
-- `apps/runtime_api/src/main.rs` — API + WebSocket para Flutter
+- `apps/runtime_api/src/main.rs` — API gRPC (unário + Server Streaming) para Flutter
 - `apps/control_plane/src/main.rs` — gestão de tenants e planos
 - `ia_engine/src/server.py` — serviço gRPC de IA (Python; núcleo `FeaturesCompose`)
 - `clients/flutter_windows/lib/main.dart` — app Flutter Windows (Web: `flutter_web/`)
 
-## Key Exports (planejados)
+## Key Exports
 
-- `crates/contracts` — DTOs, eventos, envelopes com `tenant_id`, contratos gRPC
+**Já implementados (✅):**
+- `crates/infrastructure_postgres` — pool sqlx, migrations 0001–0009, RLS, `RequestContext`, `CipherManager`, auth/Argon2
+- `crates/infrastructure_redis` — event bus (Streams), `auth_tokens` (refresh/blocklist), cache, `TenantEnvelope`
+
+**Planejados (⬜/🚧):**
+- `crates/contracts` (🚧 via auth) — DTOs, eventos, envelopes com `tenant_id`, contratos gRPC
+- `crates/application` (🚧 via auth) — casos de uso orquestrados
 - `crates/domain_*` — regras puras de negócio (sem I/O)
-- `crates/application` — casos de uso orquestrados
 - `crates/local_engine` — cache local + FFI para Flutter Windows
 
 ## File Structure & Code Organization
@@ -49,11 +64,11 @@ Smart Core Assistant v2 é uma plataforma SaaS multi-tenant de atendimento intel
 - `smart-agent-config/` — planejamento, agentes, CLAUDE.md e `.context/`
 - `old/` — v1 Django (referência de domínio apenas, git-ignored)
 
-> Estrutura detalhada com responsabilidades e regras de acoplamento: `doc_dev/01-estrutura-do-projeto.md`
+> Estrutura detalhada com responsabilidades e regras de acoplamento: `doc_dev/planejamento/01-estrutura-do-projeto.md`
 
 ## Technology Stack Summary
 
-**Backend**: Rust com tokio, axum (HTTP), tonic (gRPC), sqlx (PostgreSQL). Quatro binários independentes em Cargo workspace.
+**Backend**: Rust com tokio, **tonic** (gRPC unário + Server Streaming) + **tonic-web** (gRPC-Web para a Web), sqlx (PostgreSQL). Quatro binários independentes em Cargo workspace.
 
 **Frontend**: Flutter/Dart, Windows desktop primeiro. FFI via `flutter_rust_bridge` com `local_engine`. Port Web usa `RemoteOnly` sem FFI.
 
