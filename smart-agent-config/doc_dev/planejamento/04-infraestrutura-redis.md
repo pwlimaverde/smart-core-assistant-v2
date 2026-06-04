@@ -136,4 +136,4 @@ delayed tasks (sorted-set por ETA); presença/typing.
 
 Com a fundação Redis pronta, o módulo de **cadastro/login + JWT** passa a usar o `RefreshTokenStore`
 (refresh) e o `CachePermissoes` (flow_permissions). Retomar a partir de
-`03-comunicacao-e-autenticacao.md` (decisões em aberto: escopo da entrega e resolução multi-tenant).
+`09-comunicacao-e-autenticacao.md` (decisões em aberto: escopo da entrega e resolução multi-tenant).

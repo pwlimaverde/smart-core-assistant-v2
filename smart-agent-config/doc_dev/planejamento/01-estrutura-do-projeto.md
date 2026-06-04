@@ -59,6 +59,7 @@ smart-core-assistant-v2/                    # raiz do monorepo / git root
 │       ├── infrastructure_storage/         # MinIO/S3 para mídia transitória
 │       ├── local_engine/                   # dual-target: lib servidor + cdylib FFI Flutter Windows
 │       ├── observability/                  # logs estruturados, métricas, tracing
+│       ├── error_core/                     # taxonomia de erros + mapeamento p/ transporte
 │       └── realtime/                       # WebSocket fan-out por tenant
 │
 ├── evolution/                              # STACK: Evolution Go — gateway WhatsApp
@@ -115,9 +116,17 @@ smart-core-assistant-v2/                    # raiz do monorepo / git root
 │   ├── .agents/                            # Antigravity: rules, workflows
 │   └── doc_dev/                            # documentação técnica de desenvolvimento
 │       └── planejamento/
-│           ├── 00-planejamento-inicial.md  # visão arquitetural completa da v2
-│           ├── 01-estrutura-do-projeto.md # este documento
-│           └── 02-fases-desenvolvimento.md # guia de fases/etapas de construção
+│           ├── 00-planejamento-inicial.md   # visão arquitetural completa da v2
+│           ├── 01-estrutura-do-projeto.md   # este documento
+│           ├── 02-fases-desenvolvimento.md  # fases/etapas (com status real)
+│           ├── 03-infraestrutura-postgres.md # crate Postgres + RLS (canonizado)
+│           ├── 04-infraestrutura-redis.md   # crate Redis (canonizado)
+│           ├── 05-observabilidade.md        # logs/métricas/traces + stack LGTM
+│           ├── 06-tratamento-de-erros.md    # crate error_core (erros rastreáveis)
+│           ├── 07-crate-contracts.md        # contratos/eventos/envelope
+│           ├── 08-infraestrutura-storage.md # ponte S3/R2 (mídia multi-tenant)
+│           ├── 09-comunicacao-e-autenticacao.md # transporte + auth (canonizado)
+│           └── 10-plano-cicd-devops.md      # plano-mãe CI/CD + DevOps
 │
 ├── .gitignore
 └── .env.example                            # template de variáveis de ambiente

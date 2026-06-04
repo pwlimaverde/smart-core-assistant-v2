@@ -1,4 +1,4 @@
-# 03 — Comunicação Front↔Back e Encaixe da Autenticação
+# 09 — Comunicação Front↔Back e Encaixe da Autenticação
 
 > **Histórico.** Este documento foi canonizado pela skill `plan-restructuring` para o dotcontext.
 > A fonte da verdade passa a ser o plano canônico em
