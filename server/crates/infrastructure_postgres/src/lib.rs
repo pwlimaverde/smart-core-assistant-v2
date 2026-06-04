@@ -13,6 +13,7 @@
 #![allow(clippy::too_many_arguments, clippy::module_inception)]
 
 pub mod atendimentos;
+pub mod auditoria;
 pub mod auth;
 pub mod clientes;
 pub mod config_cache;
@@ -28,6 +29,11 @@ pub mod treinamento;
 // Re-exports de conveniência para os binários consumidores
 pub use auth::password::{hash_password, verify_password};
 pub use auth::users::{AuthUser, AuthUserRepository, PostgresAuthUserRepository};
+pub use auditoria::audit_log::{
+    AuditLogEntry, NewAuditLogEntry, inserir_audit_log, inserir_audit_log_global,
+    buscar_audit_logs, buscar_audit_logs_por_evento, buscar_audit_logs_admin,
+    buscar_audit_logs_globais,
+};
 pub use config_cache::{RuntimeConfig, TenantConfigCache};
 pub use connection::{criar_pool, inicializar_banco_dados, run_in_tenant_transaction};
 pub use crypto::CipherManager;

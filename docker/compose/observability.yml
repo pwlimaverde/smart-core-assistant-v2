@@ -1,0 +1,121 @@
+name: smartcore-v2-observability
+
+networks:
+  smartcore_v2_network:
+    name: smartcore_v2_network
+    external: true
+
+services:
+  # OpenTelemetry Collector (Ponto de Entrada)
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: smartcore-v2-otel-collector
+    volumes:
+      - ../observability/otel-collector-config.yml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+    networks:
+      - smartcore_v2_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # Grafana Loki (Agregador de Logs)
+  loki:
+    image: grafana/loki:latest
+    container_name: smartcore-v2-loki
+    volumes:
+      - ../observability/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki_data:/loki
+    ports:
+      - "3100:3100"
+    networks:
+      - smartcore_v2_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # Grafana Tempo (Traces Distribuídos)
+  tempo:
+    image: grafana/tempo:latest
+    container_name: smartcore-v2-tempo
+    volumes:
+      - ../observability/tempo-config.yml:/etc/tempo/tempo.yaml:ro
+      - tempo_data:/var/tempo
+    ports:
+      - "3200:3200"
+    networks:
+      - smartcore_v2_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # Prometheus (Métricas)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: smartcore-v2-prometheus
+    volumes:
+      - ../observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - smartcore_v2_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # Grafana (Painel Visual)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: smartcore-v2-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin_secret_pass}
+    volumes:
+      - ../observability/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks:
+      - smartcore_v2_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+  # Promtail (Coletor de logs locais do Docker)
+  promtail:
+    image: grafana/promtail:latest
+    container_name: smartcore-v2-promtail
+    volumes:
+      - ../observability/promtail-config.yml:/etc/promtail/config.yml:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    networks:
+      - smartcore_v2_network
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+
+volumes:
+  loki_data:
+    name: smartcore_v2_loki_data
+  tempo_data:
+    name: smartcore_v2_tempo_data
+  prometheus_data:
+    name: smartcore_v2_prometheus_data
+  grafana_data:
+    name: smartcore_v2_grafana_data

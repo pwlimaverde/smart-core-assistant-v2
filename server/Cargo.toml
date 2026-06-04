@@ -1,6 +1,10 @@
 [workspace]
 resolver = "2"
-members = ["crates/infrastructure_postgres", "crates/infrastructure_redis"]
+members = [
+    "crates/infrastructure_postgres",
+    "crates/infrastructure_redis",
+    "crates/observability",
+]
 
 [workspace.package]
 edition = "2021"
