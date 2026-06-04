@@ -42,13 +42,13 @@ Write-Host ""
 Write-Host "Servidor remoto: $HOSTINGER_SSH_HOST" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Portas mapeadas para localhost:" -ForegroundColor Green
-Write-Host "  PostgreSQL : localhost:5432  ->  $HOSTINGER_SSH_HOST`:$POSTGRES_PORT"
+Write-Host "  PostgreSQL : localhost:5434  ->  $HOSTINGER_SSH_HOST`:$POSTGRES_PORT"
 Write-Host "  Redis      : localhost:6379  ->  $HOSTINGER_SSH_HOST`:$REDIS_PORT"
 Write-Host "  MinIO API  : localhost:9000  ->  $HOSTINGER_SSH_HOST`:$MINIO_PORT"
 Write-Host "  MinIO UI   : localhost:9001  ->  $HOSTINGER_SSH_HOST`:$MINIO_CONSOLE_PORT"
 Write-Host ""
 Write-Host "Configure o .env local da aplicacao com:" -ForegroundColor Cyan
-Write-Host "  DATABASE_URL=postgresql://smartcore_app:SENHA@localhost:5432/smartcore_v2"
+Write-Host "  DATABASE_URL=postgresql://smartcore_app:SENHA@localhost:5434/smartcore_v2"
 Write-Host "  REDIS_URL=redis://:SENHA@localhost:6379"
 Write-Host "  MINIO_ENDPOINT=http://localhost:9000"
 Write-Host ""
@@ -58,7 +58,7 @@ Write-Host "Pressione Ctrl+C para encerrar os tunnels." -ForegroundColor Yellow
 Write-Host ""
 
 ssh -p $HOSTINGER_SSH_PORT `
-    -L "5432:localhost:$POSTGRES_PORT" `
+    -L "5434:localhost:$POSTGRES_PORT" `
     -L "6379:localhost:$REDIS_PORT" `
     -L "9000:localhost:$MINIO_PORT" `
     -L "9001:localhost:$MINIO_CONSOLE_PORT" `
