@@ -1,14 +1,14 @@
 {
   "active": [
     {
-      "slug": "user-auth-module",
-      "path": "plans/user-auth-module.md",
-      "title": "Módulo de Autenticação de Usuário — JWT + `runtime_api` gRPC",
-      "summary": "Plano **canônico** (leve). A verdade técnica detalhada está nos artefatos abaixo.",
-      "linkedAt": "2026-06-02T22:34:47.628Z",
+      "slug": "observabilidade-e-auditoria",
+      "path": "plans/observabilidade-e-auditoria.md",
+      "title": "Observabilidade e Auditoria — Logs Estruturados, Traces, Métricas e Auditoria no PostgreSQL",
+      "summary": "Implementar o sistema completo de observabilidade (logs JSON, métricas OTel, traces distribuídos via LGTM stack) e logs de auditoria de negócio/segurança persistidos no PostgreSQL com RLS.",
+      "linkedAt": "2026-06-04T20:51:10.254Z",
       "status": "active"
     }
   ],
   "completed": [],
-  "primary": "user-auth-module"
+  "primary": "observabilidade-e-auditoria"
 }
