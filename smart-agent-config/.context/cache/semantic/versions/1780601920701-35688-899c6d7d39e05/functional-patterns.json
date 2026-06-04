@@ -1,0 +1,13 @@
+{
+  "hasAuthPattern": false,
+  "hasDatabasePattern": false,
+  "hasApiPattern": false,
+  "hasCachePattern": false,
+  "hasQueuePattern": false,
+  "hasWebSocketPattern": false,
+  "hasLoggingPattern": false,
+  "hasValidationPattern": false,
+  "hasErrorHandlingPattern": false,
+  "hasTestingPattern": false,
+  "patterns": []
+}

@@ -1,0 +1,14 @@
+{
+  "primaryLanguage": null,
+  "languages": [],
+  "frameworks": [],
+  "buildTools": [],
+  "testFrameworks": [],
+  "packageManager": null,
+  "isMonorepo": false,
+  "hasDocker": false,
+  "hasCI": false,
+  "hasBinField": false,
+  "hasMainExport": false,
+  "hasTypesField": false
+}

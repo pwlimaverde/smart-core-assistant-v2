@@ -10,7 +10,7 @@ scaffoldVersion: "2.0.0"
 
 ## Data Flow & Integrations
 
-Dados entram exclusivamente via webhook do Evolution Go. O `messaging_gateway` é a única porta de entrada e nunca executa regra pesada. O domínio roda assincronamente no `worker` via Redis Streams. O `runtime_api` expõe os dados ao Flutter via gRPC/HTTP + WebSocket.
+Dados entram exclusivamente via webhook do Evolution Go. O `messaging_gateway` é a única porta de entrada e nunca executa regra pesada. O domínio roda assincronamente no `worker` via Redis Streams. O `runtime_api` expõe os dados ao Flutter via **gRPC único**: unário (comandos/consultas) + Server Streaming (realtime).
 
 ## Module Dependencies
 
@@ -25,7 +25,7 @@ Dados entram exclusivamente via webhook do Evolution Go. O `messaging_gateway` �
 
 - `messaging_gateway` — valida webhook, resolve tenant, persiste raw, publica no bus
 - `worker` — consome eventos, executa domínio, chama IA, envia outbound
-- `runtime_api` — comandos/consultas gRPC/HTTP + WebSocket realtime
+- `runtime_api` — comandos/consultas gRPC unário + realtime via gRPC Server Streaming (web via gRPC-Web)
 - `control_plane` — CRUD de tenants, planos, instâncias Evolution
 - `ia_engine` — transcrição, análise de mídia, RAG, geração de resposta (Python/gRPC; núcleo `FeaturesCompose`)
 
@@ -46,7 +46,7 @@ Dados entram exclusivamente via webhook do Evolution Go. O `messaging_gateway` �
    d. ia_engine (gRPC): converte mídia, classifica intents, RAG, gera resposta
    e. domain_kanban: atualiza etapa/fluxo, registra MovimentoFluxo
    f. BotRulesEngine: decide se bot responde; se sim, envia outbound via Evolution
-4. runtime_api publica via WebSocket: nova mensagem + status → Flutter
+4. runtime_api empurra pelo stream gRPC: nova mensagem + status → Flutter
 ```
 
 ### Mídia
@@ -64,10 +64,10 @@ Webhook → worker decifra via Evolution Go → ia_engine (gRPC) gera resumo_mid
 ### Mensagem enviada pelo atendente (outbound)
 
 ```
-Flutter → runtime_api (gRPC/HTTP) → worker persiste (tipo: ATENDENTE_HUMANO)
+Flutter → runtime_api (gRPC unário) → worker persiste (tipo: ATENDENTE_HUMANO)
 → bot_pode_atender = false (bloqueado permanentemente)
 → Evolution Go envia mensagem WhatsApp
-→ WebSocket notifica todos os clientes do tenant
+→ stream gRPC notifica todos os clientes do tenant
 ```
 
 ## External Integrations

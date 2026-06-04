@@ -43,3 +43,52 @@ pub fn extrair_contexto(metadados: &HashMap<String, String>) -> opentelemetry::C
         propagator.extract(&HashMapExtractor(metadados))
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use opentelemetry::global;
+    use opentelemetry_sdk::propagation::TraceContextPropagator;
+    use opentelemetry::trace::{SpanContext, SpanId, TraceFlags, TraceId, TraceState, TraceContextExt};
+    use std::collections::HashMap;
+
+    #[test]
+    fn test_trace_context_propagation_hashmap() {
+        // Garante que o propagador W3C TraceContext está registrado para o teste
+        global::set_text_map_propagator(TraceContextPropagator::new());
+
+        let mut metadados = HashMap::new();
+
+        // Cria IDs fictícios de Trace e Span
+        let trace_id = TraceId::from_hex("0123456789abcdef0123456789abcdef").unwrap();
+        let span_id = SpanId::from_hex("0123456789abcdef").unwrap();
+        let span_context = SpanContext::new(
+            trace_id,
+            span_id,
+            TraceFlags::default(),
+            false,
+            TraceState::default(),
+        );
+
+        // Anexa o SpanContext remoto ao contexto atual da thread
+        let context = opentelemetry::Context::current().with_remote_span_context(span_context);
+        let _guard = context.attach();
+
+        // Injeta os metadados da thread atual no HashMap
+        injetar_contexto_atual(&mut metadados);
+
+        // Assevera que a chave de especificação 'traceparent' está presente
+        assert!(metadados.contains_key("traceparent"), "Metadados deveriam conter 'traceparent'");
+        let traceparent_val = metadados.get("traceparent").unwrap();
+        assert!(traceparent_val.contains("0123456789abcdef0123456789abcdef"), "Valor de traceparent deve conter o trace_id");
+
+        // Extrai o contexto de volta a partir do HashMap
+        let extracted_ctx = extrair_contexto(&metadados);
+        let extracted_span_ctx = extracted_ctx.span();
+        let extracted_span_context = extracted_span_ctx.span_context();
+
+        // Assevera que os IDs recuperados coincidem com os injetados
+        assert_eq!(extracted_span_context.trace_id(), trace_id);
+        assert_eq!(extracted_span_context.span_id(), span_id);
+    }
+}

@@ -11,11 +11,12 @@ scaffoldVersion: "2.0.0"
 
 ## Responsibilities
 
-- Implementar a UI do app Flutter para Windows (desktop) e depois Web.
+- Implementar a UI do app Flutter para Windows (desktop) e depois Web, de forma **incremental** — a tela nasce colada à feature que valida (ex.: auth → login/cadastro). Decisão D8.
+- Manter o **design system `core_ui`** (tema dark padrão; tokens slate/emerald) e reusar seus componentes (card de Kanban, painel de chat, inputs).
 - Implementar camada `DataSource` abstrata: `LocalEngineFFI` (Windows) e `RemoteOnly` (Web).
-- Integrar com `runtime_api` via gRPC/HTTP (comandos) e WebSocket (realtime) — sempre pela interface `DataSource` em `clients/packages/api_client/`.
+- Integrar com `runtime_api` via **gRPC único**: unário (comandos/consultas) + Server Streaming (realtime). Desktop usa gRPC nativo HTTP/2; Web usa gRPC-Web. Sempre pela interface `DataSource` em `clients/packages/api_client/`.
 - Garantir que toda lógica de dados passa pela interface `DataSource`.
-- Implementar stores reativos (Riverpod/Bloc) que respondem a eventos WebSocket.
+- Implementar stores reativos (Riverpod/Bloc) que respondem aos eventos do **stream gRPC**.
 
 ## Platform Notes
 

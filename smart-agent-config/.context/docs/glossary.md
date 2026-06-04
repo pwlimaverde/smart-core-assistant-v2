@@ -37,7 +37,7 @@ Terminologia extraída da v1 em produção e do planejamento da v2. Termos em po
 | **Contato** | Cliente/número WhatsApp com perfil, metadados e histórico. |
 | **Messaging Gateway** | Binário Rust que recebe webhooks do Evolution, resolve `tenant_id` e publica eventos internos. |
 | **Worker / Support Core** | Binário Rust que executa o domínio (conversa, ticket, kanban, IA, outbound). |
-| **Runtime API** | Binário Rust com gRPC/HTTP + WebSocket que serve o app Flutter. |
+| **Runtime API** | Binário Rust com gRPC único (unário + Server Streaming) que serve o app Flutter; web via gRPC-Web. |
 | **Control Plane** | Binário Rust para gestão de tenants, planos, credenciais, instâncias Evolution. |
 | **Evolution Go** | Gateway de WhatsApp multi-instância. Um cluster gerencia N instâncias. |
 | **EvolutionInstance** | Instância WhatsApp vinculada a um tenant. Controla `resposta_bot`. |
@@ -46,7 +46,11 @@ Terminologia extraída da v1 em produção e do planejamento da v2. Termos em po
 | **Local Engine** | Crate Rust dual-target: cache local de conversas/mídia (SQLite) + fila offline. |
 | **ia_engine** | Serviço Python separado de IA (LangChain/RAG), consumido pelo worker via **gRPC**. Núcleo: `FeaturesCompose`. |
 | **FeaturesCompose** | Facade de IA da v1 (transcrição, intents, resposta, embeddings) reaproveitada como núcleo do `ia_engine`. |
-| **gRPC** | RPC com contrato `.proto` (Protobuf binário); canal worker ↔ ia_engine (e candidato para Flutter ↔ servidor). |
+| **gRPC** | RPC com contrato `.proto` (Protobuf binário); transporte **único** worker ↔ ia_engine **e** Flutter ↔ servidor (decisão D7). |
+| **gRPC Server Streaming** | Canal de realtime: o cliente abre um stream e o servidor empurra eventos (mensagens, kanban, presença). Substitui o WebSocket. Fan-out multi-réplica por Redis pub/sub. |
+| **gRPC-Web** | Variante do gRPC sobre HTTP/1.1–2 para o app Flutter Web (sandbox do browser); habilitada no servidor via `tonic-web`. Desktop usa gRPC nativo HTTP/2. |
+| **core_ui / design system** | Pacote Dart com o tema dark padrão (tokens slate/emerald) e componentes reutilizáveis (card de Kanban, painel de chat, inputs) compartilhados pelos 2 apps Flutter. |
+| **UI incremental (D8)** | A tela nasce colada à feature que valida (ex.: auth → login/cadastro), no `flutter_windows` RemoteOnly — não é uma fase final. |
 | **PyO3** | Ponte Python↔Rust in-process (FFI). **Descartada** para o canal de IA (ver §13.1 do planejamento). |
 | **RAG** | Retrieval-Augmented Generation: busca de documentos similares via pgvector. |
 | **Debounce por contato** | Acumular mensagens em rajada antes de processá-las como um lote. |

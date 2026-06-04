@@ -54,7 +54,7 @@ Escalas: `QUICK` (bugfix simples), `SMALL` (feature isolada), `MEDIUM` (feature 
 
 1. **Fundação**: Cargo workspace + `contracts` + schema PostgreSQL com RLS + observabilidade
 2. **Messaging Gateway** + Evolution multi-instância
-3. **Runtime API** + WebSocket + shell Flutter Windows (`RemoteOnly`)
+3. **Runtime API** (gRPC unário + Server Streaming) + shell Flutter Windows (`RemoteOnly`) + telas de login/cadastro junto do auth (UI incremental — decisão D8)
 4. **Worker** (substitui o Celery da v1) + `ia_engine` Python via gRPC
 5. **Regras de domínio** explícitas nos crates `domain_*`
 6. **Local Engine** (FFI) + cache de mídia + SQLite + sync

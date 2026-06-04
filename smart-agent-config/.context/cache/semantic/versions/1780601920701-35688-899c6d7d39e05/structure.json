@@ -1,0 +1,17 @@
+{
+  "totalFiles": 71,
+  "rootPath": ".",
+  "topDirectories": [
+    {
+      "name": "doc_dev",
+      "fileCount": 69,
+      "description": "Module directory"
+    }
+  ],
+  "languageDistribution": [
+    {
+      "extension": ".md",
+      "count": 71
+    }
+  ]
+}
