@@ -24,8 +24,9 @@ O projeto é um **monorepo monolítico** com stacks tecnológicas distintas, cad
 **Princípios-chave:**
 
 - **Uma stack, um diretório:** cada stack tem sua pasta raiz, seu toolchain próprio e suas responsabilidades bem delimitadas. Nenhuma stack importa diretamente código de outra.
-- **Contratos explícitos na fronteira:** a comunicação entre stacks é feita exclusivamente por contratos formais (gRPC/protobuf, HTTP + JSON, eventos no Redis Streams com envelope padronizado). Nunca por import direto de código.
+- **Contratos explícitos na fronteira:** a comunicação entre stacks é feita exclusivamente por contratos formais (gRPC/protobuf, eventos no Redis Streams com envelope padronizado). Nunca por import direto de código. O canal Flutter ↔ servidor é **gRPC único** — unário (comandos/consultas) + **Server Streaming** (realtime); sem WebSocket.
 - **Apps Flutter distintos por plataforma:** o app Windows e o app Web são projetos Flutter separados. Não há build multi-plataforma num mesmo `pubspec.yaml`. O código em comum fica em pacotes Dart compartilhados dentro de `clients/packages/`.
+- **UI incremental, colada à feature:** a interface não é uma fase final — cada feature de backend entrega, no mesmo ciclo, a tela que a valida (ex.: auth → telas de login/cadastro). As telas nascem no `flutter_windows` (RemoteOnly) e falam só com o `api_client`.
 - **Smart-agent-config é meta-código:** não contém código de produto. É a camada de planejamento, documentação e orquestração de agentes do projeto inteiro.
 
 ---
@@ -41,7 +42,7 @@ smart-core-assistant-v2/                    # raiz do monorepo / git root
 │   ├── apps/
 │   │   ├── control_plane/                  # binário: gestão de tenants, planos, credenciais
 │   │   ├── messaging_gateway/              # binário: ingestão de webhooks Evolution Go
-│   │   ├── runtime_api/                    # binário: API gRPC/HTTP + WebSocket para clientes
+│   │   ├── runtime_api/                    # binário: API gRPC (unário + Server Streaming) para clientes
 │   │   └── worker/                         # binário: processamento de eventos e domínio
 │   └── crates/
 │       ├── application/                    # orquestra casos de uso (depende de domain_*)
@@ -60,7 +61,7 @@ smart-core-assistant-v2/                    # raiz do monorepo / git root
 │       ├── local_engine/                   # dual-target: lib servidor + cdylib FFI Flutter Windows
 │       ├── observability/                  # logs estruturados, métricas, tracing
 │       ├── error_core/                     # taxonomia de erros + mapeamento p/ transporte
-│       └── realtime/                       # WebSocket fan-out por tenant
+│       └── realtime/                       # fan-out por tenant via gRPC streaming (Redis pub/sub)
 │
 ├── evolution/                              # STACK: Evolution Go — gateway WhatsApp
 │   ├── docker/                             # docker-compose + volumes para Evolution Go
@@ -69,9 +70,9 @@ smart-core-assistant-v2/                    # raiz do monorepo / git root
 │
 ├── clients/                                # STACK: Aplicações Flutter
 │   ├── packages/                           # pacotes Dart compartilhados entre apps
-│   │   ├── core_ui/                        # componentes de UI reutilizáveis (widgets, temas)
+│   │   ├── core_ui/                        # design system: tema dark padrão + widgets (kanban, chat, inputs)
 │   │   ├── domain_models/                  # modelos de domínio em Dart (DTOs gerados ou manuais)
-│   │   ├── api_client/                     # cliente gRPC/HTTP + WebSocket para o runtime_api
+│   │   ├── api_client/                     # cliente gRPC único (unário + Server Streaming) + factory kIsWeb
 │   │   └── local_engine_ffi/               # bridge flutter_rust_bridge (wrapper do crate local_engine)
 │   │
 │   ├── flutter_windows/                    # App Flutter Windows — FASE 1 (desktop)
@@ -145,13 +146,13 @@ smart-core-assistant-v2/                    # raiz do monorepo / git root
 | `control_plane` | Cadastro de tenants, planos, quotas, feature flags, credenciais e configuração de instâncias Evolution |
 | `messaging_gateway` | Recebe webhooks do Evolution Go, valida assinatura/origem, resolve `tenant_id`, persiste evento bruto, publica no Redis Streams. **Nunca executa regra de negócio** |
 | `worker` | Consome eventos do bus e executa o domínio: debounce, conversa, política de ticket, kanban, chamada ao `ia_engine`, envio outbound via Evolution |
-| `runtime_api` | gRPC/HTTP para comandos e consultas + WebSocket para realtime (nova mensagem, typing, kanban, presença). Fan-out de eventos por tenant |
+| `runtime_api` | gRPC unário para comandos e consultas + gRPC Server Streaming para realtime (nova mensagem, typing, kanban, presença); gRPC-Web (`tonic-web`) para o app Web. Fan-out de eventos por tenant via Redis pub/sub |
 
 **Crates de domínio (`crates/domain_*`):** regras puras de negócio sem I/O. Nenhum import de `infrastructure_*`.
 
 **Crate especial — `local_engine`:** compilável tanto como dependência dos binários-servidor quanto como `cdylib`/`staticlib` para FFI do app Flutter Windows. Contém apenas lógica válida offline/cache — nada multi-tenant sensível.
 
-**Deploy:** Hostinger KVM2 (uma VM). Proxy reverso (Nginx/Caddy) na frente com TLS e `proxy_buffering off` para WebSocket.
+**Deploy:** Hostinger KVM2 (uma VM). Proxy reverso (Nginx/Caddy) na frente com TLS, HTTP/2 e `proxy_buffering off` para o gRPC Server Streaming (e tradução gRPC-Web para o app Web).
 
 ---
 
@@ -174,16 +175,37 @@ smart-core-assistant-v2/                    # raiz do monorepo / git root
 
 | Pacote | Responsabilidade |
 |--------|-----------------|
-| `core_ui` | Widgets, temas, componentes visuais reutilizáveis entre os dois apps |
-| `domain_models` | Modelos de domínio em Dart (DTOs): Ticket, Mensagem, Contato, Kanban etc. |
-| `api_client` | Cliente gRPC/HTTP + WebSocket para o `runtime_api`. Única dependência de rede dos apps |
+| `core_ui` | **Design system do projeto:** tema dark padrão (tokens abaixo), widgets e componentes visuais reutilizáveis entre os dois apps (card de Kanban, painel de chat, input de mensagem, badges de status) |
+| `domain_models` | Modelos de domínio em Dart (DTOs gerados do `.proto`): Ticket, Mensagem, Contato, Kanban etc. |
+| `api_client` | **Cliente gRPC único** para o `runtime_api`: unário (comandos/consultas) + Server Streaming (realtime). Factory de canal por `kIsWeb` (`ClientChannel` no desktop, `GrpcWebClientChannel` na web). Injeta o JWT no metadata. **Única dependência de rede dos apps** |
 | `local_engine_ffi` | Wrapper do `flutter_rust_bridge` sobre o crate `local_engine`. **Usado somente pelo `flutter_windows`** |
+
+#### Design system padrão (`core_ui`)
+
+Baseline visual do produto — tema dark corporativo, herdado do estudo de
+arquitetura Kanban/chat. Tokens:
+
+| Token | Cor | Uso |
+|-------|-----|-----|
+| Fundo base | `slate-950 #020617` / `slate-900 #0F172A` | Background da aplicação e do chat |
+| Superfície | `slate-800 #1E293B` | Cards, inputs, painéis |
+| Texto primário | `#FFFFFF` / `slate-300 #CBD5E1` | Títulos e corpo |
+| Texto secundário | `slate-400 #94A3B8` | Metadados, IDs, hints |
+| Acento | `emerald-400 #34D399` / `emerald-600 #059669` | Destaques, nomes, ações primárias |
+
+Engine **Impeller** (60fps). Componentes-base: coluna de Kanban (horizontal, card
+~280px), painel lateral de chat (~384px), input de mensagem com ação primária,
+badge de status (`novo` / `em_atendimento` / `finalizado`).
 
 #### `clients/flutter_windows/` — App Windows (Fase 1)
 
-- App desktop Flutter para Windows.
-- Usa `DataSource: LocalEngineFFI` (via `local_engine_ffi`) para cache local de conversas e mídia em disco.
-- Depende de todos os packages compartilhados incluindo `local_engine_ffi`.
+- App desktop Flutter para Windows. **É onde a UI nasce de forma incremental:**
+  cada feature de backend entrega aqui a tela que a valida (auth → login/cadastro;
+  worker/kanban → fila + chat; etc.).
+- **Começa em `DataSource: RemoteOnly`** (só `api_client`, sem FFI). Ganha
+  `DataSource: LocalEngineFFI` (via `local_engine_ffi`) na Fase 8 para cache local
+  de conversas e mídia em disco.
+- Depende dos packages compartilhados; o `local_engine_ffi` só entra na Fase 8.
 - Build: `flutter build windows --release`
 
 #### `clients/flutter_web/` — App Web (Fase 2)
@@ -235,7 +257,7 @@ smart-core-assistant-v2/                    # raiz do monorepo / git root
 
 | Regra | Descrição |
 |-------|-----------|
-| **Sem imports cruzados entre stacks** | `server/` não importa código de `ia_engine/`, `clients/` ou `evolution/`. A comunicação é por contrato (gRPC/HTTP/Redis). |
+| **Sem imports cruzados entre stacks** | `server/` não importa código de `ia_engine/`, `clients/` ou `evolution/`. A comunicação é por contrato (gRPC/Redis). |
 | **Sem lógica de produto em `smart-agent-config/`** | Esta pasta contém somente documentação, configuração de agentes e planejamento. |
 | **`domain_*` sem I/O** | Nenhum crate `server/crates/domain_*` pode ter dependência de `infrastructure_*`. |
 | **`local_engine` sem multi-tenant sensível** | O crate `local_engine` não pode conter lógica que exija dados de múltiplos tenants ou processamento de webhook. |
@@ -250,12 +272,13 @@ smart-core-assistant-v2/                    # raiz do monorepo / git root
 ```
 Flutter Windows/Web
       │
-      │  gRPC/HTTP (comandos/consultas)
-      │  WebSocket (realtime: mensagens, kanban, presença)
+      │  gRPC unário (comandos/consultas)
+      │  gRPC Server Streaming (realtime: mensagens, kanban, presença)
+      │  (desktop: HTTP/2 nativo · web: gRPC-Web via tonic-web + proxy)
       ▼
 server/runtime_api  ◄──── server/worker ◄──── Redis Streams ◄──── server/messaging_gateway
                                   │
-                                  │  gRPC/HTTP
+                                  │  gRPC (interno)
                                   ▼
                              ia_engine/
                              (Python)
@@ -274,7 +297,7 @@ clients/packages/local_engine_ffi
 
 | Fronteira | Protocolo | Definição do contrato |
 |-----------|-----------|----------------------|
-| Flutter → server | gRPC/HTTP + WebSocket | `server/crates/contracts/` (proto + DTOs) |
+| Flutter → server | **gRPC único** (unário + Server Streaming; web via gRPC-Web) | `server/crates/contracts/` (proto + DTOs) |
 | server/worker → ia_engine | **gRPC** | `server/crates/domain_ai/` (interfaces Rust) + `.proto`/protobuf em `ia_engine/proto/` |
 | Evolution Go → server | Webhook HTTP | Payload normalizado em `server/crates/domain_whatsapp/` |
 | server/worker → Evolution Go | HTTP REST | `server/crates/infrastructure_evolution/` |

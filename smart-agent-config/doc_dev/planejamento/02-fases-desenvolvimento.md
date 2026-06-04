@@ -92,8 +92,10 @@ atual é o **módulo de autenticação + primeiro ponto de entrada gRPC**
 | `worker` | app | ⬜ | F4 |
 | `control_plane` | app | ⬜ | F2 |
 | `ia_engine` | stack Python | ⬜ | F5 |
-| `clients/flutter_windows` | stack Flutter | ⬜ | F7 |
-| `clients/flutter_web` | stack Flutter | ⬜ | F10 |
+| `clients/packages/core_ui` | pacote Flutter | ⬜ | bootstrap na F6.5 (design system) |
+| `clients/packages/api_client` | pacote Flutter | ⬜ | bootstrap na F6.5 (gRPC único + `kIsWeb`) |
+| `clients/flutter_windows` | stack Flutter | ⬜ | **incremental** (F6.5 bootstrap+auth → F2/F4/F5 telas → F7 consolida) |
+| `clients/flutter_web` | stack Flutter | ⬜ | F10 (RemoteOnly; reusa packages) |
 | `evolution/` | stack Go | ⬜ | F3 |
 
 > **Nota de arquitetura (camadas — esclarecimento importante):**
@@ -128,6 +130,12 @@ atual é o **módulo de autenticação + primeiro ponto de entrada gRPC**
 6. **Uma crate por sistema externo** — `infrastructure_postgres` (SQLx),
    `infrastructure_redis` (Redis), `infrastructure_storage` (S3/R2) são as
    **únicas** que falam com cada cliente.
+7. **Transporte Flutter ↔ servidor é gRPC único** — unário (comandos/consultas) +
+   **Server Streaming** (realtime). Sem WebSocket. Web via gRPC-Web (`tonic-web`).
+   Toda tela fala só com o `api_client`.
+8. **UI incremental, colada à feature** — cada feature de backend entrega, no
+   mesmo ciclo, a tela que a valida (a partir da F6/auth). A UI nasce no
+   `flutter_windows` em modo `RemoteOnly`. Ver "Trilha de UI" abaixo.
 
 ### Mapa de dependências entre fases
 
@@ -140,10 +148,12 @@ F0 Fundação ──► F1 Banco+RLS ──► F2 Control Plane
                        └──► F4 Worker + Domínio ──► F5 ia_engine (gRPC)
                                   │                     │
                                   ▼                     │
-                          F6 Runtime API + Realtime ◄───┘   ◄── 🚧 auth aqui
-                                  │
+                          F6 Runtime API (gRPC) + Realtime ◄───┘  ◄── 🚧 auth aqui
+                                  │            └─► UI incremental nasce aqui
+                                  │                (F6.5 login/cadastro; depois
+                                  │                 F2 admin, F4 kanban/chat, F5 IA)
                                   ▼
-                          F7 Flutter Windows (RemoteOnly)
+                          F7 Flutter Windows — consolidação (RemoteOnly)
                                   │
                                   ▼
                           F8 Local Engine (FFI) + mídia local
@@ -157,6 +167,43 @@ F0 Fundação ──► F1 Banco+RLS ──► F2 Control Plane
 
 > **MVP funcional ponta-a-ponta** = F0→F6. A persistência das F1–F5 já está
 > pronta; falta a orquestração (worker, gateway, IA) e a API/realtime.
+
+---
+
+## Trilha de UI incremental (transversal — decisão D8)
+
+A UI **não** é uma fase única e tardia. A partir da F6 (quando o `runtime_api`
+ganha o primeiro endpoint gRPC real), **cada feature de backend entrega a tela
+que a valida**, no `flutter_windows` em modo `RemoteOnly` (sem FFI), consumindo o
+`api_client`. O objetivo é conferir o uso ponta-a-ponta a cada feature — começando
+pelas telas de login e cadastro junto do auth.
+
+> **Pré-requisito único:** existir o endpoint gRPC da feature no `runtime_api`. A
+> primeira leva de UI nasce com o auth (F6), que também faz o bootstrap do app e
+> do design system `core_ui`.
+
+| Feature de backend | Fase | Tela entregue junto (flutter_windows · RemoteOnly) |
+|---|---|---|
+| **Bootstrap + auth** | **F6** | Shell do app + `core_ui` (tema dark) + **login** + **cadastro** (Register) + aceite de convite |
+| Control Plane (admin) | F2 | Telas internas de gestão: tenants, planos/assinatura, convites (uso administrativo) |
+| Worker + Kanban (sem IA) | F4 | Fila por departamento + **painel Kanban** (drag-and-drop) + **chat lateral** consumindo o **Server Streaming** |
+| `ia_engine` | F5 | Exibição da resposta da IA e do resumo de mídia dentro do chat |
+| Local Engine (FFI) | F8 | Estados offline/cache na UI (troca para `DataSource: LocalEngineFFI`) |
+| Endurecimento/billing | F9 | Tela de configurações do tenant + uso/billing |
+
+**Regras da trilha:**
+- A UI sempre fala com o `api_client` (gRPC) — nunca com infraestrutura nem FFI
+  direto fora do `local_engine_ffi`.
+- Componentes visuais reutilizáveis vão para `core_ui` (design system); telas
+  específicas ficam no app.
+- `DataSource` abstrato desde a primeira tela (modo `RemoteOnly`), garantindo o
+  port Web (F10) sem reescrita.
+- **DoD de cada tela:** `flutter analyze` limpo + a tela exercita o fluxo real da
+  feature contra o `runtime_api` (não mock) + comentários em pt-br.
+
+> **F7 deixa de ser "construir todas as telas".** Como as telas nascem coladas às
+> features, a F7 passa a ser **consolidação** do app Windows (navegação, estados de
+> erro/carga, acessibilidade, empacotamento) — ver Fase 7.
 
 ---
 
@@ -249,12 +296,18 @@ registro de instâncias Evolution. **Persistência já pronta; falta o app.**
 
 ### Etapa 2.3 — Binário `control_plane` — ⬜
 - CRUD (tenant, config, plano/assinatura, tenant_user/invite) sobre os
-  repositórios existentes; API gRPC/HTTP de administração.
+  repositórios existentes; API gRPC de administração.
 
 ### Etapa 2.4 — `infrastructure_evolution` (provisionamento) — ⬜
 - Cliente **HTTP** do Evolution Go (`/instance/create|connect|qr|pair|status`),
   global key × token de instância, guard de quota. *A persistência das instâncias
   já existe em `integracoes/evolution.rs` + migration 0008.*
+
+### Etapa 2.5 — UI: telas de administração (trilha de UI) — ⬜
+- No `flutter_windows`: telas internas de gestão de **tenants**, **planos/
+  assinatura** e **convites**, consumindo a API do `control_plane` via `api_client`.
+  Componentes reutilizáveis em `core_ui`. **DoD:** fluxos reais contra o servidor;
+  `flutter analyze` limpo.
 
 ---
 
@@ -309,6 +362,14 @@ registro de instâncias Evolution. **Persistência já pronta; falta o app.**
 - Bot responde só se: instância permite **e** sem interação humana **e**
   `bot_pode_atender`. Resposta provisória até a IA (F5).
 
+### Etapa 4.6 — UI: fila + Kanban + chat lateral (trilha de UI) — ⬜
+- No `flutter_windows`: **fila por departamento**, **painel Kanban** com
+  drag-and-drop (`appflowy_board` ou equivalente) e **chat lateral** consumindo o
+  **gRPC Server Streaming** (`StreamAtendimentos`) via stores reativos. Envio de
+  mensagem outbound pela tela. Componentes em `core_ui` (card de Kanban, painel de
+  chat, input). **DoD:** mover card e enviar/receber mensagem em tempo real contra
+  o `runtime_api`; `flutter analyze` limpo.
+
 ---
 
 ## Fase 5 — `ia_engine` (Python, serviço gRPC) — ⬜
@@ -338,9 +399,12 @@ serviço Python via **gRPC** (decisão D3/§13.1). *RAG/pgvector já no Postgres
   Accept) já planejado/iniciado. Demais comandos/consultas (tickets, kanban,
   histórico) ⬜.
 
-### Etapa 6.2 — crate `realtime` (WebSocket) — 🚧
-- Scaffold de handshake WS autenticado no auth. Fan-out por tenant (mensagem,
-  typing, presença, kanban) completo ⬜ — usa Redis pub/sub (doc 09 §1.2).
+### Etapa 6.2 — crate `realtime` (gRPC Server Streaming) — 🚧
+- RPC de stream autenticado (ex.: `StreamAtendimentos`) — o cliente abre um
+  stream gRPC e o servidor empurra eventos. Fan-out por tenant (mensagem, typing,
+  presença, kanban) completo ⬜ — usa **Redis pub/sub** para multi-réplica.
+  **Sem WebSocket** (decisão D7). O JWT é validado na abertura do stream pelo
+  mesmo interceptor das chamadas unárias.
 
 ### Etapa 6.3 — Autenticação/autorização — 🚧
 - JWT HS256 (access 15min) + refresh opaco 7d (rotação por família, reuse-
@@ -350,18 +414,36 @@ serviço Python via **gRPC** (decisão D3/§13.1). *RAG/pgvector já no Postgres
   [09-comunicacao-e-autenticacao.md](./09-comunicacao-e-autenticacao.md).
 
 ### Etapa 6.4 — Contrato cliente estável — ⬜
-- Congelar proto/DTOs em `contracts` para o Flutter (codegen Dart); changelog.
+- Congelar proto/DTOs em `contracts` para o Flutter (codegen Dart); habilitar
+  `tonic-web` para o app Web; changelog.
+
+### Etapa 6.5 — UI: bootstrap do `flutter_windows` + telas de auth — ⬜ — **NOVO (trilha de UI)**
+- Bootstrap do app `flutter_windows` + packages `core_ui` (design system, tema
+  dark), `domain_models` (DTOs do `.proto`) e `api_client` (factory gRPC `kIsWeb`,
+  modo `RemoteOnly`).
+- **Telas de login e cadastro** (e aceite de convite) consumindo `AuthService`
+  via gRPC, validando o fluxo ponta-a-ponta (decisão D8). Guarda de sessão
+  (armazenamento seguro do refresh token + auto-refresh do access token).
+- **DoD:** `flutter analyze` limpo; login/cadastro reais contra o `runtime_api`
+  emitem e renovam tokens; navegação autenticada protegida.
 
 ---
 
-## Fase 7 — Flutter Windows (cliente, modo RemoteOnly) — ⬜
+## Fase 7 — Flutter Windows: consolidação do app (RemoteOnly) — ⬜
 
-**Objetivo:** painel desktop funcional consumindo o `runtime_api`.
+**Objetivo:** consolidar em um app coeso as telas que **já nasceram coladas às
+features** (login/cadastro na F6.5; admin na F2; Kanban/fila/chat na F4; IA no
+chat na F5). Aqui não se "constrói tudo do zero" — refina-se o conjunto.
 
-- **7.1** packages compartilhados (`domain_models`, `api_client`, `core_ui`).
-- **7.2** abstração `DataSource` com implementação `RemoteOnly` (sem FFI).
-- **7.3** telas (login, fila por departamento, chat, Kanban, configurações).
-- **7.4** realtime no cliente (stores reagindo a eventos WebSocket).
+- **7.1** packages estáveis (`domain_models`, `api_client`, `core_ui`) — já
+  existentes da trilha de UI; aqui são revisados e versionados.
+- **7.2** `DataSource: RemoteOnly` consolidado (sem FFI), interface estável para
+  o port Web e para a futura troca por `LocalEngineFFI` (F8).
+- **7.3** navegação, estados de carga/erro/vazio, acessibilidade e consistência
+  visual entre as telas; settings do tenant.
+- **7.4** realtime no cliente consolidado (stores reagindo aos eventos do
+  **stream gRPC**), reconexão e backpressure.
+- **7.5** empacotamento e build de release (`flutter build windows --release`).
 
 ---
 

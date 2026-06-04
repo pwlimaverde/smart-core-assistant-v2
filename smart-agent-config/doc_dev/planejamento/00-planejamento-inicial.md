@@ -77,6 +77,8 @@ Evolution). A v2 nasce do zero para:
 | D4 | Isolamento do banco | **`tenant_id` + Row-Level Security (RLS)** do PostgreSQL | Melhor custo/segurança; banco recusa query sem `tenant_id` no contexto |
 | D5 | Modelo de projeto | **Greenfield** (v1 como referência de domínio) | Sem migração incremental nem big-bang sobre o legado |
 | D6 | Ordem de entrega | **Windows primeiro**, depois **Web** | Foco em uma plataforma; abstração de dados garante port limpo |
+| D7 | Transporte Flutter ↔ servidor | **gRPC único** (unário + **Server Streaming**) | Um só protocolo e um só `.proto` para comandos, consultas e realtime; desktop usa gRPC nativo HTTP/2, web usa **gRPC-Web** (mesmo código Dart gerado, canal trocado por `kIsWeb`). **Substitui WebSocket** para realtime (ver §8) |
+| D8 | Construção da UI | **Incremental, junto de cada feature** (após as fundações) | A UI nasce colada à feature que valida — ex.: ao entregar o auth, criam-se as telas de login/cadastro para conferir o uso ponta-a-ponta. Continua em **2 apps Flutter** separados (Windows → Web), começando pelo `flutter_windows` em modo `RemoteOnly` (ver §8.3) |
 
 ### Princípio arquitetural central (herdado do estudo de viabilidade)
 
@@ -126,7 +128,7 @@ Evolution). A v2 nasce do zero para:
    │  + pgvector (RAG)       │         │   presença, pub/sub)   │
    └────────────────────────┘         └────────────────────────┘
                 ▲
-                │ gRPC/HTTP (comandos/consultas) + WebSocket (realtime)
+                │ gRPC unário (comandos/consultas) + gRPC Server Streaming (realtime)
         ┌───────┴─────────┐
         │  RUNTIME API    │ ◄──── Flutter (Windows → depois Web)
         │  (Rust)         │           │
@@ -184,11 +186,17 @@ temporal (`verificar_feedback_atendimento` após `RESOLVIDO`,
   da task Celery.
 
 ### 4.4 Runtime API + Realtime (App Delivery)
-- **gRPC/HTTP** para comandos e consultas (abrir ticket, listar colunas, buscar
-  histórico, configurar, enviar mensagem).
-- **WebSocket** para realtime (nova mensagem, typing, presença, leitura,
-  mudança de etapa, resposta da IA, atualização do Kanban).
-- Fan-out de eventos por tenant.
+- **gRPC unário** (Tonic) para comandos e consultas (abrir ticket, listar
+  colunas, buscar histórico, configurar, enviar mensagem).
+- **gRPC Server Streaming** para realtime (nova mensagem, typing, presença,
+  leitura, mudança de etapa, resposta da IA, atualização do Kanban) — o cliente
+  abre um stream (ex.: `StreamAtendimentos`) e o servidor empurra eventos.
+- **Fan-out por tenant via Redis pub/sub:** eventos produzidos pelo `worker` são
+  publicados no Redis; cada réplica do `runtime_api` assina os canais dos clientes
+  conectados a ela e propaga pelo stream gRPC aberto.
+- **Mesma porta, dois transportes de borda:** gRPC nativo HTTP/2 (Flutter
+  Desktop) e **gRPC-Web** (Flutter Web, via `tonic-web`/`GrpcWebLayer`),
+  atendidos pelo mesmo serviço (ver §8).
 
 ---
 
@@ -308,16 +316,61 @@ camada `infrastructure_postgres`.
 
 ## 8. Comunicação com o Flutter (cliente fino + FFI híbrido)
 
-### 8.1 Duas camadas de comunicação com o servidor
-- **gRPC/HTTP** para comandos e consultas (abrir ticket, listar colunas, buscar
+### 8.1 Transporte único: gRPC (unário + Server Streaming) — decisão D7
+Toda a comunicação Flutter ↔ `runtime_api` usa **um só protocolo (gRPC) e um só
+`.proto`**, sem REST manual nem WebSocket:
+
+- **gRPC unário** para comandos e consultas (abrir ticket, listar colunas, buscar
   histórico, alterar configurações, enviar mensagem).
-- **WebSocket** para realtime (nova mensagem, typing, presença, leitura,
-  mudança de etapa, resposta da IA, atualização do Kanban).
+- **gRPC Server Streaming** para realtime (nova mensagem, typing, presença,
+  leitura, mudança de etapa, resposta da IA, atualização do Kanban). O cliente
+  mantém um stream aberto e reage a cada evento; supera o polling e alimenta os
+  stores locais do Flutter.
 
-Essa combinação supera o polling e permite stores locais no Flutter reagindo a
-eventos em tempo real.
+Essa unificação elimina a dualidade gRPC + WebSocket: contrato binário
+auto-gerado (Protobuf), tipos compartilhados entre Rust/Python/Dart e um único
+ponto de autenticação (o JWT viaja no metadata de cada chamada e na abertura do
+stream).
 
-### 8.2 Motor local via FFI (decisão D1 — híbrido)
+### 8.2 Transporte multiplataforma (Desktop × Web)
+O **mesmo código Dart gerado** atende as duas plataformas, trocando apenas o
+canal em tempo de execução via `kIsWeb`, encapsulado numa **factory única**
+(`api_client`):
+
+| Plataforma | Pacote Dart | Canal | Protocolo | Observação |
+|---|---|---|---|---|
+| **Windows Desktop** | `grpc` | `ClientChannel` | gRPC nativo HTTP/2 | Menor latência; multiplexing real de streams |
+| **Web** | `grpc` + `grpc_web` | `GrpcWebClientChannel` | gRPC-Web sobre HTTP/1.1–2 | Exigência do sandbox do browser |
+
+No servidor, o `runtime_api` (Tonic) habilita a camada **`tonic-web`
+(`GrpcWebLayer`)** + CORS restritivo para atender o Flutter Web na mesma porta do
+gRPC nativo. O proxy reverso (Caddy/Nginx) faz `accept_http1` e termina o TLS;
+para o renderer web `skwasm`, envia os headers de `SharedArrayBuffer`
+(`Cross-Origin-Opener-Policy`/`Cross-Origin-Embedder-Policy`). A UI nunca sabe
+qual transporte está ativo.
+
+### 8.3 Construção incremental da UI + design system — decisão D8
+A UI **não** é uma fase tardia e monolítica: cada feature de backend entrega, no
+mesmo ciclo, a **tela que a valida** (ex.: ao concluir o auth, criam-se as telas
+de **login e cadastro** no `flutter_windows` para conferir o uso ponta-a-ponta).
+Detalhe operacional (trilha de UI por feature) em
+[02-fases-desenvolvimento.md](./02-fases-desenvolvimento.md).
+
+- **Onde nasce:** sempre no `flutter_windows` (Fase 1), em modo `RemoteOnly`
+  (sem FFI), consumindo o `runtime_api` via `api_client`. O port Web (`flutter_web`)
+  reaproveita os mesmos packages depois (ver §1/D6).
+- **Design system padrão (pacote `core_ui`):** tema dark corporativo como baseline
+  do projeto — fundo `slate-950 #020617` / `slate-900 #0F172A`, superfícies
+  `slate-800 #1E293B`, texto `slate-300 #CBD5E1` / `slate-400 #94A3B8`, acento
+  `emerald-400 #34D399` / `emerald-600 #059669`. Engine **Impeller** a 60fps.
+  Componentes-base reutilizados pelos dois apps: card de Kanban (coluna horizontal,
+  card ~280px), painel lateral de chat (~384px), input de mensagem, badges de
+  status. Esses componentes são a referência visual herdada do estudo de
+  arquitetura Kanban/chat (absorvido aqui).
+- **Princípio:** a tela é instrumento de verificação da feature — entra junto,
+  não depois. Toda tela fala só com o `api_client` (gRPC), nunca com infraestrutura.
+
+### 8.4 Motor local via FFI (decisão D1 — híbrido)
 O crate `local_engine` é compilado como **biblioteca nativa** e embarcado no app
 Windows via **`flutter_rust_bridge`**. Responsável por:
 - Cache local de conversas/tickets/kanban (leitura otimista, baixa latência).
@@ -334,7 +387,7 @@ Windows via **`flutter_rust_bridge`**. Responsável por:
    (`DataSource`): implementação `LocalEngineFFI` no Windows; `RemoteOnly` na
    Web (onde FFI não existe). Isso garante port limpo.
 3. **Sincronização:** a verdade vive no servidor; o motor local é cache. O
-   WebSocket reconcilia. Definir estratégia de conflito (sugestão inicial:
+   **stream gRPC de realtime** reconcilia. Definir estratégia de conflito (sugestão inicial:
    *last-write-wins* por timestamp do servidor + versionamento por evento para
    casos sensíveis).
 
@@ -698,9 +751,10 @@ let resp = client
 Início em **Hostinger KVM2** (uma VM), com separação **lógica** de serviços para
 facilitar futura distribuição sem reescrever:
 
-- **Proxy reverso** (Nginx/Caddy/Traefik) com TLS e `proxy_buffering off` para
-  WebSocket/SSE.
-- **runtime_api** (Rust) — API + realtime.
+- **Proxy reverso** (Nginx/Caddy/Traefik) com TLS, suporte a **HTTP/2** e
+  `proxy_buffering off` para o **gRPC Server Streaming** (e tradução gRPC-Web
+  para o app web).
+- **runtime_api** (Rust) — API gRPC + realtime (streaming).
 - **worker** (Rust) — processamento assíncrono + agendamento (substitui o Celery
   da v1).
 - **messaging_gateway** (Rust) — ingestão de webhooks.
@@ -722,11 +776,12 @@ facilitar futura distribuição sem reescrever:
 | Event bus | Redis Streams (consumer groups) |
 | Agendamento | `worker` Rust (tokio timers + Redis delayed) — substitui Celery |
 | Banco | PostgreSQL + pgvector, RLS |
-| Cache/Realtime | Redis (namespace por tenant), WebSocket |
+| Cache/Realtime | Redis (namespace por tenant) + **gRPC Server Streaming** (fan-out por Redis pub/sub) |
 | IA/NLP | `ia_engine` Python (serviço gRPC; LangChain), OpenAI/Groq/Ollama |
 | IA ↔ Backend | gRPC (tonic no Rust, grpcio no Python); FFI/PyO3 descartado (§13.1) |
+| Flutter ↔ Backend | **gRPC único** (unário + streaming); desktop HTTP/2 nativo, web gRPC-Web (`tonic-web`) |
 | WhatsApp | Evolution Go (multi-instância) + S3/MinIO |
-| Frontend | Flutter (Windows → Web) |
+| Frontend | Flutter (Windows → Web), 2 apps + packages; design system `core_ui` (tema dark) |
 | FFI | flutter_rust_bridge + SQLite local |
 | Storage mídia | MinIO/S3 (transitório) + disco local (cache permanente) |
 | Observabilidade | tracing + métricas + logs estruturados |
@@ -736,6 +791,8 @@ facilitar futura distribuição sem reescrever:
 ## 16. Roadmap de construção
 
 > Greenfield, sem migração. Ordem por dependência técnica.
+> **A UI acompanha cada feature** (decisão D8): a partir do item 3, toda entrega
+> de backend ganha a tela que a valida no `flutter_windows` (RemoteOnly).
 
 1. **Fundação**
    - Cargo workspace + crate `contracts` (eventos, DTOs, gRPC).
@@ -743,10 +800,12 @@ facilitar futura distribuição sem reescrever:
    - Esqueleto de observabilidade.
 2. **Messaging Gateway + Evolution multi-instância**
    - Ingestão de webhook → resolve tenant → persiste bruto → publica no bus.
-3. **Runtime API + Realtime + shell Flutter (Windows)**
-   - gRPC/HTTP + WebSocket. Camada `DataSource` abstrata (modo `RemoteOnly`).
-   - Primeiros casos de uso de leitura + realtime.
-4. **Worker + `ia_engine` (Python, gRPC)**
+3. **Runtime API (gRPC) + shell Flutter (Windows) + auth + telas de login/cadastro**
+   - gRPC unário + Server Streaming. Camada `DataSource` abstrata (`RemoteOnly`).
+   - Bootstrap do `flutter_windows` + `core_ui` (design system).
+   - Primeiro fechamento ponta-a-ponta: auth no servidor **e** telas de
+     login/cadastro no cliente para validar o uso.
+4. **Worker + `ia_engine` (Python, gRPC)** — *(UI: fila/Kanban + chat consumindo o stream)*
    - Debounce, conversa, política de ticket, kanban, IA, envio outbound.
    - Worker assume também o agendamento que era do Celery (feedback, retenção).
 5. **Regras de domínio explícitas**
@@ -785,12 +844,16 @@ fora do caminho crítico.)*
 - ✅ **Transporte `worker` (Rust) ↔ `ia_engine` (Python): gRPC** (não FFI/PyO3).
   Racional completo em §13.1. Garante isolamento de processo, escala por réplicas
   (sem teto do GIL) e mantém o Rust 100% safe.
+- ✅ **Transporte Flutter ↔ `runtime_api`: gRPC único** (unário + Server
+  Streaming) — decisão D7. Comandos, consultas e realtime no mesmo `.proto`;
+  WebSocket descartado para realtime. `flutter_web` usa **gRPC-Web** (`tonic-web`
+  + proxy); `flutter_windows` usa gRPC nativo HTTP/2. Independente da decisão
+  §13.1 (canal interno backend ↔ IA). Ver §8.
+- ✅ **Construção da UI: incremental, junto de cada feature** (decisão D8). Mantém
+  os **2 apps Flutter** separados (Windows → Web); a UI começa no `flutter_windows`
+  RemoteOnly e cada feature entrega sua tela. Ver §8.3 e o doc 02.
 
 **Decisões em aberto (a definir antes/durante o planejamento):**
-- Protocolo final: **gRPC vs REST+WS** para o Runtime API (Flutter ↔ servidor; e
-  codegen Dart). *Atenção:* gRPC não roda nativo no navegador — o `flutter_web`
-  exigiria gRPC-Web + proxy. Isto é independente da decisão §13.1 (que trata só
-  do canal interno backend ↔ IA).
 - **Redis Streams vs NATS JetStream** para o bus (recomendação atual: Redis
   Streams para começar simples).
 - Estratégia de **conflito de sync** (last-write-wins vs versionamento por

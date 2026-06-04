@@ -19,10 +19,22 @@ O transporte de dados entre o cliente (Flutter) e o servidor (`runtime_api`) dar
 * **Protocolo:** HTTP/2 puro (gRPC padrão).
 * **Escopo:** Operações síncronas de escrita (comandos) e leitura (consultas).
 * **Tonic em Rust:** A `runtime_api` atuará como um servidor gRPC utilizando o crate `tonic`.
-* **Multiplexação/Portas:** O servidor gRPC rodará em uma porta dedicada (ex.: `50051`). Essa porta é **interna** — o Nginx/Caddy na frente faz o proxy somente do WebSocket e do gRPC-Web (se necessário para o cliente Flutter Web); o tráfego gRPC puro fica no plano interno da VM.
+* **Multiplexação/Portas:** O servidor gRPC rodará em uma porta dedicada (ex.: `50051`), atendendo tanto comandos/consultas unários quanto o **Server Streaming** de realtime. O Nginx/Caddy na frente termina o TLS, fala **HTTP/2** com o backend e traduz **gRPC-Web** para o cliente Flutter Web; o gRPC nativo do Flutter Desktop chega direto.
 * **Erros gRPC:** O interceptor retorna `Status::unauthenticated(msg)` (código 16) para JWT ausente/inválido/blocklisted e `Status::permission_denied(msg)` (código 7) para escopos insuficientes. O cliente Flutter mapeia esses códigos nos interceptors do `api_client`.
 
-### 1.2 WebSockets — Realtime e Eventos Push
+### 1.2 Realtime e Eventos Push
+
+> ⚠️ **Superado (decisão D7 — junho/2026).** O realtime foi **padronizado em
+> gRPC Server Streaming**, não mais WebSocket. Ver
+> [00-planejamento-inicial.md §8](./00-planejamento-inicial.md#8-comunicação-com-o-flutter-cliente-fino--ffi-híbrido)
+> e a Fase 6.2 do [doc 02](./02-fases-desenvolvimento.md). O cliente abre um
+> stream gRPC (ex.: `StreamAtendimentos`); o servidor empurra eventos; o fan-out
+> multi-réplica continua por **Redis pub/sub**. A **validação do JWT** descrita
+> abaixo permanece válida, porém aplicada na **abertura do stream** (mesmo
+> interceptor das chamadas unárias), e o token viaja no **metadata gRPC** — não há
+> handshake WebSocket nem token em query param. O texto WebSocket a seguir é
+> mantido apenas como registro histórico.
+
 * **Protocolo:** WebSocket (HTTP/1.1 Upgrade ou HTTP/2 Extended Connect).
 * **Escopo:** Atualizações bidirecionais e pushes em tempo real (novas mensagens, digitação, presença, atualizações no Kanban, etc.).
 * **Mecanismo:** Hospedado no `runtime_api` utilizando `axum::extract::ws` (ou similar integrado ao stack de rede).
@@ -282,7 +294,9 @@ O crate `server/crates/application` orquestra os casos de uso de auth:
 * `apps/runtime_api/src/main.rs`: inicializar pools de banco (admin + tenant), `ConnectionManager` do Redis, carregar `JWT_SECRET` via `OnceLock`.
 * Configurar o servidor Tonic gRPC na porta configurável via `GRPC_PORT` (padrão 50051).
 * Desenvolver e injetar `AuthInterceptor` (excluindo as rotas públicas listadas em §4 Camada 1).
-* Configurar `axum` para o servidor WebSocket (porta separada ou mesmo servidor com `axum-tonic`).
+* Realtime via **gRPC Server Streaming** no mesmo servidor Tonic (decisão D7) —
+  habilitar `tonic-web` (`GrpcWebLayer`) + CORS para o app Flutter Web. *(O
+  servidor WebSocket `axum` descrito originalmente foi superado.)*
 
 ---
 
