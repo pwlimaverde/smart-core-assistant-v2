@@ -29,7 +29,7 @@ e blocklist). Esta crate é a **única** do workspace que fala com o cliente Red
 - Testes de integração contra Redis real (banco lógico 15).
 
 **Fora desta entrega (fases futuras — ver §9):** pub/sub de invalidação de config e cache
-`tenant:config:{id}`; fan-out realtime por tenant (WebSocket); lock de debounce por contato;
+`tenant:config:{id}`; fan-out realtime por tenant (gRPC Server Streaming); lock de debounce por contato;
 delayed tasks (sorted-set por ETA); presença/typing.
 
 ## 3. Arquitetura e decisões
@@ -127,7 +127,7 @@ delayed tasks (sorted-set por ETA); presença/typing.
 | Responsabilidade | Fase | Chave/Canal sugerido |
 |---|---|---|
 | Cache `RuntimeConfig` + pub/sub de invalidação | F2/F5 | `tenant:config:{tenant_id}` / canal `tenant:config:invalidate` |
-| Fan-out realtime por tenant (WebSocket) | F6 | pub/sub por canal do tenant |
+| Fan-out realtime por tenant (gRPC Server Streaming) | F6 | pub/sub por canal do tenant |
 | Lock de debounce por contato | F4 | `tenant:{id}:lock:debounce:{contact_id}` (SET NX EX) |
 | Delayed tasks (feedback/purga de mídia) | F4 | sorted-set por ETA |
 | Presença/typing do atendente | F6 | `tenant:{id}:presence:agent_{id}` |
