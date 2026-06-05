@@ -1,4 +1,4 @@
-use error_core::{AppError, ErrorContext, ErrorReport, ErrorCode, Severity, registrar};
+use error_core::{registrar, AppError, ErrorCode, ErrorContext, ErrorReport, Severity};
 
 #[test]
 fn test_error_report_from_error() {
@@ -31,13 +31,16 @@ fn test_error_report_with_context() {
     };
 
     // Act
-    let report = ErrorReport::from_error(&err, &ctx)
-        .with_context("Erro adicional de teste interno");
+    let report =
+        ErrorReport::from_error(&err, &ctx).with_context("Erro adicional de teste interno");
 
     // Assert
     assert_eq!(report.error_code, ErrorCode::DbConnectionFailed);
     assert_eq!(report.severity, Severity::Error);
-    assert_eq!(report.context, Some("Erro adicional de teste interno".to_owned()));
+    assert_eq!(
+        report.context,
+        Some("Erro adicional de teste interno".to_owned())
+    );
 }
 
 #[test]

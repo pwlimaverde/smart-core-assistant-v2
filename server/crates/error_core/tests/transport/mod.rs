@@ -1,5 +1,5 @@
 #[cfg(feature = "grpc")]
-use error_core::{AppError, to_status};
+use error_core::{to_status, AppError};
 #[cfg(feature = "grpc")]
 use tonic::Code;
 

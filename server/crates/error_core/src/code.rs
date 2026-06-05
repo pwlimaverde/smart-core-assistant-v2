@@ -109,5 +109,3 @@ impl fmt::Display for ErrorCode {
         write!(f, "{}", s)
     }
 }
-
-

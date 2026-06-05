@@ -1,18 +1,17 @@
 {
-  "active": [],
-  "completed": [
+  "active": [
     {
       "slug": "tratamento-de-erros",
-      "path": "plans/archive/tratamento-de-erros/tratamento-de-erros.md",
+      "path": "plans/tratamento-de-erros.md",
       "title": "Crate `error_core` — Tratamento de Erros Rastreável",
       "summary": "Plano **canônico** (leve). A verdade técnica detalhada está nos artefatos abaixo.",
       "linkedAt": "2026-06-04T23:44:34.849Z",
-      "status": "completed",
+      "status": "active",
       "approval_status": "approved",
       "approved_at": "2026-06-04T23:44:53.404Z",
-      "approved_by": "architect",
-      "archived_at": "2026-06-05T01:03:35.000Z"
+      "approved_by": "architect"
     }
   ],
-  "primary": null
+  "completed": [],
+  "primary": "tratamento-de-erros"
 }

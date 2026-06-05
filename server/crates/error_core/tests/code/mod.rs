@@ -3,22 +3,55 @@ use error_core::{ErrorCategory, ErrorCode};
 #[test]
 fn test_error_code_display() {
     // Valida se a conversão do Display do ErrorCode retorna o formato SCREAMING_SNAKE_CASE correto.
-    assert_eq!(ErrorCode::AuthInvalidToken.to_string(), "AUTH_INVALID_TOKEN");
-    assert_eq!(ErrorCode::AuthExpiredToken.to_string(), "AUTH_EXPIRED_TOKEN");
-    assert_eq!(ErrorCode::AuthMissingToken.to_string(), "AUTH_MISSING_TOKEN");
-    assert_eq!(ErrorCode::AuthInsufficientScope.to_string(), "AUTH_INSUFFICIENT_SCOPE");
+    assert_eq!(
+        ErrorCode::AuthInvalidToken.to_string(),
+        "AUTH_INVALID_TOKEN"
+    );
+    assert_eq!(
+        ErrorCode::AuthExpiredToken.to_string(),
+        "AUTH_EXPIRED_TOKEN"
+    );
+    assert_eq!(
+        ErrorCode::AuthMissingToken.to_string(),
+        "AUTH_MISSING_TOKEN"
+    );
+    assert_eq!(
+        ErrorCode::AuthInsufficientScope.to_string(),
+        "AUTH_INSUFFICIENT_SCOPE"
+    );
     assert_eq!(ErrorCode::StorageNotFound.to_string(), "STORAGE_NOT_FOUND");
-    assert_eq!(ErrorCode::StorageUploadFailed.to_string(), "STORAGE_UPLOAD_FAILED");
-    assert_eq!(ErrorCode::StorageDeleteFailed.to_string(), "STORAGE_DELETE_FAILED");
-    assert_eq!(ErrorCode::DbConnectionFailed.to_string(), "DB_CONNECTION_FAILED");
-    assert_eq!(ErrorCode::DbRecordNotFound.to_string(), "DB_RECORD_NOT_FOUND");
-    assert_eq!(ErrorCode::DbConstraintViolation.to_string(), "DB_CONSTRAINT_VIOLATION");
+    assert_eq!(
+        ErrorCode::StorageUploadFailed.to_string(),
+        "STORAGE_UPLOAD_FAILED"
+    );
+    assert_eq!(
+        ErrorCode::StorageDeleteFailed.to_string(),
+        "STORAGE_DELETE_FAILED"
+    );
+    assert_eq!(
+        ErrorCode::DbConnectionFailed.to_string(),
+        "DB_CONNECTION_FAILED"
+    );
+    assert_eq!(
+        ErrorCode::DbRecordNotFound.to_string(),
+        "DB_RECORD_NOT_FOUND"
+    );
+    assert_eq!(
+        ErrorCode::DbConstraintViolation.to_string(),
+        "DB_CONSTRAINT_VIOLATION"
+    );
     assert_eq!(ErrorCode::DbQueryFailed.to_string(), "DB_QUERY_FAILED");
     assert_eq!(ErrorCode::CacheUnavailable.to_string(), "CACHE_UNAVAILABLE");
-    assert_eq!(ErrorCode::CacheKeyNotFound.to_string(), "CACHE_KEY_NOT_FOUND");
+    assert_eq!(
+        ErrorCode::CacheKeyNotFound.to_string(),
+        "CACHE_KEY_NOT_FOUND"
+    );
     assert_eq!(ErrorCode::ValidationFailed.to_string(), "VALIDATION_FAILED");
     assert_eq!(ErrorCode::Conflict.to_string(), "CONFLICT");
-    assert_eq!(ErrorCode::RateLimitExceeded.to_string(), "RATE_LIMIT_EXCEEDED");
+    assert_eq!(
+        ErrorCode::RateLimitExceeded.to_string(),
+        "RATE_LIMIT_EXCEEDED"
+    );
     assert_eq!(ErrorCode::InternalError.to_string(), "INTERNAL_ERROR");
 }
 
@@ -28,24 +61,51 @@ fn test_error_code_category_mapping() {
     assert_eq!(ErrorCode::AuthInvalidToken.category(), ErrorCategory::Auth);
     assert_eq!(ErrorCode::AuthExpiredToken.category(), ErrorCategory::Auth);
     assert_eq!(ErrorCode::AuthMissingToken.category(), ErrorCategory::Auth);
-    assert_eq!(ErrorCode::AuthInsufficientScope.category(), ErrorCategory::Auth);
+    assert_eq!(
+        ErrorCode::AuthInsufficientScope.category(),
+        ErrorCategory::Auth
+    );
 
-    assert_eq!(ErrorCode::StorageNotFound.category(), ErrorCategory::Storage);
-    assert_eq!(ErrorCode::StorageUploadFailed.category(), ErrorCategory::Storage);
-    assert_eq!(ErrorCode::StorageDeleteFailed.category(), ErrorCategory::Storage);
+    assert_eq!(
+        ErrorCode::StorageNotFound.category(),
+        ErrorCategory::Storage
+    );
+    assert_eq!(
+        ErrorCode::StorageUploadFailed.category(),
+        ErrorCategory::Storage
+    );
+    assert_eq!(
+        ErrorCode::StorageDeleteFailed.category(),
+        ErrorCategory::Storage
+    );
 
-    assert_eq!(ErrorCode::DbConnectionFailed.category(), ErrorCategory::Database);
-    assert_eq!(ErrorCode::DbRecordNotFound.category(), ErrorCategory::Database);
-    assert_eq!(ErrorCode::DbConstraintViolation.category(), ErrorCategory::Database);
+    assert_eq!(
+        ErrorCode::DbConnectionFailed.category(),
+        ErrorCategory::Database
+    );
+    assert_eq!(
+        ErrorCode::DbRecordNotFound.category(),
+        ErrorCategory::Database
+    );
+    assert_eq!(
+        ErrorCode::DbConstraintViolation.category(),
+        ErrorCategory::Database
+    );
     assert_eq!(ErrorCode::DbQueryFailed.category(), ErrorCategory::Database);
 
     assert_eq!(ErrorCode::CacheUnavailable.category(), ErrorCategory::Cache);
     assert_eq!(ErrorCode::CacheKeyNotFound.category(), ErrorCategory::Cache);
 
-    assert_eq!(ErrorCode::ValidationFailed.category(), ErrorCategory::Validation);
+    assert_eq!(
+        ErrorCode::ValidationFailed.category(),
+        ErrorCategory::Validation
+    );
 
     assert_eq!(ErrorCode::Conflict.category(), ErrorCategory::Internal);
-    assert_eq!(ErrorCode::RateLimitExceeded.category(), ErrorCategory::Internal);
+    assert_eq!(
+        ErrorCode::RateLimitExceeded.category(),
+        ErrorCategory::Internal
+    );
     assert_eq!(ErrorCode::InternalError.category(), ErrorCategory::Internal);
 }
 
