@@ -634,6 +634,7 @@ name = "error_core"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "serde_json",
  "thiserror 1.0.69",
  "tonic 0.14.6",
  "tracing",

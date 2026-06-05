@@ -77,3 +77,5 @@ pub fn registrar(err: &AppError, ctx: &ErrorContext) {
         }
     }
 }
+
+
