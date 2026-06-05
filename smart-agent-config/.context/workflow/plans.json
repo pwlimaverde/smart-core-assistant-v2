@@ -1,18 +1,14 @@
 {
-  "active": [],
-  "completed": [
+  "active": [
     {
-      "slug": "tratamento-de-erros",
-      "path": "plans/archive/tratamento-de-erros/tratamento-de-erros.md",
-      "title": "Crate `error_core` — Tratamento de Erros Rastreável",
+      "slug": "refator-arquitetura-modular",
+      "path": "plans/refator-arquitetura-modular.md",
+      "title": "Refator de Arquitetura Modular por Contrato (FlatBuffers/UDS + gRPC fallback)",
       "summary": "Plano **canônico** (leve). A verdade técnica detalhada está nos artefatos abaixo.",
-      "linkedAt": "2026-06-04T23:44:34.849Z",
-      "status": "completed",
-      "approval_status": "approved",
-      "approved_at": "2026-06-04T23:44:53.404Z",
-      "approved_by": "architect",
-      "archived_at": "2026-06-05T01:03:35.000Z"
+      "linkedAt": "2026-06-05T20:38:12.794Z",
+      "status": "active"
     }
   ],
-  "primary": null
+  "completed": [],
+  "primary": "refator-arquitetura-modular"
 }

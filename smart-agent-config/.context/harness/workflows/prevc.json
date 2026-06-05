@@ -1,188 +1,92 @@
 {
   "version": 2,
   "workflowType": "prevc",
-  "updatedAt": "2026-06-05T00:12:10.452Z",
+  "updatedAt": "2026-06-05T20:38:31.748Z",
   "status": {
     "project": {
-      "name": "tratamento-de-erros",
-      "scale": 2,
-      "started": "2026-06-04T23:44:31.336Z",
-      "current_phase": "V",
+      "name": "refator-arquitetura-modular",
+      "scale": 3,
+      "started": "2026-06-05T20:38:08.686Z",
+      "current_phase": "R",
       "settings": {
         "autonomous_mode": false,
         "require_plan": true,
         "require_approval": true
       },
-      "plan": "tratamento-de-erros"
+      "plan": "refator-arquitetura-modular"
     },
     "phases": {
       "P": {
         "status": "completed",
-        "started_at": "2026-06-04T23:44:31.336Z",
-        "completed_at": "2026-06-04T23:44:40.806Z",
+        "started_at": "2026-06-05T20:38:08.686Z",
+        "completed_at": "2026-06-05T20:38:17.310Z",
         "outputs": [
           {
-            "path": ".context/plans/tratamento-de-erros.md",
+            "path": "./.context/plans/refator-arquitetura-modular.md",
             "status": "filled"
           },
           {
-            "path": ".context/plans/tratamento-de-erros/plano_completo_tratamento-de-erros.md",
+            "path": "./.context/plans/refator-arquitetura-modular/plano_completo_refator-arquitetura-modular.md",
             "status": "filled"
           },
           {
-            "path": ".context/plans/tratamento-de-erros/info_aux_tratamento-de-erros.md",
+            "path": "./.context/plans/refator-arquitetura-modular/info_aux_refator-arquitetura-modular.md",
             "status": "filled"
           }
         ]
       },
       "R": {
-        "status": "completed",
-        "started_at": "2026-06-04T23:44:40.810Z",
-        "completed_at": "2026-06-04T23:44:57.077Z",
-        "outputs": [
-          {
-            "path": ".context/plans/tratamento-de-erros.md",
-            "status": "filled"
-          },
-          {
-            "path": ".context/plans/tratamento-de-erros/plano_completo_tratamento-de-erros.md",
-            "status": "filled"
-          },
-          {
-            "path": ".context/plans/tratamento-de-erros/info_aux_tratamento-de-erros.md",
-            "status": "filled"
-          }
-        ]
+        "status": "in_progress",
+        "started_at": "2026-06-05T20:38:17.313Z"
       },
       "E": {
-        "status": "completed",
-        "started_at": "2026-06-04T23:44:57.079Z",
-        "completed_at": "2026-06-05T00:12:05.992Z",
-        "outputs": [
-          {
-            "path": "server/Cargo.toml",
-            "status": "filled"
-          },
-          {
-            "path": "server/crates/error_core/Cargo.toml",
-            "status": "filled"
-          },
-          {
-            "path": "server/crates/error_core/src/lib.rs",
-            "status": "filled"
-          },
-          {
-            "path": "server/crates/error_core/src/code.rs",
-            "status": "filled"
-          },
-          {
-            "path": "server/crates/error_core/src/error.rs",
-            "status": "filled"
-          },
-          {
-            "path": "server/crates/error_core/src/report.rs",
-            "status": "filled"
-          },
-          {
-            "path": "server/crates/error_core/src/transport.rs",
-            "status": "filled"
-          }
-        ]
+        "status": "pending"
       },
       "V": {
-        "status": "completed",
-        "started_at": "2026-06-05T00:12:06.006Z",
-        "completed_at": "2026-06-05T00:12:10.440Z"
+        "status": "pending"
       },
       "C": {
-        "status": "skipped",
-        "reason": "Not required for scale MEDIUM"
+        "status": "pending"
       }
     },
     "agents": {},
     "roles": {},
     "approval": {
       "plan_created": true,
-      "plan_approved": true,
-      "approved_by": "architect",
-      "approved_at": "2026-06-04T23:44:53.404Z",
-      "approval_notes": "Plano canônico reestruturado pela skill plan-restructuring: 7 correções aplicadas (tonic no workspace, AppError com String payload, Display para ErrorCode, AuthInsufficientScope separado, RateLimitExceeded/Conflict adicionados, testes feature-gated, severity composta). Design de tipos revisado e aprovado."
+      "plan_approved": false
     },
     "execution": {
       "history": [
         {
-          "timestamp": "2026-06-04T23:44:31.336Z",
+          "timestamp": "2026-06-05T20:38:08.686Z",
           "phase": "P",
           "action": "started"
         },
         {
-          "timestamp": "2026-06-04T23:44:31.346Z",
-          "phase": "C",
-          "action": "phase_skipped"
-        },
-        {
-          "timestamp": "2026-06-04T23:44:34.853Z",
+          "timestamp": "2026-06-05T20:38:12.798Z",
           "phase": "P",
           "action": "plan_linked",
-          "plan": "tratamento-de-erros"
+          "plan": "refator-arquitetura-modular"
         },
         {
-          "phase": "P",
-          "action": "plan_phase_updated",
-          "plan": "tratamento-de-erros",
-          "description": "Plan phase phase-p updated to completed",
-          "timestamp": "2026-06-04T23:44:37.906Z"
-        },
-        {
-          "timestamp": "2026-06-04T23:44:40.806Z",
+          "timestamp": "2026-06-05T20:38:17.310Z",
           "phase": "P",
           "action": "completed"
         },
         {
-          "timestamp": "2026-06-04T23:44:40.810Z",
+          "timestamp": "2026-06-05T20:38:17.313Z",
           "phase": "R",
           "action": "started"
-        },
-        {
-          "timestamp": "2026-06-04T23:44:53.404Z",
-          "phase": "R",
-          "action": "plan_approved",
-          "approved_by": "architect"
-        },
-        {
-          "timestamp": "2026-06-04T23:44:57.077Z",
-          "phase": "R",
-          "action": "completed"
-        },
-        {
-          "timestamp": "2026-06-04T23:44:57.079Z",
-          "phase": "E",
-          "action": "started"
-        },
-        {
-          "timestamp": "2026-06-05T00:12:05.992Z",
-          "phase": "E",
-          "action": "completed"
-        },
-        {
-          "timestamp": "2026-06-05T00:12:06.006Z",
-          "phase": "V",
-          "action": "started"
-        },
-        {
-          "timestamp": "2026-06-05T00:12:10.440Z",
-          "phase": "V",
-          "action": "completed"
         }
       ],
-      "last_activity": "2026-06-05T00:12:10.440Z",
-      "resume_context": "Fase V (Validação) concluída"
+      "last_activity": "2026-06-05T20:38:17.313Z",
+      "resume_context": "Fase R (Revisão) em progresso"
     }
   },
   "binding": {
-    "workflowName": "tratamento-de-erros",
-    "sessionId": "139863a8-baae-4236-a7eb-f83849d6dda4",
-    "createdAt": "2026-06-04T23:44:31.344Z",
-    "updatedAt": "2026-06-05T00:12:10.447Z"
+    "workflowName": "refator-arquitetura-modular",
+    "sessionId": "8f44857e-d0a4-4027-8e39-bb7d511c3d02",
+    "createdAt": "2026-06-05T20:38:08.693Z",
+    "updatedAt": "2026-06-05T20:38:17.321Z"
   }
 }
