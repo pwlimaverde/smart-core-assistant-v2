@@ -1,6 +1,6 @@
 ---
 type: skill
-name: Plan Restructuring
+name: Plan-Restructuring
 description: Etapa final de qualquer planejamento. Normaliza a origem do plano (conversa, doc_dev ou .context/plans) em um diretório próprio dentro de .context/plans/{feature}/, levanta libs internas e serviços externos, coleta documentação atual (PRIMEIRO consulta a central local doc_dev/libs/; só recorre a context7 quando o doc local falta/está desatualizado, e nesse caso atualiza o doc local; WebSearch/WebFetch para serviços externos) em info_aux_{feature}.md, reestrutura o plano completo, e por fim cria o plano canônico via MCP dotcontext (scaffoldPlan + workflow-init) referenciando esses arquivos e deixando o workflow pronto para implementação. Na conclusão, consolida o canônico dentro da pasta e move tudo para archive/.
 skillSlug: plan-restructuring
 phases: [P]

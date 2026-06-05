@@ -13,3 +13,4 @@ thiserror.workspace  = true
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+test_support = { path = "../test_support" }

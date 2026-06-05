@@ -4,6 +4,7 @@ members = [
     "crates/infrastructure_postgres",
     "crates/infrastructure_redis",
     "crates/observability",
+    "crates/test_support",
 ]
 
 [workspace.package]

@@ -1,0 +1,13 @@
+{
+  "phases": {
+    "phase-p": {
+      "status": "completed",
+      "updatedAt": "2026-06-04T23:44:37.899Z"
+    }
+  },
+  "progress": 0,
+  "approvalStatus": "approved",
+  "approvedAt": "2026-06-04T23:44:53.404Z",
+  "approvedBy": "architect",
+  "lastUpdated": "2026-06-04T23:44:53.404Z"
+}
