@@ -3,7 +3,7 @@
 This directory contains plans for coordinating work across documentation and playbooks.
 
 ## Plan Queue
-1. [Tratamento De Erros](./tratamento-de-erros.md)
+1. [Refator Arquitetura Modular](./refator-arquitetura-modular.md)
 2. [User Auth Module](./user-auth-module.md)
 
 ## How To Create Or Update Plans
