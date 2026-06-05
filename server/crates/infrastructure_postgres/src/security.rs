@@ -1,5 +1,7 @@
 use uuid::Uuid;
 
+use crate::errors::DbError;
+
 /// Contexto de requisição com identidade do usuário e escopos de permissão.
 /// Construído pelo middleware JWT (futuro runtime_api) e injetado como Extension do Axum.
 #[derive(Debug, Clone)]
@@ -28,6 +30,25 @@ impl RequestContext {
             return true;
         }
         self.flow_permissions.contains(&flow_id)
+    }
+
+    /// Exige que o usuário possua **ao menos um** dos `escopos` informados.
+    ///
+    /// Ponto único de checagem de autorização dos repositórios: em caso de negação,
+    /// registra um aviso de auditoria (`warn`) correlacionado por `tenant_id`/`user_id`
+    /// — para captura pelas ferramentas de observabilidade — e devolve
+    /// [`DbError::PermissionDenied`].
+    pub fn exigir_qualquer(&self, escopos: &[&str]) -> Result<(), DbError> {
+        if escopos.iter().any(|e| self.has_permission(e)) {
+            return Ok(());
+        }
+        tracing::warn!(
+            user_id = self.user_id,
+            tenant_id = %self.tenant_id,
+            escopos_exigidos = ?escopos,
+            "permissão negada para a operação solicitada"
+        );
+        Err(DbError::PermissionDenied)
     }
 }
 
@@ -70,5 +91,23 @@ mod tests {
         let ctx_tenant_admin = get_test_context(vec!["tenant:admin"], vec![1]);
         assert!(ctx_tenant_admin.has_flow_permission(1));
         assert!(ctx_tenant_admin.has_flow_permission(99));
+    }
+
+    #[test]
+    fn test_exigir_qualquer_concede_e_nega() {
+        let ctx = get_test_context(vec!["clientes:read"], vec![]);
+
+        // Possui o escopo exigido → Ok.
+        assert!(ctx.exigir_qualquer(&["clientes:read", "tenant:admin"]).is_ok());
+
+        // Não possui nenhum dos escopos → PermissionDenied.
+        let negado = ctx.exigir_qualquer(&["clientes:write", "tenant:admin"]);
+        assert!(matches!(negado, Err(DbError::PermissionDenied)));
+
+        // Lista vazia nega por definição (nenhum escopo satisfaz).
+        assert!(matches!(
+            ctx.exigir_qualquer(&[]),
+            Err(DbError::PermissionDenied)
+        ));
     }
 }

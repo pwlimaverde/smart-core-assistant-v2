@@ -22,6 +22,7 @@ impl std::fmt::Debug for CipherManager {
 
 impl CipherManager {
     /// Carrega a chave mestra (32 bytes) da variável de ambiente ENCRYPTION_KEY (base64).
+    #[tracing::instrument(err)]
     pub fn new_from_env() -> Result<Self, DbError> {
         let key_str = std::env::var("ENCRYPTION_KEY")
             .map_err(|_| DbError::ConfigError("ENCRYPTION_KEY não configurada".into()))?;
@@ -40,6 +41,8 @@ impl CipherManager {
 
     /// Encripta `plaintext` e retorna (ciphertext_b64, nonce_b64, tag_b64).
     /// Nonce de 96 bits gerado via OsRng (CSPRNG do SO) — nunca reutilizar.
+    // `plaintext` é segredo: jamais logar.
+    #[tracing::instrument(level = "debug", skip(self, plaintext), err)]
     pub fn encrypt(&self, plaintext: &[u8]) -> Result<(String, String, String), DbError> {
         let cipher = Aes256Gcm::new_from_slice(&self.key)
             .map_err(|_| DbError::CryptoError("falha ao inicializar AES-GCM".into()))?;
@@ -53,6 +56,7 @@ impl CipherManager {
     }
 
     /// Descriptografa a partir dos três componentes base64.
+    #[tracing::instrument(level = "debug", skip(self, ct_b64, nonce_b64, tag_b64), err)]
     pub fn decrypt(
         &self,
         ct_b64: &str,
@@ -80,6 +84,7 @@ impl CipherManager {
 
     /// Descriptografa uma entrada do dicionário JSONB api_keys.
     /// Retorna String vazia se a chave não estiver presente.
+    #[tracing::instrument(level = "debug", skip(self, api_keys), fields(key_name = %key_name), err)]
     pub fn decrypt_from_jsonb(
         &self,
         api_keys: &serde_json::Value,

@@ -33,6 +33,12 @@ impl RefreshTokenStore {
     }
 
     /// Armazena um novo refresh token (hash) e o associa à sua família, com TTL.
+    // `token_hash` é omitido do span: é material de credencial, nunca deve ir para o log.
+    #[tracing::instrument(
+        skip(self, token_hash),
+        fields(user_id, tenant_id = ?tenant_id, family_id = %family_id, ttl_segundos),
+        err
+    )]
     pub async fn armazenar(
         &mut self,
         token_hash: &str,
@@ -68,6 +74,7 @@ impl RefreshTokenStore {
     ///
     /// - `NotFound`: token inexistente/expirado/revogado.
     /// - `TokenReuse`: token já rotacionado → a família inteira é revogada antes de retornar.
+    #[tracing::instrument(skip(self, token_hash))]
     pub async fn validar_e_rotacionar(
         &mut self,
         token_hash: &str,
@@ -75,11 +82,19 @@ impl RefreshTokenStore {
         let chave = keys::chave_refresh(token_hash);
         let valor: Option<String> = self.con.get(&chave).await?;
         let Some(serializado) = valor else {
+            tracing::debug!("refresh token inexistente, expirado ou já revogado");
             return Err(RedisError::NotFound);
         };
         let registro: RegistroRefresh = serde_json::from_str(&serializado)?;
 
         if registro.rotacionado {
+            // Evento de segurança: reuso de token rotacionado indica possível roubo.
+            tracing::warn!(
+                user_id = registro.user_id,
+                tenant_id = ?registro.tenant_id,
+                family_id = %registro.family_id,
+                "reuso de refresh token detectado — revogando a família inteira"
+            );
             self.revogar_familia(&registro.family_id).await?;
             return Err(RedisError::TokenReuse);
         }
@@ -100,12 +115,14 @@ impl RefreshTokenStore {
     }
 
     /// Revoga um refresh token específico (remove o registro).
+    #[tracing::instrument(skip(self, token_hash), err)]
     pub async fn revogar(&mut self, token_hash: &str) -> Result<(), RedisError> {
         let _: i64 = self.con.del(keys::chave_refresh(token_hash)).await?;
         Ok(())
     }
 
     /// Revoga todos os refresh tokens de uma família (logout global / resposta a reuso).
+    #[tracing::instrument(skip(self), fields(family_id = %family_id), err)]
     pub async fn revogar_familia(&mut self, family_id: &str) -> Result<(), RedisError> {
         let chave_fam = keys::chave_refresh_familia(family_id);
         let membros: Vec<String> = self.con.smembers(&chave_fam).await?;
@@ -113,6 +130,7 @@ impl RefreshTokenStore {
             let _: i64 = self.con.del(keys::chave_refresh(hash)).await?;
         }
         let _: i64 = self.con.del(&chave_fam).await?;
+        tracing::info!(tokens_revogados = membros.len(), "família de refresh tokens revogada");
         Ok(())
     }
 }
@@ -128,6 +146,8 @@ impl TokenBlocklist {
     }
 
     /// Bloqueia um `jti` por `ttl_segundos` (deve ser o tempo restante de vida do access token).
+    // `jti` identifica um token específico; é omitido do span por prudência.
+    #[tracing::instrument(skip(self, jti), fields(ttl_segundos), err)]
     pub async fn bloquear(&mut self, jti: &str, ttl_segundos: u64) -> Result<(), RedisError> {
         let _: () = redis::cmd("SET")
             .arg(keys::chave_blocklist(jti))
@@ -140,6 +160,7 @@ impl TokenBlocklist {
     }
 
     /// Indica se o `jti` está na blocklist.
+    #[tracing::instrument(level = "debug", skip(self, jti), err)]
     pub async fn esta_bloqueado(&mut self, jti: &str) -> Result<bool, RedisError> {
         let existe: bool = self.con.exists(keys::chave_blocklist(jti)).await?;
         Ok(existe)

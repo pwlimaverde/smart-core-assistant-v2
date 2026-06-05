@@ -1235,6 +1235,7 @@ dependencies = [
  "base64",
  "chrono",
  "dashmap",
+ "error_core",
  "pgvector",
  "rust_decimal",
  "secrecy",
@@ -1253,12 +1254,14 @@ name = "infrastructure_redis"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "error_core",
  "redis",
  "serde",
  "serde_json",
  "test_support",
  "thiserror 1.0.69",
  "tokio",
+ "tracing",
  "uuid",
 ]
 
