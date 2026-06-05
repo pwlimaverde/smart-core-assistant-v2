@@ -1,7 +1,10 @@
 use observability::{init_telemetry, shutdown_telemetry};
 
-#[test]
-fn test_telemetry_initialization_flow() {
+// O exporter OTLP é instalado com `install_batch(runtime::Tokio)`, que spawna a task de
+// exportação em background — logo exige um runtime Tokio ativo. Usamos o flavor multi_thread
+// para que o flush no shutdown não bloqueie o agendador single-thread.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn test_telemetry_initialization_flow() {
     // 1. Arrange: Define o endpoint da OTel fictício para evitar pânico de falta de env
     std::env::set_var("OTEL_EXPORTER_OTLP_ENDPOINT", "http://localhost:4317");
 

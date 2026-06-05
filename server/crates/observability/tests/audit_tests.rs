@@ -116,18 +116,24 @@ async fn test_audit_logger_async_fire_and_forget() {
         None,
     );
 
-    // 3. Aguarda um curto intervalo para que as tarefas em background completem a inserção.
-    tokio::time::sleep(Duration::from_millis(150)).await;
-
-    // 4. Assert: Busca e valida a inserção no banco de dados usando o pool administrativo (bypass RLS).
-    // Verifica o log de auditoria do Tenant
-    let tenant_logs = sqlx::query_as::<_, AuditLogEntry>(
-        "SELECT * FROM audit_log WHERE tenant_id = $1 AND event = 'TEST_TENANT_EVENT'"
-    )
-    .bind(tenant.id)
-    .fetch_all(&admin_pool)
-    .await
-    .expect("Falha ao consultar logs do tenant");
+    // 3 + 4. Assert: as inserções são fire-and-forget (tokio::spawn). Contra o banco remoto
+    // (via túnel SSH) a latência pode exceder qualquer sleep fixo, então aguardamos a row
+    // aparecer com polling e timeout (~5s) em vez de assumir um tempo fixo. Consulta via
+    // pool administrativo (bypass RLS).
+    let mut tenant_logs = Vec::new();
+    for _ in 0..50 {
+        tenant_logs = sqlx::query_as::<_, AuditLogEntry>(
+            "SELECT * FROM audit_log WHERE tenant_id = $1 AND event = 'TEST_TENANT_EVENT'",
+        )
+        .bind(tenant.id)
+        .fetch_all(&admin_pool)
+        .await
+        .expect("Falha ao consultar logs do tenant");
+        if tenant_logs.len() == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 
     assert_eq!(tenant_logs.len(), 1, "Deveria ter persistido exatamente 1 log para o tenant");
     assert_eq!(tenant_logs[0].tenant_id, Some(tenant.id));
@@ -137,14 +143,21 @@ async fn test_audit_logger_async_fire_and_forget() {
     assert_eq!(tenant_logs[0].message, "Mensagem de teste assíncrono de tenant");
     assert_eq!(tenant_logs[0].context, context);
 
-    // Verifica o log de auditoria Global
-    let global_logs = sqlx::query_as::<_, AuditLogEntry>(
-        "SELECT * FROM audit_log WHERE tenant_id IS NULL AND event = $1"
-    )
-    .bind(&unique_global_event)
-    .fetch_all(&admin_pool)
-    .await
-    .expect("Falha ao consultar logs globais");
+    // Verifica o log de auditoria Global (mesmo polling tolerante a latência).
+    let mut global_logs = Vec::new();
+    for _ in 0..50 {
+        global_logs = sqlx::query_as::<_, AuditLogEntry>(
+            "SELECT * FROM audit_log WHERE tenant_id IS NULL AND event = $1",
+        )
+        .bind(&unique_global_event)
+        .fetch_all(&admin_pool)
+        .await
+        .expect("Falha ao consultar logs globais");
+        if global_logs.len() == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 
     assert_eq!(global_logs.len(), 1, "Deveria ter persistido exatamente 1 log global");
     assert_eq!(global_logs[0].tenant_id, None);

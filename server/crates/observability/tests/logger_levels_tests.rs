@@ -117,18 +117,24 @@ async fn test_audit_logger_tenant_warn_and_error_levels() {
         Some(trace_id_error.clone()),
     );
 
-    // Aguarda um curto intervalo para que as tarefas em background completem a inserção.
-    tokio::time::sleep(Duration::from_millis(200)).await;
-
-    // 3. Assert: Busca e valida a inserção no banco de dados usando o pool administrativo (bypass RLS).
+    // 3. Assert: as inserções são fire-and-forget (tokio::spawn). Contra o banco remoto (via
+    // túnel SSH) a latência pode exceder qualquer sleep fixo, então aguardamos a row aparecer
+    // com polling e timeout (~5s). Consulta via pool administrativo (bypass RLS).
     // Verifica o log de WARN
-    let warn_logs = sqlx::query_as::<_, AuditLogEntry>(
-        "SELECT * FROM audit_log WHERE tenant_id = $1 AND event = 'TEST_TENANT_WARN'"
-    )
-    .bind(tenant.id)
-    .fetch_all(&admin_pool)
-    .await
-    .expect("Falha ao consultar logs de warn");
+    let mut warn_logs = Vec::new();
+    for _ in 0..50 {
+        warn_logs = sqlx::query_as::<_, AuditLogEntry>(
+            "SELECT * FROM audit_log WHERE tenant_id = $1 AND event = 'TEST_TENANT_WARN'",
+        )
+        .bind(tenant.id)
+        .fetch_all(&admin_pool)
+        .await
+        .expect("Falha ao consultar logs de warn");
+        if warn_logs.len() == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 
     assert_eq!(warn_logs.len(), 1, "Deveria ter persistido exatamente 1 log de WARN");
     assert_eq!(warn_logs[0].tenant_id, Some(tenant.id));
@@ -137,14 +143,21 @@ async fn test_audit_logger_tenant_warn_and_error_levels() {
     assert_eq!(warn_logs[0].message, "Mensagem de warn de inquilino");
     assert_eq!(warn_logs[0].context, context);
 
-    // Verifica o log de ERROR
-    let error_logs = sqlx::query_as::<_, AuditLogEntry>(
-        "SELECT * FROM audit_log WHERE tenant_id = $1 AND event = 'TEST_TENANT_ERROR'"
-    )
-    .bind(tenant.id)
-    .fetch_all(&admin_pool)
-    .await
-    .expect("Falha ao consultar logs de erro");
+    // Verifica o log de ERROR (mesmo polling tolerante a latência).
+    let mut error_logs = Vec::new();
+    for _ in 0..50 {
+        error_logs = sqlx::query_as::<_, AuditLogEntry>(
+            "SELECT * FROM audit_log WHERE tenant_id = $1 AND event = 'TEST_TENANT_ERROR'",
+        )
+        .bind(tenant.id)
+        .fetch_all(&admin_pool)
+        .await
+        .expect("Falha ao consultar logs de erro");
+        if error_logs.len() == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 
     assert_eq!(error_logs.len(), 1, "Deveria ter persistido exatamente 1 log de ERROR");
     assert_eq!(error_logs[0].tenant_id, Some(tenant.id));
@@ -201,18 +214,23 @@ async fn test_audit_logger_global_warn_and_error_levels() {
         None,
     );
 
-    // Aguarda gravação
-    tokio::time::sleep(Duration::from_millis(200)).await;
-
-    // 3. Assert: Valida logs globais no banco de dados.
+    // 3. Assert: Valida logs globais no banco de dados, aguardando as inserções
+    // fire-and-forget com polling tolerante a latência (~5s) em vez de sleep fixo.
     // Valida WARN global
-    let warn_logs = sqlx::query_as::<_, AuditLogEntry>(
-        "SELECT * FROM audit_log WHERE tenant_id IS NULL AND event = $1"
-    )
-    .bind(&event_warn)
-    .fetch_all(&admin_pool)
-    .await
-    .expect("Falha ao consultar logs de warn globais");
+    let mut warn_logs = Vec::new();
+    for _ in 0..50 {
+        warn_logs = sqlx::query_as::<_, AuditLogEntry>(
+            "SELECT * FROM audit_log WHERE tenant_id IS NULL AND event = $1",
+        )
+        .bind(&event_warn)
+        .fetch_all(&admin_pool)
+        .await
+        .expect("Falha ao consultar logs de warn globais");
+        if warn_logs.len() == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 
     assert_eq!(warn_logs.len(), 1, "Deveria ter persistido 1 log global de WARN");
     assert_eq!(warn_logs[0].tenant_id, None);
@@ -220,14 +238,21 @@ async fn test_audit_logger_global_warn_and_error_levels() {
     assert_eq!(warn_logs[0].message, "Mensagem global de warn");
     assert_eq!(warn_logs[0].context, context);
 
-    // Valida ERROR global
-    let error_logs = sqlx::query_as::<_, AuditLogEntry>(
-        "SELECT * FROM audit_log WHERE tenant_id IS NULL AND event = $1"
-    )
-    .bind(&event_error)
-    .fetch_all(&admin_pool)
-    .await
-    .expect("Falha ao consultar logs de erro globais");
+    // Valida ERROR global (mesmo polling tolerante a latência).
+    let mut error_logs = Vec::new();
+    for _ in 0..50 {
+        error_logs = sqlx::query_as::<_, AuditLogEntry>(
+            "SELECT * FROM audit_log WHERE tenant_id IS NULL AND event = $1",
+        )
+        .bind(&event_error)
+        .fetch_all(&admin_pool)
+        .await
+        .expect("Falha ao consultar logs de erro globais");
+        if error_logs.len() == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
 
     assert_eq!(error_logs.len(), 1, "Deveria ter persistido 1 log global de ERROR");
     assert_eq!(error_logs[0].tenant_id, None);

@@ -3,9 +3,15 @@
 ///
 /// # Exemplos
 /// ```rust
+/// use observability::tenant_span;
+///
+/// let tenant_id = uuid::Uuid::new_v4();
+/// let trace_id = "trace-abc-123";
+///
 /// // Criando span apenas com tenant_id
 /// let span = tenant_span!(tenant_id, "processar_mensagem");
 /// let _guard = span.enter();
+/// drop(_guard);
 ///
 /// // Criando span com tenant_id e trace_id correlacionados
 /// let span = tenant_span!(tenant_id, trace_id, "chamar_ia");

@@ -14,3 +14,5 @@ grpc = ["dep:tonic"]
 
 [dev-dependencies]
 tracing-subscriber = { workspace = true }
+serde_json         = { workspace = true }
+

@@ -1,0 +1,8 @@
+# Garante quebras de linha LF consistentes entre Windows (dev) e Linux (servidor).
+# Crítico para as migrations: o SQLx calcula o checksum pelos bytes do arquivo, então
+# CRLF vs LF geraria VersionMismatch ao aplicar as mesmas migrations em ambientes
+# diferentes (ex.: dev no Windows e app rodando no Docker da Hostinger).
+*.sql text eol=lf
+
+# Scripts de shell sempre LF (executados no servidor Linux).
+*.sh text eol=lf
