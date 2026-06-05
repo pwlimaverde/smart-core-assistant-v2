@@ -47,6 +47,7 @@ pub struct PostgresMovimentoFluxoRepository;
 
 #[async_trait]
 impl MovimentoFluxoRepository for PostgresMovimentoFluxoRepository {
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, etapa_destino_id = etapa_destino_id, automatico = automatico))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -90,6 +91,7 @@ impl MovimentoFluxoRepository for PostgresMovimentoFluxoRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
     async fn listar_por_atendimento(
         &self,
         tx: &mut Transaction<'_, Postgres>,

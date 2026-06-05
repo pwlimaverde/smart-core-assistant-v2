@@ -60,6 +60,7 @@ pub struct PostgresQueryComposeRepository;
 
 #[async_trait]
 impl QueryComposeRepository for PostgresQueryComposeRepository {
+    #[tracing::instrument(skip_all, fields(tag = %tag, grupo = %grupo))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -71,9 +72,7 @@ impl QueryComposeRepository for PostgresQueryComposeRepository {
         comportamento: &str,
         embedding: Option<Vec<f32>>,
     ) -> Result<QueryCompose, DbError> {
-        if !ctx.has_permission("treinamento:write") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["treinamento:write", "tenant:admin"])?;
         let vec = embedding.map(Vector::from);
         let row = sqlx::query!(
             r#"INSERT INTO treinamento_querycompose
@@ -105,14 +104,13 @@ impl QueryComposeRepository for PostgresQueryComposeRepository {
         })
     }
 
+    #[tracing::instrument(skip_all)]
     async fn listar_por_tenant(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
     ) -> Result<Vec<QueryCompose>, DbError> {
-        if !ctx.has_permission("treinamento:read") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["treinamento:read", "tenant:admin"])?;
         let rows = sqlx::query!(
             r#"SELECT id, tenant_id, tag, grupo, descricao, exemplo, comportamento,
                       created_at, updated_at
@@ -139,6 +137,7 @@ impl QueryComposeRepository for PostgresQueryComposeRepository {
             .collect())
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %tenant_id))]
     async fn buscar_comportamento_similar(
         &self,
         tx: &mut Transaction<'_, Postgres>,

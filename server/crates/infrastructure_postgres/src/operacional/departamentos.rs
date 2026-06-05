@@ -56,6 +56,7 @@ pub struct PostgresDepartamentoRepository;
 
 #[async_trait]
 impl DepartamentoRepository for PostgresDepartamentoRepository {
+    #[tracing::instrument(skip_all, fields(nome = %nome))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -63,9 +64,7 @@ impl DepartamentoRepository for PostgresDepartamentoRepository {
         nome: &str,
         descricao: Option<&str>,
     ) -> Result<Departamento, DbError> {
-        if !ctx.has_permission("operacional:admin") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
         let row = sqlx::query_as!(
             Departamento,
             r#"INSERT INTO oraculo_departamento (tenant_id, nome, descricao)
@@ -82,6 +81,7 @@ impl DepartamentoRepository for PostgresDepartamentoRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(id = id))]
     async fn buscar_por_id(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -102,14 +102,13 @@ impl DepartamentoRepository for PostgresDepartamentoRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all)]
     async fn listar_ativos(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
     ) -> Result<Vec<Departamento>, DbError> {
-        if !ctx.has_permission("operacional:read") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["operacional:read", "tenant:admin"])?;
         let rows = sqlx::query_as!(
             Departamento,
             r#"SELECT id, tenant_id, nome, slug, descricao, ativo,
@@ -124,6 +123,8 @@ impl DepartamentoRepository for PostgresDepartamentoRepository {
         Ok(rows)
     }
 
+    // `api_key` é credencial: `skip_all`.
+    #[tracing::instrument(skip_all)]
     async fn buscar_por_api_key(
         &self,
         tx: &mut Transaction<'_, Postgres>,

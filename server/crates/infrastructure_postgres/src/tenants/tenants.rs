@@ -156,6 +156,7 @@ pub struct PostgresTenantInviteRepository;
 
 #[async_trait]
 impl TenantRepository for PostgresTenantRepository {
+    #[tracing::instrument(skip_all, fields(tenant_id = %tenant_id))]
     async fn buscar_por_id(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -176,6 +177,7 @@ impl TenantRepository for PostgresTenantRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(slug = %slug))]
     async fn buscar_por_slug(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -195,6 +197,7 @@ impl TenantRepository for PostgresTenantRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(slug = %slug))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -236,6 +239,7 @@ impl TenantRepository for PostgresTenantRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %tenant_id, active = active))]
     async fn atualizar_status(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -243,9 +247,7 @@ impl TenantRepository for PostgresTenantRepository {
         tenant_id: Uuid,
         active: bool,
     ) -> Result<(), DbError> {
-        if !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["tenant:admin"])?;
         sqlx::query!(
             "UPDATE tenants_tenant SET active = $1, updated_at = NOW() WHERE id = $2",
             active,
@@ -256,6 +258,7 @@ impl TenantRepository for PostgresTenantRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, fields(setup_completed = setup_completed, onboarding_step = onboarding_step))]
     async fn atualizar_setup(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -263,9 +266,7 @@ impl TenantRepository for PostgresTenantRepository {
         setup_completed: bool,
         onboarding_step: i32,
     ) -> Result<(), DbError> {
-        if !ctx.has_permission("configuracoes:write") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["configuracoes:write", "tenant:admin"])?;
         sqlx::query!(
             r#"UPDATE tenants_tenant
                SET setup_completed = $1, onboarding_step = $2, updated_at = NOW()
@@ -282,6 +283,7 @@ impl TenantRepository for PostgresTenantRepository {
 
 #[async_trait]
 impl TenantUserRepository for PostgresTenantUserRepository {
+    #[tracing::instrument(skip_all, fields(user_id = user_id))]
     async fn buscar_por_user_id(
         &self,
         admin_pool: &PgPool,
@@ -299,6 +301,7 @@ impl TenantUserRepository for PostgresTenantUserRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(user_id = user_id, role = %role))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -306,9 +309,7 @@ impl TenantUserRepository for PostgresTenantUserRepository {
         user_id: i32,
         role: &str,
     ) -> Result<TenantUser, DbError> {
-        if !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["tenant:admin"])?;
         let row = sqlx::query_as!(
             TenantUser,
             r#"INSERT INTO tenants_tenantuser (user_id, tenant_id, role, created_by_id)
@@ -329,6 +330,8 @@ impl TenantUserRepository for PostgresTenantUserRepository {
 
 #[async_trait]
 impl TenantInviteRepository for PostgresTenantInviteRepository {
+    // `email`/`token` são sensíveis: `skip_all`.
+    #[tracing::instrument(skip_all, fields(role = %role))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -339,9 +342,7 @@ impl TenantInviteRepository for PostgresTenantInviteRepository {
         token: &str,
         expires_at: DateTime<Utc>,
     ) -> Result<TenantInvite, DbError> {
-        if !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["tenant:admin"])?;
         let row = sqlx::query_as!(
             TenantInvite,
             r#"INSERT INTO tenants_tenantinvite
@@ -363,6 +364,8 @@ impl TenantInviteRepository for PostgresTenantInviteRepository {
         Ok(row)
     }
 
+    // `token` é o segredo do convite: `skip_all`.
+    #[tracing::instrument(skip_all)]
     async fn buscar_por_token(
         &self,
         admin_pool: &PgPool,
@@ -380,6 +383,7 @@ impl TenantInviteRepository for PostgresTenantInviteRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(invite_id = %invite_id))]
     async fn marcar_usado(&self, admin_pool: &PgPool, invite_id: Uuid) -> Result<(), DbError> {
         sqlx::query!(
             "UPDATE tenants_tenantinvite SET used = true WHERE id = $1",

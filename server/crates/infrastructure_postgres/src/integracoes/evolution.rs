@@ -93,6 +93,8 @@ pub struct PostgresEvolutionContactRepository;
 
 #[async_trait]
 impl EvolutionInstanceRepository for PostgresEvolutionInstanceRepository {
+    // `api_key` é segredo: `skip_all` garante que nenhum argumento entre no span.
+    #[tracing::instrument(skip_all)]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -100,9 +102,7 @@ impl EvolutionInstanceRepository for PostgresEvolutionInstanceRepository {
         name: &str,
         api_key: &str,
     ) -> Result<EvolutionInstance, DbError> {
-        if !ctx.has_permission("operacional:admin") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
         let row = sqlx::query_as!(
             EvolutionInstance,
             r#"INSERT INTO evolution_sync_instance (tenant_id, name, api_key)
@@ -120,6 +120,7 @@ impl EvolutionInstanceRepository for PostgresEvolutionInstanceRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all)]
     async fn buscar_por_name(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -141,6 +142,7 @@ impl EvolutionInstanceRepository for PostgresEvolutionInstanceRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(connection_state = %connection_state))]
     async fn atualizar_estado(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -163,6 +165,7 @@ impl EvolutionInstanceRepository for PostgresEvolutionInstanceRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     async fn listar_ativas(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -186,6 +189,7 @@ impl EvolutionInstanceRepository for PostgresEvolutionInstanceRepository {
 
 #[async_trait]
 impl EvolutionContactRepository for PostgresEvolutionContactRepository {
+    #[tracing::instrument(skip_all, fields(instance_id = instance_id))]
     async fn criar_ou_atualizar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -210,6 +214,7 @@ impl EvolutionContactRepository for PostgresEvolutionContactRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all)]
     async fn buscar_por_jid(
         &self,
         tx: &mut Transaction<'_, Postgres>,

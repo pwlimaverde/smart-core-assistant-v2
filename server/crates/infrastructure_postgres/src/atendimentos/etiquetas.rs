@@ -83,6 +83,7 @@ pub struct PostgresNotaRepository;
 
 #[async_trait]
 impl EtiquetaRepository for PostgresEtiquetaRepository {
+    #[tracing::instrument(skip_all, fields(nome = %nome))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -90,9 +91,7 @@ impl EtiquetaRepository for PostgresEtiquetaRepository {
         nome: &str,
         cor: Option<&str>,
     ) -> Result<Etiqueta, DbError> {
-        if !ctx.has_permission("atendimentos:write") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
         let cor_val = cor.unwrap_or("#a98f71");
         let row = sqlx::query_as!(
             Etiqueta,
@@ -109,6 +108,7 @@ impl EtiquetaRepository for PostgresEtiquetaRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all)]
     async fn listar_ativas(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -127,6 +127,7 @@ impl EtiquetaRepository for PostgresEtiquetaRepository {
         Ok(rows)
     }
 
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, etiqueta_id = etiqueta_id))]
     async fn aplicar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -146,6 +147,7 @@ impl EtiquetaRepository for PostgresEtiquetaRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, etiqueta_id = etiqueta_id))]
     async fn remover(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -168,6 +170,8 @@ impl EtiquetaRepository for PostgresEtiquetaRepository {
 
 #[async_trait]
 impl NotaRepository for PostgresNotaRepository {
+    // `texto` é conteúdo livre do atendente: `skip_all` evita logá-lo.
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -191,6 +195,7 @@ impl NotaRepository for PostgresNotaRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
     async fn listar_por_atendimento(
         &self,
         tx: &mut Transaction<'_, Postgres>,

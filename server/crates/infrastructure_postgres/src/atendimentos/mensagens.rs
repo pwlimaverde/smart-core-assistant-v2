@@ -76,6 +76,8 @@ pub struct PostgresMensagemRepository;
 
 #[async_trait]
 impl MensagemRepository for PostgresMensagemRepository {
+    // `conteudo` é mensagem do usuário (PII): `skip_all` evita registrá-lo.
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, tipo = %tipo))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -111,6 +113,7 @@ impl MensagemRepository for PostgresMensagemRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, limit = limit, offset = offset))]
     async fn listar_por_atendimento(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -119,9 +122,7 @@ impl MensagemRepository for PostgresMensagemRepository {
         limit: i64,
         offset: i64,
     ) -> Result<Vec<Mensagem>, DbError> {
-        if !ctx.has_permission("atendimentos:read") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
         let rows = sqlx::query_as!(
             Mensagem,
             r#"SELECT id, tenant_id, atendimento_id, tipo, conteudo, remetente,
@@ -143,6 +144,7 @@ impl MensagemRepository for PostgresMensagemRepository {
         Ok(rows)
     }
 
+    #[tracing::instrument(skip_all, fields(mensagem_id = mensagem_id))]
     async fn registrar_resposta_bot(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -165,6 +167,7 @@ impl MensagemRepository for PostgresMensagemRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
     async fn marcar_como_lida(
         &self,
         tx: &mut Transaction<'_, Postgres>,

@@ -43,6 +43,13 @@ pub struct NewAuditLogEntry {
 
 /// Insere um registro de auditoria associado a um inquilino (tenant).
 /// Esta função executa dentro da transação do inquilino que configura o RLS.
+// Sem `err`: o `AuditLogger` (crate observability) já registra falhas de persistência;
+// evita-se log duplicado mantendo apenas o span de correlação.
+#[tracing::instrument(
+    level = "debug",
+    skip(tx, entry),
+    fields(event = %entry.event, level = %entry.level, tenant_id = ?entry.tenant_id)
+)]
 pub async fn inserir_audit_log(
     tx: &mut Transaction<'_, Postgres>,
     entry: &NewAuditLogEntry,
@@ -72,6 +79,11 @@ pub async fn inserir_audit_log(
 
 /// Insere um registro de auditoria global (sem tenant, ex: superusuário/sistema)
 /// usando o pool administrativo que ignora ou bypassa o RLS.
+#[tracing::instrument(
+    level = "debug",
+    skip(admin_pool, entry),
+    fields(event = %entry.event, level = %entry.level)
+)]
 pub async fn inserir_audit_log_global(
     admin_pool: &PgPool,
     entry: &NewAuditLogEntry,
@@ -104,6 +116,7 @@ pub async fn inserir_audit_log_global(
 
 /// Busca registros de auditoria do inquilino (tenant) com paginação.
 /// Deve ser executado em transação configurada com o tenant_id para que o RLS filtre corretamente.
+#[tracing::instrument(level = "debug", skip(tx), fields(tenant_id = %tenant_id, limit, offset), err)]
 pub async fn buscar_audit_logs(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
@@ -130,6 +143,12 @@ pub async fn buscar_audit_logs(
 }
 
 /// Busca registros de auditoria do inquilino filtrados por evento.
+#[tracing::instrument(
+    level = "debug",
+    skip(tx),
+    fields(tenant_id = %tenant_id, event = %event, limit, offset),
+    err
+)]
 pub async fn buscar_audit_logs_por_evento(
     tx: &mut Transaction<'_, Postgres>,
     tenant_id: Uuid,
@@ -159,6 +178,12 @@ pub async fn buscar_audit_logs_por_evento(
 
 /// Busca todos os registros de auditoria do sistema (incluindo inquilinos e globais).
 /// Uso restrito do pool administrativo para dashboards de administração global.
+#[tracing::instrument(
+    level = "debug",
+    skip(admin_pool),
+    fields(event_filter = ?event_filter, limit, offset),
+    err
+)]
 pub async fn buscar_audit_logs_admin(
     admin_pool: &PgPool,
     event_filter: Option<&str>,
@@ -186,6 +211,7 @@ pub async fn buscar_audit_logs_admin(
 
 /// Busca apenas os registros de auditoria globais do sistema (onde tenant_id IS NULL).
 /// Uso restrito do pool administrativo.
+#[tracing::instrument(level = "debug", skip(admin_pool), fields(limit, offset), err)]
 pub async fn buscar_audit_logs_globais(
     admin_pool: &PgPool,
     limit: i64,
