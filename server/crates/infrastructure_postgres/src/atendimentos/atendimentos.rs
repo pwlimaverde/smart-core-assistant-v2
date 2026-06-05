@@ -94,6 +94,7 @@ pub struct PostgresAtendimentoRepository;
 
 #[async_trait]
 impl AtendimentoRepository for PostgresAtendimentoRepository {
+    #[tracing::instrument(skip_all, fields(contato_id = contato_id))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -103,9 +104,7 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         fluxo_id: Option<i32>,
         etapa_inicial_id: Option<i32>,
     ) -> Result<Atendimento, DbError> {
-        if !ctx.has_permission("atendimentos:write") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
         let row = sqlx::query_as!(
             Atendimento,
             r#"INSERT INTO oraculo_atendimento
@@ -127,6 +126,7 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(id = id))]
     async fn buscar_por_id(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -150,6 +150,7 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(status = %status, limit = limit))]
     async fn listar_por_status(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -158,9 +159,7 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         departamento_id: Option<i32>,
         limit: i64,
     ) -> Result<Vec<Atendimento>, DbError> {
-        if !ctx.has_permission("atendimentos:read") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
         let rows = sqlx::query_as!(
             Atendimento,
             r#"SELECT id, tenant_id, contato_id, departamento_id, fluxo_atendimento_id,
@@ -183,6 +182,7 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         Ok(rows)
     }
 
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, novo_status = %novo_status))]
     async fn atualizar_status(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -190,9 +190,7 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         atendimento_id: i32,
         novo_status: &str,
     ) -> Result<(), DbError> {
-        if !ctx.has_permission("atendimentos:write") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
         sqlx::query!(
             r#"UPDATE oraculo_atendimento
                SET status = $1::text,
@@ -208,6 +206,7 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, etapa_id = etapa_id))]
     async fn atualizar_etapa(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -216,9 +215,7 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         etapa_id: i32,
         atendente_id: Option<i32>,
     ) -> Result<(), DbError> {
-        if !ctx.has_permission("atendimentos:write") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
         sqlx::query!(
             r#"UPDATE oraculo_atendimento
                SET etapa_atual_id = $1,
@@ -234,6 +231,7 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, atendente_id = atendente_id))]
     async fn assumir_atendimento(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -241,9 +239,7 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         atendimento_id: i32,
         atendente_id: i32,
     ) -> Result<(), DbError> {
-        if !ctx.has_permission("atendimentos:write") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
         // Desliga o bot e atribui o atendente humano
         sqlx::query!(
             r#"UPDATE oraculo_atendimento
@@ -260,6 +256,7 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
     async fn touch_last_message(
         &self,
         tx: &mut Transaction<'_, Postgres>,

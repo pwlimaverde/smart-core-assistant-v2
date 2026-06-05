@@ -5,6 +5,8 @@ use argon2::{
 
 use crate::errors::DbError;
 
+// `plaintext` é a senha em claro: jamais logar.
+#[tracing::instrument(level = "debug", skip(plaintext), err)]
 pub fn hash_password(plaintext: &str) -> Result<String, DbError> {
     let salt = SaltString::generate(&mut OsRng);
     Argon2::default()

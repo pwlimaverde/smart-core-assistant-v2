@@ -88,14 +88,13 @@ pub struct PostgresPaymentRecordRepository;
 
 #[async_trait]
 impl SubscriptionRepository for PostgresSubscriptionRepository {
+    #[tracing::instrument(skip_all)]
     async fn buscar_por_tenant(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
     ) -> Result<Option<Subscription>, DbError> {
-        if !ctx.has_permission("financeiro:read") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["financeiro:read", "tenant:admin"])?;
         let row = sqlx::query_as!(
             Subscription,
             r#"SELECT id, tenant_id, plan_id, status,
@@ -110,15 +109,14 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(status = %status))]
     async fn atualizar_status(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
         status: &str,
     ) -> Result<(), DbError> {
-        if !ctx.has_permission("financeiro:write") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["financeiro:write", "tenant:admin"])?;
         sqlx::query!(
             r#"UPDATE tenants_subscription
                SET status = $1, updated_at = NOW()
@@ -134,6 +132,7 @@ impl SubscriptionRepository for PostgresSubscriptionRepository {
 
 #[async_trait]
 impl PaymentRecordRepository for PostgresPaymentRecordRepository {
+    #[tracing::instrument(skip_all, fields(payment_method = %payment_method))]
     async fn registrar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -145,9 +144,7 @@ impl PaymentRecordRepository for PostgresPaymentRecordRepository {
         period_end: NaiveDate,
         notes: &str,
     ) -> Result<PaymentRecord, DbError> {
-        if !ctx.has_permission("financeiro:write") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["financeiro:write", "tenant:admin"])?;
         let row = sqlx::query_as!(
             PaymentRecord,
             r#"INSERT INTO tenants_paymentrecord
@@ -170,14 +167,13 @@ impl PaymentRecordRepository for PostgresPaymentRecordRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all)]
     async fn listar_por_tenant(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
     ) -> Result<Vec<PaymentRecord>, DbError> {
-        if !ctx.has_permission("financeiro:read") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["financeiro:read", "tenant:admin"])?;
         let rows = sqlx::query_as!(
             PaymentRecord,
             r#"SELECT id, tenant_id, amount, payment_date, payment_method,
@@ -194,6 +190,7 @@ impl PaymentRecordRepository for PostgresPaymentRecordRepository {
 }
 
 // buscar_planos_ativos não precisa de contexto de tenant (global)
+#[tracing::instrument(skip_all, err)]
 pub async fn listar_planos_ativos(pool: &PgPool) -> Result<Vec<Plan>, DbError> {
     let rows = sqlx::query_as!(
         Plan,

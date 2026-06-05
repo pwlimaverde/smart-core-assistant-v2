@@ -50,6 +50,8 @@ pub struct PostgresAppInstanceRepository;
 
 #[async_trait]
 impl AppInstanceRepository for PostgresAppInstanceRepository {
+    // `api_key` é segredo: `skip_all` impede que entre no span.
+    #[tracing::instrument(skip_all, fields(channel = %channel))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -59,9 +61,7 @@ impl AppInstanceRepository for PostgresAppInstanceRepository {
         display_name: Option<&str>,
         departamento_id: Option<i32>,
     ) -> Result<AppInstance, DbError> {
-        if !ctx.has_permission("operacional:admin") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
         let row = sqlx::query_as!(
             AppInstance,
             r#"INSERT INTO oraculo_app_instance
@@ -81,6 +81,8 @@ impl AppInstanceRepository for PostgresAppInstanceRepository {
         Ok(row)
     }
 
+    // `api_key` é segredo: `skip_all`.
+    #[tracing::instrument(skip_all)]
     async fn buscar_por_api_key(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -101,14 +103,13 @@ impl AppInstanceRepository for PostgresAppInstanceRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all)]
     async fn listar_ativas(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
     ) -> Result<Vec<AppInstance>, DbError> {
-        if !ctx.has_permission("operacional:read") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["operacional:read", "tenant:admin"])?;
         let rows = sqlx::query_as!(
             AppInstance,
             r#"SELECT id, tenant_id, api_key, channel, display_name,

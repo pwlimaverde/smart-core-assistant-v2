@@ -65,6 +65,8 @@ pub struct PostgresContatoRepository;
 
 #[async_trait]
 impl ContatoRepository for PostgresContatoRepository {
+    // `telefone`/`nome_contato` são PII: `skip_all` mantém-nos fora do span.
+    #[tracing::instrument(skip_all)]
     async fn salvar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -72,9 +74,7 @@ impl ContatoRepository for PostgresContatoRepository {
         telefone: &str,
         nome_contato: Option<&str>,
     ) -> Result<Contato, DbError> {
-        if !ctx.has_permission("clientes:write") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["clientes:write", "tenant:admin"])?;
         // ON CONFLICT atualiza apenas nome_contato e ultima_interacao
         let row = sqlx::query_as!(
             Contato,
@@ -96,6 +96,7 @@ impl ContatoRepository for PostgresContatoRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all)]
     async fn buscar_por_telefone(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -117,6 +118,7 @@ impl ContatoRepository for PostgresContatoRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(id = id))]
     async fn buscar_por_id(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -138,15 +140,14 @@ impl ContatoRepository for PostgresContatoRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(limit = limit))]
     async fn listar_recentes(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
         limit: i64,
     ) -> Result<Vec<Contato>, DbError> {
-        if !ctx.has_permission("clientes:read") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["clientes:read", "tenant:admin"])?;
         let rows = sqlx::query_as!(
             Contato,
             r#"SELECT id, tenant_id, telefone, nome_contato, slug, email,
@@ -164,6 +165,7 @@ impl ContatoRepository for PostgresContatoRepository {
         Ok(rows)
     }
 
+    #[tracing::instrument(skip_all, fields(contato_id = contato_id))]
     async fn atualizar_ultima_interacao(
         &self,
         tx: &mut Transaction<'_, Postgres>,

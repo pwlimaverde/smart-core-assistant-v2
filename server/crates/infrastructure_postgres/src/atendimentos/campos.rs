@@ -88,6 +88,7 @@ pub struct PostgresValorCampoRepository;
 
 #[async_trait]
 impl CampoPersonalizadoRepository for PostgresCampoPersonalizadoRepository {
+    #[tracing::instrument(skip_all, fields(slug = %slug, escopo = %escopo))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -98,9 +99,7 @@ impl CampoPersonalizadoRepository for PostgresCampoPersonalizadoRepository {
         tipo: &str,
         fluxo_id: Option<i32>,
     ) -> Result<CampoPersonalizado, DbError> {
-        if !ctx.has_permission("configuracoes:write") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["configuracoes:write", "tenant:admin"])?;
         let row = sqlx::query_as!(
             CampoPersonalizado,
             r#"INSERT INTO atu_campo_personalizado (tenant_id, slug, nome, escopo, tipo, fluxo_id)
@@ -121,6 +120,7 @@ impl CampoPersonalizadoRepository for PostgresCampoPersonalizadoRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(escopo = %escopo))]
     async fn listar_por_escopo(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -149,6 +149,7 @@ impl CampoPersonalizadoRepository for PostgresCampoPersonalizadoRepository {
 
 #[async_trait]
 impl ValorCampoRepository for PostgresValorCampoRepository {
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, campo_id = campo_id))]
     async fn upsert(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -183,6 +184,7 @@ impl ValorCampoRepository for PostgresValorCampoRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
     async fn listar_por_atendimento(
         &self,
         tx: &mut Transaction<'_, Postgres>,
