@@ -24,3 +24,6 @@ uuid.workspace               = true
 # Infra Postgres (para o AuditLogger)
 infrastructure_postgres = { path = "../infrastructure_postgres" }
 sqlx.workspace               = true
+
+[dev-dependencies]
+test_support = { path = "../test_support" }

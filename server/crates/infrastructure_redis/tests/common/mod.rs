@@ -4,6 +4,10 @@ use redis::aio::ConnectionManager;
 /// Carrega de forma resiliente as variáveis de ambiente a partir de arquivos `.env` locais
 /// ou nas pastas superiores (mesmo padrão da crate `infrastructure_postgres`).
 pub fn carregar_env_teste() {
+    // Garante que o túnel SSH para o Docker da Hostinger esteja ativo antes de
+    // qualquer conexão. Idempotente e barato quando o túnel já está de pé.
+    test_support::ensure_tunnel();
+
     let caminhos = [
         ".env",
         "../.env",
