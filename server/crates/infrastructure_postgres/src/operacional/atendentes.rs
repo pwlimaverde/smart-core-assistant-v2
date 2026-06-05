@@ -77,6 +77,8 @@ pub struct PostgresAtendenteRepository;
 
 #[async_trait]
 impl AtendenteRepository for PostgresAtendenteRepository {
+    // `nome`/`email` são PII: `skip_all`.
+    #[tracing::instrument(skip_all, fields(fluxo_id = fluxo_id))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -87,9 +89,7 @@ impl AtendenteRepository for PostgresAtendenteRepository {
         fluxo_id: i32,
         departamento_id: Option<i32>,
     ) -> Result<Atendente, DbError> {
-        if !ctx.has_permission("operacional:admin") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
         let row = sqlx::query_as!(
             Atendente,
             r#"INSERT INTO oraculo_atendente
@@ -113,6 +113,7 @@ impl AtendenteRepository for PostgresAtendenteRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(id = id))]
     async fn buscar_por_id(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -136,6 +137,7 @@ impl AtendenteRepository for PostgresAtendenteRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all)]
     async fn buscar_disponivel_round_robin(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -172,6 +174,7 @@ impl AtendenteRepository for PostgresAtendenteRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(atendente_id = atendente_id))]
     async fn atualizar_ultima_atribuicao(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -190,6 +193,7 @@ impl AtendenteRepository for PostgresAtendenteRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, fields(atendente_id = atendente_id, disponivel = disponivel))]
     async fn atualizar_disponibilidade(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -197,9 +201,7 @@ impl AtendenteRepository for PostgresAtendenteRepository {
         atendente_id: i32,
         disponivel: bool,
     ) -> Result<(), DbError> {
-        if !ctx.has_permission("operacional:admin") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
         sqlx::query!(
             r#"UPDATE oraculo_atendente SET disponivel = $1, ultima_atividade = NOW()
                WHERE tenant_id = $2 AND id = $3"#,

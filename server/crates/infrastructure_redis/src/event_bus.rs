@@ -52,6 +52,16 @@ impl EventoBruto {
 
 /// Publica um evento no barramento (`XADD` com MAXLEN aproximado). O ID do stream é
 /// atribuído pelo Redis (`*`); o `event_id` (UUID v7) viaja como campo para idempotência.
+// `payload` é omitido do span (pode conter PII); só metadados de correlação são registrados.
+#[tracing::instrument(
+    skip(con, evento),
+    fields(
+        tenant_id = %evento.tenant_id,
+        event_id = %evento.event_id,
+        event_type = %evento.event_type,
+    ),
+    err
+)]
 pub async fn publicar_evento<T: Serialize>(
     con: &mut ConnectionManager,
     evento: &TenantEnvelope<T>,
@@ -71,11 +81,13 @@ pub async fn publicar_evento<T: Serialize>(
             ],
         )
         .await?;
+    tracing::debug!(stream_id = %id, "evento publicado no barramento");
     Ok(id)
 }
 
 /// Garante a existência do consumer group (idempotente). Cria o stream se necessário
 /// (`MKSTREAM`) e ignora o erro `BUSYGROUP` quando o grupo já existe.
+#[tracing::instrument(skip(con), fields(grupo = %grupo), err)]
 pub async fn garantir_consumer_group(
     con: &mut ConnectionManager,
     grupo: &str,
@@ -89,8 +101,14 @@ pub async fn garantir_consumer_group(
         .query_async(con)
         .await;
     match resultado {
-        Ok(()) => Ok(()),
-        Err(e) if e.code() == Some("BUSYGROUP") => Ok(()),
+        Ok(()) => {
+            tracing::info!("consumer group criado");
+            Ok(())
+        }
+        Err(e) if e.code() == Some("BUSYGROUP") => {
+            tracing::debug!("consumer group já existia (BUSYGROUP)");
+            Ok(())
+        }
         Err(e) => Err(e.into()),
     }
 }
@@ -100,6 +118,12 @@ pub async fn garantir_consumer_group(
 /// `block_ms > 0` ativa o modo bloqueante (use uma conexão dedicada nesse caso, pois
 /// comandos bloqueantes travam conexões multiplexadas). `block_ms == 0` retorna de imediato
 /// com o que houver disponível.
+#[tracing::instrument(
+    level = "debug",
+    skip(con),
+    fields(grupo = %grupo, consumidor = %consumidor, quantidade, block_ms),
+    err
+)]
 pub async fn consumir(
     con: &mut ConnectionManager,
     grupo: &str,
@@ -114,11 +138,19 @@ pub async fn consumir(
         opts = opts.block(block_ms);
     }
     let reply: StreamReadReply = con.xread_options(&[STREAM_EVENTOS], &[">"], &opts).await?;
-    Ok(extrair_eventos(reply))
+    let eventos = extrair_eventos(reply);
+    tracing::debug!(eventos = eventos.len(), "eventos consumidos do barramento");
+    Ok(eventos)
 }
 
 /// Relê as mensagens já entregues a este `consumidor` mas ainda não confirmadas (PEL),
 /// usando `XREADGROUP ... 0`. Permite reprocessar após uma falha/reinício do consumidor.
+#[tracing::instrument(
+    level = "debug",
+    skip(con),
+    fields(grupo = %grupo, consumidor = %consumidor, quantidade),
+    err
+)]
 pub async fn reprocessar_pendentes(
     con: &mut ConnectionManager,
     grupo: &str,
@@ -129,10 +161,20 @@ pub async fn reprocessar_pendentes(
         .group(grupo, consumidor)
         .count(quantidade);
     let reply: StreamReadReply = con.xread_options(&[STREAM_EVENTOS], &["0"], &opts).await?;
-    Ok(extrair_eventos(reply))
+    let eventos = extrair_eventos(reply);
+    if !eventos.is_empty() {
+        tracing::info!(pendentes = eventos.len(), "reprocessando eventos pendentes (PEL)");
+    }
+    Ok(eventos)
 }
 
 /// Confirma o processamento de um evento (`XACK`), removendo-o da lista de pendentes.
+#[tracing::instrument(
+    level = "debug",
+    skip(con),
+    fields(grupo = %grupo, stream_id = %stream_id),
+    err
+)]
 pub async fn confirmar(
     con: &mut ConnectionManager,
     grupo: &str,

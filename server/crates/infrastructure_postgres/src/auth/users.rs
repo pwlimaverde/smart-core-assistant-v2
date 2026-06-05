@@ -60,6 +60,12 @@ pub struct PostgresAuthUserRepository;
 
 #[async_trait]
 impl AuthUserRepository for PostgresAuthUserRepository {
+    // `password_hash` é material de credencial: omitido do span.
+    #[tracing::instrument(
+        skip(self, pool, password_hash),
+        fields(username = %username, email = %email, is_superuser),
+        err
+    )]
     async fn criar(
         &self,
         pool: &PgPool,
@@ -85,6 +91,7 @@ impl AuthUserRepository for PostgresAuthUserRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(level = "debug", skip(self, pool), fields(id), err)]
     async fn buscar_por_id(&self, pool: &PgPool, id: i32) -> Result<Option<AuthUser>, DbError> {
         let row = sqlx::query_as!(
             AuthUser,
@@ -98,6 +105,7 @@ impl AuthUserRepository for PostgresAuthUserRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(level = "debug", skip(self, pool), fields(username = %username), err)]
     async fn buscar_por_username(
         &self,
         pool: &PgPool,
@@ -115,6 +123,7 @@ impl AuthUserRepository for PostgresAuthUserRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(level = "debug", skip(self, pool), fields(email = %email), err)]
     async fn buscar_por_email(
         &self,
         pool: &PgPool,
@@ -132,6 +141,7 @@ impl AuthUserRepository for PostgresAuthUserRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip(self, pool), fields(user_id), err)]
     async fn atualizar_ultimo_login(&self, pool: &PgPool, user_id: i32) -> Result<(), DbError> {
         sqlx::query!(
             "UPDATE auth_user SET last_login = NOW() WHERE id = $1",
@@ -142,6 +152,7 @@ impl AuthUserRepository for PostgresAuthUserRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, pool, password_hash), fields(user_id), err)]
     async fn atualizar_senha(
         &self,
         pool: &PgPool,
@@ -158,6 +169,7 @@ impl AuthUserRepository for PostgresAuthUserRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, pool), fields(user_id), err)]
     async fn desativar(&self, pool: &PgPool, user_id: i32) -> Result<(), DbError> {
         sqlx::query!(
             "UPDATE auth_user SET is_active = false WHERE id = $1",

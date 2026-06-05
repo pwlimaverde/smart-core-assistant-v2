@@ -71,11 +71,14 @@ impl TenantConfigCache {
 
     /// Obtém a config resolvida para o tenant.
     /// Cache hit: clona o Arc e SOLTA o guard antes de qualquer await (evita deadlock).
+    #[tracing::instrument(skip(self), fields(tenant_id = %tenant_id), err)]
     pub async fn get_config(&self, tenant_id: Uuid) -> Result<Arc<RuntimeConfig>, DbError> {
         // Extrai o Arc e descarta o Ref antes do await assíncrono
         if let Some(cfg) = self.cache.get(&tenant_id).map(|r| r.clone()) {
+            tracing::debug!("cache hit de RuntimeConfig");
             return Ok(cfg);
         }
+        tracing::debug!("cache miss de RuntimeConfig — resolvendo do banco");
         let config = Arc::new(self.resolve_from_db(tenant_id).await?);
         self.cache.insert(tenant_id, config.clone());
         Ok(config)
@@ -85,6 +88,7 @@ impl TenantConfigCache {
     /// ao receber o evento de invalidação do canal Redis Pub/Sub.
     pub fn invalidate(&self, tenant_id: &Uuid) {
         self.cache.remove(tenant_id);
+        tracing::debug!(tenant_id = %tenant_id, "cache de RuntimeConfig invalidado");
     }
 
     /// Invalida e re-resolve todos os tenants ativos. Usado no cold-start.
@@ -92,6 +96,7 @@ impl TenantConfigCache {
         self.cache.clear();
     }
 
+    #[tracing::instrument(skip(self), fields(tenant_id = %tenant_id), err)]
     async fn resolve_from_db(&self, tenant_id: Uuid) -> Result<RuntimeConfig, DbError> {
         crate::tenants::config::resolve_runtime_config(&self.pool, &self.cipher, tenant_id).await
     }

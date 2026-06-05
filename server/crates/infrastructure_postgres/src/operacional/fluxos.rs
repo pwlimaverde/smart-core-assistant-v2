@@ -94,6 +94,7 @@ pub struct PostgresEtapaFluxoRepository;
 
 #[async_trait]
 impl FluxoAtendimentoRepository for PostgresFluxoAtendimentoRepository {
+    #[tracing::instrument(skip_all, fields(departamento_id = departamento_id, nome = %nome))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -101,9 +102,7 @@ impl FluxoAtendimentoRepository for PostgresFluxoAtendimentoRepository {
         departamento_id: i32,
         nome: &str,
     ) -> Result<FluxoAtendimento, DbError> {
-        if !ctx.has_permission("operacional:admin") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
         let row = sqlx::query_as!(
             FluxoAtendimento,
             r#"INSERT INTO oraculo_fluxo_atendimento (tenant_id, departamento_id, nome)
@@ -119,6 +118,7 @@ impl FluxoAtendimentoRepository for PostgresFluxoAtendimentoRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(departamento_id = departamento_id))]
     async fn buscar_por_departamento(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -140,6 +140,7 @@ impl FluxoAtendimentoRepository for PostgresFluxoAtendimentoRepository {
         Ok(rows)
     }
 
+    #[tracing::instrument(skip_all, fields(id = id))]
     async fn buscar_por_id(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -163,6 +164,7 @@ impl FluxoAtendimentoRepository for PostgresFluxoAtendimentoRepository {
 
 #[async_trait]
 impl EtapaFluxoRepository for PostgresEtapaFluxoRepository {
+    #[tracing::instrument(skip_all, fields(fluxo_id = fluxo_id, ordem = ordem))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -173,9 +175,7 @@ impl EtapaFluxoRepository for PostgresEtapaFluxoRepository {
         tipo_etapa: &str,
         cor: Option<&str>,
     ) -> Result<EtapaFluxo, DbError> {
-        if !ctx.has_permission("operacional:admin") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
         let cor_val = cor.unwrap_or("#6B7280");
         let row = sqlx::query_as!(
             EtapaFluxo,
@@ -197,6 +197,7 @@ impl EtapaFluxoRepository for PostgresEtapaFluxoRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(fluxo_id = fluxo_id))]
     async fn listar_por_fluxo(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -219,6 +220,7 @@ impl EtapaFluxoRepository for PostgresEtapaFluxoRepository {
         Ok(rows)
     }
 
+    #[tracing::instrument(skip_all, fields(fluxo_id = fluxo_id))]
     async fn get_etapa_inicial(
         &self,
         tx: &mut Transaction<'_, Postgres>,

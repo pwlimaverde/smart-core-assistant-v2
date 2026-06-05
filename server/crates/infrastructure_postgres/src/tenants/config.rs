@@ -34,6 +34,7 @@ struct TenantConfigRow {
 
 /// Resolve o RuntimeConfig aplicando a cascata Tenant > CoreSettings.
 /// Chamado por TenantConfigCache em cache miss.
+#[tracing::instrument(skip(pool, cipher), fields(tenant_id = %tenant_id), err)]
 pub async fn resolve_runtime_config(
     pool: &PgPool,
     cipher: &CipherManager,

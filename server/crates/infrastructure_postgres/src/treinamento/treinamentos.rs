@@ -62,6 +62,7 @@ pub struct PostgresTreinamentoRepository;
 
 #[async_trait]
 impl TreinamentoRepository for PostgresTreinamentoRepository {
+    #[tracing::instrument(skip_all, fields(tag = %tag, grupo = %grupo))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -70,9 +71,7 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
         grupo: &str,
         conteudo: Option<&str>,
     ) -> Result<Treinamento, DbError> {
-        if !ctx.has_permission("treinamento:write") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["treinamento:write", "tenant:admin"])?;
         let row = sqlx::query_as!(
             Treinamento,
             r#"INSERT INTO oraculo_treinamento (tenant_id, tag, grupo, conteudo)
@@ -91,6 +90,7 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(tag = %tag, grupo = %grupo))]
     async fn buscar_por_tag_grupo(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -114,15 +114,14 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(treinamento_id = treinamento_id))]
     async fn marcar_finalizado(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
         treinamento_id: i32,
     ) -> Result<(), DbError> {
-        if !ctx.has_permission("treinamento:write") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["treinamento:write", "tenant:admin"])?;
         sqlx::query!(
             r#"UPDATE oraculo_treinamento
                SET treinamento_finalizado = true, data_atualizacao = NOW()
@@ -135,6 +134,7 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, fields(treinamento_id = treinamento_id))]
     async fn marcar_vetorizado(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -153,14 +153,13 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all)]
     async fn listar_pendentes_vetorizacao(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
     ) -> Result<Vec<Treinamento>, DbError> {
-        if !ctx.has_permission("treinamento:read") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["treinamento:read", "tenant:admin"])?;
         let rows = sqlx::query_as!(
             Treinamento,
             r#"SELECT id, tenant_id, tag, grupo, conteudo,

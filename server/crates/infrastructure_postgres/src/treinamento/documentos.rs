@@ -46,6 +46,7 @@ pub struct PostgresDocumentoRepository;
 
 #[async_trait]
 impl DocumentoRepository for PostgresDocumentoRepository {
+    #[tracing::instrument(skip_all, fields(treinamento_id = treinamento_id, ordem = ordem))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -56,9 +57,7 @@ impl DocumentoRepository for PostgresDocumentoRepository {
         ordem: i32,
         metadata: serde_json::Value,
     ) -> Result<Documento, DbError> {
-        if !ctx.has_permission("treinamento:write") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["treinamento:write", "tenant:admin"])?;
         let vec = embedding.map(Vector::from);
         let row = sqlx::query!(
             r#"INSERT INTO oraculo_documento
@@ -85,6 +84,7 @@ impl DocumentoRepository for PostgresDocumentoRepository {
         })
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %tenant_id, top_k = top_k))]
     async fn buscar_documentos_similares(
         &self,
         tx: &mut Transaction<'_, Postgres>,

@@ -81,6 +81,7 @@ pub struct PostgresClienteRepository;
 
 #[async_trait]
 impl ClienteRepository for PostgresClienteRepository {
+    #[tracing::instrument(skip_all)]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -90,9 +91,7 @@ impl ClienteRepository for PostgresClienteRepository {
         cnpj: Option<&str>,
         cpf: Option<&str>,
     ) -> Result<Cliente, DbError> {
-        if !ctx.has_permission("clientes:write") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["clientes:write", "tenant:admin"])?;
         let row = sqlx::query_as!(
             Cliente,
             r#"INSERT INTO oraculo_cliente (tenant_id, nome_fantasia, tipo, cnpj, cpf)
@@ -113,6 +112,7 @@ impl ClienteRepository for PostgresClienteRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(id = id))]
     async fn buscar_por_id(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -135,6 +135,7 @@ impl ClienteRepository for PostgresClienteRepository {
         Ok(row)
     }
 
+    #[tracing::instrument(skip_all, fields(cliente_id = cliente_id, contato_id = contato_id))]
     async fn adicionar_contato(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -142,9 +143,7 @@ impl ClienteRepository for PostgresClienteRepository {
         cliente_id: i32,
         contato_id: i32,
     ) -> Result<(), DbError> {
-        if !ctx.has_permission("clientes:write") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["clientes:write", "tenant:admin"])?;
         sqlx::query!(
             r#"INSERT INTO oraculo_cliente_contatos (tenant_id, cliente_id, contato_id)
                VALUES ($1, $2, $3) ON CONFLICT DO NOTHING"#,
@@ -157,6 +156,7 @@ impl ClienteRepository for PostgresClienteRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, fields(cliente_id = cliente_id, contato_id = contato_id))]
     async fn remover_contato(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -164,9 +164,7 @@ impl ClienteRepository for PostgresClienteRepository {
         cliente_id: i32,
         contato_id: i32,
     ) -> Result<(), DbError> {
-        if !ctx.has_permission("clientes:write") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["clientes:write", "tenant:admin"])?;
         sqlx::query!(
             "DELETE FROM oraculo_cliente_contatos
              WHERE tenant_id = $1 AND cliente_id = $2 AND contato_id = $3",
@@ -179,6 +177,7 @@ impl ClienteRepository for PostgresClienteRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, fields(limit = limit, offset = offset))]
     async fn listar_ativos(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -186,9 +185,7 @@ impl ClienteRepository for PostgresClienteRepository {
         limit: i64,
         offset: i64,
     ) -> Result<Vec<Cliente>, DbError> {
-        if !ctx.has_permission("clientes:read") && !ctx.has_permission("tenant:admin") {
-            return Err(DbError::PermissionDenied);
-        }
+        ctx.exigir_qualquer(&["clientes:read", "tenant:admin"])?;
         let rows = sqlx::query_as!(
             Cliente,
             r#"SELECT id, tenant_id, nome_fantasia, slug, razao_social, tipo,

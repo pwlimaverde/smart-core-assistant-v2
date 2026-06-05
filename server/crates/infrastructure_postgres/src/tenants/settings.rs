@@ -13,6 +13,7 @@ pub struct CoreSettingRow {
 
 /// Carrega todas as CoreSettings globais em um mapa key→value.
 /// Valores encrypted são descriptografados antes de retornar.
+#[tracing::instrument(skip(pool, cipher), err)]
 pub async fn load_all_settings(
     pool: &PgPool,
     cipher: &CipherManager,
@@ -44,6 +45,8 @@ pub async fn load_all_settings(
 }
 
 /// Obtém ou insere/atualiza uma configuração global.
+// `value` pode ser segredo (quando `encrypted`): omitido do span.
+#[tracing::instrument(skip(pool, value, description), fields(key = %key, encrypted = encrypted), err)]
 pub async fn upsert_setting(
     pool: &PgPool,
     key: &str,
