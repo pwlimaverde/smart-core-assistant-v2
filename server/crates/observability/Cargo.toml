@@ -21,9 +21,20 @@ serde_json.workspace         = true
 chrono.workspace             = true
 uuid.workspace               = true
 
-# Infra Postgres (para o AuditLogger)
-infrastructure_postgres = { path = "../infrastructure_postgres" }
-sqlx.workspace               = true
+# Infra e contratos para barramento de auditoria
+contracts  = { path = "../contracts" }
+transport  = { path = "../transport" }
+redis      = { workspace = true }
+
+# Dependências opcionais para testes/retrocompatibilidade com banco
+infrastructure_postgres = { path = "../infrastructure_postgres", optional = true }
+sqlx = { workspace = true, optional = true }
+
+[features]
+default = ["postgres-audit"]
+postgres-audit = ["dep:infrastructure_postgres", "dep:sqlx"]
 
 [dev-dependencies]
 test_support = { path = "../test_support" }
+infrastructure_postgres = { path = "../infrastructure_postgres" }
+sqlx.workspace               = true

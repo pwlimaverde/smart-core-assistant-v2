@@ -1,25 +1,56 @@
-use infrastructure_postgres::{
-    inserir_audit_log, inserir_audit_log_global, NewAuditLogEntry,
-};
-use sqlx::PgPool;
 use uuid::Uuid;
+use redis::aio::ConnectionManager;
 
-/// Logger de auditoria que persiste eventos críticos no banco de dados de forma assíncrona.
-/// Suporta tanto ações vinculadas a inquilinos (RLS) quanto ações globais de superusuário (admin pool).
+#[cfg(feature = "postgres-audit")]
+use sqlx::PgPool;
+
+/// Payload do evento de log de auditoria publicado no barramento.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct AuditLogPayload {
+    pub tenant_id: Option<Uuid>,
+    pub level: String,
+    pub service: String,
+    pub trace_id: Option<String>,
+    pub event: String,
+    pub message: String,
+    pub context: serde_json::Value,
+    pub user_id: Option<i32>,
+    pub ip_address: Option<String>,
+}
+
+/// Logger de auditoria que redireciona logs para o Redis Streams em produção.
+/// Em ambiente de testes, pode salvar diretamente no banco de dados para retrocompatibilidade.
 #[derive(Clone)]
 pub struct AuditLogger {
-    tenant_pool: PgPool,   // pool convencional com RLS habilitado
-    admin_pool: PgPool,    // pool administrativo (BYPASSRLS) para gravação global (tenant_id = NULL)
     service_name: String,
+    redis_conn: Option<ConnectionManager>,
+    #[cfg(feature = "postgres-audit")]
+    tenant_pool: Option<PgPool>,
+    #[cfg(feature = "postgres-audit")]
+    admin_pool: Option<PgPool>,
 }
 
 impl AuditLogger {
-    /// Inicializa o logger com os pools necessários e o nome do serviço atual.
+    /// Inicializa o logger para testes com os pools do Postgres.
+    #[cfg(feature = "postgres-audit")]
     pub fn new(tenant_pool: PgPool, admin_pool: PgPool, service_name: &str) -> Self {
         Self {
-            tenant_pool,
-            admin_pool,
             service_name: service_name.to_string(),
+            redis_conn: None,
+            tenant_pool: Some(tenant_pool),
+            admin_pool: Some(admin_pool),
+        }
+    }
+
+    /// Inicializa o logger para produção usando o barramento do Redis.
+    pub fn new_with_redis(redis_conn: ConnectionManager, service_name: &str) -> Self {
+        Self {
+            service_name: service_name.to_string(),
+            redis_conn: Some(redis_conn),
+            #[cfg(feature = "postgres-audit")]
+            tenant_pool: None,
+            #[cfg(feature = "postgres-audit")]
+            admin_pool: None,
         }
     }
 
@@ -27,8 +58,8 @@ impl AuditLogger {
     // Ações Vinculadas a Tenant (Inquilino)
     // ============================================================
 
-    /// Registra um evento de auditoria para um inquilino em background (fire-and-forget).
-    /// Usa o pool com RLS executando dentro de `run_in_tenant_transaction`.
+    /// Registra um evento de auditoria para um inquilino.
+    /// Em produção publica no Redis Streams, em testes salva direto no banco.
     pub fn log_tenant_event(
         &self,
         tenant_id: Uuid,
@@ -40,52 +71,87 @@ impl AuditLogger {
         ip_address: Option<String>,
         trace_id: Option<String>,
     ) {
-        let pool = self.tenant_pool.clone();
         let service = self.service_name.clone();
         let event = event.to_string();
         let message = message.to_string();
         let level = level.to_string();
+        let trace_id_clone = trace_id.clone();
 
-        tokio::spawn(async move {
-            let entry = NewAuditLogEntry {
-                tenant_id: Some(tenant_id),
-                level,
-                service,
-                trace_id,
-                event: event.clone(),
-                message,
-                context,
-                user_id,
-                ip_address,
-            };
-
-            let result = infrastructure_postgres::run_in_tenant_transaction(
-                &pool,
-                tenant_id,
-                |mut tx| async move {
-                    let id = inserir_audit_log(&mut tx, &entry).await?;
-                    Ok((id, tx))
-                },
-            )
-            .await;
-
-            if let Err(e) = result {
-                tracing::error!(
-                    error = ?e,
-                    audit_event = %event,
-                    tenant_id = %tenant_id,
-                    "Falha ao persistir log de auditoria do inquilino no banco."
+        if let Some(mut con) = self.redis_conn.clone() {
+            tokio::spawn(async move {
+                let payload = AuditLogPayload {
+                    tenant_id: Some(tenant_id),
+                    level: level.clone(),
+                    service: service.clone(),
+                    trace_id: trace_id_clone,
+                    event: event.clone(),
+                    message,
+                    context,
+                    user_id,
+                    ip_address,
+                };
+                let envelope = contracts::TenantEnvelope::novo(
+                    tenant_id,
+                    "audit_log",
+                    payload,
                 );
+                if let Err(e) = transport::bus::publicar_evento_seguranca(&mut con, &envelope).await {
+                    tracing::error!(
+                        error = ?e,
+                        audit_event = %event,
+                        tenant_id = %tenant_id,
+                        "Falha ao publicar log de auditoria no Redis Streams"
+                    );
+                }
+            });
+            return;
+        }
+
+        #[cfg(feature = "postgres-audit")]
+        {
+            if let Some(pool) = self.tenant_pool.clone() {
+                tokio::spawn(async move {
+                    let entry = infrastructure_postgres::NewAuditLogEntry {
+                        tenant_id: Some(tenant_id),
+                        level,
+                        service,
+                        trace_id,
+                        event: event.clone(),
+                        message,
+                        context,
+                        user_id,
+                        ip_address,
+                    };
+
+                    let result = infrastructure_postgres::run_in_tenant_transaction(
+                        &pool,
+                        tenant_id,
+                        |mut tx| async move {
+                            let id = infrastructure_postgres::inserir_audit_log(&mut tx, &entry).await?;
+                            Ok((id, tx))
+                        },
+                    )
+                    .await;
+
+                    if let Err(e) = result {
+                        tracing::error!(
+                            error = ?e,
+                            audit_event = %event,
+                            tenant_id = %tenant_id,
+                            "Falha ao persistir log de auditoria do inquilino no banco."
+                        );
+                    }
+                });
             }
-        });
+        }
     }
 
     // ============================================================
     // Ações Globais (Superusuário / Sistema / Background)
     // ============================================================
 
-    /// Registra um evento de auditoria global (sem tenant_id) em background (fire-and-forget).
-    /// Usa o pool administrativo (BYPASSRLS) para gravação direta.
+    /// Registra um evento de auditoria global (sem tenant_id).
+    /// Em produção publica no Redis Streams, em testes salva direto no banco.
     pub fn log_global_event(
         &self,
         event: &str,
@@ -96,35 +162,69 @@ impl AuditLogger {
         ip_address: Option<String>,
         trace_id: Option<String>,
     ) {
-        let admin_pool = self.admin_pool.clone();
         let service = self.service_name.clone();
         let event = event.to_string();
         let message = message.to_string();
         let level = level.to_string();
+        let trace_id_clone = trace_id.clone();
 
-        tokio::spawn(async move {
-            let entry = NewAuditLogEntry {
-                tenant_id: None,
-                level,
-                service,
-                trace_id,
-                event: event.clone(),
-                message,
-                context,
-                user_id,
-                ip_address,
-            };
-
-            let result = inserir_audit_log_global(&admin_pool, &entry).await;
-
-            if let Err(e) = result {
-                tracing::error!(
-                    error = ?e,
-                    audit_event = %event,
-                    "Falha ao persistir log de auditoria global no banco."
+        if let Some(mut con) = self.redis_conn.clone() {
+            tokio::spawn(async move {
+                let payload = AuditLogPayload {
+                    tenant_id: None,
+                    level: level.clone(),
+                    service: service.clone(),
+                    trace_id: trace_id_clone,
+                    event: event.clone(),
+                    message,
+                    context,
+                    user_id,
+                    ip_address,
+                };
+                let envelope = contracts::TenantEnvelope::novo(
+                    Uuid::nil(),
+                    "audit_log",
+                    payload,
                 );
+                if let Err(e) = transport::bus::publicar_evento_seguranca(&mut con, &envelope).await {
+                    tracing::error!(
+                        error = ?e,
+                        audit_event = %event,
+                        "Falha ao publicar log de auditoria global no Redis Streams"
+                    );
+                }
+            });
+            return;
+        }
+
+        #[cfg(feature = "postgres-audit")]
+        {
+            if let Some(admin_pool) = self.admin_pool.clone() {
+                tokio::spawn(async move {
+                    let entry = infrastructure_postgres::NewAuditLogEntry {
+                        tenant_id: None,
+                        level,
+                        service,
+                        trace_id,
+                        event: event.clone(),
+                        message,
+                        context,
+                        user_id,
+                        ip_address,
+                    };
+
+                    let result = infrastructure_postgres::inserir_audit_log_global(&admin_pool, &entry).await;
+
+                    if let Err(e) = result {
+                        tracing::error!(
+                            error = ?e,
+                            audit_event = %event,
+                            "Falha ao persistir log de auditoria global no banco."
+                        );
+                    }
+                });
             }
-        });
+        }
     }
 
     // ============================================================

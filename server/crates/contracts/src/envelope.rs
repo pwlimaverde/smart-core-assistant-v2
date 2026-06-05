@@ -7,8 +7,6 @@ use uuid::Uuid;
 /// O `tenant_id` reside na raiz para que consumidores assíncronos configurem o contexto
 /// RLS de banco antes de rodar os Use Cases. O `event_id` é um UUID v7 (ordenável no tempo)
 /// que garante idempotência.
-///
-/// Nota: quando a crate `contracts` existir, este tipo deve migrar para lá.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TenantEnvelope<T> {
     pub tenant_id: Uuid,

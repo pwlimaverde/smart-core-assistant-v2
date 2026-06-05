@@ -1,0 +1,12 @@
+// Generated from ai_engine.proto
+
+namespace smartcore.contracts.ai;
+
+table AiRequest {
+  prompt:string;
+}
+
+table AiResponse {
+  text:string;
+}
+

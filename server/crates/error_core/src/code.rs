@@ -13,6 +13,12 @@ pub enum ErrorCategory {
     Cache,
     Validation,
     Internal,
+    Permission,
+    RateLimit,
+    Timeout,
+    Dependency,
+    NotFound,
+    Conflict,
 }
 
 /// Código estável que identifica o erro de forma rastreável em logs, métricas e alertas.

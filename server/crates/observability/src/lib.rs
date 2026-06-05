@@ -11,6 +11,6 @@ pub mod span_helpers;
 pub mod telemetry;
 
 // Re-exports de conveniência
-pub use audit::AuditLogger;
+pub use audit::{AuditLogger, AuditLogPayload};
 pub use propagation::{extrair_contexto, injetar_contexto_atual, HashMapCarrier, HashMapExtractor};
 pub use telemetry::{init_telemetry, shutdown_telemetry};

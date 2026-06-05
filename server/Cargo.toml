@@ -6,6 +6,17 @@ members = [
     "crates/infrastructure_redis",
     "crates/observability",
     "crates/test_support",
+    "crates/contracts",
+    "crates/transport",
+    "crates/infrastructure_storage",
+    "crates/application",
+    "apps/data_postgres",
+    "apps/data_redis",
+    "apps/data_storage",
+    "apps/runtime_api",
+    "apps/messaging_gateway",
+    "apps/worker",
+    "apps/control_plane",
 ]
 
 [workspace.package]
@@ -36,3 +47,14 @@ redis         = { version = "0.25.0", features = ["aio", "tokio-comp", "connecti
 tonic         = "0.14.6"
 error_core    = { path = "crates/error_core" }
 tracing-subscriber = "0.3.18"
+flatbuffers   = "25.0.0"
+prost         = "0.13.3"
+tonic-prost-build = "0.14.6"
+flatc-rust    = "0.2.0"
+contracts     = { path = "crates/contracts" }
+transport     = { path = "crates/transport" }
+application   = { path = "crates/application" }
+observability = { path = "crates/observability" }
+anyhow        = "1.0.86"
+bytes         = "1.6.0"
+futures-util  = "0.3.30"
