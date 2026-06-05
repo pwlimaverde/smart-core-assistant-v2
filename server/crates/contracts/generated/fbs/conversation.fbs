@@ -1,0 +1,14 @@
+// Generated from conversation.proto
+
+namespace smartcore.contracts.queries;
+
+table GetConversationRequest {
+  conversation_id:string;
+}
+
+table GetConversationResponse {
+  conversation_id:string;
+  title:string;
+  participant_ids:[string];
+}
+

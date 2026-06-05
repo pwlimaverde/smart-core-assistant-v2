@@ -1,0 +1,29 @@
+// contracts/schemas/envelope.proto  (comentários em pt-br)
+syntax = "proto3";
+package smartcore.contracts;
+
+import "errors.proto";
+
+// Tipo de interação que o envelope transporta.
+enum MessageKind {
+  MESSAGE_KIND_UNSPECIFIED = 0; // valor zero obrigatório (proto3 + mapeia p/ FB)
+  MESSAGE_KIND_EVENT = 1;
+  MESSAGE_KIND_REQUEST = 2;
+  MESSAGE_KIND_REPLY = 3;
+  MESSAGE_KIND_STREAM_ITEM = 4;
+  MESSAGE_KIND_ERROR = 5;
+}
+
+// Invólucro comum a todo evento e toda requisição (independe de codec/canal).
+message Envelope {
+  string tenant_id = 1;       // UUID do tenant (vazio = superuser/global)
+  uint32 schema_version = 2;  // versão do schema (evolução aditiva) — uint16 lógico
+  string message_id = 3;      // UUIDv7 — ordenável e idempotente
+  string causation_id = 4;    // id da mensagem que causou esta
+  string traceparent = 5;     // W3C trace context — propaga o trace entre VMs
+  int64 occurred_at = 6;      // epoch millis
+  MessageKind kind = 7;
+  string method = 8;          // nome lógico ("GetThread", "PersistMessage")
+  bytes payload = 9;          // corpo FlatBuffers (opaco ao transporte)
+  ErrorEnvelope error = 10;   // preenchido só quando kind = ERROR
+}

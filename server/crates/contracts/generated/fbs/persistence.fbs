@@ -1,0 +1,9 @@
+// Generated from persistence.proto
+
+namespace smartcore.contracts.events;
+
+table MessagePersisted {
+  message_id:string;
+  persisted_at:long;
+}
+

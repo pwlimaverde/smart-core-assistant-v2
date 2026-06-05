@@ -8,6 +8,8 @@ thiserror  = { workspace = true }
 serde      = { workspace = true, features = ["derive"] }
 tracing    = { workspace = true }
 tonic      = { workspace = true, optional = true }
+contracts  = { path = "../contracts" }
+chrono     = { workspace = true }
 
 [features]
 grpc = ["dep:tonic"]

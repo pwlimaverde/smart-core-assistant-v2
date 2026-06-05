@@ -1,0 +1,40 @@
+// contracts/schemas/errors.proto  (comentários em pt-br)
+syntax = "proto3";
+package smartcore.contracts;
+
+enum ErrorCategory {
+  ERROR_CATEGORY_UNSPECIFIED = 0;
+  VALIDATION = 1;
+  AUTH = 2;
+  PERMISSION = 3;
+  CONFLICT = 4;
+  NOT_FOUND = 5;
+  RATE_LIMIT = 6;
+  DEPENDENCY = 7;
+  TIMEOUT = 8;
+  INTERNAL = 9;
+}
+
+enum Severity {
+  SEVERITY_UNSPECIFIED = 0;
+  SEVERITY_INFO = 1;
+  SEVERITY_WARNING = 2;
+  SEVERITY_ERROR = 3;
+  SEVERITY_CRITICAL = 4;
+}
+
+message KeyValue { string key = 1; string value = 2; }
+
+message ErrorEnvelope {
+  string code = 1;                  // canônico, ex.: "AUTH_INVALID_CREDENTIALS"
+  ErrorCategory category = 2;
+  Severity severity = 3;
+  string message = 4;               // técnica (log/dev; sem dado sensível)
+  string user_message = 5;          // CHAVE i18n, ex.: "errors.auth.invalid_credentials"
+  string user_message_fallback = 6; // texto seguro p/ consumidores sem i18n
+  bool retryable = 7;
+  string trace_id = 8;
+  string source_svc = 9;            // ex.: "ia_engine@vm-gpu"
+  repeated KeyValue details = 10;
+  int64 occurred_at = 11;
+}

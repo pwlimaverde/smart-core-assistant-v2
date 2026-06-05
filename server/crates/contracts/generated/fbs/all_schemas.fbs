@@ -1,0 +1,142 @@
+// Auto-generated unified FlatBuffers schema
+
+namespace smartcore.contracts;
+
+
+
+table AiRequest {
+  prompt:string;
+}
+
+table AiResponse {
+  text:string;
+}
+
+
+
+
+table RegisterRequest {
+  username:string;
+  email:string;
+  password:string;
+  full_name:string;
+  tenant_name:string;
+  tenant_slug:string;
+}
+
+table LoginRequest {
+  email:string;
+  password:string;
+}
+
+table AuthResponse {
+  access_token:string;
+  refresh_token:string;
+}
+
+
+
+
+table GetConversationRequest {
+  conversation_id:string;
+}
+
+table GetConversationResponse {
+  conversation_id:string;
+  title:string;
+  participant_ids:[string];
+}
+
+
+
+
+
+enum MessageKind : int {
+  MESSAGE_KIND_UNSPECIFIED = 0,
+  MESSAGE_KIND_EVENT = 1,
+  MESSAGE_KIND_REQUEST = 2,
+  MESSAGE_KIND_REPLY = 3,
+  MESSAGE_KIND_STREAM_ITEM = 4,
+  MESSAGE_KIND_ERROR = 5,
+}
+
+table Envelope {
+  tenant_id:string;
+  schema_version:uint;
+  message_id:string;
+  causation_id:string;
+  traceparent:string;
+  occurred_at:long;
+  kind:MessageKind;
+  method:string;
+  payload:[ubyte];
+  error:ErrorEnvelope;
+}
+
+
+
+
+enum ErrorCategory : int {
+  ERROR_CATEGORY_UNSPECIFIED = 0,
+  VALIDATION = 1,
+  AUTH = 2,
+  PERMISSION = 3,
+  CONFLICT = 4,
+  NOT_FOUND = 5,
+  RATE_LIMIT = 6,
+  DEPENDENCY = 7,
+  TIMEOUT = 8,
+  INTERNAL = 9,
+}
+
+enum Severity : int {
+  SEVERITY_UNSPECIFIED = 0,
+  SEVERITY_INFO = 1,
+  SEVERITY_WARNING = 2,
+  SEVERITY_ERROR = 3,
+  SEVERITY_CRITICAL = 4,
+}
+
+table KeyValue {
+  key:string;
+  value:string;
+}
+
+table ErrorEnvelope {
+  code:string;
+  category:ErrorCategory;
+  severity:Severity;
+  message:string;
+  user_message:string;
+  user_message_fallback:string;
+  retryable:bool;
+  trace_id:string;
+  source_svc:string;
+  details:[KeyValue];
+  occurred_at:long;
+}
+
+
+
+
+table MessageReceived {
+  message_id:string;
+  sender_id:string;
+  content:string;
+  timestamp:long;
+}
+
+table MessageUpdate {
+  message_id:string;
+  status:string;
+}
+
+
+
+
+table MessagePersisted {
+  message_id:string;
+  persisted_at:long;
+}
+
+
