@@ -1,0 +1,16 @@
+[package]
+name    = "error_core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror  = { workspace = true }
+serde      = { workspace = true, features = ["derive"] }
+tracing    = { workspace = true }
+tonic      = { workspace = true, optional = true }
+
+[features]
+grpc = ["dep:tonic"]
+
+[dev-dependencies]
+tracing-subscriber = { workspace = true }

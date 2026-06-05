@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = [
+    "crates/error_core",
     "crates/infrastructure_postgres",
     "crates/infrastructure_redis",
     "crates/observability",
@@ -32,3 +33,6 @@ base64        = "0.22.1"
 secrecy       = "0.10.3"
 argon2        = { version = "0.5", features = ["std"] }
 redis         = { version = "0.25.0", features = ["aio", "tokio-comp", "connection-manager", "streams"] }
+tonic         = "0.14.6"
+error_core    = { path = "crates/error_core" }
+tracing-subscriber = "0.3.18"
