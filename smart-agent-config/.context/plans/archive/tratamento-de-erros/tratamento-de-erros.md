@@ -1,5 +1,5 @@
 ---
-status: in_progress
+status: completed
 generated: 2026-06-04
 slug: tratamento-de-erros
 scale: MEDIUM
@@ -16,22 +16,22 @@ phases:
     name: "Review — design de tipos, mapeamento gRPC e feature flags"
     prevc: "R"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-e"
     name: "Execution — crate error_core (code, error, report, transport, testes)"
     prevc: "E"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-v"
     name: "Validation — cargo test + clippy + fmt + integração observability"
     prevc: "V"
     agent: "test-writer"
-    status: "pending"
+    status: "completed"
   - id: "phase-c"
     name: "Confirmation — final-review e arquivamento dotcontext"
     prevc: "C"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
 ---
 
 # Crate `error_core` — Tratamento de Erros Rastreável
@@ -63,10 +63,10 @@ integrados à `observability` (doc 05) via `tracing`. **Não substitui** os erro
 | Fase | Nome | Agente | Status |
 |---|---|---|---|
 | **P** | Planning — escopo, API pública e decisões de workspace | Backend Specialist | ✅ completed |
-| **R** | Review — design de tipos, mapeamento gRPC e feature flags | Backend Specialist | ⬜ pending |
-| **E** | Execution — crate `error_core` (code, error, report, transport, testes) | Backend Specialist | ⬜ pending |
-| **V** | Validation — `cargo test` + clippy + fmt + integração observability | Test Writer | ⬜ pending |
-| **C** | Confirmation — final-review e arquivamento dotcontext | Backend Specialist | ⬜ pending |
+| **R** | Review — design de tipos, mapeamento gRPC e feature flags | Backend Specialist | ✅ completed |
+| **E** | Execution — crate `error_core` (code, error, report, transport, testes) | Backend Specialist | ✅ completed |
+| **V** | Validation — `cargo test` + clippy + fmt + integração observability | Test Writer | ✅ completed |
+| **C** | Confirmation — final-review e arquivamento dotcontext | Backend Specialist | ✅ completed |
 
 ## Decisões-chave (resumo — detalhes no plano completo)
 

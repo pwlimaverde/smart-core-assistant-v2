@@ -3,9 +3,25 @@
     "phase-p": {
       "status": "completed",
       "updatedAt": "2026-06-04T23:44:37.899Z"
+    },
+    "phase-r": {
+      "status": "completed",
+      "updatedAt": "2026-06-04T23:44:37.899Z"
+    },
+    "phase-e": {
+      "status": "completed",
+      "updatedAt": "2026-06-04T23:44:37.899Z"
+    },
+    "phase-v": {
+      "status": "completed",
+      "updatedAt": "2026-06-04T23:44:37.899Z"
+    },
+    "phase-c": {
+      "status": "completed",
+      "updatedAt": "2026-06-04T23:44:37.899Z"
     }
   },
-  "progress": 0,
+  "progress": 100,
   "approvalStatus": "approved",
   "approvedAt": "2026-06-04T23:44:53.404Z",
   "approvedBy": "architect",

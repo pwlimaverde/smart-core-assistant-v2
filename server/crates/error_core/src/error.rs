@@ -130,10 +130,14 @@ impl AppError {
     pub fn public_message(&self) -> &str {
         match self {
             Self::Auth(_) => "Credencial inválida ou ausente.",
-            Self::Database(msg) if msg.contains("não encontrado") || msg.contains("not found") => "Recurso não encontrado.",
+            Self::Database(msg) if msg.contains("não encontrado") || msg.contains("not found") => {
+                "Recurso não encontrado."
+            }
             Self::Database(_) => "Erro ao acessar o banco de dados.",
             Self::Cache(_) => "Erro ao acessar o cache.",
-            Self::Storage(msg) if msg.contains("não encontrado") || msg.contains("not found") => "Arquivo não encontrado.",
+            Self::Storage(msg) if msg.contains("não encontrado") || msg.contains("not found") => {
+                "Arquivo não encontrado."
+            }
             Self::Storage(_) => "Erro ao acessar o armazenamento.",
             Self::Validation(_) => "Dados de entrada inválidos.",
             Self::Conflict(_) => "Conflito com o estado atual do recurso.",
@@ -141,5 +145,3 @@ impl AppError {
         }
     }
 }
-
-

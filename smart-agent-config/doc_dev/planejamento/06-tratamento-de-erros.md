@@ -1,6 +1,7 @@
 # 06 — Tratamento de Erros (`error_core`)
 
-> **Status:** Planejamento (a implementar). **Fundação transversal** — par da
+> **Status:** ✅ Implementado (2026-06-04) — crate `server/crates/error_core`,
+> com feature opcional `grpc` (`tonic = "0.14.6"`). **Fundação transversal** — par da
 > observabilidade ([05-observabilidade.md](./05-observabilidade.md)).
 > **Idioma:** pt-br na documentação/comentários; identificadores em inglês.
 > **Origem:** Necessidade de **organizar os erros de forma rastreável** em todos
