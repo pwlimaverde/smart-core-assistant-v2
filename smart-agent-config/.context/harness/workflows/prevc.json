@@ -1,13 +1,13 @@
 {
   "version": 2,
   "workflowType": "prevc",
-  "updatedAt": "2026-06-04T23:44:57.087Z",
+  "updatedAt": "2026-06-05T00:12:10.452Z",
   "status": {
     "project": {
       "name": "tratamento-de-erros",
       "scale": 2,
       "started": "2026-06-04T23:44:31.336Z",
-      "current_phase": "E",
+      "current_phase": "V",
       "settings": {
         "autonomous_mode": false,
         "require_plan": true,
@@ -55,11 +55,44 @@
         ]
       },
       "E": {
-        "status": "in_progress",
-        "started_at": "2026-06-04T23:44:57.079Z"
+        "status": "completed",
+        "started_at": "2026-06-04T23:44:57.079Z",
+        "completed_at": "2026-06-05T00:12:05.992Z",
+        "outputs": [
+          {
+            "path": "server/Cargo.toml",
+            "status": "filled"
+          },
+          {
+            "path": "server/crates/error_core/Cargo.toml",
+            "status": "filled"
+          },
+          {
+            "path": "server/crates/error_core/src/lib.rs",
+            "status": "filled"
+          },
+          {
+            "path": "server/crates/error_core/src/code.rs",
+            "status": "filled"
+          },
+          {
+            "path": "server/crates/error_core/src/error.rs",
+            "status": "filled"
+          },
+          {
+            "path": "server/crates/error_core/src/report.rs",
+            "status": "filled"
+          },
+          {
+            "path": "server/crates/error_core/src/transport.rs",
+            "status": "filled"
+          }
+        ]
       },
       "V": {
-        "status": "pending"
+        "status": "completed",
+        "started_at": "2026-06-05T00:12:06.006Z",
+        "completed_at": "2026-06-05T00:12:10.440Z"
       },
       "C": {
         "status": "skipped",
@@ -125,16 +158,31 @@
           "timestamp": "2026-06-04T23:44:57.079Z",
           "phase": "E",
           "action": "started"
+        },
+        {
+          "timestamp": "2026-06-05T00:12:05.992Z",
+          "phase": "E",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-05T00:12:06.006Z",
+          "phase": "V",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-05T00:12:10.440Z",
+          "phase": "V",
+          "action": "completed"
         }
       ],
-      "last_activity": "2026-06-04T23:44:57.079Z",
-      "resume_context": "Fase E (Execução) em progresso"
+      "last_activity": "2026-06-05T00:12:10.440Z",
+      "resume_context": "Fase V (Validação) concluída"
     }
   },
   "binding": {
     "workflowName": "tratamento-de-erros",
     "sessionId": "139863a8-baae-4236-a7eb-f83849d6dda4",
     "createdAt": "2026-06-04T23:44:31.344Z",
-    "updatedAt": "2026-06-04T23:44:57.084Z"
+    "updatedAt": "2026-06-05T00:12:10.447Z"
   }
 }
