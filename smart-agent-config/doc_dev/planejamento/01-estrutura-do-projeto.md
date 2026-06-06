@@ -38,30 +38,25 @@ smart-core-assistant-v2/                    # raiz do monorepo / git root
 │
 ├── server/                                 # STACK: Backend Rust (Cargo workspace)
 │   ├── Cargo.toml                          # workspace manifest
-│   ├── Cargo.lock                          # versionado (workspace com binários)
+│   ├── Cargo.lock                          # versionado
 │   ├── apps/
-│   │   ├── control_plane/                  # binário: gestão de tenants, planos, credenciais
+│   │   ├── control_plane/                  # binário: gestão administrativa de tenants/planos
 │   │   ├── messaging_gateway/              # binário: ingestão de webhooks Evolution Go
-│   │   ├── runtime_api/                    # binário: API gRPC (unário + Server Streaming) para clientes
-│   │   └── worker/                         # binário: processamento de eventos e domínio
+│   │   ├── runtime_api/                    # binário: API gRPC + Server Streaming para clientes
+│   │   ├── worker/                         # binário: processamento assíncrono de eventos do bus
+│   │   ├── data_postgres/                  # binário: servidor RPC de dados PostgreSQL + outbox
+│   │   ├── data_redis/                     # binário: servidor RPC de cache/tokens/locks síncrono
+│   │   └── data_storage/                   # binário: servidor RPC de storage de mídia
 │   └── crates/
-│       ├── application/                    # orquestra casos de uso (depende de domain_*)
-│       ├── contracts/                      # DTOs, eventos, envelopes (todos com tenant_id)
-│       ├── domain_ai/                      # interfaces de IA (sem implementação)
-│       ├── domain_contact/                 # contatos, números, tags, histórico
-│       ├── domain_conversation/            # thread de conversa, mensagens, anexos
-│       ├── domain_kanban/                  # etapas, fluxos, automações
-│       ├── domain_tenant/                  # tenant, plano, quota, feature flags
-│       ├── domain_ticket/                  # atendimento: status, SLA, distribuição
-│       ├── domain_whatsapp/                # instâncias Evolution, normalização de webhook
-│       ├── infrastructure_evolution/       # cliente HTTP/WS para Evolution Go
-│       ├── infrastructure_postgres/        # sqlx + migrations + policies RLS
-│       ├── infrastructure_redis/           # Redis Streams, cache, pub/sub
-│       ├── infrastructure_storage/         # MinIO/S3 para mídia transitória
-│       ├── local_engine/                   # dual-target: lib servidor + cdylib FFI Flutter Windows
-│       ├── observability/                  # logs estruturados, métricas, tracing
-│       ├── error_core/                     # taxonomia de erros + mapeamento p/ transporte
-│       └── realtime/                       # fan-out por tenant via gRPC streaming (Redis pub/sub)
+│       ├── application/                    # orquestração de casos de uso (depende de contracts/transport)
+│       ├── contracts/                      # schemas .proto canônicos + .fbs gerados + Envelope
+│       ├── transport/                      # canais (UDS/TCP/WS), codecs (FB/gRPC) e event bus
+│       ├── error_core/                     # taxonomia de erros, ErrorEnvelope (convenção)
+│       ├── observability/                  # tracing distribuído e contexto traceparent (convenção)
+│       ├── infrastructure_postgres/        # sqlx + migrations + crypto (lib de data_postgres)
+│       ├── infrastructure_redis/           # conexões Redis, tokens, cache (lib de data_redis)
+│       ├── infrastructure_storage/         # Cloudflare R2 / S3 client (lib de data_storage)
+│       └── test_support/                   # utilitários e fixtures para testes
 │
 ├── evolution/                              # STACK: Evolution Go — gateway WhatsApp
 │   ├── docker/                             # docker-compose + volumes para Evolution Go
@@ -71,8 +66,8 @@ smart-core-assistant-v2/                    # raiz do monorepo / git root
 ├── clients/                                # STACK: Aplicações Flutter
 │   ├── packages/                           # pacotes Dart compartilhados entre apps
 │   │   ├── core_ui/                        # design system: tema dark padrão + widgets (kanban, chat, inputs)
-│   │   ├── domain_models/                  # modelos de domínio em Dart (DTOs gerados ou manuais)
-│   │   ├── api_client/                     # cliente gRPC único (unário + Server Streaming) + factory kIsWeb
+│   │   ├── domain_models/                  # modelos de domínio em Dart (DTOs gerados do .proto)
+│   │   ├── api_client/                     # cliente RPC único + factory kIsWeb
 │   │   └── local_engine_ffi/               # bridge flutter_rust_bridge (wrapper do crate local_engine)
 │   │
 │   ├── flutter_windows/                    # App Flutter Windows — FASE 1 (desktop)
@@ -99,8 +94,8 @@ smart-core-assistant-v2/                    # raiz do monorepo / git root
 │   │   ├── llm/                            # abstração de provedores (OpenAI, Groq, Ollama)
 │   │   ├── contracts/                      # DTOs Pydantic espelhando o .proto
 │   │   ├── features_compose.py             # facade (núcleo de IA herdado da v1)
-│   │   └── server.py                       # servidor gRPC (ponto de entrada; handlers)
-│   ├── proto/                              # .proto do serviço (espelhado em domain_ai)
+│   │   └── server.py                       # servidor RPC (ponto de entrada; handlers)
+│   ├── proto/                              # .proto do serviço (gerado do contracts)
 │   ├── tests/
 │   ├── pyproject.toml                      # gerenciado com uv
 │   └── uv.lock                             # versionado
@@ -141,18 +136,25 @@ smart-core-assistant-v2/                    # raiz do monorepo / git root
 
 **Responsabilidade:** núcleo da aplicação multi-tenant. Toda regra de negócio, persistência, event bus e API para os clientes.
 
-| Binário | Responsabilidade |
-|---------|-----------------|
+| Binário/App | Responsabilidade |
+|-------------|------------------|
 | `control_plane` | Cadastro de tenants, planos, quotas, feature flags, credenciais e configuração de instâncias Evolution |
-| `messaging_gateway` | Recebe webhooks do Evolution Go, valida assinatura/origem, resolve `tenant_id`, persiste evento bruto, publica no Redis Streams. **Nunca executa regra de negócio** |
-| `worker` | Consome eventos do bus e executa o domínio: debounce, conversa, política de ticket, kanban, chamada ao `ia_engine`, envio outbound via Evolution |
-| `runtime_api` | gRPC unário para comandos e consultas + gRPC Server Streaming para realtime (nova mensagem, typing, kanban, presença); gRPC-Web (`tonic-web`) para o app Web. Fan-out de eventos por tenant via Redis pub/sub |
+| `messaging_gateway` | Recebe webhooks do Evolution Go, valida assinatura/origem, resolve `tenant_id`, persiste bruto no `data_postgres` (RPC) e publica no Redis Streams (bus). **Nunca executa regra de negócio** |
+| `worker` | Consome eventos do bus e executa a orquestração do domínio: debounce, conversa, política de ticket, kanban, chamada ao `ia_engine`, envio outbound via Evolution. Salva alterações via RPC no `data_postgres` |
+| `runtime_api` | API RPC/gRPC e Server Streaming para realtime (nova mensagem, typing, kanban, presença); gRPC-Web para Flutter Web. Fan-out de eventos por tenant via Redis pub/sub |
+| `data_postgres` | Servidor RPC (UDS/FlatBuffers/gRPC) exclusivo do PostgreSQL. Executa migrações, gerencia RLS pool e comandos de escrita ACID / consultas unárias de leitura |
+| `data_redis` | Servidor RPC exclusivo para controle síncrono de caches de permissões, locks distribuídos e tokens JWT/refresh |
+| `data_storage` | Servidor RPC exclusivo do storage de mídias no Cloudflare R2 |
 
-**Crates de domínio (`crates/domain_*`):** regras puras de negócio sem I/O. Nenhum import de `infrastructure_*`.
+**Crates compartilhadas principais:**
+- **`application`**: Camada que abriga os casos de uso orquestrando a lógica de negócio (ex.: auth, fluxos de atendimento), dependendo apenas das interfaces de transporte/contratos.
+- **`contracts`**: Contém os arquivos `.proto` canônicos, transpilação para `.fbs` e os tipos Rust resultantes da geração de build (flatc / tonic-build), além de expor o `Envelope` de tráfego.
+- **`transport`**: Implementa o codec FlatBuffers/gRPC, a runtime de transmissão UDS/TCP/WS, e o barramento Redis Streams (`transport::bus`).
+- **`error_core` / `observability`**: Convenções transversais compiladas em todos os serviços.
 
-**Crate especial — `local_engine`:** compilável tanto como dependência dos binários-servidor quanto como `cdylib`/`staticlib` para FFI do app Flutter Windows. Contém apenas lógica válida offline/cache — nada multi-tenant sensível.
+**Crate especial — `local_engine`:** compilável tanto como dependência de servidor quanto como `cdylib` / `staticlib` para FFI do app Flutter Windows. Contém apenas lógica válida offline/cache — nada multi-tenant sensível.
 
-**Deploy:** Hostinger KVM2 (uma VM). Proxy reverso (Nginx/Caddy) na frente com TLS, HTTP/2 e `proxy_buffering off` para o gRPC Server Streaming (e tradução gRPC-Web para o app Web).
+**Deploy:** Hostinger KVM2 (uma VM). Proxy reverso (Nginx/Caddy) na frente com TLS, HTTP/2 e `proxy_buffering off` para o realtime (e tradução gRPC-Web para o app Web).
 
 ---
 
@@ -257,51 +259,44 @@ badge de status (`novo` / `em_atendimento` / `finalizado`).
 
 | Regra | Descrição |
 |-------|-----------|
-| **Sem imports cruzados entre stacks** | `server/` não importa código de `ia_engine/`, `clients/` ou `evolution/`. A comunicação é por contrato (gRPC/Redis). |
-| **Sem lógica de produto em `smart-agent-config/`** | Esta pasta contém somente documentação, configuração de agentes e planejamento. |
-| **`domain_*` sem I/O** | Nenhum crate `server/crates/domain_*` pode ter dependência de `infrastructure_*`. |
+| **Sem imports cruzados entre stacks** | `server/` não importa código de `ia_engine/`, `clients/` ou `evolution/`. A comunicação é por contrato (RPC/Redis). |
+| **Isolamento de Infraestrutura de Banco** | Apenas `apps/data_postgres` pode importar `crates/infrastructure_postgres`. Nenhuma outra crate ou app pode interagir com o Postgres diretamente. |
+| **Isolamento de Cache/Tokens** | Apenas `apps/data_redis` pode importar `crates/infrastructure_redis` (para fins de persistência de tokens, cache, etc.). O tráfego do barramento Streams é gerenciado por `crates/transport`. |
+| **Isolamento de Storage** | Apenas `apps/data_storage` pode importar `crates/infrastructure_storage`. |
+| **Acesso via Contrato e RPC** | Módulos como `apps/worker`, `apps/runtime_api` e `apps/control_plane` importam `crates/contracts` e `crates/transport` e realizam chamadas RPC em IPC/UDS para acessar dados. |
 | **`local_engine` sem multi-tenant sensível** | O crate `local_engine` não pode conter lógica que exija dados de múltiplos tenants ou processamento de webhook. |
 | **`flutter_web` sem `local_engine_ffi`** | O app Web nunca depende do pacote `local_engine_ffi`. |
-| **Contratos em `server/crates/contracts/`** | Todos os DTOs, eventos e envelopes usados na comunicação inter-serviço vivem neste crate, incluindo o `TenantEnvelope<T>`. |
-| **`tenant_id` em toda query** | Toda query ao PostgreSQL inclui filtro por `tenant_id` na aplicação, além do RLS. Duas barreiras. |
+| **`tenant_id` em toda query** | Toda query ao PostgreSQL (gerida internamente pelo `data_postgres`) inclui obrigatoriamente o filtro por `tenant_id` na aplicação + Row-Level Security (RLS) via `RequestContext`. |
 
 ---
 
 ## 5. Contratos de comunicação entre stacks
 
 ```
-Flutter Windows/Web
+Flutter Windows/Web Client
       │
-      │  gRPC unário (comandos/consultas)
-      │  gRPC Server Streaming (realtime: mensagens, kanban, presença)
-      │  (desktop: HTTP/2 nativo · web: gRPC-Web via tonic-web + proxy)
+      │  FlatBuffers / IPC (UDS ou TCP/TLS) · gRPC / HTTP2 fallback
+      │  WebSocket binário para realtime na Web
       ▼
-server/runtime_api  ◄──── server/worker ◄──── Redis Streams ◄──── server/messaging_gateway
-                                  │
-                                  │  gRPC (interno)
-                                  ▼
-                             ia_engine/
-                             (Python)
-
-evolution/
-  Evolution Go ──webhook──► server/messaging_gateway
-  server/worker ──HTTP──► Evolution Go (envio outbound)
-
-Flutter Windows (somente)
+server/runtime_api ──(RPC direto UDS/FlatBuffers)──► data_redis (Cache/Tokens)
+      │                                            │
+      │──(RPC direto UDS/FlatBuffers)──► data_postgres (PostgreSQL unificado)
+      │                                            │
+      │──(RPC direto UDS/FlatBuffers)──► data_storage (R2 storage)
+      ▼
+[ EVENT BUS ] (Redis Streams - transport::bus) ◄── messaging_gateway ◄── Evolution Go
       │
-      │  FFI (flutter_rust_bridge)
       ▼
-clients/packages/local_engine_ffi
-  └── server/crates/local_engine (cdylib compilado)
+server/worker ──(RPC direto UDS/FlatBuffers/gRPC)──► ia_engine (Python, GPU)
 ```
 
 | Fronteira | Protocolo | Definição do contrato |
 |-----------|-----------|----------------------|
-| Flutter → server | **gRPC único** (unário + Server Streaming; web via gRPC-Web) | `server/crates/contracts/` (proto + DTOs) |
-| server/worker → ia_engine | **gRPC** | `server/crates/domain_ai/` (interfaces Rust) + `.proto`/protobuf em `ia_engine/proto/` |
-| Evolution Go → server | Webhook HTTP | Payload normalizado em `server/crates/domain_whatsapp/` |
-| server/worker → Evolution Go | HTTP REST | `server/crates/infrastructure_evolution/` |
-| Flutter Windows → local_engine | FFI nativo | `clients/packages/local_engine_ffi/` (gerado pelo flutter_rust_bridge) |
+| Flutter → server/runtime_api | FlatBuffers / gRPC | `server/crates/contracts/` (schemas `.proto` + `.fbs` gerados) |
+| server/worker → ia_engine | FlatBuffers / gRPC | `ia_engine/proto/` e `contracts` (.proto + stubs) |
+| Evolution Go → server | Webhook HTTP | normalizado por `contracts` (eventos) |
+| server ↔ data_* (acesso a dados) | FlatBuffers sobre UDS (gRPC fallback) | `contracts` (schemas RPC síncronos) |
+| Flutter Windows → local_engine | FFI nativo | `clients/packages/local_engine_ffi/` (flutter_rust_bridge) |
 
 ---
 

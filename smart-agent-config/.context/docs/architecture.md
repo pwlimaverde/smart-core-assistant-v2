@@ -22,16 +22,22 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
                     ┌─────────▼──────────┐
                     │  messaging_gateway  │  ← valida, resolve tenant, persiste bruto, publica
                     └─────────┬──────────┘
-                              │ Redis Streams (envelope com tenant_id)
+                              │ transport::bus (Redis Streams; TenantEnvelope<T> com tenant_id)
                     ┌─────────▼──────────┐
                     │      worker         │  ← debounce, conversa, ticket, kanban, IA, outbound
                     └──────┬─────┬───────┘
                            │     │ gRPC (não FFI/PyO3 — ver §13.1 do planejamento)
-                    ┌──────▼──┐  └──► ia_engine (Python / LangChain / RAG; núcleo = FeaturesCompose)
-                    │PostgreSQL│
-                    │+ pgvector│
-                    └──────────┘
-                           ▲
+                           │     └──► ia_engine (Python / LangChain / RAG; núcleo = FeaturesCompose)
+                           │
+       RPC tipado (UDS + FlatBuffers; gRPC/TCP fallback) — Envelope protobuf
+        ┌──────────────────┼───────────────────┐
+        ▼                  ▼                   ▼
+ ┌────────────┐    ┌──────────────┐    ┌──────────────┐
+ │data_postgres│   │  data_redis  │    │ data_storage │   ← únicos donos das infra_* libs
+ │ PG+pgvector │   │ cache/tokens │    │  R2/MinIO*   │
+ │ +RLS+outbox │   │ locks/bus    │    │  (*stub fs)  │
+ └────────────┘    └──────────────┘    └──────────────┘
+        ▲
        gRPC único: unário (comandos/consultas) + Server Streaming (realtime)
                     ┌──────┴──────────┐
                     │  runtime_api    │  ← API + realtime p/ Flutter (desktop HTTP/2; web gRPC-Web)
@@ -42,29 +48,62 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
                     local_engine (SQLite + cache de mídia)
 
   + control_plane: tenants, planos, credenciais, instâncias Evolution
+  Apps de negócio (runtime_api/worker/gateway/control_plane) acessam dados só via RPC aos data_*.
 ```
+
+## Arquitetura modular por contrato (decisão central)
+
+O refator modular dividiu o backend em **processos independentes que se comunicam por
+contrato**, nunca por import cruzado de código. O eixo é a separação **acesso a dados em
+serviços `data_*`** acessados via **RPC sobre Unix Domain Sockets com FlatBuffers**
+(gRPC/TCP como fallback):
+
+- **Serviços de dados (`apps/data_*`)** — únicos donos das libs de infraestrutura:
+  - `data_postgres` encapsula `infrastructure_postgres` (RLS, migrations, CRUD, outbox relay);
+  - `data_redis` encapsula `infrastructure_redis` (cache, tokens, locks);
+  - `data_storage` encapsula `infrastructure_storage` (hoje stub filesystem; S3/R2 pendente).
+  - Expõem servidor RPC (FlatBuffers/UDS, gRPC fallback) e consomem o bus para tarefas assíncronas.
+- **Apps de negócio (`apps/runtime_api`, `worker`, `messaging_gateway`, `control_plane`)** —
+  **não** importam `infrastructure_*`; falam com os `data_*` via cliente RPC tipado de `transport`.
+- **Crates de base (transversais)**: `contracts` (schemas `.proto` → FlatBuffers + gRPC,
+  `Envelope` e `TenantEnvelope<T>`), `transport` (codecs, canais UDS/TCP/WS, framing RPC e
+  `transport::bus` Redis Streams), `error_core` (`AppError`/`ErrorEnvelope`), `observability`
+  (tracing OTLP, `traceparent`, auditoria via bus).
 
 ## Architectural Layers
 
 - **`apps/*`**: Executáveis (binários Rust) — cada um é um processo independente.
-- **`crates/domain_*`**: Regras puras de negócio, sem I/O, sem dependência de infraestrutura.
-- **`crates/application`**: Orquestra casos de uso (`ReceiveMessage`, `DecideTicketPolicy`, `CanBotRespond`).
-- **`crates/contracts`**: DTOs, eventos, contratos gRPC, envelopes — todos carregam `tenant_id`.
-- **`crates/infrastructure_*`**: Adaptadores de banco (sqlx), Redis, Evolution Go, storage.
-- **`crates/local_engine`**: Crate dual-target: lib dos binários-servidor **e** `cdylib`/`staticlib` para FFI do Flutter Windows.
-- **`ia_engine/`**: Serviço Python separado (LangChain) chamado via **gRPC** pelo worker. Núcleo é a facade `FeaturesCompose` reaproveitada da v1 (só muda o ponto de entrada: task Celery → handler gRPC). FFI/PyO3 foi descartado (§13.1 do planejamento).
-- **`clients/flutter_windows` + `clients/flutter_web`**: Dois apps Flutter separados + pacotes em `clients/packages/`, com camada `DataSource` abstrata (`LocalEngineFFI` no Windows, `RemoteOnly` na Web).
+- **`crates/application`**: Orquestra casos de uso de negócio (auth hoje; depois `ReceiveMessage`,
+  `DecideTicketPolicy`, `CanBotRespond`), dependendo só de `contracts`/`transport` (RPC), não de infra.
+- **`crates/contracts`**: schemas `.proto` canônicos, FlatBuffers e stubs gRPC gerados no build;
+  expõe o `Envelope` (RPC) e o `TenantEnvelope<T>` (eventos do bus) — ambos carregam `tenant_id`.
+- **`crates/transport`**: codecs FlatBuffers/gRPC, canais UDS/TCP/WS, framing RPC e o barramento `transport::bus`.
+- **`crates/error_core` / `crates/observability`**: convenções transversais compiladas em todos os serviços.
+- **`crates/infrastructure_*`**: adaptadores de banco (sqlx), Redis e storage — **consumidos
+  exclusivamente** pelos respectivos `apps/data_*`, nunca pelos apps de negócio.
+- **`crates/domain_*`** *(ainda não criados)*: regras puras sem I/O. **Opcionais** — extraídos da
+  `application` só quando a complexidade justificar; até lá a regra vive em `application`.
+- **`crates/local_engine`** *(F8, não criado)*: crate dual-target (lib-servidor **e**
+  `cdylib`/`staticlib` para FFI do Flutter Windows).
+- **`ia_engine/`** *(F5, não criado)*: serviço Python separado (LangChain) chamado via **gRPC** pelo
+  worker. Núcleo é a facade `FeaturesCompose` da v1 (só muda o ponto de entrada: task Celery → handler
+  gRPC). FFI/PyO3 foi descartado (§13.1 do planejamento).
+- **`clients/flutter_windows` + `clients/flutter_web`** *(F6.5+, não criados)*: dois apps Flutter
+  separados + pacotes em `clients/packages/`, com camada `DataSource` abstrata (`LocalEngineFFI` no
+  Windows, `RemoteOnly` na Web).
 
 ## Detected Design Patterns
 
 | Pattern | Confiança | Localização | Descrição |
 |---------|-----------|-------------|-----------|
 | Event-Driven | Alta | `messaging_gateway` → Redis Streams → `worker` | Webhook publica evento; worker consome assincronamente |
-| Domain-Driven Design | Alta | `crates/domain_*` | Crates por bounded context; regras puras sem I/O |
+| RPC por contrato | Alta | `apps/data_*` + `crates/transport`/`contracts` | Acesso a dados isolado em serviços via UDS/FlatBuffers (gRPC fallback) |
 | CQRS (leve) | Média | `runtime_api` | Comandos/consultas via gRPC unário; realtime via gRPC Server Streaming (transporte único — decisão D7) |
-| Repository | Alta | `crates/infrastructure_postgres` | Adaptadores isolados do domínio |
-| Strategy | Alta | `clients/packages/api_client` DataSource | `LocalEngineFFI` vs `RemoteOnly` trocáveis sem mudar lógica |
-| Dual-Target Crate | Alta | `crates/local_engine` | Compilável como lib-servidor e cdylib/FFI |
+| Repository | Alta | `crates/infrastructure_postgres` | Adaptadores isolados do domínio (consumidos só por `data_postgres`) |
+| Outbox + relay | Alta | `data_postgres` (migration 0011) | Escrita transacional + `LISTEN/NOTIFY` → publica no bus |
+| Domain-Driven Design | Planejado | `crates/domain_*` (não criados) | Bounded contexts; regras puras sem I/O — extraídas da `application` quando justificar |
+| Strategy | Planejado | `clients/packages/api_client` DataSource | `LocalEngineFFI` vs `RemoteOnly` trocáveis sem mudar lógica |
+| Dual-Target Crate | Planejado | `crates/local_engine` (F8) | Compilável como lib-servidor e cdylib/FFI |
 
 ## Entry Points
 
@@ -75,22 +114,34 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
 - `ia_engine/src/server.py` — serviço gRPC de IA (Python)
 - `clients/flutter_windows/lib/main.dart` — app Flutter Windows
 
-> **Nota:** em desenvolvimento. A **fundação já está implementada** — `infrastructure_postgres` (RLS, migrations 0001–0009, crypto, auth, `RequestContext`) e `infrastructure_redis` (event bus, auth_tokens, cache); o **auth** (`contracts`/`application`/`runtime_api`) está em andamento. Os demais entry points acima ainda **não foram criados**. Status real por etapa: `doc_dev/planejamento/02-fases-desenvolvimento.md`.
+> **Nota:** em desenvolvimento. A **fundação modular já está implementada** — crates de base
+> (`contracts`, `transport`, `error_core`, `observability`), os serviços `data_*` (RPC sobre
+> UDS/FlatBuffers + consumo do bus) e as libs `infrastructure_postgres` (RLS, migrations
+> 0001–0011, crypto, auth, `RequestContext`, outbox) e `infrastructure_redis` (bus, auth_tokens,
+> cache, locks). `infrastructure_storage` ainda é **stub filesystem**. O **auth**
+> (`application`/`runtime_api`) e os apps de negócio (`worker`, `messaging_gateway`,
+> `control_plane`) estão **bootstrapados/em andamento**; `ia_engine`, `local_engine` e os
+> clients Flutter **não foram criados**. Status real por etapa: `doc_dev/planejamento/02-fases-desenvolvimento.md`.
 
 ## Public API
 
 | Símbolo | Tipo | Localização |
 |---------|------|-------------|
-| `contracts::events::MessageReceived` | Evento | `crates/contracts` |
-| `contracts::envelopes::TenantEnvelope` | DTO | `crates/contracts` |
-| `domain_ticket::TicketPolicy` | Trait | `crates/domain_ticket` |
-| `domain_conversation::Conversation` | Entity | `crates/domain_conversation` |
-| `application::use_cases::ReceiveMessage` | Use Case | `crates/application` |
-| `local_engine::LocalEngine` | FFI + lib | `crates/local_engine` |
+| `contracts::Envelope` | DTO RPC (protobuf) | `crates/contracts` |
+| `contracts::TenantEnvelope<T>` | DTO de evento do bus | `crates/contracts` (`src/envelope.rs`) |
+| `contracts::ErrorEnvelope` | DTO de erro | `crates/contracts` |
+| `transport::bus::{Consumer, publicar_evento}` | Barramento Redis Streams | `crates/transport` |
+| `transport::Server` | Servidor RPC (rotas por `method`) | `crates/transport` |
+| `error_core::AppError` / `to_error_envelope` | Erro agregado + ponte | `crates/error_core` |
+| `observability::init_telemetry` | Bootstrap de tracing | `crates/observability` |
+| `infrastructure_postgres::run_in_tenant_transaction` | RLS scope | `crates/infrastructure_postgres` |
 
 ## Internal System Boundaries
 
-- **Gateway ↔ Worker**: Redis Streams com `tenant_id` no envelope. Gateway nunca conhece regras de domínio.
+- **Apps de negócio ↔ dados**: acesso a Postgres/Redis/storage **só** via RPC tipado aos
+  `apps/data_*` (UDS + FlatBuffers, gRPC/TCP fallback), embrulhado no `Envelope` protobuf.
+  Nenhum app de negócio importa `infrastructure_*`.
+- **Gateway ↔ Worker**: `transport::bus` (Redis Streams) com `TenantEnvelope<T>` (tenant_id no envelope). Gateway nunca conhece regras de domínio.
 - **Worker ↔ ia_engine**: **gRPC** (processos separados; FFI/PyO3 descartado — §13.1). Rust nunca depende de detalhes do LangChain; contrato `.proto`/`domain_ai`. O worker também substitui o Celery da v1 (fila via Redis Streams + agendamento de feedback/retenção).
 - **Worker ↔ Runtime API**: PostgreSQL + Redis pub/sub para fan-out de eventos realtime por tenant; o `runtime_api` empurra cada evento pelo **stream gRPC** aberto pelo cliente.
 - **Flutter ↔ Runtime API**: **gRPC único** — unário (comandos/consultas) + Server Streaming (realtime). Desktop usa gRPC nativo HTTP/2; Web usa gRPC-Web (`tonic-web`). Sem WebSocket (decisão D7).
@@ -117,7 +168,7 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
 
 ## Top Directories Snapshot
 
-- `server/` — Cargo workspace Rust (4 binários + ~14 crates de domínio, aplicação e infra)
+- `server/` — Cargo workspace Rust: **7 apps** (`data_postgres`, `data_redis`, `data_storage`, `runtime_api`, `worker`, `messaging_gateway`, `control_plane`) + **9 crates** (`contracts`, `transport`, `error_core`, `observability`, `application`, `infrastructure_postgres/redis/storage`, `test_support`)
 - `evolution/` — configuração e gestão do Evolution Go (gateway WhatsApp multi-instância)
 - `clients/packages/` — pacotes Dart compartilhados (core_ui, domain_models, api_client, local_engine_ffi)
 - `clients/flutter_windows/` — app Flutter Windows desktop (fase 1)

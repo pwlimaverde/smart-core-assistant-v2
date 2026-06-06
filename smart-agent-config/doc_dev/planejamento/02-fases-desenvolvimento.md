@@ -27,76 +27,55 @@
 
 ### Legenda de status
 - ✅ **Concluído** — implementado e validado.
-- 🚧 **Em andamento** — começado (ou bootstrapado por outro plano).
+- 🚧 **Em andamento** — começado.
 - ⬜ **Pendente** — ainda não iniciado.
 
 ---
 
 ## Estado atual do desenvolvimento (snapshot)
 
-A base de **persistência, segurança e barramento** já está construída; o foco
-atual é o **módulo de autenticação + primeiro ponto de entrada gRPC**
-(`runtime_api`).
-
 ### O que já está pronto (✅)
-- **`infrastructure_postgres`** — PostgreSQL único multi-tenant com **RLS**,
-  **migrations 0001–0009** (RLS, tenants/config/users/invites, planos/
-  assinaturas, clientes/contatos, operacional [departamentos/fluxos/etapas/
-  atendentes/app_instances], atendimentos [tickets/mensagens/campos/etiquetas/
-  movimentos], treinamento RAG [pgvector 1536], evolution_sync, settings),
-  **crypto AES-256-GCM** (`CipherManager`), **cache** `DashMap` (`RuntimeConfig`),
-  **auth** (`AuthUser`, Argon2) e **`RequestContext`** (RLS por transação).
-- **`infrastructure_redis`** — event bus (Streams + consumer groups +
-  `TenantEnvelope`), cache de `flow_permissions` (TTL curto), refresh tokens
-  (rotação + reuse-detection) e blocklist de access tokens.
-- **Storage Cloudflare R2** — bucket `media-smart-core-assistant` + token
-  restrito (Object R/W) configurados em `infra/.env.deploy` e **validados** por
-  `infra/test-r2.py` (head/put/list/get/presigned/delete). Ver
-  [08-infraestrutura-storage.md](./08-infraestrutura-storage.md).
-- **Infra de dados + deploy** — `docker/compose/data.yml` (PG+pgvector, Redis,
-  MinIO) e scripts `infra/` (deploy/manage/tunnel via SSH para Hostinger).
+- **Crates de Base/Fundação** — `contracts` (schemas proto/fbs, Envelope e stubs gerados), `transport` (codec FlatBuffers/gRPC, canais UDS/TCP/WS, barramento `transport::bus`), `error_core` (erros serializáveis `ErrorEnvelope`) e `observability` (tracing, `traceparent`, auditoria rewired para Streams).
+- **Serviços de Dados (data_*)** — `data_postgres` (encapsulando RLS pool, migrations e CRUD Postgres de `infrastructure_postgres`), `data_redis` (encapsulando cache, tokens, locks de `infrastructure_redis`) e `data_storage` (encapsulando Cloudflare R2 de `infrastructure_storage`).
+- **Infraestrutura de dados + deploy** — `docker/compose/data.yml` (PG+pgvector, Redis, MinIO) e scripts `infra/` de automação e túnel SSH.
 
 ### O que está em andamento (🚧)
-- **Módulo de autenticação** (`user-auth-module`, plano canônico no dotcontext —
-  PREVC: P concluído, R/E/V/C pendentes). Cria os crates **`contracts`**
-  (`auth.proto`) e **`application`** (`AuthService`) e o app **`runtime_api`**
-  (Tonic + `AuthInterceptor`), além de JWT HS256, refresh opaco e rate limiting.
+- **Módulo de autenticação** (`user-auth-module`) — Casos de uso de autenticação e RBAC em `application`, expostos via RPC no `runtime_api`.
+- **Orquestração e Gateway de Mensagens** — O bootstrap estrutural de `messaging_gateway`, `worker` e `control_plane` já foi criado na reestruturação e aguarda a lógica detalhada de suas respectivas fases.
 
-### O que está pendiente (⬜)
-- Crates de base ainda não criados: **`observability`** (plano 05),
-  **`error_core`** (plano 06), **`infrastructure_storage`** (plano 08 — R2 já
-  configurado), **`infrastructure_evolution`** (cliente HTTP; persistência já existe).
-- Camada **`application`** (regras de negócio/casos de uso) — só começando com o auth.
-- Apps: **`messaging_gateway`**, **`worker`**, **`control_plane`**.
-- **`ia_engine`** (Python/gRPC), **`realtime`** (fan-out completo),
-  **`local_engine`** (FFI), **clients Flutter**, **`evolution/`** (infra Go).
-- **CI/CD + DevOps** (plano 10); **observabilidade** (plano 05).
+### O que está pendente (⬜)
+- **`ia_engine`** (serviço Python separado via gRPC/FlatBuffers).
+- **realtime** (fan-out do stream gRPC via Redis pub/sub no `runtime_api`).
+- **Clients Flutter** e o motor local **`local_engine`** (FFI).
+- **CI/CD + DevOps** completo (plano 10).
 
 ### Inventário de crates/apps × status
 
 | Componente | Tipo | Status | Plano/Nota |
 |---|---|---|---|
-| `infrastructure_postgres` | crate infra | ✅ | migr. 0001–0009 + RLS + crypto; doc [03](./03-infraestrutura-postgres.md) |
-| `infrastructure_redis` | crate infra | ✅ | bus + cache + auth tokens; doc [04](./04-infraestrutura-redis.md) |
-| `infrastructure_storage` | crate infra | ⬜ (R2 config ✅) | [08](./08-infraestrutura-storage.md) |
-| `infrastructure_evolution` | crate infra | ⬜ | cliente HTTP; persistência já em `integracoes/` |
-| `contracts` | crate base | 🚧 | bootstrap pelo auth; [07](./07-crate-contracts.md) |
-| `application` | crate aplicação | 🚧 | **regras de negócio/casos de uso**; começa com o auth |
-| `observability` | crate base | ⬜ | [05](./05-observabilidade.md) |
-| `error_core` | crate base | ⬜ | [06](./06-tratamento-de-erros.md) |
-| `domain_*` (regras puras) | crates domínio | ⬜ | regras na `application`; persistência (CRUD) no `infrastructure_postgres` |
-| `realtime` | crate | 🚧 | scaffold de WS no auth; fan-out completo ⬜ |
-| `local_engine` | crate (FFI) | ⬜ | F8 |
-| `runtime_api` | app | 🚧 | gRPC mínimo (auth) |
-| `messaging_gateway` | app | ⬜ | F3 |
-| `worker` | app | ⬜ | F4 |
-| `control_plane` | app | ⬜ | F2 |
-| `ia_engine` | stack Python | ⬜ | F5 |
+| `infrastructure_postgres` | crate infra | ✅ | repositórios SQLx, criptografia e migrations |
+| `infrastructure_redis` | crate infra | ✅ | conexões Redis, cache, tokens, locks |
+| `infrastructure_storage` | crate infra | 🚧 | **stub filesystem** (`StorageClient` put/get/presign/delete grava em disco local; presign mockado); cliente S3/R2 (`aws-sdk-s3`) e layout multi-tenant **pendentes** |
+| `infrastructure_evolution` | crate infra | ⬜ | cliente HTTP REST para o Evolution Go |
+| `contracts` | crate base | ✅ | schemas proto/fbs, Envelope e tipos gerados |
+| `transport` | crate base | ✅ | canais UDS/TCP/WS, codecs e barramento |
+| `observability` | crate base | ✅ | tracing OTLP central + auditoria via bus |
+| `error_core` | crate base | ✅ | taxonomia e erros com `ErrorEnvelope` serializável |
+| `application` | crate aplicação| 🚧 | casos de uso de negócio; em andamento com o auth |
+| `local_engine` | crate (FFI) | ⬜ | F8; motor local embarcado |
+| `data_postgres` | app | ✅ | servidor RPC Postgres síncrono/assíncrono + outbox |
+| `data_redis` | app | ✅ | servidor RPC Redis síncrono (tokens, cache, locks) |
+| `data_storage` | app | 🚧 | servidor RPC (PutFile/GetFile/PresignFile) + consumer de purga **funcionando sobre o stub filesystem**; backend R2/MinIO pendente |
+| `control_plane` | app | 🚧 | bootstrapado; aguarda endpoints admin (F2) |
+| `messaging_gateway` | app | 🚧 | bootstrapado; aguarda lógica webhook WhatsApp (F3) |
+| `worker` | app | 🚧 | bootstrapado; aguarda orquestrador do domínio (F4) |
+| `runtime_api` | app | 🚧 | em andamento; gRPC mínimo (auth) (F6) |
 | `clients/packages/core_ui` | pacote Flutter | ⬜ | bootstrap na F6.5 (design system) |
-| `clients/packages/api_client` | pacote Flutter | ⬜ | bootstrap na F6.5 (gRPC único + `kIsWeb`) |
-| `clients/flutter_windows` | stack Flutter | ⬜ | **incremental** (F6.5 bootstrap+auth → F2/F4/F5 telas → F7 consolida) |
+| `clients/packages/api_client` | pacote Flutter | ⬜ | bootstrap na F6.5 (gRPC único / FlatBuffers) |
+| `clients/flutter_windows` | stack Flutter | ⬜ | incremental (F6.5 bootstrap+auth → F2/F4/F5 telas → F7 consolida) |
 | `clients/flutter_web` | stack Flutter | ⬜ | F10 (RemoteOnly; reusa packages) |
-| `evolution/` | stack Go | ⬜ | F3 |
+| `evolution/` | stack Go | ⬜ | F3; gateway Evolution Go |
+| `ia_engine` | stack Python | ⬜ | F5; gRPC/FlatBuffers IA engine |
 
 > **Nota de arquitetura (camadas — esclarecimento importante):**
 > `infrastructure_postgres` **não é** a camada de domínio. É a **ponte de
@@ -216,12 +195,8 @@ pelas telas de login e cadastro junto do auth.
 - ⬜ `evolution/`, `clients/`, `ia_engine/` (criados quando as fases chegarem).
 - ✅ `.env.example` + `.gitignore` cobrindo `.env`, `target/`, `infra/.env.deploy`.
 
-### Etapa 0.2 — Cargo workspace (skeleton) — 🚧
-- ✅ `server/Cargo.toml` (workspace) + `Cargo.lock`; `[workspace.dependencies]`
-  central.
-- 🚧 Membros atuais: `infrastructure_postgres`, `infrastructure_redis`. Demais
-  crates/apps entram conforme suas fases (auth adiciona `contracts`/
-  `application`/`runtime_api`).
+### Etapa 0.2 — Cargo workspace — ✅
+- ✅ `server/Cargo.toml` (workspace) + `Cargo.lock` configurados com todos os membros de `apps/` e `crates/`.
 - **DoD:** `cargo build` verde no workspace; `cargo fmt --check` limpo.
 
 ### Etapa 0.3 — Infra local de dados — ✅
@@ -229,24 +204,21 @@ pelas telas de login e cadastro junto do auth.
 - `docker/init-scripts/01-extensions.sql` (`vector`, `uuid-ossp`).
 - **DoD:** `docker compose -f docker/compose/data.yml up -d` sobe saudável.
 
-### Etapa 0.4 — crate `observability` — ⬜ (prioridade: antes das features)
-- Logs estruturados (JSON) com `tracing`; init reusável pelos binários; spans com
-  `tenant_id`; export OTLP. Todo módulo nasce rastreável. **Detalhe em
-  [05-observabilidade.md](./05-observabilidade.md).**
+### Etapa 0.4 — crate `observability` — ✅
+- logs estruturados (JSON) com `tracing`; spans com `tenant_id` e contexto OTLP. Auditoria direcionada para Streams (bus) sem conexão direta ao Postgres.
 - **DoD:** binário emite log JSON com nível configurável; trace exportável.
 
-### Etapa 0.5 — crate `error_core` — ⬜ (prioridade: antes das features)
-- Taxonomia (`ErrorCode`), agregador `AppError`, mapeamento p/ `tonic::Status` e
-  registro rastreável (integra à observabilidade). Os erros por crate
-  (`DbError`/`RedisError`/`StorageError`/…) permanecem. Detalhe em
-  [06-tratamento-de-erros.md](./06-tratamento-de-erros.md).
-- **DoD:** erro logado em JSON com `error_code` + `tenant_id`/`trace_id`.
+### Etapa 0.5 — crate `error_core` — ✅
+- Taxonomia (`ErrorCode`, `ErrorCategory`), agregador `AppError` e mapeamento para `ErrorEnvelope` serializável que cruza a fronteira IPC/RPC de rede.
+- **DoD:** erros estruturados e rastreáveis na observabilidade.
 
-### Etapa 0.6 — crate `contracts` — 🚧
-- `TenantEnvelope<T>` (migrar de `infrastructure_redis`), eventos do bus, DTOs
-  (`MediaPointer`), versão de schema. **Bootstrap pelo auth (`auth.proto`).**
-  Detalhe em [07-crate-contracts.md](./07-crate-contracts.md).
-- **DoD:** tipos com round-trip serde testado; proto gera stubs.
+### Etapa 0.6 — crate `contracts` — ✅
+- Schemas `.proto` canônicos em `schemas/`, transpilação automática para `.fbs` no build, e stubs de tipos gerados automaticamente via `build.rs` (FlatBuffers + Tonic). Exposição do `Envelope` unificado.
+- **DoD:** stubs gerados; compatibilidade de tipos compilando no workspace.
+
+### Etapa 0.7 — crate `transport` — ✅
+- Implementação de codecs (FlatBuffers, gRPC), canais UDS/TCP/WS, protocolo de framing RPC (len, flags, corr_id) e barramento assíncrono Redis Streams (`transport::bus`).
+- **DoD:** transmissão local via UDS e barramento Streams operando.
 
 ---
 
@@ -264,19 +236,27 @@ pelas telas de login e cadastro junto do auth.
   com `SET LOCAL app.current_tenant`; policies fail-closed por tabela.
 
 ### Etapa 1.3 — Migrations do schema de domínio — ✅
-- Migrations **0002–0009** cobrem Control Plane, domínio operacional,
-  atendimentos, treinamento RAG (pgvector 1536), evolution_sync e settings.
+- Migrations **0002–0011** cobrem Control Plane, domínio operacional,
+  atendimentos, treinamento RAG (pgvector 1536), evolution_sync, settings,
+  **audit_log (0010)** e **outbox (0011)**.
 
 ### Etapa 1.4 — Testes de isolamento multi-tenant — ✅
 - Suíte de integração contra Postgres real (vazamento entre tenants + ausência
   de contexto). *Revalidar a cada nova tabela.*
 
-### Etapa 1.5 — `infrastructure_storage` (R2/MinIO) — ⬜ (config ✅) — **NOVO**
-- Ponte S3-compatible única; layout `media/{tenant}/{instance}/{type}/{hash}`;
-  put/get/presign/delete; R2 em produção, MinIO em dev. **R2 já configurado e
-  validado**; falta implementar a crate. Detalhe em
-  [08-infraestrutura-storage.md](./08-infraestrutura-storage.md).
-- **DoD:** crate replica o fluxo já provado por `infra/test-r2.py`.
+### Etapa 1.5 — `infrastructure_storage` (R2/MinIO) — 🚧 (stub)
+- **Estado atual:** `StorageClient` é um **stub baseado em filesystem** (grava em
+  diretório local; `presign` devolve URL mockada) já integrado como dependência de
+  `data_storage` e exercido pelos handlers RPC. A API atual é `put/get/presign/delete`
+  por `tenant_id`+`file_name`.
+- **Pendente:** substituir o stub pela ponte S3-compatible (`aws-sdk-s3`) com layout
+  `media/{tenant}/{instance}/{type}/{hash}`, presign real e R2 em produção / MinIO em
+  dev — ver [08-infraestrutura-storage.md](./08-infraestrutura-storage.md).
+- **DoD:** CRUD de objetos e links pré-assinados **reais** contra MinIO/R2.
+
+### Etapa 1.6 — Microsserviços de dados (`data_*`) — ✅
+- Embrulho das bibliotecas de infraestrutura em apps de execução independentes (`data_postgres`, `data_redis`, `data_storage`) expondo servidores RPC IPC/UDS para leitura/escrita e escuta do bus.
+- **DoD:** comunicação UDS direta no Cargo workspace operando; persistência preservada sob RLS.
 
 ---
 
@@ -323,12 +303,13 @@ registro de instâncias Evolution. **Persistência já pronta; falta o app.**
 - Mapeamento por chave JSON (`imageMessage`/`audioMessage`/… → `media_type`),
   normalização de `messages.upsert` → evento interno, reply/`stanzaId`.
 
-### Etapa 3.3 — `infrastructure_redis` (event bus) — ✅
-- Streams + consumer groups; `TenantEnvelope`; publish/consume/ack/replay.
+### Etapa 3.3 — barramento de eventos (`transport::bus`) — ✅
+- Redis Streams + consumer groups integrados em `transport::bus`; envelopes serializáveis e publish/consume operacionais.
+- **DoD:** eventos no bus fluem com sucesso no workspace.
 
-### Etapa 3.4 — Binário `messaging_gateway` — ⬜
-- Webhook → valida origem → resolve `tenant_id`+instância → persiste bruto →
-  publica no bus. **Sem regra de negócio.** Idempotência por `message_id`.
+### Etapa 3.4 — Binário `messaging_gateway` — 🚧
+- Ingestão de webhooks → resolve `tenant_id` → persiste bruto via RPC em `data_postgres` → publica evento no bus. Sem regras de negócio.
+- **DoD:** webhook cadastrado e eventos enfileirados no bus com sucesso.
 
 ---
 
@@ -346,21 +327,21 @@ registro de instâncias Evolution. **Persistência já pronta; falta o app.**
   `DecideTicketPolicy`, `ApplyKanbanStage`, `CanBotRespond`, `TransferFlow`. A
   crate já nasce com o auth; estes casos de uso entram aqui.
 
-### Etapa 4.3 — Binário `worker` — ⬜
-- Consome o bus, debounce por contato (lock Redis), resolve conversa, política de
-  ticket, kanban + `flow_movement`.
+### Etapa 4.3 — Binário `worker` — 🚧
+- Consome o bus, executa o debounce por contato, resolve a conversa, aplica políticas de ticket e atualiza o Kanban via chamadas RPC a `data_postgres` e `data_redis`.
+- **DoD:** processamento assíncrono consumindo eventos do bus integrado com sucesso.
 
 ### Etapa 4.3b — Scheduler do `worker` (substitui o Celery da v1) — ⬜
-- Timeout de feedback + purga de mídia (delayed tasks no Redis / `tokio` timers).
-  A **purga de mídia** usa `infrastructure_storage::remover_objeto` (R2/MinIO).
+- Timeout de feedback + purga de mídias. A purga de mídia dispara requisição RPC para o serviço `data_storage::remover_objeto`.
+- **DoD:** tarefas temporais agendadas no Redis executadas de forma resiliente.
 
 ### Etapa 4.4 — Envio outbound — ⬜
-- Via `infrastructure_evolution` (`/message/sendText|sendMedia`) com retry/backoff;
-  `status_envio` por `MESSAGES_UPDATE`.
+- Dispara requisição HTTP REST para o Evolution Go (`/message/sendText|sendMedia`) com retry e backoff; escuta confirmações.
+- **DoD:** envio outbound operando via gateway.
 
 ### Etapa 4.5 — `BotRulesEngine` (sem LLM) — ⬜
-- Bot responde só se: instância permite **e** sem interação humana **e**
-  `bot_pode_atender`. Resposta provisória até a IA (F5).
+- Lógica de barreira de bot (resposta automática ativa, sem interação humana, flag `bot_pode_atender`). Resposta temporária.
+- **DoD:** bot respondendo mensagens simuladas via RPC.
 
 ### Etapa 4.6 — UI: fila + Kanban + chat lateral (trilha de UI) — ⬜
 - No `flutter_windows`: **fila por departamento**, **painel Kanban** com
@@ -372,20 +353,16 @@ registro de instâncias Evolution. **Persistência já pronta; falta o app.**
 
 ---
 
-## Fase 5 — `ia_engine` (Python, serviço gRPC) — ⬜
+## Fase 5 — `ia_engine` (Python, serviço RPC) — ⬜
 
-**Objetivo:** mídia→texto, intents/entidades, RAG, resposta e sentimento, como
-serviço Python via **gRPC** (decisão D3/§13.1). *RAG/pgvector já no Postgres
-(`treinamento/`).*
+**Objetivo:** mídia→texto, intents/entidades, RAG, resposta e sentimento, como serviço Python exposto por RPC e consumido pelo `worker`.
 
-- **5.1** skeleton (`uv`, `server.py` gRPC, `features/`, `llm/`, `contracts/`).
-- **5.2** contratos `domain_ai` + protobuf (fonte única; stubs nos dois lados).
+- **5.1** skeleton (`uv`, `server.py` RPC, `features/`, `llm/`, `contracts/`).
+- **5.2** contratos e stubs gerados com base em schemas `.proto` (stubs nos dois lados).
 - **5.2b** portar a facade `FeaturesCompose` da v1 (núcleo de IA quase intacto).
 - **5.3** features de análise (transcribe/interpret/analyse/embeddings 1536).
-- **5.4** resposta + RAG (pgvector + `query_compose`) + sentimento.
-- **5.5** integração worker→IA + mídia: grava `resumo`/`analise` + **ponteiro**
-  (`MediaPointer`); binário vai para `infrastructure_storage` (R2). Timeout +
-  retry/backoff; degradação graciosa.
+- **5.4** resposta + RAG (pgvector + `query_compose` via `data_postgres` RPC) + sentimento.
+- **5.5** integração worker→IA + mídia: grava `resumo`/`analise` + **ponteiro** (`MediaPointer`) via `data_postgres` RPC; binário vai para `data_storage` RPC (R2). Timeout + retry/backoff; degradação graciosa.
 
 ---
 
@@ -523,7 +500,7 @@ chat na F5). Aqui não se "constrói tudo do zero" — refina-se o conjunto.
 | Atendimento/Mensagem/Movimento | `atendimentos/` + migration 0006 | ✅ (persist.) |
 | Refresh/blocklist/cache de permissões | `infrastructure_redis` (auth_tokens, cache) | ✅ |
 | Event bus (substitui fila Celery) | `infrastructure_redis::event_bus` | ✅ |
-| Mídia (binário transitório) | `infrastructure_storage` (R2/MinIO) | ⬜ (R2 config ✅) |
+| Mídia (binário transitório) | `infrastructure_storage` (R2/MinIO) | 🚧 (stub filesystem; S3/R2 pendente) |
 | Auth/JWT/sessão + `runtime_api` | `application` + `apps/runtime_api` | 🚧 |
 | `AttendanceOrchestrator` (orquestração) | `worker` + `application` | ⬜ |
 | Celery: `process_contact_response_task` | `worker` consumindo Streams | ⬜ |
