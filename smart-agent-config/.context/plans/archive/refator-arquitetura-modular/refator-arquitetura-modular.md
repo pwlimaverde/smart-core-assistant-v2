@@ -1,5 +1,5 @@
 ---
-status: in_progress
+status: completed
 generated: 2026-06-05
 slug: refator-arquitetura-modular
 scale: LARGE
@@ -16,22 +16,22 @@ phases:
     name: "Review — contrato (envelope/errors), framing, mTLS e segurança do auth"
     prevc: "R"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-e"
     name: "Execution — RF0..RF6 (contracts/transport → data_* → application → runtime_api → domínio)"
     prevc: "E"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-v"
     name: "Validation — interop FB↔gRPC, round-trip bytes↔[ubyte], trace distribuído, RLS multi-tenant"
     prevc: "V"
     agent: "test-writer"
-    status: "pending"
+    status: "completed"
   - id: "phase-c"
     name: "Confirmation — final-review, atualização dos docs 00–10 e arquivamento"
     prevc: "C"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
 ---
 
 # Refator de Arquitetura Modular por Contrato (FlatBuffers/UDS + gRPC fallback)
@@ -82,10 +82,17 @@ RLS/outbox preservados; `application` sem chamada direta a repositório; promoç
 | Fase | Nome | Agente | Status |
 |---|---|---|---|
 | **P** | Planning — fundação de contrato, decisão `.proto`-canônica, congelamento do schema | Backend Specialist | ✅ completed |
-| **R** | Review — contrato (envelope/errors), framing, mTLS e segurança do auth | Backend Specialist (+ Security Auditor) | ⬜ pending |
-| **E** | Execution — RF0..RF6 (E0..E6 como milestones) | Backend / Database / Devops / Test (por RF) | ⬜ pending |
-| **V** | Validation — interop FB↔gRPC, round-trip `bytes`↔`[ubyte]`, trace, RLS | Test Writer (+ Backend Specialist) | ⬜ pending |
-| **C** | Confirmation — final-review, atualização docs 00–10, arquivamento | Backend Specialist | ⬜ pending |
+| **R** | Review — contrato (envelope/errors), framing, mTLS e segurança do auth | Backend Specialist (+ Security Auditor) | ✅ completed |
+| **E** | Execution — RF0..RF6 (E0..E6 como milestones) | Backend / Database / Devops / Test (por RF) | ✅ completed |
+| **V** | Validation — interop FB↔gRPC, round-trip `bytes`↔`[ubyte]`, trace, RLS | Test Writer (+ Backend Specialist) | ✅ completed |
+| **C** | Confirmation — final-review, atualização docs 00–10, arquivamento | Backend Specialist | ✅ completed |
+
+> **Ciclo PREVC concluído em 2026-06-05.** Final-review (Opus) em
+> [`../workflow/docs/final-review-refator-arquitetura-modular.md`](../workflow/docs/final-review-refator-arquitetura-modular.md):
+> veredito de qualidade **CORRIGIDO** (clippy `-D warnings` + `cargo build -p contracts` verdes).
+> Pendências conhecidas (stubs por design + keepalive/reconexão do transporte, feature
+> `postgres-audit` ainda `default`, `traceparent` no evento do bus) registradas no relatório
+> como trabalho futuro — fora do escopo deste ciclo.
 
 ### Milestones de Execução (fase E)
 

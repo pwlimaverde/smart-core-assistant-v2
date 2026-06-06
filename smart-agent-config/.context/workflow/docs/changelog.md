@@ -2,6 +2,27 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-06-05] - Refator de Arquitetura Modular por Contrato (RF0–RF6)
+
+> Ciclo PREVC `refator-arquitetura-modular` concluído. Final-review (Opus):
+> `final-review-refator-arquitetura-modular.md` — qualidade **CORRIGIDO**.
+
+### Adicionado
+- **Crate `contracts` (`server/crates/contracts`):** Fonte de schema canônica em **`.proto`** (`schemas/*.proto`) gerando gRPC/Protobuf via `tonic_prost_build` e FlatBuffers via `flatc --proto`→`.fbs`→`flatc --rust` (`build.rs`). `protoc`/`flatc` vendorizados em `server/bin/`. Decisão de manchete: o `flatc` **não** transpila `.fbs`→`.proto`, então o IDL autorado virou `.proto` — FlatBuffers permanece o codec de fio padrão (`payload:[ubyte]` preservado).
+- **Crate `transport` (`server/crates/transport`):** Runtime de transporte sobre UDS — `framing.rs` (len/flags/corr_id), `runtime.rs` (`MuxClient` corr_id→oneshot, timeout, backpressure), `codec.rs` (codec FB/gRPC comutável por env) e `bus.rs` (Redis Streams `STREAM_EVENTOS`/`STREAM_SEGURANCA`, consumer group, XACK, reprocessamento PEL) absorvendo o antigo `event_bus.rs` do `infrastructure_redis`.
+- **`ErrorEnvelope` no `error_core` (`envelope_bridge.rs`):** Ponte serializável entre `AppError` e o envelope de contrato; 6 categorias novas em `code.rs` (apêndice, disciplina de não-remover preservada).
+- **Rewire de auditoria p/ Streams (`observability/src/audit.rs`):** Auditoria publica em `STREAM_SEGURANCA` via `transport::bus`; consumidor de consolidação no app `data_postgres`.
+- **Apps por contrato (`server/apps/*`):** `data_postgres` (RPC 3 protocolos + consumer de auditoria + `OutboxRelay` via PgListener), `data_redis`, `data_storage`, `runtime_api`, `messaging_gateway`, `worker`, `control_plane` (topologia ponta-a-ponta; realtime/WS e `control_plane` como stubs declarados).
+- **Crate `application` (`auth/login.rs`):** Caso de uso de login falando por RPC (`transport::conectar_cliente`), sem acesso direto a repositório.
+- **Migration `0011_outbox.sql`:** Tabela `outbox` + trigger `pg_notify('outbox_new')` para o relay outbox→bus.
+- **Docker:** serviço `redis-bus` com `--maxmemory-policy noeviction` (separado do `allkeys-lru` que evicta Streams).
+
+### Pendências (trabalho futuro, fora do escopo do ciclo)
+- Runtime de transporte sem keepalive/reconexão com backoff (read_loop encerra na queda).
+- Feature `postgres-audit` ainda `default` em `observability` (o ciclo `observability→postgres` não foi removido à risca).
+- `traceparent` não trafega no evento do bus (salto bus→RPC inicia novo trace).
+- Stubs por completar: `control_plane`, realtime/WS de `runtime_api`, handlers mock de `data_postgres`.
+
 ## [2026-06-04] - Tratamento de Erros (`error_core`)
 
 ### Adicionado
