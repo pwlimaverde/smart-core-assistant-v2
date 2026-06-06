@@ -1,0 +1,28 @@
+// Generated from envelope.proto
+
+include "errors.fbs";
+
+namespace smartcore.contracts;
+
+enum MessageKind : int {
+  MESSAGE_KIND_UNSPECIFIED = 0,
+  MESSAGE_KIND_EVENT = 1,
+  MESSAGE_KIND_REQUEST = 2,
+  MESSAGE_KIND_REPLY = 3,
+  MESSAGE_KIND_STREAM_ITEM = 4,
+  MESSAGE_KIND_ERROR = 5,
+}
+
+table Envelope {
+  tenant_id:string;
+  schema_version:uint;
+  message_id:string;
+  causation_id:string;
+  traceparent:string;
+  occurred_at:long;
+  kind:smartcore.contracts.MessageKind;
+  method:string;
+  payload:[ubyte];
+  error:smartcore.contracts.ErrorEnvelope;
+}
+

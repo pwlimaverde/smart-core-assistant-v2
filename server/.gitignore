@@ -1,0 +1,3 @@
+/target/
+.env
+# .sqlx/ deve ser versionado (modo offline do SQLx)

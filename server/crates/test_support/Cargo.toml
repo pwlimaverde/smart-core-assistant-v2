@@ -1,0 +1,10 @@
+[package]
+name    = "test_support"
+version = "0.1.0"
+edition.workspace = true
+publish = false
+
+# Crate de apoio aos testes de integração: garante que o túnel SSH para o
+# Docker da Hostinger esteja de pé antes dos testes conectarem em localhost.
+# Usa apenas a stdlib (spawna o `ssh` do sistema), sem dependências externas.
+[dependencies]

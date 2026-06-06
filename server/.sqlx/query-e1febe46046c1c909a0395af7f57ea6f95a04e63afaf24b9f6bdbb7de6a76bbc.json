@@ -1,0 +1,103 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO evolution_sync_whitelist (tenant_id, name, phone_number, contact_id)\n               VALUES ($1, $2, $3, $4)\n               RETURNING id, tenant_id, contact_id, name, phone_number, active, created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "evolution_sync_whitelist",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "evolution_sync_whitelist",
+            "name": "tenant_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "contact_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "evolution_sync_whitelist",
+            "name": "contact_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "name",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "evolution_sync_whitelist",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "phone_number",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "evolution_sync_whitelist",
+            "name": "phone_number"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "active",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "evolution_sync_whitelist",
+            "name": "active"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "evolution_sync_whitelist",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e1febe46046c1c909a0395af7f57ea6f95a04e63afaf24b9f6bdbb7de6a76bbc"
+}

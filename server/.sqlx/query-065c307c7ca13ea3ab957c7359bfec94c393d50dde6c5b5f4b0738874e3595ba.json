@@ -1,0 +1,148 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, username, email, password_hash, first_name, last_name,\n                      is_active, is_staff, is_superuser, last_login, date_joined\n               FROM auth_user WHERE username = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "auth_user",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "username",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "auth_user",
+            "name": "username"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "email",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "auth_user",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "password_hash",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "auth_user",
+            "name": "password_hash"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "first_name",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "auth_user",
+            "name": "first_name"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "last_name",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "auth_user",
+            "name": "last_name"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "is_active",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "auth_user",
+            "name": "is_active"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "is_staff",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "auth_user",
+            "name": "is_staff"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "is_superuser",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "auth_user",
+            "name": "is_superuser"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "last_login",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "auth_user",
+            "name": "last_login"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "date_joined",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "auth_user",
+            "name": "date_joined"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "065c307c7ca13ea3ab957c7359bfec94c393d50dde6c5b5f4b0738874e3595ba"
+}

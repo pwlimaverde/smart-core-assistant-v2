@@ -1,0 +1,136 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, tenant_id, amount, payment_date, payment_method,\n                      period_start, period_end, notes, recorded_by_id, created_at\n               FROM tenants_paymentrecord\n               WHERE tenant_id = $1\n               ORDER BY payment_date DESC",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "tenants_paymentrecord",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "tenants_paymentrecord",
+            "name": "tenant_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "amount",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "tenants_paymentrecord",
+            "name": "amount"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "payment_date",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "tenants_paymentrecord",
+            "name": "payment_date"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "payment_method",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_paymentrecord",
+            "name": "payment_method"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "period_start",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "tenants_paymentrecord",
+            "name": "period_start"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "period_end",
+        "type_info": "Date",
+        "origin": {
+          "Table": {
+            "table": "tenants_paymentrecord",
+            "name": "period_end"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "notes",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tenants_paymentrecord",
+            "name": "notes"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "recorded_by_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "tenants_paymentrecord",
+            "name": "recorded_by_id"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "tenants_paymentrecord",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "457cd41a280c86e900c77e0603cf24830730ec6b86daa5fef65560d3af4e2f2d"
+}

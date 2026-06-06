@@ -1,0 +1,30 @@
+{
+  "active": [],
+  "completed": [
+    {
+      "slug": "infrastructure-postgres",
+      "path": "plans/archive/infrastructure-postgres/infrastructure-postgres.md",
+      "title": "Fundação Rust de Persistência — crate `infrastructure_postgres`",
+      "summary": "Plano **canônico** (leve). A verdade técnica detalhada está nos artefatos abaixo.",
+      "linkedAt": "2026-06-01T10:16:21.750Z",
+      "status": "completed",
+      "approval_status": "approved",
+      "approved_at": "2026-06-01T10:17:54.055Z",
+      "approved_by": "architect",
+      "completed_at": "2026-06-01"
+    },
+    {
+      "slug": "infrastructure-redis",
+      "path": "plans/archive/infrastructure-redis/infrastructure-redis.md",
+      "title": "Fundação Redis de Cache e Barramento — crate `infrastructure_redis`",
+      "summary": "Plano **canônico** (leve). A verdade técnica detalhada está nos artefatos abaixo.",
+      "linkedAt": "2026-06-02T00:00:00.000Z",
+      "status": "completed",
+      "approval_status": "approved",
+      "approved_at": "2026-06-02T00:00:00.000Z",
+      "approved_by": "architect",
+      "completed_at": "2026-06-02"
+    }
+  ],
+  "primary": null
+}

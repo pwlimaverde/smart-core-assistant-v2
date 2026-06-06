@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE tenants_tenantinvite SET used = true WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "12db2a0c5666229fe6efd14bd469d678c25cd59f64fefdfefaa14ea97b8cc210"
+}

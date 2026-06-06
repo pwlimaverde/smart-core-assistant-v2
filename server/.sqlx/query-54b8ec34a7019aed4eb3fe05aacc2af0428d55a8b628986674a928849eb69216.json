@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oraculo_mensagem\n               SET resposta_bot = $1, confianca_resposta = $2, respondida = true\n               WHERE tenant_id = $3 AND id = $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Float8",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "54b8ec34a7019aed4eb3fe05aacc2af0428d55a8b628986674a928849eb69216"
+}

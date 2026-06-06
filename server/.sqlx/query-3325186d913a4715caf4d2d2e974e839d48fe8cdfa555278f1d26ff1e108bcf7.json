@@ -1,0 +1,172 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, name, slug, api_key, owner_id, email, phone,\n                      active, setup_completed, onboarding_step, access_code,\n                      created_at, updated_at\n               FROM tenants_tenant WHERE slug = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenant",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenant",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "slug",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenant",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "api_key",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenant",
+            "name": "api_key"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "owner_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenant",
+            "name": "owner_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "email",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenant",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "phone",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenant",
+            "name": "phone"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "active",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenant",
+            "name": "active"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "setup_completed",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenant",
+            "name": "setup_completed"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "onboarding_step",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenant",
+            "name": "onboarding_step"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "access_code",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenant",
+            "name": "access_code"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenant",
+            "name": "created_at"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "updated_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenant",
+            "name": "updated_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "3325186d913a4715caf4d2d2e974e839d48fe8cdfa555278f1d26ff1e108bcf7"
+}

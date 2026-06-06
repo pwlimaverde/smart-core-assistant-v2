@@ -1,0 +1,169 @@
+{
+  "version": 2,
+  "workflowType": "prevc",
+  "updatedAt": "2026-06-06T00:04:11.161Z",
+  "status": {
+    "project": {
+      "name": "refator-arquitetura-modular",
+      "scale": 3,
+      "started": "2026-06-05T20:38:08.686Z",
+      "current_phase": "C",
+      "settings": {
+        "autonomous_mode": false,
+        "require_plan": true,
+        "require_approval": true
+      },
+      "plan": "refator-arquitetura-modular"
+    },
+    "phases": {
+      "P": {
+        "status": "completed",
+        "started_at": "2026-06-05T20:38:08.686Z",
+        "completed_at": "2026-06-05T20:38:17.310Z",
+        "outputs": [
+          {
+            "path": "./.context/plans/refator-arquitetura-modular.md",
+            "status": "filled"
+          },
+          {
+            "path": "./.context/plans/refator-arquitetura-modular/plano_completo_refator-arquitetura-modular.md",
+            "status": "filled"
+          },
+          {
+            "path": "./.context/plans/refator-arquitetura-modular/info_aux_refator-arquitetura-modular.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "R": {
+        "status": "completed",
+        "started_at": "2026-06-05T20:38:17.313Z",
+        "completed_at": "2026-06-05T22:28:51.159Z",
+        "outputs": []
+      },
+      "E": {
+        "status": "completed",
+        "started_at": "2026-06-05T22:28:51.163Z",
+        "completed_at": "2026-06-05T23:00:23.210Z",
+        "outputs": [
+          {
+            "path": "crates/application/src/auth/login.rs",
+            "status": "filled"
+          },
+          {
+            "path": "apps/runtime_api/src/main.rs",
+            "status": "filled"
+          },
+          {
+            "path": "apps/messaging_gateway/src/main.rs",
+            "status": "filled"
+          },
+          {
+            "path": "apps/worker/src/main.rs",
+            "status": "filled"
+          },
+          {
+            "path": "apps/control_plane/src/main.rs",
+            "status": "filled"
+          }
+        ]
+      },
+      "V": {
+        "status": "completed",
+        "started_at": "2026-06-05T23:00:23.217Z",
+        "completed_at": "2026-06-05T23:00:31.169Z",
+        "outputs": [
+          {
+            "path": "C:\\Users\\pwlim\\.gemini\\antigravity-ide\\brain\\d08a69a6-93c9-4994-a005-277e4741cd53\\walkthrough.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "C": {
+        "status": "completed",
+        "started_at": "2026-06-05T23:00:31.177Z",
+        "completed_at": "2026-06-06T00:04:11.049Z",
+        "outputs": [
+          {
+            "path": "./.context/workflow/docs/final-review-refator-arquitetura-modular.md",
+            "status": "filled"
+          }
+        ]
+      }
+    },
+    "agents": {},
+    "roles": {},
+    "approval": {
+      "plan_created": true,
+      "plan_approved": false
+    },
+    "execution": {
+      "history": [
+        {
+          "timestamp": "2026-06-05T20:38:08.686Z",
+          "phase": "P",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-05T20:38:12.798Z",
+          "phase": "P",
+          "action": "plan_linked",
+          "plan": "refator-arquitetura-modular"
+        },
+        {
+          "timestamp": "2026-06-05T20:38:17.310Z",
+          "phase": "P",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-05T20:38:17.313Z",
+          "phase": "R",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-05T22:28:51.159Z",
+          "phase": "R",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-05T22:28:51.163Z",
+          "phase": "E",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-05T23:00:23.210Z",
+          "phase": "E",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-05T23:00:23.217Z",
+          "phase": "V",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-05T23:00:31.169Z",
+          "phase": "V",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-05T23:00:31.177Z",
+          "phase": "C",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-06T00:04:11.049Z",
+          "phase": "C",
+          "action": "completed"
+        }
+      ],
+      "last_activity": "2026-06-06T00:04:11.049Z",
+      "resume_context": "Fase C (Confirmação) concluída"
+    }
+  },
+  "binding": {
+    "workflowName": "refator-arquitetura-modular",
+    "sessionId": "8f44857e-d0a4-4027-8e39-bb7d511c3d02",
+    "createdAt": "2026-06-05T20:38:08.693Z",
+    "updatedAt": "2026-06-06T00:04:11.141Z"
+  }
+}

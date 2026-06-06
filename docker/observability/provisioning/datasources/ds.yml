@@ -1,0 +1,40 @@
+apiVersion: 1
+
+datasources:
+  # Datasource Prometheus
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      httpMethod: POST
+
+  # Datasource Loki
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      derivedFields:
+        # Correlaciona logs Loki com traces Tempo baseando-se no trace_id no formato JSON
+        - datasourceUid: Tempo
+          matcherRegex: '"trace_id":"(\w+)"'
+          name: TraceID
+          url: '$${__value.raw}'
+
+  # Datasource Tempo
+  - name: Tempo
+    type: tempo
+    access: proxy
+    url: http://tempo:3200
+    jsonData:
+      httpMethod: GET
+      serviceMap:
+        datasourceUid: Prometheus
+      nodeGraph:
+        enabled: true
+      search:
+        filters:
+          - key: service.name
+            value: service_name

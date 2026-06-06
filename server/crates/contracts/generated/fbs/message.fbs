@@ -1,0 +1,16 @@
+// Generated from message.proto
+
+namespace smartcore.contracts.events;
+
+table MessageReceived {
+  message_id:string;
+  sender_id:string;
+  content:string;
+  timestamp:long;
+}
+
+table MessageUpdate {
+  message_id:string;
+  status:string;
+}
+

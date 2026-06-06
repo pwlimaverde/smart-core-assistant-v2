@@ -1,0 +1,9 @@
+# Configuração de ambiente para testes de integração
+# Limita a 1 thread para evitar conflitos de transações concorrentes no banco
+[env]
+RUST_TEST_THREADS = "1"
+# Usa o cache versionado em .sqlx/ para validar as queries em tempo de compilação,
+# evitando que as macros do SQLx tentem conectar no banco (e exijam o túnel SSH)
+# durante o `cargo build`/`cargo test`. Para atualizar o cache: `cargo sqlx prepare`
+# (com o túnel aberto). O banco só é necessário em runtime, nos testes de integração.
+SQLX_OFFLINE = "true"

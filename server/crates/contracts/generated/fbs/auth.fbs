@@ -1,0 +1,23 @@
+// Generated from auth.proto
+
+namespace smartcore.contracts.queries;
+
+table RegisterRequest {
+  username:string;
+  email:string;
+  password:string;
+  full_name:string;
+  tenant_name:string;
+  tenant_slug:string;
+}
+
+table LoginRequest {
+  email:string;
+  password:string;
+}
+
+table AuthResponse {
+  access_token:string;
+  refresh_token:string;
+}
+

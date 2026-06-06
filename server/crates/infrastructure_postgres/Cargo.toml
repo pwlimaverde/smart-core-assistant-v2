@@ -1,0 +1,27 @@
+[package]
+name    = "infrastructure_postgres"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+error_core.workspace  = true
+sqlx.workspace        = true
+pgvector.workspace    = true
+dashmap.workspace     = true
+aes-gcm.workspace     = true
+rust_decimal.workspace = true
+chrono.workspace      = true
+serde.workspace       = true
+serde_json.workspace  = true
+thiserror.workspace   = true
+tokio.workspace       = true
+tracing.workspace     = true
+uuid.workspace        = true
+async-trait.workspace = true
+base64.workspace      = true
+secrecy.workspace     = true
+argon2.workspace      = true
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+test_support = { path = "../test_support" }

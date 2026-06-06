@@ -1,0 +1,10 @@
+mod atendimentos;
+mod auth;
+mod auditoria;
+mod clientes;
+mod common;
+mod e2e;
+mod integracoes;
+mod operacional;
+mod tenants;
+mod treinamento;

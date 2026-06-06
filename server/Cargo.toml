@@ -1,0 +1,60 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/error_core",
+    "crates/infrastructure_postgres",
+    "crates/infrastructure_redis",
+    "crates/observability",
+    "crates/test_support",
+    "crates/contracts",
+    "crates/transport",
+    "crates/infrastructure_storage",
+    "crates/application",
+    "apps/data_postgres",
+    "apps/data_redis",
+    "apps/data_storage",
+    "apps/runtime_api",
+    "apps/messaging_gateway",
+    "apps/worker",
+    "apps/control_plane",
+]
+
+[workspace.package]
+edition = "2021"
+license = "Proprietary"
+
+[workspace.dependencies]
+sqlx = { version = "0.9", features = [
+    "postgres", "runtime-tokio", "tls-rustls", "macros",
+    "migrate", "uuid", "chrono", "rust_decimal", "json",
+] }
+pgvector      = { version = "0.4", features = ["sqlx"] }
+dashmap       = "6.1.0"
+aes-gcm       = "0.10.3"
+rust_decimal  = { version = "1.36.0", features = ["serde-with-str"] }
+chrono        = { version = "0.4", features = ["serde"] }
+serde         = { version = "1.0", features = ["derive"] }
+serde_json    = "1.0"
+thiserror     = "1.0"
+tokio         = { version = "1.38", features = ["full"] }
+tracing       = "0.1.40"
+uuid          = { version = "1.0", features = ["v4", "v7", "serde"] }
+async-trait   = "0.1.83"
+base64        = "0.22.1"
+secrecy       = "0.10.3"
+argon2        = { version = "0.5", features = ["std"] }
+redis         = { version = "0.25.0", features = ["aio", "tokio-comp", "connection-manager", "streams"] }
+tonic         = "0.14.6"
+error_core    = { path = "crates/error_core" }
+tracing-subscriber = "0.3.18"
+flatbuffers   = "25.0.0"
+prost         = "0.13.3"
+tonic-prost-build = "0.14.6"
+flatc-rust    = "0.2.0"
+contracts     = { path = "crates/contracts" }
+transport     = { path = "crates/transport" }
+application   = { path = "crates/application" }
+observability = { path = "crates/observability" }
+anyhow        = "1.0.86"
+bytes         = "1.6.0"
+futures-util  = "0.3.30"

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "2.0.0",
+  "generatedAt": "2026-06-04T19:38:40.674Z",
+  "repoFingerprint": "e63af4d5450cd164e284cc71a3abcdbdb9aa4962",
+  "analyzer": {
+    "useLSP": false,
+    "includesSymbolPayload": false
+  },
+  "sections": {
+    "summary": "versions/1780601920701-35688-899c6d7d39e05/summary.json",
+    "stack": "versions/1780601920701-35688-899c6d7d39e05/stack.json",
+    "structure": "versions/1780601920701-35688-899c6d7d39e05/structure.json",
+    "architecture": "versions/1780601920701-35688-899c6d7d39e05/architecture.json",
+    "functionalPatterns": "versions/1780601920701-35688-899c6d7d39e05/functional-patterns.json",
+    "dependencies": "versions/1780601920701-35688-899c6d7d39e05/dependencies.json",
+    "stats": "versions/1780601920701-35688-899c6d7d39e05/stats.json",
+    "keyFiles": "versions/1780601920701-35688-899c6d7d39e05/key-files.json",
+    "navigation": "versions/1780601920701-35688-899c6d7d39e05/navigation.json"
+  },
+  "publishedSummary": "cache\\semantic/summary.json"
+}

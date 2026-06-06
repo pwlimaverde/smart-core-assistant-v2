@@ -1,0 +1,14 @@
+{
+  "active": [
+    {
+      "slug": "observabilidade-e-auditoria",
+      "path": "plans/observabilidade-e-auditoria.md",
+      "title": "Observabilidade e Auditoria — Logs Estruturados, Traces, Métricas e Auditoria no PostgreSQL",
+      "summary": "Implementar o sistema completo de observabilidade (logs JSON, métricas OTel, traces distribuídos via LGTM stack) e logs de auditoria de negócio/segurança persistidos no PostgreSQL com RLS.",
+      "linkedAt": "2026-06-04T20:51:10.254Z",
+      "status": "active"
+    }
+  ],
+  "completed": [],
+  "primary": "observabilidade-e-auditoria"
+}

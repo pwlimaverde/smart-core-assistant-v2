@@ -1,0 +1,12 @@
+syntax = "proto3";
+package smartcore.contracts.queries;
+
+message GetConversationRequest {
+  string conversation_id = 1;
+}
+
+message GetConversationResponse {
+  string conversation_id = 1;
+  string title = 2;
+  repeated string participant_ids = 3;
+}

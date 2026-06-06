@@ -1,0 +1,91 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO atu_nota (tenant_id, atendimento_id, texto, criado_por_id)\n               VALUES ($1, $2, $3, $4)\n               RETURNING id, tenant_id, atendimento_id, texto, criado_por_id, criado_em",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "atu_nota",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "atu_nota",
+            "name": "tenant_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "atendimento_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "atu_nota",
+            "name": "atendimento_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "texto",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "atu_nota",
+            "name": "texto"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "criado_por_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "atu_nota",
+            "name": "criado_por_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "criado_em",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "atu_nota",
+            "name": "criado_em"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "ff11f8a93852b7081c879d82f2f39044a5a5f6aea1cfe9ee1b6d3a6665574434"
+}

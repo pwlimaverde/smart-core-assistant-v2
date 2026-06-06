@@ -1,0 +1,20 @@
+# Saídas de export do dotcontext para ferramentas de IA NÃO usadas neste projeto.
+# Usamos apenas Claude Code (.claude/ + CLAUDE.md) e Antigravity (.agents/).
+# Sempre exporte com preset explícito: claude e antigravity (nunca o export "para todos").
+.cursor/
+.cursorrules
+.windsurf/
+.cline/
+.continue/
+.trae/
+.zed/
+.gemini/
+.codex/
+.github/
+GEMINI.md
+CONVENTIONS.md
+
+# Estado efêmero de runtime do harness dotcontext (sessões/traces/artefatos)
+.context/harness/sessions/
+.context/harness/traces/
+.context/harness/artifacts/

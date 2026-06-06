@@ -1,0 +1,295 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, tenant_id, atendimento_id, tipo, conteudo, remetente,\n                      timestamp, message_id_whatsapp, metadados, respondida, lido,\n                      resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,\n                      arquivo_midia, analise_midia, resumo_midia, mensagem_citada_id,\n                      quoted_preview, status_envio, data_entregue, data_lida\n               FROM oraculo_mensagem\n               WHERE tenant_id = $1 AND atendimento_id = $2\n               ORDER BY timestamp ASC, id ASC\n               LIMIT $3 OFFSET $4",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "tenant_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "atendimento_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "atendimento_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "tipo",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "tipo"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "conteudo",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "conteudo"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "remetente",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "remetente"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "timestamp",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "timestamp"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "message_id_whatsapp",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "message_id_whatsapp"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "metadados",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "metadados"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "respondida",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "respondida"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "lido",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "lido"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "resposta_bot",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "resposta_bot"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "intent_detectado",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "intent_detectado"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "entidades_extraidas",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "entidades_extraidas"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "confianca_resposta",
+        "type_info": "Float8",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "confianca_resposta"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "arquivo_midia",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "arquivo_midia"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "analise_midia",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "analise_midia"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "resumo_midia",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "resumo_midia"
+          }
+        }
+      },
+      {
+        "ordinal": 18,
+        "name": "mensagem_citada_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "mensagem_citada_id"
+          }
+        }
+      },
+      {
+        "ordinal": 19,
+        "name": "quoted_preview",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "quoted_preview"
+          }
+        }
+      },
+      {
+        "ordinal": 20,
+        "name": "status_envio",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "status_envio"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
+        "name": "data_entregue",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "data_entregue"
+          }
+        }
+      },
+      {
+        "ordinal": 22,
+        "name": "data_lida",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "data_lida"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "533523a4efb3e556405a50e0f01dfdc056c54189e63becc6887e8db2d40ceb93"
+}
