@@ -76,8 +76,122 @@ impl AppError {
 
             "VALIDATION_FAILED" => AppError::Validation(msg),
             "CONFLICT" => AppError::Conflict(msg),
+            "RATE_LIMIT_EXCEEDED" => AppError::RateLimit(msg),
 
             _ => AppError::Internal(msg),
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use contracts::{ErrorCategory as ProtoCategory, Severity as ProtoSeverity};
+
+    #[test]
+    fn test_i18n_keys() {
+        assert_eq!(AppError::Auth("token expirado".to_string()).i18n_key(), "errors.auth.expired.token");
+        assert_eq!(AppError::Database("conexão".to_string()).i18n_key(), "errors.db.connection.failed");
+        assert_eq!(AppError::Validation("erro".to_string()).i18n_key(), "errors.validation.failed");
+    }
+
+    #[test]
+    fn test_to_error_envelope() {
+        let err = AppError::Auth("token expirado".to_string());
+        let env = err.to_error_envelope("trace-1", "src-svc");
+
+        assert_eq!(env.code, "AUTH_EXPIRED_TOKEN");
+        assert_eq!(env.category, ProtoCategory::Auth as i32);
+        assert_eq!(env.severity, ProtoSeverity::Warning as i32);
+        assert_eq!(env.message, "Erro de autenticação: token expirado");
+        assert_eq!(env.user_message, "errors.auth.expired.token");
+        assert_eq!(env.user_message_fallback, "Credencial inválida ou ausente.");
+        assert_eq!(env.trace_id, "trace-1");
+        assert_eq!(env.source_svc, "src-svc");
+        assert_eq!(env.details.len(), 1);
+        assert_eq!(env.details[0].key, "original_error");
+        assert_eq!(env.details[0].value, "Erro de autenticação: token expirado");
+        assert!(!env.retryable);
+
+        // Testa conversão de categorias para garantir cobertura de todos os braços do match
+        assert_eq!(
+            AppError::Validation("".to_string()).to_error_envelope("", "").category,
+            ProtoCategory::Validation as i32
+        );
+        assert_eq!(
+            AppError::Auth("permissão".to_string()).to_error_envelope("", "").category,
+            ProtoCategory::Auth as i32
+        );
+        assert_eq!(
+            AppError::Conflict("".to_string()).to_error_envelope("", "").category,
+            ProtoCategory::Conflict as i32
+        );
+
+        assert_eq!(
+            AppError::RateLimit("".to_string()).to_error_envelope("", "").category,
+            ProtoCategory::RateLimit as i32
+        );
+        assert_eq!(
+            AppError::Database("não encontrado".to_string()).to_error_envelope("", "").category,
+            ProtoCategory::Internal as i32
+        );
+        assert_eq!(
+            AppError::Storage("upload".to_string()).to_error_envelope("", "").category,
+            ProtoCategory::NotFound as i32
+        );
+        assert_eq!(
+            AppError::Database("".to_string()).to_error_envelope("", "").category,
+            ProtoCategory::Internal as i32
+        );
+        assert_eq!(
+            AppError::Cache("".to_string()).to_error_envelope("", "").category,
+            ProtoCategory::Internal as i32
+        );
+        assert_eq!(
+            AppError::Internal("".to_string()).to_error_envelope("", "").category,
+            ProtoCategory::Internal as i32
+        );
+    }
+
+    #[test]
+    fn test_from_envelope() {
+        let mut env = contracts::ErrorEnvelope {
+            code: "AUTH_INVALID_TOKEN".to_string(),
+            category: ProtoCategory::Auth as i32,
+            severity: ProtoSeverity::Error as i32,
+            message: "msg".to_string(),
+            user_message: "".to_string(),
+            user_message_fallback: "".to_string(),
+            retryable: false,
+            trace_id: "".to_string(),
+            source_svc: "".to_string(),
+            details: vec![],
+            occurred_at: 0,
+        };
+
+        // Testa mapeamento reverso
+        assert!(matches!(AppError::from_envelope(&env), AppError::Auth(_)));
+
+        env.code = "STORAGE_NOT_FOUND".to_string();
+        assert!(matches!(AppError::from_envelope(&env), AppError::Storage(_)));
+
+        env.code = "DB_CONNECTION_FAILED".to_string();
+        assert!(matches!(AppError::from_envelope(&env), AppError::Database(_)));
+
+        env.code = "CACHE_UNAVAILABLE".to_string();
+        assert!(matches!(AppError::from_envelope(&env), AppError::Cache(_)));
+
+        env.code = "VALIDATION_FAILED".to_string();
+        assert!(matches!(AppError::from_envelope(&env), AppError::Validation(_)));
+
+        env.code = "CONFLICT".to_string();
+        assert!(matches!(AppError::from_envelope(&env), AppError::Conflict(_)));
+
+        env.code = "RATE_LIMIT_EXCEEDED".to_string();
+        assert!(matches!(AppError::from_envelope(&env), AppError::RateLimit(_)));
+
+        env.code = "OUTRO_CODIGO".to_string();
+        assert!(matches!(AppError::from_envelope(&env), AppError::Internal(_)));
+    }
+}
+

@@ -42,3 +42,97 @@ pub async fn read_frame<R: AsyncReadExt + Unpin>(r: &mut R) -> std::io::Result<F
         body,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn frame_flags_contain_expected_binary_representations() {
+        // Valida as flags declaradas
+        assert_eq!(flags::STREAM_ITEM, 0b0000_0001);
+        assert_eq!(flags::STREAM_END, 0b0000_0010);
+        assert_eq!(flags::IS_ERROR, 0b0000_0100);
+        assert_eq!(flags::COMPRESSED, 0b0000_1000);
+        assert_eq!(flags::PING, 0b0001_0000);
+        assert_eq!(flags::PONG, 0b0010_0000);
+    }
+
+    #[tokio::test]
+    async fn writes_and_reads_frame_successfully() {
+        // Arrange
+        let original_frame = Frame {
+            flags: flags::STREAM_ITEM | flags::IS_ERROR,
+            corr_id: 12345678901234567890,
+            body: vec![10, 20, 30, 40, 50],
+        };
+        let mut buffer = Vec::new();
+
+        // Act - Escrever
+        let mut cursor_write = Cursor::new(&mut buffer);
+        let write_res = write_frame(&mut cursor_write, &original_frame).await;
+        assert!(write_res.is_ok());
+
+        // Act - Ler de volta
+        let mut cursor_read = Cursor::new(&buffer);
+        let read_res = read_frame(&mut cursor_read).await;
+        assert!(read_res.is_ok());
+
+        // Assert
+        let decoded_frame = read_res.unwrap();
+        assert_eq!(decoded_frame.flags, original_frame.flags);
+        assert_eq!(decoded_frame.corr_id, original_frame.corr_id);
+        assert_eq!(decoded_frame.body, original_frame.body);
+    }
+
+    #[tokio::test]
+    async fn read_frame_fails_on_empty_input() {
+        // Arrange
+        let buffer = Vec::new();
+        let mut cursor = Cursor::new(buffer);
+
+        // Act
+        let read_res = read_frame(&mut cursor).await;
+
+        // Assert
+        assert!(read_res.is_err());
+        assert_eq!(read_res.err().unwrap().kind(), std::io::ErrorKind::UnexpectedEof);
+    }
+
+    #[tokio::test]
+    async fn read_frame_fails_on_truncated_header() {
+        // Arrange - Escreve apenas 2 bytes (len precisa de 4 bytes)
+        let buffer = vec![0u8, 5u8];
+        let mut cursor = Cursor::new(buffer);
+
+        // Act
+        let read_res = read_frame(&mut cursor).await;
+
+        // Assert
+        assert!(read_res.is_err());
+        assert_eq!(read_res.err().unwrap().kind(), std::io::ErrorKind::UnexpectedEof);
+    }
+
+    #[tokio::test]
+    async fn read_frame_fails_on_truncated_body() {
+        // Arrange - Escreve header completo indicando 10 bytes de corpo, mas envia apenas 3
+        let mut buffer = Vec::new();
+        let mut cursor_setup = Cursor::new(&mut buffer);
+        cursor_setup.write_u32(10).await.unwrap(); // len = 10
+        cursor_setup.write_u8(flags::STREAM_ITEM).await.unwrap(); // flags
+        cursor_setup.write_u128(99).await.unwrap(); // corr_id
+        cursor_setup.write_all(&[1, 2, 3]).await.unwrap(); // body incompleto (3 bytes)
+
+        let mut cursor = Cursor::new(buffer);
+
+        // Act
+        let read_res = read_frame(&mut cursor).await;
+
+        // Assert
+        assert!(read_res.is_err());
+        assert_eq!(read_res.err().unwrap().kind(), std::io::ErrorKind::UnexpectedEof);
+    }
+}
+
+

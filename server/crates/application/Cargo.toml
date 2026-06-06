@@ -17,3 +17,7 @@ contracts = { workspace = true }
 transport = { workspace = true }
 error_core = { workspace = true }
 observability = { workspace = true }
+
+[dev-dependencies]
+test_support = { path = "../test_support" }
+

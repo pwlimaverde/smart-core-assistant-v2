@@ -404,3 +404,92 @@ impl Consumer {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_evento_bruto_desserializar_success() {
+        let tenant_id = Uuid::new_v4().to_string();
+        let event_id = Uuid::now_v7().to_string();
+        let timestamp = Utc::now().to_rfc3339();
+
+        let raw = EventoBruto {
+            stream_id: "1-0".to_string(),
+            tenant_id: tenant_id.clone(),
+            event_id: event_id.clone(),
+            event_type: "test.event".to_string(),
+            timestamp,
+            traceparent: "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01".to_string(),
+            payload: "{\"valor\": 123}".to_string(),
+        };
+
+        let res = raw.desserializar::<serde_json::Value>();
+        assert!(res.is_ok());
+
+        let envelope = res.unwrap();
+        assert_eq!(envelope.tenant_id.to_string(), tenant_id);
+        assert_eq!(envelope.event_id.to_string(), event_id);
+        assert_eq!(envelope.event_type, "test.event");
+        assert_eq!(envelope.traceparent, "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
+        assert_eq!(envelope.payload.get("valor").and_then(|v| v.as_i64()), Some(123));
+    }
+
+    #[test]
+    fn test_evento_bruto_desserializar_invalid_tenant() {
+        let raw = EventoBruto {
+            stream_id: "1-0".to_string(),
+            tenant_id: "invalido".to_string(),
+            event_id: Uuid::now_v7().to_string(),
+            event_type: "test".to_string(),
+            timestamp: Utc::now().to_rfc3339(),
+            traceparent: "".to_string(),
+            payload: "{}".to_string(),
+        };
+        assert!(raw.desserializar::<serde_json::Value>().is_err());
+    }
+
+    #[test]
+    fn test_evento_bruto_desserializar_invalid_event_id() {
+        let raw = EventoBruto {
+            stream_id: "1-0".to_string(),
+            tenant_id: Uuid::new_v4().to_string(),
+            event_id: "invalido".to_string(),
+            event_type: "test".to_string(),
+            timestamp: Utc::now().to_rfc3339(),
+            traceparent: "".to_string(),
+            payload: "{}".to_string(),
+        };
+        assert!(raw.desserializar::<serde_json::Value>().is_err());
+    }
+
+    #[test]
+    fn test_evento_bruto_desserializar_invalid_timestamp() {
+        let raw = EventoBruto {
+            stream_id: "1-0".to_string(),
+            tenant_id: Uuid::new_v4().to_string(),
+            event_id: Uuid::now_v7().to_string(),
+            event_type: "test".to_string(),
+            timestamp: "data-invalida".to_string(),
+            traceparent: "".to_string(),
+            payload: "{}".to_string(),
+        };
+        assert!(raw.desserializar::<serde_json::Value>().is_err());
+    }
+
+    #[test]
+    fn test_evento_bruto_desserializar_invalid_payload() {
+        let raw = EventoBruto {
+            stream_id: "1-0".to_string(),
+            tenant_id: Uuid::new_v4().to_string(),
+            event_id: Uuid::now_v7().to_string(),
+            event_type: "test".to_string(),
+            timestamp: Utc::now().to_rfc3339(),
+            traceparent: "".to_string(),
+            payload: "{invalid-json}".to_string(),
+        };
+        assert!(raw.desserializar::<serde_json::Value>().is_err());
+    }
+}
+

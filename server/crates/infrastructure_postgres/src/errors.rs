@@ -104,7 +104,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_db_error_display() {
+    fn db_error_formats_messages_correctly() {
+        // Valida a formatação de mensagens de todas as variantes de DbError
         let err = DbError::PermissionDenied;
         assert_eq!(
             err.to_string(),
@@ -128,18 +129,23 @@ mod tests {
     }
 
     #[test]
-    fn test_db_error_from_sqlx_non_unique() {
+    fn from_sqlx_unique_preserves_non_unique_errors() {
+        // Arrange
         let sqlx_err = sqlx::Error::RowNotFound;
+
+        // Act
         let db_err = DbError::from_sqlx_unique(sqlx_err);
+
+        // Assert
         match db_err {
             DbError::SqlxError(sqlx::Error::RowNotFound) => {}
             _ => panic!("Esperado DbError::SqlxError(RowNotFound)"),
         }
     }
 
-    /// Cada variante deve expor o `ErrorCode` esperado do núcleo.
     #[test]
-    fn test_db_error_code_mapeia_para_core() {
+    fn maps_each_db_error_to_its_correct_core_error_code() {
+        // Valida se cada variante de DbError mapeia para o ErrorCode correspondente
         assert_eq!(
             DbError::PermissionDenied.code(),
             ErrorCode::AuthInsufficientScope
@@ -167,9 +173,9 @@ mod tests {
         );
     }
 
-    /// A conversão para `AppError` deve preservar o `ErrorCode` (coerência ponta a ponta).
     #[test]
-    fn test_db_error_para_app_error_preserva_code() {
+    fn converts_db_error_to_app_error_preserving_error_code() {
+        // Garante a coerência ponta a ponta na conversão de DbError para AppError
         let casos = [
             DbError::PermissionDenied,
             DbError::NotFound,
