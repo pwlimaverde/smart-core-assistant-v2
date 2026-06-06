@@ -48,8 +48,10 @@ pub fn extrair_contexto(metadados: &HashMap<String, String>) -> opentelemetry::C
 mod tests {
     use super::*;
     use opentelemetry::global;
+    use opentelemetry::trace::{
+        SpanContext, SpanId, TraceContextExt, TraceFlags, TraceId, TraceState,
+    };
     use opentelemetry_sdk::propagation::TraceContextPropagator;
-    use opentelemetry::trace::{SpanContext, SpanId, TraceFlags, TraceId, TraceState, TraceContextExt};
     use std::collections::HashMap;
 
     #[test]
@@ -78,9 +80,15 @@ mod tests {
         injetar_contexto_atual(&mut metadados);
 
         // Assevera que a chave de especificação 'traceparent' está presente
-        assert!(metadados.contains_key("traceparent"), "Metadados deveriam conter 'traceparent'");
+        assert!(
+            metadados.contains_key("traceparent"),
+            "Metadados deveriam conter 'traceparent'"
+        );
         let traceparent_val = metadados.get("traceparent").unwrap();
-        assert!(traceparent_val.contains("0123456789abcdef0123456789abcdef"), "Valor de traceparent deve conter o trace_id");
+        assert!(
+            traceparent_val.contains("0123456789abcdef0123456789abcdef"),
+            "Valor de traceparent deve conter o trace_id"
+        );
 
         // Extrai o contexto de volta a partir do HashMap
         let extracted_ctx = extrair_contexto(&metadados);

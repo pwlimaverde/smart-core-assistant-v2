@@ -1,11 +1,7 @@
 use opentelemetry::global;
 use opentelemetry::KeyValue;
 use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{
-    propagation::TraceContextPropagator,
-    trace::Config,
-    Resource,
-};
+use opentelemetry_sdk::{propagation::TraceContextPropagator, trace::Config, Resource};
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter, Registry};
 
@@ -55,8 +51,7 @@ pub fn init_telemetry(
         .with_line_number(true);
 
     // Filtro de nível por RUST_LOG ou padrão info
-    let env_filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     // Registra todas as camadas no Tracing Subscriber
     Registry::default()

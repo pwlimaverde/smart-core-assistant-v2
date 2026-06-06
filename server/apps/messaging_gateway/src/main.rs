@@ -61,7 +61,10 @@ async fn handler_receive_webhook(mut redis_conn: ConnectionManager, env: Envelop
         "timestamp": chrono::Utc::now().timestamp_millis(),
     });
 
-    let envelope_evento = TenantEnvelope::novo(tenant_id, "message.received", event_payload);
+    // Propaga o traceparent recebido na chamada RPC para o evento do barramento,
+    // mantendo a cadeia de trace distribuído viva no salto síncrono → assíncrono.
+    let envelope_evento = TenantEnvelope::novo(tenant_id, "message.received", event_payload)
+        .com_traceparent(env.traceparent.clone());
 
     // Publica no barramento de eventos principal
     match transport::bus::publicar_evento(&mut redis_conn, &envelope_evento).await {

@@ -421,7 +421,8 @@ async fn handler_verify_credentials(
         };
 
         let envelope_auditoria =
-            contracts::TenantEnvelope::novo(tenant_id, "security.audit", audit_payload);
+            contracts::TenantEnvelope::novo(tenant_id, "security.audit", audit_payload)
+                .com_traceparent(env.traceparent.clone());
 
         if let Err(e) =
             transport::bus::publicar_evento_seguranca(&mut redis_conn, &envelope_auditoria).await

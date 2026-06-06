@@ -87,9 +87,9 @@ async fn processar_mensagem_recebida(evt: transport::bus::EventoBruto) -> anyhow
         schema_version: 1,
         message_id: Uuid::now_v7().to_string(),
         causation_id: envelope.event_id.to_string(),
-        // TODO(RF6): propagar o traceparent W3C carregado no evento do bus quando
-        // o `EventoBruto` passar a transportá-lo; por ora segue vazio (novo trace).
-        traceparent: String::new(),
+        // Propaga o traceparent W3C carregado no evento do bus para a chamada RPC
+        // downstream, fechando a cadeia de trace distribuído gateway → bus → worker → data_postgres.
+        traceparent: envelope.traceparent.clone(),
         occurred_at: chrono::Utc::now().timestamp_millis(),
         kind: MessageKind::Request as i32,
         method: "PersistMessage".to_string(),

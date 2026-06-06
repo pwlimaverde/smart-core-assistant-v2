@@ -85,12 +85,17 @@ async fn test_audit_logger_tenant_warn_and_error_levels() {
     // Cria um tenant temporário para associar aos logs do inquilino
     let tenant_repo = PostgresTenantRepository;
     let slug = format!("levels-tenant-{}", Uuid::new_v4());
-    let mut tx = admin_pool.begin().await.expect("Falha ao iniciar transação admin");
+    let mut tx = admin_pool
+        .begin()
+        .await
+        .expect("Falha ao iniciar transação admin");
     let tenant = tenant_repo
         .criar(&mut tx, "Tenant Níveis Teste", &slug, Some(1), None, None)
         .await
         .expect("Falha ao criar tenant de testes");
-    tx.commit().await.expect("Falha ao comitar tenant de testes");
+    tx.commit()
+        .await
+        .expect("Falha ao comitar tenant de testes");
 
     let context = serde_json::json!({"action": "warn_error_tests", "meta": {"test": true}});
     let trace_id_warn = format!("trace-warn-{}", Uuid::new_v4());
@@ -136,7 +141,11 @@ async fn test_audit_logger_tenant_warn_and_error_levels() {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
-    assert_eq!(warn_logs.len(), 1, "Deveria ter persistido exatamente 1 log de WARN");
+    assert_eq!(
+        warn_logs.len(),
+        1,
+        "Deveria ter persistido exatamente 1 log de WARN"
+    );
     assert_eq!(warn_logs[0].tenant_id, Some(tenant.id));
     assert_eq!(warn_logs[0].level, "WARN");
     assert_eq!(warn_logs[0].trace_id.as_ref(), Some(&trace_id_warn));
@@ -159,7 +168,11 @@ async fn test_audit_logger_tenant_warn_and_error_levels() {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
-    assert_eq!(error_logs.len(), 1, "Deveria ter persistido exatamente 1 log de ERROR");
+    assert_eq!(
+        error_logs.len(),
+        1,
+        "Deveria ter persistido exatamente 1 log de ERROR"
+    );
     assert_eq!(error_logs[0].tenant_id, Some(tenant.id));
     assert_eq!(error_logs[0].level, "ERROR");
     assert_eq!(error_logs[0].trace_id.as_ref(), Some(&trace_id_error));
@@ -232,7 +245,11 @@ async fn test_audit_logger_global_warn_and_error_levels() {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
-    assert_eq!(warn_logs.len(), 1, "Deveria ter persistido 1 log global de WARN");
+    assert_eq!(
+        warn_logs.len(),
+        1,
+        "Deveria ter persistido 1 log global de WARN"
+    );
     assert_eq!(warn_logs[0].tenant_id, None);
     assert_eq!(warn_logs[0].level, "WARN");
     assert_eq!(warn_logs[0].message, "Mensagem global de warn");
@@ -254,7 +271,11 @@ async fn test_audit_logger_global_warn_and_error_levels() {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
-    assert_eq!(error_logs.len(), 1, "Deveria ter persistido 1 log global de ERROR");
+    assert_eq!(
+        error_logs.len(),
+        1,
+        "Deveria ter persistido 1 log global de ERROR"
+    );
     assert_eq!(error_logs[0].tenant_id, None);
     assert_eq!(error_logs[0].level, "ERROR");
     assert_eq!(error_logs[0].message, "Mensagem global de erro");

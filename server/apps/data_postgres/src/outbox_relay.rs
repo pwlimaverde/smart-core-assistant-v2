@@ -111,6 +111,9 @@ impl OutboxRelay {
                 event_id: row.id, // ID da linha garante idempotência no barramento
                 event_type: row.event_type.clone(),
                 timestamp: row.occurred_at.with_timezone(&Utc),
+                // A tabela `outbox` (0011) ainda não persiste o traceparent W3C; o evento
+                // relayed nasce sem contexto de trace. Propagar exigiria uma coluna dedicada.
+                traceparent: String::new(),
                 payload: payload_json,
             };
 

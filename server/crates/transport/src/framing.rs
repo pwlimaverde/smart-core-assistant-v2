@@ -9,6 +9,10 @@ pub mod flags {
     pub const STREAM_END: u8 = 0b0000_0010;
     pub const IS_ERROR: u8 = 0b0000_0100;
     pub const COMPRESSED: u8 = 0b0000_1000; // futuro
+    /// Keepalive: requisição de ping (corpo vazio); o servidor responde com PONG no mesmo corr_id.
+    pub const PING: u8 = 0b0001_0000;
+    /// Keepalive: resposta de pong ao PING, reutilizando o corr_id da requisição.
+    pub const PONG: u8 = 0b0010_0000;
 }
 
 #[derive(Debug, Clone)]

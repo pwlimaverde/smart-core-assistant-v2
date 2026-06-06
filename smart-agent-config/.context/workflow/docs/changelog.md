@@ -17,10 +17,13 @@ Histórico de alterações do projeto com base no ciclo PREVC.
 - **Migration `0011_outbox.sql`:** Tabela `outbox` + trigger `pg_notify('outbox_new')` para o relay outbox→bus.
 - **Docker:** serviço `redis-bus` com `--maxmemory-policy noeviction` (separado do `allkeys-lru` que evicta Streams).
 
-### Pendências (trabalho futuro, fora do escopo do ciclo)
-- Runtime de transporte sem keepalive/reconexão com backoff (read_loop encerra na queda).
-- Feature `postgres-audit` ainda `default` em `observability` (o ciclo `observability→postgres` não foi removido à risca).
-- `traceparent` não trafega no evento do bus (salto bus→RPC inicia novo trace).
+### Corrigido (follow-up das pendências do final-review)
+- **Runtime de transporte resiliente (`transport/src/runtime.rs`):** `MuxClient` reescrito com keepalive (PING→PONG nas flags do `framing`), detecção de conexão morta e reconexão automática com **backoff exponencial + jitter** (teto de tentativas). O `Server` responde PING com PONG sem passar pelos handlers.
+- **Ciclo `observability→infrastructure_postgres` removido em produção:** feature `postgres-audit` saiu do `default` (`default = []`); o build padrão publica auditoria só via Redis Streams. Dev-dependency auto-referente reativa a feature nos testes (retrocompatibilidade com banco).
+- **`traceparent` W3C ponta-a-ponta no barramento:** `TenantEnvelope`/`EventoBruto` ganham o campo `traceparent` (serde `default`, retrocompatível); publicado e lido no Redis Streams. Propagado em `messaging_gateway` (RPC→bus), `worker` (bus→RPC) e auditoria (`audit.rs`, `data_postgres`).
+
+### Pendências remanescentes (trabalho futuro)
+- `traceparent` no relay do **outbox**: a tabela `0011_outbox` não persiste trace context (exigiria coluna dedicada); eventos relayed nascem sem trace.
 - Stubs por completar: `control_plane`, realtime/WS de `runtime_api`, handlers mock de `data_postgres`.
 
 ## [2026-06-04] - Tratamento de Erros (`error_core`)
