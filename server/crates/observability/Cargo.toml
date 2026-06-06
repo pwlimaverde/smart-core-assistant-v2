@@ -31,10 +31,16 @@ infrastructure_postgres = { path = "../infrastructure_postgres", optional = true
 sqlx = { workspace = true, optional = true }
 
 [features]
-default = ["postgres-audit"]
+# Produção NÃO depende de postgres: o build padrão publica auditoria só via Redis Streams,
+# eliminando a aresta observability → infrastructure_postgres (quebra o ciclo registrado).
+default = []
+# Caminho de retrocompatibilidade (testes): grava auditoria direto no banco.
 postgres-audit = ["dep:infrastructure_postgres", "dep:sqlx"]
 
 [dev-dependencies]
+# Dev-dependency auto-referente: liga `postgres-audit` apenas ao compilar testes/exemplos,
+# sem reintroduzir postgres no build de produção da crate.
+observability = { path = ".", features = ["postgres-audit"] }
 test_support = { path = "../test_support" }
 infrastructure_postgres = { path = "../infrastructure_postgres" }
 sqlx.workspace               = true

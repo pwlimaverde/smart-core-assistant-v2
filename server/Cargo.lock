@@ -1613,6 +1613,7 @@ dependencies = [
  "chrono",
  "contracts",
  "infrastructure_postgres",
+ "observability",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",

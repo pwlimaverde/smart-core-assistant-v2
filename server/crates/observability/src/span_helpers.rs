@@ -45,4 +45,3 @@ mod tests {
         assert_eq!(span_com_ambos.metadata().unwrap().name(), "span_test_2");
     }
 }
-

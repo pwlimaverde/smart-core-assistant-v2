@@ -80,17 +80,33 @@ async fn test_audit_logger_async_fire_and_forget() {
         .expect("Falha ao criar tenant pool");
 
     // Cria o AuditLogger de testes
-    let logger = AuditLogger::new(tenant_pool, admin_pool.clone(), "test-observability-service");
+    let logger = AuditLogger::new(
+        tenant_pool,
+        admin_pool.clone(),
+        "test-observability-service",
+    );
 
     // Cria um tenant temporário para associar ao log do inquilino
     let tenant_repo = PostgresTenantRepository;
     let slug = format!("obs-tenant-{}", Uuid::new_v4());
-    let mut tx = admin_pool.begin().await.expect("Falha ao iniciar transação admin");
+    let mut tx = admin_pool
+        .begin()
+        .await
+        .expect("Falha ao iniciar transação admin");
     let tenant = tenant_repo
-        .criar(&mut tx, "Tenant Observabilidade Teste", &slug, Some(1), None, None)
+        .criar(
+            &mut tx,
+            "Tenant Observabilidade Teste",
+            &slug,
+            Some(1),
+            None,
+            None,
+        )
         .await
         .expect("Falha ao criar tenant de testes");
-    tx.commit().await.expect("Falha ao comitar tenant de testes");
+    tx.commit()
+        .await
+        .expect("Falha ao comitar tenant de testes");
 
     let context = serde_json::json!({"action": "integration_test", "meta": {"ok": true}});
     let trace_id = format!("trace-{}", Uuid::new_v4());
@@ -135,12 +151,19 @@ async fn test_audit_logger_async_fire_and_forget() {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
-    assert_eq!(tenant_logs.len(), 1, "Deveria ter persistido exatamente 1 log para o tenant");
+    assert_eq!(
+        tenant_logs.len(),
+        1,
+        "Deveria ter persistido exatamente 1 log para o tenant"
+    );
     assert_eq!(tenant_logs[0].tenant_id, Some(tenant.id));
     assert_eq!(tenant_logs[0].level, "INFO");
     assert_eq!(tenant_logs[0].service, "test-observability-service");
     assert_eq!(tenant_logs[0].trace_id.as_ref(), Some(&trace_id));
-    assert_eq!(tenant_logs[0].message, "Mensagem de teste assíncrono de tenant");
+    assert_eq!(
+        tenant_logs[0].message,
+        "Mensagem de teste assíncrono de tenant"
+    );
     assert_eq!(tenant_logs[0].context, context);
 
     // Verifica o log de auditoria Global (mesmo polling tolerante a latência).
@@ -159,11 +182,18 @@ async fn test_audit_logger_async_fire_and_forget() {
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
 
-    assert_eq!(global_logs.len(), 1, "Deveria ter persistido exatamente 1 log global");
+    assert_eq!(
+        global_logs.len(),
+        1,
+        "Deveria ter persistido exatamente 1 log global"
+    );
     assert_eq!(global_logs[0].tenant_id, None);
     assert_eq!(global_logs[0].level, "INFO");
     assert_eq!(global_logs[0].service, "test-observability-service");
-    assert_eq!(global_logs[0].message, "Mensagem de teste assíncrono global");
+    assert_eq!(
+        global_logs[0].message,
+        "Mensagem de teste assíncrono global"
+    );
     assert_eq!(global_logs[0].context, context);
 
     // 5. Teardown: Limpeza manual dos registros para não poluir o banco de dados.

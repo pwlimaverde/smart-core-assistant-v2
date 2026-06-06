@@ -27,6 +27,8 @@ pub struct EventoBruto {
     pub event_id: String,
     pub event_type: String,
     pub timestamp: String,
+    /// Traceparent W3C propagado pelo barramento (vazio em eventos antigos/sem trace).
+    pub traceparent: String,
     pub payload: String,
 }
 
@@ -47,6 +49,7 @@ impl EventoBruto {
             event_id,
             event_type: self.event_type.clone(),
             timestamp,
+            traceparent: self.traceparent.clone(),
             payload,
         })
     }
@@ -96,6 +99,7 @@ pub async fn publicar_evento_no_stream<T: Serialize>(
                 ("event_id", evento.event_id.to_string()),
                 ("event_type", evento.event_type.clone()),
                 ("timestamp", evento.timestamp.to_rfc3339()),
+                ("traceparent", evento.traceparent.clone()),
                 ("payload", payload),
             ],
         )
@@ -292,6 +296,7 @@ fn extrair_eventos(reply: StreamReadReply) -> Vec<EventoBruto> {
                 event_id: campo("event_id"),
                 event_type: campo("event_type"),
                 timestamp: campo("timestamp"),
+                traceparent: campo("traceparent"),
                 payload: campo("payload"),
             });
         }

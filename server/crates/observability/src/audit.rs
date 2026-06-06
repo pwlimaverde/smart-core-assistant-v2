@@ -94,7 +94,9 @@ impl AuditLogger {
                     user_id,
                     ip_address,
                 };
-                let envelope = contracts::TenantEnvelope::novo(tenant_id, "audit_log", payload);
+                let traceparent = payload.trace_id.clone().unwrap_or_default();
+                let envelope = contracts::TenantEnvelope::novo(tenant_id, "audit_log", payload)
+                    .com_traceparent(traceparent);
                 if let Err(e) = transport::bus::publicar_evento_seguranca(&mut con, &envelope).await
                 {
                     tracing::error!(
@@ -183,7 +185,9 @@ impl AuditLogger {
                     user_id,
                     ip_address,
                 };
-                let envelope = contracts::TenantEnvelope::novo(Uuid::nil(), "audit_log", payload);
+                let traceparent = payload.trace_id.clone().unwrap_or_default();
+                let envelope = contracts::TenantEnvelope::novo(Uuid::nil(), "audit_log", payload)
+                    .com_traceparent(traceparent);
                 if let Err(e) = transport::bus::publicar_evento_seguranca(&mut con, &envelope).await
                 {
                     tracing::error!(

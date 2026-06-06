@@ -6,13 +6,14 @@ use contracts::Envelope;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
 #[cfg(unix)]
 use tokio::net::{UnixListener, UnixStream};
 use tokio::sync::{mpsc, oneshot, Mutex};
-use tokio::time::{timeout, Duration};
+use tokio::time::{sleep, timeout, Duration};
 
 #[derive(Debug, Clone)]
 pub enum Endpoint {
@@ -36,25 +37,37 @@ impl Endpoint {
     }
 }
 
-/// Multiplexa varias chamadas na mesma conexao (o que o HTTP/2 da ao gRPC de graca).
-pub struct MuxClient {
+// Parâmetros de resiliência do cliente (keepalive + reconexão com backoff).
+const KEEPALIVE_INTERVALO: Duration = Duration::from_secs(15);
+const KEEPALIVE_TIMEOUT: Duration = Duration::from_secs(5);
+const BACKOFF_INICIAL: Duration = Duration::from_millis(100);
+const BACKOFF_MAX: Duration = Duration::from_secs(10);
+const MAX_TENTATIVAS_RECONEXAO: u32 = 6;
+
+/// Uma sessão multiplexada sobre uma única conexão física (UDS ou TCP).
+/// Mantém o mapa de chamadas pendentes (corr_id → oneshot) e um sinalizador de saúde
+/// que os loops de leitura/escrita derrubam quando a conexão cai.
+struct Conexao {
     tx: mpsc::Sender<Frame>,
     pendentes: Arc<Mutex<HashMap<u128, oneshot::Sender<Frame>>>>,
-    codec: Box<dyn Codec>,
+    saudavel: Arc<AtomicBool>,
 }
 
-impl MuxClient {
-    pub fn new<S>(stream: S, codec: Box<dyn Codec>) -> Self
+impl Conexao {
+    /// Monta os loops de leitura/escrita sobre o stream e devolve a conexão pronta.
+    fn nova<S>(stream: S) -> Arc<Self>
     where
         S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
     {
         let (tx, mut rx) = mpsc::channel::<Frame>(100);
         let pendentes = Arc::new(Mutex::new(HashMap::<u128, oneshot::Sender<Frame>>::new()));
-        let pendentes_clone = pendentes.clone();
+        let saudavel = Arc::new(AtomicBool::new(true));
 
         let (mut read_half, mut write_half) = tokio::io::split(stream);
 
-        // Loop de escrita: consome do canal rx e envia no socket
+        // Loop de escrita: consome do canal rx e envia no socket. Ao falhar, marca a
+        // conexão como morta para disparar a reconexão na próxima chamada.
+        let saudavel_w = saudavel.clone();
         tokio::spawn(async move {
             while let Some(frame) = rx.recv().await {
                 if let Err(e) = write_frame(&mut write_half, &frame).await {
@@ -62,10 +75,13 @@ impl MuxClient {
                     break;
                 }
             }
+            saudavel_w.store(false, Ordering::SeqCst);
         });
 
-        // Loop de leitura: lê do socket e envia para o oneshot correspondente
+        // Loop de leitura: lê do socket e entrega ao oneshot correspondente (inclui PONGs,
+        // que são roteados pelo mesmo corr_id do PING). Ao cair, marca a conexão como morta.
         let pendentes_loop = pendentes.clone();
+        let saudavel_r = saudavel.clone();
         tokio::spawn(async move {
             loop {
                 match read_frame(&mut read_half).await {
@@ -81,54 +97,226 @@ impl MuxClient {
                         }
                     }
                     Err(e) => {
-                        tracing::error!("Erro de leitura no loop do cliente (conexao possivelmente fechada): {:?}", e);
+                        tracing::debug!("Loop de leitura encerrado (conexao fechada): {:?}", e);
                         break;
                     }
                 }
             }
+            saudavel_r.store(false, Ordering::SeqCst);
         });
 
-        Self {
+        Arc::new(Self {
             tx,
-            pendentes: pendentes_clone,
-            codec,
-        }
+            pendentes,
+            saudavel,
+        })
     }
 
-    /// Executa uma chamada request/reply síncrona com timeout.
-    pub async fn call(&self, env: Envelope, prazo: Duration) -> Result<Envelope, TransportError> {
-        let corr_id = uuid::Uuid::now_v7().as_u128();
+    fn esta_saudavel(&self) -> bool {
+        self.saudavel.load(Ordering::SeqCst)
+    }
+
+    fn marcar_morta(&self) {
+        self.saudavel.store(false, Ordering::SeqCst);
+    }
+
+    /// Registra a chamada pendente e envia o frame; devolve o receiver da resposta.
+    async fn enviar(&self, frame: Frame) -> Result<oneshot::Receiver<Frame>, TransportError> {
         let (resp_tx, resp_rx) = oneshot::channel();
-
-        // Registrar a oneshot pendente antes de enviar
+        let corr_id = frame.corr_id;
         self.pendentes.lock().await.insert(corr_id, resp_tx);
-
-        let body = self.codec.encode(&env).to_vec();
-        let frame = Frame {
-            flags: 0,
-            corr_id,
-            body,
-        };
-
         if self.tx.send(frame).await.is_err() {
             self.pendentes.lock().await.remove(&corr_id);
+            self.marcar_morta();
             return Err(TransportError::Closed);
         }
-
-        // Aguardar resposta com timeout
-        let resp_frame = match timeout(prazo, resp_rx).await {
-            Ok(Ok(f)) => f,
-            Ok(Err(_)) => {
-                return Err(TransportError::Closed);
-            }
-            Err(_) => {
-                self.pendentes.lock().await.remove(&corr_id);
-                return Err(TransportError::Timeout);
-            }
-        };
-
-        self.codec.decode(&resp_frame.body)
+        Ok(resp_rx)
     }
+
+    async fn remover_pendente(&self, corr_id: u128) {
+        self.pendentes.lock().await.remove(&corr_id);
+    }
+}
+
+/// Dispara um ping periódico (PING→PONG) para detectar conexão morta de forma proativa.
+/// Encerra-se sozinho quando a conexão é marcada como não saudável.
+fn iniciar_keepalive(conexao: Arc<Conexao>) {
+    tokio::spawn(async move {
+        let mut ticker = tokio::time::interval(KEEPALIVE_INTERVALO);
+        ticker.tick().await; // descarta o primeiro tick imediato
+        loop {
+            ticker.tick().await;
+            if !conexao.esta_saudavel() {
+                break;
+            }
+            let corr_id = uuid::Uuid::now_v7().as_u128();
+            let ping = Frame {
+                flags: crate::framing::flags::PING,
+                corr_id,
+                body: Vec::new(),
+            };
+            let resp_rx = match conexao.enviar(ping).await {
+                Ok(rx) => rx,
+                Err(_) => break,
+            };
+            match timeout(KEEPALIVE_TIMEOUT, resp_rx).await {
+                Ok(Ok(_)) => {} // PONG recebido: conexão viva
+                _ => {
+                    tracing::warn!("Keepalive sem PONG no prazo; marcando conexao como morta.");
+                    conexao.remover_pendente(corr_id).await;
+                    conexao.marcar_morta();
+                    break;
+                }
+            }
+        }
+    });
+}
+
+/// Cliente resiliente que multiplexa várias chamadas na mesma conexão (o que o HTTP/2 dá ao
+/// gRPC de graça) e reconecta com backoff exponencial + jitter quando a conexão cai, mantendo
+/// keepalive ativo. O `codec` é independente da conexão e sobrevive às reconexões.
+pub struct MuxClient {
+    endpoint: Endpoint,
+    codec: Box<dyn Codec>,
+    conexao: Mutex<Option<Arc<Conexao>>>,
+}
+
+impl MuxClient {
+    /// Conecta a um endpoint estabelecendo já a primeira conexão (falha cedo se indisponível).
+    pub async fn conectar(endpoint: Endpoint, codec: Box<dyn Codec>) -> anyhow::Result<Self> {
+        let cliente = Self {
+            endpoint,
+            codec,
+            conexao: Mutex::new(None),
+        };
+        let conexao = cliente.reconectar_com_backoff().await.map_err(|_| {
+            anyhow::anyhow!(
+                "Falha ao conectar ao endpoint {:?} apos multiplas tentativas",
+                cliente.endpoint
+            )
+        })?;
+        iniciar_keepalive(conexao.clone());
+        *cliente.conexao.lock().await = Some(conexao);
+        Ok(cliente)
+    }
+
+    /// Disca o endpoint uma vez e monta a conexão multiplexada.
+    async fn discar(&self) -> anyhow::Result<Arc<Conexao>> {
+        match &self.endpoint {
+            Endpoint::Uds(path) => {
+                #[cfg(unix)]
+                {
+                    let stream = UnixStream::connect(path).await?;
+                    Ok(Conexao::nova(stream))
+                }
+                #[cfg(not(unix))]
+                {
+                    anyhow::bail!(
+                        "Unix Domain Sockets nao sao suportados em Windows. Endpoint: {:?}",
+                        path
+                    );
+                }
+            }
+            Endpoint::Tcp(addr) => {
+                let stream = tokio::net::TcpStream::connect(addr).await?;
+                Ok(Conexao::nova(stream))
+            }
+        }
+    }
+
+    /// Tenta reconectar com backoff exponencial e jitter, respeitando um teto de tentativas.
+    async fn reconectar_com_backoff(&self) -> Result<Arc<Conexao>, TransportError> {
+        let mut atraso = BACKOFF_INICIAL;
+        for tentativa in 1..=MAX_TENTATIVAS_RECONEXAO {
+            match self.discar().await {
+                Ok(conexao) => {
+                    if tentativa > 1 {
+                        tracing::info!(tentativa, "Reconexao ao endpoint bem-sucedida.");
+                    }
+                    return Ok(conexao);
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        tentativa,
+                        atraso_ms = atraso.as_millis() as u64,
+                        erro = %e,
+                        "Falha ao conectar; aguardando backoff."
+                    );
+                    if tentativa == MAX_TENTATIVAS_RECONEXAO {
+                        break;
+                    }
+                    sleep(atraso + jitter(atraso)).await;
+                    atraso = (atraso * 2).min(BACKOFF_MAX);
+                }
+            }
+        }
+        Err(TransportError::Closed)
+    }
+
+    /// Garante uma conexão saudável, reconectando (sob lock) quando a atual caiu.
+    async fn garantir_conexao(&self) -> Result<Arc<Conexao>, TransportError> {
+        let mut guard = self.conexao.lock().await;
+        if let Some(c) = guard.as_ref() {
+            if c.esta_saudavel() {
+                return Ok(c.clone());
+            }
+        }
+        let nova = self.reconectar_com_backoff().await?;
+        iniciar_keepalive(nova.clone());
+        *guard = Some(nova.clone());
+        Ok(nova)
+    }
+
+    async fn invalidar_conexao(&self) {
+        *self.conexao.lock().await = None;
+    }
+
+    /// Executa uma chamada request/reply síncrona com timeout. Reconecta e repete uma vez
+    /// quando a conexão cai durante o envio/espera; o timeout do chamador NÃO dispara reconexão.
+    pub async fn call(&self, env: Envelope, prazo: Duration) -> Result<Envelope, TransportError> {
+        let body = self.codec.encode(&env).to_vec();
+        for _ in 0..2 {
+            let conexao = self.garantir_conexao().await?;
+            let corr_id = uuid::Uuid::now_v7().as_u128();
+            let frame = Frame {
+                flags: 0,
+                corr_id,
+                body: body.clone(),
+            };
+
+            let resp_rx = match conexao.enviar(frame).await {
+                Ok(rx) => rx,
+                Err(_) => {
+                    self.invalidar_conexao().await;
+                    continue;
+                }
+            };
+
+            match timeout(prazo, resp_rx).await {
+                Ok(Ok(f)) => return self.codec.decode(&f.body),
+                Ok(Err(_)) => {
+                    // Canal fechado pelo loop de leitura: a conexão caiu — reconectar e repetir.
+                    self.invalidar_conexao().await;
+                    continue;
+                }
+                Err(_) => {
+                    conexao.remover_pendente(corr_id).await;
+                    return Err(TransportError::Timeout);
+                }
+            }
+        }
+        Err(TransportError::Closed)
+    }
+}
+
+/// Jitter pseudo-aleatório de até ~1/3 do atraso base, sem dependência externa de RNG.
+fn jitter(base: Duration) -> Duration {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0) as u64;
+    let teto = (base.as_millis() as u64 / 3).max(1);
+    Duration::from_millis(nanos % teto)
 }
 
 pub type Handler =
@@ -275,6 +463,17 @@ where
             }
         };
 
+        // Keepalive: responde PING com PONG (mesmo corr_id, corpo vazio) sem passar pelos handlers.
+        if frame.flags & crate::framing::flags::PING != 0 {
+            let pong = Frame {
+                flags: crate::framing::flags::PONG,
+                corr_id: frame.corr_id,
+                body: Vec::new(),
+            };
+            let _ = write_tx.send(pong).await;
+            continue;
+        }
+
         let handlers_clone = handlers.clone();
         let codec_clone = match codec_name.as_str() {
             "grpc" => Box::new(crate::codec::GrpcCodec) as Box<dyn Codec>,
@@ -358,24 +557,7 @@ pub async fn conectar_cliente(svc_name: &str) -> anyhow::Result<MuxClient> {
         _ => Box::new(crate::codec::FlatbuffersCodec),
     };
 
-    match endpoint {
-        Endpoint::Uds(path) => {
-            #[cfg(unix)]
-            {
-                let stream = tokio::net::UnixStream::connect(path).await?;
-                Ok(MuxClient::new(stream, codec))
-            }
-            #[cfg(not(unix))]
-            {
-                anyhow::bail!(
-                    "Unix Domain Sockets nao sao suportados em Windows. Endpoint: {:?}",
-                    path
-                );
-            }
-        }
-        Endpoint::Tcp(addr) => {
-            let stream = tokio::net::TcpStream::connect(addr).await?;
-            Ok(MuxClient::new(stream, codec))
-        }
-    }
+    // Cliente resiliente: estabelece a conexão inicial e passa a manter keepalive +
+    // reconexão automática com backoff a cada `call`.
+    MuxClient::conectar(endpoint, codec).await
 }
