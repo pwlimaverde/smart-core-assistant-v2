@@ -1,18 +1,18 @@
 // transport/src/runtime.rs  (comentários em pt-br)
+use crate::codec::Codec;
+use crate::error::TransportError;
+use crate::framing::{read_frame, write_frame, Frame};
+use contracts::Envelope;
 use std::collections::HashMap;
-use std::sync::Arc;
-use std::path::PathBuf;
 use std::net::SocketAddr;
-use tokio::sync::{oneshot, Mutex, mpsc};
-use tokio::time::{timeout, Duration};
+use std::path::PathBuf;
+use std::sync::Arc;
+use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::TcpListener;
 #[cfg(unix)]
-use tokio::net::{UnixStream, UnixListener};
-use tokio::io::{AsyncRead, AsyncWrite};
-use crate::error::TransportError;
-use crate::codec::Codec;
-use crate::framing::{Frame, read_frame, write_frame};
-use contracts::Envelope;
+use tokio::net::{UnixListener, UnixStream};
+use tokio::sync::{mpsc, oneshot, Mutex};
+use tokio::time::{timeout, Duration};
 
 #[derive(Debug, Clone)]
 pub enum Endpoint {
@@ -28,7 +28,10 @@ impl Endpoint {
             let addr: SocketAddr = addr_str.parse()?;
             Ok(Endpoint::Tcp(addr))
         } else {
-            anyhow::bail!("Formato de endpoint invalido: {}. Deve comecar com unix:// ou tcp://", s)
+            anyhow::bail!(
+                "Formato de endpoint invalido: {}. Deve comecar com unix:// ou tcp://",
+                s
+            )
         }
     }
 }
@@ -41,14 +44,14 @@ pub struct MuxClient {
 }
 
 impl MuxClient {
-    pub fn new<S>(stream: S, codec: Box<dyn Codec>) -> Self 
+    pub fn new<S>(stream: S, codec: Box<dyn Codec>) -> Self
     where
-        S: AsyncRead + AsyncWrite + Send + Unpin + 'static
+        S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
     {
         let (tx, mut rx) = mpsc::channel::<Frame>(100);
         let pendentes = Arc::new(Mutex::new(HashMap::<u128, oneshot::Sender<Frame>>::new()));
         let pendentes_clone = pendentes.clone();
-        
+
         let (mut read_half, mut write_half) = tokio::io::split(stream);
 
         // Loop de escrita: consome do canal rx e envia no socket
@@ -71,7 +74,10 @@ impl MuxClient {
                         if let Some(tx_resp) = map.remove(&frame.corr_id) {
                             let _ = tx_resp.send(frame);
                         } else {
-                            tracing::warn!("Resposta recebida sem chamada pendente para corr_id: {}", frame.corr_id);
+                            tracing::warn!(
+                                "Resposta recebida sem chamada pendente para corr_id: {}",
+                                frame.corr_id
+                            );
                         }
                     }
                     Err(e) => {
@@ -93,10 +99,10 @@ impl MuxClient {
     pub async fn call(&self, env: Envelope, prazo: Duration) -> Result<Envelope, TransportError> {
         let corr_id = uuid::Uuid::now_v7().as_u128();
         let (resp_tx, resp_rx) = oneshot::channel();
-        
+
         // Registrar a oneshot pendente antes de enviar
         self.pendentes.lock().await.insert(corr_id, resp_tx);
-        
+
         let body = self.codec.encode(&env).to_vec();
         let frame = Frame {
             flags: 0,
@@ -104,7 +110,7 @@ impl MuxClient {
             body,
         };
 
-        if let Err(_) = self.tx.send(frame).await {
+        if self.tx.send(frame).await.is_err() {
             self.pendentes.lock().await.remove(&corr_id);
             return Err(TransportError::Closed);
         }
@@ -125,7 +131,8 @@ impl MuxClient {
     }
 }
 
-pub type Handler = Arc<dyn Fn(Envelope) -> futures_util::future::BoxFuture<'static, Envelope> + Send + Sync>;
+pub type Handler =
+    Arc<dyn Fn(Envelope) -> futures_util::future::BoxFuture<'static, Envelope> + Send + Sync>;
 
 pub struct Server {
     endpoint: Endpoint,
@@ -148,18 +155,24 @@ impl Server {
             .unwrap_or_else(|_| format!("unix:///var/run/smartcore/{}.sock", svc_name));
         let endpoint = Endpoint::parse(&endpoint_str).unwrap_or_else(|_| {
             // Fallback para Windows usando caminho local
-            Endpoint::Uds(PathBuf::from(format!("c:/temp/smartcore_{}.sock", svc_name)))
+            Endpoint::Uds(PathBuf::from(format!(
+                "c:/temp/smartcore_{}.sock",
+                svc_name
+            )))
         });
-        
+
         let codec_key = format!("SMARTCORE_{}_CODEC", svc_name.to_uppercase());
         let codec_name = std::env::var(&codec_key).unwrap_or_else(|_| "flatbuffers".to_string());
-        
+
         Self::new(endpoint, &codec_name)
     }
 
     pub fn route<F>(mut self, method: &str, handler: F) -> Self
     where
-        F: Fn(Envelope) -> futures_util::future::BoxFuture<'static, Envelope> + Send + Sync + 'static
+        F: Fn(Envelope) -> futures_util::future::BoxFuture<'static, Envelope>
+            + Send
+            + Sync
+            + 'static,
     {
         let handlers = Arc::get_mut(&mut self.handlers).unwrap();
         handlers.insert(method.to_string(), Arc::new(handler));
@@ -169,7 +182,7 @@ impl Server {
     pub async fn run(self) -> anyhow::Result<()> {
         let handlers = self.handlers.clone();
         let codec_name = self.codec_name.clone();
-        
+
         match self.endpoint {
             Endpoint::Uds(path) => {
                 #[cfg(unix)]
@@ -178,7 +191,7 @@ impl Server {
                     if path.exists() {
                         let _ = std::fs::remove_file(&path);
                     }
-                    
+
                     // Garantir diretorio pai
                     if let Some(parent) = path.parent() {
                         std::fs::create_dir_all(parent)?;
@@ -186,13 +199,15 @@ impl Server {
 
                     let listener = UnixListener::bind(&path)?;
                     tracing::info!("Servidor UDS rodando em {:?}", path);
-                    
+
                     loop {
                         let (stream, _) = listener.accept().await?;
                         let handlers_clone = handlers.clone();
                         let codec_name_clone = codec_name.clone();
                         tokio::spawn(async move {
-                            if let Err(e) = handle_connection(stream, handlers_clone, codec_name_clone).await {
+                            if let Err(e) =
+                                handle_connection(stream, handlers_clone, codec_name_clone).await
+                            {
                                 tracing::error!("Erro lidando com conexao UDS: {:?}", e);
                             }
                         });
@@ -206,13 +221,15 @@ impl Server {
             Endpoint::Tcp(addr) => {
                 let listener = TcpListener::bind(addr).await?;
                 tracing::info!("Servidor TCP rodando em {}", addr);
-                
+
                 loop {
                     let (stream, _) = listener.accept().await?;
                     let handlers_clone = handlers.clone();
                     let codec_name_clone = codec_name.clone();
                     tokio::spawn(async move {
-                        if let Err(e) = handle_connection(stream, handlers_clone, codec_name_clone).await {
+                        if let Err(e) =
+                            handle_connection(stream, handlers_clone, codec_name_clone).await
+                        {
                             tracing::error!("Erro lidando com conexao TCP: {:?}", e);
                         }
                     });
@@ -222,15 +239,19 @@ impl Server {
     }
 }
 
-async fn handle_connection<S>(stream: S, handlers: Arc<HashMap<String, Handler>>, codec_name: String) -> anyhow::Result<()>
+async fn handle_connection<S>(
+    stream: S,
+    handlers: Arc<HashMap<String, Handler>>,
+    codec_name: String,
+) -> anyhow::Result<()>
 where
-    S: AsyncRead + AsyncWrite + Send + Unpin + 'static
+    S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
     let (mut read_half, mut write_half) = tokio::io::split(stream);
-    
+
     // Inicializar o canal de escrita uma única vez por conexão
     let (write_tx, mut write_rx) = mpsc::channel::<Frame>(100);
-    
+
     // Spawnar a task de escrita em background que detém write_half
     tokio::spawn(async move {
         while let Some(f) = write_rx.recv().await {
@@ -240,7 +261,7 @@ where
             }
         }
     });
-    
+
     loop {
         // Ler proximo frame do cliente
         let frame = match read_frame(&mut read_half).await {
@@ -253,13 +274,13 @@ where
                 break;
             }
         };
-        
+
         let handlers_clone = handlers.clone();
         let codec_clone = match codec_name.as_str() {
             "grpc" => Box::new(crate::codec::GrpcCodec) as Box<dyn Codec>,
             _ => Box::new(crate::codec::FlatbuffersCodec) as Box<dyn Codec>,
         };
-        
+
         let write_tx_clone = write_tx.clone();
         tokio::spawn(async move {
             // Decodificar o envelope
@@ -284,9 +305,13 @@ where
                                 code: "METHOD_NOT_FOUND".to_string(),
                                 category: contracts::ErrorCategory::NotFound as i32,
                                 severity: contracts::Severity::Error as i32,
-                                message: format!("Metodo {} nao suportado por este servidor", method),
+                                message: format!(
+                                    "Metodo {} nao suportado por este servidor",
+                                    method
+                                ),
                                 user_message: "errors.method_not_found".to_string(),
-                                user_message_fallback: "Recurso solicitado nao encontrado.".to_string(),
+                                user_message_fallback: "Recurso solicitado nao encontrado."
+                                    .to_string(),
                                 retryable: false,
                                 trace_id: env.traceparent.clone(),
                                 source_svc: "transport_runtime".to_string(),
@@ -295,18 +320,18 @@ where
                             }),
                         }
                     };
-                    
+
                     let resp_body = codec_clone.encode(&response_env).to_vec();
                     let resp_frame = Frame {
-                        flags: if response_env.kind == contracts::MessageKind::Error as i32 { 
-                            crate::framing::flags::IS_ERROR 
-                        } else { 
-                            0 
+                        flags: if response_env.kind == contracts::MessageKind::Error as i32 {
+                            crate::framing::flags::IS_ERROR
+                        } else {
+                            0
                         },
                         corr_id: frame.corr_id,
                         body: resp_body,
                     };
-                    
+
                     let _ = write_tx_clone.send(resp_frame).await;
                 }
                 Err(e) => {
@@ -315,7 +340,7 @@ where
             }
         });
     }
-    
+
     Ok(())
 }
 
@@ -325,7 +350,7 @@ pub async fn conectar_cliente(svc_name: &str) -> anyhow::Result<MuxClient> {
     let endpoint_str = std::env::var(&env_key)
         .unwrap_or_else(|_| format!("unix:///var/run/smartcore/{}.sock", svc_name));
     let endpoint = Endpoint::parse(&endpoint_str)?;
-    
+
     let codec_key = format!("SMARTCORE_{}_CODEC", svc_name.to_uppercase());
     let codec_name = std::env::var(&codec_key).unwrap_or_else(|_| "flatbuffers".to_string());
     let codec: Box<dyn Codec> = match codec_name.as_str() {
@@ -342,7 +367,10 @@ pub async fn conectar_cliente(svc_name: &str) -> anyhow::Result<MuxClient> {
             }
             #[cfg(not(unix))]
             {
-                anyhow::bail!("Unix Domain Sockets nao sao suportados em Windows. Endpoint: {:?}", path);
+                anyhow::bail!(
+                    "Unix Domain Sockets nao sao suportados em Windows. Endpoint: {:?}",
+                    path
+                );
             }
         }
         Endpoint::Tcp(addr) => {
@@ -351,4 +379,3 @@ pub async fn conectar_cliente(svc_name: &str) -> anyhow::Result<MuxClient> {
         }
     }
 }
-

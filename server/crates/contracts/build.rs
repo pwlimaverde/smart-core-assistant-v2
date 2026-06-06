@@ -7,7 +7,7 @@ fn find_flatc() -> String {
     if Command::new("flatc").arg("--version").status().is_ok() {
         return "flatc".to_string();
     }
-    
+
     // 2. Se falhar, tentar o caminho relativo no workspace
     let local_paths = [
         "../../bin/flatc.exe",
@@ -16,13 +16,13 @@ fn find_flatc() -> String {
         "../bin/flatc",
     ];
     for path in local_paths {
-        if std::path::Path::new(path).exists() {
-            if Command::new(path).arg("--version").status().is_ok() {
-                return path.to_string();
-            }
+        if std::path::Path::new(path).exists()
+            && Command::new(path).arg("--version").status().is_ok()
+        {
+            return path.to_string();
         }
     }
-    
+
     panic!("Compilador flatc nao encontrado no PATH nem em server/bin/");
 }
 
@@ -31,7 +31,7 @@ fn find_protoc() -> String {
     if Command::new("protoc").arg("--version").status().is_ok() {
         return "protoc".to_string();
     }
-    
+
     // 2. Se falhar, tentar o caminho relativo no workspace
     let local_paths = [
         "../../bin/protoc.exe",
@@ -48,7 +48,7 @@ fn find_protoc() -> String {
             }
         }
     }
-    
+
     panic!("Compilador protoc nao encontrado no PATH nem em server/bin/");
 }
 
@@ -105,26 +105,31 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for entry in fbs_entries {
         let entry = entry?;
         let path = entry.path();
-        if path.extension().map_or(false, |ext| ext == "fbs") && path.file_name().unwrap() != "all_schemas.fbs" {
+        if path.extension().is_some_and(|ext| ext == "fbs")
+            && path.file_name().unwrap() != "all_schemas.fbs"
+        {
             let content = std::fs::read_to_string(&path)?;
             for line in content.lines() {
                 let trimmed = line.trim();
                 // Ignorar imports (includes) e definicoes de namespace duplicadas
-                if trimmed.starts_with("include ") || trimmed.starts_with("namespace ") || trimmed.starts_with("//") {
+                if trimmed.starts_with("include ")
+                    || trimmed.starts_with("namespace ")
+                    || trimmed.starts_with("//")
+                {
                     continue;
                 }
-                
+
                 // Limpar qualificadores absolutos de namespace dentro do schema unificado
                 let mut cleaned_line = line.to_string();
                 cleaned_line = cleaned_line.replace("smartcore.contracts.events.", "");
                 cleaned_line = cleaned_line.replace("smartcore.contracts.queries.", "");
                 cleaned_line = cleaned_line.replace("smartcore.contracts.ai.", "");
                 cleaned_line = cleaned_line.replace("smartcore.contracts.", "");
-                
+
                 unified_fbs.push_str(&cleaned_line);
-                unified_fbs.push_str("\n");
+                unified_fbs.push('\n');
             }
-            unified_fbs.push_str("\n");
+            unified_fbs.push('\n');
         }
     }
 
@@ -138,7 +143,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .arg(&out_rs)
         .arg(&all_schemas_path)
         .status()?;
-    assert!(status.success(), "flatc --rust falhou para o all_schemas.fbs");
+    assert!(
+        status.success(),
+        "flatc --rust falhou para o all_schemas.fbs"
+    );
 
     Ok(())
 }

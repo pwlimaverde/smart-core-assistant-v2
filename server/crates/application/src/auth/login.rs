@@ -1,5 +1,5 @@
 //! Caso de uso de login do usuário.
-//! 
+//!
 //! Realiza a verificação de credenciais no banco via RPC síncrono e
 //! persiste os tokens gerados no cache compartilhado (Redis).
 
@@ -51,11 +51,17 @@ pub async fn login(
         if let Some(err) = resp_envelope.error {
             return Err(AppError::from_envelope(&err));
         }
-        return Err(AppError::Auth("Erro desconhecido na autenticação".to_string()));
+        return Err(AppError::Auth(
+            "Erro desconhecido na autenticação".to_string(),
+        ));
     }
 
-    let user_info: serde_json::Value = serde_json::from_slice(&resp_envelope.payload)
-        .map_err(|e| AppError::Internal(format!("Erro ao desserializar resposta de credenciais: {e}")))?;
+    let user_info: serde_json::Value =
+        serde_json::from_slice(&resp_envelope.payload).map_err(|e| {
+            AppError::Internal(format!(
+                "Erro ao desserializar resposta de credenciais: {e}"
+            ))
+        })?;
 
     let user_id = user_info.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
 
@@ -68,7 +74,7 @@ pub async fn login(
     let access_token = Uuid::new_v4().to_string();
     let refresh_token = Uuid::new_v4().to_string();
     let family_id = Uuid::new_v4().to_string();
-    
+
     // Hash representativo do token de refresh (nunca salvar em claro no Redis)
     let token_hash = format!("hash_{}", refresh_token);
 

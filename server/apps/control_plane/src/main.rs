@@ -1,8 +1,8 @@
 //! Serviço control_plane: Painel administrativo e tarefas de back office.
 
-use uuid::Uuid;
 use contracts::{Envelope, MessageKind};
 use transport::Server;
+use uuid::Uuid;
 
 #[derive(Clone)]
 struct AppState {}
@@ -17,15 +17,17 @@ async fn main() -> anyhow::Result<()> {
     let _state = AppState {};
 
     // 2. Inicia o Servidor RPC síncrono nos 3 de protocolos
-    let server = Server::from_env("CONTROL_PLANE")
-        .route("RegisterTenant", move |env| {
-            Box::pin(async move { handler_register_tenant(env).await })
-        });
+    let server = Server::from_env("CONTROL_PLANE").route("RegisterTenant", move |env| {
+        Box::pin(async move { handler_register_tenant(env).await })
+    });
 
     tracing::info!("Servidor RPC do control_plane configurado e pronto.");
-    
+
     if let Err(e) = server.run().await {
-        tracing::error!("Servidor RPC do control_plane parou com erro crítico: {:?}", e);
+        tracing::error!(
+            "Servidor RPC do control_plane parou com erro crítico: {:?}",
+            e
+        );
     }
 
     Ok(())
@@ -38,7 +40,10 @@ async fn handler_register_tenant(env: Envelope) -> Envelope {
         Err(_) => serde_json::json!({}),
     };
 
-    let tenant_name = payload_json.get("name").and_then(|v| v.as_str()).unwrap_or("Novo Tenant");
+    let tenant_name = payload_json
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Novo Tenant");
     let tenant_id = Uuid::new_v4();
 
     tracing::info!(

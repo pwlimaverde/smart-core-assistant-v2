@@ -1,11 +1,11 @@
 //! Relay de Outbox: escuta notificações do banco via LISTEN/NOTIFY e publica
 //! os eventos pendentes no Redis Streams para replicação assíncrona.
 
-use sqlx::{PgPool, postgres::PgListener};
-use redis::aio::ConnectionManager;
-use uuid::Uuid;
 use chrono::Utc;
+use redis::aio::ConnectionManager;
+use sqlx::{postgres::PgListener, PgPool};
 use std::time::Duration;
+use uuid::Uuid;
 
 /// Estrutura para mapeamento de linhas do outbox
 #[derive(sqlx::FromRow)]
@@ -33,7 +33,7 @@ impl OutboxRelay {
     pub async fn run(&self) -> anyhow::Result<()> {
         let mut listener = PgListener::connect_with(&self.pool).await?;
         listener.listen("outbox_new").await?;
-        
+
         tracing::info!("Outbox Relay iniciado e escutando canal 'outbox_new' no Postgres.");
 
         // Drenagem inicial ao subir para processar pendências anteriores
@@ -49,7 +49,10 @@ impl OutboxRelay {
                     }
                 }
                 Err(e) => {
-                    tracing::error!("Erro na conexão do PgListener: {:?}. Tentando reconectar...", e);
+                    tracing::error!(
+                        "Erro na conexão do PgListener: {:?}. Tentando reconectar...",
+                        e
+                    );
                     tokio::time::sleep(Duration::from_secs(2)).await;
                     if let Ok(mut new_listener) = PgListener::connect_with(&self.pool).await {
                         if new_listener.listen("outbox_new").await.is_ok() {
@@ -65,13 +68,13 @@ impl OutboxRelay {
     /// Busca eventos não publicados e publica no barramento do Redis.
     async fn drenar_outbox(&self) -> anyhow::Result<()> {
         let mut conn = self.redis_conn.clone();
-        
+
         let rows = sqlx::query_as::<_, OutboxRow>(
             r#"SELECT id, tenant_id, event_type, payload, occurred_at
                FROM outbox
                WHERE published_at IS NULL
                ORDER BY occurred_at ASC
-               LIMIT 100"#
+               LIMIT 100"#,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -86,7 +89,11 @@ impl OutboxRelay {
             let payload_str = match String::from_utf8(row.payload) {
                 Ok(s) => s,
                 Err(e) => {
-                    tracing::error!("Payload do outbox id {} não é UTF-8 válido: {:?}", row.id, e);
+                    tracing::error!(
+                        "Payload do outbox id {} não é UTF-8 válido: {:?}",
+                        row.id,
+                        e
+                    );
                     continue;
                 }
             };
@@ -109,15 +116,17 @@ impl OutboxRelay {
 
             match transport::bus::publicar_evento(&mut conn, &envelope).await {
                 Ok(_) => {
-                    sqlx::query(
-                        "UPDATE outbox SET published_at = NOW() WHERE id = $1"
-                    )
-                    .bind(row.id)
-                    .execute(&self.pool)
-                    .await?;
+                    sqlx::query("UPDATE outbox SET published_at = NOW() WHERE id = $1")
+                        .bind(row.id)
+                        .execute(&self.pool)
+                        .await?;
                 }
                 Err(e) => {
-                    tracing::error!("Falha ao publicar evento do outbox {} no Redis: {:?}", row.id, e);
+                    tracing::error!(
+                        "Falha ao publicar evento do outbox {} no Redis: {:?}",
+                        row.id,
+                        e
+                    );
                     break;
                 }
             }

@@ -1,9 +1,9 @@
 //! Serviço messaging_gateway: Ingestão de webhooks e publicação de eventos no barramento.
 
-use redis::aio::ConnectionManager;
-use uuid::Uuid;
 use contracts::{Envelope, MessageKind, TenantEnvelope};
+use redis::aio::ConnectionManager;
 use transport::Server;
+use uuid::Uuid;
 
 #[derive(Clone)]
 struct AppState {
@@ -18,27 +18,28 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Iniciando serviço messaging_gateway...");
 
     // 2. Conecta ao Redis para publicação de eventos
-    let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+    let redis_url =
+        std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
     let redis_client = redis::Client::open(redis_url)?;
     let redis_conn = ConnectionManager::new(redis_client).await?;
     tracing::info!("Conexão com Redis estabelecida.");
 
-    let state = AppState {
-        redis_conn,
-    };
+    let state = AppState { redis_conn };
 
     // 3. Inicia o Servidor RPC síncrono nos 3 protocolos
     let state_clone = state.clone();
-    let server = Server::from_env("MESSAGING_GATEWAY")
-        .route("ReceiveWebhook", move |env| {
-            let state = state_clone.clone();
-            Box::pin(async move { handler_receive_webhook(state.redis_conn, env).await })
-        });
+    let server = Server::from_env("MESSAGING_GATEWAY").route("ReceiveWebhook", move |env| {
+        let state = state_clone.clone();
+        Box::pin(async move { handler_receive_webhook(state.redis_conn, env).await })
+    });
 
     tracing::info!("Servidor RPC do messaging_gateway configurado e pronto.");
-    
+
     if let Err(e) = server.run().await {
-        tracing::error!("Servidor RPC do messaging_gateway parou com erro crítico: {:?}", e);
+        tracing::error!(
+            "Servidor RPC do messaging_gateway parou com erro crítico: {:?}",
+            e
+        );
     }
 
     Ok(())
@@ -52,7 +53,7 @@ async fn handler_receive_webhook(mut redis_conn: ConnectionManager, env: Envelop
     };
 
     let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
-    
+
     // Monta o envelope de domínio
     let event_payload = serde_json::json!({
         "sender_id": payload_json.get("sender_id").and_then(|v| v.as_str()).unwrap_or("externo"),
@@ -60,17 +61,14 @@ async fn handler_receive_webhook(mut redis_conn: ConnectionManager, env: Envelop
         "timestamp": chrono::Utc::now().timestamp_millis(),
     });
 
-    let envelope_evento = TenantEnvelope::novo(
-        tenant_id,
-        "message.received",
-        event_payload,
-    );
+    let envelope_evento = TenantEnvelope::novo(tenant_id, "message.received", event_payload);
 
     // Publica no barramento de eventos principal
     match transport::bus::publicar_evento(&mut redis_conn, &envelope_evento).await {
         Ok(id) => {
             tracing::info!(stream_id = %id, "Mensagem de webhook publicada no barramento de eventos.");
-            let res = serde_json::json!({ "status": "success", "event_id": envelope_evento.event_id });
+            let res =
+                serde_json::json!({ "status": "success", "event_id": envelope_evento.event_id });
             Envelope {
                 kind: MessageKind::Reply as i32,
                 method: "ReceiveWebhookReply".to_string(),

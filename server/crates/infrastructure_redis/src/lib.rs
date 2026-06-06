@@ -22,10 +22,10 @@ pub use cache::{CachePermissoes, TTL_FLOW_PERMISSIONS_SEGUNDOS};
 pub use connection::{criar_cliente, criar_conexao_com_url, criar_conexao_redis, ping};
 pub use contracts::TenantEnvelope;
 pub use errors::RedisError;
+pub use keys::{
+    chave_blocklist, chave_flow_permissions, chave_refresh, chave_refresh_familia, chave_tenant,
+};
 pub use transport::bus::{
     confirmar, consumir, garantir_consumer_group, publicar_evento, reprocessar_pendentes,
     EventoBruto, STREAM_EVENTOS,
-};
-pub use keys::{
-    chave_blocklist, chave_flow_permissions, chave_refresh, chave_refresh_familia, chave_tenant,
 };

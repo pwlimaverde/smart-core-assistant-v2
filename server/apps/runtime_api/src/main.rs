@@ -1,10 +1,10 @@
 //! Serviço runtime_api: Borda de API cliente servindo FlatBuffers e fallback gRPC.
-//! 
+//!
 //! Expõe rotas RPC de autenticação (Login) e streaming conceitual de realtime (StreamAtendimentos).
 
-use uuid::Uuid;
 use contracts::{Envelope, MessageKind};
 use transport::Server;
+use uuid::Uuid;
 
 #[derive(Clone)]
 struct AppState {}
@@ -28,9 +28,12 @@ async fn main() -> anyhow::Result<()> {
         });
 
     tracing::info!("Servidor RPC da runtime_api configurado e pronto.");
-    
+
     if let Err(e) = server.run().await {
-        tracing::error!("Servidor RPC da runtime_api parou com erro crítico: {:?}", e);
+        tracing::error!(
+            "Servidor RPC da runtime_api parou com erro crítico: {:?}",
+            e
+        );
     }
 
     Ok(())
@@ -42,9 +45,15 @@ async fn handler_login(env: Envelope) -> Envelope {
         Ok(v) => v,
         Err(_) => serde_json::json!({}),
     };
-    
-    let email = payload_json.get("email").and_then(|v| v.as_str()).unwrap_or("");
-    let password = payload_json.get("password").and_then(|v| v.as_str()).unwrap_or("");
+
+    let email = payload_json
+        .get("email")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let password = payload_json
+        .get("password")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
     let ctx = application::RequestContext {
@@ -55,15 +64,13 @@ async fn handler_login(env: Envelope) -> Envelope {
     };
 
     match application::auth::login::login(&ctx, email, password).await {
-        Ok(tokens) => {
-            Envelope {
-                kind: MessageKind::Reply as i32,
-                method: "LoginReply".to_string(),
-                payload: serde_json::to_vec(&tokens).unwrap_or_default(),
-                error: None,
-                ..env
-            }
-        }
+        Ok(tokens) => Envelope {
+            kind: MessageKind::Reply as i32,
+            method: "LoginReply".to_string(),
+            payload: serde_json::to_vec(&tokens).unwrap_or_default(),
+            error: None,
+            ..env
+        },
         Err(err) => {
             let err_env = err.to_error_envelope(&env.traceparent, "runtime_api");
             Envelope {
