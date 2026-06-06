@@ -21,10 +21,15 @@ Histórico de alterações do projeto com base no ciclo PREVC.
 - **Runtime de transporte resiliente (`transport/src/runtime.rs`):** `MuxClient` reescrito com keepalive (PING→PONG nas flags do `framing`), detecção de conexão morta e reconexão automática com **backoff exponencial + jitter** (teto de tentativas). O `Server` responde PING com PONG sem passar pelos handlers.
 - **Ciclo `observability→infrastructure_postgres` removido em produção:** feature `postgres-audit` saiu do `default` (`default = []`); o build padrão publica auditoria só via Redis Streams. Dev-dependency auto-referente reativa a feature nos testes (retrocompatibilidade com banco).
 - **`traceparent` W3C ponta-a-ponta no barramento:** `TenantEnvelope`/`EventoBruto` ganham o campo `traceparent` (serde `default`, retrocompatível); publicado e lido no Redis Streams. Propagado em `messaging_gateway` (RPC→bus), `worker` (bus→RPC) e auditoria (`audit.rs`, `data_postgres`).
+- **`traceparent` no relay do outbox:** `0011_outbox` ganha a coluna `traceparent`; o `handler_persist_message` persiste o trace da requisição na mesma transação ACID e o `OutboxRelay` o repropaga no barramento (persistência → relay → bus).
+- **Stubs eliminados (handlers reais por contrato):**
+  - `data_postgres`: `GetThread` carrega a thread de mensagens (RLS); novos RPCs `ListAtendimentos` (snapshot por status, RLS) e `CreateTenant` (escrita admin).
+  - `runtime_api`: `StreamAtendimentos` deixa de ser mock e delega ao `data_postgres` (`ListAtendimentos`) via RPC.
+  - `control_plane`: `RegisterTenant` deixa de gerar UUID fake e delega ao `data_postgres` (`CreateTenant`) via RPC.
 
 ### Pendências remanescentes (trabalho futuro)
-- `traceparent` no relay do **outbox**: a tabela `0011_outbox` não persiste trace context (exigiria coluna dedicada); eventos relayed nascem sem trace.
-- Stubs por completar: `control_plane`, realtime/WS de `runtime_api`, handlers mock de `data_postgres`.
+- **Streaming multi-frame de verdade** (`runtime_api::StreamAtendimentos`): hoje é snapshot req/reply. Server-streaming real exige um primitivo de Handler com múltiplos frames no `transport` (as flags `STREAM_ITEM`/`STREAM_END` já existem no framing).
+- **Validação em banco real:** os handlers novos (`GetThread`/`ListAtendimentos`/`CreateTenant`) passam `fmt`/`clippy`/build offline; a semântica RLS/admin precisa ser exercitada com o túnel SSH + DB (`cargo test`).
 
 ## [2026-06-04] - Tratamento de Erros (`error_core`)
 

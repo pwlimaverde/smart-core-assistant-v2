@@ -80,7 +80,9 @@ async fn main() -> anyhow::Result<()> {
     let state_for_get_thread = state_clone.clone();
     let state_for_persist = state_clone.clone();
     let state_for_verify = state_clone.clone();
-    let state_for_upsert = state_clone;
+    let state_for_upsert = state_clone.clone();
+    let state_for_list = state_clone.clone();
+    let state_for_create_tenant = state_clone;
 
     let server = Server::from_env("DATA_POSTGRES")
         .route("GetThread", move |env| {
@@ -100,6 +102,14 @@ async fn main() -> anyhow::Result<()> {
         .route("UpsertContact", move |env| {
             let state = state_for_upsert.clone();
             Box::pin(async move { handler_upsert_contact(state.pool, env).await })
+        })
+        .route("ListAtendimentos", move |env| {
+            let state = state_for_list.clone();
+            Box::pin(async move { handler_list_atendimentos(state.pool, env).await })
+        })
+        .route("CreateTenant", move |env| {
+            let state = state_for_create_tenant.clone();
+            Box::pin(async move { handler_create_tenant(state.pool, env).await })
         });
 
     tracing::info!("Servidor RPC configurado e pronto.");
@@ -167,13 +177,201 @@ async fn processar_evento_auditoria(
     Ok(())
 }
 
-async fn handler_get_thread(_pool: PgPool, env: Envelope) -> Envelope {
-    // Stub de consulta de thread/atendimento
-    Envelope {
-        kind: MessageKind::Reply as i32,
-        method: "GetThreadReply".to_string(),
-        payload: vec![],
-        ..env
+/// Carrega a thread (mensagens) de um atendimento, respeitando o RLS do tenant.
+async fn handler_get_thread(pool: PgPool, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
+    let atendimento_id = payload_json
+        .get("atendimento_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32)
+        .unwrap_or(1);
+    let limit = payload_json
+        .get("limit")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(50);
+    let offset = payload_json
+        .get("offset")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+
+    let ctx = RequestContext {
+        tenant_id,
+        user_id: 1,
+        user_scopes: vec!["atendimentos:read".to_string()],
+        flow_permissions: vec![],
+    };
+    let repo = infrastructure_postgres::atendimentos::mensagens::PostgresMensagemRepository;
+
+    let result =
+        infrastructure_postgres::run_in_tenant_transaction(&pool, tenant_id, |mut tx| async move {
+            use infrastructure_postgres::atendimentos::mensagens::MensagemRepository;
+            let mensagens = repo
+                .listar_por_atendimento(&mut tx, &ctx, atendimento_id, limit, offset)
+                .await?;
+            Ok((mensagens, tx))
+        })
+        .await;
+
+    match result {
+        Ok(mensagens) => {
+            let reply = serde_json::json!({
+                "atendimento_id": atendimento_id,
+                "mensagens": mensagens,
+            });
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "GetThreadReply".to_string(),
+                payload: serde_json::to_vec(&reply).unwrap_or_default(),
+                error: None,
+                ..env
+            }
+        }
+        Err(err) => {
+            let app_err = error_core::AppError::Database(err.to_string());
+            let err_env = app_err.to_error_envelope(&env.traceparent, "data_postgres");
+            Envelope {
+                kind: MessageKind::Error as i32,
+                method: "GetThreadReply".to_string(),
+                error: Some(err_env),
+                ..env
+            }
+        }
+    }
+}
+
+/// Lista atendimentos por status (snapshot de realtime), respeitando o RLS do tenant.
+async fn handler_list_atendimentos(pool: PgPool, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
+    let status = payload_json
+        .get("status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("em_atendimento")
+        .to_string();
+    let departamento_id = payload_json
+        .get("departamento_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32);
+    let limit = payload_json
+        .get("limit")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(50);
+
+    let ctx = RequestContext {
+        tenant_id,
+        user_id: 1,
+        user_scopes: vec!["atendimentos:read".to_string()],
+        flow_permissions: vec![],
+    };
+    let repo = infrastructure_postgres::atendimentos::atendimentos::PostgresAtendimentoRepository;
+
+    let result =
+        infrastructure_postgres::run_in_tenant_transaction(&pool, tenant_id, |mut tx| async move {
+            use infrastructure_postgres::atendimentos::atendimentos::AtendimentoRepository;
+            let atendimentos = repo
+                .listar_por_status(&mut tx, &ctx, &status, departamento_id, limit)
+                .await?;
+            Ok((atendimentos, tx))
+        })
+        .await;
+
+    match result {
+        Ok(atendimentos) => {
+            let reply = serde_json::json!({ "atendimentos": atendimentos });
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "ListAtendimentosReply".to_string(),
+                payload: serde_json::to_vec(&reply).unwrap_or_default(),
+                error: None,
+                ..env
+            }
+        }
+        Err(err) => {
+            let app_err = error_core::AppError::Database(err.to_string());
+            let err_env = app_err.to_error_envelope(&env.traceparent, "data_postgres");
+            Envelope {
+                kind: MessageKind::Error as i32,
+                method: "ListAtendimentosReply".to_string(),
+                error: Some(err_env),
+                ..env
+            }
+        }
+    }
+}
+
+/// Cria um novo tenant (operação administrativa do control_plane). A própria
+/// `TenantRepository::criar` configura `app.current_tenant` para satisfazer o RLS.
+async fn handler_create_tenant(pool: PgPool, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let name = payload_json
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("Novo Tenant")
+        .to_string();
+    let slug_in = payload_json
+        .get("slug")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let slug = if slug_in.is_empty() {
+        name.to_lowercase().replace(' ', "-")
+    } else {
+        slug_in
+    };
+    let email = payload_json
+        .get("email")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let phone = payload_json
+        .get("phone")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    use infrastructure_postgres::tenants::tenants::{PostgresTenantRepository, TenantRepository};
+    let repo = PostgresTenantRepository;
+
+    let resultado: Result<_, infrastructure_postgres::DbError> = async {
+        let mut tx = pool.begin().await?;
+        let tenant = repo
+            .criar(
+                &mut tx,
+                &name,
+                &slug,
+                None,
+                email.as_deref(),
+                phone.as_deref(),
+            )
+            .await?;
+        tx.commit().await?;
+        Ok(tenant)
+    }
+    .await;
+
+    match resultado {
+        Ok(tenant) => {
+            let reply = serde_json::json!({ "status": "success", "tenant": tenant });
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "CreateTenantReply".to_string(),
+                payload: serde_json::to_vec(&reply).unwrap_or_default(),
+                error: None,
+                ..env
+            }
+        }
+        Err(err) => {
+            let app_err = error_core::AppError::Database(err.to_string());
+            let err_env = app_err.to_error_envelope(&env.traceparent, "data_postgres");
+            Envelope {
+                kind: MessageKind::Error as i32,
+                method: "CreateTenantReply".to_string(),
+                error: Some(err_env),
+                ..env
+            }
+        }
     }
 }
 
