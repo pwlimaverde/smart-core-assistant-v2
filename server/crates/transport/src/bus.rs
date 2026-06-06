@@ -1,13 +1,13 @@
 // transport/src/bus.rs  (comentários em pt-br)
+use crate::error::TransportError;
 use chrono::{DateTime, Utc};
+use contracts::TenantEnvelope;
 use redis::aio::ConnectionManager;
 use redis::streams::{StreamMaxlen, StreamReadOptions, StreamReadReply};
 use redis::AsyncCommands;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use uuid::Uuid;
-use crate::error::TransportError;
-use contracts::TenantEnvelope;
 
 /// Stream único de eventos do domínio. O `messaging_gateway` publica; o `worker` consome
 /// via consumer groups.
@@ -183,7 +183,10 @@ pub async fn garantir_consumer_group_stream(
             Ok(())
         }
         Err(e) if e.code() == Some("BUSYGROUP") => {
-            tracing::debug!("consumer group já existia (BUSYGROUP) no stream '{}'", stream);
+            tracing::debug!(
+                "consumer group já existia (BUSYGROUP) no stream '{}'",
+                stream
+            );
             Ok(())
         }
         Err(e) => Err(TransportError::Bus(e.to_string())),
@@ -243,7 +246,10 @@ pub async fn reprocessar_pendentes_stream(
         .map_err(|e| TransportError::Bus(e.to_string()))?;
     let eventos = extrair_eventos(reply);
     if !eventos.is_empty() {
-        tracing::info!(pendentes = eventos.len(), "reprocessando eventos pendentes (PEL)");
+        tracing::info!(
+            pendentes = eventos.len(),
+            "reprocessando eventos pendentes (PEL)"
+        );
     }
     Ok(eventos)
 }
@@ -336,11 +342,21 @@ impl Consumer {
         );
 
         // 1. Processar pendências da lista PEL (Pending Entries List)
-        match reprocessar_pendentes_stream(&mut con, &self.stream, &self.grupo, &self.consumidor, 10).await {
+        match reprocessar_pendentes_stream(
+            &mut con,
+            &self.stream,
+            &self.grupo,
+            &self.consumidor,
+            10,
+        )
+        .await
+        {
             Ok(pendentes) => {
                 for evento in pendentes {
                     handler(evento.clone()).await;
-                    let _ = confirmar_stream(&mut con, &self.stream, &self.grupo, &evento.stream_id).await;
+                    let _ =
+                        confirmar_stream(&mut con, &self.stream, &self.grupo, &evento.stream_id)
+                            .await;
                 }
             }
             Err(e) => {
@@ -350,15 +366,33 @@ impl Consumer {
 
         // 2. Loop de consumo ativo
         loop {
-            match consumir_stream(&mut con, &self.stream, &self.grupo, &self.consumidor, 10, 1000).await {
+            match consumir_stream(
+                &mut con,
+                &self.stream,
+                &self.grupo,
+                &self.consumidor,
+                10,
+                1000,
+            )
+            .await
+            {
                 Ok(eventos) => {
                     for evento in eventos {
                         handler(evento.clone()).await;
-                        let _ = confirmar_stream(&mut con, &self.stream, &self.grupo, &evento.stream_id).await;
+                        let _ = confirmar_stream(
+                            &mut con,
+                            &self.stream,
+                            &self.grupo,
+                            &evento.stream_id,
+                        )
+                        .await;
                     }
                 }
                 Err(e) => {
-                    tracing::error!("Erro consumindo do Redis Streams: {:?}. Aguardando re-tentativa...", e);
+                    tracing::error!(
+                        "Erro consumindo do Redis Streams: {:?}. Aguardando re-tentativa...",
+                        e
+                    );
                     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
                 }
             }

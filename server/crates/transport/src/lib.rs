@@ -1,12 +1,12 @@
 // transport/src/lib.rs  (comentários em pt-br)
-pub mod error;
+pub mod bus;
 pub mod codec;
+pub mod error;
 pub mod framing;
 pub mod runtime;
-pub mod bus;
 
 // Re-exportações públicas para facilitar o uso por outros crates
+pub use codec::{from_env, Codec, FlatbuffersCodec, GrpcCodec};
 pub use error::TransportError;
-pub use codec::{Codec, FlatbuffersCodec, GrpcCodec, from_env};
 pub use framing::Frame;
-pub use runtime::{Endpoint, MuxClient, Server, Handler, conectar_cliente};
+pub use runtime::{conectar_cliente, Endpoint, Handler, MuxClient, Server};

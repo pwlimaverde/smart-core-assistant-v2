@@ -1,14 +1,14 @@
 //! Serviço data_postgres: provê RPC síncrono e pub/sub assíncrono sujeito a políticas RLS.
 //! Contém o Relay de Outbox e o Consumidor de Auditoria integrados.
 
-use sqlx::PgPool;
-use redis::aio::ConnectionManager;
-use uuid::Uuid;
 use contracts::{Envelope, MessageKind};
-use transport::Server;
 use infrastructure_postgres::{
     inserir_audit_log, inserir_audit_log_global, NewAuditLogEntry, RequestContext,
 };
+use redis::aio::ConnectionManager;
+use sqlx::PgPool;
+use transport::Server;
+use uuid::Uuid;
 
 mod outbox_relay;
 use outbox_relay::OutboxRelay;
@@ -32,7 +32,8 @@ async fn main() -> anyhow::Result<()> {
     tracing::info!("Banco de dados PostgreSQL conectado e migrations executadas.");
 
     // 3. Conecta ao Redis
-    let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+    let redis_url =
+        std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
     let redis_client = redis::Client::open(redis_url)?;
     let redis_conn = ConnectionManager::new(redis_client).await?;
     tracing::info!("Conexão com Redis estabelecida.");
@@ -59,14 +60,17 @@ async fn main() -> anyhow::Result<()> {
         redis_conn.clone(),
     );
     let audit_handle = tokio::spawn(async move {
-        if let Err(e) = audit_consumer.run(move |evt| {
-            let pool = pool_clone.clone();
-            async move {
-                if let Err(err) = processar_evento_auditoria(pool, evt).await {
-                    tracing::error!("Erro consolidação auditoria: {:?}", err);
+        if let Err(e) = audit_consumer
+            .run(move |evt| {
+                let pool = pool_clone.clone();
+                async move {
+                    if let Err(err) = processar_evento_auditoria(pool, evt).await {
+                        tracing::error!("Erro consolidação auditoria: {:?}", err);
+                    }
                 }
-            }
-        }).await {
+            })
+            .await
+        {
             tracing::error!("Consumidor de auditoria parou com erro crítico: {:?}", e);
         }
     });
@@ -89,7 +93,9 @@ async fn main() -> anyhow::Result<()> {
         })
         .route("VerifyCredentials", move |env| {
             let state = state_for_verify.clone();
-            Box::pin(async move { handler_verify_credentials(state.pool, state.redis_conn, env).await })
+            Box::pin(
+                async move { handler_verify_credentials(state.pool, state.redis_conn, env).await },
+            )
         })
         .route("UpsertContact", move |env| {
             let state = state_for_upsert.clone();
@@ -97,7 +103,7 @@ async fn main() -> anyhow::Result<()> {
         });
 
     tracing::info!("Servidor RPC configurado e pronto.");
-    
+
     // Aguarda execução
     tokio::select! {
         res = server.run() => {
@@ -113,9 +119,12 @@ async fn main() -> anyhow::Result<()> {
 }
 
 /// Consolida um evento de auditoria vindo do barramento de segurança no banco de dados.
-async fn processar_evento_auditoria(pool: PgPool, evt: transport::bus::EventoBruto) -> anyhow::Result<()> {
+async fn processar_evento_auditoria(
+    pool: PgPool,
+    evt: transport::bus::EventoBruto,
+) -> anyhow::Result<()> {
     let envelope = evt.desserializar::<observability::AuditLogPayload>()?;
-    
+
     let entry = NewAuditLogEntry {
         tenant_id: envelope.payload.tenant_id,
         level: envelope.payload.level,
@@ -136,15 +145,22 @@ async fn processar_evento_auditoria(pool: PgPool, evt: transport::bus::EventoBru
             |mut tx| async move {
                 let id = inserir_audit_log(&mut tx, &entry).await?;
                 Ok((id, tx))
-            }
-        ).await;
+            },
+        )
+        .await;
         if let Err(e) = result {
-            tracing::error!("Falha ao consolidar log de auditoria do tenant no Postgres: {:?}", e);
+            tracing::error!(
+                "Falha ao consolidar log de auditoria do tenant no Postgres: {:?}",
+                e
+            );
         }
     } else {
         // Ação Global: bypass RLS
         if let Err(e) = inserir_audit_log_global(&pool, &entry).await {
-            tracing::error!("Falha ao consolidar log de auditoria global no Postgres: {:?}", e);
+            tracing::error!(
+                "Falha ao consolidar log de auditoria global no Postgres: {:?}",
+                e
+            );
         }
     }
 
@@ -179,54 +195,60 @@ async fn handler_persist_message(pool: PgPool, env: Envelope) -> Envelope {
         flow_permissions: vec![],
     };
 
-    let result = infrastructure_postgres::run_in_tenant_transaction(&pool, tenant_id, |mut tx| async move {
-        let atendimento_id = payload_json.get("atendimento_id")
-            .and_then(|v| v.as_i64())
-            .map(|v| v as i32)
-            .unwrap_or(1);
-        let conteudo = payload_json.get("content")
-            .and_then(|v| v.as_str())
-            .unwrap_or("Mensagem padrão");
-        let tipo = payload_json.get("tipo")
-            .and_then(|v| v.as_str())
-            .unwrap_or("texto");
-        let remetente = payload_json.get("sender_id")
-            .and_then(|v| v.as_str())
-            .unwrap_or("usuario");
+    let result =
+        infrastructure_postgres::run_in_tenant_transaction(&pool, tenant_id, |mut tx| async move {
+            let atendimento_id = payload_json
+                .get("atendimento_id")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32)
+                .unwrap_or(1);
+            let conteudo = payload_json
+                .get("content")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Mensagem padrão");
+            let tipo = payload_json
+                .get("tipo")
+                .and_then(|v| v.as_str())
+                .unwrap_or("texto");
+            let remetente = payload_json
+                .get("sender_id")
+                .and_then(|v| v.as_str())
+                .unwrap_or("usuario");
 
-        use infrastructure_postgres::atendimentos::mensagens::MensagemRepository;
-        let msg = repo.criar(
-            &mut tx,
-            &ctx,
-            atendimento_id,
-            tipo,
-            conteudo,
-            remetente,
-            None,
-            None
-        ).await?;
+            use infrastructure_postgres::atendimentos::mensagens::MensagemRepository;
+            let msg = repo
+                .criar(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    tipo,
+                    conteudo,
+                    remetente,
+                    None,
+                    None,
+                )
+                .await?;
 
-        // Padrão OUTBOX: insere o evento de domínio na mesma transação ACID
-        let event_payload = serde_json::json!({
-            "message_id": msg.id.to_string(),
-            "sender_id": msg.remetente,
-            "content": msg.conteudo,
-            "timestamp": msg.timestamp.timestamp_millis(),
-        });
-        let event_payload_bytes = serde_json::to_vec(&event_payload)
-            .map_err(|e| infrastructure_postgres::DbError::ConfigError(e.to_string()))?;
+            // Padrão OUTBOX: insere o evento de domínio na mesma transação ACID
+            let event_payload = serde_json::json!({
+                "message_id": msg.id.to_string(),
+                "sender_id": msg.remetente,
+                "content": msg.conteudo,
+                "timestamp": msg.timestamp.timestamp_millis(),
+            });
+            let event_payload_bytes = serde_json::to_vec(&event_payload)
+                .map_err(|e| infrastructure_postgres::DbError::ConfigError(e.to_string()))?;
 
-        sqlx::query(
-            "INSERT INTO outbox (tenant_id, event_type, payload) VALUES ($1, $2, $3)"
-        )
-        .bind(tenant_id)
-        .bind("message.persisted")
-        .bind(event_payload_bytes)
-        .execute(&mut *tx)
-        .await?;
+            sqlx::query("INSERT INTO outbox (tenant_id, event_type, payload) VALUES ($1, $2, $3)")
+                .bind(tenant_id)
+                .bind("message.persisted")
+                .bind(event_payload_bytes)
+                .execute(&mut *tx)
+                .await?;
 
-        Ok((msg, tx))
-    }).await;
+            Ok((msg, tx))
+        })
+        .await;
 
     match result {
         Ok(msg) => {
@@ -271,14 +293,19 @@ async fn handler_upsert_contact(pool: PgPool, env: Envelope) -> Envelope {
         flow_permissions: vec![],
     };
 
-    let telefone = payload_json.get("phone").and_then(|v| v.as_str()).unwrap_or("5511999999999");
+    let telefone = payload_json
+        .get("phone")
+        .and_then(|v| v.as_str())
+        .unwrap_or("5511999999999");
     let nome = payload_json.get("name").and_then(|v| v.as_str());
 
-    let result = infrastructure_postgres::run_in_tenant_transaction(&pool, tenant_id, |mut tx| async move {
-        use infrastructure_postgres::clientes::contatos::ContatoRepository;
-        let contato = repo.salvar(&mut tx, &ctx, telefone, nome).await?;
-        Ok((contato, tx))
-    }).await;
+    let result =
+        infrastructure_postgres::run_in_tenant_transaction(&pool, tenant_id, |mut tx| async move {
+            use infrastructure_postgres::clientes::contatos::ContatoRepository;
+            let contato = repo.salvar(&mut tx, &ctx, telefone, nome).await?;
+            Ok((contato, tx))
+        })
+        .await;
 
     match result {
         Ok(contato) => {
@@ -303,18 +330,28 @@ async fn handler_upsert_contact(pool: PgPool, env: Envelope) -> Envelope {
     }
 }
 
-async fn handler_verify_credentials(pool: PgPool, mut redis_conn: ConnectionManager, env: Envelope) -> Envelope {
+async fn handler_verify_credentials(
+    pool: PgPool,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
     let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
         Ok(v) => v,
         Err(_) => serde_json::json!({}),
     };
 
-    let email = payload_json.get("email").and_then(|v| v.as_str()).unwrap_or("");
-    let password = payload_json.get("password").and_then(|v| v.as_str()).unwrap_or("");
+    let email = payload_json
+        .get("email")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let password = payload_json
+        .get("password")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
 
     use infrastructure_postgres::AuthUserRepository;
     let repo = infrastructure_postgres::PostgresAuthUserRepository;
-    
+
     // Busca o usuário por e-mail no banco
     let user_opt = match repo.buscar_por_email(&pool, email).await {
         Ok(opt) => opt,
@@ -383,14 +420,16 @@ async fn handler_verify_credentials(pool: PgPool, mut redis_conn: ConnectionMana
             ip_address: None,
         };
 
-        let envelope_auditoria = contracts::TenantEnvelope::novo(
-            tenant_id,
-            "security.audit",
-            audit_payload,
-        );
+        let envelope_auditoria =
+            contracts::TenantEnvelope::novo(tenant_id, "security.audit", audit_payload);
 
-        if let Err(e) = transport::bus::publicar_evento_seguranca(&mut redis_conn, &envelope_auditoria).await {
-            tracing::error!("Falha ao publicar evento de auditoria de login_failed: {:?}", e);
+        if let Err(e) =
+            transport::bus::publicar_evento_seguranca(&mut redis_conn, &envelope_auditoria).await
+        {
+            tracing::error!(
+                "Falha ao publicar evento de auditoria de login_failed: {:?}",
+                e
+            );
         }
 
         Envelope {
@@ -401,4 +440,3 @@ async fn handler_verify_credentials(pool: PgPool, mut redis_conn: ConnectionMana
         }
     }
 }
-

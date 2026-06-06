@@ -3,9 +3,9 @@
 //! Crate transversal de tratamento de erros do workspace `smart-core-assistant-v2`.
 
 pub mod code;
+pub mod envelope_bridge;
 pub mod error;
 pub mod report;
-pub mod envelope_bridge;
 
 #[cfg(feature = "grpc")]
 pub mod transport;

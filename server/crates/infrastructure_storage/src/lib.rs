@@ -17,18 +17,23 @@ impl StorageClient {
     }
 
     /// Salva dados de um arquivo no storage do inquilino.
-    pub async fn put(&self, tenant_id: Uuid, file_name: &str, data: &[u8]) -> anyhow::Result<String> {
+    pub async fn put(
+        &self,
+        tenant_id: Uuid,
+        file_name: &str,
+        data: &[u8],
+    ) -> anyhow::Result<String> {
         let tenant_dir = self.base_path.join(tenant_id.to_string());
         std::fs::create_dir_all(&tenant_dir)?;
         let file_path = tenant_dir.join(file_name);
         std::fs::write(&file_path, data)?;
-        
+
         tracing::info!(
             file_name = %file_name,
             tenant_id = %tenant_id,
             "Arquivo salvo com sucesso no storage do inquilino."
         );
-        
+
         Ok(format!("storage://{}/{}", tenant_id, file_name))
     }
 
@@ -43,9 +48,17 @@ impl StorageClient {
     }
 
     /// Gera uma URL temporária assinada (presigned URL) para acesso externo ao arquivo.
-    pub async fn presign(&self, tenant_id: Uuid, file_name: &str, _ttl_segundos: u64) -> anyhow::Result<String> {
+    pub async fn presign(
+        &self,
+        tenant_id: Uuid,
+        file_name: &str,
+        _ttl_segundos: u64,
+    ) -> anyhow::Result<String> {
         // Retorna URL de acesso mockada (simulando MinIO/S3)
-        Ok(format!("http://localhost:9000/media-bucket/{}/{}?token=mock_signed_token", tenant_id, file_name))
+        Ok(format!(
+            "http://localhost:9000/media-bucket/{}/{}?token=mock_signed_token",
+            tenant_id, file_name
+        ))
     }
 
     /// Remove fisicamente um arquivo do storage.
@@ -58,4 +71,3 @@ impl StorageClient {
         Ok(())
     }
 }
-

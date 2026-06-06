@@ -1,13 +1,16 @@
 //! Ponte de conversão entre erros locais da aplicação e o envelope de erros do contrato.
 //! Permite serializar e desserializar erros na fronteira de comunicação de serviços.
 
-use crate::error::{AppError, Severity};
 use crate::code::ErrorCategory;
+use crate::error::{AppError, Severity};
 
 impl AppError {
     /// Retorna a chave de internacionalização correspondente ao código do erro.
     pub fn i18n_key(&self) -> String {
-        format!("errors.{}", self.code().to_string().to_lowercase().replace('_', "."))
+        format!(
+            "errors.{}",
+            self.code().to_string().to_lowercase().replace('_', ".")
+        )
     }
 
     /// Converte o erro nativo no envelope de fronteira (dado serializável).

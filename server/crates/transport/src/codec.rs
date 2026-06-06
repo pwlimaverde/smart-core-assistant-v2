@@ -1,13 +1,13 @@
 // transport/src/codec.rs  (comentários em pt-br)
-use bytes::Bytes;
 use crate::error::TransportError;
+use bytes::Bytes;
 use contracts::Envelope;
 use prost::Message;
 
 /// Serializa/deserializa o envelope. Desacoplado do canal.
 pub trait Codec: Send + Sync {
-    fn nome(&self) -> &'static str;                 // "flatbuffers" | "grpc"
-    fn encode(&self, env: &Envelope) -> Bytes;      // envelope → bytes do fio
+    fn nome(&self) -> &'static str; // "flatbuffers" | "grpc"
+    fn encode(&self, env: &Envelope) -> Bytes; // envelope → bytes do fio
     fn decode(&self, raw: &[u8]) -> Result<Envelope, TransportError>;
 }
 
@@ -21,7 +21,7 @@ impl Codec for FlatbuffersCodec {
 
     fn encode(&self, env: &Envelope) -> Bytes {
         let mut fbb = flatbuffers::FlatBufferBuilder::new();
-        
+
         // 1. Criar os campos de erro se existirem
         let error_offset = env.error.as_ref().map(|err| {
             let code_offset = fbb.create_string(&err.code);
@@ -30,13 +30,13 @@ impl Codec for FlatbuffersCodec {
             let user_msg_fb_offset = fbb.create_string(&err.user_message_fallback);
             let trace_id_offset = fbb.create_string(&err.trace_id);
             let source_svc_offset = fbb.create_string(&err.source_svc);
-            
+
             // Criar KeyValue details
             let mut det_offsets = Vec::new();
             for kv in &err.details {
                 let k_offset = fbb.create_string(&kv.key);
                 let v_offset = fbb.create_string(&kv.value);
-                
+
                 let kv_args = contracts::fbs::errors::KeyValueArgs {
                     key: Some(k_offset),
                     value: Some(v_offset),
@@ -44,11 +44,11 @@ impl Codec for FlatbuffersCodec {
                 det_offsets.push(contracts::fbs::errors::KeyValue::create(&mut fbb, &kv_args));
             }
             let details_vector = fbb.create_vector(&det_offsets);
-            
+
             let err_args = contracts::fbs::errors::ErrorEnvelopeArgs {
                 code: Some(code_offset),
-                category: contracts::fbs::errors::ErrorCategory(err.category as i32),
-                severity: contracts::fbs::errors::Severity(err.severity as i32),
+                category: contracts::fbs::errors::ErrorCategory(err.category),
+                severity: contracts::fbs::errors::Severity(err.severity),
                 message: Some(msg_offset),
                 user_message: Some(user_msg_offset),
                 user_message_fallback: Some(user_msg_fb_offset),
@@ -60,7 +60,7 @@ impl Codec for FlatbuffersCodec {
             };
             contracts::fbs::errors::ErrorEnvelope::create(&mut fbb, &err_args)
         });
-        
+
         // 2. Criar os offsets de string/vetores para o Envelope
         let tenant_id_offset = fbb.create_string(&env.tenant_id);
         let message_id_offset = fbb.create_string(&env.message_id);
@@ -68,7 +68,7 @@ impl Codec for FlatbuffersCodec {
         let traceparent_offset = fbb.create_string(&env.traceparent);
         let method_offset = fbb.create_string(&env.method);
         let payload_offset = fbb.create_vector(&env.payload);
-        
+
         // 3. Criar a tabela Envelope
         let env_args = contracts::fbs::envelope::EnvelopeArgs {
             tenant_id: Some(tenant_id_offset),
@@ -77,30 +77,33 @@ impl Codec for FlatbuffersCodec {
             causation_id: Some(causation_id_offset),
             traceparent: Some(traceparent_offset),
             occurred_at: env.occurred_at,
-            kind: contracts::fbs::envelope::MessageKind(env.kind as i32),
+            kind: contracts::fbs::envelope::MessageKind(env.kind),
             method: Some(method_offset),
             payload: Some(payload_offset),
             error: error_offset,
         };
         let root = contracts::fbs::envelope::Envelope::create(&mut fbb, &env_args);
         fbb.finish(root, None);
-        
+
         Bytes::copy_from_slice(fbb.finished_data())
     }
 
     fn decode(&self, raw: &[u8]) -> Result<Envelope, TransportError> {
         let fbs_env = flatbuffers::root::<contracts::fbs::envelope::Envelope>(raw)
             .map_err(|e| TransportError::Codec(format!("Erro ao ler root FlatBuffers: {:?}", e)))?;
-            
+
         // Converter de volta para a struct do gRPC
         let tenant_id = fbs_env.tenant_id().unwrap_or("").to_string();
         let message_id = fbs_env.message_id().unwrap_or("").to_string();
         let causation_id = fbs_env.causation_id().unwrap_or("").to_string();
         let traceparent = fbs_env.traceparent().unwrap_or("").to_string();
         let method = fbs_env.method().unwrap_or("").to_string();
-        
-        let payload = fbs_env.payload().map(|p| p.bytes().to_vec()).unwrap_or_default();
-        
+
+        let payload = fbs_env
+            .payload()
+            .map(|p| p.bytes().to_vec())
+            .unwrap_or_default();
+
         let error = fbs_env.error().map(|err| {
             let code = err.code().unwrap_or("").to_string();
             let message = err.message().unwrap_or("").to_string();
@@ -108,7 +111,7 @@ impl Codec for FlatbuffersCodec {
             let user_message_fallback = err.user_message_fallback().unwrap_or("").to_string();
             let trace_id = err.trace_id().unwrap_or("").to_string();
             let source_svc = err.source_svc().unwrap_or("").to_string();
-            
+
             let mut details = Vec::new();
             if let Some(dets) = err.details() {
                 for i in 0..dets.len() {
@@ -119,11 +122,11 @@ impl Codec for FlatbuffersCodec {
                     });
                 }
             }
-            
+
             contracts::ErrorEnvelope {
                 code,
-                category: err.category().0 as i32,
-                severity: err.severity().0 as i32,
+                category: err.category().0,
+                severity: err.severity().0,
                 message,
                 user_message,
                 user_message_fallback,
@@ -134,7 +137,7 @@ impl Codec for FlatbuffersCodec {
                 occurred_at: err.occurred_at(),
             }
         });
-        
+
         Ok(Envelope {
             tenant_id,
             schema_version: fbs_env.schema_version(),
@@ -142,7 +145,7 @@ impl Codec for FlatbuffersCodec {
             causation_id,
             traceparent,
             occurred_at: fbs_env.occurred_at(),
-            kind: fbs_env.kind().0 as i32,
+            kind: fbs_env.kind().0,
             method,
             payload,
             error,
@@ -165,8 +168,9 @@ impl Codec for GrpcCodec {
     }
 
     fn decode(&self, raw: &[u8]) -> Result<Envelope, TransportError> {
-        Envelope::decode(raw)
-            .map_err(|e| TransportError::Codec(format!("Erro ao decodificar Protobuf/gRPC: {:?}", e)))
+        Envelope::decode(raw).map_err(|e| {
+            TransportError::Codec(format!("Erro ao decodificar Protobuf/gRPC: {:?}", e))
+        })
     }
 }
 

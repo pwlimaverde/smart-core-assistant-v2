@@ -1,5 +1,9 @@
-use uuid::Uuid;
+// Os métodos de auditoria carregam o contexto completo do evento (tenant, ator, trace,
+// rede) numa única chamada; a assinatura larga é intencional e espelha a tabela audit_log.
+#![allow(clippy::too_many_arguments)]
+
 use redis::aio::ConnectionManager;
+use uuid::Uuid;
 
 #[cfg(feature = "postgres-audit")]
 use sqlx::PgPool;
@@ -90,12 +94,9 @@ impl AuditLogger {
                     user_id,
                     ip_address,
                 };
-                let envelope = contracts::TenantEnvelope::novo(
-                    tenant_id,
-                    "audit_log",
-                    payload,
-                );
-                if let Err(e) = transport::bus::publicar_evento_seguranca(&mut con, &envelope).await {
+                let envelope = contracts::TenantEnvelope::novo(tenant_id, "audit_log", payload);
+                if let Err(e) = transport::bus::publicar_evento_seguranca(&mut con, &envelope).await
+                {
                     tracing::error!(
                         error = ?e,
                         audit_event = %event,
@@ -127,7 +128,8 @@ impl AuditLogger {
                         &pool,
                         tenant_id,
                         |mut tx| async move {
-                            let id = infrastructure_postgres::inserir_audit_log(&mut tx, &entry).await?;
+                            let id =
+                                infrastructure_postgres::inserir_audit_log(&mut tx, &entry).await?;
                             Ok((id, tx))
                         },
                     )
@@ -181,12 +183,9 @@ impl AuditLogger {
                     user_id,
                     ip_address,
                 };
-                let envelope = contracts::TenantEnvelope::novo(
-                    Uuid::nil(),
-                    "audit_log",
-                    payload,
-                );
-                if let Err(e) = transport::bus::publicar_evento_seguranca(&mut con, &envelope).await {
+                let envelope = contracts::TenantEnvelope::novo(Uuid::nil(), "audit_log", payload);
+                if let Err(e) = transport::bus::publicar_evento_seguranca(&mut con, &envelope).await
+                {
                     tracing::error!(
                         error = ?e,
                         audit_event = %event,
@@ -213,7 +212,9 @@ impl AuditLogger {
                         ip_address,
                     };
 
-                    let result = infrastructure_postgres::inserir_audit_log_global(&admin_pool, &entry).await;
+                    let result =
+                        infrastructure_postgres::inserir_audit_log_global(&admin_pool, &entry)
+                            .await;
 
                     if let Err(e) = result {
                         tracing::error!(
@@ -241,7 +242,9 @@ impl AuditLogger {
         ip_address: Option<String>,
         trace_id: Option<String>,
     ) {
-        self.log_tenant_event(tenant_id, event, message, "INFO", context, user_id, ip_address, trace_id);
+        self.log_tenant_event(
+            tenant_id, event, message, "INFO", context, user_id, ip_address, trace_id,
+        );
     }
 
     pub fn warn(
@@ -254,7 +257,9 @@ impl AuditLogger {
         ip_address: Option<String>,
         trace_id: Option<String>,
     ) {
-        self.log_tenant_event(tenant_id, event, message, "WARN", context, user_id, ip_address, trace_id);
+        self.log_tenant_event(
+            tenant_id, event, message, "WARN", context, user_id, ip_address, trace_id,
+        );
     }
 
     pub fn error(
@@ -267,7 +272,9 @@ impl AuditLogger {
         ip_address: Option<String>,
         trace_id: Option<String>,
     ) {
-        self.log_tenant_event(tenant_id, event, message, "ERROR", context, user_id, ip_address, trace_id);
+        self.log_tenant_event(
+            tenant_id, event, message, "ERROR", context, user_id, ip_address, trace_id,
+        );
     }
 
     // ============================================================
@@ -283,7 +290,9 @@ impl AuditLogger {
         ip_address: Option<String>,
         trace_id: Option<String>,
     ) {
-        self.log_global_event(event, message, "INFO", context, user_id, ip_address, trace_id);
+        self.log_global_event(
+            event, message, "INFO", context, user_id, ip_address, trace_id,
+        );
     }
 
     pub fn warn_global(
@@ -295,7 +304,9 @@ impl AuditLogger {
         ip_address: Option<String>,
         trace_id: Option<String>,
     ) {
-        self.log_global_event(event, message, "WARN", context, user_id, ip_address, trace_id);
+        self.log_global_event(
+            event, message, "WARN", context, user_id, ip_address, trace_id,
+        );
     }
 
     pub fn error_global(
@@ -307,6 +318,8 @@ impl AuditLogger {
         ip_address: Option<String>,
         trace_id: Option<String>,
     ) {
-        self.log_global_event(event, message, "ERROR", context, user_id, ip_address, trace_id);
+        self.log_global_event(
+            event, message, "ERROR", context, user_id, ip_address, trace_id,
+        );
     }
 }
