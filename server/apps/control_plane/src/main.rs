@@ -1,8 +1,8 @@
 //! Serviço control_plane: Painel administrativo e tarefas de back office.
 
 use contracts::{Envelope, MessageKind};
+use std::time::Duration;
 use transport::Server;
-use uuid::Uuid;
 
 #[derive(Clone)]
 struct AppState {}
@@ -33,36 +33,45 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Handler administrativo que simula o cadastro de um novo Tenant
+/// Handler administrativo: encaminha o cadastro do tenant ao `data_postgres` por contrato
+/// (RPC `CreateTenant`). O control_plane não acessa o banco diretamente.
 async fn handler_register_tenant(env: Envelope) -> Envelope {
-    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
-        Ok(v) => v,
-        Err(_) => serde_json::json!({}),
+    let pg_client = match transport::conectar_cliente("data_postgres").await {
+        Ok(c) => c,
+        Err(e) => {
+            let app_err =
+                error_core::AppError::Internal(format!("falha ao conectar ao data_postgres: {e}"));
+            let err_env = app_err.to_error_envelope(&env.traceparent, "control_plane");
+            return Envelope {
+                kind: MessageKind::Error as i32,
+                method: "RegisterTenantReply".to_string(),
+                error: Some(err_env),
+                ..env
+            };
+        }
     };
 
-    let tenant_name = payload_json
-        .get("name")
-        .and_then(|v| v.as_str())
-        .unwrap_or("Novo Tenant");
-    let tenant_id = Uuid::new_v4();
+    // Repassa o payload do cliente reescrevendo apenas o método para o contrato do data_postgres.
+    let req = Envelope {
+        kind: MessageKind::Request as i32,
+        method: "CreateTenant".to_string(),
+        ..env.clone()
+    };
 
-    tracing::info!(
-        tenant_id = %tenant_id,
-        tenant_name = %tenant_name,
-        "Painel Administrativo: registrando novo inquilino global."
-    );
-
-    let res = serde_json::json!({
-        "status": "success",
-        "tenant_id": tenant_id.to_string(),
-        "name": tenant_name,
-    });
-
-    Envelope {
-        kind: MessageKind::Reply as i32,
-        method: "RegisterTenantReply".to_string(),
-        payload: serde_json::to_vec(&res).unwrap_or_default(),
-        error: None,
-        ..env
+    match pg_client.call(req, Duration::from_secs(5)).await {
+        Ok(resp) => Envelope {
+            method: "RegisterTenantReply".to_string(),
+            ..resp
+        },
+        Err(e) => {
+            let app_err = error_core::AppError::Internal(format!("RPC CreateTenant falhou: {e}"));
+            let err_env = app_err.to_error_envelope(&env.traceparent, "control_plane");
+            Envelope {
+                kind: MessageKind::Error as i32,
+                method: "RegisterTenantReply".to_string(),
+                error: Some(err_env),
+                ..env
+            }
+        }
     }
 }

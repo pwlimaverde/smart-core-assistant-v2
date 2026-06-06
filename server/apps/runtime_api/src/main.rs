@@ -83,31 +83,47 @@ async fn handler_login(env: Envelope) -> Envelope {
     }
 }
 
-/// Handler de StreamAtendimentos: retorna um snapshot de atendimentos mockados de realtime
+/// Handler de StreamAtendimentos: snapshot real de atendimentos via RPC ao data_postgres.
+/// Streaming multi-frame de verdade dependeria de um primitivo de server-streaming no
+/// transport (as flags STREAM_ITEM/STREAM_END já existem no framing, mas o Handler é req/reply).
 async fn handler_stream_atendimentos(env: Envelope) -> Envelope {
-    // Simula atendimentos retornados via FlatBuffers/gRPC payload
-    let atendimentos = serde_json::json!({
-        "atendimentos": [
-            {
-                "id": 1,
-                "cliente": "João Silva",
-                "status": "em_atendimento",
-                "ultima_mensagem": "Olá, preciso de suporte."
-            },
-            {
-                "id": 2,
-                "cliente": "Maria Souza",
-                "status": "aguardando",
-                "ultima_mensagem": "Aguardando resposta."
-            }
-        ]
-    });
+    let pg_client = match transport::conectar_cliente("data_postgres").await {
+        Ok(c) => c,
+        Err(e) => {
+            let app_err =
+                error_core::AppError::Internal(format!("falha ao conectar ao data_postgres: {e}"));
+            let err_env = app_err.to_error_envelope(&env.traceparent, "runtime_api");
+            return Envelope {
+                kind: MessageKind::Error as i32,
+                method: "StreamAtendimentosReply".to_string(),
+                error: Some(err_env),
+                ..env
+            };
+        }
+    };
 
-    Envelope {
-        kind: MessageKind::Reply as i32,
-        method: "StreamAtendimentosReply".to_string(),
-        payload: serde_json::to_vec(&atendimentos).unwrap_or_default(),
-        error: None,
-        ..env
+    // Repassa o payload (status/departamento/limit) reescrevendo o método para o contrato do data_postgres.
+    let req = Envelope {
+        kind: MessageKind::Request as i32,
+        method: "ListAtendimentos".to_string(),
+        ..env.clone()
+    };
+
+    match pg_client.call(req, std::time::Duration::from_secs(5)).await {
+        Ok(resp) => Envelope {
+            method: "StreamAtendimentosReply".to_string(),
+            ..resp
+        },
+        Err(e) => {
+            let app_err =
+                error_core::AppError::Internal(format!("RPC ListAtendimentos falhou: {e}"));
+            let err_env = app_err.to_error_envelope(&env.traceparent, "runtime_api");
+            Envelope {
+                kind: MessageKind::Error as i32,
+                method: "StreamAtendimentosReply".to_string(),
+                error: Some(err_env),
+                ..env
+            }
+        }
     }
 }
