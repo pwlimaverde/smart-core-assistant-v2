@@ -122,24 +122,73 @@ mod tests {
     }
 
     #[test]
-    fn test_cipher_manager_encrypt_decrypt_success() {
+    fn cipher_manager_initializes_from_env_successfully() {
+        let _cipher = get_test_cipher();
+    }
+
+    #[test]
+    fn cipher_manager_fails_initialization_when_key_is_missing() {
+        // Arrange
+        std::env::remove_var("ENCRYPTION_KEY");
+
+        // Act
+        let result = CipherManager::new_from_env();
+
+        // Assert
+        assert!(result.is_err());
+        assert!(matches!(result.err().unwrap(), DbError::ConfigError(_)));
+    }
+
+    #[test]
+    fn cipher_manager_fails_initialization_when_key_is_invalid_base64() {
+        // Arrange
+        std::env::set_var("ENCRYPTION_KEY", "not-base64-content!");
+
+        // Act
+        let result = CipherManager::new_from_env();
+
+        // Assert
+        assert!(result.is_err());
+        assert!(matches!(result.err().unwrap(), DbError::CryptoError(_)));
+    }
+
+    #[test]
+    fn cipher_manager_fails_initialization_when_key_has_invalid_length() {
+        // Arrange - Base64 correspondente a 16 bytes em vez de 32
+        let short_key = BASE64.encode(vec![0u8; 16]);
+        std::env::set_var("ENCRYPTION_KEY", short_key);
+
+        // Act
+        let result = CipherManager::new_from_env();
+
+        // Assert
+        assert!(result.is_err());
+        assert!(matches!(result.err().unwrap(), DbError::CryptoError(_)));
+    }
+
+    #[test]
+    fn encrypts_and_decrypts_plaintext_successfully() {
+        // Arrange
         let cipher = get_test_cipher();
         let original_text = b"Texto ultra secreto de teste!";
 
+        // Act
         let (ct, nonce, tag) = cipher.encrypt(original_text).unwrap();
         assert!(!ct.is_empty());
         assert!(!nonce.is_empty());
         assert!(!tag.is_empty());
 
         let decrypted = cipher.decrypt(&ct, &nonce, &tag).unwrap();
+
+        // Assert
         assert_eq!(decrypted, original_text);
     }
 
     #[test]
-    fn test_cipher_manager_decrypt_invalid_tag() {
+    fn decrypt_fails_when_integrity_tag_is_invalid() {
+        // Arrange
         let cipher = get_test_cipher();
         let original_text = b"Mensagem secreta";
-
         let (ct, nonce, tag) = cipher.encrypt(original_text).unwrap();
 
         // Adultera a tag (altera o primeiro caractere)
@@ -149,7 +198,10 @@ mod tests {
             format!("A{}", &tag[1..])
         };
 
+        // Act
         let result = cipher.decrypt(&ct, &nonce, &invalid_tag);
+
+        // Assert
         assert!(result.is_err());
         match result {
             Err(DbError::CryptoError(msg)) => {
@@ -160,10 +212,10 @@ mod tests {
     }
 
     #[test]
-    fn test_cipher_manager_decrypt_from_jsonb() {
+    fn decrypts_api_keys_from_jsonb_correctly() {
+        // Arrange
         let cipher = get_test_cipher();
         let secret_key = "sk-live-123456789";
-
         let (ct, nonce, tag) = cipher.encrypt(secret_key.as_bytes()).unwrap();
 
         let api_keys_json = json!({
@@ -172,25 +224,71 @@ mod tests {
                 "nonce": nonce,
                 "tag": tag
             },
-            "groq_api_key": null
+            "groq_api_key": null,
+            "corrupt_api_key": {
+                "ciphertext": "invalidbase64",
+                "nonce": nonce,
+                "tag": tag
+            }
         });
 
-        // 1. Recupera chave existente
+        // 1. Act & Assert - Recupera chave existente
         let decrypted = cipher
             .decrypt_from_jsonb(&api_keys_json, "openai_api_key")
             .unwrap();
         assert_eq!(decrypted, secret_key);
 
-        // 2. Chave nula deve retornar string vazia
+        // 2. Act & Assert - Chave nula deve retornar string vazia
         let decrypted_null = cipher
             .decrypt_from_jsonb(&api_keys_json, "groq_api_key")
             .unwrap();
         assert!(decrypted_null.is_empty());
 
-        // 3. Chave inexistente deve retornar string vazia
+        // 3. Act & Assert - Chave inexistente deve retornar string vazia
         let decrypted_missing = cipher
             .decrypt_from_jsonb(&api_keys_json, "google_api_key")
             .unwrap();
         assert!(decrypted_missing.is_empty());
+
+        // 4. Act & Assert - Chave corrompida (base64 inválido) deve retornar erro
+        let decrypt_corrupt_res = cipher.decrypt_from_jsonb(&api_keys_json, "corrupt_api_key");
+        assert!(decrypt_corrupt_res.is_err());
+    }
+
+    #[test]
+    fn decrypt_from_jsonb_fails_when_plaintext_is_not_utf8() {
+        // Arrange - Encripta bytes que não formam string UTF-8 válida (ex.: 0x80)
+        let cipher = get_test_cipher();
+        let non_utf8_data = vec![0x80, 0x81, 0xff];
+        let (ct, nonce, tag) = cipher.encrypt(&non_utf8_data).unwrap();
+
+        let api_keys_json = json!({
+            "invalid_utf8_key": {
+                "ciphertext": ct,
+                "nonce": nonce,
+                "tag": tag
+            }
+        });
+
+        // Act
+        let result = cipher.decrypt_from_jsonb(&api_keys_json, "invalid_utf8_key");
+
+        // Assert
+        assert!(result.is_err());
+        assert!(matches!(result.err().unwrap(), DbError::CryptoError(_)));
+    }
+
+    #[test]
+    fn cipher_manager_debug_format_does_not_leak_key_contents() {
+        // Arrange
+        let cipher = get_test_cipher();
+
+        // Act
+        let debug_str = format!("{:?}", cipher);
+
+        // Assert
+        assert!(debug_str.contains("CipherManager"));
+        assert!(debug_str.contains("[REDACTED]"));
+        assert!(!debug_str.contains("MDEy")); // Não deve vazar a base64 da chave
     }
 }

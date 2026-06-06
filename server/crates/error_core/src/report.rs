@@ -77,3 +77,47 @@ pub fn registrar(err: &AppError, ctx: &ErrorContext) {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_error_report_creation() {
+        let err = AppError::Auth("token expirado".to_string());
+        let ctx = ErrorContext {
+            trace_id: "trace-id-123".to_string(),
+            tenant_id: "tenant-id-456".to_string(),
+        };
+
+        // Testa construção do ErrorReport
+        let report = ErrorReport::from_error(&err, &ctx);
+        assert_eq!(report.error_code, ErrorCode::AuthExpiredToken);
+        assert_eq!(report.severity, Severity::Warn);
+        assert_eq!(report.trace_id, "trace-id-123");
+        assert_eq!(report.tenant_id, "tenant-id-456");
+        assert_eq!(report.public_message, "Credencial inválida ou ausente.");
+        assert!(report.context.is_none());
+
+        // Testa builder com contexto
+        let report_with_ctx = report.with_context("contexto interno de teste");
+        assert_eq!(report_with_ctx.context.unwrap(), "contexto interno de teste");
+    }
+
+    #[test]
+    fn test_registrar_flows() {
+        // Garante que a função registrar executa sem erros/pânico para ambas severidades
+        let ctx = ErrorContext {
+            trace_id: "trace-id-123".to_string(),
+            tenant_id: "tenant-id-456".to_string(),
+        };
+
+        let err_warn = AppError::Auth("token expirado".to_string());
+        let err_error = AppError::Database("conexão falhou".to_string());
+
+        // Deve registrar logs estruturados no tracing sem causar pânico
+        registrar(&err_warn, &ctx);
+        registrar(&err_error, &ctx);
+    }
+}
+

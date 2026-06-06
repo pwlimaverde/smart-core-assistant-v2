@@ -1,7 +1,7 @@
 use error_core::{ErrorCategory, ErrorCode};
 
 #[test]
-fn test_error_code_display() {
+fn error_code_formats_correctly_as_screaming_snake_case_string() {
     // Valida se a conversão do Display do ErrorCode retorna o formato SCREAMING_SNAKE_CASE correto.
     assert_eq!(
         ErrorCode::AuthInvalidToken.to_string(),
@@ -56,7 +56,7 @@ fn test_error_code_display() {
 }
 
 #[test]
-fn test_error_code_category_mapping() {
+fn maps_each_error_code_to_its_correct_high_level_category() {
     // Valida se o agrupamento em categorias de erro está correto.
     assert_eq!(ErrorCode::AuthInvalidToken.category(), ErrorCategory::Auth);
     assert_eq!(ErrorCode::AuthExpiredToken.category(), ErrorCategory::Auth);
@@ -101,16 +101,16 @@ fn test_error_code_category_mapping() {
         ErrorCategory::Validation
     );
 
-    assert_eq!(ErrorCode::Conflict.category(), ErrorCategory::Internal);
+    assert_eq!(ErrorCode::Conflict.category(), ErrorCategory::Conflict);
     assert_eq!(
         ErrorCode::RateLimitExceeded.category(),
-        ErrorCategory::Internal
+        ErrorCategory::RateLimit
     );
     assert_eq!(ErrorCode::InternalError.category(), ErrorCategory::Internal);
 }
 
 #[test]
-fn test_error_serialization_deserialization() {
+fn serializes_and_deserializes_error_codes_and_categories_correctly() {
     // Valida que a serialização em JSON de ErrorCode gera a string em SCREAMING_SNAKE_CASE esperada.
     let code = ErrorCode::AuthExpiredToken;
     let serialized = serde_json::to_string(&code).unwrap();
@@ -126,3 +126,4 @@ fn test_error_serialization_deserialization() {
     let deserialized_cat: ErrorCategory = serde_json::from_str(&serialized_cat).unwrap();
     assert_eq!(deserialized_cat, ErrorCategory::Database);
 }
+

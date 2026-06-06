@@ -561,3 +561,58 @@ pub async fn conectar_cliente(svc_name: &str) -> anyhow::Result<MuxClient> {
     // reconexão automática com backoff a cada `call`.
     MuxClient::conectar(endpoint, codec).await
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_unix_domain_socket_endpoint_correctly() {
+        // Arrange
+        let endpoint_str = "unix:///var/run/test.sock";
+        
+        // Act
+        let parsed = Endpoint::parse(endpoint_str);
+        
+        // Assert
+        assert!(parsed.is_ok());
+        match parsed.unwrap() {
+            Endpoint::Uds(path) => {
+                assert_eq!(path.to_str().unwrap(), "/var/run/test.sock");
+            }
+            _ => panic!("Esperava Endpoint::Uds"),
+        }
+    }
+
+    #[test]
+    fn parses_tcp_socket_endpoint_correctly() {
+        // Arrange
+        let endpoint_str = "tcp://127.0.0.1:8080";
+        
+        // Act
+        let parsed = Endpoint::parse(endpoint_str);
+        
+        // Assert
+        assert!(parsed.is_ok());
+        match parsed.unwrap() {
+            Endpoint::Tcp(addr) => {
+                assert_eq!(addr.ip().to_string(), "127.0.0.1");
+                assert_eq!(addr.port(), 8080);
+            }
+            _ => panic!("Esperava Endpoint::Tcp"),
+        }
+    }
+
+    #[test]
+    fn fails_to_parse_endpoint_with_invalid_protocol() {
+        // Arrange
+        let endpoint_str = "invalid://var/run/test.sock";
+        
+        // Act
+        let parsed = Endpoint::parse(endpoint_str);
+        
+        // Assert
+        assert!(parsed.is_err());
+    }
+}
+

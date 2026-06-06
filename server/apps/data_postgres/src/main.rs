@@ -646,3 +646,406 @@ async fn handler_verify_credentials(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+    use contracts::{Envelope, MessageKind};
+    use sqlx::PgPool;
+    use redis::aio::ConnectionManager;
+
+    fn carregar_env_teste() {
+        test_support::ensure_tunnel();
+        let caminhos = vec![
+            ".env",
+            "../.env",
+            "../../.env",
+            "apps/data_postgres/.env",
+            "../data_postgres/.env",
+        ];
+        for caminho in caminhos {
+            if let Ok(conteudo) = std::fs::read_to_string(caminho) {
+                for linha in conteudo.lines() {
+                    let linha_limpa = linha.trim();
+                    if linha_limpa.is_empty() || linha_limpa.starts_with('#') {
+                        continue;
+                    }
+                    if let Some((chave, valor)) = linha_limpa.split_once('=') {
+                        let chave = chave.trim();
+                        let valor = valor.trim().trim_matches('"').trim_matches('\'');
+                        if std::env::var(chave).is_err() {
+                            std::env::set_var(chave, valor);
+                        }
+                    }
+                }
+                break;
+            }
+        }
+    }
+
+    async fn setup_teste() -> (PgPool, ConnectionManager) {
+        carregar_env_teste();
+        let admin_url = std::env::var("DATABASE_ADMIN_URL").expect("DATABASE_ADMIN_URL ausente");
+        let pool = PgPool::connect(&admin_url).await.expect("Falha ao conectar Postgres");
+        
+        infrastructure_postgres::inicializar_banco_dados(&pool).await.unwrap();
+
+        let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6380".to_string());
+        let redis_client = redis::Client::open(redis_url).unwrap();
+        let redis_conn = ConnectionManager::new(redis_client).await.unwrap();
+
+        (pool, redis_conn)
+    }
+
+    #[tokio::test]
+    async fn test_handler_create_tenant() {
+        let (pool, _) = setup_teste().await;
+        
+        let tenant_name = format!("Tenant Teste {}", Uuid::new_v4());
+        let payload = serde_json::json!({
+            "name": tenant_name,
+            "slug": format!("slug-{}", Uuid::new_v4()),
+            "email": "tenant@teste.com",
+            "phone": "5511999999999",
+        });
+
+        let req = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace1-span1-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "CreateTenant".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            error: None,
+        };
+
+        let resp = handler_create_tenant(pool.clone(), req).await;
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        assert_eq!(resp.method, "CreateTenantReply");
+
+        let resp_payload: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(resp_payload.get("status").unwrap().as_str().unwrap(), "success");
+        
+        let tenant_json = resp_payload.get("tenant").unwrap();
+        let tenant_id_str = tenant_json.get("id").unwrap().as_str().unwrap();
+        let tenant_id = Uuid::parse_str(tenant_id_str).unwrap();
+
+        // Limpeza
+        sqlx::query("DELETE FROM tenants_tenant WHERE id = $1")
+            .bind(tenant_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_handler_verify_credentials() {
+        let (pool, redis_conn) = setup_teste().await;
+
+        use infrastructure_postgres::AuthUserRepository;
+        let auth_repo = infrastructure_postgres::PostgresAuthUserRepository;
+        let test_username = format!("user_{}", Uuid::new_v4().to_string().replace('-', ""));
+        let test_email = format!("teste_{}@auth.com", Uuid::new_v4());
+        let hash = infrastructure_postgres::hash_password("minhasenha123").unwrap();
+        
+        let user = auth_repo.criar(&pool, &test_username, &test_email, &hash, false)
+            .await
+            .expect("Erro ao criar usuário");
+
+        // 1. Testa credenciais válidas
+        let payload_valido = serde_json::json!({
+            "email": test_email,
+            "password": "minhasenha123",
+        });
+        let req_valido = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace2-span2-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "VerifyCredentials".to_string(),
+            payload: serde_json::to_vec(&payload_valido).unwrap(),
+            error: None,
+        };
+
+        let resp_valido = handler_verify_credentials(pool.clone(), redis_conn.clone(), req_valido).await;
+        assert_eq!(resp_valido.kind, MessageKind::Reply as i32);
+        let resp_valido_payload: serde_json::Value = serde_json::from_slice(&resp_valido.payload).unwrap();
+        assert_eq!(resp_valido_payload.get("id").unwrap().as_i64().unwrap(), user.id as i64);
+
+        // 2. Testa credenciais inválidas
+        let payload_invalido = serde_json::json!({
+            "email": test_email,
+            "password": "senha_errada",
+        });
+        let req_invalido = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace2-span2-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "VerifyCredentials".to_string(),
+            payload: serde_json::to_vec(&payload_invalido).unwrap(),
+            error: None,
+        };
+
+        let resp_invalido = handler_verify_credentials(pool.clone(), redis_conn.clone(), req_invalido).await;
+        assert_eq!(resp_invalido.kind, MessageKind::Error as i32);
+        assert!(resp_invalido.error.is_some());
+
+        // Limpeza
+        sqlx::query("DELETE FROM auth_user WHERE id = $1")
+            .bind(user.id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_handler_persist_and_get_message_flow() {
+        let (pool, _) = setup_teste().await;
+
+        let tenant_id = Uuid::new_v4();
+        let slug = format!("tenant-{}", Uuid::new_v4());
+        sqlx::query(
+            "INSERT INTO tenants_tenant (id, name, slug, api_key, owner_id) VALUES ($1, $2, $3, $4, 1)"
+        )
+        .bind(tenant_id)
+        .bind("Tenant Message Flow Test")
+        .bind(slug)
+        .bind(Uuid::new_v4().to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let contato_id: (i32,) = sqlx::query_as(
+            "INSERT INTO oraculo_contato (tenant_id, telefone, nome_contato) VALUES ($1, '5511988888888', 'Contato Teste') RETURNING id"
+        )
+        .bind(tenant_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        let atendimento_id: (i32,) = sqlx::query_as(
+            "INSERT INTO oraculo_atendimento (tenant_id, contato_id, status) VALUES ($1, $2, 'em_atendimento') RETURNING id"
+        )
+        .bind(tenant_id)
+        .bind(contato_id.0)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        let payload_msg = serde_json::json!({
+            "atendimento_id": atendimento_id.0,
+            "content": "Minha mensagem persistida de teste",
+            "tipo": "texto",
+            "sender_id": "operator",
+        });
+
+        let req_msg = Envelope {
+            tenant_id: tenant_id.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace3-span3-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "PersistMessage".to_string(),
+            payload: serde_json::to_vec(&payload_msg).unwrap(),
+            error: None,
+        };
+
+        let resp_msg = handler_persist_message(pool.clone(), req_msg).await;
+        assert_eq!(resp_msg.kind, MessageKind::Reply as i32);
+        
+        let resp_msg_payload: serde_json::Value = serde_json::from_slice(&resp_msg.payload).unwrap();
+        assert_eq!(resp_msg_payload.get("status").unwrap().as_str().unwrap(), "success");
+        let msg_id = resp_msg_payload.get("message_id").unwrap().as_i64().unwrap() as i32;
+
+        let payload_thread = serde_json::json!({
+            "atendimento_id": atendimento_id.0,
+            "limit": 10,
+            "offset": 0
+        });
+
+        let req_thread = Envelope {
+            tenant_id: tenant_id.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace3-span3-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "GetThread".to_string(),
+            payload: serde_json::to_vec(&payload_thread).unwrap(),
+            error: None,
+        };
+
+        let resp_thread = handler_get_thread(pool.clone(), req_thread).await;
+        assert_eq!(resp_thread.kind, MessageKind::Reply as i32);
+
+        let resp_thread_payload: serde_json::Value = serde_json::from_slice(&resp_thread.payload).unwrap();
+        let mensagens_arr = resp_thread_payload.get("mensagens").unwrap().as_array().unwrap();
+        assert!(!mensagens_arr.is_empty());
+        
+        let encontrada = mensagens_arr.iter().any(|m| m.get("id").unwrap().as_i64().unwrap() == msg_id as i64);
+        assert!(encontrada, "Mensagem persistida não encontrada na thread");
+
+        // Limpeza
+        sqlx::query("DELETE FROM tenants_tenant WHERE id = $1")
+            .bind(tenant_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_handler_upsert_contact_and_list_atendimentos() {
+        let (pool, _) = setup_teste().await;
+
+        let tenant_id = Uuid::new_v4();
+        let slug = format!("tenant-{}", Uuid::new_v4());
+        sqlx::query(
+            "INSERT INTO tenants_tenant (id, name, slug, api_key, owner_id) VALUES ($1, $2, $3, $4, 1)"
+        )
+        .bind(tenant_id)
+        .bind("Tenant Contact Test")
+        .bind(slug)
+        .bind(Uuid::new_v4().to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let payload_contato = serde_json::json!({
+            "phone": "5511977777777",
+            "name": "Contato Upserted",
+        });
+
+        let req_contato = Envelope {
+            tenant_id: tenant_id.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace4-span4-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "UpsertContact".to_string(),
+            payload: serde_json::to_vec(&payload_contato).unwrap(),
+            error: None,
+        };
+
+        let resp_contato = handler_upsert_contact(pool.clone(), req_contato).await;
+        assert_eq!(resp_contato.kind, MessageKind::Reply as i32);
+
+        let resp_contato_payload: serde_json::Value = serde_json::from_slice(&resp_contato.payload).unwrap();
+        let contato_id = resp_contato_payload.get("id").unwrap().as_i64().unwrap() as i32;
+
+        sqlx::query(
+            "INSERT INTO oraculo_atendimento (tenant_id, contato_id, status) VALUES ($1, $2, 'em_atendimento')"
+        )
+        .bind(tenant_id)
+        .bind(contato_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let payload_list = serde_json::json!({
+            "status": "em_atendimento",
+            "limit": 10
+        });
+
+        let req_list = Envelope {
+            tenant_id: tenant_id.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace4-span4-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "ListAtendimentos".to_string(),
+            payload: serde_json::to_vec(&payload_list).unwrap(),
+            error: None,
+        };
+
+        let resp_list = handler_list_atendimentos(pool.clone(), req_list).await;
+        assert_eq!(resp_list.kind, MessageKind::Reply as i32);
+
+        let resp_list_payload: serde_json::Value = serde_json::from_slice(&resp_list.payload).unwrap();
+        let atendimentos_arr = resp_list_payload.get("atendimentos").unwrap().as_array().unwrap();
+        assert!(!atendimentos_arr.is_empty());
+
+        // Limpeza
+        sqlx::query("DELETE FROM tenants_tenant WHERE id = $1")
+            .bind(tenant_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_processar_evento_auditoria() {
+        let (pool, _) = setup_teste().await;
+
+        let tenant_id = Uuid::new_v4();
+        let slug = format!("tenant-{}", Uuid::new_v4());
+        sqlx::query(
+            "INSERT INTO tenants_tenant (id, name, slug, api_key, owner_id) VALUES ($1, $2, $3, $4, 1)"
+        )
+        .bind(tenant_id)
+        .bind("Tenant Audit Test")
+        .bind(slug)
+        .bind(Uuid::new_v4().to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let audit_payload = observability::AuditLogPayload {
+            tenant_id: Some(tenant_id),
+            level: "INFO".to_string(),
+            service: "data_postgres_test".to_string(),
+            trace_id: Some("00-trace5-span5-01".to_string()),
+            event: "test_event".to_string(),
+            message: "Evento de auditoria de teste integrado".to_string(),
+            context: serde_json::json!({}),
+            user_id: Some(1),
+            ip_address: Some("127.0.0.1".to_string()),
+        };
+
+        let payload_json_str = serde_json::to_string(&audit_payload).unwrap();
+
+        let evt = transport::bus::EventoBruto {
+            stream_id: "12345-0".to_string(),
+            tenant_id: tenant_id.to_string(),
+            event_id: Uuid::now_v7().to_string(),
+            event_type: "security.audit".to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            traceparent: "00-trace5-span5-01".to_string(),
+            payload: payload_json_str,
+        };
+
+        let processou = processar_evento_auditoria(pool.clone(), evt).await;
+        assert!(processou.is_ok());
+
+        let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM audit_log WHERE tenant_id = $1 AND event = 'test_event'")
+            .bind(tenant_id)
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(count.0, 1);
+
+        // Limpeza
+        sqlx::query("DELETE FROM tenants_tenant WHERE id = $1")
+            .bind(tenant_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+}

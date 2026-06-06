@@ -55,7 +55,7 @@ mod tests {
     use std::collections::HashMap;
 
     #[test]
-    fn test_trace_context_propagation_hashmap() {
+    fn injects_and_extracts_trace_context_via_hashmap_successfully() {
         // Garante que o propagador W3C TraceContext está registrado para o teste
         global::set_text_map_propagator(TraceContextPropagator::new());
 

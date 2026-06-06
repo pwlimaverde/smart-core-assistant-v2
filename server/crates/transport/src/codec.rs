@@ -181,3 +181,159 @@ pub fn from_env(svc: &str) -> Box<dyn Codec> {
         _ => Box::new(FlatbuffersCodec), // padrão
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn criar_envelope_teste(com_erro: bool) -> Envelope {
+        let error = if com_erro {
+            Some(contracts::ErrorEnvelope {
+                code: "TEST_ERROR".to_string(),
+                category: contracts::ErrorCategory::Validation as i32,
+                severity: contracts::Severity::Error as i32,
+                message: "Mensagem de teste".to_string(),
+                user_message: "errors.test".to_string(),
+                user_message_fallback: "Erro fallback".to_string(),
+                retryable: true,
+                trace_id: "trace-123".to_string(),
+                source_svc: "teste_svc".to_string(),
+                details: vec![contracts::KeyValue {
+                    key: "detalhe_key".to_string(),
+                    value: "detalhe_val".to_string(),
+                }],
+                occurred_at: 10002000,
+            })
+        } else {
+            None
+        };
+
+        Envelope {
+            tenant_id: "tenant-id-test".to_string(),
+            schema_version: 2,
+            message_id: "msg-id-123".to_string(),
+            causation_id: "cause-id-456".to_string(),
+            traceparent: "traceparent-789".to_string(),
+            occurred_at: 50006000,
+            kind: contracts::MessageKind::Request as i32,
+            method: "TestMethod".to_string(),
+            payload: vec![1, 2, 3, 4],
+            error,
+        }
+    }
+
+    #[test]
+    fn flatbuffers_codec_serializes_and_deserializes_correctly() {
+        let codec = FlatbuffersCodec;
+        assert_eq!(codec.nome(), "flatbuffers");
+
+        // Testa sem erro
+        let env = criar_envelope_teste(false);
+        let encoded = codec.encode(&env);
+        let decoded = codec.decode(&encoded).unwrap();
+
+        assert_eq!(decoded.tenant_id, env.tenant_id);
+        assert_eq!(decoded.schema_version, env.schema_version);
+        assert_eq!(decoded.message_id, env.message_id);
+        assert_eq!(decoded.causation_id, env.causation_id);
+        assert_eq!(decoded.traceparent, env.traceparent);
+        assert_eq!(decoded.occurred_at, env.occurred_at);
+        assert_eq!(decoded.kind, env.kind);
+        assert_eq!(decoded.method, env.method);
+        assert_eq!(decoded.payload, env.payload);
+        assert!(decoded.error.is_none());
+
+        // Testa com erro
+        let env_err = criar_envelope_teste(true);
+        let encoded_err = codec.encode(&env_err);
+        let decoded_err = codec.decode(&encoded_err).unwrap();
+
+        assert!(decoded_err.error.is_some());
+        let err = decoded_err.error.unwrap();
+        let orig_err = env_err.error.unwrap();
+        assert_eq!(err.code, orig_err.code);
+        assert_eq!(err.category, orig_err.category);
+        assert_eq!(err.severity, orig_err.severity);
+        assert_eq!(err.message, orig_err.message);
+        assert_eq!(err.user_message, orig_err.user_message);
+        assert_eq!(err.user_message_fallback, orig_err.user_message_fallback);
+        assert_eq!(err.retryable, orig_err.retryable);
+        assert_eq!(err.trace_id, orig_err.trace_id);
+        assert_eq!(err.source_svc, orig_err.source_svc);
+        assert_eq!(err.details.len(), 1);
+        assert_eq!(err.details[0].key, "detalhe_key");
+        assert_eq!(err.details[0].value, "detalhe_val");
+        assert_eq!(err.occurred_at, orig_err.occurred_at);
+    }
+
+    #[test]
+    fn flatbuffers_codec_fails_on_corrupt_data() {
+        let codec = FlatbuffersCodec;
+        let corrupt_data = b"corruptflatbuffersdata";
+
+        // Act
+        let result = codec.decode(corrupt_data);
+
+        // Assert
+        assert!(result.is_err());
+        assert!(matches!(result.err().unwrap(), TransportError::Codec(_)));
+    }
+
+    #[test]
+    fn grpc_codec_serializes_and_deserializes_correctly() {
+        let codec = GrpcCodec;
+        assert_eq!(codec.nome(), "grpc");
+
+        let env = criar_envelope_teste(true);
+        let encoded = codec.encode(&env);
+        let decoded = codec.decode(&encoded).unwrap();
+
+        assert_eq!(decoded.tenant_id, env.tenant_id);
+        assert_eq!(decoded.schema_version, env.schema_version);
+        assert_eq!(decoded.message_id, env.message_id);
+        assert_eq!(decoded.causation_id, env.causation_id);
+        assert_eq!(decoded.traceparent, env.traceparent);
+        assert_eq!(decoded.occurred_at, env.occurred_at);
+        assert_eq!(decoded.kind, env.kind);
+        assert_eq!(decoded.method, env.method);
+        assert_eq!(decoded.payload, env.payload);
+        assert!(decoded.error.is_some());
+    }
+
+    #[test]
+    fn grpc_codec_fails_on_corrupt_data() {
+        let codec = GrpcCodec;
+        let corrupt_data = b"corruptprotobufdata";
+
+        // Act
+        let result = codec.decode(corrupt_data);
+
+        // Assert
+        assert!(result.is_err());
+        assert!(matches!(result.err().unwrap(), TransportError::Codec(_)));
+    }
+
+    #[test]
+    fn resolves_codec_from_env_variable() {
+        let env_key = "SMARTCORE_TEST_SVC_CODEC";
+
+        // Caso sem variável definida (padrão flatbuffers)
+        std::env::remove_var(env_key);
+        let codec = from_env("test_svc");
+        assert_eq!(codec.nome(), "flatbuffers");
+
+        // Caso com variável definida como grpc
+        std::env::set_var(env_key, "grpc");
+        let codec = from_env("test_svc");
+        assert_eq!(codec.nome(), "grpc");
+
+        // Caso com qualquer outro valor (padrão flatbuffers)
+        std::env::set_var(env_key, "outro");
+        let codec = from_env("test_svc");
+        assert_eq!(codec.nome(), "flatbuffers");
+
+        std::env::remove_var(env_key);
+    }
+}
+
+

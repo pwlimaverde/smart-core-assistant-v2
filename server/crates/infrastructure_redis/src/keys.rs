@@ -34,8 +34,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_formato_das_chaves() {
+    fn formats_redis_keys_according_to_domain_namespaces_correctly() {
+        // Arrange
         let t = Uuid::parse_str("f47ac10b-58cc-4372-a567-0e02b2c3d479").unwrap();
+
+        // Act & Assert
         assert_eq!(
             chave_tenant(t, "presence", "agent_123"),
             "tenant:f47ac10b-58cc-4372-a567-0e02b2c3d479:presence:agent_123"

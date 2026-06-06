@@ -41,3 +41,40 @@ impl<T> TenantEnvelope<T> {
         self
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tenant_envelope_new() {
+        let tenant_id = Uuid::new_v4();
+        let payload = "teste_payload".to_string();
+
+        let env = TenantEnvelope::novo(tenant_id, "meu.evento", payload.clone());
+
+        assert_eq!(env.tenant_id, tenant_id);
+        assert_eq!(env.event_type, "meu.evento");
+        assert_eq!(env.payload, payload);
+        assert_eq!(env.traceparent, "");
+
+        // Valida que event_id é UUID v7
+        assert_eq!(env.event_id.get_version_num(), 7);
+
+        // Valida se o timestamp está perto de agora (margem de 5 segundos)
+        let agora = Utc::now();
+        let diff = agora.signed_duration_since(env.timestamp);
+        assert!(diff.num_seconds() >= 0);
+        assert!(diff.num_seconds() < 5);
+    }
+
+    #[test]
+    fn test_tenant_envelope_com_traceparent() {
+        let tenant_id = Uuid::new_v4();
+        let env = TenantEnvelope::novo(tenant_id, "test", ())
+            .com_traceparent("00-trace-id-span-id-01");
+
+        assert_eq!(env.traceparent, "00-trace-id-span-id-01");
+    }
+}
+

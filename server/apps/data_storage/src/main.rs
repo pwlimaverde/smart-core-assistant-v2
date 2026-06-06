@@ -197,3 +197,134 @@ async fn handler_presign_file(client: StorageClient, env: Envelope) -> Envelope 
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+    use std::fs;
+    use std::path::PathBuf;
+    use contracts::{Envelope, MessageKind};
+
+    fn setup_test_storage() -> (StorageClient, PathBuf) {
+        let mut test_dir = std::env::temp_dir();
+        test_dir.push(format!("smartcore_test_storage_{}", Uuid::new_v4()));
+        let client = StorageClient::new(test_dir.clone());
+        (client, test_dir)
+    }
+
+    fn teardown_test_storage(dir: PathBuf) {
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[tokio::test]
+    async fn test_handler_put_and_get_file_flow() {
+        let (client, dir) = setup_test_storage();
+
+        // 1. PutFile
+        let tenant_id = Uuid::new_v4();
+        let payload_content = b"Conteudo do arquivo de testes do storage";
+        
+        let put_req = Envelope {
+            tenant_id: tenant_id.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace-storage-1-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "arquivo_teste.txt".to_string(),
+            payload: payload_content.to_vec(),
+            error: None,
+        };
+
+        let put_resp = handler_put_file(client.clone(), put_req).await;
+        assert_eq!(put_resp.kind, MessageKind::Reply as i32);
+        assert_eq!(put_resp.method, "PutFileReply");
+
+        let put_resp_payload: serde_json::Value = serde_json::from_slice(&put_resp.payload).unwrap();
+        let uri = put_resp_payload.get("uri").unwrap().as_str().unwrap();
+        assert!(uri.contains("arquivo_teste.txt"));
+
+        // 2. GetFile
+        let get_req = Envelope {
+            tenant_id: tenant_id.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace-storage-1-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "arquivo_teste.txt".to_string(),
+            payload: vec![],
+            error: None,
+        };
+
+        let get_resp = handler_get_file(client.clone(), get_req).await;
+        assert_eq!(get_resp.kind, MessageKind::Reply as i32);
+        assert_eq!(get_resp.method, "GetFileReply");
+        assert_eq!(get_resp.payload, payload_content.to_vec());
+
+        // 3. PresignFile
+        let presign_req = Envelope {
+            tenant_id: tenant_id.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace-storage-1-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "arquivo_teste.txt".to_string(),
+            payload: vec![],
+            error: None,
+        };
+
+        let presign_resp = handler_presign_file(client.clone(), presign_req).await;
+        assert_eq!(presign_resp.kind, MessageKind::Reply as i32);
+        assert_eq!(presign_resp.method, "PresignFileReply");
+        
+        let presign_payload: serde_json::Value = serde_json::from_slice(&presign_resp.payload).unwrap();
+        let url = presign_payload.get("url").unwrap().as_str().unwrap();
+        assert!(url.contains("arquivo_teste.txt"));
+
+        teardown_test_storage(dir);
+    }
+
+    #[tokio::test]
+    async fn test_processar_purga_midia() {
+        let (client, dir) = setup_test_storage();
+        
+        let tenant_id = Uuid::new_v4();
+        let file_name = "purga_teste.png";
+        
+        client.put(tenant_id, file_name, b"dados_imagem_temporaria").await.unwrap();
+
+        let exists = client.get(tenant_id, file_name).await;
+        assert!(exists.is_ok());
+
+        let audit_payload = serde_json::json!({
+            "file_name": file_name
+        });
+        
+        let payload_json_str = serde_json::to_string(&audit_payload).unwrap();
+
+        let evt = transport::bus::EventoBruto {
+            stream_id: "999-0".to_string(),
+            tenant_id: tenant_id.to_string(),
+            event_id: Uuid::now_v7().to_string(),
+            event_type: "media.purge".to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            traceparent: "00-trace-storage-2-01".to_string(),
+            payload: payload_json_str,
+        };
+
+        let state = AppState { client: client.clone() };
+        let res = processar_purga_midia(state, evt).await;
+        assert!(res.is_ok());
+
+        let deleted = client.get(tenant_id, file_name).await;
+        assert!(deleted.is_err());
+
+        teardown_test_storage(dir);
+    }
+}

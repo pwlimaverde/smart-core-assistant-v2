@@ -19,3 +19,7 @@ transport = { path = "../../crates/transport" }
 error_core = { path = "../../crates/error_core" }
 observability = { path = "../../crates/observability" }
 infrastructure_postgres = { path = "../../crates/infrastructure_postgres" }
+
+[dev-dependencies]
+test_support = { path = "../../crates/test_support" }
+

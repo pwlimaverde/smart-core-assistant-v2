@@ -69,7 +69,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_redis_error_display() {
+    fn redis_error_formats_messages_correctly() {
+        // Valida a formatação de mensagens de todas as variantes de RedisError
         assert_eq!(
             RedisError::ConfigError("REDIS_URL ausente".into()).to_string(),
             "erro de configuração: REDIS_URL ausente"
@@ -81,9 +82,9 @@ mod tests {
         );
     }
 
-    /// Cada variante deve expor o `ErrorCode` esperado do núcleo.
     #[test]
-    fn test_redis_error_code_mapeia_para_core() {
+    fn maps_each_redis_error_to_its_correct_core_error_code() {
+        // Valida se cada variante de RedisError expõe o ErrorCode canônico do core
         assert_eq!(RedisError::NotFound.code(), ErrorCode::CacheKeyNotFound);
         assert_eq!(
             RedisError::ConfigError("x".into()).code(),
@@ -92,9 +93,9 @@ mod tests {
         assert_eq!(RedisError::TokenReuse.code(), ErrorCode::AuthInvalidToken);
     }
 
-    /// A conversão para `AppError` deve preservar o `ErrorCode` (coerência ponta a ponta).
     #[test]
-    fn test_redis_error_para_app_error_preserva_code() {
+    fn converts_redis_error_to_app_error_preserving_error_code() {
+        // Garante a coerência ponta a ponta na conversão de RedisError para AppError
         let casos = [
             RedisError::NotFound,
             RedisError::ConfigError("cfg".into()),

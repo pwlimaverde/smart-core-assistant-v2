@@ -32,7 +32,7 @@ mod tests {
     use uuid::Uuid;
 
     #[test]
-    fn test_tenant_span_macro_expansion() {
+    fn tenant_span_macro_expands_correctly_with_metadata() {
         let tenant_id = Uuid::new_v4();
         let trace_id = "trace-123-test";
 
