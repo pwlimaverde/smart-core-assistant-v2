@@ -8,6 +8,7 @@ CREATE TABLE outbox (
     tenant_id     UUID NOT NULL REFERENCES tenants_tenant(id) ON DELETE CASCADE,
     event_type    TEXT NOT NULL,
     payload       BYTEA NOT NULL,          -- envelope FlatBuffers ou JSON serializado
+    traceparent   TEXT NOT NULL DEFAULT '',-- traceparent W3C p/ trace distribuído (vazio = sem contexto)
     occurred_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     published_at  TIMESTAMPTZ              -- NULL = ainda não publicado no bus
 );
