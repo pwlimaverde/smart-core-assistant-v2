@@ -12,25 +12,31 @@
 
 ## 1. Objetivo
 
-Centralizar **todo** o acesso ao Redis em uma única crate (`server/crates/infrastructure_redis`),
-análoga à ponte `infrastructure_postgres`. O Redis é o coração de sincronização assíncrona da v2:
-barramento de eventos (Streams), cache de baixa latência e suporte à autenticação (refresh tokens
-e blocklist). Esta crate é a **única** do workspace que fala com o cliente Redis.
+A crate `infrastructure_redis` serve como uma **biblioteca interna exclusiva** do aplicativo `apps/data_redis`. O Redis atua em dois papéis distintos no sistema, que foram desmembrados no refator modular:
+- **Cache, Tokens e Locks (Síncrono)**: Gerenciado por esta crate e exposto via RPC pelo serviço `data_redis`. Centraliza namespacing, cache de permissões, rotação de refresh tokens e blocklist de acesso.
+- **Barramento de Eventos (Assíncrono)**: O tráfego do Redis Streams foi movido para a biblioteca de base `crates/transport` (`transport::bus`), permitindo que qualquer módulo interaja com o barramento de eventos sem carregar dependências de cache.
 
-## 2. Escopo
+---
 
-**Implementado nesta entrega:**
-- Conexão (`ConnectionManager`) + `ping`, lendo `REDIS_URL`.
+## 1.1 O Serviço de Dados `data_redis`
+
+O aplicativo `apps/data_redis` é o processo servidor UDS que expõe via RPC (FlatBuffers padrão, gRPC fallback) os seguintes recursos de persistência do Redis em tempo de execução:
+- Validação e rotação de Refresh Tokens (com detecção de reuso).
+- Verificação de blocklist de Access Tokens (jti) para logout imediato.
+- Cache síncrono de permissões por fluxo e tenant (`flow_permissions`).
+- Locks atômicos para debounce por contato.
+
+---
+
+## 2. Escopo do Cache e Persistência (`data_redis`)
+
+**Implementado:**
+- Conexão (`ConnectionManager`) multiplexada e com reconexão automática.
 - Namespacing obrigatório por tenant (`tenant:<uuid>:<recurso>:<chave>`).
-- **Auth (driver imediato):** refresh tokens com rotação e detecção de reuso por família;
-  blocklist de access tokens (jti); cache de `flow_permissions` (TTL curto).
-- **Event bus (Etapa 3.3):** Redis Streams + consumer groups com `TenantEnvelope`
-  (publicar / consumir / confirmar / reprocessar pendentes).
-- Testes de integração contra Redis real (banco lógico 15).
-
-**Fora desta entrega (fases futuras — ver §9):** pub/sub de invalidação de config e cache
-`tenant:config:{id}`; fan-out realtime por tenant (gRPC Server Streaming); lock de debounce por contato;
-delayed tasks (sorted-set por ETA); presença/typing.
+- Rotação de refresh tokens com detecção de reuso e revogação de família.
+- Blocklist de access tokens (jti) e cache de permissões.
+- Locks distribuídos baseados em chaves de curta duração para debounce e concorrência.
+- Cobertura por testes de integração.
 
 ## 3. Arquitetura e decisões
 
@@ -43,8 +49,13 @@ delayed tasks (sorted-set por ETA); presença/typing.
    auth usam prefixo `auth:` (precedem a seleção de tenant; o `tenant_id` vai dentro do registro).
 4. **Erro único por crate:** `RedisError` (via `thiserror`), espelhando o padrão de `DbError`.
 5. **Sem `unwrap()/expect()` em produção;** uso de `?`/`Result`. Comentários em pt-br.
-6. **Envelope obrigatório** para eventos: `TenantEnvelope<T>` com `tenant_id` na raiz e `event_id`
-   UUID v7 (ordenável/idempotente). Quando existir a crate `contracts`, o tipo migra para lá.
+6. **Dois envelopes coexistem em `contracts`** (não há substituição): o
+   `TenantEnvelope<T>` (genérico Rust, serde/JSON) embrulha **eventos do barramento**
+   Redis Streams (`tenant_id`, `event_id` UUIDv7, `event_type`, `timestamp`,
+   `traceparent`, `payload`); o `Envelope` protobuf/FlatBuffers embrulha as
+   **chamadas RPC IPC/gRPC**. Cada um serve a um transporte.
+7. **Barramento de Eventos**: O event bus foi implementado fisicamente em
+   `transport::bus`, publicando/consumindo `TenantEnvelope<T>`.
 
 ## 4. Estrutura de módulos (`src/`)
 
@@ -53,10 +64,9 @@ delayed tasks (sorted-set por ETA); presença/typing.
 | `connection.rs` | Conexão e health | `criar_conexao_redis()`, `criar_conexao_com_url(url)`, `criar_cliente(url)`, `ping(con)` |
 | `errors.rs` | Erro único | `RedisError { Redis, Serde, ConfigError, NotFound, TokenReuse }` |
 | `keys.rs` | Namespacing | `chave_tenant`, `chave_flow_permissions`, `chave_refresh`, `chave_refresh_familia`, `chave_blocklist` |
-| `envelope.rs` | Contrato de evento | `TenantEnvelope<T>` + `TenantEnvelope::novo(...)` |
-| `cache.rs` | Cache de permissões | `CachePermissoes::{definir,obter,invalidar}_flow_permissions`, `TTL_FLOW_PERMISSIONS_SEGUNDOS=60` |
+| `cache.rs` | Cache de permissões | `CachePermissoes::{definir,obter,invalidar}_flow_permissions` |
 | `auth_tokens.rs` | Tokens de auth | `RefreshTokenStore`, `TokenBlocklist`, `RegistroRefresh` |
-| `event_bus.rs` | Streams | `publicar_evento`, `garantir_consumer_group`, `consumir`, `reprocessar_pendentes`, `confirmar`, `EventoBruto` |
+| `locks.rs` | Locks distribuídos | `LockManager` (debounce e concorrência) |
 
 ## 5. Modelo de chaves
 
@@ -91,17 +101,11 @@ delayed tasks (sorted-set por ETA); presença/typing.
 - `definir_flow_permissions(tenant, user, &[i32], ttl=60)` na emissão; `obter_flow_permissions`
   no interceptor (cache miss → recarrega do Postgres); `invalidar` ao mudar permissões.
 
-### 6.4 Event bus (Streams + consumer groups)
-- `publicar_evento(con, &TenantEnvelope<T>)`: `XADD events:stream MAXLEN ~ 10000 *` — o ID do
-  stream é atribuído pelo Redis; o `event_id` (UUID v7) viaja como campo para idempotência.
-- `garantir_consumer_group(con, grupo)`: `XGROUP CREATE ... $ MKSTREAM` (idempotente; ignora
-  `BUSYGROUP`).
-- `consumir(con, grupo, consumidor, qtd, block_ms)`: `XREADGROUP ... >`; `block_ms>0` ativa modo
-  bloqueante (use conexão dedicada).
-- `reprocessar_pendentes(con, grupo, consumidor, qtd)`: `XREADGROUP ... 0` relê o PEL do
-  consumidor (replay após falha/reinício).
-- `confirmar(con, grupo, stream_id)`: `XACK`.
-- `EventoBruto::desserializar::<T>()` reconstrói o `TenantEnvelope<T>` tipado.
+### 6.4 Event bus (Redis Streams + consumer groups)
+- **Implementação**: A publicação, consumo, confirmação e replay de pendentes baseados em Redis Streams foram delegados para a biblioteca `transport::bus` na crate `crates/transport`. Ela gerencia as conexões bloqueantes dedicadas e publica envelopes unificados `Envelope` de `contracts`.
+
+### 6.5 Relação de chamadas RPC de dados
+- O cache de permissões, verificação de blocklist, rotação de refresh e locks atômicos de debounce são requisitados pelos demais módulos através do cliente tipado de RPC conectando-se no socket de `apps/data_redis`. O app realiza as chamadas síncronas contra esta crate.
 
 ## 7. Configuração e ambiente
 

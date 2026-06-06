@@ -72,12 +72,12 @@ Evolution). A v2 nasce do zero para:
 | # | Decisão | Escolha | Racional |
 |---|---------|---------|----------|
 | D1 | Conexão Flutter ↔ Rust | **Híbrida** (servidor de rede + FFI local) | Servidor Rust é a fonte da verdade multi-tenant; FFI local dá desempenho/offline e cache de mídia no Windows |
-| D2 | Granularidade dos serviços | **Modular monolith** (crates por domínio + poucos binários) | Isolamento lógico agora; promoção a microserviço depois sem reescrever; barato para 1 VM |
-| D3 | Camada de IA | **Serviço Python separado** (LangChain/RAG) exposto por **gRPC** | Ecossistema de IA maduro em Python; isola a parte imatura em Rust. gRPC dá contrato forte poliglota com isolamento de processo (FFI/PyO3 **descartado** — ver §13.1) |
+| D2 | Granularidade dos serviços | **Serviços por Contrato IPC/RPC** (microsserviços locais) | Módulos executados como processos isolados (`data_*`, `worker`, `runtime_api`, etc.) comunicando-se por contrato formal. Garante desacoplamento de rede e escala horizontal sem alterar o código de aplicação. |
+| D3 | Camada de IA | **Serviço Python separado** (LangChain/RAG) exposto por **FlatBuffers/gRPC** | Ecossistema de IA maduro em Python; isola o interpretador. FlatBuffers sobre IPC/UDS como padrão (gRPC como fallback). Dá contrato forte e permite mover a IA para VM dedicada com GPU (ver §13.1) |
 | D4 | Isolamento do banco | **`tenant_id` + Row-Level Security (RLS)** do PostgreSQL | Melhor custo/segurança; banco recusa query sem `tenant_id` no contexto |
 | D5 | Modelo de projeto | **Greenfield** (v1 como referência de domínio) | Sem migração incremental nem big-bang sobre o legado |
 | D6 | Ordem de entrega | **Windows primeiro**, depois **Web** | Foco em uma plataforma; abstração de dados garante port limpo |
-| D7 | Transporte Flutter ↔ servidor | **gRPC único** (unário + **Server Streaming**) | Um só protocolo e um só `.proto` para comandos, consultas e realtime; desktop usa gRPC nativo HTTP/2, web usa **gRPC-Web** (mesmo código Dart gerado, canal trocado por `kIsWeb`). **Substitui WebSocket** para realtime (ver §8) |
+| D7 | Transporte Flutter ↔ servidor | **Contrato Unificado com Transporte Flexível** (FlatBuffers/UDS local; gRPC/TCP/WS fallback) | Canal padrão local é UDS/FlatBuffers (RPC de baixíssima latência); gRPC-Web e WebSocket binário para Web. Unifica comandos, consultas e realtime sob a mesma interface contratual, trocável por configuração. |
 | D8 | Construção da UI | **Incremental, junto de cada feature** (após as fundações) | A UI nasce colada à feature que valida — ex.: ao entregar o auth, criam-se as telas de login/cadastro para conferir o uso ponta-a-ponta. Continua em **2 apps Flutter** separados (Windows → Web), começando pelo `flutter_windows` em modo `RemoteOnly` (ver §8.3) |
 
 ### Princípio arquitetural central (herdado do estudo de viabilidade)
@@ -95,138 +95,108 @@ Evolution). A v2 nasce do zero para:
 
 ## 3. Visão geral da arquitetura
 
+A topologia da v2 é baseada em **serviços isolados por contrato** rodando localmente como processos separados que se comunicam através de **Unix Domain Sockets (UDS)** como transporte IPC padrão de baixíssima latência (FlatBuffers como codec padrão, com suporte comutável a gRPC/TCP por configuração).
+
 ```
                          ┌──────────────────────────────┐
    WhatsApp ──webhook──► │  Evolution Go (1 cluster,     │
                          │  multi-instância)             │
                          └───────────────┬──────────────┘
                                          │ webhook
-┌─────────────────────────────────────────────────────────────────┐
-│  MESSAGING GATEWAY (Rust)                                         │
-│  → valida assinatura/origem                                       │
-│  → resolve tenant_id pela instância Evolution                     │
-│  → persiste evento bruto (raw)                                    │
-│  → publica evento interno no bus     (NUNCA roda regra pesada)    │
-└───────────────┬───────────────────────────────────────────────────┘
-                │ evento (envelope com tenant_id)
-        ┌───────▼─────────┐        Event Bus (Redis Streams)
-        │     WORKER      │  ◄──── debounce por contato →
-        │  (Rust)         │        conversa → política de ticket →
-        │                 │        kanban → automação → IA
-        └───┬────────┬────┘
-            │        │ gRPC
-            │        ▼
-            │   ┌──────────────────────┐
-            │   │ ia_engine            │  (Python: LangChain, RAG,
-            │   │ (Python, serviço     │   transcrição, sentimento).
-            │   │  gRPC separado)      │   Núcleo = FeaturesCompose
-            │   └──────────────────────┘
-            ▼
-   ┌────────────────────────┐         ┌────────────────────────┐
-   │  PostgreSQL (UNIFICADO) │         │  Redis                 │
-   │  tenant_id + RLS        │         │  (Streams, cache,      │
-   │  + pgvector (RAG)       │         │   presença, pub/sub)   │
-   └────────────────────────┘         └────────────────────────┘
-                ▲
-                │ gRPC unário (comandos/consultas) + gRPC Server Streaming (realtime)
-        ┌───────┴─────────┐
-        │  RUNTIME API    │ ◄──── Flutter (Windows → depois Web)
-        │  (Rust)         │           │
-        └─────────────────┘           │ FFI (flutter_rust_bridge)
-                                      ▼
-                            ┌────────────────────────┐
-                            │ LOCAL ENGINE (Rust FFI)│
-                            │ cache + mídia em disco │
-                            │ + índice SQLite local  │
-                            └────────────────────────┘
-
-  + CONTROL PLANE (Rust): tenants, planos, credenciais, feature flags,
-    billing/usage, instâncias Evolution
+┌────────────────────────────────────────▼────────────────────────┐
+│  MESSAGING GATEWAY (App / Processo)                             │
+│  → valida assinatura/origem                                     │
+│  → resolve tenant_id pela instância Evolution                   │
+│  → persiste bruto via RPC em data_postgres e envia p/ bus       │
+└────────────────────────┬────────────────────────────────────────┘
+                         │ evento (envelope com tenant_id e traceparent)
+                         ▼
+            [ EVENT BUS ]  (Redis Streams - transport::bus)
+                         │
+                         ▼
+           ┌───────────────────────────┐
+           │   WORKER (App / Processo) │ ◄──── debounce por contato
+           │   → orquestra domínio     │       chamando ia_engine
+           └──────┬──────────────┬─────┘
+                  │              │
+                  │ RPC (IPC)    │ RPC (IPC)
+                  ▼              ▼
+    ┌──────────────────┐   ┌───────────┐
+    │ ia_engine        │   │data_redis │ ──► Redis (Cache/Tokens/Locks)
+    │ (Python, GPU)    │   └───────────┘
+    └──────────────────┘
+                  │
+                  │ RPC (IPC)
+                  ▼
+    ┌───────────────────────────┐
+    │ data_postgres (App)       │ ──► PostgreSQL (banco unificado + RLS)
+    └───────────────────────────┘
+                  ▲
+                  │ RPC (IPC)
+    ┌─────────────┴─────────────┐
+    │ RUNTIME API (App)         │ ◄─── gRPC/WS ─── Flutter Client
+    └───────────────────────────┘
 ```
 
 ---
 
 ## 4. Blocos da arquitetura
 
-A solução se divide em quatro blocos lógicos (executados como 4 binários Rust):
+A solução se divide em **processos (serviços) independentes** que interagem por contratos IPC síncronos (RPC direto) ou assíncronos (event bus), eliminando acoplamentos diretos com os bancos de dados:
 
 ### 4.1 Control Plane
-Cadastro de tenants, planos, quotas, branding, feature flags, credenciais e
-configuração das integrações (incluindo o registro das instâncias Evolution
-por tenant). É o "back office" da plataforma.
+Cadastro de tenants, planos, quotas, branding, feature flags, credenciais e configuração das integrações (indo o registro das instâncias Evolution por tenant). É o "back office" administrativo da plataforma. Falará com os bancos unicamente via contratos de RPC dos serviços de dados.
 
 ### 4.2 Messaging Gateway
-Recebe webhooks do Evolution Go, **valida origem/assinatura**, **resolve o
-tenant pela instância**, **persiste o payload bruto** e **publica o evento
-interno** (`message.received`, `message.update`, `connection.update`, etc.) no
-event bus. **Não executa regra de negócio.** É a única porta de entrada do
-mundo externo de mensagens.
+Recebe webhooks do Evolution Go, **valida origem/assinatura**, **resolve o tenant pela instância**, **persiste o payload bruto** via RPC em `data_postgres` e **publica o evento interno** (`message.received`, `message.update`, etc.) no barramento de eventos. **Não executa regra de negócio.** É a única porta de entrada do fluxo externo de mensagens.
 
 ### 4.3 Worker (Support Core)
-Consome eventos do bus e executa o domínio:
-- **Debounce por contato** (junta rajadas de mensagens).
+Consome eventos do bus e executa a orquestração do domínio:
+- **Debounce por contato** (junta rajadas de mensagens) via `application::DebounceByContact` (buffer + lock no Redis).
 - Resolve/cria a conversa/atendimento.
 - Aplica **política de ticket** (reaproveita ativo, reabre, cria).
 - Atualiza **Kanban** (etapa/fluxo/departamento), **automações**.
-- Chama o **`ia_engine`** (Python, via gRPC) para mídia, intents, resposta e
-  sentimento.
-- Registra a resposta do bot e dispara o envio outbound via Evolution.
+- Chama o **`ia_engine`** (via RPC) para mídias, intents, resposta e sentimento.
+- Registra a resposta do bot via RPC em `data_postgres` e dispara o envio outbound via Evolution.
 
-**Substitui o Celery da v1.** Na v1, o Celery acumulava dois papéis: (a) fila de
-trabalho + worker assíncrono (`process_contact_response_task`) e (b) agendamento
-temporal (`verificar_feedback_atendimento` após `RESOLVIDO`,
-`purge_old_media_all_tenants` periódico). Na v2 ambos vivem no `worker` Rust:
-- **Fila + processamento assíncrono** → consumo de **Redis Streams** (consumer
-  groups) pelo `worker`.
-- **Agendamento temporal** → scheduler interno do `worker` (tarefas com atraso
-  via stream com `ETA`/sorted-set no Redis, ou `tokio` timers para o processo
-  vivo) para timeout de feedback e jobs de retenção/manutenção.
-- **Debounce** → `application::DebounceByContact` (buffer + lock no Redis,
-  herdando a lógica do `message_buffer` da v1), em vez do `time.sleep()` dentro
-  da task Celery.
+O `worker` centraliza também os agendamentos temporais (timeout de feedback, purga de mídias) via Redis Streams/sorted-sets, substituindo o Celery da v1.
 
 ### 4.4 Runtime API + Realtime (App Delivery)
-- **gRPC unário** (Tonic) para comandos e consultas (abrir ticket, listar
-  colunas, buscar histórico, configurar, enviar mensagem).
-- **gRPC Server Streaming** para realtime (nova mensagem, typing, presença,
-  leitura, mudança de etapa, resposta da IA, atualização do Kanban) — o cliente
-  abre um stream (ex.: `StreamAtendimentos`) e o servidor empurra eventos.
-- **Fan-out por tenant via Redis pub/sub:** eventos produzidos pelo `worker` são
-  publicados no Redis; cada réplica do `runtime_api` assina os canais dos clientes
-  conectados a ela e propaga pelo stream gRPC aberto.
-- **Mesma porta, dois transportes de borda:** gRPC nativo HTTP/2 (Flutter
-  Desktop) e **gRPC-Web** (Flutter Web, via `tonic-web`/`GrpcWebLayer`),
-  atendidos pelo mesmo serviço (ver §8).
+- **RPC/gRPC** para comandos e consultas (abrir ticket, listar colunas, buscar histórico, configurar, enviar mensagem).
+- **Server Streaming** para realtime (nova mensagem, typing, presença, leitura, mudança de etapa, resposta da IA, atualização do Kanban) — o cliente abre uma inscrição e o servidor empurra atualizações em tempo real.
+- **Fan-out por tenant via Redis pub/sub:** eventos produzidos pelo `worker` são publicados no Redis; cada réplica do `runtime_api` assina os canais dos clientes conectados a ela e os propaga pelos streams ativos. Habilita gRPC-Web para compatibilidade com o Flutter Web.
+
+### 4.5 Serviços de Acesso a Dados (data_*) - Âncoras do Sistema
+- **`data_postgres`**: Responsável único por gerenciar o pool `sqlx`, rodar migrations, validar Row-Level Security (RLS) através do `RequestContext`, e executar queries ACID. Oferece planos de escrita-com-ack/leitura (RPC síncrono) e escrita assíncrona baseada em eventos do bus.
+- **`data_redis`**: Responsável único por mediar as operações síncronas de cache, locks de debounce, presença de atendentes e tokens de autenticação (refresh tokens). O barramento de eventos (Streams) fica a cargo da biblioteca `transport`.
+- **`data_storage`**: Responsável por encapsular as operações de escrita, leitura e pré-assinatura de URLs no Cloudflare R2 (ou MinIO local). Realiza limpezas e purgas de mídias acionadas de forma assíncrona por eventos.
 
 ---
 
 ## 5. Estrutura de código (Cargo workspace)
 
-Monorepo Rust com isolamento lógico por domínio (DDD) e poucos binários:
+Monorepo Rust com isolamento por processos e bibliotecas de apoio:
 
 ```
 apps/
-  control_plane/        # binário: back office / gestão de tenants
-  runtime_api/          # binário: API + realtime para o Flutter
-  worker/               # binário: processamento de eventos + IA
-  messaging_gateway/    # binário: ingestão de webhooks do Evolution
+  control_plane/            # binário: back office / gestão de tenants
+  runtime_api/              # binário: API gRPC + Server Streaming para clientes
+  worker/                   # binário: processamento de eventos do bus
+  messaging_gateway/        # binário: ingestão de webhooks do WhatsApp
+  data_postgres/            # binário: servidor RPC de dados PostgreSQL + outbox
+  data_redis/               # binário: servidor RPC de cache/tokens/locks síncrono
+  data_storage/             # binário: servidor RPC de storage de mídia
 crates/
-  domain_tenant/        # regras puras: tenant, plano, quota, feature flags
-  domain_contact/       # contatos, números, tags, histórico
-  domain_conversation/  # conversa: thread, participantes, mensagens, anexos
-  domain_ticket/        # atendimento: abertura, vínculo, prioridade, SLA, status
-  domain_kanban/        # colunas/etapas, regras de transição, automações de etapa
-  domain_whatsapp/      # instâncias Evolution, sessões, normalização de webhook
-  domain_ai/            # contratos de classificação/resumo/sugestão/handoff
-  application/          # orquestração dos casos de uso (use cases)
-  contracts/            # DTOs, eventos, contratos gRPC, envelopes (tenant_id)
-  infrastructure_postgres/
-  infrastructure_redis/
-  infrastructure_evolution/
-  infrastructure_storage/   # mídia (storage transitório)
-  realtime/             # subscriptions, sessões conectadas, fan-out
-  observability/        # logs estruturados, métricas, tracing
-  local_engine/         # crate dual-target: lib server + cdylib FFI (cache local)
+  application/              # casos de uso (orquestração e regras de negócio)
+  contracts/                # schemas .proto canônicos + .fbs gerados + Envelope
+  transport/                # canais (UDS/TCP/WS), codecs (FB/gRPC) e event bus
+  error_core/               # taxonomia de erros, ErrorEnvelope (convenção)
+  observability/            # tracing distribuído e contexto traceparent (convenção)
+  infrastructure_postgres/  # repositórios SQLx, migrations e crypto (lib de data_postgres)
+  infrastructure_redis/     # persistência de cache/tokens/locks (lib de data_redis)
+  infrastructure_storage/   # integração com Cloudflare R2 (lib de data_storage)
+  test_support/             # infraestrutura para testes integrados
+  local_engine/             # FFI compilável para o motor local do Flutter Windows
 ```
 
 > A estrutura completa do monorepo (todas as stacks, não só o workspace Rust)
@@ -234,19 +204,16 @@ crates/
 > O frontend são **dois apps Flutter** (`clients/flutter_windows` e
 > `clients/flutter_web`) + pacotes compartilhados em `clients/packages/`. A IA é
 > o serviço Python independente **`ia_engine/`** (na raiz do monorepo, fora do
-> workspace Rust), comunicando-se por **gRPC** (ver §13).
+> workspace Rust), comunicando-se por **RPC (FlatBuffers/gRPC)** (ver §13).
 
 **Camadas:**
-- `domain_*`: regras puras de negócio (sem I/O).
-- `application`: orquestra casos de uso (ex.: `ReceiveMessage`,
-  `DecideTicketPolicy`, `CanBotRespond`, `TransferFlow`).
-- `contracts`: DTOs, eventos, contratos RPC e envelopes (todos carregam
-  `tenant_id`).
-- `infrastructure_*`: integração com banco, Redis, Evolution e storage.
-- `apps/*`: executáveis independentes.
-- `local_engine`: **crate especial** compilável tanto como dependência dos
-  binários-servidor quanto como `cdylib`/`staticlib` para o FFI do Flutter
-  (ver §8).
+- `apps/*`: executáveis independentes (processos) que sobem em portas/sockets específicos.
+- `application`: orquestra os casos de uso de negócio.
+- `contracts`: define os formatos dos dados transmitidos nas fronteiras de rede (schemas).
+- `transport`: lida com o empacotamento, enquadramento e transmissão de rede nos sockets.
+- `infrastructure_*`: bibliotecas internas que implementam as APIs dos armazéns físicos (SQLx, Redis, S3).
+- `error_core`/`observability`: convenções de telemetria e falhas compiladas em todos os serviços.
+- `local_engine`: compilável como `cdylib` / `staticlib` para FFI do Flutter Desktop Windows.
 
 ---
 
@@ -316,38 +283,25 @@ camada `infrastructure_postgres`.
 
 ## 8. Comunicação com o Flutter (cliente fino + FFI híbrido)
 
-### 8.1 Transporte único: gRPC (unário + Server Streaming) — decisão D7
-Toda a comunicação Flutter ↔ `runtime_api` usa **um só protocolo (gRPC) e um só
-`.proto`**, sem REST manual nem WebSocket:
+### 8.1 Transporte flexível: FlatBuffers padrão e gRPC fallback — decisão D7
+Toda a comunicação Flutter ↔ `runtime_api` usa uma interface contratual unificada gerada a partir dos schemas canônicos `.proto` transpiletados para `.fbs` no build, suportando transporte de rede flexível:
 
-- **gRPC unário** para comandos e consultas (abrir ticket, listar colunas, buscar
-  histórico, alterar configurações, enviar mensagem).
-- **gRPC Server Streaming** para realtime (nova mensagem, typing, presença,
-  leitura, mudança de etapa, resposta da IA, atualização do Kanban). O cliente
-  mantém um stream aberto e reage a cada evento; supera o polling e alimenta os
-  stores locais do Flutter.
+- **FlatBuffers padrão (zero-copy)**: Utilizado por padrão para as operações locais. As leituras e escritas com ack (req/reply) usam socket UDS ou conexões TCP/TLS diretas. Transmite envelopes e payloads leves com baixíssima latência.
+- **gRPC fallback comutável**: Usado como alternativa quando houver entraves estruturais de rede ou se for conveniente aproveitar o ecossistema gRPC (Tonic/HTTP2).
+- **WebSocket binário**: Usado para o tráfego realtime na Web, transportando payloads FlatBuffers.
+- **Server Streaming**: Para realtime (typing, presença, novas mensagens), onde o servidor empurra dados de forma assíncrona.
 
-Essa unificação elimina a dualidade gRPC + WebSocket: contrato binário
-auto-gerado (Protobuf), tipos compartilhados entre Rust/Python/Dart e um único
-ponto de autenticação (o JWT viaja no metadata de cada chamada e na abertura do
-stream).
+Esta flexibilidade permite comutar o transporte e a codificação apenas alterando configurações de ambiente (`SMARTCORE_API_CODEC`), mantendo os handlers e o código da UI intactos.
 
-### 8.2 Transporte multiplataforma (Desktop × Web)
-O **mesmo código Dart gerado** atende as duas plataformas, trocando apenas o
-canal em tempo de execução via `kIsWeb`, encapsulado numa **factory única**
-(`api_client`):
+### 8.2 Transporte por plataforma (Desktop × Web)
+O canal de transporte é abstraído na factory do cliente Dart (`api_client`), selecionando o canal com base em `kIsWeb`:
 
-| Plataforma | Pacote Dart | Canal | Protocolo | Observação |
-|---|---|---|---|---|
-| **Windows Desktop** | `grpc` | `ClientChannel` | gRPC nativo HTTP/2 | Menor latência; multiplexing real de streams |
-| **Web** | `grpc` + `grpc_web` | `GrpcWebClientChannel` | gRPC-Web sobre HTTP/1.1–2 | Exigência do sandbox do browser |
+| Plataforma | Canal Primário (FlatBuffers) | Canal Fallback (gRPC) | Observação |
+|---|---|---|---|
+| **Windows Desktop** | TCP/TLS com FlatBuffers binário | `ClientChannel` gRPC nativo HTTP/2 | Canal nativo de altíssima performance |
+| **Web** | WebSocket binário com FlatBuffers | `GrpcWebClientChannel` (gRPC-Web) | Habilitado pelo middleware `tonic-web` no servidor |
 
-No servidor, o `runtime_api` (Tonic) habilita a camada **`tonic-web`
-(`GrpcWebLayer`)** + CORS restritivo para atender o Flutter Web na mesma porta do
-gRPC nativo. O proxy reverso (Caddy/Nginx) faz `accept_http1` e termina o TLS;
-para o renderer web `skwasm`, envia os headers de `SharedArrayBuffer`
-(`Cross-Origin-Opener-Policy`/`Cross-Origin-Embedder-Policy`). A UI nunca sabe
-qual transporte está ativo.
+No servidor, o `runtime_api` atende e despacha as requisições no mesmo socket mapeando os payloads opacos baseados em `Envelope`. Para a Web, são fornecidos os headers de segurança CORS e COOP/COEP para suporte a multi-threading (`SharedArrayBuffer` com renderer `skwasm`).
 
 ### 8.3 Construção incremental da UI + design system — decisão D8
 A UI **não** é uma fase tardia e monolítica: cada feature de backend entrega, no
@@ -736,143 +690,63 @@ let resp = client
   master key e passadas no request; o `ia_engine` não acessa o banco
   multi-tenant. Conteúdo do cliente é **input não confiável** (anti prompt
   injection). Ver diretrizes em
-  [padroes_linguagens/seguranca.md](../padroes_linguagens/seguranca.md).
-- **Resiliência (no `worker`):** `tokio::time::timeout` em toda chamada gRPC +
-  retry/backoff para erros transitórios; o worker degrada graciosamente (ex.:
-  fallback fixo) se a IA estiver indisponível.
-- **Escala:** sob carga, sobem-se **N réplicas** do `ia_engine` (cada uma com seu
-  GIL) atrás de balanceamento gRPC — é assim que se escala Python em produção
-  (processos, não threads).
-
----
-
-## 14. Infraestrutura
-
-Início em **Hostinger KVM2** (uma VM), com separação **lógica** de serviços para
-facilitar futura distribuição sem reescrever:
-
-- **Proxy reverso** (Nginx/Caddy/Traefik) com TLS, suporte a **HTTP/2** e
-  `proxy_buffering off` para o **gRPC Server Streaming** (e tradução gRPC-Web
-  para o app web).
-- **runtime_api** (Rust) — API gRPC + realtime (streaming).
-- **worker** (Rust) — processamento assíncrono + agendamento (substitui o Celery
-  da v1).
-- **messaging_gateway** (Rust) — ingestão de webhooks.
-- **control_plane** (Rust) — gestão.
-- **ia_engine** (Python) — IA (serviço gRPC separado; escalável por réplicas).
-- **PostgreSQL** (+ pgvector) — banco unificado.
-- **Redis** — Streams (bus), cache, presença, pub/sub.
-- **Evolution Go** — gateway de WhatsApp (multi-instância) + S3/MinIO para mídia.
-- **Storage de objetos** (MinIO/S3) — mídia transitória.
-- **Observabilidade** — logs estruturados, métricas, tracing.
-
----
-
-## 15. Stack tecnológica
-
-| Camada | Tecnologia |
-|--------|------------|
-| Backend | Rust (tokio, axum, tonic/gRPC, sqlx) |
-| Event bus | Redis Streams (consumer groups) |
-| Agendamento | `worker` Rust (tokio timers + Redis delayed) — substitui Celery |
-| Banco | PostgreSQL + pgvector, RLS |
-| Cache/Realtime | Redis (namespace por tenant) + **gRPC Server Streaming** (fan-out por Redis pub/sub) |
-| IA/NLP | `ia_engine` Python (serviço gRPC; LangChain), OpenAI/Groq/Ollama |
-| IA ↔ Backend | gRPC (tonic no Rust, grpcio no Python); FFI/PyO3 descartado (§13.1) |
-| Flutter ↔ Backend | **gRPC único** (unário + streaming); desktop HTTP/2 nativo, web gRPC-Web (`tonic-web`) |
-| WhatsApp | Evolution Go (multi-instância) + S3/MinIO |
+  [padroes_linguagens/seguranca.md](../padroes_linguagens/seguranca.md).| IA ↔ Backend | RPC sobre IPC/UDS ou TCP/TLS (FlatBuffers padrão; gRPC fallback) |
+| Flutter ↔ Backend | **Contrato Flexível**: FlatBuffers binário local (UDS/TCP); gRPC/TCP/WebSocket fallback e Web |
+| WhatsApp | Evolution Go (multi-instância) + R2/MinIO para mídia |
 | Frontend | Flutter (Windows → Web), 2 apps + packages; design system `core_ui` (tema dark) |
 | FFI | flutter_rust_bridge + SQLite local |
-| Storage mídia | MinIO/S3 (transitório) + disco local (cache permanente) |
-| Observabilidade | tracing + métricas + logs estruturados |
+| Storage mídia | Cloudflare R2 (produção) / MinIO (dev) (transitório) + disco local (cache permanente) |
+| Observabilidade | tracing + métricas + logs estruturados via OTLP gRPC central |
 
 ---
 
 ## 16. Roadmap de construção
 
-> Greenfield, sem migração. Ordem por dependência técnica.
-> **A UI acompanha cada feature** (decisão D8): a partir do item 3, toda entrega
-> de backend ganha a tela que a valida no `flutter_windows` (RemoteOnly).
+> Sem migração. Ordem por dependência técnica. Os serviços de base e de acesso a dados já foram concluídos.
 
-1. **Fundação**
-   - Cargo workspace + crate `contracts` (eventos, DTOs, gRPC).
-   - Schema PostgreSQL com `tenant_id` + policies RLS + contexto de tenant.
-   - Esqueleto de observabilidade.
-2. **Messaging Gateway + Evolution multi-instância**
-   - Ingestão de webhook → resolve tenant → persiste bruto → publica no bus.
-3. **Runtime API (gRPC) + shell Flutter (Windows) + auth + telas de login/cadastro**
-   - gRPC unário + Server Streaming. Camada `DataSource` abstrata (`RemoteOnly`).
-   - Bootstrap do `flutter_windows` + `core_ui` (design system).
-   - Primeiro fechamento ponta-a-ponta: auth no servidor **e** telas de
-     login/cadastro no cliente para validar o uso.
-4. **Worker + `ia_engine` (Python, gRPC)** — *(UI: fila/Kanban + chat consumindo o stream)*
-   - Debounce, conversa, política de ticket, kanban, IA, envio outbound.
-   - Worker assume também o agendamento que era do Celery (feedback, retenção).
-5. **Regras de domínio explícitas**
-   - Casos de uso das §10.1–10.4 nos crates `domain_*`.
-6. **Local Engine (FFI) + mídia local**
-   - `local_engine` dual-target; cache de mídia + SQLite; sync §9.
-7. **Endurecimento + observabilidade + billing/usage**
-8. **Port para Web** (troca `DataSource` para `RemoteOnly`; sem FFI).
-
-*(Importação de dados da v1, se desejada um dia, é um script único e opcional —
-fora do caminho crítico.)*
+1. **Fundação e Acesso a Dados (Concluído ✅)**
+   - Cargo workspace reestruturado em `apps/` e `crates/`.
+   - Crate `contracts` (schemas `.proto` canônicos, transpilação `.fbs`, stubs gerados, `Envelope` unificado).
+   - Crate `transport` (canais UDS/TCP/WS, codecs FlatBuffers/gRPC e `transport::bus` sobre Redis Streams).
+   - Apps `data_postgres`, `data_redis`, `data_storage` atuando como servidores RPC e controlando os armazéns físicos.
+   - Convenções transversais de observabilidade (OTLP, `traceparent`) e erros (`ErrorEnvelope`).
+2. **Messaging Gateway + Evolution multi-instância (🚧 em andamento)**
+   - Gateway de webhook do Evolution Go (`messaging_gateway`) → persiste via RPC em `data_postgres` → publica eventos de domínio em `transport::bus`.
+3. **Runtime API + Auth + Realtime + UI (🚧 em andamento)**
+   - Autenticação por JWT + refresh opaco + RBAC.
+   - Primeiro fechamento ponta-a-ponta: auth no servidor `runtime_api` **e** telas de login/cadastro no `flutter_windows` (RemoteOnly).
+4. **Worker + `ia_engine` (Python, gRPC/FlatBuffers)**
+   - Worker consome barramento, debounce por contato, política de ticket, kanban, IA, envio outbound.
+   - `ia_engine` Python com a facade `FeaturesCompose` exposto em RPC.
+5. **Local Engine (FFI) + mídia local**
+   - `local_engine` dual-target (cache local + SQLite + sincronização).
+6. **Endurecimento + observabilidade completa + billing/usage**
+7. **Port para Web** (troca `DataSource` para `RemoteOnly` usando WebSocket binário / gRPC-Web).
 
 ---
 
 ## 17. Riscos e decisões em aberto
 
 **Riscos:**
-- **FFI dual-target** (`local_engine`) é a parte de maior complexidade; exige a
-  abstração `DataSource` desde o dia 1 para não comprometer o port Web.
-- **Sincronização de cache local** (conflitos, invalidação) precisa de
-  estratégia explícita.
-- **Maturidade de IA em Rust** — mitigado mantendo o serviço Python `ia_engine`
-  isolado, falando por gRPC (decisão D3/§13.1).
-- **Reaproveitamento do `FeaturesCompose`** — risco baixo: o código de IA da v1 é
-  portado quase intacto; o esforço está em trocar o ponto de entrada (Celery →
-  handler gRPC) e extrair a orquestração para o `worker` Rust.
-- **Agendamento sem Celery** — o `worker` Rust precisa cobrir os jobs temporais
-  que eram do Celery (timeout de feedback, purga de mídia); validar a estratégia
-  de delayed tasks no Redis para não perder agendamentos.
-- **Retenção de mídia** — política de expiração precisa equilibrar custo de
-  storage × disponibilidade multi-operador/Web.
-- **Migração mental DB-por-tenant → único** — RLS precisa ser testada
-  rigorosamente para garantir isolamento.
+- **Complexidade do IPC/FlatBuffers personalizado:** Mitigado pelo gRPC estruturado como fallback de configuração imediato em caso de entrave.
+- **FFI dual-target** (`local_engine`) é a parte de maior complexidade; exige a abstração `DataSource` desde o dia 1 para não comprometer o port Web.
+- **Sincronização de cache local** (conflitos, invalidação) precisa de estratégia explícita.
+- **Maturidade de IA em Rust** — mitigado mantendo o serviço Python `ia_engine` isolado, falando por RPC.
+- **Retenção de mídia** — política de expiração precisa equilibrar custo de storage × disponibilidade.
+- **Auditoria distribuída** — mitigado pelo redirecionamento da auditoria para o bus assíncrono.
 
 **Decisões já fechadas (antes em aberto):**
-- ✅ **Transporte `worker` (Rust) ↔ `ia_engine` (Python): gRPC** (não FFI/PyO3).
-  Racional completo em §13.1. Garante isolamento de processo, escala por réplicas
-  (sem teto do GIL) e mantém o Rust 100% safe.
-- ✅ **Transporte Flutter ↔ `runtime_api`: gRPC único** (unário + Server
-  Streaming) — decisão D7. Comandos, consultas e realtime no mesmo `.proto`;
-  WebSocket descartado para realtime. `flutter_web` usa **gRPC-Web** (`tonic-web`
-  + proxy); `flutter_windows` usa gRPC nativo HTTP/2. Independente da decisão
-  §13.1 (canal interno backend ↔ IA). Ver §8.
-- ✅ **Construção da UI: incremental, junto de cada feature** (decisão D8). Mantém
-  os **2 apps Flutter** separados (Windows → Web); a UI começa no `flutter_windows`
-  RemoteOnly e cada feature entrega sua tela. Ver §8.3 e o doc 02.
+- ✅ **Transporte interno backend ↔ IA**: RPC sobre FlatBuffers/UDS padrão local (ou gRPC/TCP fallback para VM dedicada com GPU).
+- ✅ **Bus de eventos**: Redis Streams (implementado na crate `transport::bus`).
+- ✅ **Cifragem de credenciais/tokens**: CipherManager AES-256-GCM.
+- ✅ **Realtime Flutter**: Stream gRPC unificado, WebSocket descartado para desktop nativo. gRPC-Web e WebSocket binário com FlatBuffers para Web.
+- ✅ **Auditoria**: Redis Streams de forma assíncrona, eliminando o acoplamento direto com o Postgres em `observability`.
+- ✅ **Provisionamento de instâncias Evolution**: Control Plane chama a API REST do Evolution Go, com token de instância e global key.
+- ✅ **Mídia no Evolution Go**: Usar Cloudflare R2/MinIO como storage compatível com S3 integrado ao Evolution, com o gateway gerando URLs pré-assinadas.
 
-**Decisões em aberto (a definir antes/durante o planejamento):**
-- **Redis Streams vs NATS JetStream** para o bus (recomendação atual: Redis
-  Streams para começar simples).
-- Estratégia de **conflito de sync** (last-write-wins vs versionamento por
-  evento).
-- Política de **retenção de mídia** no servidor (TTL, gatilho de expiração).
-- Manter `Atendimento` unificado (como v1) **ou** separar conversa × ticket
-  (recomendado) na v2.
-- Modelo de **autenticação/autorização** do Flutter (tokens, refresh, RBAC por
-  tenant) — reaproveitar o modelo da v1: `TenantUser`/`TenantInvite` com
-  `role` + `module_permissions` + `flow_permissions`.
-- **Mídia no Evolution Go:** habilitar S3/MinIO (entrega `mediaUrl` direta) ou
-  manter download + descriptografia no worker (`mediaKey`/`directPath`). A config
-  de referência da v1 não tem S3 e usa `DATABASE_SAVE_MESSAGES=false`.
-- **Cifragem em repouso** de credenciais/tokens (api keys de provedores,
-  Evolution, etc.): definir o mecanismo (a v1 usa Fernet via
-  `encrypt_value`/`decrypt_value`).
-- **Provisionamento de instâncias Evolution:** o Control Plane chama a API REST
-  (`/instance/create`, `/connect`, `/qr`, `/pair`, `/status`) — definir guarda de
-  quota por plano (`max_instances`).
+- Estratégia detalhada de **conflito de sync** (last-write-wins vs versionamento por evento).
+- Janela de **retenção de mídia** no servidor (TTL de 30 dias recomendado).
+- Separação total de `conversa` × `ticket` na camada do Rust.
 
 ---
 

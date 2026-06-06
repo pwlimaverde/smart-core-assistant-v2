@@ -11,15 +11,22 @@
 
 ## 1. Objetivo
 
-Centralizar **todo** o acesso ao PostgreSQL em uma única crate
-(`server/crates/infrastructure_postgres`). É a **única** crate do workspace que
-usa SQLx diretamente. Implementa o banco **único multi-tenant** com isolamento
-por **Row-Level Security (RLS)**, busca vetorial (pgvector 1536, cosseno),
-cache de configuração e criptografia de credenciais.
+A crate `infrastructure_postgres` centraliza **todo** o acesso de persistência ao PostgreSQL de forma a servir como uma **biblioteca interna exclusiva** do aplicativo `apps/data_postgres`. Ela implementa o banco **único multi-tenant** com isolamento por **Row-Level Security (RLS)**, busca vetorial (pgvector 1536, cosseno), cache de configuração e criptografia de credenciais. Nenhuma outra crate de negócio consome o Postgres diretamente.
 
-> Regra central: **toda query em tabela de tenant DEVE correr dentro de
+> Regra central de RLS: **toda query em tabela de tenant DEVE correr dentro de
 > `run_in_tenant_transaction`** (que seta `app.current_tenant` via
-> `SELECT set_config(...)`), ativando as policies RLS fail-closed.
+> `SELECT set_config(...)`), ativando as policies RLS fail-closed baseadas no `RequestContext`.
+
+---
+
+## 1.1 O Serviço de Dados `data_postgres`
+
+O aplicativo `apps/data_postgres` é o processo servidor que expõe as capacidades desta crate para o resto do monorepo através de dois planos:
+- **Plano Síncrono (RPC direto)**: Servidor UDS expondo métodos via FlatBuffers (padrão) e gRPC (fallback) para atender leituras e escritas rápidas que exijam resposta imediata (ack).
+- **Plano Assíncrono (Consumidor do Bus)**: Consome eventos do barramento Redis Streams para processar persistências do fluxo de mensagens de forma assíncrona.
+- **Relay Outbox**: Escuta notificações `LISTEN/NOTIFY` do banco e repassa eventos de domínio no bus.
+
+---
 
 ## 2. Escopo entregue
 
@@ -53,6 +60,8 @@ cache de configuração e criptografia de credenciais.
 | `0007_treinamento_rag` | IA/RAG | base vetorial (`vector(1536)`, HNSW cosseno) + intenções (`query_compose`) |
 | `0008_evolution_sync` | Integrações | instâncias Evolution, contatos sincronizados, whitelist |
 | `0009_settings_manager` | Settings | `CoreSettings` (config dinâmica global; substitui Remote Config) |
+| `0010_audit_log` | Auditoria | tabela de logs de auditoria persistidos a partir do bus (consumidos do Redis Streams) |
+| `0011_outbox` | Outbox | tabela transacional de outbox + `LISTEN/NOTIFY` para o relay de eventos de domínio no bus |
 
 ## 4. Estrutura de módulos (`src/`)
 
@@ -70,6 +79,7 @@ cache de configuração e criptografia de credenciais.
 | `atendimentos/` | `atendimentos.rs`, `mensagens.rs`, `campos.rs`, `etiquetas.rs`, `movimentos.rs` |
 | `treinamento/` | `documentos.rs`, `treinamentos.rs`, `query_compose.rs` |
 | `integracoes/` | `evolution.rs`, `whitelist.rs` |
+| `auditoria/` | `audit_log.rs` (persistência dos logs de auditoria consumidos do bus) |
 
 ## 5. Decisões-chave (resumo)
 
@@ -93,14 +103,8 @@ cache de configuração e criptografia de credenciais.
   `docker/compose/data.yml` + `docker/init-scripts/01-extensions.sql`.
 
 ## 7. Relação com as fases
-
-Cobre integralmente a **Fase 1** e a persistência de boa parte das F2–F5 (ver
-[02-fases-desenvolvimento.md](./02-fases-desenvolvimento.md), Apêndice B). É
-consumida pelo módulo de autenticação (doc
-[09-comunicacao-e-autenticacao.md](./09-comunicacao-e-autenticacao.md)) e será
-pelo `worker`, `control_plane` e `runtime_api`.
+Cobre integralmente a persistência da **Fase 1** e de boa parte das F2-F5. No entanto, pós-refator, ela é consumida **exclusivamente** através de chamadas RPC IPC para o serviço `data_postgres` tipadas via `contracts`. O `runtime_api`, `worker` e `control_plane` conversam com o `data_postgres` em vez de carregar esta crate diretamente.
 
 ---
 
-*Registro da fundação de persistência. Verdade técnica detalhada no plano
-canônico do dotcontext.*
+*Consolidação da fundação de persistência. A verdade técnica reside no código físico e nos schemas unificados de contratos.*
