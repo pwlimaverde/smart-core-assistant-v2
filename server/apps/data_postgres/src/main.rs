@@ -195,6 +195,10 @@ async fn handler_persist_message(pool: PgPool, env: Envelope) -> Envelope {
         flow_permissions: vec![],
     };
 
+    // Captura o traceparent da requisição para persistir no outbox e manter o trace
+    // distribuído vivo até o relay republicar o evento no barramento.
+    let traceparent = env.traceparent.clone();
+
     let result =
         infrastructure_postgres::run_in_tenant_transaction(&pool, tenant_id, |mut tx| async move {
             let atendimento_id = payload_json
@@ -239,12 +243,15 @@ async fn handler_persist_message(pool: PgPool, env: Envelope) -> Envelope {
             let event_payload_bytes = serde_json::to_vec(&event_payload)
                 .map_err(|e| infrastructure_postgres::DbError::ConfigError(e.to_string()))?;
 
-            sqlx::query("INSERT INTO outbox (tenant_id, event_type, payload) VALUES ($1, $2, $3)")
-                .bind(tenant_id)
-                .bind("message.persisted")
-                .bind(event_payload_bytes)
-                .execute(&mut *tx)
-                .await?;
+            sqlx::query(
+                "INSERT INTO outbox (tenant_id, event_type, payload, traceparent) VALUES ($1, $2, $3, $4)",
+            )
+            .bind(tenant_id)
+            .bind("message.persisted")
+            .bind(event_payload_bytes)
+            .bind(&traceparent)
+            .execute(&mut *tx)
+            .await?;
 
             Ok((msg, tx))
         })

@@ -14,6 +14,7 @@ struct OutboxRow {
     tenant_id: Uuid,
     event_type: String,
     payload: Vec<u8>,
+    traceparent: String,
     occurred_at: chrono::DateTime<Utc>,
 }
 
@@ -70,7 +71,7 @@ impl OutboxRelay {
         let mut conn = self.redis_conn.clone();
 
         let rows = sqlx::query_as::<_, OutboxRow>(
-            r#"SELECT id, tenant_id, event_type, payload, occurred_at
+            r#"SELECT id, tenant_id, event_type, payload, traceparent, occurred_at
                FROM outbox
                WHERE published_at IS NULL
                ORDER BY occurred_at ASC
@@ -111,9 +112,9 @@ impl OutboxRelay {
                 event_id: row.id, // ID da linha garante idempotência no barramento
                 event_type: row.event_type.clone(),
                 timestamp: row.occurred_at.with_timezone(&Utc),
-                // A tabela `outbox` (0011) ainda não persiste o traceparent W3C; o evento
-                // relayed nasce sem contexto de trace. Propagar exigiria uma coluna dedicada.
-                traceparent: String::new(),
+                // Propaga o traceparent persistido no outbox, mantendo o trace distribuído
+                // vivo no salto assíncrono persistência → relay → barramento.
+                traceparent: row.traceparent.clone(),
                 payload: payload_json,
             };
 
