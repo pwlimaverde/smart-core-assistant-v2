@@ -1,0 +1,96 @@
+name: Deploy → DEV
+
+on:
+  push:
+    branches: [dev]
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    name: Build Rust + Deploy DEV
+    runs-on: [self-hosted, hostinger]
+    environment: dev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Garante toolchain Rust atualizado
+        run: rustup update stable
+
+      - name: Cargo build release (workspace)
+        working-directory: server
+        env:
+          SQLX_OFFLINE: "true"
+          RUSTFLAGS: "-C target-cpu=native"
+        run: cargo build --release --workspace
+
+      - name: Backup binários anteriores
+        run: |
+          BACKUP_DIR="/opt/smartcore/dev/bin.bak"
+          rm -rf "$BACKUP_DIR"
+          cp -r /opt/smartcore/dev/bin "$BACKUP_DIR" 2>/dev/null || true
+
+      - name: Instala novos binários em DEV
+        run: |
+          BIN_DIR="/opt/smartcore/dev/bin"
+          SRC="server/target/release"
+          for svc in data_postgres data_redis data_storage \
+                     runtime_api control_plane messaging_gateway worker; do
+            if [ -f "$SRC/$svc" ]; then
+              cp "$SRC/$svc" "$BIN_DIR/$svc"
+              chmod +x "$BIN_DIR/$svc"
+              echo "✓ $svc instalado"
+            fi
+          done
+
+      - name: Reinicia serviços DEV (ordem de dependência)
+        run: |
+          sudo systemctl restart smartcore-dev-data_redis
+          sleep 2
+          sudo systemctl restart smartcore-dev-data_postgres
+          sleep 3
+          sudo systemctl restart \
+            smartcore-dev-data_storage \
+            smartcore-dev-control_plane \
+            smartcore-dev-messaging_gateway \
+            smartcore-dev-worker
+          sleep 3
+          sudo systemctl restart smartcore-dev-runtime_api
+
+      - name: Smoke test DEV
+        run: |
+          sleep 8
+          FAILED=0
+          for svc in data_redis data_postgres data_storage runtime_api; do
+            STATUS=$(sudo systemctl is-active smartcore-dev-$svc 2>/dev/null || echo "unknown")
+            if [ "$STATUS" != "active" ]; then
+              echo "ERRO: smartcore-dev-$svc → $STATUS"
+              sudo journalctl -u smartcore-dev-$svc --no-pager -n 30
+              FAILED=1
+            else
+              echo "✓ smartcore-dev-$svc ativo"
+            fi
+          done
+          exit $FAILED
+
+      - name: Rollback em falha
+        if: failure()
+        run: |
+          echo "Falha detectada — revertendo binários DEV..."
+          if [ -d "/opt/smartcore/dev/bin.bak" ]; then
+            cp -r /opt/smartcore/dev/bin.bak/* /opt/smartcore/dev/bin/ 2>/dev/null || true
+            sudo systemctl restart \
+              smartcore-dev-data_redis \
+              smartcore-dev-data_postgres \
+              smartcore-dev-data_storage \
+              smartcore-dev-control_plane \
+              smartcore-dev-messaging_gateway \
+              smartcore-dev-worker \
+              smartcore-dev-runtime_api
+            echo "Rollback DEV concluído."
+          else
+            echo "Sem backup disponível."
+          fi

@@ -1,0 +1,38 @@
+name: PR dev → main após release
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+jobs:
+  create-pr:
+    name: Abre PR de release
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Cria PR dev → main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh pr create \
+            --base main \
+            --head dev \
+            --title "release: $TAG — merge dev → main" \
+            --body "Deploy da versão **$TAG** concluído em produção via pipeline CI/CD.
+
+          Este PR registra o estado do \`main\` após a release.
+
+          **Checklist antes de mergear:**
+          - [ ] Smoke tests em prod verificados
+          - [ ] Grafana sem alertas ativos
+          - [ ] CHANGELOG atualizado (se aplicável)
+          " \
+            --label "release" \
+          || echo "PR já existe ou branch main já está atualizada."
