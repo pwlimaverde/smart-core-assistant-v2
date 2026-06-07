@@ -35,8 +35,7 @@ apt-get install -y -qq \
     ufw \
     jq \
     ca-certificates gnupg lsb-release \
-    postgresql-client \
-    docker.io docker-compose-plugin
+    postgresql-client
 
 # ── 2. Caddy (reverse proxy) ──────────────────────────────────────────────────
 echo ""
