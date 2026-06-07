@@ -38,9 +38,11 @@
 - **Crates de Base/Fundação** — `contracts` (schemas proto/fbs, Envelope e stubs gerados), `transport` (codec FlatBuffers/gRPC, canais UDS/TCP/WS, barramento `transport::bus`), `error_core` (erros serializáveis `ErrorEnvelope`) e `observability` (tracing, `traceparent`, auditoria rewired para Streams).
 - **Serviços de Dados (data_*)** — `data_postgres` (encapsulando RLS pool, migrations e CRUD Postgres de `infrastructure_postgres`), `data_redis` (encapsulando cache, tokens, locks de `infrastructure_redis`) e `data_storage` (encapsulando Cloudflare R2 de `infrastructure_storage`).
 - **Infraestrutura de dados + deploy** — `docker/compose/data.yml` (PG+pgvector, Redis, MinIO) e scripts `infra/` de automação e túnel SSH.
+- **Bootstrap de superusuário** — CLI `create-superuser` e `delete-superuser` no `control_plane` (thin RPC client → `data_postgres`), com auditoria e trail.
 
 ### O que está em andamento (🚧)
-- **Módulo de autenticação** (`user-auth-module`) — Casos de uso de autenticação e RBAC em `application`, expostos via RPC no `runtime_api`.
+- **Módulo de autenticação** (`user-auth-module`) — Casos de uso de autenticação e RBAC em `application`, expostos via RPC no `runtime_api`. **Pré-requisito para o painel admin.**
+- **Painel Admin do Superusuário** — Equivalente ao Django admin da v1: gestão de tenants, planos, assinaturas e pagamentos via Flutter + `runtime_api`. Veja [11-painel-admin-superusuario.md](./11-painel-admin-superusuario.md).
 - **Orquestração e Gateway de Mensagens** — O bootstrap estrutural de `messaging_gateway`, `worker` e `control_plane` já foi criado na reestruturação e aguarda a lógica detalhada de suas respectivas fases.
 
 ### O que está pendente (⬜)
@@ -55,7 +57,7 @@
 |---|---|---|---|
 | `infrastructure_postgres` | crate infra | ✅ | repositórios SQLx, criptografia e migrations |
 | `infrastructure_redis` | crate infra | ✅ | conexões Redis, cache, tokens, locks |
-| `infrastructure_storage` | crate infra | 🚧 | **stub filesystem** (`StorageClient` put/get/presign/delete grava em disco local; presign mockado); cliente S3/R2 (`aws-sdk-s3`) e layout multi-tenant **pendentes** |
+| `infrastructure_storage` | crate infra | ✅ | cliente R2 real (`aws-sdk-s3`), presign real, layout `media/{tenant}/...` |
 | `infrastructure_evolution` | crate infra | ⬜ | cliente HTTP REST para o Evolution Go |
 | `contracts` | crate base | ✅ | schemas proto/fbs, Envelope e tipos gerados |
 | `transport` | crate base | ✅ | canais UDS/TCP/WS, codecs e barramento |
@@ -119,18 +121,35 @@
 ### Mapa de dependências entre fases
 
 ```
-F0 Fundação ──► F1 Banco+RLS ──► F2 Control Plane
-   (✅ infra      (✅ feito)          │
-    local)             │              ├──► F3 Messaging Gateway + Evolution
-                       │              │            │
-                       │              │            ▼
+F0 Fundação ──► F1 Banco+RLS+Storage ──► Bootstrap CLI superuser
+   (✅ infra      (✅ feito)              (✅ create/delete-superuser)
+    local)             │
+                       │
+                       ▼
+               F6.1 runtime_api + AuthService (Login/Logout/Refresh)
+                       │
+                       ▼
+               F6.2 AuthInterceptor (is_superuser role guard)
+                       │
+                       ▼
+               F2-admin Control Plane CRUD ──► AdminService no runtime_api
+                       │                               │
+                       │                               ▼
+                       │                    Flutter Admin (Painel Superusuário)
+                       │                    (Tenants, Planos, Assinaturas, Pagamentos)
+                       │                    ← ver 11-painel-admin-superusuario.md
+                       │
+                       ├──► F3 Messaging Gateway + Evolution
+                       │            │
+                       │            ▼
                        └──► F4 Worker + Domínio ──► F5 ia_engine (gRPC)
                                   │                     │
                                   ▼                     │
-                          F6 Runtime API (gRPC) + Realtime ◄───┘  ◄── 🚧 auth aqui
-                                  │            └─► UI incremental nasce aqui
-                                  │                (F6.5 login/cadastro; depois
-                                  │                 F2 admin, F4 kanban/chat, F5 IA)
+                          F6 Runtime API completo ◄─────┘
+                          (Auth regular, Register, Invite)
+                          └─► UI: login/cadastro tenant
+                          └─► F4.6 Kanban/chat Flutter
+                                  │
                                   ▼
                           F7 Flutter Windows — consolidação (RemoteOnly)
                                   │
@@ -144,6 +163,12 @@ F0 Fundação ──► F1 Banco+RLS ──► F2 Control Plane
                           F10 Port Web (RemoteOnly)
 ```
 
+> **Ordem prática de desenvolvimento:** fundação ✅ → auth superusuário (F6.1–6.2) →
+> **painel admin** (F2-admin + Flutter admin) → auth regular de tenants (F6 completo) →
+> features operacionais (F3/F4/F5). O painel admin é a primeira feature de negócio
+> porque valida toda a stack (JWT, gRPC, Flutter, controle de acesso) em um ambiente
+> controlado (apenas o superusuário usa).
+>
 > **MVP funcional ponta-a-ponta** = F0→F6. A persistência das F1–F5 já está
 > pronta; falta a orquestração (worker, gateway, IA) e a API/realtime.
 
