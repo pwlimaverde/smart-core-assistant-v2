@@ -19,8 +19,8 @@ common:
 query_range:
   results_cache:
     cache:
-      embedded_collector:
-        store: inmemory
+      embedded_cache:
+        enabled: true
 
 limits_config:
   reject_old_samples: true
