@@ -310,22 +310,27 @@ Gráficos (agregação no backend, renderização Flutter):
 Todas as tabelas já existem nas migrations 0001–0011. O painel é **read/write sobre
 tabelas já provisionadas** — nenhuma migration nova é necessária para P1–P3.
 
-| Tabela | Entidade | Migration |
+> **Atenção aos nomes reais das tabelas:** o schema preserva o prefixo de app do Django
+> legado (`tenants_*`, `oraculo_*`). Use os nomes exatos abaixo nas queries.
+
+| Tabela (nome real) | Entidade | Migration |
 |---|---|---|
-| `tenant` | Tenant | 0002 |
-| `tenant_config` | TenantConfig | 0002 |
-| `plan` | Plan | 0003 |
-| `subscription` | Subscription | 0003 |
-| `payment_record` | PaymentRecord | 0003 |
-| `tenant_user` | TenantUser | 0002 |
-| `tenant_invite` | TenantInvite | 0002 |
-| `app_instance` | AppInstance | 0005/0008 |
+| `tenants_tenant` | Tenant | 0002 |
+| `tenants_tenantconfig` | TenantConfig | 0002 |
+| `tenants_plan` | Plan | 0003 |
+| `tenants_subscription` | Subscription | 0003 |
+| `tenants_paymentrecord` | PaymentRecord | 0003 |
+| `tenants_tenantuser` | TenantUser | 0002 |
+| `tenants_tenantinvite` | TenantInvite | 0002 |
+| `oraculo_app_instance` | AppInstance | 0005 |
 | `auth_user` | AuthUser | 0001 |
 | `audit_log` | AuditLog | 0010 |
 
 > **Nota:** `TenantDatabase`, `TenantEvolution`, `TenantTrello` da v1 foram
-> consolidadas em `tenant_config` e `app_instance` na v2. Os campos de credencial
-> são encriptados via `CipherManager` (AES-256-GCM) em `infrastructure_postgres::crypto`.
+> consolidadas em `tenants_tenantconfig` e `oraculo_app_instance` na v2. Os campos de
+> credencial são encriptados via `CipherManager` (AES-256-GCM) em
+> `infrastructure_postgres::crypto`. As instâncias Evolution sincronizadas têm
+> persistência adicional na migration 0008 (`evolution_sync`).
 
 ---
 

@@ -21,7 +21,7 @@ ambientes a cada push/tag.
 |---|---|---|
 | Trigger | Push na branch `dev` (GitHub) | Tag semântica `v*.*.*` → merge em `main` |
 | Banco | `smartcore_v2_dev` | `smartcore_v2` |
-| Redis DB | DB 1 (cache) / DB 3 (bus) | DB 0 (cache) / DB 2 (bus) |
+| Redis (banco lógico) | DB 1 | DB 0 |
 | Sockets UDS | `/run/smartcore-dev/` | `/run/smartcore/` |
 | Binários | `/opt/smartcore/dev/bin/` | `/opt/smartcore/prod/releases/<tag>/` |
 | API gRPC porta | `8090` (dev) | `8080` (prod) |
@@ -195,9 +195,9 @@ EOF
 
 # ── 7. Banco de dados dev (no PostgreSQL já existente via Docker) ─────────────
 # Executar após o data stack estar no ar:
-# docker exec smartcore_v2_postgres psql -U smartcore_app -c \
+# docker exec smartcore-v2-postgres psql -U smartcore_app -c \
 #   "CREATE DATABASE smartcore_v2_dev;"
-# docker exec smartcore_v2_postgres psql -U smartcore_app -c \
+# docker exec smartcore-v2-postgres psql -U smartcore_app -c \
 #   "GRANT ALL PRIVILEGES ON DATABASE smartcore_v2_dev TO smartcore_app;"
 
 echo "Provisionamento base concluído. Próximos passos:"
@@ -319,7 +319,7 @@ WantedBy=multi-user.target
 | Serviço | Porta / Socket | Depende de | Notas |
 |---|---|---|---|
 | `smartcore-{env}-data_redis` | `/run/smartcore{-dev}/data_redis.sock` | docker | Sobe primeiro |
-| `smartcore-{env}-data_postgres` | `/run/smartcore{-dev}/data_postgres.sock` | docker, data_redis | Roda migrations no ExecStartPre |
+| `smartcore-{env}-data_postgres` | `/run/smartcore{-dev}/data_postgres.sock` | docker, data_redis | Roda migrations embutidas no boot (`sqlx::migrate!` + `DATABASE_ADMIN_URL`) |
 | `smartcore-{env}-data_storage` | `/run/smartcore{-dev}/data_storage.sock` | docker | R2 é externo |
 | `smartcore-{env}-control_plane` | `/run/smartcore{-dev}/control_plane.sock` | data_postgres, data_redis | |
 | `smartcore-{env}-messaging_gateway` | `/run/smartcore{-dev}/messaging_gateway.sock` | data_postgres, data_redis | Recebe webhooks |
@@ -347,17 +347,33 @@ WantedBy=multi-user.target
 
 Ativar: `systemctl enable smartcore-prod.target smartcore-dev.target`
 
-### 6.4 Migrations no boot (ExecStartPre)
+### 6.4 Migrations no boot
 
-O serviço `data_postgres` roda as migrations automaticamente ao iniciar (via
-`inicializar_banco_dados` no código). Para garantir que o sqlx-cli também pode ser
-invocado manualmente ou em emergência:
+O serviço `data_postgres` roda as migrations **automaticamente ao iniciar** via
+`inicializar_banco_dados`. As migrations são **embutidas no binário** em build time
+(macro `sqlx::migrate!` lendo `crates/infrastructure_postgres/migrations`), então o
+binário é autossuficiente — não depende da pasta `migrations/` no servidor.
 
+A migração roda com o pool administrativo (`DATABASE_ADMIN_URL`, BYPASSRLS + DDL).
+**`DATABASE_ADMIN_URL` é obrigatório** — o `data_postgres` aborta no boot sem ela
+(`outbox_relay` faz `expect("DATABASE_ADMIN_URL ausente")`).
+
+Se uma migração falhar no boot, o serviço **não fica `active`** e o smoke test do
+deploy detecta a falha (disparando rollback do binário).
+
+Para rodar migrations manualmente em emergência (a cópia da pasta vai junto na release):
 ```bash
 # Rodar migrations manualmente no prod:
-DATABASE_URL="$(grep DATABASE_URL /opt/smartcore/prod/.env | cut -d= -f2-)" \
-  /opt/smartcore/shared/sqlx migrate run --source /opt/smartcore/prod/releases/current/migrations/
+DATABASE_URL="$(grep '^DATABASE_ADMIN_URL=' /opt/smartcore/prod/.env | cut -d= -f2-)" \
+  /opt/smartcore/shared/sqlx migrate run \
+  --source /opt/smartcore/prod/releases/current/migrations/
 ```
+
+> ⚠️ **Migrations devem ser backward-compatible (padrão expand/contract).** O rollback
+> de binário (symlink `current`) **não desfaz** mudanças de schema. Uma migração que
+> dropa/renomeia coluna quebra a versão anterior caso seja necessário reverter o binário.
+> Regra: primeiro `expand` (adiciona coluna/tabela nova, código novo passa a usá-la),
+> só em uma release **posterior** o `contract` (remove o antigo). Ver checklist seção 13.
 
 ---
 
@@ -371,8 +387,15 @@ DATABASE_URL=postgresql://smartcore_app:SENHA@localhost:5434/smartcore_v2
 DATABASE_ADMIN_URL=postgresql://smartcore_admin:SENHA_ADMIN@localhost:5434/smartcore_v2
 
 # ── Redis ─────────────────────────────────────────────────────────────────────
-REDIS_URL=redis://:SENHA@localhost:6380/0
-REDIS_BUS_URL=redis://:SENHA@localhost:6381/0
+# ATENÇÃO: hoje o código lê APENAS `REDIS_URL` (cache, tokens, locks E bus usam a
+# mesma instância). O compose provisiona dois containers (redis :6380 cache/lru e
+# redis-bus :6381 noeviction), mas `REDIS_BUS_URL` ainda NÃO é consumida pelo código.
+# Ver pendência na seção 7.3. Até lá, aponte REDIS_URL para o redis-bus (:6381),
+# pois o bus exige durabilidade (noeviction) e não pode perder eventos por LRU.
+REDIS_URL=redis://:SENHA@localhost:6381/0
+# Previsto (quando o código separar bus de cache):
+# REDIS_BUS_URL=redis://:SENHA@localhost:6381/0   # bus durável (noeviction)
+# REDIS_URL=redis://:SENHA@localhost:6380/0       # cache (allkeys-lru)
 
 # ── Storage (Cloudflare R2) ───────────────────────────────────────────────────
 S3_ENDPOINT=https://<account_id>.r2.cloudflarestorage.com
@@ -417,15 +440,41 @@ Idem ao prod, com as seguintes diferenças:
 ```dotenv
 DATABASE_URL=postgresql://smartcore_app:SENHA@localhost:5434/smartcore_v2_dev
 DATABASE_ADMIN_URL=postgresql://smartcore_admin:SENHA@localhost:5434/smartcore_v2_dev
-REDIS_URL=redis://:SENHA@localhost:6380/1
-REDIS_BUS_URL=redis://:SENHA@localhost:6381/1
+# DEV usa o banco lógico 1 do MESMO Redis (isola eventos/cache de PROD que usa DB 0)
+REDIS_URL=redis://:SENHA@localhost:6381/1
 SMARTCORE_DATA_POSTGRES_ENDPOINT=unix:///run/smartcore-dev/data_postgres.sock
-# ... demais ENDPOINT com -dev
+# ... demais ENDPOINT com -dev (data_redis, data_storage, control_plane, messaging_gateway)
 RUNTIME_API_GRPC_PORT=8090
 RUNTIME_API_GRPC_LISTEN=0.0.0.0:8090
 RUST_LOG=debug
 OTEL_SERVICE_NAMESPACE=smartcore-dev
 ```
+
+> **Isolamento dev/prod no Redis:** como há uma única `REDIS_URL`, dev e prod
+> compartilham a mesma instância Redis mas em **bancos lógicos diferentes** (prod=DB 0,
+> dev=DB 1). Isso evita que eventos/cache de um ambiente vazem para o outro. Os
+> consumer groups do bus e as chaves de cache ficam naturalmente segregados por DB.
+
+### 7.3 Pendência — separar `redis-bus` no código
+
+O `docker/compose/data.yml` já provisiona **dois** Redis com políticas distintas:
+
+| Container | Porta | Política | Uso pretendido |
+|---|---|---|---|
+| `smartcore-v2-redis` | 6380 | `allkeys-lru` | Cache, tokens, locks (descartável) |
+| `smartcore-v2-redis-bus` | 6381 | `noeviction` | Bus de eventos + auditoria (durável) |
+
+**Estado atual do código:** todos os apps (`data_redis`, `data_postgres`,
+`messaging_gateway`, `worker`, `data_storage`) leem **apenas `REDIS_URL`** — cache e bus
+acabam na mesma instância. Se essa instância for a de `allkeys-lru`, **eventos do bus
+podem ser despejados sob pressão de memória** (perda de mensagens). Por isso, até a
+separação, `REDIS_URL` deve apontar para o `redis-bus` (`:6381`, noeviction).
+
+**Tarefa de correção (registrar como issue):** introduzir `REDIS_BUS_URL` e fazer
+`transport::bus` consumi-la, deixando `REDIS_URL` exclusiva para cache/tokens/locks.
+Afeta: `infrastructure_redis::connection`, `transport::bus`, e os `main.rs` dos apps.
+Não bloqueia a fundação DevOps, mas deve entrar **antes da F3** (quando o volume de
+eventos do bus cresce com a ingestão de webhooks).
 
 ---
 
@@ -477,79 +526,79 @@ rustup update stable   # executar periodicamente ou via cron
 
 ## 9. GitHub Actions Workflows
 
+> **Fonte da verdade:** os arquivos em `.github/workflows/` (`ci.yml`, `deploy-dev.yml`,
+> `deploy-prod.yml`, `pr-to-main.yml`) já existem versionados no repositório. Os blocos
+> abaixo documentam as decisões; ao editar, mantenha os dois em sincronia (ou trate o
+> arquivo como canônico e este doc como explicação).
+
 ### 9.1 CI — Lint e Testes (todo push e PR)
 
 **Arquivo:** `.github/workflows/ci.yml`
 
+Decisões-chave:
+- **Runner GitHub-hosted** (`ubuntu-latest`) — PRs de forks não tocam o servidor.
+- **`cargo fmt --check` + `clippy -D warnings` + `test --workspace`** com `SQLX_OFFLINE=true`.
+- **`cargo sqlx prepare --check`** — valida que o cache `.sqlx/` versionado está em
+  sincronia com as queries. Sem isto, uma query nova sem `prepare` passaria no CI mas
+  **quebraria o build de release no deploy** (que também usa `SQLX_OFFLINE`).
+- **Job `detect` + `flutter`** — o app Flutter ainda não existe (`clients/` é ⬜). Um job
+  `detect` faz checkout e expõe `outputs.flutter`; o job `flutter` só roda se
+  `clients/flutter_windows/pubspec.yaml` existir. (`hashFiles()` **não** funciona em `if`
+  de nível de job, pois é avaliado antes do checkout — daí o job de detecção.)
+
 ```yaml
-name: CI
-
-on:
-  push:
-    branches: ['**']
-  pull_request:
-    branches: [main, dev]
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   rust:
-    name: Rust — lint e testes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Instala toolchain Rust estável
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - name: Cache Cargo
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: server
-
-      - name: cargo fmt --check
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: rustfmt, clippy }
+      - uses: Swatinem/rust-cache@v2
+        with: { workspaces: server }
+      - run: cargo fmt --all -- --check
         working-directory: server
-        run: cargo fmt --all -- --check
-
-      - name: cargo clippy
+      - run: cargo clippy --all-targets --all-features -- -D warnings
         working-directory: server
-        env:
-          SQLX_OFFLINE: "true"
-        run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: cargo test
+        env: { SQLX_OFFLINE: "true" }
+      - run: cargo test --workspace --lib --bins
         working-directory: server
-        env:
-          SQLX_OFFLINE: "true"
-        run: cargo test --workspace --lib --bins 2>&1
+        env: { SQLX_OFFLINE: "true" }
+      - name: cargo sqlx prepare --check
+        working-directory: server
+        env: { SQLX_OFFLINE: "true" }
+        run: |
+          cargo install sqlx-cli --no-default-features --features postgres --locked || true
+          cargo sqlx prepare --workspace --check
+
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      flutter: ${{ steps.check.outputs.flutter }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          if [ -f clients/flutter_windows/pubspec.yaml ]; then
+            echo "flutter=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "flutter=false" >> "$GITHUB_OUTPUT"
+          fi
 
   flutter:
-    name: Flutter — análise e testes
     runs-on: ubuntu-latest
+    needs: detect
+    if: needs.detect.outputs.flutter == 'true'
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.x'
-          channel: stable
-
-      - name: flutter pub get
-        working-directory: clients
-        run: flutter pub get
-
-      - name: flutter analyze
-        working-directory: clients
-        run: flutter analyze
-
-      - name: flutter test
-        working-directory: clients
-        run: flutter test
+      - uses: subosito/flutter-action@v2
+        with: { flutter-version: '3.x', channel: stable, cache: true }
+      - run: flutter pub get
+        working-directory: clients/flutter_windows
+      - run: flutter analyze
+        working-directory: clients/flutter_windows
+      - run: flutter test
+        working-directory: clients/flutter_windows
 ```
 
 ### 9.2 Deploy Dev — push na branch `dev`
@@ -675,7 +724,7 @@ jobs:
           TAG: ${{ steps.version.outputs.TAG }}
         run: |
           BACKUP_FILE="/opt/smartcore/prod/db-backup-${TAG}-$(date +%Y%m%d%H%M).dump"
-          docker exec smartcore_v2_postgres pg_dump \
+          docker exec smartcore-v2-postgres pg_dump \
             -U smartcore_app \
             -F c \
             smartcore_v2 > "$BACKUP_FILE"
@@ -703,7 +752,7 @@ jobs:
           done
           chmod +x "$RELEASE_DIR"/*
           # Copia migrations para o diretório da release
-          cp -r server/migrations "$RELEASE_DIR/migrations"
+          cp -r server/crates/infrastructure_postgres/migrations "$RELEASE_DIR/migrations"
 
       - name: Atualiza symlink current
         env:
@@ -1009,7 +1058,7 @@ ls -lt /opt/smartcore/prod/db-backup-*.dump
 
 # Restaura backup (CUIDADO: destrói dados atuais)
 BACKUP="/opt/smartcore/prod/db-backup-v1.1.0-20260601.dump"
-docker exec -i smartcore_v2_postgres pg_restore \
+docker exec -i smartcore-v2-postgres pg_restore \
   -U smartcore_app \
   -d smartcore_v2 \
   --clean \
@@ -1045,23 +1094,28 @@ docker exec -i smartcore_v2_postgres pg_restore \
 - [ ] `systemctl daemon-reload`
 - [ ] Criar `.env` files em `/opt/smartcore/{dev,prod}/` com os valores reais
 - [ ] Habilitar targets: `systemctl enable smartcore-prod.target smartcore-dev.target`
-- [ ] Testar subida manual: `systemctl start smartcore-dev-data_redis` (sem binários ainda)
+- [ ] `systemctl daemon-reload` (sem `start` ainda — os binários não existem; o
+      `ExecStart` aponta para `releases/current` (prod) / `bin/` (dev) que só são
+      populados no **primeiro deploy**. Iniciar antes disso falha, é esperado.)
 
 ### Fase devops-3 — GitHub Actions
 - [ ] Criar environments `dev` e `prod` no GitHub (Settings → Environments)
 - [ ] Configurar `prod` com `Required reviewers`
 - [ ] Instalar self-hosted runner no servidor (seção 8)
-- [ ] Criar arquivos de workflow em `.github/workflows/`
+- [ ] Workflows já versionados em `.github/workflows/` — revisar `SEU-ORG` nos comentários
+- [ ] Ajustar `Description=`/`Documentation=` dos `.service` (placeholder `seu-org`)
 - [ ] Fazer push de teste na `dev` e verificar que CI passa
 - [ ] Verificar que runner self-hosted executa o build
 
 ### Fase devops-4 — Primeiro deploy completo
 - [ ] Primeiro push em `dev` com algum código compilável
-- [ ] Verificar build no runner self-hosted (pode demorar na primeira vez — compila tudo)
+- [ ] Verificar build no runner self-hosted (primeira vez compila tudo — 20-40 min)
+- [ ] Após o deploy popular os binários, **só então** os serviços sobem
 - [ ] Verificar que `smoke test` passa
-- [ ] Testar rollback manualmente
+- [ ] Testar rollback manualmente (simular falha → confirma retorno à versão anterior)
 - [ ] Criar tag `v0.1.0` → verificar deploy prod com aprovação manual
 - [ ] Verificar GitHub Release criada automaticamente
+- [ ] Confirmar PR automático `dev → main` aberto pela `pr-to-main.yml`
 
 ### Fase devops-5 — Observabilidade
 - [ ] Subir stack LGTM: `docker compose -f docker/compose/observability.yml up -d`
@@ -1102,4 +1156,96 @@ Configurar no Grafana:
 
 ---
 
-*Documento criado em 2026-06-07. Executar o checklist da seção 13 antes de iniciar F6 (auth/runtime_api).*
+## 15. Riscos Operacionais e Capacidade do Servidor
+
+Um único KVM2 (2 vCPU / 8 GB) hospeda **tudo**: 2 ambientes × 7 serviços Rust + Postgres
++ 2 Redis + MinIO + stack LGTM (5 containers) + self-hosted runner + builds de release.
+Os riscos abaixo precisam de mitigação explícita.
+
+### 15.1 Disco — o risco mais provável
+
+Fontes de crescimento que podem **encher o disco e derrubar tudo**:
+- `server/target/` no runner: build de release Rust facilmente passa de **5-15 GB**.
+- Releases versionadas em `/opt/smartcore/prod/releases/` (7 binários cada).
+- Backups `pg_dump` por release.
+- Imagens e volumes Docker (Postgres data, MinIO, Loki/Tempo/Prometheus).
+- Logs do journald e do Caddy.
+
+**Mitigações (todas já previstas, reforçar):**
+```bash
+# /etc/cron.d/smartcore — limpeza de disco
+# Limpa o target/ do runner semanalmente (rust-cache do CI já guarda o essencial)
+0 5 * * 0 gh-runner find /home/gh-runner/_work -name target -type d -exec cargo clean --manifest-path {}/../Cargo.toml \; 2>/dev/null
+# Prune de imagens Docker órfãs
+0 5 * * 1 root docker image prune -af --filter 'until=168h'
+```
+- Releases: workflow já mantém só as **últimas 5**.
+- Backups DB: workflow já mantém só os **últimos 5**.
+- **Alerta de disco > 75%** no Grafana (mais agressivo que os 80% genéricos).
+- Considerar `target-dir` compartilhado entre dev/prod no runner para não duplicar.
+
+### 15.2 Runner único serializa os deploys
+
+Há **um** self-hosted runner. Os workflows `deploy-dev` e `deploy-prod` usam `concurrency`
+com `cancel-in-progress: false`, mas como compartilham o mesmo runner, um deploy de prod
+**espera** um build de dev em andamento (e vice-versa). Para o estágio atual (um
+desenvolvedor) isso é aceitável. Se virar gargalo: registrar um segundo runner ou separar
+o build (hosted) da entrega (self-hosted via artifact).
+
+### 15.3 RAM sob pressão durante builds
+
+`cargo build --release` consome bastante RAM e pode competir com Postgres/Redis/LGTM em
+produção. Mitigações:
+- Limitar paralelismo do build no runner: `CARGO_BUILD_JOBS=2` no `.bashrc` do `gh-runner`.
+- Os limites de memória do compose (Postgres 512M, Redis 200M×2, MinIO 256M) já protegem
+  os dados; o LGTM stack também deve ganhar `mem_limit`.
+- Se a RAM for insuficiente, criar swap de 2-4 GB (`fallocate`/`swapon`).
+
+### 15.4 Health check raso (apenas `systemctl is-active`)
+
+O smoke test atual só verifica se o processo está `active`, não se o gRPC responde de fato.
+Quando o `runtime_api` existir (F6), **promover o smoke test** para uma chamada real:
+```bash
+# Requer grpcurl instalado no servidor
+grpcurl -plaintext localhost:8080 grpc.health.v1.Health/Check
+```
+Implementar o serviço de health gRPC (`tonic-health`) no `runtime_api` é pré-requisito.
+Até lá, o `is-active` é a melhor verificação disponível.
+
+### 15.5 Backup e segurança dos `.env`
+
+Os `.env` de prod/dev contêm **todos os segredos** (DB, JWT, R2, SMTP) e **não** estão no
+Git. Riscos: perda do servidor = perda dos segredos; ninguém mais tem cópia.
+- Guardar cópia cifrada dos `.env` num cofre (1Password / Bitwarden / `age`-encrypted no Git).
+- Permissão `chmod 600` e dono `smartcore` nos `.env`.
+- Rotação periódica de `JWT_SECRET` e `ENCRYPTION_KEY` (atenção: girar `ENCRYPTION_KEY`
+  exige redecifrar credenciais já gravadas — planejar antes).
+
+### 15.6 Migrations e rollback (resumo do risco)
+
+Rollback de binário **não** desfaz schema. Toda migração deve seguir **expand/contract**
+(ver seção 6.4). Antes de tag de release com migração destrutiva, confirmar que a versão
+anterior do binário ainda funciona com o schema novo — senão o rollback automático falha.
+
+---
+
+## 16. Resumo dos Achados de Auditoria (2026-06-07)
+
+Correções aplicadas nos arquivos reais e nos planos durante a auditoria:
+
+| # | Achado | Severidade | Correção |
+|---|---|---|---|
+| 1 | Container chamado `smartcore_v2_postgres` (underscore) nos scripts; o real é `smartcore-v2-postgres` (hífen) | 🔴 Crítico | Corrigido em workflow, `server-setup.sh`, planos 10 e 03 |
+| 2 | Migrations em `server/migrations` (inexistente); reais em `crates/infrastructure_postgres/migrations` | 🔴 Crítico | Corrigido `cp` no workflow + comandos `--source` |
+| 3 | CI sem validação do cache `.sqlx/` → query nova sem `prepare` quebraria o deploy | 🟠 Alto | Adicionado `cargo sqlx prepare --check` |
+| 4 | Job Flutter usava `hashFiles()` em `if` de job (sempre vazio → nunca roda) | 🟠 Alto | Job `detect` com checkout + output |
+| 5 | Plano assumia `REDIS_BUS_URL`/2 instâncias; código usa só `REDIS_URL` | 🟠 Alto | Alinhado; pendência registrada (§7.3) |
+| 6 | Rollback de binário não desfaz migração de schema | 🟡 Médio | Documentado padrão expand/contract (§6.4) |
+| 7 | Disco de 8 GB sob risco (target/, releases, backups, Docker) | 🟡 Médio | Seção de capacidade + crons de limpeza (§15) |
+| 8 | Smoke test raso; health gRPC real só com runtime_api | 🟢 Baixo | Documentado plano de promoção (§15.4) |
+| 9 | `.env` sem estratégia de backup/rotação | 🟡 Médio | Documentado (§15.5) |
+
+---
+
+*Documento criado em 2026-06-07 e auditado no mesmo dia. Executar o checklist da seção 13
+antes de iniciar F6 (auth/runtime_api).*

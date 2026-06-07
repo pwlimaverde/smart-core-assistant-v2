@@ -43,11 +43,40 @@ jobs:
           SQLX_OFFLINE: "true"
         run: cargo test --workspace --lib --bins 2>&1
 
+      # Valida que o cache .sqlx/ versionado está em sincronia com as queries do código.
+      # Sem isto, uma query nova/alterada sem `cargo sqlx prepare` quebraria o build de
+      # release no deploy (que usa SQLX_OFFLINE). O --check falha se houver drift.
+      - name: cargo sqlx prepare --check
+        working-directory: server
+        run: |
+          cargo install sqlx-cli --no-default-features --features postgres --locked || true
+          cargo sqlx prepare --workspace --check
+        env:
+          SQLX_OFFLINE: "true"
+
+  # Detecta se o app Flutter já existe (clients/ ainda é ⬜ pendente no projeto).
+  # hashFiles() NÃO funciona em if de nível de job (avaliado antes do checkout),
+  # por isso a detecção roda num job próprio com checkout e expõe um output.
+  detect:
+    name: Detecta stacks presentes
+    runs-on: ubuntu-latest
+    outputs:
+      flutter: ${{ steps.check.outputs.flutter }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: check
+        run: |
+          if [ -f clients/flutter_windows/pubspec.yaml ]; then
+            echo "flutter=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "flutter=false" >> "$GITHUB_OUTPUT"
+          fi
+
   flutter:
     name: Flutter — análise e testes
     runs-on: ubuntu-latest
-    # Só executa quando o diretório clients existir
-    if: hashFiles('clients/pubspec.yaml') != '' || hashFiles('clients/flutter_windows/pubspec.yaml') != ''
+    needs: detect
+    if: needs.detect.outputs.flutter == 'true'
     steps:
       - uses: actions/checkout@v4
 
