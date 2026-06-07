@@ -1,6 +1,6 @@
 [Unit]
 Description=SmartCore PROD — runtime_api (gRPC gateway)
-Documentation=https://github.com/seu-org/smart-core-assistant-v2
+Documentation=https://github.com/pwlimaverde/smart-core-assistant-v2
 After=smartcore-prod-data_postgres.service smartcore-prod-data_redis.service \
       smartcore-prod-data_storage.service smartcore-prod-control_plane.service \
       smartcore-prod-messaging_gateway.service smartcore-prod-worker.service

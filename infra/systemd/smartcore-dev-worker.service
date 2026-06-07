@@ -1,6 +1,6 @@
 [Unit]
 Description=SmartCore DEV — worker
-Documentation=https://github.com/seu-org/smart-core-assistant-v2
+Documentation=https://github.com/pwlimaverde/smart-core-assistant-v2
 After=smartcore-dev-data_postgres.service smartcore-dev-data_redis.service smartcore-dev-data_storage.service
 Requires=smartcore-dev-data_postgres.service smartcore-dev-data_redis.service
 

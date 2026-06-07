@@ -1,6 +1,6 @@
 [Unit]
 Description=SmartCore DEV — data_storage
-Documentation=https://github.com/seu-org/smart-core-assistant-v2
+Documentation=https://github.com/pwlimaverde/smart-core-assistant-v2
 After=network.target docker.service smartcore-dev-data_redis.service
 Requires=smartcore-dev-data_redis.service
 

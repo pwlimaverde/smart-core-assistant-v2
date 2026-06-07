@@ -1,6 +1,6 @@
 [Unit]
 Description=SmartCore DEV — runtime_api (gRPC gateway)
-Documentation=https://github.com/seu-org/smart-core-assistant-v2
+Documentation=https://github.com/pwlimaverde/smart-core-assistant-v2
 After=smartcore-dev-data_postgres.service smartcore-dev-data_redis.service \
       smartcore-dev-data_storage.service smartcore-dev-control_plane.service \
       smartcore-dev-messaging_gateway.service smartcore-dev-worker.service
