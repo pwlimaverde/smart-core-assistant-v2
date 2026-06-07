@@ -23,6 +23,9 @@ jobs:
         id: version
         run: echo "TAG=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
 
+      - name: Adiciona Rust ao PATH
+        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
       - name: Garante toolchain Rust atualizado
         run: rustup update stable
 
