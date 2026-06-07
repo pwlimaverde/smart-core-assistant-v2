@@ -17,6 +17,23 @@ pub async fn criar_pool(max_connections: u32) -> Result<PgPool, DbError> {
     Ok(pool)
 }
 
+/// Cria um pool com privilégios administrativos a partir da `DATABASE_ADMIN_URL`.
+///
+/// Uso restrito a operações que exigem DDL/elevação (ex.: rodar migrations) e a
+/// lookups pré-tenant que precisam contornar o RLS. O runtime de negócio usa
+/// sempre [`criar_pool`] (role da aplicação + RLS).
+#[tracing::instrument(fields(max_connections), err)]
+pub async fn criar_admin_pool(max_connections: u32) -> Result<PgPool, DbError> {
+    let url = std::env::var("DATABASE_ADMIN_URL")
+        .map_err(|_| DbError::ConfigError("DATABASE_ADMIN_URL não configurada".into()))?;
+    let pool = PgPoolOptions::new()
+        .max_connections(max_connections)
+        .connect(&url)
+        .await?;
+    tracing::info!("pool administrativo PostgreSQL criado");
+    Ok(pool)
+}
+
 /// Executa um bloco de código sob transação configurada com o tenant_id para RLS.
 ///
 /// CORREÇÃO CRÍTICA vs. documentação:
