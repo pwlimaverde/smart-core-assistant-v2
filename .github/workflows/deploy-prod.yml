@@ -31,7 +31,7 @@ jobs:
           TAG: ${{ steps.version.outputs.TAG }}
         run: |
           BACKUP_FILE="/opt/smartcore/prod/db-backup-${TAG}-$(date +%Y%m%d%H%M).dump"
-          docker exec smartcore_v2_postgres pg_dump \
+          docker exec smartcore-v2-postgres pg_dump \
             -U smartcore_app \
             -F c \
             smartcore_v2 > "$BACKUP_FILE"
@@ -61,8 +61,10 @@ jobs:
               echo "✓ $svc → $TAG"
             fi
           done
-          # Inclui migrations para uso manual em emergência
-          cp -r server/migrations "$RELEASE_DIR/" 2>/dev/null || true
+          # Inclui migrations para uso manual em emergência (sqlx-cli).
+          # As migrations já vão COMPILADAS no binário (sqlx::migrate! em build time);
+          # esta cópia é apenas para rodar sqlx-cli manualmente se necessário.
+          cp -r server/crates/infrastructure_postgres/migrations "$RELEASE_DIR/migrations" 2>/dev/null || true
 
       - name: Atualiza symlink current
         env:

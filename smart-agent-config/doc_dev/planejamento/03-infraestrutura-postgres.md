@@ -109,7 +109,7 @@ O aplicativo `apps/data_postgres` é o processo servidor que expõe as capacidad
 # docker/compose/data.yml — serviço postgres
 postgres:
   image: pgvector/pgvector:pg16
-  container_name: smartcore_v2_postgres
+  container_name: smartcore-v2-postgres
   ports:
     - "5434:5432"
   volumes:
@@ -165,14 +165,20 @@ acessado diretamente pela CLI.
 
 ## 8. Comandos de referência
 
+As migrations vivem em `crates/infrastructure_postgres/migrations/` (use `--source`).
+
 ```bash
-# Rodar migrations (desenvolvimento — túnel SSH ativo)
-cd server && DATABASE_URL="..." sqlx migrate run
+# Rodar migrations (desenvolvimento — túnel SSH ativo).
+# Em produção o data_postgres roda as migrations embutidas no boot.
+cd server && DATABASE_URL="..." \
+  sqlx migrate run --source crates/infrastructure_postgres/migrations
 
 # Verificar status das migrations
-cd server && DATABASE_URL="..." sqlx migrate info
+cd server && DATABASE_URL="..." \
+  sqlx migrate info --source crates/infrastructure_postgres/migrations
 
-# Gerar cache SQLx offline (após adicionar query! / query_as!)
+# Gerar cache SQLx offline (após adicionar/alterar query! / query_as!)
+# O .sqlx/ é versionado e o CI valida com `cargo sqlx prepare --check`.
 cd server && cargo sqlx prepare --workspace
 
 # Testes de integração (requer PostgreSQL real via túnel)
