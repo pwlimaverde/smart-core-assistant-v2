@@ -1,0 +1,22 @@
+[Unit]
+Description=SmartCore DEV — todos os serviços
+Documentation=https://github.com/seu-org/smart-core-assistant-v2
+Requires=\
+    smartcore-dev-data_redis.service \
+    smartcore-dev-data_postgres.service \
+    smartcore-dev-data_storage.service \
+    smartcore-dev-control_plane.service \
+    smartcore-dev-messaging_gateway.service \
+    smartcore-dev-worker.service \
+    smartcore-dev-runtime_api.service
+After=\
+    smartcore-dev-data_redis.service \
+    smartcore-dev-data_postgres.service \
+    smartcore-dev-data_storage.service \
+    smartcore-dev-control_plane.service \
+    smartcore-dev-messaging_gateway.service \
+    smartcore-dev-worker.service \
+    smartcore-dev-runtime_api.service
+
+[Install]
+WantedBy=multi-user.target

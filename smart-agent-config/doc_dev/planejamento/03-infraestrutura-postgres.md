@@ -1,13 +1,9 @@
 # 03 — Infraestrutura PostgreSQL (`infrastructure_postgres`)
 
-> **Histórico.** Plano canonizado pela skill `plan-restructuring` para o dotcontext.
-> A fonte da verdade é o plano canônico em
-> `.context/plans/archive/infrastructure-postgres/` (`plano_completo` + `info_aux`).
-> Mantido aqui como registro do estado da fundação de persistência.
->
-> **Status:** ✅ **Concluído** (fundação implementada e validada).
+> **Status:** ✅ **Concluído** — fundação implementada, testada e mergeada em `dev`.
 > **Idioma:** pt-br na documentação/comentários; identificadores em inglês
 > (verbos pt-br: `criar_*`, `buscar_*`, `inicializar_*`).
+> **Última revisão:** 2026-06-07
 
 ## 1. Objetivo
 
@@ -96,15 +92,96 @@ O aplicativo `apps/data_postgres` é o processo servidor que expõe as capacidad
 
 ## 6. Configuração e ambiente
 
-- **Variáveis:** `DATABASE_URL` (pool tenant-scoped) e `DATABASE_ADMIN_URL`
-  (pool admin BYPASSRLS — só login/registro/convites). Em dev, via túnel SSH
-  (`infra/tunnel.ps1` → `localhost:5434`).
-- **Docker:** serviço `postgres` (`pgvector/pgvector:pg16`) em
-  `docker/compose/data.yml` + `docker/init-scripts/01-extensions.sql`.
+### 6.1 Variáveis de ambiente
+
+| Variável | Pool | Propósito |
+|---|---|---|
+| `DATABASE_URL` | tenant-scoped (RLS ativo) | Toda query de domínio com `run_in_tenant_transaction` |
+| `DATABASE_ADMIN_URL` | admin (BYPASSRLS) | Migrations, login, registro, convites, superuser |
+
+**Desenvolvimento local:** acessar via túnel SSH (`infra/tunnel.ps1`) → `localhost:5434`.
+**Produção:** PostgreSQL Docker na VM Hostinger, porta `5434`, banco `smartcore_v2`.
+**Dev no servidor:** mesmo PostgreSQL, banco `smartcore_v2_dev`, porta `5434`.
+
+### 6.2 Docker Compose
+
+```yaml
+# docker/compose/data.yml — serviço postgres
+postgres:
+  image: pgvector/pgvector:pg16
+  container_name: smartcore_v2_postgres
+  ports:
+    - "5434:5432"
+  volumes:
+    - smartcore_v2_postgres_data:/var/lib/postgresql/data
+    - ./init-scripts:/docker-entrypoint-initdb.d
+  environment:
+    POSTGRES_DB: smartcore_v2
+    POSTGRES_USER: smartcore_app
+    POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+```
+
+### 6.3 Usuários e privilégios no PostgreSQL
+
+| Usuário | Papel | Acesso |
+|---|---|---|
+| `smartcore_app` | Role da aplicação | SELECT/INSERT/UPDATE/DELETE em tabelas de domínio; BYPASSRLS bloqueado |
+| `smartcore_admin` | Role administrativo | BYPASSRLS; CREATE/DROP para migrations |
+
+Criar manualmente após o primeiro `docker compose up`:
+```sql
+CREATE USER smartcore_admin WITH PASSWORD 'SENHA_ADMIN' BYPASSRLS;
+GRANT ALL PRIVILEGES ON DATABASE smartcore_v2 TO smartcore_admin;
+GRANT ALL PRIVILEGES ON DATABASE smartcore_v2_dev TO smartcore_admin;
+```
+
+### 6.4 Bootstrap do superusuário
+
+O superusuário é criado via CLI (não via migration):
+```powershell
+# Windows (local)
+.\infra\create-superuser.ps1
+
+# Ou diretamente:
+cargo run -p control_plane -- create-superuser --username admin --email admin@local --password <senha>
+```
+A CLI é um thin client RPC que envia ao `data_postgres` via TCP/UDS. O banco nunca é
+acessado diretamente pela CLI.
 
 ## 7. Relação com as fases
-Cobre integralmente a persistência da **Fase 1** e de boa parte das F2-F5. No entanto, pós-refator, ela é consumida **exclusivamente** através de chamadas RPC IPC para o serviço `data_postgres` tipadas via `contracts`. O `runtime_api`, `worker` e `control_plane` conversam com o `data_postgres` em vez de carregar esta crate diretamente.
+
+| Fase | Dependência desta crate |
+|---|---|
+| F0/F1 ✅ | Fundação completa: conexão, RLS, migrations, auth, CRUD de todos os domínios |
+| F-devops ⬜ | Migrations rodadas pelo `data_postgres` no boot de cada ambiente (dev/prod) |
+| F6 ⬜ | `AuthUserRepository` (login, registro, tokens); `criar_admin_pool` para JWT bootstrap |
+| F2-admin ⬜ | `TenantRepository`, `PlanRepository`, `SubscriptionRepository`, `PaymentRecordRepository` |
+| F3 ⬜ | `ContaRepository`, `MensagemRepository` (ingestão de webhooks) |
+| F4 ⬜ | `AtendimentoRepository`, `KanbanRepository`, `AtendenteRepository` |
+| F5 ⬜ | `DocumentoRepository` (pgvector 1536, HNSW), `QueryComposeRepository` |
+
+> O `runtime_api`, `worker`, `control_plane` e `messaging_gateway` **nunca** importam
+> esta crate diretamente. Toda comunicação é via RPC ao `data_postgres`.
+
+## 8. Comandos de referência
+
+```bash
+# Rodar migrations (desenvolvimento — túnel SSH ativo)
+cd server && DATABASE_URL="..." sqlx migrate run
+
+# Verificar status das migrations
+cd server && DATABASE_URL="..." sqlx migrate info
+
+# Gerar cache SQLx offline (após adicionar query! / query_as!)
+cd server && cargo sqlx prepare --workspace
+
+# Testes de integração (requer PostgreSQL real via túnel)
+cd server && cargo test -p infrastructure_postgres
+
+# Reset do schema remoto (CUIDADO — destrói dados)
+cd server && DATABASE_URL="..." sqlx database drop && DATABASE_URL="..." sqlx database create
+```
 
 ---
 
-*Consolidação da fundação de persistência. A verdade técnica reside no código físico e nos schemas unificados de contratos.*
+*Fundação de persistência concluída. Retroalimentar apenas se surgir nova migration ou mudança de arquitetura na camada de dados. Última revisão: 2026-06-07.*

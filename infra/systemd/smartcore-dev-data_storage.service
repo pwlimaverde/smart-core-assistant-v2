@@ -1,0 +1,25 @@
+[Unit]
+Description=SmartCore DEV — data_storage
+Documentation=https://github.com/seu-org/smart-core-assistant-v2
+After=network.target docker.service smartcore-dev-data_redis.service
+Requires=smartcore-dev-data_redis.service
+
+[Service]
+Type=simple
+User=smartcore
+Group=smartcore
+WorkingDirectory=/opt/smartcore/dev
+EnvironmentFile=/opt/smartcore/dev/.env
+ExecStart=/opt/smartcore/dev/bin/data_storage
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5s
+TimeoutStopSec=30s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=smartcore-dev-data_storage
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=smartcore-dev.target

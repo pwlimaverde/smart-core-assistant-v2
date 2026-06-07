@@ -1,0 +1,188 @@
+name: Deploy → PROD
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  build-and-deploy:
+    name: Build Rust + Deploy PROD
+    runs-on: [self-hosted, hostinger]
+    environment: prod
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extrai versão da tag
+        id: version
+        run: echo "TAG=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - name: Garante toolchain Rust atualizado
+        run: rustup update stable
+
+      - name: Backup banco de dados PROD (pg_dump)
+        env:
+          TAG: ${{ steps.version.outputs.TAG }}
+        run: |
+          BACKUP_FILE="/opt/smartcore/prod/db-backup-${TAG}-$(date +%Y%m%d%H%M).dump"
+          docker exec smartcore_v2_postgres pg_dump \
+            -U smartcore_app \
+            -F c \
+            smartcore_v2 > "$BACKUP_FILE"
+          echo "Backup gerado: $BACKUP_FILE"
+          # Mantém apenas os últimos 5 backups
+          ls -t /opt/smartcore/prod/db-backup-*.dump 2>/dev/null | tail -n +6 | xargs rm -f || true
+
+      - name: Cargo build release (workspace)
+        working-directory: server
+        env:
+          SQLX_OFFLINE: "true"
+          RUSTFLAGS: "-C target-cpu=native"
+        run: cargo build --release --workspace
+
+      - name: Cria diretório da release
+        env:
+          TAG: ${{ steps.version.outputs.TAG }}
+        run: |
+          RELEASE_DIR="/opt/smartcore/prod/releases/$TAG"
+          mkdir -p "$RELEASE_DIR"
+          SRC="server/target/release"
+          for svc in data_postgres data_redis data_storage \
+                     runtime_api control_plane messaging_gateway worker; do
+            if [ -f "$SRC/$svc" ]; then
+              cp "$SRC/$svc" "$RELEASE_DIR/$svc"
+              chmod +x "$RELEASE_DIR/$svc"
+              echo "✓ $svc → $TAG"
+            fi
+          done
+          # Inclui migrations para uso manual em emergência
+          cp -r server/migrations "$RELEASE_DIR/" 2>/dev/null || true
+
+      - name: Atualiza symlink current
+        env:
+          TAG: ${{ steps.version.outputs.TAG }}
+        run: |
+          RELEASES_DIR="/opt/smartcore/prod/releases"
+          # Registra a release anterior antes de mudar o symlink
+          PREV=$(readlink "$RELEASES_DIR/current" 2>/dev/null | xargs basename 2>/dev/null || true)
+          echo "PREV_RELEASE=$PREV" >> "$GITHUB_ENV"
+          ln -sfn "$RELEASES_DIR/$TAG" "$RELEASES_DIR/current"
+          echo "Symlink: current → $TAG (anterior: $PREV)"
+
+      - name: Reinicia serviços PROD (rolling restart)
+        run: |
+          # Para o runtime_api primeiro — para de aceitar novas requisições
+          sudo systemctl stop smartcore-prod-runtime_api || true
+          sleep 2
+          # Reinicia serviços internos
+          sudo systemctl restart smartcore-prod-data_redis
+          sleep 2
+          sudo systemctl restart smartcore-prod-data_postgres
+          sleep 4
+          sudo systemctl restart \
+            smartcore-prod-data_storage \
+            smartcore-prod-control_plane \
+            smartcore-prod-messaging_gateway \
+            smartcore-prod-worker
+          sleep 4
+          # Sobe a nova versão do runtime_api
+          sudo systemctl start smartcore-prod-runtime_api
+
+      - name: Smoke test PROD
+        run: |
+          sleep 10
+          FAILED=0
+          for svc in data_redis data_postgres data_storage runtime_api; do
+            STATUS=$(sudo systemctl is-active smartcore-prod-$svc 2>/dev/null || echo "unknown")
+            if [ "$STATUS" != "active" ]; then
+              echo "ERRO: smartcore-prod-$svc → $STATUS"
+              sudo journalctl -u smartcore-prod-$svc --no-pager -n 50
+              FAILED=1
+            else
+              echo "✓ smartcore-prod-$svc ativo"
+            fi
+          done
+          exit $FAILED
+
+      - name: Rollback em falha
+        if: failure()
+        env:
+          TAG: ${{ steps.version.outputs.TAG }}
+        run: |
+          echo "Falha no deploy $TAG — executando rollback..."
+          RELEASES_DIR="/opt/smartcore/prod/releases"
+          PREV="${{ env.PREV_RELEASE }}"
+          if [ -n "$PREV" ] && [ -d "$RELEASES_DIR/$PREV" ]; then
+            ln -sfn "$RELEASES_DIR/$PREV" "$RELEASES_DIR/current"
+            echo "Revertendo para $PREV..."
+            sudo systemctl restart \
+              smartcore-prod-data_redis \
+              smartcore-prod-data_postgres \
+              smartcore-prod-data_storage \
+              smartcore-prod-control_plane \
+              smartcore-prod-messaging_gateway \
+              smartcore-prod-worker \
+              smartcore-prod-runtime_api
+            echo "Rollback para $PREV concluído."
+          else
+            echo "Sem release anterior disponível — rollback manual necessário."
+            echo "Releases disponíveis: $(ls $RELEASES_DIR)"
+          fi
+          # Remove release com falha para não poluir
+          rm -rf "$RELEASES_DIR/$TAG" || true
+
+      - name: Remove releases antigas (mantém últimas 5)
+        if: success()
+        run: |
+          RELEASES_DIR="/opt/smartcore/prod/releases"
+          ls -dt "$RELEASES_DIR"/v* 2>/dev/null | tail -n +6 | xargs rm -rf || true
+
+      - name: Cria GitHub Release
+        if: success()
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "${{ steps.version.outputs.TAG }}"
+          generate_release_notes: true
+          draft: false
+
+  flutter-windows:
+    name: Build Flutter Windows
+    runs-on: windows-latest
+    needs: build-and-deploy
+    if: needs.build-and-deploy.result == 'success'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: stable
+          cache: true
+
+      - name: flutter pub get
+        working-directory: clients/flutter_windows
+        run: flutter pub get
+
+      - name: flutter build windows --release
+        working-directory: clients/flutter_windows
+        run: flutter build windows --release
+
+      - name: Empacota artefato
+        run: |
+          Compress-Archive `
+            -Path "clients/flutter_windows/build/windows/x64/runner/Release/*" `
+            -DestinationPath "SmartCore-Windows-${{ github.ref_name }}.zip"
+        shell: pwsh
+
+      - name: Upload para GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: SmartCore-Windows-*.zip

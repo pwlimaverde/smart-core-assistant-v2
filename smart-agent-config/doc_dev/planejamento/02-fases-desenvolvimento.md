@@ -40,16 +40,21 @@
 - **Infraestrutura de dados + deploy** — `docker/compose/data.yml` (PG+pgvector, Redis, MinIO) e scripts `infra/` de automação e túnel SSH.
 - **Bootstrap de superusuário** — CLI `create-superuser` e `delete-superuser` no `control_plane` (thin RPC client → `data_postgres`), com auditoria e trail.
 
-### O que está em andamento (🚧)
-- **Módulo de autenticação** (`user-auth-module`) — Casos de uso de autenticação e RBAC em `application`, expostos via RPC no `runtime_api`. **Pré-requisito para o painel admin.**
-- **Painel Admin do Superusuário** — Equivalente ao Django admin da v1: gestão de tenants, planos, assinaturas e pagamentos via Flutter + `runtime_api`. Veja [11-painel-admin-superusuario.md](./11-painel-admin-superusuario.md).
-- **Orquestração e Gateway de Mensagens** — O bootstrap estrutural de `messaging_gateway`, `worker` e `control_plane` já foi criado na reestruturação e aguarda a lógica detalhada de suas respectivas fases.
+### O que está em andamento / próximo (🚧)
+- **CI/CD + DevOps** ← **próxima fase a executar (F-devops)**. Servidor Hostinger,
+  dois ambientes (dev/prod), self-hosted runner, systemd units, Caddy, Grafana.
+  Ver [10-plano-cicd-devops.md](./10-plano-cicd-devops.md).
+- **Módulo de autenticação** (`user-auth-module`) — Após DevOps: AuthService + JWT no
+  `runtime_api`. Pré-requisito para o painel admin.
+- **Painel Admin do Superusuário** — Equivalente ao Django admin da v1. Após auth.
+  Ver [11-painel-admin-superusuario.md](./11-painel-admin-superusuario.md).
+- **Orquestração e Gateway de Mensagens** — Bootstrap estrutural pronto; aguarda F3/F4.
 
 ### O que está pendente (⬜)
-- **`ia_engine`** (serviço Python separado via gRPC/FlatBuffers).
-- **realtime** (fan-out do stream gRPC via Redis pub/sub no `runtime_api`).
-- **Clients Flutter** e o motor local **`local_engine`** (FFI).
-- **CI/CD + DevOps** completo (plano 10).
+- **`ia_engine`** (serviço Python separado via gRPC/FlatBuffers) — F5.
+- **realtime** (gRPC Server Streaming via Redis pub/sub no `runtime_api`) — F6.2.
+- **Clients Flutter** (`flutter_windows`, `flutter_web`) e motor local `local_engine` (FFI).
+- **Observabilidade completa** (Grafana LGTM stack em produção) — parte do F-devops.
 
 ### Inventário de crates/apps × status
 
@@ -67,7 +72,7 @@
 | `local_engine` | crate (FFI) | ⬜ | F8; motor local embarcado |
 | `data_postgres` | app | ✅ | servidor RPC Postgres síncrono/assíncrono + outbox |
 | `data_redis` | app | ✅ | servidor RPC Redis síncrono (tokens, cache, locks) |
-| `data_storage` | app | 🚧 | servidor RPC (PutFile/GetFile/PresignFile) + consumer de purga **funcionando sobre o stub filesystem**; backend R2/MinIO pendente |
+| `data_storage` | app | ✅ | servidor RPC (PutFile/GetFile/PresignFile/DeleteFile) + consumer de purga; backend Cloudflare R2 real |
 | `control_plane` | app | 🚧 | bootstrapado; aguarda endpoints admin (F2) |
 | `messaging_gateway` | app | 🚧 | bootstrapado; aguarda lógica webhook WhatsApp (F3) |
 | `worker` | app | 🚧 | bootstrapado; aguarda orquestrador do domínio (F4) |
@@ -126,6 +131,19 @@ F0 Fundação ──► F1 Banco+RLS+Storage ──► Bootstrap CLI superuser
     local)             │
                        │
                        ▼
+               F-devops ← PRÓXIMA FASE A EXECUTAR
+               CI/CD + Servidor + 2 Ambientes
+               (ver 10-plano-cicd-devops.md)
+               - Servidor Hostinger provisionado
+               - Systemd units (dev + prod)
+               - Caddy + TLS automático
+               - GitHub Actions (CI + deploy-dev + deploy-prod)
+               - Self-hosted runner no servidor
+               - Grafana LGTM stack
+               - Checklist seção 13 do plano 10
+                       │
+                       │ (servidor pronto — primeiro deploy funcional)
+                       ▼
                F6.1 runtime_api + AuthService (Login/Logout/Refresh)
                        │
                        ▼
@@ -142,35 +160,35 @@ F0 Fundação ──► F1 Banco+RLS+Storage ──► Bootstrap CLI superuser
                        ├──► F3 Messaging Gateway + Evolution
                        │            │
                        │            ▼
-                       └──► F4 Worker + Domínio ──► F5 ia_engine (gRPC)
+                       └──► F4 Worker + Domínio ──► F5 ia_engine (gRPC Python)
                                   │                     │
                                   ▼                     │
                           F6 Runtime API completo ◄─────┘
-                          (Auth regular, Register, Invite)
-                          └─► UI: login/cadastro tenant
-                          └─► F4.6 Kanban/chat Flutter
+                          (Auth tenant, Register, Invite, Realtime)
+                          └─► F6.5 UI: login/cadastro Flutter
                                   │
                                   ▼
-                          F7 Flutter Windows — consolidação (RemoteOnly)
+                          F7 Flutter Windows — consolidação
                                   │
                                   ▼
                           F8 Local Engine (FFI) + mídia local
                                   │
                                   ▼
-                          F9 Endurecimento + billing + observ. + CI/CD + deploy
+                          F9 Endurecimento + billing + CI/CD completo
                                   │
                                   ▼
                           F10 Port Web (RemoteOnly)
 ```
 
-> **Ordem prática de desenvolvimento:** fundação ✅ → auth superusuário (F6.1–6.2) →
-> **painel admin** (F2-admin + Flutter admin) → auth regular de tenants (F6 completo) →
-> features operacionais (F3/F4/F5). O painel admin é a primeira feature de negócio
-> porque valida toda a stack (JWT, gRPC, Flutter, controle de acesso) em um ambiente
-> controlado (apenas o superusuário usa).
+> **Ordem prática de desenvolvimento:**
+> 1. **F-devops** — pipeline e servidor antes de qualquer código de feature.
+>    Todo push em `dev` já faz deploy automático. Tags fazem deploy em prod.
+> 2. **F6.1–6.2** — auth superusuário no `runtime_api` (Login + AuthInterceptor).
+> 3. **F2-admin + Flutter admin** — painel gerencial (valida toda a stack).
+> 4. **F6 completo + F3 + F4 + F5** — features operacionais e IA.
 >
-> **MVP funcional ponta-a-ponta** = F0→F6. A persistência das F1–F5 já está
-> pronta; falta a orquestração (worker, gateway, IA) e a API/realtime.
+> **MVP funcional ponta-a-ponta** = F-devops → F6. A persistência (F1) já está
+> pronta; falta o pipeline de entrega, a API/realtime e as features de negócio.
 
 ---
 
@@ -269,15 +287,11 @@ pelas telas de login e cadastro junto do auth.
 - Suíte de integração contra Postgres real (vazamento entre tenants + ausência
   de contexto). *Revalidar a cada nova tabela.*
 
-### Etapa 1.5 — `infrastructure_storage` (R2/MinIO) — 🚧 (stub)
-- **Estado atual:** `StorageClient` é um **stub baseado em filesystem** (grava em
-  diretório local; `presign` devolve URL mockada) já integrado como dependência de
-  `data_storage` e exercido pelos handlers RPC. A API atual é `put/get/presign/delete`
-  por `tenant_id`+`file_name`.
-- **Pendente:** substituir o stub pela ponte S3-compatible (`aws-sdk-s3`) com layout
-  `media/{tenant}/{instance}/{type}/{hash}`, presign real e R2 em produção / MinIO em
-  dev — ver [08-infraestrutura-storage.md](./08-infraestrutura-storage.md).
-- **DoD:** CRUD de objetos e links pré-assinados **reais** contra MinIO/R2.
+### Etapa 1.5 — `infrastructure_storage` (R2/Cloudflare) — ✅
+- Cliente `aws-sdk-s3` com configuração manual (sem `aws-config`); endpoint Cloudflare R2.
+- `put/get/delete/presign` reais; presign SigV4; layout de chave `media/{tenant}/{instance}/{type}/{hash}`.
+- Testes opt-in em `tests/objetos/` (requer `S3_*` no env; sem túnel — R2 é HTTPS direto).
+- **DoD:** CRUD e presign reais contra R2 — concluído.
 
 ### Etapa 1.6 — Microsserviços de dados (`data_*`) — ✅
 - Embrulho das bibliotecas de infraestrutura em apps de execução independentes (`data_postgres`, `data_redis`, `data_storage`) expondo servidores RPC IPC/UDS para leitura/escrita e escuta do bus.
@@ -285,10 +299,61 @@ pelas telas de login e cadastro junto do auth.
 
 ---
 
-## Fase 2 — Control Plane
+## Fase devops — CI/CD, Ambientes e Provisionamento do Servidor — ⬜ PRÓXIMA
+
+**Objetivo:** ter pipeline de CI/CD totalmente funcional e servidor provisionado
+**antes** de escrever qualquer feature de negócio. Todo push em `dev` faz deploy
+automático no ambiente de desenvolvimento; tags `v*` fazem deploy em produção com
+aprovação manual.
+
+> **Plano detalhado:** [10-plano-cicd-devops.md](./10-plano-cicd-devops.md)
+> — workflows YAML completos, systemd units, Caddy config, scripts de provisionamento,
+> estratégia de rollback e checklist de execução.
+
+### Etapa devops-1 — Provisionamento do Servidor Hostinger — ⬜
+- Executar `infra/server-setup.sh` (instala Caddy, Rust toolchain, sqlx-cli, cria usuários).
+- Criar estrutura `/opt/smartcore/{dev,prod}/`, `/run/smartcore{,-dev}/`.
+- Configurar firewall `ufw` (22, 80, 443 abertos; demais fechados).
+- Criar banco `smartcore_v2_dev` no PostgreSQL Docker existente.
+- **DoD:** servidor com Caddy respondendo, TLS automático ativo, domínios resolvendo.
+
+### Etapa devops-2 — Systemd e Caddy — ⬜
+- Criar 14 unit files systemd (`smartcore-{dev,prod}-{serviço}.service`).
+- Criar `smartcore-{dev,prod}.target` (ordem de boot garantida).
+- Configurar `/etc/caddy/Caddyfile` (prod porta 8080, dev porta 8090, Grafana 3000).
+- Criar arquivos `.env` por ambiente em `/opt/smartcore/{dev,prod}/.env`.
+- **DoD:** `systemctl start smartcore-dev.target` bem-sucedido (mesmo sem binários reais ainda).
+
+### Etapa devops-3 — GitHub Actions e Self-Hosted Runner — ⬜
+- Instalar self-hosted runner no Hostinger como usuário `gh-runner`.
+- Criar `ci.yml` (lint + testes, runner GitHub-hosted).
+- Criar `deploy-dev.yml` (build Rust + deploy dev, runner self-hosted).
+- Criar `deploy-prod.yml` (build + backup DB + deploy prod + rollback, runner self-hosted).
+- Criar `pr-to-main.yml` (PR automático dev→main após tag).
+- Configurar GitHub Environments (`dev` livre, `prod` com aprovação manual).
+- **DoD:** push em `dev` dispara CI + deploy automático; tag `v0.1.0` dispara deploy prod.
+
+### Etapa devops-4 — Observabilidade (Grafana LGTM) — ⬜
+- Criar `docker/compose/observability.yml` (OTel Collector, Loki, Tempo, Prometheus, Grafana).
+- Configurar datasources e dashboards básicos (uptime, latência gRPC, erros).
+- Apontar `grafana.smartcoreassistant.com.br` via Caddy.
+- **DoD:** traces e logs visíveis no Grafana para qualquer serviço que emita OTLP.
+
+**DoD global da fase devops:**
+- Push em `dev` → CI passa → binários compilados → deploy automático DEV → smoke test verde.
+- Tag `v*` → aprovação manual → deploy PROD → smoke test → GitHub Release criada.
+- Rollback testado manualmente (simular falha → verifica retorno à versão anterior).
+- Grafana com dados reais de pelo menos um serviço.
+
+---
+
+## Fase 2 — Control Plane e Painel Admin
 
 **Objetivo:** back office — gestão de tenants, planos, RBAC, credenciais e
-registro de instâncias Evolution. **Persistência já pronta; falta o app.**
+registro de instâncias Evolution + Painel Flutter do superusuário.
+**Persistência já pronta; falta o app e a UI.**
+**Pré-requisito: F-devops + F6.1–6.2 (AuthService + AuthInterceptor).**
+Ver detalhamento completo em [11-painel-admin-superusuario.md](./11-painel-admin-superusuario.md).
 
 ### Etapa 2.1 — Regras de tenant/plano/quota — ⬜
 - Dados e repositórios já existem em `infrastructure_postgres/tenants/` +
