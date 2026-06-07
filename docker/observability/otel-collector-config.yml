@@ -18,11 +18,11 @@ exporters:
     namespace: "smartcore"
 
   otlp/tempo:
-    endpoint: tempo:3200
+    endpoint: tempo:4317
     tls:
       insecure: true
 
-  otlp/loki:
+  otlphttp/loki:
     endpoint: http://loki:3100/otlp
     tls:
       insecure: true
@@ -40,4 +40,4 @@ service:
     logs:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlp/loki]
+      exporters: [otlphttp/loki]
