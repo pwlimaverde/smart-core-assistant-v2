@@ -8,4 +8,7 @@ uuid = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 anyhow = { workspace = true }
 tracing = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+aws-sdk-s3 = { workspace = true }
 error_core = { path = "../error_core" }
