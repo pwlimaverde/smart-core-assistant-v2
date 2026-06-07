@@ -16,7 +16,7 @@ phases:
     name: "Review — revisão de workflows, systemd, scripts e segurança"
     prevc: "R"
     agent: "devops-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-e"
     name: "Execution — provisionamento do servidor e deploy completo"
     prevc: "E"
