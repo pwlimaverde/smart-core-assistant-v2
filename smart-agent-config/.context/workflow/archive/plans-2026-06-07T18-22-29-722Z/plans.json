@@ -1,0 +1,15 @@
+{
+  "active": [],
+  "completed": [
+    {
+      "slug": "refator-arquitetura-modular",
+      "path": "plans/archive/refator-arquitetura-modular/refator-arquitetura-modular.md",
+      "title": "Refator de Arquitetura Modular por Contrato (FlatBuffers/UDS + gRPC fallback)",
+      "summary": "Plano **canônico** (leve). A verdade técnica detalhada está nos artefatos abaixo.",
+      "linkedAt": "2026-06-05T20:38:12.794Z",
+      "completedAt": "2026-06-05T23:00:31.187Z",
+      "status": "completed"
+    }
+  ],
+  "primary": null
+}
