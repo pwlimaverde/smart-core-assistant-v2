@@ -92,7 +92,9 @@ async fn main() -> anyhow::Result<()> {
     let state_for_upsert = state_clone.clone();
     let state_for_list = state_clone.clone();
     let state_for_create_tenant = state_clone.clone();
-    let state_for_create_superuser = state_clone;
+    let state_for_create_superuser = state_clone.clone();
+    let state_for_list_superusers = state_clone.clone();
+    let state_for_delete_superuser = state_clone;
 
     let server = Server::from_env("DATA_POSTGRES")
         .route("GetThread", move |env| {
@@ -125,6 +127,16 @@ async fn main() -> anyhow::Result<()> {
             let state = state_for_create_superuser.clone();
             Box::pin(
                 async move { handler_create_superuser(state.pool, state.redis_conn, env).await },
+            )
+        })
+        .route("ListSuperusers", move |env| {
+            let state = state_for_list_superusers.clone();
+            Box::pin(async move { handler_list_superusers(state.pool, env).await })
+        })
+        .route("DeleteSuperuser", move |env| {
+            let state = state_for_delete_superuser.clone();
+            Box::pin(
+                async move { handler_delete_superuser(state.pool, state.redis_conn, env).await },
             )
         });
 
@@ -544,6 +556,122 @@ async fn handler_create_superuser(
         payload: serde_json::to_vec(&reply).unwrap_or_default(),
         error: None,
         ..env
+    }
+}
+
+/// Lista os superusuários do sistema (operação administrativa, tabela global).
+async fn handler_list_superusers(pool: PgPool, env: Envelope) -> Envelope {
+    use infrastructure_postgres::AuthUserRepository;
+    let repo = infrastructure_postgres::PostgresAuthUserRepository;
+
+    match repo.listar_superusers(&pool).await {
+        Ok(usuarios) => {
+            let lista: Vec<serde_json::Value> = usuarios
+                .iter()
+                .map(|u| {
+                    serde_json::json!({
+                        "id": u.id,
+                        "username": u.username,
+                        "email": u.email,
+                        "is_active": u.is_active,
+                    })
+                })
+                .collect();
+            let reply = serde_json::json!({ "superusers": lista });
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "ListSuperusersReply".to_string(),
+                payload: serde_json::to_vec(&reply).unwrap_or_default(),
+                error: None,
+                ..env
+            }
+        }
+        Err(err) => {
+            let app_err = error_core::AppError::Database(err.to_string());
+            let err_env = app_err.to_error_envelope(&env.traceparent, "data_postgres");
+            Envelope {
+                kind: MessageKind::Error as i32,
+                method: "ListSuperusersReply".to_string(),
+                error: Some(err_env),
+                ..env
+            }
+        }
+    }
+}
+
+/// Exclui (hard delete) um superusuário pelo id (operação administrativa).
+/// Só remove se o registro for de fato superusuário; dispara auditoria global.
+async fn handler_delete_superuser(
+    pool: PgPool,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let user_id = payload_json.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+    let erro = |app_err: error_core::AppError, env: &Envelope| -> Envelope {
+        let err_env = app_err.to_error_envelope(&env.traceparent, "data_postgres");
+        Envelope {
+            kind: MessageKind::Error as i32,
+            method: "DeleteSuperuserReply".to_string(),
+            error: Some(err_env),
+            ..env.clone()
+        }
+    };
+
+    if user_id <= 0 {
+        return erro(
+            error_core::AppError::Validation("id de superusuário inválido".to_string()),
+            &env,
+        );
+    }
+
+    use infrastructure_postgres::AuthUserRepository;
+    let repo = infrastructure_postgres::PostgresAuthUserRepository;
+
+    match repo.deletar_superuser(&pool, user_id).await {
+        Ok(0) => erro(
+            error_core::AppError::Conflict(format!(
+                "nenhum superusuário com id {user_id} (ou o registro não é superusuário)"
+            )),
+            &env,
+        ),
+        Ok(_) => {
+            tracing::info!(id = user_id, "superusuário excluído");
+
+            // Auditoria global do evento de exclusão.
+            let audit_payload = observability::AuditLogPayload {
+                tenant_id: None,
+                level: "WARN".to_string(),
+                service: "data_postgres".to_string(),
+                trace_id: Some(env.traceparent.clone()),
+                event: "superuser_deleted".to_string(),
+                message: format!("Superusuário id={user_id} excluído"),
+                context: serde_json::json!({ "user_id": user_id }),
+                user_id: Some(user_id),
+                ip_address: None,
+            };
+            let envelope_auditoria =
+                contracts::TenantEnvelope::novo(Uuid::nil(), "security.audit", audit_payload)
+                    .com_traceparent(env.traceparent.clone());
+            if let Err(e) =
+                transport::bus::publicar_evento_seguranca(&mut redis_conn, &envelope_auditoria)
+                    .await
+            {
+                tracing::error!("Falha ao publicar auditoria de superuser_deleted: {:?}", e);
+            }
+
+            let reply = serde_json::json!({ "status": "deleted", "id": user_id });
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "DeleteSuperuserReply".to_string(),
+                payload: serde_json::to_vec(&reply).unwrap_or_default(),
+                error: None,
+                ..env
+            }
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }
 }
 
