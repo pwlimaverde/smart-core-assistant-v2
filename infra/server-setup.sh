@@ -27,7 +27,7 @@ echo "============================================================"
 # ── 1. Pacotes do sistema ─────────────────────────────────────────────────────
 echo ""
 echo "[1/8] Atualizando pacotes do sistema..."
-apt-get update -qq && apt-get upgrade -y -qq
+apt-get update -qq
 apt-get install -y -qq \
     curl wget git unzip \
     build-essential pkg-config \
