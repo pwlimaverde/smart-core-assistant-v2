@@ -35,7 +35,8 @@ apt-get install -y -qq \
     ufw \
     jq \
     ca-certificates gnupg lsb-release \
-    postgresql-client
+    postgresql-client \
+    protobuf-compiler
 
 # ── 2. Caddy (reverse proxy) ──────────────────────────────────────────────────
 echo ""
@@ -63,6 +64,15 @@ echo "Rust: $(rustc --version)"
 # sqlx-cli para rodar migrations manualmente em emergência
 echo "Instalando sqlx-cli..."
 cargo install sqlx-cli --no-default-features --features postgres --quiet
+
+# Instalando compilador flatc atualizado para compilação de FlatBuffers
+echo "Instalando flatc v25.12.19 do GitHub..."
+wget -q -O /tmp/flatc.zip https://github.com/google/flatbuffers/releases/download/v25.12.19-2026-02-06-03fffb2/Linux.flatc.binary.g%2B%2B-13.zip
+unzip -q -o /tmp/flatc.zip -d /tmp/flatc_extracted
+mv /tmp/flatc_extracted/flatc /usr/local/bin/flatc
+chmod +x /usr/local/bin/flatc
+rm -rf /tmp/flatc.zip /tmp/flatc_extracted
+echo "flatc: $(flatc --version)"
 
 # ── 4. Usuários e diretórios ──────────────────────────────────────────────────
 echo ""
