@@ -1,0 +1,131 @@
+{
+  "version": 2,
+  "workflowType": "prevc",
+  "updatedAt": "2026-06-07T18:34:13.984Z",
+  "status": {
+    "project": {
+      "name": "cicd-devops",
+      "scale": 3,
+      "started": "2026-06-07T18:22:29.724Z",
+      "current_phase": "E",
+      "settings": {
+        "autonomous_mode": false,
+        "require_plan": true,
+        "require_approval": true
+      },
+      "plan": "cicd-devops"
+    },
+    "phases": {
+      "P": {
+        "status": "completed",
+        "started_at": "2026-06-07T18:22:29.724Z",
+        "completed_at": "2026-06-07T18:22:44.674Z",
+        "outputs": [
+          {
+            "path": ".context/plans/cicd-devops.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/cicd-devops/plano_completo_cicd-devops.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/cicd-devops/info_aux_cicd-devops.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "R": {
+        "status": "completed",
+        "started_at": "2026-06-07T18:22:44.678Z",
+        "completed_at": "2026-06-07T18:26:34.880Z",
+        "outputs": [
+          {
+            "path": "infra/systemd/",
+            "status": "filled"
+          }
+        ]
+      },
+      "E": {
+        "status": "in_progress",
+        "started_at": "2026-06-07T18:26:34.884Z"
+      },
+      "V": {
+        "status": "pending"
+      },
+      "C": {
+        "status": "pending"
+      }
+    },
+    "agents": {},
+    "roles": {},
+    "approval": {
+      "plan_created": true,
+      "plan_approved": false
+    },
+    "execution": {
+      "history": [
+        {
+          "timestamp": "2026-06-07T18:22:29.724Z",
+          "phase": "P",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-07T18:22:39.349Z",
+          "phase": "P",
+          "action": "plan_linked",
+          "plan": "cicd-devops"
+        },
+        {
+          "timestamp": "2026-06-07T18:22:44.674Z",
+          "phase": "P",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-07T18:22:44.678Z",
+          "phase": "R",
+          "action": "started"
+        },
+        {
+          "phase": "R",
+          "action": "plan_phase_updated",
+          "plan": "cicd-devops",
+          "description": "Plan phase phase-p updated to completed",
+          "timestamp": "2026-06-07T18:22:56.629Z"
+        },
+        {
+          "phase": "R",
+          "action": "plan_phase_updated",
+          "plan": "cicd-devops",
+          "description": "Plan phase phase-r updated to in_progress",
+          "timestamp": "2026-06-07T18:24:03.044Z"
+        },
+        {
+          "phase": "R",
+          "action": "plan_phase_updated",
+          "plan": "cicd-devops",
+          "description": "Plan phase phase-r updated to completed",
+          "timestamp": "2026-06-07T18:26:30.309Z"
+        },
+        {
+          "timestamp": "2026-06-07T18:26:34.880Z",
+          "phase": "R",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-07T18:26:34.884Z",
+          "phase": "E",
+          "action": "started"
+        }
+      ],
+      "last_activity": "2026-06-07T18:26:34.884Z",
+      "resume_context": "Fase E (Execução) em progresso"
+    }
+  },
+  "binding": {
+    "workflowName": "cicd-devops",
+    "sessionId": "5821ef98-2087-4b7d-85e1-5a9e7d4faab3",
+    "createdAt": "2026-06-07T18:22:29.734Z",
+    "updatedAt": "2026-06-07T18:26:34.892Z"
+  }
+}
