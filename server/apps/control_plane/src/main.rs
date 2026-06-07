@@ -21,6 +21,9 @@ async fn main() -> anyhow::Result<()> {
     if args.get(1).map(String::as_str) == Some("create-superuser") {
         return cli::create_superuser(&args).await;
     }
+    if args.get(1).map(String::as_str) == Some("delete-superuser") {
+        return cli::delete_superuser(&args).await;
+    }
 
     tracing::info!("Iniciando serviço control_plane...");
 
