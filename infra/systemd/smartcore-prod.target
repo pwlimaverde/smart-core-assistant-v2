@@ -1,6 +1,6 @@
 [Unit]
 Description=SmartCore PROD — todos os serviços
-Documentation=https://github.com/seu-org/smart-core-assistant-v2
+Documentation=https://github.com/pwlimaverde/smart-core-assistant-v2
 Requires=\
     smartcore-prod-data_redis.service \
     smartcore-prod-data_postgres.service \

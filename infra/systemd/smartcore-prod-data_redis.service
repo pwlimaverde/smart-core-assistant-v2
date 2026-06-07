@@ -1,6 +1,6 @@
 [Unit]
 Description=SmartCore PROD — data_redis
-Documentation=https://github.com/seu-org/smart-core-assistant-v2
+Documentation=https://github.com/pwlimaverde/smart-core-assistant-v2
 After=network.target docker.service
 
 [Service]

@@ -1,6 +1,6 @@
 [Unit]
 Description=SmartCore PROD — control_plane
-Documentation=https://github.com/seu-org/smart-core-assistant-v2
+Documentation=https://github.com/pwlimaverde/smart-core-assistant-v2
 After=smartcore-prod-data_postgres.service smartcore-prod-data_redis.service
 Requires=smartcore-prod-data_postgres.service smartcore-prod-data_redis.service
 
