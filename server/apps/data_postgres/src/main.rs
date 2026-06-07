@@ -26,9 +26,18 @@ async fn main() -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
     tracing::info!("Iniciando serviço data_postgres...");
 
-    // 2. Conecta ao banco de dados e roda migrations
+    // 2. Conecta ao banco de dados e roda migrations.
+    //    Migrations exigem DDL: rodam com o pool administrativo (DATABASE_ADMIN_URL)
+    //    quando disponível; o runtime de negócio usa sempre o pool da aplicação
+    //    (DATABASE_URL + RLS).
     let pool = infrastructure_postgres::criar_pool(5).await?;
-    infrastructure_postgres::inicializar_banco_dados(&pool).await?;
+    if std::env::var("DATABASE_ADMIN_URL").is_ok() {
+        let admin_pool = infrastructure_postgres::criar_admin_pool(2).await?;
+        infrastructure_postgres::inicializar_banco_dados(&admin_pool).await?;
+        admin_pool.close().await;
+    } else {
+        infrastructure_postgres::inicializar_banco_dados(&pool).await?;
+    }
     tracing::info!("Banco de dados PostgreSQL conectado e migrations executadas.");
 
     // 3. Conecta ao Redis
@@ -82,7 +91,10 @@ async fn main() -> anyhow::Result<()> {
     let state_for_verify = state_clone.clone();
     let state_for_upsert = state_clone.clone();
     let state_for_list = state_clone.clone();
-    let state_for_create_tenant = state_clone;
+    let state_for_create_tenant = state_clone.clone();
+    let state_for_create_superuser = state_clone.clone();
+    let state_for_list_superusers = state_clone.clone();
+    let state_for_delete_superuser = state_clone;
 
     let server = Server::from_env("DATA_POSTGRES")
         .route("GetThread", move |env| {
@@ -110,6 +122,22 @@ async fn main() -> anyhow::Result<()> {
         .route("CreateTenant", move |env| {
             let state = state_for_create_tenant.clone();
             Box::pin(async move { handler_create_tenant(state.pool, env).await })
+        })
+        .route("CreateSuperuser", move |env| {
+            let state = state_for_create_superuser.clone();
+            Box::pin(
+                async move { handler_create_superuser(state.pool, state.redis_conn, env).await },
+            )
+        })
+        .route("ListSuperusers", move |env| {
+            let state = state_for_list_superusers.clone();
+            Box::pin(async move { handler_list_superusers(state.pool, env).await })
+        })
+        .route("DeleteSuperuser", move |env| {
+            let state = state_for_delete_superuser.clone();
+            Box::pin(
+                async move { handler_delete_superuser(state.pool, state.redis_conn, env).await },
+            )
         });
 
     tracing::info!("Servidor RPC configurado e pronto.");
@@ -372,6 +400,278 @@ async fn handler_create_tenant(pool: PgPool, env: Envelope) -> Envelope {
                 ..env
             }
         }
+    }
+}
+
+/// Cria o superusuário padrão do sistema (operação administrativa do control_plane).
+///
+/// `auth_user` é uma tabela **global, sem RLS**: usa o pool direto. A senha chega em
+/// claro pelo Envelope (transporte local) e é **tratada aqui** (hash argon2id) antes
+/// de gravar. Idempotente: se já existir usuário por username ou email, devolve
+/// `status: "exists"` sem recriar. Ao criar, dispara um log de auditoria global.
+async fn handler_create_superuser(
+    pool: PgPool,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let username = payload_json
+        .get("username")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let email = payload_json
+        .get("email")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let password = payload_json
+        .get("password")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    // Validação de entrada (regra mínima do bootstrap).
+    if username.is_empty() || password.chars().count() < 8 {
+        let app_err = error_core::AppError::Validation(
+            "username obrigatório e senha com ao menos 8 caracteres".to_string(),
+        );
+        let err_env = app_err.to_error_envelope(&env.traceparent, "data_postgres");
+        return Envelope {
+            kind: MessageKind::Error as i32,
+            method: "CreateSuperuserReply".to_string(),
+            error: Some(err_env),
+            ..env
+        };
+    }
+
+    use infrastructure_postgres::AuthUserRepository;
+    let repo = infrastructure_postgres::PostgresAuthUserRepository;
+
+    // Helper para responder erro mantendo o método de resposta.
+    let erro = |app_err: error_core::AppError, env: &Envelope| -> Envelope {
+        let err_env = app_err.to_error_envelope(&env.traceparent, "data_postgres");
+        Envelope {
+            kind: MessageKind::Error as i32,
+            method: "CreateSuperuserReply".to_string(),
+            error: Some(err_env),
+            ..env.clone()
+        }
+    };
+
+    // Duplicidade é um conflito explícito (erro), indicando QUAL campo já existe —
+    // o username e o email têm UNIQUE no banco.
+    match repo.buscar_por_username(&pool, &username).await {
+        Ok(Some(_)) => {
+            return erro(
+                error_core::AppError::Conflict(format!(
+                    "já existe um usuário com o username '{username}'"
+                )),
+                &env,
+            );
+        }
+        Ok(None) => {}
+        Err(err) => return erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+    if !email.is_empty() {
+        match repo.buscar_por_email(&pool, &email).await {
+            Ok(Some(_)) => {
+                return erro(
+                    error_core::AppError::Conflict(format!(
+                        "já existe um usuário com o email '{email}'"
+                    )),
+                    &env,
+                );
+            }
+            Ok(None) => {}
+            Err(err) => return erro(error_core::AppError::Database(err.to_string()), &env),
+        }
+    }
+
+    // A senha em claro é tratada aqui (hash argon2id) — nunca é logada nem persistida.
+    let hash = match infrastructure_postgres::hash_password(password) {
+        Ok(h) => h,
+        Err(err) => {
+            let app_err = error_core::AppError::Internal(err.to_string());
+            let err_env = app_err.to_error_envelope(&env.traceparent, "data_postgres");
+            return Envelope {
+                kind: MessageKind::Error as i32,
+                method: "CreateSuperuserReply".to_string(),
+                error: Some(err_env),
+                ..env
+            };
+        }
+    };
+
+    // O último argumento (is_superuser) é `true`: cria com privilégio de superusuário.
+    let user = match repo.criar(&pool, &username, &email, &hash, true).await {
+        Ok(u) => u,
+        Err(err) => {
+            let app_err = error_core::AppError::Database(err.to_string());
+            let err_env = app_err.to_error_envelope(&env.traceparent, "data_postgres");
+            return Envelope {
+                kind: MessageKind::Error as i32,
+                method: "CreateSuperuserReply".to_string(),
+                error: Some(err_env),
+                ..env
+            };
+        }
+    };
+
+    tracing::info!(id = user.id, username = %user.username, "superusuário criado");
+
+    // Auditoria global (sem tenant): publica no barramento de segurança; o consumidor
+    // de auditoria deste mesmo serviço consolida em `audit_log` (bypass RLS).
+    let audit_payload = observability::AuditLogPayload {
+        tenant_id: None,
+        level: "INFO".to_string(),
+        service: "data_postgres".to_string(),
+        trace_id: Some(env.traceparent.clone()),
+        event: "superuser_created".to_string(),
+        message: format!("Superusuário '{}' criado (id={})", user.username, user.id),
+        context: serde_json::json!({ "username": user.username, "user_id": user.id }),
+        user_id: Some(user.id),
+        ip_address: None,
+    };
+    let envelope_auditoria =
+        contracts::TenantEnvelope::novo(Uuid::nil(), "security.audit", audit_payload)
+            .com_traceparent(env.traceparent.clone());
+    if let Err(e) =
+        transport::bus::publicar_evento_seguranca(&mut redis_conn, &envelope_auditoria).await
+    {
+        tracing::error!("Falha ao publicar auditoria de superuser_created: {:?}", e);
+    }
+
+    let reply = serde_json::json!({
+        "status": "created",
+        "id": user.id,
+        "username": user.username,
+        "email": user.email,
+        "is_superuser": user.is_superuser,
+    });
+    Envelope {
+        kind: MessageKind::Reply as i32,
+        method: "CreateSuperuserReply".to_string(),
+        payload: serde_json::to_vec(&reply).unwrap_or_default(),
+        error: None,
+        ..env
+    }
+}
+
+/// Lista os superusuários do sistema (operação administrativa, tabela global).
+async fn handler_list_superusers(pool: PgPool, env: Envelope) -> Envelope {
+    use infrastructure_postgres::AuthUserRepository;
+    let repo = infrastructure_postgres::PostgresAuthUserRepository;
+
+    match repo.listar_superusers(&pool).await {
+        Ok(usuarios) => {
+            let lista: Vec<serde_json::Value> = usuarios
+                .iter()
+                .map(|u| {
+                    serde_json::json!({
+                        "id": u.id,
+                        "username": u.username,
+                        "email": u.email,
+                        "is_active": u.is_active,
+                    })
+                })
+                .collect();
+            let reply = serde_json::json!({ "superusers": lista });
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "ListSuperusersReply".to_string(),
+                payload: serde_json::to_vec(&reply).unwrap_or_default(),
+                error: None,
+                ..env
+            }
+        }
+        Err(err) => {
+            let app_err = error_core::AppError::Database(err.to_string());
+            let err_env = app_err.to_error_envelope(&env.traceparent, "data_postgres");
+            Envelope {
+                kind: MessageKind::Error as i32,
+                method: "ListSuperusersReply".to_string(),
+                error: Some(err_env),
+                ..env
+            }
+        }
+    }
+}
+
+/// Exclui (hard delete) um superusuário pelo id (operação administrativa).
+/// Só remove se o registro for de fato superusuário; dispara auditoria global.
+async fn handler_delete_superuser(
+    pool: PgPool,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let user_id = payload_json.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+    let erro = |app_err: error_core::AppError, env: &Envelope| -> Envelope {
+        let err_env = app_err.to_error_envelope(&env.traceparent, "data_postgres");
+        Envelope {
+            kind: MessageKind::Error as i32,
+            method: "DeleteSuperuserReply".to_string(),
+            error: Some(err_env),
+            ..env.clone()
+        }
+    };
+
+    if user_id <= 0 {
+        return erro(
+            error_core::AppError::Validation("id de superusuário inválido".to_string()),
+            &env,
+        );
+    }
+
+    use infrastructure_postgres::AuthUserRepository;
+    let repo = infrastructure_postgres::PostgresAuthUserRepository;
+
+    match repo.deletar_superuser(&pool, user_id).await {
+        Ok(0) => erro(
+            error_core::AppError::Conflict(format!(
+                "nenhum superusuário com id {user_id} (ou o registro não é superusuário)"
+            )),
+            &env,
+        ),
+        Ok(_) => {
+            tracing::info!(id = user_id, "superusuário excluído");
+
+            // Auditoria global do evento de exclusão.
+            let audit_payload = observability::AuditLogPayload {
+                tenant_id: None,
+                level: "WARN".to_string(),
+                service: "data_postgres".to_string(),
+                trace_id: Some(env.traceparent.clone()),
+                event: "superuser_deleted".to_string(),
+                message: format!("Superusuário id={user_id} excluído"),
+                context: serde_json::json!({ "user_id": user_id }),
+                user_id: Some(user_id),
+                ip_address: None,
+            };
+            let envelope_auditoria =
+                contracts::TenantEnvelope::novo(Uuid::nil(), "security.audit", audit_payload)
+                    .com_traceparent(env.traceparent.clone());
+            if let Err(e) =
+                transport::bus::publicar_evento_seguranca(&mut redis_conn, &envelope_auditoria)
+                    .await
+            {
+                tracing::error!("Falha ao publicar auditoria de superuser_deleted: {:?}", e);
+            }
+
+            let reply = serde_json::json!({ "status": "deleted", "id": user_id });
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "DeleteSuperuserReply".to_string(),
+                payload: serde_json::to_vec(&reply).unwrap_or_default(),
+                error: None,
+                ..env
+            }
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }
 }
 

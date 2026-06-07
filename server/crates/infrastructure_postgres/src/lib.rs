@@ -35,7 +35,9 @@ pub use auditoria::audit_log::{
     buscar_audit_logs_globais,
 };
 pub use config_cache::{RuntimeConfig, TenantConfigCache};
-pub use connection::{criar_pool, inicializar_banco_dados, run_in_tenant_transaction};
+pub use connection::{
+    criar_admin_pool, criar_pool, inicializar_banco_dados, run_in_tenant_transaction,
+};
 pub use crypto::CipherManager;
 pub use errors::DbError;
 pub use security::RequestContext;

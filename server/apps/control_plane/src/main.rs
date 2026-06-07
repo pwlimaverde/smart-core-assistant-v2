@@ -1,5 +1,7 @@
 //! Serviço control_plane: Painel administrativo e tarefas de back office.
 
+mod cli;
+
 use contracts::{Envelope, MessageKind};
 use std::time::Duration;
 use transport::Server;
@@ -12,6 +14,17 @@ async fn main() -> anyhow::Result<()> {
     // 1. Inicializa observabilidade
     observability::init_telemetry("control_plane", "production")
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+
+    // Subcomando administrativo de bootstrap: `control_plane create-superuser ...`.
+    // Cliente fino que fala com o data_postgres via RPC; executa e encerra.
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(String::as_str) == Some("create-superuser") {
+        return cli::create_superuser(&args).await;
+    }
+    if args.get(1).map(String::as_str) == Some("delete-superuser") {
+        return cli::delete_superuser(&args).await;
+    }
+
     tracing::info!("Iniciando serviço control_plane...");
 
     let _state = AppState {};
