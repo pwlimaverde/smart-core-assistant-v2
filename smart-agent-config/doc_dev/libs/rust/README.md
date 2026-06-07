@@ -9,6 +9,7 @@ Documentação centralizada das bibliotecas Rust utilizadas no **Smart Core Assi
 | [Tonic](./tonic.md) | 0.14.6 | ✅ ATUALIZADA | Servidor gRPC com interceptor JWT, autenticação/autorização, e server streaming |
 | [Tonic-Build](./tonic-build.md) | 0.14.6 | ✅ ATUALIZADA | Compilação de `.proto` → stubs gRPC em `build.rs` (protoc embutido) |
 | [Tonic-Web](./tonic-web.md) | 0.12 | ✅ ATUALIZADA | Tradução gRPC-Web para clientes web/Flutter Web (HTTP/1.1) |
+| [aws-sdk-s3](./aws_sdk_s3.md) | 1.135.0 | ✅ ATUALIZADA | Cliente S3-compatible (MinIO dev / Cloudflare R2 prod) da crate `infrastructure_storage` |
 
 ## Instruções de Uso
 
