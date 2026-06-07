@@ -65,8 +65,6 @@ jobs:
 
       - name: Smoke test DEV
         run: |
-          echo "Simulando falha forçada para teste de rollback automático"
-          exit 1
           sleep 8
           FAILED=0
           for svc in data_redis data_postgres data_storage runtime_api; do
