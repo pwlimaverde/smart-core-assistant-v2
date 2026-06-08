@@ -126,4 +126,3 @@ fn serializes_and_deserializes_error_codes_and_categories_correctly() {
     let deserialized_cat: ErrorCategory = serde_json::from_str(&serialized_cat).unwrap();
     assert_eq!(deserialized_cat, ErrorCategory::Database);
 }
-

@@ -1,6 +1,6 @@
 mod atendimentos;
-mod auth;
 mod auditoria;
+mod auth;
 mod clientes;
 mod common;
 mod e2e;

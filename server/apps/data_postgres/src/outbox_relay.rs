@@ -179,11 +179,16 @@ mod tests {
         carregar_env_teste();
 
         let admin_url = std::env::var("DATABASE_ADMIN_URL").expect("DATABASE_ADMIN_URL ausente");
-        let pool = PgPool::connect(&admin_url).await.expect("Falha ao conectar Postgres");
+        let pool = PgPool::connect(&admin_url)
+            .await
+            .expect("Falha ao conectar Postgres");
 
-        infrastructure_postgres::inicializar_banco_dados(&pool).await.unwrap();
+        infrastructure_postgres::inicializar_banco_dados(&pool)
+            .await
+            .unwrap();
 
-        let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6380".to_string());
+        let redis_url =
+            std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6380".to_string());
         let redis_client = redis::Client::open(redis_url).unwrap();
         let redis_conn = ConnectionManager::new(redis_client).await.unwrap();
 
@@ -225,16 +230,24 @@ mod tests {
         assert!(drenou.is_ok(), "Falha ao drenar outbox: {:?}", drenou.err());
 
         // Verifica se o registro foi marcado como publicado
-        let row: (Option<chrono::DateTime<Utc>>,) = sqlx::query_as("SELECT published_at FROM outbox WHERE id = $1")
-            .bind(event_id)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+        let row: (Option<chrono::DateTime<Utc>>,) =
+            sqlx::query_as("SELECT published_at FROM outbox WHERE id = $1")
+                .bind(event_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert!(row.0.is_some(), "Deveria ter marcado como publicado");
 
         // Limpeza
-        sqlx::query("DELETE FROM outbox WHERE id = $1").bind(event_id).execute(&pool).await.unwrap();
-        sqlx::query("DELETE FROM tenants_tenant WHERE id = $1").bind(tenant_id).execute(&pool).await.unwrap();
+        sqlx::query("DELETE FROM outbox WHERE id = $1")
+            .bind(event_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM tenants_tenant WHERE id = $1")
+            .bind(tenant_id)
+            .execute(&pool)
+            .await
+            .unwrap();
     }
 }
-

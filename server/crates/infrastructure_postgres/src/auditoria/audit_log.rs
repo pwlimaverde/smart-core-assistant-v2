@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::{PgPool, Postgres, Transaction, Row};
+use sqlx::{PgPool, Postgres, Row, Transaction};
 use uuid::Uuid;
 
 use crate::errors::DbError;
@@ -10,7 +10,7 @@ use crate::errors::DbError;
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct AuditLogEntry {
     pub id: Uuid,
-    pub tenant_id: Option<Uuid>,  // NULL = superusuário/sistema
+    pub tenant_id: Option<Uuid>, // NULL = superusuário/sistema
     pub timestamp: DateTime<Utc>,
     pub level: String,
     pub service: String,
@@ -26,7 +26,7 @@ pub struct AuditLogEntry {
 /// Dados para inserir um novo registro de auditoria.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NewAuditLogEntry {
-    pub tenant_id: Option<Uuid>,  // None = ação global (superusuário)
+    pub tenant_id: Option<Uuid>, // None = ação global (superusuário)
     pub level: String,
     pub service: String,
     pub trace_id: Option<String>,
@@ -131,7 +131,7 @@ pub async fn buscar_audit_logs(
         WHERE tenant_id = $1
         ORDER BY timestamp DESC
         LIMIT $2 OFFSET $3
-        "#
+        "#,
     )
     .bind(tenant_id)
     .bind(limit)
@@ -164,7 +164,7 @@ pub async fn buscar_audit_logs_por_evento(
         WHERE tenant_id = $1 AND event = $2
         ORDER BY timestamp DESC
         LIMIT $3 OFFSET $4
-        "#
+        "#,
     )
     .bind(tenant_id)
     .bind(event)
@@ -198,7 +198,7 @@ pub async fn buscar_audit_logs_admin(
         WHERE ($1::text IS NULL OR event = $1)
         ORDER BY timestamp DESC
         LIMIT $2 OFFSET $3
-        "#
+        "#,
     )
     .bind(event_filter)
     .bind(limit)
@@ -225,7 +225,7 @@ pub async fn buscar_audit_logs_globais(
         WHERE tenant_id IS NULL
         ORDER BY timestamp DESC
         LIMIT $1 OFFSET $2
-        "#
+        "#,
     )
     .bind(limit)
     .bind(offset)

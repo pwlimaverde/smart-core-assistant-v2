@@ -335,5 +335,3 @@ mod tests {
         std::env::remove_var(env_key);
     }
 }
-
-

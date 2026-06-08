@@ -950,10 +950,10 @@ async fn handler_verify_credentials(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uuid::Uuid;
     use contracts::{Envelope, MessageKind};
-    use sqlx::PgPool;
     use redis::aio::ConnectionManager;
+    use sqlx::PgPool;
+    use uuid::Uuid;
 
     fn carregar_env_teste() {
         test_support::ensure_tunnel();
@@ -987,11 +987,16 @@ mod tests {
     async fn setup_teste() -> (PgPool, ConnectionManager) {
         carregar_env_teste();
         let admin_url = std::env::var("DATABASE_ADMIN_URL").expect("DATABASE_ADMIN_URL ausente");
-        let pool = PgPool::connect(&admin_url).await.expect("Falha ao conectar Postgres");
-        
-        infrastructure_postgres::inicializar_banco_dados(&pool).await.unwrap();
+        let pool = PgPool::connect(&admin_url)
+            .await
+            .expect("Falha ao conectar Postgres");
 
-        let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6380".to_string());
+        infrastructure_postgres::inicializar_banco_dados(&pool)
+            .await
+            .unwrap();
+
+        let redis_url =
+            std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6380".to_string());
         let redis_client = redis::Client::open(redis_url).unwrap();
         let redis_conn = ConnectionManager::new(redis_client).await.unwrap();
 
@@ -1001,7 +1006,7 @@ mod tests {
     #[tokio::test]
     async fn test_handler_create_tenant() {
         let (pool, _) = setup_teste().await;
-        
+
         let tenant_name = format!("Tenant Teste {}", Uuid::new_v4());
         let payload = serde_json::json!({
             "name": tenant_name,
@@ -1028,8 +1033,11 @@ mod tests {
         assert_eq!(resp.method, "CreateTenantReply");
 
         let resp_payload: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
-        assert_eq!(resp_payload.get("status").unwrap().as_str().unwrap(), "success");
-        
+        assert_eq!(
+            resp_payload.get("status").unwrap().as_str().unwrap(),
+            "success"
+        );
+
         let tenant_json = resp_payload.get("tenant").unwrap();
         let tenant_id_str = tenant_json.get("id").unwrap().as_str().unwrap();
         let tenant_id = Uuid::parse_str(tenant_id_str).unwrap();
@@ -1051,8 +1059,9 @@ mod tests {
         let test_username = format!("user_{}", Uuid::new_v4().to_string().replace('-', ""));
         let test_email = format!("teste_{}@auth.com", Uuid::new_v4());
         let hash = infrastructure_postgres::hash_password("minhasenha123").unwrap();
-        
-        let user = auth_repo.criar(&pool, &test_username, &test_email, &hash, false)
+
+        let user = auth_repo
+            .criar(&pool, &test_username, &test_email, &hash, false)
             .await
             .expect("Erro ao criar usuário");
 
@@ -1074,10 +1083,15 @@ mod tests {
             error: None,
         };
 
-        let resp_valido = handler_verify_credentials(pool.clone(), redis_conn.clone(), req_valido).await;
+        let resp_valido =
+            handler_verify_credentials(pool.clone(), redis_conn.clone(), req_valido).await;
         assert_eq!(resp_valido.kind, MessageKind::Reply as i32);
-        let resp_valido_payload: serde_json::Value = serde_json::from_slice(&resp_valido.payload).unwrap();
-        assert_eq!(resp_valido_payload.get("id").unwrap().as_i64().unwrap(), user.id as i64);
+        let resp_valido_payload: serde_json::Value =
+            serde_json::from_slice(&resp_valido.payload).unwrap();
+        assert_eq!(
+            resp_valido_payload.get("id").unwrap().as_i64().unwrap(),
+            user.id as i64
+        );
 
         // 2. Testa credenciais inválidas
         let payload_invalido = serde_json::json!({
@@ -1097,7 +1111,8 @@ mod tests {
             error: None,
         };
 
-        let resp_invalido = handler_verify_credentials(pool.clone(), redis_conn.clone(), req_invalido).await;
+        let resp_invalido =
+            handler_verify_credentials(pool.clone(), redis_conn.clone(), req_invalido).await;
         assert_eq!(resp_invalido.kind, MessageKind::Error as i32);
         assert!(resp_invalido.error.is_some());
 
@@ -1165,10 +1180,18 @@ mod tests {
 
         let resp_msg = handler_persist_message(pool.clone(), req_msg).await;
         assert_eq!(resp_msg.kind, MessageKind::Reply as i32);
-        
-        let resp_msg_payload: serde_json::Value = serde_json::from_slice(&resp_msg.payload).unwrap();
-        assert_eq!(resp_msg_payload.get("status").unwrap().as_str().unwrap(), "success");
-        let msg_id = resp_msg_payload.get("message_id").unwrap().as_i64().unwrap() as i32;
+
+        let resp_msg_payload: serde_json::Value =
+            serde_json::from_slice(&resp_msg.payload).unwrap();
+        assert_eq!(
+            resp_msg_payload.get("status").unwrap().as_str().unwrap(),
+            "success"
+        );
+        let msg_id = resp_msg_payload
+            .get("message_id")
+            .unwrap()
+            .as_i64()
+            .unwrap() as i32;
 
         let payload_thread = serde_json::json!({
             "atendimento_id": atendimento_id.0,
@@ -1192,11 +1215,18 @@ mod tests {
         let resp_thread = handler_get_thread(pool.clone(), req_thread).await;
         assert_eq!(resp_thread.kind, MessageKind::Reply as i32);
 
-        let resp_thread_payload: serde_json::Value = serde_json::from_slice(&resp_thread.payload).unwrap();
-        let mensagens_arr = resp_thread_payload.get("mensagens").unwrap().as_array().unwrap();
+        let resp_thread_payload: serde_json::Value =
+            serde_json::from_slice(&resp_thread.payload).unwrap();
+        let mensagens_arr = resp_thread_payload
+            .get("mensagens")
+            .unwrap()
+            .as_array()
+            .unwrap();
         assert!(!mensagens_arr.is_empty());
-        
-        let encontrada = mensagens_arr.iter().any(|m| m.get("id").unwrap().as_i64().unwrap() == msg_id as i64);
+
+        let encontrada = mensagens_arr
+            .iter()
+            .any(|m| m.get("id").unwrap().as_i64().unwrap() == msg_id as i64);
         assert!(encontrada, "Mensagem persistida não encontrada na thread");
 
         // Limpeza
@@ -1245,7 +1275,8 @@ mod tests {
         let resp_contato = handler_upsert_contact(pool.clone(), req_contato).await;
         assert_eq!(resp_contato.kind, MessageKind::Reply as i32);
 
-        let resp_contato_payload: serde_json::Value = serde_json::from_slice(&resp_contato.payload).unwrap();
+        let resp_contato_payload: serde_json::Value =
+            serde_json::from_slice(&resp_contato.payload).unwrap();
         let contato_id = resp_contato_payload.get("id").unwrap().as_i64().unwrap() as i32;
 
         sqlx::query(
@@ -1278,8 +1309,13 @@ mod tests {
         let resp_list = handler_list_atendimentos(pool.clone(), req_list).await;
         assert_eq!(resp_list.kind, MessageKind::Reply as i32);
 
-        let resp_list_payload: serde_json::Value = serde_json::from_slice(&resp_list.payload).unwrap();
-        let atendimentos_arr = resp_list_payload.get("atendimentos").unwrap().as_array().unwrap();
+        let resp_list_payload: serde_json::Value =
+            serde_json::from_slice(&resp_list.payload).unwrap();
+        let atendimentos_arr = resp_list_payload
+            .get("atendimentos")
+            .unwrap()
+            .as_array()
+            .unwrap();
         assert!(!atendimentos_arr.is_empty());
 
         // Limpeza
@@ -1334,11 +1370,13 @@ mod tests {
         let processou = processar_evento_auditoria(pool.clone(), evt).await;
         assert!(processou.is_ok());
 
-        let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM audit_log WHERE tenant_id = $1 AND event = 'test_event'")
-            .bind(tenant_id)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+        let count: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*) FROM audit_log WHERE tenant_id = $1 AND event = 'test_event'",
+        )
+        .bind(tenant_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
         assert_eq!(count.0, 1);
 
         // Limpeza

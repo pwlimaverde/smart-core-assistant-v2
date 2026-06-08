@@ -68,7 +68,10 @@ fn classificar_sqlx(e: &sqlx::Error) -> ErrorCode {
         }
         // SQLSTATE classe 23 = violação de integridade (unique/foreign key/check).
         sqlx::Error::Database(db_err)
-            if db_err.code().as_deref().is_some_and(|c| c.starts_with("23")) =>
+            if db_err
+                .code()
+                .as_deref()
+                .is_some_and(|c| c.starts_with("23")) =>
         {
             ErrorCode::DbConstraintViolation
         }
@@ -83,9 +86,7 @@ impl From<DbError> for AppError {
     fn from(err: DbError) -> Self {
         match err.code() {
             ErrorCode::DbRecordNotFound => AppError::Database("registro não encontrado".into()),
-            ErrorCode::DbConnectionFailed => {
-                AppError::Database(format!("falha de conexão: {err}"))
-            }
+            ErrorCode::DbConnectionFailed => AppError::Database(format!("falha de conexão: {err}")),
             ErrorCode::DbConstraintViolation => {
                 AppError::Database(format!("violação de constraint: {err}"))
             }

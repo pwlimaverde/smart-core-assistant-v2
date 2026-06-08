@@ -130,7 +130,10 @@ impl RefreshTokenStore {
             let _: i64 = self.con.del(keys::chave_refresh(hash)).await?;
         }
         let _: i64 = self.con.del(&chave_fam).await?;
-        tracing::info!(tokens_revogados = membros.len(), "família de refresh tokens revogada");
+        tracing::info!(
+            tokens_revogados = membros.len(),
+            "família de refresh tokens revogada"
+        );
         Ok(())
     }
 }
