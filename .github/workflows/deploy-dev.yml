@@ -40,11 +40,16 @@ jobs:
         run: |
           BIN_DIR="/opt/smartcore/dev/bin"
           SRC="server/target/release"
+          mkdir -p "$BIN_DIR"
           for svc in data_postgres data_redis data_storage \
                      runtime_api control_plane messaging_gateway worker; do
             if [ -f "$SRC/$svc" ]; then
-              cp "$SRC/$svc" "$BIN_DIR/$svc"
-              chmod +x "$BIN_DIR/$svc"
+              # Instala via arquivo temporário + mv atômico. Um cp direto sobre o
+              # binário antigo falha com "Text file busy" (ETXTBSY) enquanto o
+              # serviço está em execução; o rename apenas troca a entrada de
+              # diretório (o processo antigo mantém o inode até o restart).
+              install -m 755 "$SRC/$svc" "$BIN_DIR/$svc.new"
+              mv -f "$BIN_DIR/$svc.new" "$BIN_DIR/$svc"
               echo "✓ $svc instalado"
             fi
           done
@@ -84,7 +89,14 @@ jobs:
         run: |
           echo "Falha detectada — revertendo binários DEV..."
           if [ -d "/opt/smartcore/dev/bin.bak" ]; then
-            cp -r /opt/smartcore/dev/bin.bak/* /opt/smartcore/dev/bin/ 2>/dev/null || true
+            # Restaura via mv atômico pelo mesmo motivo do step de instalação
+            # (evita "Text file busy" sobre binários ainda em execução).
+            for bak in /opt/smartcore/dev/bin.bak/*; do
+              [ -f "$bak" ] || continue
+              svc="$(basename "$bak")"
+              install -m 755 "$bak" "/opt/smartcore/dev/bin/$svc.new"
+              mv -f "/opt/smartcore/dev/bin/$svc.new" "/opt/smartcore/dev/bin/$svc"
+            done
             sudo systemctl restart \
               smartcore-dev-data_redis \
               smartcore-dev-data_postgres \
