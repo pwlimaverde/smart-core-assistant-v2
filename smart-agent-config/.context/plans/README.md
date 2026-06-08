@@ -3,8 +3,10 @@
 This directory contains plans for coordinating work across documentation and playbooks.
 
 ## Plan Queue
-1. [Cicd Devops](./cicd-devops.md)
-2. [User Auth Module](./user-auth-module.md)
+1. [User Auth Module](./user-auth-module.md)
+
+## Archived Plans
+- [Cicd Devops](./archive/cicd-devops/cicd-devops.md)
 
 ## How To Create Or Update Plans
 - Run "dotcontext plan <name>" to scaffold a new plan template.

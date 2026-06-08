@@ -41,7 +41,7 @@ O provisionamento é realizado em um servidor VPS **Hostinger KVM2** (Ubuntu 22.
 
 O repositório conta com os seguintes workflows configurados em `.github/workflows/`:
 
-1.  **`ci.yml`**: Disparado em qualquer Pull Request. Realiza validações de formatação (`rustfmt`), análises estáticas (`clippy`), verificação de queries de banco em modo offline (`sqlx prepare --check`) e testes integrados.
+1.  **`ci.yml`**: Disparado em qualquer push (todas as branches) e em Pull Requests para `main`/`dev`. Realiza validações de formatação (`rustfmt`), análises estáticas (`clippy`), verificação de queries de banco em modo offline (`sqlx prepare --check`) e testes integrados.
 2.  **`deploy-dev.yml`**: Compila a workspace em modo release, instala os binários no diretório de desenvolvimento e reinicia os serviços systemd correspondentes.
 3.  **`deploy-prod.yml`**: Realiza o backup automático do banco de dados de produção, compila os binários em modo release, versiona o deploy sob uma pasta de release específica (ex: `/opt/smartcore/prod/releases/v0.1.0`), atualiza o symlink `current` e reinicia os serviços em rolling restart. Também empacota o cliente Flutter para Windows e o anexa na GitHub Release criada automaticamente.
 4.  **`pr-to-main.yml`**: Abre um Pull Request automático da branch `dev` para a `main` após a conclusão com sucesso do deploy de produção para manter o histórico de branches sincronizado.

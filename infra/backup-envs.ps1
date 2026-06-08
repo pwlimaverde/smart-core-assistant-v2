@@ -35,14 +35,18 @@ try {
     Exit
 }
 
-# Solicitar senha forte para criptografia
-$Password = Read-Host -Prompt "Digite uma senha forte para criptografar os arquivos"
+# Solicitar senha forte para criptografia (lida como SecureString para não ficar visível)
+$SecurePassword = Read-Host -Prompt "Digite uma senha forte para criptografar os arquivos" -AsSecureString
+$Password = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR(
+    [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecurePassword))
 if ([string]::IsNullOrWhiteSpace($Password)) {
     Write-Host "✗ Erro: A senha não pode ser vazia." -ForegroundColor Red
     Exit
 }
 
-$ConfirmPassword = Read-Host -Prompt "Confirme a senha"
+$SecureConfirm = Read-Host -Prompt "Confirme a senha" -AsSecureString
+$ConfirmPassword = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR(
+    [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($SecureConfirm))
 if ($Password -ne $ConfirmPassword) {
     Write-Host "✗ Erro: As senhas digitadas não coincidem." -ForegroundColor Red
     Exit
@@ -59,10 +63,13 @@ foreach ($Key in $EnvFiles.Keys) {
         $OutPath = "$BackupDir/${FileName}_${Timestamp}.enc"
 
         Write-Host "Criptografando $Key ($FileName) -> $OutPath ..." -ForegroundColor Yellow
-        
-        # Executar comando OpenSSL para criptografar com PBKDF2 e AES-256
-        $PasswordBytes = [System.Text.Encoding]::UTF8.GetBytes($Password)
-        & openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 -pass "pass:$Password" -in $FilePath -out $OutPath
+
+        # Executar comando OpenSSL para criptografar com PBKDF2 e AES-256.
+        # A senha é passada via variável de ambiente (pass:env:) para não ficar
+        # visível na linha de comando / lista de processos do sistema.
+        $env:BACKUP_ENC_PASS = $Password
+        & openssl enc -aes-256-cbc -salt -pbkdf2 -iter 100000 -pass "env:BACKUP_ENC_PASS" -in $FilePath -out $OutPath
+        Remove-Item Env:\BACKUP_ENC_PASS -ErrorAction SilentlyContinue
 
         if (Test-Path $OutPath) {
             Write-Host "✓ $Key criptografado com sucesso!" -ForegroundColor Green

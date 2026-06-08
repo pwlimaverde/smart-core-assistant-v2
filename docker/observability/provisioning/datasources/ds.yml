@@ -4,6 +4,7 @@ datasources:
   # Datasource Prometheus
   - name: Prometheus
     type: prometheus
+    uid: prometheus
     access: proxy
     url: http://prometheus:9090
     isDefault: true
@@ -13,12 +14,13 @@ datasources:
   # Datasource Loki
   - name: Loki
     type: loki
+    uid: loki
     access: proxy
     url: http://loki:3100
     jsonData:
       derivedFields:
         # Correlaciona logs Loki com traces Tempo baseando-se no trace_id no formato JSON
-        - datasourceUid: Tempo
+        - datasourceUid: tempo
           matcherRegex: '"trace_id":"(\w+)"'
           name: TraceID
           url: '$${__value.raw}'
@@ -26,12 +28,13 @@ datasources:
   # Datasource Tempo
   - name: Tempo
     type: tempo
+    uid: tempo
     access: proxy
     url: http://tempo:3200
     jsonData:
       httpMethod: GET
       serviceMap:
-        datasourceUid: Prometheus
+        datasourceUid: prometheus
       nodeGraph:
         enabled: true
       search:

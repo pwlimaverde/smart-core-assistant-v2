@@ -2,8 +2,8 @@
 
 > Reestruturado em: 2026-06-07
 > Origem: `doc_dev/planejamento/10-plano-cicd-devops.md`
-> Plano canônico: `.context/plans/cicd-devops.md`
-> Documentação auxiliar: `.context/plans/cicd-devops/info_aux_cicd-devops.md`
+> Plano canônico: `.context/plans/archive/cicd-devops/cicd-devops.md`
+> Documentação auxiliar: `.context/plans/archive/cicd-devops/info_aux_cicd-devops.md`
 
 ---
 
