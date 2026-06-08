@@ -995,12 +995,37 @@ mod tests {
             .await
             .unwrap();
 
+        semear_auth_user_padrao(&pool).await;
+
         let redis_url =
             std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6380".to_string());
         let redis_client = redis::Client::open(redis_url).unwrap();
         let redis_conn = ConnectionManager::new(redis_client).await.unwrap();
 
         (pool, redis_conn)
+    }
+
+    /// Garante o `auth_user` id=1 — owner padrão usado pelos fixtures de tenant
+    /// (vários testes inserem `tenants_tenant.owner_id = 1`). Idempotente: no banco
+    /// compartilhado o usuário já existe; no banco limpo do CI é criado aqui. A
+    /// sequence do SERIAL é avançada para não colidir com inserts de id automático.
+    async fn semear_auth_user_padrao(pool: &PgPool) {
+        sqlx::query(
+            "INSERT INTO auth_user (id, username, email, password_hash, is_superuser, is_staff) \
+             VALUES (1, 'ci_seed_admin', 'ci-seed@local', '', TRUE, TRUE) \
+             ON CONFLICT (id) DO NOTHING",
+        )
+        .execute(pool)
+        .await
+        .expect("falha ao semear auth_user padrão");
+
+        sqlx::query(
+            "SELECT setval(pg_get_serial_sequence('auth_user','id'), \
+             GREATEST((SELECT COALESCE(MAX(id), 1) FROM auth_user), 1))",
+        )
+        .execute(pool)
+        .await
+        .expect("falha ao ajustar a sequence de auth_user");
     }
 
     #[tokio::test]
