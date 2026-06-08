@@ -16,23 +16,22 @@ async fn test_login_flow_success() {
 
     // 2. Subir o stub do data_postgres
     let pg_endpoint = Endpoint::parse(pg_addr).unwrap();
-    let pg_server = Server::new(pg_endpoint, "flatbuffers")
-        .route("VerifyCredentials", |env| {
-            Box::pin(async move {
-                let user_payload = serde_json::json!({
-                    "id": 42,
-                    "username": "usuario_teste",
-                    "email": "test@domain.com",
-                    "is_superuser": false
-                });
-                Envelope {
-                    kind: MessageKind::Reply as i32,
-                    method: "VerifyCredentialsReply".to_string(),
-                    payload: serde_json::to_vec(&user_payload).unwrap(),
-                    ..env
-                }
-            })
-        });
+    let pg_server = Server::new(pg_endpoint, "flatbuffers").route("VerifyCredentials", |env| {
+        Box::pin(async move {
+            let user_payload = serde_json::json!({
+                "id": 42,
+                "username": "usuario_teste",
+                "email": "test@domain.com",
+                "is_superuser": false
+            });
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "VerifyCredentialsReply".to_string(),
+                payload: serde_json::to_vec(&user_payload).unwrap(),
+                ..env
+            }
+        })
+    });
 
     let pg_handle = tokio::spawn(async move {
         pg_server.run().await.unwrap();
@@ -40,8 +39,8 @@ async fn test_login_flow_success() {
 
     // 3. Subir o stub do data_redis
     let redis_endpoint = Endpoint::parse(redis_addr).unwrap();
-    let redis_server = Server::new(redis_endpoint, "flatbuffers")
-        .route("StoreRefreshToken", |env| {
+    let redis_server =
+        Server::new(redis_endpoint, "flatbuffers").route("StoreRefreshToken", |env| {
             Box::pin(async move {
                 let reply_payload = serde_json::json!({
                     "status": "success"
@@ -72,7 +71,11 @@ async fn test_login_flow_success() {
 
     let result = login(&ctx, "test@domain.com", "senha123").await;
 
-    assert!(result.is_ok(), "Falha ao realizar login: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "Falha ao realizar login: {:?}",
+        result.err()
+    );
 
     let tokens = result.unwrap();
     assert!(tokens.get("access_token").is_some());
@@ -93,30 +96,29 @@ async fn test_login_flow_invalid_credentials() {
 
     // Stub do data_postgres que retorna erro gRPC/Envelope
     let pg_endpoint = Endpoint::parse(pg_addr).unwrap();
-    let pg_server = Server::new(pg_endpoint, "flatbuffers")
-        .route("VerifyCredentials", |env| {
-            Box::pin(async move {
-                let error_env = contracts::ErrorEnvelope {
-                    code: "AUTH_INVALID_TOKEN".to_string(),
-                    category: contracts::ErrorCategory::Auth as i32,
-                    severity: contracts::Severity::Error as i32,
-                    message: "Senha inválida".to_string(),
-                    user_message: "errors.auth.invalid.token".to_string(),
-                    user_message_fallback: "Credenciais inválidas".to_string(),
-                    retryable: false,
-                    trace_id: env.traceparent.clone(),
-                    source_svc: "data_postgres_stub".to_string(),
-                    details: vec![],
-                    occurred_at: 0,
-                };
-                Envelope {
-                    kind: MessageKind::Error as i32,
-                    method: "VerifyCredentialsReply".to_string(),
-                    error: Some(error_env),
-                    ..env
-                }
-            })
-        });
+    let pg_server = Server::new(pg_endpoint, "flatbuffers").route("VerifyCredentials", |env| {
+        Box::pin(async move {
+            let error_env = contracts::ErrorEnvelope {
+                code: "AUTH_INVALID_TOKEN".to_string(),
+                category: contracts::ErrorCategory::Auth as i32,
+                severity: contracts::Severity::Error as i32,
+                message: "Senha inválida".to_string(),
+                user_message: "errors.auth.invalid.token".to_string(),
+                user_message_fallback: "Credenciais inválidas".to_string(),
+                retryable: false,
+                trace_id: env.traceparent.clone(),
+                source_svc: "data_postgres_stub".to_string(),
+                details: vec![],
+                occurred_at: 0,
+            };
+            Envelope {
+                kind: MessageKind::Error as i32,
+                method: "VerifyCredentialsReply".to_string(),
+                error: Some(error_env),
+                ..env
+            }
+        })
+    });
 
     let pg_handle = tokio::spawn(async move {
         pg_server.run().await.unwrap();

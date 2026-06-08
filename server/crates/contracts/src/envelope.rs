@@ -71,10 +71,9 @@ mod tests {
     #[test]
     fn test_tenant_envelope_com_traceparent() {
         let tenant_id = Uuid::new_v4();
-        let env = TenantEnvelope::novo(tenant_id, "test", ())
-            .com_traceparent("00-trace-id-span-id-01");
+        let env =
+            TenantEnvelope::novo(tenant_id, "test", ()).com_traceparent("00-trace-id-span-id-01");
 
         assert_eq!(env.traceparent, "00-trace-id-span-id-01");
     }
 }
-

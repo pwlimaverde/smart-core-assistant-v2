@@ -86,5 +86,3 @@ mod tests {
         assert_eq!(status.message(), err.public_message());
     }
 }
-
-

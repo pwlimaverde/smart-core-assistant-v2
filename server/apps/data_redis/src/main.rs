@@ -371,9 +371,9 @@ async fn handler_is_token_blocked(con: ConnectionManager, env: Envelope) -> Enve
 #[cfg(test)]
 mod tests {
     use super::*;
-    use uuid::Uuid;
     use contracts::{Envelope, MessageKind};
     use redis::aio::ConnectionManager;
+    use uuid::Uuid;
 
     fn carregar_env_teste() {
         test_support::ensure_tunnel();
@@ -406,7 +406,8 @@ mod tests {
 
     async fn setup_redis() -> ConnectionManager {
         carregar_env_teste();
-        let redis_url = std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6380".to_string());
+        let redis_url =
+            std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6380".to_string());
         let redis_client = redis::Client::open(redis_url).unwrap();
         ConnectionManager::new(redis_client).await.unwrap()
     }
@@ -463,8 +464,10 @@ mod tests {
         let get_resp = handler_get_cache(con.clone(), get_req).await;
         assert_eq!(get_resp.kind, MessageKind::Reply as i32);
 
-        let get_resp_payload: serde_json::Value = serde_json::from_slice(&get_resp.payload).unwrap();
-        let perms: Vec<i32> = get_resp_payload.get("permissions")
+        let get_resp_payload: serde_json::Value =
+            serde_json::from_slice(&get_resp.payload).unwrap();
+        let perms: Vec<i32> = get_resp_payload
+            .get("permissions")
             .unwrap()
             .as_array()
             .unwrap()
@@ -528,9 +531,16 @@ mod tests {
         let val_resp = handler_validate_and_rotate(con.clone(), val_req).await;
         assert_eq!(val_resp.kind, MessageKind::Reply as i32);
 
-        let val_resp_payload: serde_json::Value = serde_json::from_slice(&val_resp.payload).unwrap();
-        assert_eq!(val_resp_payload.get("user_id").unwrap().as_i64().unwrap() as i32, user_id);
-        assert_eq!(val_resp_payload.get("family_id").unwrap().as_str().unwrap(), family_id);
+        let val_resp_payload: serde_json::Value =
+            serde_json::from_slice(&val_resp.payload).unwrap();
+        assert_eq!(
+            val_resp_payload.get("user_id").unwrap().as_i64().unwrap() as i32,
+            user_id
+        );
+        assert_eq!(
+            val_resp_payload.get("family_id").unwrap().as_str().unwrap(),
+            family_id
+        );
 
         // 3. Revoga a Família de Tokens
         let revoke_payload = serde_json::json!({
@@ -581,8 +591,13 @@ mod tests {
 
         let check_resp = handler_is_token_blocked(con.clone(), check_req.clone()).await;
         assert_eq!(check_resp.kind, MessageKind::Reply as i32);
-        let check_resp_payload: serde_json::Value = serde_json::from_slice(&check_resp.payload).unwrap();
-        assert!(!check_resp_payload.get("blocked").unwrap().as_bool().unwrap());
+        let check_resp_payload: serde_json::Value =
+            serde_json::from_slice(&check_resp.payload).unwrap();
+        assert!(!check_resp_payload
+            .get("blocked")
+            .unwrap()
+            .as_bool()
+            .unwrap());
 
         // 2. Bloqueia o token
         let block_payload = serde_json::json!({
@@ -609,7 +624,12 @@ mod tests {
         // 3. Verifica se agora está bloqueado
         let check_resp2 = handler_is_token_blocked(con.clone(), check_req).await;
         assert_eq!(check_resp2.kind, MessageKind::Reply as i32);
-        let check_resp_payload2: serde_json::Value = serde_json::from_slice(&check_resp2.payload).unwrap();
-        assert!(check_resp_payload2.get("blocked").unwrap().as_bool().unwrap());
+        let check_resp_payload2: serde_json::Value =
+            serde_json::from_slice(&check_resp2.payload).unwrap();
+        assert!(check_resp_payload2
+            .get("blocked")
+            .unwrap()
+            .as_bool()
+            .unwrap());
     }
 }

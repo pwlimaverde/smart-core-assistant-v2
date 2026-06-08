@@ -72,13 +72,20 @@ async fn test_redis_bus_publish_consume_flow() {
     let read_eventos = consumir(&mut con, &grupo, consumidor, 1, 1000).await;
     assert!(read_eventos.is_ok());
     let eventos = read_eventos.unwrap();
-    assert_eq!(eventos.len(), 1, "Deveria ter consumido exatamente 1 evento");
+    assert_eq!(
+        eventos.len(),
+        1,
+        "Deveria ter consumido exatamente 1 evento"
+    );
 
     let evento_bruto = &eventos[0];
     assert_eq!(evento_bruto.stream_id, stream_id);
     assert_eq!(evento_bruto.tenant_id, tenant_id.to_string());
     assert_eq!(evento_bruto.event_type, event_type);
-    assert_eq!(evento_bruto.traceparent, "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
+    assert_eq!(
+        evento_bruto.traceparent,
+        "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+    );
 
     // Desserializa o payload e valida
     let env_tipado = evento_bruto.desserializar::<serde_json::Value>().unwrap();
@@ -91,7 +98,10 @@ async fn test_redis_bus_publish_consume_flow() {
     // 5. Verifica se o PEL está limpo (reprocessamento de pendentes deve retornar zero)
     let pendentes = reprocessar_pendentes(&mut con, &grupo, consumidor, 1).await;
     assert!(pendentes.is_ok());
-    assert!(pendentes.unwrap().is_empty(), "PEL deveria estar limpo após o ACK");
+    assert!(
+        pendentes.unwrap().is_empty(),
+        "PEL deveria estar limpo após o ACK"
+    );
 }
 
 #[tokio::test]
@@ -109,17 +119,30 @@ async fn test_redis_bus_pending_entries_recovery() {
 
     // Publica e consome (mas NÃO confirma)
     let stream_id = publicar_evento(&mut con, &envelope).await.unwrap();
-    let eventos = consumir(&mut con, &grupo, consumidor, 1, 1000).await.unwrap();
+    let eventos = consumir(&mut con, &grupo, consumidor, 1, 1000)
+        .await
+        .unwrap();
     assert_eq!(eventos.len(), 1);
 
     // Como não confirmamos, o evento deve estar pendente na PEL do consumidor.
     // Vamos reprocessar e verificar que o evento retorna.
-    let pendentes = reprocessar_pendentes(&mut con, &grupo, consumidor, 1).await.unwrap();
-    assert_eq!(pendentes.len(), 1, "Deveria ter recuperado o evento pendente");
+    let pendentes = reprocessar_pendentes(&mut con, &grupo, consumidor, 1)
+        .await
+        .unwrap();
+    assert_eq!(
+        pendentes.len(),
+        1,
+        "Deveria ter recuperado o evento pendente"
+    );
     assert_eq!(pendentes[0].stream_id, stream_id);
 
     // Agora confirma e garante que limpou
     confirmar(&mut con, &grupo, &stream_id).await.unwrap();
-    let pendentes_pos_ack = reprocessar_pendentes(&mut con, &grupo, consumidor, 1).await.unwrap();
-    assert!(pendentes_pos_ack.is_empty(), "PEL deveria estar vazia após ACK");
+    let pendentes_pos_ack = reprocessar_pendentes(&mut con, &grupo, consumidor, 1)
+        .await
+        .unwrap();
+    assert!(
+        pendentes_pos_ack.is_empty(),
+        "PEL deveria estar vazia após ACK"
+    );
 }

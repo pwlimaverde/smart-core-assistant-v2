@@ -68,8 +68,14 @@ fn iniciar_tunnel() -> Result<(), String> {
     let user = env
         .get("HOSTINGER_SSH_USER")
         .ok_or("HOSTINGER_SSH_USER ausente em infra/.env.deploy")?;
-    let ssh_port = env.get("HOSTINGER_SSH_PORT").map(String::as_str).unwrap_or("22");
-    let postgres_port = env.get("POSTGRES_PORT").map(String::as_str).unwrap_or("5434");
+    let ssh_port = env
+        .get("HOSTINGER_SSH_PORT")
+        .map(String::as_str)
+        .unwrap_or("22");
+    let postgres_port = env
+        .get("POSTGRES_PORT")
+        .map(String::as_str)
+        .unwrap_or("5434");
     let redis_port = env.get("REDIS_PORT").map(String::as_str).unwrap_or("6380");
 
     let mut cmd = Command::new("ssh");
@@ -148,7 +154,11 @@ fn carregar_env_deploy() -> Result<HashMap<String, String>, String> {
         }
         if let Some((chave, valor)) = linha.split_once('=') {
             let chave = chave.trim().to_string();
-            let valor = valor.trim().trim_matches('"').trim_matches('\'').to_string();
+            let valor = valor
+                .trim()
+                .trim_matches('"')
+                .trim_matches('\'')
+                .to_string();
             mapa.insert(chave, valor);
         }
     }

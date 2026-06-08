@@ -101,7 +101,10 @@ mod tests {
 
         // Testa builder com contexto
         let report_with_ctx = report.with_context("contexto interno de teste");
-        assert_eq!(report_with_ctx.context.unwrap(), "contexto interno de teste");
+        assert_eq!(
+            report_with_ctx.context.unwrap(),
+            "contexto interno de teste"
+        );
     }
 
     #[test]
@@ -120,4 +123,3 @@ mod tests {
         registrar(&err_error, &ctx);
     }
 }
-

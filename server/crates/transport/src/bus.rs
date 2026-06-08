@@ -432,8 +432,14 @@ mod tests {
         assert_eq!(envelope.tenant_id.to_string(), tenant_id);
         assert_eq!(envelope.event_id.to_string(), event_id);
         assert_eq!(envelope.event_type, "test.event");
-        assert_eq!(envelope.traceparent, "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
-        assert_eq!(envelope.payload.get("valor").and_then(|v| v.as_i64()), Some(123));
+        assert_eq!(
+            envelope.traceparent,
+            "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+        );
+        assert_eq!(
+            envelope.payload.get("valor").and_then(|v| v.as_i64()),
+            Some(123)
+        );
     }
 
     #[test]
@@ -492,4 +498,3 @@ mod tests {
         assert!(raw.desserializar::<serde_json::Value>().is_err());
     }
 }
-

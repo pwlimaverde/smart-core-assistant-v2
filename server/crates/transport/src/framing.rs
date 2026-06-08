@@ -97,7 +97,10 @@ mod tests {
 
         // Assert
         assert!(read_res.is_err());
-        assert_eq!(read_res.err().unwrap().kind(), std::io::ErrorKind::UnexpectedEof);
+        assert_eq!(
+            read_res.err().unwrap().kind(),
+            std::io::ErrorKind::UnexpectedEof
+        );
     }
 
     #[tokio::test]
@@ -111,7 +114,10 @@ mod tests {
 
         // Assert
         assert!(read_res.is_err());
-        assert_eq!(read_res.err().unwrap().kind(), std::io::ErrorKind::UnexpectedEof);
+        assert_eq!(
+            read_res.err().unwrap().kind(),
+            std::io::ErrorKind::UnexpectedEof
+        );
     }
 
     #[tokio::test]
@@ -131,8 +137,9 @@ mod tests {
 
         // Assert
         assert!(read_res.is_err());
-        assert_eq!(read_res.err().unwrap().kind(), std::io::ErrorKind::UnexpectedEof);
+        assert_eq!(
+            read_res.err().unwrap().kind(),
+            std::io::ErrorKind::UnexpectedEof
+        );
     }
 }
-
-

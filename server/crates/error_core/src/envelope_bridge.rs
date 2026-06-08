@@ -90,9 +90,18 @@ mod tests {
 
     #[test]
     fn test_i18n_keys() {
-        assert_eq!(AppError::Auth("token expirado".to_string()).i18n_key(), "errors.auth.expired.token");
-        assert_eq!(AppError::Database("conexão".to_string()).i18n_key(), "errors.db.connection.failed");
-        assert_eq!(AppError::Validation("erro".to_string()).i18n_key(), "errors.validation.failed");
+        assert_eq!(
+            AppError::Auth("token expirado".to_string()).i18n_key(),
+            "errors.auth.expired.token"
+        );
+        assert_eq!(
+            AppError::Database("conexão".to_string()).i18n_key(),
+            "errors.db.connection.failed"
+        );
+        assert_eq!(
+            AppError::Validation("erro".to_string()).i18n_key(),
+            "errors.validation.failed"
+        );
     }
 
     #[test]
@@ -115,40 +124,58 @@ mod tests {
 
         // Testa conversão de categorias para garantir cobertura de todos os braços do match
         assert_eq!(
-            AppError::Validation("".to_string()).to_error_envelope("", "").category,
+            AppError::Validation("".to_string())
+                .to_error_envelope("", "")
+                .category,
             ProtoCategory::Validation as i32
         );
         assert_eq!(
-            AppError::Auth("permissão".to_string()).to_error_envelope("", "").category,
+            AppError::Auth("permissão".to_string())
+                .to_error_envelope("", "")
+                .category,
             ProtoCategory::Auth as i32
         );
         assert_eq!(
-            AppError::Conflict("".to_string()).to_error_envelope("", "").category,
+            AppError::Conflict("".to_string())
+                .to_error_envelope("", "")
+                .category,
             ProtoCategory::Conflict as i32
         );
 
         assert_eq!(
-            AppError::RateLimit("".to_string()).to_error_envelope("", "").category,
+            AppError::RateLimit("".to_string())
+                .to_error_envelope("", "")
+                .category,
             ProtoCategory::RateLimit as i32
         );
         assert_eq!(
-            AppError::Database("não encontrado".to_string()).to_error_envelope("", "").category,
+            AppError::Database("não encontrado".to_string())
+                .to_error_envelope("", "")
+                .category,
             ProtoCategory::Internal as i32
         );
         assert_eq!(
-            AppError::Storage("upload".to_string()).to_error_envelope("", "").category,
+            AppError::Storage("upload".to_string())
+                .to_error_envelope("", "")
+                .category,
             ProtoCategory::NotFound as i32
         );
         assert_eq!(
-            AppError::Database("".to_string()).to_error_envelope("", "").category,
+            AppError::Database("".to_string())
+                .to_error_envelope("", "")
+                .category,
             ProtoCategory::Internal as i32
         );
         assert_eq!(
-            AppError::Cache("".to_string()).to_error_envelope("", "").category,
+            AppError::Cache("".to_string())
+                .to_error_envelope("", "")
+                .category,
             ProtoCategory::Internal as i32
         );
         assert_eq!(
-            AppError::Internal("".to_string()).to_error_envelope("", "").category,
+            AppError::Internal("".to_string())
+                .to_error_envelope("", "")
+                .category,
             ProtoCategory::Internal as i32
         );
     }
@@ -173,25 +200,42 @@ mod tests {
         assert!(matches!(AppError::from_envelope(&env), AppError::Auth(_)));
 
         env.code = "STORAGE_NOT_FOUND".to_string();
-        assert!(matches!(AppError::from_envelope(&env), AppError::Storage(_)));
+        assert!(matches!(
+            AppError::from_envelope(&env),
+            AppError::Storage(_)
+        ));
 
         env.code = "DB_CONNECTION_FAILED".to_string();
-        assert!(matches!(AppError::from_envelope(&env), AppError::Database(_)));
+        assert!(matches!(
+            AppError::from_envelope(&env),
+            AppError::Database(_)
+        ));
 
         env.code = "CACHE_UNAVAILABLE".to_string();
         assert!(matches!(AppError::from_envelope(&env), AppError::Cache(_)));
 
         env.code = "VALIDATION_FAILED".to_string();
-        assert!(matches!(AppError::from_envelope(&env), AppError::Validation(_)));
+        assert!(matches!(
+            AppError::from_envelope(&env),
+            AppError::Validation(_)
+        ));
 
         env.code = "CONFLICT".to_string();
-        assert!(matches!(AppError::from_envelope(&env), AppError::Conflict(_)));
+        assert!(matches!(
+            AppError::from_envelope(&env),
+            AppError::Conflict(_)
+        ));
 
         env.code = "RATE_LIMIT_EXCEEDED".to_string();
-        assert!(matches!(AppError::from_envelope(&env), AppError::RateLimit(_)));
+        assert!(matches!(
+            AppError::from_envelope(&env),
+            AppError::RateLimit(_)
+        ));
 
         env.code = "OUTRO_CODIGO".to_string();
-        assert!(matches!(AppError::from_envelope(&env), AppError::Internal(_)));
+        assert!(matches!(
+            AppError::from_envelope(&env),
+            AppError::Internal(_)
+        ));
     }
 }
-

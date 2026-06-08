@@ -64,9 +64,10 @@ async fn test_audit_log_tenant_insertion_and_retrieval_under_rls() {
     assert_eq!(logs_por_evento.len(), 1);
     assert_eq!(logs_por_evento[0].id, log_id);
 
-    let logs_por_outro_evento = buscar_audit_logs_por_evento(&mut tx, tenant.id, "NON_EXISTENT", 10, 0)
-        .await
-        .expect("Falha ao buscar logs por evento inexistente");
+    let logs_por_outro_evento =
+        buscar_audit_logs_por_evento(&mut tx, tenant.id, "NON_EXISTENT", 10, 0)
+            .await
+            .expect("Falha ao buscar logs por evento inexistente");
     assert!(logs_por_outro_evento.is_empty());
 
     // 4. Teardown: Reverte a transação para não poluir o banco de dados.
@@ -135,13 +136,12 @@ async fn test_audit_log_rls_isolation_enforced() {
 
     // Tenta explicitamente ler o log de A pela query direta na tabela usando o ID de A
     // (a policy do RLS deve impedir a leitura mesmo que tentemos burlar selecionando tenant_id de A).
-    let logs_a_tentativa: Vec<AuditLogEntry> = sqlx::query_as::<_, AuditLogEntry>(
-        "SELECT * FROM audit_log WHERE tenant_id = $1"
-    )
-    .bind(tenant_a.id)
-    .fetch_all(&mut *tx)
-    .await
-    .expect("Falha ao tentar selecionar dados cruzados de tenant");
+    let logs_a_tentativa: Vec<AuditLogEntry> =
+        sqlx::query_as::<_, AuditLogEntry>("SELECT * FROM audit_log WHERE tenant_id = $1")
+            .bind(tenant_a.id)
+            .fetch_all(&mut *tx)
+            .await
+            .expect("Falha ao tentar selecionar dados cruzados de tenant");
 
     assert!(
         logs_a_tentativa.is_empty(),
@@ -183,7 +183,10 @@ async fn test_audit_log_global_insertion_and_retrieval() {
         .expect("Falha ao buscar logs globais");
 
     let log_encontrado = logs_globais.iter().find(|l| l.id == log_id);
-    assert!(log_encontrado.is_some(), "Log global inserido não foi encontrado na busca global");
+    assert!(
+        log_encontrado.is_some(),
+        "Log global inserido não foi encontrado na busca global"
+    );
     let log = log_encontrado.unwrap();
     assert_eq!(log.tenant_id, None);
     assert_eq!(log.level, "WARN");
@@ -209,7 +212,10 @@ async fn test_audit_log_global_insertion_and_retrieval() {
 async fn test_audit_log_cascading_deletion_on_tenant() {
     // 1. Arrange: Obtém pool administrativo para manipulação de tenants globais e cascade.
     let admin_pool = obter_admin_pool_teste().await;
-    let mut tx = admin_pool.begin().await.expect("Falha ao iniciar transação admin");
+    let mut tx = admin_pool
+        .begin()
+        .await
+        .expect("Falha ao iniciar transação admin");
 
     // Cria um tenant temporário.
     let tenant = criar_tenant_para_teste(&mut tx, "Tenant Auditoria Cascade").await;
@@ -244,13 +250,12 @@ async fn test_audit_log_cascading_deletion_on_tenant() {
         .expect("Falha ao deletar tenant de teste");
 
     // 3. Assert: Verifica se o log correspondente sumiu (ON DELETE CASCADE).
-    let rows: Vec<AuditLogEntry> = sqlx::query_as::<_, AuditLogEntry>(
-        "SELECT * FROM audit_log WHERE id = $1"
-    )
-    .bind(log_id)
-    .fetch_all(&mut *tx)
-    .await
-    .expect("Falha ao buscar log pós-deleção");
+    let rows: Vec<AuditLogEntry> =
+        sqlx::query_as::<_, AuditLogEntry>("SELECT * FROM audit_log WHERE id = $1")
+            .bind(log_id)
+            .fetch_all(&mut *tx)
+            .await
+            .expect("Falha ao buscar log pós-deleção");
 
     assert!(
         rows.is_empty(),
@@ -258,20 +263,25 @@ async fn test_audit_log_cascading_deletion_on_tenant() {
     );
 
     // 4. Teardown
-    tx.rollback().await.expect("Falha ao reverter transação admin");
+    tx.rollback()
+        .await
+        .expect("Falha ao reverter transação admin");
 }
 
 #[tokio::test]
 async fn test_audit_log_user_deletion_sets_null() {
     // 1. Arrange: Obtém pool admin e inicia transação.
     let admin_pool = obter_admin_pool_teste().await;
-    let mut tx = admin_pool.begin().await.expect("Falha ao iniciar transação admin");
+    let mut tx = admin_pool
+        .begin()
+        .await
+        .expect("Falha ao iniciar transação admin");
 
     // Cria um usuário temporário no banco para o teste.
     let user_row = sqlx::query(
         "INSERT INTO auth_user (username, email, is_active, is_staff, is_superuser)
          VALUES ('temp_audit_user', 'temp_audit@test.com', true, false, false)
-         RETURNING id"
+         RETURNING id",
     )
     .fetch_one(&mut *tx)
     .await
@@ -305,13 +315,12 @@ async fn test_audit_log_user_deletion_sets_null() {
         .expect("Falha ao deletar usuário temporário");
 
     // 3. Assert: O log de auditoria deve continuar existindo, mas com o campo user_id = NULL.
-    let log_pos: AuditLogEntry = sqlx::query_as::<_, AuditLogEntry>(
-        "SELECT * FROM audit_log WHERE id = $1"
-    )
-    .bind(log_id)
-    .fetch_one(&mut *tx)
-    .await
-    .expect("Falha ao buscar log pós-exclusão do usuário");
+    let log_pos: AuditLogEntry =
+        sqlx::query_as::<_, AuditLogEntry>("SELECT * FROM audit_log WHERE id = $1")
+            .bind(log_id)
+            .fetch_one(&mut *tx)
+            .await
+            .expect("Falha ao buscar log pós-exclusão do usuário");
 
     assert_eq!(
         log_pos.user_id, None,

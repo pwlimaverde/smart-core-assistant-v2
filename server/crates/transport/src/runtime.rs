@@ -570,10 +570,10 @@ mod tests {
     fn parses_unix_domain_socket_endpoint_correctly() {
         // Arrange
         let endpoint_str = "unix:///var/run/test.sock";
-        
+
         // Act
         let parsed = Endpoint::parse(endpoint_str);
-        
+
         // Assert
         assert!(parsed.is_ok());
         match parsed.unwrap() {
@@ -588,10 +588,10 @@ mod tests {
     fn parses_tcp_socket_endpoint_correctly() {
         // Arrange
         let endpoint_str = "tcp://127.0.0.1:8080";
-        
+
         // Act
         let parsed = Endpoint::parse(endpoint_str);
-        
+
         // Assert
         assert!(parsed.is_ok());
         match parsed.unwrap() {
@@ -607,12 +607,11 @@ mod tests {
     fn fails_to_parse_endpoint_with_invalid_protocol() {
         // Arrange
         let endpoint_str = "invalid://var/run/test.sock";
-        
+
         // Act
         let parsed = Endpoint::parse(endpoint_str);
-        
+
         // Assert
         assert!(parsed.is_err());
     }
 }
-

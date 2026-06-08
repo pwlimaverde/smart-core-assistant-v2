@@ -98,7 +98,9 @@ mod tests {
         let ctx = get_test_context(vec!["clientes:read"], vec![]);
 
         // Possui o escopo exigido → Ok.
-        assert!(ctx.exigir_qualquer(&["clientes:read", "tenant:admin"]).is_ok());
+        assert!(ctx
+            .exigir_qualquer(&["clientes:read", "tenant:admin"])
+            .is_ok());
 
         // Não possui nenhum dos escopos → PermissionDenied.
         let negado = ctx.exigir_qualquer(&["clientes:write", "tenant:admin"]);
