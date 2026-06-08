@@ -187,6 +187,25 @@ mod tests {
             .await
             .unwrap();
 
+        // Garante o auth_user id=1 (owner do tenant inserido abaixo). Idempotente:
+        // existe no banco compartilhado, é criado no banco limpo do CI. A sequence é
+        // avançada para não colidir com inserts de id automático em outros testes.
+        sqlx::query(
+            "INSERT INTO auth_user (id, username, email, password_hash, is_superuser, is_staff) \
+             VALUES (1, 'ci_seed_admin', 'ci-seed@local', '', TRUE, TRUE) \
+             ON CONFLICT (id) DO NOTHING",
+        )
+        .execute(&pool)
+        .await
+        .expect("falha ao semear auth_user padrão");
+        sqlx::query(
+            "SELECT setval(pg_get_serial_sequence('auth_user','id'), \
+             GREATEST((SELECT COALESCE(MAX(id), 1) FROM auth_user), 1))",
+        )
+        .execute(&pool)
+        .await
+        .expect("falha ao ajustar a sequence de auth_user");
+
         let redis_url =
             std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6380".to_string());
         let redis_client = redis::Client::open(redis_url).unwrap();
