@@ -2,6 +2,29 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-06-07] - DevOps Completo: CI/CD, Ambientes e Provisionamento do Servidor
+
+> Ciclo PREVC `cicd-devops` concluído. Final-review (Opus):
+> `final-review-cicd-devops.md` — qualidade **CORRIGIDO**.
+
+### Adicionado
+- **Workflows GitHub Actions (`.github/workflows/`):** `ci.yml` (lint, testes, `cargo sqlx prepare --check` offline, detecção Flutter), `deploy-dev.yml` (build + deploy automático em push `dev` no self-hosted runner), `deploy-prod.yml` (build + deploy com approval manual, rollback via symlink/`PREV_RELEASE`, backup de banco, GitHub Release, job Flutter Windows) e `pr-to-main.yml` (PR automático `dev→main` após tag).
+- **Provisionamento do servidor (`infra/server-setup.sh`):** setup completo do Hostinger KVM2 (Ubuntu 22.04) — usuários `smartcore`/`gh-runner`, Caddy com TLS automático e h2c para gRPC, journald, ufw (só 22/80/443), sudoers restrito, `protoc`/`flatc`, postgresql-client.
+- **Systemd (`infra/systemd/`):** 14 service units (7 por ambiente dev/prod) + 2 targets, com `User=smartcore`, `NoNewPrivileges`, `PrivateTmp`, `EnvironmentFile` por ambiente e ordem de dependências (`runtime_api` depende dos demais).
+- **Observabilidade (`docker/`):** stack LGTM (Grafana, Loki, Tempo, Prometheus, OTEL Collector, Promtail) com `mem_limit` por container, rede externa `smartcore_v2_network` e datasources do Grafana pré-provisionados (correlação log↔trace e service map por UID).
+- **Backup cifrado dos `.env` (`infra/backup-envs.ps1`):** AES-256-CBC / PBKDF2 / 100k iterações, com manuseio de senha via `SecureString` e variável de ambiente (sem expor segredo na lista de processos).
+- **Documentação de deploy:** `README.md` (raiz) com instruções de CI/CD e `.env.example` com todas as variáveis de deploy (incluindo Grafana).
+
+### Corrigido (follow-up do final-review)
+- **Datasources do Grafana (`docker/observability/provisioning/datasources/ds.yml`):** `datasourceUid` referenciava o nome em vez do UID — adicionados `uid:` explícitos e corrigidas as correlações derivedField/serviceMap.
+- **Smoke tests (`deploy-dev.yml`/`deploy-prod.yml`):** ampliados de 4 para os 7 serviços, alinhando com o critério V.1 ("todos os serviços active").
+- **`backup-envs.ps1`:** removido código morto (`$PasswordBytes`) e endurecido o manuseio de senha.
+
+### Pendências remanescentes (trabalho futuro)
+- Separar `REDIS_BUS_URL` antes de F3 (registrado no plano).
+- `docker/compose/observability.yml`: trocar o default fraco `GRAFANA_ADMIN_PASSWORD:-admin_secret_pass` por variável obrigatória em produção.
+- `infra/.env.deploy.example` está coberto pelo `.gitignore` (`.env.*`) — versionar o template na feature de deploy-data/tunnel.
+
 ## [2026-06-05] - Refator de Arquitetura Modular por Contrato (RF0–RF6)
 
 > Ciclo PREVC `refator-arquitetura-modular` concluído. Final-review (Opus):

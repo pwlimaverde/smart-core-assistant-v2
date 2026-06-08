@@ -1,11 +1,13 @@
 ---
-status: in_progress
+status: completed
 generated: 2026-06-07
+completed: 2026-06-07
 slug: cicd-devops
 scale: LARGE
 artifacts:
-  plano_completo: "./cicd-devops/plano_completo_cicd-devops.md"
-  info_aux: "./cicd-devops/info_aux_cicd-devops.md"
+  plano_completo: "./plano_completo_cicd-devops.md"
+  info_aux: "./info_aux_cicd-devops.md"
+  final_review: "../../../workflow/docs/final-review-cicd-devops.md"
 phases:
   - id: "phase-p"
     name: "Planning — reestruturação do plano e validação de artefatos"
@@ -21,17 +23,17 @@ phases:
     name: "Execution — provisionamento do servidor e deploy completo"
     prevc: "E"
     agent: "devops-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-v"
     name: "Validation — primeiro deploy end-to-end e smoke tests"
     prevc: "V"
     agent: "devops-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-c"
     name: "Confirmation — alertas Grafana, backup .env, documentação final"
     prevc: "C"
     agent: "devops-specialist"
-    status: "pending"
+    status: "completed"
 ---
 
 # DevOps Completo: CI/CD, Ambientes e Provisionamento do Servidor
@@ -43,9 +45,9 @@ phases:
 ## Artefatos
 
 - **Plano completo (verdade técnica):**
-  [`./cicd-devops/plano_completo_cicd-devops.md`](./cicd-devops/plano_completo_cicd-devops.md)
+  [`./plano_completo_cicd-devops.md`](./plano_completo_cicd-devops.md)
 - **Documentação auxiliar (ferramentas + serviços):**
-  [`./cicd-devops/info_aux_cicd-devops.md`](./cicd-devops/info_aux_cicd-devops.md)
+  [`./info_aux_cicd-devops.md`](./info_aux_cicd-devops.md)
 
 ## Objetivo
 
@@ -80,10 +82,10 @@ datasources funcionais; rollback testado (dev e prod).
 | Fase | Nome | Agente | Status |
 |---|---|---|---|
 | **P** | Planning — reestruturação do plano e validação de artefatos | DevOps Specialist | ✅ completed |
-| **R** | Review — revisão de workflows, systemd, scripts e segurança | DevOps Specialist (+ Security Auditor) | ⬜ pending |
-| **E** | Execution — provisionamento do servidor e deploy completo | DevOps Specialist | ⬜ pending |
-| **V** | Validation — primeiro deploy end-to-end e smoke tests | DevOps Specialist | ⬜ pending |
-| **C** | Confirmation — alertas Grafana, backup .env, documentação final | DevOps Specialist | ⬜ pending |
+| **R** | Review — revisão de workflows, systemd, scripts e segurança | DevOps Specialist (+ Security Auditor) | ✅ completed |
+| **E** | Execution — provisionamento do servidor e deploy completo | DevOps Specialist | ✅ completed |
+| **V** | Validation — primeiro deploy end-to-end e smoke tests | DevOps Specialist | ✅ completed |
+| **C** | Confirmation — alertas Grafana, backup .env, documentação final | DevOps Specialist | ✅ completed |
 
 ## Decisões-chave (resumo — detalhes no plano completo)
 

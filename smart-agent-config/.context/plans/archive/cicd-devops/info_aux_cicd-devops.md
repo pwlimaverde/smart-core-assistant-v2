@@ -1,8 +1,8 @@
 # Documentação Auxiliar — CI/CD DevOps
 
 > Gerado em: 2026-06-07
-> Plano canônico: `.context/plans/cicd-devops.md`
-> Plano completo: `.context/plans/cicd-devops/plano_completo_cicd-devops.md`
+> Plano canônico: `.context/plans/archive/cicd-devops/cicd-devops.md`
+> Plano completo: `.context/plans/archive/cicd-devops/plano_completo_cicd-devops.md`
 
 ## Natureza do Plano
 

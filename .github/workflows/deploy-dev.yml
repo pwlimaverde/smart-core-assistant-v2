@@ -67,7 +67,7 @@ jobs:
         run: |
           sleep 8
           FAILED=0
-          for svc in data_redis data_postgres data_storage runtime_api; do
+          for svc in data_redis data_postgres data_storage control_plane messaging_gateway worker runtime_api; do
             STATUS=$(sudo systemctl is-active smartcore-dev-$svc 2>/dev/null || echo "unknown")
             if [ "$STATUS" != "active" ]; then
               echo "ERRO: smartcore-dev-$svc → $STATUS"
