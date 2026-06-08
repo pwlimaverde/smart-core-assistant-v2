@@ -27,6 +27,19 @@ jobs:
         with:
           workspaces: server
 
+      # O build.rs do crate "contracts" gera gRPC/FlatBuffers e exige protoc + flatc.
+      # No servidor isso vem do server-setup.sh; no ubuntu-latest precisamos instalar
+      # (mesmas fontes/versão do server-setup) ou o clippy/test falham ao compilar.
+      - name: Instala protoc e flatc (geração de contratos)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq protobuf-compiler
+          wget -q -O /tmp/flatc.zip https://github.com/google/flatbuffers/releases/download/v25.12.19-2026-02-06-03fffb2/Linux.flatc.binary.g%2B%2B-13.zip
+          unzip -q -o /tmp/flatc.zip -d /tmp/flatc_extracted
+          sudo mv /tmp/flatc_extracted/flatc /usr/local/bin/flatc
+          sudo chmod +x /usr/local/bin/flatc
+          protoc --version && flatc --version
+
       - name: cargo fmt --check
         working-directory: server
         run: cargo fmt --all -- --check
