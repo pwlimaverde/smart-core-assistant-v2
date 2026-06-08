@@ -14,6 +14,34 @@ jobs:
   rust:
     name: Rust — lint e testes
     runs-on: ubuntu-latest
+
+    # Infra de teste: Postgres (com pgvector) e Redis sobem como service containers
+    # mapeados nas MESMAS portas que os testes esperam (5434 e 6380). Assim o
+    # test_support detecta a porta aberta e NÃO tenta abrir o túnel SSH.
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: smartcore_v2
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6380:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - uses: actions/checkout@v4
 
@@ -33,7 +61,7 @@ jobs:
       - name: Instala protoc e flatc (geração de contratos)
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq protobuf-compiler
+          sudo apt-get install -y -qq protobuf-compiler postgresql-client
           wget -q -O /tmp/flatc.zip https://github.com/google/flatbuffers/releases/download/v25.12.19-2026-02-06-03fffb2/Linux.flatc.binary.g%2B%2B-13.zip
           unzip -q -o /tmp/flatc.zip -d /tmp/flatc_extracted
           sudo mv /tmp/flatc_extracted/flatc /usr/local/bin/flatc
@@ -50,10 +78,34 @@ jobs:
           SQLX_OFFLINE: "true"
         run: cargo clippy --all-targets --all-features -- -D warnings
 
+      # Cria o role restrito smartcore_app (NOBYPASSRLS) e configura privilégios
+      # padrão para as tabelas que as migrations criam em runtime (rodadas pelo
+      # role admin = postgres). Sem isto, a conexão DATABASE_URL (app) não enxerga
+      # as tabelas e o RLS não pode ser validado.
+      - name: Bootstrap do banco de teste (role app + RLS)
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -p 5434 -U postgres -d smartcore_v2 -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'smartcore_app') THEN
+              CREATE ROLE smartcore_app LOGIN PASSWORD 'smartcore_app' NOBYPASSRLS;
+            END IF;
+          END $$;
+          GRANT USAGE ON SCHEMA public TO smartcore_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO smartcore_app;
+          ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+            GRANT USAGE, SELECT ON SEQUENCES TO smartcore_app;
+          SQL
+
       - name: cargo test (unit + lib)
         working-directory: server
         env:
           SQLX_OFFLINE: "true"
+          DATABASE_URL: postgres://smartcore_app:smartcore_app@localhost:5434/smartcore_v2
+          DATABASE_ADMIN_URL: postgres://postgres:postgres@localhost:5434/smartcore_v2
+          REDIS_URL: redis://localhost:6380
         run: cargo test --workspace --lib --bins 2>&1
 
       # Valida que o cache .sqlx/ versionado está em sincronia com as queries do código.
@@ -66,6 +118,9 @@ jobs:
           cargo sqlx prepare --workspace --check
         env:
           SQLX_OFFLINE: "true"
+          # prepare --check conecta no banco para revalidar as queries; o schema já
+          # foi criado pelas migrations no step de testes (mesmo container persiste).
+          DATABASE_URL: postgres://postgres:postgres@localhost:5434/smartcore_v2
 
   # Detecta se o app Flutter já existe (clients/ ainda é ⬜ pendente no projeto).
   # hashFiles() NÃO funciona em if de nível de job (avaliado antes do checkout),
