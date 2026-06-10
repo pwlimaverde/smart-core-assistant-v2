@@ -5,40 +5,43 @@ description: Generate and update technical documentation. Use when Documenting n
 
 ## Workflow
 
-1. Identify the target audience
-2. Determine what needs to be documented
-3. Write clear, concise explanations
-4. Include working code examples
-5. Add any necessary diagrams or visuals
-6. Review for clarity and completeness
-7. Verify examples work with current code
+1. Identifique o público e o lugar certo: doc comment no código, `doc_dev/` (planejamento) ou `.context/docs/` (snapshot p/ agentes)
+2. Escreva em **pt-br com acentuação correta**; identificadores e nomes de arquivos em inglês
+3. Documente o *porquê* e as invariantes — não repita o que o código já mostra
+4. Inclua exemplos funcionais na linguagem certa (Rust `///`, Python docstring, Dart `///`)
+5. Atualize a doc no mesmo PR da mudança de código
+6. Mudança arquitetural → refletir em `.context/docs/architecture.md` e no plano em `doc_dev/`
 
 ## Examples
 
-**Function documentation:**
-```typescript
-/**
- * Calculates the total price of items in a cart.
- *
- * @param items - Array of cart items with price property
- * @returns The sum of all item prices
- * @throws {Error} If items is not an array
- *
- * @example
- * const total = calculateTotal([{ price: 10 }, { price: 20 }]);
- * // Returns: 30
- */
-function calculateTotal(items: CartItem[]): number
+**Rust (doc comment em pt-br):**
+```rust
+/// Decide a política de ticket para uma mensagem recebida.
+///
+/// Reaproveita ticket ativo (`FILA`/`EM_ATENDIMENTO`/`PENDENCIA`);
+/// dentro da janela de reabertura trata como feedback; fora dela,
+/// cria um novo atendimento.
+pub fn decidir_politica_ticket(ctx: &TicketContext) -> TicketDecision { ... }
+```
+
+**Python (docstring em pt-br):**
+```python
+def transcrever_audio(pointer: MediaPointer) -> str:
+    """Transcreve o áudio apontado pelo MediaPointer.
+
+    O binário é lido do storage transitório (R2); o resultado vira
+    `analise_midia` na mensagem. Lança AudioFormatError para mimetype
+    não suportado.
+    """
 ```
 
 ## Quality Bar
 
-- Write for your audience's knowledge level
-- Lead with the most important information
-- Include working, copy-pasteable examples
-- Keep documentation close to the code
-- Update docs in the same PR as code changes
-- Use consistent formatting and terminology
+- Comentários/docstrings em pt-br; código e identificadores em inglês
+- Exemplos compiláveis/copiáveis e coerentes com o código atual
+- Regras de domínio críticas documentadas com exemplo concreto (política de ticket, janela de reabertura, bot bloqueado)
+- Sem duplicação: `doc_dev/` é o planejamento canônico; `.context/docs/` resume e aponta para ele
+- Sem referências a artefatos de build ou arquivos temporários
 
 ## Resource Strategy
 

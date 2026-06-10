@@ -211,7 +211,7 @@ padrão. Rode-os sob demanda com `cargo test -- --ignored`.
 
 - Anote funções `async` com `#[tokio::test]` (não com `#[test]`). Por padrão isso cria um
   runtime **current-thread** por teste — isolado e barato.
-- **Flavor multi-thread** quando o teste exercita concorrência real (ex.: `tokio::spawn` em
+- **Flavor multi-thread** quando o teste exercita concorrência real (ex.: `tokio::spawn` in
   múltiplas tasks que precisam progredir em paralelo):
 
   ```rust
@@ -223,7 +223,7 @@ padrão. Rode-os sob demanda com `cargo test -- --ignored`.
   que trava degrada a suíte inteira. Na expiração, afirme o `Err` e registre contexto:
 
   ```rust
-  use tokio::time::{timeout, Duration};
+  use tokio::time::{timeout, Duration};Location
 
   #[tokio::test]
   async fn request_times_out_when_server_silent() {

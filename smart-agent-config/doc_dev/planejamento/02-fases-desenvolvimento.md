@@ -37,7 +37,7 @@
 ### O que já está pronto (✅)
 - **Crates de Base/Fundação** — `contracts` (schemas proto/fbs, Envelope e stubs gerados), `transport` (codec FlatBuffers/gRPC, canais UDS/TCP/WS, barramento `transport::bus`), `error_core` (erros serializáveis `ErrorEnvelope`) e `observability` (tracing, `traceparent`, auditoria rewired para Streams).
 - **Serviços de Dados (data_*)** — `data_postgres` (encapsulando RLS pool, migrations e CRUD Postgres de `infrastructure_postgres`), `data_redis` (encapsulando cache, tokens, locks de `infrastructure_redis`) e `data_storage` (encapsulando Cloudflare R2 de `infrastructure_storage`).
-- **Infraestrutura de dados + deploy** — `docker/compose/data.yml` (PG+pgvector, Redis, MinIO) e scripts `infra/` de automação e túnel SSH.
+- **Infraestrutura de dados + deploy** — `docker/compose/data.yml` (PG+pgvector, Redis; MinIO legado no compose, sem uso — storage é R2 direto) e scripts `infra/` de automação e túnel SSH.
 - **Bootstrap de superusuário** — CLI `create-superuser` e `delete-superuser` no `control_plane` (thin RPC client → `data_postgres`), com auditoria e trail.
 
 ### O que está em andamento / próximo (🚧)
@@ -243,7 +243,7 @@ pelas telas de login e cadastro junto do auth.
 - **DoD:** `cargo build` verde no workspace; `cargo fmt --check` limpo.
 
 ### Etapa 0.3 — Infra local de dados — ✅
-- `docker/compose/data.yml`: PostgreSQL 16 + pgvector, Redis 7, MinIO.
+- `docker/compose/data.yml`: PostgreSQL 16 + pgvector, Redis 7 (MinIO legado, sem uso — storage é Cloudflare R2 direto).
 - `docker/init-scripts/01-extensions.sql` (`vector`, `uuid-ossp`).
 - **DoD:** `docker compose -f docker/compose/data.yml up -d` sobe saudável.
 
@@ -590,7 +590,7 @@ chat na F5). Aqui não se "constrói tudo do zero" — refina-se o conjunto.
 | Atendimento/Mensagem/Movimento | `atendimentos/` + migration 0006 | ✅ (persist.) |
 | Refresh/blocklist/cache de permissões | `infrastructure_redis` (auth_tokens, cache) | ✅ |
 | Event bus (substitui fila Celery) | `infrastructure_redis::event_bus` | ✅ |
-| Mídia (binário transitório) | `infrastructure_storage` (R2/MinIO) | 🚧 (stub filesystem; S3/R2 pendente) |
+| Mídia (binário transitório) | `infrastructure_storage` (Cloudflare R2) | ✅ (cliente `aws-sdk-s3` real, presign real) |
 | Auth/JWT/sessão + `runtime_api` | `application` + `apps/runtime_api` | 🚧 |
 | `AttendanceOrchestrator` (orquestração) | `worker` + `application` | ⬜ |
 | Celery: `process_contact_response_task` | `worker` consumindo Streams | ⬜ |
@@ -605,7 +605,7 @@ chat na F5). Aqui não se "constrói tudo do zero" — refina-se o conjunto.
 - [05-observabilidade.md](./05-observabilidade.md) — logs/métricas/traces + LGTM.
 - [06-tratamento-de-erros.md](./06-tratamento-de-erros.md) — crate `error_core`.
 - [07-crate-contracts.md](./07-crate-contracts.md) — contratos/eventos/envelope.
-- [08-infraestrutura-storage.md](./08-infraestrutura-storage.md) — storage R2/MinIO.
+- [08-infraestrutura-storage.md](./08-infraestrutura-storage.md) — storage Cloudflare R2.
 - [09-comunicacao-e-autenticacao.md](./09-comunicacao-e-autenticacao.md) — transporte + auth.
 - [10-plano-cicd-devops.md](./10-plano-cicd-devops.md)
   — plano-mãe CI/CD + DevOps (docs 11/12 a detalhar).

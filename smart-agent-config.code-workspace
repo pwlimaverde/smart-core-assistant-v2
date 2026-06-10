@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "smart-agent-config"
+		},
+		{
+			"path": "old"
+		},
+		{
+			"path": "."
+		}
+	],
+	"settings": {}
+}

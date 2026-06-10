@@ -10,46 +10,45 @@ scaffoldVersion: "2.0.0"
 ---
 ## Workflow
 
-1. Reproduce the bug consistently
-2. Gather information (logs, stack traces, steps)
-3. Identify when the bug was introduced (git bisect)
-4. Form a hypothesis about the cause
-5. Verify hypothesis with debugging
-6. Document the root cause
-7. Plan the fix approach
+1. Reproduza o bug de forma consistente (teste que falha > reprodução manual)
+2. Identifique o processo afetado: app de negócio, serviço `data_*`, `ia_engine` ou client Flutter
+3. Colete evidências: logs estruturados (`observability`/OTLP), `traceparent`, payloads de `Envelope`/`ErrorEnvelope`
+4. Verifique as suspeitas clássicas do projeto: idempotência (`wa_message_id`), isolamento de tenant (RLS/`tenant_id`), debounce (rajadas), retry/backoff de mídia
+5. Identifique quando o bug foi introduzido (`git bisect` se necessário)
+6. Formule hipótese, confirme com debug/teste e documente a causa raiz
+7. Escreva o teste de regressão junto com o fix
 
 ## Examples
 
-**Bug investigation notes:**
+**Notas de investigação:**
 ```
-## Bug: User profile fails to load
+## Bug: mensagem duplicada no ticket após rajada
 
-### Reproduction:
-1. Log in as any user
-2. Navigate to /profile
-3. Error: "Cannot read property 'name' of undefined"
+### Reprodução:
+1. Enviar 3 mensagens em < 2s para a mesma instância
+2. Worker processa 2 lotes em vez de 1
 
-### Investigation:
-- Stack trace points to ProfilePage.tsx:25
-- API returns 200 but empty body when session expired
-- Bug introduced in commit abc123 (session refactor)
+### Investigação:
+- Trace mostra dois consumers pegando eventos do mesmo contato
+- Lock de debounce expira antes do fim da janela de acumulação
+- Introduzido no commit abc123 (ajuste do TTL do lock)
 
-### Root cause:
-Session middleware not checking token expiration correctly.
-Returns empty response instead of 401.
+### Causa raiz:
+TTL do lock menor que a janela de debounce → segundo consumer
+adquire o lock e processa a rajada parcial.
 
-### Fix approach:
-Update session middleware to return 401 when token expired.
+### Fix:
+TTL = janela + margem; teste de regressão
+`debounce_burst_results_in_single_batch` em tests/event_bus/.
 ```
 
 ## Quality Bar
 
-- Always reproduce before investigating
-- Check recent changes that might relate
-- Use debugger and logging strategically
-- Document your findings
-- Consider if bug exists elsewhere
-- Write a regression test with the fix
+- Sempre reproduzir antes de investigar; preferir reprodução por teste
+- Para bugs de dados, validar contra banco real (transação+rollback), nunca mock
+- Checar se o bug existe em outros pontos (mesmo padrão em outro handler/feature)
+- Causa raiz documentada em pt-br; teste de regressão obrigatório no fix
+- Bug de tenant isolation é severidade máxima: validar policies RLS + filtro `tenant_id`
 
 ## Resource Strategy
 

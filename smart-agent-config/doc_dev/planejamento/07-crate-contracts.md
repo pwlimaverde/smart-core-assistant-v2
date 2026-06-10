@@ -21,7 +21,7 @@ A crate serve como a **única fonte de verdade** para:
 
 Ao contrário do planejamento inicial conceitual que previa o gerenciamento manual e separado de arquivos `.proto` e `.fbs`, a implementação física estabeleceu uma **pipeline integrada de transpilação no build**:
 
-1. **Fonte Única Canônica**: Todos os contratos e DTOs são autorados como arquivos `.proto` no diretório `server/crates/contracts/schemas/`, organizado por domínio: `envelope.proto`, `errors.proto`, `ai/ai_engine.proto`, `events/message.proto`, `events/persistence.proto`, `queries/auth.proto`, `queries/conversation.proto`.
+1. **Fonte Única Canônica**: Todos os contratos e DTOs são autorados como arquivos `.proto` no diretório `server/crates/contracts/schemas/`, organizado por domínio: `envelope.proto`, `errors.proto`, `ai/ia_engine.proto`, `events/message.proto`, `events/persistence.proto`, `queries/auth.proto`, `queries/conversation.proto`.
 2. **Transpilação via `build.rs`**: O arquivo `build.rs` da crate `contracts` executa o compilador `flatc` para transpilar automaticamente os arquivos `.proto` para esquemas FlatBuffers (`.fbs`), gerando os wrappers de serialização.
 3. **Geração de Stubs Rust**: O `build.rs` gera código Rust idiomático tanto para o codec FlatBuffers (usado no IPC local por UDS) quanto para Tonic/gRPC (usado como fallback de comunicação TCP e rede).
 4. **Benefício**: Elimina conflitos de importação circular e incompatibilidades de namespaces no compilador do FlatBuffers, garantindo que o mesmo schema de dados alimente ambos os transportes.

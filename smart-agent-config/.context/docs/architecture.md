@@ -36,13 +36,13 @@ WhatsApp ──webhook──► Evolution Go (multi-instância)
         ▼                  ▼                   ▼
  ┌────────────┐    ┌──────────────┐    ┌──────────────┐
  │data_postgres│   │  data_redis  │    │ data_storage │   ← únicos donos das infra_* libs
- │ PG+pgvector │   │ cache/tokens │    │  R2/MinIO*   │
- │ +RLS+outbox │   │ locks/bus    │    │  (*stub fs)  │
+ │ PG+pgvector │   │ cache/tokens │    │ Cloudflare R2│
+ │ +RLS+outbox │   │ locks/bus    │    │ (aws-sdk-s3) │
  └────────────┘    └──────────────┘    └──────────────┘
         ▲
-       gRPC único: unário (comandos/consultas) + Server Streaming (realtime)
+       Contrato unificado D7: FlatBuffers/TCP padrão + gRPC fallback + Server Streaming (realtime)
                     ┌──────┴──────────┐
-                    │  runtime_api    │  ← API + realtime p/ Flutter (desktop HTTP/2; web gRPC-Web)
+                    │  runtime_api    │  ← API + realtime p/ Flutter (desktop TCP/HTTP2; web WS binário/gRPC-Web)
                     └─────────────────┘
                            ▲
                     Flutter (Windows → Web)
@@ -63,7 +63,7 @@ serviços `data_*`** acessados via **RPC sobre Unix Domain Sockets com FlatBuffe
 - **Serviços de dados (`apps/data_*`)** — únicos donos das libs de infraestrutura:
   - `data_postgres` encapsula `infrastructure_postgres` (RLS, migrations, CRUD, outbox relay);
   - `data_redis` encapsula `infrastructure_redis` (cache, tokens, locks);
-  - `data_storage` encapsula `infrastructure_storage` (hoje stub filesystem; S3/R2 pendente).
+  - `data_storage` encapsula `infrastructure_storage` (Cloudflare R2 real via `aws-sdk-s3`; presign + purga via bus).
   - Expõem servidor RPC (FlatBuffers/UDS, gRPC fallback) e consomem o bus para tarefas assíncronas.
 - **Apps de negócio (`apps/runtime_api`, `worker`, `messaging_gateway`, `control_plane`)** —
   **não** importam `infrastructure_*`; falam com os `data_*` via cliente RPC tipado de `transport`.
@@ -100,7 +100,7 @@ serviços `data_*`** acessados via **RPC sobre Unix Domain Sockets com FlatBuffe
 |---------|-----------|-------------|-----------|
 | Event-Driven | Alta | `messaging_gateway` → Redis Streams → `worker` | Webhook publica evento; worker consome assincronamente |
 | RPC por contrato | Alta | `apps/data_*` + `crates/transport`/`contracts` | Acesso a dados isolado em serviços via UDS/FlatBuffers (gRPC fallback) |
-| CQRS (leve) | Média | `runtime_api` | Comandos/consultas via gRPC unário; realtime via gRPC Server Streaming (transporte único — decisão D7) |
+| CQRS (leve) | Média | `runtime_api` | Comandos/consultas req/reply (FlatBuffers padrão, gRPC fallback); realtime via Server Streaming (contrato unificado — decisão D7) |
 | Repository | Alta | `crates/infrastructure_postgres` | Adaptadores isolados do domínio (consumidos só por `data_postgres`) |
 | Outbox + relay | Alta | `data_postgres` (migration 0011) | Escrita transacional + `LISTEN/NOTIFY` → publica no bus |
 | Domain-Driven Design | Planejado | `crates/domain_*` (não criados) | Bounded contexts; regras puras sem I/O — extraídas da `application` quando justificar |
@@ -111,7 +111,7 @@ serviços `data_*`** acessados via **RPC sobre Unix Domain Sockets com FlatBuffe
 
 - `apps/messaging_gateway/src/main.rs` — ingestão de webhooks
 - `apps/worker/src/main.rs` — processamento de eventos de domínio
-- `apps/runtime_api/src/main.rs` — API gRPC (unário + Server Streaming) para o Flutter
+- `apps/runtime_api/src/main.rs` — API para o Flutter (contrato unificado D7: FlatBuffers padrão, gRPC fallback, Server Streaming)
 - `apps/control_plane/src/main.rs` — back office / gestão de tenants
 - `ia_engine/src/server.py` — serviço gRPC de IA (Python)
 - `clients/flutter_windows/lib/main.dart` — app Flutter Windows
@@ -120,7 +120,7 @@ serviços `data_*`** acessados via **RPC sobre Unix Domain Sockets com FlatBuffe
 > (`contracts`, `transport`, `error_core`, `observability`), os serviços `data_*` (RPC sobre
 > UDS/FlatBuffers + consumo do bus) e as libs `infrastructure_postgres` (RLS, migrations
 > 0001–0011, crypto, auth, `RequestContext`, outbox) e `infrastructure_redis` (bus, auth_tokens,
-> cache, locks). `infrastructure_storage` ainda é **stub filesystem**. O **auth**
+> cache, locks) e `infrastructure_storage` (**Cloudflare R2 real** via `aws-sdk-s3`). O **auth**
 > (`application`/`runtime_api`) e os apps de negócio (`worker`, `messaging_gateway`,
 > `control_plane`) estão **bootstrapados/em andamento**; `ia_engine`, `local_engine` e os
 > clients Flutter **não foram criados**. Status real por etapa: `doc_dev/planejamento/02-fases-desenvolvimento.md`.
@@ -146,15 +146,15 @@ serviços `data_*`** acessados via **RPC sobre Unix Domain Sockets com FlatBuffe
 - **Gateway ↔ Worker**: `transport::bus` (Redis Streams) com `TenantEnvelope<T>` (tenant_id no envelope). Gateway nunca conhece regras de domínio.
 - **Worker ↔ ia_engine**: **gRPC** (processos separados; FFI/PyO3 descartado — §13.1). Rust nunca depende de detalhes do LangChain; contrato `.proto`/`domain_ai`. O worker também substitui o Celery da v1 (fila via Redis Streams + agendamento de feedback/retenção).
 - **Worker ↔ Runtime API**: PostgreSQL + Redis pub/sub para fan-out de eventos realtime por tenant; o `runtime_api` empurra cada evento pelo **stream gRPC** aberto pelo cliente.
-- **Flutter ↔ Runtime API**: **gRPC único** — unário (comandos/consultas) + Server Streaming (realtime). Desktop usa gRPC nativo HTTP/2; Web usa gRPC-Web (`tonic-web`). Sem WebSocket (decisão D7).
+- **Flutter ↔ Runtime API**: **contrato unificado com transporte flexível (decisão D7)** — FlatBuffers padrão (desktop: TCP/TLS; Web: WebSocket binário) com gRPC como fallback comutável (`SMARTCORE_API_CODEC`; Web via gRPC-Web/`tonic-web`); realtime por Server Streaming.
 - **Flutter ↔ local_engine**: FFI via `flutter_rust_bridge` (somente Windows). Web usa `RemoteOnly`.
 
 ## External Service Dependencies
 
-- **Evolution Go**: gateway WhatsApp multi-instância. Auth: `apikey` por instância. MinIO/S3 integrado para mídia.
+- **Evolution Go**: gateway WhatsApp multi-instância. Auth: `apikey` por instância; expõe `mediaUrl` no payload via storage S3 próprio.
 - **PostgreSQL + pgvector**: banco unificado com RLS. `tenant_id` obrigatório em todas as tabelas.
 - **Redis Streams**: event bus com consumer groups. Namespace por tenant para cache/presença.
-- **MinIO/S3**: storage transitório de mídia (TTL curto; cache permanente no cliente).
+- **Cloudflare R2 (S3-compatible)**: storage transitório de mídia (TTL curto; cache permanente no cliente). Acesso HTTPS direto, sem MinIO/túnel.
 - **OpenAI / Groq / Ollama**: provedores de LLM abstraídos pelo LangChain no `ia_engine`.
 
 ## Key Decisions & Trade-offs
@@ -164,7 +164,7 @@ serviços `data_*`** acessados via **RPC sobre Unix Domain Sockets com FlatBuffe
 | Granularidade | Modular monolith (Cargo workspace) | Isolamento lógico agora; promoção futura sem reescrever |
 | Banco multi-tenant | Um PostgreSQL + RLS | Sem provisionamento por tenant; migrations únicas |
 | IA (`ia_engine`) | Serviço Python separado via **gRPC** (não FFI/PyO3) | Ecossistema maduro; isola a parte imatura; isolamento de processo + escala por réplicas (vence o GIL) |
-| Flutter ↔ Rust | Híbrido: gRPC único (unário + Server Streaming) + FFI local | Servidor é fonte da verdade; FFI dá performance/offline no Windows |
+| Flutter ↔ Rust | Contrato unificado D7 (FlatBuffers padrão + gRPC fallback + Server Streaming) + FFI local | Servidor é fonte da verdade; transporte comutável por configuração; FFI dá performance/offline no Windows |
 | Ordem de entrega | Windows primeiro | Foco; port Web limpo via abstração `DataSource` |
 | Construção da UI | Incremental, colada a cada feature (decisão D8) | A tela nasce junto da feature que valida (ex.: auth → login/cadastro); 2 apps Flutter + design system `core_ui` (tema dark) |
 

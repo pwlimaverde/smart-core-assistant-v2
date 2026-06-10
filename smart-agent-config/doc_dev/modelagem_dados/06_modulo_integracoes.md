@@ -27,7 +27,7 @@ Configurações de armazenamento de mídias suportadas pelo servidor WhatsApp.
 
 *   *Opções do Enum (TextChoices):*
     *   `none` (Sem storage): Download de mídias sob demanda (o painel precisa chamar a API `/message/downloadmedia`).
-    *   `s3` (S3/MinIO): O servidor Evolution já grava e disponibiliza a URL direta da mídia no payload (`mediaUrl`), dispensando requisições extras de download.
+    *   `s3` (S3-compatible/R2): O servidor Evolution já grava e disponibiliza a URL direta da mídia no payload (`mediaUrl`), dispensando requisições extras de download.
 
 ---
 

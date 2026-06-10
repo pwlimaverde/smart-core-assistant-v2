@@ -102,7 +102,7 @@ smart-core-assistant-v2/                    # raiz do monorepo / git root
 │
 ├── docker/                                 # Infra local de desenvolvimento
 │   ├── compose/
-│   │   └── data.yml                        # PostgreSQL + pgvector, Redis, MinIO
+│   │   └── data.yml                        # PostgreSQL + pgvector, Redis (MinIO legado, sem uso)
 │   └── Dockerfile                          # Dockerfile principal (server Rust)
 │
 ├── smart-agent-config/                     # META: Planejamento e orquestração de agentes
@@ -329,7 +329,7 @@ Commits em inglês, sem `Co-Authored-By` nem rodapés de ferramenta de IA.
 
 ### Infra local
 ```bash
-# Sobe PostgreSQL, Redis, MinIO
+# Sobe PostgreSQL e Redis (storage é Cloudflare R2 direto)
 docker compose -f docker/compose/data.yml up -d
 ```
 

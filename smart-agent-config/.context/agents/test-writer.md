@@ -11,10 +11,12 @@ scaffoldVersion: "2.0.0"
 
 ## Responsibilities
 
-- Escrever testes unitários para regras de domínio em `crates/domain_*` (sem I/O, sem mocks).
-- Escrever testes de integração com banco real para `crates/infrastructure_postgres`.
+- Seguir o padrão canônico da skill **test-rust**: unitários inline (`#[cfg(test)]`), integração em `tests/` com agregador `integration_tests.rs` + submódulos, helpers em `tests/common/mod.rs`, AAA, `anyhow::Result<()>` com `?`.
+- Escrever testes unitários para regras puras (`crates/application`, futuros `domain_*`) sem I/O e sem mocks.
+- Escrever testes de integração com banco real para `crates/infrastructure_postgres` (transação+rollback; túnel sobe via `test_support::ensure_tunnel()`).
 - Cobrir os casos críticos: política de ticket, bot bloqueado, janela de reabertura, idempotência, RLS.
-- Escrever testes para o `ia_engine` com pytest (via `uv`); reaproveitar fixtures da v1 ao portar o `FeaturesCompose`.
+- Escrever testes para o `ia_engine` com pytest + pytest-asyncio (via `uv run pytest`); reaproveitar fixtures da v1 ao portar o `FeaturesCompose`.
+- Flutter: unitários e widget tests com `flutter_test` em `clients/*/test/` e `clients/packages/*/test/`.
 
 ## Critical Test Cases
 
@@ -32,4 +34,5 @@ scaffoldVersion: "2.0.0"
 
 | Skill | Description |
 |-------|-------------|
+| [test-rust](./../skills/test-rust/SKILL.md) | Padrão canônico de testes da stack Rust (unitário, integração, async, banco) |
 | [test-generation](./../skills/test-generation/SKILL.md) | Gerar casos de teste abrangentes |

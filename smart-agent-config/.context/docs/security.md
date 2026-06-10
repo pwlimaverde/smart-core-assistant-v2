@@ -42,8 +42,8 @@ O isolamento multi-tenant é a preocupação central. Dois mecanismos em profund
 
 ## Risks & Open Decisions
 
-- **RLS precisa ser testada rigorosamente** (migração mental de banco-por-tenant para banco único).
-- **Auth/RBAC do Flutter**: protocolo final a definir antes do Runtime API.
+- **RLS já coberta por testes de integração reais** (cross-tenant negado, fail-closed); manter cobertura a cada nova tabela/policy.
+- **Auth**: fundação pronta (Argon2, refresh com rotação/reuse-detection + blocklist); falta o módulo `user-auth-module` (JWT no `runtime_api`) e o RBAC do Flutter.
 - **Retenção de mídia**: política de expiração deve equilibrar custo × disponibilidade multi-operador/Web.
 - **FFI dual-target**: somente lógica válida offline/cache entra no `local_engine` — nada multi-tenant sensível.
 

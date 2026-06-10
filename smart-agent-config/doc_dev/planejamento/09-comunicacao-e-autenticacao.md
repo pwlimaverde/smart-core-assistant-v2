@@ -79,7 +79,7 @@ A segurança e o isolamento de dados são reforçados a cada chamada de banco:
 | Variável | Obrigatória | Padrão | Descrição |
 |---|---|---|---|
 | `JWT_SECRET` | ✅ | — | Chave de assinatura criptográfica HMAC-SHA256. |
-| `S3_ACCESS_KEY_ID` | ✅ | — | Credenciais S3 (R2/MinIO) consumidas pelo `data_storage`. |
+| `S3_ACCESS_KEY_ID` | ✅ | — | Credenciais S3 (Cloudflare R2) consumidas pelo `data_storage`. |
 | `DATABASE_ADMIN_URL` | ✅ | — | Conexão com privilégios de bypass RLS para autenticação inicial. |
 | `REDIS_URL` | ✅ | — | String de conexão com o Redis de cache e barramento. |
 

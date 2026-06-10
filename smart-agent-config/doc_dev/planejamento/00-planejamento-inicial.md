@@ -169,7 +169,7 @@ O `worker` centraliza também os agendamentos temporais (timeout de feedback, pu
 ### 4.5 Serviços de Acesso a Dados (data_*) - Âncoras do Sistema
 - **`data_postgres`**: Responsável único por gerenciar o pool `sqlx`, rodar migrations, validar Row-Level Security (RLS) através do `RequestContext`, e executar queries ACID. Oferece planos de escrita-com-ack/leitura (RPC síncrono) e escrita assíncrona baseada em eventos do bus.
 - **`data_redis`**: Responsável único por mediar as operações síncronas de cache, locks de debounce, presença de atendentes e tokens de autenticação (refresh tokens). O barramento de eventos (Streams) fica a cargo da biblioteca `transport`.
-- **`data_storage`**: Responsável por encapsular as operações de escrita, leitura e pré-assinatura de URLs no Cloudflare R2 (ou MinIO local). Realiza limpezas e purgas de mídias acionadas de forma assíncrona por eventos.
+- **`data_storage`**: Responsável por encapsular as operações de escrita, leitura e pré-assinatura de URLs no Cloudflare R2. Realiza limpezas e purgas de mídias acionadas de forma assíncrona por eventos.
 
 ---
 
@@ -252,11 +252,11 @@ camada `infrastructure_postgres`.
 - O **Messaging Gateway** resolve o `tenant_id` a partir da instância
   (`apikey`/`instance`) que recebeu o webhook.
 - Mídia: **a config de referência da v1 (`old/paulo-ecoprint-server`) NÃO usa
-  S3/MinIO** e roda com `DATABASE_SAVE_MESSAGES=false`. Logo, o webhook tende a
+  storage S3-compatible** e roda com `DATABASE_SAVE_MESSAGES=false`. Logo, o webhook tende a
   trazer apenas a referência cifrada do CDN do WhatsApp: o worker reconstrói o
   objeto e baixa/descriptografa via Evolution (precisa de `mediaKey`,
   `directPath`, etc.), com **retry/backoff** (o Go às vezes retorna 403/500
-  transitório logo após o recebimento). **Decisão em aberto:** habilitar S3/MinIO
+  transitório logo após o recebimento). **Decisão em aberto:** habilitar o storage S3-compatible (R2)
   no Evolution Go (entrega `mediaUrl` direto, sem custo de CPU) **ou** manter o
   download/descriptografia no worker. Ver §17.
 - **Gerência de instâncias via API REST do Evolution Go** (não por container por
@@ -365,7 +365,7 @@ perfeitamente no modelo local:
 | Camada | O que guarda | Permanência |
 |--------|--------------|-------------|
 | **Servidor (fonte da verdade)** | Linha da mensagem + `analise_midia` + `resumo_midia` + ponteiro da mídia (chave de storage, mimetype, tamanho, **hash**) | Permanente (leve) |
-| **Storage de objetos transitório** | O binário decifrado (Evolution Go S3/MinIO ou cache do servidor) | TTL/retenção curta |
+| **Storage de objetos transitório** | O binário decifrado (Evolution Go S3-compatible/R2 ou cache do servidor) | TTL/retenção curta |
 | **Motor Rust local (FFI, Windows)** | Cache permanente do binário em disco + índice SQLite | Permanente local |
 
 ### 9.2 Fluxo de sincronização
@@ -608,7 +608,7 @@ arquitetura.
 ### 13.2 Núcleo reaproveitado: a facade `FeaturesCompose`
 
 A v1 já concentra **toda** a lógica de IA na facade estática
-`FeaturesCompose` (`modules/ai_engine/features/features_compose.py`), com cada
+`FeaturesCompose` (`modules/ia_engine/features/features_compose.py`), com cada
 feature em clean architecture (`usecase → datasource → LangChain`). Esse código é
 **reaproveitado quase integralmente** no `ia_engine` da v2 — muda apenas o
 **ponto de entrada**: do que hoje é chamado por uma task Celery, passa a ser
@@ -692,10 +692,10 @@ let resp = client
   injection). Ver diretrizes em
   [padroes_linguagens/seguranca.md](../padroes_linguagens/seguranca.md).| IA ↔ Backend | RPC sobre IPC/UDS ou TCP/TLS (FlatBuffers padrão; gRPC fallback) |
 | Flutter ↔ Backend | **Contrato Flexível**: FlatBuffers binário local (UDS/TCP); gRPC/TCP/WebSocket fallback e Web |
-| WhatsApp | Evolution Go (multi-instância) + R2/MinIO para mídia |
+| WhatsApp | Evolution Go (multi-instância) + R2 para mídia |
 | Frontend | Flutter (Windows → Web), 2 apps + packages; design system `core_ui` (tema dark) |
 | FFI | flutter_rust_bridge + SQLite local |
-| Storage mídia | Cloudflare R2 (produção) / MinIO (dev) (transitório) + disco local (cache permanente) |
+| Storage mídia | Cloudflare R2 (dev e produção, transitório) + disco local (cache permanente) |
 | Observabilidade | tracing + métricas + logs estruturados via OTLP gRPC central |
 
 ---
@@ -742,7 +742,7 @@ let resp = client
 - ✅ **Realtime Flutter**: Stream gRPC unificado, WebSocket descartado para desktop nativo. gRPC-Web e WebSocket binário com FlatBuffers para Web.
 - ✅ **Auditoria**: Redis Streams de forma assíncrona, eliminando o acoplamento direto com o Postgres em `observability`.
 - ✅ **Provisionamento de instâncias Evolution**: Control Plane chama a API REST do Evolution Go, com token de instância e global key.
-- ✅ **Mídia no Evolution Go**: Usar Cloudflare R2/MinIO como storage compatível com S3 integrado ao Evolution, com o gateway gerando URLs pré-assinadas.
+- ✅ **Mídia no Evolution Go**: Usar Cloudflare R2 como storage compatível com S3 integrado ao Evolution, com o gateway gerando URLs pré-assinadas.
 
 - Estratégia detalhada de **conflito de sync** (last-write-wins vs versionamento por evento).
 - Janela de **retenção de mídia** no servidor (TTL de 30 dias recomendado).

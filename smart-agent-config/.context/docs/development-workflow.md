@@ -52,14 +52,15 @@ Escalas: `QUICK` (bugfix simples), `SMALL` (feature isolada), `MEDIUM` (feature 
 
 ## Roadmap de Construção
 
-1. **Fundação**: Cargo workspace + `contracts` + schema PostgreSQL com RLS + observabilidade
-2. **Messaging Gateway** + Evolution multi-instância
-3. **Runtime API** (gRPC unário + Server Streaming) + shell Flutter Windows (`RemoteOnly`) + telas de login/cadastro junto do auth (UI incremental — decisão D8)
-4. **Worker** (substitui o Celery da v1) + `ia_engine` Python via gRPC
-5. **Regras de domínio** explícitas nos crates `domain_*`
-6. **Local Engine** (FFI) + cache de mídia + SQLite + sync
-7. Endurecimento + observabilidade + billing/usage
-8. **Port para Web** (troca `DataSource` para `RemoteOnly`)
+1. **Fundação** ✅: Cargo workspace + crates de base (`contracts`/`transport`/`error_core`/`observability`) + serviços `data_*` (Postgres com RLS, Redis, storage R2)
+2. **CI/CD + DevOps** (próxima — F-devops) → depois **auth** (`user-auth-module`) e painel admin
+3. **Messaging Gateway** + Evolution multi-instância
+4. **Runtime API** (contrato unificado D7) + shell Flutter Windows (`RemoteOnly`) + telas de login/cadastro junto do auth (UI incremental — decisão D8)
+5. **Worker** (substitui o Celery da v1) + `ia_engine` Python via gRPC
+6. **Regras de domínio** explícitas nos crates `domain_*` (extraídas da `application` quando justificar)
+7. **Local Engine** (FFI) + cache de mídia + SQLite + sync
+8. Endurecimento + observabilidade + billing/usage
+9. **Port para Web** (troca `DataSource` para `RemoteOnly`)
 
 ## Related Resources
 

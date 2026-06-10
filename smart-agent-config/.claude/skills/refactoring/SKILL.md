@@ -5,40 +5,35 @@ description: Refactor code safely with a step-by-step approach. Use when Improvi
 
 ## Workflow
 
-1. Ensure adequate test coverage exists
-2. Identify the specific improvement to make
-3. Make one type of change at a time
-4. Run tests after each change
-5. Commit frequently with clear messages
-6. Verify no behavior changes occurred
+1. Garanta cobertura de testes antes (no Rust, rode `cargo test --workspace`; sem rede de proteção, escreva os testes primeiro)
+2. Identifique o alvo específico: regra em handler → caso de uso; duplicação entre crates → `contracts`/helper; lógica multi-tenant vazada p/ `local_engine` → de volta ao servidor
+3. Um tipo de mudança por vez; commits pequenos e frequentes
+4. Rode os testes (e `clippy`/`ruff`/`flutter analyze`) após cada passo
+5. Verifique que nenhum comportamento mudou — teste quebrado = comportamento alterado
 
 ## Examples
 
-**Extract function:**
-```typescript
-// Before: Inline validation logic
-if (email && email.includes('@') && email.length > 5) {
-  // process email
+**Extrair regra de handler para caso de uso (alvo clássico do projeto):**
+```rust
+// Antes: regra de negócio dentro do handler do data_postgres
+async fn handler_receive_message(env: Envelope) -> Result<Envelope, AppError> {
+    // ... 40 linhas decidindo política de ticket inline
 }
 
-// After: Extracted to function
-function isValidEmail(email: string): boolean {
-  return email && email.includes('@') && email.length > 5;
-}
-
-if (isValidEmail(email)) {
-  // process email
+// Depois: handler orquestra; regra vive em crates/application
+async fn handler_receive_message(env: Envelope) -> Result<Envelope, AppError> {
+    let decisao = application::decidir_politica_ticket(&ctx)?;
+    repo.aplicar_decisao(&decisao).await
 }
 ```
 
 ## Quality Bar
 
-- Never refactor without tests
-- Small steps, frequent commits
-- One refactoring type per commit
-- If tests break, you changed behavior
-- Use IDE refactoring tools when available
-- Keep the PR focused and reviewable
+- Nunca refatorar sem testes; passos pequenos com commit a cada um
+- Comportamento idêntico: mesma resposta, mesmos eventos publicados, mesma auditoria
+- Refatoração não mistura com feature/fix no mesmo commit
+- Fronteiras preservadas: nada de mover regra para `infrastructure_*` ou criar import de infra em app de negócio
+- Rust: sem `unwrap()` novo; tratamento de erro continua via `?`/`AppError`
 
 ## Resource Strategy
 

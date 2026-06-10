@@ -151,7 +151,7 @@ Dados Pessoais Identificáveis (PII) inseridos nas conversas de chat, transcriç
 * **Conflito com Auditoria:** O Hard Delete de dados pessoais pode colidir com a obrigação de manter logs de auditoria por prazo legal. A solução é anonimizar (não deletar) os registros de auditoria — substituindo PII por valores nulos ou genéricos — em vez de apagá-los por completo.
 
 ### 3.2 Armazenamento de Arquivos e Mídias de WhatsApp
-* **Tempo de Vida Limite (TTL):** Arquivos de áudio de mensagens de voz e imagens recebidas das instâncias do WhatsApp devem ser salvos em buckets de Object Storage privados (MinIO local em desenvolvimento, S3/R2 em produção) com políticas de expiração automática (TTL máximo recomendado de 30 dias para mensagens normais).
+* **Tempo de Vida Limite (TTL):** Arquivos de áudio de mensagens de voz e imagens recebidas das instâncias do WhatsApp devem ser salvos em buckets de Object Storage privados (Cloudflare R2, S3-compatible, em desenvolvimento e produção) com políticas de expiração automática (TTL máximo recomendado de 30 dias para mensagens normais).
 * **Links Temporários:** O acesso a mídias no Object Storage no painel do atendente deve ser realizado por meio de URLs pré-assinadas (*Presigned URLs*) com validade curta (máximo de 15 minutos), evitando links diretos ou públicos expostos.
 
 ---

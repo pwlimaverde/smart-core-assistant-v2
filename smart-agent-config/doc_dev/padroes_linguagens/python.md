@@ -290,7 +290,7 @@ def test_should_summarize_text_successfully(mocker: MockerFixture):
 ### Passo 2: Implementação Mínima para Passar (GREEN)
 Escrevemos o código necessário para fazer o teste compilar/rodar e passar.
 
-*Criamos o arquivo `src/ai_engine/summarizer.py`:*
+*Criamos o arquivo `src/ia_engine/summarizer.py`:*
 ```python
 from typing import Any
 

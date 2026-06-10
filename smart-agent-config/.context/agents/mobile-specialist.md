@@ -21,7 +21,7 @@ scaffoldVersion: "2.0.0"
 
 - `flutter_rust_bridge_codegen` gera o código de bridge a partir das anotações no `local_engine`.
 - O `local_engine` deve expor apenas funções síncronas ou com callbacks — sem tokio runtime dentro do FFI.
-- SQLite local em `AppData` no Windows; não versionar.
+- Índice local SQLite armazenado em `AppData` no Windows.
 
 ## Quality Checks
 

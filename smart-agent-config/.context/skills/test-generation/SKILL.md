@@ -10,44 +10,54 @@ scaffoldVersion: "2.0.0"
 ---
 ## Workflow
 
-1. Identify the function/component to test
-2. List the behaviors that need testing
-3. Write tests for happy path scenarios
-4. Add tests for edge cases and boundaries
-5. Include error handling tests
-6. Mock external dependencies appropriately
-7. Verify tests are deterministic and isolated
+1. Identifique a stack e o padrão: **Rust → siga a skill `test-rust`** (canônica); Python → pytest + pytest-asyncio via `uv`; Flutter → `flutter_test` (unit + widget)
+2. Liste os comportamentos a testar: caminho feliz, bordas, variantes de erro
+3. Cubra as invariantes do projeto quando tocadas: política de ticket, idempotência (`wa_message_id`), RLS/cross-tenant negado, debounce, bot bloqueado
+4. Banco real para integração (transação+rollback) — nunca mock de banco; mock só nas fronteiras externas (LLM, Evolution Go) sobre traits
+5. Nomes comportamentais em inglês; comentários em pt-br; padrão AAA com um Act por teste
+6. Garanta determinismo e isolamento (sem dependência de ordem; timeout em I/O)
 
 ## Examples
 
-**Unit test example:**
-```typescript
-describe('calculateTotal', () => {
-  it('should sum item prices correctly', () => {
-    const items = [{ price: 10 }, { price: 20 }];
-    expect(calculateTotal(items)).toBe(30);
-  });
+**Rust (integração, padrão test-rust):**
+```rust
+#[tokio::test]
+async fn rls_blocks_cross_tenant_read() -> anyhow::Result<()> {
+    // Arrange: dois tenants com dados próprios
+    let pool = common::pool_de_teste().await?;
+    // Act: tenant B consulta dados do tenant A
+    let linhas = consultar_como(&pool, tenant_b, ticket_de_a).await?;
+    // Assert: RLS nega — zero linhas, sem erro
+    assert!(linhas.is_empty());
+    Ok(())
+}
+```
 
-  it('should return 0 for empty array', () => {
-    expect(calculateTotal([])).toBe(0);
-  });
+**Python (pytest async):**
+```python
+async def test_transcricao_rejeita_mimetype_nao_suportado():
+    # Arrange / Act / Assert: valida a variante de erro, não só a falha
+    with pytest.raises(AudioFormatError):
+        await transcrever_audio(pointer_de_video())
+```
 
-  it('should handle negative prices', () => {
-    const items = [{ price: 10 }, { price: -5 }];
-    expect(calculateTotal(items)).toBe(5);
-  });
+**Flutter (widget test):**
+```dart
+testWidgets('login mostra erro com credenciais inválidas', (tester) async {
+  await tester.pumpWidget(app(datasource: RemoteOnlyFake.falhaAuth()));
+  await tester.tap(find.byKey(const Key('botao_entrar')));
+  await tester.pump();
+  expect(find.text('Credenciais inválidas'), findsOneWidget);
 });
 ```
 
 ## Quality Bar
 
-- Test behavior, not implementation
-- Use descriptive test names that explain what and why
-- Follow Arrange-Act-Assert pattern
-- Keep tests independent and isolated
-- Don't test external libraries
-- Mock at the boundary, not everywhere
-- Aim for fast, reliable tests
+- Testar comportamento, não implementação; validar a **variante** do erro (`matches!`), não só `is_err()`
+- Rust: organização da skill `test-rust` (inline p/ unitário; `tests/` com agregador p/ integração)
+- Mock apenas na fronteira externa; banco/cache/domínio próprios são sempre reais
+- Todo bugfix entra com teste de regressão no mesmo PR
+- Testes rápidos e determinísticos; integração com `RUST_TEST_THREADS=1` quando há estado compartilhado (Redis DB 15)
 
 ## Resource Strategy
 

@@ -24,8 +24,16 @@ On-demand expertise for AI agents. Skills are task-specific procedures that get 
 | [Refactoring](./refactoring/SKILL.md) | Refactor code safely with a step-by-step approach. Use when Improving code structure without changing behavior, Reducing code duplication, or Simplifying complex logic | E |
 | [Bug Investigation](./bug-investigation/SKILL.md) | Investigate bugs systematically and perform root cause analysis. Use when Investigating reported bugs, Diagnosing unexpected behavior, or Finding the root cause of issues | E, V |
 | [Feature Breakdown](./feature-breakdown/SKILL.md) | Break down features into implementable tasks. Use when Planning new feature implementation, Breaking large tasks into smaller pieces, or Creating implementation roadmap | P |
-| [Api Design](./api-design/SKILL.md) | Design RESTful APIs following best practices. Use when Designing new API endpoints, Restructuring existing APIs, or Planning API versioning strategy | P, R |
+| [Api Design](./api-design/SKILL.md) | Design contract-first APIs (.proto canônico → FlatBuffers/gRPC) for services and the Flutter client. Use when Designing new RPC methods or services, Defining events for the bus, or Planning contract versioning strategy | P, R |
 | [Security Audit](./security-audit/SKILL.md) | Review code and infrastructure for security weaknesses. Use when Reviewing code for security vulnerabilities, Assessing authentication/authorization, or Checking for OWASP top 10 issues | R, V |
+
+### Custom Skills (projeto)
+
+| Skill | Description | Phases |
+|-------|-------------|--------|
+| [Test Rust](./test-rust/SKILL.md) | Padrão canônico de testes da stack Rust: unitários inline, integração com agregador, AAA, banco real com transação+rollback, mocking só nas fronteiras | E, V |
+| [Plan Restructuring](./plan-restructuring/SKILL.md) | Etapa final de qualquer planejamento: normaliza o plano em `.context/plans/{feature}/`, coleta docs de libs (central local `doc_dev/libs/` primeiro) e cria o plano canônico via dotcontext + PREVC | P |
+| [PREVC Planning](./prevc-planning/SKILL.md) / [Review](./prevc-review/SKILL.md) / [Execution](./prevc-execution/SKILL.md) / [Validation](./prevc-validation/SKILL.md) / [Final Review](./prevc-final-review/SKILL.md) / [Confirmation](./prevc-confirmation/SKILL.md) | Fases do workflow PREVC do projeto (P → R → E → V → C, com gate de final-review antes do arquivamento) | P–C |
 
 ## Creating Custom Skills
 

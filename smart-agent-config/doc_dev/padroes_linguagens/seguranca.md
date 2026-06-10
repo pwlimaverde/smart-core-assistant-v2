@@ -163,7 +163,7 @@ async fn test_should_deny_cross_tenant_access() {
 
 | Segredo | Repouso | Acesso |
 |---------|---------|--------|
-| Senha do PostgreSQL, Redis, MinIO | `.env` (dev) / secret manager (prod) | Variável de ambiente no processo |
+| Senha do PostgreSQL, Redis e credenciais R2 (`S3_*`) | `.env` (dev) / secret manager (prod) | Variável de ambiente no processo |
 | JWT signing key, master encryption key | `.env` / secret manager | Variável de ambiente; nunca em banco |
 | API keys de LLM por tenant (`tenant_config.api_keys`) | **Banco, cifrado (AEAD)** | Decifrado em memória só no momento do uso |
 | Token/apikey de instância Evolution | **Banco, cifrado (AEAD)** | Decifrado em memória só no envio outbound |
@@ -215,10 +215,10 @@ pub fn encrypt_credential(plaintext: &str, master_key: &MasterKey) -> Result<Enc
 - **Borda → cliente:** proxy reverso (Nginx/Caddy) termina **TLS 1.2+** (preferir
   1.3). HSTS habilitado. `proxy_buffering off` para WebSocket sem quebrar o TLS.
 - **Webhook Evolution → messaging_gateway:** HTTPS obrigatório.
-- **worker → ai_engine (gRPC/HTTP):** mesmo dentro da VM, prefira TLS ou canal
-  isolado (loopback/rede interna fechada). Nunca exponha o `ai_engine` à
+- **worker → ia_engine (gRPC/HTTP):** mesmo dentro da VM, prefira TLS ou canal
+  isolado (loopback/rede interna fechada). Nunca exponha o `ia_engine` à
   internet.
-- **Serviços → PostgreSQL/Redis/MinIO:** conexão com TLS quando atravessar
+- **Serviços → PostgreSQL/Redis:** conexão com TLS quando atravessar
   fronteira de host; em VM única, restringir por firewall/bind em loopback.
 - WebSocket: `wss://` em produção, nunca `ws://`.
 
@@ -226,8 +226,8 @@ pub fn encrypt_credential(plaintext: &str, master_key: &MasterKey) -> Result<Enc
 
 - **Credenciais por tenant:** AEAD (§4.3).
 - **Banco:** cifragem de disco/volume na VM. Backups cifrados.
-- **Mídia transitória (MinIO/S3):** server-side encryption habilitada; acesso por
-  credencial com escopo mínimo e URLs pré-assinadas de vida curta (§9).
+- **Mídia transitória (Cloudflare R2):** acesso sempre por HTTPS; credencial com
+  escopo mínimo e URLs pré-assinadas de vida curta (§9).
 - **Cache local (FFI/Windows):** o disco do atendente guarda conteúdo sensível —
   ver §9.4 para proteção do cache local.
 
@@ -459,7 +459,7 @@ trabalho.
 ### 12.1 Hardening do host
 
 - Firewall: exponha **apenas** 443 (e 80 redirecionando para 443) à internet.
-  PostgreSQL, Redis, MinIO, `ai_engine` e binários internos **não** ficam
+  PostgreSQL, Redis, `ia_engine` e binários internos **não** ficam
   expostos — bind em loopback/rede interna.
 - SSH com chave (sem senha), porta restrita, root login desabilitado.
 - Atualizações de SO automáticas para patches de segurança.

@@ -1159,7 +1159,7 @@ Configurar no Grafana:
 ## 15. Riscos Operacionais e Capacidade do Servidor
 
 Um único KVM2 (2 vCPU / 8 GB) hospeda **tudo**: 2 ambientes × 7 serviços Rust + Postgres
-+ 2 Redis + MinIO + stack LGTM (5 containers) + self-hosted runner + builds de release.
++ 2 Redis + stack LGTM (5 containers) + self-hosted runner + builds de release.
 Os riscos abaixo precisam de mitigação explícita.
 
 ### 15.1 Disco — o risco mais provável
@@ -1168,7 +1168,7 @@ Fontes de crescimento que podem **encher o disco e derrubar tudo**:
 - `server/target/` no runner: build de release Rust facilmente passa de **5-15 GB**.
 - Releases versionadas em `/opt/smartcore/prod/releases/` (7 binários cada).
 - Backups `pg_dump` por release.
-- Imagens e volumes Docker (Postgres data, MinIO, Loki/Tempo/Prometheus).
+- Imagens e volumes Docker (Postgres data, Loki/Tempo/Prometheus).
 - Logs do journald e do Caddy.
 
 **Mitigações (todas já previstas, reforçar):**
@@ -1197,7 +1197,7 @@ o build (hosted) da entrega (self-hosted via artifact).
 `cargo build --release` consome bastante RAM e pode competir com Postgres/Redis/LGTM em
 produção. Mitigações:
 - Limitar paralelismo do build no runner: `CARGO_BUILD_JOBS=2` no `.bashrc` do `gh-runner`.
-- Os limites de memória do compose (Postgres 512M, Redis 200M×2, MinIO 256M) já protegem
+- Os limites de memória do compose (Postgres 512M, Redis 200M×2) já protegem
   os dados; o LGTM stack também deve ganhar `mem_limit`.
 - Se a RAM for insuficiente, criar swap de 2-4 GB (`fallocate`/`swapon`).
 

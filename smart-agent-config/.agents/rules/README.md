@@ -13,8 +13,9 @@ Welcome to the repository knowledge base. Start with the project overview, then 
 - [Tooling & Productivity Guide](./tooling.md)
 
 ## Repository Snapshot
-- `CLAUDE.md/`
-- `doc_dev/`
+- `doc_dev/` — planejamento canônico do projeto (arquitetura, modelagem de dados, padrões por linguagem, fases)
+- `.context/` — docs, agentes, skills e workflow coordenados pelo dotcontext (esta pasta)
+- Stacks: **Rust** (backend), **Python** (`ia_engine`), **Flutter/Dart** (clients)
 
 ## Document Map
 | Guide | File | Primary Inputs |

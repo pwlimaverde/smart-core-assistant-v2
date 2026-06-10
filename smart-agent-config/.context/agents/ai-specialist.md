@@ -29,7 +29,7 @@ Python 3.13+, **uv** (gerenciador), gRPC Python (`grpcio`), Pydantic (validaçã
 - Strict typing verificado via `pyright`.
 - Linting e formatação impecáveis validados com `ruff`.
 - `uv run pytest` passando sem falhas.
-- Arquivos gRPC gerados (`*_pb2.py` / `*_pb2_grpc.py`) devem estar listados no `.gitignore` (gerados durante a compilação do container/CI).
+- Stubs gRPC (`*_pb2.py` / `*_pb2_grpc.py`) não são versionados — gerados no build/CI.
 - Sem dependência física com código do backend Rust ou Flutter; comunicação estritamente por contratos RPC/protobuf.
 - Nenhuma chave de API exposta diretamente no código (sempre via variáveis de ambiente `.env` ou parâmetro cifrado resolvido no request gRPC).
 - Logs estruturados e correlacionados utilizando logs compatíveis com a observabilidade OTLP.

@@ -1,58 +1,53 @@
 ---
 name: api-design
-description: Design RESTful APIs following best practices. Use when Designing new API endpoints, Restructuring existing APIs, or Planning API versioning strategy
+description: Design contract-first APIs (.proto canônico → FlatBuffers/gRPC) for services and the Flutter client. Use when Designing new RPC methods or services, Defining events for the bus, or Planning contract versioning strategy
 ---
 
 ## Workflow
 
-1. Define the resources and their relationships
-2. Choose appropriate HTTP methods
-3. Design URL structure following REST conventions
-4. Define request/response schemas
-5. Plan error handling and status codes
-6. Consider pagination, filtering, sorting
-7. Document the API specification
+1. Defina o contrato no schema `.proto` canônico em `crates/contracts` (fonte única; `.fbs` é transpilado no build)
+2. Modele requisição/resposta como mensagens explícitas (`XxxRequest` / `XxxResponse`) — nunca tipos soltos
+3. Todo método que toca dados de tenant viaja em `Envelope` (RPC) ou `TenantEnvelope<T>` (evento do bus) com `tenant_id`
+4. Erros sempre via `ErrorEnvelope` (`error_core::AppError` no Rust) — nunca strings ad-hoc
+5. Para acesso a dados, crie o handler no serviço `data_*` dono do recurso (rota por `method` no `transport::Server`); apps de negócio só consomem via cliente RPC
+6. Para o Flutter, exponha pelo `runtime_api` seguindo o contrato unificado D7 (req/reply + Server Streaming p/ realtime)
+7. Planeje evolução compatível: campos novos opcionais, nunca reusar número de campo, `reserved` para removidos
 
 ## Examples
 
-**RESTful API design:**
+**Novo método de dados (contrato + handler):**
+```proto
+// crates/contracts/proto/ticket.proto — comentários em pt-br
+message GetTicketRequest {
+  string tenant_id = 1;
+  string ticket_id = 2;
+}
+message GetTicketResponse {
+  Ticket ticket = 1;
+}
 ```
-# Users API
 
-GET    /api/v1/users          # List users (paginated)
-POST   /api/v1/users          # Create user
-GET    /api/v1/users/:id      # Get user by ID
-PUT    /api/v1/users/:id      # Update user
-DELETE /api/v1/users/:id      # Delete user
+```rust
+// apps/data_postgres/src/main.rs — rota registrada no Server::from_env
+// handler recebe Envelope, usa repositórios de infrastructure_postgres
+// e publica auditoria via transport::bus quando a operação é sensível
+servidor.rota("ticket.get", handler_get_ticket);
+```
 
-# Nested resources
-GET    /api/v1/users/:id/posts    # Get user's posts
-
-# Response format
-{
-  "data": { ... },
-  "meta": { "page": 1, "total": 100 }
-}
-
-# Error format
-{
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Email is required",
-    "details": [...]
-  }
-}
+**Evento do bus:**
+```rust
+// TenantEnvelope<MessageReceived> publicado pelo gateway no Redis Streams
+publicar_evento(&bus, "message.received", TenantEnvelope::new(tenant_id, evento)).await?;
 ```
 
 ## Quality Bar
 
-- Use nouns for resources, not verbs
-- Use proper HTTP methods and status codes
-- Version your API from the start
-- Be consistent in naming and structure
-- Provide clear error messages
-- Document all endpoints
-- Consider rate limiting and caching
+- Schema `.proto` é a fonte única; nada de structs paralelas divergindo do contrato
+- `tenant_id` obrigatório em qualquer mensagem que toque dados de domínio
+- Nomes de métodos no padrão `recurso.acao` (ex.: `ticket.get`, `auth.verify_credentials`)
+- Mudanças de contrato são compatíveis para frente (campos opcionais, números nunca reaproveitados)
+- Webhook HTTP (Evolution Go → `messaging_gateway`) é a única superfície REST; valida assinatura e nunca executa regra pesada
+- Idempotência explícita onde há retry (ex.: `wa_message_id`)
 
 ## Resource Strategy
 

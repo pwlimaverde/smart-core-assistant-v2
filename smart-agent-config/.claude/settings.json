@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -sS -m 8 -o /dev/null -w \"http=%{http_code}\\\\n\" http://76.13.229.210:3000/api/health)",
+      "Bash(curl -sS -m 8 -o /dev/null -w \"http=%{http_code} ip=%{remote_ip}\\\\n\" https://grafana.smartcoreassistant.com.br/api/health)",
+      "Bash(ssh -o ConnectTimeout=20 -p 22 root@76.13.229.210 'systemctl restart smartcore-prod-runtime_api; sleep 3; echo \"prod runtime_api: $\\(systemctl is-active smartcore-prod-runtime_api\\)\"; echo \"=== /run/smartcore \\(prod\\) ===\"; ls -la /run/smartcore/ | grep -i runtime || echo \"\\(sem socket runtime\\)\"; echo \"=== log ===\"; journalctl -u smartcore-prod-runtime_api --no-pager -n 5 | grep -i \"rodando em\" || true')",
+      "Bash(ssh -o ConnectTimeout=20 -p 22 root@76.13.229.210 'WD=$\\(find /home/gh-runner/_work -maxdepth 3 -name Cargo.toml -path \"*server*\" 2>/dev/null | head -1 | xargs dirname 2>/dev/null\\); echo \"workdir=$WD\"; echo \"branch/commit:\"; git -C \"$WD/..\" rev-parse --short HEAD 2>/dev/null; git -C \"$WD/..\" log --oneline -1 2>/dev/null')",
+      "Bash(ssh -o ConnectTimeout=20 -p 22 root@76.13.229.210 'echo \"=== _work tree ===\"; ls -la /home/gh-runner/_work/ 2>&1; echo \"=== nivel 2 ===\"; ls -la /home/gh-runner/_work/*/ 2>&1 | head -20')",
+      "Bash(ssh -o ConnectTimeout=20 -p 22 root@76.13.229.210 'echo \"=== home gh-runner ===\"; ls -la /home/gh-runner/ 2>&1 | head; echo \"=== procura actions-runner / _work ===\"; find / -maxdepth 5 -type d -name \"_work\" 2>/dev/null | head; echo \"=== procura checkout do repo \\(Cargo.toml do workspace server\\) ===\"; find / -maxdepth 7 -type f -name \"Cargo.toml\" -path \"*smart-core-assistant-v2*server*\" 2>/dev/null | head')",
+      "Bash(ssh -o ConnectTimeout=20 -p 22 root@76.13.229.210 'WD=/home/gh-runner/actions-runner/_work/smart-core-assistant-v2/smart-core-assistant-v2; echo \"checkout: $WD\"; ls \"$WD/server/Cargo.toml\" 2>&1; echo \"commit do checkout:\"; git -C \"$WD\" log --oneline -1 2>&1; echo \"branch:\"; git -C \"$WD\" rev-parse --abbrev-ref HEAD 2>&1')",
+      "Bash(ssh -o ConnectTimeout=20 -p 22 root@76.13.229.210 'su - gh-runner -c \" *)",
+      "Bash(ssh -o ConnectTimeout=20 -p 22 root@76.13.229.210 'su - gh-runner -c \"source \\\\$HOME/.cargo/env 2>/dev/null; rustc --version; cargo clippy --version\"')",
+      "Read(//c/c/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/crates/infrastructure_postgres/**)",
+      "Bash(sed -n '152,156p' modelagem_dados/08_diretrizes_seguranca.md)",
+      "Bash(sed -n '164,168p;219,231p;460,464p' padroes_linguagens/seguranca.md)",
+      "Bash(sed -i 's|`docker/compose/data.yml` \\(PG+pgvector, Redis, MinIO\\) e scripts `infra/`|`docker/compose/data.yml` \\(PG+pgvector, Redis; MinIO legado no compose, sem uso — storage é R2 direto\\) e scripts `infra/`|' planejamento/02-fases-desenvolvimento.md)",
+      "Bash(sed -i 's|`docker/compose/data.yml`: PostgreSQL 16 + pgvector, Redis 7, MinIO.|`docker/compose/data.yml`: PostgreSQL 16 + pgvector, Redis 7 \\(MinIO legado, sem uso — storage é Cloudflare R2 direto\\).|' planejamento/02-fases-desenvolvimento.md)",
+      "Bash(sed -i 's/| Mídia \\(binário transitório\\) | `infrastructure_storage` \\(R2\\\\/MinIO\\) | 🚧 \\(stub filesystem; S3\\\\/R2 pendente\\) |/| Mídia \\(binário transitório\\) | `infrastructure_storage` \\(Cloudflare R2\\) | ✅ \\(cliente `aws-sdk-s3` real, presign real\\) |/' planejamento/02-fases-desenvolvimento.md)",
+      "Bash(sed -i 's|— storage R2/MinIO.|— storage Cloudflare R2.|' planejamento/02-fases-desenvolvimento.md)",
+      "Bash(sed -n '1,8p')",
+      "Bash(sed -n '593p;608p' planejamento/02-fases-desenvolvimento.md)",
+      "Bash(sed -i 's|\\(MinIO local em desenvolvimento, S3/R2 em produção\\)|\\(Cloudflare R2, S3-compatible, em desenvolvimento e produção\\)|' modelagem_dados/08_diretrizes_seguranca.md)",
+      "Bash(sed -i 's|Senha do PostgreSQL, Redis, MinIO|Senha do PostgreSQL, Redis e credenciais R2 \\(`S3_*`\\)|' padroes_linguagens/seguranca.md)",
+      "Bash(sed -i 's|  credencial com escopo mínimo e URLs pré-assinadas de vida curta \\(§9\\).|  escopo mínimo e URLs pré-assinadas de vida curta \\(§9\\).|' padroes_linguagens/seguranca.md)",
+      "Bash(sed -i 's|no Cloudflare R2 \\(ou MinIO local\\)|no Cloudflare R2|' planejamento/00-planejamento-inicial.md)",
+      "Bash(sed -i 's|S3/MinIO\\\\*\\\\* e roda com|storage S3-compatible** e roda com|' planejamento/00-planejamento-inicial.md)",
+      "Bash(sed -i 's|\\(Evolution Go S3/MinIO ou cache do servidor\\)|\\(Evolution Go S3-compatible/R2 ou cache do servidor\\)|' planejamento/00-planejamento-inicial.md)",
+      "Bash(sed -i 's|Evolution Go \\(multi-instância\\) + R2/MinIO para mídia|Evolution Go \\(multi-instância\\) + R2 para mídia|' planejamento/00-planejamento-inicial.md)",
+      "Bash(sed -i 's|# PostgreSQL + pgvector, Redis, MinIO|# PostgreSQL + pgvector, Redis \\(MinIO legado, sem uso\\)|' planejamento/01-estrutura-do-projeto.md)",
+      "Bash(sed -i 's|# Sobe PostgreSQL, Redis, MinIO|# Sobe PostgreSQL e Redis \\(storage é Cloudflare R2 direto\\)|' planejamento/01-estrutura-do-projeto.md)",
+      "Bash(sed -i 's|Credenciais S3 \\(R2/MinIO\\) consumidas pelo `data_storage`.|Credenciais S3 \\(Cloudflare R2\\) consumidas pelo `data_storage`.|' planejamento/09-comunicacao-e-autenticacao.md)",
+      "Bash(sed -i 's|+ 2 Redis + MinIO + stack LGTM \\(5 containers\\)|+ 2 Redis + stack LGTM \\(5 containers\\)|' planejamento/10-plano-cicd-devops.md)",
+      "Bash(sed -i 's|- Imagens e volumes Docker \\(Postgres data, MinIO, Loki/Tempo/Prometheus\\).|- Imagens e volumes Docker \\(Postgres data, Loki/Tempo/Prometheus\\).|' planejamento/10-plano-cicd-devops.md)"
+    ]
+  }
+}

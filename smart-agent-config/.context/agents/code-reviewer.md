@@ -11,7 +11,7 @@ scaffoldVersion: "2.0.0"
 
 ## Responsibilities
 
-- Verificar que crates `domain_*` não têm dependências de infraestrutura.
+- Verificar que apps de negócio não importam `infrastructure_*` (dados só via RPC aos `data_*`) e que `domain_*` não depende de infraestrutura.
 - Verificar que toda query inclui filtro por `tenant_id` (além do RLS).
 - Verificar que o crate `local_engine` não expõe lógica multi-tenant sensível.
 - Verificar que comentários no código estão em português pt-br.
@@ -21,13 +21,15 @@ scaffoldVersion: "2.0.0"
 
 ## Checklist
 
-- [ ] `domain_*` sem import de `infrastructure_*`
+- [ ] Apps de negócio sem import de `infrastructure_*`; `domain_*` puro
 - [ ] Queries com `tenant_id` explícito
 - [ ] Comentários em português pt-br
 - [ ] Sem `unwrap()` / `expect()` em produção
 - [ ] Sem segredos hardcoded
-- [ ] `cargo clippy` e `cargo fmt` passando
-- [ ] Testes para regras de domínio novas/modificadas
+- [ ] Rust: `cargo clippy --all-targets -- -D warnings` e `cargo fmt --check`
+- [ ] Python: `ruff` + `pyright` (strict) limpos
+- [ ] Flutter: `flutter analyze` limpo
+- [ ] Testes para regras de domínio novas/modificadas (padrão `test-rust` no Rust)
 
 ## Available Skills
 

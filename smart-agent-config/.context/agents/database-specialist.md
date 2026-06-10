@@ -13,7 +13,8 @@ scaffoldVersion: "2.0.0"
 
 - Projetar e manter o schema PostgreSQL com `tenant_id` em todas as tabelas de domínio.
 - Escrever e validar policies RLS por tabela (`SET app.current_tenant = '<uuid>'`).
-- Gerenciar migrations com sqlx (modo offline, `.sqlx/` versionado).
+- Gerenciar migrations com sqlx (modo offline, `.sqlx/` versionado) — vivem em `crates/infrastructure_postgres`.
+- **O banco tem uma única porta**: todo novo acesso vira handler no `apps/data_postgres` (RPC); apps e CLIs nunca conectam direto nem abrem pool/túnel próprio.
 - Otimizar queries e índices para acesso por `(tenant_id, <campo>)`.
 - Gerenciar extensão `pgvector` para embeddings RAG (`training_document.embedding`).
 - Testar isolamento de tenant: queries sem `tenant_id` no contexto devem ser rejeitadas.
