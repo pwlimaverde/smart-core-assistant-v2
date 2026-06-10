@@ -83,4 +83,4 @@ Terminologia extraída da v1 em produção e do planejamento da v2. Termos em po
 ## Related Resources
 
 - [Project Overview](project-overview.md)
-- [Planejamento Inicial §18](../doc_dev/planejamento/00-planejamento-inicial.md)
+- [00-planejamento-inicial.md](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/planejamento/00-planejamento-inicial.md#L18)

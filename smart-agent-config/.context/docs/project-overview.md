@@ -14,12 +14,13 @@ Smart Core Assistant v2 é uma plataforma SaaS multi-tenant de atendimento intel
 
 ## Quick Facts
 
-- **Raiz do monorepo**: `smart-core-assistant-v2/`
-- **Esta pasta**: `smart-agent-config/` — planejamento e orquestração de agentes
+- **Raiz do monorepo (Monolito)**: [smart-core-assistant-v2](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2)
+- **Pasta de Configurações e Agentes**: [smart-agent-config](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config) — Localização da pasta de contexto `.context/`
+- **Sistema Legado v1 (Django)**: [old](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/old) — Usado exclusivamente como referência de regras de negócio e domínio.
 - **Linguagens**: Rust (backend), Dart/Flutter (frontend), Python (IA)
-- **Estado**: em desenvolvimento — **fundação de persistência, barramento e segurança já implementada**; módulo de autenticação em andamento. Demais apps/crates ainda não criados. Snapshot real por etapa em `doc_dev/planejamento/02-fases-desenvolvimento.md`.
-- **Estrutura de diretórios e diretrizes**: `doc_dev/planejamento/01-estrutura-do-projeto.md`
-- **Planejamento arquitetural completo**: `doc_dev/planejamento/00-planejamento-inicial.md`
+- **Estado**: em desenvolvimento — **fundação de persistência, barramento e segurança já implementada**; módulo de autenticação em andamento. Demais apps/crates ainda não criados. Snapshot real por etapa em [02-fases-desenvolvimento.md](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/planejamento/02-fases-desenvolvimento.md).
+- **Estrutura de diretórios e diretrizes**: [01-estrutura-do-projeto.md](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/planejamento/01-estrutura-do-projeto.md)
+- **Planejamento arquitetural completo**: [00-planejamento-inicial.md](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/planejamento/00-planejamento-inicial.md)
 
 ## Status de implementação (resumo)
 
@@ -54,17 +55,17 @@ Smart Core Assistant v2 é uma plataforma SaaS multi-tenant de atendimento intel
 
 ## File Structure & Code Organization
 
-- `server/` — backend Rust (Cargo workspace: 4 binários + ~14 crates)
-- `evolution/` — configuração do Evolution Go (gateway WhatsApp multi-instância)
-- `clients/packages/` — pacotes Dart compartilhados entre os apps Flutter
-- `clients/flutter_windows/` — app Flutter Windows desktop (fase 1)
-- `clients/flutter_web/` — app Flutter Web (fase 2, separado do Windows)
-- `ia_engine/` — motor de IA em Python (LangChain, RAG, transcrição)
-- `docker/` — infra local de desenvolvimento (PostgreSQL, Redis, MinIO)
-- `smart-agent-config/` — planejamento, agentes, CLAUDE.md e `.context/`
-- `old/` — v1 Django (referência de domínio apenas, git-ignored)
+- [server/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server) — backend Rust (Cargo workspace: 4 binários + ~14 crates)
+- [evolution/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/evolution) — configuração do Evolution Go (gateway WhatsApp multi-instância)
+- [clients/packages/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/clients/packages) — pacotes Dart compartilhados entre os apps Flutter
+- [clients/flutter_windows/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/clients/flutter_windows) — app Flutter Windows desktop (fase 1)
+- [clients/flutter_web/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/clients/flutter_web) — app Flutter Web (fase 2, separado do Windows)
+- [ia_engine/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/ia_engine) — motor de IA em Python (LangChain, RAG, transcrição)
+- [docker/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/docker) — infra local de desenvolvimento (PostgreSQL, Redis, MinIO)
+- [smart-agent-config/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config) — planejamento, agentes, CLAUDE.md e `.context/`
+- [old/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/old) — v1 Django (referência de domínio apenas, git-ignored)
 
-> Estrutura detalhada com responsabilidades e regras de acoplamento: `doc_dev/planejamento/01-estrutura-do-projeto.md`
+> Estrutura detalhada com responsabilidades e regras de acoplamento: [01-estrutura-do-projeto.md](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/planejamento/01-estrutura-do-projeto.md)
 
 ## Technology Stack Summary
 
@@ -89,4 +90,4 @@ Smart Core Assistant v2 é uma plataforma SaaS multi-tenant de atendimento intel
 - [Architecture](architecture.md)
 - [Development Workflow](development-workflow.md)
 - [Tooling](tooling.md)
-- [Planejamento Inicial](../doc_dev/planejamento/00-planejamento-inicial.md)
+- [00-planejamento-inicial.md](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/planejamento/00-planejamento-inicial.md)

@@ -10,7 +10,9 @@ scaffoldVersion: "2.0.0"
 
 ## Architecture Notes
 
-Smart Core Assistant v2 é um **modular monolith** em Rust (Cargo workspace) com um serviço Python de IA e um cliente Flutter. Separação em crates por domínio garante isolamento lógico e facilita promoção a microserviços sem reescrever.
+Smart Core Assistant v2 é um **modular monolith** com o projeto inteiro localizado na raiz [smart-core-assistant-v2](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2). As configurações globais de IA e do contexto do agente (`.context/`) ficam centralizadas na subpasta [smart-agent-config](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config).
+
+O monorepo abriga o backend em Rust (Cargo workspace), o serviço Python de IA e os clientes Flutter. A separação em crates por domínio garante isolamento lógico e facilita a promoção a microserviços sem reescrever. O sistema antigo em Django, localizado em [old](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/old), serve estritamente como especificação viva do domínio legado.
 
 **Princípio central:** o webhook nunca executa regra pesada — apenas autentica, resolve `tenant_id`, persiste o evento bruto e publica no event bus. Todo o domínio roda assincronamente no Worker.
 
@@ -168,20 +170,20 @@ serviços `data_*`** acessados via **RPC sobre Unix Domain Sockets com FlatBuffe
 
 ## Top Directories Snapshot
 
-- `server/` — Cargo workspace Rust: **7 apps** (`data_postgres`, `data_redis`, `data_storage`, `runtime_api`, `worker`, `messaging_gateway`, `control_plane`) + **9 crates** (`contracts`, `transport`, `error_core`, `observability`, `application`, `infrastructure_postgres/redis/storage`, `test_support`)
-- `evolution/` — configuração e gestão do Evolution Go (gateway WhatsApp multi-instância)
-- `clients/packages/` — pacotes Dart compartilhados (core_ui, domain_models, api_client, local_engine_ffi)
-- `clients/flutter_windows/` — app Flutter Windows desktop (fase 1)
-- `clients/flutter_web/` — app Flutter Web (fase 2, projeto Flutter separado, sem FFI)
-- `ia_engine/` — motor de IA em Python (LangChain, RAG, transcrição)
-- `docker/` — infra local de desenvolvimento
-- `smart-agent-config/` — planejamento e orquestração de agentes (esta pasta)
-- `old/` — v1 Django (referência de domínio, git-ignored)
+- [server/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server) — Cargo workspace Rust: **7 apps** (`data_postgres`, `data_redis`, `data_storage`, `runtime_api`, `worker`, `messaging_gateway`, `control_plane`) + **9 crates** (`contracts`, `transport`, `error_core`, `observability`, `application`, `infrastructure_postgres/redis/storage`, `test_support`)
+- [evolution/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/evolution) — configuração e gestão do Evolution Go (gateway WhatsApp multi-instância)
+- [clients/packages/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/clients/packages) — pacotes Dart compartilhados (core_ui, domain_models, api_client, local_engine_ffi)
+- [clients/flutter_windows/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/clients/flutter_windows) — app Flutter Windows desktop (fase 1)
+- [clients/flutter_web/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/clients/flutter_web) — app Flutter Web (fase 2, projeto Flutter separado, sem FFI)
+- [ia_engine/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/ia_engine) — motor de IA em Python (LangChain, RAG, transcrição)
+- [docker/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/docker) — infra local de desenvolvimento
+- [smart-agent-config/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config) — planejamento e orquestração de agentes (esta pasta)
+- [old/](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/old) — v1 Django (referência de domínio, git-ignored)
 
-> Estrutura detalhada com regras de acoplamento: `doc_dev/planejamento/01-estrutura-do-projeto.md`
+> Estrutura detalhada com regras de acoplamento: [01-estrutura-do-projeto.md](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/planejamento/01-estrutura-do-projeto.md)
 
 ## Related Resources
 
 - [Project Overview](project-overview.md)
 - [Data Flow](data-flow.md)
-- [Planejamento Inicial](../doc_dev/planejamento/00-planejamento-inicial.md)
+- [00-planejamento-inicial.md](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/planejamento/00-planejamento-inicial.md)

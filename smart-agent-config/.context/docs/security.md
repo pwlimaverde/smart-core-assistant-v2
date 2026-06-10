@@ -38,7 +38,7 @@ O isolamento multi-tenant é a preocupação central. Dois mecanismos em profund
 - Tokens de LLM isolados no `ia_engine` via variáveis de ambiente; override por tenant via `tenant_config.api_keys` (cifradas em repouso).
 - O `ia_engine` é stateless quanto a tenant: recebe `tenant_id` + credenciais já resolvidas em cada request gRPC; não acessa o banco multi-tenant. Conteúdo do cliente é input não confiável (anti prompt injection).
 
-> Diretrizes completas de segurança: [doc_dev/padroes_linguagens/seguranca.md](../../doc_dev/padroes_linguagens/seguranca.md).
+> Diretrizes completas de segurança: [seguranca.md](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/padroes_linguagens/seguranca.md).
 
 ## Risks & Open Decisions
 

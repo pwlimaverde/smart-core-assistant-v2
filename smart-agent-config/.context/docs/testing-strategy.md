@@ -14,7 +14,7 @@ scaffoldVersion: "2.0.0"
 > stack Rust foi **padronizado** (skill `test-rust`) e já há **testes de integração
 > reais** contra Postgres (isolamento multi-tenant/RLS) e Redis (event bus/auth_tokens),
 > além de cobertura em `error_core`, `observability`, `transport` e `application`. A
-> referência canônica e completa é a skill `test-rust` (`.agents/skills/test-rust/SKILL.md`).
+> referência canônica e completa é a [SKILL.md](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/.agents/skills/test-rust/SKILL.md) da skill test-rust.
 
 ## Padrão de testes Rust (canônico — skill `test-rust`)
 

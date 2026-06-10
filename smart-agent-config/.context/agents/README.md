@@ -12,6 +12,7 @@ This directory contains ready-to-customize playbooks for AI agents collaborating
 - [Performance Optimizer](./performance-optimizer.md) — Identify performance bottlenecks
 - [Security Auditor](./security-auditor.md) — Identify security vulnerabilities
 - [Backend Specialist](./backend-specialist.md) — Design and implement server-side architecture
+- [AI Specialist](./ai-specialist.md) — Design and implement AI engine capabilities (Python, LangChain, RAG, gRPC)
 - [Frontend Specialist](./frontend-specialist.md) — Design and implement user interfaces
 - [Architect Specialist](./architect-specialist.md) — Design overall system architecture and patterns
 - [Devops Specialist](./devops-specialist.md) — Design and maintain CI/CD pipelines
