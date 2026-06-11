@@ -1,8 +1,8 @@
 // observability/src/pool_metrics.rs (comentários em pt-br)
 use opentelemetry::{global, KeyValue};
 use sqlx::PgPool;
-use std::time::Duration;
 use std::sync::Arc;
+use std::time::Duration;
 
 /// Inicializa os Observable Gauges para exportação das métricas de saúde do PgPool.
 /// Como opentelemetry 0.24.0 não possui Gauge síncrono que aceite valores pontuais,
@@ -19,7 +19,10 @@ pub fn monitorar_pool(pool: PgPool, intervalo: Duration) {
         .u64_observable_gauge("smartcore_pg_pool_size")
         .with_description("Conexoes abertas no pool PG (idle + em uso)")
         .with_callback(move |obs| {
-            obs.observe(pool_size.size() as u64, &[KeyValue::new("pool", "postgres")]);
+            obs.observe(
+                pool_size.size() as u64,
+                &[KeyValue::new("pool", "postgres")],
+            );
         })
         .init();
 
@@ -29,7 +32,10 @@ pub fn monitorar_pool(pool: PgPool, intervalo: Duration) {
         .u64_observable_gauge("smartcore_pg_pool_idle")
         .with_description("Conexoes ociosas no pool PG")
         .with_callback(move |obs| {
-            obs.observe(pool_idle.num_idle() as u64, &[KeyValue::new("pool", "postgres")]);
+            obs.observe(
+                pool_idle.num_idle() as u64,
+                &[KeyValue::new("pool", "postgres")],
+            );
         })
         .init();
 
