@@ -18,3 +18,7 @@ CONVENTIONS.md
 .context/harness/sessions/
 .context/harness/traces/
 .context/harness/artifacts/
+
+# Worktrees efêmeros criados por subagentes (isolation: worktree).
+# Nunca devem ser commitados — viram gitlink órfão (erro no CI).
+.claude/worktrees/

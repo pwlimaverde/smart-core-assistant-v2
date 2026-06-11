@@ -66,7 +66,10 @@
       "Bash(ssh -i C:/Users/pwlim/.ssh/id_hostinger_root -o BatchMode=yes root@76.13.229.210 \"docker inspect smartcore-v2-redis-bus --format '{{.State.Health.Status}}' && docker exec smartcore-v2-redis-bus redis-cli -a \\\\$\\(grep REDIS_PASSWORD /opt/smartcore/smartcore-v2-data/.env | cut -d= -f2\\) CONFIG GET maxmemory-policy 2>/dev/null | tail -1\")",
       "PowerShell($ssh = Get-Process ssh -ErrorAction SilentlyContinue | ForEach-Object { \\(Get-CimInstance Win32_Process -Filter \"ProcessId=$\\($_.Id\\)\"\\).CommandLine } | Where-Object { $_ -match \"5434\" }; if \\($ssh\\) { \"TUNEL ATIVO: $ssh\" } else { \"sem tunel ainda\" }; Get-Process | Where-Object { $_.Name -match \"^\\(cargo|rustc\\)$\" } | Measure-Object | Select-Object -ExpandProperty Count)",
       "Bash(cd c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server && cargo test --workspace > /tmp/test-results.txt 2>&1; echo \"EXIT=$?\"; grep -E \"^test result|running [0-9]+ test|^error|panicked\" /tmp/test-results.txt | head -50)",
-      "PowerShell($null = [System.Management.Automation.Language.Parser]::ParseFile\\(\"C:\\\\PROJETOS\\\\FULL-STACK\\\\smart-core-assistant-v2\\\\infra\\\\test-local.ps1\", [ref]$null, [ref]$errors\\); if \\($errors.Count -eq 0\\) { \"OK - nenhum erro de sintaxe\" } else { $errors | ForEach-Object { \"Linha $\\($_.Extent.StartLineNumber\\) char $\\($_.Extent.StartColumnNumber\\): $\\($_.Message\\)\" } })"
+      "PowerShell($null = [System.Management.Automation.Language.Parser]::ParseFile\\(\"C:\\\\PROJETOS\\\\FULL-STACK\\\\smart-core-assistant-v2\\\\infra\\\\test-local.ps1\", [ref]$null, [ref]$errors\\); if \\($errors.Count -eq 0\\) { \"OK - nenhum erro de sintaxe\" } else { $errors | ForEach-Object { \"Linha $\\($_.Extent.StartLineNumber\\) char $\\($_.Extent.StartColumnNumber\\): $\\($_.Message\\)\" } })",
+      "Bash(git -C \"smart-agent-config/.claude/worktrees/romantic-pasteur-f9e8f0\" status --short)",
+      "Bash(git worktree *)",
+      "Bash(git rm *)"
     ]
   }
 }
