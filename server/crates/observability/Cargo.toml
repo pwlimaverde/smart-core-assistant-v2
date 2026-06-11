@@ -9,9 +9,9 @@ tracing.workspace            = true
 tracing-subscriber = { version = "0.3", features = ["json", "env-filter", "fmt", "registry"] }
 
 # OpenTelemetry
-opentelemetry       = "0.24"
-opentelemetry_sdk   = { version = "0.24", features = ["rt-tokio"] }
-opentelemetry-otlp  = { version = "0.17", features = ["grpc-tonic", "trace"] }
+opentelemetry       = { version = "0.24", features = ["metrics"] }
+opentelemetry_sdk   = { version = "0.24", features = ["rt-tokio", "metrics"] }
+opentelemetry-otlp  = { version = "0.17", features = ["grpc-tonic", "trace", "metrics"] }
 tracing-opentelemetry = "0.25"
 
 # Runtime e serialização

@@ -1,3 +1,4 @@
+use std::time::Duration;
 use redis::aio::ConnectionManager;
 use redis::Client;
 
@@ -45,4 +46,27 @@ pub async fn ping(con: &mut ConnectionManager) -> Result<(), RedisError> {
             "resposta inesperada do PING: {resposta}"
         )))
     }
+}
+
+/// Cria um `ConnectionManager` com timeouts de resposta e conexão (P4).
+/// Em redis 0.25.5 a configuração de timeout é feita por este construtor — NÃO existe
+/// `ConnectionManagerConfig` (isso só aparece em redis ≥1.0, fora da versão fixada).
+#[tracing::instrument(skip(url), err)]
+pub async fn criar_conexao_com_timeouts(url: &str) -> Result<ConnectionManager, RedisError> {
+    let response_ms = std::env::var("SMARTCORE_REDIS_RESPONSE_TIMEOUT_MS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(2000u64);
+    let client = Client::open(url.to_string())?;
+    let manager = ConnectionManager::new_with_backoff_and_timeouts(
+        client,
+        2,    // exponent_base (ms) — backoff exponencial
+        100,  // factor
+        6,    // number_of_retries
+        Duration::from_millis(response_ms),  // response_timeout
+        Duration::from_millis(response_ms),  // connection_timeout
+    )
+    .await?;
+    tracing::info!(response_ms, "ConnectionManager Redis criado com timeouts");
+    Ok(manager)
 }

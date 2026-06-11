@@ -1,10 +1,13 @@
 // transport/src/bus.rs  (comentários em pt-br)
+#![allow(deprecated)]
+
 use crate::error::TransportError;
 use chrono::{DateTime, Utc};
 use contracts::TenantEnvelope;
 use redis::aio::ConnectionManager;
-use redis::streams::{StreamMaxlen, StreamReadOptions, StreamReadReply};
+use redis::streams::{StreamMaxlen, StreamReadOptions, StreamReadReply, StreamPendingCountReply, StreamClaimOptions};
 use redis::AsyncCommands;
+use redis::{Client, aio::Connection};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use uuid::Uuid;
@@ -168,11 +171,14 @@ pub async fn confirmar(
 
 /// Garante a existência do consumer group (idempotente) em um stream específico.
 #[tracing::instrument(skip(con), fields(stream = %stream, grupo = %grupo), err)]
-pub async fn garantir_consumer_group_stream(
-    con: &mut ConnectionManager,
+pub async fn garantir_consumer_group_stream<C>(
+    con: &mut C,
     stream: &str,
     grupo: &str,
-) -> Result<(), TransportError> {
+) -> Result<(), TransportError>
+where
+    C: redis::aio::ConnectionLike + Send,
+{
     let resultado: redis::RedisResult<()> = redis::cmd("XGROUP")
         .arg("CREATE")
         .arg(stream)
@@ -204,14 +210,17 @@ pub async fn garantir_consumer_group_stream(
     fields(stream = %stream, grupo = %grupo, consumidor = %consumidor, quantidade, block_ms),
     err
 )]
-pub async fn consumir_stream(
-    con: &mut ConnectionManager,
+pub async fn consumir_stream<C>(
+    con: &mut C,
     stream: &str,
     grupo: &str,
     consumidor: &str,
     quantidade: usize,
     block_ms: usize,
-) -> Result<Vec<EventoBruto>, TransportError> {
+) -> Result<Vec<EventoBruto>, TransportError>
+where
+    C: redis::aio::ConnectionLike + Send,
+{
     let mut opts = StreamReadOptions::default()
         .group(grupo, consumidor)
         .count(quantidade);
@@ -234,13 +243,16 @@ pub async fn consumir_stream(
     fields(stream = %stream, grupo = %grupo, consumidor = %consumidor, quantidade),
     err
 )]
-pub async fn reprocessar_pendentes_stream(
-    con: &mut ConnectionManager,
+pub async fn reprocessar_pendentes_stream<C>(
+    con: &mut C,
     stream: &str,
     grupo: &str,
     consumidor: &str,
     quantidade: usize,
-) -> Result<Vec<EventoBruto>, TransportError> {
+) -> Result<Vec<EventoBruto>, TransportError>
+where
+    C: redis::aio::ConnectionLike + Send,
+{
     let opts = StreamReadOptions::default()
         .group(grupo, consumidor)
         .count(quantidade);
@@ -265,12 +277,15 @@ pub async fn reprocessar_pendentes_stream(
     fields(stream = %stream, grupo = %grupo, stream_id = %stream_id),
     err
 )]
-pub async fn confirmar_stream(
-    con: &mut ConnectionManager,
+pub async fn confirmar_stream<C>(
+    con: &mut C,
     stream: &str,
     grupo: &str,
     stream_id: &str,
-) -> Result<(), TransportError> {
+) -> Result<(), TransportError>
+where
+    C: redis::aio::ConnectionLike + Send,
+{
     let _: i64 = con
         .xack(stream, grupo, &[stream_id])
         .await
@@ -310,7 +325,7 @@ pub struct Consumer {
     stream: String,
     grupo: String,
     consumidor: String,
-    redis_conn: ConnectionManager,
+    client: Client,
 }
 
 impl Consumer {
@@ -319,13 +334,13 @@ impl Consumer {
         stream: impl Into<String>,
         grupo: impl Into<String>,
         consumidor: impl Into<String>,
-        redis_conn: ConnectionManager,
+        client: Client,
     ) -> Self {
         Self {
             stream: stream.into(),
             grupo: grupo.into(),
             consumidor: consumidor.into(),
-            redis_conn,
+            client,
         }
     }
 
@@ -334,19 +349,18 @@ impl Consumer {
     pub async fn run<F, Fut>(&self, handler: F) -> anyhow::Result<()>
     where
         F: Fn(EventoBruto) -> Fut + Send + Sync + 'static,
-        Fut: std::future::Future<Output = ()> + Send + 'static,
+        Fut: std::future::Future<Output = anyhow::Result<()>> + Send + 'static,
     {
-        let mut con = self.redis_conn.clone();
+        let mut con: Connection = self.client.get_async_connection().await
+            .map_err(|e| TransportError::Bus(e.to_string()))?;
         garantir_consumer_group_stream(&mut con, &self.stream, &self.grupo).await?;
 
         tracing::info!(
-            "Consumidor do grupo '{}' iniciado no stream '{}' para o consumidor '{}'.",
-            self.grupo,
-            self.stream,
-            self.consumidor
+            grupo = %self.grupo, stream = %self.stream, consumidor = %self.consumidor,
+            "Consumidor iniciado em conexão dedicada."
         );
 
-        // 1. Processar pendências da lista PEL (Pending Entries List)
+        // 1. Processar pendências da lista PEL (Pending Entries List) na inicialização
         match reprocessar_pendentes_stream(
             &mut con,
             &self.stream,
@@ -358,10 +372,17 @@ impl Consumer {
         {
             Ok(pendentes) => {
                 for evento in pendentes {
-                    handler(evento.clone()).await;
-                    let _ =
-                        confirmar_stream(&mut con, &self.stream, &self.grupo, &evento.stream_id)
-                            .await;
+                    match handler(evento.clone()).await {
+                        Ok(()) => {
+                            let _ = confirmar_stream(&mut con, &self.stream, &self.grupo, &evento.stream_id).await;
+                        }
+                        Err(e) => {
+                            tracing::error!(
+                                stream_id = %evento.stream_id, erro = ?e,
+                                "reprocessador inicial: handler falhou; mantido na PEL"
+                            );
+                        }
+                    }
                 }
             }
             Err(e) => {
@@ -383,14 +404,23 @@ impl Consumer {
             {
                 Ok(eventos) => {
                     for evento in eventos {
-                        handler(evento.clone()).await;
-                        let _ = confirmar_stream(
-                            &mut con,
-                            &self.stream,
-                            &self.grupo,
-                            &evento.stream_id,
-                        )
-                        .await;
+                        match handler(evento.clone()).await {
+                            Ok(()) => {
+                                let _ = confirmar_stream(
+                                    &mut con,
+                                    &self.stream,
+                                    &self.grupo,
+                                    &evento.stream_id,
+                                )
+                                .await;
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    stream_id = %evento.stream_id, erro = ?e,
+                                    "handler falhou; evento mantido na PEL para reprocessamento"
+                                );
+                            }
+                        }
                     }
                 }
                 Err(e) => {
@@ -403,6 +433,209 @@ impl Consumer {
             }
         }
     }
+
+    /// Executa o loop de consumo de eventos em lote.
+    /// O handler recebe um vetor de eventos e retorna um vetor contendo os IDs de stream processados com sucesso.
+    pub async fn run_batch<F, Fut>(&self, handler: F) -> anyhow::Result<()>
+    where
+        F: Fn(Vec<EventoBruto>) -> Fut + Send + Sync + 'static,
+        Fut: std::future::Future<Output = anyhow::Result<Vec<String>>> + Send + 'static,
+    {
+        let mut con: Connection = self.client.get_async_connection().await
+            .map_err(|e| TransportError::Bus(e.to_string()))?;
+        garantir_consumer_group_stream(&mut con, &self.stream, &self.grupo).await?;
+
+        tracing::info!(
+            grupo = %self.grupo, stream = %self.stream, consumidor = %self.consumidor,
+            "Consumidor em lote iniciado em conexão dedicada."
+        );
+
+        // 1. Processar pendências da lista PEL (Pending Entries List) na inicialização
+        match reprocessar_pendentes_stream(
+            &mut con,
+            &self.stream,
+            &self.grupo,
+            &self.consumidor,
+            10,
+        )
+        .await
+        {
+            Ok(pendentes) => {
+                if !pendentes.is_empty() {
+                    match handler(pendentes).await {
+                        Ok(sucessos) => {
+                            for id in sucessos {
+                                let _ = confirmar_stream(&mut con, &self.stream, &self.grupo, &id).await;
+                            }
+                        }
+                        Err(e) => {
+                            tracing::error!("reprocessador inicial em lote: handler falhou; mantido na PEL: {:?}", e);
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::warn!("Erro ao reprocessar pendentes na inicialização: {:?}", e);
+            }
+        }
+
+        // 2. Loop de consumo ativo
+        loop {
+            match consumir_stream(
+                &mut con,
+                &self.stream,
+                &self.grupo,
+                &self.consumidor,
+                10,
+                1000,
+            )
+            .await
+            {
+                Ok(eventos) => {
+                    if !eventos.is_empty() {
+                        match handler(eventos).await {
+                            Ok(sucessos) => {
+                                for id in sucessos {
+                                    let _ = confirmar_stream(
+                                        &mut con,
+                                        &self.stream,
+                                        &self.grupo,
+                                        &id,
+                                    )
+                                    .await;
+                                }
+                            }
+                            Err(e) => {
+                                tracing::error!(
+                                    "handler em lote falhou; eventos mantidos na PEL para reprocessamento: {:?}",
+                                    e
+                                );
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    tracing::error!(
+                        "Erro consumindo em lote do Redis Streams: {:?}. Aguardando re-tentativa...",
+                        e
+                    );
+                    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                }
+            }
+        }
+    }
+}
+
+const MAX_ENTREGAS: usize = 5;
+pub const DLQ_STREAM: &str = "security:dlq";
+
+/// Move para a DLQ os eventos da PEL entregues mais de `MAX_ENTREGAS` vezes e os confirma.
+pub async fn varrer_dlq_pendentes(
+    con: &mut Connection,
+    stream: &str,
+    grupo: &str,
+    consumidor: &str,
+) -> anyhow::Result<()> {
+    let pend: StreamPendingCountReply = con
+        .xpending_count(stream, grupo, "-", "+", 100)
+        .await?;
+        
+    for id in pend.ids {
+        if id.times_delivered > MAX_ENTREGAS {
+            let opts = StreamClaimOptions::default();
+            let _: redis::streams::StreamClaimReply = con
+                .xclaim_options(stream, grupo, consumidor, 0, std::slice::from_ref(&id.id), opts)
+                .await?;
+                
+            let _: String = con
+                .xadd(
+                    DLQ_STREAM,
+                    "*",
+                    &[
+                        ("original_id", id.id.as_str()),
+                        ("times_delivered", &id.times_delivered.to_string()),
+                    ],
+                )
+                .await?;
+                
+            let _: i64 = con.xack(stream, grupo, std::slice::from_ref(&id.id)).await?;
+            tracing::warn!(stream_id = %id.id, entregas = id.times_delivered, "evento movido para DLQ");
+        }
+    }
+    Ok(())
+}
+
+/// Executa uma passada de reprocessamento da PEL no stream especificado.
+pub async fn reprocessar_pendentes_uma_vez<F, Fut>(
+    client: &redis::Client,
+    stream: &str,
+    grupo: &str,
+    consumidor: &str,
+    handler: F,
+) -> anyhow::Result<()>
+where
+    F: Fn(EventoBruto) -> Fut + Send + Sync + 'static,
+    Fut: std::future::Future<Output = anyhow::Result<()>> + Send + 'static,
+{
+    let mut con: Connection = client.get_async_connection().await
+        .map_err(|e| TransportError::Bus(e.to_string()))?;
+        
+    if let Err(e) = varrer_dlq_pendentes(&mut con, stream, grupo, consumidor).await {
+        tracing::warn!("Falha ao varrer DLQ de pendentes: {:?}", e);
+    }
+
+    let pendentes = reprocessar_pendentes_stream(&mut con, stream, grupo, consumidor, 10).await?;
+    for evento in pendentes {
+        match handler(evento.clone()).await {
+            Ok(()) => {
+                let _ = confirmar_stream(&mut con, stream, grupo, &evento.stream_id).await;
+            }
+            Err(e) => {
+                tracing::error!(
+                    stream_id = %evento.stream_id, erro = ?e,
+                    "reprocessador: handler falhou novamente; mantido na PEL"
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Executa uma passada de reprocessamento da PEL no stream especificado em lote.
+pub async fn reprocessar_pendentes_uma_vez_batch<F, Fut>(
+    client: &redis::Client,
+    stream: &str,
+    grupo: &str,
+    consumidor: &str,
+    handler: F,
+) -> anyhow::Result<()>
+where
+    F: Fn(Vec<EventoBruto>) -> Fut + Send + Sync + 'static,
+    Fut: std::future::Future<Output = anyhow::Result<Vec<String>>> + Send + 'static,
+{
+    let mut con: Connection = client.get_async_connection().await
+        .map_err(|e| TransportError::Bus(e.to_string()))?;
+        
+    if let Err(e) = varrer_dlq_pendentes(&mut con, stream, grupo, consumidor).await {
+        tracing::warn!("Falha ao varrer DLQ de pendentes: {:?}", e);
+    }
+
+    let pendentes = reprocessar_pendentes_stream(&mut con, stream, grupo, consumidor, 10).await?;
+    if !pendentes.is_empty() {
+        match handler(pendentes).await {
+            Ok(sucessos) => {
+                for id in sucessos {
+                    let _ = confirmar_stream(&mut con, stream, grupo, &id).await;
+                }
+            }
+            Err(e) => {
+                tracing::error!("reprocessador em lote: handler falhou novamente; mantido na PEL: {:?}", e);
+            }
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

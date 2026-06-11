@@ -22,7 +22,7 @@ async fn main() -> anyhow::Result<()> {
     let redis_url =
         std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
     let redis_client = redis::Client::open(redis_url)?;
-    let redis_conn = redis::aio::ConnectionManager::new(redis_client).await?;
+    let _redis_conn = redis::aio::ConnectionManager::new(redis_client.clone()).await?;
     tracing::info!("Conexão com Redis estabelecida.");
 
     // 3. Inicializa o cliente de storage S3-compatible (MinIO em dev / R2 em prod)
@@ -39,7 +39,7 @@ async fn main() -> anyhow::Result<()> {
         transport::bus::STREAM_EVENTOS,
         "data_storage_purge_group",
         "data_storage_purge_consumer",
-        redis_conn,
+        redis_client.clone(),
     );
     let purge_handle = tokio::spawn(async move {
         if let Err(e) = purge_consumer
@@ -47,10 +47,9 @@ async fn main() -> anyhow::Result<()> {
                 let state = state_clone.clone();
                 async move {
                     if evt.event_type == "media.purge" {
-                        if let Err(err) = processar_purga_midia(state, evt).await {
-                            tracing::error!("Erro na purga de mídia: {:?}", err);
-                        }
+                        processar_purga_midia(state, evt).await?;
                     }
+                    Ok(())
                 }
             })
             .await

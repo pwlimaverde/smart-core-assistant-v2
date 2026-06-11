@@ -326,6 +326,7 @@ pub struct Server {
     endpoint: Endpoint,
     handlers: Arc<HashMap<String, Handler>>,
     codec_name: String,
+    semaforo: Arc<tokio::sync::Semaphore>, // P3: Admission control
 }
 
 impl Server {
@@ -334,6 +335,7 @@ impl Server {
             endpoint,
             handlers: Arc::new(HashMap::new()),
             codec_name: codec_name.to_string(),
+            semaforo: Arc::new(tokio::sync::Semaphore::new(64)), // Default 64 concorrentes
         }
     }
 
@@ -352,7 +354,19 @@ impl Server {
         let codec_key = format!("SMARTCORE_{}_CODEC", svc_name.to_uppercase());
         let codec_name = std::env::var(&codec_key).unwrap_or_else(|_| "flatbuffers".to_string());
 
-        Self::new(endpoint, &codec_name)
+        // P3: Lê o limite in-flight do serviço correspondente
+        let max_inflight_key = format!("SMARTCORE_{}_MAX_INFLIGHT", svc_name.to_uppercase());
+        let max_inflight = std::env::var(&max_inflight_key)
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(64usize);
+
+        Self {
+            endpoint,
+            handlers: Arc::new(HashMap::new()),
+            codec_name,
+            semaforo: Arc::new(tokio::sync::Semaphore::new(max_inflight)),
+        }
     }
 
     pub fn route<F>(mut self, method: &str, handler: F) -> Self
@@ -370,6 +384,7 @@ impl Server {
     pub async fn run(self) -> anyhow::Result<()> {
         let handlers = self.handlers.clone();
         let codec_name = self.codec_name.clone();
+        let semaforo = self.semaforo.clone(); // P3
 
         match self.endpoint {
             Endpoint::Uds(path) => {
@@ -392,9 +407,10 @@ impl Server {
                         let (stream, _) = listener.accept().await?;
                         let handlers_clone = handlers.clone();
                         let codec_name_clone = codec_name.clone();
+                        let semaforo_clone = semaforo.clone(); // P3
                         tokio::spawn(async move {
                             if let Err(e) =
-                                handle_connection(stream, handlers_clone, codec_name_clone).await
+                                handle_connection(stream, handlers_clone, codec_name_clone, semaforo_clone).await
                             {
                                 tracing::error!("Erro lidando com conexao UDS: {:?}", e);
                             }
@@ -414,9 +430,10 @@ impl Server {
                     let (stream, _) = listener.accept().await?;
                     let handlers_clone = handlers.clone();
                     let codec_name_clone = codec_name.clone();
+                    let semaforo_clone = semaforo.clone(); // P3
                     tokio::spawn(async move {
                         if let Err(e) =
-                            handle_connection(stream, handlers_clone, codec_name_clone).await
+                            handle_connection(stream, handlers_clone, codec_name_clone, semaforo_clone).await
                         {
                             tracing::error!("Erro lidando com conexao TCP: {:?}", e);
                         }
@@ -431,10 +448,15 @@ async fn handle_connection<S>(
     stream: S,
     handlers: Arc<HashMap<String, Handler>>,
     codec_name: String,
+    semaforo: Arc<tokio::sync::Semaphore>, // P3
 ) -> anyhow::Result<()>
 where
     S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
+    let meter = opentelemetry::global::meter("transport");
+    let h_dur = meter.f64_histogram("smartcore_rpc_duration_ms").with_unit("ms").init();
+    let c_total = meter.u64_counter("smartcore_rpc_total").init();
+
     let (mut read_half, mut write_half) = tokio::io::split(stream);
 
     // Inicializar o canal de escrita uma única vez por conexão
@@ -474,6 +496,13 @@ where
             continue;
         }
 
+        // P3: Adquire o permit antes do processamento concorrente do frame.
+        // O permit é liberado de volta ao semáforo quando a task de processamento termina.
+        let permit = match semaforo.clone().acquire_owned().await {
+            Ok(p) => p,
+            Err(_) => break, // Semáforo fechado -> encerra conexão
+        };
+
         let handlers_clone = handlers.clone();
         let codec_clone = match codec_name.as_str() {
             "grpc" => Box::new(crate::codec::GrpcCodec) as Box<dyn Codec>,
@@ -481,7 +510,12 @@ where
         };
 
         let write_tx_clone = write_tx.clone();
+        let h_dur_clone = h_dur.clone();
+        let c_total_clone = c_total.clone();
+
         tokio::spawn(async move {
+            let _permit = permit; // Mantém o permit vivo durante a execução do handler (libera ao fim)
+            let inicio = std::time::Instant::now();
             // Decodificar o envelope
             match codec_clone.decode(&frame.body) {
                 Ok(env) => {
@@ -519,6 +553,31 @@ where
                             }),
                         }
                     };
+
+                    let dur_ms = inicio.elapsed().as_secs_f64() * 1000.0;
+                    let erro = response_env.kind == contracts::MessageKind::Error as i32;
+                    let attrs = [
+                        opentelemetry::KeyValue::new("method", method.clone()),
+                        opentelemetry::KeyValue::new("error", erro.to_string()),
+                    ];
+                    h_dur_clone.record(dur_ms, &attrs);
+                    c_total_clone.add(1, &attrs);
+
+                    // SLOW LOG: emite alerta se a chamada passar do limiar configurado
+                    let limiar = std::env::var("SMARTCORE_SLOW_REQUEST_MS")
+                        .ok()
+                        .and_then(|s| s.parse().ok())
+                        .unwrap_or(500.0_f64);
+                    if dur_ms > limiar {
+                        tracing::warn!(
+                            target: "slowlog",
+                            method = %method,
+                            dur_ms,
+                            tenant_id = %response_env.tenant_id,
+                            traceparent = %response_env.traceparent,
+                            "requisicao lenta"
+                        );
+                    }
 
                     let resp_body = codec_clone.encode(&response_env).to_vec();
                     let resp_frame = Frame {

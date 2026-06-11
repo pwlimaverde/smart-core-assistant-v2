@@ -32,9 +32,9 @@ pub fn init_telemetry(
         .with_exporter(
             opentelemetry_otlp::new_exporter()
                 .tonic()
-                .with_endpoint(otlp_endpoint),
+                .with_endpoint(&otlp_endpoint),
         )
-        .with_trace_config(Config::default().with_resource(resource))
+        .with_trace_config(Config::default().with_resource(resource.clone()))
         .install_batch(opentelemetry_sdk::runtime::Tokio)?;
 
     let tracer = provider.tracer(service_name.to_string());
@@ -60,6 +60,11 @@ pub fn init_telemetry(
         .with(otel_layer)
         .init();
 
+    // Inicializa o pipeline de métricas OTLP
+    if let Err(e) = init_metrics(&otlp_endpoint, resource) {
+        tracing::warn!("Falha ao inicializar pipeline de métricas OTLP: {:?}", e);
+    }
+
     tracing::info!(
         service = service_name,
         environment = env,
@@ -69,9 +74,31 @@ pub fn init_telemetry(
     Ok(())
 }
 
-/// Encerra o TracerProvider global, enviando spans pendentes para o collector.
+/// Inicializa o pipeline de MÉTRICAS via OTLP/gRPC, reaproveitando o mesmo endpoint e
+/// resource do tracing. API da otlp 0.17: `new_pipeline().metrics(rt)...build()`.
+pub fn init_metrics(
+    otlp_endpoint: &str,
+    resource: Resource,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let meter_provider = opentelemetry_otlp::new_pipeline()
+        .metrics(opentelemetry_sdk::runtime::Tokio)
+        .with_exporter(
+            opentelemetry_otlp::new_exporter()
+                .tonic()
+                .with_endpoint(otlp_endpoint),
+        )
+        .with_resource(resource)
+        .with_period(std::time::Duration::from_secs(10)) // export de métricas a cada 10s
+        .build()?;
+    opentelemetry::global::set_meter_provider(meter_provider);
+    tracing::info!("Pipeline de métricas OTLP inicializado.");
+    Ok(())
+}
+
+/// Encerra o TracerProvider e o MeterProvider globais, enviando spans e métricas pendentes.
 /// Chamar no graceful shutdown do servidor.
 pub fn shutdown_telemetry() {
-    tracing::info!("Encerrando telemetria — flushing spans pendentes...");
+    tracing::info!("Encerrando telemetria — flushing spans e métricas pendentes...");
     global::shutdown_tracer_provider();
+    // Em opentelemetry v0.24, não há global::shutdown_meter_provider()
 }

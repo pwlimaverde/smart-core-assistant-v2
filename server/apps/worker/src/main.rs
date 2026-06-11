@@ -19,7 +19,7 @@ async fn main() -> anyhow::Result<()> {
     let redis_url =
         std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
     let redis_client = redis::Client::open(redis_url)?;
-    let redis_conn = ConnectionManager::new(redis_client).await?;
+    let _redis_conn = ConnectionManager::new(redis_client.clone()).await?;
     tracing::info!("Conexão com Redis estabelecida.");
 
     let _state = AppState {};
@@ -29,7 +29,7 @@ async fn main() -> anyhow::Result<()> {
         transport::bus::STREAM_EVENTOS,
         "worker_group",
         "worker_consumer_1",
-        redis_conn,
+        redis_client.clone(),
     );
 
     tracing::info!("Consumidor do worker ativado e escutando eventos.");
@@ -38,10 +38,9 @@ async fn main() -> anyhow::Result<()> {
     if let Err(e) = consumer
         .run(move |evt| async move {
             if evt.event_type == "message.received" {
-                if let Err(err) = processar_mensagem_recebida(evt).await {
-                    tracing::error!("Erro ao processar mensagem recebida no worker: {:?}", err);
-                }
+                processar_mensagem_recebida(evt).await?;
             }
+            Ok(())
         })
         .await
     {

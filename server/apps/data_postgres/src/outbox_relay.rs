@@ -86,6 +86,7 @@ impl OutboxRelay {
 
         tracing::debug!("Drenando {} eventos do outbox.", rows.len());
 
+        let mut publicados: Vec<Uuid> = Vec::with_capacity(rows.len());
         for row in rows {
             let payload_str = match String::from_utf8(row.payload) {
                 Ok(s) => s,
@@ -120,10 +121,7 @@ impl OutboxRelay {
 
             match transport::bus::publicar_evento(&mut conn, &envelope).await {
                 Ok(_) => {
-                    sqlx::query("UPDATE outbox SET published_at = NOW() WHERE id = $1")
-                        .bind(row.id)
-                        .execute(&self.pool)
-                        .await?;
+                    publicados.push(row.id);
                 }
                 Err(e) => {
                     tracing::error!(
@@ -134,6 +132,13 @@ impl OutboxRelay {
                     break;
                 }
             }
+        }
+
+        if !publicados.is_empty() {
+            sqlx::query("UPDATE outbox SET published_at = NOW() WHERE id = ANY($1)")
+                .bind(&publicados)
+                .execute(&self.pool)
+                .await?;
         }
 
         Ok(())

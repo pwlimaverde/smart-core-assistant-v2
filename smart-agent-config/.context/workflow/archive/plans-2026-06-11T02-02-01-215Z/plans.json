@@ -5,11 +5,8 @@
       "path": "plans/otimizacao-pools-observabilidade.md",
       "title": "Otimização de Pools, Concorrência e Observabilidade de Gargalos",
       "summary": "Plano **canônico** (leve). A verdade técnica detalhada está nos artefatos abaixo.",
-      "linkedAt": "2026-06-11T02:02:05.440Z",
-      "status": "active",
-      "approval_status": "approved",
-      "approved_at": "2026-06-11T02:02:12.843Z",
-      "approved_by": "architect"
+      "linkedAt": "2026-06-11T01:55:00.602Z",
+      "status": "active"
     }
   ],
   "completed": [],

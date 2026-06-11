@@ -126,8 +126,10 @@ impl RefreshTokenStore {
     pub async fn revogar_familia(&mut self, family_id: &str) -> Result<(), RedisError> {
         let chave_fam = keys::chave_refresh_familia(family_id);
         let membros: Vec<String> = self.con.smembers(&chave_fam).await?;
-        for hash in &membros {
-            let _: i64 = self.con.del(keys::chave_refresh(hash)).await?;
+        if !membros.is_empty() {
+            // Constrói o vetor de chaves e deleta tudo num único DEL variádico.
+            let chaves: Vec<String> = membros.iter().map(|h| keys::chave_refresh(h)).collect();
+            let _: i64 = self.con.del(&chaves).await?;   // DEL k1 k2 k3 ...
         }
         let _: i64 = self.con.del(&chave_fam).await?;
         tracing::info!(
