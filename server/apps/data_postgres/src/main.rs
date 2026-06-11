@@ -55,9 +55,6 @@ async fn main() -> anyhow::Result<()> {
         std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
     let redis_bus_url = std::env::var("REDIS_BUS_URL").unwrap_or_else(|_| redis_url.clone());
 
-    // Conexão multiplexada para Cache (REDIS_URL) com timeouts
-    let _cache_conn = infrastructure_redis::criar_conexao_com_timeouts(&redis_url).await?;
-
     // Conexão multiplexada para Publicação no Bus (REDIS_BUS_URL) com timeouts
     let bus_conn = infrastructure_redis::criar_conexao_com_timeouts(&redis_bus_url).await?;
     let bus_client = infrastructure_redis::criar_cliente(&redis_bus_url)?;
@@ -610,8 +607,8 @@ async fn handler_create_tenant(pool: PgPool, env: Envelope) -> Envelope {
 ///
 /// `auth_user` é uma tabela **global, sem RLS**: usa o pool direto. A senha chega em
 /// claro pelo Envelope (transporte local) e é **tratada aqui** (hash argon2id) antes
-/// de gravar. Idempotente: se já existir usuário por username ou email, devolve
-/// `status: "exists"` sem recriar. Ao criar, dispara um log de auditoria global.
+/// de gravar. Duplicidade de username/email devolve erro `Conflict` indicando o campo
+/// em conflito. Ao criar, dispara um log de auditoria global.
 async fn handler_create_superuser(
     pool: PgPool,
     mut redis_conn: ConnectionManager,
@@ -1075,13 +1072,28 @@ async fn handler_verify_credentials(
         }
     };
 
+    // Hash dummy computado uma única vez: quando o e-mail não existe, a verificação
+    // roda contra ele mesmo assim, igualando o tempo de resposta ao caso de e-mail
+    // existente (mitiga enumeração de e-mails por timing).
+    static DUMMY_HASH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    let dummy_hash = DUMMY_HASH
+        .get_or_init(|| {
+            infrastructure_postgres::hash_password("senha_dummy_anti_timing")
+                .unwrap_or_default()
+        })
+        .clone();
+
     let login_sucesso = if let Some(user) = &user_opt {
-        infrastructure_postgres::verify_password_async(
+        let senha_ok = infrastructure_postgres::verify_password_async(
             password.to_string(),
             user.password_hash.clone(),
         )
-        .await
+        .await;
+        // Usuário desativado é rejeitado como credencial inválida (não revela o motivo).
+        senha_ok && user.is_active
     } else {
+        let _ = infrastructure_postgres::verify_password_async(password.to_string(), dummy_hash)
+            .await;
         false
     };
 
@@ -1356,6 +1368,56 @@ mod tests {
             handler_verify_credentials(pool.clone(), redis_conn.clone(), req_invalido).await;
         assert_eq!(resp_invalido.kind, MessageKind::Error as i32);
         assert!(resp_invalido.error.is_some());
+
+        // Limpeza
+        sqlx::query("DELETE FROM auth_user WHERE id = $1")
+            .bind(user.id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_handler_verify_credentials_usuario_desativado() {
+        let (pool, redis_conn) = setup_teste().await;
+
+        use infrastructure_postgres::AuthUserRepository;
+        let auth_repo = infrastructure_postgres::PostgresAuthUserRepository;
+        let test_username = format!("user_{}", Uuid::new_v4().to_string().replace('-', ""));
+        let test_email = format!("inativo_{}@auth.com", Uuid::new_v4());
+        let hash = infrastructure_postgres::hash_password("minhasenha123").unwrap();
+
+        let user = auth_repo
+            .criar(&pool, &test_username, &test_email, &hash, false)
+            .await
+            .expect("Erro ao criar usuário");
+
+        // Desativa o usuário: mesmo com a senha correta o login deve ser rejeitado.
+        auth_repo
+            .desativar(&pool, user.id)
+            .await
+            .expect("Erro ao desativar usuário");
+
+        let payload = serde_json::json!({
+            "email": test_email,
+            "password": "minhasenha123",
+        });
+        let req = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace2b-span2b-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "VerifyCredentials".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            error: None,
+        };
+
+        let resp = handler_verify_credentials(pool.clone(), redis_conn.clone(), req).await;
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert!(resp.error.is_some());
 
         // Limpeza
         sqlx::query("DELETE FROM auth_user WHERE id = $1")
