@@ -1,8 +1,12 @@
 # 09 — Comunicação Front↔Back, IPC e Encaixe da Autenticação
 
-> **Status:** ✅ Concluída (Fase 0 e Fase 1). Arquitetura de transporte unificada (IPC por UDS/FlatBuffers + gRPC fallback) e autenticação de sessão distribuída implementada.
+> **Status:** 🚧 Parcial. **Transporte** (IPC UDS/FlatBuffers + gRPC fallback, barramento,
+> envelope) ✅ concluído. **Autenticação** 🚧: a infraestrutura de tokens está pronta e
+> testada (Argon2id, rotação de refresh por família, blocklist por `jti`), mas o caso de
+> uso de login emite **tokens mockados** (UUIDs) — a emissão de JWT real, `Refresh`/`Logout`
+> e o middleware de contexto são o escopo da etapa F6.1–6.3 (detalhamento na §6).
 > **Idioma:** pt-br na documentação/comentários; identificadores em inglês.
-> **Origem:** Consolidação pós-refatoração modular.
+> **Origem:** Consolidação pós-refatoração modular; revisado em jun/2026 após análise da base.
 
 ---
 
@@ -85,8 +89,131 @@ A segurança e o isolamento de dados são reforçados a cada chamada de banco:
 
 ---
 
-## 5. Próximos Passos
+## 5. Estado real da autenticação (análise jun/2026)
 
-A infraestrutura de transporte local (IPC UDS FlatBuffers), serialização e a segurança por RLS com contexto integrado no `Envelope` estão concluídas e validadas. A implementação do frontend Flutter deve configurar interceptores gRPC compatíveis com o formato do `Envelope` para autenticação.
+Snapshot do que **já existe e está testado** versus o que é **placeholder** a substituir
+na etapa de login. Serve de inventário de partida para a §6.
+
+### 5.1 Pronto e testado (reaproveitar, não reescrever)
+
+| Peça | Onde | Observação |
+|---|---|---|
+| Hash/verify Argon2id (sync + async via `spawn_blocking`) | `infrastructure_postgres/src/auth/password.rs` | usado pelo `VerifyCredentials` |
+| Repositório `auth_user` (criar, buscar, desativar, último login) | `infrastructure_postgres/src/auth/users.rs` | tabela global sem RLS |
+| `RefreshTokenStore` — rotação por família + detecção de reuso (`KEEPTTL`) | `infrastructure_redis/src/auth_tokens.rs` | reuso revoga a família inteira |
+| `TokenBlocklist` por `jti` com TTL | `infrastructure_redis/src/auth_tokens.rs` | pronto para o logout |
+| Rotas RPC no `data_redis` | `StoreRefreshToken`, `ValidateAndRotate`, `RevokeFamily`, `BlockToken`, `IsTokenBlocked` | todas implementadas |
+| Rota RPC `VerifyCredentials` no `data_postgres` | valida senha, checa `is_active`, mitiga timing-oracle com hash dummy, audita `login_failed` | corrigida em jun/2026 |
+| Cache de `flow_permissions` (TTL 60s) | `infrastructure_redis/src/cache.rs` + rotas `GetCache`/`SetCache` | para o interceptor |
+| Bootstrap de superusuário | `control_plane create-superuser`/`delete-superuser` via RPC | com auditoria |
+
+### 5.2 Placeholders a substituir na etapa de login
+
+1. **Tokens mockados** — `application/src/auth/login.rs` gera `access_token` e
+   `refresh_token` como UUIDs e um "hash" `format!("hash_{token}")` (derivável,
+   sem proteção real). Substituir por JWT assinado + refresh opaco com SHA-256.
+2. **`RequestContext` forjado** — todos os handlers do `data_postgres` montam
+   contexto fixo (`user_id: 1`, escopos hardcoded). O contexto real virá do
+   interceptor (Camada 1) propagado pelo `Envelope`.
+3. **`RequestContext` duplicado** — existem dois tipos distintos:
+   `application::RequestContext` (com `traceparent`) e
+   `infrastructure_postgres::security::RequestContext` (com `flow_permissions`).
+   Unificar (ou definir conversão única) antes do middleware.
+4. **Sem `Refresh`/`Logout` na `runtime_api`** — hoje só existe a rota `Login`;
+   o `data_redis` já suporta as operações, falta expor.
+5. **Cliente RPC por requisição** — `login.rs` e o `worker` chamam
+   `transport::conectar_cliente(...)` a cada chamada. O `MuxClient` é multiplexado
+   e reconecta sozinho: criar **uma vez no boot** e compartilhar no estado do app.
+6. **TTL fixo** — o TTL do refresh (86400s) está hardcoded; mover para env
+   (`AUTH_REFRESH_TTL_S`, padrão 7 dias) junto do TTL do access token.
+
+---
+
+## 6. Especificação do Login real (etapas F6.1–6.3)
+
+### 6.1 Formato dos tokens
+
+**Access Token — JWT HS256** (`JWT_SECRET`), vida útil **15 minutos**, verificado
+localmente no interceptor (sem RPC no caminho quente, exceto blocklist):
+
+```json
+{
+  "sub": "42",                       // auth_user.id
+  "tenant_id": "uuid-ou-vazio",      // vazio para superusuário (contexto global)
+  "scopes": ["atendimentos:read"],   // catálogo canônico de escopos
+  "is_superuser": false,
+  "jti": "uuidv7",                   // id único p/ blocklist no logout
+  "iat": 1750000000,
+  "exp": 1750000900
+}
+```
+
+**Refresh Token — opaco**: 32 bytes aleatórios (CSPRNG), codificado base64url,
+**nunca armazenado em claro**: o `data_redis` guarda apenas o **SHA-256** do token,
+associado a `user_id`, `tenant_id`, `family_id` e flag `rotacionado` (estrutura
+`RegistroRefresh` já existente). TTL padrão **7 dias** (`AUTH_REFRESH_TTL_S`).
+
+### 6.2 Fluxos RPC
+
+**Login** (`runtime_api::Login` → orquestrado em `application::auth::login`):
+1. `VerifyCredentials` no `data_postgres` (Argon2id + `is_active` + timing-safe).
+2. Gera JWT (claims acima) + refresh opaco; calcula SHA-256 do refresh.
+3. `StoreRefreshToken` no `data_redis` (`family_id` novo = UUID v7).
+4. Devolve `{access_token, refresh_token, expires_in}`; `atualizar_ultimo_login`
+   em background.
+
+**Refresh** (`runtime_api::Refresh` — **novo**):
+1. SHA-256 do refresh recebido → `ValidateAndRotate` no `data_redis`.
+2. `NotFound` → 401; `TokenReuse` → família já revogada pelo store → 401 + evento
+   de auditoria `token_reuse_detected` no `security:stream`.
+3. Sucesso → emite novo par (JWT + refresh) **mantendo o `family_id`**;
+   `StoreRefreshToken` do novo hash.
+
+**Logout** (`runtime_api::Logout` — **novo**):
+1. `BlockToken` do `jti` do access atual com TTL = tempo restante de expiração.
+2. `RevokeFamily` da família do refresh (logout global do dispositivo/sessão).
+
+### 6.3 Interceptor de autenticação (Camada 1)
+
+Middleware na `runtime_api` aplicado a **todas** as rotas exceto `Login`/`Refresh`:
+1. Extrai o JWT do metadata gRPC; valida assinatura e `exp` localmente.
+2. Checa `jti` na blocklist (`IsTokenBlocked` via `data_redis`).
+3. Monta o `RequestContext` **unificado** (tenant, user, scopes, flow_permissions
+   com cache TTL 60s) e injeta `tenant_id` validado no `Envelope` — o cliente
+   **nunca** define `tenant_id` (princípio: claims > body).
+4. O `data_postgres` passa a montar o `RequestContext` dos handlers a partir do
+   `Envelope` recebido (eliminando o contexto forjado da §5.2-2).
+
+### 6.4 Critérios de aceite (DoD da etapa de login)
+
+- [ ] JWT real emitido/validado; access expira em 15 min e refresh rotaciona.
+- [ ] Reuso de refresh rotacionado revoga a família e audita o evento.
+- [ ] Logout bloqueia o `jti` e revoga a família (verificável por `IsTokenBlocked`).
+- [ ] Nenhum handler do `data_postgres` com `user_id`/escopos hardcoded.
+- [ ] `RequestContext` único no workspace (ou conversão única documentada).
+- [ ] Clientes RPC compartilhados no estado dos apps (sem `conectar_cliente` por request).
+- [ ] Rate limiting de tentativas de login (por IP/email, via Redis).
+- [ ] Testes: fluxo feliz, senha errada, usuário inativo, refresh expirado,
+      reuso de refresh, logout + tentativa de uso do token bloqueado.
+
+### 6.5 Variáveis de ambiente novas
+
+| Variável | Obrigatória | Padrão | Descrição |
+|---|---|---|---|
+| `JWT_SECRET` | ✅ | — | Chave HMAC-SHA256 do access token (≥ 32 bytes). |
+| `AUTH_ACCESS_TTL_S` | ⬜ | `900` | Vida útil do access token (15 min). |
+| `AUTH_REFRESH_TTL_S` | ⬜ | `604800` | Vida útil do refresh token (7 dias). |
+| `AUTH_LOGIN_RATE_LIMIT` | ⬜ | `5/60s` | Tentativas de login por janela (por email+IP). |
+
+---
+
+## 7. Próximos Passos
+
+A infraestrutura de transporte local (IPC UDS FlatBuffers), serialização e a segurança
+por RLS com contexto integrado no `Envelope` estão concluídas e validadas. A ordem de
+execução do restante é a da §6 (login real na `runtime_api`), seguida do interceptor
+(§6.3) — pré-requisitos do painel admin (plano 11). A implementação do frontend Flutter
+deve configurar interceptores gRPC compatíveis com o formato do `Envelope` para
+autenticação (F6.5).
 
 

@@ -72,7 +72,7 @@
 | `local_engine` | crate (FFI) | ⬜ | F8; motor local embarcado |
 | `data_postgres` | app | ✅ | servidor RPC Postgres síncrono/assíncrono + outbox |
 | `data_redis` | app | ✅ | servidor RPC Redis síncrono (tokens, cache, locks) |
-| `data_storage` | app | ✅ | servidor RPC (PutFile/GetFile/PresignFile/DeleteFile) + consumer de purga; backend Cloudflare R2 real |
+| `data_storage` | app | ✅ | servidor RPC (PutFile/GetFile/PresignFile — payload JSON com `file_name`; deleção via evento `media.purge`) + consumer de purga; backend Cloudflare R2 real |
 | `control_plane` | app | 🚧 | bootstrapado; aguarda endpoints admin (F2) |
 | `messaging_gateway` | app | 🚧 | bootstrapado; aguarda lógica webhook WhatsApp (F3) |
 | `worker` | app | 🚧 | bootstrapado; aguarda orquestrador do domínio (F4) |
@@ -364,6 +364,16 @@ Ver detalhamento completo em [11-painel-admin-superusuario.md](./11-painel-admin
 - `crypto.rs` (`CipherManager`, AES-256-GCM) cifra api keys de provedores e
   tokens de instância; chave-mestra via env.
 
+### Etapa 2.2b — Resolução de configuração em runtime — 🚧
+- O `TenantConfigCache` (cascata Tenant > CoreSettings, descriptografia de api
+  keys com `SecretString`) está **implementado e testado**, mas ainda **não está
+  plugado em nenhum serviço** — só é exercitado nos testes de integração.
+- Pendências: instanciar o cache nos consumidores (`data_postgres`/`worker`),
+  expor rotas RPC de leitura/escrita de configuração (hoje não existe nenhuma) e
+  implementar o assinante de **invalidação via Redis Pub/Sub** (canal
+  `core:settings:invalidate`, marcado como "fase futura" na migration 0009).
+- **DoD:** alterar uma configuração via RPC reflete nos consumidores sem restart.
+
 ### Etapa 2.3 — Binário `control_plane` — ⬜
 - CRUD (tenant, config, plano/assinatura, tenant_user/invite) sobre os
   repositórios existentes; API gRPC de administração.
@@ -399,7 +409,11 @@ Ver detalhamento completo em [11-painel-admin-superusuario.md](./11-painel-admin
 
 ### Etapa 3.4 — Binário `messaging_gateway` — 🚧
 - Ingestão de webhooks → resolve `tenant_id` → persiste bruto via RPC em `data_postgres` → publica evento no bus. Sem regras de negócio.
-- **DoD:** webhook cadastrado e eventos enfileirados no bus com sucesso.
+- **Pendência (análise jun/2026):** o handler atual não valida a origem do
+  webhook — a autenticação por api_key/token de instância e a checagem de
+  whitelist ficam aqui (os repositórios `integracoes/whitelist.rs` e
+  `integracoes/evolution.rs` já existem, falta plugar).
+- **DoD:** webhook autenticado, whitelist aplicada e eventos enfileirados no bus.
 
 ---
 
@@ -419,6 +433,10 @@ Ver detalhamento completo em [11-painel-admin-superusuario.md](./11-painel-admin
 
 ### Etapa 4.3 — Binário `worker` — 🚧
 - Consome o bus, executa o debounce por contato, resolve a conversa, aplica políticas de ticket e atualiza o Kanban via chamadas RPC a `data_postgres` e `data_redis`.
+- **Pendência (análise jun/2026):** o consumidor atual persiste toda mensagem em
+  `atendimento_id` fixo (bootstrap) — a resolução contato → atendimento aberto é
+  o coração desta etapa. Reaproveitar o cliente RPC no estado (sem
+  `conectar_cliente` por evento).
 - **DoD:** processamento assíncrono consumindo eventos do bus integrado com sucesso.
 
 ### Etapa 4.3b — Scheduler do `worker` (substitui o Celery da v1) — ⬜
