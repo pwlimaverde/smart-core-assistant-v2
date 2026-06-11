@@ -2,6 +2,31 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-06-11] - Otimização de Pools, Concorrência e Observabilidade de Gargalos
+
+> Ciclo PREVC `otimizacao-pools-observabilidade` concluído. Final-review (Opus):
+> `final-review-otimizacao-pools-observabilidade.md` — qualidade **CORRIGIDO**.
+
+### Adicionado
+- **F1 Correções críticas:** Argon2 via `spawn_blocking` (`hash_password_async`/`verify_password_async`); `transport::bus::Consumer` com **conexão dedicada** (`get_async_connection`) para o `XREADGROUP BLOCK`; `REDIS_BUS_URL` separada da `REDIS_URL` (cache 6379-local/6380-remoto allkeys-lru × bus 6380-local/6381-remoto noeviction); **ACK condicional** (XACK só em `Ok`, PEL como retry) + DLQ `security:dlq` via `xpending_count.times_delivered` + `xclaim`.
+- **F2 Controle de pools:** `PoolConfig::from_env` (`SMARTCORE_PG_POOL_MAX/MIN`, `ACQUIRE_TIMEOUT_MS`, `IDLE_TIMEOUT_S`, `MAX_LIFETIME_S`) com fail-fast e pool quente; admission control no `transport::Server` (semáforo `SMARTCORE_<SVC>_MAX_INFLIGHT`); timeouts Redis via `new_with_backoff_and_timeouts`.
+- **F3 Monitoramento:** API de métricas OTel 0.24/OTLP 0.17 (`init_metrics` via `new_pipeline().metrics`); gauges de pool (`observability::pool_metrics`, feature **`pool-metrics`** só-sqlx); RED por método + slowlog com `traceparent` no `transport::runtime`; medição de espera de acquire; gauges de lag (`smartcore_bus_pending`, `smartcore_outbox_backlog`).
+- **F4 Eficiência:** `revogar_familia` com DEL variádico; outbox relay marcando publicados em lote (`id = ANY($1)`); consolidação de auditoria em lote por tenant.
+- **Ambiente local de testes pré-push (`infra/test-local.ps1`):** esteira completa (fmt → clippy → `cargo test --workspace` com integração via túnel SSH → `sqlx prepare --check`), modos `-Fast`/`-ResetTunnel`; `tunnel.ps1` mapeando as 3 portas (Postgres 5434, cache 6379→6380, bus 6380→6381); servidor Hostinger com `smartcore-v2-redis-bus` provisionado (host 6381, noeviction) e `REDIS_BUS_URL` nos `.env` dev/prod.
+
+### Corrigido (follow-up do final-review)
+- **Invariante de arquitetura:** métricas de pool estavam gated por `postgres-audit` (reintroduzia a aresta de produção `observability → infrastructure_postgres`); isoladas na feature `pool-metrics` (apenas `dep:sqlx`), verificado com `cargo tree -e no-dev`.
+- `cargo fmt` aplicado no workspace (12 arquivos pendentes do ciclo).
+
+### Validação
+- Suíte completa (unit + integração) verde contra o Postgres/Redis reais da Hostinger via túnel (~140 testes, 0 falhas), na topologia cache×bus nova.
+
+### Pendências remanescentes (trabalho futuro)
+- **M5:** dashboard Grafana "Saúde de Dados" + 5 alertas (provisioning de infra).
+- DoDs de carga formais (20 logins concorrentes, rajada de 200 req, saturação pool max=2) — instrumentação pronta, falta o exercício de carga.
+- `worker`/`data_storage` ainda sem timeouts Redis (P4 restrito ao `data_postgres` por plano).
+- Restart dos services dev/prod para ativarem `REDIS_BUS_URL` (entra no próximo deploy).
+
 ## [2026-06-07] - DevOps Completo: CI/CD, Ambientes e Provisionamento do Servidor
 
 > Ciclo PREVC `cicd-devops` concluído. Final-review (Opus):
