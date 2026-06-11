@@ -49,6 +49,24 @@ A stack Rust segue um padrão único, válido para toda crate (`crates/`) e app 
 - **Infra dos testes**: `test_support::ensure_tunnel()` sobe o túnel SSH sozinho;
   `SQLX_OFFLINE=true` com `.sqlx/` versionado; Redis usa o **banco lógico 15** com `FLUSHDB`
   e `RUST_TEST_THREADS=1`. Ver memória `testes-db-tunel-e-reset`.
+- **Topologia do túnel** (local → Hostinger): `5434`→Postgres, `6379`→Redis **cache**
+  (remoto 6380, allkeys-lru), `6380`→Redis **bus** (remoto 6381, noeviction). A porta
+  host 6379 do servidor pertence a outro projeto — não usar.
+
+## Esteira local pré-push (`infra/test-local.ps1`)
+
+O CI (`ci.yml`) roda apenas `--lib --bins` com serviços efêmeros do runner. A **suíte
+completa** (unit + integração contra o banco real da Hostinger) roda **localmente, antes
+do push**, com a mesma sequência de gates do CI:
+
+```powershell
+.\infra\test-local.ps1                # fmt → clippy → cargo test --workspace → sqlx prepare --check
+.\infra\test-local.ps1 -Fast          # sem banco: fmt → clippy → testes unitários
+.\infra\test-local.ps1 -ResetTunnel   # derruba túneis ssh antigos (após mudança de portas)
+```
+
+Pré-requisitos: `infra/.env.deploy` (credenciais SSH) e `server/.env`
+(`DATABASE_URL`/`REDIS_URL`/`REDIS_BUS_URL` apontando para 5434/6379/6380 locais).
 
 ## Mocking — só nas fronteiras externas
 

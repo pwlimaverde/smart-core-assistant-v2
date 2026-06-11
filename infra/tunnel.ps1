@@ -31,6 +31,7 @@ Get-Content .env.deploy | ForEach-Object {
 
 if (-not $POSTGRES_PORT) { $POSTGRES_PORT = "5432" }
 if (-not $REDIS_PORT)    { $REDIS_PORT    = "6379" }
+if (-not $REDIS_BUS_PORT) { $REDIS_BUS_PORT = "6381" }
 if (-not $MINIO_PORT)    { $MINIO_PORT    = "9000" }
 if (-not $MINIO_CONSOLE_PORT) { $MINIO_CONSOLE_PORT = "9001" }
 
@@ -43,13 +44,15 @@ Write-Host "Servidor remoto: $HOSTINGER_SSH_HOST" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Portas mapeadas para localhost:" -ForegroundColor Green
 Write-Host "  PostgreSQL : localhost:5434  ->  $HOSTINGER_SSH_HOST`:$POSTGRES_PORT"
-Write-Host "  Redis      : localhost:6379  ->  $HOSTINGER_SSH_HOST`:$REDIS_PORT"
+Write-Host "  Redis Cache: localhost:6379  ->  $HOSTINGER_SSH_HOST`:$REDIS_PORT (allkeys-lru)"
+Write-Host "  Redis Bus  : localhost:6380  ->  $HOSTINGER_SSH_HOST`:$REDIS_BUS_PORT (noeviction)"
 Write-Host "  MinIO API  : localhost:9000  ->  $HOSTINGER_SSH_HOST`:$MINIO_PORT"
 Write-Host "  MinIO UI   : localhost:9001  ->  $HOSTINGER_SSH_HOST`:$MINIO_CONSOLE_PORT"
 Write-Host ""
 Write-Host "Configure o .env local da aplicacao com:" -ForegroundColor Cyan
 Write-Host "  DATABASE_URL=postgresql://smartcore_app:SENHA@localhost:5434/smartcore_v2"
 Write-Host "  REDIS_URL=redis://:SENHA@localhost:6379"
+Write-Host "  REDIS_BUS_URL=redis://:SENHA@localhost:6380"
 Write-Host "  MINIO_ENDPOINT=http://localhost:9000"
 Write-Host ""
 Write-Host "MinIO Console: http://localhost:9001" -ForegroundColor Blue
@@ -60,6 +63,7 @@ Write-Host ""
 ssh -p $HOSTINGER_SSH_PORT `
     -L "5434:localhost:$POSTGRES_PORT" `
     -L "6379:localhost:$REDIS_PORT" `
+    -L "6380:localhost:$REDIS_BUS_PORT" `
     -L "9000:localhost:$MINIO_PORT" `
     -L "9001:localhost:$MINIO_CONSOLE_PORT" `
     -N `

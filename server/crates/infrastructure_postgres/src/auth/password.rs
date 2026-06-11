@@ -24,6 +24,27 @@ pub fn verify_password(plaintext: &str, phc_hash: &str) -> bool {
         .is_ok()
 }
 
+/// Variante assíncrona de [`hash_password`]: executa o cálculo CPU-bound do Argon2
+/// em uma thread de bloqueio dedicada (`spawn_blocking`), liberando o executor async.
+#[tracing::instrument(level = "debug", skip(plaintext), err)]
+pub async fn hash_password_async(plaintext: String) -> Result<String, DbError> {
+    // `move` transfere a senha para a thread de bloqueio; ela nunca é logada.
+    tokio::task::spawn_blocking(move || hash_password(&plaintext))
+        .await
+        .map_err(|e| {
+            DbError::CryptoError(format!("falha ao agendar hash em spawn_blocking: {e}"))
+        })?
+}
+
+/// Variante assíncrona de [`verify_password`]: roda a verificação Argon2 (CPU-bound)
+/// fora do executor async. Retorna `false` em qualquer falha de junção da task.
+#[tracing::instrument(level = "debug", skip(plaintext, phc_hash))]
+pub async fn verify_password_async(plaintext: String, phc_hash: String) -> bool {
+    tokio::task::spawn_blocking(move || verify_password(&plaintext, &phc_hash))
+        .await
+        .unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

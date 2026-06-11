@@ -19,7 +19,9 @@ pub mod keys;
 // Re-exports de conveniência para os binários/consumidores.
 pub use auth_tokens::{RefreshTokenStore, RegistroRefresh, TokenBlocklist};
 pub use cache::{CachePermissoes, TTL_FLOW_PERMISSIONS_SEGUNDOS};
-pub use connection::{criar_cliente, criar_conexao_com_url, criar_conexao_redis, ping};
+pub use connection::{
+    criar_cliente, criar_conexao_com_timeouts, criar_conexao_com_url, criar_conexao_redis, ping,
+};
 pub use contracts::TenantEnvelope;
 pub use errors::RedisError;
 pub use keys::{

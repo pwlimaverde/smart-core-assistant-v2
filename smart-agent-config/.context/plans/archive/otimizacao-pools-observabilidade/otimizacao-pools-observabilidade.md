@@ -1,6 +1,7 @@
 ---
-status: in_progress
+status: completed
 generated: 2026-06-10
+completed: 2026-06-11
 slug: otimizacao-pools-observabilidade
 scale: LARGE
 artifacts:
@@ -16,22 +17,22 @@ phases:
     name: "Review — risco de concorrência e validação das APIs nas versões fixadas"
     prevc: "R"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-e"
     name: "Execution — F1 críticas, F2 pools, F3 monitoramento, F4 eficiência"
     prevc: "E"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-v"
     name: "Validation — testes de carga/concorrência e DoD por sub-fase"
     prevc: "V"
     agent: "test-writer"
-    status: "pending"
+    status: "completed"
   - id: "phase-c"
     name: "Confirmation — final-review e arquivamento dotcontext"
     prevc: "C"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
 ---
 
 # Otimização de Pools, Concorrência e Observabilidade de Gargalos
@@ -73,10 +74,10 @@ ou erro `retryable` < 4s) sem espera silenciosa de 30s nem OOM no Postgres (F2);
 | Fase | Nome | Agente | Status |
 |---|---|---|---|
 | **P** | Planning — diagnóstico, alavancas de pool e desenho de telemetria | Backend Specialist | ✅ completed |
-| **R** | Review — risco de concorrência e validação das APIs (versões fixadas) | Backend Specialist (+ Performance Optimizer) | ⬜ pending |
-| **E** | Execution — F1 críticas, F2 pools, F3 monitoramento, F4 eficiência | Backend Specialist (+ Performance Optimizer, Devops) | ⬜ pending |
-| **V** | Validation — testes de carga/concorrência e DoD por sub-fase | Test Writer | ⬜ pending |
-| **C** | Confirmation — final-review e arquivamento dotcontext | Backend Specialist | ⬜ pending |
+| **R** | Review — risco de concorrência e validação das APIs (versões fixadas) | Backend Specialist (+ Performance Optimizer) | ✅ completed |
+| **E** | Execution — F1 críticas, F2 pools, F3 monitoramento, F4 eficiência | Backend Specialist (+ Performance Optimizer, Devops) | ✅ completed (final-review: CORRIGIDO) |
+| **V** | Validation — suíte completa (unit + integração) contra a Hostinger | Test Writer | ✅ completed |
+| **C** | Confirmation — final-review (CORRIGIDO) e arquivamento dotcontext | Backend Specialist | ✅ completed |
 
 ### Sub-fases de execução (fase E)
 

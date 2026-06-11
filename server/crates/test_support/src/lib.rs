@@ -19,8 +19,10 @@ use std::time::{Duration, Instant};
 
 /// Porta local do Postgres exposta pelo túnel (deve bater com o `DATABASE_URL`).
 const PORTA_POSTGRES_LOCAL: u16 = 5434;
-/// Porta local do Redis exposta pelo túnel (deve bater com o `REDIS_URL`).
-const PORTA_REDIS_LOCAL: u16 = 6380;
+/// Porta local do Redis Cache exposta pelo túnel.
+const PORTA_REDIS_CACHE_LOCAL: u16 = 6379;
+/// Porta local do Redis Bus exposta pelo túnel.
+const PORTA_REDIS_BUS_LOCAL: u16 = 6380;
 
 /// Executado no máximo uma vez por processo de teste (cada binário de teste do
 /// Cargo é um processo separado, então o primeiro teste de cada um valida o túnel).
@@ -75,8 +77,12 @@ fn iniciar_tunnel() -> Result<(), String> {
     let postgres_port = env
         .get("POSTGRES_PORT")
         .map(String::as_str)
-        .unwrap_or("5434");
-    let redis_port = env.get("REDIS_PORT").map(String::as_str).unwrap_or("6380");
+        .unwrap_or("5432");
+    let redis_port = env.get("REDIS_PORT").map(String::as_str).unwrap_or("6379");
+    let redis_bus_port = env
+        .get("REDIS_BUS_PORT")
+        .map(String::as_str)
+        .unwrap_or("6380");
 
     let mut cmd = Command::new("ssh");
     cmd.arg("-p")
@@ -91,11 +97,15 @@ fn iniciar_tunnel() -> Result<(), String> {
         .arg("ExitOnForwardFailure=yes")
         .arg("-o")
         .arg("ServerAliveInterval=30")
-        // Mapeia Postgres e Redis remotos para as portas locais que os testes usam.
+        // Mapeia Postgres e as duas portas do Redis remotos para as portas locais que os testes usam.
         .arg("-L")
         .arg(format!("{PORTA_POSTGRES_LOCAL}:localhost:{postgres_port}"))
         .arg("-L")
-        .arg(format!("{PORTA_REDIS_LOCAL}:localhost:{redis_port}"))
+        .arg(format!("{PORTA_REDIS_CACHE_LOCAL}:localhost:{redis_port}"))
+        .arg("-L")
+        .arg(format!(
+            "{PORTA_REDIS_BUS_LOCAL}:localhost:{redis_bus_port}"
+        ))
         .arg(format!("{user}@{host}"))
         .stdin(Stdio::null())
         .stdout(Stdio::null())

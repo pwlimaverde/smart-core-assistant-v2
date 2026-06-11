@@ -3,8 +3,10 @@
 This directory contains plans for coordinating work across documentation and playbooks.
 
 ## Plan Queue
-1. [Otimizacao Pools Observabilidade](./otimizacao-pools-observabilidade.md)
-2. [User Auth Module](./user-auth-module.md)
+1. [User Auth Module](./user-auth-module.md)
+
+## Arquivados
+- [Otimizacao Pools Observabilidade](./archive/otimizacao-pools-observabilidade/otimizacao-pools-observabilidade.md) — concluído em 2026-06-11
 
 ## How To Create Or Update Plans
 - Run "dotcontext plan <name>" to scaffold a new plan template.

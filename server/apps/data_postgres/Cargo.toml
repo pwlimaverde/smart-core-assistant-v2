@@ -17,8 +17,9 @@ redis = { workspace = true }
 contracts = { path = "../../crates/contracts" }
 transport = { path = "../../crates/transport" }
 error_core = { path = "../../crates/error_core" }
-observability = { path = "../../crates/observability" }
+observability = { path = "../../crates/observability", features = ["pool-metrics"] }
 infrastructure_postgres = { path = "../../crates/infrastructure_postgres" }
+infrastructure_redis = { path = "../../crates/infrastructure_redis" }
 
 [dev-dependencies]
 test_support = { path = "../../crates/test_support" }

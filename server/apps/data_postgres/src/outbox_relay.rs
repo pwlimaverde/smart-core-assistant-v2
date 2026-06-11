@@ -86,6 +86,7 @@ impl OutboxRelay {
 
         tracing::debug!("Drenando {} eventos do outbox.", rows.len());
 
+        let mut publicados: Vec<Uuid> = Vec::with_capacity(rows.len());
         for row in rows {
             let payload_str = match String::from_utf8(row.payload) {
                 Ok(s) => s,
@@ -120,10 +121,7 @@ impl OutboxRelay {
 
             match transport::bus::publicar_evento(&mut conn, &envelope).await {
                 Ok(_) => {
-                    sqlx::query("UPDATE outbox SET published_at = NOW() WHERE id = $1")
-                        .bind(row.id)
-                        .execute(&self.pool)
-                        .await?;
+                    publicados.push(row.id);
                 }
                 Err(e) => {
                     tracing::error!(
@@ -134,6 +132,13 @@ impl OutboxRelay {
                     break;
                 }
             }
+        }
+
+        if !publicados.is_empty() {
+            sqlx::query("UPDATE outbox SET published_at = NOW() WHERE id = ANY($1)")
+                .bind(&publicados)
+                .execute(&self.pool)
+                .await?;
         }
 
         Ok(())
@@ -206,8 +211,9 @@ mod tests {
         .await
         .expect("falha ao ajustar a sequence de auth_user");
 
-        let redis_url =
-            std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6380".to_string());
+        let redis_url = std::env::var("REDIS_BUS_URL")
+            .or_else(|_| std::env::var("REDIS_URL"))
+            .unwrap_or_else(|_| "redis://127.0.0.1:6380".to_string());
         let redis_client = redis::Client::open(redis_url).unwrap();
         let redis_conn = ConnectionManager::new(redis_client).await.unwrap();
 

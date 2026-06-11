@@ -10,7 +10,15 @@ pub mod propagation;
 pub mod span_helpers;
 pub mod telemetry;
 
+#[cfg(feature = "pool-metrics")]
+pub mod pool_metrics;
+
 // Re-exports de conveniência
 pub use audit::{AuditLogPayload, AuditLogger};
+#[cfg(feature = "pool-metrics")]
+pub use pool_metrics::monitorar_pool;
 pub use propagation::{extrair_contexto, injetar_contexto_atual, HashMapCarrier, HashMapExtractor};
 pub use telemetry::{init_telemetry, shutdown_telemetry};
+
+// Re-export do opentelemetry para evitar dependência direta em outras crates
+pub use opentelemetry;
