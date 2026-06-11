@@ -12,6 +12,7 @@ serde_json = { workspace = true }
 anyhow = { workspace = true }
 tracing = { workspace = true }
 redis = { workspace = true }
+base64 = { workspace = true }
 
 contracts = { path = "../../crates/contracts" }
 transport = { path = "../../crates/transport" }

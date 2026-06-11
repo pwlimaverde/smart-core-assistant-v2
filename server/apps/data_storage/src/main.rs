@@ -116,11 +116,67 @@ async fn processar_purga_midia(
     Ok(())
 }
 
+/// Extrai e valida o `file_name` do payload JSON da requisição.
+/// Devolve `None` quando ausente/vazio — o caller responde erro de validação.
+fn extrair_file_name(payload_json: &serde_json::Value) -> Option<String> {
+    payload_json
+        .get("file_name")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(String::from)
+}
+
+/// Resposta de erro padronizada dos handlers de storage.
+fn responder_erro(app_err: error_core::AppError, env: Envelope, method: &str) -> Envelope {
+    let err_env = app_err.to_error_envelope(&env.traceparent, "data_storage");
+    Envelope {
+        kind: MessageKind::Error as i32,
+        method: method.to_string(),
+        error: Some(err_env),
+        ..env
+    }
+}
+
 async fn handler_put_file(client: StorageClient, env: Envelope) -> Envelope {
     let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
-    let file_name = env.method.clone(); // Usando o method para passar o nome do arquivo para simplificar
 
-    match client.put(tenant_id, &file_name, &env.payload).await {
+    // O payload carrega o nome e o conteúdo (base64), já que o `method` do Envelope
+    // é o nome da rota RPC e não pode transportar o nome do arquivo.
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let Some(file_name) = extrair_file_name(&payload_json) else {
+        return responder_erro(
+            error_core::AppError::Validation("file_name obrigatório no payload".to_string()),
+            env,
+            "PutFileReply",
+        );
+    };
+    let conteudo = match payload_json
+        .get("content_base64")
+        .and_then(|v| v.as_str())
+        .map(|s| base64::Engine::decode(&base64::engine::general_purpose::STANDARD, s))
+    {
+        Some(Ok(bytes)) => bytes,
+        Some(Err(e)) => {
+            return responder_erro(
+                error_core::AppError::Validation(format!("content_base64 inválido: {e}")),
+                env,
+                "PutFileReply",
+            );
+        }
+        None => {
+            return responder_erro(
+                error_core::AppError::Validation(
+                    "content_base64 obrigatório no payload".to_string(),
+                ),
+                env,
+                "PutFileReply",
+            );
+        }
+    };
+
+    match client.put(tenant_id, &file_name, &conteudo).await {
         Ok(uri) => {
             let res = serde_json::json!({ "uri": uri });
             Envelope {
@@ -131,22 +187,22 @@ async fn handler_put_file(client: StorageClient, env: Envelope) -> Envelope {
                 ..env
             }
         }
-        Err(e) => {
-            let app_err = error_core::AppError::Storage(e.to_string());
-            let err_env = app_err.to_error_envelope(&env.traceparent, "data_storage");
-            Envelope {
-                kind: MessageKind::Error as i32,
-                method: "PutFileReply".to_string(),
-                error: Some(err_env),
-                ..env
-            }
-        }
+        Err(e) => responder_erro(error_core::AppError::Storage(e.to_string()), env, "PutFileReply"),
     }
 }
 
 async fn handler_get_file(client: StorageClient, env: Envelope) -> Envelope {
     let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
-    let file_name = env.method.clone();
+
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let Some(file_name) = extrair_file_name(&payload_json) else {
+        return responder_erro(
+            error_core::AppError::Validation("file_name obrigatório no payload".to_string()),
+            env,
+            "GetFileReply",
+        );
+    };
 
     match client.get(tenant_id, &file_name).await {
         Ok(data) => Envelope {
@@ -156,24 +212,29 @@ async fn handler_get_file(client: StorageClient, env: Envelope) -> Envelope {
             error: None,
             ..env
         },
-        Err(e) => {
-            let app_err = error_core::AppError::Storage(e.to_string());
-            let err_env = app_err.to_error_envelope(&env.traceparent, "data_storage");
-            Envelope {
-                kind: MessageKind::Error as i32,
-                method: "GetFileReply".to_string(),
-                error: Some(err_env),
-                ..env
-            }
-        }
+        Err(e) => responder_erro(error_core::AppError::Storage(e.to_string()), env, "GetFileReply"),
     }
 }
 
 async fn handler_presign_file(client: StorageClient, env: Envelope) -> Envelope {
     let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
-    let file_name = env.method.clone();
 
-    match client.presign(tenant_id, &file_name, 3600).await {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let Some(file_name) = extrair_file_name(&payload_json) else {
+        return responder_erro(
+            error_core::AppError::Validation("file_name obrigatório no payload".to_string()),
+            env,
+            "PresignFileReply",
+        );
+    };
+    // Janela de validade da URL pré-assinada (segundos); default 1 hora.
+    let expires_in = payload_json
+        .get("expires_in")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(3600);
+
+    match client.presign(tenant_id, &file_name, expires_in).await {
         Ok(url) => {
             let res = serde_json::json!({ "url": url });
             Envelope {
@@ -184,15 +245,10 @@ async fn handler_presign_file(client: StorageClient, env: Envelope) -> Envelope 
                 ..env
             }
         }
-        Err(e) => {
-            let app_err = error_core::AppError::Storage(e.to_string());
-            let err_env = app_err.to_error_envelope(&env.traceparent, "data_storage");
-            Envelope {
-                kind: MessageKind::Error as i32,
-                method: "PresignFileReply".to_string(),
-                error: Some(err_env),
-                ..env
-            }
-        }
+        Err(e) => responder_erro(
+            error_core::AppError::Storage(e.to_string()),
+            env,
+            "PresignFileReply",
+        ),
     }
 }
