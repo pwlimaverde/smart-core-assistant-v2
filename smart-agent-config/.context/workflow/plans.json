@@ -1,18 +1,14 @@
 {
-  "active": [],
-  "completed": [
+  "active": [
     {
-      "slug": "cicd-devops",
-      "path": "plans/archive/cicd-devops/cicd-devops.md",
-      "title": "DevOps Completo: CI/CD, Ambientes e Provisionamento do Servidor",
+      "slug": "otimizacao-pools-observabilidade",
+      "path": "plans/otimizacao-pools-observabilidade.md",
+      "title": "Otimização de Pools, Concorrência e Observabilidade de Gargalos",
       "summary": "Plano **canônico** (leve). A verdade técnica detalhada está nos artefatos abaixo.",
-      "linkedAt": "2026-06-07T18:34:21.370Z",
-      "status": "completed",
-      "approval_status": "approved",
-      "approved_at": "2026-06-07T18:34:45.242Z",
-      "approved_by": "architect",
-      "completed_at": "2026-06-07"
+      "linkedAt": "2026-06-11T01:55:00.602Z",
+      "status": "active"
     }
   ],
-  "primary": null
+  "completed": [],
+  "primary": "otimizacao-pools-observabilidade"
 }

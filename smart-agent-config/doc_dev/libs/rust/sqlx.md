@@ -2,10 +2,10 @@
 
 - **Versão Recomendada:** 0.9.0
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-06-01
+- **Última Verificação:** 2026-06-10
 - **Propósito no Projeto:** Driver assíncrono para conexão, execução de consultas validadas em tempo de compilação, transações e migrações do PostgreSQL único (com RLS).
 - **Documentação Oficial:** [https://github.com/launchbadge/sqlx](https://github.com/launchbadge/sqlx)
-- **Library ID (Context7):** `/launchbadge/sqlx`
+- **Library ID (Context7):** `/websites/rs_sqlx`
 
 ---
 
@@ -133,8 +133,100 @@ async fn rls_bloqueia_acesso_cross_tenant() {
 
 ---
 
-## 3. Histórico de Atualizações
+## 3. Pool de Conexões — Configuração e Introspecção
 
+### 3.1 PgPoolOptions: Assinaturas de Configuração
+
+`PgPoolOptions` é um alias para `PoolOptions<Postgres>` que permite configurar o comportamento do pool de conexões. Todos os métodos de timeout recebem `Duration` (ou `impl Into<Option<Duration>>` para timeouts opcionais).
+
+**Métodos principais (versão 0.9):**
+
+```rust
+// Criação
+pub fn new() -> PoolOptions<Postgres>
+
+// Máximo/mínimo de conexões (recebem u32)
+pub fn max_connections(self, max: u32) -> PoolOptions<Postgres>
+pub fn get_max_connections(&self) -> u32
+
+pub fn min_connections(self, min: u32) -> PoolOptions<Postgres>
+pub fn get_min_connections(&self) -> u32
+
+// Timeouts (recebem Duration ou impl Into<Option<Duration>>)
+pub fn acquire_timeout(self, timeout: Duration) -> PoolOptions<Postgres>
+pub fn get_acquire_timeout(&self) -> Duration
+
+pub fn idle_timeout(self, timeout: impl Into<Option<Duration>>) -> PoolOptions<Postgres>
+pub fn max_lifetime(self, lifetime: impl Into<Option<Duration>>) -> PoolOptions<Postgres>
+
+// Connect para criar o pool
+pub async fn connect(self, url: &str) -> Result<PgPool, Error>
+
+// Logging de aquisição lenta (opcional)
+pub fn acquire_slow_threshold(self, threshold: Duration) -> PoolOptions<Postgres>
+pub fn get_acquire_slow_threshold(&self) -> Duration
+```
+
+**Exemplo de configuração com timeout:**
+
+```rust
+use sqlx::postgres::PgPoolOptions;
+use std::time::Duration;
+
+let pool = PgPoolOptions::new()
+    .max_connections(20)
+    .min_connections(5)
+    .acquire_timeout(Duration::from_secs(30))
+    .idle_timeout(Duration::from_secs(600))      // 10 min
+    .max_lifetime(Duration::from_secs(3600))     // 1 hora
+    .connect("postgresql://user:pass@localhost/db")
+    .await?;
+```
+
+### 3.2 Pool<Postgres> / PgPool: Introspecção em Runtime
+
+Métodos para consultar estado atual do pool:
+
+```rust
+// Retorna u32: número total de conexões ATIVAS (incluindo idle)
+pub fn size(&self) -> u32
+
+// Retorna usize: número de conexões IDLE (disponíveis para uso)
+pub fn num_idle(&self) -> usize
+```
+
+**Uso em observabilidade:**
+
+```rust
+let total = pool.size();           // u32
+let idle = pool.num_idle();        // usize
+let in_use = total as usize - idle;
+
+tracing::info!(
+    "pool_state size={} idle={} in_use={}",
+    total, idle, in_use
+);
+```
+
+### 3.3 Transaction::begin() — Ponto de Aquisição
+
+O método `pool.begin()` (equivalente a `pool.acquire()` implicitamente) é onde a espera por `acquire_timeout` ocorre:
+
+```rust
+pub async fn begin(&self) -> Result<Transaction<'_, Postgres>, Error>
+```
+
+Se não houver conexões livres, o pool aguarda até `acquire_timeout`. Se o tempo expirar, retorna erro `PoolError::AcquireTimeout`.
+
+### 3.4 Mudanças de 0.8 → 0.9
+
+Nenhuma breaking change nos métodos de pool utilizados neste projeto. Versão 0.9 é totalmente compatível com 0.8 para configuração e introspecção de pool.
+
+---
+
+## 4. Histórico de Atualizações
+
+- **2026-06-10:** Adicionada seção "## Pool de Conexões — Configuração e Introspecção" com assinaturas exatas de `PgPoolOptions` (versão 0.9), métodos de introspecção `size()` e `num_idle()`, tipos de retorno, e exemplo de configuração de timeouts. Coletada documentação via Context7 library ID `/websites/rs_sqlx`. Nenhuma breaking change detectada de 0.8 → 0.9.
 - **2026-06-01 (b):** Bump 0.8.2 → **0.9.0**. Necessário para unificar a versão de `sqlx` no grafo: `pgvector 0.4.2` exige `sqlx >= 0.8, < 0.10` e o Cargo resolvia `pgvector` para `sqlx 0.9.0`, gerando duas versões de `sqlx-core` no mesmo build. Validado contra o banco real (migrations + `cargo sqlx prepare --workspace --all-targets` + suíte de integração). APIs utilizadas (macros, `PgPool`, `Transaction`, `migrate`, `set_config`) permanecem compatíveis.
 - **2026-06-01 (a):** Bump 0.7.3 → 0.8.2 (alinhamento com a `estrategia_implementacao_rust.md` do projeto). **Correção de padrão:** substituído o anti-padrão `SET LOCAL app.current_tenant = $1` (que falha por `SET` não aceitar bind) por `SELECT set_config('app.current_tenant', $1, true)`.
 - **2026-05-31:** Documentação inicial da biblioteca.

@@ -1,0 +1,18 @@
+{
+  "active": [],
+  "completed": [
+    {
+      "slug": "cicd-devops",
+      "path": "plans/archive/cicd-devops/cicd-devops.md",
+      "title": "DevOps Completo: CI/CD, Ambientes e Provisionamento do Servidor",
+      "summary": "Plano **canônico** (leve). A verdade técnica detalhada está nos artefatos abaixo.",
+      "linkedAt": "2026-06-07T18:34:21.370Z",
+      "status": "completed",
+      "approval_status": "approved",
+      "approved_at": "2026-06-07T18:34:45.242Z",
+      "approved_by": "architect",
+      "completed_at": "2026-06-07"
+    }
+  ],
+  "primary": null
+}

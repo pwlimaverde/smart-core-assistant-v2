@@ -30,7 +30,14 @@
       "Bash(sed -i 's|# Sobe PostgreSQL, Redis, MinIO|# Sobe PostgreSQL e Redis \\(storage é Cloudflare R2 direto\\)|' planejamento/01-estrutura-do-projeto.md)",
       "Bash(sed -i 's|Credenciais S3 \\(R2/MinIO\\) consumidas pelo `data_storage`.|Credenciais S3 \\(Cloudflare R2\\) consumidas pelo `data_storage`.|' planejamento/09-comunicacao-e-autenticacao.md)",
       "Bash(sed -i 's|+ 2 Redis + MinIO + stack LGTM \\(5 containers\\)|+ 2 Redis + stack LGTM \\(5 containers\\)|' planejamento/10-plano-cicd-devops.md)",
-      "Bash(sed -i 's|- Imagens e volumes Docker \\(Postgres data, MinIO, Loki/Tempo/Prometheus\\).|- Imagens e volumes Docker \\(Postgres data, Loki/Tempo/Prometheus\\).|' planejamento/10-plano-cicd-devops.md)"
+      "Bash(sed -i 's|- Imagens e volumes Docker \\(Postgres data, MinIO, Loki/Tempo/Prometheus\\).|- Imagens e volumes Docker \\(Postgres data, Loki/Tempo/Prometheus\\).|' planejamento/10-plano-cicd-devops.md)",
+      "Bash(ls -la smart-agent-config/.context/plans/)",
+      "Bash(ls -la .context/plans/)",
+      "Bash(xargs grep -l \"opentelemetry\")",
+      "Bash(grep -A1 -iE '^name = \"\\(redis|opentelemetry|opentelemetry_sdk|opentelemetry-otlp|tracing-opentelemetry|sqlx|argon2\\)\"$' server/Cargo.lock)",
+      "Bash(grep -A2 -E '^name = \"\\(redis|opentelemetry|opentelemetry_sdk|opentelemetry-otlp|tracing-opentelemetry|sqlx|argon2|tokio\\)\"$' \"c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/Cargo.lock\")",
+      "Bash(SRC=\"/c/Users/pwlim/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f\"; ls \"$SRC\" | grep -E '^\\(redis-0.25.5|opentelemetry-otlp-0.17.0|opentelemetry-0.24.0|opentelemetry_sdk-0.24\\)' )",
+      "Read(//c/Users/pwlim/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/**)"
     ]
   }
 }
