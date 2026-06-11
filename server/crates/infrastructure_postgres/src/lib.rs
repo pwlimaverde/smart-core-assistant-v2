@@ -32,11 +32,14 @@ pub use auditoria::audit_log::{
     buscar_audit_logs_por_evento, inserir_audit_log, inserir_audit_log_global, AuditLogEntry,
     NewAuditLogEntry,
 };
-pub use auth::password::{hash_password, hash_password_async, verify_password, verify_password_async};
+pub use auth::password::{
+    hash_password, hash_password_async, verify_password, verify_password_async,
+};
 pub use auth::users::{AuthUser, AuthUserRepository, PostgresAuthUserRepository};
 pub use config_cache::{RuntimeConfig, TenantConfigCache};
 pub use connection::{
-    criar_admin_pool, criar_pool, criar_pool_config, PoolConfig, inicializar_banco_dados, run_in_tenant_transaction,
+    criar_admin_pool, criar_pool, criar_pool_config, inicializar_banco_dados,
+    run_in_tenant_transaction, PoolConfig,
 };
 pub use crypto::CipherManager;
 pub use errors::DbError;

@@ -5,9 +5,11 @@ use crate::error::TransportError;
 use chrono::{DateTime, Utc};
 use contracts::TenantEnvelope;
 use redis::aio::ConnectionManager;
-use redis::streams::{StreamMaxlen, StreamReadOptions, StreamReadReply, StreamPendingCountReply, StreamClaimOptions};
+use redis::streams::{
+    StreamClaimOptions, StreamMaxlen, StreamPendingCountReply, StreamReadOptions, StreamReadReply,
+};
 use redis::AsyncCommands;
-use redis::{Client, aio::Connection};
+use redis::{aio::Connection, Client};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use uuid::Uuid;
@@ -351,7 +353,10 @@ impl Consumer {
         F: Fn(EventoBruto) -> Fut + Send + Sync + 'static,
         Fut: std::future::Future<Output = anyhow::Result<()>> + Send + 'static,
     {
-        let mut con: Connection = self.client.get_async_connection().await
+        let mut con: Connection = self
+            .client
+            .get_async_connection()
+            .await
             .map_err(|e| TransportError::Bus(e.to_string()))?;
         garantir_consumer_group_stream(&mut con, &self.stream, &self.grupo).await?;
 
@@ -374,7 +379,13 @@ impl Consumer {
                 for evento in pendentes {
                     match handler(evento.clone()).await {
                         Ok(()) => {
-                            let _ = confirmar_stream(&mut con, &self.stream, &self.grupo, &evento.stream_id).await;
+                            let _ = confirmar_stream(
+                                &mut con,
+                                &self.stream,
+                                &self.grupo,
+                                &evento.stream_id,
+                            )
+                            .await;
                         }
                         Err(e) => {
                             tracing::error!(
@@ -441,7 +452,10 @@ impl Consumer {
         F: Fn(Vec<EventoBruto>) -> Fut + Send + Sync + 'static,
         Fut: std::future::Future<Output = anyhow::Result<Vec<String>>> + Send + 'static,
     {
-        let mut con: Connection = self.client.get_async_connection().await
+        let mut con: Connection = self
+            .client
+            .get_async_connection()
+            .await
             .map_err(|e| TransportError::Bus(e.to_string()))?;
         garantir_consumer_group_stream(&mut con, &self.stream, &self.grupo).await?;
 
@@ -465,7 +479,8 @@ impl Consumer {
                     match handler(pendentes).await {
                         Ok(sucessos) => {
                             for id in sucessos {
-                                let _ = confirmar_stream(&mut con, &self.stream, &self.grupo, &id).await;
+                                let _ = confirmar_stream(&mut con, &self.stream, &self.grupo, &id)
+                                    .await;
                             }
                         }
                         Err(e) => {
@@ -496,13 +511,9 @@ impl Consumer {
                         match handler(eventos).await {
                             Ok(sucessos) => {
                                 for id in sucessos {
-                                    let _ = confirmar_stream(
-                                        &mut con,
-                                        &self.stream,
-                                        &self.grupo,
-                                        &id,
-                                    )
-                                    .await;
+                                    let _ =
+                                        confirmar_stream(&mut con, &self.stream, &self.grupo, &id)
+                                            .await;
                                 }
                             }
                             Err(e) => {
@@ -536,17 +547,22 @@ pub async fn varrer_dlq_pendentes(
     grupo: &str,
     consumidor: &str,
 ) -> anyhow::Result<()> {
-    let pend: StreamPendingCountReply = con
-        .xpending_count(stream, grupo, "-", "+", 100)
-        .await?;
-        
+    let pend: StreamPendingCountReply = con.xpending_count(stream, grupo, "-", "+", 100).await?;
+
     for id in pend.ids {
         if id.times_delivered > MAX_ENTREGAS {
             let opts = StreamClaimOptions::default();
             let _: redis::streams::StreamClaimReply = con
-                .xclaim_options(stream, grupo, consumidor, 0, std::slice::from_ref(&id.id), opts)
+                .xclaim_options(
+                    stream,
+                    grupo,
+                    consumidor,
+                    0,
+                    std::slice::from_ref(&id.id),
+                    opts,
+                )
                 .await?;
-                
+
             let _: String = con
                 .xadd(
                     DLQ_STREAM,
@@ -557,8 +573,10 @@ pub async fn varrer_dlq_pendentes(
                     ],
                 )
                 .await?;
-                
-            let _: i64 = con.xack(stream, grupo, std::slice::from_ref(&id.id)).await?;
+
+            let _: i64 = con
+                .xack(stream, grupo, std::slice::from_ref(&id.id))
+                .await?;
             tracing::warn!(stream_id = %id.id, entregas = id.times_delivered, "evento movido para DLQ");
         }
     }
@@ -577,9 +595,11 @@ where
     F: Fn(EventoBruto) -> Fut + Send + Sync + 'static,
     Fut: std::future::Future<Output = anyhow::Result<()>> + Send + 'static,
 {
-    let mut con: Connection = client.get_async_connection().await
+    let mut con: Connection = client
+        .get_async_connection()
+        .await
         .map_err(|e| TransportError::Bus(e.to_string()))?;
-        
+
     if let Err(e) = varrer_dlq_pendentes(&mut con, stream, grupo, consumidor).await {
         tracing::warn!("Falha ao varrer DLQ de pendentes: {:?}", e);
     }
@@ -614,9 +634,11 @@ where
     F: Fn(Vec<EventoBruto>) -> Fut + Send + Sync + 'static,
     Fut: std::future::Future<Output = anyhow::Result<Vec<String>>> + Send + 'static,
 {
-    let mut con: Connection = client.get_async_connection().await
+    let mut con: Connection = client
+        .get_async_connection()
+        .await
         .map_err(|e| TransportError::Bus(e.to_string()))?;
-        
+
     if let Err(e) = varrer_dlq_pendentes(&mut con, stream, grupo, consumidor).await {
         tracing::warn!("Falha ao varrer DLQ de pendentes: {:?}", e);
     }
@@ -630,7 +652,10 @@ where
                 }
             }
             Err(e) => {
-                tracing::error!("reprocessador em lote: handler falhou novamente; mantido na PEL: {:?}", e);
+                tracing::error!(
+                    "reprocessador em lote: handler falhou novamente; mantido na PEL: {:?}",
+                    e
+                );
             }
         }
     }

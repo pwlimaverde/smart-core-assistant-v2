@@ -1,6 +1,6 @@
-use std::time::Duration;
 use redis::aio::ConnectionManager;
 use redis::Client;
+use std::time::Duration;
 
 use crate::errors::RedisError;
 
@@ -60,11 +60,11 @@ pub async fn criar_conexao_com_timeouts(url: &str) -> Result<ConnectionManager, 
     let client = Client::open(url.to_string())?;
     let manager = ConnectionManager::new_with_backoff_and_timeouts(
         client,
-        2,    // exponent_base (ms) — backoff exponencial
-        100,  // factor
-        6,    // number_of_retries
-        Duration::from_millis(response_ms),  // response_timeout
-        Duration::from_millis(response_ms),  // connection_timeout
+        2,                                  // exponent_base (ms) — backoff exponencial
+        100,                                // factor
+        6,                                  // number_of_retries
+        Duration::from_millis(response_ms), // response_timeout
+        Duration::from_millis(response_ms), // connection_timeout
     )
     .await?;
     tracing::info!(response_ms, "ConnectionManager Redis criado com timeouts");

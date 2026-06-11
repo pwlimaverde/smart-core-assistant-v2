@@ -1,5 +1,5 @@
-use std::time::Duration;
 use sqlx::{postgres::PgPoolOptions, PgPool, Postgres, Transaction};
+use std::time::Duration;
 use uuid::Uuid;
 
 use crate::errors::DbError;
@@ -30,20 +30,26 @@ impl PoolConfig {
     /// Lê a config do ambiente. Variáveis ausentes caem no default.
     pub fn from_env(prefix: &str) -> Self {
         let d = Self::default();
-        let u32v = |suf: &str, def: u32| std::env::var(format!("{prefix}_{suf}"))
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(def);
-        let ms = |suf: &str, def: Duration| std::env::var(format!("{prefix}_{suf}"))
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .map(Duration::from_millis)
-            .unwrap_or(def);
-        let s = |suf: &str, def: Duration| std::env::var(format!("{prefix}_{suf}"))
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .map(Duration::from_secs)
-            .unwrap_or(def);
+        let u32v = |suf: &str, def: u32| {
+            std::env::var(format!("{prefix}_{suf}"))
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(def)
+        };
+        let ms = |suf: &str, def: Duration| {
+            std::env::var(format!("{prefix}_{suf}"))
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .map(Duration::from_millis)
+                .unwrap_or(def)
+        };
+        let s = |suf: &str, def: Duration| {
+            std::env::var(format!("{prefix}_{suf}"))
+                .ok()
+                .and_then(|s| s.parse().ok())
+                .map(Duration::from_secs)
+                .unwrap_or(def)
+        };
         Self {
             max_connections: u32v("POOL_MAX", d.max_connections),
             min_connections: u32v("POOL_MIN", d.min_connections),
@@ -61,8 +67,8 @@ pub async fn criar_pool_config(cfg: PoolConfig) -> Result<PgPool, DbError> {
         .map_err(|_| DbError::ConfigError("DATABASE_URL não configurada".into()))?;
     let pool = PgPoolOptions::new()
         .max_connections(cfg.max_connections)
-        .min_connections(cfg.min_connections)        // pool quente
-        .acquire_timeout(cfg.acquire_timeout)        // fail-fast
+        .min_connections(cfg.min_connections) // pool quente
+        .acquire_timeout(cfg.acquire_timeout) // fail-fast
         .idle_timeout(cfg.idle_timeout)
         .max_lifetime(cfg.max_lifetime)
         .connect(&url)

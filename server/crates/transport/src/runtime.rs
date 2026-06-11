@@ -409,8 +409,13 @@ impl Server {
                         let codec_name_clone = codec_name.clone();
                         let semaforo_clone = semaforo.clone(); // P3
                         tokio::spawn(async move {
-                            if let Err(e) =
-                                handle_connection(stream, handlers_clone, codec_name_clone, semaforo_clone).await
+                            if let Err(e) = handle_connection(
+                                stream,
+                                handlers_clone,
+                                codec_name_clone,
+                                semaforo_clone,
+                            )
+                            .await
                             {
                                 tracing::error!("Erro lidando com conexao UDS: {:?}", e);
                             }
@@ -432,8 +437,13 @@ impl Server {
                     let codec_name_clone = codec_name.clone();
                     let semaforo_clone = semaforo.clone(); // P3
                     tokio::spawn(async move {
-                        if let Err(e) =
-                            handle_connection(stream, handlers_clone, codec_name_clone, semaforo_clone).await
+                        if let Err(e) = handle_connection(
+                            stream,
+                            handlers_clone,
+                            codec_name_clone,
+                            semaforo_clone,
+                        )
+                        .await
                         {
                             tracing::error!("Erro lidando com conexao TCP: {:?}", e);
                         }
@@ -454,7 +464,10 @@ where
     S: AsyncRead + AsyncWrite + Send + Unpin + 'static,
 {
     let meter = opentelemetry::global::meter("transport");
-    let h_dur = meter.f64_histogram("smartcore_rpc_duration_ms").with_unit("ms").init();
+    let h_dur = meter
+        .f64_histogram("smartcore_rpc_duration_ms")
+        .with_unit("ms")
+        .init();
     let c_total = meter.u64_counter("smartcore_rpc_total").init();
 
     let (mut read_half, mut write_half) = tokio::io::split(stream);

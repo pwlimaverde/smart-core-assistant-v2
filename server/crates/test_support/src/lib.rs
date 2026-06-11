@@ -79,7 +79,10 @@ fn iniciar_tunnel() -> Result<(), String> {
         .map(String::as_str)
         .unwrap_or("5432");
     let redis_port = env.get("REDIS_PORT").map(String::as_str).unwrap_or("6379");
-    let redis_bus_port = env.get("REDIS_BUS_PORT").map(String::as_str).unwrap_or("6380");
+    let redis_bus_port = env
+        .get("REDIS_BUS_PORT")
+        .map(String::as_str)
+        .unwrap_or("6380");
 
     let mut cmd = Command::new("ssh");
     cmd.arg("-p")
@@ -100,7 +103,9 @@ fn iniciar_tunnel() -> Result<(), String> {
         .arg("-L")
         .arg(format!("{PORTA_REDIS_CACHE_LOCAL}:localhost:{redis_port}"))
         .arg("-L")
-        .arg(format!("{PORTA_REDIS_BUS_LOCAL}:localhost:{redis_bus_port}"))
+        .arg(format!(
+            "{PORTA_REDIS_BUS_LOCAL}:localhost:{redis_bus_port}"
+        ))
         .arg(format!("{user}@{host}"))
         .stdin(Stdio::null())
         .stdout(Stdio::null())

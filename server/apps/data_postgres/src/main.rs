@@ -2,9 +2,7 @@
 //! Contém o Relay de Outbox e o Consumidor de Auditoria integrados.
 
 use contracts::{Envelope, MessageKind};
-use infrastructure_postgres::{
-    inserir_audit_log, NewAuditLogEntry, RequestContext,
-};
+use infrastructure_postgres::{inserir_audit_log, NewAuditLogEntry, RequestContext};
 use redis::aio::ConnectionManager;
 use redis::AsyncCommands;
 use sqlx::PgPool;
@@ -47,7 +45,10 @@ async fn main() -> anyhow::Result<()> {
         .ok()
         .and_then(|s| s.parse().ok())
         .unwrap_or(10u64);
-    observability::monitorar_pool(pool.clone(), std::time::Duration::from_secs(metrics_interval_s));
+    observability::monitorar_pool(
+        pool.clone(),
+        std::time::Duration::from_secs(metrics_interval_s),
+    );
 
     // 3. Conecta ao Redis (Cache e Bus separados) com timeouts (P4)
     let redis_url =
@@ -87,9 +88,7 @@ async fn main() -> anyhow::Result<()> {
         if let Err(e) = audit_consumer
             .run_batch(move |evts| {
                 let pool = pool_clone.clone();
-                async move {
-                    processar_eventos_auditoria_lote(pool, evts).await
-                }
+                async move { processar_eventos_auditoria_lote(pool, evts).await }
             })
             .await
         {
@@ -115,7 +114,9 @@ async fn main() -> anyhow::Result<()> {
                 "data_postgres_audit_group",
                 "data_postgres_audit_consumer",
                 handler,
-            ).await {
+            )
+            .await
+            {
                 tracing::warn!("Falha no reprocessamento periódico da PEL: {:?}", e);
             }
         }
@@ -124,19 +125,22 @@ async fn main() -> anyhow::Result<()> {
     // 5c. Task periódica de amostragem de lag das filas (M4)
     let pool_lag = pool.clone();
     let bus_conn_lag = bus_conn.clone();
-    
+
     use std::sync::atomic::AtomicU64;
     let atomic_bus_pending = std::sync::Arc::new(AtomicU64::new(0));
     let atomic_outbox_backlog = std::sync::Arc::new(AtomicU64::new(0));
 
     let meter_lag = observability::opentelemetry::global::meter("data_postgres");
-    
+
     let bus_pending_gauge = atomic_bus_pending.clone();
     let _g_bus_pending = meter_lag
         .u64_observable_gauge("smartcore_bus_pending")
         .with_description("Mensagens pendentes na PEL do Redis bus")
         .with_callback(move |obs| {
-            obs.observe(bus_pending_gauge.load(std::sync::atomic::Ordering::Relaxed), &[]);
+            obs.observe(
+                bus_pending_gauge.load(std::sync::atomic::Ordering::Relaxed),
+                &[],
+            );
         })
         .init();
 
@@ -145,7 +149,10 @@ async fn main() -> anyhow::Result<()> {
         .u64_observable_gauge("smartcore_outbox_backlog")
         .with_description("Mensagens acumuladas na tabela de outbox do PostgreSQL")
         .with_callback(move |obs| {
-            obs.observe(outbox_backlog_gauge.load(std::sync::atomic::Ordering::Relaxed), &[]);
+            obs.observe(
+                outbox_backlog_gauge.load(std::sync::atomic::Ordering::Relaxed),
+                &[],
+            );
         })
         .init();
 
@@ -157,10 +164,13 @@ async fn main() -> anyhow::Result<()> {
             tick.tick().await;
 
             // 1. Coleta o lag da PEL do Redis
-            let count: u64 = match con.xpending::<_, _, redis::streams::StreamPendingReply>(
-                transport::bus::STREAM_SEGURANCA,
-                "data_postgres_audit_group",
-            ).await {
+            let count: u64 = match con
+                .xpending::<_, _, redis::streams::StreamPendingReply>(
+                    transport::bus::STREAM_SEGURANCA,
+                    "data_postgres_audit_group",
+                )
+                .await
+            {
                 Ok(reply) => reply.count() as u64,
                 Err(e) => {
                     tracing::warn!("Falha ao ler XPENDING do Redis Bus: {:?}", e);
@@ -170,12 +180,11 @@ async fn main() -> anyhow::Result<()> {
             atomic_bus_pending.store(count, std::sync::atomic::Ordering::Relaxed);
 
             // 2. Coleta o backlog de outbox do Postgres
-            let query_res: Result<(i64,), sqlx::Error> = sqlx::query_as(
-                "SELECT count(*) FROM outbox WHERE published_at IS NULL"
-            )
-            .fetch_one(&pool_lag)
-            .await;
-            
+            let query_res: Result<(i64,), sqlx::Error> =
+                sqlx::query_as("SELECT count(*) FROM outbox WHERE published_at IS NULL")
+                    .fetch_one(&pool_lag)
+                    .await;
+
             let backlog = match query_res {
                 Ok((val,)) => val as u64,
                 Err(e) => {
@@ -273,8 +282,8 @@ async fn processar_eventos_auditoria_lote(
     pool: PgPool,
     eventos: Vec<transport::bus::EventoBruto>,
 ) -> anyhow::Result<Vec<String>> {
-    use std::collections::HashMap;
     use sqlx::Row;
+    use std::collections::HashMap;
 
     let mut agrupamento_tenant: HashMap<Uuid, Vec<(String, NewAuditLogEntry)>> = HashMap::new();
     let mut globais: Vec<(String, NewAuditLogEntry)> = Vec::new();
@@ -285,7 +294,11 @@ async fn processar_eventos_auditoria_lote(
         let envelope = match evt.desserializar::<observability::AuditLogPayload>() {
             Ok(env) => env,
             Err(e) => {
-                tracing::error!("Falha ao desserializar evento de auditoria no lote (id={}): {:?}", evt.stream_id, e);
+                tracing::error!(
+                    "Falha ao desserializar evento de auditoria no lote (id={}): {:?}",
+                    evt.stream_id,
+                    e
+                );
                 sucessos.push(evt.stream_id);
                 continue;
             }
@@ -304,7 +317,10 @@ async fn processar_eventos_auditoria_lote(
         };
 
         if let Some(tenant_id) = envelope.payload.tenant_id {
-            agrupamento_tenant.entry(tenant_id).or_default().push((evt.stream_id, entry));
+            agrupamento_tenant
+                .entry(tenant_id)
+                .or_default()
+                .push((evt.stream_id, entry));
         } else {
             globais.push((evt.stream_id, entry));
         }
@@ -327,15 +343,20 @@ async fn processar_eventos_auditoria_lote(
                     }
                 }
                 Ok((ids, tx))
-            }
-        ).await;
+            },
+        )
+        .await;
 
         match result {
             Ok(ids) => {
                 sucessos.extend(ids);
             }
             Err(e) => {
-                tracing::error!("Falha na transação de auditoria para o tenant {}: {:?}", tenant_id, e);
+                tracing::error!(
+                    "Falha na transação de auditoria para o tenant {}: {:?}",
+                    tenant_id,
+                    e
+                );
             }
         }
     }
@@ -363,7 +384,7 @@ async fn processar_eventos_auditoria_lote(
                 .bind(&entry.ip_address)
                 .fetch_one(&mut *tx)
                 .await?;
-                
+
                 let _id: Uuid = row.get("id");
                 ids.push(stream_id.clone());
             }
@@ -376,7 +397,10 @@ async fn processar_eventos_auditoria_lote(
                 sucessos.extend(ids);
             }
             Err(e) => {
-                tracing::error!("Falha ao consolidar logs de auditoria globais no Postgres: {:?}", e);
+                tracing::error!(
+                    "Falha ao consolidar logs de auditoria globais no Postgres: {:?}",
+                    e
+                );
             }
         }
     }
@@ -1052,7 +1076,11 @@ async fn handler_verify_credentials(
     };
 
     let login_sucesso = if let Some(user) = &user_opt {
-        infrastructure_postgres::verify_password_async(password.to_string(), user.password_hash.clone()).await
+        infrastructure_postgres::verify_password_async(
+            password.to_string(),
+            user.password_hash.clone(),
+        )
+        .await
     } else {
         false
     };

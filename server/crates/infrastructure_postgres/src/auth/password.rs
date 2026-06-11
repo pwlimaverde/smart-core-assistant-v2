@@ -31,7 +31,9 @@ pub async fn hash_password_async(plaintext: String) -> Result<String, DbError> {
     // `move` transfere a senha para a thread de bloqueio; ela nunca é logada.
     tokio::task::spawn_blocking(move || hash_password(&plaintext))
         .await
-        .map_err(|e| DbError::CryptoError(format!("falha ao agendar hash em spawn_blocking: {e}")))?
+        .map_err(|e| {
+            DbError::CryptoError(format!("falha ao agendar hash em spawn_blocking: {e}"))
+        })?
 }
 
 /// Variante assíncrona de [`verify_password`]: roda a verificação Argon2 (CPU-bound)

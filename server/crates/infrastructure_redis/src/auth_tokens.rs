@@ -129,7 +129,7 @@ impl RefreshTokenStore {
         if !membros.is_empty() {
             // Constrói o vetor de chaves e deleta tudo num único DEL variádico.
             let chaves: Vec<String> = membros.iter().map(|h| keys::chave_refresh(h)).collect();
-            let _: i64 = self.con.del(&chaves).await?;   // DEL k1 k2 k3 ...
+            let _: i64 = self.con.del(&chaves).await?; // DEL k1 k2 k3 ...
         }
         let _: i64 = self.con.del(&chave_fam).await?;
         tracing::info!(
