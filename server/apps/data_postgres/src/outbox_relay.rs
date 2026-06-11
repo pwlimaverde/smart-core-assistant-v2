@@ -211,8 +211,9 @@ mod tests {
         .await
         .expect("falha ao ajustar a sequence de auth_user");
 
-        let redis_url =
-            std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6380".to_string());
+        let redis_url = std::env::var("REDIS_BUS_URL")
+            .or_else(|_| std::env::var("REDIS_URL"))
+            .unwrap_or_else(|_| "redis://127.0.0.1:6380".to_string());
         let redis_client = redis::Client::open(redis_url).unwrap();
         let redis_conn = ConnectionManager::new(redis_client).await.unwrap();
 
