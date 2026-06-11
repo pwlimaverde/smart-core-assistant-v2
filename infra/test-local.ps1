@@ -94,7 +94,7 @@ try {
     # --------------------------------------------
     # 4. Testes
     #    -Fast : so unit/lib (sem banco, igual ao CI)
-    #    padrao: suite COMPLETA (unit + integracao) — o test_support abre o
+    #    padrao: suite COMPLETA (unit + integracao) - o test_support abre o
     #            tunel SSH sozinho na primeira suite que precisar do banco
     # --------------------------------------------
     if ($Fast) {
@@ -119,7 +119,7 @@ try {
             cargo sqlx prepare --workspace --check
             if ($LASTEXITCODE -ne 0) { $falhas += "sqlx-prepare" } else { Write-Host "ok" -ForegroundColor Green }
         } else {
-            Write-Host "sqlx-cli nao instalado — pulando (instale com: cargo install sqlx-cli --no-default-features --features postgres)" -ForegroundColor Yellow
+            Write-Host "sqlx-cli nao instalado - pulando (instale com: cargo install sqlx-cli --no-default-features --features postgres)" -ForegroundColor Yellow
         }
     }
 } finally {
@@ -132,7 +132,7 @@ try {
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
 if ($falhas.Count -eq 0) {
-    Write-Host "  TUDO VERDE — pode dar push." -ForegroundColor Green
+    Write-Host "  TUDO VERDE - pode dar push." -ForegroundColor Green
     Write-Host "============================================" -ForegroundColor Cyan
     exit 0
 } else {
