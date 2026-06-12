@@ -1,6 +1,7 @@
 ---
 status: in_progress
 generated: 2026-06-02
+updated: 2026-06-12
 slug: user-auth-module
 scale: LARGE
 artifacts:
@@ -8,22 +9,22 @@ artifacts:
   info_aux: "./user-auth-module/info_aux_user-auth-module.md"
 phases:
   - id: "phase-p"
-    name: "Planning — escopo, transporte/sessão e contrato"
+    name: "Planning — escopo real, inventário e decisões fechadas"
     prevc: "P"
     agent: "backend-specialist"
     status: "completed"
   - id: "phase-r"
-    name: "Review — contrato proto, modelo de token/JWT e pools"
+    name: "Review — Envelope aditivo, RequestContext único, escopos e contratos"
     prevc: "R"
-    agent: "backend-specialist"
-    status: "pending"
+    agent: "architect-specialist"
+    status: "in_progress"
   - id: "phase-e"
-    name: "Execution — deps, JWT, refresh, application e runtime_api"
+    name: "Execution — JWT/refresh, Login/Refresh/Logout, interceptor e rotas admin de config"
     prevc: "E"
     agent: "backend-specialist"
     status: "pending"
   - id: "phase-v"
-    name: "Validation — testes de integração dos 4 fluxos (PG + Redis)"
+    name: "Validation — testes de integração (auth + admin) com túnel automático"
     prevc: "V"
     agent: "test-writer"
     status: "pending"
@@ -34,85 +35,90 @@ phases:
     status: "pending"
 ---
 
-# Módulo de Autenticação de Usuário — JWT + `runtime_api` gRPC
+# Login Real + Rotas Admin de Configuração — `user-auth-module`
 
 > Plano **canônico** (leve). A verdade técnica detalhada está nos artefatos abaixo.
-> Reestruturado pela skill `plan-restructuring` a partir de
-> `doc_dev/planejamento/03-comunicacao-e-autenticacao.md`.
+> **Reestruturado em 2026-06-12** pela skill `plan-restructuring` contra o estado real do
+> código (pós-refatoração modular), a partir de `doc_dev/planejamento/09-comunicacao-e-autenticacao.md`
+> §5–6 e do subconjunto "configurações" de `doc_dev/planejamento/11-painel-admin-superusuario.md`.
 
 ## Artefatos
 
 - **Plano completo (verdade técnica):**
   [`./user-auth-module/plano_completo_user-auth-module.md`](./user-auth-module/plano_completo_user-auth-module.md)
-- **Documentação auxiliar (libs + decisões):**
+- **Documentação auxiliar (inventário do código + libs):**
   [`./user-auth-module/info_aux_user-auth-module.md`](./user-auth-module/info_aux_user-auth-module.md)
 
 ## Objetivo
 
-Implementar o **módulo de autenticação de usuário** da v2: emissão e validação de JWT (HS256),
-ciclo de vida de sessão (access 15 min + refresh opaco 7 dias com rotação por família) e o
-**primeiro ponto de entrada gRPC real** (`apps/runtime_api`) com `AuthInterceptor` que constrói o
-`RequestContext`. Fecha a defesa-em-3-camadas (Interceptor JWT → escopos em Rust → RLS no
-PostgreSQL) descrita no doc 03.
+Substituir os **mocks de autenticação** por tokens reais e expor as **rotas admin de
+configuração**, deixando o backend **pronto para plugar o app Windows (Flutter) de
+configuração do superusuário** (cadastro de prompts e chaves usadas dinamicamente pelos
+tenants — equivalente do `service_hub`/`settings_manager` da v1). O Flutter fica fora de
+escopo (plano 11); o critério é "backend pronto para plugar" via `runtime_api`.
 
-O módulo **consome** as fundações já entregues:
-- `infrastructure_postgres` — `AuthUser`, `Tenant`, `TenantUser`, Argon2, RLS, `RequestContext`.
-- `infrastructure_redis` — `RefreshTokenStore` (rotação + reuse-detection), `TokenBlocklist`,
-  `CachePermissoes`.
+**Escopo (doc 09 §6 + subconjunto config do doc 11):**
+1. **Login real** — JWT HS256 (claims §6.1), refresh opaco 32B + SHA-256, TTLs via env
+   (`AUTH_ACCESS_TTL_S`/`AUTH_REFRESH_TTL_S`), rate limiting, `MuxClient` compartilhado no boot.
+2. **Refresh/Logout** — novas rotas na `runtime_api` sobre `ValidateAndRotate`/`RevokeFamily`/
+   `BlockToken`; auditoria de `token_reuse_detected`.
+3. **Interceptor (Camada 1)** — wrapper de handler sobre o `transport` próprio (não tonic):
+   valida JWT, checa blocklist, sobrescreve `tenant_id` do Envelope (claims > body); guard
+   `is_superuser` nas rotas admin.
+4. **RequestContext unificado** — extensão **aditiva** do `envelope.proto` (identidade);
+   `data_postgres` monta contexto do Envelope e elimina os 4 contextos forjados.
+5. **Rotas admin de config** — CRUD de `CoreSettings` + `Get/UpdateTenantConfig` (cifra
+   AES-256-GCM, leitura mascarada, invalidação do `TenantConfigCache`, auditoria).
 
-**Escopo:** deps de workspace (`jsonwebtoken`, `sha2`, `base16ct`, `rand_core`, `tonic`, `prost`),
-crate `contracts` (`auth.proto`), módulo JWT, geração/hash de refresh tokens, política de senha,
-extensões em `infrastructure_postgres` (`criar_owner`, `criar_admin_pool`), rate limiting de login,
-crate `application` (`AuthService`: Register/Login/RefreshToken/Logout/InviteUser/AcceptInvite),
-app `runtime_api` (Tonic + interceptor) e scaffold de handshake WebSocket autenticado.
+**Fora de escopo:** frontend Flutter; CRUD de tenants/planos/assinaturas/pagamentos
+(plano 11); Register/Invite (cadastro via `control_plane create-superuser`); MFA/OAuth;
+recuperação de senha; fan-out realtime.
 
-**Fora do escopo:** fan-out realtime completo (WebSocket pub/sub), seleção multi-tenant
-(hoje 1-para-1), recuperação de senha, MFA, OAuth, envio real de e-mail de convite.
-
-**Sinal de sucesso:** `cargo build` do workspace compila com os novos crates; os testes de
-integração provam os fluxos Register/Login/Refresh(+reuse)/Logout/AcceptInvite contra PostgreSQL
-(RLS) e Redis reais; interceptor rejeita JWT ausente/blocklisted (`unauthenticated`) e escopo
-insuficiente (`permission_denied`); `cargo clippy -D warnings` e `cargo fmt --check` limpos.
+**Sinal de sucesso (DoD, doc 09 §6.4):** JWT real emitido/validado; refresh rotaciona e
+reuso revoga a família com auditoria; logout bloqueia `jti`; nenhum handler com contexto
+forjado; `RequestContext` único; clientes RPC compartilhados; rate limiting ativo; rotas
+admin de config funcionais com superuser e rejeitadas sem; testes de integração dos fluxos.
 
 ## Fases PREVC
 
 | Fase | Nome | Agente | Status |
 |---|---|---|---|
-| **P** | Planning — escopo, transporte/sessão e contrato | Backend Specialist | ✅ completed |
-| **R** | Review — contrato proto, modelo de token/JWT e pools | Backend Specialist (+ Security Auditor) | ⬜ pending |
-| **E** | Execution — deps, JWT, refresh, application e `runtime_api` | Backend Specialist | ⬜ pending |
-| **V** | Validation — testes de integração dos 4 fluxos (PG + Redis) | Test Writer (+ Backend Specialist) | ⬜ pending |
+| **P** | Planning — escopo real, inventário e decisões fechadas | Backend Specialist | ✅ completed |
+| **R** | Review — Envelope aditivo, RequestContext único, escopos e contratos | Architect Specialist (+ Security Auditor) | 🔄 in_progress |
+| **E** | Execution — JWT/refresh, Login/Refresh/Logout, interceptor e rotas admin | Backend Specialist | ⬜ pending |
+| **V** | Validation — testes de integração (auth + admin) | Test Writer (+ Backend Specialist) | ⬜ pending |
 | **C** | Confirmation — final-review e arquivamento dotcontext | Backend Specialist | ⬜ pending |
 
 ## Decisões-chave (resumo — detalhes no plano completo)
 
-1. **Transporte gRPC (tonic 0.14) + WebSocket (axum)** — gRPC para comandos/consultas; WS para
-   realtime. Auth no handshake via `Authorization: Bearer` ou `?token=` (token curto, logs
-   anonimizados).
-2. **JWT HS256** com claims incluindo `iat`, `jti` (blocklist) e `family_id` (revogação de família
-   no logout). Chaves via `std::sync::OnceLock`.
-3. **Refresh token opaco** — `rand_core::OsRng` 32 bytes → base64url; só o **hash SHA-256** toca o
-   Redis. Rotação por família com reuse-detection (já em `infrastructure_redis`).
-4. **Multi-tenant 1-para-1** resolvido automaticamente no login (`UNIQUE(user_id)`); superuser →
-   `tenant_id = null`.
-5. **Pool admin (BYPASSRLS)** isolado (`DATABASE_ADMIN_URL`) só para lookups pré-tenant; novo
-   helper `criar_admin_pool`.
-6. **Bootstrap de cadastro** — `TenantUserRepository::criar_owner` sem `RequestContext` (o `criar`
-   existente exige `tenant:admin`).
-7. **Erros → `tonic::Status`** na borda; `AuthError` (thiserror) interno, sem vazar detalhe ao
-   cliente.
+1. **Borda = `transport` próprio** (UDS/FlatBuffers + fallback gRPC); interceptor é
+   **wrapper de handler**, não `tonic::Interceptor` nem middleware global.
+2. **Claims do doc 09 §6.1** (`sub`, `tenant_id`, `scopes`, `is_superuser`, `jti`, `iat`,
+   `exp`); `family_id` vive só no `RefreshTokenStore`, não nas claims.
+3. **Banco tem uma porta:** `data_postgres` via RPC — sem pool de Postgres na
+   `runtime_api`/`application` (descartado `criar_admin_pool` na borda).
+4. **Envelope estendido aditivamente** (`auth_user_id`, `auth_scopes`, `auth_is_superuser`)
+   para propagar identidade validada da Camada 1 às camadas internas.
+5. **`RequestContext` canônico = o de `infrastructure_postgres`** (tem `exigir_qualquer`
+   e `flow_permissions`); o da `application` converge para ele.
+6. **`rand_core 0.6` `OsRng`** (estável, transitivo via `argon2`) em vez de `rand 0.10`.
+7. **Config dinâmica reusa a fundação pronta** (`settings.rs`, `config.rs`,
+   `config_cache.rs`, `crypto.rs`) — só expõe via RPC com máscara e invalidação de cache.
 
-## Correções aplicadas vs. plano base (doc 03)
+## Correções aplicadas vs. plano anterior (resumo)
 
-`rand::OsRng`→`rand_core 0.6`; `tonic`/`prost` fixados em 0.14; adicionado `criar_admin_pool`
-(GAP real — só existia `criar_pool`); hash via `sha2`+`base16ct`; `OnceLock` em vez de
-`once_cell`/`lazy_static`; `criar_owner` separado de `criar`; `iat`+`family_id` nas claims;
-`AcceptInvite` como rota pública. Detalhe completo na seção "Correções aplicadas" do plano completo.
+Descartados: servidor Tonic dedicado na borda, Register/Invite/AcceptInvite, pools diretos
+na `application`, `criar_admin_pool`, WebSocket Axum, upgrade desnecessário de prost.
+Alinhados ao código real: `MuxClient` no boot, claims §6.1, Envelope aditivo, contexto
+forjado eliminado (linhas 427/491/889/994 do `data_postgres`), rotas admin de config sobre
+infra existente. GAPs reais identificados: `VerifyCredentials` não devolve `tenant_id`
+(estender reply), `DeleteCoreSetting` inexistente, catálogo de escopos a fechar na fase R.
+Detalhe completo na seção "Correções aplicadas" do plano completo.
 
 ## Verificação
 
-`docker compose -f docker/compose/data.yml up -d` → exportar `JWT_SECRET`, `DATABASE_URL`,
-`DATABASE_ADMIN_URL`, `REDIS_URL` → `cargo build` → `RUST_TEST_THREADS=1 cargo test -p application
--p infrastructure_postgres -p infrastructure_redis` → `cargo clippy --all-targets -D warnings` +
-`cargo fmt --check`. Branch `claude/user-auth-module-plan-dykMV` a partir de `dev`; commits sem
-auto-referência ao modelo; comentários em pt-br.
+Túnel/test_support automático nos testes → exportar `JWT_SECRET`, `AUTH_ACCESS_TTL_S`,
+`AUTH_REFRESH_TTL_S`, `ENCRYPTION_KEY`, `DATABASE_URL`, `REDIS_URL` → `cargo build` →
+`cargo test -p application -p data_postgres -p data_redis -p runtime_api` (SQLX_OFFLINE) →
+`cargo clippy --all-targets -D warnings` + `cargo fmt --check`. Branch `feature/*` a partir
+de `dev` (gitflow); commits sem auto-referência ao modelo; comentários em pt-br.

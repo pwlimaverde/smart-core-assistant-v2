@@ -1,496 +1,633 @@
-# Plano Completo — Módulo de Autenticação de Usuário (`user-auth-module`)
+# Plano Completo — Login Real + Rotas Admin de Configuração (`user-auth-module`)
 
-> Verdade técnica detalhada do módulo de autenticação. Reestruturado a partir de
-> `doc_dev/planejamento/03-comunicacao-e-autenticacao.md` e validado contra a central de libs
-> (`doc_dev/libs/rust/`), contra a documentação atual coletada via Context7 (`info_aux`) e contra
-> o **código já implementado** em `infrastructure_postgres` e `infrastructure_redis`.
-> Idioma: pt-br; identificadores em inglês, verbos de função em pt-br (`criar_*`, `validar_*`,
-> `gerar_*`), espelhando as crates de infraestrutura existentes.
+> **Reestruturado em 2026-06-12** contra o estado REAL do código (pós-refatoração modular).
+> Fontes da verdade: `info_aux_user-auth-module.md` (inventário verificado), doc 09 §5–6
+> (spec canônica do login real) e doc 11 §2/§3.7/§5/§6/§7 (subconjunto "configurações" do
+> painel admin). Substitui integralmente a versão anterior (que assumia servidor Tonic
+> dedicado na borda, fluxos Register/Invite, pools de Postgres na `application` e WebSocket
+> Axum — tudo **descartado**).
+>
+> Idioma: pt-br na documentação/comentários; identificadores em inglês; verbos de função em
+> pt-br (`gerar_*`, `validar_*`, `criar_*`), espelhando as crates de infraestrutura existentes.
 
 ## Objetivo
 
-Implementar o **módulo de autenticação de usuário** da v2: emissão e validação de JWT (HS256),
-ciclo de vida de sessão (access + refresh tokens com rotação por família), e o primeiro ponto de
-entrada gRPC real (`apps/runtime_api`) com interceptor de autenticação que constrói o
-`RequestContext`. O módulo **consome** as fundações já entregues (`infrastructure_postgres`:
-`AuthUser`, `Tenant`, `TenantUser`, Argon2, RLS; `infrastructure_redis`: `RefreshTokenStore`,
-`TokenBlocklist`, `CachePermissoes`) e fecha a defesa-em-3-camadas descrita no doc 03.
+Implementar a **autenticação REAL** da v2 (substituindo os mocks da `application::auth::login`)
+e expor as **rotas admin de configuração** (CoreSettings + TenantConfig, estilo `service_hub`/
+`settings_manager` da v1), de modo que ao final o backend esteja **pronto para plugar o app
+Windows (Flutter) de configuração do superusuário** — todas as RPCs autenticadas e funcionais
+via `runtime_api`. O Flutter em si fica **fora de escopo** (é o plano 11); o critério é "backend
+pronto para plugar".
+
+O módulo **consome** as fundações já entregues e testadas — não as reescreve:
+- `infrastructure_postgres`: Argon2id (`auth/password.rs`), repo `auth_user` (`auth/users.rs`),
+  `RequestContext` + `exigir_qualquer` (`security.rs`), `CipherManager` (`crypto.rs`),
+  `CoreSettings` (`tenants/settings.rs`), `resolve_runtime_config` (`tenants/config.rs`),
+  `TenantConfigCache` com `invalidate` (`config_cache.rs`).
+- `infrastructure_redis`: `RefreshTokenStore` + `TokenBlocklist` (`auth_tokens.rs`).
+- `data_postgres`: `VerifyCredentials` real e testado (`main.rs:1038`).
+- `data_redis`: rotas `StoreRefreshToken`/`ValidateAndRotate`/`RevokeFamily`/`BlockToken`/
+  `IsTokenBlocked` (todas implementadas e testadas).
+- `transport`: `Server::from_env().route().run()`, `conectar_cliente -> MuxClient`,
+  `MuxClient::call(env, prazo)`, `bus::publicar_evento_seguranca`.
 
 ## Escopo
 
 **Dentro do escopo:**
-- Dependências de workspace: `jsonwebtoken`, `sha2`, `base16ct`, `rand_core`, `tonic`, `prost`,
-  `tower`, `http`, `tonic-build`.
-- Crate `contracts` com `proto/auth.proto` (serviço `AuthService` + mensagens).
-- Módulo JWT: `Claims`, `gerar_access_token`, `validar_access_token`, chaves via `OnceLock`.
-- Geração e hashing de refresh tokens (`rand_core::OsRng` → base64url → SHA-256 hex).
-- Validação de política de senha (camada de aplicação).
-- Extensões em `infrastructure_postgres`: `TenantUserRepository::criar_owner` (bootstrap sem
-  `RequestContext`) e `criar_admin_pool` (pool BYPASSRLS lendo `DATABASE_ADMIN_URL`).
-- Rate limiting de login no Redis (`auth:rate_limit:<ip_hash>`).
-- Crate `application` com `AuthService`: `Register`, `Login`, `RefreshToken`, `Logout`,
-  `InviteUser`, `AcceptInvite`.
-- App `runtime_api`: servidor Tonic gRPC + `AuthInterceptor` + injeção de `RequestContext`.
-- Scaffold de handshake WebSocket autenticado (Axum) — validação de token, sem fan-out ainda.
-- Testes de integração dos quatro fluxos contra PostgreSQL + Redis reais.
+1. **F6.1 Login real** — JWT HS256 (claims do doc 09 §6.1), refresh opaco 32B + SHA-256,
+   TTLs via env, rate limiting, `MuxClient` compartilhado no boot (`AppState`),
+   `StoreRefreshToken` com `tenant_id` real.
+2. **F6.1 Refresh e Logout** — novas rotas `Refresh`/`Logout` na `runtime_api` orquestrando
+   `ValidateAndRotate`/`RevokeFamily`/`BlockToken`; auditoria de `token_reuse_detected`.
+3. **F6.2/6.3 Interceptor (Camada 1)** — **wrapper de handler** sobre o `transport` próprio
+   (NÃO `tonic::Interceptor`): valida JWT local, checa blocklist, monta contexto, **sobrescreve
+   `tenant_id` do Envelope** (claims > body); guard `is_superuser` para rotas admin.
+4. **RequestContext unificado** — resolver a duplicação `application` vs `infrastructure_postgres`;
+   **extensão ADITIVA** do `envelope.proto` para propagar identidade (`auth_user_id`,
+   `auth_scopes`, `auth_is_superuser`); `data_postgres` monta o contexto a partir do Envelope e
+   elimina os **4 contextos forjados** (`main.rs` linhas 427, 491, 889, 994).
+5. **Rotas admin de configuração** — `data_postgres` + `runtime_api` (guard superuser):
+   listar/upsert/delete `CoreSettings` (valores `encrypted` cifrados com `CipherManager`, leitura
+   mascarada), `Get/UpdateTenantConfig` (api_keys JSONB cifradas, máscara na leitura), invalidação
+   do `TenantConfigCache` ao atualizar, auditoria de toda mutação via `publicar_evento_seguranca`.
+6. **Testes** (doc 09 §6.4): fluxo feliz, senha errada, usuário inativo, refresh expirado, reuso
+   de refresh, logout + uso de token bloqueado, rotas admin com/sem superuser.
 
-**Fora do escopo (fases futuras):** fan-out realtime por tenant (WebSocket pub/sub completo);
-seleção de tenant múltiplo (hoje a relação é 1-para-1); recuperação de senha por e-mail; MFA/2FA;
-refresh token binding por device; OAuth/social login; envio real de e-mail de convite (apenas o
-registro do `TenantInvite` é criado).
+**Fora de escopo (planos/fases futuras):** frontend Flutter (plano 11 etapa B); CRUD de tenants/
+planos/assinaturas/pagamentos (plano 11 P1, etapa A do doc 11); `TestEvolutionConnection`/
+`TestDatabaseConnection`; provisionamento via `control_plane`; recuperação de senha, MFA, OAuth,
+device binding; fan-out realtime por tenant; fluxos `Register`/`InviteUser`/`AcceptInvite`
+(o cadastro de usuário/superusuário já é feito pelo `control_plane create-superuser`).
 
-## Arquitetura (invariantes obrigatórias)
+## Arquitetura (invariantes obrigatórias — NÃO violar)
 
-1. **Defesa em 3 camadas** (doc 03 §4): Interceptor JWT → validação de escopos em Rust → RLS no
-   PostgreSQL. Nenhuma query de tenant corre fora de `run_in_tenant_transaction`.
-2. **`tenant_id` só vem das Claims do JWT** (via `RequestContext`), nunca do body da requisição.
-3. **Segredos nunca em claro:** senha só como hash Argon2id; refresh token só como hash SHA-256.
-4. **`JWT_SECRET` lido uma vez** via `std::sync::OnceLock` (sem `once_cell`/`lazy_static`).
-5. **Pool admin (BYPASSRLS) isolado:** usado **exclusivamente** em lookups pré-tenant
-   (login, aceite de convite). Todo o resto usa o pool tenant-scoped + RLS.
-6. **Erro por crate:** `application` define `AuthError` (thiserror), mapeado para `tonic::Status`
-   na borda do `runtime_api`. Não vazar erros internos ao cliente.
-7. **Sem `unwrap()/expect()` em produção;** `?`/`Result`. Comentários em pt-br.
-8. **Rotas públicas** (`Register`, `Login`, `RefreshToken`, `AcceptInvite`) não passam pelo
-   `AuthInterceptor`.
+1. **Banco tem UMA porta:** `data_postgres` via RPC. `runtime_api`/`control_plane`/`application`
+   são **clientes finos** — **proibido** abrir pool de Postgres na `runtime_api` ou na
+   `application`. Nada de `criar_admin_pool` fora do `data_postgres`.
+2. **Interceptor ≠ tonic Interceptor.** A borda é o `transport` próprio. O "interceptor" é um
+   **wrapper de handler** (`Fn(Envelope) -> BoxFuture<Envelope>` que envolve o handler real).
+3. **Claims > body:** o `tenant_id` (e identidade) do Envelope é **sobrescrito** pelo wrapper a
+   partir das claims do JWT — o cliente nunca define `tenant_id`/identidade.
+4. **`error_core::AppError` é a base** dos erros; usar `to_error_envelope`/`from_envelope` no
+   transporte (não inventar tipo de erro novo na borda).
+5. **Segredos nunca em claro:** senha só como hash Argon2id; refresh só como SHA-256; api_keys/
+   CoreSettings `encrypted` só cifradas (AES-256-GCM via `CipherManager`); leitura ao admin
+   devolve máscara `••••••••`.
+6. **`OnceLock`** (std) para chaves JWT e hash dummy — sem `once_cell`/`lazy_static`.
+7. **Evolução de schema proto é ADITIVA:** manter `schema_version`; só adicionar campos ao final.
+8. **Sem `unwrap()/expect()` em produção;** `?`/`Result`. `tracing` instrumentado **sem vazar
+   segredos** (token/senha/api_key fora dos spans).
+9. **Superusuário sem tenant:** `tenant_id` vazio nas claims → `Uuid::nil()` no Envelope das RPCs
+   globais (padrão já usado pelo `control_plane`).
+10. **gitflow:** branch `feature/*` a partir de `dev`; commits **sem** auto-referência ao modelo.
 
 ---
 
 # FASES (mapeadas ao PREVC)
 
-| Fase | Nome | Agente | Status |
+| Fase | Nome | Agente sugerido | Status |
 |---|---|---|---|
-| **P** | Planning — escopo, decisões de transporte/sessão e contrato | Backend Specialist | ✅ completed |
-| **R** | Review — contrato proto, modelo de token/JWT e estratégia de pools | Backend Specialist (+ Security Auditor) | ⬜ pending |
-| **E** | Execution — deps, JWT, refresh, application e `runtime_api` | Backend Specialist | ⬜ pending |
-| **V** | Validation — testes de integração dos 4 fluxos (PG + Redis reais) | Test Writer (+ Backend Specialist) | ⬜ pending |
-| **C** | Confirmation — final-review e arquivamento dotcontext | Backend Specialist | ⬜ pending |
+| **P** | Planning — escopo real, inventário, decisões fechadas | Backend Specialist | ✅ completed |
+| **R** | Review — extensão do Envelope, unificação do RequestContext, catálogo de escopos, contratos | Architect Specialist (+ Security Auditor) | ⬜ pending |
+| **E** | Execution — deps, JWT/refresh, login/refresh/logout, wrapper-interceptor, contexto via Envelope, rotas admin de config | Backend Specialist | ⬜ pending |
+| **V** | Validation — testes de integração (login, refresh, reuso, logout, admin) com túnel automático | Test Writer (+ Backend Specialist) | ⬜ pending |
+| **C** | Confirmation — final-review (Opus) + arquivamento dotcontext | Backend Specialist | ⬜ pending |
 
 ---
 
 ## FASE P — Planning (concluída)
 
-Saídas: `doc_dev/planejamento/03-comunicacao-e-autenticacao.md` (registro original, agora
-histórico), este `plano_completo` e o `info_aux`. Decisões-chave já fechadas no doc 03:
+Saídas: `info_aux_user-auth-module.md` (inventário verificado em 2026-06-12), doc 09 §5–6, doc 11
+(subconjunto config) e este `plano_completo`. **Decisões já fechadas:**
 
-- **Transporte:** gRPC (tonic) para comandos/consultas + WebSocket (axum) para realtime.
-- **JWT HS256**, access 15 min, refresh opaco 7 dias com rotação por família.
-- **Multi-tenant 1-para-1** resolvido automaticamente no login (`UNIQUE(user_id)` em
-  `tenants_tenantuser`).
-- **Argon2id** via `Argon2::default()` (já implementado).
-- **Escopo da entrega:** Opção B (serviço de domínio + `runtime_api` mínimo).
+- **Transporte da borda:** `transport` próprio (UDS/FlatBuffers + fallback gRPC, `Envelope`
+  unificado). NÃO há servidor Tonic dedicado nem middleware global — o interceptor é wrapper.
+- **JWT HS256**, access 15 min (`AUTH_ACCESS_TTL_S=900`); refresh opaco 32B, SHA-256, 7 dias
+  (`AUTH_REFRESH_TTL_S=604800`); rotação por família + detecção de reuso já no `RefreshTokenStore`.
+- **Infra de auth já pronta e testada** (ver §Objetivo) — reusar, não reescrever.
+- **Escopo de auth:** apenas Login/Refresh/Logout + interceptor (sem Register/Invite).
+- **Escopo de config:** CoreSettings + TenantConfig (o resto do painel 11 fica para depois).
+- **`rand_core 0.6` `OsRng`** (estável, já transitivo via `argon2`) em vez de `rand 0.10`
+  (`SysRng`).
 
 ---
 
-## FASE R — Review (Backend Specialist + Security Auditor)
+## FASE R — Review (Architect Specialist + Security Auditor)
 
-Revisar **antes** de codar:
+Decisões de design a **fechar e registrar aqui antes de codar**:
 
-1. **Contrato `auth.proto`** — assinaturas das RPCs e mensagens (§Etapa 2). Confirmar que
-   `AuthResponse` não vaza dados sensíveis e que erros usam `Status` (não campos de erro no body).
-2. **Modelo de token** — confirmar claims (incl. `family_id` e `iat`), TTLs, e que o `jti` da
-   blocklist usa TTL = `exp - now()`.
-3. **Estratégia de pools** — validar o isolamento do pool admin (BYPASSRLS) e que ele só é tocado
-   nos lookups pré-tenant. Risco de vazamento cross-tenant se usado em query de negócio.
-4. **`rand_core` vs `rand`** — confirmar a decisão de usar `rand_core 0.6` (`OsRng` estável) em vez
-   de `rand 0.10` (`SysRng`). Ver `info_aux` §Notas Gerais.
-5. **Segurança do query-param do WebSocket** — revisar mitigações (token curto, logs anonimizados).
+### R1 — Extensão aditiva do `envelope.proto` (propagação de identidade)
 
-Saída: aprovação do contrato e do modelo de segurança; ajustes registrados aqui.
+O `Envelope` hoje só tem `tenant_id` — **não há identidade** (`user_id`/`scopes`/`is_superuser`).
+A Camada 1 → Camada 2 precisa propagar o contexto autenticado. **Decisão proposta:** adicionar
+campos aditivos ao final do `message Envelope` (campos 11–13), **mantendo `schema_version`**:
+
+```proto
+message Envelope {
+  // ... campos 1..10 existentes (não tocar) ...
+  // --- Identidade autenticada (preenchida só pelo interceptor da Camada 1; claims > body) ---
+  int32  auth_user_id     = 11;  // auth_user.id (0 = não autenticado / rota pública)
+  repeated string auth_scopes = 12;  // catálogo canônico de escopos
+  bool   auth_is_superuser = 13;  // guard das rotas admin
+}
+```
+
+> Regenerar prost/FlatBuffers via `contracts/build.rs`. Alternativa avaliada (sub-message
+> `AuthContext`) — rejeitada por custo de codec maior; campos planos bastam. **A revisar:**
+> nomes finais dos campos e se `flow_permissions` (Vec<i32>) entra no Envelope ou continua
+> resolvido sob demanda no `data_postgres` (recomendação: manter `flow_permissions` fora do
+> Envelope; carregar via cache `GetCache`/`SetCache` quando o handler precisar do Kanban).
+
+### R2 — Unificação do `RequestContext`
+
+Existem dois tipos (info_aux §1.4):
+- `application::RequestContext { tenant_id, user_id, user_scopes, traceparent }` (lib.rs:8).
+- `infrastructure_postgres::security::RequestContext { tenant_id, user_id, user_scopes,
+  flow_permissions }` (tem `has_permission`, `has_flow_permission`, `exigir_qualquer`).
+
+**Decisão proposta:** o **`infrastructure_postgres::security::RequestContext` é o canônico**
+(é o que os repositórios já consomem em `run_in_tenant_transaction`). Ações:
+- Adicionar `traceparent: String` a ele (campo aditivo) **ou** mantê-lo fora e propagar o
+  traceparent separadamente pelo Envelope (recomendação: manter `traceparent` no Envelope, não
+  no contexto — o contexto é sobre identidade/autorização, não trace).
+- **Remover** `application::RequestContext` e re-exportar o de `infrastructure_postgres` via
+  `application` (`pub use infrastructure_postgres::RequestContext;`), ou fazer a `application`
+  parar de depender de um contexto próprio (o login não precisa de contexto — ver E3).
+- Decidir o catálogo canônico de escopos (R3) que alimenta `user_scopes`.
+
+### R3 — Catálogo canônico de escopos
+
+Hoje os escopos são strings hardcoded nos handlers (`"atendimentos:read"`, `"clientes:write"`,
+`"kanban:admin"`, `"tenant:admin"`). **Fechar nesta fase** o catálogo mínimo necessário para:
+- handlers existentes do `data_postgres` (atendimentos, clientes, mensagens);
+- rotas admin de config: definir o escopo/condição (recomendação: rotas admin exigem
+  `is_superuser == true` **diretamente** via guard, independente de escopos — doc 11 §5).
+
+Saída: tabela `escopo → operações` registrada aqui; de onde os escopos vêm ao montar as claims
+no login (recomendação inicial: superusuário recebe `["*"]` ou lista admin; usuário comum recebe
+escopos derivados do `TenantUser` — **a definir** se já há leitura de `TenantUser.scopes`/
+`module_permissions` ou se entra como follow-up).
+
+### R4 — Contratos das novas RPCs
+
+Fechar as mensagens (proto e/ou JSON payload sobre o Envelope) de:
+- `Refresh` / `Logout` na `runtime_api`.
+- Admin config: `ListCoreSettings`, `UpsertCoreSetting`, `DeleteCoreSetting`,
+  `GetTenantConfig`, `UpdateTenantConfig`.
+
+> Como os handlers atuais usam **payload JSON sobre o Envelope** (não FlatBuffers tipado ainda),
+> a recomendação é manter JSON nestes payloads novos (consistência com `VerifyCredentials`,
+> `StoreRefreshToken` etc.), reservando o proto tipado para quando o Flutter consumir via gRPC.
+> Decisão a confirmar com o Architect.
+
+### R5 — Segurança (Security Auditor)
+
+- Confirmar TTL do `BlockToken` = `max(1, exp - now)` (nunca TTL fixo).
+- Confirmar que erros ao cliente são **genéricos** (`unauthenticated`/"credenciais inválidas") —
+  nunca revelar se foi senha, usuário inexistente ou inativo (o `VerifyCredentials` já faz isso).
+- Confirmar que `token`/`senha`/`api_key`/`JWT_SECRET` ficam **fora** de todo span/log.
+- Confirmar máscara `••••••••` na leitura de campos cifrados (nunca decriptar para o admin).
+
+**Saída da fase R:** decisões R1–R5 aprovadas e registradas; ajustes refletidos na fase E.
 
 ---
 
 ## FASE E — Execution (Backend Specialist)
 
-### Etapa 1 — Workspace e dependências
+### Etapa E1 — Dependências de workspace
 
-`server/Cargo.toml` — adicionar aos `members` os novos crates e às `[workspace.dependencies]`:
+`server/Cargo.toml` — adicionar a `[workspace.dependencies]` (deps existentes confirmadas:
+`tonic 0.14.6`, `prost 0.13.3`, `base64 0.22.1`, `uuid`, `argon2 0.5`, `redis 0.25`, `sqlx 0.9`,
+`secrecy 0.10.3`, `aes-gcm 0.10.3`, `dashmap 6.1`, `chrono`, `thiserror`, `flatbuffers 25`):
 
 ```toml
-members = [
-    "crates/infrastructure_postgres",
-    "crates/infrastructure_redis",
-    "crates/contracts",
-    "crates/application",
-    "apps/runtime_api",
-]
-
 [workspace.dependencies]
 # ... existentes ...
 jsonwebtoken = "9"
 sha2         = "0.10"
-base16ct     = { version = "0.2", features = ["alloc"] }
-rand_core    = "0.6"                       # OsRng estável (ver info_aux)
-tonic        = "0.14"
-prost        = "0.14"
-tower        = "0.4"
-http         = "1.0"
-tonic-build  = "0.14"                      # build-dependency
+rand_core    = "0.6"   # OsRng estável (transitivo via argon2); rand 0.10 renomeou p/ SysRng
+# base16ct opcional; alternativa sem dep: format!("{b:02x}") (ver E2)
 ```
 
-> **Nota de versão:** `tonic 0.14.6` + `prost 0.14` (confirmado via Context7, 2026-06-02).
-> Não usar 0.12.x. `rand_core 0.6` já é dependência transitiva de `argon2` — preferido a
-> introduzir `rand 0.10` (que renomeou `OsRng` → `SysRng`).
+A crate `application` passa a depender de `jsonwebtoken`, `sha2`, `rand_core`, `base64`, `uuid`,
+`chrono`, `serde`, `serde_json` (já tem `transport`, `contracts`, `error_core`).
 
-### Etapa 2 — Crate `contracts` + `auth.proto`
+### Etapa E2 — Módulo JWT + refresh (crate `application`)
 
-Criar `server/crates/contracts/` com `proto/auth.proto`, `build.rs` e `src/lib.rs`.
+`application/src/jwt.rs` — claims do doc 09 §6.1, chaves via `OnceLock`:
 
-`proto/auth.proto`:
-```protobuf
-syntax = "proto3";
-package smartcore.auth.v1;
-
-import "google/protobuf/empty.proto";
-
-service AuthService {
-  rpc Register     (RegisterRequest)     returns (AuthResponse);
-  rpc Login        (LoginRequest)        returns (AuthResponse);
-  rpc RefreshToken (RefreshRequest)      returns (AuthResponse);
-  rpc Logout       (LogoutRequest)       returns (google.protobuf.Empty);
-  rpc InviteUser   (InviteUserRequest)   returns (google.protobuf.Empty);
-  rpc AcceptInvite (AcceptInviteRequest) returns (AuthResponse);
-}
-
-message RegisterRequest {
-  string username     = 1;
-  string email        = 2;
-  string password     = 3;
-  string full_name    = 4;
-  string company_name = 5;
-  string company_slug = 6;
-}
-
-message LoginRequest {
-  string identifier = 1; // email OU username
-  string password   = 2;
-}
-
-message RefreshRequest { string refresh_token = 1; }
-message LogoutRequest  { string refresh_token = 1; } // access vem no metadata Authorization
-
-message InviteUserRequest {
-  string email = 1;
-  string name  = 2;
-  string role  = 3;
-}
-
-message AcceptInviteRequest {
-  string token    = 1; // token do convite
-  string username = 2;
-  string password = 3;
-}
-
-message AuthResponse {
-  string access_token  = 1;
-  string refresh_token = 2;
-}
-```
-
-`build.rs`:
-```rust
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    tonic_build::configure()
-        .build_server(true)
-        .build_client(true) // cliente útil para testes de integração e Flutter (via proto)
-        .compile_protos(&["proto/auth.proto"], &["proto"])?;
-    Ok(())
-}
-```
-
-`src/lib.rs`:
-```rust
-//! Contratos gRPC compartilhados entre runtime_api e clientes.
-pub mod auth {
-    tonic::include_proto!("smartcore.auth.v1");
-}
-```
-
-### Etapa 3 — Módulo JWT (no crate `application`)
-
-`application/src/jwt.rs`:
 ```rust
 use std::sync::OnceLock;
 use jsonwebtoken::{encode, decode, Header, Algorithm, EncodingKey, DecodingKey, Validation};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use error_core::AppError;
 
 static ENCODING_KEY: OnceLock<EncodingKey> = OnceLock::new();
 static DECODING_KEY: OnceLock<DecodingKey> = OnceLock::new();
 
+/// Claims do access token (doc 09 §6.1). `tenant_id` vazio = superusuário (contexto global).
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
-    pub iss: String,
-    pub sub: String,                 // user_id como string
+    pub sub: String,          // auth_user.id como string
+    pub tenant_id: String,    // UUID ou "" para superusuário
+    pub scopes: Vec<String>,  // catálogo canônico de escopos (fase R3)
+    pub is_superuser: bool,
+    pub jti: String,          // UUID v7 — blocklist no logout
     pub iat: usize,
     pub exp: usize,
-    pub email: String,
-    pub tenant_id: Option<String>,   // None para superuser
-    pub role: String,
-    pub scopes: Vec<String>,
-    pub jti: String,
-    pub family_id: String,
 }
 
-/// Inicializa as chaves HMAC a partir do JWT_SECRET (chamado uma vez no boot do runtime_api).
-pub fn inicializar_chaves(secret: &str) -> Result<(), AuthError> {
+/// Inicializa as chaves HMAC a partir do JWT_SECRET (uma vez no boot da runtime_api).
+pub fn inicializar_chaves(secret: &str) -> Result<(), AppError> {
     if secret.len() < 32 {
-        return Err(AuthError::Config("JWT_SECRET deve ter ao menos 32 bytes".into()));
+        return Err(AppError::Config("JWT_SECRET deve ter ao menos 32 bytes".into()));
     }
     let _ = ENCODING_KEY.set(EncodingKey::from_secret(secret.as_bytes()));
     let _ = DECODING_KEY.set(DecodingKey::from_secret(secret.as_bytes()));
     Ok(())
 }
 
-pub fn gerar_access_token(claims: &Claims) -> Result<String, AuthError> {
-    let key = ENCODING_KEY.get().ok_or(AuthError::Config("chaves JWT não inicializadas".into()))?;
-    encode(&Header::new(Algorithm::HS256), claims, key).map_err(|_| AuthError::TokenInvalido)
+pub fn gerar_access_token(claims: &Claims) -> Result<String, AppError> {
+    let key = ENCODING_KEY.get()
+        .ok_or_else(|| AppError::Config("chaves JWT não inicializadas".into()))?;
+    encode(&Header::new(Algorithm::HS256), claims, key)
+        .map_err(|_| AppError::Auth("falha ao emitir token".into()))
 }
 
-pub fn validar_access_token(token: &str) -> Result<Claims, AuthError> {
-    let key = DECODING_KEY.get().ok_or(AuthError::Config("chaves JWT não inicializadas".into()))?;
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.set_issuer(&["smartcore"]);
+/// Valida assinatura e exp (validate_exp = true por padrão na Validation).
+pub fn validar_access_token(token: &str) -> Result<Claims, AppError> {
+    let key = DECODING_KEY.get()
+        .ok_or_else(|| AppError::Config("chaves JWT não inicializadas".into()))?;
+    let validation = Validation::new(Algorithm::HS256);
     decode::<Claims>(token, key, &validation)
         .map(|d| d.claims)
-        .map_err(|_| AuthError::TokenInvalido)
+        .map_err(|_| AppError::Auth("token inválido ou expirado".into()))
 }
 ```
 
-> Fonte das assinaturas: `doc_dev/libs/rust/jsonwebtoken.md` (Context7 `/keats/jsonwebtoken`).
-> `validate_exp = true` é o default da `Validation` — não precisa setar.
+`application/src/tokens.rs` — refresh opaco + hash (rand_core 0.6, base64url, sha2):
 
-### Etapa 4 — Refresh token e política de senha
-
-`application/src/tokens.rs`:
 ```rust
 use rand_core::{OsRng, RngCore};
-use sha2::{Sha256, Digest};
-use base16ct::lower;
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
+use sha2::{Digest, Sha256};
 
-/// Gera um refresh token opaco (32 bytes → base64url sem padding, ~43 chars).
+/// 32 bytes CSPRNG → base64url sem padding (~43 chars). Nunca persistir em claro.
 pub fn gerar_refresh_token() -> String {
     let mut bytes = [0u8; 32];
     OsRng.fill_bytes(&mut bytes);
     URL_SAFE_NO_PAD.encode(bytes)
 }
 
-/// Hash SHA-256 (hex minúsculo, 64 chars) para indexar no Redis. Nunca grava o token em claro.
+/// SHA-256 hex minúsculo (64 chars) — é o que vai ao data_redis (StoreRefreshToken).
 pub fn hash_refresh_token(token: &str) -> String {
-    lower::encode_string(&Sha256::digest(token.as_bytes()))
+    Sha256::digest(token.as_bytes()).iter().map(|b| format!("{b:02x}")).collect()
 }
 ```
 
-`application/src/password_policy.rs`:
+> `AppError::Config`/`AppError::Auth` já existem em `error_core` (usados em todo o repo). Se
+> `Config` não existir, usar a variante equivalente confirmada na fase R.
+
+### Etapa E3 — Login real (substituir `application/src/auth/login.rs`)
+
+Reescrever `login` **sem** tokens mockados, **sem** `conectar_cliente` por request (recebe os
+`MuxClient` do `AppState`), **com** TTLs por env e `tenant_id` real no `StoreRefreshToken`.
+Assinatura nova (clientes injetados):
+
 ```rust
-/// Valida a complexidade da senha (doc 03 §3.3). Retorna lista de violações (vazia = OK).
-pub fn validar_politica_senha(senha: &str) -> Result<(), AuthError> {
-    let mut faltas = Vec::new();
-    if senha.chars().count() < 8 { faltas.push("mínimo 8 caracteres"); }
-    if !senha.chars().any(|c| c.is_ascii_uppercase()) { faltas.push("uma letra maiúscula"); }
-    if !senha.chars().any(|c| c.is_ascii_lowercase()) { faltas.push("uma letra minúscula"); }
-    if !senha.chars().any(|c| c.is_ascii_digit())     { faltas.push("um número"); }
-    if !senha.chars().any(|c| !c.is_alphanumeric())   { faltas.push("um caractere especial"); }
-    if faltas.is_empty() { Ok(()) }
-    else { Err(AuthError::SenhaFraca(faltas.join(", "))) }
+use contracts::{Envelope, MessageKind};
+use error_core::AppError;
+use std::time::Duration;
+use transport::MuxClient;
+use uuid::Uuid;
+use crate::jwt::{self, Claims};
+use crate::tokens::{gerar_refresh_token, hash_refresh_token};
+
+pub struct AuthDeps {
+    pub pg: MuxClient,                 // cliente data_postgres compartilhado (boot)
+    pub redis: MuxClient,              // cliente data_redis compartilhado (boot)
+    pub access_ttl_s: i64,             // AUTH_ACCESS_TTL_S (900)
+    pub refresh_ttl_s: u64,            // AUTH_REFRESH_TTL_S (604800)
+}
+
+/// Login real: VerifyCredentials → emite JWT + refresh opaco → StoreRefreshToken.
+pub async fn login(
+    deps: &AuthDeps,
+    traceparent: &str,
+    email: &str,
+    password: &str,
+) -> Result<serde_json::Value, AppError> {
+    // 1. VerifyCredentials no data_postgres (Argon2id + is_active + timing-safe).
+    let verify_req = montar_envelope(
+        Uuid::nil(), traceparent, "VerifyCredentials",
+        &serde_json::json!({ "email": email, "password": password }),
+    );
+    let verify_resp = deps.pg.call(verify_req, Duration::from_secs(5)).await
+        .map_err(|e| AppError::Database(format!("RPC VerifyCredentials falhou: {e:?}")))?;
+    if verify_resp.kind == MessageKind::Error as i32 {
+        // Erro genérico — não revela se foi senha/usuário/inativo.
+        return Err(verify_resp.error.map(|e| AppError::from_envelope(&e))
+            .unwrap_or_else(|| AppError::Auth("credenciais inválidas".into())));
+    }
+    let user: serde_json::Value = serde_json::from_slice(&verify_resp.payload)
+        .map_err(|e| AppError::Internal(format!("payload de credenciais inválido: {e}")))?;
+    let user_id = user.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let is_superuser = user.get("is_superuser").and_then(|v| v.as_bool()).unwrap_or(false);
+
+    // 2. Resolve tenant_id real do usuário (superusuário = vazio/nil).
+    //    Recomendação: VerifyCredentials passa a devolver tenant_id (extensão aditiva do reply)
+    //    OU resolve-se via RPC dedicada. Decisão na fase R4. Aqui assumimos o reply estendido:
+    let tenant_str = user.get("tenant_id").and_then(|v| v.as_str()).unwrap_or("");
+    let tenant_opt = Uuid::parse_str(tenant_str).ok().filter(|_| !is_superuser);
+
+    // 3. Monta claims e emite os tokens.
+    let agora = chrono::Utc::now().timestamp() as usize;
+    let jti = Uuid::now_v7().to_string();
+    let family_id = Uuid::now_v7().to_string();
+    let claims = Claims {
+        sub: user_id.to_string(),
+        tenant_id: tenant_opt.map(|t| t.to_string()).unwrap_or_default(),
+        scopes: derivar_escopos(is_superuser, &user), // fase R3
+        is_superuser,
+        jti,
+        iat: agora,
+        exp: agora + deps.access_ttl_s as usize,
+    };
+    let access_token = jwt::gerar_access_token(&claims)?;
+    let refresh_token = gerar_refresh_token();
+    let refresh_hash = hash_refresh_token(&refresh_token);
+
+    // 4. StoreRefreshToken no data_redis com tenant_id REAL (não mais 86400 hardcoded).
+    let store_req = montar_envelope(
+        tenant_opt.unwrap_or_else(Uuid::nil), traceparent, "StoreRefreshToken",
+        &serde_json::json!({
+            "token_hash": refresh_hash,
+            "user_id": user_id,
+            "family_id": family_id,
+            "ttl": deps.refresh_ttl_s,
+        }),
+    );
+    let store_resp = deps.redis.call(store_req, Duration::from_secs(5)).await
+        .map_err(|e| AppError::Cache(format!("RPC StoreRefreshToken falhou: {e:?}")))?;
+    if store_resp.kind == MessageKind::Error as i32 {
+        return Err(store_resp.error.map(|e| AppError::from_envelope(&e))
+            .unwrap_or_else(|| AppError::Cache("falha ao salvar refresh".into())));
+    }
+
+    Ok(serde_json::json!({
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "expires_in": deps.access_ttl_s,
+    }))
 }
 ```
 
-### Etapa 5 — Extensões em `infrastructure_postgres`
+> Helper `montar_envelope(tenant, traceparent, method, payload)` cria o `Envelope` REQUEST com
+> `message_id = Uuid::now_v7()`, `schema_version` atual, `occurred_at = now_millis()`. Centraliza
+> a construção repetida hoje copiada em `login.rs`/`data_redis`.
+> **`derivar_escopos`** implementa a decisão R3. **Nota de fase R4:** o `VerifyCredentials` atual
+> (`data_postgres:1038`) devolve `{id, username, email, is_superuser}` — **não** devolve
+> `tenant_id`; estender o reply (aditivo) com `tenant_id` resolvido do `TenantUser`, ou criar RPC
+> `ResolveUserTenant`. Decidir e implementar nesta etapa.
 
-**(a) `criar_admin_pool`** em `connection.rs` (GAP: hoje só existe `criar_pool` lendo
-`DATABASE_URL`):
+### Etapa E4 — Rate limiting de login (Redis via data_redis ou helper)
+
+Recomendação: novo handler `RegisterLoginAttempt` no `data_redis` (INCR+EXPIRE), chamado **antes**
+do `VerifyCredentials`; ao exceder `AUTH_LOGIN_RATE_LIMIT` → `AppError::Auth`/`RateLimited`.
+
 ```rust
-/// Pool administrativo com BYPASSRLS, lido de DATABASE_ADMIN_URL. Uso EXCLUSIVO em
-/// lookups pré-tenant (login, aceite de convite). NUNCA usar em query de negócio.
-pub async fn criar_admin_pool(max_connections: u32) -> Result<PgPool, DbError> {
-    let url = std::env::var("DATABASE_ADMIN_URL")
-        .map_err(|_| DbError::ConfigError("DATABASE_ADMIN_URL não configurada".into()))?;
-    let pool = PgPoolOptions::new().max_connections(max_connections).connect(&url).await?;
-    Ok(pool)
-}
-```
-
-**(b) `TenantUserRepository::criar_owner`** em `tenants/tenants.rs` — bootstrap sem
-`RequestContext` (doc 03 §3.4). O método `criar` existente continua para convites de admin logado:
-```rust
-async fn criar_owner(
-    &self,
-    tx: &mut Transaction<'_, Postgres>,
-    user_id: i32,
-    tenant_id: Uuid,
-    role: &str,
-) -> Result<TenantUser, DbError> {
-    // app.current_tenant já foi setado por TenantRepository::criar nesta mesma tx.
-    let row = sqlx::query_as!(
-        TenantUser,
-        r#"INSERT INTO tenants_tenantuser (user_id, tenant_id, role, created_by_id)
-           VALUES ($1, $2, $3, $1)
-           RETURNING id, user_id, tenant_id, role, module_permissions,
-                     flow_permissions, is_active, created_at, created_by_id"#,
-        user_id, tenant_id, role
-    )
-    .fetch_one(&mut **tx)
-    .await
-    .map_err(DbError::from_sqlx_unique)?;
-    Ok(row)
-}
-```
-
-> Adicionar `criar_owner` à trait `TenantUserRepository` e à impl `PostgresTenantUserRepository`.
-> Re-exportar nada novo é necessário (já exportado via `tenants`).
-
-### Etapa 6 — Rate limiting de login (Redis)
-
-Adicionar em `infrastructure_redis` um helper simples (ou implementar no `application` usando o
-`ConnectionManager`). Chave `auth:rate_limit:<ip_hash>`, `INCR` + `EXPIRE`:
-```rust
-/// Incrementa o contador de tentativas e retorna o total na janela. Primeira chamada seta EXPIRE.
-pub async fn registrar_tentativa_login(
-    con: &mut ConnectionManager, ip_hash: &str, janela_segundos: u64,
+// infrastructure_redis (novo helper) — chave auth:rate_limit:<sha256(email|ip)>
+pub async fn registrar_tentativa(
+    con: &mut ConnectionManager, chave: &str, janela_s: i64,
 ) -> Result<u64, RedisError> {
-    let chave = format!("auth:rate_limit:{ip_hash}");
-    let total: u64 = con.incr(&chave, 1).await?;
-    if total == 1 { let _: bool = con.expire(&chave, janela_segundos as i64).await?; }
+    let total: u64 = con.incr(chave, 1).await?;
+    if total == 1 { let _: bool = con.expire(chave, janela_s).await?; }
     Ok(total)
 }
 ```
-O `AuthService::login` checa `total > LOGIN_RATE_LIMIT_MAX` → `AuthError::RateLimited`.
 
-### Etapa 7 — Crate `application` — `AuthService`
+> Alternativa mínima: implementar o INCR+EXPIRE direto no handler do `data_redis` reusando o
+> `ConnectionManager` do `AppState`. A `application::login` chama a rota e decide o corte.
 
-`server/crates/application/` depende de `infrastructure_postgres`, `infrastructure_redis`,
-`contracts`, `jsonwebtoken`, `sha2`, `base16ct`, `rand_core`, `base64`, `tonic`, `thiserror`,
-`chrono`, `uuid`.
+### Etapa E5 — Rotas Refresh e Logout (`runtime_api`) + `application`
 
-`application/src/errors.rs` — `AuthError` (thiserror) + `From<AuthError> for tonic::Status`:
+`application/src/auth/refresh.rs`:
+1. `hash_refresh_token(refresh)` → `ValidateAndRotate` no `data_redis`.
+2. Reply de erro: `NotFound`→`AppError::Auth` (401); `TokenReuse`→`AppError::Auth` **+** publicar
+   `token_reuse_detected` no `security:stream` via `bus::publicar_evento_seguranca`.
+3. Sucesso: o reply traz `RegistroRefresh {user_id, tenant_id, family_id, rotacionado}`; emitir
+   **novo par mantendo `family_id`**; `StoreRefreshToken` do novo hash (mesmo `family_id`).
+
+`application/src/auth/logout.rs`:
+1. `BlockToken` do `jti` (extraído das claims do access atual) com TTL = `max(1, exp - now)`.
+2. `RevokeFamily` da família do refresh (logout do dispositivo/sessão).
+
+`runtime_api/src/main.rs` — registrar as novas rotas e o `AppState` com clientes compartilhados:
+
 ```rust
-#[derive(Debug, thiserror::Error)]
-pub enum AuthError {
-    #[error("credenciais inválidas")]            CredenciaisInvalidas,
-    #[error("sessão inválida ou expirada")]      SessaoInvalida,
-    #[error("token inválido")]                   TokenInvalido,
-    #[error("senha fraca: {0}")]                 SenhaFraca(String),
-    #[error("muitas tentativas de login")]       RateLimited,
-    #[error("conflito: {0}")]                    Conflito(String),     // email/username/slug
-    #[error("convite inválido ou expirado")]     ConviteInvalido,
-    #[error("erro de configuração: {0}")]        Config(String),
-    #[error(transparent)]                        Db(#[from] infrastructure_postgres::DbError),
-    #[error(transparent)]                        Redis(#[from] infrastructure_redis::RedisError),
+#[derive(Clone)]
+struct AppState {
+    pg: transport::MuxClient,      // criado UMA vez no boot
+    redis: transport::MuxClient,   // idem
+    bus: redis::aio::ConnectionManager, // para publicar_evento_seguranca
+    access_ttl_s: i64,
+    refresh_ttl_s: u64,
 }
 
-impl From<AuthError> for tonic::Status {
-    fn from(e: AuthError) -> Self {
-        use AuthError::*;
-        match e {
-            CredenciaisInvalidas | SessaoInvalida | TokenInvalido => tonic::Status::unauthenticated(e.to_string()),
-            RateLimited => tonic::Status::resource_exhausted(e.to_string()),
-            SenhaFraca(_) | Conflito(_) | ConviteInvalido => tonic::Status::invalid_argument(e.to_string()),
-            Config(_) | Db(_) | Redis(_) => tonic::Status::internal("erro interno"), // não vaza detalhe
-        }
-    }
-}
-```
-
-`application/src/auth_service.rs` — orquestra os fluxos (doc 03 §5). Estrutura:
-```rust
-pub struct AuthService {
-    pub pool: PgPool,            // tenant-scoped (RLS)
-    pub admin_pool: PgPool,      // BYPASSRLS (lookups pré-tenant)
-    pub redis: ConnectionManager,
-    pub jwt_expiry_secs: i64,
-    pub refresh_ttl_secs: u64,
-}
-```
-
-**Fluxos (resumo — detalhe canônico no doc 03 §5):**
-
-- **`register`** (§5.1): valida senha + slug + unicidade → `run_in_tenant_transaction` não serve
-  aqui porque o tenant ainda não existe; usar transação manual: `criar` auth_user (admin_pool ou
-  pool), `TenantRepository::criar` (seta `app.current_tenant`), `criar_owner(role="admin")` →
-  commit → gera `family_id`, par de tokens, `RefreshTokenStore::armazenar`. Retorna `AuthResponse`.
-- **`login`** (§5.2): rate limit → `buscar_por_email`/`buscar_por_username` (admin_pool) → erro
-  genérico se inexistente/inativo → `verify_password` → `buscar_por_user_id` (admin_pool) →
-  monta `Claims` (incl. `family_id` novo, `jti`, `iat`, `exp`) → `gerar_access_token` →
-  `gerar_refresh_token` + `armazenar(hash)` → `atualizar_ultimo_login` (via `tokio::spawn`) →
-  `AuthResponse`.
-- **`refresh_token`** (§5.3): `hash_refresh_token` → `RefreshTokenStore::validar_e_rotacionar`
-  (mapeia `NotFound`→`SessaoInvalida`, `TokenReuse`→`SessaoInvalida`) → recarrega scopes
-  (re-deriva de `buscar_por_user_id` ou cache) → novo `jti`/`iat`, mesmo `family_id` → novo par →
-  `armazenar` novo hash com mesmo `family_id`.
-- **`logout`** (§5.4): extrai `jti`/`exp`/`family_id` do `RequestContext` (injetado pelo
-  interceptor) → `ttl = max(1, exp - now)` → `TokenBlocklist::bloquear(jti, ttl)` →
-  `RefreshTokenStore::revogar_familia(family_id)`.
-- **`invite_user`** (§5.5): exige `RequestContext` com `tenant:admin` → `TenantInviteRepository::criar`
-  com token UUID e `expires_at = now + 72h`.
-- **`accept_invite`** (§5.5): `buscar_por_token` (admin_pool) → valida `expires_at`/`used` →
-  transação: cria auth_user + `criar_owner(role do convite, tenant do convite)` +
-  `marcar_usado` → par de tokens.
-
-### Etapa 8 — App `runtime_api`
-
-`server/apps/runtime_api/src/main.rs`:
-```rust
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Carregar config de ambiente (ver doc 03 §7)
-    let jwt_secret = std::env::var("JWT_SECRET")?;
-    application::jwt::inicializar_chaves(&jwt_secret)?;
+async fn main() -> anyhow::Result<()> {
+    observability::init_telemetry("runtime_api", "production")
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    let jwt_secret = std::env::var("JWT_SECRET")
+        .map_err(|_| anyhow::anyhow!("JWT_SECRET não configurada"))?;
+    application::jwt::inicializar_chaves(&jwt_secret)
+        .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
-    // 2. Pools e Redis
-    let pool = infrastructure_postgres::criar_pool(10).await?;
-    let admin_pool = infrastructure_postgres::criar_admin_pool(4).await?;
-    let redis = infrastructure_redis::criar_conexao_redis().await?;
+    let pg = transport::conectar_cliente("data_postgres").await?;
+    let redis = transport::conectar_cliente("data_redis").await?;
+    let bus_url = std::env::var("REDIS_BUS_URL")
+        .or_else(|_| std::env::var("REDIS_URL"))
+        .unwrap_or_else(|_| "redis://127.0.0.1:6379".into());
+    let bus = infrastructure_redis::criar_conexao_com_timeouts(&bus_url).await?;
 
-    // 3. Serviço + interceptor
-    let svc = application::AuthService { pool, admin_pool, redis, jwt_expiry_secs: 900, refresh_ttl_secs: 604_800 };
-    let auth_grpc = contracts::auth::auth_service_server::AuthServiceServer::new(svc);
+    let state = AppState {
+        pg, redis, bus,
+        access_ttl_s: env_i64("AUTH_ACCESS_TTL_S", 900),
+        refresh_ttl_s: env_u64("AUTH_REFRESH_TTL_S", 604_800),
+    };
 
-    let addr = format!("0.0.0.0:{}", std::env::var("GRPC_PORT").unwrap_or("50051".into())).parse()?;
-    tonic::transport::Server::builder()
-        .add_service(auth_grpc) // rotas públicas: o interceptor por-rota é aplicado nos handlers protegidos
-        .serve(addr)
-        .await?;
+    // Rotas PÚBLICAS (sem interceptor): Login, Refresh.
+    // Rotas PROTEGIDAS (com wrapper-interceptor): StreamAtendimentos, Logout, admin de config.
+    let s_login = state.clone();
+    let s_refresh = state.clone();
+    let s_logout = state.clone();
+    let server = Server::from_env("RUNTIME_API")
+        .route("Login",   move |env| { let s = s_login.clone();   Box::pin(async move { handler_login(s, env).await }) })
+        .route("Refresh", move |env| { let s = s_refresh.clone(); Box::pin(async move { handler_refresh(s, env).await }) })
+        .route("Logout",  exigir_auth(state.clone(), false, |s, env| Box::pin(handler_logout(s, env))))
+        .route("StreamAtendimentos", exigir_auth(state.clone(), false, |s, env| Box::pin(handler_stream(s, env))))
+        // rotas admin (guard superuser = true) registradas em E7
+        ;
+    server.run().await?;
     Ok(())
 }
 ```
 
-**`AuthInterceptor`** (`runtime_api/src/interceptor.rs`) — conforme `info_aux` (tonic):
-extrai `authorization: Bearer <jwt>` do `metadata`, `validar_access_token`, checa
-`TokenBlocklist::esta_bloqueado(jti)`, carrega `flow_permissions` do `CachePermissoes` (TTL 60s),
-constrói `RequestContext` e `request.extensions_mut().insert(ctx)`. Erros → `Status::unauthenticated`.
+### Etapa E6 — Wrapper-interceptor (Camada 1) + contexto via Envelope
 
-> **Rotas públicas:** `Register`, `Login`, `RefreshToken`, `AcceptInvite` não exigem JWT. Como o
-> interceptor do tonic é global por padrão, separar os handlers públicos: usar `interceptor` apenas
-> no(s) serviço(s) protegido(s), ou checar o método no interceptor e pular as rotas públicas.
+O `transport::Server::route` recebe `Fn(Envelope) -> BoxFuture<'static, Envelope>` (confirmado em
+`transport/src/runtime.rs:372`). O interceptor é uma **função de ordem superior** que devolve esse
+mesmo tipo, validando o JWT antes de chamar o handler real:
 
-### Etapa 9 — WebSocket handshake autenticado (scaffold)
+```rust
+/// Envolve um handler protegido: valida JWT (do payload/metadata), checa blocklist,
+/// sobrescreve identidade/tenant no Envelope (claims > body) e, se `exigir_superuser`,
+/// rejeita não-superusuários. Retorna o tipo aceito por Server::route.
+fn exigir_auth<F>(
+    state: AppState,
+    exigir_superuser: bool,
+    handler: F,
+) -> impl Fn(Envelope) -> futures_util::future::BoxFuture<'static, Envelope> + Clone + Send + Sync + 'static
+where
+    F: Fn(AppState, Envelope) -> futures_util::future::BoxFuture<'static, Envelope>
+        + Clone + Send + Sync + 'static,
+{
+    move |env: Envelope| {
+        let state = state.clone();
+        let handler = handler.clone();
+        Box::pin(async move {
+            // 1. Extrai o JWT (payload.access_token por ora; metadata Authorization no gRPC futuro).
+            let token = extrair_bearer(&env);
+            let claims = match application::jwt::validar_access_token(&token) {
+                Ok(c) => c,
+                Err(e) => return erro_envelope(e, &env, "runtime_api"),
+            };
+            // 2. Blocklist (IsTokenBlocked via data_redis).
+            if token_bloqueado(&state.redis, &claims.jti, &env.traceparent).await {
+                return erro_envelope(AppError::Auth("token revogado".into()), &env, "runtime_api");
+            }
+            // 3. Guard de superusuário (rotas admin).
+            if exigir_superuser && !claims.is_superuser {
+                return erro_envelope(AppError::Auth("acesso negado".into()), &env, "runtime_api");
+            }
+            // 4. Sobrescreve identidade e tenant no Envelope (claims > body).
+            let tenant_id = if claims.tenant_id.is_empty() {
+                Uuid::nil().to_string()
+            } else {
+                claims.tenant_id.clone()
+            };
+            let env_autenticado = Envelope {
+                tenant_id,
+                auth_user_id: claims.sub.parse().unwrap_or(0),
+                auth_scopes: claims.scopes.clone(),
+                auth_is_superuser: claims.is_superuser,
+                ..env
+            };
+            handler(state, env_autenticado).await
+        })
+    }
+}
+```
 
-`runtime_api/src/ws.rs` (Axum, conforme `doc_dev/libs/rust/axum.md`): aceitar `Authorization:
-Bearer` OU `?token=<jwt>`; `validar_access_token` + checagem de blocklist no upgrade; rejeitar com
-close code `4401` se inválido. Sem fan-out por tenant ainda (fase futura) — apenas estabelece e
-valida a sessão. Servidor Axum em porta separada (`WS_PORT`, padrão 8080).
+`data_postgres` — substituir os **4 contextos forjados** (`main.rs` 427, 491, 889, 994) por uma
+construção a partir do Envelope, eliminando `user_id: 1` e escopos fixos:
+
+```rust
+/// Monta o RequestContext canônico a partir da identidade já validada no Envelope (Camada 1).
+fn contexto_do_envelope(env: &Envelope) -> RequestContext {
+    RequestContext {
+        tenant_id: Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil()),
+        user_id: env.auth_user_id,
+        user_scopes: env.auth_scopes.clone(),
+        flow_permissions: vec![], // carregado sob demanda via cache quando o handler precisar (R1)
+    }
+}
+```
+
+> Cada um dos 4 handlers troca o bloco `let ctx = RequestContext { ... user_id: 1 ... }` por
+> `let ctx = contexto_do_envelope(&env);`. Os repositórios continuam chamando `exigir_qualquer`
+> internamente — agora com escopos reais, fechando o DoD "nenhum handler com user_id/escopos
+> hardcoded".
+
+### Etapa E7 — Rotas admin de configuração (data_postgres + runtime_api)
+
+Reusam as peças prontas (`tenants/settings.rs`, `config.rs`, `crypto.rs`, `config_cache.rs`).
+Adicionar **handlers no `data_postgres`** (e registrá-los em `Server::route`):
+
+| Rota | Reusa | Observação |
+|---|---|---|
+| `ListCoreSettings` | `load_all_settings(pool, cipher)` | **mascarar** valores `encrypted` (`••••••••`) — NÃO retornar o decriptado ao admin |
+| `UpsertCoreSetting` | `upsert_setting(pool, key, value, encrypted, desc)` | se `encrypted`, cifrar via `CipherManager::encrypt` → formato `ct_b64:nonce_b64:tag_b64` antes de gravar |
+| `DeleteCoreSetting` | **novo** `delete_setting(pool, key)` (GAP) | `DELETE FROM settings_manager_coresettings WHERE key=$1` |
+| `GetTenantConfig` | `resolve_runtime_config` ou leitura crua de `tenants_tenantconfig` | api_keys exibidas **mascaradas por chave** (`groq_api_key: ••••`) |
+| `UpdateTenantConfig` | UPDATE em `tenants_tenantconfig` (RLS via `set_config`) | api_keys cifradas no JSONB (`{ciphertext,nonce,tag}` — formato já lido por `decrypt_from_jsonb`); ao final **invalidar** o `TenantConfigCache` (`cache.invalidate(&tenant_id)`) |
+
+Exemplo de `UpsertCoreSetting` (cifragem + auditoria):
+
+```rust
+async fn handler_upsert_core_setting(
+    pool: PgPool, cipher: Arc<CipherManager>, mut bus: ConnectionManager, env: Envelope,
+) -> Envelope {
+    let p: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let key = p.get("key").and_then(|v| v.as_str()).unwrap_or("");
+    let raw = p.get("value").and_then(|v| v.as_str()).unwrap_or("");
+    let encrypted = p.get("encrypted").and_then(|v| v.as_bool()).unwrap_or(false);
+    let desc = p.get("description").and_then(|v| v.as_str()).unwrap_or("");
+
+    // Cifra quando marcado encrypted (formato compatível com load_all_settings: ct:nonce:tag).
+    let value = if encrypted {
+        match cipher.encrypt(raw.as_bytes()) {
+            Ok((ct, nonce, tag)) => format!("{ct}:{nonce}:{tag}"),
+            Err(e) => return erro(error_core::AppError::Internal(e.to_string()), &env),
+        }
+    } else { raw.to_string() };
+
+    if let Err(e) = infrastructure_postgres::tenants::settings::upsert_setting(
+        &pool, key, &value, encrypted, desc).await {
+        return erro(error_core::AppError::Database(e.to_string()), &env);
+    }
+    // Auditoria da mutação (sem logar o valor).
+    publicar_auditoria(&mut bus, &env, "core_setting_upserted",
+        serde_json::json!({ "key": key, "encrypted": encrypted })).await;
+
+    ok_reply(&env, "UpsertCoreSettingReply", serde_json::json!({ "status": "success" }))
+}
+```
+
+`runtime_api` — expor cada rota admin **com `exigir_auth(state, /*superuser=*/true, ...)`** e
+repassar ao `data_postgres` via `state.pg.call(...)` (cliente fino; sem pool). O guard garante
+`is_superuser == true` (doc 11 §5). Toda mutação no `data_postgres` publica auditoria via
+`publicar_evento_seguranca` (consumida pelo `audit_consumer` → `audit_log`).
+
+> O `data_postgres` precisa de `CipherManager` (`new_from_env`, lê `ENCRYPTION_KEY`) e do
+> `TenantConfigCache` no `AppState` para cifrar/mascarar e invalidar. Ambos já existem; basta
+> instanciá-los no boot e injetar nos handlers (mesmo padrão de `pool`/`redis_conn`).
 
 ---
 
 ## FASE V — Validation (Test Writer + Backend Specialist)
 
-Testes de integração (banco lógico Redis 15 + PostgreSQL de teste com RLS), `RUST_TEST_THREADS=1`:
+Testes de integração seguindo o padrão do projeto: **túnel SSH automático via `test_support`**
+(`test_support::ensure_tunnel()` no setup — ver `data_redis` tests) + `SQLX_OFFLINE=true` no build
+CI; reset de schema remoto conforme a memória do projeto. Cobrir o DoD do doc 09 §6.4:
 
-1. **Register** → cria auth_user + tenant + tenant_user(admin); retorna par válido; access decoda
-   com `tenant_id` correto; refresh existe no Redis (como hash).
-2. **Login** sucesso/falha: senha errada → `unauthenticated` genérico; usuário inativo → idem;
-   rate limit dispara `resource_exhausted` após N tentativas.
-3. **Refresh** feliz: rotação emite novo par, mesmo `family_id`; **reuso**: reenviar o token
-   anterior dispara `TokenReuse` → família revogada → `unauthenticated`.
-4. **Logout**: `jti` entra na blocklist (interceptor passa a rejeitar); `revogar_familia` apaga os
-   refresh tokens da sessão.
-5. **Interceptor**: requisição protegida sem token → `unauthenticated`; com token blocklisted →
-   `unauthenticated`; com escopo insuficiente em endpoint protegido → `permission_denied`.
-6. **AcceptInvite**: convite válido cria usuário no tenant correto; expirado/usado → erro.
+1. **Login feliz** — credenciais válidas → reply `{access_token, refresh_token, expires_in}`;
+   o access decoda com `tenant_id`/`is_superuser` corretos; o refresh existe no Redis (como hash).
+2. **Senha errada** → erro genérico (não revela motivo).
+3. **Usuário inativo** → erro genérico (o `VerifyCredentials` já rejeita inativo).
+4. **Refresh feliz** → novo par, **mesmo `family_id`**; o hash antigo fica `rotacionado`.
+5. **Refresh expirado / inexistente** → `NotFound` → erro de sessão.
+6. **Reuso de refresh** → reenviar o token já rotacionado dispara `TokenReuse` → família revogada
+   pelo store → erro + evento `token_reuse_detected` no `security:stream`.
+7. **Logout** → `jti` entra na blocklist (`IsTokenBlocked` passa a `true`); `RevokeFamily` apaga a
+   família; uma chamada protegida com o token bloqueado é rejeitada pelo wrapper.
+8. **Rotas admin com/sem superuser** — `is_superuser=false` ou sem token → rejeitado pelo guard;
+   superusuário → `UpsertCoreSetting` cifra e persiste, `ListCoreSettings` devolve mascarado,
+   `UpdateTenantConfig` cifra api_keys e **invalida** o cache.
 
-Gates de qualidade: `cargo build` workspace; `cargo clippy --all-targets -D warnings`;
-`cargo fmt --check`; `SQLX_OFFLINE=true` para o build CI.
+Gates de qualidade: `cargo build` (workspace); `cargo clippy --all-targets -- -D warnings`;
+`cargo fmt --check`; `cargo sqlx prepare` (com túnel aberto) para as queries novas (`delete_setting`,
+UPDATE de `tenants_tenantconfig`).
 
 ---
 
@@ -498,30 +635,67 @@ Gates de qualidade: `cargo build` workspace; `cargo clippy --all-targets -D warn
 
 `prevc-final-review` (subagente Opus) compara o implementado contra este plano; corrige desvios;
 libera o arquivamento. Depois consolidar o canônico dentro da pasta e mover para `archive/`
-(skill `plan-restructuring` §7).
+(skill `plan-restructuring` §7). Branch `feature/user-auth-module` a partir de `dev`; commits sem
+auto-referência ao modelo; comentários em pt-br.
 
 ---
 
-## Correções aplicadas (vs. plano base do doc 03)
+## Correções aplicadas (vs. plano antigo)
 
-| # | Correção | Motivo / Fonte |
-|---|----------|----------------|
-| 1 | `rand::rngs::OsRng` → **`rand_core 0.6` `OsRng`** | `rand 0.10` renomeou `OsRng`→`SysRng` (API `TryRng`); `rand_core 0.6` é estável e já transitivo via `argon2`. Context7 `/rust-random/rand`. |
-| 2 | **`tonic 0.14.6` + `prost 0.14`** (plano citava genérico/0.12) | Versões atuais confirmadas via Context7 `/hyperium/tonic` (2026-06-02). |
-| 3 | Adicionado **`criar_admin_pool`** (`DATABASE_ADMIN_URL`) | GAP real: `connection.rs` só tinha `criar_pool`(`DATABASE_URL`); os repos de lookup pré-tenant exigem pool BYPASSRLS. |
-| 4 | Hash do refresh via **`sha2` + `base16ct`** (hex) | Padrão idiomático atual; `RefreshTokenStore` espera o hash, não o token. Context7 `/rustcrypto/hashes`. |
-| 5 | **`std::sync::OnceLock`** em vez de `once_cell`/`lazy_static` | Estável desde Rust 1.70; remove dependência. |
-| 6 | `criar_owner` **separado** de `criar` (sem `RequestContext`) | `TenantUserRepository::criar` exige `tenant:admin`; no registro inicial não há contexto (doc 03 §3.4). |
-| 7 | Erros mapeados para **`tonic::Status`** (não HTTP) | Transporte é gRPC; doc 03 já corrigido para `unauthenticated`/`permission_denied`. |
-| 8 | `Claims` inclui **`iat` e `family_id`** | `family_id` necessário ao logout; `iat` para auditoria. Confirmado contra `jsonwebtoken` (campos livres no struct). |
-| 9 | `AcceptInvite` adicionado às **rotas públicas** | O convidado não tem JWT no aceite. |
-| 10 | Política de senha retorna **lista de violações** | Melhor DX no cliente do que erro genérico. |
+| # | O que mudou | Por quê | Fonte |
+|---|---|---|---|
+| 1 | **Borda Tonic dedicada → wrapper de handler sobre `transport` próprio** | Não existe servidor Tonic na borda nem middleware global; `Server::route` aceita `Fn(Envelope)->BoxFuture<Envelope>` | info_aux §1.1, §3.1; `transport/src/runtime.rs:372` |
+| 2 | **Removidos Register/Invite/AcceptInvite** | Cadastro de usuário/superusuário é feito pelo `control_plane create-superuser`; fora do escopo de login | info_aux §1.3; doc 09 §6 (só Login/Refresh/Logout) |
+| 3 | **Removidos pools de Postgres na `application`/`runtime_api` e `criar_admin_pool` na borda** | Banco tem 1 porta (`data_postgres` via RPC); apps são clientes finos | memória "banco só via infra/RPC"; restrição arquitetural §1 |
+| 4 | **Removido WebSocket Axum handshake** | Realtime é gRPC Server Streaming (doc 09 §1.2); o scaffold WS não pertence a este plano | doc 09 §1.2, §7 |
+| 5 | **Cliente RPC criado UMA vez no boot (AppState) — não por request** | `login.rs` e o `worker` chamam `conectar_cliente` a cada chamada; `MuxClient` é multiplexado e reconecta | doc 09 §5.2-5; info_aux §1.1 |
+| 6 | **Claims do JWT alinhadas ao doc 09 §6.1** (`sub`, `tenant_id`, `scopes`, `is_superuser`, `jti`, `iat`, `exp`) — removidos `iss`/`role`/`email`/`family_id` das claims | `family_id` vive no `RefreshTokenStore`, não nas claims; superusuário identificado por `is_superuser`/tenant vazio | doc 09 §6.1; `auth_tokens.rs` |
+| 7 | **Hash do refresh via `format!("{b:02x}")`** (sem `base16ct` obrigatório) | Remove dependência extra; `sha2` basta | info_aux §2.2 |
+| 8 | **`RefreshTokenStore::armazenar` recebe `tenant_id: Option<Uuid>` real** (não `86400` hardcoded nem sem tenant) | Assinatura real do store; TTL agora via `AUTH_REFRESH_TTL_S` | `auth_tokens.rs:42`; doc 09 §6.5 |
+| 9 | **Interceptor sobrescreve `tenant_id`/identidade no Envelope (claims > body)** | O `handler_login` atual lê `tenant_id` do cliente; viola o princípio | info_aux §3.2; doc 09 §6.3 |
+| 10 | **Extensão ADITIVA do `envelope.proto`** (`auth_user_id`/`auth_scopes`/`auth_is_superuser`) | Envelope não tem identidade; precisa propagar Camada 1 → Camada 2 mantendo `schema_version` | info_aux §1.2, §3.3; `envelope.proto` |
+| 11 | **`RequestContext` unificado no de `infrastructure_postgres`** (canônico) | Há dois tipos; o da infra já é consumido pelos repositórios e tem `exigir_qualquer` | info_aux §1.4; `security.rs`, `lib.rs:8` |
+| 12 | **Eliminar 4 contextos forjados no `data_postgres`** (linhas 427/491/889/994) | `user_id:1` + escopos fixos; o real vem do Envelope | info_aux §1.4; `data_postgres/main.rs` |
+| 13 | **Adicionadas rotas admin de config (CoreSettings + TenantConfig)** com cifra/máscara/invalidação/auditoria | Gap real: a fundação está no banco mas não há exposição RPC | info_aux §1.5; doc 11 §3.7, §6, §7 |
+| 14 | **`TokenBlocklist::bloquear` com TTL = `max(1, exp-now)`** | Nunca TTL fixo; a infra já existe | doc 09 §6.2; `auth_tokens.rs:156` |
+| 15 | **Removido `prost 0.14`/`tonic 0.14` "atualização"** — workspace já tem `tonic 0.14.6` + `prost 0.13.3` | Versões reais confirmadas no `Cargo.toml` | `server/Cargo.toml` |
+| 16 | **`AppError` (error_core) é a base; sem `AuthError` próprio na borda** | Padrão único de erro com `to_error_envelope`/`from_envelope` | restrição arquitetural §4; código atual |
 
-## Verificação
+---
 
-`docker compose -f docker/compose/data.yml up -d` (PostgreSQL + Redis) → exportar `JWT_SECRET`,
-`DATABASE_URL`, `DATABASE_ADMIN_URL`, `REDIS_URL` → `cargo build` (workspace) →
-`RUST_TEST_THREADS=1 cargo test -p application -p infrastructure_postgres -p infrastructure_redis`
-→ `cargo clippy --all-targets -D warnings` + `cargo fmt --check`. Branch
-`claude/user-auth-module-plan-dykMV` a partir de `dev`; commits sem auto-referência ao modelo;
-comentários em pt-br.
+## Critérios de Aceite (DoD consolidado)
+
+**Auth (doc 09 §6.4):**
+- [ ] JWT HS256 real emitido/validado; access expira em 15 min; refresh rotaciona.
+- [ ] Reuso de refresh rotacionado revoga a família e audita `token_reuse_detected`.
+- [ ] Logout bloqueia o `jti` (TTL = exp-now) e revoga a família (verificável por `IsTokenBlocked`).
+- [ ] Nenhum handler do `data_postgres` com `user_id`/escopos hardcoded (4 contextos eliminados).
+- [ ] `RequestContext` único no workspace (canônico = `infrastructure_postgres`).
+- [ ] Clientes RPC (`MuxClient`) compartilhados no `AppState` (sem `conectar_cliente` por request).
+- [ ] Rate limiting de login (por email/IP, via Redis).
+- [ ] Interceptor sobrescreve `tenant_id`/identidade do Envelope a partir das claims (claims > body).
+- [ ] Testes: feliz, senha errada, inativo, refresh expirado, reuso, logout + token bloqueado.
+
+**Pronto para plugar o app de configuração (doc 11 subconjunto config):**
+- [ ] `runtime_api` expõe rotas admin de config com guard `is_superuser == true` (rejeita comum/sem token).
+- [ ] `ListCoreSettings`/`UpsertCoreSetting`/`DeleteCoreSetting` funcionais; valores `encrypted` cifrados via `CipherManager`, leitura **mascarada**.
+- [ ] `GetTenantConfig`/`UpdateTenantConfig` funcionais; api_keys cifradas no JSONB, leitura mascarada por chave.
+- [ ] `UpdateTenantConfig`/`UpsertCoreSetting` invalidam o `TenantConfigCache`.
+- [ ] Toda mutação admin gera evento de auditoria via `publicar_evento_seguranca` (→ `audit_log`).
+- [ ] Campos cifrados nunca retornam em claro nem aparecem em logs/spans.
+
+**Qualidade:** `cargo build` + `cargo clippy --all-targets -- -D warnings` + `cargo fmt --check`
+limpos; `.sqlx` atualizado; comentários pt-br; sem `unwrap/expect` em produção; commits sem
+auto-referência ao modelo.
+
+## Variáveis de ambiente novas (doc 09 §6.5)
+
+| Variável | Obrigatória | Padrão | Descrição |
+|---|---|---|---|
+| `JWT_SECRET` | ✅ | — | Chave HMAC-SHA256 do access token (≥ 32 bytes). |
+| `AUTH_ACCESS_TTL_S` | ⬜ | `900` | Vida útil do access token (15 min). |
+| `AUTH_REFRESH_TTL_S` | ⬜ | `604800` | Vida útil do refresh token (7 dias). |
+| `AUTH_LOGIN_RATE_LIMIT` | ⬜ | `5/60s` | Tentativas de login por janela (email+IP). |
+
+Já existentes e reusadas: `ENCRYPTION_KEY` (CipherManager), `REDIS_URL`/`REDIS_BUS_URL`,
+`DATABASE_URL`, `SMARTCORE_<SVC>_ENDPOINT` (em Windows: `tcp://...`).
