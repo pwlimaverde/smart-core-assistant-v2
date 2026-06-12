@@ -187,7 +187,11 @@ async fn handler_put_file(client: StorageClient, env: Envelope) -> Envelope {
                 ..env
             }
         }
-        Err(e) => responder_erro(error_core::AppError::Storage(e.to_string()), env, "PutFileReply"),
+        Err(e) => responder_erro(
+            error_core::AppError::Storage(e.to_string()),
+            env,
+            "PutFileReply",
+        ),
     }
 }
 
@@ -212,7 +216,11 @@ async fn handler_get_file(client: StorageClient, env: Envelope) -> Envelope {
             error: None,
             ..env
         },
-        Err(e) => responder_erro(error_core::AppError::Storage(e.to_string()), env, "GetFileReply"),
+        Err(e) => responder_erro(
+            error_core::AppError::Storage(e.to_string()),
+            env,
+            "GetFileReply",
+        ),
     }
 }
 

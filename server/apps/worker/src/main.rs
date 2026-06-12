@@ -94,6 +94,9 @@ async fn processar_mensagem_recebida(evt: transport::bus::EventoBruto) -> anyhow
         method: "PersistMessage".to_string(),
         payload: serde_json::to_vec(&persist_payload).unwrap_or_default(),
         error: None,
+        auth_user_id: 0,
+        auth_scopes: vec![],
+        auth_is_superuser: false,
     };
 
     let resp = pg_client.call(req_envelope, Duration::from_secs(5)).await?;

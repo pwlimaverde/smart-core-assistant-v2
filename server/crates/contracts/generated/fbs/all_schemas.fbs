@@ -71,6 +71,9 @@ table Envelope {
   method:string;
   payload:[ubyte];
   error:ErrorEnvelope;
+  auth_user_id:int;
+  auth_scopes:[string];
+  auth_is_superuser:bool;
 }
 
 

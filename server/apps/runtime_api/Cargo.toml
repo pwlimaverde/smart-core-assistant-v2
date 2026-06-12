@@ -19,4 +19,6 @@ transport = { workspace = true }
 error_core = { workspace = true }
 observability = { workspace = true }
 application = { workspace = true }
+infrastructure_redis = { path = "../../crates/infrastructure_redis" }
+redis = { workspace = true }
 tracing = { workspace = true }

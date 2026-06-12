@@ -45,6 +45,9 @@ async fn test_rpc_flow_success() {
         method: "Ping".to_string(),
         payload: vec![],
         error: None,
+        auth_user_id: 0,
+        auth_scopes: vec![],
+        auth_is_superuser: false,
     };
 
     let response = client
@@ -86,6 +89,9 @@ async fn test_rpc_flow_method_not_found() {
         method: "MetodoInexistente".to_string(),
         payload: vec![],
         error: None,
+        auth_user_id: 0,
+        auth_scopes: vec![],
+        auth_is_superuser: false,
     };
 
     let response = client.call(request, Duration::from_secs(2)).await.unwrap();

@@ -461,6 +461,74 @@ fn renders_invoice_summary() {
 
 ---
 
+## 12. Como Executar Testes Neste Projeto (Smart Core Assistant v2)
+
+O projeto opera com **três ambientes distintos** para testes:
+
+| Ambiente | Onde roda | Suite | Gatilho |
+|----------|-----------|-------|---------|
+| **Local** | máquina do dev (Windows) | completa: unit + integração | manual, pré-push |
+| **CI (dev/prod)** | GitHub Actions ubuntu-latest | somente `--lib --bins` | push/PR automático |
+| **Hostinger (dev/prod)** | VPS remota | deploy automático pós-CI verde | CI verde em `dev`/`main` |
+
+### 12.1. Workflow ao escrever um novo teste
+
+**Passo 1 — Rode o teste em isolamento** (sempre, antes de rodar a suíte inteira):
+
+```powershell
+# a partir de server/
+cargo test nome_parcial_do_teste
+# ou filtrando por crate específica:
+cargo test -p data_postgres login
+# com saída em caso de sucesso:
+cargo test nome_parcial_do_teste -- --nocapture
+```
+
+Para testes unitários inline (sem banco), isso é suficiente. Para testes de integração, o
+`test_support::ensure_tunnel()` abre o túnel SSH automaticamente na primeira vez que o
+banco é necessário (requer `server/.env` com as URLs apontando para as portas do túnel).
+
+**Passo 2 — Rode a esteira local completa** antes de fazer push:
+
+```powershell
+# da raiz do repo ou da pasta infra/
+.\infra\test-local.ps1                  # fmt → clippy → cargo test --workspace → sqlx prepare --check
+.\infra\test-local.ps1 -Fast            # sem banco: fmt → clippy → testes unitários (--lib --bins)
+.\infra\test-local.ps1 -ResetTunnel     # derruba túneis SSH antigos (após mudança de portas)
+```
+
+> `-Fast` é idêntico ao que o CI roda. Use-o quando não tiver túnel disponível ou quiser
+> um feedback rápido de lint/unitários. Sempre rode o modo completo (sem flags) antes do push.
+
+### 12.2. Topologia do túnel SSH (local → Hostinger)
+
+O `test_support::ensure_tunnel()` abre o túnel sozinho; o script `-ResetTunnel` mata
+processos `ssh` residuais quando os mapeamentos de porta ficam obsoletos.
+
+| Porta local | Serviço | Porta remota (host) | Política Redis |
+|-------------|---------|---------------------|----------------|
+| `5434` | PostgreSQL | `POSTGRES_PORT` | — |
+| `6379` | Redis **cache** | `REDIS_PORT` | allkeys-lru |
+| `6380` | Redis **bus** | `REDIS_BUS_PORT` | noeviction |
+
+### 12.3. Pré-requisitos para testes de integração locais
+
+- `infra/.env.deploy` — credenciais SSH (chave `id_hostinger_root`) para abrir o túnel.
+- `server/.env` — variáveis `DATABASE_URL`, `DATABASE_ADMIN_URL`, `REDIS_URL`,
+  `REDIS_BUS_URL` apontando para as portas locais do túnel (`5434`/`6379`/`6380`).
+
+### 12.4. O que o CI faz (e o que ele **não** faz)
+
+O CI (`ci.yml`) roda a mesma sequência de gates — `cargo fmt`, `cargo clippy`,
+`cargo test`, `cargo sqlx prepare --check` — mas com Postgres e Redis **efêmeros** do
+runner e **somente `--lib --bins`** (sem testes de integração da pasta `tests/`). A suíte
+completa de integração **é responsabilidade do dev rodar localmente** antes do push.
+
+Ao subir serviços nas mesmas portas (`5434`, `6380`) que o `test_support` monitora, o CI
+faz o código "achar" o banco sem abrir túnel — o mecanismo é o mesmo, apenas a infra muda.
+
+---
+
 ## Referências (boas práticas consultadas)
 
 - [The Rust Book — Test Organization](https://doc.rust-lang.org/book/ch11-03-test-organization.html)

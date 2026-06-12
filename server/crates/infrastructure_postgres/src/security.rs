@@ -19,8 +19,12 @@ pub struct RequestContext {
 
 impl RequestContext {
     /// Retorna true se o usuário possui o escopo informado.
+    ///
+    /// O escopo coringa `"*"` (concedido a superusuários no login) satisfaz qualquer
+    /// permissão exigida — sem ele, um superusuário com `["*"]` seria barrado pelas
+    /// checagens de escopo exato dos repositórios.
     pub fn has_permission(&self, permission: &str) -> bool {
-        self.user_scopes.iter().any(|p| p == permission)
+        self.user_scopes.iter().any(|p| p == "*" || p == permission)
     }
 
     /// Retorna true se o usuário pode acessar o fluxo Kanban informado.

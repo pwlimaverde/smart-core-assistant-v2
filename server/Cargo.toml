@@ -59,3 +59,7 @@ anyhow        = "1.0.86"
 bytes         = "1.6.0"
 futures-util  = "0.3.30"
 aws-sdk-s3    = "1"
+jsonwebtoken  = "9.3.0"
+sha2          = "0.10.8"
+rand_core     = { version = "0.6", features = ["std"] }
+

@@ -1,5 +1,4 @@
 use application::auth::login::login;
-use application::RequestContext;
 use contracts::{Envelope, MessageKind};
 use std::time::Duration;
 use transport::runtime::{Endpoint, Server};
@@ -7,6 +6,7 @@ use uuid::Uuid;
 
 #[tokio::test]
 async fn test_login_flow_success() {
+    let _ = application::jwt::inicializar_chaves("segredo_de_teste_de_pelo_menos_32_bytes_longo");
     // 1. Configura as portas locais TCP para os stubs
     let pg_addr = "tcp://127.0.0.1:29101";
     let redis_addr = "tcp://127.0.0.1:29102";
@@ -22,7 +22,8 @@ async fn test_login_flow_success() {
                 "id": 42,
                 "username": "usuario_teste",
                 "email": "test@domain.com",
-                "is_superuser": false
+                "is_superuser": false,
+                "tenant_id": Uuid::new_v4().to_string()
             });
             Envelope {
                 kind: MessageKind::Reply as i32,
@@ -61,15 +62,25 @@ async fn test_login_flow_success() {
     // Aguarda stubs iniciarem
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    // 4. Executa o login
-    let ctx = RequestContext {
-        tenant_id: Uuid::new_v4(),
-        user_id: 0,
-        user_scopes: vec![],
-        traceparent: "00-trace-123-span-456-01".to_string(),
+    // Conecta clientes multiplexados
+    let pg_client = transport::conectar_cliente("data_postgres").await.unwrap();
+    let redis_client = transport::conectar_cliente("data_redis").await.unwrap();
+
+    let deps = application::auth::login::AuthDeps {
+        pg: pg_client,
+        redis: redis_client,
+        access_ttl_s: 900,
+        refresh_ttl_s: 604800,
     };
 
-    let result = login(&ctx, "test@domain.com", "senha123").await;
+    // 4. Executa o login
+    let result = login(
+        &deps,
+        "00-trace-123-span-456-01",
+        "test@domain.com",
+        "senha123",
+    )
+    .await;
 
     assert!(
         result.is_ok(),
@@ -88,6 +99,7 @@ async fn test_login_flow_success() {
 
 #[tokio::test]
 async fn test_login_flow_invalid_credentials() {
+    let _ = application::jwt::inicializar_chaves("segredo_de_teste_de_pelo_menos_32_bytes_longo");
     let pg_addr = "tcp://127.0.0.1:29103";
     let redis_addr = "tcp://127.0.0.1:29104";
 
@@ -124,20 +136,37 @@ async fn test_login_flow_invalid_credentials() {
         pg_server.run().await.unwrap();
     });
 
+    // Subir stub do data_redis
+    let redis_endpoint = Endpoint::parse(redis_addr).unwrap();
+    let redis_server = Server::new(redis_endpoint, "flatbuffers");
+    let redis_handle = tokio::spawn(async move {
+        let _ = redis_server.run().await;
+    });
+
     tokio::time::sleep(Duration::from_millis(200)).await;
 
-    let ctx = RequestContext {
-        tenant_id: Uuid::new_v4(),
-        user_id: 0,
-        user_scopes: vec![],
-        traceparent: "".to_string(),
+    let pg_client = transport::conectar_cliente("data_postgres").await.unwrap();
+    let redis_client = transport::conectar_cliente("data_redis").await.unwrap();
+
+    let deps = application::auth::login::AuthDeps {
+        pg: pg_client,
+        redis: redis_client,
+        access_ttl_s: 900,
+        refresh_ttl_s: 604800,
     };
 
-    let result = login(&ctx, "test@domain.com", "senha_errada").await;
+    let result = login(
+        &deps,
+        "00-trace-abc-span-def-01",
+        "test@domain.com",
+        "senha_errada",
+    )
+    .await;
 
     assert!(result.is_err());
     let err = result.err().unwrap();
     assert_eq!(err.code(), error_core::ErrorCode::AuthInvalidToken);
 
     pg_handle.abort();
+    redis_handle.abort();
 }

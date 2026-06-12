@@ -5,8 +5,12 @@
       "updatedAt": "2026-06-12T11:37:35.437Z"
     },
     "phase-r": {
+      "status": "completed",
+      "updatedAt": "2026-06-12T13:16:47.278Z"
+    },
+    "phase-e": {
       "status": "in_progress",
-      "updatedAt": "2026-06-12T11:37:40.495Z"
+      "updatedAt": "2026-06-12T13:16:47.669Z"
     }
   },
   "progress": 0

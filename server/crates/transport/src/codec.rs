@@ -69,6 +69,12 @@ impl Codec for FlatbuffersCodec {
         let method_offset = fbb.create_string(&env.method);
         let payload_offset = fbb.create_vector(&env.payload);
 
+        let mut scopes_offsets = Vec::new();
+        for scope in &env.auth_scopes {
+            scopes_offsets.push(fbb.create_string(scope));
+        }
+        let scopes_vector = fbb.create_vector(&scopes_offsets);
+
         // 3. Criar a tabela Envelope
         let env_args = contracts::fbs::envelope::EnvelopeArgs {
             tenant_id: Some(tenant_id_offset),
@@ -81,6 +87,9 @@ impl Codec for FlatbuffersCodec {
             method: Some(method_offset),
             payload: Some(payload_offset),
             error: error_offset,
+            auth_user_id: env.auth_user_id,
+            auth_scopes: Some(scopes_vector),
+            auth_is_superuser: env.auth_is_superuser,
         };
         let root = contracts::fbs::envelope::Envelope::create(&mut fbb, &env_args);
         fbb.finish(root, None);
@@ -138,6 +147,13 @@ impl Codec for FlatbuffersCodec {
             }
         });
 
+        let mut auth_scopes = Vec::new();
+        if let Some(scopes) = fbs_env.auth_scopes() {
+            for i in 0..scopes.len() {
+                auth_scopes.push(scopes.get(i).to_string());
+            }
+        }
+
         Ok(Envelope {
             tenant_id,
             schema_version: fbs_env.schema_version(),
@@ -149,6 +165,9 @@ impl Codec for FlatbuffersCodec {
             method,
             payload,
             error,
+            auth_user_id: fbs_env.auth_user_id(),
+            auth_scopes,
+            auth_is_superuser: fbs_env.auth_is_superuser(),
         })
     }
 }
@@ -219,6 +238,9 @@ mod tests {
             method: "TestMethod".to_string(),
             payload: vec![1, 2, 3, 4],
             error,
+            auth_user_id: 0,
+            auth_scopes: vec![],
+            auth_is_superuser: false,
         }
     }
 

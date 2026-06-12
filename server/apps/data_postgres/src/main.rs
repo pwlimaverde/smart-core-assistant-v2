@@ -9,6 +9,15 @@ use sqlx::PgPool;
 use transport::Server;
 use uuid::Uuid;
 
+fn contexto_do_envelope(env: &Envelope) -> RequestContext {
+    RequestContext {
+        tenant_id: Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil()),
+        user_id: env.auth_user_id,
+        user_scopes: env.auth_scopes.clone(),
+        flow_permissions: vec![],
+    }
+}
+
 mod outbox_relay;
 use outbox_relay::OutboxRelay;
 
@@ -16,6 +25,8 @@ use outbox_relay::OutboxRelay;
 struct AppState {
     pool: PgPool,
     redis_conn: ConnectionManager,
+    cipher: std::sync::Arc<infrastructure_postgres::crypto::CipherManager>,
+    config_cache: std::sync::Arc<infrastructure_postgres::TenantConfigCache>,
 }
 
 #[tokio::main]
@@ -60,9 +71,18 @@ async fn main() -> anyhow::Result<()> {
     let bus_client = infrastructure_redis::criar_cliente(&redis_bus_url)?;
     tracing::info!("Conexão com Redis Cache e Redis Bus estabelecidas.");
 
+    let cipher =
+        std::sync::Arc::new(infrastructure_postgres::crypto::CipherManager::new_from_env()?);
+    let config_cache = std::sync::Arc::new(infrastructure_postgres::TenantConfigCache::new(
+        pool.clone(),
+        cipher.clone(),
+    ));
+
     let state = AppState {
         pool: pool.clone(),
-        redis_conn: bus_conn.clone(), // os handlers publicam no bus_conn
+        redis_conn: bus_conn.clone(),
+        cipher,
+        config_cache,
     };
 
     // 4. Inicia o Relay de Outbox em background
@@ -210,7 +230,13 @@ async fn main() -> anyhow::Result<()> {
     let state_for_create_tenant = state_clone.clone();
     let state_for_create_superuser = state_clone.clone();
     let state_for_list_superusers = state_clone.clone();
-    let state_for_delete_superuser = state_clone;
+    let state_for_delete_superuser = state_clone.clone();
+    let state_for_get_user_identity = state_clone.clone();
+    let state_for_list_core_settings = state_clone.clone();
+    let state_for_upsert_core_setting = state_clone.clone();
+    let state_for_delete_core_setting = state_clone.clone();
+    let state_for_get_tenant_config = state_clone.clone();
+    let state_for_update_tenant_config = state_clone;
 
     let server = Server::from_env("DATA_POSTGRES")
         .route("GetThread", move |env| {
@@ -254,6 +280,43 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(
                 async move { handler_delete_superuser(state.pool, state.redis_conn, env).await },
             )
+        })
+        .route("GetUserIdentity", move |env| {
+            let state = state_for_get_user_identity.clone();
+            Box::pin(async move { handler_get_user_identity(state.pool, env).await })
+        })
+        .route("ListCoreSettings", move |env| {
+            let state = state_for_list_core_settings.clone();
+            Box::pin(async move { handler_list_core_settings(state.pool, env).await })
+        })
+        .route("UpsertCoreSetting", move |env| {
+            let state = state_for_upsert_core_setting.clone();
+            Box::pin(async move {
+                handler_upsert_core_setting(state.pool, state.cipher, state.redis_conn, env).await
+            })
+        })
+        .route("DeleteCoreSetting", move |env| {
+            let state = state_for_delete_core_setting.clone();
+            Box::pin(
+                async move { handler_delete_core_setting(state.pool, state.redis_conn, env).await },
+            )
+        })
+        .route("GetTenantConfig", move |env| {
+            let state = state_for_get_tenant_config.clone();
+            Box::pin(async move { handler_get_tenant_config(state.pool, state.cipher, env).await })
+        })
+        .route("UpdateTenantConfig", move |env| {
+            let state = state_for_update_tenant_config.clone();
+            Box::pin(async move {
+                handler_update_tenant_config(
+                    state.pool,
+                    state.cipher,
+                    state.config_cache,
+                    state.redis_conn,
+                    env,
+                )
+                .await
+            })
         });
 
     tracing::info!("Servidor RPC configurado e pronto.");
@@ -424,12 +487,7 @@ async fn handler_get_thread(pool: PgPool, env: Envelope) -> Envelope {
         .and_then(|v| v.as_i64())
         .unwrap_or(0);
 
-    let ctx = RequestContext {
-        tenant_id,
-        user_id: 1,
-        user_scopes: vec!["atendimentos:read".to_string()],
-        flow_permissions: vec![],
-    };
+    let ctx = contexto_do_envelope(&env);
     let repo = infrastructure_postgres::atendimentos::mensagens::PostgresMensagemRepository;
 
     let result =
@@ -488,12 +546,7 @@ async fn handler_list_atendimentos(pool: PgPool, env: Envelope) -> Envelope {
         .and_then(|v| v.as_i64())
         .unwrap_or(50);
 
-    let ctx = RequestContext {
-        tenant_id,
-        user_id: 1,
-        user_scopes: vec!["atendimentos:read".to_string()],
-        flow_permissions: vec![],
-    };
+    let ctx = contexto_do_envelope(&env);
     let repo = infrastructure_postgres::atendimentos::atendimentos::PostgresAtendimentoRepository;
 
     let result =
@@ -886,12 +939,7 @@ async fn handler_persist_message(pool: PgPool, env: Envelope) -> Envelope {
 
     let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
     let repo = infrastructure_postgres::atendimentos::mensagens::PostgresMensagemRepository;
-    let ctx = RequestContext {
-        tenant_id,
-        user_id: 1,
-        user_scopes: vec!["atendimentos:write".to_string()],
-        flow_permissions: vec![],
-    };
+    let ctx = contexto_do_envelope(&env);
 
     // Captura o traceparent da requisição para persistir no outbox e manter o trace
     // distribuído vivo até o relay republicar o evento no barramento.
@@ -991,12 +1039,7 @@ async fn handler_upsert_contact(pool: PgPool, env: Envelope) -> Envelope {
 
     let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
     let repo = infrastructure_postgres::clientes::contatos::PostgresContatoRepository;
-    let ctx = RequestContext {
-        tenant_id,
-        user_id: 1,
-        user_scopes: vec!["clientes:write".to_string()],
-        flow_permissions: vec![],
-    };
+    let ctx = contexto_do_envelope(&env);
 
     let telefone = payload_json
         .get("phone")
@@ -1078,8 +1121,7 @@ async fn handler_verify_credentials(
     static DUMMY_HASH: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     let dummy_hash = DUMMY_HASH
         .get_or_init(|| {
-            infrastructure_postgres::hash_password("senha_dummy_anti_timing")
-                .unwrap_or_default()
+            infrastructure_postgres::hash_password("senha_dummy_anti_timing").unwrap_or_default()
         })
         .clone();
 
@@ -1092,13 +1134,65 @@ async fn handler_verify_credentials(
         // Usuário desativado é rejeitado como credencial inválida (não revela o motivo).
         senha_ok && user.is_active
     } else {
-        let _ = infrastructure_postgres::verify_password_async(password.to_string(), dummy_hash)
-            .await;
+        let _ =
+            infrastructure_postgres::verify_password_async(password.to_string(), dummy_hash).await;
         false
     };
 
     if login_sucesso {
         let user = user_opt.unwrap();
+
+        let mut tenant_id_str = String::new();
+        let mut role = serde_json::Value::Null;
+        let mut module_permissions = serde_json::Value::Null;
+
+        // Se não for superusuário, precisamos obter a associação de tenant dele
+        if !user.is_superuser {
+            use infrastructure_postgres::tenants::tenants::TenantUserRepository;
+            let tenant_user_repo =
+                infrastructure_postgres::tenants::tenants::PostgresTenantUserRepository;
+            match tenant_user_repo.buscar_por_user_id(&pool, user.id).await {
+                Ok(Some(tu)) => {
+                    // Se o vínculo estiver inativo, bloquear o login
+                    if !tu.is_active {
+                        let app_err =
+                            error_core::AppError::Auth("vínculo inativo com o tenant".to_string());
+                        let err_env = app_err.to_error_envelope(&env.traceparent, "data_postgres");
+                        return Envelope {
+                            kind: MessageKind::Error as i32,
+                            method: "VerifyCredentialsReply".to_string(),
+                            error: Some(err_env),
+                            ..env
+                        };
+                    }
+                    tenant_id_str = tu.tenant_id.to_string();
+                    role = serde_json::Value::String(tu.role);
+                    module_permissions = tu.module_permissions;
+                }
+                Ok(None) => {
+                    let app_err =
+                        error_core::AppError::Auth("usuário sem tenant associado".to_string());
+                    let err_env = app_err.to_error_envelope(&env.traceparent, "data_postgres");
+                    return Envelope {
+                        kind: MessageKind::Error as i32,
+                        method: "VerifyCredentialsReply".to_string(),
+                        error: Some(err_env),
+                        ..env
+                    };
+                }
+                Err(err) => {
+                    let app_err = error_core::AppError::Database(err.to_string());
+                    let err_env = app_err.to_error_envelope(&env.traceparent, "data_postgres");
+                    return Envelope {
+                        kind: MessageKind::Error as i32,
+                        method: "VerifyCredentialsReply".to_string(),
+                        error: Some(err_env),
+                        ..env
+                    };
+                }
+            }
+        }
+
         // Atualiza a data do último login em background
         let pool_clone = pool.clone();
         let user_id = user.id;
@@ -1111,6 +1205,9 @@ async fn handler_verify_credentials(
             "username": user.username,
             "email": user.email,
             "is_superuser": user.is_superuser,
+            "tenant_id": tenant_id_str,
+            "role": role,
+            "module_permissions": module_permissions,
         });
 
         Envelope {
@@ -1164,6 +1261,584 @@ async fn handler_verify_credentials(
             ..env
         }
     }
+}
+
+// --- Helpers e Utilitários para os Handlers Admin ---
+
+fn erro(app_err: error_core::AppError, env: &Envelope) -> Envelope {
+    let err_env = app_err.to_error_envelope(&env.traceparent, "data_postgres");
+    Envelope {
+        kind: MessageKind::Error as i32,
+        method: format!("{}Reply", env.method),
+        error: Some(err_env),
+        ..env.clone()
+    }
+}
+
+/// Resolve o tenant alvo de uma operação admin de configuração.
+///
+/// O interceptor da runtime_api zera o `tenant_id` do Envelope para superusuários
+/// (claims > body), então o tenant a ser configurado é informado no payload
+/// (`tenant_id`). Caímos no `tenant_id` do Envelope apenas quando o payload não o traz
+/// (compatibilidade com chamadas tenant-scoped não-superusuário).
+fn resolver_tenant_alvo(env: &Envelope, payload: &serde_json::Value) -> Uuid {
+    if let Some(alvo) = payload
+        .get("tenant_id")
+        .and_then(|v| v.as_str())
+        .and_then(|s| Uuid::parse_str(s).ok())
+    {
+        return alvo;
+    }
+    Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil())
+}
+
+fn ok_reply(env: &Envelope, method_reply: &str, payload: serde_json::Value) -> Envelope {
+    Envelope {
+        kind: MessageKind::Reply as i32,
+        method: method_reply.to_string(),
+        payload: serde_json::to_vec(&payload).unwrap_or_default(),
+        error: None,
+        ..env.clone()
+    }
+}
+
+async fn publicar_auditoria(
+    redis_conn: &mut ConnectionManager,
+    env: &Envelope,
+    event: &str,
+    message: String,
+    context: serde_json::Value,
+) {
+    let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
+    let audit_payload = observability::AuditLogPayload {
+        tenant_id: Some(tenant_id),
+        level: "WARN".to_string(),
+        service: "data_postgres".to_string(),
+        trace_id: Some(env.traceparent.clone()),
+        event: event.to_string(),
+        message,
+        context,
+        user_id: Some(env.auth_user_id),
+        ip_address: None,
+    };
+
+    let envelope_auditoria =
+        contracts::TenantEnvelope::novo(tenant_id, "security.audit", audit_payload)
+            .com_traceparent(env.traceparent.clone());
+
+    if let Err(e) = transport::bus::publicar_evento_seguranca(redis_conn, &envelope_auditoria).await
+    {
+        tracing::error!("Falha ao publicar auditoria de '{}': {:?}", event, e);
+    }
+}
+
+// --- Novos Handlers Admin e Identidade ---
+
+async fn handler_get_user_identity(pool: PgPool, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload_json.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+    use infrastructure_postgres::AuthUserRepository;
+    let repo = infrastructure_postgres::PostgresAuthUserRepository;
+
+    match repo.buscar_por_id(&pool, id).await {
+        Ok(Some(user)) => {
+            let mut tenant_id_str = String::new();
+            let mut role = serde_json::Value::Null;
+            let mut module_permissions = serde_json::Value::Null;
+
+            if !user.is_superuser {
+                use infrastructure_postgres::tenants::tenants::TenantUserRepository;
+                let tenant_user_repo =
+                    infrastructure_postgres::tenants::tenants::PostgresTenantUserRepository;
+                if let Ok(Some(tu)) = tenant_user_repo.buscar_por_user_id(&pool, user.id).await {
+                    tenant_id_str = tu.tenant_id.to_string();
+                    role = serde_json::Value::String(tu.role);
+                    module_permissions = tu.module_permissions;
+                }
+            }
+
+            let reply = serde_json::json!({
+                "id": user.id,
+                "username": user.username,
+                "email": user.email,
+                "is_active": user.is_active,
+                "is_superuser": user.is_superuser,
+                "tenant_id": tenant_id_str,
+                "role": role,
+                "module_permissions": module_permissions,
+            });
+            ok_reply(&env, "GetUserIdentityReply", reply)
+        }
+        Ok(None) => erro(
+            error_core::AppError::Auth("usuário não encontrado".to_string()),
+            &env,
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_list_core_settings(pool: PgPool, env: Envelope) -> Envelope {
+    let result = sqlx::query!(
+        "SELECT key, value, encrypted, description FROM settings_manager_coresettings ORDER BY key"
+    )
+    .fetch_all(&pool)
+    .await;
+
+    match result {
+        Ok(rows) => {
+            let list: Vec<serde_json::Value> = rows
+                .into_iter()
+                .map(|row| {
+                    let val_masked = if row.encrypted {
+                        "••••••••".to_string()
+                    } else {
+                        row.value
+                    };
+                    serde_json::json!({
+                        "key": row.key,
+                        "value": val_masked,
+                        "encrypted": row.encrypted,
+                        "description": row.description,
+                    })
+                })
+                .collect();
+
+            ok_reply(
+                &env,
+                "ListCoreSettingsReply",
+                serde_json::json!({ "settings": list }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_upsert_core_setting(
+    pool: PgPool,
+    cipher: std::sync::Arc<infrastructure_postgres::crypto::CipherManager>,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let key = payload_json
+        .get("key")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let raw_value = payload_json
+        .get("value")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let encrypted = payload_json
+        .get("encrypted")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let description = payload_json
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    if key.is_empty() {
+        return erro(
+            error_core::AppError::Validation("chave não pode ser vazia".to_string()),
+            &env,
+        );
+    }
+
+    let final_value = if encrypted {
+        match cipher.encrypt(raw_value.as_bytes()) {
+            Ok((ct, nonce, tag)) => format!("{}:{}:{}", ct, nonce, tag),
+            Err(err) => {
+                return erro(
+                    error_core::AppError::Internal(format!("erro de criptografia: {}", err)),
+                    &env,
+                )
+            }
+        }
+    } else {
+        raw_value.to_string()
+    };
+
+    match infrastructure_postgres::tenants::settings::upsert_setting(
+        &pool,
+        key,
+        &final_value,
+        encrypted,
+        description,
+    )
+    .await
+    {
+        Ok(_) => {
+            publicar_auditoria(
+                &mut redis_conn,
+                &env,
+                "core_setting_upserted",
+                format!("Configuração global '{}' cadastrada ou atualizada", key),
+                serde_json::json!({ "key": key, "encrypted": encrypted }),
+            )
+            .await;
+
+            ok_reply(
+                &env,
+                "UpsertCoreSettingReply",
+                serde_json::json!({ "status": "success" }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_delete_core_setting(
+    pool: PgPool,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let key = payload_json
+        .get("key")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    if key.is_empty() {
+        return erro(
+            error_core::AppError::Validation("chave não pode ser vazia".to_string()),
+            &env,
+        );
+    }
+
+    let result = sqlx::query!(
+        "DELETE FROM settings_manager_coresettings WHERE key = $1",
+        key
+    )
+    .execute(&pool)
+    .await;
+
+    match result {
+        Ok(res) => {
+            if res.rows_affected() == 0 {
+                return erro(
+                    error_core::AppError::Validation("configuração inexistente".to_string()),
+                    &env,
+                );
+            }
+
+            publicar_auditoria(
+                &mut redis_conn,
+                &env,
+                "core_setting_deleted",
+                format!("Configuração global '{}' excluída", key),
+                serde_json::json!({ "key": key }),
+            )
+            .await;
+
+            ok_reply(
+                &env,
+                "DeleteCoreSettingReply",
+                serde_json::json!({ "status": "success" }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_get_tenant_config(
+    pool: PgPool,
+    cipher: std::sync::Arc<infrastructure_postgres::crypto::CipherManager>,
+    env: Envelope,
+) -> Envelope {
+    // O superusuário gerencia a config de um tenant ALVO informado no payload.
+    // Como o interceptor zera o tenant_id do Envelope para superusuários (claims > body),
+    // o tenant alvo precisa vir do payload; só recaímos no Envelope se ausente.
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let tenant_id = resolver_tenant_alvo(&env, &payload_json);
+    if tenant_id.is_nil() {
+        return erro(
+            error_core::AppError::Validation("tenant_id alvo não informado".to_string()),
+            &env,
+        );
+    }
+
+    let result = pool.begin().await;
+    let mut tx = match result {
+        Ok(tx) => tx,
+        Err(err) => return erro(error_core::AppError::Database(err.to_string()), &env),
+    };
+
+    let set_rls = sqlx::query("SELECT set_config('app.current_tenant', $1, true)")
+        .bind(tenant_id.to_string())
+        .execute(&mut *tx)
+        .await;
+
+    if let Err(err) = set_rls {
+        return erro(error_core::AppError::Database(err.to_string()), &env);
+    }
+
+    let tc_row = sqlx::query!(
+        r#"SELECT dados_empresa, persona_bot, bot_agent_name,
+                  msg_fallback, msg_sem_info, msg_transferencia,
+                  llm_class, model, llm_temperature,
+                  transcription_provider, transcription_model,
+                  vision_provider, vision_model,
+                  embeddings_class, embeddings_model,
+                  chunk_size, chunk_overlap,
+                  similarity_threshold, vector_distance_threshold,
+                  api_keys
+           FROM tenants_tenantconfig
+           WHERE tenant_id = $1"#,
+        tenant_id
+    )
+    .fetch_optional(&mut *tx)
+    .await;
+
+    let _ = tx.commit().await;
+
+    match tc_row {
+        Ok(Some(row)) => {
+            let mut api_keys_masked = serde_json::Map::new();
+            for key_name in &["openai_api_key", "groq_api_key", "google_api_key"] {
+                let val = cipher
+                    .decrypt_from_jsonb(&row.api_keys, key_name)
+                    .unwrap_or_default();
+                let masked = if val.is_empty() {
+                    ""
+                } else {
+                    "••••••••"
+                };
+                api_keys_masked.insert(
+                    key_name.to_string(),
+                    serde_json::Value::String(masked.to_string()),
+                );
+            }
+
+            let reply = serde_json::json!({
+                "dados_empresa": row.dados_empresa.unwrap_or_default(),
+                "persona_bot": row.persona_bot.unwrap_or_default(),
+                "bot_agent_name": row.bot_agent_name.unwrap_or_default(),
+                "msg_fallback": row.msg_fallback.unwrap_or_default(),
+                "msg_sem_info": row.msg_sem_info.unwrap_or_default(),
+                "msg_transferencia": row.msg_transferencia.unwrap_or_default(),
+                "llm_class": row.llm_class.unwrap_or_default(),
+                "model": row.model.unwrap_or_default(),
+                "llm_temperature": row.llm_temperature.unwrap_or_default(),
+                "transcription_provider": row.transcription_provider.unwrap_or_default(),
+                "transcription_model": row.transcription_model.unwrap_or_default(),
+                "vision_provider": row.vision_provider.unwrap_or_default(),
+                "vision_model": row.vision_model.unwrap_or_default(),
+                "embeddings_class": row.embeddings_class.unwrap_or_default(),
+                "embeddings_model": row.embeddings_model.unwrap_or_default(),
+                "chunk_size": row.chunk_size.unwrap_or(0),
+                "chunk_overlap": row.chunk_overlap.unwrap_or(0),
+                "similarity_threshold": row.similarity_threshold.unwrap_or_default(),
+                "vector_distance_threshold": row.vector_distance_threshold.unwrap_or_default(),
+                "api_keys": serde_json::Value::Object(api_keys_masked),
+            });
+
+            ok_reply(&env, "GetTenantConfigReply", reply)
+        }
+        Ok(None) => ok_reply(&env, "GetTenantConfigReply", serde_json::json!({})),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_update_tenant_config(
+    pool: PgPool,
+    cipher: std::sync::Arc<infrastructure_postgres::crypto::CipherManager>,
+    config_cache: std::sync::Arc<infrastructure_postgres::TenantConfigCache>,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    // Tenant alvo informado pelo superusuário no payload (ver handler_get_tenant_config).
+    let tenant_id = resolver_tenant_alvo(&env, &payload_json);
+    if tenant_id.is_nil() {
+        return erro(
+            error_core::AppError::Validation("tenant_id alvo não informado".to_string()),
+            &env,
+        );
+    }
+
+    let mut tx = match pool.begin().await {
+        Ok(tx) => tx,
+        Err(err) => return erro(error_core::AppError::Database(err.to_string()), &env),
+    };
+
+    if let Err(err) = sqlx::query("SELECT set_config('app.current_tenant', $1, true)")
+        .bind(tenant_id.to_string())
+        .execute(&mut *tx)
+        .await
+    {
+        return erro(error_core::AppError::Database(err.to_string()), &env);
+    }
+
+    let keys_existente_res = sqlx::query!(
+        "SELECT api_keys FROM tenants_tenantconfig WHERE tenant_id = $1",
+        tenant_id
+    )
+    .fetch_optional(&mut *tx)
+    .await;
+
+    let api_keys_atual = match keys_existente_res {
+        Ok(Some(row)) => row.api_keys,
+        _ => serde_json::Value::Object(Default::default()),
+    };
+
+    let mut novas_keys = serde_json::Map::new();
+    if let Some(req_keys) = payload_json.get("api_keys").and_then(|v| v.as_object()) {
+        for key_name in &["openai_api_key", "groq_api_key", "google_api_key"] {
+            if let Some(val_str) = req_keys.get(*key_name).and_then(|v| v.as_str()) {
+                if val_str == "••••••••" {
+                    if let Some(existente) = api_keys_atual.get(*key_name) {
+                        novas_keys.insert(key_name.to_string(), existente.clone());
+                    }
+                } else if val_str.is_empty() {
+                    novas_keys.insert(key_name.to_string(), serde_json::Value::Null);
+                } else {
+                    match cipher.encrypt(val_str.as_bytes()) {
+                        Ok((ct, nonce, tag)) => {
+                            let key_obj = serde_json::json!({
+                                "ciphertext": ct,
+                                "nonce": nonce,
+                                "tag": tag
+                            });
+                            novas_keys.insert(key_name.to_string(), key_obj);
+                        }
+                        Err(err) => {
+                            return erro(
+                                error_core::AppError::Internal(format!(
+                                    "erro ao cifrar chaves: {}",
+                                    err
+                                )),
+                                &env,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let dados_empresa = payload_json.get("dados_empresa").and_then(|v| v.as_str());
+    let persona_bot = payload_json.get("persona_bot").and_then(|v| v.as_str());
+    let bot_agent_name = payload_json.get("bot_agent_name").and_then(|v| v.as_str());
+    let msg_fallback = payload_json.get("msg_fallback").and_then(|v| v.as_str());
+    let msg_sem_info = payload_json.get("msg_sem_info").and_then(|v| v.as_str());
+    let msg_transferencia = payload_json
+        .get("msg_transferencia")
+        .and_then(|v| v.as_str());
+    let llm_class = payload_json.get("llm_class").and_then(|v| v.as_str());
+    let model = payload_json.get("model").and_then(|v| v.as_str());
+
+    let llm_temperature = payload_json
+        .get("llm_temperature")
+        .and_then(|v| v.as_str())
+        .and_then(|s| s.parse::<rust_decimal::Decimal>().ok());
+    let transcription_provider = payload_json
+        .get("transcription_provider")
+        .and_then(|v| v.as_str());
+    let transcription_model = payload_json
+        .get("transcription_model")
+        .and_then(|v| v.as_str());
+    let vision_provider = payload_json.get("vision_provider").and_then(|v| v.as_str());
+    let vision_model = payload_json.get("vision_model").and_then(|v| v.as_str());
+    let embeddings_class = payload_json
+        .get("embeddings_class")
+        .and_then(|v| v.as_str());
+    let embeddings_model = payload_json
+        .get("embeddings_model")
+        .and_then(|v| v.as_str());
+
+    let chunk_size = payload_json
+        .get("chunk_size")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32);
+    let chunk_overlap = payload_json
+        .get("chunk_overlap")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32);
+
+    let similarity_threshold = payload_json
+        .get("similarity_threshold")
+        .and_then(|v| v.as_str())
+        .and_then(|s| s.parse::<rust_decimal::Decimal>().ok());
+    let vector_distance_threshold = payload_json
+        .get("vector_distance_threshold")
+        .and_then(|v| v.as_str())
+        .and_then(|s| s.parse::<rust_decimal::Decimal>().ok());
+
+    let api_keys_json = serde_json::Value::Object(novas_keys);
+
+    let query_res = sqlx::query!(
+        r#"INSERT INTO tenants_tenantconfig (
+            tenant_id, dados_empresa, persona_bot, bot_agent_name,
+            msg_fallback, msg_sem_info, msg_transferencia,
+            llm_class, model, llm_temperature,
+            transcription_provider, transcription_model,
+            vision_provider, vision_model,
+            embeddings_class, embeddings_model,
+            chunk_size, chunk_overlap,
+            similarity_threshold, vector_distance_threshold,
+            api_keys, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW())
+        ON CONFLICT (tenant_id) DO UPDATE SET
+            dados_empresa = COALESCE(EXCLUDED.dados_empresa, tenants_tenantconfig.dados_empresa),
+            persona_bot = COALESCE(EXCLUDED.persona_bot, tenants_tenantconfig.persona_bot),
+            bot_agent_name = COALESCE(EXCLUDED.bot_agent_name, tenants_tenantconfig.bot_agent_name),
+            msg_fallback = COALESCE(EXCLUDED.msg_fallback, tenants_tenantconfig.msg_fallback),
+            msg_sem_info = COALESCE(EXCLUDED.msg_sem_info, tenants_tenantconfig.msg_sem_info),
+            msg_transferencia = COALESCE(EXCLUDED.msg_transferencia, tenants_tenantconfig.msg_transferencia),
+            llm_class = COALESCE(EXCLUDED.llm_class, tenants_tenantconfig.llm_class),
+            model = COALESCE(EXCLUDED.model, tenants_tenantconfig.model),
+            llm_temperature = COALESCE(EXCLUDED.llm_temperature, tenants_tenantconfig.llm_temperature),
+            transcription_provider = COALESCE(EXCLUDED.transcription_provider, tenants_tenantconfig.transcription_provider),
+            transcription_model = COALESCE(EXCLUDED.transcription_model, tenants_tenantconfig.transcription_model),
+            vision_provider = COALESCE(EXCLUDED.vision_provider, tenants_tenantconfig.vision_provider),
+            vision_model = COALESCE(EXCLUDED.vision_model, tenants_tenantconfig.vision_model),
+            embeddings_class = COALESCE(EXCLUDED.embeddings_class, tenants_tenantconfig.embeddings_class),
+            embeddings_model = COALESCE(EXCLUDED.embeddings_model, tenants_tenantconfig.embeddings_model),
+            chunk_size = COALESCE(EXCLUDED.chunk_size, tenants_tenantconfig.chunk_size),
+            chunk_overlap = COALESCE(EXCLUDED.chunk_overlap, tenants_tenantconfig.chunk_overlap),
+            similarity_threshold = COALESCE(EXCLUDED.similarity_threshold, tenants_tenantconfig.similarity_threshold),
+            vector_distance_threshold = COALESCE(EXCLUDED.vector_distance_threshold, tenants_tenantconfig.vector_distance_threshold),
+            api_keys = EXCLUDED.api_keys,
+            updated_at = NOW()"#,
+        tenant_id, dados_empresa, persona_bot, bot_agent_name,
+        msg_fallback, msg_sem_info, msg_transferencia,
+        llm_class, model, llm_temperature,
+        transcription_provider, transcription_model,
+        vision_provider, vision_model,
+        embeddings_class, embeddings_model,
+        chunk_size, chunk_overlap,
+        similarity_threshold, vector_distance_threshold,
+        api_keys_json
+    )
+    .execute(&mut *tx)
+    .await;
+
+    if let Err(err) = query_res {
+        let _ = tx.rollback().await;
+        return erro(error_core::AppError::Database(err.to_string()), &env);
+    }
+
+    if let Err(err) = tx.commit().await {
+        return erro(error_core::AppError::Database(err.to_string()), &env);
+    }
+
+    config_cache.invalidate(&tenant_id);
+
+    publicar_auditoria(
+        &mut redis_conn,
+        &env,
+        "tenant_config_updated",
+        "Configurações do tenant atualizadas".to_string(),
+        serde_json::json!({}),
+    )
+    .await;
+
+    ok_reply(
+        &env,
+        "UpdateTenantConfigReply",
+        serde_json::json!({ "status": "success" }),
+    )
 }
 
 #[cfg(test)]
@@ -1279,6 +1954,7 @@ mod tests {
             method: "CreateTenant".to_string(),
             payload: serde_json::to_vec(&payload).unwrap(),
             error: None,
+            ..Default::default()
         };
 
         let resp = handler_create_tenant(pool.clone(), req).await;
@@ -1314,7 +1990,7 @@ mod tests {
         let hash = infrastructure_postgres::hash_password("minhasenha123").unwrap();
 
         let user = auth_repo
-            .criar(&pool, &test_username, &test_email, &hash, false)
+            .criar(&pool, &test_username, &test_email, &hash, true)
             .await
             .expect("Erro ao criar usuário");
 
@@ -1334,6 +2010,7 @@ mod tests {
             method: "VerifyCredentials".to_string(),
             payload: serde_json::to_vec(&payload_valido).unwrap(),
             error: None,
+            ..Default::default()
         };
 
         let resp_valido =
@@ -1362,6 +2039,7 @@ mod tests {
             method: "VerifyCredentials".to_string(),
             payload: serde_json::to_vec(&payload_invalido).unwrap(),
             error: None,
+            ..Default::default()
         };
 
         let resp_invalido =
@@ -1413,6 +2091,7 @@ mod tests {
             method: "VerifyCredentials".to_string(),
             payload: serde_json::to_vec(&payload).unwrap(),
             error: None,
+            ..Default::default()
         };
 
         let resp = handler_verify_credentials(pool.clone(), redis_conn.clone(), req).await;
@@ -1479,6 +2158,9 @@ mod tests {
             method: "PersistMessage".to_string(),
             payload: serde_json::to_vec(&payload_msg).unwrap(),
             error: None,
+            auth_user_id: 1,
+            auth_scopes: vec!["tenant:admin".to_string()],
+            ..Default::default()
         };
 
         let resp_msg = handler_persist_message(pool.clone(), req_msg).await;
@@ -1513,6 +2195,9 @@ mod tests {
             method: "GetThread".to_string(),
             payload: serde_json::to_vec(&payload_thread).unwrap(),
             error: None,
+            auth_user_id: 1,
+            auth_scopes: vec!["tenant:admin".to_string()],
+            ..Default::default()
         };
 
         let resp_thread = handler_get_thread(pool.clone(), req_thread).await;
@@ -1573,6 +2258,9 @@ mod tests {
             method: "UpsertContact".to_string(),
             payload: serde_json::to_vec(&payload_contato).unwrap(),
             error: None,
+            auth_user_id: 1,
+            auth_scopes: vec!["tenant:admin".to_string()],
+            ..Default::default()
         };
 
         let resp_contato = handler_upsert_contact(pool.clone(), req_contato).await;
@@ -1607,6 +2295,9 @@ mod tests {
             method: "ListAtendimentos".to_string(),
             payload: serde_json::to_vec(&payload_list).unwrap(),
             error: None,
+            auth_user_id: 1,
+            auth_scopes: vec!["tenant:admin".to_string()],
+            ..Default::default()
         };
 
         let resp_list = handler_list_atendimentos(pool.clone(), req_list).await;

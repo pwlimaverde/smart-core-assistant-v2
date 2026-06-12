@@ -48,6 +48,9 @@ pub async fn create_superuser(args: &[String]) -> anyhow::Result<()> {
         method: "CreateSuperuser".to_string(),
         payload: serde_json::to_vec(&payload).context("falha ao serializar o payload")?,
         error: None,
+        auth_user_id: 0,
+        auth_scopes: vec![],
+        auth_is_superuser: false,
     };
 
     println!("Enviando cadastro do superusuário ao data_postgres...");
@@ -208,6 +211,9 @@ fn montar_envelope(method: &str, payload: serde_json::Value) -> anyhow::Result<E
         method: method.to_string(),
         payload: serde_json::to_vec(&payload).context("falha ao serializar o payload")?,
         error: None,
+        auth_user_id: 0,
+        auth_scopes: vec![],
+        auth_is_superuser: false,
     })
 }
 

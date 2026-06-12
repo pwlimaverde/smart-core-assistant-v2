@@ -564,6 +564,9 @@ where
                                 details: vec![],
                                 occurred_at: chrono::Utc::now().timestamp_millis(),
                             }),
+                            auth_user_id: 0,
+                            auth_scopes: vec![],
+                            auth_is_superuser: false,
                         }
                     };
 

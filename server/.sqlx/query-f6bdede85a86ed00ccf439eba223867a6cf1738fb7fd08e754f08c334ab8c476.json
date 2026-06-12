@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT api_keys FROM tenants_tenantconfig WHERE tenant_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "api_keys",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "api_keys"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f6bdede85a86ed00ccf439eba223867a6cf1738fb7fd08e754f08c334ab8c476"
+}

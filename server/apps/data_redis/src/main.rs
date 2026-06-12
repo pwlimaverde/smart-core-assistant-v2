@@ -247,7 +247,15 @@ async fn handler_validate_and_rotate(con: ConnectionManager, env: Envelope) -> E
             }
         }
         Err(e) => {
-            let app_err = error_core::AppError::Cache(e.to_string());
+            // Reuso de token rotacionado é uma falha de autenticação (possível roubo de sessão),
+            // não um simples miss de cache. Mapeamos para AppError::Auth com marcador estável
+            // ("token_reuse_detected") para que a runtime_api possa auditar o evento de segurança.
+            let app_err = match e {
+                infrastructure_redis::RedisError::TokenReuse => {
+                    error_core::AppError::Auth("token_reuse_detected".to_string())
+                }
+                outro => error_core::AppError::Cache(outro.to_string()),
+            };
             let err_env = app_err.to_error_envelope(&env.traceparent, "data_redis");
             Envelope {
                 kind: MessageKind::Error as i32,
@@ -438,6 +446,7 @@ mod tests {
             method: "SetCache".to_string(),
             payload: serde_json::to_vec(&set_payload).unwrap(),
             error: None,
+            ..Default::default()
         };
 
         let set_resp = handler_set_cache(con.clone(), set_req).await;
@@ -459,6 +468,7 @@ mod tests {
             method: "GetCache".to_string(),
             payload: serde_json::to_vec(&get_payload).unwrap(),
             error: None,
+            ..Default::default()
         };
 
         let get_resp = handler_get_cache(con.clone(), get_req).await;
@@ -505,6 +515,7 @@ mod tests {
             method: "StoreRefreshToken".to_string(),
             payload: serde_json::to_vec(&store_payload).unwrap(),
             error: None,
+            ..Default::default()
         };
 
         let store_resp = handler_store_refresh_token(con.clone(), store_req).await;
@@ -526,6 +537,7 @@ mod tests {
             method: "ValidateAndRotate".to_string(),
             payload: serde_json::to_vec(&val_payload).unwrap(),
             error: None,
+            ..Default::default()
         };
 
         let val_resp = handler_validate_and_rotate(con.clone(), val_req).await;
@@ -558,6 +570,7 @@ mod tests {
             method: "RevokeFamily".to_string(),
             payload: serde_json::to_vec(&revoke_payload).unwrap(),
             error: None,
+            ..Default::default()
         };
 
         let revoke_resp = handler_revoke_family(con.clone(), revoke_req).await;
@@ -587,6 +600,7 @@ mod tests {
             method: "IsTokenBlocked".to_string(),
             payload: serde_json::to_vec(&check_payload).unwrap(),
             error: None,
+            ..Default::default()
         };
 
         let check_resp = handler_is_token_blocked(con.clone(), check_req.clone()).await;
@@ -616,6 +630,7 @@ mod tests {
             method: "BlockToken".to_string(),
             payload: serde_json::to_vec(&block_payload).unwrap(),
             error: None,
+            ..Default::default()
         };
 
         let block_resp = handler_block_token(con.clone(), block_req).await;

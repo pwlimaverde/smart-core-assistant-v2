@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO tenants_tenantconfig (\n            tenant_id, dados_empresa, persona_bot, bot_agent_name,\n            msg_fallback, msg_sem_info, msg_transferencia,\n            llm_class, model, llm_temperature,\n            transcription_provider, transcription_model,\n            vision_provider, vision_model,\n            embeddings_class, embeddings_model,\n            chunk_size, chunk_overlap,\n            similarity_threshold, vector_distance_threshold,\n            api_keys, updated_at\n        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW())\n        ON CONFLICT (tenant_id) DO UPDATE SET\n            dados_empresa = COALESCE(EXCLUDED.dados_empresa, tenants_tenantconfig.dados_empresa),\n            persona_bot = COALESCE(EXCLUDED.persona_bot, tenants_tenantconfig.persona_bot),\n            bot_agent_name = COALESCE(EXCLUDED.bot_agent_name, tenants_tenantconfig.bot_agent_name),\n            msg_fallback = COALESCE(EXCLUDED.msg_fallback, tenants_tenantconfig.msg_fallback),\n            msg_sem_info = COALESCE(EXCLUDED.msg_sem_info, tenants_tenantconfig.msg_sem_info),\n            msg_transferencia = COALESCE(EXCLUDED.msg_transferencia, tenants_tenantconfig.msg_transferencia),\n            llm_class = COALESCE(EXCLUDED.llm_class, tenants_tenantconfig.llm_class),\n            model = COALESCE(EXCLUDED.model, tenants_tenantconfig.model),\n            llm_temperature = COALESCE(EXCLUDED.llm_temperature, tenants_tenantconfig.llm_temperature),\n            transcription_provider = COALESCE(EXCLUDED.transcription_provider, tenants_tenantconfig.transcription_provider),\n            transcription_model = COALESCE(EXCLUDED.transcription_model, tenants_tenantconfig.transcription_model),\n            vision_provider = COALESCE(EXCLUDED.vision_provider, tenants_tenantconfig.vision_provider),\n            vision_model = COALESCE(EXCLUDED.vision_model, tenants_tenantconfig.vision_model),\n            embeddings_class = COALESCE(EXCLUDED.embeddings_class, tenants_tenantconfig.embeddings_class),\n            embeddings_model = COALESCE(EXCLUDED.embeddings_model, tenants_tenantconfig.embeddings_model),\n            chunk_size = COALESCE(EXCLUDED.chunk_size, tenants_tenantconfig.chunk_size),\n            chunk_overlap = COALESCE(EXCLUDED.chunk_overlap, tenants_tenantconfig.chunk_overlap),\n            similarity_threshold = COALESCE(EXCLUDED.similarity_threshold, tenants_tenantconfig.similarity_threshold),\n            vector_distance_threshold = COALESCE(EXCLUDED.vector_distance_threshold, tenants_tenantconfig.vector_distance_threshold),\n            api_keys = EXCLUDED.api_keys,\n            updated_at = NOW()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Numeric",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Int4",
+        "Int4",
+        "Numeric",
+        "Numeric",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cea60f274cd402b1ecf0b251177fa4a6f11802e41c0cbad1d29edd9e61c06c47"
+}

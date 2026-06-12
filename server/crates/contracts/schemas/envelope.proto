@@ -26,4 +26,10 @@ message Envelope {
   string method = 8;          // nome lógico ("GetThread", "PersistMessage")
   bytes payload = 9;          // corpo FlatBuffers (opaco ao transporte)
   ErrorEnvelope error = 10;   // preenchido só quando kind = ERROR
+
+  // --- Identidade autenticada (Camada 1 -> Camada 2, preenchida pelo interceptor) ---
+  int32 auth_user_id = 11;          // ID do usuário autenticado (0 = público/não autenticado)
+  repeated string auth_scopes = 12; // Escopos do usuário autenticado (claims > body)
+  bool auth_is_superuser = 13;      // Flag que indica se o usuário é superusuário (admin global)
 }
+

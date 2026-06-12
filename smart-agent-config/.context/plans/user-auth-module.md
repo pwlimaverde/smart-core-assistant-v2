@@ -17,12 +17,12 @@ phases:
     name: "Review — Envelope aditivo, RequestContext único, escopos e contratos"
     prevc: "R"
     agent: "architect-specialist"
-    status: "in_progress"
+    status: "completed"
   - id: "phase-e"
     name: "Execution — JWT/refresh, Login/Refresh/Logout, interceptor e rotas admin de config"
     prevc: "E"
     agent: "backend-specialist"
-    status: "pending"
+    status: "in_progress"
   - id: "phase-v"
     name: "Validation — testes de integração (auth + admin) com túnel automático"
     prevc: "V"
@@ -84,8 +84,8 @@ admin de config funcionais com superuser e rejeitadas sem; testes de integraçã
 | Fase | Nome | Agente | Status |
 |---|---|---|---|
 | **P** | Planning — escopo real, inventário e decisões fechadas | Backend Specialist | ✅ completed |
-| **R** | Review — Envelope aditivo, RequestContext único, escopos e contratos | Architect Specialist (+ Security Auditor) | 🔄 in_progress |
-| **E** | Execution — JWT/refresh, Login/Refresh/Logout, interceptor e rotas admin | Backend Specialist | ⬜ pending |
+| **R** | Review — Envelope aditivo, RequestContext único, escopos e contratos | Architect Specialist (+ Security Auditor) | ✅ completed |
+| **E** | Execution — JWT/refresh, Login/Refresh/Logout, interceptor e rotas admin | Backend Specialist | 🔄 in_progress (falta rate limiting) |
 | **V** | Validation — testes de integração (auth + admin) | Test Writer (+ Backend Specialist) | ⬜ pending |
 | **C** | Confirmation — final-review e arquivamento dotcontext | Backend Specialist | ⬜ pending |
 

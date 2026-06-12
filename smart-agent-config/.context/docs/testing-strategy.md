@@ -53,20 +53,55 @@ A stack Rust segue um padrão único, válido para toda crate (`crates/`) e app 
   (remoto 6380, allkeys-lru), `6380`→Redis **bus** (remoto 6381, noeviction). A porta
   host 6379 do servidor pertence a outro projeto — não usar.
 
+## Ambientes de teste
+
+O projeto possui **três ambientes distintos**:
+
+| Ambiente | Onde roda | Suite executada | Gatilho |
+|----------|-----------|-----------------|---------|
+| **Local (Windows)** | máquina do dev | completa: unit + integração | manual, pré-push |
+| **CI (GitHub Actions)** | ubuntu-latest | somente `--lib --bins` | push/PR automático |
+| **Hostinger dev/prod** | VPS remota | deploy automático pós-CI verde | CI verde em `dev`/`main` |
+
+## Workflow ao escrever um novo teste
+
+**1 — Rode o teste em isolamento** (feedback rápido, sem subir a suíte toda):
+
+```powershell
+# a partir de server/
+cargo test nome_parcial_do_teste
+cargo test -p data_postgres login          # filtrar por crate
+cargo test nome_parcial -- --nocapture     # ver saída
+```
+
+Para testes unitários inline (sem banco), isso basta. Para integração, o
+`test_support::ensure_tunnel()` abre o túnel SSH automaticamente ao primeiro acesso ao
+banco (requer `server/.env` com as URLs das portas do túnel).
+
+**2 — Rode a esteira local completa** antes do push:
+
+```powershell
+.\infra\test-local.ps1                # fmt → clippy → cargo test --workspace → sqlx prepare --check
+.\infra\test-local.ps1 -Fast          # sem banco: fmt → clippy → testes unitários (igual ao CI)
+.\infra\test-local.ps1 -ResetTunnel   # derruba túneis ssh antigos (após mudança de portas)
+```
+
+`-Fast` é o que o CI executa; use para feedback rápido ou quando o túnel não está
+disponível. **Sempre rode sem flags antes do push** para garantir os testes de integração.
+
 ## Esteira local pré-push (`infra/test-local.ps1`)
 
 O CI (`ci.yml`) roda apenas `--lib --bins` com serviços efêmeros do runner. A **suíte
 completa** (unit + integração contra o banco real da Hostinger) roda **localmente, antes
 do push**, com a mesma sequência de gates do CI:
 
-```powershell
-.\infra\test-local.ps1                # fmt → clippy → cargo test --workspace → sqlx prepare --check
-.\infra\test-local.ps1 -Fast          # sem banco: fmt → clippy → testes unitários
-.\infra\test-local.ps1 -ResetTunnel   # derruba túneis ssh antigos (após mudança de portas)
+```
+fmt → clippy → cargo test --workspace → cargo sqlx prepare --check
 ```
 
 Pré-requisitos: `infra/.env.deploy` (credenciais SSH) e `server/.env`
-(`DATABASE_URL`/`REDIS_URL`/`REDIS_BUS_URL` apontando para 5434/6379/6380 locais).
+(`DATABASE_URL`/`DATABASE_ADMIN_URL`/`REDIS_URL`/`REDIS_BUS_URL` apontando para
+`5434`/`6379`/`6380` locais).
 
 ## Mocking — só nas fronteiras externas
 
