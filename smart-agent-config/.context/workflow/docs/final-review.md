@@ -92,12 +92,20 @@ exigiriam o túnel rodaram com stubs/Redis local e passaram.
 
 ## 5. Pendências (sub-features ausentes — não construídas pela auditoria)
 
-1. **Rate limiting de login (`AUTH_LOGIN_RATE_LIMIT`)** — não implementado. Requer novo handler
-   `RegisterLoginAttempt` (INCR+EXPIRE) no `data_redis` + corte na `application::login`. Construção de
-   sub-feature, fora do mandato da auditoria. DoD §6.4 não atendido neste ponto.
-2. **Testes do DoD §6.4 incompletos** — faltam: usuário inativo, refresh expirado/inexistente, reuso
-   de refresh (+ verificação do evento `token_reuse_detected`), logout + token bloqueado, e rotas admin
-   com/sem superusuário. Recomenda-se suíte de integração com túnel (`test_support::ensure_tunnel`).
+1. ~~**Rate limiting de login (`AUTH_LOGIN_RATE_LIMIT`)**~~ — **resolvido no fechamento (2026-06-12)**:
+   `registrar_tentativa_login` (INCR+EXPIRE) em `infrastructure_redis`, rota `RegisterLoginAttempt`
+   no `data_redis`, corte fail-closed em `application::login` (hash SHA-256 do e-mail, nunca em claro)
+   e parse de `AUTH_LOGIN_RATE_LIMIT` ("N/Ms", padrão 5/60s) no boot da `runtime_api`.
+2. ~~**Testes do DoD §6.4 incompletos**~~ — **resolvidos**: suíte criada em
+   `application/tests/{login,refresh,logout,jwt,tokens}` (20+ testes: inativo, refresh
+   expirado/inexistente, reuso, logout, superusuário) + 6 testes da `runtime_api` (interceptor,
+   handlers, auditoria de reuso) + teste de rate limit excedido + teste do handler no `data_redis`.
 3. **Contrato das RPCs admin tenant-scoped** — passam a exigir `tenant_id` no payload (correção #6);
    refletir no contrato consumido pelo app Flutter (plano 11) e documentar no doc 11.
 4. ~~**`JWT_SECRET` obrigatório em produção**~~ — resolvido (correção #9 da revisão complementar).
+
+## 6. Fechamento (2026-06-12)
+
+Rate limiting implementado e suíte de testes do DoD criada/validada. Com isso o DoD §6.4
+fica completo no backend. Item 3 permanece como nota de integração para o plano 11
+(app Flutter de configuração).

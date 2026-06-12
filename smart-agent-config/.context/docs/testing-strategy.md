@@ -65,7 +65,9 @@ O projeto possui **três ambientes distintos**:
 
 ## Workflow ao escrever um novo teste
 
-**1 — Rode o teste em isolamento** (feedback rápido, sem subir a suíte toda):
+A regra depende do **tipo** de teste:
+
+**Teste unitário** (inline em `src/`, sem banco/cache/rede) → roda **isolado via `cargo`**:
 
 ```powershell
 # a partir de server/
@@ -74,20 +76,20 @@ cargo test -p data_postgres login          # filtrar por crate
 cargo test nome_parcial -- --nocapture     # ver saída
 ```
 
-Para testes unitários inline (sem banco), isso basta. Para integração, o
-`test_support::ensure_tunnel()` abre o túnel SSH automaticamente ao primeiro acesso ao
-banco (requer `server/.env` com as URLs das portas do túnel).
+Unitários não tocam recursos externos — não precisam de túnel nem de `.env`.
 
-**2 — Rode a esteira local completa** antes do push:
+**Teste de integração** (pasta `tests/`, depende de Postgres/Redis) → roda **a partir do
+script** `infra/test-local.ps1`, **nunca** via `cargo test` direto. É o script que orquestra
+as conexões (túnel SSH para os bancos da Hostinger, variáveis de ambiente, ordem dos gates):
 
 ```powershell
-.\infra\test-local.ps1                # fmt → clippy → cargo test --workspace → sqlx prepare --check
-.\infra\test-local.ps1 -Fast          # sem banco: fmt → clippy → testes unitários (igual ao CI)
-.\infra\test-local.ps1 -ResetTunnel   # derruba túneis ssh antigos (após mudança de portas)
+.\infra\test-local.ps1                # esteira completa: fmt → clippy → cargo test --workspace → sqlx prepare --check
+.\infra\test-local.ps1 -ResetTunnel   # idem, derrubando túneis ssh antigos antes (após mudança de portas)
+.\infra\test-local.ps1 -Fast          # modo rápido sem banco: fmt → clippy → --lib --bins (igual ao CI)
 ```
 
-`-Fast` é o que o CI executa; use para feedback rápido ou quando o túnel não está
-disponível. **Sempre rode sem flags antes do push** para garantir os testes de integração.
+`-Fast` é o que o CI executa; **não substitui** a esteira completa. **Sempre rode sem flags
+antes do push** para exercitar a integração.
 
 ## Esteira local pré-push (`infra/test-local.ps1`)
 

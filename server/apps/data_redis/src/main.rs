@@ -34,7 +34,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_validate = state_clone.clone();
     let state_for_revoke = state_clone.clone();
     let state_for_block = state_clone.clone();
-    let state_for_is_blocked = state_clone;
+    let state_for_is_blocked = state_clone.clone();
+    let state_for_login_attempt = state_clone;
 
     let server = Server::from_env("DATA_REDIS")
         .route("GetCache", move |env| {
@@ -64,6 +65,10 @@ async fn main() -> anyhow::Result<()> {
         .route("IsTokenBlocked", move |env| {
             let state = state_for_is_blocked.clone();
             Box::pin(async move { handler_is_token_blocked(state.redis_conn, env).await })
+        })
+        .route("RegisterLoginAttempt", move |env| {
+            let state = state_for_login_attempt.clone();
+            Box::pin(async move { handler_register_login_attempt(state.redis_conn, env).await })
         });
 
     tracing::info!("Servidor RPC do data_redis configurado e pronto.");
@@ -376,6 +381,59 @@ async fn handler_is_token_blocked(con: ConnectionManager, env: Envelope) -> Enve
     }
 }
 
+/// Registra uma tentativa de login (rate limiting, doc 09 §6.5) e devolve o total
+/// acumulado na janela. Payload: `{ key_hash, window_s }` — `key_hash` é o hash do
+/// identificador (nunca o e-mail em claro). Reply: `{ attempts }`.
+async fn handler_register_login_attempt(con: ConnectionManager, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(_) => serde_json::json!({}),
+    };
+    let key_hash = payload_json
+        .get("key_hash")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let window_s = payload_json
+        .get("window_s")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(60);
+
+    if key_hash.is_empty() {
+        let app_err = error_core::AppError::Validation("key_hash é obrigatório".to_string());
+        let err_env = app_err.to_error_envelope(&env.traceparent, "data_redis");
+        return Envelope {
+            kind: MessageKind::Error as i32,
+            method: "RegisterLoginAttemptReply".to_string(),
+            error: Some(err_env),
+            ..env
+        };
+    }
+
+    let mut con = con;
+    match infrastructure_redis::registrar_tentativa_login(&mut con, key_hash, window_s).await {
+        Ok(attempts) => {
+            let res = serde_json::json!({ "attempts": attempts });
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "RegisterLoginAttemptReply".to_string(),
+                payload: serde_json::to_vec(&res).unwrap_or_default(),
+                error: None,
+                ..env
+            }
+        }
+        Err(e) => {
+            let app_err = error_core::AppError::Cache(e.to_string());
+            let err_env = app_err.to_error_envelope(&env.traceparent, "data_redis");
+            Envelope {
+                kind: MessageKind::Error as i32,
+                method: "RegisterLoginAttemptReply".to_string(),
+                error: Some(err_env),
+                ..env
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -646,5 +704,45 @@ mod tests {
             .unwrap()
             .as_bool()
             .unwrap());
+    }
+
+    #[tokio::test]
+    async fn test_handler_register_login_attempt() {
+        let con = setup_redis().await;
+
+        // Hash exclusivo por execução para não colidir com janelas anteriores
+        let key_hash = format!("teste_{}", Uuid::new_v4().simple());
+
+        let montar_req = |key_hash: &str| Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace-redis4-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "RegisterLoginAttempt".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({
+                "key_hash": key_hash,
+                "window_s": 60,
+            }))
+            .unwrap(),
+            error: None,
+            ..Default::default()
+        };
+
+        // 1. Três tentativas consecutivas devem acumular o contador na janela
+        for esperado in 1u64..=3 {
+            let resp = handler_register_login_attempt(con.clone(), montar_req(&key_hash)).await;
+            assert_eq!(resp.kind, MessageKind::Reply as i32);
+            let payload: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+            assert_eq!(payload.get("attempts").unwrap().as_u64().unwrap(), esperado);
+        }
+
+        // 2. key_hash vazio é rejeitado com erro de validação
+        let mut req_invalida = montar_req("");
+        req_invalida.payload = serde_json::to_vec(&serde_json::json!({ "window_s": 60 })).unwrap();
+        let resp_invalida = handler_register_login_attempt(con.clone(), req_invalida).await;
+        assert_eq!(resp_invalida.kind, MessageKind::Error as i32);
     }
 }

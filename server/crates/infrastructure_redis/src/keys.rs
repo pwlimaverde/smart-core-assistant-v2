@@ -29,6 +29,12 @@ pub fn chave_blocklist(jti: &str) -> String {
     format!("auth:blocklist:{jti}")
 }
 
+/// Contador de tentativas de login por janela (rate limiting), indexado pelo hash
+/// do identificador (ex.: SHA-256 do e-mail) — nunca pelo identificador em claro.
+pub fn chave_rate_limit_login(id_hash: &str) -> String {
+    format!("auth:rate_limit:login:{id_hash}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -50,5 +56,6 @@ mod tests {
         assert_eq!(chave_refresh("abc"), "auth:refresh:abc");
         assert_eq!(chave_refresh_familia("fam1"), "auth:refresh_family:fam1");
         assert_eq!(chave_blocklist("jti1"), "auth:blocklist:jti1");
+        assert_eq!(chave_rate_limit_login("h4sh"), "auth:rate_limit:login:h4sh");
     }
 }

@@ -2380,4 +2380,438 @@ mod tests {
             .await
             .unwrap();
     }
+
+    #[tokio::test]
+    async fn test_handler_get_user_identity() {
+        let (pool, _) = setup_teste().await;
+
+        use infrastructure_postgres::AuthUserRepository;
+        let auth_repo = infrastructure_postgres::PostgresAuthUserRepository;
+        let test_username = format!("user_{}", Uuid::new_v4().to_string().replace('-', ""));
+        let test_email = format!("teste_{}@identity.com", Uuid::new_v4());
+        let hash = infrastructure_postgres::hash_password("minhasenha123").unwrap();
+
+        let user = auth_repo
+            .criar(&pool, &test_username, &test_email, &hash, false)
+            .await
+            .expect("Erro ao criar usuário");
+
+        // Cria tenant e associa usuario
+        let tenant_id = Uuid::new_v4();
+        let slug = format!("tenant-{}", Uuid::new_v4());
+        sqlx::query(
+            "INSERT INTO tenants_tenant (id, name, slug, api_key, owner_id) VALUES ($1, $2, $3, $4, 1)"
+        )
+        .bind(tenant_id)
+        .bind("Tenant Identity Test")
+        .bind(slug)
+        .bind(Uuid::new_v4().to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "INSERT INTO tenants_tenantuser (tenant_id, user_id, role, is_active, module_permissions) VALUES ($1, $2, 'admin', true, $3)"
+        )
+        .bind(tenant_id)
+        .bind(user.id)
+        .bind(serde_json::json!(["atendimentos:read", "clientes:write"]))
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // 1. Caso de sucesso
+        let payload = serde_json::json!({ "id": user.id });
+        let req = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace-id1-span1-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "GetUserIdentity".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            error: None,
+            ..Default::default()
+        };
+
+        let resp = handler_get_user_identity(pool.clone(), req).await;
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        assert_eq!(resp.method, "GetUserIdentityReply");
+
+        let resp_payload: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(
+            resp_payload.get("id").unwrap().as_i64().unwrap(),
+            user.id as i64
+        );
+        assert_eq!(
+            resp_payload.get("tenant_id").unwrap().as_str().unwrap(),
+            tenant_id.to_string()
+        );
+        assert_eq!(resp_payload.get("role").unwrap().as_str().unwrap(), "admin");
+        let perms = resp_payload
+            .get("module_permissions")
+            .unwrap()
+            .as_array()
+            .unwrap();
+        assert_eq!(perms.len(), 2);
+
+        // 2. Caso de usuário não encontrado
+        let payload_err = serde_json::json!({ "id": 999999 });
+        let req_err = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace-id2-span2-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "GetUserIdentity".to_string(),
+            payload: serde_json::to_vec(&payload_err).unwrap(),
+            error: None,
+            ..Default::default()
+        };
+        let resp_err = handler_get_user_identity(pool.clone(), req_err).await;
+        assert_eq!(resp_err.kind, MessageKind::Error as i32);
+
+        // Limpeza
+        sqlx::query("DELETE FROM tenants_tenantuser WHERE user_id = $1")
+            .bind(user.id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM tenants_tenant WHERE id = $1")
+            .bind(tenant_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM auth_user WHERE id = $1")
+            .bind(user.id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_handler_list_core_settings() {
+        let (pool, _) = setup_teste().await;
+
+        // Limpa configs de teste anteriores se existirem
+        let _ = sqlx::query("DELETE FROM settings_manager_coresettings WHERE key IN ('test_key_normal', 'test_key_enc')")
+            .execute(&pool)
+            .await;
+
+        sqlx::query(
+            "INSERT INTO settings_manager_coresettings (key, value, encrypted, description) VALUES \
+             ('test_key_normal', 'val_normal', false, 'normal config'), \
+             ('test_key_enc', 'val_enc_encrypted', true, 'encrypted config')"
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let req = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace-list-span-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "ListCoreSettings".to_string(),
+            payload: vec![],
+            error: None,
+            ..Default::default()
+        };
+
+        let resp = handler_list_core_settings(pool.clone(), req).await;
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+
+        let resp_payload: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        let settings = resp_payload.get("settings").unwrap().as_array().unwrap();
+
+        let normal = settings
+            .iter()
+            .find(|s| s.get("key").unwrap().as_str().unwrap() == "test_key_normal")
+            .unwrap();
+        let enc = settings
+            .iter()
+            .find(|s| s.get("key").unwrap().as_str().unwrap() == "test_key_enc")
+            .unwrap();
+
+        assert_eq!(normal.get("value").unwrap().as_str().unwrap(), "val_normal");
+        assert_eq!(enc.get("value").unwrap().as_str().unwrap(), "••••••••"); // Criptografado mascarado
+        assert!(enc.get("encrypted").unwrap().as_bool().unwrap());
+
+        // Limpeza
+        sqlx::query("DELETE FROM settings_manager_coresettings WHERE key IN ('test_key_normal', 'test_key_enc')")
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_handler_upsert_delete_core_setting() {
+        let (pool, redis_conn) = setup_teste().await;
+        let cipher = std::sync::Arc::new(
+            infrastructure_postgres::crypto::CipherManager::new_from_env().unwrap(),
+        );
+
+        let key = "test_key_upserted";
+        let _ = sqlx::query("DELETE FROM settings_manager_coresettings WHERE key = $1")
+            .bind(key)
+            .execute(&pool)
+            .await;
+
+        // 1. Testa Upsert criptografado
+        let payload = serde_json::json!({
+            "key": key,
+            "value": "meusegredomuitolongo",
+            "encrypted": true,
+            "description": "teste upsert"
+        });
+
+        let req = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace-upsert-span-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "UpsertCoreSetting".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            error: None,
+            auth_user_id: 1,
+            ..Default::default()
+        };
+
+        let resp =
+            handler_upsert_core_setting(pool.clone(), cipher.clone(), redis_conn.clone(), req)
+                .await;
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+
+        // Verifica no banco se foi salvo de forma criptografada
+        use sqlx::Row;
+        let row = sqlx::query(
+            "SELECT value, encrypted FROM settings_manager_coresettings WHERE key = $1",
+        )
+        .bind(key)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        let val_str: String = row.get("value");
+        let is_enc: bool = row.get("encrypted");
+        assert!(is_enc);
+        assert_ne!(val_str, "meusegredomuitolongo"); // Criptografado!
+        assert!(val_str.contains(':')); // Formato ct:nonce:tag
+
+        // Descriptografa para testar consistência
+        let partes: Vec<&str> = val_str.split(':').collect();
+        let decrypted = cipher.decrypt(partes[0], partes[1], partes[2]).unwrap();
+        assert_eq!(
+            String::from_utf8(decrypted).unwrap(),
+            "meusegredomuitolongo"
+        );
+
+        // 2. Testa Delete
+        let payload_del = serde_json::json!({ "key": key });
+        let req_del = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace-del-span-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "DeleteCoreSetting".to_string(),
+            payload: serde_json::to_vec(&payload_del).unwrap(),
+            error: None,
+            auth_user_id: 1,
+            ..Default::default()
+        };
+
+        let resp_del = handler_delete_core_setting(pool.clone(), redis_conn.clone(), req_del).await;
+        assert_eq!(resp_del.kind, MessageKind::Reply as i32);
+
+        // Verifica que sumiu do banco
+        let row_opt = sqlx::query("SELECT key FROM settings_manager_coresettings WHERE key = $1")
+            .bind(key)
+            .fetch_optional(&pool)
+            .await
+            .unwrap();
+        assert!(row_opt.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_handler_tenant_config_flow() {
+        let (pool, redis_conn) = setup_teste().await;
+        let cipher = std::sync::Arc::new(
+            infrastructure_postgres::crypto::CipherManager::new_from_env().unwrap(),
+        );
+        let config_cache = std::sync::Arc::new(infrastructure_postgres::TenantConfigCache::new(
+            pool.clone(),
+            cipher.clone(),
+        ));
+
+        let tenant_id = Uuid::new_v4();
+        let slug = format!("tenant-{}", Uuid::new_v4());
+        sqlx::query(
+            "INSERT INTO tenants_tenant (id, name, slug, api_key, owner_id) VALUES ($1, $2, $3, $4, 1)"
+        )
+        .bind(tenant_id)
+        .bind("Tenant Config Test")
+        .bind(slug)
+        .bind(Uuid::new_v4().to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // 1. Atualiza a configuração do tenant definindo novas API Keys
+        let payload_update = serde_json::json!({
+            "tenant_id": tenant_id.to_string(),
+            "dados_empresa": "Minha Empresa Teste",
+            "api_keys": {
+                "openai_api_key": "openai-key-original-123",
+                "groq_api_key": "groq-key-original-456",
+                "google_api_key": ""
+            }
+        });
+
+        let req_update = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace-cfg-span-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "UpdateTenantConfig".to_string(),
+            payload: serde_json::to_vec(&payload_update).unwrap(),
+            error: None,
+            auth_user_id: 1,
+            ..Default::default()
+        };
+
+        let resp_update = handler_update_tenant_config(
+            pool.clone(),
+            cipher.clone(),
+            config_cache.clone(),
+            redis_conn.clone(),
+            req_update,
+        )
+        .await;
+        assert_eq!(resp_update.kind, MessageKind::Reply as i32);
+
+        // 2. Consulta a configuração do tenant e valida se as chaves vêm mascaradas
+        let payload_get = serde_json::json!({ "tenant_id": tenant_id.to_string() });
+        let req_get = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace-cfg-span-02".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "GetTenantConfig".to_string(),
+            payload: serde_json::to_vec(&payload_get).unwrap(),
+            error: None,
+            ..Default::default()
+        };
+
+        let resp_get = handler_get_tenant_config(pool.clone(), cipher.clone(), req_get).await;
+        assert_eq!(resp_get.kind, MessageKind::Reply as i32);
+
+        let resp_payload: serde_json::Value = serde_json::from_slice(&resp_get.payload).unwrap();
+        assert_eq!(
+            resp_payload.get("dados_empresa").unwrap().as_str().unwrap(),
+            "Minha Empresa Teste"
+        );
+
+        let api_keys = resp_payload.get("api_keys").unwrap().as_object().unwrap();
+        assert_eq!(
+            api_keys.get("openai_api_key").unwrap().as_str().unwrap(),
+            "••••••••"
+        );
+        assert_eq!(
+            api_keys.get("groq_api_key").unwrap().as_str().unwrap(),
+            "••••••••"
+        );
+        assert_eq!(
+            api_keys.get("google_api_key").unwrap().as_str().unwrap(),
+            ""
+        );
+
+        // 3. Atualiza enviando a máscara "••••••••" (deve preservar o valor original no banco)
+        // e enviando nova chave em claro para google_api_key
+        let payload_update2 = serde_json::json!({
+            "tenant_id": tenant_id.to_string(),
+            "api_keys": {
+                "openai_api_key": "••••••••", // Preservar
+                "groq_api_key": "groq-key-alterada-789", // Alterar
+                "google_api_key": "google-nova-key" // Criar
+            }
+        });
+
+        let req_update2 = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace-cfg-span-03".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "UpdateTenantConfig".to_string(),
+            payload: serde_json::to_vec(&payload_update2).unwrap(),
+            error: None,
+            auth_user_id: 1,
+            ..Default::default()
+        };
+
+        let resp_update2 = handler_update_tenant_config(
+            pool.clone(),
+            cipher.clone(),
+            config_cache.clone(),
+            redis_conn.clone(),
+            req_update2,
+        )
+        .await;
+        assert_eq!(resp_update2.kind, MessageKind::Reply as i32);
+
+        // Verifica os segredos no banco via decriptação direta para confirmar preservação/alteração
+        let tc_row = sqlx::query!(
+            "SELECT api_keys FROM tenants_tenantconfig WHERE tenant_id = $1",
+            tenant_id
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        let openai_dec = cipher
+            .decrypt_from_jsonb(&tc_row.api_keys, "openai_api_key")
+            .unwrap();
+        let groq_dec = cipher
+            .decrypt_from_jsonb(&tc_row.api_keys, "groq_api_key")
+            .unwrap();
+        let google_dec = cipher
+            .decrypt_from_jsonb(&tc_row.api_keys, "google_api_key")
+            .unwrap();
+
+        assert_eq!(openai_dec, "openai-key-original-123"); // Preservado
+        assert_eq!(groq_dec, "groq-key-alterada-789"); // Alterado
+        assert_eq!(google_dec, "google-nova-key"); // Criado
+
+        // Limpeza
+        sqlx::query("DELETE FROM tenants_tenantconfig WHERE tenant_id = $1")
+            .bind(tenant_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM tenants_tenant WHERE id = $1")
+            .bind(tenant_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
 }

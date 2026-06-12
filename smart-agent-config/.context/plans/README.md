@@ -3,7 +3,10 @@
 This directory contains plans for coordinating work across documentation and playbooks.
 
 ## Plan Queue
-1. [User Auth Module](./user-auth-module.md)
+*(vazio — nenhum plano ativo no momento)*
+
+## Arquivados (mais recentes)
+- [User Auth Module](./archive/user-auth-module/user-auth-module.md) — concluído em 2026-06-12
 
 ## How To Create Or Update Plans
 - Run "dotcontext plan <name>" to scaffold a new plan template.

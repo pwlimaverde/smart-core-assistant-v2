@@ -473,37 +473,53 @@ O projeto opera com **três ambientes distintos** para testes:
 
 ### 12.1. Workflow ao escrever um novo teste
 
-**Passo 1 — Rode o teste em isolamento** (sempre, antes de rodar a suíte inteira):
+A regra prática depende do **tipo** de teste que você escreveu:
+
+#### Teste **unitário** (inline em `src/`, sem banco/cache/rede) → roda isolado via `cargo`
+
+Rode diretamente, filtrando pelo nome ou pela crate — é o caminho de feedback rápido:
 
 ```powershell
 # a partir de server/
 cargo test nome_parcial_do_teste
-# ou filtrando por crate específica:
-cargo test -p data_postgres login
-# com saída em caso de sucesso:
-cargo test nome_parcial_do_teste -- --nocapture
+cargo test -p data_postgres login            # filtrar por crate
+cargo test nome_parcial_do_teste -- --nocapture   # ver saída
 ```
 
-Para testes unitários inline (sem banco), isso é suficiente. Para testes de integração, o
-`test_support::ensure_tunnel()` abre o túnel SSH automaticamente na primeira vez que o
-banco é necessário (requer `server/.env` com as URLs apontando para as portas do túnel).
+Como não tocam em recursos externos, unitários não precisam de túnel nem de `.env`.
 
-**Passo 2 — Rode a esteira local completa** antes de fazer push:
+#### Teste **de integração** (pasta `tests/`, depende de Postgres/Redis) → roda **a partir do script**
+
+**Não** rode testes de integração chamando `cargo test` direto. As conexões (túnel SSH
+para os bancos da Hostinger, variáveis de ambiente, ordem dos gates) são orquestradas pelo
+script `infra/test-local.ps1` — é ele que prepara o ambiente para a integração funcionar:
 
 ```powershell
 # da raiz do repo ou da pasta infra/
-.\infra\test-local.ps1                  # fmt → clippy → cargo test --workspace → sqlx prepare --check
-.\infra\test-local.ps1 -Fast            # sem banco: fmt → clippy → testes unitários (--lib --bins)
-.\infra\test-local.ps1 -ResetTunnel     # derruba túneis SSH antigos (após mudança de portas)
+.\infra\test-local.ps1                  # esteira completa: fmt → clippy → cargo test --workspace → sqlx prepare --check
+.\infra\test-local.ps1 -ResetTunnel     # idem, derrubando túneis SSH antigos antes (após mudança de portas)
 ```
 
-> `-Fast` é idêntico ao que o CI roda. Use-o quando não tiver túnel disponível ou quiser
-> um feedback rápido de lint/unitários. Sempre rode o modo completo (sem flags) antes do push.
+O script roda a **suíte completa** (`cargo test --workspace`, unit + integração) com os
+gates na mesma ordem do CI. É essa a forma correta de validar testes de integração e o que
+você **deve** rodar antes de qualquer push.
+
+#### Modo rápido / sem banco
+
+Quando você só quer revalidar lint + unitários (ou não tem o túnel disponível):
+
+```powershell
+.\infra\test-local.ps1 -Fast            # fmt → clippy → cargo test --workspace --lib --bins (sem banco)
+```
+
+> `-Fast` é idêntico ao que o CI roda. **Não substitui** a esteira completa: sempre rode o
+> modo completo (sem flags) antes do push para exercitar a integração.
 
 ### 12.2. Topologia do túnel SSH (local → Hostinger)
 
-O `test_support::ensure_tunnel()` abre o túnel sozinho; o script `-ResetTunnel` mata
-processos `ssh` residuais quando os mapeamentos de porta ficam obsoletos.
+Quando você roda o script, o `test_support::ensure_tunnel()` (acionado pela primeira suíte
+que precisa do banco) abre o túnel sozinho; `-ResetTunnel` mata processos `ssh` residuais
+quando os mapeamentos de porta ficam obsoletos.
 
 | Porta local | Serviço | Porta remota (host) | Política Redis |
 |-------------|---------|---------------------|----------------|

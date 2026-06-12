@@ -17,6 +17,10 @@ pub struct AuthDeps {
     pub access_ttl_s: i64,
     /// Tempo de expiração em segundos do refresh token.
     pub refresh_ttl_s: u64,
+    /// Máximo de tentativas de login por janela (rate limiting, doc 09 §6.5).
+    pub login_rate_max: u64,
+    /// Janela do rate limiting de login, em segundos.
+    pub login_rate_window_s: u64,
 }
 
 /// Helper para criar envelopes de requisição RPC síncronos padrão.
@@ -52,6 +56,47 @@ pub async fn login(
     email: &str,
     password: &str,
 ) -> Result<serde_json::Value, AppError> {
+    // 0. Rate limiting por e-mail (INCR+EXPIRE via data_redis, doc 09 §6.5).
+    // Falha fechada: o login já depende do data_redis para persistir a sessão,
+    // então uma indisponibilidade aqui não abre brecha para força bruta.
+    let rate_key = crate::tokens::hash_sha256_hex(&email.trim().to_lowercase());
+    let rate_payload = serde_json::json!({
+        "key_hash": rate_key,
+        "window_s": deps.login_rate_window_s,
+    });
+    let rate_req = montar_envelope_request(
+        Uuid::nil(),
+        traceparent,
+        "RegisterLoginAttempt",
+        &rate_payload,
+    );
+
+    let rate_resp = deps
+        .redis
+        .call(rate_req, Duration::from_secs(5))
+        .await
+        .map_err(|e| AppError::Cache(format!("RPC RegisterLoginAttempt falhou: {:?}", e)))?;
+
+    if rate_resp.kind == MessageKind::Error as i32 {
+        return Err(rate_resp
+            .error
+            .map(|e| AppError::from_envelope(&e))
+            .unwrap_or_else(|| {
+                AppError::Cache("falha ao registrar tentativa de login".to_string())
+            }));
+    }
+
+    let attempts = serde_json::from_slice::<serde_json::Value>(&rate_resp.payload)
+        .ok()
+        .and_then(|v| v.get("attempts").and_then(|a| a.as_u64()))
+        .unwrap_or(u64::MAX); // resposta malformada conta como estouro (falha fechada)
+
+    if attempts > deps.login_rate_max {
+        return Err(AppError::RateLimit(
+            "muitas tentativas de login; aguarde antes de tentar novamente".to_string(),
+        ));
+    }
+
     // 1. Verificar as credenciais chamando a RPC VerifyCredentials no data_postgres
     let verify_payload = serde_json::json!({
         "email": email,

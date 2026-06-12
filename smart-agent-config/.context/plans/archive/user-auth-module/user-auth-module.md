@@ -1,7 +1,8 @@
 ---
-status: in_progress
+status: completed
 generated: 2026-06-02
 updated: 2026-06-12
+completed: 2026-06-12
 slug: user-auth-module
 scale: LARGE
 artifacts:
@@ -22,17 +23,17 @@ phases:
     name: "Execution — JWT/refresh, Login/Refresh/Logout, interceptor e rotas admin de config"
     prevc: "E"
     agent: "backend-specialist"
-    status: "in_progress"
+    status: "completed"
   - id: "phase-v"
     name: "Validation — testes de integração (auth + admin) com túnel automático"
     prevc: "V"
     agent: "test-writer"
-    status: "pending"
+    status: "completed"
   - id: "phase-c"
     name: "Confirmation — final-review e arquivamento dotcontext"
     prevc: "C"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
 ---
 
 # Login Real + Rotas Admin de Configuração — `user-auth-module`
@@ -85,9 +86,9 @@ admin de config funcionais com superuser e rejeitadas sem; testes de integraçã
 |---|---|---|---|
 | **P** | Planning — escopo real, inventário e decisões fechadas | Backend Specialist | ✅ completed |
 | **R** | Review — Envelope aditivo, RequestContext único, escopos e contratos | Architect Specialist (+ Security Auditor) | ✅ completed |
-| **E** | Execution — JWT/refresh, Login/Refresh/Logout, interceptor e rotas admin | Backend Specialist | 🔄 in_progress (falta rate limiting) |
-| **V** | Validation — testes de integração (auth + admin) | Test Writer (+ Backend Specialist) | ⬜ pending |
-| **C** | Confirmation — final-review e arquivamento dotcontext | Backend Specialist | ⬜ pending |
+| **E** | Execution — JWT/refresh, Login/Refresh/Logout, interceptor e rotas admin | Backend Specialist | ✅ completed |
+| **V** | Validation — testes de integração (auth + admin) | Test Writer (+ Backend Specialist) | ✅ completed |
+| **C** | Confirmation — final-review e arquivamento dotcontext | Backend Specialist | ✅ completed |
 
 ## Decisões-chave (resumo — detalhes no plano completo)
 

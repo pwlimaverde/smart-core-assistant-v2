@@ -10,11 +10,17 @@ pub fn gerar_refresh_token() -> String {
     URL_SAFE_NO_PAD.encode(bytes)
 }
 
-/// Retorna o hash SHA-256 (hexadecimal minúsculo, 64 caracteres) do refresh token.
-/// É este hash que é enviado e armazenado no Redis para segurança.
-pub fn hash_refresh_token(token: &str) -> String {
-    Sha256::digest(token.as_bytes())
+/// Retorna o hash SHA-256 (hexadecimal minúsculo, 64 caracteres) de uma string.
+/// Usado para indexar credenciais/identificadores no Redis sem expô-los em claro.
+pub fn hash_sha256_hex(input: &str) -> String {
+    Sha256::digest(input.as_bytes())
         .iter()
         .map(|b| format!("{:02x}", b))
         .collect()
+}
+
+/// Retorna o hash SHA-256 (hexadecimal minúsculo, 64 caracteres) do refresh token.
+/// É este hash que é enviado e armazenado no Redis para segurança.
+pub fn hash_refresh_token(token: &str) -> String {
+    hash_sha256_hex(token)
 }

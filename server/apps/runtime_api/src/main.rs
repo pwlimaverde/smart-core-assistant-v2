@@ -31,6 +31,12 @@ async fn main() -> anyhow::Result<()> {
         .and_then(|s| s.parse::<u64>().ok())
         .unwrap_or(604800); // 7 dias
 
+    // Rate limiting de login: formato "N/Ms" (N tentativas por M segundos), padrão 5/60s.
+    let (login_rate_max, login_rate_window_s) = std::env::var("AUTH_LOGIN_RATE_LIMIT")
+        .ok()
+        .and_then(|s| parse_rate_limit(&s))
+        .unwrap_or((5, 60));
+
     // 3. Conecta clientes multiplexados
     let pg_client = transport::conectar_cliente("data_postgres").await?;
     let redis_client = transport::conectar_cliente("data_redis").await?;
@@ -48,6 +54,8 @@ async fn main() -> anyhow::Result<()> {
         redis: redis_client,
         access_ttl_s,
         refresh_ttl_s,
+        login_rate_max,
+        login_rate_window_s,
     });
 
     // 4. Inicia o Servidor RPC síncrono nos 3 protocolos
@@ -150,6 +158,18 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Interpreta o formato "N/Ms" de `AUTH_LOGIN_RATE_LIMIT` (ex.: "5/60s").
+/// Retorna `None` para entradas malformadas (o caller aplica o padrão 5/60s).
+fn parse_rate_limit(s: &str) -> Option<(u64, u64)> {
+    let (max, janela) = s.split_once('/')?;
+    let max = max.trim().parse::<u64>().ok()?;
+    let janela = janela.trim().trim_end_matches('s').parse::<u64>().ok()?;
+    if max == 0 || janela == 0 {
+        return None;
+    }
+    Some((max, janela))
 }
 
 // --- Funções Auxiliares de Erro ---
@@ -515,5 +535,654 @@ async fn handler_admin_forward(
                 ..env
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use contracts::{Envelope, MessageKind};
+    use std::time::Duration;
+    use transport::runtime::{Endpoint, Server};
+    use uuid::Uuid;
+
+    // Mutex estático local para serializar testes de integração da runtime_api
+    // que modificam variáveis de ambiente globais.
+    static RUNTIME_TEST_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    #[test]
+    fn test_runtime_api_extrair_bearer() {
+        let env1 = Envelope {
+            causation_id: "Bearer meu_token_jwt".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(extrair_bearer(&env1), Some("meu_token_jwt"));
+
+        let env2 = Envelope {
+            causation_id: "Bearer   token_espacos  ".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(extrair_bearer(&env2), Some("token_espacos"));
+
+        let env3 = Envelope {
+            causation_id: "Bearer ".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(extrair_bearer(&env3), None);
+
+        // Sem prefixo, mas com formato JWT (2 pontos)
+        let env4 = Envelope {
+            causation_id: "abc.def.ghi".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(extrair_bearer(&env4), Some("abc.def.ghi"));
+
+        // Sem prefixo, sem formato JWT
+        let env5 = Envelope {
+            causation_id: "token_invalido".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(extrair_bearer(&env5), None);
+    }
+
+    #[tokio::test]
+    async fn test_runtime_api_exigir_auth_interceptor() {
+        let _guard = RUNTIME_TEST_MUTEX.lock().await;
+        let _ =
+            application::jwt::inicializar_chaves("segredo_de_teste_de_pelo_menos_32_bytes_longo");
+
+        let pg_addr = "tcp://127.0.0.1:29141";
+        let redis_addr = "tcp://127.0.0.1:29142";
+
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+        std::env::set_var("SMARTCORE_DATA_REDIS_ENDPOINT", redis_addr);
+
+        // Stub Redis
+        let redis_endpoint = Endpoint::parse(redis_addr).unwrap();
+        let redis_server =
+            Server::new(redis_endpoint, "flatbuffers").route("IsTokenBlocked", |env| {
+                Box::pin(async move {
+                    let payload_json: serde_json::Value =
+                        serde_json::from_slice(&env.payload).unwrap();
+                    let jti = payload_json.get("jti").unwrap().as_str().unwrap();
+
+                    let blocked = jti == "token_bloqueado";
+                    let reply = serde_json::json!({ "blocked": blocked });
+
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "IsTokenBlockedReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let redis_handle = tokio::spawn(async move {
+            redis_server.run().await.unwrap();
+        });
+
+        // Stub Postgres
+        let pg_endpoint = Endpoint::parse(pg_addr).unwrap();
+        let pg_server = Server::new(pg_endpoint, "flatbuffers");
+        let pg_handle = tokio::spawn(async move {
+            let _ = pg_server.run().await;
+        });
+
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let pg_client = transport::conectar_cliente("data_postgres").await.unwrap();
+        let redis_client = transport::conectar_cliente("data_redis").await.unwrap();
+
+        let deps = std::sync::Arc::new(AuthDeps {
+            pg: pg_client,
+            redis: redis_client,
+            access_ttl_s: 900,
+            refresh_ttl_s: 604800,
+            login_rate_max: 5,
+            login_rate_window_s: 60,
+        });
+
+        // 1. Testa token ausente
+        let env_ausente = Envelope {
+            method: "Logout".to_string(),
+            ..Default::default()
+        };
+        let res = exigir_auth(deps.clone(), false, |_, env| {
+            Box::pin(async move {
+                Envelope {
+                    method: "Ok".to_string(),
+                    ..env
+                }
+            })
+        })(env_ausente)
+        .await;
+        assert_eq!(res.kind, MessageKind::Error as i32);
+        let err = res.error.unwrap();
+        assert_eq!(err.code, "AUTH_MISSING_TOKEN");
+
+        // 2. Testa token inválido / expirado
+        let env_invalido = Envelope {
+            method: "Logout".to_string(),
+            causation_id: "Bearer token.invalido.assinado".to_string(),
+            ..Default::default()
+        };
+        let res = exigir_auth(deps.clone(), false, |_, env| {
+            Box::pin(async move {
+                Envelope {
+                    method: "Ok".to_string(),
+                    ..env
+                }
+            })
+        })(env_invalido)
+        .await;
+        assert_eq!(res.kind, MessageKind::Error as i32);
+
+        // Gera token válido para testes subsequentes
+        let claims = application::jwt::Claims {
+            sub: "42".to_string(),
+            tenant_id: Uuid::new_v4().to_string(),
+            scopes: vec!["atendimentos:read".to_string()],
+            is_superuser: false,
+            jti: "token_jti_ok".to_string(),
+            iat: chrono::Utc::now().timestamp() as usize,
+            exp: (chrono::Utc::now().timestamp() + 300) as usize,
+        };
+        let token_valido = application::jwt::gerar_access_token(&claims).unwrap();
+
+        // 3. Testa token bloqueado na blocklist
+        let mut claims_bloqueado = claims.clone();
+        claims_bloqueado.jti = "token_bloqueado".to_string();
+        let token_bloqueado = application::jwt::gerar_access_token(&claims_bloqueado).unwrap();
+
+        let env_bloqueado = Envelope {
+            method: "Logout".to_string(),
+            causation_id: format!("Bearer {}", token_bloqueado),
+            ..Default::default()
+        };
+        let res = exigir_auth(deps.clone(), false, |_, env| {
+            Box::pin(async move {
+                Envelope {
+                    method: "Ok".to_string(),
+                    ..env
+                }
+            })
+        })(env_bloqueado)
+        .await;
+        assert_eq!(res.kind, MessageKind::Error as i32);
+        assert_eq!(
+            res.error.unwrap().message,
+            "Erro de autenticação: Sessão encerrada. Token na blocklist."
+        );
+
+        // 4. Testa token de usuário comum acessando rota de superusuário (guard)
+        let env_guard = Envelope {
+            method: "ListCoreSettings".to_string(),
+            causation_id: format!("Bearer {}", token_valido),
+            ..Default::default()
+        };
+        let res = exigir_auth(deps.clone(), true, |_, env| {
+            Box::pin(async move {
+                Envelope {
+                    method: "Ok".to_string(),
+                    ..env
+                }
+            })
+        })(env_guard)
+        .await;
+        assert_eq!(res.kind, MessageKind::Error as i32);
+        assert_eq!(res.error.unwrap().code, "AUTH_INSUFFICIENT_SCOPE");
+
+        // 5. Testa token válido passando no interceptor e sobrescrevendo tenant e identidade
+        let env_feliz = Envelope {
+            method: "Logout".to_string(),
+            causation_id: format!("Bearer {}", token_valido),
+            ..Default::default()
+        };
+        let res = exigir_auth(deps.clone(), false, |_, env| {
+            Box::pin(async move {
+                Envelope {
+                    method: "Ok".to_string(),
+                    ..env
+                }
+            })
+        })(env_feliz)
+        .await;
+
+        assert_eq!(res.method, "Ok");
+        assert_eq!(res.auth_user_id, 42);
+        assert_eq!(res.auth_scopes, vec!["atendimentos:read".to_string()]);
+        assert!(!res.auth_is_superuser);
+        assert_eq!(res.tenant_id, claims.tenant_id);
+
+        redis_handle.abort();
+        pg_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_runtime_api_handler_login() {
+        let _guard = RUNTIME_TEST_MUTEX.lock().await;
+        let _ =
+            application::jwt::inicializar_chaves("segredo_de_teste_de_pelo_menos_32_bytes_longo");
+
+        let pg_addr = "tcp://127.0.0.1:29143";
+        let redis_addr = "tcp://127.0.0.1:29144";
+
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+        std::env::set_var("SMARTCORE_DATA_REDIS_ENDPOINT", redis_addr);
+
+        let pg_endpoint = Endpoint::parse(pg_addr).unwrap();
+        let pg_server = Server::new(pg_endpoint, "flatbuffers").route("VerifyCredentials", |env| {
+            Box::pin(async move {
+                let user_payload = serde_json::json!({
+                    "id": 42,
+                    "username": "usuario_teste",
+                    "email": "test@domain.com",
+                    "is_superuser": false,
+                    "tenant_id": Uuid::new_v4().to_string()
+                });
+                Envelope {
+                    kind: MessageKind::Reply as i32,
+                    method: "VerifyCredentialsReply".to_string(),
+                    payload: serde_json::to_vec(&user_payload).unwrap(),
+                    ..env
+                }
+            })
+        });
+        let pg_handle = tokio::spawn(async move {
+            pg_server.run().await.unwrap();
+        });
+
+        let redis_endpoint = Endpoint::parse(redis_addr).unwrap();
+        let redis_server = Server::new(redis_endpoint, "flatbuffers")
+            .route("RegisterLoginAttempt", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({ "attempts": 1 });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "RegisterLoginAttemptReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("StoreRefreshToken", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({ "status": "success" });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "StoreRefreshTokenReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let redis_handle = tokio::spawn(async move {
+            redis_server.run().await.unwrap();
+        });
+
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let pg_client = transport::conectar_cliente("data_postgres").await.unwrap();
+        let redis_client = transport::conectar_cliente("data_redis").await.unwrap();
+
+        let deps = std::sync::Arc::new(AuthDeps {
+            pg: pg_client,
+            redis: redis_client,
+            access_ttl_s: 900,
+            refresh_ttl_s: 604800,
+            login_rate_max: 5,
+            login_rate_window_s: 60,
+        });
+
+        let payload = serde_json::json!({
+            "email": "test@domain.com",
+            "password": "senha"
+        });
+        let env = Envelope {
+            method: "Login".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        };
+
+        let res = handler_login(deps, env).await;
+        assert_eq!(res.kind, MessageKind::Reply as i32);
+        assert_eq!(res.method, "LoginReply");
+
+        let res_payload: serde_json::Value = serde_json::from_slice(&res.payload).unwrap();
+        assert!(res_payload.get("access_token").is_some());
+        assert!(res_payload.get("refresh_token").is_some());
+
+        pg_handle.abort();
+        redis_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_runtime_api_handler_refresh_e_auditoria() {
+        let _guard = RUNTIME_TEST_MUTEX.lock().await;
+        let _ =
+            application::jwt::inicializar_chaves("segredo_de_teste_de_pelo_menos_32_bytes_longo");
+
+        let pg_addr = "tcp://127.0.0.1:29145";
+        let redis_addr = "tcp://127.0.0.1:29146";
+
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+        std::env::set_var("SMARTCORE_DATA_REDIS_ENDPOINT", redis_addr);
+
+        let pg_endpoint = Endpoint::parse(pg_addr).unwrap();
+        let pg_server =
+            Server::new(pg_endpoint.clone(), "flatbuffers").route("GetUserIdentity", |env| {
+                Box::pin(async move {
+                    let user_payload = serde_json::json!({
+                        "id": 42,
+                        "username": "usuario_teste",
+                        "email": "test@domain.com",
+                        "is_active": true,
+                        "is_superuser": false,
+                        "tenant_id": Uuid::new_v4().to_string(),
+                        "module_permissions": []
+                    });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "GetUserIdentityReply".to_string(),
+                        payload: serde_json::to_vec(&user_payload).unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let pg_handle = tokio::spawn(async move {
+            pg_server.run().await.unwrap();
+        });
+
+        let redis_endpoint = Endpoint::parse(redis_addr).unwrap();
+        let contador = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let contador_clone = contador.clone();
+        let redis_server = Server::new(redis_endpoint.clone(), "flatbuffers")
+            .route("ValidateAndRotate", move |env| {
+                let cnt = contador_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                Box::pin(async move {
+                    if cnt == 0 {
+                        let reply = serde_json::json!({
+                            "user_id": 42,
+                            "tenant_id": Uuid::new_v4().to_string(),
+                            "family_id": "fam_123",
+                            "rotacionado": false
+                        });
+                        Envelope {
+                            kind: MessageKind::Reply as i32,
+                            method: "ValidateAndRotateReply".to_string(),
+                            payload: serde_json::to_vec(&reply).unwrap(),
+                            ..env
+                        }
+                    } else {
+                        let error_env = contracts::ErrorEnvelope {
+                            code: "TOKEN_REUSE".to_string(),
+                            message: "token_reuse_detected".to_string(),
+                            ..Default::default()
+                        };
+                        Envelope {
+                            kind: MessageKind::Error as i32,
+                            method: "ValidateAndRotateReply".to_string(),
+                            error: Some(error_env),
+                            ..env
+                        }
+                    }
+                })
+            })
+            .route("StoreRefreshToken", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({ "status": "success" });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "StoreRefreshTokenReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let redis_handle = tokio::spawn(async move {
+            redis_server.run().await.unwrap();
+        });
+
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let pg_client = transport::conectar_cliente("data_postgres").await.unwrap();
+        let redis_client = transport::conectar_cliente("data_redis").await.unwrap();
+
+        let deps = std::sync::Arc::new(AuthDeps {
+            pg: pg_client,
+            redis: redis_client,
+            access_ttl_s: 900,
+            refresh_ttl_s: 604800,
+            login_rate_max: 5,
+            login_rate_window_s: 60,
+        });
+
+        // 1. Testa refresh feliz
+        let payload = serde_json::json!({ "refresh_token": "token_valido" });
+        let env = Envelope {
+            method: "Refresh".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        };
+
+        // Stub TCP para o Redis bus para aceitar conexão e responder sucessos simples (+OK\r\n ou +PONG\r\n) a comandos
+        let bus_listener = tokio::net::TcpListener::bind("127.0.0.1:29999")
+            .await
+            .unwrap();
+        let bus_handle = tokio::spawn(async move {
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            while let Ok((mut socket, _)) = bus_listener.accept().await {
+                tokio::spawn(async move {
+                    let mut buf = [0u8; 1024];
+                    while let Ok(n) = socket.read(&mut buf).await {
+                        if n == 0 {
+                            break;
+                        }
+                        let req = String::from_utf8_lossy(&buf[..n]);
+                        let partes = req.split('*');
+                        for parte in partes {
+                            if parte.is_empty() {
+                                continue;
+                            }
+                            if parte.to_uppercase().contains("PING") {
+                                let _ = socket.write_all(b"+PONG\r\n").await;
+                            } else {
+                                let _ = socket.write_all(b"+OK\r\n").await;
+                            }
+                        }
+                    }
+                });
+            }
+        });
+
+        // Passamos uma conexao de teste para o bus de auditoria conectando no nosso stub TCP.
+        let redis_bus_client = redis::Client::open("redis://127.0.0.1:29999").unwrap();
+        let bus_conn = redis::aio::ConnectionManager::new(redis_bus_client)
+            .await
+            .unwrap();
+
+        let res = handler_refresh(deps.clone(), bus_conn.clone(), env).await;
+        assert_eq!(res.kind, MessageKind::Reply as i32);
+
+        let res_payload: serde_json::Value = serde_json::from_slice(&res.payload).unwrap();
+        assert!(res_payload.get("access_token").is_some());
+        assert!(res_payload.get("refresh_token").is_some());
+
+        // 2. Testa refresh com reuso (o ValidateAndRotate agora retornará erro de reuso na segunda chamada)
+        let env_reuse = Envelope {
+            method: "Refresh".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        };
+
+        let res_reuse = handler_refresh(deps, bus_conn, env_reuse).await;
+        assert_eq!(res_reuse.kind, MessageKind::Error as i32);
+        assert_eq!(res_reuse.error.unwrap().code, "AUTH_INVALID_TOKEN");
+
+        pg_handle.abort();
+        redis_handle.abort();
+        bus_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_runtime_api_handler_logout() {
+        let _guard = RUNTIME_TEST_MUTEX.lock().await;
+        let _ =
+            application::jwt::inicializar_chaves("segredo_de_teste_de_pelo_menos_32_bytes_longo");
+
+        let pg_addr = "tcp://127.0.0.1:29147";
+        let redis_addr = "tcp://127.0.0.1:29148";
+
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+        std::env::set_var("SMARTCORE_DATA_REDIS_ENDPOINT", redis_addr);
+
+        let pg_endpoint = Endpoint::parse(pg_addr).unwrap();
+        let pg_server = Server::new(pg_endpoint, "flatbuffers");
+        let pg_handle = tokio::spawn(async move {
+            let _ = pg_server.run().await;
+        });
+
+        let redis_endpoint = Endpoint::parse(redis_addr).unwrap();
+        let redis_server = Server::new(redis_endpoint, "flatbuffers").route("BlockToken", |env| {
+            Box::pin(async move {
+                let reply = serde_json::json!({ "status": "blocked" });
+                Envelope {
+                    kind: MessageKind::Reply as i32,
+                    method: "BlockTokenReply".to_string(),
+                    payload: serde_json::to_vec(&reply).unwrap(),
+                    ..env
+                }
+            })
+        });
+        let redis_handle = tokio::spawn(async move {
+            redis_server.run().await.unwrap();
+        });
+
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let pg_client = transport::conectar_cliente("data_postgres").await.unwrap();
+        let redis_client = transport::conectar_cliente("data_redis").await.unwrap();
+
+        let deps = std::sync::Arc::new(AuthDeps {
+            pg: pg_client,
+            redis: redis_client,
+            access_ttl_s: 900,
+            refresh_ttl_s: 604800,
+            login_rate_max: 5,
+            login_rate_window_s: 60,
+        });
+
+        // Gera token válido para desempacotar as claims
+        let claims = application::jwt::Claims {
+            sub: "42".to_string(),
+            tenant_id: Uuid::new_v4().to_string(),
+            scopes: vec![],
+            is_superuser: false,
+            jti: "logout_jti".to_string(),
+            iat: chrono::Utc::now().timestamp() as usize,
+            exp: (chrono::Utc::now().timestamp() + 300) as usize,
+        };
+        let token = application::jwt::gerar_access_token(&claims).unwrap();
+
+        let payload = serde_json::json!({});
+        let env = Envelope {
+            method: "Logout".to_string(),
+            causation_id: format!("Bearer {}", token),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        };
+
+        let res = handler_logout(deps, env).await;
+        assert_eq!(res.kind, MessageKind::Reply as i32);
+        assert_eq!(res.method, "LogoutReply");
+
+        pg_handle.abort();
+        redis_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_runtime_api_handler_encaminhamento() {
+        let _guard = RUNTIME_TEST_MUTEX.lock().await;
+
+        let pg_addr = "tcp://127.0.0.1:29149";
+        let redis_addr = "tcp://127.0.0.1:29150";
+
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+        std::env::set_var("SMARTCORE_DATA_REDIS_ENDPOINT", redis_addr);
+
+        let pg_endpoint = Endpoint::parse(pg_addr).unwrap();
+        let pg_server = Server::new(pg_endpoint, "flatbuffers")
+            .route("ListAtendimentos", |env| {
+                Box::pin(async move {
+                    assert_eq!(env.causation_id, "mensagem_origem_123"); // Verifica causalidade
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "ListAtendimentosReply".to_string(),
+                        payload: b"[]".to_vec(),
+                        ..env
+                    }
+                })
+            })
+            .route("ListCoreSettings", |env| {
+                Box::pin(async move {
+                    assert_eq!(env.causation_id, "mensagem_origem_456");
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "ListCoreSettingsReply".to_string(),
+                        payload: b"{}".to_vec(),
+                        ..env
+                    }
+                })
+            });
+        let pg_handle = tokio::spawn(async move {
+            pg_server.run().await.unwrap();
+        });
+
+        let redis_endpoint = Endpoint::parse(redis_addr).unwrap();
+        let redis_server = Server::new(redis_endpoint, "flatbuffers");
+        let redis_handle = tokio::spawn(async move {
+            let _ = redis_server.run().await;
+        });
+
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let pg_client = transport::conectar_cliente("data_postgres").await.unwrap();
+        let redis_client = transport::conectar_cliente("data_redis").await.unwrap();
+
+        let deps = std::sync::Arc::new(AuthDeps {
+            pg: pg_client,
+            redis: redis_client,
+            access_ttl_s: 900,
+            refresh_ttl_s: 604800,
+            login_rate_max: 5,
+            login_rate_window_s: 60,
+        });
+
+        // 1. Testa handler_stream_atendimentos
+        let env_stream = Envelope {
+            message_id: "mensagem_origem_123".to_string(),
+            method: "StreamAtendimentos".to_string(),
+            causation_id: "Bearer JWT_SECRETO_QUE_NAO_DEVE_VAZAR".to_string(), // jwt na borda
+            ..Default::default()
+        };
+        let res_stream = handler_stream_atendimentos(deps.clone(), env_stream).await;
+        assert_eq!(res_stream.method, "StreamAtendimentosReply");
+        assert_eq!(res_stream.kind, MessageKind::Reply as i32);
+
+        // 2. Testa handler_admin_forward
+        let env_admin = Envelope {
+            message_id: "mensagem_origem_456".to_string(),
+            method: "ListCoreSettings".to_string(),
+            causation_id: "Bearer JWT_SECRETO_QUE_NAO_DEVE_VAZAR".to_string(),
+            ..Default::default()
+        };
+        let res_admin =
+            handler_admin_forward(deps, env_admin, "ListCoreSettings", "ListCoreSettingsReply")
+                .await;
+        assert_eq!(res_admin.method, "ListCoreSettingsReply");
+        assert_eq!(res_admin.kind, MessageKind::Reply as i32);
+
+        pg_handle.abort();
+        redis_handle.abort();
     }
 }

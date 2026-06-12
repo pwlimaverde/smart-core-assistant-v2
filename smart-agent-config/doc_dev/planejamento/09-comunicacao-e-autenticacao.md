@@ -1,10 +1,12 @@
 # 09 — Comunicação Front↔Back, IPC e Encaixe da Autenticação
 
-> **Status:** 🚧 Parcial. **Transporte** (IPC UDS/FlatBuffers + gRPC fallback, barramento,
-> envelope) ✅ concluído. **Autenticação** 🚧: a infraestrutura de tokens está pronta e
-> testada (Argon2id, rotação de refresh por família, blocklist por `jti`), mas o caso de
-> uso de login emite **tokens mockados** (UUIDs) — a emissão de JWT real, `Refresh`/`Logout`
-> e o middleware de contexto são o escopo da etapa F6.1–6.3 (detalhamento na §6).
+> **Status:** ✅ Concluído (jun/2026). **Transporte** (IPC UDS/FlatBuffers + gRPC fallback,
+> barramento, envelope) ✅. **Autenticação** ✅: login real (JWT HS256), `Refresh`/`Logout`,
+> interceptor de contexto (wrapper na `runtime_api`), rate limiting de login e rotas admin
+> de configuração entregues pelo plano `user-auth-module` (F6.1–6.3). Auditoria final em
+> `.context/workflow/docs/final-review.md`. Convenção de transporte: o access token viaja
+> no campo `causation_id` do Envelope na borda (com/sem prefixo `Bearer `) e é removido
+> antes do encaminhamento aos serviços internos.
 > **Idioma:** pt-br na documentação/comentários; identificadores em inglês.
 > **Origem:** Consolidação pós-refatoração modular; revisado em jun/2026 após análise da base.
 
@@ -186,14 +188,15 @@ Middleware na `runtime_api` aplicado a **todas** as rotas exceto `Login`/`Refres
 
 ### 6.4 Critérios de aceite (DoD da etapa de login)
 
-- [ ] JWT real emitido/validado; access expira em 15 min e refresh rotaciona.
-- [ ] Reuso de refresh rotacionado revoga a família e audita o evento.
-- [ ] Logout bloqueia o `jti` e revoga a família (verificável por `IsTokenBlocked`).
-- [ ] Nenhum handler do `data_postgres` com `user_id`/escopos hardcoded.
-- [ ] `RequestContext` único no workspace (ou conversão única documentada).
-- [ ] Clientes RPC compartilhados no estado dos apps (sem `conectar_cliente` por request).
-- [ ] Rate limiting de tentativas de login (por IP/email, via Redis).
-- [ ] Testes: fluxo feliz, senha errada, usuário inativo, refresh expirado,
+- [x] JWT real emitido/validado; access expira em 15 min e refresh rotaciona.
+- [x] Reuso de refresh rotacionado revoga a família e audita o evento.
+- [x] Logout bloqueia o `jti` e revoga a família (verificável por `IsTokenBlocked`).
+- [x] Nenhum handler do `data_postgres` com `user_id`/escopos hardcoded.
+- [x] `RequestContext` único no workspace (canônico em `infrastructure_postgres`).
+- [x] Clientes RPC compartilhados no estado dos apps (sem `conectar_cliente` por request).
+- [x] Rate limiting de tentativas de login (por e-mail hasheado, via Redis; o transporte
+      não propaga IP do cliente — registrar IP quando a borda gRPC-Web/proxy existir).
+- [x] Testes: fluxo feliz, senha errada, usuário inativo, refresh expirado,
       reuso de refresh, logout + tentativa de uso do token bloqueado.
 
 ### 6.5 Variáveis de ambiente novas
