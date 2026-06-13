@@ -1,14 +1,6 @@
 ---
-type: skill
-name: Plan Restructuring
+name: plan-restructuring
 description: Etapa final de qualquer planejamento. Normaliza a origem do plano (conversa, doc_dev ou .context/plans) em um diretório próprio dentro de .context/plans/{feature}/, levanta libs internas e serviços externos, coleta documentação atual (PRIMEIRO consulta a central local doc_dev/libs/; só recorre a context7 quando o doc local falta/está desatualizado, e nesse caso atualiza o doc local; WebSearch/WebFetch para serviços externos) em info_aux_{feature}.md, reestrutura o plano completo, e por fim cria o plano canônico via MCP dotcontext (scaffoldPlan + workflow-init) referenciando esses arquivos e deixando o workflow pronto para implementação. Na conclusão, consolida o canônico dentro da pasta e move tudo para archive/.
-skillSlug: plan-restructuring
-phases: [P]
-skills: [feature-breakdown]
-trigger: manual
-generated: 2026-05-31
-status: filled
-scaffoldVersion: "2.0.0"
 ---
 
 # Plan Restructuring Skill
@@ -32,6 +24,43 @@ inicial já existe. O objetivo duplo é:
 > desatualizado/vencido, e o resultado realimenta a central.
 
 NÃO é para criar o plano do zero — para isso use `/plan` / `feature-breakdown`.
+
+## Requisito Transversal: Observabilidade e Auditoria
+
+> **Princípio inviolável do projeto** (ver `doc_dev/planejamento/05-observabilidade.md`
+> e `doc_dev/modelagem_dados/08_diretrizes_seguranca.md`, seções 4 e 4.2):
+> **todo módulo emite log estruturado + erro rastreável + trace desde o dia 1.**
+> Nenhum plano de implementação está completo se não disser, para cada etapa que
+> toca código, **como ela será exposta e registrada**.
+
+O plano reestruturado **deve** tornar explícito, em cada fase/etapa que cria ou
+altera comportamento, os três eixos abaixo. Não é seção decorativa no fim — é
+parte do detalhamento de cada etapa.
+
+1. **Logs estruturados (`tracing`)** — quais spans/eventos a etapa emite, em que
+   nível, e que campos de correlação carrega (`service`, `env`, `tenant_id`,
+   `trace_id`, `error_code`). Política de instrumentação da infra conforme a
+   arquitetura de erros (`#[tracing::instrument(err)]` só onde todo erro é falha
+   real de infra; repositórios de tenant via `run_in_tenant_transaction` +
+   `#[instrument(skip_all)]`).
+2. **Auditoria no banco (`audit_log`)** — se a etapa **acessa ou modifica estado
+   sensível/crítico**, qual registro de auditoria ela gera. Eventos críticos
+   obrigatoriamente auditados (08 §4.2): alterações de `Tenant`/`owner_id`,
+   convites (`TenantInvite`), mudança de cargo/permissões (`TenantUser`),
+   `Subscription`/`PaymentRecord`, mudança de chaves de API (`TenantConfig`),
+   além de acessos a dados protegidos. Metadados mínimos do registro: timestamp
+   UTC, `user_id` (do `RequestContext`), `ip_address`, `user_agent`,
+   `event_type` (ex.: `api_key.update`) e descrição **sem** o segredo em si. A
+   trilha de auditoria é publicada de forma assíncrona no barramento
+   (`transport::bus`) e persistida pelo `data_postgres` (não dependência síncrona
+   do Postgres na `observability`).
+3. **Sanitização / não-vazamento** — confirmação de que a etapa **não loga**
+   segredos, PII bruta (telefone completo, payloads do WhatsApp), tokens ou
+   chaves. Structs com credenciais usam `secrecy::SecretString`/`SecretVec`.
+
+Esses três eixos entram no **levantamento** (etapa 1, como "Grupo C" abaixo),
+são **exigidos do subagente `opus`** na reestruturação (etapa 4) e **verificados**
+no checklist final.
 
 ## Origem do Plano (qualquer uma é tratada igual)
 
@@ -153,6 +182,22 @@ autenticação e versão/release (cruzando com `.env`/configs do projeto). Forma
     -> GET /cards/{id}, POST /cards, PUT /cards/{id}
     -> Auth: key + token query params
 ```
+
+#### Grupo C — Observabilidade e Auditoria (transversal, sempre)
+
+Para **cada etapa do plano que cria/altera comportamento**, anote desde já:
+
+- **Pontos de log/trace**: que spans/eventos emite, nível, e campos de correlação
+  (`tenant_id`, `trace_id`, `error_code`).
+- **Eventos de auditoria**: se acessa/modifica estado sensível, qual `event_type`
+  do `audit_log` é gerado e com quais metadados (ver §08 §4.2).
+- **Riscos de vazamento**: campos sensíveis que a etapa manipula (chaves, PII,
+  tokens) e como serão sanitizados/protegidos (`secrecy`, mascaramento).
+
+Esse levantamento alimenta o "Requisito Transversal" e é passado ao subagente
+`opus` na etapa 4. Se uma etapa genuinamente não emite log/auditoria relevante,
+registre **"sem evento de auditoria"** explicitamente — a ausência deve ser
+intencional, não esquecimento.
 
 ### 2a. Triagem da Central Local de Libs (sessão principal)
 
@@ -336,9 +381,29 @@ Agent({
        extraídos do info_aux.
     6. Respeite a arquitetura (ver .context/docs/architecture.md).
        Não invente libs novas sem necessidade.
-    7. Estruture o plano em FASES claras (cada uma mapeável a uma fase PREVC e a
-       um agente especialista), pois servirão de base ao plano canônico do MCP.
+    7. OBSERVABILIDADE E AUDITORIA (requisito inviolável — ver
+       doc_dev/planejamento/05-observabilidade.md e
+       doc_dev/modelagem_dados/08_diretrizes_seguranca.md §4 e §4.2): para CADA
+       etapa que cria/altera comportamento, detalhe explicitamente:
+         a) Logs/traces estruturados (tracing): spans/eventos emitidos, nível e
+            campos de correlação (service, env, tenant_id, trace_id, error_code).
+            Política da infra: #[tracing::instrument(err)] só onde todo erro é
+            falha real de infra; repositórios de tenant via
+            run_in_tenant_transaction + #[instrument(skip_all)].
+         b) Auditoria no banco: se a etapa acessa/modifica estado sensível ou
+            crítico (Tenant/owner_id, TenantInvite, TenantUser/permissões,
+            Subscription/PaymentRecord, chaves de API do TenantConfig, ou acesso
+            a dados protegidos), descreva o registro de audit_log gerado com
+            metadados mínimos (timestamp UTC, user_id do RequestContext,
+            ip_address, user_agent, event_type, descrição SEM o segredo). A
+            trilha vai assíncrona pelo transport::bus → data_postgres.
+         c) Sanitização: confirme que a etapa NÃO loga segredos/PII bruta/tokens;
+            structs com credenciais usam secrecy::SecretString/SecretVec.
+       Se uma etapa não tiver evento de auditoria, declare "sem evento de
+       auditoria" de forma intencional. Use o levantamento do Grupo C do info_aux.
     8. Adicione seção "Correções aplicadas": o que mudou, por quê e a fonte.
+    9. Adicione, em cada fase, uma sub-seção "Observabilidade & Auditoria" com os
+       três eixos (a/b/c) resolvidos para aquela fase.
 
     Devolva o PLANO COMPLETO reestruturado em markdown, pronto para salvar.
   `
@@ -459,6 +524,7 @@ fechadas / workflow finalizado). O objetivo é manter tudo de um plano junto.
 - [ ] Slug `{feature}` definido e diretório `.context/plans/{feature}/` criado.
 - [ ] Grupo A (libs Python/Rust/Flutter) levantado com versões do `pyproject.toml`/`Cargo.toml`/`pubspec.yaml` e stack de cada lib.
 - [ ] Grupo B (serviços externos) levantado com endpoints e tipo de auth.
+- [ ] Grupo C (observabilidade/auditoria) levantado: pontos de log/trace, eventos de `audit_log` e riscos de vazamento por etapa.
 - [ ] Central local `doc_dev/libs/` consultada; cada lib classificada em USAR LOCAL / ATUALIZAR / CRIAR (etapa 2a).
 - [ ] Context7 chamado **apenas** para libs ATUALIZAR/CRIAR (subagentes `haiku`); libs USAR LOCAL reaproveitadas da central.
 - [ ] Docs locais em `doc_dev/libs/{stack}/<lib>.md` criados/atualizados (cabeçalho padrão + data) para as libs que passaram pelo Context7.
@@ -466,6 +532,7 @@ fechadas / workflow finalizado). O objetivo é manter tudo de um plano junto.
 - [ ] `.context/plans/{feature}/info_aux_{feature}.md` consolidado e salvo.
 - [ ] Plano completo reestruturado por `opus` salvo em `.context/plans/{feature}/plano_completo_{feature}.md`.
 - [ ] Seção "Correções aplicadas" presente no plano completo.
+- [ ] Cada fase do plano completo tem sub-seção "Observabilidade & Auditoria" com os três eixos resolvidos (logs/trace, audit_log, sanitização).
 - [ ] Plano canônico `.context/plans/{feature}.md` criado via `scaffoldPlan` e referenciando os artefatos.
 - [ ] Fases PREVC transcritas no frontmatter do plano canônico.
 - [ ] `workflow-init` + `plan link` executados; workflow avançado para implementação (E).
