@@ -50,6 +50,8 @@ pub fn montar_envelope_request(
 
 /// Realiza o login real do usuário validando as credenciais no Postgres
 /// e persistindo a sessão (refresh token) no Redis.
+// `email`/`password` ficam fora do span (PII/credencial); a correlação é pelo traceparent.
+#[tracing::instrument(skip_all, fields(traceparent = %traceparent))]
 pub async fn login(
     deps: &AuthDeps,
     traceparent: &str,
@@ -92,6 +94,14 @@ pub async fn login(
         .unwrap_or(u64::MAX); // resposta malformada conta como estouro (falha fechada)
 
     if attempts > deps.login_rate_max {
+        // O identificador fica fora do log (PII); o hash permite correlacionar tentativas.
+        tracing::warn!(
+            attempts,
+            limite = deps.login_rate_max,
+            janela_s = deps.login_rate_window_s,
+            key_hash = %rate_key,
+            "rate limit de login excedido"
+        );
         return Err(AppError::RateLimit(
             "muitas tentativas de login; aguarde antes de tentar novamente".to_string(),
         ));
@@ -200,10 +210,21 @@ pub async fn login(
             .unwrap_or_else(|| AppError::Cache("falha ao salvar refresh token".to_string())));
     }
 
+    tracing::info!(
+        user_id,
+        is_superuser,
+        tenant_id = %claims.tenant_id,
+        "login bem-sucedido"
+    );
+
+    // `user_id`/`tenant_id` já constam nas claims do JWT devolvido; expô-los aqui
+    // permite à borda auditar `login_success` sem decodificar o token.
     Ok(serde_json::json!({
         "access_token": access_token,
         "refresh_token": refresh_token,
         "expires_in": deps.access_ttl_s,
+        "user_id": user_id,
+        "tenant_id": claims.tenant_id,
     }))
 }
 

@@ -1266,6 +1266,15 @@ async fn handler_verify_credentials(
 // --- Helpers e Utilitários para os Handlers Admin ---
 
 fn erro(app_err: error_core::AppError, env: &Envelope) -> Envelope {
+    // Ponto único de saída de erro dos handlers admin: registra no tracing com
+    // severidade e correlação (trace/tenant) antes de devolver o Envelope de erro.
+    error_core::registrar(
+        &app_err,
+        &error_core::ErrorContext {
+            trace_id: env.traceparent.clone(),
+            tenant_id: env.tenant_id.clone(),
+        },
+    );
     let err_env = app_err.to_error_envelope(&env.traceparent, "data_postgres");
     Envelope {
         kind: MessageKind::Error as i32,

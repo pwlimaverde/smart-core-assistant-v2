@@ -62,9 +62,11 @@ async fn main() -> anyhow::Result<()> {
     let server = Server::from_env("RUNTIME_API")
         .route("Login", {
             let deps = deps.clone();
+            let bus = bus.clone();
             move |env| {
                 let deps = deps.clone();
-                Box::pin(async move { handler_login(deps, env).await })
+                let bus = bus.clone();
+                Box::pin(async move { handler_login(deps, bus, env).await })
             }
         })
         .route("Refresh", {
@@ -76,21 +78,22 @@ async fn main() -> anyhow::Result<()> {
                 Box::pin(async move { handler_refresh(deps, bus, env).await })
             }
         })
-        .route(
-            "Logout",
-            exigir_auth(deps.clone(), false, move |deps, env| {
-                Box::pin(async move { handler_logout(deps, env).await })
-            }),
-        )
+        .route("Logout", {
+            let bus = bus.clone();
+            exigir_auth(deps.clone(), bus.clone(), false, move |deps, env| {
+                let bus = bus.clone();
+                Box::pin(async move { handler_logout(deps, bus, env).await })
+            })
+        })
         .route(
             "StreamAtendimentos",
-            exigir_auth(deps.clone(), false, move |deps, env| {
+            exigir_auth(deps.clone(), bus.clone(), false, move |deps, env| {
                 Box::pin(async move { handler_stream_atendimentos(deps, env).await })
             }),
         )
         .route(
             "GetUserIdentity",
-            exigir_auth(deps.clone(), true, move |deps, env| {
+            exigir_auth(deps.clone(), bus.clone(), true, move |deps, env| {
                 Box::pin(async move {
                     handler_admin_forward(deps, env, "GetUserIdentity", "GetUserIdentityReply")
                         .await
@@ -99,7 +102,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .route(
             "ListCoreSettings",
-            exigir_auth(deps.clone(), true, move |deps, env| {
+            exigir_auth(deps.clone(), bus.clone(), true, move |deps, env| {
                 Box::pin(async move {
                     handler_admin_forward(deps, env, "ListCoreSettings", "ListCoreSettingsReply")
                         .await
@@ -108,7 +111,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .route(
             "UpsertCoreSetting",
-            exigir_auth(deps.clone(), true, move |deps, env| {
+            exigir_auth(deps.clone(), bus.clone(), true, move |deps, env| {
                 Box::pin(async move {
                     handler_admin_forward(deps, env, "UpsertCoreSetting", "UpsertCoreSettingReply")
                         .await
@@ -117,7 +120,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .route(
             "DeleteCoreSetting",
-            exigir_auth(deps.clone(), true, move |deps, env| {
+            exigir_auth(deps.clone(), bus.clone(), true, move |deps, env| {
                 Box::pin(async move {
                     handler_admin_forward(deps, env, "DeleteCoreSetting", "DeleteCoreSettingReply")
                         .await
@@ -126,7 +129,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .route(
             "GetTenantConfig",
-            exigir_auth(deps.clone(), true, move |deps, env| {
+            exigir_auth(deps.clone(), bus.clone(), true, move |deps, env| {
                 Box::pin(async move {
                     handler_admin_forward(deps, env, "GetTenantConfig", "GetTenantConfigReply")
                         .await
@@ -135,7 +138,7 @@ async fn main() -> anyhow::Result<()> {
         )
         .route(
             "UpdateTenantConfig",
-            exigir_auth(deps.clone(), true, move |deps, env| {
+            exigir_auth(deps.clone(), bus.clone(), true, move |deps, env| {
                 Box::pin(async move {
                     handler_admin_forward(
                         deps,
@@ -197,8 +200,22 @@ fn extrair_bearer(env: &Envelope) -> Option<&str> {
     None
 }
 
+/// Registra o erro no tracing (ponto único da borda: todo Envelope de erro emitido
+/// pela `runtime_api` passa pelos helpers `erro_*` e fica visível nos logs).
+fn registrar_erro_borda(app_err: &error_core::AppError, env: &Envelope) {
+    error_core::registrar(
+        app_err,
+        &error_core::ErrorContext {
+            trace_id: env.traceparent.clone(),
+            tenant_id: env.tenant_id.clone(),
+        },
+    );
+}
+
 fn erro_unauthorized(msg: &str, env: &Envelope) -> Envelope {
     let app_err = error_core::AppError::Auth(msg.to_string());
+    registrar_erro_borda(&app_err, env);
+    tracing::warn!(method = %env.method, motivo = %msg, "requisição rejeitada: não autenticada");
     let err_env = app_err.to_error_envelope(&env.traceparent, "runtime_api");
     Envelope {
         kind: MessageKind::Error as i32,
@@ -210,6 +227,13 @@ fn erro_unauthorized(msg: &str, env: &Envelope) -> Envelope {
 
 fn erro_forbidden(msg: &str, env: &Envelope) -> Envelope {
     let app_err = error_core::AppError::Auth(msg.to_string());
+    registrar_erro_borda(&app_err, env);
+    tracing::warn!(
+        method = %env.method,
+        user_id = env.auth_user_id,
+        motivo = %msg,
+        "requisição rejeitada: escopo/privilégio insuficiente"
+    );
     let mut err_env = app_err.to_error_envelope(&env.traceparent, "runtime_api");
     err_env.code = "AUTH_INSUFFICIENT_SCOPE".to_string();
     err_env.user_message = "errors.auth.insufficient.scope".to_string();
@@ -224,6 +248,7 @@ fn erro_forbidden(msg: &str, env: &Envelope) -> Envelope {
 
 fn erro_internal(msg: &str, env: &Envelope) -> Envelope {
     let app_err = error_core::AppError::Internal(msg.to_string());
+    registrar_erro_borda(&app_err, env);
     let err_env = app_err.to_error_envelope(&env.traceparent, "runtime_api");
     Envelope {
         kind: MessageKind::Error as i32,
@@ -237,6 +262,7 @@ fn erro_internal(msg: &str, env: &Envelope) -> Envelope {
 
 fn exigir_auth<F>(
     deps: std::sync::Arc<AuthDeps>,
+    bus: redis::aio::ConnectionManager,
     exigir_superuser: bool,
     handler: F,
 ) -> impl Fn(Envelope) -> futures_util::future::BoxFuture<'static, Envelope>
@@ -253,6 +279,7 @@ where
 {
     move |mut env| {
         let deps = deps.clone();
+        let mut bus = bus.clone();
         let handler = handler.clone();
         Box::pin(async move {
             // 1. Extrair token de acesso JWT do Envelope (causation_id, com ou sem "Bearer ")
@@ -306,8 +333,22 @@ where
                 }
             }
 
-            // 4. Impor relação de superusuário se a rota for administrativa
+            // 4. Impor relação de superusuário se a rota for administrativa.
+            // Tentativa de acesso admin sem privilégio é evento de segurança auditável.
             if exigir_superuser && !claims.is_superuser {
+                publicar_auditoria_borda(
+                    &mut bus,
+                    Uuid::parse_str(&claims.tenant_id)
+                        .ok()
+                        .filter(|u| !u.is_nil()),
+                    "WARN",
+                    "auth_access_denied",
+                    format!("Acesso à rota administrativa '{}' negado.", env.method),
+                    serde_json::json!({ "method": env.method }),
+                    claims.sub.parse::<i32>().ok(),
+                    &env.traceparent,
+                )
+                .await;
                 return erro_forbidden("Acesso negado: exige privilégios de superusuário", &env);
             }
 
@@ -332,8 +373,14 @@ where
 
 // --- Handlers de Operações ---
 
-/// Handler de Login: extrai as credenciais e chama a lógica de negócio na crate application
-async fn handler_login(deps: std::sync::Arc<AuthDeps>, env: Envelope) -> Envelope {
+/// Handler de Login: extrai as credenciais e chama a lógica de negócio na crate application.
+/// Audita `login_success` (INFO) e `login_rate_limited` (WARN) no security:stream;
+/// o `login_failed` (credencial inválida) já é auditado pelo `data_postgres`.
+async fn handler_login(
+    deps: std::sync::Arc<AuthDeps>,
+    mut bus: redis::aio::ConnectionManager,
+    env: Envelope,
+) -> Envelope {
     let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
         Ok(v) => v,
         Err(_) => serde_json::json!({}),
@@ -349,14 +396,51 @@ async fn handler_login(deps: std::sync::Arc<AuthDeps>, env: Envelope) -> Envelop
         .unwrap_or("");
 
     match application::auth::login::login(&deps, &env.traceparent, email, password).await {
-        Ok(tokens) => Envelope {
-            kind: MessageKind::Reply as i32,
-            method: "LoginReply".to_string(),
-            payload: serde_json::to_vec(&tokens).unwrap_or_default(),
-            error: None,
-            ..env
-        },
+        Ok(tokens) => {
+            let user_id = tokens
+                .get("user_id")
+                .and_then(|v| v.as_i64())
+                .map(|v| v as i32);
+            let tenant_id = tokens
+                .get("tenant_id")
+                .and_then(|v| v.as_str())
+                .and_then(|s| Uuid::parse_str(s).ok())
+                .filter(|u| !u.is_nil());
+            publicar_auditoria_borda(
+                &mut bus,
+                tenant_id,
+                "INFO",
+                "login_success",
+                "Login bem-sucedido.".to_string(),
+                serde_json::json!({}),
+                user_id,
+                &env.traceparent,
+            )
+            .await;
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "LoginReply".to_string(),
+                payload: serde_json::to_vec(&tokens).unwrap_or_default(),
+                error: None,
+                ..env
+            }
+        }
         Err(err) => {
+            // Rate limit estourado é evento de segurança auditável (possível força bruta).
+            if matches!(&err, error_core::AppError::RateLimit(_)) {
+                publicar_auditoria_borda(
+                    &mut bus,
+                    None,
+                    "WARN",
+                    "login_rate_limited",
+                    "Tentativas de login acima do limite na janela.".to_string(),
+                    serde_json::json!({}),
+                    None,
+                    &env.traceparent,
+                )
+                .await;
+            }
+            registrar_erro_borda(&err, &env);
             let err_env = err.to_error_envelope(&env.traceparent, "runtime_api");
             Envelope {
                 kind: MessageKind::Error as i32,
@@ -399,6 +483,7 @@ async fn handler_refresh(
             {
                 publicar_reuso_detectado(&mut bus, &env).await;
             }
+            registrar_erro_borda(&err, &env);
             let err_env = err.to_error_envelope(&env.traceparent, "runtime_api");
             Envelope {
                 kind: MessageKind::Error as i32,
@@ -410,31 +495,65 @@ async fn handler_refresh(
     }
 }
 
-/// Publica o evento de auditoria `token_reuse_detected` no stream de segurança.
-/// Nunca registra o token em si — apenas o traceparent para correlação.
-async fn publicar_reuso_detectado(bus: &mut redis::aio::ConnectionManager, env: &Envelope) {
+/// Publica um evento de auditoria de segurança no `security:stream` (consumido pelo
+/// `data_postgres`, que consolida em `audit_log`). Nunca inclui tokens/senhas — apenas
+/// identificadores (user_id, jti) e o traceparent para correlação.
+#[allow(clippy::too_many_arguments)]
+async fn publicar_auditoria_borda(
+    bus: &mut redis::aio::ConnectionManager,
+    tenant_id: Option<Uuid>,
+    level: &str,
+    event: &str,
+    message: String,
+    context: serde_json::Value,
+    user_id: Option<i32>,
+    traceparent: &str,
+) {
     let audit_payload = observability::AuditLogPayload {
-        tenant_id: None,
-        level: "WARN".to_string(),
+        tenant_id,
+        level: level.to_string(),
         service: "runtime_api".to_string(),
-        trace_id: Some(env.traceparent.clone()),
-        event: "token_reuse_detected".to_string(),
-        message: "Reuso de refresh token rotacionado detectado; família revogada.".to_string(),
-        context: serde_json::json!({}),
-        user_id: None,
+        trace_id: Some(traceparent.to_string()),
+        event: event.to_string(),
+        message,
+        context,
+        user_id,
         ip_address: None,
     };
-    let envelope_auditoria =
-        contracts::TenantEnvelope::novo(Uuid::nil(), "security.audit", audit_payload)
-            .com_traceparent(env.traceparent.clone());
+    let envelope_auditoria = contracts::TenantEnvelope::novo(
+        tenant_id.unwrap_or_else(Uuid::nil),
+        "security.audit",
+        audit_payload,
+    )
+    .com_traceparent(traceparent.to_string());
 
     if let Err(e) = transport::bus::publicar_evento_seguranca(bus, &envelope_auditoria).await {
-        tracing::error!("Falha ao publicar evento token_reuse_detected: {:?}", e);
+        tracing::error!("Falha ao publicar evento de auditoria '{}': {:?}", event, e);
     }
 }
 
-/// Handler de Logout: invalida a sessão
-async fn handler_logout(deps: std::sync::Arc<AuthDeps>, env: Envelope) -> Envelope {
+/// Publica o evento de auditoria `token_reuse_detected` no stream de segurança.
+/// Nunca registra o token em si — apenas o traceparent para correlação.
+async fn publicar_reuso_detectado(bus: &mut redis::aio::ConnectionManager, env: &Envelope) {
+    publicar_auditoria_borda(
+        bus,
+        None,
+        "WARN",
+        "token_reuse_detected",
+        "Reuso de refresh token rotacionado detectado; família revogada.".to_string(),
+        serde_json::json!({}),
+        None,
+        &env.traceparent,
+    )
+    .await;
+}
+
+/// Handler de Logout: invalida a sessão e audita o evento `logout` no security:stream.
+async fn handler_logout(
+    deps: std::sync::Arc<AuthDeps>,
+    mut bus: redis::aio::ConnectionManager,
+    env: Envelope,
+) -> Envelope {
     let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
         Ok(v) => v,
         Err(_) => serde_json::json!({}),
@@ -453,14 +572,31 @@ async fn handler_logout(deps: std::sync::Arc<AuthDeps>, env: Envelope) -> Envelo
     };
 
     match application::auth::logout::logout(&deps, &env.traceparent, &claims, refresh_token).await {
-        Ok(res) => Envelope {
-            kind: MessageKind::Reply as i32,
-            method: "LogoutReply".to_string(),
-            payload: serde_json::to_vec(&res).unwrap_or_default(),
-            error: None,
-            ..env
-        },
+        Ok(res) => {
+            let tenant_id = Uuid::parse_str(&claims.tenant_id)
+                .ok()
+                .filter(|u| !u.is_nil());
+            publicar_auditoria_borda(
+                &mut bus,
+                tenant_id,
+                "INFO",
+                "logout",
+                "Sessão encerrada pelo usuário (jti bloqueado e família revogada).".to_string(),
+                serde_json::json!({ "jti": claims.jti }),
+                claims.sub.parse::<i32>().ok(),
+                &env.traceparent,
+            )
+            .await;
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "LogoutReply".to_string(),
+                payload: serde_json::to_vec(&res).unwrap_or_default(),
+                error: None,
+                ..env
+            }
+        }
         Err(err) => {
+            registrar_erro_borda(&err, &env);
             let err_env = err.to_error_envelope(&env.traceparent, "runtime_api");
             Envelope {
                 kind: MessageKind::Error as i32,
@@ -549,6 +685,46 @@ mod tests {
     // Mutex estático local para serializar testes de integração da runtime_api
     // que modificam variáveis de ambiente globais.
     static RUNTIME_TEST_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    /// Sobe um stub TCP minimalista do protocolo RESP (responde `+PONG`/`+OK`)
+    /// e devolve um `ConnectionManager` apontando para ele — suficiente para os
+    /// publishes de auditoria best-effort dos handlers em teste.
+    async fn fake_bus(porta: u16) -> redis::aio::ConnectionManager {
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", porta))
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut socket, _)) = listener.accept().await else {
+                    break;
+                };
+                tokio::spawn(async move {
+                    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+                    let mut buf = [0u8; 4096];
+                    while let Ok(n) = socket.read(&mut buf).await {
+                        if n == 0 {
+                            break;
+                        }
+                        // Responde UMA vez por comando RESP (arrays começam com '*'),
+                        // garantindo que o cliente nunca fique aguardando resposta.
+                        let req = String::from_utf8_lossy(&buf[..n]);
+                        for parte in req.split('*') {
+                            if parte.is_empty() {
+                                continue;
+                            }
+                            if parte.to_uppercase().contains("PING") {
+                                let _ = socket.write_all(b"+PONG\r\n").await;
+                            } else {
+                                let _ = socket.write_all(b"+OK\r\n").await;
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        let client = redis::Client::open(format!("redis://127.0.0.1:{porta}")).unwrap();
+        redis::aio::ConnectionManager::new(client).await.unwrap()
+    }
 
     #[test]
     fn test_runtime_api_extrair_bearer() {
@@ -641,13 +817,14 @@ mod tests {
             login_rate_max: 5,
             login_rate_window_s: 60,
         });
+        let bus = fake_bus(29150).await;
 
         // 1. Testa token ausente
         let env_ausente = Envelope {
             method: "Logout".to_string(),
             ..Default::default()
         };
-        let res = exigir_auth(deps.clone(), false, |_, env| {
+        let res = exigir_auth(deps.clone(), bus.clone(), false, |_, env| {
             Box::pin(async move {
                 Envelope {
                     method: "Ok".to_string(),
@@ -666,7 +843,7 @@ mod tests {
             causation_id: "Bearer token.invalido.assinado".to_string(),
             ..Default::default()
         };
-        let res = exigir_auth(deps.clone(), false, |_, env| {
+        let res = exigir_auth(deps.clone(), bus.clone(), false, |_, env| {
             Box::pin(async move {
                 Envelope {
                     method: "Ok".to_string(),
@@ -699,7 +876,7 @@ mod tests {
             causation_id: format!("Bearer {}", token_bloqueado),
             ..Default::default()
         };
-        let res = exigir_auth(deps.clone(), false, |_, env| {
+        let res = exigir_auth(deps.clone(), bus.clone(), false, |_, env| {
             Box::pin(async move {
                 Envelope {
                     method: "Ok".to_string(),
@@ -720,7 +897,7 @@ mod tests {
             causation_id: format!("Bearer {}", token_valido),
             ..Default::default()
         };
-        let res = exigir_auth(deps.clone(), true, |_, env| {
+        let res = exigir_auth(deps.clone(), bus.clone(), true, |_, env| {
             Box::pin(async move {
                 Envelope {
                     method: "Ok".to_string(),
@@ -738,7 +915,7 @@ mod tests {
             causation_id: format!("Bearer {}", token_valido),
             ..Default::default()
         };
-        let res = exigir_auth(deps.clone(), false, |_, env| {
+        let res = exigir_auth(deps.clone(), bus.clone(), false, |_, env| {
             Box::pin(async move {
                 Envelope {
                     method: "Ok".to_string(),
@@ -833,6 +1010,7 @@ mod tests {
             login_rate_max: 5,
             login_rate_window_s: 60,
         });
+        let bus = fake_bus(29151).await;
 
         let payload = serde_json::json!({
             "email": "test@domain.com",
@@ -844,7 +1022,7 @@ mod tests {
             ..Default::default()
         };
 
-        let res = handler_login(deps, env).await;
+        let res = handler_login(deps, bus.clone(), env).await;
         assert_eq!(res.kind, MessageKind::Reply as i32);
         assert_eq!(res.method, "LoginReply");
 
@@ -1071,6 +1249,7 @@ mod tests {
             login_rate_max: 5,
             login_rate_window_s: 60,
         });
+        let bus = fake_bus(29153).await;
 
         // Gera token válido para desempacotar as claims
         let claims = application::jwt::Claims {
@@ -1092,7 +1271,7 @@ mod tests {
             ..Default::default()
         };
 
-        let res = handler_logout(deps, env).await;
+        let res = handler_logout(deps, bus.clone(), env).await;
         assert_eq!(res.kind, MessageKind::Reply as i32);
         assert_eq!(res.method, "LogoutReply");
 

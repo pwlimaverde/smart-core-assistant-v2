@@ -12,6 +12,8 @@ use crate::tokens::hash_refresh_token;
 ///
 /// Invalida a família de refresh tokens correspondente no Redis e adiciona
 /// o `jti` do token de acesso atual na blocklist pelo tempo de vida restante.
+// Tokens ficam fora do span; `sub`/`jti` são identificadores, não segredos.
+#[tracing::instrument(skip_all, fields(traceparent = %traceparent, user = %claims.sub))]
 pub async fn logout(
     deps: &crate::auth::login::AuthDeps,
     traceparent: &str,
@@ -76,6 +78,8 @@ pub async fn logout(
             .map(|e| AppError::from_envelope(&e))
             .unwrap_or_else(|| AppError::Cache("falha ao bloquear token".to_string())));
     }
+
+    tracing::info!(jti = %claims.jti, ttl_blocklist_s = ttl, "logout efetuado; jti bloqueado e família revogada");
 
     Ok(serde_json::json!({
         "status": "success",

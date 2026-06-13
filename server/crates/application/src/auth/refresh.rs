@@ -16,6 +16,8 @@ pub const REUSE_MARKER: &str = "token_reuse_detected";
 /// Realiza a rotação do token de refresh (Refresh Token Rotation).
 /// Valida o token atual no Redis, invalida-o, gera um novo par (access + refresh)
 /// mantendo a mesma família de rotação e prevenindo ataques de replay.
+// O refresh token fica fora do span (credencial); correlação via traceparent.
+#[tracing::instrument(skip_all, fields(traceparent = %traceparent))]
 pub async fn refresh(
     deps: &crate::auth::login::AuthDeps,
     traceparent: &str,
@@ -177,6 +179,8 @@ pub async fn refresh(
             .map(|e| AppError::from_envelope(&e))
             .unwrap_or_else(|| AppError::Cache("falha ao salvar novo refresh token".to_string())));
     }
+
+    tracing::info!(user_id, is_superuser, family_id = %family_id, "refresh rotacionado com sucesso");
 
     Ok(serde_json::json!({
         "access_token": access_token,
