@@ -106,7 +106,14 @@ jobs:
           DATABASE_URL: postgres://smartcore_app:smartcore_app@localhost:5434/smartcore_v2
           DATABASE_ADMIN_URL: postgres://postgres:postgres@localhost:5434/smartcore_v2
           REDIS_URL: redis://localhost:6380
-        run: cargo test --workspace --lib --bins 2>&1
+          # Testes de banco compartilham o mesmo Postgres/Redis e cada `setup_teste()`
+          # abre um pool próprio. Sem serializar, os testes paralelos estouram o
+          # `max_connections` do Postgres (container = 100) e derrubam conexões
+          # (MigrateError/UnexpectedEof). É a convenção do projeto p/ testes de banco
+          # (ver testing-strategy.md). `--test-threads=1` serializa também entre os
+          # binários (RUST_TEST_THREADS só serializa dentro de cada binário).
+          RUST_TEST_THREADS: "1"
+        run: cargo test --workspace --lib --bins -- --test-threads=1 2>&1
 
       # Valida que o cache .sqlx/ versionado está em sincronia com as queries do código.
       # Sem isto, uma query nova/alterada sem `cargo sqlx prepare` quebraria o build de
