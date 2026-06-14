@@ -3,10 +3,7 @@
 This directory contains plans for coordinating work across documentation and playbooks.
 
 ## Plan Queue
-*(vazio — nenhum plano ativo no momento)*
-
-## Arquivados (mais recentes)
-- [User Auth Module](./archive/user-auth-module/user-auth-module.md) — concluído em 2026-06-12
+1. [Base Frontend Flutter](./base-frontend-flutter.md)
 
 ## How To Create Or Update Plans
 - Run "dotcontext plan <name>" to scaffold a new plan template.
