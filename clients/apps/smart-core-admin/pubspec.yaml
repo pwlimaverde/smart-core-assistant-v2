@@ -1,0 +1,32 @@
+name: smart_core_admin
+description: App Web admin do Smart Core Assistant (casca mínima — features de domínio em fases futuras).
+version: 1.0.0+1
+publish_to: 'none'
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  app_config:
+    path: ../../packages/app_config
+  dependencies_module:
+    path: ../../modulos/dependencies_module
+  initial_loading_module:
+    path: ../../modulos/initial_loading_module
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  generate: true
+  uses-material-design: true
+
+resolution: workspace

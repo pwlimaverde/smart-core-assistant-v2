@@ -1,0 +1,7 @@
+{
+  "@@locale": "pt",
+  "appTitle": "Smart Core Admin",
+  "@appTitle": {
+    "description": "Título da aplicação"
+  }
+}

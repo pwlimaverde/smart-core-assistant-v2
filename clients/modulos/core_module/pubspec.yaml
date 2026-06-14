@@ -1,0 +1,27 @@
+name: core_module
+description: InfraModule (serviços globais + boot) e contratos de serviço com impls no-op para a base estrutural.
+version: 1.0.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  get_it_module:
+    path: ../../packages/get_it_module
+  app_config:
+    path: ../../packages/app_config
+  api_client:
+    path: ../../packages/api_client
+  navigation_module:
+    path: ../navigation_module
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+resolution: workspace

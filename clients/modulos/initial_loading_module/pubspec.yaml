@@ -1,0 +1,23 @@
+name: initial_loading_module
+description: Módulo de splash/bootstrap — roda runBootTasks e libera a barreira de navegação via BootState.
+version: 1.0.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  dependencies_module:
+    path: ../dependencies_module
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  bloc_test: ^10.0.0
+  mocktail: ^1.0.5
+
+resolution: workspace
