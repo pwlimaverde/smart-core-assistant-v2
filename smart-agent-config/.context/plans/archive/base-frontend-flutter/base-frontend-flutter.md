@@ -22,17 +22,17 @@ phases:
     name: "Execution — cronograma: packages → módulos → agregador → splash → app"
     prevc: "E"
     agent: "frontend-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-v"
     name: "Validation — melos analyze/test por etapa + app sobe no Chrome"
     prevc: "V"
     agent: "test-writer"
-    status: "pending"
+    status: "completed"
   - id: "phase-c"
     name: "Confirmation — final-review e arquivamento dotcontext"
     prevc: "C"
     agent: "frontend-specialist"
-    status: "pending"
+    status: "in_progress"
 ---
 
 # Base do Monorepo Frontend Flutter — `base-frontend-flutter`
