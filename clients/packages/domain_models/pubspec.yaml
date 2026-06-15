@@ -11,3 +11,8 @@ dependencies:
   return_success_or_error: ^2.0.0
 
 resolution: workspace
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+

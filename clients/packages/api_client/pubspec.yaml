@@ -17,3 +17,9 @@ dependencies:
   protobuf: ^4.1.0
 
 resolution: workspace
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  mocktail: ^1.0.5
+

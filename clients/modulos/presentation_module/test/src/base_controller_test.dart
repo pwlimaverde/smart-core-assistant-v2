@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:presentation_module/presentation_module.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
 
-// Controller concreto mínimo para teste
 final class _TestController extends BaseController<String> {
   Future<void> load(ReturnSuccessOrError<String> result) =>
       execute(() async => result);
