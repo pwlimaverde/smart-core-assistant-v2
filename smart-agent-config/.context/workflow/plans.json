@@ -1,14 +1,15 @@
 {
-  "active": [
+  "active": [],
+  "completed": [
     {
-      "slug": "user-auth-module",
-      "path": "plans/user-auth-module.md",
-      "title": "Login Real + Rotas Admin de Configuração — `user-auth-module`",
+      "slug": "base-frontend-flutter",
+      "path": "plans/archive/base-frontend-flutter/base-frontend-flutter.md",
+      "title": "Base do Monorepo Frontend Flutter — `base-frontend-flutter`",
       "summary": "Plano **canônico** (leve). A verdade técnica detalhada está nos artefatos abaixo.",
-      "linkedAt": "2026-06-12T11:43:49.394Z",
-      "status": "active"
+      "linkedAt": "2026-06-14T14:37:01.160Z",
+      "completedAt": "2026-06-14T20:00:00.000Z",
+      "status": "completed"
     }
   ],
-  "completed": [],
-  "primary": "user-auth-module"
+  "primary": null
 }

@@ -1,8 +1,8 @@
 # Flutter BLoC (flutter_bloc)
 
-- **Versão Recomendada:** 8.1.3
+- **Versão Recomendada:** 9.1.1 (par com `bloc ^9.2.1`; API de `Cubit`/`BlocBuilder`/`BlocListener` inalterada vs 8.x — 9.0 removeu apenas `BlocOverrides`)
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-05-31
+- **Última Verificação:** 2026-06-14
 - **Propósito no Projeto:** Gerenciamento de estado previsível e reativo baseado no padrão BLoC (Business Logic Component) para controlar as interações visuais complexas do Chat e Kanban.
 - **Documentação Oficial:** [https://bloclibrary.dev/](https://bloclibrary.dev/)
 

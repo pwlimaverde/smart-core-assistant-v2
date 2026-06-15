@@ -1,123 +1,124 @@
 {
   "version": 2,
   "workflowType": "prevc",
-  "updatedAt": "2026-06-12T19:51:27.094Z",
+  "updatedAt": "2026-06-14T23:21:09.680Z",
   "status": {
     "project": {
-      "name": "user-auth-module",
+      "name": "base-frontend-flutter",
       "scale": 3,
-      "started": "2026-06-12T11:37:18.728Z",
+      "started": "2026-06-14T14:36:52.579Z",
       "current_phase": "C",
       "settings": {
         "autonomous_mode": false,
         "require_plan": true,
         "require_approval": true
       },
-      "plan": "user-auth-module"
+      "plan": "base-frontend-flutter"
     },
     "phases": {
       "P": {
         "status": "completed",
-        "started_at": "2026-06-12T11:37:18.728Z",
-        "completed_at": "2026-06-12T11:37:29.281Z",
+        "started_at": "2026-06-14T14:36:52.579Z",
+        "completed_at": "2026-06-14T14:37:05.986Z",
         "outputs": [
           {
-            "path": ".context/plans/user-auth-module.md",
+            "path": ".context/plans/base-frontend-flutter.md",
             "status": "filled"
           },
           {
-            "path": ".context/plans/user-auth-module/plano_completo_user-auth-module.md",
+            "path": ".context/plans/base-frontend-flutter/plano_completo_base-frontend-flutter.md",
             "status": "filled"
           },
           {
-            "path": ".context/plans/user-auth-module/info_aux_user-auth-module.md",
+            "path": ".context/plans/base-frontend-flutter/info_aux_base-frontend-flutter.md",
             "status": "filled"
           }
         ]
       },
       "R": {
         "status": "completed",
-        "started_at": "2026-06-12T11:37:29.284Z",
-        "completed_at": "2026-06-12T11:45:01.235Z",
+        "started_at": "2026-06-14T14:37:05.991Z",
+        "completed_at": "2026-06-14T14:37:28.172Z",
         "outputs": [
           {
-            "path": "C:\\Users\\pwlim\\.gemini\\antigravity-ide\\brain\\d58e7549-f6d5-4a8f-a76b-1eee2246a752\\implementation_plan.md",
+            "path": ".context/plans/base-frontend-flutter/plano_completo_base-frontend-flutter.md",
             "status": "filled"
           }
         ]
       },
       "E": {
         "status": "completed",
-        "started_at": "2026-06-12T11:45:01.240Z",
-        "completed_at": "2026-06-12T13:16:53.673Z",
+        "started_at": "2026-06-14T14:37:28.177Z",
+        "completed_at": "2026-06-14T20:06:18.624Z",
         "outputs": [
           {
-            "path": "smart-agent-config/.context/workflow/docs/final-review.md",
+            "path": "clients/pubspec.yaml",
             "status": "filled"
           },
           {
-            "path": "server/crates/application/src/jwt.rs",
+            "path": "clients/packages/app_config/",
             "status": "filled"
           },
           {
-            "path": "server/crates/application/src/tokens.rs",
+            "path": "clients/packages/domain_models/",
             "status": "filled"
           },
           {
-            "path": "server/crates/application/src/auth/refresh.rs",
+            "path": "clients/packages/api_client/",
             "status": "filled"
           },
           {
-            "path": "server/crates/application/src/auth/logout.rs",
+            "path": "clients/packages/get_it_module/",
             "status": "filled"
           },
           {
-            "path": "server/apps/runtime_api/src/main.rs",
+            "path": "clients/modulos/presentation_module/",
             "status": "filled"
           },
           {
-            "path": "server/apps/data_postgres/src/main.rs",
+            "path": "clients/modulos/design_system_module/",
+            "status": "filled"
+          },
+          {
+            "path": "clients/modulos/navigation_module/",
+            "status": "filled"
+          },
+          {
+            "path": "clients/modulos/core_module/",
+            "status": "filled"
+          },
+          {
+            "path": "clients/modulos/dependencies_module/",
+            "status": "filled"
+          },
+          {
+            "path": "clients/modulos/initial_loading_module/",
+            "status": "filled"
+          },
+          {
+            "path": "clients/apps/smart-core-admin/",
             "status": "filled"
           }
         ]
       },
       "V": {
         "status": "completed",
-        "started_at": "2026-06-12T13:16:53.840Z",
-        "completed_at": "2026-06-12T19:51:21.076Z",
+        "started_at": "2026-06-14T20:06:18.629Z",
+        "completed_at": "2026-06-14T23:21:09.668Z",
         "outputs": [
           {
-            "path": "server/crates/application/tests",
-            "status": "filled"
-          },
-          {
-            "path": "server/apps/runtime_api/src/main.rs",
-            "status": "filled"
-          },
-          {
-            "path": "server/apps/data_redis/src/main.rs",
-            "status": "filled"
-          },
-          {
             "path": "smart-agent-config/.context/workflow/docs/final-review.md",
+            "status": "filled"
+          },
+          {
+            "path": "smart-agent-config/.context/plans/archive/base-frontend-flutter/",
             "status": "filled"
           }
         ]
       },
       "C": {
-        "status": "completed",
-        "started_at": "2026-06-12T19:51:21.086Z",
-        "completed_at": "2026-06-12T19:51:27.080Z",
-        "outputs": [
-          {
-            "path": "smart-agent-config/.context/workflow/docs/final-review.md",
-            "status": "filled"
-          },
-          {
-            "path": "smart-agent-config/.context/plans/archive/user-auth-module",
-            "status": "filled"
-          }
-        ]
+        "status": "in_progress",
+        "started_at": "2026-06-14T23:21:09.670Z"
       }
     },
     "agents": {},
@@ -129,132 +130,72 @@
     "execution": {
       "history": [
         {
-          "timestamp": "2026-06-12T11:37:18.728Z",
+          "timestamp": "2026-06-14T14:36:52.579Z",
           "phase": "P",
           "action": "started"
         },
         {
-          "timestamp": "2026-06-12T11:37:23.056Z",
+          "timestamp": "2026-06-14T14:37:01.168Z",
           "phase": "P",
           "action": "plan_linked",
-          "plan": "user-auth-module"
+          "plan": "base-frontend-flutter"
         },
         {
-          "timestamp": "2026-06-12T11:37:29.281Z",
+          "timestamp": "2026-06-14T14:37:05.986Z",
           "phase": "P",
           "action": "completed"
         },
         {
-          "timestamp": "2026-06-12T11:37:29.284Z",
+          "timestamp": "2026-06-14T14:37:05.991Z",
           "phase": "R",
           "action": "started"
         },
         {
-          "phase": "R",
-          "action": "plan_phase_updated",
-          "plan": "user-auth-module",
-          "description": "Plan phase phase-p updated to completed",
-          "timestamp": "2026-06-12T11:37:35.443Z"
-        },
-        {
-          "phase": "R",
-          "action": "plan_phase_updated",
-          "plan": "user-auth-module",
-          "description": "Plan phase phase-r updated to in_progress",
-          "timestamp": "2026-06-12T11:37:40.500Z"
-        },
-        {
-          "timestamp": "2026-06-12T11:43:49.399Z",
-          "phase": "R",
-          "action": "plan_linked",
-          "plan": "user-auth-module"
-        },
-        {
-          "timestamp": "2026-06-12T11:45:01.235Z",
+          "timestamp": "2026-06-14T14:37:28.172Z",
           "phase": "R",
           "action": "completed"
         },
         {
-          "timestamp": "2026-06-12T11:45:01.240Z",
+          "timestamp": "2026-06-14T14:37:28.177Z",
           "phase": "E",
           "action": "started"
         },
         {
           "phase": "E",
           "action": "plan_phase_updated",
-          "plan": "user-auth-module",
+          "plan": "base-frontend-flutter",
           "description": "Plan phase phase-r updated to completed",
-          "timestamp": "2026-06-12T13:16:47.567Z"
+          "timestamp": "2026-06-14T14:37:32.626Z"
         },
         {
-          "phase": "E",
-          "action": "plan_phase_updated",
-          "plan": "user-auth-module",
-          "description": "Plan phase phase-e updated to in_progress",
-          "timestamp": "2026-06-12T13:16:47.747Z"
-        },
-        {
-          "timestamp": "2026-06-12T13:16:53.673Z",
+          "timestamp": "2026-06-14T20:06:18.624Z",
           "phase": "E",
           "action": "completed"
         },
         {
-          "timestamp": "2026-06-12T13:16:53.840Z",
+          "timestamp": "2026-06-14T20:06:18.629Z",
           "phase": "V",
           "action": "started"
         },
         {
-          "phase": "V",
-          "action": "plan_phase_updated",
-          "plan": "user-auth-module",
-          "description": "Plan phase phase-e updated to completed",
-          "timestamp": "2026-06-12T18:51:57.449Z"
-        },
-        {
-          "phase": "V",
-          "action": "plan_phase_updated",
-          "plan": "user-auth-module",
-          "description": "Plan phase phase-v updated to in_progress",
-          "timestamp": "2026-06-12T18:51:58.004Z"
-        },
-        {
-          "phase": "V",
-          "action": "plan_phase_updated",
-          "plan": "user-auth-module",
-          "description": "Plan phase phase-v updated to completed",
-          "timestamp": "2026-06-12T19:51:20.261Z"
-        },
-        {
-          "timestamp": "2026-06-12T19:51:21.076Z",
+          "timestamp": "2026-06-14T23:21:09.668Z",
           "phase": "V",
           "action": "completed"
         },
         {
-          "timestamp": "2026-06-12T19:51:21.086Z",
+          "timestamp": "2026-06-14T23:21:09.670Z",
           "phase": "C",
           "action": "started"
-        },
-        {
-          "phase": "C",
-          "action": "plan_phase_updated",
-          "plan": "user-auth-module",
-          "description": "Plan phase phase-c updated to completed",
-          "timestamp": "2026-06-12T19:51:26.273Z"
-        },
-        {
-          "timestamp": "2026-06-12T19:51:27.080Z",
-          "phase": "C",
-          "action": "completed"
         }
       ],
-      "last_activity": "2026-06-12T19:51:27.080Z",
-      "resume_context": "Fase C (Confirmação) concluída"
+      "last_activity": "2026-06-14T23:21:09.670Z",
+      "resume_context": "Fase C (Confirmação) em progresso"
     }
   },
   "binding": {
-    "workflowName": "user-auth-module",
-    "sessionId": "f5fc94b8-4c37-4b12-a2de-7432271b87b9",
-    "createdAt": "2026-06-12T11:37:18.734Z",
-    "updatedAt": "2026-06-12T19:51:27.088Z"
+    "workflowName": "base-frontend-flutter",
+    "sessionId": "3bfec11c-7065-4d22-8233-218dfab83f86",
+    "createdAt": "2026-06-14T14:36:52.587Z",
+    "updatedAt": "2026-06-14T23:21:09.676Z"
   }
 }

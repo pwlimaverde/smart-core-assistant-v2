@@ -1,0 +1,260 @@
+{
+  "version": 2,
+  "workflowType": "prevc",
+  "updatedAt": "2026-06-14T14:36:52.568Z",
+  "status": {
+    "project": {
+      "name": "user-auth-module",
+      "scale": 3,
+      "started": "2026-06-12T11:37:18.728Z",
+      "current_phase": "C",
+      "settings": {
+        "autonomous_mode": false,
+        "require_plan": true,
+        "require_approval": true
+      },
+      "plan": "user-auth-module"
+    },
+    "phases": {
+      "P": {
+        "status": "completed",
+        "started_at": "2026-06-12T11:37:18.728Z",
+        "completed_at": "2026-06-12T11:37:29.281Z",
+        "outputs": [
+          {
+            "path": ".context/plans/user-auth-module.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/user-auth-module/plano_completo_user-auth-module.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/user-auth-module/info_aux_user-auth-module.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "R": {
+        "status": "completed",
+        "started_at": "2026-06-12T11:37:29.284Z",
+        "completed_at": "2026-06-12T11:45:01.235Z",
+        "outputs": [
+          {
+            "path": "C:\\Users\\pwlim\\.gemini\\antigravity-ide\\brain\\d58e7549-f6d5-4a8f-a76b-1eee2246a752\\implementation_plan.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "E": {
+        "status": "completed",
+        "started_at": "2026-06-12T11:45:01.240Z",
+        "completed_at": "2026-06-12T13:16:53.673Z",
+        "outputs": [
+          {
+            "path": "smart-agent-config/.context/workflow/docs/final-review.md",
+            "status": "filled"
+          },
+          {
+            "path": "server/crates/application/src/jwt.rs",
+            "status": "filled"
+          },
+          {
+            "path": "server/crates/application/src/tokens.rs",
+            "status": "filled"
+          },
+          {
+            "path": "server/crates/application/src/auth/refresh.rs",
+            "status": "filled"
+          },
+          {
+            "path": "server/crates/application/src/auth/logout.rs",
+            "status": "filled"
+          },
+          {
+            "path": "server/apps/runtime_api/src/main.rs",
+            "status": "filled"
+          },
+          {
+            "path": "server/apps/data_postgres/src/main.rs",
+            "status": "filled"
+          }
+        ]
+      },
+      "V": {
+        "status": "completed",
+        "started_at": "2026-06-12T13:16:53.840Z",
+        "completed_at": "2026-06-12T19:51:21.076Z",
+        "outputs": [
+          {
+            "path": "server/crates/application/tests",
+            "status": "filled"
+          },
+          {
+            "path": "server/apps/runtime_api/src/main.rs",
+            "status": "filled"
+          },
+          {
+            "path": "server/apps/data_redis/src/main.rs",
+            "status": "filled"
+          },
+          {
+            "path": "smart-agent-config/.context/workflow/docs/final-review.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "C": {
+        "status": "completed",
+        "started_at": "2026-06-12T19:51:21.086Z",
+        "completed_at": "2026-06-12T19:51:27.080Z",
+        "outputs": [
+          {
+            "path": "smart-agent-config/.context/workflow/docs/final-review.md",
+            "status": "filled"
+          },
+          {
+            "path": "smart-agent-config/.context/plans/archive/user-auth-module",
+            "status": "filled"
+          }
+        ]
+      }
+    },
+    "agents": {},
+    "roles": {},
+    "approval": {
+      "plan_created": true,
+      "plan_approved": false
+    },
+    "execution": {
+      "history": [
+        {
+          "timestamp": "2026-06-12T11:37:18.728Z",
+          "phase": "P",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-12T11:37:23.056Z",
+          "phase": "P",
+          "action": "plan_linked",
+          "plan": "user-auth-module"
+        },
+        {
+          "timestamp": "2026-06-12T11:37:29.281Z",
+          "phase": "P",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-12T11:37:29.284Z",
+          "phase": "R",
+          "action": "started"
+        },
+        {
+          "phase": "R",
+          "action": "plan_phase_updated",
+          "plan": "user-auth-module",
+          "description": "Plan phase phase-p updated to completed",
+          "timestamp": "2026-06-12T11:37:35.443Z"
+        },
+        {
+          "phase": "R",
+          "action": "plan_phase_updated",
+          "plan": "user-auth-module",
+          "description": "Plan phase phase-r updated to in_progress",
+          "timestamp": "2026-06-12T11:37:40.500Z"
+        },
+        {
+          "timestamp": "2026-06-12T11:43:49.399Z",
+          "phase": "R",
+          "action": "plan_linked",
+          "plan": "user-auth-module"
+        },
+        {
+          "timestamp": "2026-06-12T11:45:01.235Z",
+          "phase": "R",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-12T11:45:01.240Z",
+          "phase": "E",
+          "action": "started"
+        },
+        {
+          "phase": "E",
+          "action": "plan_phase_updated",
+          "plan": "user-auth-module",
+          "description": "Plan phase phase-r updated to completed",
+          "timestamp": "2026-06-12T13:16:47.567Z"
+        },
+        {
+          "phase": "E",
+          "action": "plan_phase_updated",
+          "plan": "user-auth-module",
+          "description": "Plan phase phase-e updated to in_progress",
+          "timestamp": "2026-06-12T13:16:47.747Z"
+        },
+        {
+          "timestamp": "2026-06-12T13:16:53.673Z",
+          "phase": "E",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-12T13:16:53.840Z",
+          "phase": "V",
+          "action": "started"
+        },
+        {
+          "phase": "V",
+          "action": "plan_phase_updated",
+          "plan": "user-auth-module",
+          "description": "Plan phase phase-e updated to completed",
+          "timestamp": "2026-06-12T18:51:57.449Z"
+        },
+        {
+          "phase": "V",
+          "action": "plan_phase_updated",
+          "plan": "user-auth-module",
+          "description": "Plan phase phase-v updated to in_progress",
+          "timestamp": "2026-06-12T18:51:58.004Z"
+        },
+        {
+          "phase": "V",
+          "action": "plan_phase_updated",
+          "plan": "user-auth-module",
+          "description": "Plan phase phase-v updated to completed",
+          "timestamp": "2026-06-12T19:51:20.261Z"
+        },
+        {
+          "timestamp": "2026-06-12T19:51:21.076Z",
+          "phase": "V",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-12T19:51:21.086Z",
+          "phase": "C",
+          "action": "started"
+        },
+        {
+          "phase": "C",
+          "action": "plan_phase_updated",
+          "plan": "user-auth-module",
+          "description": "Plan phase phase-c updated to completed",
+          "timestamp": "2026-06-12T19:51:26.273Z"
+        },
+        {
+          "timestamp": "2026-06-12T19:51:27.080Z",
+          "phase": "C",
+          "action": "completed"
+        }
+      ],
+      "last_activity": "2026-06-12T19:51:27.080Z",
+      "resume_context": "Fase C (Confirmação) concluída"
+    }
+  },
+  "binding": {
+    "workflowName": "user-auth-module",
+    "sessionId": "f5fc94b8-4c37-4b12-a2de-7432271b87b9",
+    "createdAt": "2026-06-12T11:37:18.734Z",
+    "updatedAt": "2026-06-12T19:51:27.088Z"
+  }
+}

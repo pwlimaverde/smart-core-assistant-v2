@@ -1,0 +1,20 @@
+name: get_it_module
+description: Infraestrutura de injeção de dependências modular (escopo global + escopos de feature) via GetIt atrelado ao ciclo de vida do Flutter.
+version: 2.0.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  get_it: ^9.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+resolution: workspace

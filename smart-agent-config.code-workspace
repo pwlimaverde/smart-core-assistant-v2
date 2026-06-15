@@ -7,8 +7,48 @@
 			"path": "old"
 		},
 		{
+			"name": "smart-core-assistant-v2",
 			"path": "."
 		}
 	],
-	"settings": {}
+	"settings": {},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+			{
+				"name": "smart-core-admin (dev · Chrome)",
+				"request": "launch",
+				"type": "dart",
+				"program": "${workspaceFolder:smart-core-assistant-v2}/clients/apps/smart-core-admin/lib/main_dev.dart",
+				"cwd": "${workspaceFolder:smart-core-assistant-v2}/clients/apps/smart-core-admin",
+				"deviceId": "chrome",
+				"args": [
+					"--dart-define=SMARTCORE_API_ENDPOINT=tcp://localhost:50051"
+				]
+			},
+			{
+				"name": "smart-core-admin (prod · Chrome)",
+				"request": "launch",
+				"type": "dart",
+				"program": "${workspaceFolder:smart-core-assistant-v2}/clients/apps/smart-core-admin/lib/main_prod.dart",
+				"cwd": "${workspaceFolder:smart-core-assistant-v2}/clients/apps/smart-core-admin",
+				"deviceId": "chrome",
+				"args": [
+					"--dart-define=SMARTCORE_API_ENDPOINT=${env:SMARTCORE_API_ENDPOINT}"
+				]
+			},
+			{
+				"name": "smart-core-admin (dev · web-server)",
+				"request": "launch",
+				"type": "dart",
+				"program": "${workspaceFolder:smart-core-assistant-v2}/clients/apps/smart-core-admin/lib/main_dev.dart",
+				"cwd": "${workspaceFolder:smart-core-assistant-v2}/clients/apps/smart-core-admin",
+				"deviceId": "web-server",
+				"args": [
+					"--web-port=8080",
+					"--dart-define=SMARTCORE_API_ENDPOINT=tcp://localhost:50051"
+				]
+			}
+		]
+	}
 }

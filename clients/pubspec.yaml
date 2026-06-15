@@ -1,0 +1,30 @@
+name: smart_core_clients
+publish_to: 'none'
+environment:
+  sdk: ^3.12.2
+
+# Pub Workspaces (Dart >= 3.6): membros adicionados a cada etapa.
+workspace:
+  - packages/app_config
+  - packages/domain_models
+  - packages/get_it_module
+  - packages/api_client
+  - modulos/presentation_module
+  - modulos/design_system_module
+  - modulos/navigation_module
+  - modulos/core_module
+  - modulos/dependencies_module
+  - modulos/initial_loading_module
+  - apps/smart-core-admin
+
+dev_dependencies:
+  melos: ^7.8.2
+
+# Scripts do Melos 7.x (mora no pubspec raiz; não há melos.yaml).
+melos:
+  name: smart_core_clients
+  scripts:
+    analyze:
+      run: melos exec -- flutter analyze .
+    test:
+      run: melos exec --dir-exists=test -- flutter test

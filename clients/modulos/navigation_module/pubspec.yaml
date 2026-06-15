@@ -1,0 +1,22 @@
+name: navigation_module
+description: Navegação baseada em go_router, agregando as rotas declaradas pelos GetItModule num roteador central.
+version: 1.0.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  go_router: ^17.3.0
+  get_it_module:
+    path: ../../packages/get_it_module
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+resolution: workspace

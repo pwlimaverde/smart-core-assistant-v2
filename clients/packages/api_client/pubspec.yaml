@@ -1,0 +1,15 @@
+name: api_client
+description: Contrato único de comunicação com o backend (stub — gRPC/gRPC-Web em fase futura).
+version: 1.0.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  app_config:
+    path: ../app_config
+  domain_models:
+    path: ../domain_models
+
+resolution: workspace

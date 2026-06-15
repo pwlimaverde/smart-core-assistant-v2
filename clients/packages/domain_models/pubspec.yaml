@@ -1,0 +1,9 @@
+name: domain_models
+description: Modelos de domínio e DTOs compartilhados do monorepo (stub estrutural).
+version: 1.0.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.12.2
+
+resolution: workspace

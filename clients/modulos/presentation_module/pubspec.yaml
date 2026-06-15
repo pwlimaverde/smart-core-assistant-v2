@@ -1,0 +1,26 @@
+name: presentation_module
+description: Bases de apresentação (ViewState genérico, BaseController e páginas) padronizando Cubit + Clean Architecture sobre o get_it_module.
+version: 1.0.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  bloc: ^9.2.1
+  flutter_bloc: ^9.1.1
+  get_it_module:
+    path: ../../packages/get_it_module
+  return_success_or_error: ^2.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  bloc_test: ^10.0.0
+  mocktail: ^1.0.5
+
+resolution: workspace

@@ -1,0 +1,14 @@
+{
+  "active": [
+    {
+      "slug": "user-auth-module",
+      "path": "plans/user-auth-module.md",
+      "title": "Login Real + Rotas Admin de Configuração — `user-auth-module`",
+      "summary": "Plano **canônico** (leve). A verdade técnica detalhada está nos artefatos abaixo.",
+      "linkedAt": "2026-06-12T11:43:49.394Z",
+      "status": "active"
+    }
+  ],
+  "completed": [],
+  "primary": "user-auth-module"
+}

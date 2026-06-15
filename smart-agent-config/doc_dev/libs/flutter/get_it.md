@@ -1,8 +1,8 @@
 # Get It
 
-- **Versão Recomendada:** 7.6.0
+- **Versão Recomendada:** 9.2.1 (escopos e `register*`/`dispose` inalterados vs 7.x; 9.0 tornou o disposal estritamente LIFO e removeu `strictDisposalOrder`)
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-05-31
+- **Última Verificação:** 2026-06-14
 - **Propósito no Projeto:** Service Locator simples e rápido para injeção de dependências (Repositories, DataSources, Serviços e ViewModels) no frontend Flutter.
 - **Documentação Oficial:** [https://pub.dev/packages/get_it](https://pub.dev/packages/get_it)
 

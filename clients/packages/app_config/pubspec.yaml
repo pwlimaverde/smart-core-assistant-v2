@@ -1,0 +1,9 @@
+name: app_config
+description: Configuração imutável do app por ambiente (flavor/endpoint).
+version: 1.0.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.12.2
+
+resolution: workspace

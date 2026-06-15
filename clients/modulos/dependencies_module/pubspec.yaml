@@ -1,0 +1,47 @@
+name: dependencies_module
+description: Âncora de versões e ponto único de import para features e o app. Reexporta apenas infra — nunca módulos de feature.
+version: 1.0.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Módulos internos de infra
+  design_system_module:
+    path: ../design_system_module
+  core_module:
+    path: ../core_module
+  presentation_module:
+    path: ../presentation_module
+  navigation_module:
+    path: ../navigation_module
+
+  # Packages do monorepo
+  get_it_module:
+    path: ../../packages/get_it_module
+  api_client:
+    path: ../../packages/api_client
+  domain_models:
+    path: ../../packages/domain_models
+  app_config:
+    path: ../../packages/app_config
+
+  # Externas
+  get_it: ^9.2.1
+  flutter_bloc: ^9.1.1
+  bloc: ^9.2.1
+  intl: ^0.20.2
+  uuid: ^4.5.3
+  return_success_or_error: ^2.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+resolution: workspace
