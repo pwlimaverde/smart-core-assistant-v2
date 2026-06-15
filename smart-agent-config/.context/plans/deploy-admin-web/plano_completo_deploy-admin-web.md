@@ -22,7 +22,7 @@ O `smart-core-admin` (Flutter Web/WASM) já existe e fala com a fachada gRPC-Web
 
 ```
 Browser ──HTTPS──> Caddy (apex / dev.)
-   ├─ @grpcweb (Content-Type: application/grpc-web*) ──> reverse_proxy 127.0.0.1:<porta facade>
+   ├─ @grpcapi (path /smartcore.contracts.*; pega POST + preflight OPTIONS) ──> reverse_proxy 127.0.0.1:<porta facade>
    └─ handle_path /v2/admin/*  ──> root + try_files {path} /index.html + file_server
                                    (/srv/smart-core-admin/<env>/web)
 ```
@@ -52,7 +52,7 @@ Eixo declarado já na concepção: este é plano de **infra/CI** — **app não 
 
 Objetivo: confirmar que o desenho é coerente com o que existe **antes** de tocar arquivos. Itens de revisão (checklist de gate R):
 
-1. **Same-origin sem CORS bloqueante.** A fachada (`grpc_web.rs`) já tem `CorsLayer` com `mirror_request` + `accept_http1(true)`. Como Caddy roteia o gRPC-Web no **mesmo host/porta 443** que serve o WASM, o browser nem dispara preflight cross-origin. Confirmado: o matcher casa por **content-type**, não por path → captura `/smartcore.contracts.queries.AuthService/*` na raiz mesmo com o app sob `/v2/admin/`.
+1. **Same-origin (deploy) e cross-origin (debug local).** A fachada (`grpc_web.rs`) já tem `CorsLayer` com `mirror_request` + `accept_http1(true)`. No **deploy** o bundle e o gRPC-Web são same-origin (sem preflight). No **debug local** (app em `http://localhost` → `https://dev...`) o tráfego é **cross-origin** → o browser dispara **preflight `OPTIONS`**. Por isso o Caddy roteia o gRPC por **path** (`@grpcapi path /smartcore.contracts.*`), que captura POST **e** OPTIONS — o matcher por content-type perderia o preflight (OPTIONS não tem `application/grpc-web`). O path do gRPC fica na raiz, não colide com `/v2/admin/`.
 2. **`reverse_proxy` SEM h2c.** gRPC-Web trafega sobre **HTTP/1.1**; a fachada Tonic escuta HTTP/1.1 plano em `127.0.0.1`. Os blocos legados `api.`/`dev-api.` usam `h2c://` (gRPC puro 8080/8090) — caso distinto. NÃO replicar h2c nos novos blocos apex/dev.
 3. **Path URL strategy exige SPA rewrite.** `usePathUrlStrategy()` + `--base-href /v2/admin/` só funcionam com `try_files {path} /index.html` **dentro do `handle_path`** (após o strip, `{path}` é relativo ao webroot). Sem isso → 404 em refresh/deep-link.
 4. **Porta por ambiente.** Default do código é `0.0.0.0:50051`; sem `RUNTIME_API_GRPC_WEB_ADDR` distinto por ambiente, dev e prod colidem. Bind `127.0.0.1` (Caddy é a única borda; firewall só abre 80/443).
@@ -140,11 +140,11 @@ Notas:
 smartcoreassistant.com.br {
 	encode gzip zstd
 
-	# gRPC-Web same-origin (HTTP/1.1). Matcher por content-type DENTRO do block;
-	# casa em QUALQUER path (a API sai na raiz: /smartcore.contracts.queries.AuthService/*).
-	# SEM h2c: a fachada Tonic escuta HTTP/1.1 plano em 127.0.0.1.
-	@grpcweb header Content-Type application/grpc-web*
-	handle @grpcweb {
+	# gRPC-Web por PATH do namespace do contrato (HTTP/1.1). Matchar por path (não por
+	# content-type) captura tanto o POST gRPC-Web quanto o preflight OPTIONS (cross-origin
+	# do debug local). SEM h2c: a fachada Tonic escuta HTTP/1.1 plano em 127.0.0.1.
+	@grpcapi path /smartcore.contracts.*
+	handle @grpcapi {
 		reverse_proxy 127.0.0.1:50051
 	}
 
@@ -175,8 +175,8 @@ smartcoreassistant.com.br {
 dev.smartcoreassistant.com.br {
 	encode gzip zstd
 
-	@grpcweb header Content-Type application/grpc-web*
-	handle @grpcweb {
+	@grpcapi path /smartcore.contracts.*
+	handle @grpcapi {
 		reverse_proxy 127.0.0.1:50061
 	}
 
@@ -525,6 +525,66 @@ Estender o step "Remove releases antigas (mantém últimas 5)" — o `rm -rf` de
 
 ---
 
+### E9 — Ambiente de debug local (VS Code F5 → backend dev remoto)
+
+**Objetivo:** permitir rodar o app em debug **antes do commit**, testando funcionalidades contra
+o **backend dev remoto** (`https://dev.smartcoreassistant.com.br`), sem subir Rust local. Disparo
+por **compound F5**. Exercitável assim que E1 (usePathUrlStrategy) e E2 (matcher por path) estiverem
+no dev (depende do dev deployado).
+
+**Arquivos tocados:**
+- `.vscode/launch.json` (criar — hoje só existe `settings.json`)
+- `clients/run-admin.ps1` (opcional: documentar/atalho para o endpoint dev remoto)
+
+**Conteúdo concreto** — `.vscode/launch.json`:
+
+```jsonc
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "admin (dev remoto)",
+      "type": "dart",
+      "request": "launch",
+      "program": "clients/apps/smart-core-admin/lib/main_dev.dart",
+      "cwd": "clients/apps/smart-core-admin",
+      "deviceId": "chrome",
+      "args": [
+        "--dart-define=SMARTCORE_API_ENDPOINT=https://dev.smartcoreassistant.com.br"
+      ]
+    }
+  ],
+  "compounds": [
+    { "name": "Debug Admin (tudo)", "configurations": ["admin (dev remoto)"] }
+  ]
+}
+```
+
+Notas:
+- **Sem `--base-href`** (roda na raiz `/`; `usePathUrlStrategy()` funciona em `/`) e **sem `--wasm`**
+  (debug em JS, hot-restart; o transporte gRPC-Web do `grpc 4.x` roda igual em JS).
+- **Reconciliação backend remoto × "compound tudo junto":** como não há Rust local a orquestrar,
+  o compound contém só a app Flutter. Fica **extensível** — se um dia o debug for contra Rust
+  local, adicionam-se configs/tasks de backend ao mesmo compound (e o endpoint vira
+  `http://localhost:50051`).
+- `run-admin.ps1` já aceita `-Endpoint`; documentar `.\run-admin.ps1 -Endpoint "https://dev.smartcoreassistant.com.br"`
+  como equivalente CLI (opcionalmente uma flag `-Remote`).
+- **CORS:** o tráfego é cross-origin (localhost → dev remoto); o matcher por path no Caddy (E2)
+  encaminha o preflight `OPTIONS` à fachada, que já responde via `CorsLayer mirror_request`.
+  **Nenhuma mudança no Rust.**
+
+**Critério de pronto:** F5 "Debug Admin (tudo)" sobe o Chrome em debug; com o **dev no ar**, o
+login funciona ponta-a-ponta contra `https://dev.smartcoreassistant.com.br` (porta 50061 via
+Caddy); no DevTools, o preflight `OPTIONS` e o POST gRPC-Web retornam 200 (sem erro de CORS).
+
+#### Observabilidade & Auditoria (E9)
+- **Logs:** debug local — logs no console do Flutter/DevTools (só endpoint/status, sem token/PII).
+  No backend, a fachada dev loga normalmente (span/traceparent), inalterada.
+- **Auditoria:** **sem evento novo no client**; a auditoria de auth ocorre server-side no dev.
+- **Segredos:** o endpoint é público; credenciais de login são digitadas pelo dev e nunca logadas.
+
+---
+
 ### E8 — Documentação
 
 **Objetivo:** registrar topologia, portas por ambiente e o fluxo de deploy do bundle nas docs canônicas do projeto.
@@ -535,7 +595,7 @@ Estender o step "Remove releases antigas (mantém últimas 5)" — o `rm -rf` de
 
 **Conteúdo concreto (resumo a inserir):**
 - Em `10-plano-cicd-devops.md`: diagrama da arquitetura-alvo; tabela de portas (prod 50051 / dev 50061, bind 127.0.0.1); web roots; passos do build (`flutter build web --wasm --base-href /v2/admin/ -t lib/main_<flavor>.dart --dart-define=SMARTCORE_API_ENDPOINT=<origem>`); padrão de publicação (dev: `web.bak`; prod: `releases/$TAG/web` + symlink); que o `server-setup.sh` instala Flutter SDK no `gh-runner` e copia o `infra/Caddyfile`.
-- Em `09-comunicacao-e-autenticacao.md`: a fachada gRPC-Web é servida **same-origin** com o admin sob `/v2/admin`; o navegador resolve rotas do go_router relativas ao `<base href="/v2/admin/">`; gRPC-Web casa por content-type na raiz (sem CORS preflight bloqueante).
+- Em `09-comunicacao-e-autenticacao.md`: a fachada gRPC-Web é servida **same-origin** com o admin sob `/v2/admin`; o navegador resolve rotas do go_router relativas ao `<base href="/v2/admin/">`; o Caddy roteia o gRPC por **path** (`/smartcore.contracts.*`, raiz) cobrindo o preflight do **debug local cross-origin**; a fachada (`CorsLayer mirror_request`) responde o preflight.
 
 **Critério de pronto:** ambas as docs atualizadas e coerentes com os arquivos de E1–E7; sem referência a `flutter_windows`/`admin.smartcore.example` como topologia atual do web.
 
@@ -546,8 +606,9 @@ Estender o step "Remove releases antigas (mantém últimas 5)" — o `rm -rf` de
 
 ## FASE V — Validation (verificar que funciona)
 
-Objetivo: provar ponta-a-ponta nos 2 ambientes.
+Objetivo: provar ponta-a-ponta nos **3 contextos** (debug local, deploy dev, deploy prod).
 
+0. **Debug local (F5).** Com o dev no ar, rodar o compound "Debug Admin (tudo)" → Chrome em debug em `http://localhost:<porta>`; login ponta-a-ponta contra `https://dev.smartcoreassistant.com.br`; no DevTools o **preflight `OPTIONS`** e o POST gRPC-Web retornam 200 (sem erro de CORS cross-origin). Hot-restart funciona.
 1. **CI verde.** Abrir PR/push → job `rust` e job `flutter` (analyze/test + smoke `--wasm`) passam; `detect` resolve `flutter=true` via `clients/pubspec.yaml`.
 2. **Dev acessível.** Push em `dev` → deploy builda Rust + web dev e publica em `/srv/smart-core-admin/dev/web`. Acessar `https://dev.smartcoreassistant.com.br/v2/admin` → tela de login carrega (WASM); **login real ponta-a-ponta contra a fachada dev (porta 50061)** funciona; deep-link `…/v2/admin/login` resolve (path strategy + try_files).
 3. **Prod acessível.** Tag `v*` → release publica `releases/$TAG/web` + symlink. Acessar `https://smartcoreassistant.com.br/v2/admin` → login ponta-a-ponta **na porta 50051**.
@@ -556,7 +617,7 @@ Objetivo: provar ponta-a-ponta nos 2 ambientes.
 6. **Segurança.** Resposta de `/v2/admin/` traz **CSP** (`wasm-unsafe-eval`) + **HSTS** + `nosniff`/`DENY` (checar headers no DevTools/`curl -I`). **Fachada gRPC-Web não exposta direto:** `curl http://<IP>:50051` de fora **recusa/timeout** (bind 127.0.0.1; firewall só 80/443). Acesso só via Caddy.
 7. **TLS.** Certificados Let's Encrypt emitidos automaticamente para apex e dev ao subir o Caddy (DNS apontado).
 
-**Critério de saída da V:** itens 1–7 verificados; evidências (prints/headers/logs) anexadas ao PR.
+**Critério de saída da V:** itens 0–7 verificados; evidências (prints/headers/logs) anexadas ao PR.
 
 ### Observabilidade & Auditoria (Fase V)
 - **Logs:** validação consome Caddy access logs (`/var/log/caddy/admin-*.log`), journal da fachada (`journalctl -u smartcore-{prod,dev}-runtime_api`) e logs do Actions.
@@ -581,7 +642,7 @@ Objetivo: provar ponta-a-ponta nos 2 ambientes.
 ## Correções aplicadas (vs. plano base) — com fonte no info_aux
 
 1. **`reverse_proxy` SEM `h2c`** nos blocos apex/dev. O plano base citava só "reverse_proxy"; reforçado que **gRPC-Web é HTTP/1.1** e a fachada Tonic escuta HTTP/1.1 plano — `h2c` seria errado (é para gRPC puro, caso dos blocos legados 8080/8090). Fonte: info_aux §2.1.
-2. **Matcher `@grpcweb` e `reverse_proxy` DENTRO de `handle`**, no escopo do site block. O `Caddyfile` atual usa `reverse_proxy @grpcweb {upstream}` no escopo do site e `try_files`/`file_server` **fora** de `handle` (errado para subpath). Corrigido para `@grpcweb` + `handle @grpcweb { reverse_proxy ... }` e o SPA fallback **dentro** do `handle_path`. Fonte: info_aux §2.1–2.3.
+2. **Matcher por PATH (`@grpcapi path /smartcore.contracts.*`) + `reverse_proxy` DENTRO de `handle`**, no escopo do site block. O `Caddyfile` atual usa `reverse_proxy @grpcweb {upstream}` no escopo do site e `try_files`/`file_server` **fora** de `handle` (errado para subpath). Corrigido para `@grpcapi` (path) + `handle @grpcapi { reverse_proxy ... }` e o SPA fallback **dentro** do `handle_path`. O path (vs content-type) é necessário para o **preflight OPTIONS** do debug local cross-origin chegar à fachada. Fonte: info_aux §2.1–2.3 e §6.2.
 3. **`handle_path /v2/admin/*`** (com strip do prefixo) em vez de `root`+`file_server` na raiz. Necessário para servir sob subpath; após o strip, `{path}` é relativo ao webroot. Fonte: info_aux §2.1.
 4. **CI `detect` → `clients/pubspec.yaml`** (pub workspace) em vez de `clients/flutter_windows/pubspec.yaml` (inexistente). Job Flutter passa a usar **melos** (`dart pub get` + `melos run analyze`/`test`) com **`subosito/flutter-action@v2`**. Fonte: info_aux §3.2 e §1 (melos).
 5. **Flutter SDK no `gh-runner` via clone stable + `$GITHUB_PATH`/`.bashrc` + `safe.directory` + `precache --web`.** Detalhado as pegadinhas (PATH só vale no mesmo `run`; dubious ownership). Fonte: info_aux §3.3.
@@ -590,12 +651,14 @@ Objetivo: provar ponta-a-ponta nos 2 ambientes.
 8. **`RUNTIME_API_GRPC_WEB_ADDR` por ambiente** documentado em `.env.deploy.example` (prod 50051 / dev 50061, bind 127.0.0.1) — evita colisão no default `0.0.0.0:50051`. Fonte: info_aux §0 e §5.3.
 9. **COOP/COEP NÃO habilitados.** Decisão explícita: só seriam necessários para **WASM multithread (skwasm)**; o build atual roda single-thread/JS-fallback sem eles, e COEP pode quebrar recursos cross-origin. Revisitar só se ativar rendering multithread. Fonte: info_aux §2.3.
 10. **go_router com rotas puras** (`/login`, `/home`) — o subpath é responsabilidade do `<base href>` + servidor; **não** prefixar rotas com `/v2/admin`. Fonte: info_aux §1 (go_router) e §3.1.
+11. **3º contexto: debug local (E9) contra o dev remoto.** Adicionado `.vscode/launch.json` (compound F5) apontando o app debug para `https://dev.smartcoreassistant.com.br` (sem Rust local). Isso tornou o tráfego **cross-origin** → o matcher do Caddy passou de content-type para **path** (`/smartcore.contracts.*`) para capturar o **preflight `OPTIONS`**; a fachada já responde o preflight via `CorsLayer mirror_request` (sem mudança no Rust). Reconciliação: como o backend é remoto, o "compound tudo junto" reduz-se à app (extensível p/ Rust local). Fonte: decisão do usuário + info_aux §6.
 
 ---
 
 ## Arquivos tocados (consolidado, caminhos reais)
 
 - App: `clients/apps/smart-core-admin/lib/bootstrap.dart` (editar); `…/web/index.html` (só conferir).
+- Debug local: `.vscode/launch.json` (criar — compound F5); `clients/run-admin.ps1` (documentar endpoint dev remoto).
 - Caddy: `infra/Caddyfile` (reescrever).
 - Provisionamento: `infra/server-setup.sh` (fases 3/4/8 + resumo DNS).
 - Env: `infra/.env.deploy.example` (+ `/opt/smartcore/{prod,dev}/.env` no servidor).

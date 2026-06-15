@@ -56,14 +56,15 @@ phases:
 | Portas fachada | `RUNTIME_API_GRPC_WEB_ADDR` por ambiente (bind localhost): prod `127.0.0.1:50051`, dev `127.0.0.1:50061`. |
 | Web roots | `/srv/smart-core-admin/{prod,dev}/web`. |
 | Subpath | `--base-href /v2/admin/` + `usePathUrlStrategy()` + SPA fallback (`try_files`) no Caddy. |
+| Debug local | 3º contexto: VS Code F5 (compound) / `flutter run`, `main_dev`, **direto no dev remoto** (`https://dev.smartcoreassistant.com.br`), base-href `/`, sem `--wasm`. Cross-origin → matcher do Caddy por **path** (`/smartcore.contracts.*`) cobre o preflight `OPTIONS`; fachada já responde via `CorsLayer mirror_request`. |
 | Reuso | Padrão de deploy/rollback existente (symlink prod, `bin.bak` dev), self-hosted runner, sudoers `gh-runner`; fachada gRPC-Web já instrumentada (inalterada, só muda o bind). |
 
 ## Fases PREVC
 
 - **P — Planning** ✅ concluído: domínios (apex+dev), build no self-hosted, endpoint via dart-define, portas por ambiente, web roots, base-href + path strategy.
-- **R — Review:** ratificar same-origin sem CORS bloqueante; `reverse_proxy` sem h2c (gRPC-Web é HTTP/1.1); path strategy exige `try_files`; porta por ambiente; reuso do padrão de deploy; `detect` do CI → `clients/pubspec.yaml`; Caddyfile versionado como fonte da verdade.
-- **E — Execution:** E1 app (`usePathUrlStrategy`) → E2 `infra/Caddyfile` (apex+dev) → E3 `server-setup.sh` (Flutter SDK + web roots + copiar Caddyfile + DNS) → E4 `.env` (`RUNTIME_API_GRPC_WEB_ADDR`) → E5 `ci.yml` (detect + job Flutter via melos + smoke `--wasm`) → E6 `deploy-dev.yml` (build+publish web, rollback) → E7 `deploy-prod.yml` (web versionado + symlink) → E8 docs.
-- **V — Validation:** CI verde; `https://dev.smartcoreassistant.com.br/v2/admin` login ponta-a-ponta (porta 50061); `https://smartcoreassistant.com.br/v2/admin` idem (50051); same-origin sem CORS no DevTools; rollback dev/prod; CSP/HSTS + fachada não exposta direto; TLS automático.
+- **R — Review:** ratificar same-origin (deploy) e cross-origin (debug local); matcher do Caddy por **path** (`/smartcore.contracts.*`) cobre o preflight `OPTIONS` — não por content-type; `reverse_proxy` sem h2c (gRPC-Web é HTTP/1.1); path strategy exige `try_files`; porta por ambiente; reuso do padrão de deploy; `detect` do CI → `clients/pubspec.yaml`; Caddyfile versionado como fonte da verdade.
+- **E — Execution:** E1 app (`usePathUrlStrategy`) → E2 `infra/Caddyfile` (apex+dev, matcher por path) → E3 `server-setup.sh` (Flutter SDK + web roots + copiar Caddyfile + DNS) → E4 `.env` (`RUNTIME_API_GRPC_WEB_ADDR`) → E5 `ci.yml` (detect + job Flutter via melos + smoke `--wasm`) → E6 `deploy-dev.yml` (build+publish web, rollback) → E7 `deploy-prod.yml` (web versionado + symlink) → E9 `.vscode/launch.json` (debug local compound → dev remoto) → E8 docs.
+- **V — Validation:** **debug local (F5)** login ponta-a-ponta contra dev remoto sem erro de CORS (preflight 200); CI verde; `https://dev.smartcoreassistant.com.br/v2/admin` login (porta 50061); `https://smartcoreassistant.com.br/v2/admin` idem (50051); rollback dev/prod; CSP/HSTS + fachada não exposta direto; TLS automático.
 - **C — Confirmation:** gate `prevc-final-review`, docs (`10`/`09`), arquivamento do plano.
 
 ## Riscos-chave
