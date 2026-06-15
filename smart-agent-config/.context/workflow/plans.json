@@ -1,15 +1,14 @@
 {
-  "active": [],
-  "completed": [
+  "active": [
     {
-      "slug": "base-frontend-flutter",
-      "path": "plans/archive/base-frontend-flutter/base-frontend-flutter.md",
-      "title": "Base do Monorepo Frontend Flutter — `base-frontend-flutter`",
-      "summary": "Plano **canônico** (leve). A verdade técnica detalhada está nos artefatos abaixo.",
-      "linkedAt": "2026-06-14T14:37:01.160Z",
-      "completedAt": "2026-06-14T20:00:00.000Z",
-      "status": "completed"
+      "slug": "login-module",
+      "path": "plans/login-module.md",
+      "title": "Módulo de Login (Flutter Web/WASM) × borda gRPC-Web",
+      "summary": "Construir o `login_module` no app `smart-core-admin` (Flutter Web/WASM) consumindo o auth da",
+      "linkedAt": "2026-06-15T02:14:55.022Z",
+      "status": "active"
     }
   ],
-  "primary": null
+  "completed": [],
+  "primary": "login-module"
 }
