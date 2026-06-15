@@ -1,5 +1,9 @@
 /// Modelos de domínio / DTOs compartilhados do monorepo.
 ///
-/// Stub estrutural: receberá os tipos gerados dos `.proto` do backend em fase
-/// futura. Sem tipos nesta base.
+/// Reúne os tipos transversais usados por mais de um módulo — hoje, os erros
+/// de domínio tipados ([ErrorAuth], [ErrorUnauthorized], [ErrorNetwork],
+/// [ErrorValidation]), consumidos pela camada de dados (mapeamento de falhas)
+/// e pela apresentação (ErrorMessageMapper).
 library;
+
+export 'src/errors/auth_errors.dart';

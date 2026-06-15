@@ -11,5 +11,9 @@ dependencies:
     path: ../app_config
   domain_models:
     path: ../domain_models
+  # gRPC-Web: canal + stubs gerados do auth.proto. A web do grpc 4.x usa
+  # package:web/dart:js_interop (compatível com flutter build web --wasm).
+  grpc: ^4.0.1
+  protobuf: ^4.1.0
 
 resolution: workspace

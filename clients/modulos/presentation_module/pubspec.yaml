@@ -14,6 +14,8 @@ dependencies:
   flutter_bloc: ^9.1.1
   get_it_module:
     path: ../../packages/get_it_module
+  domain_models:
+    path: ../../packages/domain_models
   return_success_or_error: ^2.0.0
 
 dev_dependencies:
