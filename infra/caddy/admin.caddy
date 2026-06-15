@@ -1,0 +1,63 @@
+# ============================================================================
+# Smart Core Admin (Flutter web) — roteamento Caddy
+# ============================================================================
+# Snippet versionado da config do painel admin. Instalar no servidor como
+# /etc/caddy/conf.d/admin.caddy e garantir no /etc/caddy/Caddyfile a linha:
+#     import /etc/caddy/conf.d/*.caddy
+# Depois: caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
+#
+# O app e 100% ESTATICO (build web --wasm), servido em /v2/admin/ ; as chamadas
+# gRPC-Web do browser vao para a RAIZ do mesmo dominio (mesma origem, sem CORS)
+# e sao encaminhadas para a fachada gRPC-Web da runtime_api (tonic_web, HTTP/1.1).
+# ============================================================================
+
+# ── DEV ─────────────────────────────────────────────────────────────────────
+# Build: --base-href /v2/admin/ , endpoint https://dev.smartcoreassistant.com.br
+# runtime_api dev expoe gRPC-Web em 0.0.0.0:50051 (RUNTIME_API_GRPC_WEB_ADDR).
+dev.smartcoreassistant.com.br {
+	# Estaticos do admin sob /v2/admin/ (handle_path remove o prefixo).
+	handle_path /v2/admin/* {
+		root * /srv/smart-core-admin/dev/web
+		try_files {path} /index.html
+		file_server
+	}
+
+	# Demais rotas = gRPC-Web da runtime_api (login, etc.).
+	handle {
+		reverse_proxy localhost:50051 {
+			flush_interval -1
+		}
+	}
+
+	header {
+		Strict-Transport-Security max-age=31536000; includeSubDomains
+		X-Content-Type-Options nosniff
+	}
+	log {
+		output file /var/log/caddy/admin-dev.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+	}
+}
+
+# ── PROD (pendente de decisao) ──────────────────────────────────────────────
+# Build prod usa --base-href /v2/admin/ e endpoint https://smartcoreassistant.com.br,
+# que HOJE e o dominio do painel Django (reverse_proxy 172.18.0.5:8000). Servir o
+# admin em smartcoreassistant.com.br/v2/admin/ exige inserir um handle /v2/admin/*
+# ANTES do reverse_proxy do painel naquele site block — alterando a config de um
+# sistema em producao. Definir com cuidado antes de habilitar. Esboco:
+#
+# smartcoreassistant.com.br {
+#     handle_path /v2/admin/* {
+#         root * /srv/smart-core-admin/prod/web
+#         try_files {path} /index.html
+#         file_server
+#     }
+#     handle /grpc.runtime/* {        # ajustar ao path real do gRPC-Web prod
+#         reverse_proxy localhost:<porta_grpc_web_prod>
+#     }
+#     handle {
+#         reverse_proxy 172.18.0.5:8000 { header_up X-Real-IP {remote_host}; header_up Host {host} }
+#     }
+# }

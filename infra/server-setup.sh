@@ -47,7 +47,19 @@ curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
 curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
     | tee /etc/apt/sources.list.d/caddy-stable.list > /dev/null
 apt-get update -qq && apt-get install -y -qq caddy
+# O Caddy roda como user 'caddy'; o diretório de logs precisa ser dele, senão
+# um novo bloco `log` no Caddyfile falha o reload com "permission denied".
 mkdir -p /var/log/caddy
+chown -R caddy:caddy /var/log/caddy
+
+# Snippets de site versionados (ex.: infra/caddy/admin.caddy → painel admin).
+# O Caddyfile principal os carrega via `import /etc/caddy/conf.d/*.caddy`.
+# Copie os snippets do repo para cá e garanta o import:
+#   cp infra/caddy/*.caddy /etc/caddy/conf.d/
+#   grep -qF 'import /etc/caddy/conf.d/' /etc/caddy/Caddyfile || \
+#     sed -i '1i import /etc/caddy/conf.d/*.caddy\n' /etc/caddy/Caddyfile
+#   caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
+mkdir -p /etc/caddy/conf.d
 
 # ── 3. Rust toolchain ─────────────────────────────────────────────────────────
 echo ""
