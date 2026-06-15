@@ -9,25 +9,105 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
-    name: Build Rust + Deploy PROD
+  # ── Build do servidor Rust (GitHub-hosted) ────────────────────────────────────
+  # Build fora do servidor (não gasta recurso da máquina de produção). glibc no
+  # Ubuntu 22.04 (forward-compatible p/ 22.04/24.04+) em vez de musl, porque
+  # aws-lc-sys/ring/libsqlite3-sys trazem C/assembly que complicam o alvo musl.
+  # Sem target-cpu=native: binário precisa ser portável (CPU do runner != servidor).
+  # O artefato leva os binários + as migrations (uso manual via sqlx-cli em emergência).
+  build-server:
+    name: Build Rust (PROD)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: server
+
+      - name: Instala protoc e flatc
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq protobuf-compiler
+          wget -q -O /tmp/flatc.zip https://github.com/google/flatbuffers/releases/download/v25.12.19-2026-02-06-03fffb2/Linux.flatc.binary.g%2B%2B-13.zip
+          unzip -q -o /tmp/flatc.zip -d /tmp/flatc_extracted
+          sudo mv /tmp/flatc_extracted/flatc /usr/local/bin/flatc
+          sudo chmod +x /usr/local/bin/flatc
+
+      - name: Cargo build release (workspace)
+        working-directory: server
+        env:
+          SQLX_OFFLINE: "true"
+        run: cargo build --release --workspace
+
+      - name: Empacota binários + migrations
+        run: |
+          SRC="server/target/release"
+          mkdir -p stage/bin
+          for svc in data_postgres data_redis data_storage \
+                     runtime_api control_plane messaging_gateway worker; do
+            [ -f "$SRC/$svc" ] && install -m 755 "$SRC/$svc" "stage/bin/$svc"
+          done
+          # Migrations já vão COMPILADAS no binário (sqlx::migrate! em build time);
+          # esta cópia é só para rodar sqlx-cli manualmente em emergência.
+          cp -r server/crates/infrastructure_postgres/migrations stage/migrations 2>/dev/null || true
+          tar -C stage -czf server-prod.tar.gz .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-prod
+          path: server-prod.tar.gz
+          retention-days: 7
+
+  # ── Build do web (GitHub-hosted) ──────────────────────────────────────────────
+  # Bundle estático (HTML/JS/WASM); Flutter só no build, nunca em runtime.
+  build-web:
+    name: Build Web (PROD)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: stable
+          cache: true
+
+      - name: Build web admin (PROD, --wasm)
+        working-directory: clients
+        run: |
+          flutter pub get
+          cd apps/smart-core-admin
+          flutter build web --wasm \
+            --base-href /v2/admin/ \
+            -t lib/main_prod.dart \
+            --dart-define=SMARTCORE_API_ENDPOINT=https://smartcoreassistant.com.br
+
+      - name: Empacota bundle estático
+        run: tar -C clients/apps/smart-core-admin/build/web -czf web-prod.tar.gz .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-prod
+          path: web-prod.tar.gz
+          retention-days: 7
+
+  # ── Deploy (self-hosted) ──────────────────────────────────────────────────────
+  # Release versionada e COMPLETA (toda tag publica server + web de forma
+  # determinística). Sem compilação aqui: baixa os artefatos e troca symlinks.
+  deploy:
+    name: Deploy PROD
+    needs: [build-server, build-web]
     runs-on: [self-hosted, hostinger]
     environment: prod
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - name: Extrai versão da tag
         id: version
         run: echo "TAG=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-
-      - name: Adiciona Rust ao PATH
-        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Garante toolchain Rust atualizado
-        run: rustup update stable
 
       - name: Backup banco de dados PROD (pg_dump)
         env:
@@ -42,32 +122,29 @@ jobs:
           # Mantém apenas os últimos 5 backups
           ls -t /opt/smartcore/prod/db-backup-*.dump 2>/dev/null | tail -n +6 | xargs rm -f || true
 
-      - name: Cargo build release (workspace)
-        working-directory: server
-        env:
-          SQLX_OFFLINE: "true"
-          RUSTFLAGS: "-C target-cpu=native"
-        run: cargo build --release --workspace
+      - uses: actions/download-artifact@v4
+        with:
+          name: server-prod
 
-      - name: Cria diretório da release
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-prod
+
+      - name: Cria diretório da release (binários + migrations)
         env:
           TAG: ${{ steps.version.outputs.TAG }}
         run: |
           RELEASE_DIR="/opt/smartcore/prod/releases/$TAG"
           mkdir -p "$RELEASE_DIR"
-          SRC="server/target/release"
-          for svc in data_postgres data_redis data_storage \
-                     runtime_api control_plane messaging_gateway worker; do
-            if [ -f "$SRC/$svc" ]; then
-              cp "$SRC/$svc" "$RELEASE_DIR/$svc"
-              chmod +x "$RELEASE_DIR/$svc"
-              echo "✓ $svc → $TAG"
-            fi
-          done
-          # Inclui migrations para uso manual em emergência (sqlx-cli).
-          # As migrations já vão COMPILADAS no binário (sqlx::migrate! em build time);
-          # esta cópia é apenas para rodar sqlx-cli manualmente se necessário.
-          cp -r server/crates/infrastructure_postgres/migrations "$RELEASE_DIR/migrations" 2>/dev/null || true
+          tar -xzf server-prod.tar.gz -C "$RELEASE_DIR"
+          # tar trazia bin/ e migrations/; promove os binários para a raiz da release.
+          if [ -d "$RELEASE_DIR/bin" ]; then
+            mv "$RELEASE_DIR/bin/"* "$RELEASE_DIR/"
+            rmdir "$RELEASE_DIR/bin"
+          fi
+          chmod +x "$RELEASE_DIR"/* 2>/dev/null || true
+          rm -f server-prod.tar.gz
+          echo "✓ release $TAG montada em $RELEASE_DIR"
 
       - name: Atualiza symlink current
         env:
@@ -80,30 +157,17 @@ jobs:
           ln -sfn "$RELEASES_DIR/$TAG" "$RELEASES_DIR/current"
           echo "Symlink: current → $TAG (anterior: $PREV)"
 
-      - name: Garante Flutter no PATH
-        run: echo "$HOME/flutter/bin" >> $GITHUB_PATH
-
-      - name: Build web admin (PROD, --wasm)
-        working-directory: clients
-        run: |
-          dart pub get
-          cd apps/smart-core-admin
-          flutter build web --wasm \
-            --base-href /v2/admin/ \
-            -t lib/main_prod.dart \
-            --dart-define=SMARTCORE_API_ENDPOINT=https://smartcoreassistant.com.br
-
       - name: Publica bundle web PROD (versionado + symlink)
         env:
           TAG: ${{ steps.version.outputs.TAG }}
         run: |
           BASE="/srv/smart-core-admin/prod"
           REL_WEB="$BASE/releases/$TAG/web"
-          SRC="clients/apps/smart-core-admin/build/web"
-          mkdir -p "$BASE/releases/$TAG"
-          rm -rf "$REL_WEB"
-          cp -r "$SRC" "$REL_WEB"
+          mkdir -p "$REL_WEB"
+          rm -rf "$REL_WEB"; mkdir -p "$REL_WEB"
+          tar -xzf web-prod.tar.gz -C "$REL_WEB"
           chmod -R 755 "$REL_WEB"
+          rm -f web-prod.tar.gz
           # Registra o alvo anterior do symlink web para rollback.
           PREV_WEB=$(readlink "$BASE/web" 2>/dev/null || true)
           echo "PREV_WEB=$PREV_WEB" >> "$GITHUB_ENV"
@@ -177,56 +241,3 @@ jobs:
             ln -sfn "$PREV_WEB" "$BASE/web"
             echo "Symlink web PROD revertido para $PREV_WEB."
           fi
-          # A release com falha já é removida adiante (rm releases/$TAG inclui o web).
-          rm -rf "$BASE/releases/$TAG" || true
-          rm -rf "$RELEASES_DIR/$TAG" || true
-
-      - name: Remove releases antigas (mantém últimas 5)
-        if: success()
-        run: |
-          RELEASES_DIR="/opt/smartcore/prod/releases"
-          ls -dt "$RELEASES_DIR"/v* 2>/dev/null | tail -n +6 | xargs rm -rf || true
-
-      - name: Cria GitHub Release
-        if: success()
-        uses: softprops/action-gh-release@v2
-        with:
-          name: "${{ steps.version.outputs.TAG }}"
-          generate_release_notes: true
-          draft: false
-
-  flutter-windows:
-    name: Build Flutter Windows
-    runs-on: windows-latest
-    needs: build-and-deploy
-    if: needs.build-and-deploy.result == 'success'
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup Flutter
-        uses: subosito/flutter-action@v2
-        with:
-          flutter-version: '3.x'
-          channel: stable
-          cache: true
-
-      - name: flutter pub get
-        working-directory: clients/flutter_windows
-        run: flutter pub get
-
-      - name: flutter build windows --release
-        working-directory: clients/flutter_windows
-        run: flutter build windows --release
-
-      - name: Empacota artefato
-        run: |
-          Compress-Archive `
-            -Path "clients/flutter_windows/build/windows/x64/runner/Release/*" `
-            -DestinationPath "SmartCore-Windows-${{ github.ref_name }}.zip"
-        shell: pwsh
-
-      - name: Upload para GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: SmartCore-Windows-*.zip

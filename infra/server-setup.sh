@@ -74,21 +74,11 @@ chmod +x /usr/local/bin/flatc
 rm -rf /tmp/flatc.zip /tmp/flatc_extracted
 echo "flatc: $(flatc --version)"
 
-# Flutter SDK para o usuário gh-runner (build do smart-core-admin no CI/CD).
-# Clone one-shot no canal stable (compatível com sdk ^3.12.2); ~1.5GB no disco.
-echo "Instalando Flutter SDK para o gh-runner..."
-GHR_HOME="/home/gh-runner"
-if [ ! -d "$GHR_HOME/flutter" ]; then
-    sudo -u gh-runner git clone https://github.com/flutter/flutter.git \
-        -b stable --depth 1 "$GHR_HOME/flutter"
-fi
-# PATH persistente do gh-runner + safe.directory (evita "dubious ownership").
-# Guard de idempotência: só insere se a linha ainda não existir no .bashrc.
-grep -qF 'flutter/bin' "$GHR_HOME/.bashrc" || \
-    echo 'export PATH="$HOME/flutter/bin:$PATH"' >> "$GHR_HOME/.bashrc"
-sudo -u gh-runner git config --global --replace-all safe.directory "$GHR_HOME/flutter"
-# Baixa só os artefatos web (poupa disco) e valida.
-sudo -u gh-runner bash -lc 'flutter precache --web && flutter --version'
+# Flutter NÃO é instalado no servidor. O app web é buildado nos workflows de
+# deploy em runner GitHub-hosted (ubuntu) e chega aqui como bundle estático já
+# pronto (HTML/JS/WASM) — quem serve é o Caddy, sem toolchain. Isso evita ~1.5GB
+# de SDK + build pesando na máquina de produção. Ver .github/workflows/deploy-*.yml.
+# Se restou uma instalação antiga: rm -rf /home/gh-runner/flutter
 
 # ── 4. Usuários e diretórios ──────────────────────────────────────────────────
 echo ""

@@ -9,93 +9,194 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
-    name: Build Rust + Deploy DEV
-    runs-on: [self-hosted, hostinger]
-    environment: dev
+  # ── Detecta o que mudou ───────────────────────────────────────────────────────
+  # Monorepo: só faz sentido recompilar/reiniciar o stack que realmente mudou.
+  # server  -> rebuild Rust + restart seletivo (por checksum) dos serviços.
+  # client  -> rebuild web + publicação do bundle estático.
+  # Mudança no próprio workflow força ambos (valida o pipeline).
+  changes:
+    name: Detecta mudanças
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.filter.outputs.server }}
+      client: ${{ steps.filter.outputs.client }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            server:
+              - 'server/**'
+              - '.github/workflows/deploy-dev.yml'
+            client:
+              - 'clients/**'
+              - '.github/workflows/deploy-dev.yml'
 
+  # ── Build do servidor Rust (GitHub-hosted) ────────────────────────────────────
+  # Build NÃO roda mais no servidor de produção (gastava CPU/RAM da máquina que
+  # serve tráfego). Aqui, num runner limpo, geramos os binários e enviamos como
+  # artefato; o self-hosted apenas instala.
+  #
+  # Por que glibc (e não musl estático): as dependências de cripto/SQLite
+  # (aws-lc-sys, ring, libsqlite3-sys) trazem C/assembly que tornam o alvo musl
+  # trabalhoso de cross-compilar. Buildamos com glibc no Ubuntu 22.04 (glibc 2.35)
+  # — como glibc é forward-compatible, o binário roda em 22.04/24.04+.
+  # Sem RUSTFLAGS=target-cpu=native: o binário precisa ser portável (a CPU do
+  # runner != CPU do servidor), senão arriscaria SIGILL.
+  build-server:
+    name: Build Rust (DEV)
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: Adiciona Rust ao PATH
-        run: echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - uses: dtolnay/rust-toolchain@stable
 
-      - name: Garante toolchain Rust atualizado
-        run: rustup update stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: server
+
+      # build.rs do crate "contracts" gera gRPC/FlatBuffers e exige protoc + flatc
+      # (mesmas fontes/versão do server-setup e do CI).
+      - name: Instala protoc e flatc
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq protobuf-compiler
+          wget -q -O /tmp/flatc.zip https://github.com/google/flatbuffers/releases/download/v25.12.19-2026-02-06-03fffb2/Linux.flatc.binary.g%2B%2B-13.zip
+          unzip -q -o /tmp/flatc.zip -d /tmp/flatc_extracted
+          sudo mv /tmp/flatc_extracted/flatc /usr/local/bin/flatc
+          sudo chmod +x /usr/local/bin/flatc
 
       - name: Cargo build release (workspace)
         working-directory: server
         env:
           SQLX_OFFLINE: "true"
-          RUSTFLAGS: "-C target-cpu=native"
         run: cargo build --release --workspace
 
-      - name: Backup binários anteriores
+      - name: Empacota binários
         run: |
-          BACKUP_DIR="/opt/smartcore/dev/bin.bak"
-          rm -rf "$BACKUP_DIR"
-          cp -r /opt/smartcore/dev/bin "$BACKUP_DIR" 2>/dev/null || true
-
-      - name: Instala novos binários em DEV
-        run: |
-          BIN_DIR="/opt/smartcore/dev/bin"
           SRC="server/target/release"
-          mkdir -p "$BIN_DIR"
+          mkdir -p bins
           for svc in data_postgres data_redis data_storage \
                      runtime_api control_plane messaging_gateway worker; do
-            if [ -f "$SRC/$svc" ]; then
-              # Instala via arquivo temporário + mv atômico. Um cp direto sobre o
-              # binário antigo falha com "Text file busy" (ETXTBSY) enquanto o
-              # serviço está em execução; o rename apenas troca a entrada de
-              # diretório (o processo antigo mantém o inode até o restart).
-              install -m 755 "$SRC/$svc" "$BIN_DIR/$svc.new"
-              mv -f "$BIN_DIR/$svc.new" "$BIN_DIR/$svc"
-              echo "✓ $svc instalado"
-            fi
+            [ -f "$SRC/$svc" ] && install -m 755 "$SRC/$svc" "bins/$svc"
           done
+          tar -C bins -czf server-dev.tar.gz .
 
-      - name: Reinicia serviços DEV (ordem de dependência)
-        run: |
-          sudo systemctl restart smartcore-dev-data_redis
-          sleep 2
-          sudo systemctl restart smartcore-dev-data_postgres
-          sleep 3
-          sudo systemctl restart \
-            smartcore-dev-data_storage \
-            smartcore-dev-control_plane \
-            smartcore-dev-messaging_gateway \
-            smartcore-dev-worker
-          sleep 3
-          sudo systemctl restart smartcore-dev-runtime_api
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-dev
+          path: server-dev.tar.gz
+          retention-days: 3
 
-      - name: Garante Flutter no PATH
-        run: echo "$HOME/flutter/bin" >> $GITHUB_PATH
+  # ── Build do web (GitHub-hosted) ──────────────────────────────────────────────
+  # O app web Flutter é 100% ESTÁTICO (HTML/JS/WASM); o Flutter só é necessário no
+  # BUILD, nunca em runtime (quem serve é o Caddy). Por isso buildamos aqui, num
+  # runner limpo com o toolchain, e enviamos apenas o bundle como artefato. O
+  # servidor não precisa (mais) de Flutter instalado.
+  build-web:
+    name: Build Web (DEV)
+    needs: changes
+    if: needs.changes.outputs.client == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: stable
+          cache: true
 
       - name: Build web admin (DEV, --wasm)
         working-directory: clients
         run: |
-          dart pub get
+          flutter pub get
           cd apps/smart-core-admin
           flutter build web --wasm \
             --base-href /v2/admin/ \
             -t lib/main_dev.dart \
             --dart-define=SMARTCORE_API_ENDPOINT=https://dev.smartcoreassistant.com.br
 
-      - name: Publica bundle web DEV (atômico, com backup)
+      - name: Empacota bundle estático
+        run: tar -C clients/apps/smart-core-admin/build/web -czf web-dev.tar.gz .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dev
+          path: web-dev.tar.gz
+          retention-days: 3
+
+  # ── Deploy do servidor (self-hosted) ──────────────────────────────────────────
+  # Só instala: baixa os binários, troca por checksum e reinicia o que mudou.
+  # Nenhuma compilação aqui.
+  deploy-server:
+    name: Deploy DEV (server)
+    needs: [changes, build-server]
+    if: needs.changes.outputs.server == 'true'
+    runs-on: [self-hosted, hostinger]
+    environment: dev
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: server-dev
+
+      - name: Instala binários alterados (por checksum) em DEV
+        id: install
         run: |
-          WEB_DIR="/srv/smart-core-admin/dev/web"
-          SRC="clients/apps/smart-core-admin/build/web"
-          STAGE="/srv/smart-core-admin/dev/web.staging"
-          # Backup do bundle atual para rollback.
-          rm -rf /srv/smart-core-admin/dev/web.bak
-          cp -r "$WEB_DIR" /srv/smart-core-admin/dev/web.bak 2>/dev/null || true
-          # Cópia para staging + troca atômica (rm do antigo + mv do novo).
-          rm -rf "$STAGE"
-          cp -r "$SRC" "$STAGE"
-          chmod -R 755 "$STAGE"
-          rm -rf "$WEB_DIR"
-          mv "$STAGE" "$WEB_DIR"
-          echo "✓ bundle web DEV publicado em $WEB_DIR (arquivos estáticos: Caddy não precisa reload)"
+          BIN_DIR="/opt/smartcore/dev/bin"
+          BACKUP_DIR="/opt/smartcore/dev/bin.bak"
+          NEW_DIR="$(pwd)/newbins"
+          mkdir -p "$BIN_DIR" "$NEW_DIR"
+          rm -rf "$NEW_DIR"/*; tar -xzf server-dev.tar.gz -C "$NEW_DIR"
+          # bin.bak guarda SOMENTE os binários trocados neste run (base do rollback).
+          rm -rf "$BACKUP_DIR"; mkdir -p "$BACKUP_DIR"
+          CHANGED=""
+          for svc in data_postgres data_redis data_storage \
+                     runtime_api control_plane messaging_gateway worker; do
+            [ -f "$NEW_DIR/$svc" ] || continue
+            NEW=$(sha256sum "$NEW_DIR/$svc" | cut -d' ' -f1)
+            OLD=""
+            [ -f "$BIN_DIR/$svc" ] && OLD=$(sha256sum "$BIN_DIR/$svc" | cut -d' ' -f1)
+            # Só toca no binário cujo conteúdo realmente mudou. Um crate compartilhado
+            # (contracts/transport/error_core...) altera o checksum de vários serviços
+            # de uma vez — e é exatamente isso que queremos reiniciar.
+            if [ "$NEW" != "$OLD" ]; then
+              [ -f "$BIN_DIR/$svc" ] && cp -p "$BIN_DIR/$svc" "$BACKUP_DIR/$svc"
+              # Troca via temp + mv atômico: cp direto sobre binário em execução falha
+              # com "Text file busy" (ETXTBSY); o rename só troca a entrada de diretório.
+              install -m 755 "$NEW_DIR/$svc" "$BIN_DIR/$svc.new"
+              mv -f "$BIN_DIR/$svc.new" "$BIN_DIR/$svc"
+              CHANGED="$CHANGED $svc"
+              echo "✓ $svc atualizado (checksum mudou)"
+            else
+              echo "= $svc inalterado"
+            fi
+          done
+          rm -f server-dev.tar.gz
+          CHANGED="$(echo $CHANGED | xargs)"
+          echo "changed=$CHANGED" >> "$GITHUB_OUTPUT"
+          echo "Serviços alterados: ${CHANGED:-(nenhum)}"
+
+      - name: Reinicia serviços alterados (ordem de dependência)
+        if: steps.install.outputs.changed != ''
+        run: |
+          CHANGED="${{ steps.install.outputs.changed }}"
+          changed_has() { echo " $CHANGED " | grep -q " $1 "; }
+          # Camada base primeiro, borda (runtime_api) por último.
+          if changed_has data_redis;    then sudo systemctl restart smartcore-dev-data_redis;    sleep 2; fi
+          if changed_has data_postgres; then sudo systemctl restart smartcore-dev-data_postgres; sleep 3; fi
+          APP=""
+          for svc in data_storage control_plane messaging_gateway worker; do
+            changed_has "$svc" && APP="$APP smartcore-dev-$svc"
+          done
+          if [ -n "$APP" ]; then sudo systemctl restart $APP; sleep 3; fi
+          changed_has runtime_api && sudo systemctl restart smartcore-dev-runtime_api
+          echo "Reiniciados: $CHANGED"
 
       - name: Smoke test DEV
         run: |
@@ -116,32 +217,62 @@ jobs:
       - name: Rollback em falha
         if: failure()
         run: |
-          echo "Falha detectada — revertendo binários DEV..."
-          if [ -d "/opt/smartcore/dev/bin.bak" ]; then
-            # Restaura via mv atômico pelo mesmo motivo do step de instalação
-            # (evita "Text file busy" sobre binários ainda em execução).
-            for bak in /opt/smartcore/dev/bin.bak/*; do
+          echo "Falha detectada — revertendo apenas os binários trocados neste run..."
+          BIN_DIR="/opt/smartcore/dev/bin"
+          BACKUP_DIR="/opt/smartcore/dev/bin.bak"
+          if [ -d "$BACKUP_DIR" ] && [ -n "$(ls -A "$BACKUP_DIR" 2>/dev/null)" ]; then
+            RESTART=""
+            for bak in "$BACKUP_DIR"/*; do
               [ -f "$bak" ] || continue
               svc="$(basename "$bak")"
-              install -m 755 "$bak" "/opt/smartcore/dev/bin/$svc.new"
-              mv -f "/opt/smartcore/dev/bin/$svc.new" "/opt/smartcore/dev/bin/$svc"
+              install -m 755 "$bak" "$BIN_DIR/$svc.new"
+              mv -f "$BIN_DIR/$svc.new" "$BIN_DIR/$svc"
+              RESTART="$RESTART smartcore-dev-$svc"
             done
-            sudo systemctl restart \
-              smartcore-dev-data_redis \
-              smartcore-dev-data_postgres \
-              smartcore-dev-data_storage \
-              smartcore-dev-control_plane \
-              smartcore-dev-messaging_gateway \
-              smartcore-dev-worker \
-              smartcore-dev-runtime_api
-            echo "Rollback DEV concluído."
+            [ -n "$RESTART" ] && sudo systemctl restart $RESTART
+            echo "Rollback concluído:$RESTART"
           else
-            echo "Sem backup disponível."
+            echo "Nenhum binário havia sido trocado — nada a reverter."
           fi
 
-          # Rollback do bundle web DEV junto com os binários.
+  # ── Publicação do web (self-hosted) ───────────────────────────────────────────
+  # Operação trivial: baixa o artefato buildado e troca o bundle estático de forma
+  # atômica. Sem Flutter, sem compilar nada no servidor.
+  publish-web:
+    name: Publica Web (DEV)
+    needs: [changes, build-web]
+    if: needs.changes.outputs.client == 'true'
+    runs-on: [self-hosted, hostinger]
+    environment: dev
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dev
+
+      - name: Publica bundle web DEV (atômico, com backup)
+        run: |
+          WEB_DIR="/srv/smart-core-admin/dev/web"
+          STAGE="/srv/smart-core-admin/dev/web.staging"
+          # Backup do bundle atual para rollback.
+          rm -rf /srv/smart-core-admin/dev/web.bak
+          cp -r "$WEB_DIR" /srv/smart-core-admin/dev/web.bak 2>/dev/null || true
+          # Extrai o artefato em staging e faz a troca atômica.
+          rm -rf "$STAGE"; mkdir -p "$STAGE"
+          tar -xzf web-dev.tar.gz -C "$STAGE"
+          chmod -R 755 "$STAGE"
+          rm -rf "$WEB_DIR"
+          mv "$STAGE" "$WEB_DIR"
+          rm -f web-dev.tar.gz
+          echo "✓ bundle web DEV publicado em $WEB_DIR (estático: Caddy não precisa reload)"
+
+      - name: Rollback web em falha
+        if: failure()
+        run: |
           if [ -d "/srv/smart-core-admin/dev/web.bak" ]; then
             rm -rf "/srv/smart-core-admin/dev/web"
             mv "/srv/smart-core-admin/dev/web.bak" "/srv/smart-core-admin/dev/web"
             echo "Bundle web DEV revertido para o backup."
+          else
+            echo "Sem backup disponível para reverter."
           fi
