@@ -163,6 +163,13 @@ postgres-data/
 redis-data/
 minio-data/
 evolution-data/
+
+# Exceção: em clients/, a pasta data/ da Clean Architecture é CÓDIGO-FONTE
+# (datasources, services, mappers) — não volume de infra. A regra data/ acima
+# a ignorava por engano, fazendo o build passar local e quebrar no CI (os
+# arquivos nunca eram commitados).
+!clients/**/lib/**/data/
+!clients/**/lib/**/data/**
 .docker-data/
 
 # Logs

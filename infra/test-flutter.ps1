@@ -53,6 +53,29 @@ $falhas      = @()
 $totalTestes = 0
 
 # --------------------------------------------
+# 0. Codigo-fonte .dart ignorado pelo git
+#    Pega o caso "passa local, quebra no CI": um .dart de lib/ que casa o
+#    .gitignore existe na sua maquina (o analyze/test local passa) mas nunca
+#    foi commitado — o CI nao o tem e a compilacao quebra. Foi exatamente o que
+#    aconteceu com a pasta data/ da Clean Architecture (regra data/ generica).
+# --------------------------------------------
+Write-Etapa "Codigo .dart ignorado pelo git (nao vai pro CI)"
+Push-Location $clientDir
+try {
+    $ignorados = git ls-files --others --ignored --exclude-standard . |
+        Where-Object { $_ -match 'lib/.*\.dart$' }
+    if ($ignorados) {
+        $falhas += "git-ignored"
+        Write-Fail "ha .dart de codigo ignorado pelo git:"
+        $ignorados | ForEach-Object { Write-Host "    $_" -ForegroundColor Yellow }
+    } else {
+        Write-Ok
+    }
+} finally {
+    Pop-Location
+}
+
+# --------------------------------------------
 # 1. flutter analyze (equivalente ao clippy)
 #    Roda no workspace raiz — cobre todos os pacotes de uma vez.
 #    SEM --no-fatal-infos: o CI roda `melos exec -- flutter analyze .` (ver
