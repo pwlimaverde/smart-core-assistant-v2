@@ -897,6 +897,35 @@ jobs:
 
 ---
 
+### 9.5 Deploy do admin Flutter Web sob `/v2/admin`
+
+A partir do ciclo de implantação do web admin (`deploy-admin-web`), o bundle do Flutter Web (`smart-core-admin`) foi incluído no fluxo de CI/CD.
+
+#### Estratégia de Build
+- O build é executado no **runner self-hosted** (Hostinger), exigindo a instalação do Flutter SDK no usuário `gh-runner` (realizado via `server-setup.sh`).
+- O build utiliza compilação para **WASM** (`--wasm`), definindo a base das URLs como `/v2/admin/` (`--base-href /v2/admin/`) e injetando o endpoint correto em build-time por meio de `--dart-define=SMARTCORE_API_ENDPOINT`.
+- Comando de build (DEV):
+  ```bash
+  flutter build web --wasm --base-href /v2/admin/ -t lib/main_dev.dart --dart-define=SMARTCORE_API_ENDPOINT=https://dev.smartcoreassistant.com.br
+  ```
+- Comando de build (PROD):
+  ```bash
+  flutter build web --wasm --base-href /v2/admin/ -t lib/main_prod.dart --dart-define=SMARTCORE_API_ENDPOINT=https://smartcoreassistant.com.br
+  ```
+
+#### Publicação e Diretórios
+- **Ambiente DEV:** Publicado atômica e diretamente em `/srv/smart-core-admin/dev/web`, realizando backup em `/srv/smart-core-admin/dev/web.bak` para permitir rollback rápido.
+- **Ambiente PROD:** Publicado de forma versionada sob `/srv/smart-core-admin/prod/releases/$TAG/web`, apontando o symlink estável `/srv/smart-core-admin/prod/web` para a versão ativa.
+- **Rollback:** Integrado ao rollback de falha dos binários no pipeline (DEV restaura o backup e PROD reverte o symlink estável para a release anterior `PREV_WEB`).
+
+#### Roteamento no Caddy
+- O Caddy atua como borda única, realizando o roteamento com same-origin para as chamadas de API gRPC-Web e SPA fallback no subpath `/v2/admin/*` direcionando para `index.html`.
+- Fachadas gRPC-Web (bind localhost):
+  - PROD: `127.0.0.1:50051` (Caddy direciona `path /smartcore.contracts.*`)
+  - DEV: `127.0.0.1:50061` (Caddy direciona `path /smartcore.contracts.*`)
+
+---
+
 ## 10. GitHub Secrets e Environments
 
 ### 10.1 Secrets necessários (Settings → Secrets → Actions)

@@ -1,4 +1,5 @@
 import 'package:dependencies_module/dependencies_module.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:initial_loading_module/initial_loading_module.dart';
 import 'package:login_module/login_module.dart';
 
@@ -10,6 +11,11 @@ import 'app.dart';
 /// O boot assíncrono (runBootTasks) roda DENTRO da rota '/', não aqui.
 Future<void> bootstrap(AppConfig config) async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Path URL strategy: URLs limpas sob /v2/admin/ (sem '#'); combina com
+  // --base-href /v2/admin/ e o SPA fallback (try_files) do Caddy. Sem isso,
+  // refresh/deep-link em /v2/admin/login retornaria 404.
+  usePathUrlStrategy();
 
   // Ordem importa: InfraModule primeiro (registra SessionService/ApiClient);
   // LoginModule depois (registra AuthService/LocalStorageService reais).

@@ -68,6 +68,35 @@ jobs:
           sleep 3
           sudo systemctl restart smartcore-dev-runtime_api
 
+      - name: Garante Flutter no PATH
+        run: echo "$HOME/flutter/bin" >> $GITHUB_PATH
+
+      - name: Build web admin (DEV, --wasm)
+        working-directory: clients
+        run: |
+          dart pub get
+          cd apps/smart-core-admin
+          flutter build web --wasm \
+            --base-href /v2/admin/ \
+            -t lib/main_dev.dart \
+            --dart-define=SMARTCORE_API_ENDPOINT=https://dev.smartcoreassistant.com.br
+
+      - name: Publica bundle web DEV (atômico, com backup)
+        run: |
+          WEB_DIR="/srv/smart-core-admin/dev/web"
+          SRC="clients/apps/smart-core-admin/build/web"
+          STAGE="/srv/smart-core-admin/dev/web.staging"
+          # Backup do bundle atual para rollback.
+          rm -rf /srv/smart-core-admin/dev/web.bak
+          cp -r "$WEB_DIR" /srv/smart-core-admin/dev/web.bak 2>/dev/null || true
+          # Cópia para staging + troca atômica (rm do antigo + mv do novo).
+          rm -rf "$STAGE"
+          cp -r "$SRC" "$STAGE"
+          chmod -R 755 "$STAGE"
+          rm -rf "$WEB_DIR"
+          mv "$STAGE" "$WEB_DIR"
+          echo "✓ bundle web DEV publicado em $WEB_DIR (arquivos estáticos: Caddy não precisa reload)"
+
       - name: Smoke test DEV
         run: |
           sleep 8
@@ -108,4 +137,11 @@ jobs:
             echo "Rollback DEV concluído."
           else
             echo "Sem backup disponível."
+          fi
+
+          # Rollback do bundle web DEV junto com os binários.
+          if [ -d "/srv/smart-core-admin/dev/web.bak" ]; then
+            rm -rf "/srv/smart-core-admin/dev/web"
+            mv "/srv/smart-core-admin/dev/web.bak" "/srv/smart-core-admin/dev/web"
+            echo "Bundle web DEV revertido para o backup."
           fi
