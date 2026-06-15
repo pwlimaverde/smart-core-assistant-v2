@@ -229,6 +229,94 @@ fn msg_erro(err: Option<contracts::ErrorEnvelope>) -> String {
     .unwrap_or_else(|| "erro desconhecido".to_string())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use contracts::{ErrorEnvelope, MessageKind};
+
+    #[test]
+    fn test_resolver_prioriza_flag_sobre_env() {
+        let args = vec![
+            "programa".to_string(),
+            "--username".to_string(),
+            "usuario_via_flag".to_string(),
+        ];
+        std::env::set_var("_TEST_SUPERUSER_USERNAME", "usuario_via_env");
+        let resultado = resolver("--username", "_TEST_SUPERUSER_USERNAME", &args);
+        assert_eq!(resultado, Some("usuario_via_flag".to_string()));
+        std::env::remove_var("_TEST_SUPERUSER_USERNAME");
+    }
+
+    #[test]
+    fn test_resolver_usa_env_quando_flag_ausente() {
+        let args = vec!["programa".to_string()];
+        std::env::set_var("_TEST_SUPERUSER_EMAIL", "admin@teste.com");
+        let resultado = resolver("--email", "_TEST_SUPERUSER_EMAIL", &args);
+        assert_eq!(resultado, Some("admin@teste.com".to_string()));
+        std::env::remove_var("_TEST_SUPERUSER_EMAIL");
+    }
+
+    #[test]
+    fn test_resolver_retorna_none_sem_flag_e_sem_env() {
+        let args = vec!["programa".to_string()];
+        std::env::remove_var("_TEST_SUPERUSER_PASSWORD");
+        let resultado = resolver("--password", "_TEST_SUPERUSER_PASSWORD", &args);
+        assert!(resultado.is_none());
+    }
+
+    #[test]
+    fn test_resolver_env_vazia_retorna_none() {
+        let args = vec!["programa".to_string()];
+        std::env::set_var("_TEST_SUPERUSER_USERNAME2", "");
+        let resultado = resolver("--username", "_TEST_SUPERUSER_USERNAME2", &args);
+        assert!(resultado.is_none());
+        std::env::remove_var("_TEST_SUPERUSER_USERNAME2");
+    }
+
+    #[test]
+    fn test_montar_envelope_campos_corretos() {
+        let payload = serde_json::json!({ "nome": "Teste", "email": "a@b.com" });
+        let env = montar_envelope("CreateSuperuser", payload.clone()).unwrap();
+
+        assert_eq!(env.kind, MessageKind::Request as i32);
+        assert_eq!(env.method, "CreateSuperuser");
+        assert_eq!(env.schema_version, 1);
+        assert_eq!(env.auth_user_id, 0);
+        assert!(!env.auth_is_superuser);
+        assert!(env.error.is_none());
+
+        let payload_de_volta: serde_json::Value = serde_json::from_slice(&env.payload).unwrap();
+        assert_eq!(payload_de_volta, payload);
+    }
+
+    #[test]
+    fn test_msg_erro_usa_message_quando_preenchido() {
+        let err = ErrorEnvelope {
+            code: "ERRO".to_string(),
+            message: "mensagem detalhada do admin".to_string(),
+            user_message_fallback: "fallback".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(msg_erro(Some(err)), "mensagem detalhada do admin");
+    }
+
+    #[test]
+    fn test_msg_erro_usa_fallback_quando_message_vazio() {
+        let err = ErrorEnvelope {
+            code: "ERRO".to_string(),
+            message: "".to_string(),
+            user_message_fallback: "mensagem ao usuário".to_string(),
+            ..Default::default()
+        };
+        assert_eq!(msg_erro(Some(err)), "mensagem ao usuário");
+    }
+
+    #[test]
+    fn test_msg_erro_retorna_padrao_quando_none() {
+        assert_eq!(msg_erro(None), "erro desconhecido");
+    }
+}
+
 /// Lê uma linha do stdin exibindo um prompt (modo interativo).
 fn ler_linha(prompt: &str) -> anyhow::Result<String> {
     use std::io::Write;

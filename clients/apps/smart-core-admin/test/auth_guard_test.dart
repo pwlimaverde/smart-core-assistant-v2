@@ -15,6 +15,13 @@ void main() {
       );
     });
 
+    test('durante o boot: /login também redireciona para /', () {
+      expect(
+        authRedirectTarget(booted: false, isAuthenticated: false, location: '/login'),
+        '/',
+      );
+    });
+
     test('pós-boot deslogado: vai para /login (e fica nele)', () {
       expect(
         authRedirectTarget(
