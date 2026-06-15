@@ -224,6 +224,91 @@ async fn handler_get_file(client: StorageClient, env: Envelope) -> Envelope {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use contracts::{Envelope, MessageKind};
+
+    #[test]
+    fn test_extrair_file_name_ausente() {
+        assert!(extrair_file_name(&serde_json::json!({})).is_none());
+    }
+
+    #[test]
+    fn test_extrair_file_name_vazio() {
+        assert!(extrair_file_name(&serde_json::json!({ "file_name": "" })).is_none());
+    }
+
+    #[test]
+    fn test_extrair_file_name_apenas_espacos() {
+        assert!(extrair_file_name(&serde_json::json!({ "file_name": "   " })).is_none());
+    }
+
+    #[test]
+    fn test_extrair_file_name_presente_sem_espacos() {
+        assert_eq!(
+            extrair_file_name(&serde_json::json!({ "file_name": "documento.pdf" })),
+            Some("documento.pdf".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extrair_file_name_trim_de_espacos() {
+        assert_eq!(
+            extrair_file_name(&serde_json::json!({ "file_name": "  foto.jpg  " })),
+            Some("foto.jpg".to_string())
+        );
+    }
+
+    #[test]
+    fn test_responder_erro_preenche_kind_e_method() {
+        let env = Envelope {
+            tenant_id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+            traceparent: "00-trace123-span456-01".to_string(),
+            message_id: "abc".to_string(),
+            ..Default::default()
+        };
+        let app_err = error_core::AppError::Validation("campo obrigatório".to_string());
+        let resp = responder_erro(app_err, env.clone(), "PutFileReply");
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert_eq!(resp.method, "PutFileReply");
+        assert!(resp.error.is_some());
+        assert_eq!(resp.tenant_id, env.tenant_id);
+        assert_eq!(resp.traceparent, env.traceparent);
+    }
+
+    #[test]
+    fn test_responder_erro_storage_preserva_contexto() {
+        let env = Envelope {
+            tenant_id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+            traceparent: "00-trace999-span999-01".to_string(),
+            ..Default::default()
+        };
+        let resp = responder_erro(
+            error_core::AppError::Storage("S3 off".to_string()),
+            env,
+            "GetFileReply",
+        );
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert_eq!(resp.method, "GetFileReply");
+        assert!(resp.error.is_some());
+    }
+
+    #[test]
+    fn test_responder_erro_method_presign() {
+        let env = Envelope::default();
+        let resp = responder_erro(
+            error_core::AppError::Validation("file_name obrigatório".to_string()),
+            env,
+            "PresignFileReply",
+        );
+        assert_eq!(resp.method, "PresignFileReply");
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+}
+
 async fn handler_presign_file(client: StorageClient, env: Envelope) -> Envelope {
     let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
 

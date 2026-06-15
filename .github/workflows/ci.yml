@@ -133,7 +133,7 @@ jobs:
           # foi criado pelas migrations no step de testes (mesmo container persiste).
           DATABASE_URL: postgres://postgres:postgres@localhost:5434/smartcore_v2
 
-  # Detecta se o app Flutter já existe (clients/ ainda é ⬜ pendente no projeto).
+  # Detecta se o app Flutter já existe.
   # hashFiles() NÃO funciona em if de nível de job (avaliado antes do checkout),
   # por isso a detecção roda num job próprio com checkout e expõe um output.
   detect:
@@ -145,7 +145,7 @@ jobs:
       - uses: actions/checkout@v4
       - id: check
         run: |
-          if [ -f clients/flutter_windows/pubspec.yaml ]; then
+          if [ -f clients/pubspec.yaml ]; then
             echo "flutter=true" >> "$GITHUB_OUTPUT"
           else
             echo "flutter=false" >> "$GITHUB_OUTPUT"
@@ -166,14 +166,22 @@ jobs:
           channel: stable
           cache: true
 
-      - name: flutter pub get
-        working-directory: clients/flutter_windows
-        run: flutter pub get
+      # Pub workspace (Dart >= 3.6): resolve todos os membros a partir da raiz clients/.
+      - name: dart pub get (workspace)
+        working-directory: clients
+        run: dart pub get
 
-      - name: flutter analyze
-        working-directory: clients/flutter_windows
-        run: flutter analyze
+      - name: melos analyze
+        working-directory: clients
+        run: |
+          dart pub global activate melos
+          melos run analyze
 
-      - name: flutter test
-        working-directory: clients/flutter_windows
-        run: flutter test
+      - name: melos test
+        working-directory: clients
+        run: melos run test
+
+      # Smoke de build web/WASM: pega quebras de compilação cedo (ex.: flutter_secure_storage).
+      - name: Smoke build web (--wasm)
+        working-directory: clients/apps/smart-core-admin
+        run: flutter build web --wasm --base-href /v2/admin/ -t lib/main_dev.dart --dart-define=SMARTCORE_API_ENDPOINT=https://dev.smartcoreassistant.com.br

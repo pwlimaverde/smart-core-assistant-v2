@@ -74,6 +74,22 @@ chmod +x /usr/local/bin/flatc
 rm -rf /tmp/flatc.zip /tmp/flatc_extracted
 echo "flatc: $(flatc --version)"
 
+# Flutter SDK para o usuário gh-runner (build do smart-core-admin no CI/CD).
+# Clone one-shot no canal stable (compatível com sdk ^3.12.2); ~1.5GB no disco.
+echo "Instalando Flutter SDK para o gh-runner..."
+GHR_HOME="/home/gh-runner"
+if [ ! -d "$GHR_HOME/flutter" ]; then
+    sudo -u gh-runner git clone https://github.com/flutter/flutter.git \
+        -b stable --depth 1 "$GHR_HOME/flutter"
+fi
+# PATH persistente do gh-runner + safe.directory (evita "dubious ownership").
+# Guard de idempotência: só insere se a linha ainda não existir no .bashrc.
+grep -qF 'flutter/bin' "$GHR_HOME/.bashrc" || \
+    echo 'export PATH="$HOME/flutter/bin:$PATH"' >> "$GHR_HOME/.bashrc"
+sudo -u gh-runner git config --global --replace-all safe.directory "$GHR_HOME/flutter"
+# Baixa só os artefatos web (poupa disco) e valida.
+sudo -u gh-runner bash -lc 'flutter precache --web && flutter --version'
+
 # ── 4. Usuários e diretórios ──────────────────────────────────────────────────
 echo ""
 echo "[4/8] Criando usuários e estrutura de diretórios..."
@@ -100,10 +116,14 @@ mkdir -p \
     "$SMARTCORE_DIR/prod/releases" \
     "$SMARTCORE_DIR/shared" \
     "$RUN_DIR_PROD" \
-    "$RUN_DIR_DEV"
+    "$RUN_DIR_DEV" \
+    /srv/smart-core-admin/prod \
+    /srv/smart-core-admin/dev
 
 # Permissões
 chown -R gh-runner:gh-runner "$SMARTCORE_DIR"
+chown -R gh-runner:gh-runner /srv/smart-core-admin
+chmod -R 755 /srv/smart-core-admin
 chown -R smartcore:smartcore "$RUN_DIR_PROD" "$RUN_DIR_DEV"
 chmod 755 "$RUN_DIR_PROD" "$RUN_DIR_DEV"
 
@@ -159,62 +179,14 @@ sed -i 's/#SystemMaxUse=/SystemMaxUse=500M/' /etc/systemd/journald.conf
 sed -i 's/#MaxRetentionSec=/MaxRetentionSec=7day/' /etc/systemd/journald.conf
 systemctl restart systemd-journald
 
-# ── 8. Caddy — Caddyfile inicial ─────────────────────────────────────────────
+# ── 8. Caddy — instala o Caddyfile versionado (fonte da verdade) ──────────────
 echo ""
-echo "[8/8] Configurando Caddyfile inicial..."
-# Só cria se não existir (não sobrescreve configuração existente)
-if [ ! -f /etc/caddy/Caddyfile ] || grep -q "your-hostname" /etc/caddy/Caddyfile 2>/dev/null; then
-    cat > /etc/caddy/Caddyfile << 'CADDYEOF'
-# Smart Core Assistant v2 — Caddyfile
-# Substitua os domínios pelos seus antes de iniciar o Caddy
-
-# Produção — gRPC via h2c
-api.smartcoreassistant.com.br {
-    reverse_proxy h2c://localhost:8080 {
-        flush_interval -1
-        transport http {
-            versions h2c
-        }
-    }
-    header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains"
-        X-Content-Type-Options nosniff
-    }
-    log {
-        output file /var/log/caddy/api-prod.log {
-            roll_size 10mb
-            roll_keep 5
-        }
-    }
-}
-
-# Desenvolvimento — gRPC via h2c
-dev-api.smartcoreassistant.com.br {
-    reverse_proxy h2c://localhost:8090 {
-        flush_interval -1
-        transport http {
-            versions h2c
-        }
-    }
-    log {
-        output file /var/log/caddy/api-dev.log {
-            roll_size 10mb
-            roll_keep 5
-        }
-    }
-}
-
-# Grafana — observabilidade
-grafana.smartcoreassistant.com.br {
-    reverse_proxy localhost:3000
-}
-CADDYEOF
-    echo "Caddyfile criado em /etc/caddy/Caddyfile"
-    echo "IMPORTANTE: edite os domínios antes de iniciar o Caddy!"
-fi
-
+echo "[8/8] Instalando Caddyfile versionado (infra/Caddyfile)..."
+install -m 644 infra/Caddyfile /etc/caddy/Caddyfile
+echo "Caddyfile copiado de infra/Caddyfile → /etc/caddy/Caddyfile"
+echo "IMPORTANTE: valide os domínios e rode 'caddy validate' antes de iniciar."
 systemctl enable caddy
-# Não inicia o Caddy agora — domínios precisam ser configurados antes
+# Não inicia o Caddy agora — DNS precisa estar apontado antes (TLS automático).
 
 # ── Resumo ────────────────────────────────────────────────────────────────────
 echo ""
@@ -249,12 +221,11 @@ echo "     systemctl daemon-reload"
 echo "     systemctl enable smartcore-prod.target smartcore-dev.target"
 echo ""
 echo "  5. Apontar DNS para este IP ($(hostname -I | awk '{print $1}')):"
-echo "     api.smartcoreassistant.com.br"
-echo "     dev-api.smartcoreassistant.com.br"
-echo "     grafana.smartcoreassistant.com.br"
+echo "     smartcoreassistant.com.br       (apex — admin prod + gRPC-Web prod)"
+echo "     dev.smartcoreassistant.com.br   (admin dev + gRPC-Web dev)"
+echo "     # (blocos legados api./dev-api./grafana. — manter DNS só se ainda em uso)"
 echo ""
-echo "  6. Editar e iniciar o Caddy:"
-echo "     vim /etc/caddy/Caddyfile"
+echo "  6. Iniciar o Caddy:"
 echo "     systemctl start caddy"
 echo ""
 echo "  7. Registrar GitHub Actions self-hosted runner como usuário gh-runner:"

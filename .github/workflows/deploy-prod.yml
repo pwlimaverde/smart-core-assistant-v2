@@ -80,6 +80,37 @@ jobs:
           ln -sfn "$RELEASES_DIR/$TAG" "$RELEASES_DIR/current"
           echo "Symlink: current → $TAG (anterior: $PREV)"
 
+      - name: Garante Flutter no PATH
+        run: echo "$HOME/flutter/bin" >> $GITHUB_PATH
+
+      - name: Build web admin (PROD, --wasm)
+        working-directory: clients
+        run: |
+          dart pub get
+          cd apps/smart-core-admin
+          flutter build web --wasm \
+            --base-href /v2/admin/ \
+            -t lib/main_prod.dart \
+            --dart-define=SMARTCORE_API_ENDPOINT=https://smartcoreassistant.com.br
+
+      - name: Publica bundle web PROD (versionado + symlink)
+        env:
+          TAG: ${{ steps.version.outputs.TAG }}
+        run: |
+          BASE="/srv/smart-core-admin/prod"
+          REL_WEB="$BASE/releases/$TAG/web"
+          SRC="clients/apps/smart-core-admin/build/web"
+          mkdir -p "$BASE/releases/$TAG"
+          rm -rf "$REL_WEB"
+          cp -r "$SRC" "$REL_WEB"
+          chmod -R 755 "$REL_WEB"
+          # Registra o alvo anterior do symlink web para rollback.
+          PREV_WEB=$(readlink "$BASE/web" 2>/dev/null || true)
+          echo "PREV_WEB=$PREV_WEB" >> "$GITHUB_ENV"
+          # Symlink estável que o Caddy serve (root /srv/smart-core-admin/prod/web).
+          ln -sfn "$REL_WEB" "$BASE/web"
+          echo "✓ web PROD → releases/$TAG/web (anterior: $PREV_WEB)"
+
       - name: Reinicia serviços PROD (rolling restart)
         run: |
           # Para o runtime_api primeiro — para de aceitar novas requisições
@@ -139,7 +170,15 @@ jobs:
             echo "Sem release anterior disponível — rollback manual necessário."
             echo "Releases disponíveis: $(ls $RELEASES_DIR)"
           fi
-          # Remove release com falha para não poluir
+
+          # Rollback do symlink web PROD para a release anterior.
+          BASE="/srv/smart-core-admin/prod"
+          if [ -n "${PREV_WEB:-}" ] && [ -d "${PREV_WEB:-/nonexistent}" ]; then
+            ln -sfn "$PREV_WEB" "$BASE/web"
+            echo "Symlink web PROD revertido para $PREV_WEB."
+          fi
+          # A release com falha já é removida adiante (rm releases/$TAG inclui o web).
+          rm -rf "$BASE/releases/$TAG" || true
           rm -rf "$RELEASES_DIR/$TAG" || true
 
       - name: Remove releases antigas (mantém últimas 5)

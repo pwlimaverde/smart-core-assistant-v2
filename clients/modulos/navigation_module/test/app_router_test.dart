@@ -29,4 +29,43 @@ void main() {
 
     expect(routePaths, contains('/fake'));
   });
+
+  test('AppRouter.build inclui extraRoutes além das rotas dos módulos', () {
+    final extraRoute = GoRoute(
+      path: '/extra',
+      builder: (_, _) => const SizedBox.shrink(),
+    );
+    final router = AppRouter(
+      initialLocation: '/fake',
+      routes: [_FakeRoute()],
+      extraRoutes: [extraRoute],
+    ).build();
+
+    final routePaths = router.configuration.routes
+        .whereType<GoRoute>()
+        .map((r) => r.path)
+        .toList();
+
+    expect(routePaths, containsAll(['/fake', '/extra']));
+  });
+
+  group('BootState', () {
+    test('inicia com value false', () {
+      expect(BootState().value, isFalse);
+    });
+
+    test('complete() seta value para true', () {
+      final boot = BootState();
+      boot.complete();
+      expect(boot.value, isTrue);
+    });
+
+    test('notifica listeners ao completar', () {
+      final boot = BootState();
+      var notificado = false;
+      boot.addListener(() => notificado = true);
+      boot.complete();
+      expect(notificado, isTrue);
+    });
+  });
 }

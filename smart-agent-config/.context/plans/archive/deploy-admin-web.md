@@ -1,5 +1,5 @@
 ---
-status: active
+status: archived
 generated: 2026-06-15
 prevc_scale: MEDIUM
 artifacts:
@@ -15,22 +15,22 @@ phases:
     name: "Review — same-origin/CORS, Caddy subpath, portas por ambiente"
     prevc: "R"
     agent: "architect-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-e"
     name: "Execution — app, Caddyfile, server-setup, .env, CI, deploy dev/prod, docs"
     prevc: "E"
     agent: "devops-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-v"
     name: "Validation — CI verde, dev/prod acessíveis, same-origin, rollback, segurança"
     prevc: "V"
     agent: "test-writer"
-    status: "pending"
+    status: "completed"
   - id: "phase-c"
     name: "Confirmation — final-review, docs e arquivamento"
     prevc: "C"
     agent: "code-reviewer"
-    status: "pending"
+    status: "completed"
 ---
 
 # Deploy do admin Flutter Web no CI/CD sob `/v2/admin` (dev + prod)

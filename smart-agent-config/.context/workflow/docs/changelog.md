@@ -2,6 +2,30 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-06-15] - Deploy do Admin Flutter Web no CI/CD sob `/v2/admin`
+
+> Ciclo PREVC `deploy-admin-web` concluído. Final-review:
+> `final-review-deploy-admin-web.md` — qualidade **CORRIGIDO**.
+
+### Adicionado
+- **App Flutter (E1):** `usePathUrlStrategy()` em `bootstrap.dart` para URLs limpas sob `/v2/admin/` (path strategy). Dependência `flutter_web_plugins: sdk: flutter` declarada no `pubspec.yaml`.
+- **Caddyfile reescrito (E2):** 2 site blocks (apex prod + dev) com matcher por path `@grpcapi path /smartcore.contracts.*` (captura POST e preflight OPTIONS), `handle_path /v2/admin/*` com SPA fallback (`try_files`), CSP (`wasm-unsafe-eval`) + HSTS + headers de segurança. `reverse_proxy` sem h2c (gRPC-Web é HTTP/1.1). Access logs por site com rotação.
+- **Provisionamento (E3):** Flutter SDK para o `gh-runner` (clone stable + `precache --web`), web roots `/srv/smart-core-admin/{prod,dev}` (755, owned by `gh-runner`), Caddyfile copiado via `install` (fonte da verdade versionada), DNS apex+dev no resumo.
+- **Ambiente (E4):** `RUNTIME_API_GRPC_WEB_ADDR` documentado em `.env.deploy.example` (prod 50051 / dev 50061, bind localhost).
+- **CI (E5):** `detect` corrigido para `clients/pubspec.yaml` (pub workspace). Job Flutter via melos (`analyze`/`test`) + smoke build web `--wasm`.
+- **Deploy DEV (E6):** Build web + publicação atômica em `/srv/smart-core-admin/dev/web` com backup `web.bak` e rollback integrado.
+- **Deploy PROD (E7):** Build web + publicação versionada em `releases/$TAG/web` com symlink estável e rollback por `PREV_WEB`.
+- **Debug local (E9):** `.vscode/launch.json` (compound F5 → Chrome debug contra dev remoto). `run-admin.ps1` documentado com endpoint dev remoto.
+- **Documentação (E8):** Seção 9.5 em `10-plano-cicd-devops.md` (estratégia de build/deploy web). Seção 7 em `09-comunicacao-e-autenticacao.md` (same-origin, roteamento por path, debug local CORS).
+
+### Corrigido (follow-up do final-review)
+- **`server-setup.sh`:** Guard de idempotência (`grep -qF`) na inserção do Flutter PATH no `.bashrc` do `gh-runner` — evita linhas duplicadas em re-execuções. Trocado `--add` por `--replace-all` no `git config safe.directory`.
+
+### Pendências remanescentes (trabalho futuro)
+- **Fase V (validação):** Itens V0–V7 (debug local, CI verde, dev/prod acessíveis, same-origin, rollback, segurança, TLS) dependem de infraestrutura no servidor (DNS apontado, Caddy rodando, Flutter SDK instalado).
+- **Job `flutter-windows`** em `deploy-prod.yml` referencia `clients/flutter_windows` (possível path obsoleto) — fora do escopo deste plano.
+- **Idempotência do cargo PATH** no `.bashrc` (linha 145 de `server-setup.sh`) — pré-existente, merece correção em ciclo futuro.
+
 ## [2026-06-11] - Otimização de Pools, Concorrência e Observabilidade de Gargalos
 
 > Ciclo PREVC `otimizacao-pools-observabilidade` concluído. Final-review (Opus):

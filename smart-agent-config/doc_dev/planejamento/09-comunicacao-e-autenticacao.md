@@ -210,7 +210,30 @@ Middleware na `runtime_api` aplicado a **todas** as rotas exceto `Login`/`Refres
 
 ---
 
-## 7. Próximos Passos
+## 7. Hospedagem do Painel Admin (`/v2/admin`) e gRPC-Web Same-Origin
+
+Com a inclusão do painel administrativo (`smart-core-admin` em Flutter Web/WASM), a topologia de comunicação externa (Front↔Back) foi estendida:
+
+### 7.1 Same-Origin em Produção e Desenvolvimento
+- **Same-Origin:** O admin web e as chamadas de API gRPC-Web são roteados sob o mesmo domínio de borda de cada ambiente:
+  - PROD: `smartcoreassistant.com.br/v2/admin` (admin) e `smartcoreassistant.com.br/smartcore.contracts.*` (gRPC-Web)
+  - DEV: `dev.smartcoreassistant.com.br/v2/admin` (admin) e `dev.smartcoreassistant.com.br/smartcore.contracts.*` (gRPC-Web)
+- **Vantagem:** O navegador não precisa realizar verificações de preflight CORS (`OPTIONS`) para conexões gRPC-Web originadas no próprio painel admin, pois ambos compartilham a mesma origem.
+
+### 7.2 Roteamento por Path no Caddy
+- O proxy reverso Caddy captura o tráfego do namespace do gRPC-Web utilizando o matcher por path (`@grpcapi path /smartcore.contracts.*`) e o repassa para a fachada Tonic na porta apropriada do ambiente (bind localhost):
+  - PROD: `127.0.0.1:50051`
+  - DEV: `127.0.0.1:50061`
+- **Roteamento por Path vs. Content-Type:** O matcher é definido por prefixo de path (e não por header `Content-Type: application/grpc-web*`) para que as requisições de preflight `OPTIONS` (disparadas no debug local cross-origin) também sejam capturadas e encaminhadas corretamente para o backend responder.
+
+### 7.3 Debug Local Cross-Origin (CORS)
+- **Cenário:** O desenvolvedor executa o app Flutter localmente (`http://localhost:<porta>`) apontando para o backend remoto de desenvolvimento (`https://dev.smartcoreassistant.com.br`).
+- **Comportamento:** Como a origem do app (`http://localhost`) difere do backend, o navegador dispara uma requisição de preflight `OPTIONS`.
+- **Resolução:** O Caddy repassa a requisição `OPTIONS` à fachada Tonic, que já está instrumentada com `tower_http::cors::CorsLayer` utilizando `AllowOrigin::mirror_request()`. A fachada responde com sucesso (`200 OK`) permitindo a chamada final de gRPC-Web, sem necessitar de alteração no código Rust.
+
+---
+
+## 8. Próximos Passos
 
 A infraestrutura de transporte local (IPC UDS FlatBuffers), serialização e a segurança
 por RLS com contexto integrado no `Envelope` estão concluídas e validadas. A ordem de

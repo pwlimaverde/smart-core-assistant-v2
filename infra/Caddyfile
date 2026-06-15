@@ -1,42 +1,73 @@
-# Caddyfile — borda pública do smart-core-admin (Flutter Web/WASM) + API gRPC-Web.
+# Caddyfile — borda pública do smart-core-admin (Flutter Web/WASM) + fachada gRPC-Web.
+# Fonte da verdade versionada; o server-setup.sh COPIA este arquivo para /etc/caddy/Caddyfile.
 #
-# Objetivos (login-module, Frente A §A5):
-#   - Servir o bundle Flutter Web/WASM e a fachada gRPC-Web da runtime_api na MESMA ORIGEM
-#     (CORS trivial; o WASM e a API compartilham o host).
-#   - Terminar TLS (HTTPS): exigência do Web Cryptography API usado pelo flutter_secure_storage.
-#   - Aplicar CSP forte + HSTS para mitigar XSS sobre o refresh token persistido no browser.
-#
-# Variáveis esperadas no ambiente do Caddy:
-#   - ADMIN_DOMAIN: domínio público (ex.: admin.smartcore.example)
-#   - GRPC_WEB_UPSTREAM: endereço da fachada Tonic (default localhost:50051 = RUNTIME_API_GRPC_WEB_ADDR)
-#   - ADMIN_WEB_ROOT: diretório do build web (ex.: /srv/smart-core-admin/build/web)
+# Topologia por ambiente:
+#   apex smartcoreassistant.com.br      → web /srv/smart-core-admin/prod/web ; gRPC-Web 127.0.0.1:50051
+#   dev. dev.smartcoreassistant.com.br  → web /srv/smart-core-admin/dev/web  ; gRPC-Web 127.0.0.1:50061
+# Caddy emite TLS automático (Let's Encrypt) e faz HTTP→HTTPS.
 
-{$ADMIN_DOMAIN:admin.smartcore.example} {
+# ===================== PRODUÇÃO (apex) =====================
+smartcoreassistant.com.br {
 	encode gzip zstd
 
-	# --- API gRPC-Web (HTTP/1.1) ---
-	# O tráfego gRPC-Web chega com Content-Type application/grpc-web*; roteamos para a
-	# fachada Tonic. O Caddy repassa X-Forwarded-For, que a fachada usa para auditar o IP.
-	@grpcweb header Content-Type application/grpc-web*
-	reverse_proxy @grpcweb {$GRPC_WEB_UPSTREAM:localhost:50051}
+	# gRPC-Web por PATH do namespace do contrato (HTTP/1.1). Matchar por path (não por
+	# content-type) captura tanto o POST gRPC-Web quanto o preflight OPTIONS (cross-origin
+	# do debug local). SEM h2c: a fachada Tonic escuta HTTP/1.1 plano em 127.0.0.1.
+	@grpcapi path /smartcore.contracts.*
+	handle @grpcapi {
+		reverse_proxy 127.0.0.1:50051
+	}
 
-	# --- Bundle Flutter Web/WASM (mesma origem → CORS trivial) ---
-	root * {$ADMIN_WEB_ROOT:/srv/smart-core-admin/build/web}
-	file_server
+	# Bundle Flutter sob /v2/admin/* (handle_path remove o prefixo antes do try_files).
+	handle_path /v2/admin/* {
+		root * /srv/smart-core-admin/prod/web
+		header {
+			Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+			Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+			X-Content-Type-Options "nosniff"
+			X-Frame-Options "DENY"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			-Server
+		}
+		try_files {path} /index.html
+		file_server
+	}
 
-	# SPA fallback: rotas do go_router resolvem para index.html.
-	try_files {path} /index.html
+	log {
+		output file /var/log/caddy/admin-prod.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+	}
+}
 
-	# --- Cabeçalhos de segurança ---
-	header {
-		# CSP forte: mitiga XSS (que poderia ler o refresh token do secure storage).
-		# 'wasm-unsafe-eval' é necessário para instanciar o módulo WASM do Flutter.
-		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
-		# HSTS: força HTTPS (contexto seguro exigido pelo Web Crypto).
-		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-		X-Content-Type-Options "nosniff"
-		X-Frame-Options "DENY"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		-Server
+# ===================== DESENVOLVIMENTO (dev.) =====================
+dev.smartcoreassistant.com.br {
+	encode gzip zstd
+
+	@grpcapi path /smartcore.contracts.*
+	handle @grpcapi {
+		reverse_proxy 127.0.0.1:50061
+	}
+
+	handle_path /v2/admin/* {
+		root * /srv/smart-core-admin/dev/web
+		header {
+			Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+			Strict-Transport-Security "max-age=31536000; includeSubDomains"
+			X-Content-Type-Options "nosniff"
+			X-Frame-Options "DENY"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			-Server
+		}
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output file /var/log/caddy/admin-dev.log {
+			roll_size 10mb
+			roll_keep 5
+		}
 	}
 }

@@ -45,6 +45,119 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use contracts::{Envelope, MessageKind};
+    use uuid::Uuid;
+
+    static MESSAGING_TEST_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    /// Sobe um stub TCP mínimo que fala RESP suficiente para XADD + PING.
+    async fn fake_redis(porta: u16) -> ConnectionManager {
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", porta))
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut socket, _)) = listener.accept().await else {
+                    break;
+                };
+                tokio::spawn(async move {
+                    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+                    let mut buf = [0u8; 4096];
+                    while let Ok(n) = socket.read(&mut buf).await {
+                        if n == 0 {
+                            break;
+                        }
+                        let req = String::from_utf8_lossy(&buf[..n]).to_uppercase();
+                        for parte in req.split('*') {
+                            if parte.is_empty() {
+                                continue;
+                            }
+                            if parte.contains("PING") {
+                                let _ = socket.write_all(b"+PONG\r\n").await;
+                            } else {
+                                // XADD retorna um ID como bulk string; +OK é aceito como String
+                                let _ = socket.write_all(b"+OK\r\n").await;
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        let client = redis::Client::open(format!("redis://127.0.0.1:{porta}")).unwrap();
+        ConnectionManager::new(client).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_handler_receive_webhook_payload_valido() {
+        let _guard = MESSAGING_TEST_MUTEX.lock().await;
+        let redis_conn = fake_redis(29201).await;
+
+        let payload = serde_json::json!({
+            "sender_id": "whatsapp:5511999999999",
+            "content": "Olá, preciso de ajuda!"
+        });
+        let tenant_id = Uuid::new_v4().to_string();
+        let env = Envelope {
+            tenant_id: tenant_id.clone(),
+            traceparent: "00-trace-msg-01-01".to_string(),
+            method: "ReceiveWebhook".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        };
+
+        let resp = handler_receive_webhook(redis_conn, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        assert_eq!(resp.method, "ReceiveWebhookReply");
+        assert_eq!(resp.tenant_id, tenant_id);
+        let resp_payload: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(
+            resp_payload.get("status").and_then(|v| v.as_str()),
+            Some("success")
+        );
+        assert!(resp_payload.get("event_id").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_handler_receive_webhook_json_invalido_usa_defaults() {
+        let _guard = MESSAGING_TEST_MUTEX.lock().await;
+        let redis_conn = fake_redis(29202).await;
+
+        let env = Envelope {
+            tenant_id: Uuid::new_v4().to_string(),
+            method: "ReceiveWebhook".to_string(),
+            payload: b"nao_e_json!!!".to_vec(),
+            ..Default::default()
+        };
+
+        // JSON inválido: fallback para json!({}) — campos sender_id/"content" ficam com defaults
+        let resp = handler_receive_webhook(redis_conn, env).await;
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        assert_eq!(resp.method, "ReceiveWebhookReply");
+    }
+
+    #[tokio::test]
+    async fn test_handler_receive_webhook_tenant_uuid_invalido_usa_nil() {
+        let _guard = MESSAGING_TEST_MUTEX.lock().await;
+        let redis_conn = fake_redis(29203).await;
+
+        let payload = serde_json::json!({ "content": "mensagem" });
+        let env = Envelope {
+            tenant_id: "nao-eh-um-uuid-valido".to_string(),
+            method: "ReceiveWebhook".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        };
+
+        // tenant_id inválido: fallback para Uuid::nil() — handler ainda publica o evento
+        let resp = handler_receive_webhook(redis_conn, env).await;
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+}
+
 /// Handler que simula o recebimento de uma mensagem via Webhook e a despacha como evento assíncrono no barramento.
 async fn handler_receive_webhook(mut redis_conn: ConnectionManager, env: Envelope) -> Envelope {
     let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
