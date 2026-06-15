@@ -21,3 +21,15 @@ table AuthResponse {
   refresh_token:string;
 }
 
+table RefreshRequest {
+  refresh_token:string;
+}
+
+table LogoutRequest {
+  refresh_token:string;
+}
+
+table LogoutResponse {
+  revoked:bool;
+}
+

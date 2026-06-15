@@ -8,6 +8,11 @@ use std::time::Duration;
 use transport::Server;
 use uuid::Uuid;
 
+mod audit;
+mod grpc_web;
+
+use audit::{publicar_auditoria_borda, publicar_reuso_detectado};
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // 1. Inicializa observabilidade
@@ -152,6 +157,19 @@ async fn main() -> anyhow::Result<()> {
         );
 
     tracing::info!("Servidor RPC da runtime_api configurado e pronto.");
+
+    // Fachada gRPC-Web da borda do browser (Flutter Web/WASM): roda em task paralela,
+    // numa porta HTTP própria, reaproveitando os mesmos `deps`/`bus` e delegando para
+    // `application::auth::*`. Não interfere no `transport::Server` (IPC interno).
+    {
+        let facade_deps = deps.clone();
+        let facade_bus = bus.clone();
+        tokio::spawn(async move {
+            if let Err(e) = grpc_web::serve(facade_deps, facade_bus).await {
+                tracing::error!("Fachada gRPC-Web parou com erro: {:?}", e);
+            }
+        });
+    }
 
     if let Err(e) = server.run().await {
         tracing::error!(
@@ -347,6 +365,7 @@ where
                     serde_json::json!({ "method": env.method }),
                     claims.sub.parse::<i32>().ok(),
                     &env.traceparent,
+                    None,
                 )
                 .await;
                 return erro_forbidden("Acesso negado: exige privilégios de superusuário", &env);
@@ -415,6 +434,7 @@ async fn handler_login(
                 serde_json::json!({}),
                 user_id,
                 &env.traceparent,
+                None,
             )
             .await;
             Envelope {
@@ -437,6 +457,7 @@ async fn handler_login(
                     serde_json::json!({}),
                     None,
                     &env.traceparent,
+                    None,
                 )
                 .await;
             }
@@ -481,7 +502,7 @@ async fn handler_refresh(
             // Aqui publicamos o evento de segurança `token_reuse_detected` no security:stream.
             if matches!(&err, error_core::AppError::Auth(m) if m == application::auth::refresh::REUSE_MARKER)
             {
-                publicar_reuso_detectado(&mut bus, &env).await;
+                publicar_reuso_detectado(&mut bus, &env.traceparent, None).await;
             }
             registrar_erro_borda(&err, &env);
             let err_env = err.to_error_envelope(&env.traceparent, "runtime_api");
@@ -493,59 +514,6 @@ async fn handler_refresh(
             }
         }
     }
-}
-
-/// Publica um evento de auditoria de segurança no `security:stream` (consumido pelo
-/// `data_postgres`, que consolida em `audit_log`). Nunca inclui tokens/senhas — apenas
-/// identificadores (user_id, jti) e o traceparent para correlação.
-#[allow(clippy::too_many_arguments)]
-async fn publicar_auditoria_borda(
-    bus: &mut redis::aio::ConnectionManager,
-    tenant_id: Option<Uuid>,
-    level: &str,
-    event: &str,
-    message: String,
-    context: serde_json::Value,
-    user_id: Option<i32>,
-    traceparent: &str,
-) {
-    let audit_payload = observability::AuditLogPayload {
-        tenant_id,
-        level: level.to_string(),
-        service: "runtime_api".to_string(),
-        trace_id: Some(traceparent.to_string()),
-        event: event.to_string(),
-        message,
-        context,
-        user_id,
-        ip_address: None,
-    };
-    let envelope_auditoria = contracts::TenantEnvelope::novo(
-        tenant_id.unwrap_or_else(Uuid::nil),
-        "security.audit",
-        audit_payload,
-    )
-    .com_traceparent(traceparent.to_string());
-
-    if let Err(e) = transport::bus::publicar_evento_seguranca(bus, &envelope_auditoria).await {
-        tracing::error!("Falha ao publicar evento de auditoria '{}': {:?}", event, e);
-    }
-}
-
-/// Publica o evento de auditoria `token_reuse_detected` no stream de segurança.
-/// Nunca registra o token em si — apenas o traceparent para correlação.
-async fn publicar_reuso_detectado(bus: &mut redis::aio::ConnectionManager, env: &Envelope) {
-    publicar_auditoria_borda(
-        bus,
-        None,
-        "WARN",
-        "token_reuse_detected",
-        "Reuso de refresh token rotacionado detectado; família revogada.".to_string(),
-        serde_json::json!({}),
-        None,
-        &env.traceparent,
-    )
-    .await;
 }
 
 /// Handler de Logout: invalida a sessão e audita o evento `logout` no security:stream.
@@ -585,6 +553,7 @@ async fn handler_logout(
                 serde_json::json!({ "jti": claims.jti }),
                 claims.sub.parse::<i32>().ok(),
                 &env.traceparent,
+                None,
             )
             .await;
             Envelope {

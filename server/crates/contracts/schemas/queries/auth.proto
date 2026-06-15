@@ -19,3 +19,24 @@ message AuthResponse {
   string access_token = 1;
   string refresh_token = 2;
 }
+
+message RefreshRequest {
+  string refresh_token = 1;
+}
+
+message LogoutRequest {
+  // refresh opcional: se presente, revoga a família inteira (logout global).
+  string refresh_token = 1;
+}
+
+message LogoutResponse {
+  bool revoked = 1;
+}
+
+// Fachada de borda gRPC-Web. Login/Refresh são públicas; Logout exige access token
+// no metadata `authorization: Bearer <access>`.
+service AuthService {
+  rpc Login   (LoginRequest)   returns (AuthResponse);
+  rpc Refresh (RefreshRequest) returns (AuthResponse);
+  rpc Logout  (LogoutRequest)  returns (LogoutResponse);
+}
