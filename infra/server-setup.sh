@@ -83,8 +83,10 @@ if [ ! -d "$GHR_HOME/flutter" ]; then
         -b stable --depth 1 "$GHR_HOME/flutter"
 fi
 # PATH persistente do gh-runner + safe.directory (evita "dubious ownership").
-echo 'export PATH="$HOME/flutter/bin:$PATH"' >> "$GHR_HOME/.bashrc"
-sudo -u gh-runner git config --global --add safe.directory "$GHR_HOME/flutter"
+# Guard de idempotência: só insere se a linha ainda não existir no .bashrc.
+grep -qF 'flutter/bin' "$GHR_HOME/.bashrc" || \
+    echo 'export PATH="$HOME/flutter/bin:$PATH"' >> "$GHR_HOME/.bashrc"
+sudo -u gh-runner git config --global --replace-all safe.directory "$GHR_HOME/flutter"
 # Baixa só os artefatos web (poupa disco) e valida.
 sudo -u gh-runner bash -lc 'flutter precache --web && flutter --version'
 
