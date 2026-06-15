@@ -43,7 +43,7 @@ jobs:
           --health-retries 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Instala toolchain Rust estável
         uses: dtolnay/rust-toolchain@stable
@@ -142,7 +142,7 @@ jobs:
     outputs:
       flutter: ${{ steps.check.outputs.flutter }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - id: check
         run: |
           if [ -f clients/pubspec.yaml ]; then
@@ -157,7 +157,7 @@ jobs:
     needs: detect
     if: needs.detect.outputs.flutter == 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2

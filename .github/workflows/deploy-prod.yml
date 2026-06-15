@@ -19,7 +19,7 @@ jobs:
     name: Build Rust (PROD)
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: dtolnay/rust-toolchain@stable
 
@@ -55,7 +55,7 @@ jobs:
           cp -r server/crates/infrastructure_postgres/migrations stage/migrations 2>/dev/null || true
           tar -C stage -czf server-prod.tar.gz .
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: server-prod
           path: server-prod.tar.gz
@@ -67,7 +67,7 @@ jobs:
     name: Build Web (PROD)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -89,7 +89,7 @@ jobs:
       - name: Empacota bundle estático
         run: tar -C clients/apps/smart-core-admin/build/web -czf web-prod.tar.gz .
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: web-prod
           path: web-prod.tar.gz
@@ -122,11 +122,11 @@ jobs:
           # Mantém apenas os últimos 5 backups
           ls -t /opt/smartcore/prod/db-backup-*.dump 2>/dev/null | tail -n +6 | xargs rm -f || true
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: server-prod
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: web-prod
 
