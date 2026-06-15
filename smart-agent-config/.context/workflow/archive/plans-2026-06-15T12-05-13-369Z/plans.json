@@ -1,0 +1,14 @@
+{
+  "active": [
+    {
+      "slug": "login-module",
+      "path": "plans/login-module.md",
+      "title": "Módulo de Login (Flutter Web/WASM) × borda gRPC-Web",
+      "summary": "Construir o `login_module` no app `smart-core-admin` (Flutter Web/WASM) consumindo o auth da",
+      "linkedAt": "2026-06-15T02:14:55.022Z",
+      "status": "active"
+    }
+  ],
+  "completed": [],
+  "primary": "login-module"
+}

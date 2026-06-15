@@ -1,60 +1,53 @@
 {
   "version": 2,
   "workflowType": "prevc",
-  "updatedAt": "2026-06-15T02:15:26.445Z",
+  "updatedAt": "2026-06-15T12:05:38.579Z",
   "status": {
     "project": {
-      "name": "login-module",
-      "scale": 3,
-      "started": "2026-06-15T02:14:50.266Z",
-      "current_phase": "E",
+      "name": "deploy-admin-web",
+      "scale": 2,
+      "started": "2026-06-15T12:05:13.374Z",
+      "current_phase": "R",
       "settings": {
         "autonomous_mode": false,
         "require_plan": true,
         "require_approval": true
       },
-      "plan": "login-module"
+      "plan": "deploy-admin-web"
     },
     "phases": {
       "P": {
         "status": "completed",
-        "started_at": "2026-06-15T02:14:50.266Z",
-        "completed_at": "2026-06-15T02:14:59.934Z",
+        "started_at": "2026-06-15T12:05:13.374Z",
+        "completed_at": "2026-06-15T12:05:25.218Z",
         "outputs": [
           {
-            "path": ".context/plans/login-module.md",
+            "path": ".context/plans/deploy-admin-web.md",
             "status": "filled"
           },
           {
-            "path": ".context/plans/login-module/plano_completo_login-module.md",
+            "path": ".context/plans/deploy-admin-web/plano_completo_deploy-admin-web.md",
             "status": "filled"
           },
           {
-            "path": ".context/plans/login-module/info_aux_login-module.md",
+            "path": ".context/plans/deploy-admin-web/info_aux_deploy-admin-web.md",
             "status": "filled"
           }
         ]
       },
       "R": {
-        "status": "completed",
-        "started_at": "2026-06-15T02:14:59.938Z",
-        "completed_at": "2026-06-15T02:15:19.938Z",
-        "outputs": [
-          {
-            "path": ".context/plans/login-module/plano_completo_login-module.md",
-            "status": "filled"
-          }
-        ]
+        "status": "in_progress",
+        "started_at": "2026-06-15T12:05:25.222Z"
       },
       "E": {
-        "status": "in_progress",
-        "started_at": "2026-06-15T02:15:19.942Z"
+        "status": "pending"
       },
       "V": {
         "status": "pending"
       },
       "C": {
-        "status": "pending"
+        "status": "skipped",
+        "reason": "Not required for scale MEDIUM"
       }
     },
     "agents": {},
@@ -66,59 +59,40 @@
     "execution": {
       "history": [
         {
-          "timestamp": "2026-06-15T02:14:50.266Z",
+          "timestamp": "2026-06-15T12:05:13.374Z",
           "phase": "P",
           "action": "started"
         },
         {
-          "timestamp": "2026-06-15T02:14:55.025Z",
+          "timestamp": "2026-06-15T12:05:13.388Z",
+          "phase": "C",
+          "action": "phase_skipped"
+        },
+        {
+          "timestamp": "2026-06-15T12:05:20.793Z",
           "phase": "P",
           "action": "plan_linked",
-          "plan": "login-module"
+          "plan": "deploy-admin-web"
         },
         {
-          "phase": "P",
-          "action": "plan_phase_updated",
-          "plan": "login-module",
-          "description": "Plan phase phase-p updated to completed",
-          "timestamp": "2026-06-15T02:14:59.178Z"
-        },
-        {
-          "timestamp": "2026-06-15T02:14:59.934Z",
+          "timestamp": "2026-06-15T12:05:25.218Z",
           "phase": "P",
           "action": "completed"
         },
         {
-          "timestamp": "2026-06-15T02:14:59.938Z",
+          "timestamp": "2026-06-15T12:05:25.222Z",
           "phase": "R",
-          "action": "started"
-        },
-        {
-          "phase": "R",
-          "action": "plan_phase_updated",
-          "plan": "login-module",
-          "description": "Plan phase phase-r updated to completed",
-          "timestamp": "2026-06-15T02:15:19.547Z"
-        },
-        {
-          "timestamp": "2026-06-15T02:15:19.938Z",
-          "phase": "R",
-          "action": "completed"
-        },
-        {
-          "timestamp": "2026-06-15T02:15:19.942Z",
-          "phase": "E",
           "action": "started"
         }
       ],
-      "last_activity": "2026-06-15T02:15:19.942Z",
-      "resume_context": "Fase E (Execução) em progresso"
+      "last_activity": "2026-06-15T12:05:25.222Z",
+      "resume_context": "Fase R (Revisão) em progresso"
     }
   },
   "binding": {
-    "workflowName": "login-module",
-    "sessionId": "892e01f4-ec70-4ab0-a25e-c0a4d62c6f6a",
-    "createdAt": "2026-06-15T02:14:50.273Z",
-    "updatedAt": "2026-06-15T02:15:19.949Z"
+    "workflowName": "deploy-admin-web",
+    "sessionId": "c17bb4d7-2996-496f-af80-3f0943a88eda",
+    "createdAt": "2026-06-15T12:05:13.385Z",
+    "updatedAt": "2026-06-15T12:05:25.229Z"
   }
 }
