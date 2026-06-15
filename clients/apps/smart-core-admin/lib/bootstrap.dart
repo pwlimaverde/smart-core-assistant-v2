@@ -1,5 +1,6 @@
 import 'package:dependencies_module/dependencies_module.dart';
 import 'package:initial_loading_module/initial_loading_module.dart';
+import 'package:login_module/login_module.dart';
 
 import 'app.dart';
 
@@ -10,7 +11,13 @@ import 'app.dart';
 Future<void> bootstrap(AppConfig config) async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  final modules = <AppModule>[InfraModule(config), InitialLoadingModule()];
+  // Ordem importa: InfraModule primeiro (registra SessionService/ApiClient);
+  // LoginModule depois (registra AuthService/LocalStorageService reais).
+  final modules = <AppModule>[
+    InfraModule(config),
+    LoginModule(),
+    InitialLoadingModule(),
+  ];
 
   // Registro síncrono dos serviços globais no escopo-base.
   installModules(modules);

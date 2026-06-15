@@ -6,4 +6,8 @@ publish_to: 'none'
 environment:
   sdk: ^3.12.2
 
+dependencies:
+  meta: ^1.15.0
+  return_success_or_error: ^2.0.0
+
 resolution: workspace

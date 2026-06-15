@@ -1,0 +1,42 @@
+# Caddyfile — borda pública do smart-core-admin (Flutter Web/WASM) + API gRPC-Web.
+#
+# Objetivos (login-module, Frente A §A5):
+#   - Servir o bundle Flutter Web/WASM e a fachada gRPC-Web da runtime_api na MESMA ORIGEM
+#     (CORS trivial; o WASM e a API compartilham o host).
+#   - Terminar TLS (HTTPS): exigência do Web Cryptography API usado pelo flutter_secure_storage.
+#   - Aplicar CSP forte + HSTS para mitigar XSS sobre o refresh token persistido no browser.
+#
+# Variáveis esperadas no ambiente do Caddy:
+#   - ADMIN_DOMAIN: domínio público (ex.: admin.smartcore.example)
+#   - GRPC_WEB_UPSTREAM: endereço da fachada Tonic (default localhost:50051 = RUNTIME_API_GRPC_WEB_ADDR)
+#   - ADMIN_WEB_ROOT: diretório do build web (ex.: /srv/smart-core-admin/build/web)
+
+{$ADMIN_DOMAIN:admin.smartcore.example} {
+	encode gzip zstd
+
+	# --- API gRPC-Web (HTTP/1.1) ---
+	# O tráfego gRPC-Web chega com Content-Type application/grpc-web*; roteamos para a
+	# fachada Tonic. O Caddy repassa X-Forwarded-For, que a fachada usa para auditar o IP.
+	@grpcweb header Content-Type application/grpc-web*
+	reverse_proxy @grpcweb {$GRPC_WEB_UPSTREAM:localhost:50051}
+
+	# --- Bundle Flutter Web/WASM (mesma origem → CORS trivial) ---
+	root * {$ADMIN_WEB_ROOT:/srv/smart-core-admin/build/web}
+	file_server
+
+	# SPA fallback: rotas do go_router resolvem para index.html.
+	try_files {path} /index.html
+
+	# --- Cabeçalhos de segurança ---
+	header {
+		# CSP forte: mitiga XSS (que poderia ler o refresh token do secure storage).
+		# 'wasm-unsafe-eval' é necessário para instanciar o módulo WASM do Flutter.
+		Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+		# HSTS: força HTTPS (contexto seguro exigido pelo Web Crypto).
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+}

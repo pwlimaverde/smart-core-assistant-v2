@@ -18,6 +18,8 @@ dependencies:
     path: ../../modulos/dependencies_module
   initial_loading_module:
     path: ../../modulos/initial_loading_module
+  login_module:
+    path: ../../modulos/login_module
   cupertino_icons: ^1.0.8
 
 dev_dependencies:

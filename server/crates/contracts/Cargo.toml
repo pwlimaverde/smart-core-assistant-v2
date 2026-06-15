@@ -7,6 +7,7 @@ edition.workspace = true
 flatbuffers.workspace = true
 prost.workspace = true
 tonic.workspace = true
+tonic-prost.workspace = true
 serde.workspace = true
 uuid.workspace = true
 chrono.workspace = true

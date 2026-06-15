@@ -894,9 +894,10 @@ dependencies = [
  "chrono",
  "flatbuffers",
  "flatc-rust",
- "prost 0.13.5",
+ "prost 0.14.3",
  "serde",
  "tonic 0.14.6",
+ "tonic-prost",
  "tonic-prost-build",
  "uuid",
 ]
@@ -3006,12 +3007,17 @@ dependencies = [
  "contracts",
  "error_core",
  "futures-util",
+ "http 1.4.1",
  "infrastructure_redis",
  "observability",
  "redis",
  "serde",
  "serde_json",
  "tokio",
+ "tonic 0.14.6",
+ "tonic-web",
+ "tower 0.5.3",
+ "tower-http",
  "tracing",
  "transport",
  "uuid",
@@ -3975,6 +3981,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "tonic-prost"
+version = "0.14.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50849f68853be452acf590cde0b146665b8d507b3b8af17261df47e02c209ea0"
+dependencies = [
+ "bytes",
+ "prost 0.14.3",
+ "tonic 0.14.6",
+]
+
+[[package]]
 name = "tonic-prost-build"
 version = "0.14.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3988,6 +4005,24 @@ dependencies = [
  "syn 2.0.117",
  "tempfile",
  "tonic-build",
+]
+
+[[package]]
+name = "tonic-web"
+version = "0.14.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b5e6a1b6319ca4b61a4c0f0c94d439c8f3ed344cca56fe0df40e1fe4be11380b"
+dependencies = [
+ "base64",
+ "bytes",
+ "http 1.4.1",
+ "http-body 1.0.1",
+ "pin-project",
+ "tokio-stream",
+ "tonic 0.14.6",
+ "tower-layer",
+ "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -4027,6 +4062,20 @@ dependencies = [
  "tower-layer",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "tower-http"
+version = "0.6.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4cfcf7e2740e6fc6d4d688b4ef00650406bb94adf4731e43c096c3a19fe40840"
+dependencies = [
+ "bitflags",
+ "bytes",
+ "http 1.4.1",
+ "pin-project-lite",
+ "tower-layer",
+ "tower-service",
 ]
 
 [[package]]
@@ -4147,7 +4196,7 @@ dependencies = [
  "flatbuffers",
  "futures-util",
  "opentelemetry",
- "prost 0.13.5",
+ "prost 0.14.3",
  "redis",
  "serde",
  "serde_json",
