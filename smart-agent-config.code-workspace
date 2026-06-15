@@ -11,7 +11,12 @@
 			"path": "."
 		}
 	],
-	"settings": {},
+	"settings": {
+		// O app Flutter (clients/apps/smart-core-admin) fica no nível 3 a partir
+		// da raiz do repo. O default do Dart-Code não alcança essa profundidade e
+		// classifica o workspace como "Dart-only", impedindo o launch do Flutter.
+		"dart.projectSearchDepth": 6
+	},
 	"launch": {
 		"version": "0.2.0",
 		"configurations": [
@@ -23,30 +28,7 @@
 				"cwd": "${workspaceFolder:smart-core-assistant-v2}/clients/apps/smart-core-admin",
 				"deviceId": "chrome",
 				"args": [
-					"--dart-define=SMARTCORE_API_ENDPOINT=tcp://localhost:50051"
-				]
-			},
-			{
-				"name": "smart-core-admin (prod · Chrome)",
-				"request": "launch",
-				"type": "dart",
-				"program": "${workspaceFolder:smart-core-assistant-v2}/clients/apps/smart-core-admin/lib/main_prod.dart",
-				"cwd": "${workspaceFolder:smart-core-assistant-v2}/clients/apps/smart-core-admin",
-				"deviceId": "chrome",
-				"args": [
-					"--dart-define=SMARTCORE_API_ENDPOINT=${env:SMARTCORE_API_ENDPOINT}"
-				]
-			},
-			{
-				"name": "smart-core-admin (dev · web-server)",
-				"request": "launch",
-				"type": "dart",
-				"program": "${workspaceFolder:smart-core-assistant-v2}/clients/apps/smart-core-admin/lib/main_dev.dart",
-				"cwd": "${workspaceFolder:smart-core-assistant-v2}/clients/apps/smart-core-admin",
-				"deviceId": "web-server",
-				"args": [
-					"--web-port=8080",
-					"--dart-define=SMARTCORE_API_ENDPOINT=tcp://localhost:50051"
+					"--dart-define=SMARTCORE_API_ENDPOINT=https://dev.smartcoreassistant.com.br"
 				]
 			}
 		]

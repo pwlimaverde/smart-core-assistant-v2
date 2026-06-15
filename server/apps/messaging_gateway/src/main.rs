@@ -45,6 +45,54 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+/// Handler que simula o recebimento de uma mensagem via Webhook e a despacha como evento assíncrono no barramento.
+async fn handler_receive_webhook(mut redis_conn: ConnectionManager, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(_) => serde_json::json!({}),
+    };
+
+    let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
+
+    // Monta o envelope de domínio
+    let event_payload = serde_json::json!({
+        "sender_id": payload_json.get("sender_id").and_then(|v| v.as_str()).unwrap_or("externo"),
+        "content": payload_json.get("content").and_then(|v| v.as_str()).unwrap_or(""),
+        "timestamp": chrono::Utc::now().timestamp_millis(),
+    });
+
+    // Propaga o traceparent recebido na chamada RPC para o evento do barramento,
+    // mantendo a cadeia de trace distribuído viva no salto síncrono → assíncrono.
+    let envelope_evento = TenantEnvelope::novo(tenant_id, "message.received", event_payload)
+        .com_traceparent(env.traceparent.clone());
+
+    // Publica no barramento de eventos principal
+    match transport::bus::publicar_evento(&mut redis_conn, &envelope_evento).await {
+        Ok(id) => {
+            tracing::info!(stream_id = %id, "Mensagem de webhook publicada no barramento de eventos.");
+            let res =
+                serde_json::json!({ "status": "success", "event_id": envelope_evento.event_id });
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "ReceiveWebhookReply".to_string(),
+                payload: serde_json::to_vec(&res).unwrap_or_default(),
+                error: None,
+                ..env
+            }
+        }
+        Err(e) => {
+            let app_err = error_core::AppError::Cache(e.to_string());
+            let err_env = app_err.to_error_envelope(&env.traceparent, "messaging_gateway");
+            Envelope {
+                kind: MessageKind::Error as i32,
+                method: "ReceiveWebhookReply".to_string(),
+                error: Some(err_env),
+                ..env
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -155,53 +203,5 @@ mod tests {
         // tenant_id inválido: fallback para Uuid::nil() — handler ainda publica o evento
         let resp = handler_receive_webhook(redis_conn, env).await;
         assert_eq!(resp.kind, MessageKind::Reply as i32);
-    }
-}
-
-/// Handler que simula o recebimento de uma mensagem via Webhook e a despacha como evento assíncrono no barramento.
-async fn handler_receive_webhook(mut redis_conn: ConnectionManager, env: Envelope) -> Envelope {
-    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
-        Ok(v) => v,
-        Err(_) => serde_json::json!({}),
-    };
-
-    let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
-
-    // Monta o envelope de domínio
-    let event_payload = serde_json::json!({
-        "sender_id": payload_json.get("sender_id").and_then(|v| v.as_str()).unwrap_or("externo"),
-        "content": payload_json.get("content").and_then(|v| v.as_str()).unwrap_or(""),
-        "timestamp": chrono::Utc::now().timestamp_millis(),
-    });
-
-    // Propaga o traceparent recebido na chamada RPC para o evento do barramento,
-    // mantendo a cadeia de trace distribuído viva no salto síncrono → assíncrono.
-    let envelope_evento = TenantEnvelope::novo(tenant_id, "message.received", event_payload)
-        .com_traceparent(env.traceparent.clone());
-
-    // Publica no barramento de eventos principal
-    match transport::bus::publicar_evento(&mut redis_conn, &envelope_evento).await {
-        Ok(id) => {
-            tracing::info!(stream_id = %id, "Mensagem de webhook publicada no barramento de eventos.");
-            let res =
-                serde_json::json!({ "status": "success", "event_id": envelope_evento.event_id });
-            Envelope {
-                kind: MessageKind::Reply as i32,
-                method: "ReceiveWebhookReply".to_string(),
-                payload: serde_json::to_vec(&res).unwrap_or_default(),
-                error: None,
-                ..env
-            }
-        }
-        Err(e) => {
-            let app_err = error_core::AppError::Cache(e.to_string());
-            let err_env = app_err.to_error_envelope(&env.traceparent, "messaging_gateway");
-            Envelope {
-                kind: MessageKind::Error as i32,
-                method: "ReceiveWebhookReply".to_string(),
-                error: Some(err_env),
-                ..env
-            }
-        }
     }
 }

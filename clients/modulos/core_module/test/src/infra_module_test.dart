@@ -1,9 +1,6 @@
 import 'package:api_client/api_client.dart';
 import 'package:app_config/app_config.dart';
 import 'package:core_module/core_module.dart';
-import 'package:core_module/src/infra_module.dart';
-import 'package:core_module/src/no_op/auth_service_no_op.dart';
-import 'package:core_module/src/no_op/local_storage_service_no_op.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:get_it_module/get_it_module.dart';

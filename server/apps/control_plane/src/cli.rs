@@ -229,6 +229,16 @@ fn msg_erro(err: Option<contracts::ErrorEnvelope>) -> String {
     .unwrap_or_else(|| "erro desconhecido".to_string())
 }
 
+/// Lê uma linha do stdin exibindo um prompt (modo interativo).
+fn ler_linha(prompt: &str) -> anyhow::Result<String> {
+    use std::io::Write;
+    print!("{prompt}");
+    std::io::stdout().flush().ok();
+    let mut linha = String::new();
+    std::io::stdin().read_line(&mut linha)?;
+    Ok(linha)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -315,14 +325,4 @@ mod tests {
     fn test_msg_erro_retorna_padrao_quando_none() {
         assert_eq!(msg_erro(None), "erro desconhecido");
     }
-}
-
-/// Lê uma linha do stdin exibindo um prompt (modo interativo).
-fn ler_linha(prompt: &str) -> anyhow::Result<String> {
-    use std::io::Write;
-    print!("{prompt}");
-    std::io::stdout().flush().ok();
-    let mut linha = String::new();
-    std::io::stdin().read_line(&mut linha)?;
-    Ok(linha)
 }

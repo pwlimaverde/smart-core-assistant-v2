@@ -99,10 +99,20 @@ try {
     # --------------------------------------------
     if ($Fast) {
         Write-Etapa "cargo test --workspace --lib --bins (modo rapido, sem banco)"
-        cargo test --workspace --lib --bins
+        # Serializa threads para evitar exaustao de conexoes ao banco (ver ci.yml)
+        $env:RUST_TEST_THREADS = "1"
+        cargo test --workspace --lib --bins -- --test-threads=1
     } else {
         Write-Etapa "cargo test --workspace (suite completa: unit + integracao via tunel)"
-        cargo test --workspace
+        # RUST_TEST_THREADS=1 serializa testes dentro de cada binario; --test-threads=1
+        # serializa entre binarios. Obrigatorio: testes de banco compartilham o mesmo
+        # Postgres e cada setup_teste() abre pool proprio — paralelo esgota max_connections.
+        # Alem disso, o teste test_audit_log_rls_isolation_enforced exige que DATABASE_URL
+        # aponte para a role smartcore_app (NOBYPASSRLS), nao para o superuser postgres.
+        # Se DATABASE_URL usar superuser, o teste falha com "VULNERABILIDADE: Tenant B...".
+        # Ver .github/workflows/ci.yml step "Bootstrap do banco de teste" para criar o role.
+        $env:RUST_TEST_THREADS = "1"
+        cargo test --workspace -- --test-threads=1
     }
     if ($LASTEXITCODE -ne 0) { $falhas += "test" } else { Write-Host "ok" -ForegroundColor Green }
 

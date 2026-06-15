@@ -105,10 +105,7 @@ impl AuthService for AuthFacade {
     /// Login: delega para `application::auth::login::login`. Sem token no metadata.
     /// Audita `login_success`/`login_rate_limited` igual ao handler do `transport::Server`.
     #[tracing::instrument(skip_all, fields(service = "runtime_api", rpc = "Login", traceparent))]
-    async fn login(
-        &self,
-        req: Request<LoginRequest>,
-    ) -> Result<Response<AuthResponse>, Status> {
+    async fn login(&self, req: Request<LoginRequest>) -> Result<Response<AuthResponse>, Status> {
         let traceparent = traceparent_do_metadata(&req);
         let ip = ip_do_metadata(&req);
         tracing::Span::current().record("traceparent", tracing::field::display(&traceparent));
@@ -118,7 +115,10 @@ impl AuthService for AuthFacade {
         let mut bus = self.bus.clone();
         match application::auth::login::login(&self.deps, &traceparent, &email, &password).await {
             Ok(tokens) => {
-                let user_id = tokens.get("user_id").and_then(|v| v.as_i64()).map(|v| v as i32);
+                let user_id = tokens
+                    .get("user_id")
+                    .and_then(|v| v.as_i64())
+                    .map(|v| v as i32);
                 let tenant_id = tokens
                     .get("tenant_id")
                     .and_then(|v| v.as_str())
@@ -166,7 +166,10 @@ impl AuthService for AuthFacade {
     }
 
     /// Refresh: delega para `application::auth::refresh::refresh` (rotação + detecção de reuso).
-    #[tracing::instrument(skip_all, fields(service = "runtime_api", rpc = "Refresh", traceparent))]
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "Refresh", traceparent)
+    )]
     async fn refresh(
         &self,
         req: Request<RefreshRequest>,
@@ -216,7 +219,8 @@ impl AuthService for AuthFacade {
         let refresh_opt = (!refresh.is_empty()).then_some(refresh.as_str());
 
         let mut bus = self.bus.clone();
-        match application::auth::logout::logout(&self.deps, &traceparent, &claims, refresh_opt).await
+        match application::auth::logout::logout(&self.deps, &traceparent, &claims, refresh_opt)
+            .await
         {
             Ok(_) => {
                 let tenant_id = Uuid::parse_str(&claims.tenant_id)
@@ -252,10 +256,7 @@ impl AuthService for AuthFacade {
 
 /// Sobe a fachada gRPC-Web numa porta HTTP própria (browser usa HTTP/1.1).
 /// Ordem dos layers (obrigatória): CORS **antes** de `GrpcWebLayer`.
-pub async fn serve(
-    deps: Arc<AuthDeps>,
-    bus: redis::aio::ConnectionManager,
-) -> anyhow::Result<()> {
+pub async fn serve(deps: Arc<AuthDeps>, bus: redis::aio::ConnectionManager) -> anyhow::Result<()> {
     let addr = std::env::var("RUNTIME_API_GRPC_WEB_ADDR")
         .unwrap_or_else(|_| "0.0.0.0:50051".to_string())
         .parse()?;

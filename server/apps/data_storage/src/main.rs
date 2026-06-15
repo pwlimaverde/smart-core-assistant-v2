@@ -224,6 +224,43 @@ async fn handler_get_file(client: StorageClient, env: Envelope) -> Envelope {
     }
 }
 
+async fn handler_presign_file(client: StorageClient, env: Envelope) -> Envelope {
+    let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
+
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let Some(file_name) = extrair_file_name(&payload_json) else {
+        return responder_erro(
+            error_core::AppError::Validation("file_name obrigatório no payload".to_string()),
+            env,
+            "PresignFileReply",
+        );
+    };
+    // Janela de validade da URL pré-assinada (segundos); default 1 hora.
+    let expires_in = payload_json
+        .get("expires_in")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(3600);
+
+    match client.presign(tenant_id, &file_name, expires_in).await {
+        Ok(url) => {
+            let res = serde_json::json!({ "url": url });
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "PresignFileReply".to_string(),
+                payload: serde_json::to_vec(&res).unwrap_or_default(),
+                error: None,
+                ..env
+            }
+        }
+        Err(e) => responder_erro(
+            error_core::AppError::Storage(e.to_string()),
+            env,
+            "PresignFileReply",
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -306,42 +343,5 @@ mod tests {
         );
         assert_eq!(resp.method, "PresignFileReply");
         assert_eq!(resp.kind, MessageKind::Error as i32);
-    }
-}
-
-async fn handler_presign_file(client: StorageClient, env: Envelope) -> Envelope {
-    let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
-
-    let payload_json: serde_json::Value =
-        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
-    let Some(file_name) = extrair_file_name(&payload_json) else {
-        return responder_erro(
-            error_core::AppError::Validation("file_name obrigatório no payload".to_string()),
-            env,
-            "PresignFileReply",
-        );
-    };
-    // Janela de validade da URL pré-assinada (segundos); default 1 hora.
-    let expires_in = payload_json
-        .get("expires_in")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(3600);
-
-    match client.presign(tenant_id, &file_name, expires_in).await {
-        Ok(url) => {
-            let res = serde_json::json!({ "url": url });
-            Envelope {
-                kind: MessageKind::Reply as i32,
-                method: "PresignFileReply".to_string(),
-                payload: serde_json::to_vec(&res).unwrap_or_default(),
-                error: None,
-                ..env
-            }
-        }
-        Err(e) => responder_erro(
-            error_core::AppError::Storage(e.to_string()),
-            env,
-            "PresignFileReply",
-        ),
     }
 }
