@@ -72,6 +72,38 @@ if (-not $Fast -and -not (Test-Path (Join-Path $serverDir ".env"))) {
 }
 Write-Host "ok" -ForegroundColor Green
 
+# --- Carrega server/.env no ambiente do processo para os testes e sqlx herdarem as configuracoes ---
+if (Test-Path (Join-Path $serverDir ".env")) {
+    Get-Content (Join-Path $serverDir ".env") | ForEach-Object {
+        if ($_ -match '^\s*([^#=][^=]*)=(.*)$') {
+            $nome = $matches[1].Trim()
+            $valor = $matches[2].Trim().Trim('"').Trim("'")
+            [Environment]::SetEnvironmentVariable($nome, $valor, "Process")
+        }
+    }
+}
+
+$databaseUrl = [Environment]::GetEnvironmentVariable("DATABASE_URL", "Process")
+$databaseAdminUrl = [Environment]::GetEnvironmentVariable("DATABASE_ADMIN_URL", "Process")
+$smartcoreEnv = [Environment]::GetEnvironmentVariable("SMARTCORE_ENV", "Process")
+
+if ($smartcoreEnv -eq "dev") {
+    # Roteia o banco de dados na URL para smartcore_v2_dev
+    if ($databaseUrl -and $databaseUrl -match '/smartcore_v2(?:\?|$)') {
+        $databaseUrl = $databaseUrl -replace '/smartcore_v2(?:\?|$)', '/smartcore_v2_dev'
+        [Environment]::SetEnvironmentVariable("DATABASE_URL", $databaseUrl, "Process")
+    }
+    if ($databaseAdminUrl -and $databaseAdminUrl -match '/smartcore_v2(?:\?|$)') {
+        $databaseAdminUrl = $databaseAdminUrl -replace '/smartcore_v2(?:\?|$)', '/smartcore_v2_dev'
+        [Environment]::SetEnvironmentVariable("DATABASE_ADMIN_URL", $databaseAdminUrl, "Process")
+    }
+    Write-Host "Roteando testes para o ambiente de DESENVOLVIMENTO remoto (banco: smartcore_v2_dev)" -ForegroundColor Yellow
+} elseif ($smartcoreEnv -eq "prod") {
+    Write-Host "Roteando testes para o ambiente de PRODUCAO remoto (banco: smartcore_v2)" -ForegroundColor Red
+} else {
+    Write-Host "Roteando testes para o ambiente LOCAL/TESTE" -ForegroundColor Green
+}
+
 $falhas = @()
 
 # --------------------------------------------
@@ -124,8 +156,10 @@ try {
         Write-Etapa "cargo sqlx prepare --workspace --check"
         if (Get-Command cargo-sqlx -ErrorAction SilentlyContinue) {
             # Conecta no banco remoto via tunel para revalidar as queries
-            $envLocal = Get-Content (Join-Path $serverDir ".env") | Where-Object { $_ -match '^DATABASE_ADMIN_URL=' }
-            if ($envLocal) { $env:DATABASE_URL = ($envLocal -split '=', 2)[1] }
+            $dbAdmin = [Environment]::GetEnvironmentVariable("DATABASE_ADMIN_URL", "Process")
+            if ($dbAdmin) {
+                $env:DATABASE_URL = $dbAdmin
+            }
             cargo sqlx prepare --workspace --check
             if ($LASTEXITCODE -ne 0) { $falhas += "sqlx-prepare" } else { Write-Host "ok" -ForegroundColor Green }
         } else {
