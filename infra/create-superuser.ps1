@@ -84,20 +84,28 @@ Get-Content $envFile | ForEach-Object {
     }
 }
 $databaseUrl = [Environment]::GetEnvironmentVariable("DATABASE_URL", "Process")
+$databaseAdminUrl = [Environment]::GetEnvironmentVariable("DATABASE_ADMIN_URL", "Process")
 $redisUrl = [Environment]::GetEnvironmentVariable("REDIS_URL", "Process")
 $redisBusUrl = [Environment]::GetEnvironmentVariable("REDIS_BUS_URL", "Process")
 $smartcoreEnv = [Environment]::GetEnvironmentVariable("SMARTCORE_ENV", "Process")
+
+# Se DATABASE_ADMIN_URL estiver definida, usamos ela como DATABASE_URL para os scripts de infra (privilégios administrativos)
+if ($databaseAdminUrl) {
+    $databaseUrl = $databaseAdminUrl
+}
 
 if ($smartcoreEnv -eq "dev") {
     # Roteia o banco de dados na URL para smartcore_v2_dev
     if ($databaseUrl -match '/smartcore_v2(?:\?|$)') {
         $databaseUrl = $databaseUrl -replace '/smartcore_v2(?:\?|$)', '/smartcore_v2_dev'
-        [Environment]::SetEnvironmentVariable("DATABASE_URL", $databaseUrl, "Process")
     }
+    [Environment]::SetEnvironmentVariable("DATABASE_URL", $databaseUrl, "Process")
     Write-Host "Roteando conexao para o ambiente de DESENVOLVIMENTO remoto (banco: smartcore_v2_dev)" -ForegroundColor Yellow
 } elseif ($smartcoreEnv -eq "prod") {
+    [Environment]::SetEnvironmentVariable("DATABASE_URL", $databaseUrl, "Process")
     Write-Host "Roteando conexao para o ambiente de PRODUCAO remoto (banco: smartcore_v2)" -ForegroundColor Red
 } else {
+    [Environment]::SetEnvironmentVariable("DATABASE_URL", $databaseUrl, "Process")
     Write-Host "Roteando conexao para o ambiente LOCAL/TESTE" -ForegroundColor Green
 }
 
@@ -159,6 +167,14 @@ try {
         $dpExe = Join-Path $serverDir "target\debug\data_postgres.exe"
         $cpExe = Join-Path $serverDir "target\debug\control_plane.exe"
 
+        # Garante que nenhuma instancia orfa de data_postgres.exe esteja rodando localmente (evita conexao com o banco errado)
+        $processosAntigos = Get-Process -Name "data_postgres" -ErrorAction SilentlyContinue
+        if ($processosAntigos) {
+            Write-Host "Encerrando instancias antigas de data_postgres.exe para garantir o roteamento de banco..." -ForegroundColor Yellow
+            $processosAntigos | Stop-Process -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 800
+        }
+
         if (-not (Test-Port $RpcPort)) {
             Write-Host "Subindo data_postgres em $($env:SMARTCORE_DATA_POSTGRES_ENDPOINT)..." -ForegroundColor Cyan
             $logOut = Join-Path $env:TEMP "smartcore_data_postgres.out.log"
@@ -170,7 +186,7 @@ try {
             }
         }
         else {
-            Write-Host "data_postgres ja acessivel em $RpcPort (reaproveitado)." -ForegroundColor DarkGray
+            throw "A porta RPC $RpcPort ja esta em uso por outro processo que nao e o data_postgres. Por favor, libere-a."
         }
 
         # --- 4) Roda o CLI create-superuser ---

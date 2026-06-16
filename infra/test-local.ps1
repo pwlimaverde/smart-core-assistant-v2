@@ -44,7 +44,7 @@ function Write-Etapa([string]$msg) {
 #    pois o test_support so verifica se a porta 5434 esta aberta)
 # --------------------------------------------
 if ($ResetTunnel) {
-    Write-Etapa "Derrubando tuneis SSH antigos"
+    Write-Etapa "Derrubando tuneis SSH antigos e processos data_postgres residuais"
     Get-Process ssh -ErrorAction SilentlyContinue | ForEach-Object {
         try {
             $cmdline = (Get-CimInstance Win32_Process -Filter "ProcessId=$($_.Id)").CommandLine
@@ -54,6 +54,11 @@ if ($ResetTunnel) {
                 Stop-Process -Id $_.Id -Force -Confirm:$false
             }
         } catch {}
+    }
+    $dpProcess = Get-Process -Name "data_postgres" -ErrorAction SilentlyContinue
+    if ($dpProcess) {
+        Write-Host "  matando data_postgres.exe" -ForegroundColor Yellow
+        $dpProcess | Stop-Process -Force -Confirm:$false
     }
     Start-Sleep -Seconds 1
 }
