@@ -17,9 +17,9 @@
 
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory = $true)][string]$Username,
-    [string]$Email = "",
-    [Parameter(Mandatory = $true)][string]$Password,
+    [string]$Username,
+    [string]$Email,
+    [string]$Password,
     [int]$RpcPort = 7001
 )
 
@@ -29,6 +29,26 @@ $ErrorActionPreference = "Stop"
 $infraDir = $PSScriptRoot
 $rootDir = Split-Path -Parent $infraDir
 $serverDir = Join-Path $rootDir "server"
+
+# --- Validacao e Entrada de Parametros Interativa ---
+while ([string]::IsNullOrWhiteSpace($Username)) {
+    $Username = Read-Host "Username"
+}
+while ([string]::IsNullOrWhiteSpace($Email)) {
+    $Email = Read-Host "Email"
+}
+while ([string]::IsNullOrWhiteSpace($Password)) {
+    # Solicita a senha ocultando a digitacao
+    $PasswordSecure = Read-Host "Password" -AsSecureString
+    if ($PasswordSecure) {
+        $BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($PasswordSecure)
+        try {
+            $Password = [System.Runtime.InteropServices.Marshal]::PtrToStringBSTR($BSTR)
+        } finally {
+            [System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+        }
+    }
+}
 
 function Test-Port([int]$porta) {
     $cliente = New-Object Net.Sockets.TcpClient
@@ -65,10 +85,17 @@ Get-Content $envFile | ForEach-Object {
 }
 $databaseUrl = [Environment]::GetEnvironmentVariable("DATABASE_URL", "Process")
 $redisUrl = [Environment]::GetEnvironmentVariable("REDIS_URL", "Process")
+$redisBusUrl = [Environment]::GetEnvironmentVariable("REDIS_BUS_URL", "Process")
+
+# Silencia logs de depuracao e telemetria OTLP para manter o terminal interativo limpo
+$env:RUST_LOG = "warn"
+$env:OTEL_SDK_DISABLED = "true"
+
 if (-not $databaseUrl) { throw "DATABASE_URL ausente no server/.env" }
 
 $pgLocal = Get-PortaDaUrl $databaseUrl 5434
-$redisLocal = if ($redisUrl) { Get-PortaDaUrl $redisUrl 6380 } else { 6380 }
+$redisLocal = if ($redisUrl) { Get-PortaDaUrl $redisUrl 6379 } else { 6379 }
+$redisBusLocal = if ($redisBusUrl) { Get-PortaDaUrl $redisBusUrl 6380 } else { 6380 }
 
 # Endpoint TCP do data_postgres (servidor e cliente leem a MESMA variavel).
 $env:SMARTCORE_DATA_POSTGRES_ENDPOINT = "tcp://127.0.0.1:$RpcPort"
@@ -89,12 +116,15 @@ try {
         $sshPort = if ($deploy["HOSTINGER_SSH_PORT"]) { $deploy["HOSTINGER_SSH_PORT"] } else { "22" }
         $pgRemote = if ($deploy["POSTGRES_PORT"]) { $deploy["POSTGRES_PORT"] } else { "5432" }
         $redisRemote = if ($deploy["REDIS_PORT"]) { $deploy["REDIS_PORT"] } else { "6379" }
+        $redisBusRemote = if ($deploy["REDIS_BUS_PORT"]) { $deploy["REDIS_BUS_PORT"] } else { "6381" }
         if (-not $sshHost -or -not $sshUser) { throw "HOSTINGER_SSH_HOST/USER ausentes em infra/.env.deploy" }
 
-        Write-Host "Abrindo tunel SSH (Postgres $pgLocal, Redis $redisLocal)..." -ForegroundColor Cyan
+        Write-Host "Abrindo tunel SSH (Postgres $pgLocal, Redis Cache $redisLocal, Redis Bus $redisBusLocal)..." -ForegroundColor Cyan
         $sshArgs = @("-p", $sshPort, "-N",
             "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", "-o", "ExitOnForwardFailure=yes",
-            "-L", "${pgLocal}:localhost:$pgRemote", "-L", "${redisLocal}:localhost:$redisRemote",
+            "-L", "${pgLocal}:localhost:$pgRemote",
+            "-L", "${redisLocal}:localhost:$redisRemote",
+            "-L", "${redisBusLocal}:localhost:$redisBusRemote",
             "$sshUser@$sshHost")
         if ($deploy["HOSTINGER_SSH_IDENTITY_FILE"]) { $sshArgs += @("-i", $deploy["HOSTINGER_SSH_IDENTITY_FILE"]) }
         $sshProc = Start-Process -FilePath "ssh" -ArgumentList $sshArgs -PassThru -WindowStyle Hidden
@@ -131,7 +161,14 @@ try {
 
         # --- 4) Roda o CLI create-superuser ---
         Write-Host "Cadastrando superusuario '$Username'..." -ForegroundColor Cyan
-        & $cpExe create-superuser --username $Username --email $Email --password $Password
+        
+        $argsList = @("create-superuser", "--username", $Username)
+        if ($Email -and $Email.Trim() -ne "") {
+            $argsList += @("--email", $Email.Trim())
+        }
+        $argsList += @("--password", $Password)
+
+        & $cpExe $argsList
         $cliExit = $LASTEXITCODE
     }
     finally { Pop-Location }

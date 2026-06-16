@@ -11,6 +11,37 @@ pub fn init_telemetry(
     service_name: &str,
     env: &str,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    // Camada fmt para imprimir logs estruturados em JSON no stdout
+    let json_layer = fmt::layer()
+        .json()
+        .with_target(true)
+        .with_thread_ids(true)
+        .with_file(true)
+        .with_line_number(true);
+
+    // Filtro de nível por RUST_LOG ou padrão info
+    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+
+    // Verifica se a telemetria do SDK do OpenTelemetry foi desativada via variavel de ambiente
+    let otel_disabled = std::env::var("OTEL_SDK_DISABLED")
+        .map(|v| v.to_lowercase() == "true")
+        .unwrap_or(false);
+
+    if otel_disabled {
+        // Registra apenas o formatador JSON local, sem o pipeline OTel/OTLP
+        Registry::default()
+            .with(env_filter)
+            .with(json_layer)
+            .init();
+
+        tracing::info!(
+            service = service_name,
+            environment = env,
+            "Telemetria inicializada no modo local (apenas stdout JSON, OTel desativado)."
+        );
+        return Ok(());
+    }
+
     // Propagação W3C TraceContext (inter-serviço)
     global::set_text_map_propagator(TraceContextPropagator::new());
 
@@ -41,17 +72,6 @@ pub fn init_telemetry(
 
     // Camada do OpenTelemetry para propagar spans do Tracing
     let otel_layer = OpenTelemetryLayer::new(tracer);
-
-    // Camada fmt para imprimir logs estruturados em JSON no stdout
-    let json_layer = fmt::layer()
-        .json()
-        .with_target(true)
-        .with_thread_ids(true)
-        .with_file(true)
-        .with_line_number(true);
-
-    // Filtro de nível por RUST_LOG ou padrão info
-    let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     // Registra todas as camadas no Tracing Subscriber
     Registry::default()
