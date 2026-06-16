@@ -585,3 +585,117 @@ async fn test_login_flow_rate_limit_excedido() {
     pg_handle.abort();
     redis_handle.abort();
 }
+
+#[tokio::test]
+async fn test_login_flow_username_success() {
+    let _guard = TEST_MUTEX.lock().await;
+    let _ = application::jwt::inicializar_chaves("segredo_de_teste_de_pelo_menos_32_bytes_longo");
+
+    // 1. Configura as portas locais TCP para os stubs
+    let pg_addr = "tcp://127.0.0.1:29201";
+    let redis_addr = "tcp://127.0.0.1:29202";
+
+    std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+    std::env::set_var("SMARTCORE_DATA_REDIS_ENDPOINT", redis_addr);
+
+    // 2. Subir o stub do data_postgres que valida o recebimento do username no campo email do envelope
+    let pg_endpoint = Endpoint::parse(pg_addr).unwrap();
+    let pg_server = Server::new(pg_endpoint, "flatbuffers").route("VerifyCredentials", |env| {
+        Box::pin(async move {
+            let req_payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap();
+            let email_or_user = req_payload.get("email").unwrap().as_str().unwrap();
+
+            // Garante que o valor recebido no payload é o username
+            assert_eq!(email_or_user, "usuario_teste");
+
+            let user_payload = serde_json::json!({
+                "id": 42,
+                "username": "usuario_teste",
+                "email": "test@domain.com",
+                "is_superuser": false,
+                "tenant_id": Uuid::new_v4().to_string()
+            });
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "VerifyCredentialsReply".to_string(),
+                payload: serde_json::to_vec(&user_payload).unwrap(),
+                ..env
+            }
+        })
+    });
+
+    let pg_handle = tokio::spawn(async move {
+        pg_server.run().await.unwrap();
+    });
+
+    // 3. Subir o stub do data_redis
+    let redis_endpoint = Endpoint::parse(redis_addr).unwrap();
+    let redis_server = Server::new(redis_endpoint, "flatbuffers")
+        .route("RegisterLoginAttempt", |env| {
+            Box::pin(async move {
+                let reply = serde_json::json!({ "attempts": 1 });
+                Envelope {
+                    kind: MessageKind::Reply as i32,
+                    method: "RegisterLoginAttemptReply".to_string(),
+                    payload: serde_json::to_vec(&reply).unwrap(),
+                    ..env
+                }
+            })
+        })
+        .route("StoreRefreshToken", |env| {
+            Box::pin(async move {
+                let reply_payload = serde_json::json!({
+                    "status": "success"
+                });
+                Envelope {
+                    kind: MessageKind::Reply as i32,
+                    method: "StoreRefreshTokenReply".to_string(),
+                    payload: serde_json::to_vec(&reply_payload).unwrap(),
+                    ..env
+                }
+            })
+        });
+
+    let redis_handle = tokio::spawn(async move {
+        redis_server.run().await.unwrap();
+    });
+
+    // Aguarda stubs iniciarem
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    // Conecta clientes multiplexados
+    let pg_client = transport::conectar_cliente("data_postgres").await.unwrap();
+    let redis_client = transport::conectar_cliente("data_redis").await.unwrap();
+
+    let deps = application::auth::login::AuthDeps {
+        pg: pg_client,
+        redis: redis_client,
+        access_ttl_s: 900,
+        refresh_ttl_s: 604800,
+        login_rate_max: 5,
+        login_rate_window_s: 60,
+    };
+
+    // 4. Executa o login passando o username
+    let result = login(
+        &deps,
+        "00-trace-123-span-456-01",
+        "usuario_teste",
+        "senha123",
+    )
+    .await;
+
+    assert!(
+        result.is_ok(),
+        "Falha ao realizar login com username: {:?}",
+        result.err()
+    );
+
+    let tokens = result.unwrap();
+    assert!(tokens.get("access_token").is_some());
+    assert!(tokens.get("refresh_token").is_some());
+
+    // Limpa tasks
+    pg_handle.abort();
+    redis_handle.abort();
+}

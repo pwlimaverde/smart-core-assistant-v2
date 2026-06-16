@@ -29,10 +29,7 @@ pub fn init_telemetry(
 
     if otel_disabled {
         // Registra apenas o formatador JSON local, sem o pipeline OTel/OTLP
-        Registry::default()
-            .with(env_filter)
-            .with(json_layer)
-            .init();
+        Registry::default().with(env_filter).with(json_layer).init();
 
         tracing::info!(
             service = service_name,

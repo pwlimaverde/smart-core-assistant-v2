@@ -50,7 +50,7 @@ class _LoginFormState extends State<LoginForm> {
                 ),
                 const SizedBox(height: 24),
                 AppTextField(
-                  label: 'E-mail',
+                  label: 'E-mail ou Usuário',
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
                 ),

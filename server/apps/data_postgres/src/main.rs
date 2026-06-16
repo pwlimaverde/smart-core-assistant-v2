@@ -1100,8 +1100,14 @@ async fn handler_verify_credentials(
     use infrastructure_postgres::AuthUserRepository;
     let repo = infrastructure_postgres::PostgresAuthUserRepository;
 
-    // Busca o usuário por e-mail no banco
+    // Busca o usuário por e-mail ou username no banco
     let user_opt = match repo.buscar_por_email(&pool, email).await {
+        Ok(Some(u)) => Ok(Some(u)),
+        Ok(None) => repo.buscar_por_username(&pool, email).await,
+        Err(err) => Err(err),
+    };
+
+    let user_opt = match user_opt {
         Ok(opt) => opt,
         Err(err) => {
             let app_err = error_core::AppError::Database(err.to_string());

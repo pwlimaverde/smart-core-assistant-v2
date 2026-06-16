@@ -272,6 +272,7 @@ pub async fn serve(deps: Arc<AuthDeps>, bus: redis::aio::ConnectionManager) -> a
             http::header::AUTHORIZATION,
             "x-grpc-web".parse().unwrap(),
             "grpc-timeout".parse().unwrap(),
+            "x-user-agent".parse().unwrap(),
             "traceparent".parse().unwrap(),
         ])
         .expose_headers([
