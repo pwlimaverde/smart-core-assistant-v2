@@ -69,7 +69,17 @@
       "PowerShell($null = [System.Management.Automation.Language.Parser]::ParseFile\\(\"C:\\\\PROJETOS\\\\FULL-STACK\\\\smart-core-assistant-v2\\\\infra\\\\test-local.ps1\", [ref]$null, [ref]$errors\\); if \\($errors.Count -eq 0\\) { \"OK - nenhum erro de sintaxe\" } else { $errors | ForEach-Object { \"Linha $\\($_.Extent.StartLineNumber\\) char $\\($_.Extent.StartColumnNumber\\): $\\($_.Message\\)\" } })",
       "Bash(git -C \"smart-agent-config/.claude/worktrees/romantic-pasteur-f9e8f0\" status --short)",
       "Bash(git worktree *)",
-      "Bash(git rm *)"
+      "Bash(git rm *)",
+      "PowerShell(& \"C:\\\\PROJETOS\\\\FULL-STACK\\\\smart-core-assistant-v2\\\\infra\\\\test-flutter.ps1\" 2>&1)",
+      "Bash(ls -d android ios web windows macos linux)",
+      "Bash(ls web/icons web/favicon.png)",
+      "Bash(ls android/app/src/main/res/)",
+      "Bash(ls assets *)",
+      "Bash(magick -version)",
+      "Bash(convert -version)",
+      "Bash(py -c \"import PIL; print\\('PIL', PIL.__version__\\)\")",
+      "Bash(py --version)",
+      "PowerShell(& \"C:\\\\PROJETOS\\\\FULL-STACK\\\\smart-core-assistant-v2\\\\infra\\\\test-flutter.ps1\" -SkipAnalyze 2>&1)"
     ]
   }
 }

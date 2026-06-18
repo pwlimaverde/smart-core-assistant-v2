@@ -1,25 +1,31 @@
-# Executa o smart-core-admin no Chrome (flavor dev).
-# Uso:  .\run-admin.ps1
-#       .\run-admin.ps1 -Endpoint "tcp://localhost:50051"
-#       .\run-admin.ps1 -Endpoint "https://dev.smartcoreassistant.com.br" (dev remoto)
-#       .\run-admin.ps1 -Device web-server -Port 8080
+# Executa o smart-core-admin (Flutter Web) com o arquivo de ambiente desejado (.env.dev ou .env.prod).
+# Uso:  .\run-admin.ps1 -Env dev
+#       .\run-admin.ps1 -Env prod
+#       .\run-admin.ps1 -Env dev -Device web-server -Port 8080
 param(
-    [string]$Endpoint = "tcp://localhost:50051",
+    [ValidateSet("dev", "prod")]
+    [string]$Env = "dev",
     [ValidateSet("chrome", "web-server")]
     [string]$Device   = "chrome",
     [int]   $Port     = 0
 )
 
 $AppDir = "$PSScriptRoot/apps/smart-core-admin"
+$EnvFile = "$PSScriptRoot/.env.$Env"
+
+if (-not (Test-Path $EnvFile)) {
+    Write-Host "Erro: Arquivo de ambiente $EnvFile nao encontrado!" -ForegroundColor Red
+    exit 1
+}
 
 $args = @(
     "run",
     "-d", $Device,
-    "-t", "lib/main_dev.dart",
-    "--dart-define=SMARTCORE_API_ENDPOINT=$Endpoint"
+    "-t", "lib/main_$Env.dart",
+    "--dart-define-from-file=../../.env.$Env"
 )
 if ($Port -gt 0) { $args += "--web-port=$Port" }
 
-Write-Host "Iniciando smart-core-admin ($Device) → $Endpoint"
+Write-Host "Iniciando smart-core-admin ($Device) usando o arquivo de ambiente: $EnvFile"
 Set-Location $AppDir
 flutter @args
