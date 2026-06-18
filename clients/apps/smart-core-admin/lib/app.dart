@@ -48,8 +48,10 @@ class SmartCoreAdminApp extends StatelessWidget {
 
     return MaterialApp.router(
       title: 'Smart Core Admin',
+      debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.light,
       routerConfig: router,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,

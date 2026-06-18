@@ -31,53 +31,107 @@ class _LoginFormState extends State<LoginForm> {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.colors;
+    final textTheme = Theme.of(context).textTheme;
+
     return BlocBuilder<LoginController, ViewState<Session>>(
       bloc: widget.controller,
       builder: (context, state) {
         final loading = state is LoadingState<Session>;
-        final erro =
-            state is ErrorState<Session> ? ErrorMessageMapper.map(state.error) : null;
+        final erro = state is ErrorState<Session>
+            ? ErrorMessageMapper.map(state.error)
+            : null;
 
         return Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Smart Core Admin',
-                  style: Theme.of(context).textTheme.headlineSmall,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 400),
+              child: AppCard(
+                padding: const EdgeInsets.all(AppSpacing.xl),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Align(child: AppLogo(height: 96)),
+                    const SizedBox(height: AppSpacing.md),
+                    Text(
+                      'Painel administrativo',
+                      textAlign: TextAlign.center,
+                      style: textTheme.bodyMedium?.copyWith(color: colors.fgMuted),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    AppTextField(
+                      label: 'E-mail ou Usuário',
+                      controller: _email,
+                      keyboardType: TextInputType.emailAddress,
+                      prefixIcon: Icons.person_outline,
+                      textInputAction: TextInputAction.next,
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    AppTextField(
+                      label: 'Senha',
+                      controller: _password,
+                      obscureText: true,
+                      obscureToggle: true,
+                      prefixIcon: Icons.lock_outline,
+                      textInputAction: TextInputAction.done,
+                      onSubmitted: (_) => loading ? null : _submit(),
+                    ),
+                    if (erro != null) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      _ErrorBanner(message: erro),
+                    ],
+                    const SizedBox(height: AppSpacing.lg),
+                    PrimaryButton(
+                      label: 'Entrar',
+                      isLoading: loading,
+                      onPressed: loading ? null : _submit,
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 24),
-                AppTextField(
-                  label: 'E-mail ou Usuário',
-                  controller: _email,
-                  keyboardType: TextInputType.emailAddress,
-                ),
-                const SizedBox(height: 16),
-                AppTextField(
-                  label: 'Senha',
-                  controller: _password,
-                  obscureText: true,
-                ),
-                if (erro != null) ...[
-                  const SizedBox(height: 12),
-                  Text(
-                    erro,
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
-                  ),
-                ],
-                const SizedBox(height: 24),
-                PrimaryButton(
-                  label: 'Entrar',
-                  isLoading: loading,
-                  onPressed: loading ? null : _submit,
-                ),
-              ],
+              ),
             ),
           ),
         );
       },
+    );
+  }
+}
+
+/// Banner de erro em superfície suave (token `dangerSoft`).
+class _ErrorBanner extends StatelessWidget {
+  final String message;
+
+  const _ErrorBanner({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm + 2,
+      ),
+      decoration: BoxDecoration(
+        color: colors.dangerSoft,
+        borderRadius: AppRadius.md,
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.error_outline, size: 18, color: colors.danger),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              message,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: colors.danger),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -1,34 +1,98 @@
 import 'package:flutter/material.dart';
 
-import '../tokens/app_colors.dart';
+import '../tokens/app_radius.dart';
+import '../tokens/app_spacing.dart';
+import '../tokens/app_typography.dart';
+import 'app_colors.dart';
 
-/// Temas Material 3 do design system.
+/// Temas Material 3 do design system (gold + stone).
+///
+/// O tema é montado a partir dos tokens semânticos [AppColors], registrados
+/// também como [ThemeExtension] para que telas leiam cores via `context.colors`.
+/// O tema **claro** é o padrão do app; o escuro é a variante opcional.
 abstract final class AppTheme {
-  static ThemeData get light => ThemeData(
-    useMaterial3: true,
-    colorScheme: ColorScheme.light(
-      primary: AppColors.primary,
-      secondary: AppColors.secondary,
-      surface: AppColors.surfaceLight,
-      error: AppColors.error,
-      onPrimary: AppColors.onPrimary,
-      onSurface: AppColors.onSurfaceLight,
-      onError: AppColors.onError,
-    ),
-    scaffoldBackgroundColor: AppColors.backgroundLight,
-  );
+  static ThemeData get light => _build(AppColors.light, Brightness.light);
 
-  static ThemeData get dark => ThemeData(
-    useMaterial3: true,
-    colorScheme: ColorScheme.dark(
-      primary: AppColors.primary,
-      secondary: AppColors.secondary,
-      surface: AppColors.surface,
-      error: AppColors.error,
-      onPrimary: AppColors.onPrimary,
-      onSurface: AppColors.onSurface,
-      onError: AppColors.onError,
-    ),
-    scaffoldBackgroundColor: AppColors.background,
-  );
+  static ThemeData get dark => _build(AppColors.dark, Brightness.dark);
+
+  static ThemeData _build(AppColors c, Brightness brightness) {
+    final scheme = ColorScheme(
+      brightness: brightness,
+      primary: c.accent,
+      onPrimary: Colors.white,
+      secondary: c.accentHover,
+      onSecondary: Colors.white,
+      surface: c.card,
+      onSurface: c.fgStrong,
+      error: c.danger,
+      onError: Colors.white,
+      outline: c.border,
+      outlineVariant: c.divider,
+    );
+
+    final textTheme = AppTypography.textTheme(fg: c.fg, fgStrong: c.fgStrong);
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: brightness,
+      colorScheme: scheme,
+      scaffoldBackgroundColor: c.bg,
+      textTheme: textTheme,
+      extensions: [c],
+      dividerColor: c.divider,
+      cardTheme: CardThemeData(
+        color: c.card,
+        elevation: 0,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: AppRadius.card,
+          side: BorderSide(color: c.border),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: c.inputBg,
+        hintStyle: TextStyle(color: c.fgSubtle),
+        labelStyle: TextStyle(color: c.fgMuted),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: AppRadius.md,
+          borderSide: BorderSide(color: c.border),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: AppRadius.md,
+          borderSide: BorderSide(color: c.border),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: AppRadius.md,
+          borderSide: BorderSide(color: c.accent, width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: AppRadius.md,
+          borderSide: BorderSide(color: c.danger),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: AppRadius.md,
+          borderSide: BorderSide(color: c.danger, width: 2),
+        ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: c.accent,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: c.fgSubtle,
+          disabledForegroundColor: Colors.white,
+          minimumSize: const Size.fromHeight(48),
+          textStyle: AppTypography.labelLarge,
+          shape: const RoundedRectangleBorder(borderRadius: AppRadius.md),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: c.accentHover),
+      ),
+    );
+  }
 }

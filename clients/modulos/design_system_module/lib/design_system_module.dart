@@ -1,10 +1,13 @@
-// Tokens
-export 'src/tokens/app_colors.dart';
+// Tokens primitivos e escalares
+export 'src/tokens/app_palette.dart';
 export 'src/tokens/app_typography.dart';
 export 'src/tokens/app_spacing.dart';
 export 'src/tokens/app_radius.dart';
+export 'src/tokens/app_shadows.dart';
+export 'src/tokens/app_motion.dart';
 
-// Tema
+// Tema e cores semânticas (context.colors)
+export 'src/theme/app_colors.dart';
 export 'src/theme/app_theme.dart';
 
 // Widgets base
@@ -13,3 +16,4 @@ export 'src/widgets/app_text_field.dart';
 export 'src/widgets/app_card.dart';
 export 'src/widgets/app_scaffold.dart';
 export 'src/widgets/app_error_view.dart';
+export 'src/widgets/app_logo.dart';

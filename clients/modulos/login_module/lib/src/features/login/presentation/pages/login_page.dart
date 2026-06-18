@@ -11,10 +11,7 @@ final class LoginPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: LoginForm(controller: inject<LoginController>()),
-      ),
+      body: LoginForm(controller: inject<LoginController>()),
     );
   }
 }

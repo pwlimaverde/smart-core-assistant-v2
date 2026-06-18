@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
-/// Card padronizado do design system.
+import '../tokens/app_radius.dart';
+import '../tokens/app_spacing.dart';
+
+/// Card padronizado do design system. Cor, borda e raio vêm do [CardThemeData].
 class AppCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry? padding;
@@ -13,9 +16,9 @@ class AppCard extends StatelessWidget {
     return Card(
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: AppRadius.card,
         child: Padding(
-          padding: padding ?? const EdgeInsets.all(16),
+          padding: padding ?? const EdgeInsets.all(AppSpacing.md),
           child: child,
         ),
       ),
