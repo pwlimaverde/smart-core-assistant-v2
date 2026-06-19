@@ -1,0 +1,15 @@
+{
+  "active": [],
+  "completed": [
+    {
+      "slug": "deploy-admin-web",
+      "path": "plans/archive/deploy-admin-web.md",
+      "title": "Deploy do admin Flutter Web no CI/CD sob `/v2/admin` (dev + prod)",
+      "summary": "Build e deploy do bundle Flutter Web (smart-core-admin) no CI/CD, servindo o admin em /v2/admin/ same-origin.",
+      "linkedAt": "2026-06-15T12:05:20.789Z",
+      "completedAt": "2026-06-15T16:47:00.000Z",
+      "status": "archived"
+    }
+  ],
+  "primary": null
+}

@@ -1,8 +1,8 @@
 # Prost (Protocol Buffers)
 
-- **Versão Recomendada:** 0.13.5 (compatível com tonic 0.14.x)
+- **Versão Recomendada:** 0.14.3 (compatível com tonic 0.14.x)
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-06-05
+- **Última Verificação:** 2026-06-18
 - **Propósito no Projeto:** Codec gRPC/Protobuf de fallback do transport; serialização/deserialização de mensagens geradas do `.proto` em Rust — base para todas as mensagens do tonic.
 - **Documentação Oficial:** https://docs.rs/prost/0.13.5
 - **Library ID (Context7):** `/tokio-rs/prost`
@@ -11,8 +11,8 @@
 
 | Crate | Versão | Propósito |
 |-------|--------|----------|
-| `prost` | `0.13.5` | Serialização/deserialização Protobuf, geração de código via prost-build |
-| `prost-build` | `0.13.5` | Compilação de `.proto` em `build.rs` (usado via tonic-build) |
+| `prost` | `0.14.3` | Serialização/deserialização Protobuf, geração de código via prost-build |
+| `prost-build` | `0.14.3` | Compilação de `.proto` em `build.rs` (usado via tonic-build) |
 | `tonic` | `0.14.x` | Integração automática via tonic-build (que depende de prost-build) |
 | `tokio` | `1.x` | Runtime async para gRPC |
 
@@ -20,12 +20,12 @@
 
 ```toml
 [dependencies]
-prost = "0.13"
+prost = "0.14"
 tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
 tonic = "0.14"
 
 [build-dependencies]
-prost-build = "0.13"
+prost-build = "0.14"
 tonic-build = "0.14"
 ```
 
@@ -234,17 +234,23 @@ Não é necessário chamar `prost_build::Config` explicitamente — tonic-build 
 
 ## Breaking Changes & Deprecações Recentes
 
-### v0.13 (Estável, Recomendada)
-- **Compatibilidade:** Totalmente estável com tonic 0.14.x
-- **Mudanças notáveis:** Suporte completo a proto3 sem alterações maiores
-- **Enums descontinuados:** `from_i32()` marcado como deprecado — use `TryFrom<i32>` ou validação manual
+### v0.14.3 (Atual, Recomendada)
+- **Compatibilidade:** Totalmente estável com tonic 0.14.6
+- **Mudanças notáveis:** APIs de encode/decode mantidas estáveis; trait `Message` com `encode(&mut self, buf: &mut impl BufMut)` e `decode(buf: impl Buf)` sem alterações
+- **Enums:** `from_i32()` descontinuado desde v0.13 — use `TryFrom<i32>` ou validação manual com `is_valid()`
+- **Sem breaking changes** entre v0.13.x → v0.14.3 para código que segue o padrão prost-build
+
+### v0.13 → v0.14
+- Melhorias internas de performance e segurança de memória
+- APIs de codificação/decodificação mantidas idênticas
+- Enumerações: `PhoneType::try_from(i32)` funciona sem alterações
 
 ### v0.12 → v0.13
 - Melhorias de performance em serialização
 - Sem breaking changes significativas para uso padrão
 
 ### Avisos de Deprecação
-- **`PhoneType::from_i32()`** → Use `PhoneType::try_from()` ou validação condicional com `is_valid()`
+- **`PhoneType::from_i32()`** → Use `TryFrom<i32>` ou `PhoneType::is_valid(value: i32)` com conversão manual
 
 ## Notas de Arquitetura no Projeto
 
@@ -252,3 +258,10 @@ Não é necessário chamar `prost_build::Config` explicitamente — tonic-build 
 2. **Compatibilidade com error_core:** Mensagens prost não dependem de error_core; podem ser usadas livremente em serialização.
 3. **Comentários em Código Gerado:** Preserve comentários do `.proto` no Rust gerado — prost-build os mapeia automaticamente como `///` docs.
 4. **Tags Explícitas:** Sempre especifique `#[prost(..., tag = "N")]` — sem tag, prost infere sequencialmente (frágil com evolução).
+
+## Histórico de Atualizações
+
+| Data | Versão | Mudanças |
+|------|--------|----------|
+| 2026-06-18 | 0.14.3 | Atualização via Context7: versão 0.14.3 confirmada compatível com tonic 0.14.6; APIs de `Message::encode()` e `Message::decode()` mantidas estáveis; enumerações com deprecação de `from_i32()` desde v0.13; sem breaking changes relevantes entre v0.13.5 → v0.14.3 para código padrão. |
+| 2026-06-05 | 0.13.5 | Criação inicial com compatibilidade tonic 0.14.x, tipos Protobuf → Rust, encode/decode, campos oneof, enumerações, arrays repetidos, integração tonic-build. |

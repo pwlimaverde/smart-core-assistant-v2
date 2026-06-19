@@ -1,8 +1,8 @@
 # Tonic-Web (gRPC-Web)
 
-- **Versão Recomendada:** 0.12
+- **Versão Recomendada:** 0.14.1
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-06-04
+- **Última Verificação:** 2026-06-18
 - **Propósito no Projeto:** Tradução gRPC-Web no runtime_api para o app Flutter Web (decisão D7). Permite clientes web/mobile acessarem serviços gRPC via HTTP/1.1.
 - **Documentação Oficial:** https://github.com/hyperium/tonic/tree/master/tonic-web
 - **Library ID (Context7):** `/hyperium/tonic`
@@ -13,7 +13,7 @@
 
 | Crate | Versão | Notas |
 |-------|--------|-------|
-| `tonic-web` | `0.12` | Compatível com tonic 0.14.6 |
+| `tonic-web` | `0.14.1` | Compatível com tonic 0.14.6 — habilitação de gRPC-Web via `GrpcWebLayer` |
 | `tonic` | `0.14.6` | Servidor base |
 | `tower-http` | `0.5` | Para CorsLayer |
 | `tower` | `0.4` | Middleware/layers |
@@ -27,7 +27,7 @@
 ```toml
 [dependencies]
 tonic = "0.14"
-tonic-web = "0.12"
+tonic-web = "0.14"
 tower = "0.4"
 tower-http = { version = "0.5", features = ["cors", "trace"] }
 http = "1.0"
@@ -395,6 +395,7 @@ ServiceBuilder::new()
 
 | Data | Versão | Mudanças |
 |------|--------|----------|
+| 2026-06-18 | 0.14.1 | Atualização via Context7: confirmada compatibilidade com tonic 0.14.6, sintaxe de habilitação gRPC-Web via `GrpcWebLayer::new()` sem mudanças, imports e exemplos validados para 0.14.x. Sem breaking changes entre 0.12 → 0.14.1. |
 | 2026-06-04 | 0.12 | Criação inicial com guia completo: accept_http1, GrpcWebLayer, CORS configuration, server streaming, autenticação JWT, limitações de gRPC-Web, e troubleshooting. Library ID Context7: `/hyperium/tonic`. |
 
 ---

@@ -79,7 +79,9 @@
       "Bash(convert -version)",
       "Bash(py -c \"import PIL; print\\('PIL', PIL.__version__\\)\")",
       "Bash(py --version)",
-      "PowerShell(& \"C:\\\\PROJETOS\\\\FULL-STACK\\\\smart-core-assistant-v2\\\\infra\\\\test-flutter.ps1\" -SkipAnalyze 2>&1)"
+      "PowerShell(& \"C:\\\\PROJETOS\\\\FULL-STACK\\\\smart-core-assistant-v2\\\\infra\\\\test-flutter.ps1\" -SkipAnalyze 2>&1)",
+      "Bash(xargs grep -E '\\(grpc|get_it|go_router|return_success|flutter_secure\\)')",
+      "Bash(xargs cat)"
     ]
   }
 }

@@ -1,15 +1,14 @@
 {
-  "active": [],
-  "completed": [
+  "active": [
     {
-      "slug": "deploy-admin-web",
-      "path": "plans/archive/deploy-admin-web.md",
-      "title": "Deploy do admin Flutter Web no CI/CD sob `/v2/admin` (dev + prod)",
-      "summary": "Build e deploy do bundle Flutter Web (smart-core-admin) no CI/CD, servindo o admin em /v2/admin/ same-origin.",
-      "linkedAt": "2026-06-15T12:05:20.789Z",
-      "completedAt": "2026-06-15T16:47:00.000Z",
-      "status": "archived"
+      "slug": "painel-admin-superusuario",
+      "path": "plans/painel-admin-superusuario.md",
+      "title": "Painel Gerencial do Superusuário (Admin Total)",
+      "summary": "Construir o painel de controle total para o superusuário: `AdminService` gRPC-Web tipado",
+      "linkedAt": "2026-06-19T00:52:25.457Z",
+      "status": "active"
     }
   ],
-  "primary": null
+  "completed": [],
+  "primary": "painel-admin-superusuario"
 }

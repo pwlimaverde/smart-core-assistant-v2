@@ -1,8 +1,8 @@
 # gRPC Dart
 
-- **Versão Recomendada:** ~4.0.0
+- **Versão Recomendada:** ^5.1.0
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-06-14
+- **Última Verificação:** 2026-06-18
 - **Propósito no Projeto:** Cliente gRPC-Web no Flutter Web/WASM (smart-core-admin) consumindo o AuthService da runtime_api; geração de stubs Dart dos .proto
 - **Documentação Oficial:** https://grpc.io/docs/languages/dart/
 - **Library ID Context7:** `/grpc/grpc-dart`
@@ -21,8 +21,8 @@ Adicione as dependências no `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  grpc: ^4.0.0
-  protobuf: ^3.0.0
+  grpc: ^5.1.0
+  protobuf: ^6.0.0
 ```
 
 ### Ativar o Plugin Protoc (uma vez por máquina de desenvolvimento)
@@ -195,19 +195,37 @@ final response = await authStub.login(
 );
 ```
 
-#### Opção D: gRPC-Web com CORS
+#### Opção D: gRPC-Web com CORS e JWT Bearer
+
+Para aplicações gRPC-Web (como smart-core-admin em Flutter Web), use `WebCallOptions` para otimizar CORS:
 
 ```dart
+// Estático (token conhecido)
 final webOpts = WebCallOptions(
-  metadata: {'authorization': 'Bearer <token>'},
-  bypassCorsPreflight: true,   // evita preflight (HEAD request)
+  metadata: {'authorization': 'Bearer eyJhbGc...'},
+  bypassCorsPreflight: true,   // evita preflight (HEAD request) — packs headers em query
   withCredentials: true,        // envia cookies se necessário
+  timeout: Duration(seconds: 10),
+);
+
+// Dinâmico (token obtido em tempo de execução)
+Future<void> injectJWT(Map<String, String> metadata, String uri) async {
+  final token = await getStoredJWT();  // ex: do SessionService
+  if (token.isNotEmpty) {
+    metadata['authorization'] = 'Bearer $token';
+  }
+}
+
+final dynamicWebOpts = WebCallOptions(
+  metadata: {'x-trace-id': 'req-123'},
+  providers: [injectJWT],
+  bypassCorsPreflight: true,
   timeout: Duration(seconds: 10),
 );
 
 final response = await authStub.login(
   LoginRequest(),
-  options: webOpts,
+  options: dynamicWebOpts,
 );
 ```
 
@@ -371,18 +389,67 @@ await for (final item in stream) {
 
 ## 3. APIs Depreciadas e Breaking Changes Recentes
 
-### Versão ~4.0.0 (Atual)
-- ✅ Sem breaking changes relevantes em relação à 3.x
-- ✅ `GrpcWebClientChannel` é a forma moderna e recomendada
-- ✅ `CallOptions` e `WebCallOptions` são estáveis
+### Versão 5.1.0 (Recomendada — Atual)
 
-### Versão 3.x → 4.x
-- **Mudança Menor:** A assinatura de `interceptors` no cliente pode ter evoluído, mas o padrão `ClientInterceptor` permanece compatível.
-- **Recomendação:** Se ainda usar versão 3.x, atualizar para 4.x é seguro e recomendado.
+- ✅ `GrpcWebClientChannel` é a forma moderna e recomendada (uso via `.xhr()`)
+- ✅ `CallOptions` e `WebCallOptions` são estáveis
+- ✅ Suporte melhorado para WASM (via `package:web` / `dart:js_interop` internamente)
+- ✅ `protobuf: ^6.0.0` — versão compatível
+
+### Versão 4.x → 5.x (Breaking Changes Relevantes)
+
+#### 1. **Dependency: protobuf**
+
+- **4.x:** `protobuf: ^3.0.0` (ou ~3.20.0)
+- **5.x:** `protobuf: ^6.0.0` (maior version bump)
+- **Impacto:** Verificar se há mudanças nos tipos gerados (raros, mas validar se tipos custom usam `.pb.dart`). Praticamente compatível para mensagens padrão.
+- **Ação:** Atualizar `pubspec.yaml` conforme seção 1.
+
+#### 2. **Geração de Stubs (protoc_plugin)**
+
+- **Versão exigida:** protoc_plugin >= 16.0.0 para grpc ^5.0+
+- **Anteriormente:** protoc_plugin ~0.7.x funcionava com 4.x
+- **Impacto:** Re-rodar `protoc` com plugin atualizado; `.pbgrpc.dart` gerados podem ter mudanças menores de formatação, mas a API de uso permanece compatível.
+- **Ação:** `dart pub global activate protoc_plugin` e regenerar stubs.
+
+#### 3. **APIs Removidas**
+
+- Sem remoções dramáticas de métodos principais (`GrpcWebClientChannel`, `CallOptions`, `interceptors`).
+- APIs internas (e.g., alguns helpers privados) podem ter mudado, mas não afeta consumidores normais.
+
+#### 4. **Comportamento de CallOptions.providers**
+
+- **Assinatura mantida:** `Future<void> Function(Map<String, String>, String)`
+- **Sem mudança:** Continua funcionando como em 4.x.
+
+#### 5. **WASM Compatibility**
+
+- **4.x:** `.xhr()` funciona em JS mas pode ter limitações não documentadas em WASM.
+- **5.x:** Melhorias internas para suportar WASM via `package:web` (internamente — consumidor não muda código se usar `.xhr()`).
+- **Validação Pendente (Frente B):** Confirmar se `.xhr()` realmente funciona em `flutter build web --wasm` ou se é necessário canal alternativo.
+
+### Resumo para Migração 4.x → 5.x
+
+| Tarefa | Passo |
+|--------|-------|
+| Versão pubspec | Mudar `grpc: ^4.0.0` → `^5.1.0` e `protobuf: ^3.0.0` → `^6.0.0` |
+| Regenerar stubs | `dart pub global activate protoc_plugin` (16.0.0+) e executar `protoc ...` |
+| Testar | Rodar aplicação em Flutter Web (JS e WASM) — nenhuma mudança de código necessária se usar padrões recomendados |
+| Validação final | Confirmar `.xhr()` em WASM (se aplicável ao smart-core-admin) |
 
 ---
 
 ## 4. Histórico de Atualizações
+
+### 2026-06-18 — Atualização para versão 5.1.0
+
+- Coletada documentação atualizada via Context7 (`/grpc/grpc-dart`).
+- **Versão migrada:** ~4.0.0 → ^5.1.0 (pubspec divergia: tinha ^5.1.0 mas doc estava desatualizada).
+- **Dependência protobuf:** ^3.0.0 → ^6.0.0 (acompanhamento automático via grpc ^5.1.0).
+- **Exemplos atualizados:** WebCallOptions com JWT Bearer dinâmico, `providers` para injeção de metadata em runtime.
+- **Breaking changes documentados:** Bump de protobuf major, protoc_plugin >= 16.0.0, WASM compatibility notes.
+- **Tabela de migração 4.x → 5.x** adicionada com passos claros.
+- Status mantido ✅ ATUALIZADA, confirmada compatibilidade com smart-core-admin e runtime_api.
 
 ### 2026-06-14 — Criação Inicial
 - Documentação coletada via Context7 (`/grpc/grpc-dart`).

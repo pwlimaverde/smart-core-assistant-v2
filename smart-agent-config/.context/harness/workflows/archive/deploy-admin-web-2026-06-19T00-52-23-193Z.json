@@ -1,0 +1,98 @@
+{
+  "version": 2,
+  "workflowType": "prevc",
+  "updatedAt": "2026-06-19T00:52:23.191Z",
+  "status": {
+    "project": {
+      "name": "deploy-admin-web",
+      "scale": 2,
+      "started": "2026-06-15T12:05:13.374Z",
+      "current_phase": "R",
+      "settings": {
+        "autonomous_mode": false,
+        "require_plan": true,
+        "require_approval": true
+      },
+      "plan": "deploy-admin-web"
+    },
+    "phases": {
+      "P": {
+        "status": "completed",
+        "started_at": "2026-06-15T12:05:13.374Z",
+        "completed_at": "2026-06-15T12:05:25.218Z",
+        "outputs": [
+          {
+            "path": ".context/plans/deploy-admin-web.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/deploy-admin-web/plano_completo_deploy-admin-web.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/deploy-admin-web/info_aux_deploy-admin-web.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "R": {
+        "status": "in_progress",
+        "started_at": "2026-06-15T12:05:25.222Z"
+      },
+      "E": {
+        "status": "pending"
+      },
+      "V": {
+        "status": "pending"
+      },
+      "C": {
+        "status": "skipped",
+        "reason": "Not required for scale MEDIUM"
+      }
+    },
+    "agents": {},
+    "roles": {},
+    "approval": {
+      "plan_created": true,
+      "plan_approved": false
+    },
+    "execution": {
+      "history": [
+        {
+          "timestamp": "2026-06-15T12:05:13.374Z",
+          "phase": "P",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-15T12:05:13.388Z",
+          "phase": "C",
+          "action": "phase_skipped"
+        },
+        {
+          "timestamp": "2026-06-15T12:05:20.793Z",
+          "phase": "P",
+          "action": "plan_linked",
+          "plan": "deploy-admin-web"
+        },
+        {
+          "timestamp": "2026-06-15T12:05:25.218Z",
+          "phase": "P",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-15T12:05:25.222Z",
+          "phase": "R",
+          "action": "started"
+        }
+      ],
+      "last_activity": "2026-06-15T12:05:25.222Z",
+      "resume_context": "Fase R (Revisão) em progresso"
+    }
+  },
+  "binding": {
+    "workflowName": "deploy-admin-web",
+    "sessionId": "c17bb4d7-2996-496f-af80-3f0943a88eda",
+    "createdAt": "2026-06-15T12:05:13.385Z",
+    "updatedAt": "2026-06-15T12:05:25.229Z"
+  }
+}
