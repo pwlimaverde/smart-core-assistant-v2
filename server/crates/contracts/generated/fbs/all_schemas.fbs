@@ -4,6 +4,377 @@ namespace smartcore.contracts;
 
 
 
+table CoreSetting {
+  key:string;
+  value:string;
+  encrypted:bool;
+  description:string;
+}
+
+table ListCoreSettingsRequest {
+}
+
+table ListCoreSettingsResponse {
+  settings:[CoreSetting];
+}
+
+table UpsertCoreSettingRequest {
+  key:string;
+  value:string;
+  encrypted:bool;
+  description:string;
+}
+
+table UpsertCoreSettingResponse {
+  success:bool;
+}
+
+table DeleteCoreSettingRequest {
+  key:string;
+}
+
+table DeleteCoreSettingResponse {
+  success:bool;
+}
+
+table ApiKeyEntry {
+  key:string;
+  value:string;
+}
+
+table GetTenantConfigRequest {
+  tenant_id:string;
+}
+
+table GetTenantConfigResponse {
+  dados_empresa:string;
+  persona_bot:string;
+  bot_agent_name:string;
+  msg_fallback:string;
+  msg_sem_info:string;
+  msg_transferencia:string;
+  llm_class:string;
+  model:string;
+  llm_temperature:string;
+  transcription_provider:string;
+  transcription_model:string;
+  vision_provider:string;
+  vision_model:string;
+  embeddings_class:string;
+  embeddings_model:string;
+  chunk_size:int;
+  chunk_overlap:int;
+  similarity_threshold:string;
+  vector_distance_threshold:string;
+  api_keys:[ApiKeyEntry];
+}
+
+table UpdateTenantConfigRequest {
+  tenant_id:string;
+  dados_empresa:string;
+  persona_bot:string;
+  bot_agent_name:string;
+  msg_fallback:string;
+  msg_sem_info:string;
+  msg_transferencia:string;
+  llm_class:string;
+  model:string;
+  llm_temperature:string;
+  transcription_provider:string;
+  transcription_model:string;
+  vision_provider:string;
+  vision_model:string;
+  embeddings_class:string;
+  embeddings_model:string;
+  chunk_size:int;
+  chunk_overlap:int;
+  similarity_threshold:string;
+  vector_distance_threshold:string;
+  api_keys:[ApiKeyEntry];
+}
+
+table UpdateTenantConfigResponse {
+  success:bool;
+}
+
+table Tenant {
+  id:string;
+  name:string;
+  slug:string;
+  api_key:string;
+  owner_id:int;
+  email:string;
+  phone:string;
+  active:bool;
+  setup_completed:bool;
+  onboarding_step:int;
+  access_code:string;
+  created_at:long;
+  updated_at:long;
+}
+
+table Plan {
+  id:int;
+  name:string;
+  description:string;
+  price:string;
+  max_instances:int;
+  max_departments:int;
+  active:bool;
+  created_at:long;
+}
+
+table Subscription {
+  id:int;
+  tenant_id:string;
+  plan_id:int;
+  status:string;
+  current_period_start:long;
+  current_period_end:long;
+  payment_gateway:string;
+  external_customer_id:string;
+  external_subscription_id:string;
+  updated_at:long;
+}
+
+table PaymentRecord {
+  id:int;
+  tenant_id:string;
+  amount:string;
+  payment_date:string;
+  payment_method:string;
+  period_start:string;
+  period_end:string;
+  notes:string;
+  recorded_by_id:int;
+  created_at:long;
+}
+
+table ListTenantsRequest {
+}
+
+table ListTenantsResponse {
+  tenants:[Tenant];
+}
+
+table GetTenantRequest {
+  id:string;
+}
+
+table GetTenantResponse {
+  tenant:Tenant;
+}
+
+table CreateTenantRequest {
+  name:string;
+  slug:string;
+  owner_id:int;
+  email:string;
+  phone:string;
+}
+
+table CreateTenantResponse {
+  tenant:Tenant;
+}
+
+table UpdateTenantRequest {
+  id:string;
+  name:string;
+  slug:string;
+  owner_id:int;
+  email:string;
+  phone:string;
+}
+
+table UpdateTenantResponse {
+  success:bool;
+}
+
+table SetTenantActiveRequest {
+  id:string;
+  active:bool;
+}
+
+table SetTenantActiveResponse {
+  success:bool;
+}
+
+table GenerateAccessCodeRequest {
+  id:string;
+}
+
+table GenerateAccessCodeResponse {
+  access_code:string;
+}
+
+table ListPlansRequest {
+}
+
+table ListPlansResponse {
+  plans:[Plan];
+}
+
+table CreatePlanRequest {
+  name:string;
+  description:string;
+  price:string;
+  max_instances:int;
+  max_departments:int;
+}
+
+table CreatePlanResponse {
+  plan:Plan;
+}
+
+table UpdatePlanRequest {
+  id:int;
+  name:string;
+  description:string;
+  price:string;
+  max_instances:int;
+  max_departments:int;
+  active:bool;
+}
+
+table UpdatePlanResponse {
+  success:bool;
+}
+
+table ListSubscriptionsRequest {
+}
+
+table ListSubscriptionsResponse {
+  subscriptions:[Subscription];
+}
+
+table RegisterPaymentRequest {
+  tenant_id:string;
+  amount:string;
+  payment_method:string;
+  payment_date:string;
+  period_start:string;
+  period_end:string;
+  notes:string;
+}
+
+table RegisterPaymentResponse {
+  payment:PaymentRecord;
+}
+
+table ListPaymentsRequest {
+  tenant_id:string;
+}
+
+table ListPaymentsResponse {
+  payments:[PaymentRecord];
+}
+
+table TestEvolutionConnectionRequest {
+  tenant_id:string;
+}
+
+table TestEvolutionConnectionResponse {
+  status:string;
+  error_message:string;
+}
+
+table FeatureFlagOverride {
+  tenant_id:string;
+  enabled:bool;
+}
+
+table FeatureFlag {
+  key:string;
+  description:string;
+  enabled_globally:bool;
+  overrides:[FeatureFlagOverride];
+}
+
+table ListFeatureFlagsRequest {
+}
+
+table ListFeatureFlagsResponse {
+  flags:[FeatureFlag];
+}
+
+table SetFeatureFlagRequest {
+  key:string;
+  enabled_globally:bool;
+}
+
+table SetFeatureFlagResponse {
+  success:bool;
+}
+
+table SetFeatureFlagOverrideRequest {
+  key:string;
+  tenant_id:string;
+  enabled:bool;
+  remove_override:bool;
+}
+
+table SetFeatureFlagOverrideResponse {
+  success:bool;
+}
+
+table AuditLogEntry {
+  id:int;
+  event_type:string;
+  actor:string;
+  tenant_id:string;
+  description:string;
+  ip_address:string;
+  user_agent:string;
+  created_at:long;
+}
+
+table QueryAuditLogRequest {
+  tenant_id:string;
+  event_type:string;
+  limit:int;
+  offset:int;
+}
+
+table QueryAuditLogResponse {
+  entries:[AuditLogEntry];
+  total_count:int;
+}
+
+table ServiceHealth {
+  service_name:string;
+  status:string;
+  message:string;
+  response_time_ms:long;
+}
+
+table GetServiceHealthRequest {
+}
+
+table GetServiceHealthResponse {
+  services:[ServiceHealth];
+}
+
+table GetDashboardSummaryRequest {
+}
+
+table GetDashboardSummaryResponse {
+  total_tenants:int;
+  active_tenants:int;
+  total_subscriptions:int;
+  monthly_recurring_revenue:string;
+  health:[ServiceHealth];
+}
+
+table ExportTenantsCsvRequest {
+}
+
+table ExportTenantsCsvResponse {
+  chunk:[ubyte];
+}
+
+
+
+
 table AiRequest {
   prompt:string;
 }

@@ -12,6 +12,6 @@ String? authRedirectTarget({
 
   final indoParaLogin = location == '/login';
   if (!isAuthenticated) return indoParaLogin ? null : '/login';
-  if (indoParaLogin || location == '/') return '/home';
+  if (indoParaLogin || location == '/' || location == '/home') return '/admin/core-settings';
   return null;
 }

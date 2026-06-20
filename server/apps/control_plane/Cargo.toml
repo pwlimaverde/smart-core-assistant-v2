@@ -12,9 +12,12 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 anyhow = { workspace = true }
 bytes = { workspace = true }
+secrecy = { workspace = true }
+reqwest = { version = "0.12", features = ["json"] }
 
 contracts = { workspace = true }
 transport = { workspace = true }
 error_core = { workspace = true }
 observability = { workspace = true }
 tracing = { workspace = true }
+

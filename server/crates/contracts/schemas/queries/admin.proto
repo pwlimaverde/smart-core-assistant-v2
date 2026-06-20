@@ -1,0 +1,419 @@
+syntax = "proto3";
+package smartcore.contracts.queries;
+
+// --- Configurações Globais (CoreSettings) ---
+message CoreSetting {
+  string key = 1;
+  string value = 2;
+  bool encrypted = 3;
+  string description = 4;
+}
+
+message ListCoreSettingsRequest {}
+
+message ListCoreSettingsResponse {
+  repeated CoreSetting settings = 1;
+}
+
+message UpsertCoreSettingRequest {
+  string key = 1;
+  string value = 2;
+  bool encrypted = 3;
+  string description = 4;
+}
+
+message UpsertCoreSettingResponse {
+  bool success = 1;
+}
+
+message DeleteCoreSettingRequest {
+  string key = 1;
+}
+
+message DeleteCoreSettingResponse {
+  bool success = 1;
+}
+
+// --- Entrada de Chave de API ---
+message ApiKeyEntry {
+  string key = 1;
+  string value = 2;
+}
+
+// --- Configurações de Tenant (TenantConfig) ---
+message GetTenantConfigRequest {
+  string tenant_id = 1;
+}
+
+message GetTenantConfigResponse {
+  string dados_empresa = 1;
+  string persona_bot = 2;
+  string bot_agent_name = 3;
+  string msg_fallback = 4;
+  string msg_sem_info = 5;
+  string msg_transferencia = 6;
+  string llm_class = 7;
+  string model = 8;
+  string llm_temperature = 9;
+  string transcription_provider = 10;
+  string transcription_model = 11;
+  string vision_provider = 12;
+  string vision_model = 13;
+  string embeddings_class = 14;
+  string embeddings_model = 15;
+  int32 chunk_size = 16;
+  int32 chunk_overlap = 17;
+  string similarity_threshold = 18;
+  string vector_distance_threshold = 19;
+  repeated ApiKeyEntry api_keys = 20;
+}
+
+message UpdateTenantConfigRequest {
+  string tenant_id = 1;
+  string dados_empresa = 2;
+  string persona_bot = 3;
+  string bot_agent_name = 4;
+  string msg_fallback = 5;
+  string msg_sem_info = 6;
+  string msg_transferencia = 7;
+  string llm_class = 8;
+  string model = 9;
+  string llm_temperature = 10;
+  string transcription_provider = 11;
+  string transcription_model = 12;
+  string vision_provider = 13;
+  string vision_model = 14;
+  string embeddings_class = 15;
+  string embeddings_model = 16;
+  int32 chunk_size = 17;
+  int32 chunk_overlap = 18;
+  string similarity_threshold = 19;
+  string vector_distance_threshold = 20;
+  repeated ApiKeyEntry api_keys = 21;
+}
+
+message UpdateTenantConfigResponse {
+  bool success = 1;
+}
+
+// --- FASE 2: Entidades de Tenants & Billing ---
+
+message Tenant {
+  string id = 1;
+  string name = 2;
+  string slug = 3;
+  string api_key = 4;
+  int32 owner_id = 5;
+  string email = 6;
+  string phone = 7;
+  bool active = 8;
+  bool setup_completed = 9;
+  int32 onboarding_step = 10;
+  string access_code = 11;
+  int64 created_at = 12; // timestamp_millis
+  int64 updated_at = 13; // timestamp_millis
+}
+
+message Plan {
+  int32 id = 1;
+  string name = 2;
+  string description = 3;
+  string price = 4; // Decimal como string (evita perda de precisão)
+  int32 max_instances = 5;
+  int32 max_departments = 6;
+  bool active = 7;
+  int64 created_at = 8;
+}
+
+message Subscription {
+  int32 id = 1;
+  string tenant_id = 2;
+  int32 plan_id = 3;
+  string status = 4;
+  int64 current_period_start = 5;
+  int64 current_period_end = 6;
+  string payment_gateway = 7;
+  string external_customer_id = 8;
+  string external_subscription_id = 9;
+  int64 updated_at = 10;
+}
+
+message PaymentRecord {
+  int32 id = 1;
+  string tenant_id = 2;
+  string amount = 3;
+  string payment_date = 4; // YYYY-MM-DD
+  string payment_method = 5;
+  string period_start = 6;  // YYYY-MM-DD
+  string period_end = 7;    // YYYY-MM-DD
+  string notes = 8;
+  int32 recorded_by_id = 9;
+  int64 created_at = 10;
+}
+
+// --- Requisições/Respostas de Tenants ---
+
+message ListTenantsRequest {}
+
+message ListTenantsResponse {
+  repeated Tenant tenants = 1;
+}
+
+message GetTenantRequest {
+  string id = 1;
+}
+
+message GetTenantResponse {
+  Tenant tenant = 1;
+}
+
+message CreateTenantRequest {
+  string name = 1;
+  string slug = 2;
+  int32 owner_id = 3;
+  string email = 4;
+  string phone = 5;
+}
+
+message CreateTenantResponse {
+  Tenant tenant = 1;
+}
+
+message UpdateTenantRequest {
+  string id = 1;
+  string name = 2;
+  string slug = 3;
+  int32 owner_id = 4;
+  string email = 5;
+  string phone = 6;
+}
+
+message UpdateTenantResponse {
+  bool success = 1;
+}
+
+message SetTenantActiveRequest {
+  string id = 1;
+  bool active = 2;
+}
+
+message SetTenantActiveResponse {
+  bool success = 1;
+}
+
+message GenerateAccessCodeRequest {
+  string id = 1;
+}
+
+message GenerateAccessCodeResponse {
+  string access_code = 1;
+}
+
+// --- Requisições/Respostas de Billing ---
+
+message ListPlansRequest {}
+
+message ListPlansResponse {
+  repeated Plan plans = 1;
+}
+
+message CreatePlanRequest {
+  string name = 1;
+  string description = 2;
+  string price = 3;
+  int32 max_instances = 4;
+  int32 max_departments = 5;
+}
+
+message CreatePlanResponse {
+  Plan plan = 1;
+}
+
+message UpdatePlanRequest {
+  int32 id = 1;
+  string name = 2;
+  string description = 3;
+  string price = 4;
+  int32 max_instances = 5;
+  int32 max_departments = 6;
+  bool active = 7;
+}
+
+message UpdatePlanResponse {
+  bool success = 1;
+}
+
+message ListSubscriptionsRequest {}
+
+message ListSubscriptionsResponse {
+  repeated Subscription subscriptions = 1;
+}
+
+message RegisterPaymentRequest {
+  string tenant_id = 1;
+  string amount = 2;
+  string payment_method = 3;
+  string payment_date = 4; // YYYY-MM-DD
+  string period_start = 5;  // YYYY-MM-DD
+  string period_end = 6;    // YYYY-MM-DD
+  string notes = 7;
+}
+
+message RegisterPaymentResponse {
+  PaymentRecord payment = 1;
+}
+
+message ListPaymentsRequest {
+  string tenant_id = 1; // Opcional: filtra por tenant, se vazio lista todos
+}
+
+message ListPaymentsResponse {
+  repeated PaymentRecord payments = 1;
+}
+
+// --- Requisições/Respostas de Faturamento ---
+// ...
+
+// --- Fase 3: Evolution Connection ---
+message TestEvolutionConnectionRequest {
+  string tenant_id = 1;
+}
+
+message TestEvolutionConnectionResponse {
+  string status = 1; // "open", "connecting", "close", "error"
+  string error_message = 2;
+}
+
+// --- Fase 4: Feature Flags ---
+message FeatureFlagOverride {
+  string tenant_id = 1;
+  bool enabled = 2;
+}
+
+message FeatureFlag {
+  string key = 1;
+  string description = 2;
+  bool enabled_globally = 3;
+  repeated FeatureFlagOverride overrides = 4;
+}
+
+message ListFeatureFlagsRequest {}
+
+message ListFeatureFlagsResponse {
+  repeated FeatureFlag flags = 1;
+}
+
+message SetFeatureFlagRequest {
+  string key = 1;
+  bool enabled_globally = 2;
+}
+
+message SetFeatureFlagResponse {
+  bool success = 1;
+}
+
+message SetFeatureFlagOverrideRequest {
+  string key = 1;
+  string tenant_id = 2;
+  bool enabled = 3;
+  bool remove_override = 4;
+}
+
+message SetFeatureFlagOverrideResponse {
+  bool success = 1;
+}
+
+// --- Fase 5: Auditoria & Saúde ---
+message AuditLogEntry {
+  int32 id = 1;
+  string event_type = 2;
+  string actor = 3;
+  string tenant_id = 4;
+  string description = 5;
+  string ip_address = 6;
+  string user_agent = 7;
+  int64 created_at = 8;
+}
+
+message QueryAuditLogRequest {
+  string tenant_id = 1;
+  string event_type = 2;
+  int32 limit = 3;
+  int32 offset = 4;
+}
+
+message QueryAuditLogResponse {
+  repeated AuditLogEntry entries = 1;
+  int32 total_count = 2;
+}
+
+message ServiceHealth {
+  string service_name = 1;
+  string status = 2; // "healthy", "unhealthy", "degraded"
+  string message = 3;
+  int64 response_time_ms = 4;
+}
+
+message GetServiceHealthRequest {}
+
+message GetServiceHealthResponse {
+  repeated ServiceHealth services = 1;
+}
+
+message GetDashboardSummaryRequest {}
+
+message GetDashboardSummaryResponse {
+  int32 total_tenants = 1;
+  int32 active_tenants = 2;
+  int32 total_subscriptions = 3;
+  string monthly_recurring_revenue = 4;
+  repeated ServiceHealth health = 5;
+}
+
+message ExportTenantsCsvRequest {}
+
+message ExportTenantsCsvResponse {
+  bytes chunk = 1;
+}
+
+// --- Serviço Admin ---
+service AdminService {
+  rpc ListCoreSettings(ListCoreSettingsRequest) returns (ListCoreSettingsResponse);
+  rpc UpsertCoreSetting(UpsertCoreSettingRequest) returns (UpsertCoreSettingResponse);
+  rpc DeleteCoreSetting(DeleteCoreSettingRequest) returns (DeleteCoreSettingResponse);
+  rpc GetTenantConfig(GetTenantConfigRequest) returns (GetTenantConfigResponse);
+  rpc UpdateTenantConfig(UpdateTenantConfigRequest) returns (UpdateTenantConfigResponse);
+
+  // Fase 2: Tenants
+  rpc ListTenants(ListTenantsRequest) returns (ListTenantsResponse);
+  rpc GetTenant(GetTenantRequest) returns (GetTenantResponse);
+  rpc CreateTenant(CreateTenantRequest) returns (CreateTenantResponse);
+  rpc UpdateTenant(UpdateTenantRequest) returns (UpdateTenantResponse);
+  rpc SetTenantActive(SetTenantActiveRequest) returns (SetTenantActiveResponse);
+  rpc GenerateAccessCode(GenerateAccessCodeRequest) returns (GenerateAccessCodeResponse);
+
+  // Fase 2: Billing
+  rpc ListPlans(ListPlansRequest) returns (ListPlansResponse);
+  rpc CreatePlan(CreatePlanRequest) returns (CreatePlanResponse);
+  rpc UpdatePlan(UpdatePlanRequest) returns (UpdatePlanResponse);
+  rpc ListSubscriptions(ListSubscriptionsRequest) returns (ListSubscriptionsResponse);
+  rpc RegisterPayment(RegisterPaymentRequest) returns (RegisterPaymentResponse);
+  rpc ListPayments(ListPaymentsRequest) returns (ListPaymentsResponse);
+
+  // Fase 3: Evolution Connection
+  rpc TestEvolutionConnection(TestEvolutionConnectionRequest) returns (TestEvolutionConnectionResponse);
+
+  // Fase 4: Feature Flags
+  rpc ListFeatureFlags(ListFeatureFlagsRequest) returns (ListFeatureFlagsResponse);
+  rpc SetFeatureFlag(SetFeatureFlagRequest) returns (SetFeatureFlagResponse);
+  rpc SetFeatureFlagOverride(SetFeatureFlagOverrideRequest) returns (SetFeatureFlagOverrideResponse);
+
+  // Fase 5: Auditoria & Saúde
+  rpc QueryAuditLog(QueryAuditLogRequest) returns (QueryAuditLogResponse);
+  rpc GetServiceHealth(GetServiceHealthRequest) returns (GetServiceHealthResponse);
+  rpc GetDashboardSummary(GetDashboardSummaryRequest) returns (GetDashboardSummaryResponse);
+  rpc ExportTenantsCsv(ExportTenantsCsvRequest) returns (stream ExportTenantsCsvResponse);
+}
+
+
+

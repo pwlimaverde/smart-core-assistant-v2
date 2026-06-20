@@ -2,19 +2,21 @@ import 'package:grpc/grpc_web.dart';
 
 import 'api_client.dart';
 import 'generated/queries/auth.pbgrpc.dart';
+import 'generated/queries/admin.pbgrpc.dart';
 import 'interceptors/auth_token_interceptor.dart';
 
-/// Cliente gRPC-Web real da borda de autenticação.
+/// Cliente gRPC-Web real da borda de autenticação e administração.
 ///
 /// Cria o canal gRPC-Web (`GrpcWebClientChannel.xhr`) — que no `grpc` 4.x usa
 /// `package:web`/`dart:js_interop` (compatível com `flutter build web --wasm`)
-/// — e expõe o stub [AuthServiceClient] com o [AuthTokenInterceptor] já
+/// — e expõe os stubs [AuthServiceClient] e [AdminServiceClient] com o [AuthTokenInterceptor] já
 /// acoplado. NÃO loga token/credenciais; apenas endpoint/status.
 final class GrpcApiClient implements ApiClient {
   final Uri _uri;
   final bool _enableLogging;
   late final GrpcWebClientChannel _channel;
   late final AuthServiceClient _auth;
+  late final AdminServiceClient _admin;
 
   /// [endpoint] é a URL HTTP(S) da fachada (mesma origem do WASM, via Caddy).
   /// [readAccessToken] devolve o access token atual (memória) para o interceptor.
@@ -32,10 +34,17 @@ final class GrpcApiClient implements ApiClient {
       _channel,
       interceptors: [AuthTokenInterceptor(readAccessToken)],
     );
+    _admin = AdminServiceClient(
+      _channel,
+      interceptors: [AuthTokenInterceptor(readAccessToken)],
+    );
   }
 
   /// Stub do `AuthService` para os datasources do `login_module`.
   AuthServiceClient get auth => _auth;
+
+  /// Stub do `AdminService` para os datasources do `admin_module`.
+  AdminServiceClient get admin => _admin;
 
   @override
   Future<void> connect() async {

@@ -236,7 +236,26 @@ async fn main() -> anyhow::Result<()> {
     let state_for_upsert_core_setting = state_clone.clone();
     let state_for_delete_core_setting = state_clone.clone();
     let state_for_get_tenant_config = state_clone.clone();
-    let state_for_update_tenant_config = state_clone;
+    let state_for_update_tenant_config = state_clone.clone();
+    let state_for_list_tenants = state_clone.clone();
+    let state_for_get_tenant = state_clone.clone();
+    let state_for_update_tenant = state_clone.clone();
+    let state_for_set_tenant_active = state_clone.clone();
+    let state_for_generate_access_code = state_clone.clone();
+    let state_for_list_plans = state_clone.clone();
+    let state_for_create_plan = state_clone.clone();
+    let state_for_update_plan = state_clone.clone();
+    let state_for_list_subscriptions = state_clone.clone();
+    let state_for_register_payment = state_clone.clone();
+    let state_for_get_evolution_instance_by_tenant = state_clone.clone();
+    let state_for_list_feature_flags = state_clone.clone();
+    let state_for_set_feature_flag = state_clone.clone();
+    let state_for_set_feature_flag_override = state_clone.clone();
+    let state_for_query_audit_log = state_clone.clone();
+    let state_for_list_payments = state_clone.clone();
+    let state_for_get_service_health = state_clone.clone();
+    let state_for_get_dashboard_summary = state_clone.clone();
+    let state_for_export_tenants_csv = state_clone;
 
     let server = Server::from_env("DATA_POSTGRES")
         .route("GetThread", move |env| {
@@ -317,6 +336,96 @@ async fn main() -> anyhow::Result<()> {
                 )
                 .await
             })
+        })
+        .route("ListTenants", move |env| {
+            let state = state_for_list_tenants.clone();
+            Box::pin(async move { handler_list_tenants(state.pool, env).await })
+        })
+        .route("GetTenant", move |env| {
+            let state = state_for_get_tenant.clone();
+            Box::pin(async move { handler_get_tenant(state.pool, env).await })
+        })
+        .route("UpdateTenant", move |env| {
+            let state = state_for_update_tenant.clone();
+            Box::pin(async move { handler_update_tenant(state.pool, state.redis_conn, env).await })
+        })
+        .route("SetTenantActive", move |env| {
+            let state = state_for_set_tenant_active.clone();
+            Box::pin(
+                async move { handler_set_tenant_active(state.pool, state.redis_conn, env).await },
+            )
+        })
+        .route("GenerateAccessCode", move |env| {
+            let state = state_for_generate_access_code.clone();
+            Box::pin(async move {
+                handler_generate_access_code(state.pool, state.redis_conn, env).await
+            })
+        })
+        .route("ListPlans", move |env| {
+            let state = state_for_list_plans.clone();
+            Box::pin(async move { handler_list_plans(state.pool, env).await })
+        })
+        .route("CreatePlan", move |env| {
+            let state = state_for_create_plan.clone();
+            Box::pin(async move { handler_create_plan(state.pool, state.redis_conn, env).await })
+        })
+        .route("UpdatePlan", move |env| {
+            let state = state_for_update_plan.clone();
+            Box::pin(async move { handler_update_plan(state.pool, state.redis_conn, env).await })
+        })
+        .route("ListSubscriptions", move |env| {
+            let state = state_for_list_subscriptions.clone();
+            Box::pin(async move { handler_list_subscriptions(state.pool, env).await })
+        })
+        .route("RegisterPayment", move |env| {
+            let state = state_for_register_payment.clone();
+            Box::pin(
+                async move { handler_register_payment(state.pool, state.redis_conn, env).await },
+            )
+        })
+        .route("ListPayments", move |env| {
+            let state = state_for_list_payments.clone();
+            Box::pin(async move { handler_list_payments(state.pool, env).await })
+        })
+        .route("GetEvolutionInstanceByTenant", move |env| {
+            let state = state_for_get_evolution_instance_by_tenant.clone();
+            Box::pin(async move { handler_get_evolution_instance_by_tenant(state.pool, env).await })
+        })
+        .route("ListFeatureFlags", move |env| {
+            let state = state_for_list_feature_flags.clone();
+            Box::pin(async move { handler_list_feature_flags(state.pool, env).await })
+        })
+        .route("SetFeatureFlag", move |env| {
+            let state = state_for_set_feature_flag.clone();
+            Box::pin(
+                async move { handler_set_feature_flag(state.pool, state.redis_conn, env).await },
+            )
+        })
+        .route("SetFeatureFlagOverride", move |env| {
+            let state = state_for_set_feature_flag_override.clone();
+            Box::pin(async move {
+                handler_set_feature_flag_override(state.pool, state.redis_conn, env).await
+            })
+        })
+        .route("QueryAuditLog", move |env| {
+            let state = state_for_query_audit_log.clone();
+            Box::pin(async move { handler_query_audit_log(state.pool, env).await })
+        })
+        .route("GetServiceHealth", move |env| {
+            let state = state_for_get_service_health.clone();
+            Box::pin(
+                async move { handler_get_service_health(state.pool, state.redis_conn, env).await },
+            )
+        })
+        .route("GetDashboardSummary", move |env| {
+            let state = state_for_get_dashboard_summary.clone();
+            Box::pin(async move {
+                handler_get_dashboard_summary(state.pool, state.redis_conn, env).await
+            })
+        })
+        .route("ExportTenantsCsv", move |env| {
+            let state = state_for_export_tenants_csv.clone();
+            Box::pin(async move { handler_export_tenants_csv(state.pool, env).await })
         });
 
     tracing::info!("Servidor RPC configurado e pronto.");
@@ -1854,6 +1963,1377 @@ async fn handler_update_tenant_config(
         "UpdateTenantConfigReply",
         serde_json::json!({ "status": "success" }),
     )
+}
+
+// --- FASE 2: Handlers de Tenants ---
+
+async fn handler_list_tenants(pool: PgPool, env: Envelope) -> Envelope {
+    use sqlx::Row;
+    let result = sqlx::query(
+        r#"SELECT id, name, slug, api_key, owner_id, email, phone, active, setup_completed, onboarding_step, access_code, created_at, updated_at
+           FROM tenants_tenant ORDER BY name"#
+    )
+    .fetch_all(&pool)
+    .await;
+
+    match result {
+        Ok(rows) => {
+            let list: Vec<serde_json::Value> = rows
+                .into_iter()
+                .map(|row| {
+                    let id: Uuid = row.get("id");
+                    let name: String = row.get("name");
+                    let slug: String = row.get("slug");
+                    let api_key: String = row.get("api_key");
+                    let owner_id: i32 = row.get("owner_id");
+                    let email: String = row.get("email");
+                    let phone: Option<String> = row.get("phone");
+                    let active: bool = row.get("active");
+                    let setup_completed: bool = row.get("setup_completed");
+                    let onboarding_step: i32 = row.get("onboarding_step");
+                    let access_code: Option<String> = row.get("access_code");
+                    let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+                    let updated_at: chrono::DateTime<chrono::Utc> = row.get("updated_at");
+
+                    serde_json::json!({
+                        "id": id.to_string(),
+                        "name": name,
+                        "slug": slug,
+                        "api_key": api_key,
+                        "owner_id": owner_id,
+                        "email": email,
+                        "phone": phone.unwrap_or_default(),
+                        "active": active,
+                        "setup_completed": setup_completed,
+                        "onboarding_step": onboarding_step,
+                        "access_code": access_code.unwrap_or_default(),
+                        "created_at": created_at.timestamp_millis(),
+                        "updated_at": updated_at.timestamp_millis(),
+                    })
+                })
+                .collect();
+            ok_reply(
+                &env,
+                "ListTenantsReply",
+                serde_json::json!({ "tenants": list }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_get_tenant(pool: PgPool, env: Envelope) -> Envelope {
+    use sqlx::Row;
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id_str = payload_json
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let tenant_id = match Uuid::parse_str(id_str) {
+        Ok(u) => u,
+        Err(_) => {
+            return erro(
+                error_core::AppError::Validation("ID do tenant inválido".to_string()),
+                &env,
+            )
+        }
+    };
+
+    let result = sqlx::query(
+        r#"SELECT id, name, slug, api_key, owner_id, email, phone, active, setup_completed, onboarding_step, access_code, created_at, updated_at
+           FROM tenants_tenant WHERE id = $1"#,
+    )
+    .bind(tenant_id)
+    .fetch_optional(&pool)
+    .await;
+
+    match result {
+        Ok(Some(row)) => {
+            let id: Uuid = row.get("id");
+            let name: String = row.get("name");
+            let slug: String = row.get("slug");
+            let api_key: String = row.get("api_key");
+            let owner_id: i32 = row.get("owner_id");
+            let email: String = row.get("email");
+            let phone: Option<String> = row.get("phone");
+            let active: bool = row.get("active");
+            let setup_completed: bool = row.get("setup_completed");
+            let onboarding_step: i32 = row.get("onboarding_step");
+            let access_code: Option<String> = row.get("access_code");
+            let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+            let updated_at: chrono::DateTime<chrono::Utc> = row.get("updated_at");
+
+            let tenant = serde_json::json!({
+                "id": id.to_string(),
+                "name": name,
+                "slug": slug,
+                "api_key": api_key,
+                "owner_id": owner_id,
+                "email": email,
+                "phone": phone.unwrap_or_default(),
+                "active": active,
+                "setup_completed": setup_completed,
+                "onboarding_step": onboarding_step,
+                "access_code": access_code.unwrap_or_default(),
+                "created_at": created_at.timestamp_millis(),
+                "updated_at": updated_at.timestamp_millis(),
+            });
+            ok_reply(
+                &env,
+                "GetTenantReply",
+                serde_json::json!({ "tenant": tenant }),
+            )
+        }
+        Ok(None) => erro(
+            error_core::AppError::Validation("Tenant não encontrado".to_string()),
+            &env,
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_update_tenant(
+    pool: PgPool,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id_str = payload_json
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let tenant_id = match Uuid::parse_str(id_str) {
+        Ok(u) => u,
+        Err(_) => {
+            return erro(
+                error_core::AppError::Validation("ID do tenant inválido".to_string()),
+                &env,
+            )
+        }
+    };
+    let name = payload_json
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let slug = payload_json
+        .get("slug")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let owner_id = payload_json
+        .get("owner_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(1) as i32;
+    let email = payload_json
+        .get("email")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let phone = payload_json
+        .get("phone")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    if name.is_empty() || slug.is_empty() {
+        return erro(
+            error_core::AppError::Validation("Nome e Slug não podem ser vazios".to_string()),
+            &env,
+        );
+    }
+
+    let result = sqlx::query(
+        r#"UPDATE tenants_tenant
+           SET name = $1, slug = $2, owner_id = $3, email = $4, phone = $5, updated_at = NOW()
+           WHERE id = $6"#,
+    )
+    .bind(name)
+    .bind(slug)
+    .bind(owner_id)
+    .bind(email)
+    .bind(phone)
+    .bind(tenant_id)
+    .execute(&pool)
+    .await;
+
+    match result {
+        Ok(res) => {
+            if res.rows_affected() == 0 {
+                return erro(
+                    error_core::AppError::Validation("Tenant inexistente".to_string()),
+                    &env,
+                );
+            }
+            publicar_auditoria(
+                &mut redis_conn,
+                &env,
+                "tenant_updated",
+                format!("Cadastro do tenant '{}' atualizado", name),
+                serde_json::json!({ "id": id_str, "name": name }),
+            )
+            .await;
+            ok_reply(
+                &env,
+                "UpdateTenantReply",
+                serde_json::json!({ "status": "success" }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_set_tenant_active(
+    pool: PgPool,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id_str = payload_json
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let tenant_id = match Uuid::parse_str(id_str) {
+        Ok(u) => u,
+        Err(_) => {
+            return erro(
+                error_core::AppError::Validation("ID do tenant inválido".to_string()),
+                &env,
+            )
+        }
+    };
+    let active = payload_json
+        .get("active")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    let result =
+        sqlx::query("UPDATE tenants_tenant SET active = $1, updated_at = NOW() WHERE id = $2")
+            .bind(active)
+            .bind(tenant_id)
+            .execute(&pool)
+            .await;
+
+    match result {
+        Ok(res) => {
+            if res.rows_affected() == 0 {
+                return erro(
+                    error_core::AppError::Validation("Tenant inexistente".to_string()),
+                    &env,
+                );
+            }
+            let status_str = if active { "ativado" } else { "desativado" };
+            publicar_auditoria(
+                &mut redis_conn,
+                &env,
+                "tenant_active_changed",
+                format!("Tenant '{}' foi {}", id_str, status_str),
+                serde_json::json!({ "id": id_str, "active": active }),
+            )
+            .await;
+            ok_reply(
+                &env,
+                "SetTenantActiveReply",
+                serde_json::json!({ "status": "success" }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_generate_access_code(
+    pool: PgPool,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id_str = payload_json
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let tenant_id = match Uuid::parse_str(id_str) {
+        Ok(u) => u,
+        Err(_) => {
+            return erro(
+                error_core::AppError::Validation("ID do tenant inválido".to_string()),
+                &env,
+            )
+        }
+    };
+
+    let code = Uuid::new_v4().simple().to_string()[..20]
+        .to_string()
+        .to_uppercase();
+
+    let result =
+        sqlx::query("UPDATE tenants_tenant SET access_code = $1, updated_at = NOW() WHERE id = $2")
+            .bind(&code)
+            .bind(tenant_id)
+            .execute(&pool)
+            .await;
+
+    match result {
+        Ok(res) => {
+            if res.rows_affected() == 0 {
+                return erro(
+                    error_core::AppError::Validation("Tenant inexistente".to_string()),
+                    &env,
+                );
+            }
+            publicar_auditoria(
+                &mut redis_conn,
+                &env,
+                "tenant_access_code_generated",
+                format!("Código de acesso do tenant '{}' gerado", id_str),
+                serde_json::json!({ "id": id_str }),
+            )
+            .await;
+            ok_reply(
+                &env,
+                "GenerateAccessCodeReply",
+                serde_json::json!({ "access_code": code }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+// --- FASE 2: Handlers de Billing ---
+
+async fn handler_list_plans(pool: PgPool, env: Envelope) -> Envelope {
+    use sqlx::Row;
+    let result = sqlx::query(
+        "SELECT id, name, description, price, max_instances, max_departments, active, created_at FROM tenants_plan ORDER BY id"
+    )
+    .fetch_all(&pool)
+    .await;
+
+    match result {
+        Ok(rows) => {
+            let list: Vec<serde_json::Value> = rows
+                .into_iter()
+                .map(|row| {
+                    let id: i32 = row.get("id");
+                    let name: String = row.get("name");
+                    let description: String = row.get("description");
+                    let price: Option<rust_decimal::Decimal> = row.get("price");
+                    let max_instances: i32 = row.get("max_instances");
+                    let max_departments: i32 = row.get("max_departments");
+                    let active: bool = row.get("active");
+                    let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+
+                    serde_json::json!({
+                        "id": id,
+                        "name": name,
+                        "description": description,
+                        "price": price.map(|p| p.to_string()).unwrap_or_default(),
+                        "max_instances": max_instances,
+                        "max_departments": max_departments,
+                        "active": active,
+                        "created_at": created_at.timestamp_millis(),
+                    })
+                })
+                .collect();
+            ok_reply(&env, "ListPlansReply", serde_json::json!({ "plans": list }))
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_create_plan(
+    pool: PgPool,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
+    use sqlx::Row;
+    use std::str::FromStr;
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let name = payload_json
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let description = payload_json
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let price_str = payload_json
+        .get("price")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let max_instances = payload_json
+        .get("max_instances")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(1) as i32;
+    let max_departments = payload_json
+        .get("max_departments")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(1) as i32;
+
+    if name.is_empty() {
+        return erro(
+            error_core::AppError::Validation("Nome do plano não pode ser vazio".to_string()),
+            &env,
+        );
+    }
+
+    let price_dec = if !price_str.is_empty() {
+        match rust_decimal::Decimal::from_str(price_str) {
+            Ok(d) => Some(d),
+            Err(e) => {
+                return erro(
+                    error_core::AppError::Validation(format!("Preço inválido: {}", e)),
+                    &env,
+                )
+            }
+        }
+    } else {
+        None
+    };
+
+    let result = sqlx::query(
+        r#"INSERT INTO tenants_plan (name, description, price, max_instances, max_departments)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING id, name, description, price, max_instances, max_departments, active, created_at"#,
+    )
+    .bind(name)
+    .bind(description)
+    .bind(price_dec)
+    .bind(max_instances)
+    .bind(max_departments)
+    .fetch_one(&pool)
+    .await;
+
+    match result {
+        Ok(row) => {
+            publicar_auditoria(
+                &mut redis_conn,
+                &env,
+                "billing_plan_created",
+                format!("Plano de faturamento '{}' criado", name),
+                serde_json::json!({ "id": row.get::<i32, _>("id"), "name": name }),
+            )
+            .await;
+
+            let plan = serde_json::json!({
+                "id": row.get::<i32, _>("id"),
+                "name": row.get::<String, _>("name"),
+                "description": row.get::<String, _>("description"),
+                "price": row.get::<Option<rust_decimal::Decimal>, _>("price").map(|p| p.to_string()).unwrap_or_default(),
+                "max_instances": row.get::<i32, _>("max_instances"),
+                "max_departments": row.get::<i32, _>("max_departments"),
+                "active": row.get::<bool, _>("active"),
+                "created_at": row.get::<chrono::DateTime<chrono::Utc>, _>("created_at").timestamp_millis(),
+            });
+
+            ok_reply(&env, "CreatePlanReply", serde_json::json!({ "plan": plan }))
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_update_plan(
+    pool: PgPool,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
+    use std::str::FromStr;
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload_json.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let name = payload_json
+        .get("name")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let description = payload_json
+        .get("description")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let price_str = payload_json
+        .get("price")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let max_instances = payload_json
+        .get("max_instances")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(1) as i32;
+    let max_departments = payload_json
+        .get("max_departments")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(1) as i32;
+    let active = payload_json
+        .get("active")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    if id <= 0 || name.is_empty() {
+        return erro(
+            error_core::AppError::Validation("Dados do plano inválidos".to_string()),
+            &env,
+        );
+    }
+
+    let price_dec = if !price_str.is_empty() {
+        match rust_decimal::Decimal::from_str(price_str) {
+            Ok(d) => Some(d),
+            Err(e) => {
+                return erro(
+                    error_core::AppError::Validation(format!("Preço inválido: {}", e)),
+                    &env,
+                )
+            }
+        }
+    } else {
+        None
+    };
+
+    let result = sqlx::query(
+        r#"UPDATE tenants_plan
+           SET name = $1, description = $2, price = $3, max_instances = $4, max_departments = $5, active = $6
+           WHERE id = $7"#,
+    )
+    .bind(name)
+    .bind(description)
+    .bind(price_dec)
+    .bind(max_instances)
+    .bind(max_departments)
+    .bind(active)
+    .bind(id)
+    .execute(&pool)
+    .await;
+
+    match result {
+        Ok(res) => {
+            if res.rows_affected() == 0 {
+                return erro(
+                    error_core::AppError::Validation("Plano inexistente".to_string()),
+                    &env,
+                );
+            }
+            publicar_auditoria(
+                &mut redis_conn,
+                &env,
+                "billing_plan_updated",
+                format!("Plano de faturamento '{}' atualizado", name),
+                serde_json::json!({ "id": id, "name": name }),
+            )
+            .await;
+            ok_reply(
+                &env,
+                "UpdatePlanReply",
+                serde_json::json!({ "status": "success" }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_list_subscriptions(pool: PgPool, env: Envelope) -> Envelope {
+    use sqlx::Row;
+    let result = sqlx::query(
+        r#"SELECT id, tenant_id, plan_id, status, current_period_start, current_period_end, payment_gateway, external_customer_id, external_subscription_id, updated_at
+           FROM tenants_subscription ORDER BY id"#
+    )
+    .fetch_all(&pool)
+    .await;
+
+    match result {
+        Ok(rows) => {
+            let list: Vec<serde_json::Value> = rows
+                .into_iter()
+                .map(|row| {
+                    let id: i32 = row.get("id");
+                    let tenant_id: Uuid = row.get("tenant_id");
+                    let plan_id: Option<i32> = row.get("plan_id");
+                    let status: String = row.get("status");
+                    let current_period_start: Option<chrono::DateTime<chrono::Utc>> = row.get("current_period_start");
+                    let current_period_end: Option<chrono::DateTime<chrono::Utc>> = row.get("current_period_end");
+                    let payment_gateway: String = row.get("payment_gateway");
+                    let external_customer_id: String = row.get("external_customer_id");
+                    let external_subscription_id: String = row.get("external_subscription_id");
+                    let updated_at: chrono::DateTime<chrono::Utc> = row.get("updated_at");
+
+                    serde_json::json!({
+                        "id": id,
+                        "tenant_id": tenant_id.to_string(),
+                        "plan_id": plan_id.unwrap_or(0),
+                        "status": status,
+                        "current_period_start": current_period_start.map(|d| d.timestamp_millis()).unwrap_or(0),
+                        "current_period_end": current_period_end.map(|d| d.timestamp_millis()).unwrap_or(0),
+                        "payment_gateway": payment_gateway,
+                        "external_customer_id": external_customer_id,
+                        "external_subscription_id": external_subscription_id,
+                        "updated_at": updated_at.timestamp_millis(),
+                    })
+                })
+                .collect();
+            ok_reply(
+                &env,
+                "ListSubscriptionsReply",
+                serde_json::json!({ "subscriptions": list }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_register_payment(
+    pool: PgPool,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
+    use sqlx::Row;
+    use std::str::FromStr;
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let tenant_id_str = payload_json
+        .get("tenant_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let tenant_id = match Uuid::parse_str(tenant_id_str) {
+        Ok(u) => u,
+        Err(_) => {
+            return erro(
+                error_core::AppError::Validation("ID do tenant inválido".to_string()),
+                &env,
+            )
+        }
+    };
+    let amount_str = payload_json
+        .get("amount")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let payment_method = payload_json
+        .get("payment_method")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let payment_date_str = payload_json
+        .get("payment_date")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let period_start_str = payload_json
+        .get("period_start")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let period_end_str = payload_json
+        .get("period_end")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let notes = payload_json
+        .get("notes")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    let amount = match rust_decimal::Decimal::from_str(amount_str) {
+        Ok(d) => d,
+        Err(e) => {
+            return erro(
+                error_core::AppError::Validation(format!("Valor do pagamento inválido: {}", e)),
+                &env,
+            )
+        }
+    };
+
+    let payment_date = match chrono::NaiveDate::parse_from_str(payment_date_str, "%Y-%m-%d") {
+        Ok(d) => d,
+        Err(e) => {
+            return erro(
+                error_core::AppError::Validation(format!("Data de pagamento inválida: {}", e)),
+                &env,
+            )
+        }
+    };
+
+    let period_start = match chrono::NaiveDate::parse_from_str(period_start_str, "%Y-%m-%d") {
+        Ok(d) => d,
+        Err(e) => {
+            return erro(
+                error_core::AppError::Validation(format!("Início do período inválido: {}", e)),
+                &env,
+            )
+        }
+    };
+
+    let period_end = match chrono::NaiveDate::parse_from_str(period_end_str, "%Y-%m-%d") {
+        Ok(d) => d,
+        Err(e) => {
+            return erro(
+                error_core::AppError::Validation(format!("Fim do período inválido: {}", e)),
+                &env,
+            )
+        }
+    };
+
+    let user_id = env.auth_user_id;
+
+    let result = sqlx::query(
+        r#"INSERT INTO tenants_paymentrecord (tenant_id, amount, payment_date, payment_method, period_start, period_end, notes, recorded_by_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+           RETURNING id, tenant_id, amount, payment_date, payment_method, period_start, period_end, notes, recorded_by_id, created_at"#,
+    )
+    .bind(tenant_id)
+    .bind(amount)
+    .bind(payment_date)
+    .bind(payment_method)
+    .bind(period_start)
+    .bind(period_end)
+    .bind(notes)
+    .bind(if user_id > 0 { Some(user_id) } else { None })
+    .fetch_one(&pool)
+    .await;
+
+    match result {
+        Ok(row) => {
+            publicar_auditoria(
+                &mut redis_conn,
+                &env,
+                "payment_registered",
+                format!(
+                    "Pagamento de R$ {} registrado para o tenant '{}'",
+                    amount, tenant_id_str
+                ),
+                serde_json::json!({ "tenant_id": tenant_id_str, "amount": amount.to_string() }),
+            )
+            .await;
+
+            let payment = serde_json::json!({
+                "id": row.get::<i32, _>("id"),
+                "tenant_id": row.get::<Uuid, _>("tenant_id").to_string(),
+                "amount": row.get::<rust_decimal::Decimal, _>("amount").to_string(),
+                "payment_date": row.get::<chrono::NaiveDate, _>("payment_date").to_string(),
+                "payment_method": row.get::<String, _>("payment_method"),
+                "period_start": row.get::<chrono::NaiveDate, _>("period_start").to_string(),
+                "period_end": row.get::<chrono::NaiveDate, _>("period_end").to_string(),
+                "notes": row.get::<String, _>("notes"),
+                "recorded_by_id": row.get::<Option<i32>, _>("recorded_by_id").unwrap_or(0),
+                "created_at": row.get::<chrono::DateTime<chrono::Utc>, _>("created_at").timestamp_millis(),
+            });
+
+            ok_reply(
+                &env,
+                "RegisterPaymentReply",
+                serde_json::json!({ "payment": payment }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_list_payments(pool: PgPool, env: Envelope) -> Envelope {
+    use sqlx::Row;
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let tenant_id_str = payload_json
+        .get("tenant_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    let result = if !tenant_id_str.is_empty() {
+        let tenant_id = match Uuid::parse_str(tenant_id_str) {
+            Ok(u) => u,
+            Err(_) => {
+                return erro(
+                    error_core::AppError::Validation("ID do tenant inválido".to_string()),
+                    &env,
+                )
+            }
+        };
+        sqlx::query(
+            r#"SELECT id, tenant_id, amount, payment_date, payment_method, period_start, period_end, notes, recorded_by_id, created_at
+               FROM tenants_paymentrecord WHERE tenant_id = $1 ORDER BY payment_date DESC"#,
+        )
+        .bind(tenant_id)
+        .fetch_all(&pool)
+        .await
+    } else {
+        sqlx::query(
+            r#"SELECT id, tenant_id, amount, payment_date, payment_method, period_start, period_end, notes, recorded_by_id, created_at
+               FROM tenants_paymentrecord ORDER BY payment_date DESC"#
+        )
+        .fetch_all(&pool)
+        .await
+    };
+
+    match result {
+        Ok(rows) => {
+            let list: Vec<serde_json::Value> = rows
+                .into_iter()
+                .map(|row| {
+                    let id: i32 = row.get("id");
+                    let tenant_id: Uuid = row.get("tenant_id");
+                    let amount: rust_decimal::Decimal = row.get("amount");
+                    let payment_date: chrono::NaiveDate = row.get("payment_date");
+                    let payment_method: String = row.get("payment_method");
+                    let period_start: chrono::NaiveDate = row.get("period_start");
+                    let period_end: chrono::NaiveDate = row.get("period_end");
+                    let notes: String = row.get("notes");
+                    let recorded_by_id: Option<i32> = row.get("recorded_by_id");
+                    let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+
+                    serde_json::json!({
+                        "id": id,
+                        "tenant_id": tenant_id.to_string(),
+                        "amount": amount.to_string(),
+                        "payment_date": payment_date.to_string(),
+                        "payment_method": payment_method,
+                        "period_start": period_start.to_string(),
+                        "period_end": period_end.to_string(),
+                        "notes": notes,
+                        "recorded_by_id": recorded_by_id.unwrap_or(0),
+                        "created_at": created_at.timestamp_millis(),
+                    })
+                })
+                .collect();
+            ok_reply(
+                &env,
+                "ListPaymentsReply",
+                serde_json::json!({ "payments": list }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_get_evolution_instance_by_tenant(pool: PgPool, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let tenant_id_str = match payload.get("tenant_id").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => {
+            return erro(
+                error_core::AppError::Validation("tenant_id ausente".to_string()),
+                &env,
+            )
+        }
+    };
+    let tenant_uuid = match Uuid::parse_str(tenant_id_str) {
+        Ok(u) => u,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let result = sqlx::query(
+        "SELECT name, api_key FROM evolution_sync_instance WHERE tenant_id = $1 AND active = true LIMIT 1"
+    )
+    .bind(tenant_uuid)
+    .fetch_optional(&pool)
+    .await;
+
+    match result {
+        Ok(Some(row)) => {
+            use sqlx::Row;
+            let name: String = row.get("name");
+            let api_key: String = row.get("api_key");
+            ok_reply(
+                &env,
+                "GetEvolutionInstanceByTenantReply",
+                serde_json::json!({
+                    "name": name,
+                    "api_key": api_key
+                }),
+            )
+        }
+        Ok(None) => ok_reply(
+            &env,
+            "GetEvolutionInstanceByTenantReply",
+            serde_json::json!({
+                "name": "",
+                "api_key": ""
+            }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+async fn handler_list_feature_flags(pool: PgPool, env: Envelope) -> Envelope {
+    let flags_res =
+        sqlx::query("SELECT key, description, enabled_globally FROM feature_flags ORDER BY key")
+            .fetch_all(&pool)
+            .await;
+
+    let overrides_res =
+        sqlx::query("SELECT feature_key, tenant_id, enabled FROM feature_flag_overrides")
+            .fetch_all(&pool)
+            .await;
+
+    match (flags_res, overrides_res) {
+        (Ok(flags_rows), Ok(overrides_rows)) => {
+            use sqlx::Row;
+            use std::collections::HashMap;
+            let mut overrides_map: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
+            for row in overrides_rows {
+                let f_key: String = row.get("feature_key");
+                let tenant_id: Uuid = row.get("tenant_id");
+                let enabled: bool = row.get("enabled");
+                overrides_map
+                    .entry(f_key)
+                    .or_default()
+                    .push(serde_json::json!({
+                        "tenant_id": tenant_id.to_string(),
+                        "enabled": enabled,
+                    }));
+            }
+
+            let flags_list: Vec<serde_json::Value> = flags_rows
+                .into_iter()
+                .map(|row| {
+                    let key: String = row.get("key");
+                    let description: String = row.get("description");
+                    let enabled_globally: bool = row.get("enabled_globally");
+                    let ovs = overrides_map.get(&key).cloned().unwrap_or_default();
+                    serde_json::json!({
+                        "key": key,
+                        "description": description,
+                        "enabled_globally": enabled_globally,
+                        "overrides": ovs,
+                    })
+                })
+                .collect();
+
+            ok_reply(
+                &env,
+                "ListFeatureFlagsReply",
+                serde_json::json!({ "flags": flags_list }),
+            )
+        }
+        (Err(e), _) | (_, Err(e)) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+async fn handler_set_feature_flag(
+    pool: PgPool,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let key = match payload.get("key").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => {
+            return erro(
+                error_core::AppError::Validation("key ausente".to_string()),
+                &env,
+            )
+        }
+    };
+    let enabled_globally = match payload.get("enabled_globally").and_then(|v| v.as_bool()) {
+        Some(b) => b,
+        None => {
+            return erro(
+                error_core::AppError::Validation("enabled_globally ausente".to_string()),
+                &env,
+            )
+        }
+    };
+
+    let res = sqlx::query("UPDATE feature_flags SET enabled_globally = $1 WHERE key = $2")
+        .bind(enabled_globally)
+        .bind(key)
+        .execute(&pool)
+        .await;
+
+    match res {
+        Ok(_) => {
+            let channel = format!("feature_flag:invalidate:{}", key);
+            let _: Result<(), redis::RedisError> = redis::AsyncCommands::publish(
+                &mut redis_conn,
+                channel,
+                enabled_globally.to_string(),
+            )
+            .await;
+
+            ok_reply(
+                &env,
+                "SetFeatureFlagReply",
+                serde_json::json!({ "success": true }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+async fn handler_set_feature_flag_override(
+    pool: PgPool,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let key = match payload.get("key").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => {
+            return erro(
+                error_core::AppError::Validation("key ausente".to_string()),
+                &env,
+            )
+        }
+    };
+    let tenant_id_str = match payload.get("tenant_id").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => {
+            return erro(
+                error_core::AppError::Validation("tenant_id ausente".to_string()),
+                &env,
+            )
+        }
+    };
+    let tenant_uuid = match Uuid::parse_str(tenant_id_str) {
+        Ok(u) => u,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let enabled = payload
+        .get("enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let remove_override = payload
+        .get("remove_override")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let res = if remove_override {
+        sqlx::query("DELETE FROM feature_flag_overrides WHERE feature_key = $1 AND tenant_id = $2")
+            .bind(key)
+            .bind(tenant_uuid)
+            .execute(&pool)
+            .await
+    } else {
+        sqlx::query(
+            "INSERT INTO feature_flag_overrides (feature_key, tenant_id, enabled) \
+             VALUES ($1, $2, $3) \
+             ON CONFLICT (feature_key, tenant_id) DO UPDATE SET enabled = EXCLUDED.enabled",
+        )
+        .bind(key)
+        .bind(tenant_uuid)
+        .bind(enabled)
+        .execute(&pool)
+        .await
+    };
+
+    match res {
+        Ok(_) => {
+            let channel = format!("feature_flag_override:invalidate:{}:{}", key, tenant_id_str);
+            let val_str = if remove_override {
+                "deleted".to_string()
+            } else {
+                enabled.to_string()
+            };
+            let _: Result<(), redis::RedisError> =
+                redis::AsyncCommands::publish(&mut redis_conn, channel, val_str).await;
+
+            ok_reply(
+                &env,
+                "SetFeatureFlagOverrideReply",
+                serde_json::json!({ "success": true }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+async fn handler_query_audit_log(pool: PgPool, env: Envelope) -> Envelope {
+    use sqlx::Row;
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let tenant_id_str = payload
+        .get("tenant_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let event_type = payload
+        .get("event_type")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let limit = payload.get("limit").and_then(|v| v.as_i64()).unwrap_or(50) as i32;
+    let offset = payload.get("offset").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+    let mut query_str = "SELECT id, tenant_id, timestamp, level, service, trace_id, event, message, context, user_id, ip_address FROM audit_log WHERE 1=1".to_string();
+    let mut count_str = "SELECT COUNT(*) FROM audit_log WHERE 1=1".to_string();
+
+    let mut bind_tenant = false;
+    let mut tenant_uuid = Uuid::nil();
+    if !tenant_id_str.is_empty() {
+        if let Ok(u) = Uuid::parse_str(tenant_id_str) {
+            tenant_uuid = u;
+            query_str.push_str(" AND tenant_id = $1");
+            count_str.push_str(" AND tenant_id = $1");
+            bind_tenant = true;
+        }
+    }
+
+    let mut bind_event = false;
+    let mut event_index = 1;
+    if bind_tenant {
+        event_index = 2;
+    }
+    if !event_type.is_empty() {
+        query_str.push_str(&format!(" AND event = ${}", event_index));
+        count_str.push_str(&format!(" AND event = ${}", event_index));
+        bind_event = true;
+    }
+
+    let limit_index = if bind_tenant && bind_event {
+        3
+    } else if bind_tenant || bind_event {
+        2
+    } else {
+        1
+    };
+    let offset_index = limit_index + 1;
+    query_str.push_str(&format!(
+        " ORDER BY timestamp DESC LIMIT ${} OFFSET ${}",
+        limit_index, offset_index
+    ));
+
+    let mut q = sqlx::query(sqlx::AssertSqlSafe(query_str));
+    let mut c = sqlx::query(sqlx::AssertSqlSafe(count_str));
+
+    if bind_tenant {
+        q = q.bind(tenant_uuid);
+        c = c.bind(tenant_uuid);
+    }
+    if bind_event {
+        q = q.bind(event_type);
+        c = c.bind(event_type);
+    }
+
+    q = q.bind(limit).bind(offset);
+
+    let rows_res = q.fetch_all(&pool).await;
+    let count_res = c.fetch_one(&pool).await;
+
+    match (rows_res, count_res) {
+        (Ok(rows), Ok(count_row)) => {
+            let total_count: i64 = count_row.get(0);
+            let list: Vec<serde_json::Value> = rows
+                .into_iter()
+                .map(|row| {
+                    let id: Uuid = row.get("id");
+                    let tenant_id: Option<Uuid> = row.get("tenant_id");
+                    let timestamp: chrono::DateTime<chrono::Utc> = row.get("timestamp");
+                    let level: String = row.get("level");
+                    let service: String = row.get("service");
+                    let trace_id: Option<String> = row.get("trace_id");
+                    let event: String = row.get("event");
+                    let message: String = row.get("message");
+                    let context: serde_json::Value = row.get("context");
+                    let user_id: Option<i32> = row.get("user_id");
+                    let ip_address: Option<String> = row.get("ip_address");
+
+                    serde_json::json!({
+                        "id": id.to_string(),
+                        "tenant_id": tenant_id.map(|u| u.to_string()).unwrap_or_default(),
+                        "created_at": timestamp.timestamp_millis(),
+                        "level": level,
+                        "service": service,
+                        "trace_id": trace_id.unwrap_or_default(),
+                        "event_type": event,
+                        "description": message,
+                        "context": context,
+                        "user_id": user_id.unwrap_or(0),
+                        "ip_address": ip_address.unwrap_or_default(),
+                    })
+                })
+                .collect();
+
+            ok_reply(
+                &env,
+                "QueryAuditLogReply",
+                serde_json::json!({
+                    "entries": list,
+                    "total_count": total_count as i32
+                }),
+            )
+        }
+        (Err(e), _) | (_, Err(e)) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+async fn handler_get_service_health(
+    pool: PgPool,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
+    let mut services = Vec::new();
+
+    // 1. Testar Postgres
+    let start_pg = std::time::Instant::now();
+    let pg_res = sqlx::query("SELECT 1").execute(&pool).await;
+    let duration_pg = start_pg.elapsed().as_millis() as i64;
+    let pg_health = if pg_res.is_ok() {
+        serde_json::json!({
+            "service_name": "PostgreSQL",
+            "status": "healthy",
+            "message": "Conectado com sucesso",
+            "response_time_ms": duration_pg,
+        })
+    } else {
+        serde_json::json!({
+            "service_name": "PostgreSQL",
+            "status": "unhealthy",
+            "message": pg_res.err().unwrap().to_string(),
+            "response_time_ms": duration_pg,
+        })
+    };
+    services.push(pg_health);
+
+    // 2. Testar Redis
+    let start_redis = std::time::Instant::now();
+    let redis_res: Result<String, redis::RedisError> =
+        redis::cmd("PING").query_async(&mut redis_conn).await;
+    let duration_redis = start_redis.elapsed().as_millis() as i64;
+    let redis_health = if redis_res.is_ok() {
+        serde_json::json!({
+            "service_name": "Redis",
+            "status": "healthy",
+            "message": "Conectado com sucesso",
+            "response_time_ms": duration_redis,
+        })
+    } else {
+        serde_json::json!({
+            "service_name": "Redis",
+            "status": "unhealthy",
+            "message": redis_res.err().unwrap().to_string(),
+            "response_time_ms": duration_redis,
+        })
+    };
+    services.push(redis_health);
+
+    ok_reply(
+        &env,
+        "GetServiceHealthReply",
+        serde_json::json!({ "services": services }),
+    )
+}
+
+async fn handler_get_dashboard_summary(
+    pool: PgPool,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
+    use sqlx::Row;
+
+    let total_tenants_res = sqlx::query("SELECT COUNT(*) FROM tenants_tenant")
+        .fetch_one(&pool)
+        .await;
+
+    let active_tenants_res = sqlx::query("SELECT COUNT(*) FROM tenants_tenant WHERE active = true")
+        .fetch_one(&pool)
+        .await;
+
+    let total_subs_res =
+        sqlx::query("SELECT COUNT(*) FROM tenants_subscription WHERE status = 'active'")
+            .fetch_one(&pool)
+            .await;
+
+    let mrr_res = sqlx::query(
+        "SELECT COALESCE(SUM(p.price), 0) FROM tenants_subscription s JOIN tenants_plan p ON s.plan_id = p.id WHERE s.status = 'active'"
+    )
+    .fetch_one(&pool)
+    .await;
+
+    match (
+        total_tenants_res,
+        active_tenants_res,
+        total_subs_res,
+        mrr_res,
+    ) {
+        (Ok(tt_row), Ok(at_row), Ok(ts_row), Ok(mrr_row)) => {
+            let total_tenants: i64 = tt_row.get(0);
+            let active_tenants: i64 = at_row.get(0);
+            let total_subscriptions: i64 = ts_row.get(0);
+            let mrr: rust_decimal::Decimal = mrr_row.get(0);
+
+            let mut services = Vec::new();
+
+            let start_pg = std::time::Instant::now();
+            let pg_res = sqlx::query("SELECT 1").execute(&pool).await;
+            let duration_pg = start_pg.elapsed().as_millis() as i64;
+            services.push(serde_json::json!({
+                "service_name": "PostgreSQL",
+                "status": if pg_res.is_ok() { "healthy" } else { "unhealthy" },
+                "message": pg_res.err().map(|e| e.to_string()).unwrap_or_else(|| "Conectado".to_string()),
+                "response_time_ms": duration_pg,
+            }));
+
+            let start_redis = std::time::Instant::now();
+            let redis_res: Result<String, redis::RedisError> =
+                redis::cmd("PING").query_async(&mut redis_conn).await;
+            let duration_redis = start_redis.elapsed().as_millis() as i64;
+            services.push(serde_json::json!({
+                "service_name": "Redis",
+                "status": if redis_res.is_ok() { "healthy" } else { "unhealthy" },
+                "message": redis_res.err().map(|e| e.to_string()).unwrap_or_else(|| "Conectado".to_string()),
+                "response_time_ms": duration_redis,
+            }));
+
+            ok_reply(
+                &env,
+                "GetDashboardSummaryReply",
+                serde_json::json!({
+                    "total_tenants": total_tenants as i32,
+                    "active_tenants": active_tenants as i32,
+                    "total_subscriptions": total_subscriptions as i32,
+                    "monthly_recurring_revenue": mrr.to_string(),
+                    "health": services,
+                }),
+            )
+        }
+        (tt_err, at_err, ts_err, mrr_err) => {
+            let err_msg = format!(
+                "Erro ao carregar resumo do dashboard: tt={:?}, at={:?}, ts={:?}, mrr={:?}",
+                tt_err.err(),
+                at_err.err(),
+                ts_err.err(),
+                mrr_err.err()
+            );
+            erro(error_core::AppError::Database(err_msg), &env)
+        }
+    }
+}
+
+async fn handler_export_tenants_csv(pool: PgPool, env: Envelope) -> Envelope {
+    use sqlx::Row;
+    let result = sqlx::query(
+        "SELECT id, name, slug, email, phone, active, created_at FROM tenants_tenant ORDER BY name",
+    )
+    .fetch_all(&pool)
+    .await;
+
+    match result {
+        Ok(rows) => {
+            let mut csv_string = String::new();
+            csv_string.push_str("id,name,slug,email,phone,active,created_at\n");
+            for row in rows {
+                let id: Uuid = row.get("id");
+                let name: String = row.get("name");
+                let slug: String = row.get("slug");
+                let email: String = row.get("email");
+                let phone: Option<String> = row.get("phone");
+                let active: bool = row.get("active");
+                let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+
+                let escaped_name = name.replace("\"", "\"\"");
+
+                csv_string.push_str(&format!(
+                    "{},\"{}\",{},{},{},{},{}\n",
+                    id,
+                    escaped_name,
+                    slug,
+                    email,
+                    phone.unwrap_or_default(),
+                    active,
+                    created_at.to_rfc3339()
+                ));
+            }
+
+            ok_reply(
+                &env,
+                "ExportTenantsCsvReply",
+                serde_json::json!({
+                    "csv_data": csv_string
+                }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
 }
 
 #[cfg(test)]

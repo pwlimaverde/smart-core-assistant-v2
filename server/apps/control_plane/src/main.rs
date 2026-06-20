@@ -1,6 +1,7 @@
 //! Serviço control_plane: Painel administrativo e tarefas de back office.
 
 mod cli;
+mod evolution;
 
 use contracts::{Envelope, MessageKind};
 use std::time::Duration;
@@ -30,9 +31,13 @@ async fn main() -> anyhow::Result<()> {
     let _state = AppState {};
 
     // 2. Inicia o Servidor RPC síncrono nos 3 de protocolos
-    let server = Server::from_env("CONTROL_PLANE").route("RegisterTenant", move |env| {
-        Box::pin(async move { handler_register_tenant(env).await })
-    });
+    let server = Server::from_env("CONTROL_PLANE")
+        .route("RegisterTenant", move |env| {
+            Box::pin(async move { handler_register_tenant(env).await })
+        })
+        .route("TestEvolutionConnection", move |env| {
+            Box::pin(async move { handler_test_evolution_connection(env).await })
+        });
 
     tracing::info!("Servidor RPC do control_plane configurado e pronto.");
 
@@ -83,6 +88,150 @@ async fn handler_register_tenant(env: Envelope) -> Envelope {
                 kind: MessageKind::Error as i32,
                 method: "RegisterTenantReply".to_string(),
                 error: Some(err_env),
+                ..env
+            }
+        }
+    }
+}
+
+async fn handler_test_evolution_connection(env: Envelope) -> Envelope {
+    let pg_client = match transport::conectar_cliente("data_postgres").await {
+        Ok(c) => c,
+        Err(e) => {
+            let app_err =
+                error_core::AppError::Internal(format!("falha ao conectar ao data_postgres: {e}"));
+            let err_env = app_err.to_error_envelope(&env.traceparent, "control_plane");
+            return Envelope {
+                kind: MessageKind::Error as i32,
+                method: "TestEvolutionConnectionReply".to_string(),
+                error: Some(err_env),
+                ..env
+            };
+        }
+    };
+
+    // 1. Obtém a instância do Evolution para este tenant do data_postgres
+    let req_inst = Envelope {
+        kind: MessageKind::Request as i32,
+        method: "GetEvolutionInstanceByTenant".to_string(),
+        ..env.clone()
+    };
+
+    let (inst_name, inst_key) = match pg_client.call(req_inst, Duration::from_secs(5)).await {
+        Ok(resp) if resp.kind != MessageKind::Error as i32 => {
+            let payload: serde_json::Value =
+                serde_json::from_slice(&resp.payload).unwrap_or_default();
+            let name = payload
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let key = payload
+                .get("api_key")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            (name, key)
+        }
+        _ => ("".to_string(), "".to_string()),
+    };
+
+    if inst_name.is_empty() {
+        let app_err = error_core::AppError::Validation(
+            "Nenhuma instância ativa do WhatsApp configurada para este tenant.".to_string(),
+        );
+        let err_env = app_err.to_error_envelope(&env.traceparent, "control_plane");
+        return Envelope {
+            kind: MessageKind::Error as i32,
+            method: "TestEvolutionConnectionReply".to_string(),
+            error: Some(err_env),
+            ..env
+        };
+    }
+
+    // 2. Obtém os settings globais do data_postgres para URL e Token
+    let req_settings = Envelope {
+        kind: MessageKind::Request as i32,
+        method: "ListCoreSettings".to_string(),
+        tenant_id: uuid::Uuid::nil().to_string(), // listagem global
+        ..env.clone()
+    };
+
+    let mut api_url = std::env::var("EVOLUTION_API_URL").unwrap_or_default();
+    let mut api_token = std::env::var("EVOLUTION_API_TOKEN").unwrap_or_default();
+
+    if let Ok(resp) = pg_client.call(req_settings, Duration::from_secs(5)).await {
+        if resp.kind != MessageKind::Error as i32 {
+            let payload: serde_json::Value =
+                serde_json::from_slice(&resp.payload).unwrap_or_default();
+            if let Some(settings) = payload.get("settings").and_then(|v| v.as_array()) {
+                for s in settings {
+                    if let Some(k) = s.get("key").and_then(|v| v.as_str()) {
+                        if k == "EVOLUTION_API_URL" {
+                            if let Some(v) = s.get("value").and_then(|v| v.as_str()) {
+                                if !v.is_empty() && v != "••••••••" {
+                                    api_url = v.to_string();
+                                }
+                            }
+                        } else if k == "EVOLUTION_API_TOKEN" || k == "EVOLUTION_GLOBAL_API_KEY" {
+                            if let Some(v) = s.get("value").and_then(|v| v.as_str()) {
+                                if !v.is_empty() && v != "••••••••" {
+                                    api_token = v.to_string();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if api_url.is_empty() {
+        api_url = "http://localhost:8080".to_string();
+    }
+
+    // 3. Executa a verificação HTTP da Evolution API
+    let global_token_sec = if !api_token.is_empty() {
+        Some(secrecy::SecretString::from(api_token))
+    } else {
+        None
+    };
+
+    let inst_key_sec = if !inst_key.is_empty() {
+        Some(secrecy::SecretString::from(inst_key))
+    } else {
+        None
+    };
+
+    match evolution::test_evolution_connection(
+        &api_url,
+        global_token_sec.as_ref(),
+        &inst_name,
+        inst_key_sec.as_ref(),
+    )
+    .await
+    {
+        Ok(state) => {
+            let reply = serde_json::json!({
+                "status": state,
+                "error_message": ""
+            });
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "TestEvolutionConnectionReply".to_string(),
+                payload: serde_json::to_vec(&reply).unwrap(),
+                ..env
+            }
+        }
+        Err(e) => {
+            let reply = serde_json::json!({
+                "status": "error",
+                "error_message": e.to_string()
+            });
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "TestEvolutionConnectionReply".to_string(),
+                payload: serde_json::to_vec(&reply).unwrap(),
                 ..env
             }
         }
