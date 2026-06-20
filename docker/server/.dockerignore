@@ -1,0 +1,6 @@
+**/target
+**/*.bak
+server/target
+.git
+docker/
+clients/

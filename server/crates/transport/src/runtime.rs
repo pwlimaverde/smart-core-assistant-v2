@@ -4,7 +4,6 @@ use crate::error::TransportError;
 use crate::framing::{read_frame, write_frame, Frame};
 use contracts::Envelope;
 use std::collections::HashMap;
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -18,7 +17,7 @@ use tokio::time::{sleep, timeout, Duration};
 #[derive(Debug, Clone)]
 pub enum Endpoint {
     Uds(PathBuf),
-    Tcp(SocketAddr),
+    Tcp(String), // host:port resolvível (IP ou hostname)
 }
 
 impl Endpoint {
@@ -26,8 +25,15 @@ impl Endpoint {
         if let Some(path) = s.strip_prefix("unix://") {
             Ok(Endpoint::Uds(PathBuf::from(path)))
         } else if let Some(addr_str) = s.strip_prefix("tcp://") {
-            let addr: SocketAddr = addr_str.parse()?;
-            Ok(Endpoint::Tcp(addr))
+            // Aceita IP:porta E hostname:porta (DNS do Docker). Validamos só que há
+            // host e porta; a resolução acontece no bind/dial via ToSocketAddrs do Tokio.
+            if addr_str
+                .rsplit_once(':')
+                .is_none_or(|(h, p)| h.is_empty() || p.parse::<u16>().is_err())
+            {
+                anyhow::bail!("Endpoint TCP invalido (esperado host:porta): {}", addr_str);
+            }
+            Ok(Endpoint::Tcp(addr_str.to_string()))
         } else {
             anyhow::bail!(
                 "Formato de endpoint invalido: {}. Deve comecar com unix:// ou tcp://",
@@ -218,7 +224,7 @@ impl MuxClient {
                 }
             }
             Endpoint::Tcp(addr) => {
-                let stream = tokio::net::TcpStream::connect(addr).await?;
+                let stream = tokio::net::TcpStream::connect(addr.as_str()).await?;
                 Ok(Conexao::nova(stream))
             }
         }
@@ -428,8 +434,9 @@ impl Server {
                 }
             }
             Endpoint::Tcp(addr) => {
-                let listener = TcpListener::bind(addr).await?;
-                tracing::info!("Servidor TCP rodando em {}", addr);
+                let listener = TcpListener::bind(addr.as_str()).await?;
+                let local = listener.local_addr().ok();
+                tracing::info!(endpoint = %addr, local = ?local, "Servidor TCP rodando");
 
                 loop {
                     let (stream, _) = listener.accept().await?;
@@ -671,10 +678,27 @@ mod tests {
         assert!(parsed.is_ok());
         match parsed.unwrap() {
             Endpoint::Tcp(addr) => {
-                assert_eq!(addr.ip().to_string(), "127.0.0.1");
-                assert_eq!(addr.port(), 8080);
+                assert_eq!(addr, "127.0.0.1:8080");
             }
             _ => panic!("Esperava Endpoint::Tcp"),
+        }
+    }
+
+    #[test]
+    fn parses_tcp_endpoint_com_hostname() {
+        // Arrange
+        let endpoint_str = "tcp://data_postgres:9101";
+
+        // Act
+        let parsed = Endpoint::parse(endpoint_str);
+
+        // Assert
+        assert!(parsed.is_ok());
+        match parsed.unwrap() {
+            Endpoint::Tcp(addr) => {
+                assert_eq!(addr, "data_postgres:9101");
+            }
+            _ => panic!("Esperava Endpoint::Tcp com hostname"),
         }
     }
 

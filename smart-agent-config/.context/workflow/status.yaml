@@ -1,0 +1,43 @@
+project:
+  name: "migracao-full-docker"
+  scale: LARGE
+  started: "2026-06-20T14:51:57.442Z"
+  current_phase: C
+
+phases:
+  P:
+    status: completed
+    started_at: "2026-06-20T14:51:57.442Z"
+    completed_at: "2026-06-20T14:52:00.000Z"
+  R:
+    status: completed
+    started_at: "2026-06-20T14:52:00.000Z"
+    completed_at: "2026-06-20T14:52:30.000Z"
+  E:
+    status: filled
+    started_at: "2026-06-20T14:52:30.000Z"
+    completed_at: "2026-06-20T15:21:20.145Z"
+  V:
+    status: filled
+    started_at: "2026-06-20T15:21:20.148Z"
+    completed_at: "2026-06-20T15:21:53.575Z"
+  C:
+    status: completed
+    started_at: "2026-06-20T15:21:53.577Z"
+    completed_at: "2026-06-20T15:22:03.031Z"
+    outputs:
+      - path: "C:\Users\pwlim\.gemini\antigravity-ide\brain\e738eacc-3b3d-4aca-8546-f17358a519f3\task.md"
+        status: filled
+
+execution:
+  history:
+    - timestamp: "2026-06-20T15:22:03.031Z"
+      phase: C
+      action: completed
+  last_activity: "2026-06-20T15:22:03.031Z"
+  resume_context: "Fase C (Confirmação) concluída"
+
+approval:
+  plan_created: true
+  plan_approved: true
+

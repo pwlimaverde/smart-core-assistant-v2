@@ -1,0 +1,147 @@
+x-server-image: &server-image ${SERVER_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-server:dev}
+
+networks:
+  internal:
+    driver: bridge
+  observability:
+    name: smartcore_observability
+    external: true
+
+services:
+  # ---------- DADOS (isolados por ambiente) ----------
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../init-scripts:/docker-entrypoint-initdb.d:ro
+    networks: [internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: >
+      redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+      --maxmemory 150mb --maxmemory-policy allkeys-lru --bind 0.0.0.0 --protected-mode yes
+    volumes: [redis_data:/data]
+    networks: [internal]
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis-bus:
+    image: redis:7-alpine
+    command: >
+      redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+      --maxmemory 150mb --maxmemory-policy noeviction --bind 0.0.0.0 --protected-mode yes
+    volumes: [redis_bus_data:/data]
+    networks: [internal]
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    profiles: ["dev"]            # só sobe quando o profile "dev" está ativo
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes: [minio_data:/data]
+    networks: [internal]
+    restart: unless-stopped
+
+  # ---------- SERVICOS RUST (imagem unica, command por servico) ----------
+  data_postgres:
+    image: *server-image
+    command: ["data_postgres"]
+    env_file: [./env/${ENV_FILE}]
+    networks: [internal, observability]
+    depends_on:
+      postgres: { condition: service_healthy }
+    restart: unless-stopped
+
+  data_redis:
+    image: *server-image
+    command: ["data_redis"]
+    env_file: [./env/${ENV_FILE}]
+    networks: [internal, observability]
+    depends_on:
+      redis: { condition: service_healthy }
+      redis-bus: { condition: service_started }
+    restart: unless-stopped
+
+  data_storage:
+    image: *server-image
+    command: ["data_storage"]
+    env_file: [./env/${ENV_FILE}]
+    networks: [internal, observability]
+    restart: unless-stopped
+
+  control_plane:
+    image: *server-image
+    command: ["control_plane"]
+    env_file: [./env/${ENV_FILE}]
+    networks: [internal, observability]
+    depends_on:
+      data_postgres: { condition: service_started }
+    restart: unless-stopped
+
+  messaging_gateway:
+    image: *server-image
+    command: ["messaging_gateway"]
+    env_file: [./env/${ENV_FILE}]
+    networks: [internal, observability]
+    restart: unless-stopped
+
+  worker:
+    image: *server-image
+    command: ["worker"]
+    env_file: [./env/${ENV_FILE}]
+    networks: [internal, observability]
+    depends_on:
+      data_postgres: { condition: service_started }
+      data_redis: { condition: service_started }
+    restart: unless-stopped
+
+  runtime_api:
+    image: *server-image
+    command: ["runtime_api"]
+    env_file: [./env/${ENV_FILE}]
+    networks: [internal, observability]
+    depends_on:
+      control_plane: { condition: service_started }
+    restart: unless-stopped
+
+  # ---------- BORDA / GATEWAY ----------
+  edge:
+    image: ${EDGE_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-edge:dev}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"        # HTTP/3 QUIC
+    volumes:
+      - caddy_data:/data     # certificados do Let's Encrypt
+      - caddy_config:/config
+    networks: [internal]
+    depends_on:
+      runtime_api: { condition: service_started }
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  redis_bus_data:
+  minio_data:
+  caddy_data:
+  caddy_config:

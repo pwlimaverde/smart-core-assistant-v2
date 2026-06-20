@@ -8,63 +8,42 @@ concurrency:
   group: deploy-prod
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
-  # ── Build do servidor Rust (GitHub-hosted) ────────────────────────────────────
-  # Build fora do servidor (não gasta recurso da máquina de produção). glibc no
-  # Ubuntu 22.04 (forward-compatible p/ 22.04/24.04+) em vez de musl, porque
-  # aws-lc-sys/ring/libsqlite3-sys trazem C/assembly que complicam o alvo musl.
-  # Sem target-cpu=native: binário precisa ser portável (CPU do runner != servidor).
-  # O artefato leva os binários + as migrations (uso manual via sqlx-cli em emergência).
   build-server:
-    name: Build Rust (PROD)
-    runs-on: ubuntu-22.04
+    name: Build Rust Server (PROD)
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
+      - uses: docker/login-action@v3
         with:
-          workspaces: server
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Instala protoc e flatc
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq protobuf-compiler
-          wget -q -O /tmp/flatc.zip https://github.com/google/flatbuffers/releases/download/v25.12.19-2026-02-06-03fffb2/Linux.flatc.binary.g%2B%2B-13.zip
-          unzip -q -o /tmp/flatc.zip -d /tmp/flatc_extracted
-          sudo mv /tmp/flatc_extracted/flatc /usr/local/bin/flatc
-          sudo chmod +x /usr/local/bin/flatc
-
-      - name: Cargo build release (workspace)
-        working-directory: server
-        env:
-          SQLX_OFFLINE: "true"
-        run: cargo build --release --workspace
-
-      - name: Empacota binários + migrations
-        run: |
-          SRC="server/target/release"
-          mkdir -p stage/bin
-          for svc in data_postgres data_redis data_storage \
-                     runtime_api control_plane messaging_gateway worker; do
-            [ -f "$SRC/$svc" ] && install -m 755 "$SRC/$svc" "stage/bin/$svc"
-          done
-          # Migrations já vão COMPILADAS no binário (sqlx::migrate! em build time);
-          # esta cópia é só para rodar sqlx-cli manualmente em emergência.
-          cp -r server/crates/infrastructure_postgres/migrations stage/migrations 2>/dev/null || true
-          tar -C stage -czf server-prod.tar.gz .
-
-      - uses: actions/upload-artifact@v6
+      - id: meta
+        uses: docker/metadata-action@v5
         with:
-          name: server-prod
-          path: server-prod.tar.gz
-          retention-days: 7
+          images: ghcr.io/${{ github.repository }}/smartcore-server
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
 
-  # ── Build do web (GitHub-hosted) ──────────────────────────────────────────────
-  # Bundle estático (HTML/JS/WASM); Flutter só no build, nunca em runtime.
-  build-web:
-    name: Build Web (PROD)
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/server/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=server
+          cache-to: type=gha,mode=max,scope=server
+
+  build-edge:
+    name: Build Edge Gateway (PROD)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -86,158 +65,61 @@ jobs:
             -t lib/main_prod.dart \
             --dart-define=SMARTCORE_API_ENDPOINT=https://smartcoreassistant.com.br
 
-      - name: Empacota bundle estático
-        run: tar -C clients/apps/smart-core-admin/build/web -czf web-prod.tar.gz .
+      - name: Prepare build context
+        run: cp -r clients/apps/smart-core-admin/build/web ./web
 
-      - uses: actions/upload-artifact@v6
+      - uses: docker/login-action@v3
         with:
-          name: web-prod
-          path: web-prod.tar.gz
-          retention-days: 7
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
-  # ── Deploy (self-hosted) ──────────────────────────────────────────────────────
-  # Release versionada e COMPLETA (toda tag publica server + web de forma
-  # determinística). Sem compilação aqui: baixa os artefatos e troca symlinks.
-  deploy:
-    name: Deploy PROD
-    needs: [build-server, build-web]
+      - id: meta-edge
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/smartcore-edge
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/edge/Dockerfile
+          push: true
+          tags: ${{ id.meta-edge.outputs.tags }}
+          cache-from: type=gha,scope=edge
+          cache-to: type=gha,mode=max,scope=edge
+
+  deploy-prod:
+    name: Deploy PROD (compose)
+    needs: [build-server, build-edge]
     runs-on: [self-hosted, hostinger]
-    environment: prod
-
+    environment: production
     steps:
-      - name: Extrai versão da tag
-        id: version
-        run: echo "TAG=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v5
 
       - name: Backup banco de dados PROD (pg_dump)
-        env:
-          TAG: ${{ steps.version.outputs.TAG }}
         run: |
+          TAG="${GITHUB_REF_NAME}"
           BACKUP_FILE="/opt/smartcore/prod/db-backup-${TAG}-$(date +%Y%m%d%H%M).dump"
-          docker exec smartcore-v2-postgres pg_dump \
-            -U smartcore_app \
-            -F c \
-            smartcore_v2 > "$BACKUP_FILE"
-          echo "Backup gerado: $BACKUP_FILE"
+          mkdir -p /opt/smartcore/prod
+          CONTAINER="smartcore-v2-postgres"
+          if docker ps --format '{{.Names}}' | grep -q "smartcore-prod-postgres"; then
+            CONTAINER="smartcore-prod-postgres-1"
+          fi
+          echo "Gerando backup do banco de dados usando o container $CONTAINER..."
+          docker exec "$CONTAINER" pg_dump -U smartcore_app -F c smartcore_v2 > "$BACKUP_FILE" || echo "Falha ao gerar backup (pode ser o primeiro deploy)"
+          echo "Backup gravado em: $BACKUP_FILE"
           # Mantém apenas os últimos 5 backups
           ls -t /opt/smartcore/prod/db-backup-*.dump 2>/dev/null | tail -n +6 | xargs rm -f || true
 
-      - uses: actions/download-artifact@v8
-        with:
-          name: server-prod
+      - name: Docker login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - uses: actions/download-artifact@v8
-        with:
-          name: web-prod
-
-      - name: Cria diretório da release (binários + migrations)
-        env:
-          TAG: ${{ steps.version.outputs.TAG }}
+      - name: Compose pull & up (PROD)
+        working-directory: docker/compose
         run: |
-          RELEASE_DIR="/opt/smartcore/prod/releases/$TAG"
-          mkdir -p "$RELEASE_DIR"
-          tar -xzf server-prod.tar.gz -C "$RELEASE_DIR"
-          # tar trazia bin/ e migrations/; promove os binários para a raiz da release.
-          if [ -d "$RELEASE_DIR/bin" ]; then
-            mv "$RELEASE_DIR/bin/"* "$RELEASE_DIR/"
-            rmdir "$RELEASE_DIR/bin"
-          fi
-          chmod +x "$RELEASE_DIR"/* 2>/dev/null || true
-          rm -f server-prod.tar.gz
-          echo "✓ release $TAG montada em $RELEASE_DIR"
-
-      - name: Atualiza symlink current
-        env:
-          TAG: ${{ steps.version.outputs.TAG }}
-        run: |
-          RELEASES_DIR="/opt/smartcore/prod/releases"
-          # Registra a release anterior antes de mudar o symlink
-          PREV=$(readlink "$RELEASES_DIR/current" 2>/dev/null | xargs basename 2>/dev/null || true)
-          echo "PREV_RELEASE=$PREV" >> "$GITHUB_ENV"
-          ln -sfn "$RELEASES_DIR/$TAG" "$RELEASES_DIR/current"
-          echo "Symlink: current → $TAG (anterior: $PREV)"
-
-      - name: Publica bundle web PROD (versionado + symlink)
-        env:
-          TAG: ${{ steps.version.outputs.TAG }}
-        run: |
-          BASE="/srv/smart-core-admin/prod"
-          REL_WEB="$BASE/releases/$TAG/web"
-          mkdir -p "$REL_WEB"
-          rm -rf "$REL_WEB"; mkdir -p "$REL_WEB"
-          tar -xzf web-prod.tar.gz -C "$REL_WEB"
-          chmod -R 755 "$REL_WEB"
-          rm -f web-prod.tar.gz
-          # Registra o alvo anterior do symlink web para rollback.
-          PREV_WEB=$(readlink "$BASE/web" 2>/dev/null || true)
-          echo "PREV_WEB=$PREV_WEB" >> "$GITHUB_ENV"
-          # Symlink estável que o Caddy serve (root /srv/smart-core-admin/prod/web).
-          ln -sfn "$REL_WEB" "$BASE/web"
-          echo "✓ web PROD → releases/$TAG/web (anterior: $PREV_WEB)"
-
-      - name: Reinicia serviços PROD (rolling restart)
-        run: |
-          # Para o runtime_api primeiro — para de aceitar novas requisições
-          sudo systemctl stop smartcore-prod-runtime_api || true
-          sleep 2
-          # Reinicia serviços internos
-          sudo systemctl restart smartcore-prod-data_redis
-          sleep 2
-          sudo systemctl restart smartcore-prod-data_postgres
-          sleep 4
-          sudo systemctl restart \
-            smartcore-prod-data_storage \
-            smartcore-prod-control_plane \
-            smartcore-prod-messaging_gateway \
-            smartcore-prod-worker
-          sleep 4
-          # Sobe a nova versão do runtime_api
-          sudo systemctl start smartcore-prod-runtime_api
-
-      - name: Smoke test PROD
-        run: |
-          sleep 10
-          FAILED=0
-          for svc in data_redis data_postgres data_storage control_plane messaging_gateway worker runtime_api; do
-            STATUS=$(sudo systemctl is-active smartcore-prod-$svc 2>/dev/null || echo "unknown")
-            if [ "$STATUS" != "active" ]; then
-              echo "ERRO: smartcore-prod-$svc → $STATUS"
-              sudo journalctl -u smartcore-prod-$svc --no-pager -n 50
-              FAILED=1
-            else
-              echo "✓ smartcore-prod-$svc ativo"
-            fi
-          done
-          exit $FAILED
-
-      - name: Rollback em falha
-        if: failure()
-        env:
-          TAG: ${{ steps.version.outputs.TAG }}
-        run: |
-          echo "Falha no deploy $TAG — executando rollback..."
-          RELEASES_DIR="/opt/smartcore/prod/releases"
-          PREV="${{ env.PREV_RELEASE }}"
-          if [ -n "$PREV" ] && [ -d "$RELEASES_DIR/$PREV" ]; then
-            ln -sfn "$RELEASES_DIR/$PREV" "$RELEASES_DIR/current"
-            echo "Revertendo para $PREV..."
-            sudo systemctl restart \
-              smartcore-prod-data_redis \
-              smartcore-prod-data_postgres \
-              smartcore-prod-data_storage \
-              smartcore-prod-control_plane \
-              smartcore-prod-messaging_gateway \
-              smartcore-prod-worker \
-              smartcore-prod-runtime_api
-            echo "Rollback para $PREV concluído."
-          else
-            echo "Sem release anterior disponível — rollback manual necessário."
-            echo "Releases disponíveis: $(ls $RELEASES_DIR)"
-          fi
-
-          # Rollback do symlink web PROD para a release anterior.
-          BASE="/srv/smart-core-admin/prod"
-          if [ -n "${PREV_WEB:-}" ] && [ -d "${PREV_WEB:-/nonexistent}" ]; then
-            ln -sfn "$PREV_WEB" "$BASE/web"
-            echo "Symlink web PROD revertido para $PREV_WEB."
-          fi
+          export COMPOSE_PROJECT_NAME=smartcore-prod
+          docker compose --env-file env/prod.env pull
+          docker compose --env-file env/prod.env up -d --remove-orphans
