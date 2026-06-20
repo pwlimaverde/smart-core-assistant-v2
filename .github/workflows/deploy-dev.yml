@@ -13,8 +13,41 @@ permissions:
   packages: write
 
 jobs:
+  # Monorepo: detecta o que mudou para nao rebuildar o que nao foi alterado.
+  #   server  -> rebuild da imagem Rust + compose up
+  #   web     -> rebuild do bundle Flutter + publicacao em /srv
+  #   compose -> so compose up (pull da imagem existente + aplica mudancas)
+  # Mudar o proprio workflow forca tudo (valida o pipeline).
+  changes:
+    name: Detecta mudanças
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.filter.outputs.server }}
+      web: ${{ steps.filter.outputs.web }}
+      compose: ${{ steps.filter.outputs.compose }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            server:
+              - 'server/**'
+              - 'docker/server/**'
+              - '.github/workflows/deploy-dev.yml'
+            web:
+              - 'clients/**'
+              - '.github/workflows/deploy-dev.yml'
+            compose:
+              - 'docker/compose/**'
+              - 'docker/init-scripts/**'
+              - 'docker/observability/**'
+              - '.github/workflows/deploy-dev.yml'
+
   build-server:
     name: Build Rust Server (DEV)
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -46,12 +79,10 @@ jobs:
           cache-from: type=gha,scope=server
           cache-to: type=gha,mode=max,scope=server
 
-  # O bundle Flutter NÃO é embutido numa imagem edge: o servidor é compartilhado e a
-  # borda é o Caddy do host (que também serve o painel v1). O Caddy do host serve o
-  # admin estático de /srv/smart-core-admin/dev/web (via conf.d/admin.caddy). Aqui só
-  # buildamos o bundle e o enviamos como artefato; o job de deploy publica em /srv.
   build-web:
     name: Build Web Admin (DEV)
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -84,15 +115,20 @@ jobs:
 
   deploy-dev:
     name: Deploy DEV (compose + web)
-    needs: [build-server, build-web]
+    needs: [changes, build-server, build-web]
+    # Roda se algo relevante mudou e nenhum build falhou (builds pulados = 'skipped',
+    # nao bloqueiam). A borda continua sendo o Caddy do host (servidor compartilhado).
+    if: >-
+      ${{ always()
+          && needs.build-server.result != 'failure'
+          && needs.build-web.result != 'failure'
+          && (needs.changes.outputs.server == 'true'
+              || needs.changes.outputs.web == 'true'
+              || needs.changes.outputs.compose == 'true') }}
     runs-on: [self-hosted, hostinger]
     environment: dev
     steps:
       - uses: actions/checkout@v5
-
-      - uses: actions/download-artifact@v8
-        with:
-          name: web-dev
 
       - name: Docker login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -100,25 +136,33 @@ jobs:
       # O env real (com segredos) NÃO está no repo (gitignored) e o checkout limpa o
       # working tree; copiamos do caminho provisionado pelo server-setup.sh.
       - name: Provisiona env real do servidor (DEV)
+        if: needs.changes.outputs.server == 'true' || needs.changes.outputs.compose == 'true'
         run: |
           mkdir -p docker/compose/env
           cp /opt/smartcore/dev/env/dev.env docker/compose/env/dev.env
 
-      # Observabilidade compartilhada (cria a rede external smartcore_observability).
-      # Idempotente: só sobe o que faltar.
+      # Observabilidade compartilhada (cria a rede external). Idempotente.
       - name: Sobe observabilidade (cria a rede compartilhada)
+        if: needs.changes.outputs.server == 'true' || needs.changes.outputs.compose == 'true'
         working-directory: docker/compose
         run: docker compose -f compose.observability.yml up -d
 
       - name: Compose pull & up (DEV)
+        if: needs.changes.outputs.server == 'true' || needs.changes.outputs.compose == 'true'
         working-directory: docker/compose
         run: |
           export COMPOSE_PROJECT_NAME=smart-core-v2-dev
           docker compose --env-file env/dev.env pull
           docker compose --env-file env/dev.env up -d --remove-orphans
 
-      # O Caddy do host serve o admin estático; publicamos o bundle de forma atômica.
+      # Bundle estático servido pelo Caddy do host: baixa o artefato e troca atômico.
+      - uses: actions/download-artifact@v8
+        if: needs.changes.outputs.web == 'true'
+        with:
+          name: web-dev
+
       - name: Publica bundle web DEV (atômico, com backup)
+        if: needs.changes.outputs.web == 'true'
         run: |
           WEB_DIR="/srv/smart-core-admin/dev/web"
           STAGE="/srv/smart-core-admin/dev/web.staging"
