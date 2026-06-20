@@ -62,18 +62,16 @@ echo "✓ gh-runner adicionado ao grupo docker."
 # ── 4. Estrutura de Diretórios ────────────────────────────────────────────────
 echo ""
 echo "[4/6] Configurando diretórios de aplicação e deploy..."
+# Full-Docker: só precisamos dos diretórios de env (segredos por ambiente) e de
+# backups do banco. Sem /opt/.../releases (não há binários no host) e sem
+# /srv/smart-core-admin (o bundle web vai embutido na imagem edge).
 mkdir -p \
     "$SMARTCORE_DIR/dev/env" \
     "$SMARTCORE_DIR/prod/env" \
-    "$SMARTCORE_DIR/prod/releases" \
-    /opt/smartcore/prod/backups \
-    /srv/smart-core-admin/dev \
-    /srv/smart-core-admin/prod
+    "$SMARTCORE_DIR/prod/backups"
 
 # Permissões das pastas para o runner
 chown -R gh-runner:gh-runner "$SMARTCORE_DIR"
-chown -R gh-runner:gh-runner /srv/smart-core-admin
-chmod -R 755 /srv/smart-core-admin
 echo "✓ Pastas e permissões configuradas."
 
 # ── 5. Configuração do Sudoers ────────────────────────────────────────────────
@@ -106,12 +104,12 @@ echo "============================================================"
 echo ""
 echo "PRÓXIMOS PASSOS:"
 echo "  1. Configurar os arquivos de ambiente reais no servidor:"
-2.     /opt/smartcore/dev/env/dev.env  (copie de dev.env.example)
-3.     /opt/smartcore/prod/env/prod.env  (copie de prod.env.example)
-4.
-5.   2. Registrar o GitHub self-hosted runner sob o usuário 'gh-runner'
-6.
-7.   3. Rodar o compose de observabilidade primeiro para criar a rede compartilhada:
-8.      docker compose -f docker/compose/compose.observability.yml up -d
-9.
-10.  4. O CI/CD agora gerenciará builds, tags e subidas automáticas de DEV e PROD!
+echo "       /opt/smartcore/dev/env/dev.env   (copie de docker/compose/env/dev.env.example)"
+echo "       /opt/smartcore/prod/env/prod.env (copie de docker/compose/env/prod.env.example)"
+echo ""
+echo "  2. Registrar o GitHub self-hosted runner sob o usuário 'gh-runner'."
+echo ""
+echo "  3. Subir o compose de observabilidade primeiro (cria a rede compartilhada):"
+echo "       docker compose -f docker/compose/compose.observability.yml up -d"
+echo ""
+echo "  4. A partir daí o CI/CD gerencia builds, tags e subidas automáticas de DEV e PROD."

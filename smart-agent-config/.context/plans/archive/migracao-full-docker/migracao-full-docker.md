@@ -1,5 +1,5 @@
 ---
-status: in_progress
+status: completed
 generated: 2026-06-20
 title: Migração Full-Docker (dev + prod)
 artifacts:
@@ -15,22 +15,22 @@ phases:
     name: "Review — approach: transport DNS, isolamento, redes, Dockerfile, edge, CI"
     prevc: "R"
     agent: "architect-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-e"
     name: "Execution — transport, Dockerfile, compose, observability, edge, env, workflows, remoções"
     prevc: "E"
     agent: "devops-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-v"
     name: "Validation — subida ordenada + smoke-test (healthy, gRPC-Web, admin, traces, audit_log)"
     prevc: "V"
     agent: "devops-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-c"
     name: "Confirmation — final-review, limpeza Hostinger, arquivamento"
     prevc: "C"
     agent: "devops-specialist"
-    status: "pending"
+    status: "completed"
 ---
 
 # Migração Full-Docker (dev + prod) — Plano Canônico

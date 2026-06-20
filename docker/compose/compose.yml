@@ -65,7 +65,8 @@ services:
   data_postgres:
     image: *server-image
     command: ["data_postgres"]
-    env_file: [./env/${ENV_FILE}]
+    env_file:
+      - ./env/${ENV_FILE}
     networks: [internal, observability]
     depends_on:
       postgres: { condition: service_healthy }
@@ -74,7 +75,8 @@ services:
   data_redis:
     image: *server-image
     command: ["data_redis"]
-    env_file: [./env/${ENV_FILE}]
+    env_file:
+      - ./env/${ENV_FILE}
     networks: [internal, observability]
     depends_on:
       redis: { condition: service_healthy }
@@ -84,14 +86,16 @@ services:
   data_storage:
     image: *server-image
     command: ["data_storage"]
-    env_file: [./env/${ENV_FILE}]
+    env_file:
+      - ./env/${ENV_FILE}
     networks: [internal, observability]
     restart: unless-stopped
 
   control_plane:
     image: *server-image
     command: ["control_plane"]
-    env_file: [./env/${ENV_FILE}]
+    env_file:
+      - ./env/${ENV_FILE}
     networks: [internal, observability]
     depends_on:
       data_postgres: { condition: service_started }
@@ -100,14 +104,16 @@ services:
   messaging_gateway:
     image: *server-image
     command: ["messaging_gateway"]
-    env_file: [./env/${ENV_FILE}]
+    env_file:
+      - ./env/${ENV_FILE}
     networks: [internal, observability]
     restart: unless-stopped
 
   worker:
     image: *server-image
     command: ["worker"]
-    env_file: [./env/${ENV_FILE}]
+    env_file:
+      - ./env/${ENV_FILE}
     networks: [internal, observability]
     depends_on:
       data_postgres: { condition: service_started }
@@ -117,7 +123,8 @@ services:
   runtime_api:
     image: *server-image
     command: ["runtime_api"]
-    env_file: [./env/${ENV_FILE}]
+    env_file:
+      - ./env/${ENV_FILE}
     networks: [internal, observability]
     depends_on:
       control_plane: { condition: service_started }
@@ -126,6 +133,10 @@ services:
   # ---------- BORDA / GATEWAY ----------
   edge:
     image: ${EDGE_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-edge:dev}
+    environment:
+      # O Caddyfile usa {$DOMAIN} para definir o endereço do site (TLS automático).
+      # Sem esta injeção o Caddy subiria sem domínio e falharia a borda.
+      DOMAIN: ${DOMAIN}
     ports:
       - "80:80"
       - "443:443"

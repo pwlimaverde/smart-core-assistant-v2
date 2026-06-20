@@ -94,6 +94,13 @@ jobs:
       - name: Docker login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
+      # O env real (com segredos) NÃO está no repo (gitignored) e o checkout limpa o
+      # working tree; copiamos do caminho provisionado pelo server-setup.sh.
+      - name: Provisiona env real do servidor (DEV)
+        run: |
+          mkdir -p docker/compose/env
+          cp /opt/smartcore/dev/env/dev.env docker/compose/env/dev.env
+
       - name: Compose pull & up (DEV)
         working-directory: docker/compose
         run: |

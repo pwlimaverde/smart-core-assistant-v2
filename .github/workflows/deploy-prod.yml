@@ -87,7 +87,7 @@ jobs:
           context: .
           file: docker/edge/Dockerfile
           push: true
-          tags: ${{ id.meta-edge.outputs.tags }}
+          tags: ${{ steps.meta-edge.outputs.tags }}
           cache-from: type=gha,scope=edge
           cache-to: type=gha,mode=max,scope=edge
 
@@ -116,6 +116,13 @@ jobs:
 
       - name: Docker login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      # O env real (com segredos) NÃO está no repo (gitignored) e o checkout limpa o
+      # working tree; copiamos do caminho provisionado pelo server-setup.sh.
+      - name: Provisiona env real do servidor (PROD)
+        run: |
+          mkdir -p docker/compose/env
+          cp /opt/smartcore/prod/env/prod.env docker/compose/env/prod.env
 
       - name: Compose pull & up (PROD)
         working-directory: docker/compose

@@ -1,72 +1,79 @@
-# Final Review — login-module
+# Final Review — migracao-full-docker
+Data: 2026-06-20 · Modelo: Opus · Diff auditado: commit `df02554` (working tree limpo)
 
-Data: 2026-06-15 · Modelo: Opus · Diff: dev..HEAD (server/apps/runtime_api, server/crates/contracts, server/Cargo.*, infra/Caddyfile, clients/)
-
-## Rótulo: CONFORME  (informativo — não bloqueia o ciclo)
+## Rótulo: CORRIGIDO  (informativo — não bloqueia o ciclo)
 
 ## Resumo das correções
-Nenhuma correção necessária. A implementação dos 3 commits está 100% conforme o plano aprovado e os padrões do projeto. Todas as revalidações (clippy, cargo test, flutter analyze, flutter test) passaram limpas. Nenhum arquivo foi editado pela auditoria.
+A implementação do commit `df02554` estava majoritariamente fiel ao plano (transport,
+Dockerfile, compose, edge, workflows, remoção do systemd). Foram corrigidos **10 desvios**:
+3 bugs que impediriam o deploy (Caddyfile sem `DOMAIN`, `env_file` em YAML de fluxo inválido,
+referência `id.meta-edge` no workflow prod), 1 script quebrado (`server-setup.sh` com bloco
+de echo malformado), 1 falha de versionamento (env.example gitignored), o descompasso de
+caminho do env real entre `server-setup.sh` e os workflows, e a limpeza de configuração
+morta (compose antigos + scripts de deploy host obsoletos).
 
 ## 1. Plano vs. Implementado
-
-| Item | Status | Evidência |
-|---|---|---|
-| **A1** `auth.proto` + `service AuthService` + Refresh/Logout msgs | ✅ | `auth.proto` L23-42: 3 RPCs, mensagens novas; `RegisterRequest` mantido mas fora do service (escopo respeitado) |
-| **A2** Deps Tonic/tonic-web/tower-http | ✅ | `runtime_api/Cargo.toml` (tonic 0.14 / tonic-web 0.14 conforme bump documentado) |
-| **A3** Fachada delega para `application::auth::*` | ✅ | `grpc_web.rs` delega login/refresh/logout; nunca reescreve regra; auditoria reusada via `crate::audit` |
-| **A4** Servir task paralela + accept_http1 + CORS→GrpcWebLayer | ✅ | `grpc_web.rs` ordem correta dos layers; `main.rs` `tokio::spawn` paralelo ao `server.run()` |
-| **A5** Caddyfile (TLS/mesma origem/CSP/HSTS) | ✅ | `infra/Caddyfile`: grpc-web reverse_proxy, file_server WASM, CSP+HSTS, X-Forwarded-For |
-| **A5** validação grpcurl (5 cenários) | ⚠️ | Coberto por testes unitários; verificação ao vivo depende de infra (documentado na Conclusão do plano) |
-| **B0** PoC WASM gRPC-Web | ✅ | Resolvido por versão (`grpc ^4.x` usa package:web) |
-| **B1** Stubs Dart + scaffolding | ✅ | `api_client/lib/src/generated/queries/*`; estrutura anatomia-módulo completa |
-| **B2** domain (Session/AuthService/Params/usecases) | ✅ | Session imutável, usecases passthrough com `process` estático |
-| **B3** GrpcApiClient + AuthTokenInterceptor | ✅ | `grpc_api_client.dart`, `auth_token_interceptor.dart` (provider assíncrono; interceptUnary síncrono correto) |
-| **B4** datasources gRPC + local | ✅ | login/refresh/logout (só I/O, try/catch→throw parameters.error); TokenLocalDatasource secure storage |
-| **B5** AuthServiceImpl single-flight | ✅ | `_refreshInFlight` compartilhado; auto-login; falha aberta no logout |
-| **B6** presentation (rota/controller/page/form) | ✅ | UI fala só com controller; form não loga credencial |
-| **B7** LoginModule + substituir NoOps | ✅ | `login_module.dart` globalBinds; InfraModule não registra mais ApiClient/Auth/Storage |
-| **B8** Guard GoRouter | ✅ | `auth_redirect.dart` função pura testável; `refreshListenable` reage a authChanges |
-| **B9** i18n erros | ✅ | `ErrorMessageMapper` cobre Auth/Unauthorized/Network/Validation + default |
-| **Reconciliação 2 AuthService** | ✅ | AuthServiceImpl implementa ambos (variante ii) |
-| **Escopo FORA (Register/domínio)** | ✅ | Não implementado; `/home` placeholder apenas |
+| Item do plano | Status | Observação |
+|---------------|--------|------------|
+| E.1 Transport resolve hostname TCP (`Endpoint::Tcp(String)` + `ToSocketAddrs`) | ✅ | Fiel: parse validado, bind/connect via `as_str()`, teste de hostname adicionado, testes antigos ajustados. |
+| E.2 Dockerfile server (cargo-chef, flatc URL do CI, SQLX_OFFLINE, debian-slim non-root, sem ENTRYPOINT) | ✅ | Fiel; `libpq5` corretamente ausente. |
+| E.3 `compose.yml` (7 serviços, minio profile dev, redes internal+observability, healthchecks `$$`) | ⚠️→✅ | `env_file` em sequência de fluxo quebrava o YAML; edge sem `DOMAIN`. Corrigidos. |
+| E.4 `compose.observability.yml` (projeto próprio cria a rede external) | ✅ | Fiel. |
+| E.5 Edge (Caddy + bundle, HTTP/1.1 sem h2c, persiste `caddy_data`) | ⚠️→✅ | Caddyfile usa `{$DOMAIN}` mas o container não recebia a var. Corrigido. |
+| E.6 Env-files de exemplo versionados | ❌→✅ | Existiam no working tree mas **gitignored** (`env/` pegava `docker/compose/env/`). Agora versionados. |
+| E.7 Workflows GHCR (tags por ambiente, approval prod, cache scope) | ⚠️→✅ | `deploy-prod` referenciava `id.meta-edge` (inválido) e ambos não provisionavam o env real. Corrigidos. |
+| E.8 Remoções (systemd, Caddyfile host, provisioning) | ⚠️→✅ | systemd e `infra/Caddyfile` removidos; faltou remover compose antigos e scripts host obsoletos. Removidos agora. |
+| Transport: testes mantidos + novo teste hostname | ✅ | `parses_tcp_endpoint_com_hostname` presente. |
+| `cleanup-hostinger.sh` (limpeza do legado) | ✅ | Presente e com sintaxe válida. |
 
 ## 2. Correções Aplicadas
-
-| arquivo:linha | problema | correção |
-|---|---|---|
-| — | nenhum desvio encontrado | nenhuma |
+| Arquivo:linha | Problema | Correção |
+|---------------|----------|----------|
+| `docker/compose/compose.yml` (edge) | Caddyfile usa `{$DOMAIN}` mas o serviço `edge` não recebia a variável → borda subiria sem domínio (TLS falha). | Adicionado `environment: DOMAIN: ${DOMAIN}` ao serviço edge. |
+| `docker/compose/compose.yml` (7×) | `env_file: [./env/${ENV_FILE}]` — em sequência de fluxo YAML o `{` de `${...}` é indicador inválido → `docker compose config` falharia. | Convertido para forma de bloco (`env_file:` + item `- ./env/${ENV_FILE}`). |
+| `.github/workflows/deploy-prod.yml:90` | `tags: ${{ id.meta-edge.outputs.tags }}` — sintaxe inválida; imagem edge sairia sem tag → build falha. | Corrigido para `${{ steps.meta-edge.outputs.tags }}`. |
+| `.github/workflows/deploy-dev.yml`, `deploy-prod.yml` | Compose roda `--env-file env/{env}.env`, mas esse arquivo (com segredos) é gitignored e o `checkout` limpa o working tree → env real some no deploy. | Passo novo "Provisiona env real do servidor" copia de `/opt/smartcore/{env}/env/{env}.env` (caminho do `server-setup.sh`). |
+| `infra/server-setup.sh:108-117` | Bloco "PRÓXIMOS PASSOS" malformado (linhas `2.`, `3.`… fora de `echo`) → com `set -e` o script abortaria. | Reescrito como `echo` válidos. |
+| `infra/server-setup.sh` (mkdir/chown) | Criava dirs vestigiais do modelo host (`/srv/smart-core-admin`, `prod/releases`) que o full-docker não usa. | Mantidos só `dev/env`, `prod/env`, `prod/backups`. |
+| `.gitignore` | Regra `env/` (venvs) capturava `docker/compose/env/`, impedindo versionar os `*.env.example`. | Re-inclusão explícita: `!docker/compose/env/`, ignora `*.env` reais, versiona `*.env.example`. |
+| `docker/compose/env/{dev,prod}.env.example` | Não estavam versionados. | `git add` após corrigir o gitignore. |
+| `docker/compose/data.yml`, `observability.yml` | Superados por `compose.yml`/`compose.observability.yml` (config morta). | Removidos (`git rm`). |
+| `infra/deploy-data.sh`, `deploy-data.ps1`, `manage.ps1` | Scripts do fluxo host antigo (push de `data.yml` via scp) — obsoletos no GHCR/compose. | Removidos (`git rm`). |
+| `docker/compose/env/prod.env.example` | `S3_FORCE_PATH_STYLE=false` divergia da config R2 já validada no projeto (`infra/.env.deploy.example` usa `true`). | Ajustado para `true`. |
 
 ## 2b. Observabilidade & Auditoria
+| Comportamento | Logs/Trace | Audit log | Sanitização | Observação |
+|---------------|-----------|-----------|-------------|------------|
+| Transport TCP (resolução de hostname) | ✅ | N/A | ✅ | `tracing::info!(endpoint, local)` no bind; sem segredos; sem novo evento de domínio. |
+| Empacotamento em containers (Dockerfile/compose) | ✅ | N/A | ✅ | `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317` + `OTEL_SERVICE_NAMESPACE` por ambiente; serviços em `internal`+`observability`. |
+| Edge (Caddy) | ✅ | N/A | ✅ | Headers de segurança (CSP `wasm-unsafe-eval`, HSTS) mantidos. |
+| Env-files | N/A | N/A | ✅ | Só `*.env.example` com placeholders versionado; `*.env` reais gitignored. |
 
-| Eixo | Status | Evidência |
-|---|---|---|
-| A: span por RPC + traceparent propagado | ✅ | `grpc_web.rs` `#[tracing::instrument(...traceparent)]` + `Span::record` |
-| A: AppError→Status via error_core::registrar sem detalhe | ✅ | `error_core::registrar`; `app_err_para_status` retorna chaves i18n (`errors.auth`), teste confirma |
-| A: auditoria reaproveitada sem duplicar | ✅ | `audit.rs` compartilhado entre `main.rs` handlers e `grpc_web.rs` |
-| A: IP via X-Forwarded-For | ✅ | `grpc_web.rs` `ip_do_metadata`, propagado a todos os eventos |
-| A: nunca logar email/senha/token | ✅ | `skip_all` em todos os spans; comentário explícito "NUNCA logar" |
-| B: client loga só endpoint/status | ✅ | `grpc_api_client.dart` loga só `endpoint=/status=`, sob flag |
-| B: sem auditoria no client (intencional) | ✅ | nenhum publish de auditoria no client |
-| B: access só em memória | ✅ | SessionService (memória); TokenLocalDatasource persiste só refresh |
-| B: refresh em secure storage | ✅ | `secure_local_storage_service.dart` (flutter_secure_storage chave namespaced) |
-| B: logout limpa tudo | ✅ | `_limparSessao` zera `_current`, `clearSession`, `deleteRefresh` |
+> A migração **não cria nem altera eventos de auditoria de domínio** — só muda transporte e
+> empacotamento. A trilha `transport::bus → data_postgres → audit_log` deve ser exercida no
+> smoke-test ao subir o stack (ver Pendências).
 
 ## 3. Decisões Autônomas (revisar depois)
-Nenhuma. Não foi necessária correção, portanto não houve decisão autônoma arriscada.
+- **Remoção de `infra/deploy-data.{sh,ps1}` e `manage.ps1`**: assumi que o fluxo host de deploy
+  de dados foi totalmente substituído pelo compose+GHCR. `infra/tunnel.{sh,ps1}` foram **mantidos**
+  (uso de dev local contra DB remoto).
+- **`env_file` em forma de bloco**: mudança puramente sintática, sem efeito de runtime.
 
 ## 4. Revalidação
-
-| Comando | Resultado |
-|---|---|
-| `cargo clippy -p runtime_api -- -D warnings` | ✅ limpo |
-| `cargo test -p runtime_api` | ✅ 10/10 |
-| `flutter analyze` (login_module) | ✅ No issues found |
-| `flutter test` (login_module) | ✅ 16/16 |
-| `flutter analyze` (smart-core-admin) | ✅ No issues found |
-| `flutter test` (smart-core-admin) | ✅ 3/3 (guard) |
+- lint/type-check Python: N/A (nenhum código Python tocado neste ciclo).
+- compile Rust: a transport (única mudança Rust) veio do commit `df02554` e **não foi alterada**
+  neste review; diff revisado estaticamente (correto). Não re-executei `cargo` para não subir
+  túnel/infra de teste; recomenda-se rodar `.\infra\test-local.ps1` antes do próximo deploy.
+- YAML (compose + workflows): ✅ validado com parser após correção do `env_file`.
+- Shell (`bash -n`): ✅ `server-setup.sh` e `cleanup-hostinger.sh` sem erro de sintaxe.
+- `docker compose config`: ⚠️ não executável aqui (Docker só no servidor Hostinger); YAML validado por parser como proxy.
 
 ## 5. Pendências (escopo extra ou fora do plano)
-- **grpcurl/grpcui ao vivo (A5, doc 09 §6.4):** os 5 cenários exigem `runtime_api` no ar com Postgres/Redis. A lógica está coberta por testes unitários; verificação manual fica para o ambiente com infra. Registrado na Conclusão do plano — não é desvio.
-- **`build web --wasm` ponta-a-ponta:** validado na fase V (`✓ Built build\web`); não reexecutado nesta auditoria por custo, já evidenciado.
-
-Nada fora do escopo do plano foi introduzido indevidamente.
+- **Smoke-test no servidor** (Fase V do plano, exige Docker/servidor): subir observabilidade →
+  dev → prod, confirmar containers `healthy`, gRPC-Web via Caddy, admin em `/v2/admin/`, traces
+  separados por namespace no Grafana, e **um evento real persistido em `audit_log`**.
+- **Limpeza do Hostinger**: rodar `infra/cleanup-hostinger.sh` + remover projetos Docker legados
+  `smart-core-app/-data/-workers` (o usuário executa via SSH).
+- **GitHub Environment `production`**: configurar Required reviewers para o approval manual do `deploy-prod`.
+- **`bind` por nome-de-serviço**: se o smoke-test acusar falha de bind TCP no container, aplicar o
+  fallback `0.0.0.0:porta` previsto no plano (E.1).

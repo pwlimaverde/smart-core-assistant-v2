@@ -185,6 +185,13 @@ docker-compose.override.yml
 docker-compose.*.local.yml
 .env.docker
 
+# Env files do compose por ambiente: os REAIS (com segredos) ficam fora do git;
+# os *.env.example (templates, sem segredos) SÃO versionados. A regra "env/" acima
+# (venvs Python) capturava docker/compose/env/, então re-incluímos explicitamente.
+!docker/compose/env/
+docker/compose/env/*.env
+!docker/compose/env/*.env.example
+
 # =============================================================================
 # EDITORES / IDEs
 # =============================================================================
