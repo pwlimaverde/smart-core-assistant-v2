@@ -1,14 +1,15 @@
 {
-  "active": [
+  "active": [],
+  "completed": [
     {
       "slug": "painel-admin-superusuario",
-      "path": "plans/painel-admin-superusuario.md",
+      "path": "plans/archive/painel-admin-superusuario/painel-admin-superusuario.md",
       "title": "Painel Gerencial do Superusuário (Admin Total)",
       "summary": "Construir o painel de controle total para o superusuário: `AdminService` gRPC-Web tipado",
       "linkedAt": "2026-06-19T00:52:25.457Z",
-      "status": "active"
+      "completedAt": "2026-06-20T00:00:00.000Z",
+      "status": "completed"
     }
   ],
-  "completed": [],
-  "primary": "painel-admin-superusuario"
+  "primary": null
 }

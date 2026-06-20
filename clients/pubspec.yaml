@@ -16,6 +16,7 @@ workspace:
   - modulos/dependencies_module
   - modulos/initial_loading_module
   - modulos/login_module
+  - modulos/admin_module
   - apps/smart-core-admin
 
 dev_dependencies:
