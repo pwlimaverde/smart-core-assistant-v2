@@ -42,8 +42,12 @@ jobs:
           cache-from: type=gha,scope=server
           cache-to: type=gha,mode=max,scope=server
 
-  build-edge:
-    name: Build Edge Gateway (DEV)
+  # O bundle Flutter NÃO é embutido numa imagem edge: o servidor é compartilhado e a
+  # borda é o Caddy do host (que também serve o painel v1). O Caddy do host serve o
+  # admin estático de /srv/smart-core-admin/dev/web (via conf.d/admin.caddy). Aqui só
+  # buildamos o bundle e o enviamos como artefato; o job de deploy publica em /srv.
+  build-web:
+    name: Build Web Admin (DEV)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -65,31 +69,26 @@ jobs:
             -t lib/main_dev.dart \
             --dart-define=SMARTCORE_API_ENDPOINT=https://dev.smartcoreassistant.com.br
 
-      - name: Prepare build context
-        run: cp -r clients/apps/smart-core-admin/build/web ./web
+      - name: Empacota bundle estático
+        run: tar -C clients/apps/smart-core-admin/build/web -czf web-dev.tar.gz .
 
-      - uses: docker/login-action@v3
+      - uses: actions/upload-artifact@v6
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/edge/Dockerfile
-          push: true
-          tags: ghcr.io/${{ github.repository }}/smartcore-edge:dev
-          cache-from: type=gha,scope=edge
-          cache-to: type=gha,mode=max,scope=edge
+          name: web-dev
+          path: web-dev.tar.gz
+          retention-days: 3
 
   deploy-dev:
-    name: Deploy DEV (compose)
-    needs: [build-server, build-edge]
+    name: Deploy DEV (compose + web)
+    needs: [build-server, build-web]
     runs-on: [self-hosted, hostinger]
     environment: dev
     steps:
       - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-dev
 
       - name: Docker login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -101,9 +100,30 @@ jobs:
           mkdir -p docker/compose/env
           cp /opt/smartcore/dev/env/dev.env docker/compose/env/dev.env
 
+      # Observabilidade compartilhada (cria a rede external smartcore_observability).
+      # Idempotente: só sobe o que faltar.
+      - name: Sobe observabilidade (cria a rede compartilhada)
+        working-directory: docker/compose
+        run: docker compose -f compose.observability.yml up -d
+
       - name: Compose pull & up (DEV)
         working-directory: docker/compose
         run: |
           export COMPOSE_PROJECT_NAME=smartcore-dev
           docker compose --env-file env/dev.env pull
           docker compose --env-file env/dev.env up -d --remove-orphans
+
+      # O Caddy do host serve o admin estático; publicamos o bundle de forma atômica.
+      - name: Publica bundle web DEV (atômico, com backup)
+        run: |
+          WEB_DIR="/srv/smart-core-admin/dev/web"
+          STAGE="/srv/smart-core-admin/dev/web.staging"
+          rm -rf /srv/smart-core-admin/dev/web.bak
+          cp -r "$WEB_DIR" /srv/smart-core-admin/dev/web.bak 2>/dev/null || true
+          rm -rf "$STAGE"; mkdir -p "$STAGE"
+          tar -xzf web-dev.tar.gz -C "$STAGE"
+          chmod -R 755 "$STAGE"
+          rm -rf "$WEB_DIR"; mkdir -p "$(dirname "$WEB_DIR")"
+          mv "$STAGE" "$WEB_DIR"
+          rm -f web-dev.tar.gz
+          echo "✓ bundle web DEV publicado em $WEB_DIR (Caddy do host serve estático, sem reload)"

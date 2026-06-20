@@ -42,8 +42,10 @@ jobs:
           cache-from: type=gha,scope=server
           cache-to: type=gha,mode=max,scope=server
 
-  build-edge:
-    name: Build Edge Gateway (PROD)
+  # Bundle estático servido pelo Caddy do host (servidor compartilhado: a borda é o
+  # Caddy do host, que também serve o painel v1). Sem imagem edge.
+  build-web:
+    name: Build Web Admin (PROD)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -65,64 +67,54 @@ jobs:
             -t lib/main_prod.dart \
             --dart-define=SMARTCORE_API_ENDPOINT=https://smartcoreassistant.com.br
 
-      - name: Prepare build context
-        run: cp -r clients/apps/smart-core-admin/build/web ./web
+      - name: Empacota bundle estático
+        run: tar -C clients/apps/smart-core-admin/build/web -czf web-prod.tar.gz .
 
-      - uses: docker/login-action@v3
+      - uses: actions/upload-artifact@v6
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - id: meta-edge
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}/smartcore-edge
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest
-
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: docker/edge/Dockerfile
-          push: true
-          tags: ${{ steps.meta-edge.outputs.tags }}
-          cache-from: type=gha,scope=edge
-          cache-to: type=gha,mode=max,scope=edge
+          name: web-prod
+          path: web-prod.tar.gz
+          retention-days: 3
 
   deploy-prod:
-    name: Deploy PROD (compose)
-    needs: [build-server, build-edge]
+    name: Deploy PROD (compose + web)
+    needs: [build-server, build-web]
     runs-on: [self-hosted, hostinger]
     environment: production
     steps:
       - uses: actions/checkout@v5
 
+      - uses: actions/download-artifact@v8
+        with:
+          name: web-prod
+
       - name: Backup banco de dados PROD (pg_dump)
         run: |
           TAG="${GITHUB_REF_NAME}"
-          BACKUP_FILE="/opt/smartcore/prod/db-backup-${TAG}-$(date +%Y%m%d%H%M).dump"
-          mkdir -p /opt/smartcore/prod
-          CONTAINER="smartcore-v2-postgres"
-          if docker ps --format '{{.Names}}' | grep -q "smartcore-prod-postgres"; then
-            CONTAINER="smartcore-prod-postgres-1"
+          BACKUP_FILE="/opt/smartcore/prod/backups/db-backup-${TAG}-$(date +%Y%m%d%H%M).dump"
+          mkdir -p /opt/smartcore/prod/backups
+          CONTAINER="smartcore-prod-postgres-1"
+          if docker ps --format '{{.Names}}' | grep -q "$CONTAINER"; then
+            echo "Gerando backup do banco usando $CONTAINER..."
+            docker exec "$CONTAINER" pg_dump -U smartcore_app -F c smartcore_v2 > "$BACKUP_FILE" \
+              || echo "Falha no backup (pode ser o primeiro deploy)"
+            echo "Backup: $BACKUP_FILE"
+            ls -t /opt/smartcore/prod/backups/db-backup-*.dump 2>/dev/null | tail -n +6 | xargs rm -f || true
+          else
+            echo "Container $CONTAINER ausente (primeiro deploy) — sem backup."
           fi
-          echo "Gerando backup do banco de dados usando o container $CONTAINER..."
-          docker exec "$CONTAINER" pg_dump -U smartcore_app -F c smartcore_v2 > "$BACKUP_FILE" || echo "Falha ao gerar backup (pode ser o primeiro deploy)"
-          echo "Backup gravado em: $BACKUP_FILE"
-          # Mantém apenas os últimos 5 backups
-          ls -t /opt/smartcore/prod/db-backup-*.dump 2>/dev/null | tail -n +6 | xargs rm -f || true
 
       - name: Docker login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      # O env real (com segredos) NÃO está no repo (gitignored) e o checkout limpa o
-      # working tree; copiamos do caminho provisionado pelo server-setup.sh.
       - name: Provisiona env real do servidor (PROD)
         run: |
           mkdir -p docker/compose/env
           cp /opt/smartcore/prod/env/prod.env docker/compose/env/prod.env
+
+      - name: Sobe observabilidade (cria a rede compartilhada)
+        working-directory: docker/compose
+        run: docker compose -f compose.observability.yml up -d
 
       - name: Compose pull & up (PROD)
         working-directory: docker/compose
@@ -130,3 +122,17 @@ jobs:
           export COMPOSE_PROJECT_NAME=smartcore-prod
           docker compose --env-file env/prod.env pull
           docker compose --env-file env/prod.env up -d --remove-orphans
+
+      - name: Publica bundle web PROD (atômico, com backup)
+        run: |
+          WEB_DIR="/srv/smart-core-admin/prod/web"
+          STAGE="/srv/smart-core-admin/prod/web.staging"
+          rm -rf /srv/smart-core-admin/prod/web.bak
+          cp -r "$WEB_DIR" /srv/smart-core-admin/prod/web.bak 2>/dev/null || true
+          rm -rf "$STAGE"; mkdir -p "$STAGE"
+          tar -xzf web-prod.tar.gz -C "$STAGE"
+          chmod -R 755 "$STAGE"
+          rm -rf "$WEB_DIR"; mkdir -p "$(dirname "$WEB_DIR")"
+          mv "$STAGE" "$WEB_DIR"
+          rm -f web-prod.tar.gz
+          echo "✓ bundle web PROD publicado em $WEB_DIR"

@@ -126,27 +126,13 @@ services:
     env_file:
       - ./env/${ENV_FILE}
     networks: [internal, observability]
+    # A borda continua sendo o Caddy DO HOST (servidor compartilhado: ele também
+    # serve o painel v1, que não pode ser derrubado). Publicamos só a fachada
+    # gRPC-Web no host; o admin.caddy do host já faz reverse_proxy p/ esta porta.
+    ports:
+      - "${RUNTIME_WEB_PORT:-50051}:50051"
     depends_on:
       control_plane: { condition: service_started }
-    restart: unless-stopped
-
-  # ---------- BORDA / GATEWAY ----------
-  edge:
-    image: ${EDGE_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-edge:dev}
-    environment:
-      # O Caddyfile usa {$DOMAIN} para definir o endereço do site (TLS automático).
-      # Sem esta injeção o Caddy subiria sem domínio e falharia a borda.
-      DOMAIN: ${DOMAIN}
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp"        # HTTP/3 QUIC
-    volumes:
-      - caddy_data:/data     # certificados do Let's Encrypt
-      - caddy_config:/config
-    networks: [internal]
-    depends_on:
-      runtime_api: { condition: service_started }
     restart: unless-stopped
 
 volumes:
@@ -154,5 +140,3 @@ volumes:
   redis_data:
   redis_bus_data:
   minio_data:
-  caddy_data:
-  caddy_config:
