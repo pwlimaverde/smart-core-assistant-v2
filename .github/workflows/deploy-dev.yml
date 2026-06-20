@@ -39,7 +39,7 @@ jobs:
               - 'clients/**'
               - '.github/workflows/deploy-dev.yml'
             compose:
-              - 'docker/compose/**'
+              - 'docker/dev/**'
               - 'docker/init-scripts/**'
               - 'docker/observability/**'
               - '.github/workflows/deploy-dev.yml'
@@ -137,23 +137,20 @@ jobs:
       # working tree; copiamos do caminho provisionado pelo server-setup.sh.
       - name: Provisiona env real do servidor (DEV)
         if: needs.changes.outputs.server == 'true' || needs.changes.outputs.compose == 'true'
-        run: |
-          mkdir -p docker/compose/env
-          cp /opt/smartcore/dev/env/dev.env docker/compose/env/dev.env
+        run: cp /opt/smartcore/dev/env/dev.env docker/dev/.env
 
       # Observabilidade compartilhada (cria a rede external). Idempotente.
       - name: Sobe observabilidade (cria a rede compartilhada)
         if: needs.changes.outputs.server == 'true' || needs.changes.outputs.compose == 'true'
-        working-directory: docker/compose
-        run: docker compose -f compose.observability.yml up -d
+        working-directory: docker/observability
+        run: docker compose up -d
 
       - name: Compose pull & up (DEV)
         if: needs.changes.outputs.server == 'true' || needs.changes.outputs.compose == 'true'
-        working-directory: docker/compose
+        working-directory: docker/dev
         run: |
-          export COMPOSE_PROJECT_NAME=smart-core-v2-dev
-          docker compose --env-file env/dev.env pull
-          docker compose --env-file env/dev.env up -d --remove-orphans
+          docker compose --env-file .env pull
+          docker compose --env-file .env up -d --remove-orphans
 
       # Bundle estático servido pelo Caddy do host: baixa o artefato e troca atômico.
       - uses: actions/download-artifact@v8

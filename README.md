@@ -71,7 +71,7 @@ Tarefas automatizadas rodam semanalmente no servidor para manter a saúde do sis
 
 ## 5. Observabilidade (LGTM Stack)
 
-A pilha de monitoramento e telemetria é executada via Docker Compose (`docker/compose/observability.yml`):
+A pilha de monitoramento e telemetria é executada via Docker Compose (`docker/observability/compose.yml`):
 
 *   **Grafana** (`https://grafana.smartcoreassistant.com.br`): Visualização centralizada.
 *   **Loki / Promtail**: Agregação e indexação de logs de containers Docker e dos serviços de sistema.

@@ -8,8 +8,8 @@
 # na rede interna do ambiente e faz o forward SSH ate ele.
 #
 # Para DESENVOLVIMENTO normal, prefira rodar a stack LOCALMENTE:
-#   cd docker/compose
-#   docker compose --env-file env/dev.env up -d
+#   cd docker/dev
+#   docker compose --env-file .env up -d
 # (no Windows o transport usa TCP; nao precisa de tunel).
 #
 # Uso (a partir de infra/ ou da raiz):

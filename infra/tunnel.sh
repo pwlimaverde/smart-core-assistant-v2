@@ -8,7 +8,7 @@
 # forward SSH ate ele, para inspecao com ferramentas locais.
 #
 # Para DESENVOLVIMENTO normal, prefira rodar a stack LOCALMENTE:
-#   cd docker/compose && docker compose --env-file env/dev.env up -d
+#   cd docker/dev && docker compose --env-file .env up -d
 #
 # Uso:  ./infra/tunnel.sh [dev|prod]   (padrao: dev)
 # Requer SSH (alias hostinger-root em ~/.ssh/config). Ctrl+C encerra.

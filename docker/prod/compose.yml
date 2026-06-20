@@ -1,4 +1,19 @@
-x-server-image: &server-image ${SERVER_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-server:dev}
+# =============================================================================
+# Ambiente PROD — Smart Core Assistant v2 (full-docker)
+# =============================================================================
+# Stack autocontida do ambiente de PRODUCAO. Diferencas em relacao ao dev:
+#   - storage de midia e Cloudflare R2 (NAO sobe MinIO); o data_storage usa as
+#     credenciais S3/R2 do .env.
+#   - a porta gRPC-Web publicada e 50052 (dev usa 50051; mesmo host compartilhado).
+#   - imagem default :latest.
+#
+# Subir (a partir de docker/prod/):
+#   docker compose --env-file .env up -d
+# A rede de observabilidade deve existir antes (suba docker/observability primeiro).
+# =============================================================================
+name: smart-core-v2-prod
+
+x-server-image: &server-image ${SERVER_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-server:latest}
 
 networks:
   internal:
@@ -8,7 +23,7 @@ networks:
     external: true
 
 services:
-  # ---------- DADOS (isolados por ambiente) ----------
+  # ---------- DADOS ----------
   postgres:
     image: pgvector/pgvector:pg16
     environment:
@@ -50,47 +65,11 @@ services:
     networks: [internal]
     restart: unless-stopped
 
-  minio:
-    image: minio/minio:latest
-    profiles: ["dev"]            # só sobe quando o profile "dev" está ativo
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-    volumes: [minio_data:/data]
-    networks: [internal]
-    restart: unless-stopped
-
-  # Provisiona o bucket no MinIO (dev). Sem ele, o data_storage entra em crash-loop
-  # num volume novo ("bucket inexistente"). One-off idempotente (só dev; prod usa R2).
-  minio-setup:
-    image: minio/mc:latest
-    profiles: ["dev"]
-    depends_on:
-      minio: { condition: service_started }
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      S3_BUCKET: ${S3_BUCKET:-media-smart-core-assistant}
-    networks: [internal]
-    restart: "no"
-    entrypoint:
-      - /bin/sh
-      - -c
-      - |
-        for i in $$(seq 1 30); do
-          mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" && break
-          echo "aguardando minio... ($$i)"; sleep 2
-        done
-        mc mb --ignore-existing "local/$$S3_BUCKET"
-        echo "bucket $$S3_BUCKET pronto"
-
   # ---------- SERVICOS RUST (imagem unica, command por servico) ----------
   data_postgres:
     image: *server-image
     command: ["data_postgres"]
-    env_file:
-      - ./env/${ENV_FILE}
+    env_file: [.env]
     networks: [internal, observability]
     depends_on:
       postgres: { condition: service_healthy }
@@ -99,8 +78,7 @@ services:
   data_redis:
     image: *server-image
     command: ["data_redis"]
-    env_file:
-      - ./env/${ENV_FILE}
+    env_file: [.env]
     networks: [internal, observability]
     depends_on:
       redis: { condition: service_healthy }
@@ -110,16 +88,14 @@ services:
   data_storage:
     image: *server-image
     command: ["data_storage"]
-    env_file:
-      - ./env/${ENV_FILE}
+    env_file: [.env]
     networks: [internal, observability]
     restart: unless-stopped
 
   control_plane:
     image: *server-image
     command: ["control_plane"]
-    env_file:
-      - ./env/${ENV_FILE}
+    env_file: [.env]
     networks: [internal, observability]
     depends_on:
       data_postgres: { condition: service_started }
@@ -128,16 +104,14 @@ services:
   messaging_gateway:
     image: *server-image
     command: ["messaging_gateway"]
-    env_file:
-      - ./env/${ENV_FILE}
+    env_file: [.env]
     networks: [internal, observability]
     restart: unless-stopped
 
   worker:
     image: *server-image
     command: ["worker"]
-    env_file:
-      - ./env/${ENV_FILE}
+    env_file: [.env]
     networks: [internal, observability]
     depends_on:
       data_postgres: { condition: service_started }
@@ -147,14 +121,11 @@ services:
   runtime_api:
     image: *server-image
     command: ["runtime_api"]
-    env_file:
-      - ./env/${ENV_FILE}
+    env_file: [.env]
     networks: [internal, observability]
-    # A borda continua sendo o Caddy DO HOST (servidor compartilhado: ele também
-    # serve o painel v1, que não pode ser derrubado). Publicamos só a fachada
-    # gRPC-Web no host; o admin.caddy do host já faz reverse_proxy p/ esta porta.
+    # Publica a fachada gRPC-Web no host (prod: 50052; dev usa 50051).
     ports:
-      - "${RUNTIME_WEB_PORT:-50051}:50051"
+      - "${RUNTIME_WEB_PORT:-50052}:50051"
     depends_on:
       control_plane: { condition: service_started }
     restart: unless-stopped
@@ -163,4 +134,3 @@ volumes:
   postgres_data:
   redis_data:
   redis_bus_data:
-  minio_data:

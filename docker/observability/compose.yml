@@ -1,3 +1,15 @@
+# =============================================================================
+# Observabilidade (LGTM) — Smart Core Assistant v2
+# =============================================================================
+# Stack COMPARTILHADA e separada dos ambientes. Cria a rede external
+# `smart_core_v2_observability`, que dev e prod referenciam. Suba ESTA stack
+# ANTES de dev/prod (senao o `up` deles falha por rede inexistente).
+# A separacao dev/prod nos dados/traces e por OTEL_SERVICE_NAMESPACE (no .env de
+# cada ambiente: smart-core-v2-dev / smart-core-v2-prod).
+#
+# Subir (a partir de docker/observability/):
+#   docker compose up -d
+# =============================================================================
 name: smart-core-v2-observability
 
 networks:
@@ -9,14 +21,14 @@ services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
     volumes:
-      - ../observability/otel-collector-config.yml:/etc/otelcol-contrib/config.yaml:ro
+      - ./otel-collector-config.yml:/etc/otelcol-contrib/config.yaml:ro
     networks: [smart_core_v2_observability]
     restart: unless-stopped
 
   loki:
     image: grafana/loki:latest
     volumes:
-      - ../observability/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - ./loki-config.yml:/etc/loki/local-config.yaml:ro
       - loki_data:/loki
     networks: [smart_core_v2_observability]
     restart: unless-stopped
@@ -25,7 +37,7 @@ services:
     image: grafana/tempo:latest
     command: ["-config.file=/etc/tempo/tempo.yaml"]
     volumes:
-      - ../observability/tempo-config.yml:/etc/tempo/tempo.yaml:ro
+      - ./tempo-config.yml:/etc/tempo/tempo.yaml:ro
       - tempo_data:/var/tempo
     networks: [smart_core_v2_observability]
     restart: unless-stopped
@@ -33,7 +45,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     volumes:
-      - ../observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     networks: [smart_core_v2_observability]
     restart: unless-stopped
@@ -43,7 +55,7 @@ services:
     ports:
       - "3000:3000"
     volumes:
-      - ../observability/provisioning:/etc/grafana/provisioning:ro
+      - ./provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
     networks: [smart_core_v2_observability]
     restart: unless-stopped
@@ -51,7 +63,7 @@ services:
   promtail:
     image: grafana/promtail:latest
     volumes:
-      - ../observability/promtail-config.yml:/etc/promtail/config.yml:ro
+      - ./promtail-config.yml:/etc/promtail/config.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
     networks: [smart_core_v2_observability]
