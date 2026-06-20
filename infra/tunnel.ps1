@@ -1,70 +1,68 @@
 # ============================================
-# SSH Tunnels - Desenvolvimento Local
+# SSH Tunnels para a stack remota — modelo FULL-DOCKER
 # Smart Core Assistant v2
 # ============================================
-# Mapeia as portas do Hostinger para localhost,
-# permitindo que o codigo Rust local conecte aos
-# bancos remotos como se fossem locais.
+# No modelo full-docker, Postgres/Redis/MinIO NAO publicam portas no host (ficam
+# so na rede interna do compose). Para inspecionar o banco remoto com ferramentas
+# locais (DBeaver, redis-cli, etc.), este script descobre o IP de cada container
+# na rede interna do ambiente e faz o forward SSH ate ele.
 #
-# Execute a partir da pasta infra/:
-#   cd infra
-#   .\tunnel.ps1
+# Para DESENVOLVIMENTO normal, prefira rodar a stack LOCALMENTE:
+#   cd docker/compose
+#   docker compose --env-file env/dev.env up -d
+# (no Windows o transport usa TCP; nao precisa de tunel).
 #
-# Mantenha este terminal aberto enquanto desenvolve.
-# Pressione Ctrl+C para encerrar os tunnels.
+# Uso (a partir de infra/ ou da raiz):
+#   .\infra\tunnel.ps1            # ambiente dev (padrao)
+#   .\infra\tunnel.ps1 -Env prod
+#
+# Mantenha o terminal aberto; Ctrl+C encerra. Requer SSH (alias hostinger-root).
 # ============================================
 
+[CmdletBinding()]
+param(
+    [ValidateSet("dev", "prod")]
+    [string]$Env = "dev",
+    [string]$SshAlias = "hostinger-root"
+)
+
+$ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 
-if (-not (Test-Path ".env.deploy")) {
-    Write-Host "Erro: .env.deploy nao encontrado!" -ForegroundColor Red
-    exit 1
+$net = "smart-core-v2-${Env}_internal"
+
+# servico-do-compose -> @{ remote = porta no container; local = porta em localhost }
+$mapa = [ordered]@{
+    "postgres"  = @{ remote = 5432; local = 5434 }
+    "redis"     = @{ remote = 6379; local = 6379 }
+    "redis-bus" = @{ remote = 6379; local = 6380 }
+    "minio"     = @{ remote = 9000; local = 9000 }
 }
 
-Get-Content .env.deploy | ForEach-Object {
-    if ($_ -match '^([^#=][^=]*)=(.*)$') {
-        $name = $matches[1].Trim()
-        $value = $matches[2].Trim().Trim('"')
-        Set-Variable -Name $name -Value $value -Scope Script
+Write-Host "Descobrindo IPs dos containers na rede '$net'..." -ForegroundColor Cyan
+$forwards = @()
+foreach ($svc in $mapa.Keys) {
+    $container = "smart-core-v2-$Env-$svc-1"
+    $fmt = "{{(index .NetworkSettings.Networks `"$net`").IPAddress}}"
+    $ip = (ssh $SshAlias "docker inspect -f '$fmt' $container" 2>$null).Trim()
+    if ([string]::IsNullOrWhiteSpace($ip)) {
+        Write-Host "  ! $container nao encontrado/na rede (pulando)" -ForegroundColor DarkYellow
+        continue
     }
+    $l = $mapa[$svc].local; $r = $mapa[$svc].remote
+    $forwards += "-L"; $forwards += "${l}:${ip}:${r}"
+    Write-Host ("  localhost:{0,-5} -> {1}:{2}  ({3})" -f $l, $ip, $r, $svc) -ForegroundColor Green
 }
 
-if (-not $POSTGRES_PORT) { $POSTGRES_PORT = "5432" }
-if (-not $REDIS_PORT)    { $REDIS_PORT    = "6379" }
-if (-not $REDIS_BUS_PORT) { $REDIS_BUS_PORT = "6381" }
-if (-not $MINIO_PORT)    { $MINIO_PORT    = "9000" }
-if (-not $MINIO_CONSOLE_PORT) { $MINIO_CONSOLE_PORT = "9001" }
+if ($forwards.Count -eq 0) { throw "Nenhum container encontrado para o ambiente '$Env'. A stack esta no ar?" }
 
 Write-Host ""
-Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "  SSH TUNNELS - SMART CORE V2" -ForegroundColor Cyan
-Write-Host "============================================" -ForegroundColor Cyan
+Write-Host "Conexoes locais (use a senha do env do ambiente):" -ForegroundColor Cyan
+Write-Host "  DATABASE_URL = postgresql://smartcore_app:SENHA@localhost:5434/smartcore_v2"
+Write-Host "  REDIS_URL    = redis://:SENHA@localhost:6379"
+Write-Host "  REDIS_BUS    = redis://:SENHA@localhost:6380"
+Write-Host "  MinIO API    = http://localhost:9000"
 Write-Host ""
-Write-Host "Servidor remoto: $HOSTINGER_SSH_HOST" -ForegroundColor Yellow
-Write-Host ""
-Write-Host "Portas mapeadas para localhost:" -ForegroundColor Green
-Write-Host "  PostgreSQL : localhost:5434  ->  $HOSTINGER_SSH_HOST`:$POSTGRES_PORT"
-Write-Host "  Redis Cache: localhost:6379  ->  $HOSTINGER_SSH_HOST`:$REDIS_PORT (allkeys-lru)"
-Write-Host "  Redis Bus  : localhost:6380  ->  $HOSTINGER_SSH_HOST`:$REDIS_BUS_PORT (noeviction)"
-Write-Host "  MinIO API  : localhost:9000  ->  $HOSTINGER_SSH_HOST`:$MINIO_PORT"
-Write-Host "  MinIO UI   : localhost:9001  ->  $HOSTINGER_SSH_HOST`:$MINIO_CONSOLE_PORT"
-Write-Host ""
-Write-Host "Configure o .env local da aplicacao com:" -ForegroundColor Cyan
-Write-Host "  DATABASE_URL=postgresql://smartcore_app:SENHA@localhost:5434/smartcore_v2"
-Write-Host "  REDIS_URL=redis://:SENHA@localhost:6379"
-Write-Host "  REDIS_BUS_URL=redis://:SENHA@localhost:6380"
-Write-Host "  MINIO_ENDPOINT=http://localhost:9000"
-Write-Host ""
-Write-Host "MinIO Console: http://localhost:9001" -ForegroundColor Blue
-Write-Host ""
-Write-Host "Pressione Ctrl+C para encerrar os tunnels." -ForegroundColor Yellow
-Write-Host ""
+Write-Host "Tunel ativo. Ctrl+C para encerrar." -ForegroundColor Yellow
 
-ssh -p $HOSTINGER_SSH_PORT `
-    -L "5434:localhost:$POSTGRES_PORT" `
-    -L "6379:localhost:$REDIS_PORT" `
-    -L "6380:localhost:$REDIS_BUS_PORT" `
-    -L "9000:localhost:$MINIO_PORT" `
-    -L "9001:localhost:$MINIO_CONSOLE_PORT" `
-    -N `
-    "$HOSTINGER_SSH_USER@$HOSTINGER_SSH_HOST"
+ssh @forwards -N $SshAlias

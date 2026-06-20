@@ -1,60 +1,53 @@
 #!/bin/bash
 # ============================================
-# SSH Tunnels - Desenvolvimento Local
+# SSH Tunnels para a stack remota — modelo FULL-DOCKER
 # Smart Core Assistant v2
 # ============================================
-# Mapeia as portas do Hostinger para localhost,
-# permitindo que o codigo Rust local conecte aos
-# bancos remotos como se fossem locais.
+# Postgres/Redis/MinIO NAO publicam portas no host (ficam so na rede interna do
+# compose). Este script descobre o IP de cada container no ambiente e faz o
+# forward SSH ate ele, para inspecao com ferramentas locais.
 #
-# Execute a partir da pasta infra/:
-#   cd infra && ./tunnel.sh
+# Para DESENVOLVIMENTO normal, prefira rodar a stack LOCALMENTE:
+#   cd docker/compose && docker compose --env-file env/dev.env up -d
 #
-# Mantenha este terminal aberto enquanto desenvolve.
-# Pressione Ctrl+C para encerrar os tunnels.
+# Uso:  ./infra/tunnel.sh [dev|prod]   (padrao: dev)
+# Requer SSH (alias hostinger-root em ~/.ssh/config). Ctrl+C encerra.
 # ============================================
+set -euo pipefail
 
-set -e
+ENVNAME="${1:-dev}"
+SSH_ALIAS="${SSH_ALIAS:-hostinger-root}"
+NET="smart-core-v2-${ENVNAME}_internal"
 
-if [ ! -f ".env.deploy" ]; then
-    echo "Erro: .env.deploy nao encontrado!"
+# servico:remoto:local
+SVCS=("postgres:5432:5434" "redis:6379:6379" "redis-bus:6379:6380" "minio:9000:9000")
+
+echo "Descobrindo IPs dos containers na rede '$NET'..."
+FW=()
+for entry in "${SVCS[@]}"; do
+    IFS=':' read -r svc remote local <<< "$entry"
+    container="smart-core-v2-${ENVNAME}-${svc}-1"
+    ip=$(ssh "$SSH_ALIAS" "docker inspect -f '{{(index .NetworkSettings.Networks \"$NET\").IPAddress}}' $container" 2>/dev/null | tr -d '[:space:]')
+    if [ -z "$ip" ]; then
+        echo "  ! $container nao encontrado/na rede (pulando)"
+        continue
+    fi
+    FW+=("-L" "${local}:${ip}:${remote}")
+    printf "  localhost:%-5s -> %s:%s  (%s)\n" "$local" "$ip" "$remote" "$svc"
+done
+
+if [ ${#FW[@]} -eq 0 ]; then
+    echo "Nenhum container encontrado para o ambiente '$ENVNAME'. A stack esta no ar?"
     exit 1
 fi
 
-source .env.deploy
+echo ""
+echo "Conexoes locais (use a senha do env do ambiente):"
+echo "  DATABASE_URL = postgresql://smartcore_app:SENHA@localhost:5434/smartcore_v2"
+echo "  REDIS_URL    = redis://:SENHA@localhost:6379"
+echo "  REDIS_BUS    = redis://:SENHA@localhost:6380"
+echo "  MinIO API    = http://localhost:9000"
+echo ""
+echo "Tunel ativo. Ctrl+C para encerrar."
 
-POSTGRES_PORT="${POSTGRES_PORT:-5432}"
-REDIS_PORT="${REDIS_PORT:-6379}"
-MINIO_PORT="${MINIO_PORT:-9000}"
-MINIO_CONSOLE_PORT="${MINIO_CONSOLE_PORT:-9001}"
-
-echo ""
-echo "============================================"
-echo "  SSH TUNNELS - SMART CORE V2"
-echo "============================================"
-echo ""
-echo "Servidor remoto: $HOSTINGER_SSH_HOST"
-echo ""
-echo "Portas mapeadas para localhost:"
-echo "  PostgreSQL : localhost:5432  ->  $HOSTINGER_SSH_HOST:$POSTGRES_PORT"
-echo "  Redis      : localhost:6379  ->  $HOSTINGER_SSH_HOST:$REDIS_PORT"
-echo "  MinIO API  : localhost:9000  ->  $HOSTINGER_SSH_HOST:$MINIO_PORT"
-echo "  MinIO UI   : localhost:9001  ->  $HOSTINGER_SSH_HOST:$MINIO_CONSOLE_PORT"
-echo ""
-echo "Configure o .env local da aplicacao com:"
-echo "  DATABASE_URL=postgresql://smartcore_app:SENHA@localhost:5432/smartcore_v2"
-echo "  REDIS_URL=redis://:SENHA@localhost:6379"
-echo "  MINIO_ENDPOINT=http://localhost:9000"
-echo ""
-echo "MinIO Console: http://localhost:9001"
-echo ""
-echo "Pressione Ctrl+C para encerrar os tunnels."
-echo ""
-
-ssh -p ${HOSTINGER_SSH_PORT:-22} \
-    -L "5432:localhost:$POSTGRES_PORT" \
-    -L "6379:localhost:$REDIS_PORT" \
-    -L "9000:localhost:$MINIO_PORT" \
-    -L "9001:localhost:$MINIO_CONSOLE_PORT" \
-    -N \
-    "$HOSTINGER_SSH_USER@$HOSTINGER_SSH_HOST"
+ssh "${FW[@]}" -N "$SSH_ALIAS"

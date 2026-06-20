@@ -43,14 +43,13 @@ for env in "dev" "prod"; do
     rm -f "/etc/systemd/system/smartcore-$env.target"
 done
 
-echo "2. Parando e desabilitando Caddy no host..."
-if systemctl is-active caddy &>/dev/null || systemctl is-enabled caddy &>/dev/null; then
-    echo "Desabilitando Caddy..."
-    systemctl stop caddy || true
-    systemctl disable caddy || true
-fi
-# Opcional: remove arquivo do Caddy no host para evitar conflito
-rm -f /etc/caddy/Caddyfile || true
+echo "2. Caddy do host: MANTIDO (NAO tocar)."
+# ATENCAO: neste servidor o Caddy do host e a BORDA COMPARTILHADA — serve o painel
+# v1 (smartcoreassistant.com.br) e roteia o admin v2 (conf.d/admin.caddy ->
+# localhost:50051 + /srv/smart-core-admin). Para-lo derrubaria o v1. A stack v2
+# full-docker NAO sobe um Caddy proprio em 80/443; o runtime_api publica 50051 no
+# host e o Caddy do host faz o reverse_proxy. Portanto, NAO paramos nem removemos
+# o Caddy aqui.
 
 echo "3. Recarregando daemon do systemd..."
 systemctl daemon-reload

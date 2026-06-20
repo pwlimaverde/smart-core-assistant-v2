@@ -9,10 +9,13 @@
 
 $ErrorActionPreference = "Stop"
 
-# Caminhos padrão dos arquivos de ambiente
+# Caminhos padrão dos arquivos de ambiente (modelo full-docker). Os .env reais
+# (com segredos) ficam fora do git, em docker/compose/env/. Faça uma cópia local
+# antes de rodar este backup, se eles vivem só no servidor.
 $EnvFiles = @{
-    "App-Local"  = "../.env"
-    "Deploy-Config" = "./.env.deploy"
+    "App-Local"   = "../.env"
+    "Compose-Dev"  = "../docker/compose/env/dev.env"
+    "Compose-Prod" = "../docker/compose/env/prod.env"
 }
 
 # Criar pasta de backup se não existir
