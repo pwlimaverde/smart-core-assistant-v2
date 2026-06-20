@@ -1,15 +1,14 @@
 {
-  "active": [],
-  "completed": [
+  "active": [
     {
-      "slug": "painel-admin-superusuario",
-      "path": "plans/archive/painel-admin-superusuario/painel-admin-superusuario.md",
-      "title": "Painel Gerencial do Superusuário (Admin Total)",
-      "summary": "Construir o painel de controle total para o superusuário: `AdminService` gRPC-Web tipado",
-      "linkedAt": "2026-06-19T00:52:25.457Z",
-      "completedAt": "2026-06-20T00:00:00.000Z",
-      "status": "completed"
+      "slug": "migracao-full-docker",
+      "path": "plans/migracao-full-docker.md",
+      "title": "Migração Full-Docker (dev + prod) — Plano Canônico",
+      "summary": "Migrar a infra híbrida (binários Rust via systemd no host Hostinger + dados/observabilidade",
+      "linkedAt": "2026-06-20T14:37:35.423Z",
+      "status": "active"
     }
   ],
-  "primary": null
+  "completed": [],
+  "primary": "migracao-full-docker"
 }

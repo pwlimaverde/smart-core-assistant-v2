@@ -113,7 +113,15 @@
       "Bash(seq 1 90)",
       "Bash(grep -q \"PASSARAM\\\\|FALHARAM\\\\|Tudo certo\\\\|test result: FAILED\\\\|error\\\\[\" /c/tmp/rust_fast2.log)",
       "Bash(grep -E \"test result|PASSARAM|FALHARAM|Tudo certo|error\\\\[|warning:\" /c/tmp/rust_fast2.log)",
-      "PowerShell(Set-Location C:\\\\PROJETOS\\\\FULL-STACK\\\\smart-core-assistant-v2\\\\server; cargo fmt -- --check 2>&1 | Select-Object -First 20; Write-Host \"EXIT:$LASTEXITCODE\")"
+      "PowerShell(Set-Location C:\\\\PROJETOS\\\\FULL-STACK\\\\smart-core-assistant-v2\\\\server; cargo fmt -- --check 2>&1 | Select-Object -First 20; Write-Host \"EXIT:$LASTEXITCODE\")",
+      "Bash(cd /c/PROJETOS/FULL-STACK/smart-core-assistant-v2 && mkdir -p smart-agent-config/.context/plans/migracao-full-docker && echo \"dir criado\" && echo \"=== doc_dev/libs ===\" && ls -R smart-agent-config/doc_dev/libs/ 2>/dev/null | head -60)",
+      "WebFetch(domain:docs.docker.com)",
+      "WebFetch(domain:lpalmieri.com)",
+      "WebFetch(domain:earthly.dev)",
+      "WebFetch(domain:docs.github.com)"
+    ],
+    "additionalDirectories": [
+      "c:\\c\\PROJETOS\\FULL-STACK\\smart-core-assistant-v2\\smart-agent-config\\.context\\plans"
     ]
   }
 }

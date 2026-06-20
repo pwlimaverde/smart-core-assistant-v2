@@ -3,7 +3,7 @@
 This directory contains plans for coordinating work across documentation and playbooks.
 
 ## Plan Queue
-_Nenhum plano ativo._ Último concluído: [Painel Admin Superusuario](./archive/painel-admin-superusuario/painel-admin-superusuario.md) (arquivado em 2026-06-20).
+1. [Migracao Full Docker](./migracao-full-docker.md)
 
 ## How To Create Or Update Plans
 - Run "dotcontext plan <name>" to scaffold a new plan template.

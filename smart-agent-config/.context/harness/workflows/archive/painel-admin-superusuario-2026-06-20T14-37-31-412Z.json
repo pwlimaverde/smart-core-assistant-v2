@@ -1,0 +1,99 @@
+{
+  "version": 2,
+  "workflowType": "prevc",
+  "updatedAt": "2026-06-20T14:37:31.411Z",
+  "status": {
+    "project": {
+      "name": "painel-admin-superusuario",
+      "scale": 3,
+      "started": "2026-06-19T00:52:23.196Z",
+      "current_phase": "R",
+      "settings": {
+        "autonomous_mode": false,
+        "require_plan": true,
+        "require_approval": true
+      },
+      "plan": "painel-admin-superusuario"
+    },
+    "phases": {
+      "P": {
+        "status": "completed",
+        "started_at": "2026-06-19T00:52:23.196Z",
+        "completed_at": "2026-06-19T00:52:34.963Z",
+        "outputs": [
+          {
+            "path": ".context/plans/painel-admin-superusuario.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/painel-admin-superusuario/plano_completo_painel-admin-superusuario.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/painel-admin-superusuario/info_aux_painel-admin-superusuario.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "R": {
+        "status": "in_progress",
+        "started_at": "2026-06-19T00:52:34.966Z"
+      },
+      "E": {
+        "status": "pending"
+      },
+      "V": {
+        "status": "pending"
+      },
+      "C": {
+        "status": "pending"
+      }
+    },
+    "agents": {},
+    "roles": {},
+    "approval": {
+      "plan_created": true,
+      "plan_approved": false
+    },
+    "execution": {
+      "history": [
+        {
+          "timestamp": "2026-06-19T00:52:23.196Z",
+          "phase": "P",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-19T00:52:25.461Z",
+          "phase": "P",
+          "action": "plan_linked",
+          "plan": "painel-admin-superusuario"
+        },
+        {
+          "timestamp": "2026-06-19T00:52:34.963Z",
+          "phase": "P",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-19T00:52:34.966Z",
+          "phase": "R",
+          "action": "started"
+        },
+        {
+          "phase": "R",
+          "action": "plan_phase_updated",
+          "plan": "painel-admin-superusuario",
+          "description": "Plan phase phase-p updated to completed",
+          "timestamp": "2026-06-19T00:52:42.534Z"
+        }
+      ],
+      "last_activity": "2026-06-19T00:52:42.534Z",
+      "resume_context": "Fase do plano atualizada"
+    }
+  },
+  "binding": {
+    "workflowName": "painel-admin-superusuario",
+    "sessionId": "60677863-5a28-46f8-a975-f50b84abd988",
+    "createdAt": "2026-06-19T00:52:23.203Z",
+    "updatedAt": "2026-06-19T00:52:34.972Z"
+  }
+}
