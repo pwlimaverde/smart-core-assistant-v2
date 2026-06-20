@@ -2,6 +2,28 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-06-20] - Painel Gerencial do Superusuário (Admin Total)
+
+> Ciclo PREVC `painel-admin-superusuario` concluído e arquivado. Final-review:
+> `final-review-painel-admin-superusuario.md` — qualidade **CORRIGIDO**.
+
+### Adicionado
+- **Contratos:** `admin.proto`/`admin.fbs` com o `AdminService` (CoreSettings, TenantConfig, Tenants, Billing, Evolution, Feature Flags, Auditoria/Saúde e export CSV em stream); `build.rs` passa a gerar o `admin.proto`.
+- **runtime_api:** fachada gRPC-Web `AdminFacade` com guarda `exigir_superuser_do_metadata` (JWT + blocklist Redis + `is_superuser`) delegando ao `data_postgres`/`control_plane`.
+- **data_postgres:** handlers de tenants, planos, assinaturas, pagamentos, feature flags (+ overrides), auditoria, saúde, resumo do dashboard e export CSV; migration `0012_feature_flags` (com RLS por tenant).
+- **control_plane:** handler `TestEvolutionConnection` + módulo `evolution` (verificação HTTP via reqwest/secrecy).
+- **Flutter:** módulo `admin_module` (domain/data/presentation) consumindo o `AdminService` via gRPC-Web; `api_client` expõe `AdminServiceClient`; `smart-core-admin` registra o módulo e redireciona o superusuário para `/admin/core-settings`.
+
+### Corrigido (follow-up do final-review)
+- **Auditoria de mutações sensíveis:** adicionados eventos `feature_flag_set` (flag global e override), `tenant_created` (passa `redis_conn` ao handler/rota), `tenant_api_key_changed` (WARN, só nomes de chaves) e `connection_tested` no `TestEvolutionConnection`.
+- **Observabilidade:** `#[tracing::instrument(skip_all)]` nos handlers `test_evolution_connection`/`register_tenant` do `control_plane`.
+- **SuperuserGuard (Flutter):** passou a exigir `isSuperuser` (não só autenticação); não-superusuário é redirecionado para `/login`. Teste do guard atualizado.
+
+### Pendências remanescentes (trabalho futuro)
+- **Pagamento manual não estende `current_period_end`** da subscription (DoD parcial; exige decisão de modelagem).
+- **`data_exported`** não emitido em `ExportTenantsCsv` (leitura, não mutação).
+- **`user_agent`** não persistido no `audit_log` (limitação pré-existente de `AuditLogPayload`).
+
 ## [2026-06-15] - Deploy do Admin Flutter Web no CI/CD sob `/v2/admin`
 
 > Ciclo PREVC `deploy-admin-web` concluído. Final-review:

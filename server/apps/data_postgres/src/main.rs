@@ -282,7 +282,7 @@ async fn main() -> anyhow::Result<()> {
         })
         .route("CreateTenant", move |env| {
             let state = state_for_create_tenant.clone();
-            Box::pin(async move { handler_create_tenant(state.pool, env).await })
+            Box::pin(async move { handler_create_tenant(state.pool, state.redis_conn, env).await })
         })
         .route("CreateSuperuser", move |env| {
             let state = state_for_create_superuser.clone();
@@ -694,7 +694,11 @@ async fn handler_list_atendimentos(pool: PgPool, env: Envelope) -> Envelope {
 
 /// Cria um novo tenant (operação administrativa do control_plane). A própria
 /// `TenantRepository::criar` configura `app.current_tenant` para satisfazer o RLS.
-async fn handler_create_tenant(pool: PgPool, env: Envelope) -> Envelope {
+async fn handler_create_tenant(
+    pool: PgPool,
+    mut redis_conn: ConnectionManager,
+    env: Envelope,
+) -> Envelope {
     let payload_json: serde_json::Value =
         serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
     let name = payload_json
@@ -743,6 +747,18 @@ async fn handler_create_tenant(pool: PgPool, env: Envelope) -> Envelope {
 
     match resultado {
         Ok(tenant) => {
+            // Auditoria obrigatória: criação de tenant é alteração cadastral sensível
+            // (diretriz de segurança §4.2). O `context` registra apenas identificadores,
+            // nunca segredos (a api_key gerada não entra no evento).
+            publicar_auditoria(
+                &mut redis_conn,
+                &env,
+                "tenant_created",
+                format!("Tenant '{}' criado", name),
+                serde_json::json!({ "id": tenant.id.to_string(), "name": name, "slug": slug }),
+            )
+            .await;
+
             let reply = serde_json::json!({ "status": "success", "tenant": tenant });
             Envelope {
                 kind: MessageKind::Reply as i32,
@@ -1807,14 +1823,22 @@ async fn handler_update_tenant_config(
     };
 
     let mut novas_keys = serde_json::Map::new();
+    // Coleta apenas os NOMES das chaves de API efetivamente alteradas, para auditoria
+    // dedicada (`tenant_api_key_changed`). NUNCA registramos o valor, só o nome da chave.
+    let mut chaves_alteradas: Vec<String> = Vec::new();
     if let Some(req_keys) = payload_json.get("api_keys").and_then(|v| v.as_object()) {
         for key_name in &["openai_api_key", "groq_api_key", "google_api_key"] {
             if let Some(val_str) = req_keys.get(*key_name).and_then(|v| v.as_str()) {
                 if val_str == "••••••••" {
+                    // Máscara enviada no update preserva o valor existente (sem alteração).
                     if let Some(existente) = api_keys_atual.get(*key_name) {
                         novas_keys.insert(key_name.to_string(), existente.clone());
                     }
                 } else if val_str.is_empty() {
+                    // Remoção da chave conta como alteração.
+                    if api_keys_atual.get(*key_name).is_some_and(|v| !v.is_null()) {
+                        chaves_alteradas.push(key_name.to_string());
+                    }
                     novas_keys.insert(key_name.to_string(), serde_json::Value::Null);
                 } else {
                     match cipher.encrypt(val_str.as_bytes()) {
@@ -1825,6 +1849,7 @@ async fn handler_update_tenant_config(
                                 "tag": tag
                             });
                             novas_keys.insert(key_name.to_string(), key_obj);
+                            chaves_alteradas.push(key_name.to_string());
                         }
                         Err(err) => {
                             return erro(
@@ -1957,6 +1982,19 @@ async fn handler_update_tenant_config(
         serde_json::json!({}),
     )
     .await;
+
+    // Evento dedicado e mais severo (WARN) quando chaves de API mudam (catálogo §12 +
+    // diretriz de segurança §4.2). Registra apenas os NOMES das chaves, nunca os valores.
+    if !chaves_alteradas.is_empty() {
+        publicar_auditoria(
+            &mut redis_conn,
+            &env,
+            "tenant_api_key_changed",
+            "Chaves de API do tenant foram alteradas".to_string(),
+            serde_json::json!({ "chaves_alteradas": chaves_alteradas }),
+        )
+        .await;
+    }
 
     ok_reply(
         &env,
@@ -2937,6 +2975,24 @@ async fn handler_set_feature_flag(
             )
             .await;
 
+            // Auditoria obrigatória: toda mutação de feature flag gera evento (catálogo §12).
+            // O `context` registra apenas a chave, o escopo e o novo valor — nunca segredos.
+            publicar_auditoria(
+                &mut redis_conn,
+                &env,
+                "feature_flag_set",
+                format!(
+                    "Feature flag global '{}' definida como {}",
+                    key, enabled_globally
+                ),
+                serde_json::json!({
+                    "flag_key": key,
+                    "escopo": "global",
+                    "enabled_globally": enabled_globally,
+                }),
+            )
+            .await;
+
             ok_reply(
                 &env,
                 "SetFeatureFlagReply",
@@ -3016,6 +3072,33 @@ async fn handler_set_feature_flag_override(
             };
             let _: Result<(), redis::RedisError> =
                 redis::AsyncCommands::publish(&mut redis_conn, channel, val_str).await;
+
+            // Auditoria obrigatória: override de feature flag por tenant também é mutação (catálogo §12).
+            let descricao = if remove_override {
+                format!(
+                    "Override da feature flag '{}' removido do tenant '{}'",
+                    key, tenant_id_str
+                )
+            } else {
+                format!(
+                    "Feature flag '{}' definida como {} para o tenant '{}'",
+                    key, enabled, tenant_id_str
+                )
+            };
+            publicar_auditoria(
+                &mut redis_conn,
+                &env,
+                "feature_flag_set",
+                descricao,
+                serde_json::json!({
+                    "flag_key": key,
+                    "escopo": "tenant",
+                    "tenant_id": tenant_id_str,
+                    "enabled": enabled,
+                    "remove_override": remove_override,
+                }),
+            )
+            .await;
 
             ok_reply(
                 &env,
@@ -3428,7 +3511,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_handler_create_tenant() {
-        let (pool, _) = setup_teste().await;
+        let (pool, redis_conn) = setup_teste().await;
 
         let tenant_name = format!("Tenant Teste {}", Uuid::new_v4());
         let payload = serde_json::json!({
@@ -3452,7 +3535,7 @@ mod tests {
             ..Default::default()
         };
 
-        let resp = handler_create_tenant(pool.clone(), req).await;
+        let resp = handler_create_tenant(pool.clone(), redis_conn, req).await;
         assert_eq!(resp.kind, MessageKind::Reply as i32);
         assert_eq!(resp.method, "CreateTenantReply");
 

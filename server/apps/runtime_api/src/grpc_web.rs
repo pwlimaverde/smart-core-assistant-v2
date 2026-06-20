@@ -1852,6 +1852,7 @@ impl AdminService for AdminFacade {
     ) -> Result<Response<TestEvolutionConnectionResponse>, Status> {
         let claims = exigir_superuser_do_metadata(&self.deps, &self.bus, &req).await?;
         let traceparent = traceparent_do_metadata(&req);
+        let ip = ip_do_metadata(&req);
         let inner = req.into_inner();
 
         let payload = serde_json::json!({
@@ -1891,12 +1892,33 @@ impl AdminService for AdminFacade {
                 let val: serde_json::Value = serde_json::from_slice(&resp.payload)
                     .map_err(|e| Status::internal(e.to_string()))?;
 
+                let state = val
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+
+                // Auditoria obrigatória do teste de conexão (catálogo §12). O `context`
+                // registra apenas o tenant alvo e o estado retornado — nunca a api_key.
+                let tenant_alvo = Uuid::parse_str(&inner.tenant_id)
+                    .ok()
+                    .filter(|u| !u.is_nil());
+                let mut bus = self.bus.clone();
+                publicar_auditoria_borda(
+                    &mut bus,
+                    tenant_alvo,
+                    "INFO",
+                    "connection_tested",
+                    "Teste de conexão Evolution executado (borda gRPC-Web).".to_string(),
+                    serde_json::json!({ "tenant_id": inner.tenant_id, "state": state }),
+                    claims.sub.parse::<i32>().ok(),
+                    &traceparent,
+                    ip,
+                )
+                .await;
+
                 Ok(Response::new(TestEvolutionConnectionResponse {
-                    status: val
-                        .get("status")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
+                    status: state,
                     error_message: val
                         .get("error_message")
                         .and_then(|v| v.as_str())

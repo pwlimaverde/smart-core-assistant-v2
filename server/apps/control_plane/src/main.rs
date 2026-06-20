@@ -53,6 +53,10 @@ async fn main() -> anyhow::Result<()> {
 
 /// Handler administrativo: encaminha o cadastro do tenant ao `data_postgres` por contrato
 /// (RPC `CreateTenant`). O control_plane não acessa o banco diretamente.
+#[tracing::instrument(
+    skip_all,
+    fields(service = "control_plane", rpc = "RegisterTenant", traceparent = %env.traceparent)
+)]
 async fn handler_register_tenant(env: Envelope) -> Envelope {
     let pg_client = match transport::conectar_cliente("data_postgres").await {
         Ok(c) => c,
@@ -94,6 +98,12 @@ async fn handler_register_tenant(env: Envelope) -> Envelope {
     }
 }
 
+/// Testa a conexão Evolution de um tenant. `skip_all` garante que nenhuma credencial
+/// (token global ou chave da instância) entre nos campos do span de tracing.
+#[tracing::instrument(
+    skip_all,
+    fields(service = "control_plane", rpc = "TestEvolutionConnection", traceparent = %env.traceparent)
+)]
 async fn handler_test_evolution_connection(env: Envelope) -> Envelope {
     let pg_client = match transport::conectar_cliente("data_postgres").await {
         Ok(c) => c,

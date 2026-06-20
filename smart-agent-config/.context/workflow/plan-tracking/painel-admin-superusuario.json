@@ -3,7 +3,23 @@
     "phase-p": {
       "status": "completed",
       "updatedAt": "2026-06-19T00:52:42.528Z"
+    },
+    "phase-r": {
+      "status": "completed",
+      "updatedAt": "2026-06-20T00:00:00.000Z"
+    },
+    "phase-e": {
+      "status": "completed",
+      "updatedAt": "2026-06-20T00:00:00.000Z"
+    },
+    "phase-v": {
+      "status": "completed",
+      "updatedAt": "2026-06-20T00:00:00.000Z"
+    },
+    "phase-c": {
+      "status": "completed",
+      "updatedAt": "2026-06-20T00:00:00.000Z"
     }
   },
-  "progress": 0
+  "progress": 100
 }

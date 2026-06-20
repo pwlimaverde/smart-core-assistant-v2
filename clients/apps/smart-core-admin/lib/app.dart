@@ -59,11 +59,14 @@ class SmartCoreAdminApp extends StatelessWidget {
     );
   }
 
-  /// Guard de boot + autenticação (resolve a partir do estado injetado).
-  static String? _authRedirect(BuildContext context, GoRouterState state) =>
-      authRedirectTarget(
-        booted: inject<BootState>().value,
-        isAuthenticated: inject<login.AuthService>().isAuthenticated,
-        location: state.matchedLocation,
-      );
+  /// Guard de boot + autenticação + superusuário (resolve a partir do estado injetado).
+  static String? _authRedirect(BuildContext context, GoRouterState state) {
+    final auth = inject<login.AuthService>();
+    return authRedirectTarget(
+      booted: inject<BootState>().value,
+      isAuthenticated: auth.isAuthenticated,
+      isSuperuser: auth.currentSession?.isSuperuser ?? false,
+      location: state.matchedLocation,
+    );
+  }
 }
