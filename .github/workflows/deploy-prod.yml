@@ -97,7 +97,7 @@ jobs:
           TAG="${GITHUB_REF_NAME}"
           BACKUP_FILE="/opt/smartcore/prod/backups/db-backup-${TAG}-$(date +%Y%m%d%H%M).dump"
           mkdir -p /opt/smartcore/prod/backups
-          CONTAINER="smartcore-prod-postgres-1"
+          CONTAINER="smart-core-v2-prod-postgres-1"
           if docker ps --format '{{.Names}}' | grep -q "$CONTAINER"; then
             echo "Gerando backup do banco usando $CONTAINER..."
             docker exec "$CONTAINER" pg_dump -U smartcore_app -F c smartcore_v2 > "$BACKUP_FILE" \
@@ -123,7 +123,7 @@ jobs:
       - name: Compose pull & up (PROD)
         working-directory: docker/compose
         run: |
-          export COMPOSE_PROJECT_NAME=smartcore-prod
+          export COMPOSE_PROJECT_NAME=smart-core-v2-prod
           docker compose --env-file env/prod.env pull
           docker compose --env-file env/prod.env up -d --remove-orphans
 

@@ -118,7 +118,25 @@
       "WebFetch(domain:docs.docker.com)",
       "WebFetch(domain:lpalmieri.com)",
       "WebFetch(domain:earthly.dev)",
-      "WebFetch(domain:docs.github.com)"
+      "WebFetch(domain:docs.github.com)",
+      "Bash(gh auth *)",
+      "Bash(command -v ssh)",
+      "Bash(sed -n '/Host hostinger-root/,/^$/p' ~/.ssh/config)",
+      "Bash(timeout 20 ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=accept-new hostinger-root 'echo CONECTADO: $\\(hostname\\) ; docker --version')",
+      "Bash(timeout 40 ssh -o BatchMode=yes -o ConnectTimeout=15 hostinger-root 'bash -s')",
+      "Bash(timeout 40 ssh -o BatchMode=yes hostinger-root 'bash -s')",
+      "Bash(timeout 30 ssh -o BatchMode=yes hostinger-root 'echo \"===== /etc/caddy/Caddyfile =====\"; cat /etc/caddy/Caddyfile 2>/dev/null | grep -vE \"^\\\\s*#\" | grep -vE \"^\\\\s*$\"; echo \"\"; echo \"===== imports? =====\"; ls -la /etc/caddy/conf.d/ 2>/dev/null; echo \"\"; echo \"===== como o v1 painel \\(smartcoreassistant_app\\) expoe porta? =====\"; docker port smartcoreassistant_app 2>/dev/null || echo \"\\(sem portas publicadas - atras de proxy\\)\"')",
+      "Bash(timeout 35 ssh -o BatchMode=yes hostinger-root 'bash -s')",
+      "Bash(timeout 60 ssh -o BatchMode=yes hostinger-root 'bash -s')",
+      "Bash(timeout 90 ssh -o BatchMode=yes hostinger-root 'bash -s')",
+      "Bash(git bundle *)",
+      "Bash(scp -o BatchMode=yes /c/tmp/dev.bundle hostinger-root:/tmp/dev.bundle)",
+      "Bash(ssh -o BatchMode=yes hostinger-root 'ls -la /tmp/dev.bundle && cd /tmp && git bundle verify /tmp/dev.bundle 2>&1 | tail -3')",
+      "Bash(timeout 8 ping -n 2 srv1321059.hstgr.cloud)",
+      "Bash(ping -c 2 srv1321059.hstgr.cloud)",
+      "Bash(timeout 15 ssh -o BatchMode=yes -o ConnectTimeout=10 hostinger-root 'echo SSH_OK')",
+      "Bash(timeout 50 ssh -o BatchMode=yes hostinger-root 'bash -s')",
+      "Bash(timeout 40 ssh -o BatchMode=yes hostinger-root 'echo \"=== smartcore-dev: status de todos ===\" && docker ps -a --filter \"name=smartcore-dev-\" --format \"{{.Names}}\\\\t{{.Status}}\" | sort && echo \"\" && echo \"=== algum reiniciando/exited? ===\" && docker ps -a --filter \"name=smartcore-dev-\" --format \"{{.Status}}\" | grep -ciE \"restart|exited|dead\" | xargs -I{} echo \"{} container\\(s\\) com problema\"')"
     ],
     "additionalDirectories": [
       "c:\\c\\PROJETOS\\FULL-STACK\\smart-core-assistant-v2\\smart-agent-config\\.context\\plans"

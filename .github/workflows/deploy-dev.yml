@@ -113,7 +113,7 @@ jobs:
       - name: Compose pull & up (DEV)
         working-directory: docker/compose
         run: |
-          export COMPOSE_PROJECT_NAME=smartcore-dev
+          export COMPOSE_PROJECT_NAME=smart-core-v2-dev
           docker compose --env-file env/dev.env pull
           docker compose --env-file env/dev.env up -d --remove-orphans
 

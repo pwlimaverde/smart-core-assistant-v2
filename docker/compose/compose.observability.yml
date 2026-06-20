@@ -1,8 +1,8 @@
-name: smartcore-observability
+name: smart-core-v2-observability
 
 networks:
-  smartcore_observability:
-    name: smartcore_observability
+  smart_core_v2_observability:
+    name: smart_core_v2_observability
     driver: bridge
 
 services:
@@ -10,7 +10,7 @@ services:
     image: otel/opentelemetry-collector-contrib:latest
     volumes:
       - ../observability/otel-collector-config.yml:/etc/otelcol-contrib/config.yaml:ro
-    networks: [smartcore_observability]
+    networks: [smart_core_v2_observability]
     restart: unless-stopped
 
   loki:
@@ -18,7 +18,7 @@ services:
     volumes:
       - ../observability/loki-config.yml:/etc/loki/local-config.yaml:ro
       - loki_data:/loki
-    networks: [smartcore_observability]
+    networks: [smart_core_v2_observability]
     restart: unless-stopped
 
   tempo:
@@ -27,7 +27,7 @@ services:
     volumes:
       - ../observability/tempo-config.yml:/etc/tempo/tempo.yaml:ro
       - tempo_data:/var/tempo
-    networks: [smartcore_observability]
+    networks: [smart_core_v2_observability]
     restart: unless-stopped
 
   prometheus:
@@ -35,7 +35,7 @@ services:
     volumes:
       - ../observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
-    networks: [smartcore_observability]
+    networks: [smart_core_v2_observability]
     restart: unless-stopped
 
   grafana:
@@ -45,7 +45,7 @@ services:
     volumes:
       - ../observability/provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana
-    networks: [smartcore_observability]
+    networks: [smart_core_v2_observability]
     restart: unless-stopped
 
   promtail:
@@ -54,7 +54,7 @@ services:
       - ../observability/promtail-config.yml:/etc/promtail/config.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-    networks: [smartcore_observability]
+    networks: [smart_core_v2_observability]
     restart: unless-stopped
 
 volumes:

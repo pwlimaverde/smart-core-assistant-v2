@@ -4,7 +4,7 @@ networks:
   internal:
     driver: bridge
   observability:
-    name: smartcore_observability
+    name: smart_core_v2_observability
     external: true
 
 services:
@@ -60,6 +60,30 @@ services:
     volumes: [minio_data:/data]
     networks: [internal]
     restart: unless-stopped
+
+  # Provisiona o bucket no MinIO (dev). Sem ele, o data_storage entra em crash-loop
+  # num volume novo ("bucket inexistente"). One-off idempotente (só dev; prod usa R2).
+  minio-setup:
+    image: minio/mc:latest
+    profiles: ["dev"]
+    depends_on:
+      minio: { condition: service_started }
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET: ${S3_BUCKET:-media-smart-core-assistant}
+    networks: [internal]
+    restart: "no"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        for i in $$(seq 1 30); do
+          mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" && break
+          echo "aguardando minio... ($$i)"; sleep 2
+        done
+        mc mb --ignore-existing "local/$$S3_BUCKET"
+        echo "bucket $$S3_BUCKET pronto"
 
   # ---------- SERVICOS RUST (imagem unica, command por servico) ----------
   data_postgres:
