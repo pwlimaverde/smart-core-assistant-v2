@@ -108,7 +108,6 @@ try {
     $env:SQLX_OFFLINE = "true"
     cargo clippy --all-targets --all-features -- -D warnings
     if ($LASTEXITCODE -ne 0) { $falhas += "clippy" } else { Write-Host "ok" -ForegroundColor Green }
-    $env:SQLX_OFFLINE = ""
 
     # --------------------------------------------
     # 4. Testes
