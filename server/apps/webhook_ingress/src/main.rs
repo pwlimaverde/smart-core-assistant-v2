@@ -28,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
     let redis_url =
-        env::var("SMARTCORE_REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+        env::var("REDIS_BUS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
 
     let client = redis::Client::open(redis_url)?;
     let redis = redis::aio::ConnectionManager::new(client).await?;
