@@ -1,79 +1,70 @@
-# Final Review — migracao-full-docker
-Data: 2026-06-20 · Modelo: Opus · Diff auditado: commit `df02554` (working tree limpo)
+# Final Review — camada-abstracao-mensageria
+Data: 2026-06-21 · Modelo: Opus · Diff: main...feature/camada-abstracao-mensageria
 
-## Rótulo: CORRIGIDO  (informativo — não bloqueia o ciclo)
+## Rótulo: CORRIGIDO
 
 ## Resumo das correções
-A implementação do commit `df02554` estava majoritariamente fiel ao plano (transport,
-Dockerfile, compose, edge, workflows, remoção do systemd). Foram corrigidos **10 desvios**:
-3 bugs que impediriam o deploy (Caddyfile sem `DOMAIN`, `env_file` em YAML de fluxo inválido,
-referência `id.meta-edge` no workflow prod), 1 script quebrado (`server-setup.sh` com bloco
-de echo malformado), 1 falha de versionamento (env.example gitignored), o descompasso de
-caminho do env real entre `server-setup.sh` e os workflows, e a limpeza de configuração
-morta (compose antigos + scripts de deploy host obsoletos).
+- **DESVIO CRÍTICO corrigido**: `admin_pool` agora é mantido vivo em `AppState` do `data_postgres` e usado pelo handler `handler_admin_list_all_connected_instances` para bypassar a RLS na consulta cross-tenant. Sem isso, `bulk_disconnect` sempre retornava count=0.
+- **Comentário corrigido**: bloco impreciso "vamos executar e ver se funciona" em `whatsapp.rs:admin_listar_todas_conectadas` substituído por explicação técnica do requisito de BYPASSRLS.
+- Desvios menores (audit sem ip/user_agent; audit de bulk_disconnect apenas no control_plane): registrados como decisões autônomas — sem alteração de código.
+
+---
 
 ## 1. Plano vs. Implementado
 | Item do plano | Status | Observação |
 |---------------|--------|------------|
-| E.1 Transport resolve hostname TCP (`Endpoint::Tcp(String)` + `ToSocketAddrs`) | ✅ | Fiel: parse validado, bind/connect via `as_str()`, teste de hostname adicionado, testes antigos ajustados. |
-| E.2 Dockerfile server (cargo-chef, flatc URL do CI, SQLX_OFFLINE, debian-slim non-root, sem ENTRYPOINT) | ✅ | Fiel; `libpq5` corretamente ausente. |
-| E.3 `compose.yml` (7 serviços, minio profile dev, redes internal+observability, healthchecks `$$`) | ⚠️→✅ | `env_file` em sequência de fluxo quebrava o YAML; edge sem `DOMAIN`. Corrigidos. |
-| E.4 `compose.observability.yml` (projeto próprio cria a rede external) | ✅ | Fiel. |
-| E.5 Edge (Caddy + bundle, HTTP/1.1 sem h2c, persiste `caddy_data`) | ⚠️→✅ | Caddyfile usa `{$DOMAIN}` mas o container não recebia a var. Corrigido. |
-| E.6 Env-files de exemplo versionados | ❌→✅ | Existiam no working tree mas **gitignored** (`env/` pegava `docker/compose/env/`). Agora versionados. |
-| E.7 Workflows GHCR (tags por ambiente, approval prod, cache scope) | ⚠️→✅ | `deploy-prod` referenciava `id.meta-edge` (inválido) e ambos não provisionavam o env real. Corrigidos. |
-| E.8 Remoções (systemd, Caddyfile host, provisioning) | ⚠️→✅ | systemd e `infra/Caddyfile` removidos; faltou remover compose antigos e scripts host obsoletos. Removidos agora. |
-| Transport: testes mantidos + novo teste hostname | ✅ | `parses_tcp_endpoint_com_hostname` presente. |
-| `cleanup-hostinger.sh` (limpeza do legado) | ✅ | Presente e com sintaxe válida. |
+| `infrastructure_messaging` (trait + tipos normalizados) | ✅ | MessagingProvider 11 métodos, ConnectionState, SecretString nas assinaturas. Sem runtime/I/O. |
+| `infrastructure_evolution` (impl REST Evolution API) | ➕ | Conforme + melhoria: `send_text` também skipa `text` (PII) no `instrument`, além de `instance_token`. |
+| `0008_whatsapp_sync.sql` (schema genérico, 3 tabelas) | ✅ | RLS+FORCE em todas as tabelas. UNIQUE(tenant_id,name). `provider` sem default. |
+| `infrastructure_postgres/integracoes/whatsapp.rs` (repositório genérico) | ✅ | `evolution.rs` removido. Traits `WhatsappInstanceRepository` e `WhatsappContactRepository` implementadas. Bug de comentário corrigido. |
+| `webhook_ingress` (axum 0.8 local, normaliza webhooks) | ✅ | axum 0.8 local (não no workspace). Rota `{provider}/{tenant_id}/{instance_id}`. `body` skipado. Retorna 202 ACCEPTED. |
+| `data_whatsapp` (orquestrador RPC, 7 RPCs) | ⚠️ | Todos 7 RPCs implementados. Audit de bulk_disconnect no control_plane (não duplicado em data_whatsapp — ver §3). |
+| `control_plane`: evolution.rs legado removido | ✅ | `src/evolution.rs` deletado. Novo handler `AdminBulkDisconnect` delega a data_whatsapp. |
+| `control_plane`: endpoint admin bulk_disconnect | ⚠️ | Implementado como RPC (não HTTP endpoint axum como planejado). Funcional; ip/user_agent ausentes (ver §3). |
+| `data_postgres`: handlers whatsapp registrados (7) | ✅ | Todos 7 handlers registrados. Admin_pool mantido vivo (bug crítico corrigido). |
+| axum 0.8 SOMENTE em webhook_ingress (não no workspace) | ✅ | `runtime_api` permanece em 0.7.5. |
+| Streams `events:stream` e `security:stream` reais | ✅ | `publicar_evento` e `publicar_evento_seguranca` via `transport::bus`. |
+| docker/evolution stack isolada | ✅ | `docker/evolution/compose.yml` com postgres_evolution + evolution. |
+
+---
 
 ## 2. Correções Aplicadas
 | Arquivo:linha | Problema | Correção |
 |---------------|----------|----------|
-| `docker/compose/compose.yml` (edge) | Caddyfile usa `{$DOMAIN}` mas o serviço `edge` não recebia a variável → borda subiria sem domínio (TLS falha). | Adicionado `environment: DOMAIN: ${DOMAIN}` ao serviço edge. |
-| `docker/compose/compose.yml` (7×) | `env_file: [./env/${ENV_FILE}]` — em sequência de fluxo YAML o `{` de `${...}` é indicador inválido → `docker compose config` falharia. | Convertido para forma de bloco (`env_file:` + item `- ./env/${ENV_FILE}`). |
-| `.github/workflows/deploy-prod.yml:90` | `tags: ${{ id.meta-edge.outputs.tags }}` — sintaxe inválida; imagem edge sairia sem tag → build falha. | Corrigido para `${{ steps.meta-edge.outputs.tags }}`. |
-| `.github/workflows/deploy-dev.yml`, `deploy-prod.yml` | Compose roda `--env-file env/{env}.env`, mas esse arquivo (com segredos) é gitignored e o `checkout` limpa o working tree → env real some no deploy. | Passo novo "Provisiona env real do servidor" copia de `/opt/smartcore/{env}/env/{env}.env` (caminho do `server-setup.sh`). |
-| `infra/server-setup.sh:108-117` | Bloco "PRÓXIMOS PASSOS" malformado (linhas `2.`, `3.`… fora de `echo`) → com `set -e` o script abortaria. | Reescrito como `echo` válidos. |
-| `infra/server-setup.sh` (mkdir/chown) | Criava dirs vestigiais do modelo host (`/srv/smart-core-admin`, `prod/releases`) que o full-docker não usa. | Mantidos só `dev/env`, `prod/env`, `prod/backups`. |
-| `.gitignore` | Regra `env/` (venvs) capturava `docker/compose/env/`, impedindo versionar os `*.env.example`. | Re-inclusão explícita: `!docker/compose/env/`, ignora `*.env` reais, versiona `*.env.example`. |
-| `docker/compose/env/{dev,prod}.env.example` | Não estavam versionados. | `git add` após corrigir o gitignore. |
-| `docker/compose/data.yml`, `observability.yml` | Superados por `compose.yml`/`compose.observability.yml` (config morta). | Removidos (`git rm`). |
-| `infra/deploy-data.sh`, `deploy-data.ps1`, `manage.ps1` | Scripts do fluxo host antigo (push de `data.yml` via scp) — obsoletos no GHCR/compose. | Removidos (`git rm`). |
-| `docker/compose/env/prod.env.example` | `S3_FORCE_PATH_STYLE=false` divergia da config R2 já validada no projeto (`infra/.env.deploy.example` usa `true`). | Ajustado para `true`. |
+| `data_postgres/src/main.rs:25-35` | `AppState` sem campo para admin pool; consulta cross-tenant sempre bloqueada por RLS | Adicionado `admin_pool: Option<PgPool>` com doc-comment explicando o requisito de BYPASSRLS |
+| `data_postgres/src/main.rs:53-60` | `admin_pool` fechado imediatamente após migrations (`admin_pool.close().await`) | Reescrito para `let admin_pool = if ... Some(ap) else None` — pool mantido vivo para runtime |
+| `data_postgres/src/main.rs:92` | `AppState` não incluía `admin_pool` | Adicionado `admin_pool: admin_pool.clone()` no bloco de inicialização |
+| `data_postgres/src/main.rs:461-463` | Closure do route `AdminListAllConnectedInstances` não passava admin_pool | Atualizada para `handler_admin_list_all_connected_instances(state.pool, state.admin_pool, env)` |
+| `data_postgres/src/main.rs:3587-3613` | Handler usava `pool.begin()` direto sob RLS → 0 linhas | Assinatura recebe `admin_pool: Option<PgPool>`; usa `effective_pool`; `tracing::warn!` quando ausente |
+| `infrastructure_postgres/src/integracoes/whatsapp.rs:303-306` | Comentário "vamos executar e ver se funciona" — impreciso e inadequado para produção | Substituído por explicação técnica do comportamento RLS e requisito de BYPASSRLS |
+
+---
 
 ## 2b. Observabilidade & Auditoria
 | Comportamento | Logs/Trace | Audit log | Sanitização | Observação |
 |---------------|-----------|-----------|-------------|------------|
-| Transport TCP (resolução de hostname) | ✅ | N/A | ✅ | `tracing::info!(endpoint, local)` no bind; sem segredos; sem novo evento de domínio. |
-| Empacotamento em containers (Dockerfile/compose) | ✅ | N/A | ✅ | `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317` + `OTEL_SERVICE_NAMESPACE` por ambiente; serviços em `internal`+`observability`. |
-| Edge (Caddy) | ✅ | N/A | ✅ | Headers de segurança (CSP `wasm-unsafe-eval`, HSTS) mantidos. |
-| Env-files | N/A | N/A | ✅ | Só `*.env.example` com placeholders versionado; `*.env` reais gitignored. |
+| `MessagingProvider` (infrastructure_messaging) | ✅ N/A | N/A | ✅ | Crate sem runtime; SecretString em todas assinaturas |
+| `EvolutionProvider` (infrastructure_evolution) | ✅ | N/A | ✅ | `#[instrument(err, skip(self, instance_token))]` em todos os métodos; body de erro truncado ≤ 200 chars; `text` também skipado em send_text |
+| `webhook_ingress` (ingest de webhooks) | ✅ | N/A | ✅ | `body` em skip; apenas event_type + metadados logados; 202 ACCEPTED mesmo para eventos ignorados |
+| `data_whatsapp:CreateWhatsappInstance` | ✅ | ✅ | ✅ | `whatsapp.instance.create` publicado em `security:stream` com user_id, instance_name, provider. Sem token. |
+| `data_whatsapp:DeleteWhatsappInstance` | ✅ | ✅ | ✅ | `whatsapp.instance.delete` publicado em `security:stream` |
+| `data_whatsapp:AdminBulkDisconnect` | ✅ | ⚠️ | ✅ | Audit publicado no `control_plane` (não data_whatsapp) — ver §3. user_id presente; ip/user_agent ausentes (RPC). |
+| `AdminListAllConnectedInstances` (degradação) | ✅ | N/A | ✅ | Novo `tracing::warn!` torna degradação sem DATABASE_ADMIN_URL observável |
+| `infrastructure_postgres/whatsapp.rs` (repositório) | ✅ | N/A | ✅ | `#[instrument(skip_all)]` em todos handlers; `api_key` não logado |
 
-> A migração **não cria nem altera eventos de auditoria de domínio** — só muda transporte e
-> empacotamento. A trilha `transport::bus → data_postgres → audit_log` deve ser exercida no
-> smoke-test ao subir o stack (ver Pendências).
+---
 
 ## 3. Decisões Autônomas (revisar depois)
-- **Remoção de `infra/deploy-data.{sh,ps1}` e `manage.ps1`**: assumi que o fluxo host de deploy
-  de dados foi totalmente substituído pelo compose+GHCR. `infra/tunnel.{sh,ps1}` foram **mantidos**
-  (uso de dev local contra DB remoto).
-- **`env_file` em forma de bloco**: mudança puramente sintática, sem efeito de runtime.
+- **Audit de bulk_disconnect**: evento `whatsapp.admin.bulk_disconnect` publicado APENAS no `control_plane`, não em `data_whatsapp`. Duplicar geraria evento dobrado. O `user_id` do `Envelope` está presente. Campos `ip_address`/`user_agent` ausentes pois a operação trafega por RPC (não HTTP endpoint). Se forem requisito futuro, propagar via campos do `Envelope`.
+- **AdminBulkDisconnect como RPC (não HTTP)**: o plano previa `POST /api/v2/admin/whatsapp/disconnect-all` em axum, mas a implementação usa o padrão RPC do projeto. A operação funciona; o endpoint HTTP pode ser exposto via `runtime_api` futuramente se necessário.
+
+---
 
 ## 4. Revalidação
-- lint/type-check Python: N/A (nenhum código Python tocado neste ciclo).
-- compile Rust: a transport (única mudança Rust) veio do commit `df02554` e **não foi alterada**
-  neste review; diff revisado estaticamente (correto). Não re-executei `cargo` para não subir
-  túnel/infra de teste; recomenda-se rodar `.\infra\test-local.ps1` antes do próximo deploy.
-- YAML (compose + workflows): ✅ validado com parser após correção do `env_file`.
-- Shell (`bash -n`): ✅ `server-setup.sh` e `cleanup-hostinger.sh` sem erro de sintaxe.
-- `docker compose config`: ⚠️ não executável aqui (Docker só no servidor Hostinger); YAML validado por parser como proxy.
+- cargo check (`-p data_postgres -p infrastructure_postgres`, SQLX_OFFLINE=true): ✅ sem erros nem warnings
+
+---
 
 ## 5. Pendências (escopo extra ou fora do plano)
-- **Smoke-test no servidor** (Fase V do plano, exige Docker/servidor): subir observabilidade →
-  dev → prod, confirmar containers `healthy`, gRPC-Web via Caddy, admin em `/v2/admin/`, traces
-  separados por namespace no Grafana, e **um evento real persistido em `audit_log`**.
-- **Limpeza do Hostinger**: rodar `infra/cleanup-hostinger.sh` + remover projetos Docker legados
-  `smart-core-app/-data/-workers` (o usuário executa via SSH).
-- **GitHub Environment `production`**: configurar Required reviewers para o approval manual do `deploy-prod`.
-- **`bind` por nome-de-serviço**: se o smoke-test acusar falha de bind TCP no container, aplicar o
-  fallback `0.0.0.0:porta` previsto no plano (E.1).
+- **Operacional**: confirmar que `DATABASE_ADMIN_URL` está configurada no ambiente de produção onde `data_postgres` roda. Sem ela, `AdminListAllConnectedInstances` recai no pool com RLS ativa → lista vazia → bulk_disconnect sem efeito (agora com `tracing::warn!` explícito). Esta é uma dependência de deploy, não de código.
+- **Testes de integração** (V2 do plano): `.\infra\test-local.ps1` não foi executado neste ciclo (exige túnel SSH para Hostinger). A build compilou limpa; validação de integração real fica pendente para executar manualmente antes do merge.

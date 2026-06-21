@@ -24,6 +24,11 @@ use outbox_relay::OutboxRelay;
 #[derive(Clone)]
 struct AppState {
     pool: PgPool,
+    /// Pool administrativo (DATABASE_ADMIN_URL) com BYPASSRLS, mantido vivo após as
+    /// migrations para servir consultas cross-tenant do superusuário operacional
+    /// (ex.: AdminListAllConnectedInstances). `None` quando DATABASE_ADMIN_URL não
+    /// está configurada — nesse caso o handler recai no pool de aplicação (RLS ativa).
+    admin_pool: Option<PgPool>,
     redis_conn: ConnectionManager,
     cipher: std::sync::Arc<infrastructure_postgres::crypto::CipherManager>,
     config_cache: std::sync::Arc<infrastructure_postgres::TenantConfigCache>,
@@ -42,13 +47,17 @@ async fn main() -> anyhow::Result<()> {
     //    (DATABASE_URL + RLS).
     let pool_config = infrastructure_postgres::PoolConfig::from_env("SMARTCORE_PG");
     let pool = infrastructure_postgres::criar_pool_config(pool_config).await?;
-    if std::env::var("DATABASE_ADMIN_URL").is_ok() {
-        let admin_pool = infrastructure_postgres::criar_admin_pool(2).await?;
-        infrastructure_postgres::inicializar_banco_dados(&admin_pool).await?;
-        admin_pool.close().await;
+    // Mantemos o admin_pool vivo (não fechamos após as migrations): além do DDL, ele
+    // é o único pool com BYPASSRLS e serve as consultas cross-tenant do superusuário
+    // operacional em runtime (ex.: AdminListAllConnectedInstances).
+    let admin_pool = if std::env::var("DATABASE_ADMIN_URL").is_ok() {
+        let ap = infrastructure_postgres::criar_admin_pool(2).await?;
+        infrastructure_postgres::inicializar_banco_dados(&ap).await?;
+        Some(ap)
     } else {
         infrastructure_postgres::inicializar_banco_dados(&pool).await?;
-    }
+        None
+    };
     tracing::info!("Banco de dados PostgreSQL conectado e migrations executadas.");
 
     // Inicia monitoramento das métricas do pool PostgreSQL (M1)
@@ -80,6 +89,7 @@ async fn main() -> anyhow::Result<()> {
 
     let state = AppState {
         pool: pool.clone(),
+        admin_pool: admin_pool.clone(),
         redis_conn: bus_conn.clone(),
         cipher,
         config_cache,
@@ -448,9 +458,9 @@ async fn main() -> anyhow::Result<()> {
         })
         .route("AdminListAllConnectedInstances", move |env| {
             let state = state_for_admin_list_all_connected_instances.clone();
-            Box::pin(
-                async move { handler_admin_list_all_connected_instances(state.pool, env).await },
-            )
+            Box::pin(async move {
+                handler_admin_list_all_connected_instances(state.pool, state.admin_pool, env).await
+            })
         })
         .route("AdminDeletarInstancia", move |env| {
             let state = state_for_admin_deletar_instancia.clone();
@@ -3574,12 +3584,27 @@ async fn handler_list_whatsapp_instances(pool: PgPool, env: Envelope) -> Envelop
     }
 }
 
-async fn handler_admin_list_all_connected_instances(pool: PgPool, env: Envelope) -> Envelope {
+async fn handler_admin_list_all_connected_instances(
+    pool: PgPool,
+    admin_pool: Option<PgPool>,
+    env: Envelope,
+) -> Envelope {
     let ctx = contexto_do_envelope(&env);
     let repo = infrastructure_postgres::integracoes::whatsapp::PostgresWhatsappInstanceRepository;
 
+    // A consulta cross-tenant exige BYPASSRLS: usamos o admin_pool quando disponível.
+    // Sem ele, recaímos no pool de aplicação (RLS ativa) e a query retorna 0 linhas —
+    // por isso registramos um aviso para tornar a degradação observável.
+    if admin_pool.is_none() {
+        tracing::warn!(
+            "AdminListAllConnectedInstances sem DATABASE_ADMIN_URL: a RLS bloqueará a \
+             consulta cross-tenant e a lista virá vazia"
+        );
+    }
+    let effective_pool = admin_pool.as_ref().unwrap_or(&pool);
+
     let result: Result<Vec<_>, infrastructure_postgres::DbError> = async {
-        let mut tx = pool.begin().await?;
+        let mut tx = effective_pool.begin().await?;
         use infrastructure_postgres::integracoes::whatsapp::WhatsappInstanceRepository;
         let list = repo.admin_listar_todas_conectadas(&mut tx, &ctx).await?;
         tx.commit().await?;

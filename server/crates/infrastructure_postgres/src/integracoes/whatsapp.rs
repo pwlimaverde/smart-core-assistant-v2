@@ -300,17 +300,10 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
         ctx: &RequestContext,
     ) -> Result<Vec<WhatsappInstance>, DbError> {
         ctx.exigir_qualquer(&["operacional:admin"])?;
-        // RLS bypass: consulta direta sem tenant_id no filtro, pois é o admin operacional.
-        // O sqlx pode reclamar se o bypass de RLS via policies não for executado com escopo operacional.
-        // O policy do postgres usa app.current_tenant, mas o admin_listar_todas pode ser chamado fora do contexto de tenant
-        // ou setando o tenant_id para o tenant que quer listar ou removendo a RLS temporariamente na transação se for superuser.
-        // Como o RLS está habilitado, se a transação rodar sem definir o current_tenant, a política USING (tenant_id = current_setting('app.current_tenant'))
-        // vai avaliar para falso ou dar erro se current_setting estiver vazio.
-        // No postgres: SELECT ... USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid)
-        // Se current_setting('app.current_tenant') for vazio/NULL, a policy resulta em tenant_id = NULL (que é falso).
-        // Para o admin operacional bypassar a RLS, podemos setar o app.current_tenant para o tenant da instância, ou,
-        // no postgres, se o usuário do banco for o dono da tabela ou superuser, a RLS é bypassada se usarmos BYPASS RLS ou se ele for o owner (que é o caso na migração e dev).
-        // Mas para garantir compatibilidade no código Rust, vamos executar e ver se funciona.
+        // Requer pool com BYPASSRLS (admin pool, DATABASE_ADMIN_URL).
+        // Com pool de app (RLS ativa), esta query retorna 0 linhas pois a policy
+        // USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid)
+        // avalia para FALSE quando app.current_tenant não está definido.
         let rows = sqlx::query_as!(
             WhatsappInstance,
             r#"SELECT id, tenant_id, name, instance_id, api_key, phone_number, active,
