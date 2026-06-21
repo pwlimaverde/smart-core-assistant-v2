@@ -35,6 +35,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ../init-scripts:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${POSTGRES_PORT:-5434}:5432"
     networks: [internal]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
@@ -50,6 +52,8 @@ services:
       redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
       --maxmemory 150mb --maxmemory-policy allkeys-lru --bind 0.0.0.0 --protected-mode yes
     volumes: [redis_data:/data]
+    ports:
+      - "${REDIS_PORT:-6380}:6379"
     networks: [internal]
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
@@ -64,6 +68,8 @@ services:
       redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
       --maxmemory 150mb --maxmemory-policy noeviction --bind 0.0.0.0 --protected-mode yes
     volumes: [redis_bus_data:/data]
+    ports:
+      - "${REDIS_BUS_PORT:-6381}:6379"
     networks: [internal]
     restart: unless-stopped
 

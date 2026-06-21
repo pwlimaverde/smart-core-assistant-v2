@@ -88,26 +88,7 @@ if (Test-Path (Join-Path $serverDir ".env")) {
     }
 }
 
-$databaseUrl = [Environment]::GetEnvironmentVariable("DATABASE_URL", "Process")
-$databaseAdminUrl = [Environment]::GetEnvironmentVariable("DATABASE_ADMIN_URL", "Process")
-$smartcoreEnv = [Environment]::GetEnvironmentVariable("SMARTCORE_ENV", "Process")
-
-if ($smartcoreEnv -eq "dev") {
-    # Roteia o banco de dados na URL para smartcore_v2_dev
-    if ($databaseUrl -and $databaseUrl -match '/smartcore_v2(?:\?|$)') {
-        $databaseUrl = $databaseUrl -replace '/smartcore_v2(?:\?|$)', '/smartcore_v2_dev'
-        [Environment]::SetEnvironmentVariable("DATABASE_URL", $databaseUrl, "Process")
-    }
-    if ($databaseAdminUrl -and $databaseAdminUrl -match '/smartcore_v2(?:\?|$)') {
-        $databaseAdminUrl = $databaseAdminUrl -replace '/smartcore_v2(?:\?|$)', '/smartcore_v2_dev'
-        [Environment]::SetEnvironmentVariable("DATABASE_ADMIN_URL", $databaseAdminUrl, "Process")
-    }
-    Write-Host "Roteando testes para o ambiente de DESENVOLVIMENTO remoto (banco: smartcore_v2_dev)" -ForegroundColor Yellow
-} elseif ($smartcoreEnv -eq "prod") {
-    Write-Host "Roteando testes para o ambiente de PRODUCAO remoto (banco: smartcore_v2)" -ForegroundColor Red
-} else {
-    Write-Host "Roteando testes para o ambiente LOCAL/TESTE" -ForegroundColor Green
-}
+Write-Host "Conectando ao banco dev remoto (smartcore_v2) via tunel SSH automatico" -ForegroundColor Green
 
 $falhas = @()
 
@@ -127,6 +108,7 @@ try {
     $env:SQLX_OFFLINE = "true"
     cargo clippy --all-targets --all-features -- -D warnings
     if ($LASTEXITCODE -ne 0) { $falhas += "clippy" } else { Write-Host "ok" -ForegroundColor Green }
+    $env:SQLX_OFFLINE = ""
 
     # --------------------------------------------
     # 4. Testes

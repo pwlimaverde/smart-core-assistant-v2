@@ -106,6 +106,9 @@ jobs:
           DATABASE_URL: postgres://smartcore_app:smartcore_app@localhost:5434/smartcore_v2
           DATABASE_ADMIN_URL: postgres://postgres:postgres@localhost:5434/smartcore_v2
           REDIS_URL: redis://localhost:6380
+          # No CI há apenas um Redis (porta 6380). REDIS_BUS_URL aponta para ele também
+          # pois os testes de bus (webhook_ingress, data_whatsapp) usam fake_bus próprio.
+          REDIS_BUS_URL: redis://localhost:6380
           # Chave AES-256 (base64 de 32 bytes) exigida pelo CipherManager nos testes
           # das rotas admin de config (CoreSettings/TenantConfig cifrados). Valor de
           # TESTE fixo — não é segredo de produção (essa vem do .env do servidor).
