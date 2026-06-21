@@ -15,6 +15,8 @@ anyhow = { workspace = true }
 tracing = { workspace = true }
 redis = { workspace = true }
 
+async-trait = { workspace = true }
+
 contracts = { path = "../../crates/contracts" }
 transport = { path = "../../crates/transport" }
 error_core = { path = "../../crates/error_core" }
@@ -24,4 +26,6 @@ infrastructure_redis = { path = "../../crates/infrastructure_redis" }
 
 [dev-dependencies]
 test_support = { path = "../../crates/test_support" }
+mockall = { workspace = true }
+
 
