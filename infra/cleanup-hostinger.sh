@@ -43,13 +43,21 @@ for env in "dev" "prod"; do
     rm -f "/etc/systemd/system/smartcore-$env.target"
 done
 
-echo "2. Caddy do host: MANTIDO (NAO tocar)."
-# ATENCAO: neste servidor o Caddy do host e a BORDA COMPARTILHADA — serve o painel
-# v1 (smartcoreassistant.com.br) e roteia o admin v2 (conf.d/admin.caddy ->
-# localhost:50051 + /srv/smart-core-admin). Para-lo derrubaria o v1. A stack v2
-# full-docker NAO sobe um Caddy proprio em 80/443; o runtime_api publica 50051 no
-# host e o Caddy do host faz o reverse_proxy. Portanto, NAO paramos nem removemos
-# o Caddy aqui.
+echo "2. Caddy do host: REMOVIDO (a borda agora e o container edge)."
+# A borda 80/443 e o container Caddy (docker/edge), que roteia TUDO: v1
+# (smartcoreassistant_app:8000 via shared_network), v2 admin (web + runtime_api) e
+# grafana. O Caddy do host fica redundante e e removido para o host ficar limpo.
+# Faz backup da config antes (rollback de emergencia).
+if command -v caddy &>/dev/null || systemctl list-unit-files 2>/dev/null | grep -q '^caddy'; then
+    mkdir -p /opt/smartcore/backups/host-caddy
+    cp -a /etc/caddy /opt/smartcore/backups/host-caddy/etc-caddy 2>/dev/null || true
+    systemctl disable --now caddy 2>/dev/null || true
+    apt-get purge -y caddy >/dev/null 2>&1 || true
+    rm -rf /srv/smart-core-admin /var/log/caddy
+    echo "  Caddy do host removido; /srv/smart-core-admin limpo."
+else
+    echo "  (Caddy do host ja ausente)"
+fi
 
 echo "3. Recarregando daemon do systemd..."
 systemctl daemon-reload

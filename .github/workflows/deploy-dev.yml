@@ -179,6 +179,10 @@ jobs:
           docker compose --env-file .env pull
           docker compose --env-file .env up -d --remove-orphans
 
-      # NOTA: a subida do edge (Caddy em 80/443) NAO esta aqui ainda — o cutover
-      # inicial (parar o Caddy do host) e manual. Apos o cutover, o step
-      # "Sobe a borda (edge)" sera readicionado para automacao.
+      # Borda (Caddy em 80/443: roteia v1 + v2 + grafana). Idempotente; pull pega
+      # a :latest mais recente da imagem do edge.
+      - name: Sobe a borda (edge)
+        working-directory: docker/edge
+        run: |
+          docker compose pull
+          docker compose up -d

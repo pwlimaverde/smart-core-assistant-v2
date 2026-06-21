@@ -133,4 +133,8 @@ jobs:
           docker compose --env-file .env pull
           docker compose --env-file .env up -d --remove-orphans
 
-      # NOTA: a borda (edge) e compartilhada e gerida pelo fluxo dev apos o cutover.
+      - name: Sobe a borda (edge)
+        working-directory: docker/edge
+        run: |
+          docker compose pull
+          docker compose up -d
