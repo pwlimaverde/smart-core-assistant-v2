@@ -58,7 +58,7 @@ impl WhiteListRepository for PostgresWhiteListRepository {
         ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
         let row = sqlx::query_as!(
             WhiteList,
-            r#"INSERT INTO evolution_sync_whitelist (tenant_id, name, phone_number, contact_id)
+            r#"INSERT INTO whatsapp_whitelist (tenant_id, name, phone_number, contact_id)
                VALUES ($1, $2, $3, $4)
                RETURNING id, tenant_id, contact_id, name, phone_number, active, created_at"#,
             ctx.tenant_id,
@@ -80,7 +80,7 @@ impl WhiteListRepository for PostgresWhiteListRepository {
         phone_number: &str,
     ) -> Result<bool, DbError> {
         let count = sqlx::query_scalar!(
-            r#"SELECT COUNT(*) FROM evolution_sync_whitelist
+            r#"SELECT COUNT(*) FROM whatsapp_whitelist
                WHERE tenant_id = $1 AND phone_number = $2 AND active = true"#,
             ctx.tenant_id,
             phone_number
@@ -99,7 +99,7 @@ impl WhiteListRepository for PostgresWhiteListRepository {
         let rows = sqlx::query_as!(
             WhiteList,
             r#"SELECT id, tenant_id, contact_id, name, phone_number, active, created_at
-               FROM evolution_sync_whitelist
+               FROM whatsapp_whitelist
                WHERE tenant_id = $1 AND active = true
                ORDER BY name"#,
             ctx.tenant_id

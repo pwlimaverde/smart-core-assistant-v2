@@ -1,0 +1,30 @@
+[package]
+name = "data_whatsapp"
+version = "0.1.0"
+edition.workspace = true
+
+[[bin]]
+name = "data_whatsapp"
+path = "src/main.rs"
+
+[dependencies]
+contracts                = { workspace = true }
+transport                = { workspace = true }
+error_core               = { workspace = true }
+observability            = { workspace = true }
+infrastructure_messaging = { path = "../../crates/infrastructure_messaging" }
+infrastructure_evolution = { path = "../../crates/infrastructure_evolution" }
+tokio      = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+tracing    = { workspace = true }
+secrecy    = { workspace = true }
+async-trait = { workspace = true }
+uuid       = { workspace = true }
+redis      = { workspace = true }
+anyhow     = { workspace = true }
+
+[dev-dependencies]
+wiremock   = "0.6"
+tokio      = { workspace = true, features = ["full"] }
+

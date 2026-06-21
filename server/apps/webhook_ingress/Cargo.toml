@@ -1,0 +1,27 @@
+[package]
+name = "webhook_ingress"
+version = "0.1.0"
+edition.workspace = true
+
+[[bin]]
+name = "webhook_ingress"
+path = "src/main.rs"
+
+[dependencies]
+contracts                = { workspace = true }
+transport                = { workspace = true }
+error_core               = { workspace = true }
+observability            = { workspace = true }
+infrastructure_messaging = { path = "../../crates/infrastructure_messaging" }
+tokio      = { workspace = true }
+serde      = { workspace = true }
+serde_json = { workspace = true }
+tracing    = { workspace = true }
+redis      = { workspace = true }
+uuid       = { workspace = true }
+anyhow     = { workspace = true }
+axum       = "0.8"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+tower = { workspace = true }

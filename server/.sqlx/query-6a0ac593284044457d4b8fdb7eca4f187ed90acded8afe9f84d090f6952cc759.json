@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, tenant_id, contact_id, name, phone_number, active, created_at\n               FROM evolution_sync_whitelist\n               WHERE tenant_id = $1 AND active = true\n               ORDER BY name",
+  "query": "SELECT id, tenant_id, contact_id, name, phone_number, active, created_at\n               FROM whatsapp_whitelist\n               WHERE tenant_id = $1 AND active = true\n               ORDER BY name",
   "describe": {
     "columns": [
       {
@@ -9,7 +9,7 @@
         "type_info": "Int4",
         "origin": {
           "Table": {
-            "table": "evolution_sync_whitelist",
+            "table": "whatsapp_whitelist",
             "name": "id"
           }
         }
@@ -20,7 +20,7 @@
         "type_info": "Uuid",
         "origin": {
           "Table": {
-            "table": "evolution_sync_whitelist",
+            "table": "whatsapp_whitelist",
             "name": "tenant_id"
           }
         }
@@ -31,7 +31,7 @@
         "type_info": "Int4",
         "origin": {
           "Table": {
-            "table": "evolution_sync_whitelist",
+            "table": "whatsapp_whitelist",
             "name": "contact_id"
           }
         }
@@ -42,7 +42,7 @@
         "type_info": "Varchar",
         "origin": {
           "Table": {
-            "table": "evolution_sync_whitelist",
+            "table": "whatsapp_whitelist",
             "name": "name"
           }
         }
@@ -53,7 +53,7 @@
         "type_info": "Varchar",
         "origin": {
           "Table": {
-            "table": "evolution_sync_whitelist",
+            "table": "whatsapp_whitelist",
             "name": "phone_number"
           }
         }
@@ -64,7 +64,7 @@
         "type_info": "Bool",
         "origin": {
           "Table": {
-            "table": "evolution_sync_whitelist",
+            "table": "whatsapp_whitelist",
             "name": "active"
           }
         }
@@ -75,7 +75,7 @@
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
-            "table": "evolution_sync_whitelist",
+            "table": "whatsapp_whitelist",
             "name": "created_at"
           }
         }
@@ -96,5 +96,5 @@
       false
     ]
   },
-  "hash": "499a56035d3316de3c227c61f27f88bb9434e46cb1f00204a6379463f029d29d"
+  "hash": "6a0ac593284044457d4b8fdb7eca4f187ed90acded8afe9f84d090f6952cc759"
 }

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_instance\n               SET instance_id = $1,\n                   phone_number = $2\n               WHERE tenant_id = $3 AND id = $4",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b42de513ef1bd501d50347b3b45e327ad2ab209bc20dc111d5fb1b28beb78c6b"
+}

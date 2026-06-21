@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT COUNT(*) FROM evolution_sync_whitelist\n               WHERE tenant_id = $1 AND phone_number = $2 AND active = true",
+  "query": "SELECT COUNT(*) FROM whatsapp_whitelist\n               WHERE tenant_id = $1 AND phone_number = $2 AND active = true",
   "describe": {
     "columns": [
       {
@@ -20,5 +20,5 @@
       null
     ]
   },
-  "hash": "3e42ab1fe0dffeb525cdf1e091dc38628fdc560915dc71b1d932668e70e2c4a4"
+  "hash": "16e38048071710d35eebbd14c3341e489b45d9cded94f7a5b45e74bb1cc0c762"
 }

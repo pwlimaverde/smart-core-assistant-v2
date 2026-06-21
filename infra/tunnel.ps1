@@ -43,7 +43,7 @@ Write-Host "Descobrindo IPs dos containers na rede '$net'..." -ForegroundColor C
 $forwards = @()
 foreach ($svc in $mapa.Keys) {
     $container = "smart-core-v2-$Env-$svc-1"
-    $fmt = "{{(index .NetworkSettings.Networks `"$net`").IPAddress}}"
+    $fmt = "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}"
     $ip = (ssh $SshAlias "docker inspect -f '$fmt' $container" 2>$null).Trim()
     if ([string]::IsNullOrWhiteSpace($ip)) {
         Write-Host "  ! $container nao encontrado/na rede (pulando)" -ForegroundColor DarkYellow
@@ -65,4 +65,4 @@ Write-Host "  MinIO API    = http://localhost:9000"
 Write-Host ""
 Write-Host "Tunel ativo. Ctrl+C para encerrar." -ForegroundColor Yellow
 
-ssh @forwards -N $SshAlias
+ssh -o ServerAliveInterval=15 -o ServerAliveCountMax=3 @forwards -N $SshAlias

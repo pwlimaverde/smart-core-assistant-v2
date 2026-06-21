@@ -1,0 +1,56 @@
+name: smart-core-v2-evolution
+
+services:
+  postgres_evolution:
+    image: postgres:16-alpine
+    container_name: smartcore-evolution-postgres
+    environment:
+      POSTGRES_USER: ${EVOLUTION_POSTGRES_USER:-evolution}
+      POSTGRES_PASSWORD: ${EVOLUTION_POSTGRES_PASSWORD:-REDACTED_PGPASS}
+      POSTGRES_DB: evogo_auth
+      EVOGO_USERS_DB: evogo_users
+    volumes:
+      - postgres_evolution_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+    networks:
+      - evolution_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${EVOLUTION_POSTGRES_USER:-evolution}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  evolution:
+    image: evoapicloud/evolution-go:latest
+    container_name: smartcore-evolution
+    environment:
+      SERVER_PORT: "8080"
+      CLIENT_NAME: smartcore
+      GLOBAL_API_KEY: ${EVOLUTION_GLOBAL_API_KEY:-REDACTED_API_KEY}
+      POSTGRES_AUTH_DB: postgresql://${EVOLUTION_POSTGRES_USER:-evolution}:${EVOLUTION_POSTGRES_PASSWORD:-REDACTED_PGPASS}@postgres_evolution:5432/evogo_auth?sslmode=disable
+      POSTGRES_USERS_DB: postgresql://${EVOLUTION_POSTGRES_USER:-evolution}:${EVOLUTION_POSTGRES_PASSWORD:-REDACTED_PGPASS}@postgres_evolution:5432/evogo_users?sslmode=disable
+      DATABASE_SAVE_MESSAGES: "false"
+      WADEBUG: "ERROR"
+      LOGTYPE: console
+    ports:
+      - "${EVOLUTION_PORT:-8080}:8080"
+    volumes:
+      - evolution_data:/app/dbdata
+      - evolution_logs:/app/logs
+    networks:
+      - evolution_net
+    depends_on:
+      postgres_evolution:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_evolution_data:
+  evolution_data:
+  evolution_logs:
+
+networks:
+  evolution_net:
+    name: smart_core_v2_evolution_net
+    driver: bridge

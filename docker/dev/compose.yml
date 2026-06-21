@@ -20,6 +20,9 @@ networks:
   observability:
     name: smart_core_v2_observability
     external: true
+  evolution_net:
+    name: smart_core_v2_evolution_net
+    external: true
 
 services:
   # ---------- DADOS ----------
@@ -171,6 +174,25 @@ services:
     ports:
       - "${WEB_HOST_PORT:-8081}:80"
     networks: [internal]
+    restart: unless-stopped
+
+  # ---------- MENSAGERIA / WHATSAPP ----------
+  data_whatsapp:
+    image: *server-image
+    command: ["data_whatsapp"]
+    env_file: [.env]
+    networks: [internal, observability, evolution_net]
+    depends_on:
+      redis: { condition: service_healthy }
+    restart: unless-stopped
+
+  webhook_ingress:
+    image: *server-image
+    command: ["webhook_ingress"]
+    env_file: [.env]
+    networks: [internal, observability, evolution_net]
+    ports:
+      - "${WEBHOOK_INGRESS_PORT:-9200}:9200"
     restart: unless-stopped
 
 volumes:
