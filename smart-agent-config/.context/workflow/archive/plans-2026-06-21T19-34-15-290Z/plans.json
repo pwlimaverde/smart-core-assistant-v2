@@ -1,0 +1,17 @@
+{
+  "active": [
+    {
+      "slug": "camada-abstracao-mensageria",
+      "path": "plans/camada-abstracao-mensageria.md",
+      "title": "Camada de Abstração de Mensageria (WhatsApp)",
+      "summary": "Introduzir trait `MessagingProvider` + `infrastructure_evolution` + `webhook_ingress` + `data_whatsapp`",
+      "linkedAt": "2026-06-21T02:01:03.059Z",
+      "status": "active",
+      "approval_status": "approved",
+      "approved_at": "2026-06-21T02:01:15.187Z",
+      "approved_by": "architect"
+    }
+  ],
+  "completed": [],
+  "primary": "camada-abstracao-mensageria"
+}

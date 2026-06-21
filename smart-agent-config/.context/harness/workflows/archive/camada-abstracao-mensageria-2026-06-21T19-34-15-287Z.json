@@ -1,0 +1,195 @@
+{
+  "version": 2,
+  "workflowType": "prevc",
+  "updatedAt": "2026-06-21T19:34:15.286Z",
+  "status": {
+    "project": {
+      "name": "camada-abstracao-mensageria",
+      "scale": 3,
+      "started": "2026-06-21T02:00:57.368Z",
+      "current_phase": "C",
+      "settings": {
+        "autonomous_mode": false,
+        "require_plan": true,
+        "require_approval": true
+      },
+      "plan": "camada-abstracao-mensageria"
+    },
+    "phases": {
+      "P": {
+        "status": "completed",
+        "started_at": "2026-06-21T02:00:57.368Z",
+        "completed_at": "2026-06-21T02:01:08.366Z",
+        "outputs": [
+          {
+            "path": ".context/plans/camada-abstracao-mensageria.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/camada-abstracao-mensageria/info_aux_camada-abstracao-mensageria.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/camada-abstracao-mensageria/plano_completo_camada-abstracao-mensageria.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "R": {
+        "status": "completed",
+        "started_at": "2026-06-21T02:01:08.370Z",
+        "completed_at": "2026-06-21T02:01:21.556Z",
+        "outputs": [
+          {
+            "path": ".context/plans/camada-abstracao-mensageria/plano_completo_camada-abstracao-mensageria.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/camada-abstracao-mensageria/info_aux_camada-abstracao-mensageria.md",
+            "status": "filled"
+          },
+          {
+            "path": "doc_dev/libs/rust/axum.md",
+            "status": "filled"
+          },
+          {
+            "path": "doc_dev/apis/evolution/",
+            "status": "filled"
+          }
+        ]
+      },
+      "E": {
+        "status": "completed",
+        "started_at": "2026-06-21T02:01:21.559Z",
+        "role": "backend-specialist",
+        "completed_at": "2026-06-21T03:13:13.352Z"
+      },
+      "V": {
+        "status": "completed",
+        "started_at": "2026-06-21T03:13:13.356Z",
+        "completed_at": "2026-06-21T03:13:31.838Z"
+      },
+      "C": {
+        "status": "completed",
+        "started_at": "2026-06-21T03:13:31.842Z",
+        "completed_at": "2026-06-21T03:25:44.010Z"
+      }
+    },
+    "agents": {},
+    "roles": {
+      "backend-specialist": {
+        "status": "completed",
+        "phase": "E",
+        "outputs": [
+          "../infra/tunnel.ps1",
+          "../server/Cargo.lock",
+          "../server/Cargo.toml",
+          "../server/apps/control_plane/Cargo.toml",
+          "../server/apps/control_plane/src/evolution.rs",
+          "../server/apps/control_plane/src/main.rs",
+          "../server/apps/data_postgres/src/main.rs",
+          "../server/apps/data_whatsapp/Cargo.toml",
+          "../server/apps/data_whatsapp/src/main.rs",
+          "../server/apps/webhook_ingress/Cargo.toml",
+          "../server/apps/webhook_ingress/src/main.rs",
+          "../server/crates/infrastructure_evolution/Cargo.toml",
+          "../server/crates/infrastructure_evolution/src/client.rs",
+          "../server/crates/infrastructure_evolution/src/lib.rs",
+          "../server/crates/infrastructure_evolution/src/provider.rs",
+          "../server/crates/infrastructure_messaging/Cargo.toml",
+          "../server/crates/infrastructure_messaging/src/errors.rs",
+          "../server/crates/infrastructure_messaging/src/lib.rs",
+          "../server/crates/infrastructure_postgres/migrations/0008_evolution_sync.sql",
+          "../server/crates/infrastructure_postgres/migrations/0008_whatsapp_sync.sql",
+          "../server/crates/infrastructure_postgres/src/integracoes/evolution.rs",
+          "../server/crates/infrastructure_postgres/src/integracoes/mod.rs",
+          "../server/crates/infrastructure_postgres/src/integracoes/whatsapp.rs",
+          "../server/crates/infrastructure_postgres/src/integracoes/whitelist.rs",
+          "../server/crates/infrastructure_postgres/tests/integracoes/mod.rs"
+        ],
+        "last_active": "2026-06-21T03:12:28.210Z"
+      }
+    },
+    "approval": {
+      "plan_created": true,
+      "plan_approved": true,
+      "approved_by": "architect",
+      "approved_at": "2026-06-21T02:01:15.187Z",
+      "approval_notes": "Arquitetura validada: R1 (versões axum), R2 (segurança SecretString/RLS), R3 (barramento real events:stream/security:stream). Plano completo reestruturado e confrontado com árvore real do repositório."
+    },
+    "execution": {
+      "history": [
+        {
+          "timestamp": "2026-06-21T02:00:57.368Z",
+          "phase": "P",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-21T02:01:03.064Z",
+          "phase": "P",
+          "action": "plan_linked",
+          "plan": "camada-abstracao-mensageria"
+        },
+        {
+          "timestamp": "2026-06-21T02:01:08.366Z",
+          "phase": "P",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-21T02:01:08.370Z",
+          "phase": "R",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-21T02:01:15.187Z",
+          "phase": "R",
+          "action": "plan_approved",
+          "approved_by": "architect"
+        },
+        {
+          "timestamp": "2026-06-21T02:01:21.556Z",
+          "phase": "R",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-21T02:01:21.559Z",
+          "phase": "E",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-21T03:13:13.352Z",
+          "phase": "E",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-21T03:13:13.356Z",
+          "phase": "V",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-21T03:13:31.838Z",
+          "phase": "V",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-21T03:13:31.842Z",
+          "phase": "C",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-21T03:25:44.010Z",
+          "phase": "C",
+          "action": "completed"
+        }
+      ],
+      "last_activity": "2026-06-21T03:25:44.010Z",
+      "resume_context": "Fase C (Confirmação) concluída"
+    }
+  },
+  "binding": {
+    "workflowName": "camada-abstracao-mensageria",
+    "sessionId": "ec908c9b-cedf-475e-b8a9-2001205acb54",
+    "createdAt": "2026-06-21T02:00:57.376Z",
+    "updatedAt": "2026-06-21T03:25:44.018Z"
+  }
+}

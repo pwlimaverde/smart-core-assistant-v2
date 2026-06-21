@@ -449,15 +449,74 @@ fn renders_invoice_summary() {
 
 ## 11. Ferramentas e Execução
 
-- **Rodar tudo**: `cargo test` (workspace: `cargo test --workspace`).
-- **Filtrar**: `cargo test nome_parcial`; só ignorados: `cargo test -- --ignored`.
-- **Ver saída de testes que passam**: `cargo test -- --nocapture`.
-- **`cargo-nextest`** (recomendado): executor de testes mais rápido e com melhor saída
-  (`cargo nextest run`). Cada teste roda em seu processo, o que reforça o isolamento.
-- **Doctests**: rodam com `cargo test --doc` (não são executados pelo nextest).
-- **Cobertura**: `cargo llvm-cov` (preciso, baseado em LLVM) ou `cargo tarpaulin`. Use como
-  bússola, **não** como meta cega — 100% de cobertura com asserções fracas não vale nada.
-- **Lints em teste**: rode `cargo clippy --all-targets` para cobrir também o código de teste.
+### 11.1. Scripts canônicos do projeto (sempre use estes)
+
+**Nunca rodar `cargo test` ou `cargo test --workspace` diretamente em produção**. Os scripts encapsulam todas as variáveis de ambiente (`SQLX_OFFLINE`, `RUST_TEST_THREADS`, `ENCRYPTION_KEY`, `DATABASE_URL` via túnel SSH). Rodar diretamente pode silenciar falhas de integração.
+
+#### `test-quick.ps1` — feedback diário (segundos, sem banco)
+
+Detecta quais pacotes mudaram (via `git diff`) e testa **apenas esses**, sem banco, sem túnel.
+
+```powershell
+.\infra\test-quick.ps1                           # mudanças não commitadas (staged + unstaged)
+.\infra\test-quick.ps1 -Vs HEAD~1                # só o último commit
+.\infra\test-quick.ps1 -Vs origin/dev            # tudo no branch vs remote dev
+.\infra\test-quick.ps1 -Pkg data_whatsapp        # pacote explícito (ignora auto-detecção)
+.\infra\test-quick.ps1 -Pkg "webhook_ingress,data_whatsapp"  # múltiplos pacotes
+.\infra\test-quick.ps1 -Jobs 2                   # limita threads de compilação (poupa RAM/CPU)
+```
+
+- Roda: fmt check (workspace) → clippy → `--lib --bins` nos pacotes detectados.
+- **`SQLX_OFFLINE=true` sempre** — compila offline usando o cache `.sqlx/`, nunca conecta ao banco durante build.
+- ⚠️ **Limitação**: mudanças em crates compartilhados (`infrastructure_*`) podem quebrar apps dependentes sem este script detectar. Use `test-local.ps1` antes do push.
+
+#### `test-local.ps1` — esteira completa pré-push
+
+```powershell
+.\infra\test-local.ps1               # esteira completa: fmt → clippy → suite completa com banco → sqlx prepare --check
+.\infra\test-local.ps1 -Fast         # sem banco: fmt → clippy → --lib --bins (igual ao CI)
+.\infra\test-local.ps1 -ResetTunnel  # idem, derrubando túneis SSH antigos antes
+```
+
+**Sempre rode `test-local.ps1` (sem flags) antes de cada push** para exercitar a integração com o banco remoto da Hostinger.
+
+### 11.2. SQLX_OFFLINE — regra crítica de compilação
+
+`SQLX_OFFLINE=true` deve estar ativo durante **toda** a compilação (clippy e testes). Sem ele, o SQLx conecta ao banco remoto via SSH para cada macro `query!()` durante o build, transformando 20 s de compilação em 14 min.
+
+```powershell
+# ✅ Correto: SQLX_OFFLINE=true para clippy E para cargo test
+$env:SQLX_OFFLINE = "true"
+cargo clippy --all-targets --all-features -- -D warnings
+cargo test -p meu_pacote --lib --bins   # ainda usa SQLX_OFFLINE=true
+
+# ❌ Errado: resetar SQLX_OFFLINE entre clippy e test
+$env:SQLX_OFFLINE = ""   # faz SQLx conectar ao banco em cada query! durante compilação → lento
+cargo test ...
+```
+
+O cache `.sqlx/` (versionado no repo) contém os resultados das verificações offline. Atualize-o com `cargo sqlx prepare --workspace` (com túnel ativo) após cada nova `query!()`.
+
+### 11.3. Dependências de dev pesadas (wiremock)
+
+`wiremock = "0.6"` (usada em `infrastructure_evolution` e `data_whatsapp`) puxa ~40 crates extras em dev-mode (hyper, tower, reqwest, etc.). O **primeiro build** demora mais por isso. Após o primeiro build, a compilação é incremental (segundos).
+
+Para reduzir pico de CPU/RAM durante compilação lenta:
+```powershell
+.\infra\test-quick.ps1 -Jobs 2   # limita threads de compilação
+# ou via env diretamente:
+$env:CARGO_BUILD_JOBS = "2"
+```
+
+### 11.4. Outros comandos cargo úteis
+
+- **Filtrar**: `cargo test -p meu_pacote nome_parcial`
+- **Só ignorados**: `cargo test -- --ignored`
+- **Ver saída**: `cargo test -- --nocapture`
+- **`cargo-nextest`** (alternativa): executor mais rápido, um processo por teste (`cargo nextest run`).
+- **Doctests**: `cargo test --doc` (não executados pelo nextest).
+- **Cobertura**: `cargo llvm-cov` ou `cargo tarpaulin` — bússola, não meta cega.
+- **Lint de testes**: `cargo clippy --all-targets` cobre o código de teste.
 
 ---
 
