@@ -13,17 +13,17 @@ permissions:
   packages: write
 
 jobs:
-  # Monorepo: detecta o que mudou para nao rebuildar o que nao foi alterado.
-  #   server  -> rebuild da imagem Rust + compose up
-  #   web     -> rebuild do bundle Flutter + publicacao em /srv
-  #   compose -> so compose up (pull da imagem existente + aplica mudancas)
-  # Mudar o proprio workflow forca tudo (valida o pipeline).
+  # Monorepo: so builda o que mudou.
+  #   server  -> imagem Rust         | web  -> imagem do client Flutter
+  #   edge    -> imagem da borda      | compose -> so reconcilia (up)
+  # Mudar o proprio workflow forca tudo.
   changes:
     name: Detecta mudanças
     runs-on: ubuntu-latest
     outputs:
       server: ${{ steps.filter.outputs.server }}
       web: ${{ steps.filter.outputs.web }}
+      edge: ${{ steps.filter.outputs.edge }}
       compose: ${{ steps.filter.outputs.compose }}
     steps:
       - uses: actions/checkout@v5
@@ -37,6 +37,10 @@ jobs:
               - '.github/workflows/deploy-dev.yml'
             web:
               - 'clients/**'
+              - 'docker/web/**'
+              - '.github/workflows/deploy-dev.yml'
+            edge:
+              - 'docker/edge/**'
               - '.github/workflows/deploy-dev.yml'
             compose:
               - 'docker/dev/**'
@@ -51,17 +55,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-
-      # Driver docker-container: necessário para o cache type=gha (o driver docker
-      # padrão não suporta cache export).
       - uses: docker/setup-buildx-action@v3
-
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
       - id: meta
         uses: docker/metadata-action@v5
         with:
@@ -69,7 +68,6 @@ jobs:
           tags: |
             type=ref,event=branch
             type=sha,format=short
-
       - uses: docker/build-push-action@v6
         with:
           context: .
@@ -86,6 +84,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
@@ -104,26 +103,58 @@ jobs:
             -t lib/main_dev.dart \
             --dart-define=SMARTCORE_API_ENDPOINT=https://dev.smartcoreassistant.com.br
 
-      - name: Empacota bundle estático
-        run: tar -C clients/apps/smart-core-admin/build/web -czf web-dev.tar.gz .
+      - name: Prepara contexto (./web)
+        run: cp -r clients/apps/smart-core-admin/build/web ./web
 
-      - uses: actions/upload-artifact@v6
+      - uses: docker/login-action@v3
         with:
-          name: web-dev
-          path: web-dev.tar.gz
-          retention-days: 3
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/web/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/smartcore-web:dev
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+  build-edge:
+    name: Build Edge (borda)
+    needs: changes
+    if: needs.changes.outputs.edge == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Imagem da borda e env-agnostica (roteia v1 + dev + prod + grafana).
+      - uses: docker/build-push-action@v6
+        with:
+          context: docker/edge
+          file: docker/edge/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository }}/smartcore-edge:latest
+          cache-from: type=gha,scope=edge
+          cache-to: type=gha,mode=max,scope=edge
 
   deploy-dev:
-    name: Deploy DEV (compose + web)
-    needs: [changes, build-server, build-web]
-    # Roda se algo relevante mudou e nenhum build falhou (builds pulados = 'skipped',
-    # nao bloqueiam). A borda continua sendo o Caddy do host (servidor compartilhado).
+    name: Deploy DEV (compose)
+    needs: [changes, build-server, build-web, build-edge]
     if: >-
       ${{ always()
           && needs.build-server.result != 'failure'
           && needs.build-web.result != 'failure'
+          && needs.build-edge.result != 'failure'
           && (needs.changes.outputs.server == 'true'
               || needs.changes.outputs.web == 'true'
+              || needs.changes.outputs.edge == 'true'
               || needs.changes.outputs.compose == 'true') }}
     runs-on: [self-hosted, hostinger]
     environment: dev
@@ -133,42 +164,21 @@ jobs:
       - name: Docker login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      # O env real (com segredos) NÃO está no repo (gitignored) e o checkout limpa o
-      # working tree; copiamos do caminho provisionado pelo server-setup.sh.
       - name: Provisiona env real do servidor (DEV)
-        if: needs.changes.outputs.server == 'true' || needs.changes.outputs.compose == 'true'
         run: cp /opt/smartcore/dev/env/dev.env docker/dev/.env
 
-      # Observabilidade compartilhada (cria a rede external). Idempotente.
-      - name: Sobe observabilidade (cria a rede compartilhada)
-        if: needs.changes.outputs.server == 'true' || needs.changes.outputs.compose == 'true'
+      # Observabilidade (cria a rede external compartilhada). Idempotente.
+      - name: Sobe observabilidade
         working-directory: docker/observability
         run: docker compose up -d
 
+      # Stack do ambiente dev (inclui o container web do client). Idempotente.
       - name: Compose pull & up (DEV)
-        if: needs.changes.outputs.server == 'true' || needs.changes.outputs.compose == 'true'
         working-directory: docker/dev
         run: |
           docker compose --env-file .env pull
           docker compose --env-file .env up -d --remove-orphans
 
-      # Bundle estático servido pelo Caddy do host: baixa o artefato e troca atômico.
-      - uses: actions/download-artifact@v8
-        if: needs.changes.outputs.web == 'true'
-        with:
-          name: web-dev
-
-      - name: Publica bundle web DEV (atômico, com backup)
-        if: needs.changes.outputs.web == 'true'
-        run: |
-          WEB_DIR="/srv/smart-core-admin/dev/web"
-          STAGE="/srv/smart-core-admin/dev/web.staging"
-          rm -rf /srv/smart-core-admin/dev/web.bak
-          cp -r "$WEB_DIR" /srv/smart-core-admin/dev/web.bak 2>/dev/null || true
-          rm -rf "$STAGE"; mkdir -p "$STAGE"
-          tar -xzf web-dev.tar.gz -C "$STAGE"
-          chmod -R 755 "$STAGE"
-          rm -rf "$WEB_DIR"; mkdir -p "$(dirname "$WEB_DIR")"
-          mv "$STAGE" "$WEB_DIR"
-          rm -f web-dev.tar.gz
-          echo "✓ bundle web DEV publicado em $WEB_DIR (Caddy do host serve estático, sem reload)"
+      # NOTA: a subida do edge (Caddy em 80/443) NAO esta aqui ainda — o cutover
+      # inicial (parar o Caddy do host) e manual. Apos o cutover, o step
+      # "Sobe a borda (edge)" sera readicionado para automacao.

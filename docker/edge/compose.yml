@@ -1,0 +1,39 @@
+# =============================================================================
+# Edge (borda) — Smart Core Assistant v2 (full-docker)
+# =============================================================================
+# Stack da borda: o container Caddy ocupa 80/443 e roteia v1 + v2 + grafana
+# (substitui o Caddy do host). Persiste os certificados em volume.
+#
+# Subir (a partir de docker/edge/):
+#   docker compose up -d
+# Pre-requisitos: a rede `shared_network` (do v1) deve existir; as portas v2
+# (50051/8081 dev, 3000 grafana) publicadas no host. NADA mais pode ocupar 80/443
+# (pare o Caddy do host antes).
+# =============================================================================
+name: smart-core-v2-edge
+
+services:
+  caddy:
+    image: ${EDGE_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-edge:latest}
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"          # HTTP/3 QUIC
+    extra_hosts:
+      # Permite alcancar as portas publicadas no host (v2 e grafana).
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - caddy_data:/data       # certificados Let's Encrypt (PERSISTIR)
+      - caddy_config:/config
+    networks:
+      - v1net                  # alcanca o container do painel v1 (smartcoreassistant_app)
+
+networks:
+  v1net:
+    name: shared_network
+    external: true
+
+volumes:
+  caddy_data:
+  caddy_config:

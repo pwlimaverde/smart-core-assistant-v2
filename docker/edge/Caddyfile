@@ -1,0 +1,52 @@
+# =============================================================================
+# Edge (borda) — Smart Core Assistant v2 (full-docker)
+# =============================================================================
+# Container Caddy que ocupa 80/443 e roteia TUDO (substitui o Caddy do host).
+# TLS automatico (Let's Encrypt). Resolucao:
+#   - v1 (painel Django): pela rede `shared_network` -> smartcoreassistant_app:8000
+#   - v2/grafana: portas publicadas no host -> host.docker.internal:<porta>
+# (rotas api./dev-api. legadas foram removidas: apontavam para um gateway v2 que
+#  nao existe mais; a porta 8080 hoje e de outro projeto.)
+# =============================================================================
+
+# ----- v1: painel Django (app/dados intactos; so o ingress passou pro Docker) -----
+smartcoreassistant.com.br {
+	reverse_proxy smartcoreassistant_app:8000 {
+		header_up X-Real-IP {remote_host}
+		header_up Host {host}
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "SAMEORIGIN"
+	}
+}
+
+# ----- v2 DEV: admin Flutter (/v2/admin) + fachada gRPC-Web (demais paths) -----
+dev.smartcoreassistant.com.br {
+	encode gzip zstd
+
+	# Bundle estatico do client (web container). handle_path remove o prefixo;
+	# o web container serve /srv com fallback SPA.
+	handle_path /v2/admin/* {
+		reverse_proxy host.docker.internal:8081
+		header {
+			Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+			Strict-Transport-Security "max-age=31536000; includeSubDomains"
+			X-Content-Type-Options "nosniff"
+			X-Frame-Options "DENY"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			-Server
+		}
+	}
+
+	# gRPC-Web (HTTP/1.1 plano; SEM h2c) -> runtime_api do v2 dev.
+	handle {
+		reverse_proxy host.docker.internal:50051
+	}
+}
+
+# ----- Grafana (observabilidade) -----
+grafana.smartcoreassistant.com.br {
+	reverse_proxy host.docker.internal:3000
+}

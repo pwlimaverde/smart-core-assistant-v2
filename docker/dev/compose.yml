@@ -164,6 +164,15 @@ services:
       control_plane: { condition: service_started }
     restart: unless-stopped
 
+  # Client admin (Flutter Web) — bundle embutido na imagem. Publicado no host; o
+  # edge faz reverse_proxy p/ host.docker.internal:${WEB_HOST_PORT} no /v2/admin/*.
+  web:
+    image: ${WEB_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-web:dev}
+    ports:
+      - "${WEB_HOST_PORT:-8081}:80"
+    networks: [internal]
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
