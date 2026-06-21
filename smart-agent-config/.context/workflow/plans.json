@@ -1,14 +1,17 @@
 {
   "active": [
     {
-      "slug": "migracao-full-docker",
-      "path": "plans/migracao-full-docker.md",
-      "title": "Migração Full-Docker (dev + prod) — Plano Canônico",
-      "summary": "Migrar a infra híbrida (binários Rust via systemd no host Hostinger + dados/observabilidade",
-      "linkedAt": "2026-06-20T14:37:35.423Z",
-      "status": "active"
+      "slug": "camada-abstracao-mensageria",
+      "path": "plans/camada-abstracao-mensageria.md",
+      "title": "Camada de Abstração de Mensageria (WhatsApp)",
+      "summary": "Introduzir trait `MessagingProvider` + `infrastructure_evolution` + `webhook_ingress` + `data_whatsapp`",
+      "linkedAt": "2026-06-21T02:01:03.059Z",
+      "status": "active",
+      "approval_status": "approved",
+      "approved_at": "2026-06-21T02:01:15.187Z",
+      "approved_by": "architect"
     }
   ],
   "completed": [],
-  "primary": "migracao-full-docker"
+  "primary": "camada-abstracao-mensageria"
 }

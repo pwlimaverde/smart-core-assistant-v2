@@ -3,7 +3,7 @@
 This directory contains plans for coordinating work across documentation and playbooks.
 
 ## Plan Queue
-1. [Migracao Full Docker](./migracao-full-docker.md)
+1. [Camada Abstracao Mensageria](./camada-abstracao-mensageria.md)
 
 ## How To Create Or Update Plans
 - Run "dotcontext plan <name>" to scaffold a new plan template.

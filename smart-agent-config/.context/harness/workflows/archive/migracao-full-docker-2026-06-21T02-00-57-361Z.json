@@ -1,0 +1,92 @@
+{
+  "version": 2,
+  "workflowType": "prevc",
+  "updatedAt": "2026-06-21T02:00:57.359Z",
+  "status": {
+    "project": {
+      "name": "migracao-full-docker",
+      "scale": 3,
+      "started": "2026-06-20T14:37:31.418Z",
+      "current_phase": "R",
+      "settings": {
+        "autonomous_mode": false,
+        "require_plan": true,
+        "require_approval": true
+      },
+      "plan": "migracao-full-docker"
+    },
+    "phases": {
+      "P": {
+        "status": "completed",
+        "started_at": "2026-06-20T14:37:31.418Z",
+        "completed_at": "2026-06-20T14:37:40.018Z",
+        "outputs": [
+          {
+            "path": ".context/plans/migracao-full-docker.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/migracao-full-docker/plano_completo_migracao-full-docker.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/migracao-full-docker/info_aux_migracao-full-docker.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "R": {
+        "status": "in_progress",
+        "started_at": "2026-06-20T14:37:40.021Z"
+      },
+      "E": {
+        "status": "pending"
+      },
+      "V": {
+        "status": "pending"
+      },
+      "C": {
+        "status": "pending"
+      }
+    },
+    "agents": {},
+    "roles": {},
+    "approval": {
+      "plan_created": true,
+      "plan_approved": false
+    },
+    "execution": {
+      "history": [
+        {
+          "timestamp": "2026-06-20T14:37:31.418Z",
+          "phase": "P",
+          "action": "started"
+        },
+        {
+          "timestamp": "2026-06-20T14:37:35.428Z",
+          "phase": "P",
+          "action": "plan_linked",
+          "plan": "migracao-full-docker"
+        },
+        {
+          "timestamp": "2026-06-20T14:37:40.018Z",
+          "phase": "P",
+          "action": "completed"
+        },
+        {
+          "timestamp": "2026-06-20T14:37:40.021Z",
+          "phase": "R",
+          "action": "started"
+        }
+      ],
+      "last_activity": "2026-06-20T14:37:40.021Z",
+      "resume_context": "Fase R (Revisão) em progresso"
+    }
+  },
+  "binding": {
+    "workflowName": "migracao-full-docker",
+    "sessionId": "efad3c56-99b6-4475-a1e0-9aee9dae3c01",
+    "createdAt": "2026-06-20T14:37:31.425Z",
+    "updatedAt": "2026-06-20T14:37:40.027Z"
+  }
+}
