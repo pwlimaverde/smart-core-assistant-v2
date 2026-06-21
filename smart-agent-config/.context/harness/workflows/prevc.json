@@ -1,7 +1,7 @@
 {
   "version": 2,
   "workflowType": "prevc",
-  "updatedAt": "2026-06-21T03:13:41.666Z",
+  "updatedAt": "2026-06-21T03:25:44.023Z",
   "status": {
     "project": {
       "name": "camada-abstracao-mensageria",
@@ -70,8 +70,9 @@
         "completed_at": "2026-06-21T03:13:31.838Z"
       },
       "C": {
-        "status": "in_progress",
-        "started_at": "2026-06-21T03:13:31.842Z"
+        "status": "completed",
+        "started_at": "2026-06-21T03:13:31.842Z",
+        "completed_at": "2026-06-21T03:25:44.010Z"
       }
     },
     "agents": {},
@@ -174,16 +175,21 @@
           "timestamp": "2026-06-21T03:13:31.842Z",
           "phase": "C",
           "action": "started"
+        },
+        {
+          "timestamp": "2026-06-21T03:25:44.010Z",
+          "phase": "C",
+          "action": "completed"
         }
       ],
-      "last_activity": "2026-06-21T03:13:31.842Z",
-      "resume_context": "Fase C (Confirmação) em progresso"
+      "last_activity": "2026-06-21T03:25:44.010Z",
+      "resume_context": "Fase C (Confirmação) concluída"
     }
   },
   "binding": {
     "workflowName": "camada-abstracao-mensageria",
     "sessionId": "ec908c9b-cedf-475e-b8a9-2001205acb54",
     "createdAt": "2026-06-21T02:00:57.376Z",
-    "updatedAt": "2026-06-21T03:13:31.850Z"
+    "updatedAt": "2026-06-21T03:25:44.018Z"
   }
 }
