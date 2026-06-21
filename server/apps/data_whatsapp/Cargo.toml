@@ -24,3 +24,7 @@ uuid       = { workspace = true }
 redis      = { workspace = true }
 anyhow     = { workspace = true }
 
+[dev-dependencies]
+wiremock   = "0.6"
+tokio      = { workspace = true, features = ["full"] }
+

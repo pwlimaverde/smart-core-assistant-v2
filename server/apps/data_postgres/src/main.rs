@@ -4718,4 +4718,176 @@ mod tests {
             .await
             .unwrap();
     }
+
+    #[tokio::test]
+    async fn test_handler_whatsapp_instance_flow() {
+        let (pool, _) = setup_teste().await;
+
+        let tenant_id = Uuid::new_v4();
+        let slug = format!("tenant-{}", Uuid::new_v4());
+        sqlx::query(
+            "INSERT INTO tenants_tenant (id, name, slug, api_key, owner_id) VALUES ($1, $2, $3, $4, 1)"
+        )
+        .bind(tenant_id)
+        .bind("Tenant Whatsapp Test")
+        .bind(slug)
+        .bind(Uuid::new_v4().to_string())
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let payload_create = serde_json::json!({
+            "name": "whatsapp-inst-1",
+            "api_key": "api-key-xyz",
+            "provider": "evolution"
+        });
+
+        let req_create = Envelope {
+            tenant_id: tenant_id.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: "".to_string(),
+            traceparent: "00-trace-wa-01".to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "CreateWhatsappInstanceRecord".to_string(),
+            payload: serde_json::to_vec(&payload_create).unwrap(),
+            error: None,
+            auth_user_id: 1,
+            auth_scopes: vec!["integracoes:write".to_string()],
+            ..Default::default()
+        };
+
+        let resp_create = handler_create_whatsapp_instance_record(pool.clone(), req_create).await;
+        assert_eq!(resp_create.kind, MessageKind::Reply as i32);
+
+        let resp_payload: serde_json::Value = serde_json::from_slice(&resp_create.payload).unwrap();
+        let db_id = resp_payload.get("id").unwrap().as_i64().unwrap() as i32;
+        assert_eq!(
+            resp_payload.get("name").unwrap().as_str().unwrap(),
+            "whatsapp-inst-1"
+        );
+
+        let payload_update = serde_json::json!({
+            "id": db_id,
+            "connection_state": "connected"
+        });
+        let req_update = Envelope {
+            tenant_id: tenant_id.to_string(),
+            kind: MessageKind::Request as i32,
+            method: "AtualizarEstadoInstancia".to_string(),
+            payload: serde_json::to_vec(&payload_update).unwrap(),
+            ..Default::default()
+        };
+        let resp_update = handler_atualizar_estado_instancia(pool.clone(), req_update).await;
+        assert_eq!(resp_update.kind, MessageKind::Reply as i32);
+
+        let payload_prov = serde_json::json!({
+            "id": db_id,
+            "instance_id": "evolution-id-123",
+            "phone_number": "5511999998888"
+        });
+        let req_prov = Envelope {
+            tenant_id: tenant_id.to_string(),
+            kind: MessageKind::Request as i32,
+            method: "AtualizarInstanciaProviderId".to_string(),
+            payload: serde_json::to_vec(&payload_prov).unwrap(),
+            ..Default::default()
+        };
+        let resp_prov = handler_atualizar_instancia_provider_id(pool.clone(), req_prov).await;
+        assert_eq!(resp_prov.kind, MessageKind::Reply as i32);
+
+        let payload_get = serde_json::json!({
+            "id": db_id
+        });
+        let req_get = Envelope {
+            tenant_id: tenant_id.to_string(),
+            kind: MessageKind::Request as i32,
+            method: "GetWhatsappInstance".to_string(),
+            payload: serde_json::to_vec(&payload_get).unwrap(),
+            ..Default::default()
+        };
+        let resp_get = handler_get_whatsapp_instance(pool.clone(), req_get).await;
+        assert_eq!(resp_get.kind, MessageKind::Reply as i32);
+        let resp_get_payload: serde_json::Value =
+            serde_json::from_slice(&resp_get.payload).unwrap();
+        assert_eq!(
+            resp_get_payload
+                .get("connection_state")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "connected"
+        );
+        assert_eq!(
+            resp_get_payload
+                .get("instance_id")
+                .unwrap()
+                .as_str()
+                .unwrap(),
+            "evolution-id-123"
+        );
+
+        let req_list = Envelope {
+            tenant_id: tenant_id.to_string(),
+            kind: MessageKind::Request as i32,
+            method: "ListWhatsappInstances".to_string(),
+            payload: vec![],
+            ..Default::default()
+        };
+        let resp_list = handler_list_whatsapp_instances(pool.clone(), req_list).await;
+        assert_eq!(resp_list.kind, MessageKind::Reply as i32);
+        let resp_list_payload: serde_json::Value =
+            serde_json::from_slice(&resp_list.payload).unwrap();
+        assert_eq!(
+            resp_list_payload
+                .get("instances")
+                .unwrap()
+                .as_array()
+                .unwrap()
+                .len(),
+            1
+        );
+
+        let req_admin_list = Envelope {
+            tenant_id: tenant_id.to_string(),
+            kind: MessageKind::Request as i32,
+            method: "AdminListAllConnectedInstances".to_string(),
+            payload: vec![],
+            auth_scopes: vec!["operacional:admin".to_string()],
+            ..Default::default()
+        };
+        let resp_admin_list =
+            handler_admin_list_all_connected_instances(pool.clone(), None, req_admin_list).await;
+        assert_eq!(resp_admin_list.kind, MessageKind::Reply as i32);
+        let resp_admin_list_payload: serde_json::Value =
+            serde_json::from_slice(&resp_admin_list.payload).unwrap();
+        assert!(!resp_admin_list_payload
+            .get("instances")
+            .unwrap()
+            .as_array()
+            .unwrap()
+            .is_empty());
+
+        let payload_del = serde_json::json!({
+            "id": db_id
+        });
+        let req_del = Envelope {
+            tenant_id: tenant_id.to_string(),
+            kind: MessageKind::Request as i32,
+            method: "AdminDeletarInstancia".to_string(),
+            payload: serde_json::to_vec(&payload_del).unwrap(),
+            auth_user_id: 1,
+            auth_scopes: vec!["operacional:admin".to_string()],
+            ..Default::default()
+        };
+        let resp_del = handler_admin_deletar_instancia(pool.clone(), req_del).await;
+        assert_eq!(resp_del.kind, MessageKind::Reply as i32);
+
+        sqlx::query("DELETE FROM tenants_tenant WHERE id = $1")
+            .bind(tenant_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
 }

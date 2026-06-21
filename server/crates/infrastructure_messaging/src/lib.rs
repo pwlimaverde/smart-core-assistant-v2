@@ -95,3 +95,81 @@ pub trait MessagingProvider: Send + Sync {
     ) -> Result<SendMessageResult, MessagingProviderError>;
     async fn list_all_instances(&self) -> Result<Vec<String>, MessagingProviderError>;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_connection_state_serialization() {
+        let cases = vec![
+            (ConnectionState::Connected, "\"connected\""),
+            (ConnectionState::Disconnected, "\"disconnected\""),
+            (ConnectionState::Connecting, "\"connecting\""),
+            (ConnectionState::Unknown, "\"unknown\""),
+        ];
+
+        for (state, json) in cases {
+            let serialized = serde_json::to_string(&state).unwrap();
+            assert_eq!(serialized, json);
+
+            let deserialized: ConnectionState = serde_json::from_str(json).unwrap();
+            assert_eq!(deserialized, state);
+        }
+    }
+
+    #[test]
+    fn test_media_type_serialization() {
+        let cases = vec![
+            (MediaType::Image, "\"image\""),
+            (MediaType::Video, "\"video\""),
+            (MediaType::Audio, "\"audio\""),
+            (MediaType::Document, "\"document\""),
+        ];
+
+        for (media, json) in cases {
+            let serialized = serde_json::to_string(&media).unwrap();
+            assert_eq!(serialized, json);
+
+            let deserialized: MediaType = serde_json::from_str(json).unwrap();
+            let serialized_back = serde_json::to_string(&deserialized).unwrap();
+            assert_eq!(serialized_back, json);
+        }
+    }
+
+    #[test]
+    fn test_error_formatting() {
+        let err = MessagingProviderError::Network("falha de rede".to_string());
+        assert_eq!(
+            err.to_string(),
+            "Erro de conexão/rede no provedor: falha de rede"
+        );
+
+        let err = MessagingProviderError::ProviderApi {
+            status: 400,
+            body: "bad request".to_string(),
+        };
+        assert_eq!(
+            err.to_string(),
+            "O provedor retornou erro HTTP (status 400): bad request"
+        );
+
+        let err = MessagingProviderError::Deserialization("invalid json".to_string());
+        assert_eq!(
+            err.to_string(),
+            "Falha ao processar resposta do provedor: invalid json"
+        );
+
+        let err = MessagingProviderError::Config("url invalida".to_string());
+        assert_eq!(
+            err.to_string(),
+            "Erro de configuração do provedor: url invalida"
+        );
+
+        let err = MessagingProviderError::InvalidState("ja conectado".to_string());
+        assert_eq!(
+            err.to_string(),
+            "Operação inválida no estado atual: ja conectado"
+        );
+    }
+}

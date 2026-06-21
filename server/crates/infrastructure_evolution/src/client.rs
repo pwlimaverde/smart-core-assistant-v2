@@ -57,3 +57,42 @@ pub(crate) struct ConnStateResp {
 pub(crate) struct ConnStateInner {
     pub(crate) state: String,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_ok_or_api_success() {
+        let resp = reqwest::Response::from(
+            http::Response::builder()
+                .status(200)
+                .body("sucesso")
+                .unwrap(),
+        );
+        let res = EvolutionProvider::ok_or_api(resp).await;
+        assert!(res.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_ok_or_api_error_truncation() {
+        let long_body = "a".repeat(300);
+        let resp = reqwest::Response::from(
+            http::Response::builder()
+                .status(400)
+                .body(long_body)
+                .unwrap(),
+        );
+        let res = EvolutionProvider::ok_or_api(resp).await;
+        assert!(res.is_err());
+        if let Err(infrastructure_messaging::MessagingProviderError::ProviderApi { status, body }) =
+            res
+        {
+            assert_eq!(status, 400);
+            assert_eq!(body.len(), 200);
+            assert_eq!(body, "a".repeat(200));
+        } else {
+            panic!("Esperava ProviderApi erro");
+        }
+    }
+}

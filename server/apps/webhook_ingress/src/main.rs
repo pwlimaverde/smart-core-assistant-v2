@@ -148,3 +148,177 @@ fn build_connection_payload(raw: &serde_json::Value, instance_id: i32) -> serde_
         "raw_event": raw
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use serde_json::json;
+    use tower::ServiceExt;
+
+    async fn fake_bus(porta: u16) -> redis::aio::ConnectionManager {
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", porta))
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut socket, _)) = listener.accept().await else {
+                    break;
+                };
+                tokio::spawn(async move {
+                    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+                    let mut buf = [0u8; 4096];
+                    while let Ok(n) = socket.read(&mut buf).await {
+                        if n == 0 {
+                            break;
+                        }
+                        let req = String::from_utf8_lossy(&buf[..n]);
+                        for parte in req.split('*') {
+                            if parte.is_empty() {
+                                continue;
+                            }
+                            if parte.to_uppercase().contains("PING") {
+                                let _ = socket.write_all(b"+PONG\r\n").await;
+                            } else {
+                                let _ = socket.write_all(b"+OK\r\n").await;
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        let client = redis::Client::open(format!("redis://127.0.0.1:{porta}")).unwrap();
+        redis::aio::ConnectionManager::new(client).await.unwrap()
+    }
+
+    async fn setup_test_app() -> Router {
+        let redis = fake_bus(29256).await;
+        let state = AppState { redis };
+
+        Router::new()
+            .route(
+                "/webhook/{provider}/{tenant_id}/{instance_id}",
+                post(handle_webhook),
+            )
+            .with_state(state)
+    }
+
+    #[tokio::test]
+    async fn test_webhook_invalid_json() {
+        let app = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/webhook/evolution/00000000-0000-0000-0000-000000000001/42")
+                    .header("content-type", "application/json")
+                    .body(Body::from("{invalid json"))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_webhook_unknown_provider() {
+        let app = setup_test_app().await;
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/webhook/unknown_prov/00000000-0000-0000-0000-000000000001/42")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({ "event": "messages.upsert" }).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+    }
+
+    #[tokio::test]
+    async fn test_webhook_evolution_message_received() {
+        let app = setup_test_app().await;
+
+        let payload = json!({
+            "event": "messages.upsert",
+            "data": {
+                "message": {
+                    "conversation": "Olá mundo"
+                }
+            }
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/webhook/evolution/00000000-0000-0000-0000-000000000001/42")
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+    }
+
+    #[tokio::test]
+    async fn test_webhook_evolution_connection_updated() {
+        let app = setup_test_app().await;
+
+        let payload = json!({
+            "event": "connection.update",
+            "data": {
+                "state": "open"
+            }
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/webhook/evolution/00000000-0000-0000-0000-000000000001/42")
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+    }
+
+    #[tokio::test]
+    async fn test_webhook_evolution_ignored_event() {
+        let app = setup_test_app().await;
+
+        let payload = json!({
+            "event": "ignored.event",
+            "data": {}
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/webhook/evolution/00000000-0000-0000-0000-000000000001/42")
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+    }
+}

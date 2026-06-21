@@ -20,3 +20,6 @@ error_core = { workspace = true }
 observability = { workspace = true }
 tracing = { workspace = true }
 
+[dev-dependencies]
+tokio = { workspace = true, features = ["full"] }
+

@@ -465,4 +465,156 @@ mod tests {
         let err = resp.error.unwrap();
         assert!(err.message.contains("falha ao conectar ao data_postgres"));
     }
+
+    async fn fake_bus(porta: u16) -> redis::aio::ConnectionManager {
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", porta))
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut socket, _)) = listener.accept().await else {
+                    break;
+                };
+                tokio::spawn(async move {
+                    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+                    let mut buf = [0u8; 4096];
+                    while let Ok(n) = socket.read(&mut buf).await {
+                        if n == 0 {
+                            break;
+                        }
+                        let req = String::from_utf8_lossy(&buf[..n]);
+                        for parte in req.split('*') {
+                            if parte.is_empty() {
+                                continue;
+                            }
+                            if parte.to_uppercase().contains("PING") {
+                                let _ = socket.write_all(b"+PONG\r\n").await;
+                            } else {
+                                let _ = socket.write_all(b"+OK\r\n").await;
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        let client = redis::Client::open(format!("redis://127.0.0.1:{porta}")).unwrap();
+        redis::aio::ConnectionManager::new(client).await.unwrap()
+    }
+
+    #[tokio::test]
+    async fn test_handler_test_evolution_connection_sucesso() {
+        let _guard = CONTROL_PLANE_MUTEX.lock().await;
+        let pg_addr = "tcp://127.0.0.1:29222";
+        let wa_addr = "tcp://127.0.0.1:29220";
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+        std::env::set_var("SMARTCORE_DATA_WHATSAPP_ENDPOINT", wa_addr);
+
+        let pg_endpoint = Endpoint::parse(pg_addr).unwrap();
+        let pg_server =
+            Server::new(pg_endpoint, "flatbuffers").route("ListWhatsappInstances", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({
+                        "instances": [
+                            { "id": 42 }
+                        ]
+                    });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "ListWhatsappInstancesReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let pg_handle = tokio::spawn(async move {
+            pg_server.run().await.unwrap();
+        });
+
+        let wa_endpoint = Endpoint::parse(wa_addr).unwrap();
+        let wa_server =
+            Server::new(wa_endpoint, "flatbuffers").route("GetWhatsappInstanceStatus", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({
+                        "status": "connected"
+                    });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "GetWhatsappInstanceStatusReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let wa_handle = tokio::spawn(async move {
+            wa_server.run().await.unwrap();
+        });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let env = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            method: "TestEvolutionConnection".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({ "id": 42 })).unwrap(),
+            traceparent: "00-trace-cp-wa-01".to_string(),
+            ..Default::default()
+        };
+
+        let resp = handler_test_evolution_connection(env).await;
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        assert_eq!(resp.method, "TestEvolutionConnectionReply");
+        let resp_payload: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(
+            resp_payload.get("status").and_then(|v| v.as_str()),
+            Some("open")
+        );
+
+        wa_handle.abort();
+        pg_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_handler_admin_bulk_disconnect_sucesso() {
+        let _guard = CONTROL_PLANE_MUTEX.lock().await;
+        let wa_addr = "tcp://127.0.0.1:29221";
+        std::env::set_var("SMARTCORE_DATA_WHATSAPP_ENDPOINT", wa_addr);
+
+        let wa_endpoint = Endpoint::parse(wa_addr).unwrap();
+        let wa_server =
+            Server::new(wa_endpoint, "flatbuffers").route("AdminBulkDisconnectInstances", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({
+                        "count": 5,
+                        "scope": "global"
+                    });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "AdminBulkDisconnectInstancesReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let wa_handle = tokio::spawn(async move {
+            wa_server.run().await.unwrap();
+        });
+
+        let redis_conn = fake_bus(29255).await;
+        let state = AppState { redis_conn };
+
+        let env = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            method: "AdminBulkDisconnect".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({ "tenant_id": null })).unwrap(),
+            traceparent: "00-trace-cp-wa-02".to_string(),
+            ..Default::default()
+        };
+
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let resp = handler_admin_bulk_disconnect(state, env).await;
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let resp_payload: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(resp_payload.get("count").and_then(|v| v.as_i64()), Some(5));
+
+        wa_handle.abort();
+    }
 }

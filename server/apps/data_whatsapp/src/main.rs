@@ -815,3 +815,420 @@ async fn handler_admin_bulk_disconnect(state: AppState, env: Envelope) -> Envelo
         }),
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use contracts::Envelope;
+    use secrecy::SecretString;
+    use transport::{Endpoint, Server};
+    use wiremock::matchers::{method, path};
+    use wiremock::Mock;
+    use wiremock::MockServer;
+    use wiremock::ResponseTemplate;
+
+    async fn fake_bus(porta: u16) -> redis::aio::ConnectionManager {
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", porta))
+            .await
+            .unwrap();
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut socket, _)) = listener.accept().await else {
+                    break;
+                };
+                tokio::spawn(async move {
+                    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+                    let mut buf = [0u8; 4096];
+                    while let Ok(n) = socket.read(&mut buf).await {
+                        if n == 0 {
+                            break;
+                        }
+                        let req = String::from_utf8_lossy(&buf[..n]);
+                        for parte in req.split('*') {
+                            if parte.is_empty() {
+                                continue;
+                            }
+                            if parte.to_uppercase().contains("PING") {
+                                let _ = socket.write_all(b"+PONG\r\n").await;
+                            } else {
+                                let _ = socket.write_all(b"+OK\r\n").await;
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        let client = redis::Client::open(format!("redis://127.0.0.1:{porta}")).unwrap();
+        redis::aio::ConnectionManager::new(client).await.unwrap()
+    }
+
+    async fn setup_test_env() -> (MockServer, AppState, tokio::task::JoinHandle<()>) {
+        let wiremock_server = MockServer::start().await;
+
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", "tcp://127.0.0.1:29292");
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_CODEC", "flatbuffers");
+
+        let pg_server = Server::new(Endpoint::parse("tcp://127.0.0.1:29292").unwrap(), "flatbuffers")
+            .route("CreateWhatsappInstanceRecord", |env| {
+                Box::pin(async move {
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&serde_json::json!({ "id": 42 })).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("GetWhatsappInstance", |env| {
+                Box::pin(async move {
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&serde_json::json!({
+                            "id": 42,
+                            "name": "instancia-test",
+                            "api_key": "inst-key-123",
+                            "provider": "evolution"
+                        })).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("AdminDeletarInstancia", |env| {
+                Box::pin(async move {
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&serde_json::json!({ "status": "success" })).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("AtualizarInstanciaProviderId", |env| {
+                Box::pin(async move {
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&serde_json::json!({ "status": "success" })).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("AtualizarEstadoInstancia", |env| {
+                Box::pin(async move {
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&serde_json::json!({ "status": "success" })).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("ListWhatsappInstances", |env| {
+                Box::pin(async move {
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&serde_json::json!({
+                            "instances": [
+                                { "id": 42, "name": "inst-1", "api_key": "key-1", "tenant_id": "00000000-0000-0000-0000-000000000001" }
+                            ]
+                        })).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("AdminListAllConnectedInstances", |env| {
+                Box::pin(async move {
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&serde_json::json!([
+                            { "id": 42, "name": "inst-1", "api_key": "key-1", "tenant_id": "00000000-0000-0000-0000-000000000001" }
+                        ])).unwrap(),
+                        ..env
+                    }
+                })
+            });
+
+        let pg_handle = tokio::spawn(async move {
+            let _ = pg_server.run().await;
+        });
+
+        tokio::time::sleep(tokio::time::Duration::from_millis(150)).await;
+
+        let provider = EvolutionProvider::new(
+            wiremock_server.uri(),
+            SecretString::from("global-key".to_string()),
+        );
+        let redis_conn = fake_bus(29257).await;
+
+        let state = AppState {
+            provider,
+            redis_conn,
+        };
+
+        (wiremock_server, state, pg_handle)
+    }
+
+    #[tokio::test]
+    async fn test_handler_create_whatsapp_instance() {
+        let (server, state, pg_handle) = setup_test_env().await;
+
+        Mock::given(method("POST"))
+            .and(path("/instance/create"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(serde_json::json!({
+                "instance": {
+                    "instanceName": "instancia-test",
+                    "hash": "token-123"
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("PUT"))
+            .and(path("/webhook/set/instancia-test"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+
+        let payload = serde_json::json!({
+            "instance_name": "instancia-test",
+            "provider": "evolution"
+        });
+
+        let env = Envelope {
+            kind: MessageKind::Request as i32,
+            method: "CreateWhatsappInstance".to_string(),
+            tenant_id: "00000000-0000-0000-0000-000000000001".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        };
+
+        let res = handler_create_whatsapp_instance(state, env).await;
+        assert_eq!(res.kind, MessageKind::Reply as i32);
+        let res_payload: serde_json::Value = serde_json::from_slice(&res.payload).unwrap();
+        assert_eq!(
+            res_payload.get("status").unwrap().as_str().unwrap(),
+            "success"
+        );
+        assert_eq!(res_payload.get("id").unwrap().as_i64().unwrap(), 42);
+
+        pg_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_handler_delete_whatsapp_instance() {
+        let (server, state, pg_handle) = setup_test_env().await;
+
+        Mock::given(method("DELETE"))
+            .and(path("/instance/delete/instancia-test"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+
+        let payload = serde_json::json!({
+            "id": 42
+        });
+
+        let env = Envelope {
+            kind: MessageKind::Request as i32,
+            method: "DeleteWhatsappInstance".to_string(),
+            tenant_id: "00000000-0000-0000-0000-000000000001".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        };
+
+        let res = handler_delete_whatsapp_instance(state, env).await;
+        assert_eq!(res.kind, MessageKind::Reply as i32);
+        let res_payload: serde_json::Value = serde_json::from_slice(&res.payload).unwrap();
+        assert_eq!(
+            res_payload.get("status").unwrap().as_str().unwrap(),
+            "success"
+        );
+
+        pg_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_handler_reconnect_whatsapp_instance() {
+        let (server, state, pg_handle) = setup_test_env().await;
+
+        Mock::given(method("GET"))
+            .and(path("/instance/connect/instancia-test"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+
+        let payload = serde_json::json!({
+            "id": 42
+        });
+
+        let env = Envelope {
+            kind: MessageKind::Request as i32,
+            method: "ReconnectWhatsappInstance".to_string(),
+            tenant_id: "00000000-0000-0000-0000-000000000001".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        };
+
+        let res = handler_reconnect_whatsapp_instance(state, env).await;
+        assert_eq!(res.kind, MessageKind::Reply as i32);
+        let res_payload: serde_json::Value = serde_json::from_slice(&res.payload).unwrap();
+        assert_eq!(
+            res_payload.get("status").unwrap().as_str().unwrap(),
+            "success"
+        );
+
+        pg_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_handler_get_whatsapp_instance_status() {
+        let (server, state, pg_handle) = setup_test_env().await;
+
+        Mock::given(method("GET"))
+            .and(path("/instance/connectionState/instancia-test"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "instance": {
+                    "state": "open"
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let payload = serde_json::json!({
+            "id": 42
+        });
+
+        let env = Envelope {
+            kind: MessageKind::Request as i32,
+            method: "GetWhatsappInstanceStatus".to_string(),
+            tenant_id: "00000000-0000-0000-0000-000000000001".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        };
+
+        let res = handler_get_whatsapp_instance_status(state, env).await;
+        assert_eq!(res.kind, MessageKind::Reply as i32);
+        let res_payload: serde_json::Value = serde_json::from_slice(&res.payload).unwrap();
+        assert_eq!(
+            res_payload.get("status").unwrap().as_str().unwrap(),
+            "connected"
+        );
+
+        pg_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_handler_send_whatsapp_message() {
+        let (server, state, pg_handle) = setup_test_env().await;
+
+        Mock::given(method("POST"))
+            .and(path("/message/sendText/instancia-test"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "key": {
+                    "id": "msg-123"
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let payload = serde_json::json!({
+            "id": 42,
+            "to_number": "5511999998888",
+            "text": "Olá"
+        });
+
+        let env = Envelope {
+            kind: MessageKind::Request as i32,
+            method: "SendWhatsappMessage".to_string(),
+            tenant_id: "00000000-0000-0000-0000-000000000001".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        };
+
+        let res = handler_send_whatsapp_message(state, env).await;
+        assert_eq!(res.kind, MessageKind::Reply as i32);
+        let res_payload: serde_json::Value = serde_json::from_slice(&res.payload).unwrap();
+        assert_eq!(
+            res_payload.get("status").unwrap().as_str().unwrap(),
+            "success"
+        );
+        assert_eq!(
+            res_payload.get("message_id").unwrap().as_str().unwrap(),
+            "msg-123"
+        );
+
+        pg_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_handler_send_whatsapp_media() {
+        let (server, state, pg_handle) = setup_test_env().await;
+
+        Mock::given(method("POST"))
+            .and(path("/message/sendMedia/instancia-test"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "key": {
+                    "id": "media-123"
+                }
+            })))
+            .mount(&server)
+            .await;
+
+        let payload = serde_json::json!({
+            "id": 42,
+            "to_number": "5511999998888",
+            "media_type": "image",
+            "media_url": "http://media.url/image.png",
+            "caption": "Foto"
+        });
+
+        let env = Envelope {
+            kind: MessageKind::Request as i32,
+            method: "SendWhatsappMedia".to_string(),
+            tenant_id: "00000000-0000-0000-0000-000000000001".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        };
+
+        let res = handler_send_whatsapp_media(state, env).await;
+        assert_eq!(res.kind, MessageKind::Reply as i32);
+        let res_payload: serde_json::Value = serde_json::from_slice(&res.payload).unwrap();
+        assert_eq!(
+            res_payload.get("status").unwrap().as_str().unwrap(),
+            "success"
+        );
+        assert_eq!(
+            res_payload.get("message_id").unwrap().as_str().unwrap(),
+            "media-123"
+        );
+
+        pg_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_handler_admin_bulk_disconnect() {
+        let (server, state, pg_handle) = setup_test_env().await;
+
+        Mock::given(method("POST"))
+            .and(path("/instance/logout/inst-1"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+
+        let payload = serde_json::json!({
+            "tenant_id": "00000000-0000-0000-0000-000000000001"
+        });
+
+        let env = Envelope {
+            kind: MessageKind::Request as i32,
+            method: "AdminBulkDisconnectInstances".to_string(),
+            tenant_id: "00000000-0000-0000-0000-000000000001".to_string(),
+            auth_scopes: vec!["operacional:admin".to_string()],
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        };
+
+        let res = handler_admin_bulk_disconnect(state, env).await;
+        assert_eq!(res.kind, MessageKind::Reply as i32);
+        let res_payload: serde_json::Value = serde_json::from_slice(&res.payload).unwrap();
+        assert_eq!(res_payload.get("count").unwrap().as_i64().unwrap(), 1);
+
+        pg_handle.abort();
+    }
+}

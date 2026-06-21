@@ -187,3 +187,85 @@ async fn test_integracoes_rls_isolation() {
 
     tx.rollback().await.unwrap();
 }
+
+#[tokio::test]
+async fn test_whatsapp_repo_extended() {
+    let pool = obter_pool_teste().await;
+    let mut tx = pool.begin().await.unwrap();
+
+    let instance_repo = PostgresWhatsappInstanceRepository;
+
+    // Setup Tenant
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant Extended").await;
+    configurar_tenant_transacao(&mut tx, tenant.id).await;
+    let ctx = criar_contexto_teste(tenant.id);
+
+    // 1. Criar
+    let inst = instance_repo
+        .criar(&mut tx, &ctx, "whatsapp-ext", "api-key-ext", "evolution")
+        .await
+        .unwrap();
+
+    // 2. Buscar por ID
+    let inst_id = instance_repo
+        .buscar_por_id(&mut tx, &ctx, inst.id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(inst_id.name, "whatsapp-ext");
+
+    // 3. Atualizar Provider ID
+    instance_repo
+        .atualizar_instancia_provider_id(
+            &mut tx,
+            &ctx,
+            inst.id,
+            "prov-id-xyz",
+            Some("5511999990000"),
+        )
+        .await
+        .unwrap();
+
+    // 4. Buscar por Instance ID
+    let inst_prov = instance_repo
+        .buscar_por_instance_id(&mut tx, &ctx, "prov-id-xyz")
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(inst_prov.id, inst.id);
+    assert_eq!(inst_prov.phone_number.as_deref(), Some("5511999990000"));
+
+    // 5. Admin Listar Todas Conectadas (precisa de RLS bypass ou escopo admin)
+    let err_admin = instance_repo
+        .admin_listar_todas_conectadas(&mut tx, &ctx)
+        .await;
+    assert!(
+        err_admin.is_err(),
+        "Deveria falhar por falta de permissão de admin"
+    );
+
+    // Criar ctx de admin
+    let mut ctx_admin = ctx.clone();
+    ctx_admin.user_scopes.push("operacional:admin".to_string());
+
+    let conectadas = instance_repo
+        .admin_listar_todas_conectadas(&mut tx, &ctx_admin)
+        .await
+        .unwrap();
+    assert!(!conectadas.is_empty());
+
+    // 6. Admin Deletar Instancia
+    instance_repo
+        .admin_deletar_instancia(&mut tx, &ctx_admin, inst.id)
+        .await
+        .unwrap();
+
+    // Verificar que foi deletada
+    let inst_del = instance_repo
+        .buscar_por_id(&mut tx, &ctx, inst.id)
+        .await
+        .unwrap();
+    assert!(inst_del.is_none());
+
+    tx.rollback().await.unwrap();
+}
