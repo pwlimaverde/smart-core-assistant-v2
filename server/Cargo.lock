@@ -573,10 +573,13 @@ checksum = "31b698c5f9a010f6573133b09e0de5408834d0c82f8d7475a89fc1867a71cd90"
 dependencies = [
  "axum-core 0.5.6",
  "bytes",
+ "form_urlencoded",
  "futures-util",
  "http 1.4.1",
  "http-body 1.0.1",
  "http-body-util",
+ "hyper 1.10.1",
+ "hyper-util",
  "itoa",
  "matchit 0.8.4",
  "memchr",
@@ -584,10 +587,15 @@ dependencies = [
  "percent-encoding",
  "pin-project-lite",
  "serde_core",
+ "serde_json",
+ "serde_path_to_error",
+ "serde_urlencoded",
  "sync_wrapper",
+ "tokio",
  "tower 0.5.3",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -626,6 +634,7 @@ dependencies = [
  "sync_wrapper",
  "tower-layer",
  "tower-service",
+ "tracing",
 ]
 
 [[package]]
@@ -912,7 +921,7 @@ dependencies = [
  "contracts",
  "error_core",
  "observability",
- "reqwest",
+ "redis",
  "secrecy",
  "serde",
  "serde_json",
@@ -1137,6 +1146,27 @@ dependencies = [
  "serde",
  "serde_json",
  "test_support",
+ "tokio",
+ "tracing",
+ "transport",
+ "uuid",
+]
+
+[[package]]
+name = "data_whatsapp"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "contracts",
+ "error_core",
+ "infrastructure_evolution",
+ "infrastructure_messaging",
+ "observability",
+ "redis",
+ "secrecy",
+ "serde",
+ "serde_json",
  "tokio",
  "tracing",
  "transport",
@@ -2088,6 +2118,31 @@ dependencies = [
  "hashbrown 0.17.1",
  "serde",
  "serde_core",
+]
+
+[[package]]
+name = "infrastructure_evolution"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "infrastructure_messaging",
+ "reqwest",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tracing",
+]
+
+[[package]]
+name = "infrastructure_messaging"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "secrecy",
+ "serde",
+ "thiserror 1.0.69",
+ "uuid",
 ]
 
 [[package]]
@@ -3419,6 +3474,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_path_to_error"
+version = "0.1.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10a9ff822e371bb5403e391ecd83e182e0e77ba7f6fe0160b795797109d1b457"
+dependencies = [
+ "itoa",
+ "serde",
+ "serde_core",
+]
+
+[[package]]
 name = "serde_urlencoded"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4667,6 +4733,25 @@ checksum = "5a6580f308b1fad9207618087a65c04e7a10bc77e02c8e84e9b00dd4b12fa0bb"
 dependencies = [
  "js-sys",
  "wasm-bindgen",
+]
+
+[[package]]
+name = "webhook_ingress"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum 0.8.9",
+ "contracts",
+ "error_core",
+ "infrastructure_messaging",
+ "observability",
+ "redis",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "transport",
+ "uuid",
 ]
 
 [[package]]

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, tenant_id, name, instance_id, api_key, phone_number, active,\n                      connection_state, last_state_check, media_storage_backend,\n                      subscribed_events, last_connection_state, created_at\n               FROM evolution_sync_instance\n               WHERE tenant_id = $1 AND active = true\n               ORDER BY created_at DESC",
+  "query": "SELECT id, tenant_id, name, instance_id, api_key, phone_number, active,\n                       connection_state, last_state_check, media_storage_backend, provider,\n                       subscribed_events, last_connection_state, created_at\n               FROM whatsapp_instance\n               WHERE tenant_id = $1 AND id = $2",
   "describe": {
     "columns": [
       {
@@ -9,7 +9,7 @@
         "type_info": "Int4",
         "origin": {
           "Table": {
-            "table": "evolution_sync_instance",
+            "table": "whatsapp_instance",
             "name": "id"
           }
         }
@@ -20,7 +20,7 @@
         "type_info": "Uuid",
         "origin": {
           "Table": {
-            "table": "evolution_sync_instance",
+            "table": "whatsapp_instance",
             "name": "tenant_id"
           }
         }
@@ -31,7 +31,7 @@
         "type_info": "Varchar",
         "origin": {
           "Table": {
-            "table": "evolution_sync_instance",
+            "table": "whatsapp_instance",
             "name": "name"
           }
         }
@@ -42,7 +42,7 @@
         "type_info": "Varchar",
         "origin": {
           "Table": {
-            "table": "evolution_sync_instance",
+            "table": "whatsapp_instance",
             "name": "instance_id"
           }
         }
@@ -53,7 +53,7 @@
         "type_info": "Varchar",
         "origin": {
           "Table": {
-            "table": "evolution_sync_instance",
+            "table": "whatsapp_instance",
             "name": "api_key"
           }
         }
@@ -64,7 +64,7 @@
         "type_info": "Varchar",
         "origin": {
           "Table": {
-            "table": "evolution_sync_instance",
+            "table": "whatsapp_instance",
             "name": "phone_number"
           }
         }
@@ -75,7 +75,7 @@
         "type_info": "Bool",
         "origin": {
           "Table": {
-            "table": "evolution_sync_instance",
+            "table": "whatsapp_instance",
             "name": "active"
           }
         }
@@ -86,7 +86,7 @@
         "type_info": "Varchar",
         "origin": {
           "Table": {
-            "table": "evolution_sync_instance",
+            "table": "whatsapp_instance",
             "name": "connection_state"
           }
         }
@@ -97,7 +97,7 @@
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
-            "table": "evolution_sync_instance",
+            "table": "whatsapp_instance",
             "name": "last_state_check"
           }
         }
@@ -108,40 +108,51 @@
         "type_info": "Varchar",
         "origin": {
           "Table": {
-            "table": "evolution_sync_instance",
+            "table": "whatsapp_instance",
             "name": "media_storage_backend"
           }
         }
       },
       {
         "ordinal": 10,
-        "name": "subscribed_events",
-        "type_info": "Jsonb",
+        "name": "provider",
+        "type_info": "Varchar",
         "origin": {
           "Table": {
-            "table": "evolution_sync_instance",
-            "name": "subscribed_events"
+            "table": "whatsapp_instance",
+            "name": "provider"
           }
         }
       },
       {
         "ordinal": 11,
-        "name": "last_connection_state",
-        "type_info": "Varchar",
+        "name": "subscribed_events",
+        "type_info": "Jsonb",
         "origin": {
           "Table": {
-            "table": "evolution_sync_instance",
-            "name": "last_connection_state"
+            "table": "whatsapp_instance",
+            "name": "subscribed_events"
           }
         }
       },
       {
         "ordinal": 12,
+        "name": "last_connection_state",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "whatsapp_instance",
+            "name": "last_connection_state"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
         "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
           "Table": {
-            "table": "evolution_sync_instance",
+            "table": "whatsapp_instance",
             "name": "created_at"
           }
         }
@@ -149,7 +160,8 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Int4"
       ]
     },
     "nullable": [
@@ -164,9 +176,10 @@
       true,
       false,
       false,
+      false,
       true,
       false
     ]
   },
-  "hash": "c7296f2a413cd399b80a92e9664e74ff9333279bd42ab01a13ae309afce7c9e5"
+  "hash": "023710c27bd8d8954ee3e9a574b350071493023bfcbc98f20d0dfe507997caef"
 }

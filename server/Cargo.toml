@@ -17,6 +17,10 @@ members = [
     "apps/messaging_gateway",
     "apps/worker",
     "apps/control_plane",
+    "crates/infrastructure_messaging",
+    "crates/infrastructure_evolution",
+    "apps/webhook_ingress",
+    "apps/data_whatsapp",
 ]
 
 [workspace.package]

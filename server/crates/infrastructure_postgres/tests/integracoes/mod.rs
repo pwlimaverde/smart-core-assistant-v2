@@ -2,9 +2,9 @@ use crate::common::{
     configurar_tenant_transacao, criar_contexto_teste, criar_tenant_para_teste, obter_pool_teste,
 };
 use infrastructure_postgres::integracoes::{
-    evolution::{
-        EvolutionContactRepository, EvolutionInstanceRepository,
-        PostgresEvolutionContactRepository, PostgresEvolutionInstanceRepository,
+    whatsapp::{
+        PostgresWhatsappContactRepository, PostgresWhatsappInstanceRepository,
+        WhatsappContactRepository, WhatsappInstanceRepository,
     },
     whitelist::{PostgresWhiteListRepository, WhiteListRepository},
 };
@@ -14,8 +14,8 @@ async fn test_evolution_sync_crud() {
     let pool = obter_pool_teste().await;
     let mut tx = pool.begin().await.unwrap();
 
-    let instance_repo = PostgresEvolutionInstanceRepository;
-    let contact_repo = PostgresEvolutionContactRepository;
+    let instance_repo = PostgresWhatsappInstanceRepository;
+    let contact_repo = PostgresWhatsappContactRepository;
 
     // 1. Setup Tenant
     let tenant = criar_tenant_para_teste(&mut tx, "Tenant Evolution").await;
@@ -26,9 +26,9 @@ async fn test_evolution_sync_crud() {
     // 2. Criar EvolutionInstance
     let inst_name = "whatsapp-evolution-1";
     let inst = instance_repo
-        .criar(&mut tx, &ctx, inst_name, "api-key-test")
+        .criar(&mut tx, &ctx, inst_name, "api-key-test", "evolution")
         .await
-        .expect("Falha ao criar instância Evolution");
+        .expect("Falha ao criar instância Whatsapp");
     assert_eq!(inst.name, inst_name);
     assert_eq!(inst.connection_state, "unknown");
 
@@ -42,7 +42,7 @@ async fn test_evolution_sync_crud() {
 
     // 3. Atualizar Estado
     sqlx::query!(
-        "UPDATE evolution_sync_instance SET instance_id = 'inst-uuid-123' WHERE id = $1",
+        "UPDATE whatsapp_instance SET instance_id = 'inst-uuid-123' WHERE id = $1",
         inst.id
     )
     .execute(&mut *tx)
@@ -50,7 +50,7 @@ async fn test_evolution_sync_crud() {
     .unwrap();
 
     instance_repo
-        .atualizar_estado(&mut tx, &ctx, "inst-uuid-123", "connected")
+        .atualizar_estado(&mut tx, &ctx, inst.id, "connected")
         .await
         .expect("Falha ao atualizar estado");
 
@@ -141,7 +141,7 @@ async fn test_integracoes_rls_isolation() {
     let pool = obter_pool_teste().await;
     let mut tx = pool.begin().await.unwrap();
 
-    let instance_repo = PostgresEvolutionInstanceRepository;
+    let instance_repo = PostgresWhatsappInstanceRepository;
     let whitelist_repo = PostgresWhiteListRepository;
 
     // Setup Tenant A
@@ -151,7 +151,7 @@ async fn test_integracoes_rls_isolation() {
     let ctx_a = criar_contexto_teste(tenant_a.id);
 
     let _inst_a = instance_repo
-        .criar(&mut tx, &ctx_a, "instancia-a", "key-a")
+        .criar(&mut tx, &ctx_a, "instancia-a", "key-a", "evolution")
         .await
         .unwrap();
 

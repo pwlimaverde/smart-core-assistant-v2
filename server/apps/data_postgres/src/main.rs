@@ -255,7 +255,14 @@ async fn main() -> anyhow::Result<()> {
     let state_for_list_payments = state_clone.clone();
     let state_for_get_service_health = state_clone.clone();
     let state_for_get_dashboard_summary = state_clone.clone();
-    let state_for_export_tenants_csv = state_clone;
+    let state_for_export_tenants_csv = state_clone.clone();
+    let state_for_create_whatsapp_instance_record = state_clone.clone();
+    let state_for_get_whatsapp_instance = state_clone.clone();
+    let state_for_list_whatsapp_instances = state_clone.clone();
+    let state_for_admin_list_all_connected_instances = state_clone.clone();
+    let state_for_admin_deletar_instancia = state_clone.clone();
+    let state_for_atualizar_estado_instancia = state_clone.clone();
+    let state_for_atualizar_instancia_provider_id = state_clone;
 
     let server = Server::from_env("DATA_POSTGRES")
         .route("GetThread", move |env| {
@@ -426,6 +433,36 @@ async fn main() -> anyhow::Result<()> {
         .route("ExportTenantsCsv", move |env| {
             let state = state_for_export_tenants_csv.clone();
             Box::pin(async move { handler_export_tenants_csv(state.pool, env).await })
+        })
+        .route("CreateWhatsappInstanceRecord", move |env| {
+            let state = state_for_create_whatsapp_instance_record.clone();
+            Box::pin(async move { handler_create_whatsapp_instance_record(state.pool, env).await })
+        })
+        .route("GetWhatsappInstance", move |env| {
+            let state = state_for_get_whatsapp_instance.clone();
+            Box::pin(async move { handler_get_whatsapp_instance(state.pool, env).await })
+        })
+        .route("ListWhatsappInstances", move |env| {
+            let state = state_for_list_whatsapp_instances.clone();
+            Box::pin(async move { handler_list_whatsapp_instances(state.pool, env).await })
+        })
+        .route("AdminListAllConnectedInstances", move |env| {
+            let state = state_for_admin_list_all_connected_instances.clone();
+            Box::pin(
+                async move { handler_admin_list_all_connected_instances(state.pool, env).await },
+            )
+        })
+        .route("AdminDeletarInstancia", move |env| {
+            let state = state_for_admin_deletar_instancia.clone();
+            Box::pin(async move { handler_admin_deletar_instancia(state.pool, env).await })
+        })
+        .route("AtualizarEstadoInstancia", move |env| {
+            let state = state_for_atualizar_estado_instancia.clone();
+            Box::pin(async move { handler_atualizar_estado_instancia(state.pool, env).await })
+        })
+        .route("AtualizarInstanciaProviderId", move |env| {
+            let state = state_for_atualizar_instancia_provider_id.clone();
+            Box::pin(async move { handler_atualizar_instancia_provider_id(state.pool, env).await })
         });
 
     tracing::info!("Servidor RPC configurado e pronto.");
@@ -2844,7 +2881,7 @@ async fn handler_get_evolution_instance_by_tenant(pool: PgPool, env: Envelope) -
     };
 
     let result = sqlx::query(
-        "SELECT name, api_key FROM evolution_sync_instance WHERE tenant_id = $1 AND active = true LIMIT 1"
+        "SELECT name, api_key FROM whatsapp_instance WHERE tenant_id = $1 AND active = true LIMIT 1"
     )
     .bind(tenant_uuid)
     .fetch_optional(&pool)
@@ -3415,6 +3452,270 @@ async fn handler_export_tenants_csv(pool: PgPool, env: Envelope) -> Envelope {
                 }),
             )
         }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+async fn handler_create_whatsapp_instance_record(pool: PgPool, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let name = match payload.get("name").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => {
+            return erro(
+                error_core::AppError::Validation("name ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let api_key = match payload.get("api_key").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => {
+            return erro(
+                error_core::AppError::Validation("api_key ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let provider = match payload.get("provider").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => {
+            return erro(
+                error_core::AppError::Validation("provider ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
+    let ctx = contexto_do_envelope(&env);
+    let repo = infrastructure_postgres::integracoes::whatsapp::PostgresWhatsappInstanceRepository;
+
+    let result =
+        infrastructure_postgres::run_in_tenant_transaction(&pool, tenant_id, |mut tx| async move {
+            use infrastructure_postgres::integracoes::whatsapp::WhatsappInstanceRepository;
+            let inst = repo.criar(&mut tx, &ctx, name, api_key, provider).await?;
+            Ok((inst, tx))
+        })
+        .await;
+
+    match result {
+        Ok(inst) => ok_reply(
+            &env,
+            "CreateWhatsappInstanceRecordReply",
+            serde_json::to_value(&inst).unwrap_or_default(),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+async fn handler_get_whatsapp_instance(pool: PgPool, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let id = match payload.get("id").and_then(|v| v.as_i64()) {
+        Some(i) => i as i32,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+
+    let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
+    let ctx = contexto_do_envelope(&env);
+    let repo = infrastructure_postgres::integracoes::whatsapp::PostgresWhatsappInstanceRepository;
+
+    let result =
+        infrastructure_postgres::run_in_tenant_transaction(&pool, tenant_id, |mut tx| async move {
+            use infrastructure_postgres::integracoes::whatsapp::WhatsappInstanceRepository;
+            let inst = repo.buscar_por_id(&mut tx, &ctx, id).await?;
+            Ok((inst, tx))
+        })
+        .await;
+
+    match result {
+        Ok(Some(inst)) => ok_reply(
+            &env,
+            "GetWhatsappInstanceReply",
+            serde_json::to_value(&inst).unwrap_or_default(),
+        ),
+        Ok(None) => erro(
+            error_core::AppError::Database("não encontrado: Instância não encontrada".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+async fn handler_list_whatsapp_instances(pool: PgPool, env: Envelope) -> Envelope {
+    let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
+    let ctx = contexto_do_envelope(&env);
+    let repo = infrastructure_postgres::integracoes::whatsapp::PostgresWhatsappInstanceRepository;
+
+    let result =
+        infrastructure_postgres::run_in_tenant_transaction(&pool, tenant_id, |mut tx| async move {
+            use infrastructure_postgres::integracoes::whatsapp::WhatsappInstanceRepository;
+            let list = repo.listar_ativas(&mut tx, &ctx).await?;
+            Ok((list, tx))
+        })
+        .await;
+
+    match result {
+        Ok(list) => ok_reply(
+            &env,
+            "ListWhatsappInstancesReply",
+            serde_json::json!({ "instances": list }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+async fn handler_admin_list_all_connected_instances(pool: PgPool, env: Envelope) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    let repo = infrastructure_postgres::integracoes::whatsapp::PostgresWhatsappInstanceRepository;
+
+    let result: Result<Vec<_>, infrastructure_postgres::DbError> = async {
+        let mut tx = pool.begin().await?;
+        use infrastructure_postgres::integracoes::whatsapp::WhatsappInstanceRepository;
+        let list = repo.admin_listar_todas_conectadas(&mut tx, &ctx).await?;
+        tx.commit().await?;
+        Ok(list)
+    }
+    .await;
+
+    match result {
+        Ok(list) => ok_reply(
+            &env,
+            "AdminListAllConnectedInstancesReply",
+            serde_json::json!({ "instances": list }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+async fn handler_admin_deletar_instancia(pool: PgPool, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let id = match payload.get("id").and_then(|v| v.as_i64()) {
+        Some(i) => i as i32,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+
+    let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
+    let ctx = contexto_do_envelope(&env);
+    let repo = infrastructure_postgres::integracoes::whatsapp::PostgresWhatsappInstanceRepository;
+
+    let result =
+        infrastructure_postgres::run_in_tenant_transaction(&pool, tenant_id, |mut tx| async move {
+            use infrastructure_postgres::integracoes::whatsapp::WhatsappInstanceRepository;
+            repo.admin_deletar_instancia(&mut tx, &ctx, id).await?;
+            Ok(((), tx))
+        })
+        .await;
+
+    match result {
+        Ok(_) => ok_reply(
+            &env,
+            "AdminDeletarInstanciaReply",
+            serde_json::json!({ "status": "success" }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+async fn handler_atualizar_estado_instancia(pool: PgPool, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let id = match payload.get("id").and_then(|v| v.as_i64()) {
+        Some(i) => i as i32,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+
+    let connection_state = match payload.get("connection_state").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => {
+            return erro(
+                error_core::AppError::Validation("connection_state ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
+    let ctx = contexto_do_envelope(&env);
+    let repo = infrastructure_postgres::integracoes::whatsapp::PostgresWhatsappInstanceRepository;
+
+    let result =
+        infrastructure_postgres::run_in_tenant_transaction(&pool, tenant_id, |mut tx| async move {
+            use infrastructure_postgres::integracoes::whatsapp::WhatsappInstanceRepository;
+            repo.atualizar_estado(&mut tx, &ctx, id, connection_state)
+                .await?;
+            Ok(((), tx))
+        })
+        .await;
+
+    match result {
+        Ok(_) => ok_reply(
+            &env,
+            "AtualizarEstadoInstanciaReply",
+            serde_json::json!({ "status": "success" }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+async fn handler_atualizar_instancia_provider_id(pool: PgPool, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let id = match payload.get("id").and_then(|v| v.as_i64()) {
+        Some(i) => i as i32,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+
+    let instance_id = match payload.get("instance_id").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => {
+            return erro(
+                error_core::AppError::Validation("instance_id ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let phone_number = payload.get("phone_number").and_then(|v| v.as_str());
+
+    let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
+    let ctx = contexto_do_envelope(&env);
+    let repo = infrastructure_postgres::integracoes::whatsapp::PostgresWhatsappInstanceRepository;
+
+    let result =
+        infrastructure_postgres::run_in_tenant_transaction(&pool, tenant_id, |mut tx| async move {
+            use infrastructure_postgres::integracoes::whatsapp::WhatsappInstanceRepository;
+            repo.atualizar_instancia_provider_id(&mut tx, &ctx, id, instance_id, phone_number)
+                .await?;
+            Ok(((), tx))
+        })
+        .await;
+
+    match result {
+        Ok(_) => ok_reply(
+            &env,
+            "AtualizarInstanciaProviderIdReply",
+            serde_json::json!({ "status": "success" }),
+        ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }

@@ -1,7 +1,7 @@
 {
   "version": 2,
   "workflowType": "prevc",
-  "updatedAt": "2026-06-21T02:01:21.569Z",
+  "updatedAt": "2026-06-21T02:06:52.503Z",
   "status": {
     "project": {
       "name": "camada-abstracao-mensageria",
@@ -60,7 +60,8 @@
       },
       "E": {
         "status": "in_progress",
-        "started_at": "2026-06-21T02:01:21.559Z"
+        "started_at": "2026-06-21T02:01:21.559Z",
+        "role": "backend-specialist"
       },
       "V": {
         "status": "pending"
@@ -70,7 +71,12 @@
       }
     },
     "agents": {},
-    "roles": {},
+    "roles": {
+      "backend-specialist": {
+        "status": "in_progress",
+        "phase": "E"
+      }
+    },
     "approval": {
       "plan_created": true,
       "plan_approved": true,

@@ -1,14 +1,16 @@
 //! Serviço control_plane: Painel administrativo e tarefas de back office.
 
 mod cli;
-mod evolution;
 
-use contracts::{Envelope, MessageKind};
+use contracts::{Envelope, MessageKind, TenantEnvelope};
 use std::time::Duration;
 use transport::Server;
+use uuid::Uuid;
 
 #[derive(Clone)]
-struct AppState {}
+struct AppState {
+    redis_conn: redis::aio::ConnectionManager,
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -17,7 +19,6 @@ async fn main() -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
 
     // Subcomando administrativo de bootstrap: `control_plane create-superuser ...`.
-    // Cliente fino que fala com o data_postgres via RPC; executa e encerra.
     let args: Vec<String> = std::env::args().collect();
     if args.get(1).map(String::as_str) == Some("create-superuser") {
         return cli::create_superuser(&args).await;
@@ -28,7 +29,14 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Iniciando serviço control_plane...");
 
-    let _state = AppState {};
+    // Inicializa Redis para publicar auditoria no security:stream
+    let redis_url = std::env::var("REDIS_BUS_URL")
+        .or_else(|_| std::env::var("REDIS_URL"))
+        .unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+    let client = redis::Client::open(redis_url)?;
+    let redis_conn = redis::aio::ConnectionManager::new(client).await?;
+
+    let s_disconnect = AppState { redis_conn };
 
     // 2. Inicia o Servidor RPC síncrono nos 3 de protocolos
     let server = Server::from_env("CONTROL_PLANE")
@@ -37,6 +45,10 @@ async fn main() -> anyhow::Result<()> {
         })
         .route("TestEvolutionConnection", move |env| {
             Box::pin(async move { handler_test_evolution_connection(env).await })
+        })
+        .route("AdminBulkDisconnect", move |env| {
+            let s = s_disconnect.clone();
+            Box::pin(async move { handler_admin_bulk_disconnect(s, env).await })
         });
 
     tracing::info!("Servidor RPC do control_plane configurado e pronto.");
@@ -49,6 +61,16 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn ok_reply(env: &Envelope, method: &str, payload: serde_json::Value) -> Envelope {
+    Envelope {
+        kind: MessageKind::Reply as i32,
+        method: method.to_string(),
+        payload: serde_json::to_vec(&payload).unwrap_or_default(),
+        error: None,
+        ..env.clone()
+    }
 }
 
 /// Handler administrativo: encaminha o cadastro do tenant ao `data_postgres` por contrato
@@ -73,7 +95,6 @@ async fn handler_register_tenant(env: Envelope) -> Envelope {
         }
     };
 
-    // Repassa o payload do cliente reescrevendo apenas o método para o contrato do data_postgres.
     let req = Envelope {
         kind: MessageKind::Request as i32,
         method: "CreateTenant".to_string(),
@@ -98,8 +119,7 @@ async fn handler_register_tenant(env: Envelope) -> Envelope {
     }
 }
 
-/// Testa a conexão Evolution de um tenant. `skip_all` garante que nenhuma credencial
-/// (token global ou chave da instância) entre nos campos do span de tracing.
+/// Testa a conexão Evolution de um tenant. Agora direciona para o DATA_WHATSAPP.
 #[tracing::instrument(
     skip_all,
     fields(service = "control_plane", rpc = "TestEvolutionConnection", traceparent = %env.traceparent)
@@ -120,111 +140,97 @@ async fn handler_test_evolution_connection(env: Envelope) -> Envelope {
         }
     };
 
-    // 1. Obtém a instância do Evolution para este tenant do data_postgres
+    // 1. Obtém as instâncias do WhatsApp para este tenant
     let req_inst = Envelope {
         kind: MessageKind::Request as i32,
-        method: "GetEvolutionInstanceByTenant".to_string(),
+        method: "ListWhatsappInstances".to_string(),
         ..env.clone()
     };
 
-    let (inst_name, inst_key) = match pg_client.call(req_inst, Duration::from_secs(5)).await {
+    let list_val = match pg_client.call(req_inst, Duration::from_secs(5)).await {
         Ok(resp) if resp.kind != MessageKind::Error as i32 => {
-            let payload: serde_json::Value =
-                serde_json::from_slice(&resp.payload).unwrap_or_default();
-            let name = payload
-                .get("name")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            let key = payload
-                .get("api_key")
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string();
-            (name, key)
+            serde_json::from_slice::<serde_json::Value>(&resp.payload).unwrap_or_default()
         }
-        _ => ("".to_string(), "".to_string()),
+        _ => serde_json::json!({}),
     };
 
-    if inst_name.is_empty() {
-        let app_err = error_core::AppError::Validation(
-            "Nenhuma instância ativa do WhatsApp configurada para este tenant.".to_string(),
-        );
-        let err_env = app_err.to_error_envelope(&env.traceparent, "control_plane");
-        return Envelope {
-            kind: MessageKind::Error as i32,
-            method: "TestEvolutionConnectionReply".to_string(),
-            error: Some(err_env),
-            ..env
-        };
-    }
+    let first_inst_id = list_val
+        .get("instances")
+        .and_then(|v| v.as_array())
+        .and_then(|arr| arr.first())
+        .and_then(|inst| inst.get("id").and_then(|i| i.as_i64()));
 
-    // 2. Obtém os settings globais do data_postgres para URL e Token
-    let req_settings = Envelope {
+    let inst_id = match first_inst_id {
+        Some(id) => id,
+        None => {
+            let app_err = error_core::AppError::Validation(
+                "Nenhuma instância ativa do WhatsApp configurada para este tenant.".to_string(),
+            );
+            let err_env = app_err.to_error_envelope(&env.traceparent, "control_plane");
+            return Envelope {
+                kind: MessageKind::Error as i32,
+                method: "TestEvolutionConnectionReply".to_string(),
+                error: Some(err_env),
+                ..env
+            };
+        }
+    };
+
+    // 2. Conecta ao DATA_WHATSAPP para verificar o status da instância
+    let wa_client = match transport::conectar_cliente("data_whatsapp").await {
+        Ok(c) => c,
+        Err(e) => {
+            let app_err =
+                error_core::AppError::Internal(format!("falha ao conectar ao data_whatsapp: {e}"));
+            let err_env = app_err.to_error_envelope(&env.traceparent, "control_plane");
+            return Envelope {
+                kind: MessageKind::Error as i32,
+                method: "TestEvolutionConnectionReply".to_string(),
+                error: Some(err_env),
+                ..env
+            };
+        }
+    };
+
+    let req_status = Envelope {
         kind: MessageKind::Request as i32,
-        method: "ListCoreSettings".to_string(),
-        tenant_id: uuid::Uuid::nil().to_string(), // listagem global
+        method: "GetWhatsappInstanceStatus".to_string(),
+        payload: serde_json::to_vec(&serde_json::json!({ "id": inst_id })).unwrap(),
         ..env.clone()
     };
 
-    let mut api_url = std::env::var("EVOLUTION_API_URL").unwrap_or_default();
-    let mut api_token = std::env::var("EVOLUTION_API_TOKEN").unwrap_or_default();
+    match wa_client.call(req_status, Duration::from_secs(10)).await {
+        Ok(resp) if resp.kind != MessageKind::Error as i32 => {
+            let val: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap_or_default();
+            let status = val
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
 
-    if let Ok(resp) = pg_client.call(req_settings, Duration::from_secs(5)).await {
-        if resp.kind != MessageKind::Error as i32 {
-            let payload: serde_json::Value =
-                serde_json::from_slice(&resp.payload).unwrap_or_default();
-            if let Some(settings) = payload.get("settings").and_then(|v| v.as_array()) {
-                for s in settings {
-                    if let Some(k) = s.get("key").and_then(|v| v.as_str()) {
-                        if k == "EVOLUTION_API_URL" {
-                            if let Some(v) = s.get("value").and_then(|v| v.as_str()) {
-                                if !v.is_empty() && v != "••••••••" {
-                                    api_url = v.to_string();
-                                }
-                            }
-                        } else if k == "EVOLUTION_API_TOKEN" || k == "EVOLUTION_GLOBAL_API_KEY" {
-                            if let Some(v) = s.get("value").and_then(|v| v.as_str()) {
-                                if !v.is_empty() && v != "••••••••" {
-                                    api_token = v.to_string();
-                                }
-                            }
-                        }
-                    }
-                }
+            // Map para o formato de retorno esperado pelo grpc_web
+            let state_str = match status {
+                "connected" => "open",
+                "disconnected" => "close",
+                "connecting" => "connecting",
+                _ => "error",
+            };
+
+            let reply = serde_json::json!({
+                "status": state_str,
+                "error_message": ""
+            });
+
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "TestEvolutionConnectionReply".to_string(),
+                payload: serde_json::to_vec(&reply).unwrap(),
+                ..env
             }
         }
-    }
-
-    if api_url.is_empty() {
-        api_url = "http://localhost:8080".to_string();
-    }
-
-    // 3. Executa a verificação HTTP da Evolution API
-    let global_token_sec = if !api_token.is_empty() {
-        Some(secrecy::SecretString::from(api_token))
-    } else {
-        None
-    };
-
-    let inst_key_sec = if !inst_key.is_empty() {
-        Some(secrecy::SecretString::from(inst_key))
-    } else {
-        None
-    };
-
-    match evolution::test_evolution_connection(
-        &api_url,
-        global_token_sec.as_ref(),
-        &inst_name,
-        inst_key_sec.as_ref(),
-    )
-    .await
-    {
-        Ok(state) => {
+        _ => {
             let reply = serde_json::json!({
-                "status": state,
-                "error_message": ""
+                "status": "error",
+                "error_message": "Falha ao obter status da instância"
             });
             Envelope {
                 kind: MessageKind::Reply as i32,
@@ -233,15 +239,109 @@ async fn handler_test_evolution_connection(env: Envelope) -> Envelope {
                 ..env
             }
         }
+    }
+}
+
+/// Admin Bulk Disconnect Handler
+#[tracing::instrument(
+    skip_all,
+    fields(service = "control_plane", rpc = "AdminBulkDisconnect", traceparent = %env.traceparent)
+)]
+async fn handler_admin_bulk_disconnect(mut state: AppState, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
         Err(e) => {
-            let reply = serde_json::json!({
-                "status": "error",
-                "error_message": e.to_string()
-            });
+            let app_err = error_core::AppError::Validation(e.to_string());
+            let err_env = app_err.to_error_envelope(&env.traceparent, "control_plane");
+            return Envelope {
+                kind: MessageKind::Error as i32,
+                method: "AdminBulkDisconnectReply".to_string(),
+                error: Some(err_env),
+                ..env
+            };
+        }
+    };
+
+    let target_tenant = payload
+        .get("tenant_id")
+        .and_then(|v| v.as_str())
+        .and_then(|s| Uuid::parse_str(s).ok());
+
+    let wa_client = match transport::conectar_cliente("data_whatsapp").await {
+        Ok(c) => c,
+        Err(e) => {
+            let app_err =
+                error_core::AppError::Internal(format!("falha ao conectar ao data_whatsapp: {e}"));
+            let err_env = app_err.to_error_envelope(&env.traceparent, "control_plane");
+            return Envelope {
+                kind: MessageKind::Error as i32,
+                method: "AdminBulkDisconnectReply".to_string(),
+                error: Some(err_env),
+                ..env
+            };
+        }
+    };
+
+    let req = Envelope {
+        kind: MessageKind::Request as i32,
+        method: "AdminBulkDisconnectInstances".to_string(),
+        payload: serde_json::to_vec(&serde_json::json!({
+            "tenant_id": target_tenant.map(|t| t.to_string())
+        }))
+        .unwrap(),
+        ..env.clone()
+    };
+
+    match wa_client.call(req, Duration::from_secs(15)).await {
+        Ok(resp) => {
+            if resp.kind == MessageKind::Error as i32 {
+                return Envelope {
+                    method: "AdminBulkDisconnectReply".to_string(),
+                    ..resp
+                };
+            }
+
+            let val: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap_or_default();
+            let count = val.get("count").and_then(|v| v.as_i64()).unwrap_or(0);
+            let scope = val
+                .get("scope")
+                .and_then(|v| v.as_str())
+                .unwrap_or("global")
+                .to_string();
+
+            // Auditoria do admin disconnect
+            let audit_tenant = target_tenant.unwrap_or(Uuid::nil());
+            let audit_event = TenantEnvelope::novo(
+                audit_tenant,
+                "whatsapp.admin.bulk_disconnect",
+                serde_json::json!({
+                    "scope": scope,
+                    "count": count,
+                    "user_id": env.auth_user_id,
+                }),
+            );
+
+            let _ = transport::bus::publicar_evento_seguranca(&mut state.redis_conn, &audit_event)
+                .await;
+
+            ok_reply(
+                &env,
+                "AdminBulkDisconnectReply",
+                serde_json::json!({
+                    "count": count,
+                    "scope": scope
+                }),
+            )
+        }
+        Err(e) => {
+            let app_err = error_core::AppError::Internal(format!(
+                "RPC AdminBulkDisconnectInstances falhou: {e}"
+            ));
+            let err_env = app_err.to_error_envelope(&env.traceparent, "control_plane");
             Envelope {
-                kind: MessageKind::Reply as i32,
-                method: "TestEvolutionConnectionReply".to_string(),
-                payload: serde_json::to_vec(&reply).unwrap(),
+                kind: MessageKind::Error as i32,
+                method: "AdminBulkDisconnectReply".to_string(),
+                error: Some(err_env),
                 ..env
             }
         }
@@ -340,7 +440,6 @@ mod tests {
         };
 
         let resp = handler_register_tenant(env).await;
-        // data_postgres retorna erro → control_plane repassa o envelope de erro
         assert_eq!(resp.kind, MessageKind::Error as i32);
         assert_eq!(resp.method, "RegisterTenantReply");
 
