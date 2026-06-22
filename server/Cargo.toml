@@ -27,6 +27,21 @@ members = [
 edition = "2021"
 license = "Proprietary"
 
+# -----------------------------------------------------------------------------
+# Perfis de compilação — controle de tamanho do target/
+#
+# debug = 1  → só tabelas de linha (stack traces funcionam, .pdb bem menores)
+# debug = 2  → debug completo (padrão Rust, causa .pdb gigantes)
+# split-debuginfo = "packed" → agrupa símbolos num único .pdb por crate
+# -----------------------------------------------------------------------------
+[profile.dev]
+debug = 1
+split-debuginfo = "packed"
+
+[profile.test]
+debug = 1
+split-debuginfo = "packed"
+
 [workspace.dependencies]
 sqlx = { version = "0.9", features = [
     "postgres", "runtime-tokio", "tls-rustls", "macros",
