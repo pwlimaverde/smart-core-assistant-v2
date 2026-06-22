@@ -99,6 +99,19 @@ jobs:
             GRANT USAGE, SELECT ON SEQUENCES TO smartcore_app;
           SQL
 
+      # Cria o schema do zero via migrations sqlx. Antes isso era efeito colateral dos
+      # testes de banco do data_postgres; com a refatoração Ports & Adapters esses
+      # testes viraram unitários (mock) ou de integração (tests/), então as migrations
+      # precisam rodar AQUI explicitamente — o passo `sqlx prepare --check` abaixo
+      # introspecta as queries contra este schema (e o mesmo container persiste).
+      - name: Roda migrations (cria schema)
+        working-directory: server
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5434/smartcore_v2
+        run: |
+          cargo install sqlx-cli --no-default-features --features postgres --locked || true
+          cargo sqlx migrate run --source crates/infrastructure_postgres/migrations
+
       - name: cargo test (unit + lib)
         working-directory: server
         env:
