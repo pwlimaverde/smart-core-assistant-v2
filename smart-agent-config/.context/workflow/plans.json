@@ -1,17 +1,18 @@
 {
-  "active": [
+  "active": [],
+  "completed": [
     {
       "slug": "refator-solid-ports-adapters",
-      "path": "plans/refator-solid-ports-adapters.md",
+      "path": "plans/archive/refator-solid-ports-adapters/refator-solid-ports-adapters.md",
       "title": "Refatoração SOLID (Ports & Adapters) — data_postgres e data_redis",
       "summary": "Introduz o padrão Ports & Adapters (hexagonal) nas camadas donas de datastore, invertendo",
       "linkedAt": "2026-06-21T19:34:20.719Z",
-      "status": "active",
+      "status": "completed",
       "approval_status": "approved",
       "approved_at": "2026-06-21T19:34:37.750Z",
-      "approved_by": "architect"
+      "approved_by": "architect",
+      "completed_at": "2026-06-22T00:00:00.000Z"
     }
   ],
-  "completed": [],
-  "primary": "refator-solid-ports-adapters"
+  "primary": null
 }

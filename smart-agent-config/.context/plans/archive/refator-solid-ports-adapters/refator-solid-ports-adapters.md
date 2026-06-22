@@ -1,6 +1,7 @@
 ---
-status: active
+status: completed
 generated: 2026-06-21
+completed: 2026-06-22
 agents:
   - type: "refactoring-specialist"
     role: "Implementar o padrão Ports & Adapters nos apps de dados"
@@ -19,27 +20,27 @@ phases:
     name: "Infraestrutura de mocks (Cargo.toml + mockall)"
     prevc: "P"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
   - id: "fase-1"
     name: "Piloto — domínio WhatsApp (data_postgres)"
     prevc: "E"
     agent: "refactoring-specialist"
-    status: "pending"
+    status: "completed"
   - id: "fase-2-n"
     name: "Rollout data_postgres (domínio a domínio)"
     prevc: "E"
     agent: "refactoring-specialist"
-    status: "pending"
+    status: "completed"
   - id: "fase-d"
     name: "data_redis — ports por capacidade (ISP)"
     prevc: "E"
     agent: "refactoring-specialist"
-    status: "pending"
+    status: "completed"
   - id: "verificacao"
     name: "Verificação final e atualização dos scripts"
     prevc: "V"
     agent: "test-writer"
-    status: "pending"
+    status: "completed"
 ---
 
 # Refatoração SOLID (Ports & Adapters) — data_postgres e data_redis

@@ -116,9 +116,19 @@ try {
         cargo clippy -p $pkg --all-targets --all-features -- -D warnings
         if ($LASTEXITCODE -ne 0) { $falhas += "clippy:$pkg" } else { Write-Host "ok" -ForegroundColor Green }
 
-        Write-Etapa "test --lib --bins: $pkg"
-        # --test-threads=1 evita race entre testes que usam variaveis de ambiente globais
-        cargo test -p $pkg --lib --bins -- --test-threads=1
+        # Apps em server/apps/ sao bin-only (sem lib.rs); passar --lib nesses pacotes
+        # faz o cargo abortar com "no library targets found". Inclui --lib apenas
+        # quando o pacote tem biblioteca (crates/ ou app com lib.rs).
+        $temLib = (Test-Path (Join-Path $serverDir "crates/$pkg/src/lib.rs")) -or `
+                  (Test-Path (Join-Path $serverDir "apps/$pkg/src/lib.rs"))
+        $alvos = if ($temLib) { @('--lib', '--bins') } else { @('--bins') }
+
+        Write-Etapa "test $($alvos -join ' '): $pkg"
+        # Monta TODOS os args num unico array (incl. o separador `--`) para evitar que
+        # o PowerShell consuma o `--` ao combinar splatting com o token literal.
+        # --test-threads=1 evita race entre testes que usam variaveis de ambiente globais.
+        $testArgs = @('test', '-p', $pkg) + $alvos + @('--', '--test-threads=1')
+        cargo @testArgs
         if ($LASTEXITCODE -ne 0) { $falhas += "test:$pkg" } else { Write-Host "ok" -ForegroundColor Green }
     }
 } finally {
