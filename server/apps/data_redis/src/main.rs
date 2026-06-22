@@ -1,13 +1,43 @@
-//! Serviço data_redis: provê RPC síncrono para cache de configurações, permissões e tokens de autenticação.
+//! Serviço data_redis: provê RPC síncrono para cache de configurações, permissões e
+//! tokens de autenticação. Aplica Ports & Adapters (ISP): os handlers dependem apenas
+//! de traits por capacidade (cache, refresh token, blocklist, rate limiter); os
+//! adapters concretos encapsulam o acesso ao Redis.
 
 use contracts::{Envelope, MessageKind};
 use redis::aio::ConnectionManager;
-use transport::Server;
 use uuid::Uuid;
+
+mod adapters;
+mod ports;
+
+/// Monta um Envelope de Reply com o payload serializado.
+fn ok_reply(env: &Envelope, method: &str, payload: serde_json::Value) -> Envelope {
+    Envelope {
+        kind: MessageKind::Reply as i32,
+        method: method.to_string(),
+        payload: serde_json::to_vec(&payload).unwrap_or_default(),
+        error: None,
+        ..env.clone()
+    }
+}
+
+/// Monta um Envelope de erro a partir de um AppError, preservando o método de resposta.
+fn erro(env: &Envelope, method: &str, app_err: error_core::AppError) -> Envelope {
+    let err_env = app_err.to_error_envelope(&env.traceparent, "data_redis");
+    Envelope {
+        kind: MessageKind::Error as i32,
+        method: method.to_string(),
+        error: Some(err_env),
+        ..env.clone()
+    }
+}
 
 #[derive(Clone)]
 struct AppState {
-    redis_conn: ConnectionManager,
+    cache: std::sync::Arc<dyn ports::CacheStore>,
+    refresh_token: std::sync::Arc<dyn ports::RefreshTokenPort>,
+    blocklist: std::sync::Arc<dyn ports::TokenBlocklist>,
+    rate_limiter: std::sync::Arc<dyn ports::LoginRateLimiter>,
 }
 
 #[tokio::main]
@@ -24,9 +54,24 @@ async fn main() -> anyhow::Result<()> {
     let redis_conn = ConnectionManager::new(redis_client).await?;
     tracing::info!("Conexão com Redis estabelecida.");
 
-    let state = AppState { redis_conn };
+    // 3. Injeta as ports (DIP): adapters concretos encapsulam o ConnectionManager.
+    let cache: std::sync::Arc<dyn ports::CacheStore> =
+        std::sync::Arc::new(adapters::RedisCacheStore::new(redis_conn.clone()));
+    let refresh_token: std::sync::Arc<dyn ports::RefreshTokenPort> =
+        std::sync::Arc::new(adapters::RedisRefreshTokenStore::new(redis_conn.clone()));
+    let blocklist: std::sync::Arc<dyn ports::TokenBlocklist> =
+        std::sync::Arc::new(adapters::RedisTokenBlocklist::new(redis_conn.clone()));
+    let rate_limiter: std::sync::Arc<dyn ports::LoginRateLimiter> =
+        std::sync::Arc::new(adapters::RedisLoginRateLimiter::new(redis_conn.clone()));
 
-    // 3. Inicia o Servidor RPC síncrono nos 3 protocolos
+    let state = AppState {
+        cache,
+        refresh_token,
+        blocklist,
+        rate_limiter,
+    };
+
+    // 4. Inicia o Servidor RPC síncrono nos 3 protocolos
     let state_clone = state.clone();
     let state_for_get = state_clone.clone();
     let state_for_set = state_clone.clone();
@@ -37,38 +82,44 @@ async fn main() -> anyhow::Result<()> {
     let state_for_is_blocked = state_clone.clone();
     let state_for_login_attempt = state_clone;
 
-    let server = Server::from_env("DATA_REDIS")
+    let server = transport::Server::from_env("DATA_REDIS")
         .route("GetCache", move |env| {
             let state = state_for_get.clone();
-            Box::pin(async move { handler_get_cache(state.redis_conn, env).await })
+            Box::pin(async move { handler_get_cache(state.cache.as_ref(), env).await })
         })
         .route("SetCache", move |env| {
             let state = state_for_set.clone();
-            Box::pin(async move { handler_set_cache(state.redis_conn, env).await })
+            Box::pin(async move { handler_set_cache(state.cache.as_ref(), env).await })
         })
         .route("StoreRefreshToken", move |env| {
             let state = state_for_store.clone();
-            Box::pin(async move { handler_store_refresh_token(state.redis_conn, env).await })
+            Box::pin(
+                async move { handler_store_refresh_token(state.refresh_token.as_ref(), env).await },
+            )
         })
         .route("ValidateAndRotate", move |env| {
             let state = state_for_validate.clone();
-            Box::pin(async move { handler_validate_and_rotate(state.redis_conn, env).await })
+            Box::pin(
+                async move { handler_validate_and_rotate(state.refresh_token.as_ref(), env).await },
+            )
         })
         .route("RevokeFamily", move |env| {
             let state = state_for_revoke.clone();
-            Box::pin(async move { handler_revoke_family(state.redis_conn, env).await })
+            Box::pin(async move { handler_revoke_family(state.refresh_token.as_ref(), env).await })
         })
         .route("BlockToken", move |env| {
             let state = state_for_block.clone();
-            Box::pin(async move { handler_block_token(state.redis_conn, env).await })
+            Box::pin(async move { handler_block_token(state.blocklist.as_ref(), env).await })
         })
         .route("IsTokenBlocked", move |env| {
             let state = state_for_is_blocked.clone();
-            Box::pin(async move { handler_is_token_blocked(state.redis_conn, env).await })
+            Box::pin(async move { handler_is_token_blocked(state.blocklist.as_ref(), env).await })
         })
         .route("RegisterLoginAttempt", move |env| {
             let state = state_for_login_attempt.clone();
-            Box::pin(async move { handler_register_login_attempt(state.redis_conn, env).await })
+            Box::pin(async move {
+                handler_register_login_attempt(state.rate_limiter.as_ref(), env).await
+            })
         });
 
     tracing::info!("Servidor RPC do data_redis configurado e pronto.");
@@ -80,57 +131,37 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn handler_get_cache(con: ConnectionManager, env: Envelope) -> Envelope {
-    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
-        Ok(v) => v,
-        Err(_) => serde_json::json!({}),
-    };
+async fn handler_get_cache(cache: &dyn ports::CacheStore, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
     let user_id = payload_json
         .get("user_id")
         .and_then(|v| v.as_i64())
         .unwrap_or(0) as i32;
     let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
 
-    let mut store = infrastructure_redis::CachePermissoes::new(con);
-    match store.obter_flow_permissions(tenant_id, user_id).await {
-        Ok(Some(val)) => {
-            let res = serde_json::json!({ "permissions": val });
-            Envelope {
-                kind: MessageKind::Reply as i32,
-                method: "GetCacheReply".to_string(),
-                payload: serde_json::to_vec(&res).unwrap_or_default(),
-                error: None,
-                ..env
-            }
-        }
-        Ok(None) => {
-            let app_err = error_core::AppError::Cache("Chave não encontrada no cache".to_string());
-            let err_env = app_err.to_error_envelope(&env.traceparent, "data_redis");
-            Envelope {
-                kind: MessageKind::Error as i32,
-                method: "GetCacheReply".to_string(),
-                error: Some(err_env),
-                ..env
-            }
-        }
-        Err(e) => {
-            let app_err = error_core::AppError::Cache(e.to_string());
-            let err_env = app_err.to_error_envelope(&env.traceparent, "data_redis");
-            Envelope {
-                kind: MessageKind::Error as i32,
-                method: "GetCacheReply".to_string(),
-                error: Some(err_env),
-                ..env
-            }
-        }
+    match cache.get_flow_permissions(tenant_id, user_id).await {
+        Ok(Some(val)) => ok_reply(
+            &env,
+            "GetCacheReply",
+            serde_json::json!({ "permissions": val }),
+        ),
+        Ok(None) => erro(
+            &env,
+            "GetCacheReply",
+            error_core::AppError::Cache("Chave não encontrada no cache".to_string()),
+        ),
+        Err(e) => erro(
+            &env,
+            "GetCacheReply",
+            error_core::AppError::Cache(e.to_string()),
+        ),
     }
 }
 
-async fn handler_set_cache(con: ConnectionManager, env: Envelope) -> Envelope {
-    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
-        Ok(v) => v,
-        Err(_) => serde_json::json!({}),
-    };
+async fn handler_set_cache(cache: &dyn ports::CacheStore, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
     let user_id = payload_json
         .get("user_id")
         .and_then(|v| v.as_i64())
@@ -150,39 +181,29 @@ async fn handler_set_cache(con: ConnectionManager, env: Envelope) -> Envelope {
         .unwrap_or(60);
     let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
 
-    let mut store = infrastructure_redis::CachePermissoes::new(con);
-    match store
-        .definir_flow_permissions(tenant_id, user_id, &permissions, ttl)
+    match cache
+        .set_flow_permissions(tenant_id, user_id, permissions, ttl)
         .await
     {
-        Ok(_) => {
-            let res = serde_json::json!({ "status": "success" });
-            Envelope {
-                kind: MessageKind::Reply as i32,
-                method: "SetCacheReply".to_string(),
-                payload: serde_json::to_vec(&res).unwrap_or_default(),
-                error: None,
-                ..env
-            }
-        }
-        Err(e) => {
-            let app_err = error_core::AppError::Cache(e.to_string());
-            let err_env = app_err.to_error_envelope(&env.traceparent, "data_redis");
-            Envelope {
-                kind: MessageKind::Error as i32,
-                method: "SetCacheReply".to_string(),
-                error: Some(err_env),
-                ..env
-            }
-        }
+        Ok(()) => ok_reply(
+            &env,
+            "SetCacheReply",
+            serde_json::json!({ "status": "success" }),
+        ),
+        Err(e) => erro(
+            &env,
+            "SetCacheReply",
+            error_core::AppError::Cache(e.to_string()),
+        ),
     }
 }
 
-async fn handler_store_refresh_token(con: ConnectionManager, env: Envelope) -> Envelope {
-    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
-        Ok(v) => v,
-        Err(_) => serde_json::json!({}),
-    };
+async fn handler_store_refresh_token(
+    store: &dyn ports::RefreshTokenPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
     let token_hash = payload_json
         .get("token_hash")
         .and_then(|v| v.as_str())
@@ -201,117 +222,80 @@ async fn handler_store_refresh_token(con: ConnectionManager, env: Envelope) -> E
         .and_then(|v| v.as_u64())
         .unwrap_or(86400);
 
-    let mut store = infrastructure_redis::RefreshTokenStore::new(con);
     match store
-        .armazenar(token_hash, user_id, tenant_id, family_id, ttl)
+        .store(token_hash, user_id, tenant_id, family_id, ttl)
         .await
     {
-        Ok(_) => {
-            let res = serde_json::json!({ "status": "success" });
-            Envelope {
-                kind: MessageKind::Reply as i32,
-                method: "StoreRefreshTokenReply".to_string(),
-                payload: serde_json::to_vec(&res).unwrap_or_default(),
-                error: None,
-                ..env
-            }
-        }
-        Err(e) => {
-            let app_err = error_core::AppError::Cache(e.to_string());
-            let err_env = app_err.to_error_envelope(&env.traceparent, "data_redis");
-            Envelope {
-                kind: MessageKind::Error as i32,
-                method: "StoreRefreshTokenReply".to_string(),
-                error: Some(err_env),
-                ..env
-            }
-        }
+        Ok(()) => ok_reply(
+            &env,
+            "StoreRefreshTokenReply",
+            serde_json::json!({ "status": "success" }),
+        ),
+        Err(e) => erro(
+            &env,
+            "StoreRefreshTokenReply",
+            error_core::AppError::Cache(e.to_string()),
+        ),
     }
 }
 
-async fn handler_validate_and_rotate(con: ConnectionManager, env: Envelope) -> Envelope {
-    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
-        Ok(v) => v,
-        Err(_) => serde_json::json!({}),
-    };
+async fn handler_validate_and_rotate(
+    store: &dyn ports::RefreshTokenPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
     let token_hash = payload_json
         .get("token_hash")
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
-    let mut store = infrastructure_redis::RefreshTokenStore::new(con);
-    match store.validar_e_rotacionar(token_hash).await {
-        Ok(reg) => {
-            let res = serde_json::to_value(&reg).unwrap_or_default();
-            Envelope {
-                kind: MessageKind::Reply as i32,
-                method: "ValidateAndRotateReply".to_string(),
-                payload: serde_json::to_vec(&res).unwrap_or_default(),
-                error: None,
-                ..env
-            }
-        }
+    match store.validate_and_rotate(token_hash).await {
+        Ok(reg) => ok_reply(
+            &env,
+            "ValidateAndRotateReply",
+            serde_json::to_value(&reg).unwrap_or_default(),
+        ),
         Err(e) => {
-            // Reuso de token rotacionado é uma falha de autenticação (possível roubo de sessão),
-            // não um simples miss de cache. Mapeamos para AppError::Auth com marcador estável
-            // ("token_reuse_detected") para que a runtime_api possa auditar o evento de segurança.
+            // Reuso de token rotacionado é falha de autenticação (possível roubo de sessão),
+            // não um simples miss de cache. Mapeia para AppError::Auth com marcador estável
+            // ("token_reuse_detected") para que a runtime_api audite o evento de segurança.
             let app_err = match e {
                 infrastructure_redis::RedisError::TokenReuse => {
                     error_core::AppError::Auth("token_reuse_detected".to_string())
                 }
                 outro => error_core::AppError::Cache(outro.to_string()),
             };
-            let err_env = app_err.to_error_envelope(&env.traceparent, "data_redis");
-            Envelope {
-                kind: MessageKind::Error as i32,
-                method: "ValidateAndRotateReply".to_string(),
-                error: Some(err_env),
-                ..env
-            }
+            erro(&env, "ValidateAndRotateReply", app_err)
         }
     }
 }
 
-async fn handler_revoke_family(con: ConnectionManager, env: Envelope) -> Envelope {
-    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
-        Ok(v) => v,
-        Err(_) => serde_json::json!({}),
-    };
+async fn handler_revoke_family(store: &dyn ports::RefreshTokenPort, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
     let family_id = payload_json
         .get("family_id")
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
-    let mut store = infrastructure_redis::RefreshTokenStore::new(con);
-    match store.revogar_familia(family_id).await {
-        Ok(_) => {
-            let res = serde_json::json!({ "status": "success" });
-            Envelope {
-                kind: MessageKind::Reply as i32,
-                method: "RevokeFamilyReply".to_string(),
-                payload: serde_json::to_vec(&res).unwrap_or_default(),
-                error: None,
-                ..env
-            }
-        }
-        Err(e) => {
-            let app_err = error_core::AppError::Cache(e.to_string());
-            let err_env = app_err.to_error_envelope(&env.traceparent, "data_redis");
-            Envelope {
-                kind: MessageKind::Error as i32,
-                method: "RevokeFamilyReply".to_string(),
-                error: Some(err_env),
-                ..env
-            }
-        }
+    match store.revoke_family(family_id).await {
+        Ok(()) => ok_reply(
+            &env,
+            "RevokeFamilyReply",
+            serde_json::json!({ "status": "success" }),
+        ),
+        Err(e) => erro(
+            &env,
+            "RevokeFamilyReply",
+            error_core::AppError::Cache(e.to_string()),
+        ),
     }
 }
 
-async fn handler_block_token(con: ConnectionManager, env: Envelope) -> Envelope {
-    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
-        Ok(v) => v,
-        Err(_) => serde_json::json!({}),
-    };
+async fn handler_block_token(blocklist: &dyn ports::TokenBlocklist, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
     let jti = payload_json
         .get("jti")
         .and_then(|v| v.as_str())
@@ -321,74 +305,54 @@ async fn handler_block_token(con: ConnectionManager, env: Envelope) -> Envelope 
         .and_then(|v| v.as_u64())
         .unwrap_or(3600);
 
-    let mut blocklist = infrastructure_redis::TokenBlocklist::new(con);
-    match blocklist.bloquear(jti, ttl).await {
-        Ok(_) => {
-            let res = serde_json::json!({ "status": "success" });
-            Envelope {
-                kind: MessageKind::Reply as i32,
-                method: "BlockTokenReply".to_string(),
-                payload: serde_json::to_vec(&res).unwrap_or_default(),
-                error: None,
-                ..env
-            }
-        }
-        Err(e) => {
-            let app_err = error_core::AppError::Cache(e.to_string());
-            let err_env = app_err.to_error_envelope(&env.traceparent, "data_redis");
-            Envelope {
-                kind: MessageKind::Error as i32,
-                method: "BlockTokenReply".to_string(),
-                error: Some(err_env),
-                ..env
-            }
-        }
+    match blocklist.block(jti, ttl).await {
+        Ok(()) => ok_reply(
+            &env,
+            "BlockTokenReply",
+            serde_json::json!({ "status": "success" }),
+        ),
+        Err(e) => erro(
+            &env,
+            "BlockTokenReply",
+            error_core::AppError::Cache(e.to_string()),
+        ),
     }
 }
 
-async fn handler_is_token_blocked(con: ConnectionManager, env: Envelope) -> Envelope {
-    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
-        Ok(v) => v,
-        Err(_) => serde_json::json!({}),
-    };
+async fn handler_is_token_blocked(
+    blocklist: &dyn ports::TokenBlocklist,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
     let jti = payload_json
         .get("jti")
         .and_then(|v| v.as_str())
         .unwrap_or("");
 
-    let mut blocklist = infrastructure_redis::TokenBlocklist::new(con);
-    match blocklist.esta_bloqueado(jti).await {
-        Ok(blocked) => {
-            let res = serde_json::json!({ "blocked": blocked });
-            Envelope {
-                kind: MessageKind::Reply as i32,
-                method: "IsTokenBlockedReply".to_string(),
-                payload: serde_json::to_vec(&res).unwrap_or_default(),
-                error: None,
-                ..env
-            }
-        }
-        Err(e) => {
-            let app_err = error_core::AppError::Cache(e.to_string());
-            let err_env = app_err.to_error_envelope(&env.traceparent, "data_redis");
-            Envelope {
-                kind: MessageKind::Error as i32,
-                method: "IsTokenBlockedReply".to_string(),
-                error: Some(err_env),
-                ..env
-            }
-        }
+    match blocklist.is_blocked(jti).await {
+        Ok(blocked) => ok_reply(
+            &env,
+            "IsTokenBlockedReply",
+            serde_json::json!({ "blocked": blocked }),
+        ),
+        Err(e) => erro(
+            &env,
+            "IsTokenBlockedReply",
+            error_core::AppError::Cache(e.to_string()),
+        ),
     }
 }
 
 /// Registra uma tentativa de login (rate limiting, doc 09 §6.5) e devolve o total
 /// acumulado na janela. Payload: `{ key_hash, window_s }` — `key_hash` é o hash do
 /// identificador (nunca o e-mail em claro). Reply: `{ attempts }`.
-async fn handler_register_login_attempt(con: ConnectionManager, env: Envelope) -> Envelope {
-    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
-        Ok(v) => v,
-        Err(_) => serde_json::json!({}),
-    };
+async fn handler_register_login_attempt(
+    rate_limiter: &dyn ports::LoginRateLimiter,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
     let key_hash = payload_json
         .get("key_hash")
         .and_then(|v| v.as_str())
@@ -399,350 +363,206 @@ async fn handler_register_login_attempt(con: ConnectionManager, env: Envelope) -
         .unwrap_or(60);
 
     if key_hash.is_empty() {
-        let app_err = error_core::AppError::Validation("key_hash é obrigatório".to_string());
-        let err_env = app_err.to_error_envelope(&env.traceparent, "data_redis");
-        return Envelope {
-            kind: MessageKind::Error as i32,
-            method: "RegisterLoginAttemptReply".to_string(),
-            error: Some(err_env),
-            ..env
-        };
+        return erro(
+            &env,
+            "RegisterLoginAttemptReply",
+            error_core::AppError::Validation("key_hash é obrigatório".to_string()),
+        );
     }
 
-    let mut con = con;
-    match infrastructure_redis::registrar_tentativa_login(&mut con, key_hash, window_s).await {
-        Ok(attempts) => {
-            let res = serde_json::json!({ "attempts": attempts });
-            Envelope {
-                kind: MessageKind::Reply as i32,
-                method: "RegisterLoginAttemptReply".to_string(),
-                payload: serde_json::to_vec(&res).unwrap_or_default(),
-                error: None,
-                ..env
-            }
-        }
-        Err(e) => {
-            let app_err = error_core::AppError::Cache(e.to_string());
-            let err_env = app_err.to_error_envelope(&env.traceparent, "data_redis");
-            Envelope {
-                kind: MessageKind::Error as i32,
-                method: "RegisterLoginAttemptReply".to_string(),
-                error: Some(err_env),
-                ..env
-            }
-        }
+    match rate_limiter
+        .register_login_attempt(key_hash, window_s)
+        .await
+    {
+        Ok(attempts) => ok_reply(
+            &env,
+            "RegisterLoginAttemptReply",
+            serde_json::json!({ "attempts": attempts }),
+        ),
+        Err(e) => erro(
+            &env,
+            "RegisterLoginAttemptReply",
+            error_core::AppError::Cache(e.to_string()),
+        ),
     }
 }
 
+/// Testes unitários dos handlers via ports `mockall` (SEM Redis). Rodam no caminho
+/// rápido `--bins` sem túnel. A cobertura de Redis real vive nos testes de integração
+/// de `crates/infrastructure_redis/`.
 #[cfg(test)]
 mod tests {
     use super::*;
-    use contracts::{Envelope, MessageKind};
-    use redis::aio::ConnectionManager;
-    use uuid::Uuid;
+    use crate::ports::{
+        MockCacheStore, MockLoginRateLimiter, MockRefreshTokenPort, MockTokenBlocklist,
+    };
+    use infrastructure_redis::{RedisError, RegistroRefresh};
 
-    fn carregar_env_teste() {
-        test_support::ensure_tunnel();
-        let caminhos = vec![
-            ".env",
-            "../.env",
-            "../../.env",
-            "apps/data_redis/.env",
-            "../data_redis/.env",
-        ];
-        for caminho in caminhos {
-            if let Ok(conteudo) = std::fs::read_to_string(caminho) {
-                for linha in conteudo.lines() {
-                    let linha_limpa = linha.trim();
-                    if linha_limpa.is_empty() || linha_limpa.starts_with('#') {
-                        continue;
-                    }
-                    if let Some((chave, valor)) = linha_limpa.split_once('=') {
-                        let chave = chave.trim();
-                        let valor = valor.trim().trim_matches('"').trim_matches('\'');
-                        if std::env::var(chave).is_err() {
-                            std::env::set_var(chave, valor);
-                        }
-                    }
-                }
-                break;
-            }
+    /// Helper: monta um Envelope mínimo com método e payload arbitrários.
+    fn envelope_com_payload(method: &str, payload: serde_json::Value) -> Envelope {
+        Envelope {
+            kind: MessageKind::Request as i32,
+            method: method.to_string(),
+            tenant_id: uuid::Uuid::nil().to_string(),
+            traceparent: "00-trace-span-01".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
         }
     }
 
-    async fn setup_redis() -> ConnectionManager {
-        carregar_env_teste();
-        let redis_url =
-            std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6380".to_string());
-        let redis_client = redis::Client::open(redis_url).unwrap();
-        ConnectionManager::new(redis_client).await.unwrap()
+    /// HAPPY PATH: cache hit devolve as permissões.
+    #[tokio::test]
+    async fn get_cache_returns_permissions_on_hit() {
+        // Arrange
+        let mut cache = MockCacheStore::new();
+        cache
+            .expect_get_flow_permissions()
+            .times(1)
+            .returning(|_, _| Ok(Some(vec![1, 2, 3])));
+        let env = envelope_com_payload("GetCache", serde_json::json!({ "user_id": 1 }));
+
+        // Act
+        let resp = handler_get_cache(&cache, env).await;
+
+        // Assert
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["permissions"].as_array().unwrap().len(), 3);
     }
 
+    /// FAIL-CLOSED: cache miss vira erro (chave não encontrada).
     #[tokio::test]
-    async fn test_handler_cache_permissions() {
-        let con = setup_redis().await;
+    async fn get_cache_miss_returns_error() {
+        // Arrange
+        let mut cache = MockCacheStore::new();
+        cache
+            .expect_get_flow_permissions()
+            .times(1)
+            .returning(|_, _| Ok(None));
+        let env = envelope_com_payload("GetCache", serde_json::json!({ "user_id": 1 }));
 
-        let tenant_id = Uuid::new_v4();
-        let user_id = 12345;
-        let permissions = vec![1, 2, 3];
+        // Act
+        let resp = handler_get_cache(&cache, env).await;
 
-        // 1. Define o cache via handler_set_cache
-        let set_payload = serde_json::json!({
-            "user_id": user_id,
-            "permissions": permissions,
-            "ttl": 60
-        });
-
-        let set_req = Envelope {
-            tenant_id: tenant_id.to_string(),
-            schema_version: 1,
-            message_id: Uuid::now_v7().to_string(),
-            causation_id: "".to_string(),
-            traceparent: "00-trace-redis1-01".to_string(),
-            occurred_at: chrono::Utc::now().timestamp_millis(),
-            kind: MessageKind::Request as i32,
-            method: "SetCache".to_string(),
-            payload: serde_json::to_vec(&set_payload).unwrap(),
-            error: None,
-            ..Default::default()
-        };
-
-        let set_resp = handler_set_cache(con.clone(), set_req).await;
-        assert_eq!(set_resp.kind, MessageKind::Reply as i32);
-
-        // 2. Obtém do cache via handler_get_cache
-        let get_payload = serde_json::json!({
-            "user_id": user_id
-        });
-
-        let get_req = Envelope {
-            tenant_id: tenant_id.to_string(),
-            schema_version: 1,
-            message_id: Uuid::now_v7().to_string(),
-            causation_id: "".to_string(),
-            traceparent: "00-trace-redis1-01".to_string(),
-            occurred_at: chrono::Utc::now().timestamp_millis(),
-            kind: MessageKind::Request as i32,
-            method: "GetCache".to_string(),
-            payload: serde_json::to_vec(&get_payload).unwrap(),
-            error: None,
-            ..Default::default()
-        };
-
-        let get_resp = handler_get_cache(con.clone(), get_req).await;
-        assert_eq!(get_resp.kind, MessageKind::Reply as i32);
-
-        let get_resp_payload: serde_json::Value =
-            serde_json::from_slice(&get_resp.payload).unwrap();
-        let perms: Vec<i32> = get_resp_payload
-            .get("permissions")
-            .unwrap()
-            .as_array()
-            .unwrap()
-            .iter()
-            .map(|v| v.as_i64().unwrap() as i32)
-            .collect();
-        assert_eq!(perms, permissions);
+        // Assert
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert!(resp.error.is_some(), "deveria ter envelope de erro");
     }
 
+    /// FAIL-CLOSED: reuso de token detectado vira erro de AUTENTICAÇÃO com marcador
+    /// estável `token_reuse_detected`, não um erro de cache.
     #[tokio::test]
-    async fn test_handler_refresh_token_flow() {
-        let con = setup_redis().await;
-
-        let tenant_id = Uuid::new_v4();
-        let token_hash = format!("hash_{}", Uuid::new_v4());
-        let user_id = 999;
-        let family_id = Uuid::new_v4().to_string();
-
-        // 1. Armazena o Refresh Token
-        let store_payload = serde_json::json!({
-            "token_hash": &token_hash,
-            "user_id": user_id,
-            "family_id": &family_id,
-            "ttl": 120
-        });
-
-        let store_req = Envelope {
-            tenant_id: tenant_id.to_string(),
-            schema_version: 1,
-            message_id: Uuid::now_v7().to_string(),
-            causation_id: "".to_string(),
-            traceparent: "00-trace-redis2-01".to_string(),
-            occurred_at: chrono::Utc::now().timestamp_millis(),
-            kind: MessageKind::Request as i32,
-            method: "StoreRefreshToken".to_string(),
-            payload: serde_json::to_vec(&store_payload).unwrap(),
-            error: None,
-            ..Default::default()
-        };
-
-        let store_resp = handler_store_refresh_token(con.clone(), store_req).await;
-        assert_eq!(store_resp.kind, MessageKind::Reply as i32);
-
-        // 2. Valida e Rotaciona o Token
-        let val_payload = serde_json::json!({
-            "token_hash": &token_hash
-        });
-
-        let val_req = Envelope {
-            tenant_id: tenant_id.to_string(),
-            schema_version: 1,
-            message_id: Uuid::now_v7().to_string(),
-            causation_id: "".to_string(),
-            traceparent: "00-trace-redis2-01".to_string(),
-            occurred_at: chrono::Utc::now().timestamp_millis(),
-            kind: MessageKind::Request as i32,
-            method: "ValidateAndRotate".to_string(),
-            payload: serde_json::to_vec(&val_payload).unwrap(),
-            error: None,
-            ..Default::default()
-        };
-
-        let val_resp = handler_validate_and_rotate(con.clone(), val_req).await;
-        assert_eq!(val_resp.kind, MessageKind::Reply as i32);
-
-        let val_resp_payload: serde_json::Value =
-            serde_json::from_slice(&val_resp.payload).unwrap();
-        assert_eq!(
-            val_resp_payload.get("user_id").unwrap().as_i64().unwrap() as i32,
-            user_id
-        );
-        assert_eq!(
-            val_resp_payload.get("family_id").unwrap().as_str().unwrap(),
-            family_id
+    async fn validate_and_rotate_maps_token_reuse_to_auth_error() {
+        // Arrange: a port reporta reuso de token (família comprometida).
+        let mut store = MockRefreshTokenPort::new();
+        store
+            .expect_validate_and_rotate()
+            .times(1)
+            .returning(|_| Err(RedisError::TokenReuse));
+        let env = envelope_com_payload(
+            "ValidateAndRotate",
+            serde_json::json!({ "token_hash": "h" }),
         );
 
-        // 3. Revoga a Família de Tokens
-        let revoke_payload = serde_json::json!({
-            "family_id": &family_id
-        });
+        // Act
+        let resp = handler_validate_and_rotate(&store, env).await;
 
-        let revoke_req = Envelope {
-            tenant_id: tenant_id.to_string(),
-            schema_version: 1,
-            message_id: Uuid::now_v7().to_string(),
-            causation_id: "".to_string(),
-            traceparent: "00-trace-redis2-01".to_string(),
-            occurred_at: chrono::Utc::now().timestamp_millis(),
-            kind: MessageKind::Request as i32,
-            method: "RevokeFamily".to_string(),
-            payload: serde_json::to_vec(&revoke_payload).unwrap(),
-            error: None,
-            ..Default::default()
-        };
-
-        let revoke_resp = handler_revoke_family(con.clone(), revoke_req).await;
-        assert_eq!(revoke_resp.kind, MessageKind::Reply as i32);
+        // Assert: erro de AUTENTICAÇÃO com marcador estável, não erro de cache.
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        let err = resp.error.expect("deveria ter erro");
+        assert!(
+            err.message.contains("token_reuse_detected"),
+            "esperava marcador de reuso, veio: {err:?}"
+        );
     }
 
+    /// HAPPY PATH: validate_and_rotate devolve o registro do token rotacionado.
     #[tokio::test]
-    async fn test_handler_token_blocklist() {
-        let con = setup_redis().await;
-
-        let tenant_id = Uuid::new_v4();
-        let jti = Uuid::new_v4().to_string();
-
-        // 1. Verifica se não está bloqueado inicialmente
-        let check_payload = serde_json::json!({
-            "jti": &jti
+    async fn validate_and_rotate_returns_registro_on_success() {
+        // Arrange
+        let mut store = MockRefreshTokenPort::new();
+        store.expect_validate_and_rotate().times(1).returning(|_| {
+            Ok(RegistroRefresh {
+                user_id: 42,
+                tenant_id: None,
+                family_id: "fam".to_string(),
+                rotacionado: false,
+            })
         });
+        let env = envelope_com_payload(
+            "ValidateAndRotate",
+            serde_json::json!({ "token_hash": "h" }),
+        );
 
-        let check_req = Envelope {
-            tenant_id: tenant_id.to_string(),
-            schema_version: 1,
-            message_id: Uuid::now_v7().to_string(),
-            causation_id: "".to_string(),
-            traceparent: "00-trace-redis3-01".to_string(),
-            occurred_at: chrono::Utc::now().timestamp_millis(),
-            kind: MessageKind::Request as i32,
-            method: "IsTokenBlocked".to_string(),
-            payload: serde_json::to_vec(&check_payload).unwrap(),
-            error: None,
-            ..Default::default()
-        };
+        // Act
+        let resp = handler_validate_and_rotate(&store, env).await;
 
-        let check_resp = handler_is_token_blocked(con.clone(), check_req.clone()).await;
-        assert_eq!(check_resp.kind, MessageKind::Reply as i32);
-        let check_resp_payload: serde_json::Value =
-            serde_json::from_slice(&check_resp.payload).unwrap();
-        assert!(!check_resp_payload
-            .get("blocked")
-            .unwrap()
-            .as_bool()
-            .unwrap());
-
-        // 2. Bloqueia o token
-        let block_payload = serde_json::json!({
-            "jti": &jti,
-            "ttl": 120
-        });
-
-        let block_req = Envelope {
-            tenant_id: tenant_id.to_string(),
-            schema_version: 1,
-            message_id: Uuid::now_v7().to_string(),
-            causation_id: "".to_string(),
-            traceparent: "00-trace-redis3-01".to_string(),
-            occurred_at: chrono::Utc::now().timestamp_millis(),
-            kind: MessageKind::Request as i32,
-            method: "BlockToken".to_string(),
-            payload: serde_json::to_vec(&block_payload).unwrap(),
-            error: None,
-            ..Default::default()
-        };
-
-        let block_resp = handler_block_token(con.clone(), block_req).await;
-        assert_eq!(block_resp.kind, MessageKind::Reply as i32);
-
-        // 3. Verifica se agora está bloqueado
-        let check_resp2 = handler_is_token_blocked(con.clone(), check_req).await;
-        assert_eq!(check_resp2.kind, MessageKind::Reply as i32);
-        let check_resp_payload2: serde_json::Value =
-            serde_json::from_slice(&check_resp2.payload).unwrap();
-        assert!(check_resp_payload2
-            .get("blocked")
-            .unwrap()
-            .as_bool()
-            .unwrap());
+        // Assert
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["user_id"].as_i64().unwrap(), 42);
     }
 
+    /// HAPPY PATH: is_token_blocked devolve o booleano de bloqueio.
     #[tokio::test]
-    async fn test_handler_register_login_attempt() {
-        let con = setup_redis().await;
+    async fn is_token_blocked_returns_flag() {
+        // Arrange
+        let mut blocklist = MockTokenBlocklist::new();
+        blocklist
+            .expect_is_blocked()
+            .times(1)
+            .returning(|_| Ok(true));
+        let env = envelope_com_payload("IsTokenBlocked", serde_json::json!({ "jti": "j" }));
 
-        // Hash exclusivo por execução para não colidir com janelas anteriores
-        let key_hash = format!("teste_{}", Uuid::new_v4().simple());
+        // Act
+        let resp = handler_is_token_blocked(&blocklist, env).await;
 
-        let montar_req = |key_hash: &str| Envelope {
-            tenant_id: Uuid::nil().to_string(),
-            schema_version: 1,
-            message_id: Uuid::now_v7().to_string(),
-            causation_id: "".to_string(),
-            traceparent: "00-trace-redis4-01".to_string(),
-            occurred_at: chrono::Utc::now().timestamp_millis(),
-            kind: MessageKind::Request as i32,
-            method: "RegisterLoginAttempt".to_string(),
-            payload: serde_json::to_vec(&serde_json::json!({
-                "key_hash": key_hash,
-                "window_s": 60,
-            }))
-            .unwrap(),
-            error: None,
-            ..Default::default()
-        };
+        // Assert
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert!(body["blocked"].as_bool().unwrap());
+    }
 
-        // 1. Três tentativas consecutivas devem acumular o contador na janela
-        for esperado in 1u64..=3 {
-            let resp = handler_register_login_attempt(con.clone(), montar_req(&key_hash)).await;
-            assert_eq!(resp.kind, MessageKind::Reply as i32);
-            let payload: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
-            assert_eq!(payload.get("attempts").unwrap().as_u64().unwrap(), esperado);
-        }
+    /// FAIL-CLOSED: register_login_attempt sem key_hash é rejeitado sem tocar a port.
+    #[tokio::test]
+    async fn register_login_attempt_rejects_empty_key() {
+        // Arrange
+        let mut rate_limiter = MockLoginRateLimiter::new();
+        rate_limiter.expect_register_login_attempt().never();
+        let env = envelope_com_payload(
+            "RegisterLoginAttempt",
+            serde_json::json!({ "window_s": 60 }),
+        );
 
-        // 2. key_hash vazio é rejeitado com erro de validação
-        let mut req_invalida = montar_req("");
-        req_invalida.payload = serde_json::to_vec(&serde_json::json!({ "window_s": 60 })).unwrap();
-        let resp_invalida = handler_register_login_attempt(con.clone(), req_invalida).await;
-        assert_eq!(resp_invalida.kind, MessageKind::Error as i32);
+        // Act
+        let resp = handler_register_login_attempt(&rate_limiter, env).await;
+
+        // Assert
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        let err = resp.error.expect("deveria ter envelope de erro");
+        assert_eq!(err.code, "VALIDATION_FAILED", "veio: {err:?}");
+    }
+
+    /// HAPPY PATH: register_login_attempt devolve o total acumulado.
+    #[tokio::test]
+    async fn register_login_attempt_returns_count() {
+        // Arrange
+        let mut rate_limiter = MockLoginRateLimiter::new();
+        rate_limiter
+            .expect_register_login_attempt()
+            .times(1)
+            .returning(|_, _| Ok(3));
+        let env = envelope_com_payload(
+            "RegisterLoginAttempt",
+            serde_json::json!({ "key_hash": "h", "window_s": 60 }),
+        );
+
+        // Act
+        let resp = handler_register_login_attempt(&rate_limiter, env).await;
+
+        // Assert
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["attempts"].as_u64().unwrap(), 3);
     }
 }
