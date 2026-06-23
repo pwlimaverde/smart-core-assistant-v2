@@ -22,7 +22,10 @@ services:
     restart: unless-stopped
 
   evolution:
-    image: evoapicloud/evolution-go:latest
+    # Versão FIXA (reprodutibilidade): evita que `:latest` mude e quebre o dev sem
+    # aviso. 0.7.1 é a última release estável. Para atualizar, troque a tag aqui e
+    # suba a stack manualmente de novo (serviço fundacional "sobe uma vez").
+    image: evoapicloud/evolution-go:0.7.1
     container_name: smartcore-evolution
     environment:
       SERVER_PORT: "8080"
