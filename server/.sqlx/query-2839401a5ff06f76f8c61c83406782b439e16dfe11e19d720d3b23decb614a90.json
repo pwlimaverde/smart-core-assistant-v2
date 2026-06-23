@@ -1,0 +1,112 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO tenants_plan (name, description, price, max_instances, max_departments, active)\n           VALUES ($1, 'Plano de testes', 99.90, 5, 3, true)\n           RETURNING id, name, description, price, max_instances, max_departments, active, created_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "tenants_plan",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_plan",
+            "name": "name"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "tenants_plan",
+            "name": "description"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "price",
+        "type_info": "Numeric",
+        "origin": {
+          "Table": {
+            "table": "tenants_plan",
+            "name": "price"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "max_instances",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "tenants_plan",
+            "name": "max_instances"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "max_departments",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "tenants_plan",
+            "name": "max_departments"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "active",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "tenants_plan",
+            "name": "active"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "tenants_plan",
+            "name": "created_at"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "2839401a5ff06f76f8c61c83406782b439e16dfe11e19d720d3b23decb614a90"
+}
