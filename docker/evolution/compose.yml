@@ -15,7 +15,9 @@ services:
     networks:
       - evolution_net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${EVOLUTION_POSTGRES_USER:-evolution}"]
+      # -d evogo_auth: sem o -d, o pg_isready conecta no db "evolution" (= nome do
+      # user), que não existe → healthcheck falha eternamente → container unhealthy.
+      test: ["CMD-SHELL", "pg_isready -U ${EVOLUTION_POSTGRES_USER:-evolution} -d evogo_auth"]
       interval: 10s
       timeout: 5s
       retries: 5
