@@ -188,11 +188,16 @@ jobs:
           docker compose --env-file .env up -d
 
       # Stack do ambiente dev (inclui o container web do client). Idempotente.
+      # SEM --remove-orphans: o dev consome a rede externa compartilhada
+      # `smart_core_v2_evolution_net`; com --remove-orphans o compose trata os
+      # containers da stack evolution (outro projeto, mesma rede) como órfãos e os
+      # REMOVE, derrubando o WhatsApp a cada deploy. A limpeza de órfãos, se um dia
+      # for necessária, deve ser feita manualmente e fora da rede compartilhada.
       - name: Compose pull & up (DEV)
         working-directory: docker/dev
         run: |
           docker compose --env-file .env pull
-          docker compose --env-file .env up -d --remove-orphans
+          docker compose --env-file .env up -d
 
       # Borda (Caddy em 80/443: roteia v1 + v2 + grafana). Idempotente; pull pega
       # a :latest mais recente da imagem do edge.
