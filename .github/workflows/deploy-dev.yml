@@ -170,6 +170,9 @@ jobs:
           # O evolution sobe a partir do MESMO dev.env (compose lê via --env-file;
           # vars extras são ignoradas). Exige EVOLUTION_POSTGRES_USER/PASSWORD,
           # EVOLUTION_GLOBAL_API_KEY e EVOLUTION_PORT no dev.env (ver .env.example).
+          # IMPORTANTE: o dev.env NÃO pode conter COMPOSE_PROJECT_NAME — cada compose
+          # tem seu próprio `name:`. Se vazasse aqui, o env sobreporia o name: do
+          # evolution e ele cairia no projeto smart-core-v2-dev (vira órfão e some).
           cp /opt/smartcore/dev/env/dev.env docker/evolution/.env
 
       # Observabilidade (cria a rede external compartilhada). Idempotente.
@@ -181,23 +184,24 @@ jobs:
       # restart: unless-stopped). `up -d` é idempotente — NÃO reinicia se a config
       # não mudou — e CRIA a rede externa `smart_core_v2_evolution_net` consumida por
       # data_whatsapp/webhook_ingress. PRECEDE o docker/dev, que depende dessa rede.
+      # `-p smart-core-v2-evolution` força o projeto próprio explicitamente (defesa
+      # extra contra herdar COMPOSE_PROJECT_NAME e cair no projeto do dev).
       - name: Sobe stack evolution (fundacional)
         working-directory: docker/evolution
         run: |
-          docker compose --env-file .env pull
-          docker compose --env-file .env up -d
+          docker compose -p smart-core-v2-evolution --env-file .env pull
+          docker compose -p smart-core-v2-evolution --env-file .env up -d
 
       # Stack do ambiente dev (inclui o container web do client). Idempotente.
-      # SEM --remove-orphans: o dev consome a rede externa compartilhada
-      # `smart_core_v2_evolution_net`; com --remove-orphans o compose trata os
-      # containers da stack evolution (outro projeto, mesma rede) como órfãos e os
-      # REMOVE, derrubando o WhatsApp a cada deploy. A limpeza de órfãos, se um dia
-      # for necessária, deve ser feita manualmente e fora da rede compartilhada.
+      # --remove-orphans é seguro: a remoção de órfãos é escopada ao projeto
+      # (smart-core-v2-dev). O evolution roda em projeto próprio
+      # (smart-core-v2-evolution), então NÃO é tratado como órfão do dev mesmo
+      # compartilhando a rede smart_core_v2_evolution_net (verificado no servidor).
       - name: Compose pull & up (DEV)
         working-directory: docker/dev
         run: |
           docker compose --env-file .env pull
-          docker compose --env-file .env up -d
+          docker compose --env-file .env up -d --remove-orphans
 
       # Borda (Caddy em 80/443: roteia v1 + v2 + grafana). Idempotente; pull pega
       # a :latest mais recente da imagem do edge.
