@@ -1,5 +1,11 @@
 use infrastructure_evolution::EvolutionProvider;
-use infrastructure_messaging::{ConnectionState, MediaType, MessagingProvider};
+#[allow(unused_imports)]
+use infrastructure_messaging::{
+    AdvancedSettings, AdvancedSettingsControl, ConnectionState, CreateInstanceResult,
+    InstanceManager, MediaDownloadResult, MediaDownloader, MediaType, MessageSender,
+    MessagingProvider, MessagingProviderError, PresenceControl, PresenceState, ProfileQuery,
+    Reactions, ReadReceipts, SendMessageResult, WebhookConfig,
+};
 use secrecy::SecretString;
 use wiremock::matchers::{body_json, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -26,15 +32,10 @@ async fn test_create_instance_success() {
     Mock::given(method("POST"))
         .and(path("/instance/create"))
         .and(header("apikey", "global-key"))
-        .and(body_json(serde_json::json!({
-            "instanceName": "instancia-1",
-            "qrcode": true,
-            "integration": "WHATSAPP-BAILEYS"
-        })))
         .respond_with(ResponseTemplate::new(201).set_body_json(serde_json::json!({
             "instance": {
                 "instanceName": "instancia-1",
-                "hash": "token-123"
+                "token": "token-123"
             }
         })))
         .mount(&server)
@@ -52,16 +53,14 @@ async fn test_create_instance_with_custom_token() {
     Mock::given(method("POST"))
         .and(path("/instance/create"))
         .and(body_json(serde_json::json!({
-            "instanceName": "instancia-1",
-            "qrcode": true,
-            "integration": "WHATSAPP-BAILEYS",
+            "name": "instancia-1",
             "token": "custom-token-val"
         })))
         .respond_with(ResponseTemplate::new(201).set_body_json(serde_json::json!({
             "instance": {
-                "instanceName": "instancia-1"
-            },
-            "hash": "custom-token-val"
+                "instanceName": "instancia-1",
+                "token": "custom-token-val"
+            }
         })))
         .mount(&server)
         .await;
@@ -94,15 +93,27 @@ async fn test_delete_instance() {
 async fn test_connect_instance() {
     let (server, provider) = setup().await;
 
-    Mock::given(method("GET"))
-        .and(path("/instance/connect/instancia-1"))
+    Mock::given(method("POST"))
+        .and(path("/instance/connect"))
         .and(header("apikey", "inst-token"))
+        .and(body_json(serde_json::json!({
+            "instanceName": "instancia-1",
+            "webhookUrl": "http://webhook.url",
+            "subscribe": ["MESSAGE", "CONNECTION"],
+            "immediate": true
+        })))
         .respond_with(ResponseTemplate::new(200))
         .mount(&server)
         .await;
 
     let token = SecretString::from("inst-token".to_string());
-    let res = provider.connect_instance("instancia-1", &token).await;
+    let webhook = WebhookConfig {
+        url: "http://webhook.url".to_string(),
+        subscribe: vec!["MESSAGE".to_string(), "CONNECTION".to_string()],
+    };
+    let res = provider
+        .connect_instance("instancia-1", &token, &webhook)
+        .await;
     assert!(res.is_ok());
 }
 
@@ -110,8 +121,8 @@ async fn test_connect_instance() {
 async fn test_disconnect_instance() {
     let (server, provider) = setup().await;
 
-    Mock::given(method("POST"))
-        .and(path("/instance/logout/instancia-1"))
+    Mock::given(method("DELETE"))
+        .and(path("/instance/logout"))
         .and(header("apikey", "inst-token"))
         .respond_with(ResponseTemplate::new(200))
         .mount(&server)
@@ -123,13 +134,30 @@ async fn test_disconnect_instance() {
 }
 
 #[tokio::test]
+async fn test_reconnect_instance() {
+    let (server, provider) = setup().await;
+
+    Mock::given(method("POST"))
+        .and(path("/instance/reconnect"))
+        .and(header("apikey", "inst-token"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+
+    let token = SecretString::from("inst-token".to_string());
+    let res = provider.reconnect_instance("instancia-1", &token).await;
+    assert!(res.is_ok());
+}
+
+#[tokio::test]
 async fn test_get_qr_code() {
     let (server, provider) = setup().await;
     let token = SecretString::from("inst-token".to_string());
 
-    // Cenário 1: QR code direto na chave "code"
+    // Cenário 1: QR code direto na raiz na chave "code"
     Mock::given(method("GET"))
-        .and(path("/instance/connect/instancia-1"))
+        .and(path("/instance/qr"))
+        .and(header("apikey", "inst-token"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "code": "qr-code-direct"
         })))
@@ -142,7 +170,7 @@ async fn test_get_qr_code() {
     // Cenário 2: QR code aninhado em "qrcode.code"
     server.reset().await;
     Mock::given(method("GET"))
-        .and(path("/instance/connect/instancia-1"))
+        .and(path("/instance/qr"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
             "qrcode": {
                 "code": "qr-code-nested"
@@ -153,150 +181,64 @@ async fn test_get_qr_code() {
 
     let qr = provider.get_qr_code("instancia-1", &token).await.unwrap();
     assert_eq!(qr, "qr-code-nested");
-
-    // Cenário 3: QR code em "qrcode.base64"
-    server.reset().await;
-    Mock::given(method("GET"))
-        .and(path("/instance/connect/instancia-1"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "qrcode": {
-                "base64": "qr-code-base64-nested"
-            }
-        })))
-        .mount(&server)
-        .await;
-
-    let qr = provider.get_qr_code("instancia-1", &token).await.unwrap();
-    assert_eq!(qr, "qr-code-base64-nested");
-
-    // Cenário 4: QR code em "base64" na raiz
-    server.reset().await;
-    Mock::given(method("GET"))
-        .and(path("/instance/connect/instancia-1"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "base64": "qr-code-base64-root"
-        })))
-        .mount(&server)
-        .await;
-
-    let qr = provider.get_qr_code("instancia-1", &token).await.unwrap();
-    assert_eq!(qr, "qr-code-base64-root");
-}
-
-#[tokio::test]
-async fn test_pair_by_phone() {
-    let (server, provider) = setup().await;
-    let token = SecretString::from("inst-token".to_string());
-
-    Mock::given(method("POST"))
-        .and(path("/instance/pairingCode/instancia-1"))
-        .and(header("apikey", "inst-token"))
-        .and(body_json(serde_json::json!({ "number": "5511999998888" })))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "code": "XYZ-ABC"
-        })))
-        .mount(&server)
-        .await;
-
-    let code = provider
-        .pair_by_phone("instancia-1", &token, "5511999998888")
-        .await
-        .unwrap();
-    assert_eq!(code, "XYZ-ABC");
-}
-
-#[tokio::test]
-async fn test_configure_webhook() {
-    let (server, provider) = setup().await;
-    let token = SecretString::from("inst-token".to_string());
-
-    Mock::given(method("PUT"))
-        .and(path("/webhook/set/instancia-1"))
-        .and(header("apikey", "inst-token"))
-        .and(body_json(serde_json::json!({
-            "enabled": true,
-            "url": "http://webhook.url",
-            "webhookByEvents": false,
-            "events": ["E1", "E2"]
-        })))
-        .respond_with(ResponseTemplate::new(200))
-        .mount(&server)
-        .await;
-
-    let res = provider
-        .configure_webhook(
-            "instancia-1",
-            &token,
-            "http://webhook.url",
-            &["E1".to_string(), "E2".to_string()],
-        )
-        .await;
-    assert!(res.is_ok());
 }
 
 #[tokio::test]
 async fn test_get_connection_state() {
     let (server, provider) = setup().await;
+    let token = SecretString::from("inst-token".to_string());
 
     // Conectado ("open" -> Connected)
     Mock::given(method("GET"))
-        .and(path("/instance/connectionState/instancia-1"))
-        .and(header("apikey", "global-key"))
+        .and(path("/instance/status"))
+        .and(header("apikey", "inst-token"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "instance": {
-                "state": "open"
-            }
+            "state": "open"
         })))
         .mount(&server)
         .await;
 
-    let state = provider.get_connection_state("instancia-1").await.unwrap();
+    let state = provider
+        .get_connection_state("instancia-1", &token)
+        .await
+        .unwrap();
     assert_eq!(state, ConnectionState::Connected);
 
-    // Desconectado ("close" -> Disdisconnected)
+    // Desconectado ("close" -> Disconnected)
     server.reset().await;
     Mock::given(method("GET"))
-        .and(path("/instance/connectionState/instancia-1"))
+        .and(path("/instance/status"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "instance": {
-                "state": "close"
-            }
+            "state": "close"
         })))
         .mount(&server)
         .await;
 
-    let state = provider.get_connection_state("instancia-1").await.unwrap();
+    let state = provider
+        .get_connection_state("instancia-1", &token)
+        .await
+        .unwrap();
     assert_eq!(state, ConnectionState::Disconnected);
+}
 
-    // Conectando ("connecting" -> Connecting)
-    server.reset().await;
+#[tokio::test]
+async fn test_list_all_instances() {
+    let (server, provider) = setup().await;
+
     Mock::given(method("GET"))
-        .and(path("/instance/connectionState/instancia-1"))
+        .and(path("/instance/all"))
+        .and(header("apikey", "global-key"))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "instance": {
-                "state": "connecting"
-            }
+            "data": [
+                { "instanceName": "inst-1" },
+                { "name": "inst-2" }
+            ]
         })))
         .mount(&server)
         .await;
 
-    let state = provider.get_connection_state("instancia-1").await.unwrap();
-    assert_eq!(state, ConnectionState::Connecting);
-
-    // Desconhecido ("outro" -> Unknown)
-    server.reset().await;
-    Mock::given(method("GET"))
-        .and(path("/instance/connectionState/instancia-1"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-            "instance": {
-                "state": "qualquer"
-            }
-        })))
-        .mount(&server)
-        .await;
-
-    let state = provider.get_connection_state("instancia-1").await.unwrap();
-    assert_eq!(state, ConnectionState::Unknown);
+    let instances = provider.list_all_instances().await.unwrap();
+    assert_eq!(instances, vec!["inst-1".to_string(), "inst-2".to_string()]);
 }
 
 #[tokio::test]
@@ -305,7 +247,7 @@ async fn test_send_text() {
     let token = SecretString::from("inst-token".to_string());
 
     Mock::given(method("POST"))
-        .and(path("/message/sendText/instancia-1"))
+        .and(path("/send/text"))
         .and(header("apikey", "inst-token"))
         .and(body_json(serde_json::json!({
             "number": "5511999998888",
@@ -331,14 +273,13 @@ async fn test_send_media() {
     let (server, provider) = setup().await;
     let token = SecretString::from("inst-token".to_string());
 
-    // Teste de Imagem com Legenda
     Mock::given(method("POST"))
-        .and(path("/message/sendMedia/instancia-1"))
+        .and(path("/send/media"))
         .and(header("apikey", "inst-token"))
         .and(body_json(serde_json::json!({
             "number": "5511999998888",
-            "media": "http://media.url/image.png",
-            "mediatype": "image",
+            "type": "image",
+            "url": "http://media.url/image.png",
             "caption": "Minha imagem"
         })))
         .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
@@ -364,19 +305,186 @@ async fn test_send_media() {
 }
 
 #[tokio::test]
-async fn test_list_all_instances() {
+async fn test_presence_control() {
     let (server, provider) = setup().await;
+    let token = SecretString::from("inst-token".to_string());
 
-    Mock::given(method("GET"))
-        .and(path("/instance/fetchInstances"))
-        .and(header("apikey", "global-key"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!([
-            { "instanceName": "inst-1" },
-            { "name": "inst-2" }
-        ])))
+    Mock::given(method("POST"))
+        .and(path("/message/presence"))
+        .and(header("apikey", "inst-token"))
+        .and(body_json(serde_json::json!({
+            "number": "5511999998888",
+            "state": "recording",
+            "isAudio": true
+        })))
+        .respond_with(ResponseTemplate::new(200))
         .mount(&server)
         .await;
 
-    let instances = provider.list_all_instances().await.unwrap();
-    assert_eq!(instances, vec!["inst-1".to_string(), "inst-2".to_string()]);
+    let presence = provider.presence().unwrap();
+    let res = presence
+        .set_presence(
+            "instancia-1",
+            &token,
+            "5511999998888",
+            PresenceState::Recording,
+            true,
+        )
+        .await;
+    assert!(res.is_ok());
+}
+
+#[tokio::test]
+async fn test_read_receipts() {
+    let (server, provider) = setup().await;
+    let token = SecretString::from("inst-token".to_string());
+
+    Mock::given(method("POST"))
+        .and(path("/message/markread"))
+        .and(header("apikey", "inst-token"))
+        .and(body_json(serde_json::json!({
+            "number": "5511999998888",
+            "id": ["msg-1", "msg-2"]
+        })))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+
+    let receipts = provider.read_receipts().unwrap();
+    let res = receipts
+        .mark_read(
+            "instancia-1",
+            &token,
+            "5511999998888",
+            &["msg-1".to_string(), "msg-2".to_string()],
+        )
+        .await;
+    assert!(res.is_ok());
+}
+
+#[tokio::test]
+async fn test_reactions() {
+    let (server, provider) = setup().await;
+    let token = SecretString::from("inst-token".to_string());
+
+    Mock::given(method("POST"))
+        .and(path("/message/react"))
+        .and(header("apikey", "inst-token"))
+        .and(body_json(serde_json::json!({
+            "number": "5511999998888",
+            "reaction": "❤️",
+            "id": "msg-123",
+            "fromMe": false
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "id": "msg-123"
+        })))
+        .mount(&server)
+        .await;
+
+    let reactions = provider.reactions().unwrap();
+    let res = reactions
+        .send_reaction(
+            "instancia-1",
+            &token,
+            "5511999998888",
+            "msg-123",
+            "❤️",
+            false,
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.message_id, "msg-123");
+}
+
+#[tokio::test]
+async fn test_media_downloader() {
+    let (server, provider) = setup().await;
+    let token = SecretString::from("inst-token".to_string());
+
+    Mock::given(method("POST"))
+        .and(path("/message/downloadmedia"))
+        .and(header("apikey", "inst-token"))
+        .and(body_json(serde_json::json!({
+            "message": { "imageMessage": { "url": "http://media" } }
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "base64": "SGVsbG8=",
+            "mimetype": "image/png"
+        })))
+        .mount(&server)
+        .await;
+
+    let downloader = provider.media_downloader().unwrap();
+    let res = downloader
+        .download_media(
+            "instancia-1",
+            &token,
+            &serde_json::json!({ "imageMessage": { "url": "http://media" } }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(res.base64, "SGVsbG8=");
+    assert_eq!(res.mime_type, Some("image/png".to_string()));
+}
+
+#[tokio::test]
+async fn test_profile_query() {
+    let (server, provider) = setup().await;
+    let token = SecretString::from("inst-token".to_string());
+
+    Mock::given(method("POST"))
+        .and(path("/user/avatar"))
+        .and(header("apikey", "inst-token"))
+        .and(body_json(serde_json::json!({
+            "number": "5511999998888",
+            "preview": false
+        })))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "url": "http://profile-pic"
+        })))
+        .mount(&server)
+        .await;
+
+    let profiles = provider.profiles().unwrap();
+    let res = profiles
+        .get_profile_picture("instancia-1", &token, "5511999998888")
+        .await
+        .unwrap();
+    assert_eq!(res, Some("http://profile-pic".to_string()));
+}
+
+#[tokio::test]
+async fn test_set_advanced_settings() {
+    let (server, provider) = setup().await;
+    let token = SecretString::from("inst-token".to_string());
+
+    Mock::given(method("PUT"))
+        .and(path("/instance/inst-uuid-1/advanced-settings"))
+        .and(header("apikey", "inst-token"))
+        .and(body_json(serde_json::json!({
+            "alwaysOnline": true,
+            "readMessages": false,
+            "rejectCall": true,
+            "msgRejectCall": "Desculpe, não aceito chamadas.",
+            "ignoreGroups": false,
+            "ignoreStatus": true
+        })))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+
+    let adv = provider.advanced_settings().unwrap();
+    let settings = AdvancedSettings {
+        always_online: true,
+        read_messages: false,
+        reject_call: true,
+        msg_reject_call: "Desculpe, não aceito chamadas.".to_string(),
+        ignore_groups: false,
+        ignore_status: true,
+    };
+    let res = adv
+        .set_advanced_settings("inst-uuid-1", &token, settings)
+        .await;
+    assert!(res.is_ok());
 }

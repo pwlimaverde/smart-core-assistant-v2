@@ -12,6 +12,18 @@
       "approved_at": "2026-06-21T19:34:37.750Z",
       "approved_by": "architect",
       "completed_at": "2026-06-22T00:00:00.000Z"
+    },
+    {
+      "slug": "camada-mensageria-whatsapp-evolution-go",
+      "path": "plans/archive/camada-mensageria-whatsapp-evolution-go/camada-mensageria-whatsapp-evolution-go.md",
+      "title": "Módulo Rust de Mensageria WhatsApp (Evolution Go)",
+      "summary": "Realinhar a camada Rust de mensageria do contrato Evolution API v2 (Baileys) para o Evolution Go (whatsmeow), com SOLID (ISP/DIP/OCP/LSP).",
+      "linkedAt": "2026-06-25T18:03:02.782Z",
+      "status": "completed",
+      "approval_status": "approved",
+      "approved_at": "2026-06-25T00:00:00.000Z",
+      "approved_by": "code-reviewer",
+      "completed_at": "2026-06-25T00:00:00.000Z"
     }
   ],
   "primary": null

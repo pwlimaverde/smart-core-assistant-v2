@@ -35,27 +35,64 @@ impl EvolutionProvider {
     }
 }
 
-#[derive(Deserialize)]
-pub(crate) struct CreateInstanceResp {
-    pub(crate) instance: CreateInstanceInner,
-    pub(crate) hash: Option<String>,
-}
-
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 pub(crate) struct CreateInstanceInner {
     #[serde(rename = "instanceName")]
     pub(crate) instance_name: String,
-    pub(crate) hash: Option<String>,
+    #[serde(rename = "instanceId")]
+    pub(crate) instance_id: Option<String>,
+    pub(crate) id: Option<String>,
+    pub(crate) token: Option<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
+pub(crate) struct CreateInstanceResp {
+    pub(crate) instance: CreateInstanceInner,
+    pub(crate) token: Option<String>,
+    pub(crate) hash: Option<serde_json::Value>, // pode ser string ou objeto {"apikey": "..."}
+}
+
+#[derive(Deserialize, Debug)]
 pub(crate) struct ConnStateResp {
-    pub(crate) instance: ConnStateInner,
+    pub(crate) state: String,
 }
 
-#[derive(Deserialize)]
-pub(crate) struct ConnStateInner {
-    pub(crate) state: String,
+#[derive(Deserialize, Debug)]
+pub(crate) struct QrCodeInner {
+    pub(crate) code: Option<String>,
+    pub(crate) base64: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub(crate) struct QrCodeResp {
+    pub(crate) code: Option<String>,
+    pub(crate) base64: Option<String>,
+    pub(crate) qrcode: Option<QrCodeInner>,
+}
+
+#[derive(Deserialize, Debug)]
+pub(crate) struct MessageKey {
+    pub(crate) id: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub(crate) struct SendMessageResp {
+    pub(crate) key: Option<MessageKey>,
+    pub(crate) id: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub(crate) struct DownloadMediaResp {
+    pub(crate) base64: String,
+    pub(crate) mimetype: Option<String>,
+}
+
+#[derive(Deserialize, Debug)]
+pub(crate) struct AvatarResp {
+    #[serde(rename = "profilePictureUrl")]
+    pub(crate) profile_picture_url: Option<String>,
+    pub(crate) url: Option<String>,
 }
 
 #[cfg(test)]

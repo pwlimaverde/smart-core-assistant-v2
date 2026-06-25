@@ -7,12 +7,26 @@ use axum::{
     Router,
 };
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::env;
+use std::sync::Arc;
 use transport::bus;
+
+pub trait WebhookNormalizer: Send + Sync {
+    fn provider_name(&self) -> &'static str;
+    fn normalize(
+        &self,
+        event: &str,
+        raw: &serde_json::Value,
+        tenant_id: uuid::Uuid,
+        instance_id: i32,
+    ) -> Option<(&'static str, contracts::TenantEnvelope<serde_json::Value>)>;
+}
 
 #[derive(Clone)]
 struct AppState {
     redis: redis::aio::ConnectionManager,
+    normalizers: HashMap<&'static str, Arc<dyn WebhookNormalizer>>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -32,7 +46,12 @@ async fn main() -> anyhow::Result<()> {
 
     let client = redis::Client::open(redis_url)?;
     let redis = redis::aio::ConnectionManager::new(client).await?;
-    let state = AppState { redis };
+
+    let mut normalizers: HashMap<&'static str, Arc<dyn WebhookNormalizer>> = HashMap::new();
+    let evo_norm = Arc::new(EvolutionNormalizer);
+    normalizers.insert(evo_norm.provider_name(), evo_norm);
+
+    let state = AppState { redis, normalizers };
 
     let app = Router::new()
         // axum 0.8 sintaxe: chaves {param}
@@ -70,12 +89,11 @@ async fn handle_webhook(
     let event_type = raw.get("event").and_then(|e| e.as_str()).unwrap_or("");
     tracing::Span::current().record("event_type", event_type);
 
-    let normalizado = match params.provider.as_str() {
-        "evolution" => normalize_evolution(event_type, &raw, params.tenant_id, params.instance_id),
-        outro => {
-            tracing::warn!(provider = outro, "Provedor desconhecido no path do webhook");
-            None
-        }
+    let normalizado = if let Some(normalizer) = state.normalizers.get(params.provider.as_str()) {
+        normalizer.normalize(event_type, &raw, params.tenant_id, params.instance_id)
+    } else {
+        tracing::warn!(provider = %params.provider, "Provedor desconhecido no path do webhook");
+        None
     };
 
     if let Some((topic, envelope)) = normalizado {
@@ -96,27 +114,189 @@ async fn handle_webhook(
     Ok(StatusCode::ACCEPTED)
 }
 
-fn normalize_evolution(
-    event: &str,
-    raw: &serde_json::Value,
-    tenant_id: uuid::Uuid,
-    instance_id: i32,
-) -> Option<(&'static str, contracts::TenantEnvelope<serde_json::Value>)> {
-    let (topic, payload) = match event {
-        "messages.upsert" => (
-            "whatsapp.message.received",
-            build_message_payload(raw, instance_id),
-        ),
-        "connection.update" => (
-            "whatsapp.connection.updated",
-            build_connection_payload(raw, instance_id),
-        ),
-        _ => return None,
+fn canonical_event(raw: &str) -> Option<&'static str> {
+    match raw {
+        "MESSAGE" | "messages.upsert" | "Message" | "MESSAGES_UPSERT" | "MESSAGE_UPSERT" => {
+            Some("MESSAGE")
+        }
+        "CONNECTION" | "connection.update" | "Connection" | "CONNECTION_UPDATE" | "CONNECTED"
+        | "DISCONNECTED" | "LOGGEDOUT" | "LOGGED_OUT" | "LOGOUT" => Some("CONNECTION"),
+        "MESSAGE_UPDATE" | "messages.update" | "MESSAGE_UPDATE_RAW" => Some("MESSAGE_UPDATE"),
+        "PRESENCE" | "presence.update" | "Presence" | "PRESENCE_UPDATE" => Some("PRESENCE"),
+        "CONTACTS" | "contacts.update" | "Contacts" | "CONTACTS_UPDATE" => Some("CONTACTS"),
+        "QRCODE" | "qrcode.updated" | "QRCode" | "QRCODE_UPDATED" => Some("QRCODE"),
+        _ => {
+            let normalized = raw.to_uppercase().replace('.', "_");
+            let normalized_singular = if normalized.ends_with('S') {
+                normalized[..normalized.len() - 1].to_string()
+            } else {
+                normalized.clone()
+            };
+
+            match normalized.as_str() {
+                "MESSAGE" | "MESSAGES_UPSERT" | "MESSAGE_UPSERT" => Some("MESSAGE"),
+                "CONNECTION" | "CONNECTION_UPDATE" | "CONNECTED" | "DISCONNECTED" | "LOGGEDOUT"
+                | "LOGGED_OUT" | "LOGOUT" => Some("CONNECTION"),
+                "MESSAGE_UPDATE" | "MESSAGES_UPDATE" => Some("MESSAGE_UPDATE"),
+                "PRESENCE" | "PRESENCE_UPDATE" => Some("PRESENCE"),
+                "CONTACTS" | "CONTACTS_UPDATE" => Some("CONTACTS"),
+                "QRCODE" | "QRCODE_UPDATED" => Some("QRCODE"),
+                _ => match normalized_singular.as_str() {
+                    "MESSAGE" => Some("MESSAGE"),
+                    "CONNECTION" => Some("CONNECTION"),
+                    "MESSAGE_UPDATE" => Some("MESSAGE_UPDATE"),
+                    "PRESENCE" => Some("PRESENCE"),
+                    "CONTACTS" => Some("CONTACTS"),
+                    "QRCODE" => Some("QRCODE"),
+                    _ => None,
+                },
+            }
+        }
+    }
+}
+
+fn translate_go_payload(payload: &serde_json::Value) -> serde_json::Value {
+    let Some(data) = payload.get("data").and_then(|d| d.as_object()) else {
+        return payload.clone();
     };
-    Some((
-        topic,
-        contracts::TenantEnvelope::novo(tenant_id, topic.to_string(), payload),
-    ))
+    let Some(info) = data.get("Info").and_then(|i| i.as_object()) else {
+        return payload.clone();
+    };
+
+    let chat = info.get("Chat").and_then(|c| c.as_str()).unwrap_or("");
+    let sender = info.get("Sender").and_then(|s| s.as_str()).unwrap_or("");
+    let alt = info
+        .get("SenderAlt")
+        .or_else(|| info.get("RecipientAlt"))
+        .and_then(|a| a.as_str())
+        .unwrap_or("");
+
+    let ts_raw = info.get("Timestamp");
+    let ts_val = if let Some(ts_str) = ts_raw.and_then(|t| t.as_str()) {
+        if let Ok(dt) = chrono::DateTime::parse_from_rfc3339(ts_str) {
+            serde_json::json!(dt.timestamp())
+        } else {
+            ts_raw.cloned().unwrap_or(serde_json::Value::Null)
+        }
+    } else {
+        ts_raw.cloned().unwrap_or(serde_json::Value::Null)
+    };
+
+    let go_message = data.get("Message").unwrap_or(&serde_json::Value::Null);
+    let media_type = info.get("MediaType").and_then(|m| m.as_str()).unwrap_or("");
+
+    let mut message_out = go_message.clone();
+    let mut message_type_out = serde_json::Value::Null;
+
+    if !media_type.is_empty() {
+        let sub_key = format!("{}Message", media_type);
+        if let Some(sub_val) = go_message.get(&sub_key).and_then(|s| s.as_object()) {
+            let mut sub = sub_val.clone();
+
+            if let Some(url_val) = sub.get("URL") {
+                if !sub.contains_key("url") {
+                    sub.insert("url".to_string(), url_val.clone());
+                }
+            }
+            if let Some(sha_val) = sub.get("fileSHA256") {
+                if !sub.contains_key("fileSha256") {
+                    sub.insert("fileSha256".to_string(), sha_val.clone());
+                }
+            }
+            if let Some(enc_sha_val) = sub.get("fileEncSHA256") {
+                if !sub.contains_key("fileEncSha256") {
+                    sub.insert("fileEncSha256".to_string(), enc_sha_val.clone());
+                }
+            }
+
+            if let Some(top_b64) = go_message.get("base64") {
+                if !sub.contains_key("base64") {
+                    sub.insert("base64".to_string(), top_b64.clone());
+                }
+            }
+
+            message_out = serde_json::json!({
+                &sub_key: sub
+            });
+            message_type_out = serde_json::json!(sub_key);
+        }
+    }
+
+    serde_json::json!({
+        "event": payload.get("event"),
+        "instance": payload.get("instanceName").or_else(|| payload.get("instance")),
+        "sender": if !sender.is_empty() { sender } else { chat },
+        "apikey": payload.get("instanceToken").or_else(|| payload.get("apikey")),
+        "data": {
+            "key": {
+                "remoteJid": chat,
+                "remoteJidAlt": alt,
+                "fromMe": info.get("IsFromMe").and_then(|f| f.as_bool()).unwrap_or(false),
+                "id": info.get("ID"),
+                "addressingMode": info.get("AddressingMode"),
+            },
+            "pushName": info.get("PushName"),
+            "message": message_out,
+            "messageType": message_type_out,
+            "messageTimestamp": ts_val,
+            "instanceId": payload.get("instanceId"),
+            "isGroup": info.get("IsGroup").and_then(|g| g.as_bool()).unwrap_or(false),
+            "mediaType": media_type,
+        }
+    })
+}
+
+struct EvolutionNormalizer;
+
+impl WebhookNormalizer for EvolutionNormalizer {
+    fn provider_name(&self) -> &'static str {
+        "evolution"
+    }
+
+    fn normalize(
+        &self,
+        event: &str,
+        raw: &serde_json::Value,
+        tenant_id: uuid::Uuid,
+        instance_id: i32,
+    ) -> Option<(&'static str, contracts::TenantEnvelope<serde_json::Value>)> {
+        let canonical = canonical_event(event)?;
+
+        let translated = if raw.get("data").and_then(|d| d.get("Info")).is_some() {
+            translate_go_payload(raw)
+        } else {
+            raw.clone()
+        };
+
+        let (topic, payload) = match canonical {
+            "MESSAGE" => (
+                "whatsapp.message.received",
+                build_message_payload(&translated, instance_id),
+            ),
+            "CONNECTION" => (
+                "whatsapp.connection.updated",
+                build_connection_payload(&translated, instance_id),
+            ),
+            "MESSAGE_UPDATE" => (
+                "whatsapp.message.status",
+                build_message_payload(&translated, instance_id),
+            ),
+            "PRESENCE" => (
+                "whatsapp.presence.updated",
+                build_message_payload(&translated, instance_id),
+            ),
+            "CONTACTS" => (
+                "whatsapp.contact.updated",
+                build_message_payload(&translated, instance_id),
+            ),
+            _ => return None,
+        };
+
+        Some((
+            topic,
+            contracts::TenantEnvelope::novo(tenant_id, topic.to_string(), payload),
+        ))
+    }
 }
 
 fn build_message_payload(raw: &serde_json::Value, instance_id: i32) -> serde_json::Value {
@@ -136,7 +316,7 @@ fn build_connection_payload(raw: &serde_json::Value, instance_id: i32) -> serde_
 
     let normalized_state = match state {
         "open" | "connected" => "connected",
-        "close" | "disconnected" => "disconnected",
+        "close" | "disconnected" | "loggedOut" => "disconnected",
         "connecting" => "connecting",
         _ => "unknown",
     };
@@ -193,8 +373,12 @@ mod tests {
     }
 
     async fn setup_test_app() -> Router {
-        let redis = fake_bus(29256).await;
-        let state = AppState { redis };
+        let redis = fake_bus(29257).await;
+        let mut normalizers: HashMap<&'static str, Arc<dyn WebhookNormalizer>> = HashMap::new();
+        let evo_norm = Arc::new(EvolutionNormalizer);
+        normalizers.insert(evo_norm.provider_name(), evo_norm);
+
+        let state = AppState { redis, normalizers };
 
         Router::new()
             .route(
@@ -253,6 +437,48 @@ mod tests {
             "data": {
                 "message": {
                     "conversation": "Olá mundo"
+                }
+            }
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/webhook/evolution/00000000-0000-0000-0000-000000000001/42")
+                    .header("content-type", "application/json")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+    }
+
+    #[tokio::test]
+    async fn test_webhook_evolution_go_message_received() {
+        let app = setup_test_app().await;
+
+        let payload = json!({
+            "event": "Message",
+            "instanceName": "atendimento",
+            "instanceToken": "token-123",
+            "instanceId": "00000000-0000-0000-0000-000000000001",
+            "data": {
+                "Info": {
+                    "Chat": "5511999998888@s.whatsapp.net",
+                    "Sender": "5511999998888@s.whatsapp.net",
+                    "ID": "3EB0123456789",
+                    "IsFromMe": false,
+                    "IsGroup": false,
+                    "PushName": "João",
+                    "Timestamp": "2026-06-25T19:13:57-03:00",
+                    "Type": "text",
+                    "MediaType": ""
+                },
+                "Message": {
+                    "conversation": "Olá de volta"
                 }
             }
         });
