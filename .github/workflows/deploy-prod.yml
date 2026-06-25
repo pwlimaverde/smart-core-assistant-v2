@@ -99,6 +99,17 @@ jobs:
     runs-on: [self-hosted, hostinger]
     environment: production
     steps:
+      # O runner self-hosted reutiliza a workspace entre execuções (a mesma do deploy
+      # dev, por ser o mesmo repo). Containers que rodaram como root podem deixar
+      # arquivos root em .git/objects, fazendo o checkout falhar com "insufficient
+      # permission ... .git/objects" (git exit 128). O gh-runner não tem sudo chown
+      # (sudoers só libera `docker compose`), mas tem acesso ao Docker — então um
+      # container descartável devolve a posse ao usuário do runner ANTES do checkout.
+      - name: Sanitiza posse da workspace (runner self-hosted)
+        run: |
+          docker run --rm -v "${{ github.workspace }}":/ws busybox \
+            chown -R "$(id -u):$(id -g)" /ws
+
       - uses: actions/checkout@v5
 
       - name: Backup banco de dados PROD (pg_dump)

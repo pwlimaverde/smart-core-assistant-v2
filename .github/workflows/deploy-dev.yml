@@ -159,6 +159,18 @@ jobs:
     runs-on: [self-hosted, hostinger]
     environment: dev
     steps:
+      # O runner self-hosted reutiliza a workspace entre execuções. Containers que
+      # rodaram como root em ciclos anteriores podem deixar arquivos pertencentes a
+      # root em .git/objects, e aí o checkout falha com "insufficient permission for
+      # adding an object to repository database .git/objects" (git exit 128). O
+      # gh-runner não tem sudo chown (sudoers só libera `docker compose`), mas tem
+      # acesso ao Docker — então usamos um container descartável para devolver a
+      # posse ao usuário do runner ANTES do checkout. Idempotente e defensivo.
+      - name: Sanitiza posse da workspace (runner self-hosted)
+        run: |
+          docker run --rm -v "${{ github.workspace }}":/ws busybox \
+            chown -R "$(id -u):$(id -g)" /ws
+
       - uses: actions/checkout@v5
 
       - name: Docker login to GHCR
