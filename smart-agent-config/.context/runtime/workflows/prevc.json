@@ -1,0 +1,84 @@
+{
+  "version": 2,
+  "workflowType": "prevc",
+  "updatedAt": "2026-06-25T18:02:56.180Z",
+  "status": {
+    "project": {
+      "name": "camada-mensageria-whatsapp-evolution-go",
+      "scale": 3,
+      "started": "2026-06-25T18:02:56.166Z",
+      "current_phase": "P",
+      "settings": {
+        "autonomous_mode": false,
+        "require_plan": true,
+        "require_approval": true
+      }
+    },
+    "phases": {
+      "P": {
+        "status": "in_progress",
+        "started_at": "2026-06-25T18:02:56.166Z"
+      },
+      "R": {
+        "status": "pending"
+      },
+      "E": {
+        "status": "pending"
+      },
+      "V": {
+        "status": "pending"
+      },
+      "C": {
+        "status": "pending"
+      }
+    },
+    "agents": {},
+    "roles": {
+      "planner": {
+        "status": "pending"
+      },
+      "designer": {
+        "status": "pending"
+      },
+      "architect": {
+        "status": "pending"
+      },
+      "developer": {
+        "status": "pending"
+      },
+      "qa": {
+        "status": "pending"
+      },
+      "reviewer": {
+        "status": "pending"
+      },
+      "documenter": {
+        "status": "pending"
+      },
+      "solo-dev": {
+        "status": "pending"
+      }
+    },
+    "approval": {
+      "plan_created": false,
+      "plan_approved": false
+    },
+    "execution": {
+      "history": [
+        {
+          "phase": "P",
+          "action": "started",
+          "timestamp": "2026-06-25T18:02:56.166Z"
+        }
+      ],
+      "last_activity": "2026-06-25T18:02:56.166Z",
+      "resume_context": "Fase P (Planejamento) em progresso"
+    }
+  },
+  "binding": {
+    "workflowName": "camada-mensageria-whatsapp-evolution-go",
+    "sessionId": "f383153c-85ac-48ab-b469-2c0fe2894dfd",
+    "createdAt": "2026-06-25T18:02:56.177Z",
+    "updatedAt": "2026-06-25T18:02:56.172Z"
+  }
+}

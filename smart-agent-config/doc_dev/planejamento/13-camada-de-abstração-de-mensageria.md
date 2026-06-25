@@ -1,537 +1,405 @@
-# Plano de Implementação: Camada de Abstração de Mensageria (WhatsApp) e Integração com Evolution API
+# Plano Consolidado: Módulo Rust de Mensageria WhatsApp (Evolution Go)
 
-Este plano detalha o design arquitetural para introduzir uma **camada de abstração completa de mensageria** no Smart Core Assistant v2. A arquitetura foi desenhada para permitir que qualquer provedor de WhatsApp (como Evolution API, Z-API, Baileys, etc.) seja plugado ou trocado facilmente, de forma totalmente transparente para as regras de negócio dos inquilinos (tenants).
-
-A stack do Evolution API será isolada em um ambiente Docker separado (estilo stack de observabilidade), contendo seu próprio PostgreSQL dedicado de forma autocontida.
+> Documento único consolidado. **Substituiu** os dois planos-base v2 que existiam antes
+> (`-2.md` e a versão original deste arquivo), que assumiam
+> *greenfield* + **Evolution API v2 (Baileys)**. A realidade é outra: o scaffolding já existe
+> no repositório **e** o servidor que está rodando é o **Evolution Go (whatsmeow)**, cujo
+> contrato REST e cujos eventos divergem do v2. Este documento é a **única fonte de verdade
+> técnica** e realinha a camada Rust ao Evolution Go, com a **superfície completa** de recursos
+> (envio, gestão, presença, reações, recibo de leitura, download de mídia, advanced-settings).
+>
+> Estilo de referência: o `evolution_sync` do `old/` (adapter `evolution_go_adapter.py`).
+> Organização em fases **PREVC** (Planning, Review, Execution, Validation, Confirmation).
 
 ---
 
-## Contexto e Premissas
+## Objetivo
 
-### Abstração e Desacoplamento
-Para que o sistema seja agnóstico a fornecedores:
-1. **Contratos em Rust (Traits)**: Definiremos os comportamentos de mensageria e gerenciamento de instâncias em uma interface genérica (`MessagingProvider`).
-2. **Normalização de Dados**: Todas as informações específicas de provedores (respostas de criação, estados de conexão, mídias e webhooks) serão traduzidas para estruturas de dados neutras da nossa aplicação.
-3. **Normalização no Ingress**: O micro-serviço `webhook_ingress` receberá webhooks proprietários de cada provedor, convertendo-os em eventos universais antes de publicá-los no barramento Redis Streams (ex: `whatsapp.message.received`, `whatsapp.connection.updated`). O restante do sistema (worker, CRM) só consumirá eventos normalizados.
-4. **Banco de Dados Limpo (WhatsApp Sync)**: Como o sistema está no início da implementação, reescreveremos o schema de banco de dados original. O arquivo de migração original de sincronização será redefinido diretamente para criar tabelas genéricas (`whatsapp_instance`, `whatsapp_contact` e `whatsapp_whitelist`) contendo a coluna `provider` (sem valor padrão físico que acople ao Evolution API).
+Estruturar o **módulo Rust único responsável por toda a comunicação com o Evolution Go**:
+criação/gestão de instâncias, conexão/QR, envio de mensagens e mídia, recursos de sessão
+(presença, leitura, reações) e ingestão normalizada de webhooks. As regras de negócio dos
+tenants nunca falam com o Evolution diretamente — só com este módulo, através de contratos
+em Rust (`MessagingProvider`) e eventos universais no barramento Redis Streams.
+
+### Premissas
+1. **Provedor único hoje = Evolution Go.** A abstração `MessagingProvider` permanece, mas a
+   implementação concreta (`EvolutionProvider`) passa a falar o contrato **Go**, não o v2.
+2. **Normalização no ingress.** O `webhook_ingress` recebe webhooks proprietários do Go
+   (eventos UPPERCASE/PascalCase) e publica eventos universais (`whatsapp.message.received`,
+   `whatsapp.connection.updated`, …) no barramento. O resto do sistema só consome eventos
+   normalizados.
+3. **Banco genérico, multi-provedor.** Tabelas `whatsapp_*` com coluna `provider` sem default
+   acoplado. **Já implementado** (ver Reconciliação).
+4. **Segredos sempre `SecretString`.** `global_api_key` e `instance_token` jamais em logs ou
+   respostas; `api_key` encriptado em repouso.
+
+---
+
+## ⚠️ Reconciliação com o repositório real (pré-condição da execução)
+
+O ponto central da consolidação: **boa parte do plano-base v2 já foi implementada**, e a
+divergência relevante restante é **v2 → Go**, não "criar do zero".
+
+### Já implementado e correto (não mexer, apenas validar)
+| Componente | Caminho | Situação |
+| --- | --- | --- |
+| Migração genérica | `server/crates/infrastructure_postgres/migrations/0008_whatsapp_sync.sql` | ✅ `whatsapp_instance/contact/whitelist`, RLS+FORCE, `provider` sem default. Já sem `UNIQUE(name)` global. |
+| Repositório WhatsApp | `infrastructure_postgres/src/integracoes/whatsapp.rs` + `whitelist.rs` | ✅ Neutro de provedor; serve ao Go sem alteração. |
+| Port/Adapter no data_postgres | `data_postgres/src/ports/whatsapp.rs`, `src/adapters/whatsapp.rs` | ✅ `WhatsappStore` (criar/buscar/listar/admin/estado/provider_id), RLS + admin BYPASSRLS. |
+| Crate de contrato | `server/crates/infrastructure_messaging` | ⚠️ Existe; **trait precisa ampliar** (ver E1). |
+| Crate Evolution | `server/crates/infrastructure_evolution` | ⚠️ Existe; **fala v2, precisa realinhar ao Go** (ver E2). |
+| App orquestrador | `server/apps/data_whatsapp` | ⚠️ Existe; RPCs implementados em cima da trait v2 — **realinhar + ampliar** (ver E3). |
+| App ingress | `server/apps/webhook_ingress` | ⚠️ Existe; **só trata eventos v2 lowercase** — realinhar para eventos Go (ver E4). |
+
+### Divergência central: contrato v2 (no código) × Evolution Go (rodando)
+| Operação | Código Rust atual (v2) | Evolution Go (alvo real) | Auth |
+| --- | --- | --- | --- |
+| Criar instância | `POST /instance/create` (`integration:WHATSAPP-BAILEYS`, `qrcode:true`) → lê `hash` | `POST /instance/create` body `{name, token?}` → lê `token` | global key |
+| Conectar + webhook | `GET /instance/connect/{name}` **e** `PUT /webhook/set/{name}` (2 chamadas) | `POST /instance/connect` body `{instanceName, webhookUrl, subscribe[], immediate:true}` (**1 chamada**, webhook embutido) | **token da instância** |
+| QR Code | `GET /instance/connect/{name}` | `GET /instance/qr` | token da instância |
+| Estado | `GET /instance/connectionState/{name}` → `instance.state` | `GET /instance/status` → `{state}` (v2 retorna **503** no Go) | token da instância |
+| Listar | `GET /instance/fetchInstances` | `GET /instance/all` → `{data:[...]}` | global key |
+| Logout/desconectar | `POST /instance/logout/{name}` | `DELETE /instance/logout` (**sem nome no path**) | token da instância |
+| Deletar | `DELETE /instance/delete/{name}` | `DELETE /instance/delete/{name}` (igual) | global key |
+| Reconectar | (n/d) | `POST /instance/reconnect` | token da instância |
+| Enviar texto | `POST /message/sendText/{name}` (`{number,text}`) | `POST /send/text` (`{number,text,quoted?}`) | token da instância |
+| Enviar mídia | `POST /message/sendMedia/{name}` (`media`/`mediatype`) | `POST /send/media` (`type`/`url`/`caption`/`filename`) | token da instância |
+| Advanced settings | (n/d) | `PUT /instance/{id}/advanced-settings` (`alwaysOnline`, `readMessages`, …) | token da instância |
+| Eventos do webhook | `messages.upsert` / `connection.update` (lowercase) | `Message` / `Connection` / `Presence` / `QRCode` / `Contacts` (UPPERCASE/PascalCase + aliases) | — |
+
+### Recursos extras do Go (superfície completa — escopo aprovado)
+`POST /send/media` com `type:audio` (PTT) · `POST /message/react` · `POST /message/markread` ·
+`POST /message/presence` (`composing`/`recording`, `isAudio`) · `POST /user/avatar` (foto de
+perfil) · `POST /message/downloadmedia` (descriptografia/fallback de mídia grande sem base64
+inline).
+
+> ⚠️ **Armadilhas conhecidas do Go (do `evolution_go_adapter.py`):**
+> 1. `POST /instance/connect` exige o **token da instância** no header `apikey`; a Global Key
+>    retorna **401 "not authorized"** aqui.
+> 2. O campo de eventos no connect é **`subscribe`** (array UPPERCASE: `MESSAGE`, `CONNECTION`,
+>    `PRESENCE`, `QRCODE`). Nome inválido **zera** a assinatura → para toda entrega de webhook.
+> 3. `readMessages` em advanced-settings deve ficar **`false`** — recibo de leitura é explícito
+>    (via `markread`), nunca automático.
+> 4. `alwaysOnline:true` é o mecanismo documentado para manter a sessão whatsmeow viva.
+
+Apps existentes (confirmados): `control_plane`, `data_postgres`, `data_redis`, `data_storage`,
+`data_whatsapp`, `webhook_ingress`, `messaging_gateway`, `runtime_api`, `worker`.
+Crates existentes (confirmados): `application`, `contracts`, `error_core`, `infrastructure_messaging`,
+`infrastructure_evolution`, `infrastructure_postgres`, `infrastructure_redis`, `infrastructure_storage`,
+`observability`, `test_support`, `transport`.
 
 ---
 
 ## Decisões de Design
 
-### D1. Estruturação das Crates de Abstração
-Criaremos duas crates para separar a interface dos provedores reais:
-- **`crates/infrastructure_messaging`**: Crate abstrata que define a trait `MessagingProvider`, os enums normalizados (ex: `ConnectionState`, `MediaType`) e as structs de payloads de entrada/saída comuns.
-- **`crates/infrastructure_evolution`**: Crate que depende da anterior e implementa a trait `MessagingProvider` fazendo chamadas HTTP REST para o servidor Evolution API.
+### D1. Duas crates de abstração (mantidas)
+- **`infrastructure_messaging`**: trait `MessagingProvider`, enums normalizados
+  (`ConnectionState`, `MediaType`, `PresenceState`), structs de payload e
+  `MessagingProviderError`. Pura: sem runtime, sem I/O, sem logs.
+- **`infrastructure_evolution`**: implementa `MessagingProvider` via HTTP REST (reqwest) contra
+  o **Evolution Go**.
 
-Se no futuro surgir outro provedor, basta implementar a trait em um novo crate `crates/infrastructure_outro` sem alterar o restante da aplicação.
+### D2. `EvolutionProvider` com base_url + duas credenciais
+A struct carrega `global_api_key` (criar/deletar/listar) e recebe `instance_token` por chamada
+(conectar/QR/status/enviar/sessão). Um helper interno `send_request(method, path, apikey, body)`
+espelha o `_send_request` do adapter Go, centralizando header `apikey`, `Content-Type` e o
+tratamento de erro (`ok_or_api`, body truncado a 200 chars).
 
-### D2. Roteamento Dinâmico em `apps/data_whatsapp`
-O app `apps/data_evolution` será renomeado para `apps/data_whatsapp`. Ele atuará como o orquestrador RPC genérico. Ao receber um comando RPC (ex: `CreateWhatsappInstance`, `SendWhatsappMessage`):
-1. Ele consultará o banco para obter os dados da instância (incluindo o campo `provider`).
-2. Em tempo de execução, delegará a operação para a struct correspondente que implementa `MessagingProvider` baseado no provedor configurado.
+### D3. Roteamento dinâmico em `data_whatsapp`
+Ao receber um RPC, o app: (1) resolve o `provider` da instância no banco (via `data_postgres`);
+(2) delega à struct que implementa `MessagingProvider` (hoje só `EvolutionProvider`). Como há um
+único provedor, a factory pode ser trivial agora, mas a fronteira fica pronta para um segundo.
 
-### D3. Webhooks com Detecção de Provedor via Path da URL
-Para evitar consultas de banco de dados na hot path do webhook, a URL configurada nos provedores terá o seguinte formato:
+### D4. Webhook com detecção de provedor via path (axum 0.8) + canonização de eventos
+URL configurada no `POST /instance/connect` do Go:
 ```
 http://webhook_ingress:9200/webhook/{provider}/{tenant_id}/{instance_id}
 ```
-Onde `{provider}` indica o parser que o `webhook_ingress` deve usar (ex: `evolution`). O `webhook_ingress` extrai o provedor e os IDs do path, parseia o JSON proprietário correspondente ao provedor e publica o evento normalizado no barramento contendo `{tenant_id}` e `{instance_id}`.
+O ingress extrai `provider`/`tenant_id`/`instance_id` do path, **canoniza o nome do evento**
+(UPPERCASE/PascalCase/aliases v2 → enum canônico, espelhando `EvolutionEventName.from_raw`),
+normaliza o payload e publica em `events:stream`. `webhookByEvents=false` conceitual: todos os
+eventos chegam na mesma URL; o ingress discrimina pelo campo `event`.
 
-### D4. Desconexão em Massa pelo Administrador
-O administrador do Smart Core precisa conseguir desconectar instâncias em lote. Criaremos a rota RPC `AdminBulkDisconnectInstances` em `data_whatsapp`, consumida por rotas do painel admin em `control_plane`.
-Essa rota funcionará da seguinte forma:
-- Aceita um parâmetro opcional `tenant_id: Option<Uuid>`.
-- Se `tenant_id` for fornecido: busca todas as instâncias ativas daquele tenant e executa o logout no provedor associado.
-- Se `tenant_id` for `None` (Global): roda com bypass de RLS (`operacional:admin`) buscando todas as instâncias ativas de todos os tenants no sistema e desconecta todas elas individualmente em seus respectivos provedores.
-- Atualiza os registros do banco de dados para `connection_state = 'disconnected'`.
-
----
-
-## Arquitetura Proposta
-
-```
-                     === STACK DE APLICAÇÃO PRINCIPAL ===
-  ┌──────────────────────────────────────────────────────────────────┐
-  │ ┌──────────────┐    ┌──────────────┐         ┌────────────────┐ │
-  │ │control_plane │    │    worker    │ ◄─────► │  runtime_api   │ │
-  │ └──────┬───────┘    └──────┬───────┘         └────────────────┘ │
-  │        │ RPC               │ RPC                                │
-  │        └─────────────────┐ │                                    │
-  │                          ▼ ▼                                    │
-  │                  ┌──────────────────┐                           │
-  │                  │  data_whatsapp   │ ── RPC ──► data_postgres  │
-  │                  │ (usa Trait gen.) │   (limites, registros)   │
-  │                  └────────┬─────────┘                           │
-  │                           │                                     │
-  │  ┌────────────────────────┼───────────────────────────────────┐ │
-  │  │ Rede: smart_core_v2_evolution_net (external)               │ │
-  │  └────────────────────────┼───────────────────────────────────┘ │
-  │                           │ HTTP REST                           │
-  │  ┌────────────────────┐   │                                     │
-  │  │  webhook_ingress   │◄──┼──── Webhook HTTP POST ───────────── │
-  │  │  (normalizador)    │   │                                     │
-  │  └────────┬───────────┘   │                                     │
-  │           │ Redis Streams │                                     │
-  │           ▼               │                                     │
-  │  ┌────────────────────┐   │                                     │
-  │  │messaging_gateway   │   │  (inalterado — consome barramento) │
-  │  └────────────────────┘   │                                     │
-  └───────────────────────────┼─────────────────────────────────────┘
-                              │
-                      === STACK DO EVOLUTION API ===
-  ┌───────────────────────────┼─────────────────────────────────────┐
-  │                    ┌──────▼───────┐                             │
-  │                    │  evolution   │ (evoapicloud/evolution-go)  │
-  │                    └──────┬───────┘                             │
-  │                           │                                     │
-  │                ┌──────────▼──────────┐                          │
-  │                │ postgres-evolution  │                          │
-  │                └─────────────────────┘                          │
-  └─────────────────────────────────────────────────────────────────┘
-```
+### D5. Desconexão em massa pelo admin
+RPC `AdminBulkDisconnectInstances` em `data_whatsapp` (já existe): `tenant_id: Option<Uuid>`;
+`None` ⇒ todas as instâncias de todos os tenants (BYPASSRLS via `AdminListAllConnectedInstances`,
+exige escopo `operacional:admin`). Atualiza `connection_state='disconnected'`.
 
 ---
 
-## User Review Required
+# Fase P — Planning (output)
 
-> [!IMPORTANT]
-> **Modificação do Banco de Dados**: Reescreveremos o arquivo de migração original em vez de fazer migrações incrementais de renomeação. O arquivo original [0008_evolution_sync.sql](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/crates/infrastructure_postgres/migrations/0008_evolution_sync.sql) será renomeado para `0008_whatsapp_sync.sql` e seu conteúdo alterado para criar as tabelas `whatsapp_instance` (contendo o campo `provider` sem valor padrão fixo), `whatsapp_contact` e `whatsapp_whitelist`.
+**Status: concluída.**
 
-> [!TIP]
-> **Gestão de Provedor por Instância**: Com o campo `provider` na tabela `whatsapp_instance`, as instâncias são vinculadas ao seu respectivo provedor na criação, permitindo roteamento dinâmico transparente durante o envio de mensagens e processamento de status.
+- **Escopo**: realinhamento de 4 componentes Rust ao Evolution Go + ampliação de superfície.
+  Nenhuma criação de crate/app nova; nenhuma mudança de schema (DB pronto).
+- **Contrato central**: `MessagingProvider` ampliado para a superfície completa do Go.
+- **Eventos normalizados** publicados em `events:stream`:
+  - `whatsapp.message.received` (de `Message`)
+  - `whatsapp.connection.updated` (de `Connection`)
+  - `whatsapp.message.status` (de `MessageUpdate`)
+  - `whatsapp.presence.updated` (de `Presence`)
+  - `whatsapp.contact.updated` (de `Contacts`) *(opcional na 1ª entrega)*
+- **Auditoria** em `security:stream` → `data_postgres` → `audit_log`:
+  `whatsapp.instance.create`, `whatsapp.instance.delete`, `whatsapp.admin.bulk_disconnect`.
+- **Mapa de risco**: contrato Go indocumentado em alguns pontos (mitigado pelo adapter de
+  referência do old); `subscribe` inválido zera webhooks; dois `axum` coexistem (0.7.5 no
+  `runtime_api`, 0.8 no `webhook_ingress`) — **não unificar** via workspace.
 
 ---
 
-## Open Questions
+# Fase R — Review (arquitetura e contratos)
 
-*Nenhuma questão em aberto identicada.*
+### R1. Compatibilidade de versões
+- `runtime_api` permanece em **axum 0.7.5**; `webhook_ingress` usa **axum 0.8** declarado
+  **localmente** no `Cargo.toml` do app (já está assim). NÃO adicionar `axum` ao workspace.
+- `reqwest 0.12` (feature `json`) em `infrastructure_evolution` (já está).
+- Reuso obrigatório: `async-trait`, `serde`, `serde_json`, `secrecy`, `thiserror`, `uuid`,
+  `tracing`, `redis`, `contracts`, `transport`, `error_core`, `observability`.
+
+### R2. Sanidade de segurança
+- `global_api_key`/`instance_token` sempre `SecretString`; sempre em `skip(...)` do `instrument`.
+- `api_key` no banco encriptado (mesma política das demais credenciais de tenant).
+- RLS+FORCE em todas as `whatsapp_*`; bypass cross-tenant só por `admin_pool`/transação admin
+  explícita, sob escopo `operacional:admin`.
+- Body de erro do provedor truncado a 200 chars (evita vazar telefone/conteúdo).
+
+### R3. Contrato de barramento
+- Reaproveitar `contracts::TenantEnvelope<T>` + `transport::bus::publicar_evento` /
+  `publicar_evento_seguranca` (já em uso no `webhook_ingress` e `data_whatsapp`). Não inventar
+  stream key.
+
+**Gate R**: aprovado se R1/R2/R3 confirmados. Saída → Execution.
 
 ---
 
-## Proposed Changes
+# Fase E — Execution (detalhe técnico)
 
-### Componente 1: Camada de Abstração de Mensageria (`infrastructure_messaging`)
+## E1. `infrastructure_messaging` — ampliar o contrato
 
-#### [NEW] [Cargo.toml](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/crates/infrastructure_messaging/Cargo.toml)
-```toml
-[package]
-name = "infrastructure_messaging"
-version = "0.1.0"
-edition.workspace = true
+Manter os 12 métodos atuais e **acrescentar** a superfície Go. Adicionar enums/structs neutros.
 
-[dependencies]
-async-trait = { workspace = true }
-serde       = { workspace = true }
-secrecy     = { workspace = true }
-thiserror   = { workspace = true }
-uuid        = { workspace = true }
-```
-
-#### [NEW] [errors.rs](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/crates/infrastructure_messaging/src/errors.rs)
 ```rust
-#[derive(Debug, thiserror::Error)]
-pub enum MessagingProviderError {
-    #[error("Erro de conexão/rede no provedor: {0}")]
-    Network(String),
-    
-    #[error("O provedor retornou erro HTTP (status {status}): {body}")]
-    ProviderApi { status: u16, body: String },
-    
-    #[error("Falha ao processar resposta do provedor: {0}")]
-    Deserialization(String),
-    
-    #[error("Erro de configuração do provedor: {0}")]
-    Config(String),
-    
-    #[error("Operação inválida no estado atual: {0}")]
-    InvalidState(String),
-}
-```
-
-#### [NEW] [lib.rs](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/crates/infrastructure_messaging/src/lib.rs)
-```rust
-pub mod errors;
-
-use async_trait::async_trait;
-use secrecy::SecretString;
-
-pub use errors::MessagingProviderError;
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum ConnectionState {
-    Connected,
-    Disconnected,
-    Connecting,
-    Unknown,
-}
-
-impl ConnectionState {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Connected => "connected",
-            Self::Disconnected => "disconnected",
-            Self::Connecting => "connecting",
-            Self::Unknown => "unknown",
-        }
-    }
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct CreateInstanceResult {
-    pub provider_instance_id: String,
-    pub instance_token: String,
-}
-
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct SendMessageResult {
-    pub message_id: String,
-}
-
+// Novos tipos neutros
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
-pub enum MediaType {
-    Image,
-    Video,
-    Audio,
-    Document,
-}
+pub enum PresenceState { Composing, Paused, Recording }
 
-impl MediaType {
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Image => "image",
-            Self::Video => "video",
-            Self::Audio => "audio",
-            Self::Document => "document",
-        }
-    }
-}
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct MediaDownloadResult { pub base64: String, pub mime_type: Option<String> }
+```
 
-/// Contrato abstrato e unificado de provedores de WhatsApp/Chat.
-#[async_trait]
-pub trait MessagingProvider: Send + Sync {
-    /// Nome identificador do provedor (ex: "evolution").
-    fn provider_name(&self) -> &'static str;
+Novos métodos no trait `MessagingProvider` (todos `async`, erro `MessagingProviderError`):
+```rust
+async fn reconnect_instance(&self, instance_name: &str, instance_token: &SecretString) -> Result<(), _>;
+async fn set_advanced_settings(&self, instance_id: &str, instance_token: &SecretString, settings: AdvancedSettings) -> Result<(), _>;
+async fn mark_read(&self, instance_name: &str, instance_token: &SecretString, chat: &str, message_ids: &[String]) -> Result<(), _>;
+async fn send_reaction(&self, instance_name: &str, instance_token: &SecretString, chat: &str, message_id: &str, emoji: &str, from_me: bool) -> Result<SendMessageResult, _>;
+async fn set_presence(&self, instance_name: &str, instance_token: &SecretString, chat: &str, state: PresenceState, is_audio: bool) -> Result<(), _>;
+async fn get_profile_picture(&self, instance_name: &str, instance_token: &SecretString, number: &str) -> Result<Option<String>, _>;
+async fn download_media(&self, instance_name: &str, instance_token: &SecretString, message: &serde_json::Value) -> Result<MediaDownloadResult, _>;
+```
+- `AdvancedSettings`: struct com `always_online: bool`, `read_messages: bool` (default `false`),
+  `reject_call`, `msg_reject_call`, `ignore_groups`, `ignore_status`.
+- **Compatibilidade**: `configure_webhook` permanece no trait (assinatura neutra), mas no Go a
+  implementação será dobrada dentro do `connect_instance` (ver E2 — D4/D2). Decisão de R:
+  manter o método por compatibilidade do contrato; documentar que no Go ele é no-op explícito
+  ou delega a um `connect` idempotente.
 
-    /// Cria fisicamente uma instância de comunicação no provedor.
-    async fn create_instance(
-        &self,
-        instance_name: &str,
-        custom_token: Option<&SecretString>,
-    ) -> Result<CreateInstanceResult, MessagingProviderError>;
+**Observabilidade/Auditoria E1**: crate pura — sem logs, sem auditoria. `SecretString` nas
+assinaturas; `Debug` redige segredo.
 
-    /// Exclui permanentemente uma instância física do provedor.
-    async fn delete_instance(&self, instance_name: &str) -> Result<(), MessagingProviderError>;
+## E2. `infrastructure_evolution` — realinhar `provider.rs` ao Go
 
-    /// Inicia/conecta a sessão de uma instância no provedor.
-    async fn connect_instance(
-        &self,
-        instance_name: &str,
-        instance_token: &SecretString,
-    ) -> Result<(), MessagingProviderError>;
+Reescrever cada método de `provider.rs` para o contrato Go, reusando um helper único
+`send_request`. Tabela canônica de endpoints (substitui a lista v2):
 
-    /// Faz logout/desconecta a sessão de WhatsApp da instância sem excluí-la.
-    async fn disconnect_instance(
-        &self,
-        instance_name: &str,
-        instance_token: &SecretString,
-    ) -> Result<(), MessagingProviderError>;
+| Método trait | HTTP Go | Header `apikey` | Body / parse |
+| --- | --- | --- | --- |
+| `create_instance` | `POST /instance/create` | global | `{name, token?}` → `token` (e `id`/`name`) |
+| `delete_instance` | `DELETE /instance/delete/{name}` | global | — |
+| `connect_instance` | `POST /instance/connect` | **instância** | `{instanceName, webhookUrl, subscribe:[…], immediate:true}` |
+| `get_qr_code` | `GET /instance/qr` | instância | `base64`/`code` |
+| `get_connection_state` | `GET /instance/status` | instância | `{state}` → `map_state` |
+| `disconnect_instance` | `DELETE /instance/logout` | instância | — |
+| `reconnect_instance` | `POST /instance/reconnect` | instância | — |
+| `list_all_instances` | `GET /instance/all` | global | `{data:[{name}]}` |
+| `send_text` | `POST /send/text` | instância | `{number, text, quoted?}` → `key.id`/`id` |
+| `send_media` | `POST /send/media` | instância | `{number, type, url, caption, filename}` → id |
+| `set_advanced_settings` | `PUT /instance/{id}/advanced-settings` | instância | flags |
+| `mark_read` | `POST /message/markread` | instância | `{number, id:[…]}` |
+| `send_reaction` | `POST /message/react` | instância | `{number, reaction, id, fromMe}` |
+| `set_presence` | `POST /message/presence` | instância | `{number, state, isAudio}` |
+| `get_profile_picture` | `POST /user/avatar` | instância | `{number, preview:false}` → `profilePictureUrl`/`url` |
+| `download_media` | `POST /message/downloadmedia` | instância | `{message}` → `base64`/`mimetype` |
 
-    /// Retorna o QR Code em base64 para conexão.
-    async fn get_qr_code(
-        &self,
-        instance_name: &str,
-        instance_token: &SecretString,
-    ) -> Result<String, MessagingProviderError>;
+- **`map_state`**: aceitar variações do Go — `open`/`connected`→Connected, `close`/`disconnected`/`loggedOut`→Disconnected, `connecting`→Connecting, resto→Unknown.
+- **`configure_webhook`**: no Go não há `/webhook/set`; a configuração ocorre no
+  `connect_instance`. Implementar como delegação a `connect_instance` (idempotente) ou no-op
+  documentado. **A URL do webhook e o `subscribe` passam a ser responsabilidade do fluxo de
+  conexão** (ver E3, `CreateWhatsappInstance`).
+- **`client.rs`**: ajustar structs de desserialização (`CreateInstanceResp` lê `token`/`id`;
+  `ConnStateResp` lê `state` no topo, não em `instance.state`). Helper `send_request` central.
 
-    /// Envia solicitação de pareamento via código de telefone.
-    async fn pair_by_phone(
-        &self,
-        instance_name: &str,
-        instance_token: &SecretString,
-        phone_number: &str,
-    ) -> Result<String, MessagingProviderError>;
+**Observabilidade/Auditoria E2**: `#[tracing::instrument(err, skip(self, instance_token, …))]`
+em cada método; fields `provider="evolution"`, `instance_name`. Sem evento de auditoria (infra).
+Body de erro truncado; nunca logar `apikey`.
 
-    /// Configura o destino e eventos do webhook da instância.
-    async fn configure_webhook(
-        &self,
-        instance_name: &str,
-        instance_token: &SecretString,
-        webhook_url: &str,
-        events: &[String],
-    ) -> Result<(), MessagingProviderError>;
+## E3. `data_whatsapp` — realinhar fluxo + novos RPCs
 
-    /// Retorna o estado atual da conexão da instância.
-    async fn get_connection_state(
-        &self,
-        instance_name: &str,
-    ) -> Result<ConnectionState, MessagingProviderError>;
+O `main.rs` já tem o esqueleto RPC e o padrão (`chamar_data_postgres`, `erro`, `ok_reply`,
+auditoria via `publicar_evento_seguranca`). Ajustes:
 
-    /// Envia uma mensagem de texto simples.
-    async fn send_text(
-        &self,
-        instance_name: &str,
-        instance_token: &SecretString,
-        to_number: &str,
-        text: &str,
-    ) -> Result<SendMessageResult, MessagingProviderError>;
+1. **`CreateWhatsappInstance`** — após criar a instância e persistir o registro, **conectar via
+   `connect_instance`** passando a `webhook_url`
+   (`http://webhook_ingress:9200/webhook/evolution/{tenant_id}/{db_id}`) e `subscribe`
+   (`["MESSAGE","CONNECTION","PRESENCE","QRCODE"]`). Remover a chamada separada a
+   `configure_webhook`/`PUT /webhook/set`. Manter o rollback (delete no provedor + remoção do
+   registro) se a conexão falhar. Opcional: `set_advanced_settings(always_online:true,
+   read_messages:false)` logo após conectar.
+2. **`GetWhatsappInstanceStatus`** — usar `/instance/status`; quando desconectado/unknown, obter
+   QR via `/instance/qr`.
+3. **`SendWhatsappMessage` / `SendWhatsappMedia`** — já delegam à trait; passam a usar `/send/*`
+   automaticamente após E2. `media_type:audio` → PTT.
+4. **Novos RPCs** (superfície completa), no mesmo padrão dos handlers atuais:
+   - `MarkWhatsappMessageRead` → `mark_read`
+   - `SendWhatsappReaction` → `send_reaction`
+   - `SetWhatsappPresence` → `set_presence`
+   - `GetWhatsappProfilePicture` → `get_profile_picture`
+   - `DownloadWhatsappMedia` → `download_media` (usado pelo `worker` no fallback de mídia grande)
+   - `ReconnectWhatsappInstance` → trocar para `reconnect_instance` (hoje usa `connect`)
+5. **Auditoria** — manter `whatsapp.instance.create/delete` e `whatsapp.admin.bulk_disconnect`
+   (já implementados). Recursos de mensagem (react/markread/presence) **não** geram auditoria
+   (alto volume; intencional).
 
-    /// Envia uma mensagem de mídia (imagem, vídeo, áudio ou documento).
-    async fn send_media(
-        &self,
-        instance_name: &str,
-        instance_token: &SecretString,
-        to_number: &str,
-        media_type: MediaType,
-        media_url: &str,
-        caption: Option<&str>,
-    ) -> Result<SendMessageResult, MessagingProviderError>;
+**Observabilidade/Auditoria E3**: `#[instrument(skip_all, fields(rpc, tenant_id))]` por handler
+(já no padrão); `instance_token` como `SecretString`; auditoria sem token.
 
-    /// Lista todas as instâncias existentes no provedor físico.
-    async fn list_all_instances(&self) -> Result<Vec<String>, MessagingProviderError>;
-}
+## E4. `webhook_ingress` — canonizar eventos do Go
+
+O `main.rs`/`normalize_evolution` atual só reconhece `messages.upsert`/`connection.update`.
+Ajustar:
+
+1. **Canonização de evento** — função `canonical_event(raw: &str) -> Option<CanonicalEvent>`
+   espelhando `EvolutionEventName.from_raw`: aceita UPPERCASE (`MESSAGE`), PascalCase
+   (`Message`, `QRCode`), e aliases v2 (`messages.upsert`, `connection.update`, …). Mapear para
+   enum `{ Message, MessageUpdate, Connection, Presence, Qrcode, Contacts }`.
+2. **Normalização por evento** → tópico universal:
+   - `Message` → `whatsapp.message.received` (payload com `instance_id`, `provider`, `raw_event`;
+     o worker extrai `key.id`/`remoteJid`/`fromMe`/`pushName`/conteúdo).
+   - `Connection` → `whatsapp.connection.updated` (mapear `state` open/close/connecting/loggedOut).
+   - `MessageUpdate` → `whatsapp.message.status`.
+   - `Presence` → `whatsapp.presence.updated`.
+   - `Contacts` → `whatsapp.contact.updated` *(pode ficar para 2ª iteração)*.
+   - `Qrcode` → não publica no barramento de domínio (QR é fluxo de UI via `GetStatus`); apenas
+     `202`.
+3. **Idempotência/dedup** — `Message` pode chegar 2×; a deduplicação por `key.id` é do **worker**
+   (consumidor), não do ingress.
+4. **Sanitização** — `body` permanece em `skip(...)`; nunca logar telefone/nome/conteúdo. Só
+   `event`/tópico/identificadores.
+
+**Observabilidade/Auditoria E4**: `#[instrument(skip(state, body), fields(provider, tenant_id,
+instance_id, event_type))]`. Sem auditoria (volume alto). `info` no publish, `warn` para
+provedor/evento desconhecido.
+
+## E5. Banco e repositório — validação (sem mudança)
+
+`0008_whatsapp_sync.sql` e `infrastructure_postgres/integracoes/whatsapp.rs` já atendem.
+**Não reescrever.** Apenas, se algum novo handler RPC exigir coluna ainda não persistida (ex.:
+`last_connection_state`/`subscribed_events`), estender o repositório de forma incremental.
+Após qualquer alteração SQL, **regerar cache SQLx offline** (MEMORY "testes-db-tunel-e-reset").
+
+## E6. `control_plane` — endpoint admin (sem regressão)
+
+Manter `POST /api/v2/admin/whatsapp/disconnect-all` → RPC `AdminBulkDisconnectInstances`,
+enriquecendo a auditoria (`ip_address`/`user_agent`/`user_id` do `RequestContext`). Resposta
+**sem tokens**. Confirmar que nenhuma referência a `evolution_sync_*` legado permanece (grep
+limpo).
+
+---
+
+## Arquitetura (visão consolidada)
+
+```
+control_plane / worker ──RPC──▶ data_whatsapp ──(MessagingProvider)──▶ infrastructure_evolution ──HTTP──▶ Evolution Go
+        │                            │
+        │ (auditoria)                └──RPC──▶ data_postgres (whatsapp_* + audit_log)
+        ▼
+   security:stream ───────────────▶ data_postgres ─▶ audit_log
+
+Evolution Go ──webhook POST──▶ webhook_ingress ──canoniza+normaliza──▶ events:stream ──▶ worker/messaging_gateway
+
+Stacks Docker:
+  - principal: control_plane, data_whatsapp, webhook_ingress, data_postgres, worker, …
+  - Evolution Go isolada: container `evolution` (evoapicloud/evolution-go) + postgres próprio
+  - rede external compartilhada entre as stacks
 ```
 
 ---
 
-### Componente 2: Implementação da Evolution API (`infrastructure_evolution`)
+# Fase V — Validation
 
-#### [NEW] [Cargo.toml](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/crates/infrastructure_evolution/Cargo.toml)
-```toml
-[package]
-name = "infrastructure_evolution"
-version = "0.1.0"
-edition.workspace = true
+### V1. Compilação e contratos
+- `cargo build -p infrastructure_messaging -p infrastructure_evolution -p webhook_ingress -p data_whatsapp`.
+- Regenerar cache SQLx offline se o repositório for tocado.
 
-[dependencies]
-infrastructure_messaging = { path = "../infrastructure_messaging" }
-reqwest                  = { version = "0.12", features = ["json"] }
-serde                    = { workspace = true }
-serde_json               = { workspace = true }
-secrecy                  = { workspace = true }
-async-trait              = { workspace = true }
-thiserror                = { workspace = true }
-tracing                  = { workspace = true }
-```
+### V2. Testes (scripts canônicos — MEMORY "test-scripts")
+- **Rust**: `.\infra\test-local.ps1` (NUNCA `cargo test` direto). Cobrir:
+  - `infrastructure_messaging`: round-trip serde dos enums novos; `Display` de erro.
+  - `infrastructure_evolution`: **mock HTTP (wiremock)** dos endpoints Go reais — `/instance/create`
+    (lê `token`), `/instance/connect` (body com `subscribe`/`webhookUrl`), `/instance/status`,
+    `/instance/all`, `/send/text`, `/send/media`, `/message/markread`, `/message/react`,
+    `/message/presence`, `/user/avatar`, `/message/downloadmedia`, `DELETE /instance/logout`;
+    `map_state`; truncamento de body de erro a 200 chars. **Atualizar os mocks v2 existentes**
+    em `data_whatsapp/tests` e `infrastructure_evolution/tests` para os paths Go.
+  - `data_whatsapp`: handlers com `data_postgres` mockado (já há padrão wiremock); fluxo de
+    create com `connect_instance`+webhook; novos RPCs.
+  - `webhook_ingress`: `canonical_event` para UPPERCASE/PascalCase/aliases; normalização de
+    `Message`/`Connection`/`Presence`; garantia de que `body` não vaza em logs.
+- **Flutter** (se algum client for tocado): `.\infra\test-flutter.ps1`.
 
-#### [NEW] [client.rs](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/crates/infrastructure_evolution/src/client.rs)
-Contém a struct `EvolutionProvider` que implementa `MessagingProvider` realizando as chamadas REST mapeadas.
+### V3. Validação manual (stack Docker, Evolution Go já rodando)
+- Criar instância via `data_whatsapp`; confirmar `POST /instance/connect` com `subscribe` e
+  `webhookUrl` corretos; escanear QR (`/instance/qr`); enviar texto (`/send/text`); verificar
+  `whatsapp.message.received` em `events:stream`. Verificar `Connection` →
+  `whatsapp.connection.updated`. Testar `markread`/`react`/`presence`.
 
----
-
-### Componente 3: Alterações no Banco de Dados (Reescrita do Schema)
-
-#### [NEW] [0008_whatsapp_sync.sql](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/crates/infrastructure_postgres/migrations/0008_whatsapp_sync.sql) (Substitui `0008_evolution_sync.sql`)
-```sql
--- =============================================================================
--- Módulo Integrações WhatsApp Genérico: instâncias, contatos e whitelist
--- =============================================================================
-
--- whatsapp_instance: configuração da instância física na API de WhatsApp configurada
-CREATE TABLE whatsapp_instance (
-    id                    SERIAL PRIMARY KEY,
-    tenant_id             UUID NOT NULL REFERENCES tenants_tenant(id) ON DELETE CASCADE,
-    name                  VARCHAR(100) NOT NULL,
-    instance_id           VARCHAR(100) UNIQUE,
-    api_key               VARCHAR(256) NOT NULL,
-    phone_number          VARCHAR(20),
-    active                BOOLEAN NOT NULL DEFAULT TRUE,
-    connection_state      VARCHAR(20) NOT NULL DEFAULT 'unknown',
-    last_state_check      TIMESTAMPTZ,
-    media_storage_backend VARCHAR(10) NOT NULL DEFAULT 's3',
-    provider              VARCHAR(50) NOT NULL, -- evolution, zapi, etc.
-    subscribed_events     JSONB NOT NULL DEFAULT '[]',
-    last_connection_state VARCHAR(50),
-    created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (name),
-    UNIQUE (tenant_id, name)
-);
-
-ALTER TABLE whatsapp_instance ENABLE ROW LEVEL SECURITY;
-ALTER TABLE whatsapp_instance FORCE  ROW LEVEL SECURITY;
-CREATE POLICY whatsapp_instance_tenant_isolation ON whatsapp_instance
-    FOR ALL
-    USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid);
-
-CREATE INDEX whatsapp_instance_tenant_state
-    ON whatsapp_instance (tenant_id, active, connection_state);
-
--- whatsapp_contact: mapeamento JID/LID → Contato do CRM
-CREATE TABLE whatsapp_contact (
-    id              SERIAL PRIMARY KEY,
-    tenant_id       UUID NOT NULL REFERENCES tenants_tenant(id) ON DELETE CASCADE,
-    contact_id      INT REFERENCES oraculo_contato(id) ON DELETE SET NULL,
-    instance_id     INT NOT NULL REFERENCES whatsapp_instance(id) ON DELETE CASCADE,
-    jid             VARCHAR(100),
-    lid             VARCHAR(100),
-    addressing_mode VARCHAR(8),
-    active          BOOLEAN NOT NULL DEFAULT TRUE,
-    metadados       JSONB NOT NULL DEFAULT '{}',
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (tenant_id, instance_id, jid)
-);
-
-ALTER TABLE whatsapp_contact ENABLE ROW LEVEL SECURITY;
-ALTER TABLE whatsapp_contact FORCE  ROW LEVEL SECURITY;
-CREATE POLICY whatsapp_contact_tenant_isolation ON whatsapp_contact
-    FOR ALL
-    USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid);
-
-CREATE INDEX whatsapp_contact_tenant_jid ON whatsapp_contact (tenant_id, jid);
-CREATE INDEX whatsapp_contact_tenant_lid ON whatsapp_contact (tenant_id, lid);
-CREATE INDEX whatsapp_contact_tenant_crm ON whatsapp_contact (tenant_id, contact_id);
-
--- whatsapp_whitelist: números que o bot deve ignorar completamente
-CREATE TABLE whatsapp_whitelist (
-    id           SERIAL PRIMARY KEY,
-    tenant_id    UUID NOT NULL REFERENCES tenants_tenant(id) ON DELETE CASCADE,
-    contact_id   INT REFERENCES oraculo_contato(id) ON DELETE SET NULL,
-    name         VARCHAR(100) NOT NULL,
-    phone_number VARCHAR(20) NOT NULL,
-    active       BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (tenant_id, phone_number)
-);
-
-ALTER TABLE whatsapp_whitelist ENABLE ROW LEVEL SECURITY;
-ALTER TABLE whatsapp_whitelist FORCE  ROW LEVEL SECURITY;
-CREATE POLICY whatsapp_whitelist_tenant_isolation ON whatsapp_whitelist
-    FOR ALL
-    USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid);
-
-CREATE INDEX whatsapp_whitelist_tenant_phone ON whatsapp_whitelist (tenant_id, phone_number);
-```
-
-#### [DELETE] [0008_evolution_sync.sql](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/crates/infrastructure_postgres/migrations/0008_evolution_sync.sql)
-Removido em favor da migração limpa `0008_whatsapp_sync.sql`.
+### V4. Observabilidade/auditoria
+- Logs **sem** `apikey`/`instance_token`/body de webhook/telefone/conteúdo.
+- `audit_log` com create/delete/bulk_disconnect, `context` sem segredos, `tenant_id` NULL quando
+  ação global.
 
 ---
 
-### Componente 4: Crate `infrastructure_postgres` (Repositório)
+# Fase C — Confirmation
 
-#### [NEW] [whatsapp.rs](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/crates/infrastructure_postgres/src/integracoes/whatsapp.rs) (Substitui `evolution.rs`)
-- Structs atualizadas: `WhatsappInstance`, `WhatsappContact`.
-- Toda interação SQL direcionada às novas tabelas `whatsapp_instance` e `whatsapp_contact`.
-- Mapeamento e persistência do campo `provider` sem valores defaults acoplados.
+### C1. Critérios de pronto
+- Build e testes (V1–V2) verdes via scripts canônicos.
+- Integração manual (V3) e auditoria (V4) confirmadas contra o Evolution Go real.
+- Nenhuma referência a endpoints v2 (`/message/sendText`, `/webhook/set`,
+  `/instance/connectionState`, `/instance/fetchInstances`) remanescente (grep limpo).
 
-#### [DELETE] [evolution.rs](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/crates/infrastructure_postgres/src/integracoes/evolution.rs)
-Removido para dar lugar ao arquivo agnóstico `whatsapp.rs`.
+### C2. Gate de final-review
+- Rodar `prevc-final-review` (subagente Opus): compara implementado × este plano, corrige
+  desvios, arquiva e commita. Sem auto-referência nos commits (MEMORY "git-no-self-reference");
+  branches gitflow (MEMORY "use-gitflow").
 
----
-
-### Componente 5: Novo Micro-serviço `apps/webhook_ingress`
-
-#### [NEW] [Cargo.toml](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/apps/webhook_ingress/Cargo.toml)
-```toml
-[package]
-name = "webhook_ingress"
-version = "0.1.0"
-edition.workspace = true
-
-[[bin]]
-name = "webhook_ingress"
-path = "src/main.rs"
-
-[dependencies]
-contracts                = { workspace = true }
-transport                = { workspace = true }
-error_core               = { workspace = true }
-observability            = { workspace = true }
-infrastructure_messaging = { path = "../../crates/infrastructure_messaging" }
-tokio                    = { workspace = true }
-serde_json               = { workspace = true }
-serde                    = { workspace = true }
-tracing                  = { workspace = true }
-axum                     = "0.8"
-redis                    = { workspace = true }
-uuid                     = { workspace = true }
-```
-
-#### [NEW] [main.rs](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/apps/webhook_ingress/src/main.rs)
-- Expõe a rota axum `POST /webhook/:provider/:tenant_id/:instance_id`.
-- Lê o payload bruto, decide qual parser usar baseado no parâmetro `:provider` do path:
-  - Se for `evolution`: converte de `MESSAGES_UPSERT` para evento normalizado `whatsapp.message.received`, e de `CONNECTION_UPDATE` para `whatsapp.connection.updated`.
-- Publica o evento normalizado no Redis Streams do barramento interno do Smart Core.
+### C3. Documentação
+- Arquivar os dois planos-base v2 (`13-...md`, `13-...-2.md`) referenciando este consolidado.
+- Se aplicável, atualizar `doc_dev/libs/` (Evolution Go, axum 0.8) com o contrato real.
 
 ---
 
-### Componente 6: Crate `apps/data_whatsapp` (antigo `data_evolution`)
+# Resumo das mudanças vs. planos-base
 
-#### [NEW] [Cargo.toml](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/apps/data_whatsapp/Cargo.toml)
-```toml
-[package]
-name = "data_whatsapp"
-version = "0.1.0"
-edition.workspace = true
-
-[[bin]]
-name = "data_whatsapp"
-path = "src/main.rs"
-
-[dependencies]
-contracts                = { workspace = true }
-transport                = { workspace = true }
-error_core               = { workspace = true }
-observability            = { workspace = true }
-infrastructure_messaging = { path = "../../crates/infrastructure_messaging" }
-infrastructure_evolution = { path = "../../crates/infrastructure_evolution" }
-tokio                    = { workspace = true }
-serde_json               = { workspace = true }
-serde                    = { workspace = true }
-tracing                  = { workspace = true }
-secrecy                  = { workspace = true }
-async-trait              = { workspace = true }
-uuid                     = { workspace = true }
-```
-
-#### [NEW] [main.rs](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/apps/data_whatsapp/src/main.rs)
-- Carrega as configurações dos provedores (ex: url e global token da Evolution).
-- Provê factory para instanciar a trait `dyn MessagingProvider` com base no provedor solicitado.
-- Executa as rotas RPC de orquestração:
-  - `CreateWhatsappInstance`
-  - `DeleteWhatsappInstance`
-  - `ReconnectWhatsappInstance`
-  - `GetWhatsappInstanceStatus`
-  - `SendWhatsappMessage`
-  - `SendWhatsappMedia`
-  - **`AdminBulkDisconnectInstances`** (Busca em lote no Postgres desativando o RLS e desconecta tudo via trait de provedor).
-
----
-
-### Componente 7: Handlers no `data_postgres` e `control_plane`
-
-#### [MODIFY] [data_postgres/src/main.rs](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/apps/data_postgres/src/main.rs)
-- Substituir queries das tabelas antigas para as novas `whatsapp_*`.
-- Implementar os handlers: `GetWhatsappInstance`, `CreateWhatsappInstanceRecord`, `ListWhatsappInstances`, `DeactivateWhatsappInstanceRecord`, `AdminListAllConnectedInstances`.
-
-#### [MODIFY] [control_plane/src/main.rs](file:///c:/PROJETOS/FULL-STACK/smart-core-assistant-v2/server/apps/control_plane/src/main.rs)
-- Mapear endpoints de controle do WhatsApp para redirecionar RPCs para `data_whatsapp`.
-- Adicionar endpoint de admin: `/api/v2/admin/whatsapp/disconnect-all` que dispara RPC `AdminBulkDisconnectInstances` para o `data_whatsapp`.
-
----
-
-## Verification Plan
-
-### Sequência de Inicialização das Stacks
-1. **Stack de Observabilidade**: `docker/observability` → Cria a rede `smart_core_v2_observability`.
-2. **Stack do Evolution**: `docker/evolution` → Cria a rede `smart_core_v2_evolution_net` + postgres-evolution + evolution.
-3. **Stack Principal**: `docker/dev` → Referencia ambas as redes como `external` e inicia os microsserviços Rust (incluindo `data_whatsapp` e `webhook_ingress`).
-
-### Manual Verification
-1. **Camada de Abstração Funcional**:
-   - Chamar RPC `CreateWhatsappInstance` com provedor = `evolution`.
-   - Confirmar que a instância foi criada no servidor da Evolution e o registro foi inserido na tabela `whatsapp_instance` com `provider = 'evolution'`.
-2. **Normalização de Webhooks**:
-   - Disparar um webhook simulado de mensagens recebidas para `POST /webhook/evolution/{tenant_id}/{instance_id}`.
-   - Monitorar o barramento do Redis para garantir que o evento foi publicado no barramento em formato neutro normalizado (`whatsapp.message.received`) sem vazar chaves da Evolution.
-3. **Desconexão e Troca de Provedor**:
-   - Executar a desconexão no painel para desvincular a instância.
-   - Simular a mudança do registro da instância para um provedor dummy ou novo provedor na tabela e validar se o sistema direciona as chamadas subsequentes de forma limpa.
-4. **Desconexão Massiva do Admin**:
-   - Criar 3 instâncias conectadas de inquilinos diferentes.
-   - Disparar rota admin `/api/v2/admin/whatsapp/disconnect-all` (sem tenant).
-   - Verificar nos logs e no servidor Evolution que todas as instâncias foram desconectadas/deslogadas de uma vez, e que todas foram marcadas como `disconnected` no Postgres.
-   - Testar o mesmo endpoint passando um `tenant_id` específico, certificando-se de que apenas as instâncias daquele inquilino foram afetadas.
+1. **Alvo corrigido: Evolution v2 → Evolution Go.** Todo o contrato REST e os nomes de eventos
+   foram realinhados ao servidor que está rodando (referência: `evolution_go_adapter.py` do old).
+2. **De "criar do zero" → "realinhar o existente".** Migração, repositório, ports/adapters e o
+   scaffolding das crates/apps **já existem**; o trabalho é realinhamento + ampliação, não
+   bootstrap.
+3. **Superfície completa do Go** adicionada ao contrato e ao `data_whatsapp`: `markread`,
+   `react`, `presence`, `download_media`, `advanced-settings` (`alwaysOnline`), `reconnect`,
+   `profile picture`.
+4. **Webhook unificado no connect** (Go não tem `/webhook/set`); `subscribe` UPPERCASE
+   obrigatório; canonização de eventos no ingress.
+5. **Sem mudança de schema**: `0008_whatsapp_sync.sql` mantido.

@@ -1,0 +1,18 @@
+{
+  "id": "365aca45-ca38-4956-9dc3-b14073eb8baa",
+  "name": "mcp-activity",
+  "status": "active",
+  "repoPath": "c:\\PROJETOS\\FULL-STACK\\smart-core-assistant-v2\\smart-agent-config",
+  "createdAt": "2026-06-25T18:01:23.583Z",
+  "updatedAt": "2026-06-25T18:01:23.593Z",
+  "startedAt": "2026-06-25T18:01:23.583Z",
+  "traceCount": 2,
+  "artifactCount": 0,
+  "checkpointCount": 0,
+  "checkpoints": [],
+  "metadata": {
+    "transport": "mcp",
+    "purpose": "tool-audit"
+  },
+  "lastTraceAt": "2026-06-25T18:01:23.593Z"
+}
