@@ -23,26 +23,27 @@ phases:
     name: "Review — arquitetura e segurança"
     prevc: "R"
     agent: "security-auditor"
-    status: "pending"
+    status: "completed"
   - id: "phase-e"
     name: "Execution — realinhar + ampliar 4 componentes"
     prevc: "E"
     agent: "backend-specialist"
     required_sensors: [tests]
     required_artifacts: [handoff-summary]
-    status: "pending"
+    status: "completed"
   - id: "phase-v"
     name: "Validation — testes e integração real"
     prevc: "V"
     agent: "test-writer"
-    status: "pending"
+    status: "completed"
   - id: "phase-c"
     name: "Confirmation — final-review e arquivamento"
     prevc: "C"
     agent: "code-reviewer"
-    status: "pending"
+    status: "completed"
 generated: 2026-06-25
-status: ready
+status: completed
+finalReview: ".context/workflow/docs/final-review-camada-mensageria-whatsapp-evolution-go.md"
 scaffoldVersion: "2.0.0"
 ---
 

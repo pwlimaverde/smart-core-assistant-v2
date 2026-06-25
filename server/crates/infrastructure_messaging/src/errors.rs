@@ -10,4 +10,6 @@ pub enum MessagingProviderError {
     Config(String),
     #[error("Operação inválida no estado atual: {0}")]
     InvalidState(String),
+    #[error("Operação não suportada pelo provedor: {0}")]
+    Unsupported(&'static str),
 }

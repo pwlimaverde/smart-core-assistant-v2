@@ -2194,6 +2194,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tokio",
  "tracing",
+ "uuid",
  "wiremock",
 ]
 
@@ -4873,6 +4874,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
+ "chrono",
  "contracts",
  "error_core",
  "infrastructure_messaging",

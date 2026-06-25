@@ -1,13 +1,27 @@
-use crate::client::{ConnStateResp, CreateInstanceResp, EvolutionProvider};
+use crate::client::{
+    AvatarResp, ConnStateResp, CreateInstanceResp, DownloadMediaResp, EvolutionProvider,
+    QrCodeResp, SendMessageResp,
+};
 use async_trait::async_trait;
 use infrastructure_messaging::{
-    ConnectionState, CreateInstanceResult, MediaType, MessagingProvider, MessagingProviderError,
-    SendMessageResult,
+    AdvancedSettings, AdvancedSettingsControl, ConnectionState, CreateInstanceResult,
+    InstanceManager, MediaDownloadResult, MediaDownloader, MediaType, MessageSender,
+    MessagingProvider, MessagingProviderError, PresenceControl, PresenceState, ProfileQuery,
+    Reactions, ReadReceipts, SendMessageResult, WebhookConfig,
 };
 use secrecy::{ExposeSecret, SecretString};
 
+fn map_state(s: &str) -> ConnectionState {
+    match s {
+        "open" | "connected" => ConnectionState::Connected,
+        "close" | "disconnected" | "loggedOut" => ConnectionState::Disconnected,
+        "connecting" => ConnectionState::Connecting,
+        _ => ConnectionState::Unknown,
+    }
+}
+
 #[async_trait]
-impl MessagingProvider for EvolutionProvider {
+impl InstanceManager for EvolutionProvider {
     fn provider_name(&self) -> &'static str {
         "evolution"
     }
@@ -18,14 +32,15 @@ impl MessagingProvider for EvolutionProvider {
         instance_name: &str,
         custom_token: Option<&SecretString>,
     ) -> Result<CreateInstanceResult, MessagingProviderError> {
-        let mut body = serde_json::json!({
-            "instanceName": instance_name,
-            "qrcode": true,
-            "integration": "WHATSAPP-BAILEYS"
+        let token = match custom_token {
+            Some(t) => t.expose_secret().to_string(),
+            None => uuid::Uuid::new_v4().simple().to_string(),
+        };
+
+        let body = serde_json::json!({
+            "name": instance_name,
+            "token": token
         });
-        if let Some(tok) = custom_token {
-            body["token"] = serde_json::Value::String(tok.expose_secret().to_string());
-        }
 
         let resp = self
             .http
@@ -42,13 +57,27 @@ impl MessagingProvider for EvolutionProvider {
             .await
             .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
 
-        let token = parsed.hash.or(parsed.instance.hash).ok_or_else(|| {
-            MessagingProviderError::Deserialization("hash/token ausente na resposta".into())
-        })?;
+        let resolved_token = parsed
+            .token
+            .or_else(|| parsed.instance.token.clone())
+            .or_else(|| {
+                parsed.hash.as_ref().and_then(|h| {
+                    if let Some(s) = h.as_str() {
+                        Some(s.to_string())
+                    } else if let Some(obj) = h.as_object() {
+                        obj.get("apikey")
+                            .and_then(|v| v.as_str())
+                            .map(|s| s.to_string())
+                    } else {
+                        None
+                    }
+                })
+            })
+            .unwrap_or(token);
 
         Ok(CreateInstanceResult {
             provider_instance_id: parsed.instance.instance_name,
-            instance_token: token,
+            instance_token: resolved_token,
         })
     }
 
@@ -74,14 +103,20 @@ impl MessagingProvider for EvolutionProvider {
         &self,
         instance_name: &str,
         instance_token: &SecretString,
+        webhook: &WebhookConfig,
     ) -> Result<(), MessagingProviderError> {
+        let body = serde_json::json!({
+            "instanceName": instance_name,
+            "webhookUrl": webhook.url,
+            "subscribe": webhook.subscribe,
+            "immediate": true
+        });
+
         let resp = self
             .http
-            .get(format!(
-                "{}/instance/connect/{}",
-                self.base_url, instance_name
-            ))
+            .post(format!("{}/instance/connect", self.base_url))
             .header("apikey", instance_token.expose_secret())
+            .json(&body)
             .send()
             .await
             .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
@@ -98,10 +133,25 @@ impl MessagingProvider for EvolutionProvider {
     ) -> Result<(), MessagingProviderError> {
         let resp = self
             .http
-            .post(format!(
-                "{}/instance/logout/{}",
-                self.base_url, instance_name
-            ))
+            .delete(format!("{}/instance/logout", self.base_url))
+            .header("apikey", instance_token.expose_secret())
+            .send()
+            .await
+            .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
+
+        Self::ok_or_api(resp).await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self, instance_token), fields(provider = "evolution", instance_name = %instance_name))]
+    async fn reconnect_instance(
+        &self,
+        instance_name: &str,
+        instance_token: &SecretString,
+    ) -> Result<(), MessagingProviderError> {
+        let resp = self
+            .http
+            .post(format!("{}/instance/reconnect", self.base_url))
             .header("apikey", instance_token.expose_secret())
             .send()
             .await
@@ -119,115 +169,48 @@ impl MessagingProvider for EvolutionProvider {
     ) -> Result<String, MessagingProviderError> {
         let resp = self
             .http
-            .get(format!(
-                "{}/instance/connect/{}",
-                self.base_url, instance_name
-            ))
+            .get(format!("{}/instance/qr", self.base_url))
             .header("apikey", instance_token.expose_secret())
             .send()
             .await
             .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
 
         let resp = Self::ok_or_api(resp).await?;
-        let v: serde_json::Value = resp
+        let parsed: QrCodeResp = resp
             .json()
             .await
             .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
 
-        // Tenta achar em "code" ou "qrcode" -> "code" ou retornar o JSON todo como string se falhar
-        if let Some(code) = v.get("code").and_then(|c| c.as_str()) {
-            return Ok(code.to_string());
+        if let Some(code) = parsed.code {
+            return Ok(code);
         }
-        if let Some(qrcode) = v.get("qrcode") {
-            if let Some(code) = qrcode.get("code").and_then(|c| c.as_str()) {
-                return Ok(code.to_string());
-            }
-            if let Some(base64) = qrcode.get("base64").and_then(|b| b.as_str()) {
-                return Ok(base64.to_string());
-            }
+        if let Some(base64) = parsed.base64 {
+            return Ok(base64);
         }
-        if let Some(base64) = v.get("base64").and_then(|b| b.as_str()) {
-            return Ok(base64.to_string());
+        if let Some(qr) = parsed.qrcode {
+            if let Some(code) = qr.code {
+                return Ok(code);
+            }
+            if let Some(base64) = qr.base64 {
+                return Ok(base64);
+            }
         }
 
-        Err(MessagingProviderError::Deserialization(format!(
-            "Não foi possível extrair o QR code da resposta: {:?}",
-            v
-        )))
+        Err(MessagingProviderError::Deserialization(
+            "Não foi possível extrair o QR code da resposta".into(),
+        ))
     }
 
     #[tracing::instrument(err, skip(self, instance_token), fields(provider = "evolution", instance_name = %instance_name))]
-    async fn pair_by_phone(
-        &self,
-        instance_name: &str,
-        instance_token: &SecretString,
-        phone_number: &str,
-    ) -> Result<String, MessagingProviderError> {
-        let resp = self
-            .http
-            .post(format!(
-                "{}/instance/pairingCode/{}",
-                self.base_url, instance_name
-            ))
-            .header("apikey", instance_token.expose_secret())
-            .json(&serde_json::json!({ "number": phone_number }))
-            .send()
-            .await
-            .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
-
-        let resp = Self::ok_or_api(resp).await?;
-        let v: serde_json::Value = resp
-            .json()
-            .await
-            .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
-
-        let code = v.get("code").and_then(|c| c.as_str()).ok_or_else(|| {
-            MessagingProviderError::Deserialization(
-                "code ausente na resposta de emparelhamento".into(),
-            )
-        })?;
-
-        Ok(code.to_string())
-    }
-
-    #[tracing::instrument(err, skip(self, instance_token), fields(provider = "evolution", instance_name = %instance_name))]
-    async fn configure_webhook(
-        &self,
-        instance_name: &str,
-        instance_token: &SecretString,
-        webhook_url: &str,
-        events: &[String],
-    ) -> Result<(), MessagingProviderError> {
-        let resp = self
-            .http
-            .put(format!("{}/webhook/set/{}", self.base_url, instance_name))
-            .header("apikey", instance_token.expose_secret())
-            .json(&serde_json::json!({
-                "enabled": true,
-                "url": webhook_url,
-                "webhookByEvents": false,
-                "events": events
-            }))
-            .send()
-            .await
-            .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
-
-        Self::ok_or_api(resp).await?;
-        Ok(())
-    }
-
-    #[tracing::instrument(err, skip(self), fields(provider = "evolution", instance_name = %instance_name))]
     async fn get_connection_state(
         &self,
         instance_name: &str,
+        instance_token: &SecretString,
     ) -> Result<ConnectionState, MessagingProviderError> {
         let resp = self
             .http
-            .get(format!(
-                "{}/instance/connectionState/{}",
-                self.base_url, instance_name
-            ))
-            .header("apikey", self.global_api_key.expose_secret())
+            .get(format!("{}/instance/status", self.base_url))
+            .header("apikey", instance_token.expose_secret())
             .send()
             .await
             .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
@@ -238,25 +221,15 @@ impl MessagingProvider for EvolutionProvider {
             .await
             .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
 
-        Ok(map_state(&parsed.instance.state))
+        Ok(map_state(&parsed.state))
     }
 
-    #[tracing::instrument(err, skip(self, instance_token, text), fields(provider = "evolution", instance_name = %instance_name))]
-    async fn send_text(
-        &self,
-        instance_name: &str,
-        instance_token: &SecretString,
-        to_number: &str,
-        text: &str,
-    ) -> Result<SendMessageResult, MessagingProviderError> {
+    #[tracing::instrument(err, skip(self), fields(provider = "evolution"))]
+    async fn list_all_instances(&self) -> Result<Vec<String>, MessagingProviderError> {
         let resp = self
             .http
-            .post(format!(
-                "{}/message/sendText/{}",
-                self.base_url, instance_name
-            ))
-            .header("apikey", instance_token.expose_secret())
-            .json(&serde_json::json!({ "number": to_number, "text": text }))
+            .get(format!("{}/instance/all", self.base_url))
+            .header("apikey", self.global_api_key.expose_secret())
             .send()
             .await
             .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
@@ -267,19 +240,65 @@ impl MessagingProvider for EvolutionProvider {
             .await
             .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
 
-        let id = v
-            .get("key")
-            .and_then(|k| k.get("id"))
-            .and_then(|i| i.as_str())
+        let mut names = Vec::new();
+        let items = if let Some(arr) = v.as_array() {
+            Some(arr)
+        } else {
+            v.get("data").and_then(|d| d.as_array())
+        };
+
+        if let Some(arr) = items {
+            for item in arr {
+                if let Some(name) = item.get("instanceName").and_then(|n| n.as_str()) {
+                    names.push(name.to_string());
+                } else if let Some(name) = item.get("name").and_then(|n| n.as_str()) {
+                    names.push(name.to_string());
+                }
+            }
+        }
+
+        Ok(names)
+    }
+}
+
+#[async_trait]
+impl MessageSender for EvolutionProvider {
+    #[tracing::instrument(err, skip(self, instance_token, text), fields(provider = "evolution", instance_name = %instance_name))]
+    async fn send_text(
+        &self,
+        instance_name: &str,
+        instance_token: &SecretString,
+        to_number: &str,
+        text: &str,
+    ) -> Result<SendMessageResult, MessagingProviderError> {
+        let body = serde_json::json!({
+            "number": to_number,
+            "text": text
+        });
+
+        let resp = self
+            .http
+            .post(format!("{}/send/text", self.base_url))
+            .header("apikey", instance_token.expose_secret())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
+
+        let resp = Self::ok_or_api(resp).await?;
+        let parsed: SendMessageResp = resp
+            .json()
+            .await
+            .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
+
+        let id = parsed
+            .id
+            .or_else(|| parsed.key.map(|k| k.id))
             .ok_or_else(|| {
-                MessagingProviderError::Deserialization(
-                    "key.id ausente na resposta de envio".into(),
-                )
+                MessagingProviderError::Deserialization("ID da mensagem ausente na resposta".into())
             })?;
 
-        Ok(SendMessageResult {
-            message_id: id.to_string(),
-        })
+        Ok(SendMessageResult { message_id: id })
     }
 
     #[tracing::instrument(err, skip(self, instance_token, caption), fields(provider = "evolution", instance_name = %instance_name))]
@@ -301,8 +320,8 @@ impl MessagingProvider for EvolutionProvider {
 
         let mut body = serde_json::json!({
             "number": to_number,
-            "media": media_url,
-            "mediatype": media_type_str,
+            "type": media_type_str,
+            "url": media_url,
         });
 
         if let Some(c) = caption {
@@ -311,10 +330,7 @@ impl MessagingProvider for EvolutionProvider {
 
         let resp = self
             .http
-            .post(format!(
-                "{}/message/sendMedia/{}",
-                self.base_url, instance_name
-            ))
+            .post(format!("{}/send/media", self.base_url))
             .header("apikey", instance_token.expose_secret())
             .json(&body)
             .send()
@@ -322,62 +338,259 @@ impl MessagingProvider for EvolutionProvider {
             .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
 
         let resp = Self::ok_or_api(resp).await?;
-        let v: serde_json::Value = resp
+        let parsed: SendMessageResp = resp
             .json()
             .await
             .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
 
-        let id = v
-            .get("key")
-            .and_then(|k| k.get("id"))
-            .and_then(|i| i.as_str())
+        let id = parsed
+            .id
+            .or_else(|| parsed.key.map(|k| k.id))
             .ok_or_else(|| {
                 MessagingProviderError::Deserialization(
-                    "key.id ausente na resposta de envio de mídia".into(),
+                    "ID da mensagem de mídia ausente na resposta".into(),
                 )
             })?;
 
-        Ok(SendMessageResult {
-            message_id: id.to_string(),
-        })
+        Ok(SendMessageResult { message_id: id })
     }
+}
 
-    #[tracing::instrument(err, skip(self), fields(provider = "evolution"))]
-    async fn list_all_instances(&self) -> Result<Vec<String>, MessagingProviderError> {
+#[async_trait]
+impl PresenceControl for EvolutionProvider {
+    #[tracing::instrument(err, skip(self, token), fields(provider = "evolution", instance_name = %instance_name))]
+    async fn set_presence(
+        &self,
+        instance_name: &str,
+        token: &SecretString,
+        chat: &str,
+        state: PresenceState,
+        is_audio: bool,
+    ) -> Result<(), MessagingProviderError> {
+        let state_str = match state {
+            PresenceState::Composing => "composing",
+            PresenceState::Recording => "recording",
+            PresenceState::Paused => "paused",
+        };
+
+        let body = serde_json::json!({
+            "number": chat,
+            "state": state_str,
+            "isAudio": is_audio
+        });
+
         let resp = self
             .http
-            .get(format!("{}/instance/fetchInstances", self.base_url))
-            .header("apikey", self.global_api_key.expose_secret())
+            .post(format!("{}/message/presence", self.base_url))
+            .header("apikey", token.expose_secret())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
+
+        Self::ok_or_api(resp).await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl ReadReceipts for EvolutionProvider {
+    #[tracing::instrument(err, skip(self, token), fields(provider = "evolution", instance_name = %instance_name))]
+    async fn mark_read(
+        &self,
+        instance_name: &str,
+        token: &SecretString,
+        chat: &str,
+        message_ids: &[String],
+    ) -> Result<(), MessagingProviderError> {
+        let body = serde_json::json!({
+            "number": chat,
+            "id": message_ids
+        });
+
+        let resp = self
+            .http
+            .post(format!("{}/message/markread", self.base_url))
+            .header("apikey", token.expose_secret())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
+
+        Self::ok_or_api(resp).await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl Reactions for EvolutionProvider {
+    #[tracing::instrument(err, skip(self, token), fields(provider = "evolution", instance_name = %instance_name))]
+    async fn send_reaction(
+        &self,
+        instance_name: &str,
+        token: &SecretString,
+        chat: &str,
+        message_id: &str,
+        emoji: &str,
+        from_me: bool,
+    ) -> Result<SendMessageResult, MessagingProviderError> {
+        let body = serde_json::json!({
+            "number": chat,
+            "reaction": emoji,
+            "id": message_id,
+            "fromMe": from_me
+        });
+
+        let resp = self
+            .http
+            .post(format!("{}/message/react", self.base_url))
+            .header("apikey", token.expose_secret())
+            .json(&body)
             .send()
             .await
             .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
 
         let resp = Self::ok_or_api(resp).await?;
-        let v: serde_json::Value = resp
+        let parsed: SendMessageResp = resp
             .json()
             .await
             .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
 
-        let mut names = Vec::new();
-        if let Some(arr) = v.as_array() {
-            for item in arr {
-                if let Some(name) = item.get("instanceName").and_then(|n| n.as_str()) {
-                    names.push(name.to_string());
-                } else if let Some(name) = item.get("name").and_then(|n| n.as_str()) {
-                    names.push(name.to_string());
-                }
-            }
-        }
+        let id = parsed
+            .id
+            .or_else(|| parsed.key.map(|k| k.id))
+            .unwrap_or_else(|| message_id.to_string());
 
-        Ok(names)
+        Ok(SendMessageResult { message_id: id })
     }
 }
 
-fn map_state(s: &str) -> ConnectionState {
-    match s {
-        "open" => ConnectionState::Connected,
-        "close" => ConnectionState::Disconnected,
-        "connecting" => ConnectionState::Connecting,
-        _ => ConnectionState::Unknown,
+#[async_trait]
+impl MediaDownloader for EvolutionProvider {
+    #[tracing::instrument(err, skip(self, token, message), fields(provider = "evolution", instance_name = %instance_name))]
+    async fn download_media(
+        &self,
+        instance_name: &str,
+        token: &SecretString,
+        message: &serde_json::Value,
+    ) -> Result<MediaDownloadResult, MessagingProviderError> {
+        let body = serde_json::json!({
+            "message": message
+        });
+
+        let resp = self
+            .http
+            .post(format!("{}/message/downloadmedia", self.base_url))
+            .header("apikey", token.expose_secret())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
+
+        let resp = Self::ok_or_api(resp).await?;
+        let parsed: DownloadMediaResp = resp
+            .json()
+            .await
+            .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
+
+        Ok(MediaDownloadResult {
+            base64: parsed.base64,
+            mime_type: parsed.mimetype,
+        })
+    }
+}
+
+#[async_trait]
+impl ProfileQuery for EvolutionProvider {
+    #[tracing::instrument(err, skip(self, token), fields(provider = "evolution", instance_name = %instance_name))]
+    async fn get_profile_picture(
+        &self,
+        instance_name: &str,
+        token: &SecretString,
+        number: &str,
+    ) -> Result<Option<String>, MessagingProviderError> {
+        let body = serde_json::json!({
+            "number": number,
+            "preview": false
+        });
+
+        let resp = self
+            .http
+            .post(format!("{}/user/avatar", self.base_url))
+            .header("apikey", token.expose_secret())
+            .json(&body)
+            .send()
+            .await;
+
+        match resp {
+            Ok(r) => {
+                if r.status().is_success() {
+                    let parsed: AvatarResp = r.json().await.unwrap_or(AvatarResp {
+                        profile_picture_url: None,
+                        url: None,
+                    });
+                    Ok(parsed.profile_picture_url.or(parsed.url))
+                } else {
+                    Ok(None)
+                }
+            }
+            Err(_) => Ok(None),
+        }
+    }
+}
+
+#[async_trait]
+impl AdvancedSettingsControl for EvolutionProvider {
+    #[tracing::instrument(err, skip(self, token), fields(provider = "evolution", instance_id = %instance_id))]
+    async fn set_advanced_settings(
+        &self,
+        instance_id: &str,
+        token: &SecretString,
+        settings: AdvancedSettings,
+    ) -> Result<(), MessagingProviderError> {
+        let body = serde_json::json!({
+            "alwaysOnline": settings.always_online,
+            "readMessages": settings.read_messages,
+            "rejectCall": settings.reject_call,
+            "msgRejectCall": settings.msg_reject_call,
+            "ignoreGroups": settings.ignore_groups,
+            "ignoreStatus": settings.ignore_status,
+        });
+
+        let resp = self
+            .http
+            .put(format!(
+                "{}/instance/{}/advanced-settings",
+                self.base_url, instance_id
+            ))
+            .header("apikey", token.expose_secret())
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
+
+        Self::ok_or_api(resp).await?;
+        Ok(())
+    }
+}
+
+impl MessagingProvider for EvolutionProvider {
+    fn presence(&self) -> Option<&dyn PresenceControl> {
+        Some(self)
+    }
+    fn read_receipts(&self) -> Option<&dyn ReadReceipts> {
+        Some(self)
+    }
+    fn reactions(&self) -> Option<&dyn Reactions> {
+        Some(self)
+    }
+    fn media_downloader(&self) -> Option<&dyn MediaDownloader> {
+        Some(self)
+    }
+    fn profiles(&self) -> Option<&dyn ProfileQuery> {
+        Some(self)
+    }
+    fn advanced_settings(&self) -> Option<&dyn AdvancedSettingsControl> {
+        Some(self)
     }
 }

@@ -2,6 +2,64 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-06-25] - Camada de Mensageria WhatsApp (Evolution Go)
+
+> Ciclo PREVC `camada-mensageria-whatsapp-evolution-go` concluído e arquivado. Final-review:
+> `final-review-camada-mensageria-whatsapp-evolution-go.md` — qualidade **CORRIGIDO**.
+
+### Adicionado
+
+- **`infrastructure_messaging` — contrato segregado (ISP):** o trait único de 12 métodos virou
+  traits de capacidade — núcleo `InstanceManager`+`MessageSender` e opcionais `PresenceControl`,
+  `ReadReceipts`, `Reactions`, `MediaDownloader`, `ProfileQuery`, `AdvancedSettingsControl`. Fachada
+  `MessagingProvider` com descoberta `Option<&dyn Cap>` (default `None`), preservando object-safety
+  de `Arc<dyn MessagingProvider>`.
+- **`ProviderRegistry` + `ProviderRegistryBuilder` (DIP) (`registry.rs`):** resolve `dyn
+  MessagingProvider` pela coluna `provider` da instância (chave = `provider_name()`); plugar um novo
+  provedor passa a ser nova crate + 1 linha no registry, sem tocar consumidores.
+- **`MessagingProviderError::Unsupported(&'static str)` (LSP):** capacidade ausente retorna erro
+  canônico em vez de no-op/panic; os handlers de `data_whatsapp` derivam a mensagem desse variante.
+- **`webhook_ingress` — `WebhookNormalizer` registry (OCP):** o `match provider` hardcoded virou
+  `HashMap<&str, Arc<dyn WebhookNormalizer>>`; canonização dos eventos Go (UPPERCASE/PascalCase +
+  aliases) para `MESSAGE`/`CONNECTION`/`PRESENCE`/`QRCODE`/`CONTACTS`/`MESSAGE_UPDATE`; provedor
+  desconhecido responde 202 + warn.
+- **Novos RPCs em `data_whatsapp`:** markread, react, presence, avatar (foto de perfil), download de
+  mídia e reconnect — cada um resolve o `dyn` por instância e respeita LSP.
+
+### Alterado
+
+- **Realinhamento Evolution API v2 (Baileys) → Evolution Go (whatsmeow):** `infrastructure_evolution`
+  passa a falar o contrato Go (fonte da verdade: `evolution_go_adapter.py`) — `/instance/connect`
+  com token da instância + `subscribe` UPPERCASE + `immediate`; status via `GET /instance/status`;
+  envio via `/send/text` e `/send/media` (`type`/`url`/`caption`/`filename`); logout
+  `DELETE /instance/logout`; `map_state` ampliado; webhook embutido no `connect`. Mocks wiremock
+  migrados de v2 para Go. Nenhum endpoint v2 remanescente.
+- **`data_whatsapp`:** `AppState` deixa de segurar o `EvolutionProvider` concreto e passa a usar
+  `ProviderRegistry` (concreto só na composition root); `AdminBulkDisconnect` →
+  `AdminBulkDisconnectInstances`.
+
+### Observabilidade & Auditoria
+
+- `SecretString` sempre em `skip(...)`; body de erro do provedor truncado a 200 chars; body do
+  webhook nunca logado (PII). Auditoria `whatsapp.instance.create/delete` e
+  `whatsapp.admin.bulk_disconnect` via `security:stream` → `audit_log` (context sem token).
+
+### Sem mudança de schema
+
+- DB, migração `0008_whatsapp_sync.sql` e ports/adapters já eram genéricos — validados sem alteração.
+
+### Correções do final-review (CORRIGIDO)
+
+- 5 handlers de capacidade opcional em `data_whatsapp` retornavam `AppError::Internal` com strings
+  ad-hoc; passaram a derivar de `MessagingProviderError::Unsupported(...)` (conformidade LSP). Teste
+  `test_lsp_unsupported_error` ajustado. Revalidado verde via `test-local.ps1 -Fast`.
+
+### Pendências remanescentes (trabalho futuro)
+
+- Confirmar empiricamente o campo `base64` do `/message/downloadmedia` contra o Evolution Go real.
+- Auditar o `.proto` dos novos RPCs (markread/presence/etc.) com o time de contratos.
+- `translate_go_payload` (ingress, payload whatsmeow → shape canônico) foi além do plano; documentar.
+
 ## [2026-06-20] - Painel Gerencial do Superusuário (Admin Total)
 
 > Ciclo PREVC `painel-admin-superusuario` concluído e arquivado. Final-review:
