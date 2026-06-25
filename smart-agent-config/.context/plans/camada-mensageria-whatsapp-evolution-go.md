@@ -51,8 +51,11 @@ scaffoldVersion: "2.0.0"
 > Realinhar a camada Rust de mensageria do contrato **Evolution API v2 (Baileys)** — escrito no
 > código atual — para o **Evolution Go (whatsmeow)**, que é o servidor que está rodando, e
 > ampliar para a **superfície completa** (presença, reações, recibo de leitura, download de
-> mídia, advanced-settings, reconnect, foto de perfil). **Não é greenfield**: crates, apps,
-> migração e ports/adapters já existem. **Sem criação de crate/app e sem mudança de schema.**
+> mídia, advanced-settings, reconnect, foto de perfil). **Estruturado para conformidade SOLID**:
+> contrato segregado em traits de capacidade (ISP), `ProviderRegistry` resolvendo `dyn` por
+> instância (DIP) e registry de normalizadores no ingress (OCP) — **plugar/desplugar provedor
+> sem tocar consumidores**. **Não é greenfield**: crates, apps, migração e ports/adapters já
+> existem. **Sem criação de crate/app e sem mudança de schema.**
 
 ## Artefatos (fonte da verdade técnica)
 
@@ -74,12 +77,17 @@ contra o mesmo servidor. Onde a coleta web conflitar com o adapter, **o adapter 
 
 | Componente | Estado hoje | Trabalho |
 | --- | --- | --- |
-| `infrastructure_messaging` | trait com 12 métodos (v2-shaped) | **E1**: ampliar trait + tipos novos |
-| `infrastructure_evolution` | fala endpoints v2 | **E2**: realinhar ao contrato Go |
-| `data_whatsapp` | RPCs sobre trait v2 | **E3**: realinhar fluxo + novos RPCs |
-| `webhook_ingress` | só eventos v2 lowercase | **E4**: canonizar eventos Go |
+| `infrastructure_messaging` | trait **único** de 12 métodos (v2) | **E1**: segregar em traits de capacidade (ISP) + fachada com descoberta `Option<&dyn>` + `ProviderRegistry`; ampliar p/ Go |
+| `infrastructure_evolution` | fala endpoints v2 | **E2**: realinhar ao contrato Go implementando os traits segregados |
+| `data_whatsapp` | `AppState` com `EvolutionProvider` **concreto** | **E3**: trocar por `ProviderRegistry` (DIP), resolve `dyn` pelo `provider` da instância; novos RPCs |
+| `webhook_ingress` | `match provider` + eventos v2 lowercase | **E4**: `WebhookNormalizer` registry (OCP) + canonização de eventos Go |
 | DB + ports/adapters | prontos e genéricos | **E5**: só validar (sem mudança) |
 | `control_plane` | endpoint admin | **E6**: sem regressão |
+
+> **Conformidade SOLID** (núcleo do design): ISP (traits de capacidade), DIP (`ProviderRegistry`
+> resolve `dyn MessagingProvider` por instância), OCP (`WebhookNormalizer` registry), LSP
+> (capacidade ausente → `Unsupported`, sem no-op). Plugar provedor = nova crate + 1 linha no
+> registry + 1 normalizer; zero alteração nos consumidores.
 
 ## Fases PREVC
 
@@ -87,11 +95,14 @@ contra o mesmo servidor. Onde a coleta web conflitar com o adapter, **o adapter 
    superfície completa do trait e eventos normalizados definidos. Saídas: info_aux + plano completo.
 2. **R — Review**: R1 versões (axum 0.7.5 vs 0.8 local; reqwest 0.12); R2 segurança (SecretString,
    RLS, body truncado); R3 contrato de barramento (TenantEnvelope + transport::bus). Gate R.
-3. **E — Execution**: E1 ampliar trait `infrastructure_messaging`; E2 realinhar `EvolutionProvider`
-   ao contrato Go (helper `send_request`, endpoints Go, `map_state` ampliado, webhook embutido no
-   `connect`); E3 `data_whatsapp` (CreateWhatsappInstance via connect+subscribe; novos RPCs
-   markread/react/presence/avatar/download/reconnect); E4 `webhook_ingress` (canonical_event +
-   normalização por evento); E5 validar DB (sem mudança); E6 `control_plane` sem regressão.
+3. **E — Execution**: E1 **segregar** o contrato de `infrastructure_messaging` em traits de
+   capacidade (ISP) + fachada com acessores `Option<&dyn>` + `ProviderRegistry` + `Unsupported`;
+   E2 `EvolutionProvider` implementa os traits contra o Go (helper `send_request`, endpoints Go,
+   `map_state` ampliado, webhook embutido no `connect`); E3 `data_whatsapp` troca `AppState`
+   concreto por `ProviderRegistry` (DIP), resolve `dyn` por instância, CreateWhatsappInstance via
+   `connect_instance(&WebhookConfig)`, novos RPCs markread/react/presence/avatar/download/reconnect;
+   E4 `webhook_ingress` `WebhookNormalizer` registry (OCP) + `canonical_event`; E5 validar DB (sem
+   mudança); E6 `control_plane` sem regressão.
 4. **V — Validation**: build dos 4 crates/apps; testes via `.\infra\test-local.ps1` (mocks wiremock
    atualizados v2→Go); integração manual contra o Evolution Go real (confirmar campo `base64` do
    downloadmedia); checagem de observabilidade/auditoria sem vazamento.

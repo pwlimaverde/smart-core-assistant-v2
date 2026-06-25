@@ -139,5 +139,8 @@ Payload de **CONNECTION**: `data.state`/`data.status` (open/close/connecting/log
 ## Notas gerais
 - DB já pronto (`0008_whatsapp_sync.sql` + repositório + ports/adapters); **sem mudança de schema**.
 - Dois `axum` coexistem (0.7.5 runtime_api / 0.8 webhook_ingress) — não unificar no workspace.
+- **Design SOLID (v4) não introduz dependência nova**: `ProviderRegistry`/`ProviderRegistryBuilder`
+  e os traits de capacidade usam apenas `std` (`Arc`/`HashMap`) + `async-trait` (já no workspace);
+  os mocks de teste (DIP) usam `mockall 0.13` (já dev-dep). Nenhuma lib precisa de Context7.
 - Plano arquivado relacionado: `.context/plans/archive/camada-abstracao-mensageria/` (versão v2;
-  este plano é o realinhamento ao Go).
+  este plano é o realinhamento ao Go + adequação SOLID).
