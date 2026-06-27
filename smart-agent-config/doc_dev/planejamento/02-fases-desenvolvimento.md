@@ -1,7 +1,9 @@
 # Smart Core Assistant v2 — Fases de Desenvolvimento
 
-> **Status:** Guia operacional de construção — **revisado em junho/2026** para
-> refletir o estado real do desenvolvimento.
+> **Status:** Guia operacional de construção — **atualizado em 2026-06-27** para
+> refletir o estado real do desenvolvimento (CI/CD, auth, camada de mensageria e
+> UI de login já avançaram além da revisão de junho). Inclui **cronograma dos
+> próximos passos** ao final do snapshot.
 > **Idioma:** Português (comunicação/documentação). Código e identificadores em inglês.
 > **Origem:** Deriva de [00-planejamento-inicial.md](./00-planejamento-inicial.md)
 > (visão/arquitetura) e [01-estrutura-do-projeto.md](./01-estrutura-do-projeto.md)
@@ -36,25 +38,27 @@
 
 ### O que já está pronto (✅)
 - **Crates de Base/Fundação** — `contracts` (schemas proto/fbs, Envelope e stubs gerados), `transport` (codec FlatBuffers/gRPC, canais UDS/TCP/WS, barramento `transport::bus`), `error_core` (erros serializáveis `ErrorEnvelope`) e `observability` (tracing, `traceparent`, auditoria rewired para Streams).
-- **Serviços de Dados (data_*)** — `data_postgres` (encapsulando RLS pool, migrations e CRUD Postgres de `infrastructure_postgres`), `data_redis` (encapsulando cache, tokens, locks de `infrastructure_redis`) e `data_storage` (encapsulando Cloudflare R2 de `infrastructure_storage`).
-- **Infraestrutura de dados + deploy** — `docker/compose/data.yml` (PG+pgvector, Redis; MinIO legado no compose, sem uso — storage é R2 direto) e scripts `infra/` de automação e túnel SSH.
-- **Bootstrap de superusuário** — CLI `create-superuser` e `delete-superuser` no `control_plane` (thin RPC client → `data_postgres`), com auditoria e trail.
+- **Serviços de Dados (data_*)** — `data_postgres` e `data_redis` já em **Ports & Adapters** (plano 14), mais `data_storage` (Cloudflare R2). Todos expõem servidores RPC IPC/UDS/TCP.
+- **Infraestrutura de dados + deploy** — `docker/compose/data.yml` (PG+pgvector, Redis) e scripts `infra/` de automação e túnel SSH.
+- **Bootstrap de superusuário** — CLI `create-superuser` e `delete-superuser` no `control_plane`.
+- **CI/CD + servidor (F-devops — núcleo concluído)** — `.github/workflows/` com `ci.yml`, `deploy-dev.yml`, `deploy-prod.yml` e `pr-to-main.yml`; **self-hosted runner** no Hostinger operante (deploy automático de `dev`; tags `v*` em prod). **Falta** a stack de observabilidade Grafana LGTM (devops-4).
+- **Autenticação (F6.1 + F6.3 — backend)** — `runtime_api` com rotas `Login`/`Refresh`/`Logout`, JWT HS256, **rotação de refresh por família + reuse-detection** (auditados no `security:stream`), rate limiting de login e blocklist via `data_redis` (ports/adapters `refresh_token` e `rate_limiter`). Casos de uso em `application::auth`.
+- **Camada de mensageria WhatsApp/Evolution (planos 13 e 14)** — `infrastructure_messaging` (abstração de provedor + `ProviderRegistry`), `infrastructure_evolution` (cliente HTTP Evolution Go + provider), app `webhook_ingress` (normaliza webhook → publica no bus) e app `data_whatsapp` (12 rotas RPC: criar/excluir/reconectar instância, status, enviar texto/mídia, marcar lida, reação, presença, foto de perfil, baixar mídia + registro de instâncias no banco).
+- **UI Flutter — base + login (F6.5, avançado)** — app `clients/apps/smart-core-admin` com `login_module` completo (clean arch: data/domain/presentation, datasources gRPC de login/logout/refresh, secure storage, guarda de sessão) + `design_system_module`, `navigation_module`, `core_module` e `dependencies_module`; packages `api_client`, `domain_models`, `app_config`, `get_it_module`.
 
 ### O que está em andamento / próximo (🚧)
-- **CI/CD + DevOps** ← **próxima fase a executar (F-devops)**. Servidor Hostinger,
-  dois ambientes (dev/prod), self-hosted runner, systemd units, Caddy, Grafana.
-  Ver [10-plano-cicd-devops.md](./10-plano-cicd-devops.md).
-- **Módulo de autenticação** (`user-auth-module`) — Após DevOps: AuthService + JWT no
-  `runtime_api`. Pré-requisito para o painel admin.
-- **Painel Admin do Superusuário** — Equivalente ao Django admin da v1. Após auth.
+- **Realtime (F6.2)** — rota `StreamAtendimentos` já existe no `runtime_api` (stub repassando ao `data_postgres`); falta o **fan-out por tenant via Redis pub/sub** (multi-réplica) e o stream real de eventos.
+- **Orquestração do `worker` (F4)** — hoje persiste em `atendimento_id` fixo (bootstrap). Falta a resolução **contato → atendimento**, debounce, políticas de ticket, Kanban e barreira de bot.
+- **Painel Admin do Superusuário (F2)** — `admin_module` Flutter existe; depende dos endpoints CRUD do `control_plane` (F2.3), ainda ausentes.
   Ver [11-painel-admin-superusuario.md](./11-painel-admin-superusuario.md).
-- **Orquestração e Gateway de Mensagens** — Bootstrap estrutural pronto; aguarda F3/F4.
 
 ### O que está pendente (⬜)
-- **`ia_engine`** (serviço Python separado via gRPC/FlatBuffers) — F5.
-- **realtime** (gRPC Server Streaming via Redis pub/sub no `runtime_api`) — F6.2.
-- **Clients Flutter** (`flutter_windows`, `flutter_web`) e motor local `local_engine` (FFI).
-- **Observabilidade completa** (Grafana LGTM stack em produção) — parte do F-devops.
+- **Autenticação de webhook + whitelist** no `webhook_ingress` (F3.4) — hoje a origem não é validada.
+- **Envio outbound (F4.4)** — o `worker` ainda não chama `data_whatsapp::SendWhatsappMessage`.
+- **CRUD admin do `control_plane` (F2.3)** + telas administrativas (F2.5).
+- **`ia_engine`** (serviço Python separado via gRPC/FlatBuffers) — F5; pasta ainda vazia.
+- **Observabilidade completa** (Grafana LGTM stack em produção) — devops-4 / F9.1.
+- **Local engine `local_engine` (FFI)** — F8 — e **port Web** (`flutter_web`) — F10.
 
 ### Inventário de crates/apps × status
 
@@ -63,26 +67,33 @@
 | `infrastructure_postgres` | crate infra | ✅ | repositórios SQLx, criptografia e migrations |
 | `infrastructure_redis` | crate infra | ✅ | conexões Redis, cache, tokens, locks |
 | `infrastructure_storage` | crate infra | ✅ | cliente R2 real (`aws-sdk-s3`), presign real, layout `media/{tenant}/...` |
-| `infrastructure_evolution` | crate infra | ⬜ | cliente HTTP REST para o Evolution Go |
+| `infrastructure_evolution` | crate infra | ✅ | cliente HTTP Evolution Go + `EvolutionProvider` |
+| `infrastructure_messaging` | crate infra | ✅ | abstração de provedor de mensageria + `ProviderRegistry` (plano 13) |
 | `contracts` | crate base | ✅ | schemas proto/fbs, Envelope e tipos gerados |
 | `transport` | crate base | ✅ | canais UDS/TCP/WS, codecs e barramento |
 | `observability` | crate base | ✅ | tracing OTLP central + auditoria via bus |
 | `error_core` | crate base | ✅ | taxonomia e erros com `ErrorEnvelope` serializável |
-| `application` | crate aplicação| 🚧 | casos de uso de negócio; em andamento com o auth |
+| `test_support` | crate base | ✅ | suporte a testes (túnel SSH, fixtures) |
+| `application` | crate aplicação | 🚧 | casos de uso; `auth` concluído, domínio (F4) pendente |
 | `local_engine` | crate (FFI) | ⬜ | F8; motor local embarcado |
-| `data_postgres` | app | ✅ | servidor RPC Postgres síncrono/assíncrono + outbox |
-| `data_redis` | app | ✅ | servidor RPC Redis síncrono (tokens, cache, locks) |
-| `data_storage` | app | ✅ | servidor RPC (PutFile/GetFile/PresignFile — payload JSON com `file_name`; deleção via evento `media.purge`) + consumer de purga; backend Cloudflare R2 real |
-| `control_plane` | app | 🚧 | bootstrapado; aguarda endpoints admin (F2) |
-| `messaging_gateway` | app | 🚧 | bootstrapado; aguarda lógica webhook WhatsApp (F3) |
-| `worker` | app | 🚧 | bootstrapado; aguarda orquestrador do domínio (F4) |
-| `runtime_api` | app | 🚧 | em andamento; gRPC mínimo (auth) (F6) |
-| `clients/packages/core_ui` | pacote Flutter | ⬜ | bootstrap na F6.5 (design system) |
-| `clients/packages/api_client` | pacote Flutter | ⬜ | bootstrap na F6.5 (gRPC único / FlatBuffers) |
-| `clients/flutter_windows` | stack Flutter | ⬜ | incremental (F6.5 bootstrap+auth → F2/F4/F5 telas → F7 consolida) |
+| `data_postgres` | app | ✅ | RPC Postgres + outbox; Ports & Adapters (plano 14) |
+| `data_redis` | app | ✅ | RPC Redis (tokens, cache, locks, rate limiter); Ports & Adapters |
+| `data_storage` | app | ✅ | RPC (PutFile/GetFile/PresignFile) + consumer de purga; backend R2 real |
+| `data_whatsapp` | app | ✅ | RPC de instâncias/mensagens WhatsApp via `infrastructure_evolution` (12 rotas) |
+| `webhook_ingress` | app | 🚧 | recebe webhook → normaliza → publica no bus; **falta auth/whitelist** (F3.4) |
+| `control_plane` | app | 🚧 | CLI superuser ok; aguarda endpoints CRUD admin (F2.3) |
+| `messaging_gateway` | app | 🚧 | bootstrap; papel sendo absorvido por `webhook_ingress`/`data_whatsapp` |
+| `worker` | app | 🚧 | consome bus e persiste (atendimento fixo); aguarda orquestração (F4) |
+| `runtime_api` | app | 🚧 | auth (Login/Refresh/Logout) ✅; `StreamAtendimentos` stub; demais comandos ⬜ |
+| `clients/apps/smart-core-admin` | app Flutter | 🚧 | base + login (F6.5); telas admin/operacionais pendentes |
+| `clients/modulos/login_module` | módulo Flutter | ✅ | login/logout/refresh via gRPC + guarda de sessão |
+| `clients/modulos/admin_module` | módulo Flutter | ⬜ | depende do CRUD do `control_plane` (F2) |
+| `clients/modulos/design_system_module` | módulo Flutter | ✅ | design system (tema dark) |
+| `clients/packages/api_client` | pacote Flutter | ✅ | cliente gRPC único / FlatBuffers |
+| `clients/packages/domain_models` | pacote Flutter | ✅ | DTOs do `.proto` |
 | `clients/flutter_web` | stack Flutter | ⬜ | F10 (RemoteOnly; reusa packages) |
-| `evolution/` | stack Go | ⬜ | F3; gateway Evolution Go |
-| `ia_engine` | stack Python | ⬜ | F5; gRPC/FlatBuffers IA engine |
+| `evolution/` | stack Go | 🚧 | F3; Evolution Go rodando via compose próprio no deploy |
+| `ia_engine` | stack Python | ⬜ | F5; gRPC/FlatBuffers IA engine (pasta vazia) |
 
 > **Nota de arquitetura (camadas — esclarecimento importante):**
 > `infrastructure_postgres` **não é** a camada de domínio. É a **ponte de
@@ -131,23 +142,18 @@ F0 Fundação ──► F1 Banco+RLS+Storage ──► Bootstrap CLI superuser
     local)             │
                        │
                        ▼
-               F-devops ← PRÓXIMA FASE A EXECUTAR
-               CI/CD + Servidor + 2 Ambientes
-               (ver 10-plano-cicd-devops.md)
-               - Servidor Hostinger provisionado
-               - Systemd units (dev + prod)
-               - Caddy + TLS automático
-               - GitHub Actions (CI + deploy-dev + deploy-prod)
-               - Self-hosted runner no servidor
-               - Grafana LGTM stack
-               - Checklist seção 13 do plano 10
+               F-devops ✅ (núcleo) — falta só Grafana LGTM (devops-4)
+               CI/CD + Servidor + 2 Ambientes (ver 10-plano-cicd-devops.md)
+               - GitHub Actions (ci + deploy-dev + deploy-prod + pr-to-main) ✅
+               - Self-hosted runner no servidor ✅
+               - Grafana LGTM stack ⬜ (devops-4)
                        │
-                       │ (servidor pronto — primeiro deploy funcional)
+                       │ (servidor pronto — deploy automático de dev)
                        ▼
-               F6.1 runtime_api + AuthService (Login/Logout/Refresh)
+               F6.1 runtime_api + AuthService (Login/Logout/Refresh) ✅
                        │
                        ▼
-               F6.2 AuthInterceptor (is_superuser role guard)
+               F6.3 JWT + rotação de refresh + reuse-detection ✅
                        │
                        ▼
                F2-admin Control Plane CRUD ──► AdminService no runtime_api
@@ -180,15 +186,58 @@ F0 Fundação ──► F1 Banco+RLS+Storage ──► Bootstrap CLI superuser
                           F10 Port Web (RemoteOnly)
 ```
 
-> **Ordem prática de desenvolvimento:**
-> 1. **F-devops** — pipeline e servidor antes de qualquer código de feature.
->    Todo push em `dev` já faz deploy automático. Tags fazem deploy em prod.
-> 2. **F6.1–6.2** — auth superusuário no `runtime_api` (Login + AuthInterceptor).
-> 3. **F2-admin + Flutter admin** — painel gerencial (valida toda a stack).
-> 4. **F6 completo + F3 + F4 + F5** — features operacionais e IA.
+> **Ordem prática de desenvolvimento (revisada em 2026-06-27):**
+> 1. ~~**F-devops** — pipeline e servidor~~ ✅ pipeline e runner self-hosted ativos
+>    (falta só Grafana LGTM). Push em `dev` já faz deploy automático.
+> 2. ~~**F6.1 auth (backend)**~~ ✅ Login/Refresh/Logout no `runtime_api`.
+> 3. **Fechar o loop de mensageria (F3.4 + F4)** — auth/whitelist no webhook,
+>    orquestração do `worker` (contato→atendimento, debounce) e outbound.
+> 4. **F2-admin + telas Flutter** — CRUD no `control_plane` + painel gerencial.
+> 5. **F6.2 realtime + F5 ia_engine** — stream por tenant e camada de IA.
 >
-> **MVP funcional ponta-a-ponta** = F-devops → F6. A persistência (F1) já está
-> pronta; falta o pipeline de entrega, a API/realtime e as features de negócio.
+> **MVP funcional ponta-a-ponta** = fechar F3.4 → F4 → F6.2 (mensagem entra pelo
+> webhook, vira atendimento, aparece no painel em tempo real e a resposta sai).
+> A persistência (F1), o pipeline (F-devops) e o auth já estão prontos.
+
+---
+
+## Cronograma dos próximos passos (a partir de 2026-06-27)
+
+> Cronograma orientado a **sprints de 2 semanas**, ancorado em 2026-06-27. As
+> datas são metas de planejamento (não compromissos rígidos) e assumem a stack
+> atual já no ar (CI/CD, auth e camada de mensageria prontos). Cada sprint fecha
+> com um **incremento demonstrável ponta-a-ponta**.
+
+| Sprint | Janela | Foco | Entregáveis-chave | Fases |
+|---|---|---|---|---|
+| **S1** | 30/jun – 11/jul | **Endurecer a ingestão** | Auth/whitelist no `webhook_ingress` (valida `apikey`/token de instância contra `integracoes/whitelist.rs` + `evolution.rs`); idempotência por `message_id`/`stanzaId`; testes de ingestão. | F3.4 |
+| **S2** | 14/jul – 25/jul | **Orquestração do `worker` (1/2)** | `domain_whatsapp` (normalização) + resolução **contato → atendimento aberto** (fim do `atendimento_id` fixo); reuso do cliente RPC no estado. | F3.2, F4.1, F4.3 |
+| **S3** | 28/jul – 08/ago | **Orquestração do `worker` (2/2)** | Debounce por contato (`DebounceByContact`), políticas de ticket, atualização de Kanban e barreira de bot (`BotRulesEngine`, sem LLM). | F4.2, F4.5 |
+| **S4** | 11/ago – 22/ago | **Outbound + realtime** | `worker` → `data_whatsapp::SendWhatsappMessage` (retry/backoff, confirmações); `StreamAtendimentos` real com fan-out por tenant via Redis pub/sub. | F4.4, F6.2 |
+| **S5** | 25/ago – 05/set | **UI operacional (fecha o loop)** | No `smart-core-admin`: fila por departamento + **Kanban** (drag-and-drop) + **chat lateral** consumindo o stream gRPC. **Marco: MVP ponta-a-ponta.** | F4.6 |
+| **S6** | 08/set – 19/set | **Control Plane + Painel admin** | CRUD admin no `control_plane` (tenant/plano/assinatura/convite) + `TenantConfigCache` plugado (invalidação via Pub/Sub); telas do `admin_module`. | F2.2b, F2.3, F2.5 |
+| **S7** | 22/set – 03/out | **`ia_engine` (1/2)** | Skeleton Python (`uv`, `server.py` RPC), contratos/stubs, porte da facade `FeaturesCompose`, transcribe/interpret/embeddings 1536. | F5.1–F5.3 |
+| **S8** | 06/out – 17/out | **`ia_engine` (2/2) + integração** | Resposta + RAG (pgvector via `data_postgres` RPC) + sentimento; `worker` → IA com timeout/retry e degradação graciosa; exibição da resposta no chat. | F5.4, F5.5 |
+| **S9** | 20/out – 31/out | **Observabilidade + consolidação** | Grafana LGTM (devops-4) com traces/logs reais; consolidação do `smart-core-admin` (navegação, estados de erro/carga, empacotamento). | devops-4, F7 |
+
+> **Marco principal — MVP funcional ponta-a-ponta:** fim da **S5** (~05/set/2026)
+> — uma mensagem de WhatsApp entra pelo `webhook_ingress`, vira atendimento no
+> `worker`, aparece no painel em tempo real e a resposta sai pelo `data_whatsapp`.
+>
+> **Fora deste horizonte (backlog posterior):** F8 (local engine FFI + mídia
+> local), F9 (billing/quotas, retenção de mídia, segurança/carga) e F10 (port Web).
+> Entram após o MVP estar estável em produção.
+
+### Riscos e dependências do cronograma
+
+- **S2–S3 são o caminho crítico** — a resolução contato→atendimento destrava a UI
+  (S5) e a IA (S8). Atraso aqui empurra o MVP.
+- **`ia_engine` (S7–S8)** é a maior incógnita de esforço (serviço Python novo);
+  pode exigir um sprint extra. Não bloqueia o MVP (S5), só o enriquece.
+- **Túnel SSH / ambiente remoto** — testes de integração dependem do `test_support`
+  e do reset de schema remoto; manter o ambiente dev estável é pré-condição.
+- **Validar a cada sprint:** os princípios invioláveis abaixo e o checklist por PR
+  (Apêndice A).
 
 ---
 
@@ -299,32 +348,37 @@ pelas telas de login e cadastro junto do auth.
 
 ---
 
-## Fase devops — CI/CD, Ambientes e Provisionamento do Servidor — ⬜ PRÓXIMA
+## Fase devops — CI/CD, Ambientes e Provisionamento do Servidor — ✅ (núcleo) / 🚧 (Grafana)
 
 **Objetivo:** ter pipeline de CI/CD totalmente funcional e servidor provisionado
 **antes** de escrever qualquer feature de negócio. Todo push em `dev` faz deploy
 automático no ambiente de desenvolvimento; tags `v*` fazem deploy em produção com
 aprovação manual.
 
+> **Estado (2026-06-27):** servidor provisionado, systemd/Caddy, runner
+> self-hosted e os 4 workflows (`ci`, `deploy-dev`, `deploy-prod`, `pr-to-main`)
+> **operantes** (etapas devops-1 a devops-3 ✅). **Pendente:** etapa devops-4
+> (stack de observabilidade Grafana LGTM).
+>
 > **Plano detalhado:** [10-plano-cicd-devops.md](./10-plano-cicd-devops.md)
 > — workflows YAML completos, systemd units, Caddy config, scripts de provisionamento,
 > estratégia de rollback e checklist de execução.
 
-### Etapa devops-1 — Provisionamento do Servidor Hostinger — ⬜
+### Etapa devops-1 — Provisionamento do Servidor Hostinger — ✅
 - Executar `infra/server-setup.sh` (instala Caddy, Rust toolchain, sqlx-cli, cria usuários).
 - Criar estrutura `/opt/smartcore/{dev,prod}/`, `/run/smartcore{,-dev}/`.
 - Configurar firewall `ufw` (22, 80, 443 abertos; demais fechados).
 - Criar banco `smartcore_v2_dev` no PostgreSQL Docker existente.
 - **DoD:** servidor com Caddy respondendo, TLS automático ativo, domínios resolvendo.
 
-### Etapa devops-2 — Systemd e Caddy — ⬜
+### Etapa devops-2 — Systemd e Caddy — ✅
 - Criar 14 unit files systemd (`smartcore-{dev,prod}-{serviço}.service`).
 - Criar `smartcore-{dev,prod}.target` (ordem de boot garantida).
 - Configurar `/etc/caddy/Caddyfile` (prod porta 8080, dev porta 8090, Grafana 3000).
 - Criar arquivos `.env` por ambiente em `/opt/smartcore/{dev,prod}/.env`.
 - **DoD:** `systemctl start smartcore-dev.target` bem-sucedido (mesmo sem binários reais ainda).
 
-### Etapa devops-3 — GitHub Actions e Self-Hosted Runner — ⬜
+### Etapa devops-3 — GitHub Actions e Self-Hosted Runner — ✅
 - Instalar self-hosted runner no Hostinger como usuário `gh-runner`.
 - Criar `ci.yml` (lint + testes, runner GitHub-hosted).
 - Criar `deploy-dev.yml` (build Rust + deploy dev, runner self-hosted).
@@ -333,7 +387,7 @@ aprovação manual.
 - Configurar GitHub Environments (`dev` livre, `prod` com aprovação manual).
 - **DoD:** push em `dev` dispara CI + deploy automático; tag `v0.1.0` dispara deploy prod.
 
-### Etapa devops-4 — Observabilidade (Grafana LGTM) — ⬜
+### Etapa devops-4 — Observabilidade (Grafana LGTM) — ⬜ (única pendente da fase)
 - Criar `docker/compose/observability.yml` (OTel Collector, Loki, Tempo, Prometheus, Grafana).
 - Configurar datasources e dashboards básicos (uptime, latência gRPC, erros).
 - Apontar `grafana.smartcoreassistant.com.br` via Caddy.
@@ -480,9 +534,8 @@ Ver detalhamento completo em [11-painel-admin-superusuario.md](./11-painel-admin
 **Em andamento via `user-auth-module`.**
 
 ### Etapa 6.1 — Binário `runtime_api` — 🚧
-- gRPC (Tonic). Auth: `AuthService` (Register/Login/Refresh/Logout/Invite/
-  Accept) já planejado/iniciado. Demais comandos/consultas (tickets, kanban,
-  histórico) ⬜.
+- Auth: rotas `Login`/`Refresh`/`Logout` **implementadas** (✅). Register/Invite/
+  Accept e demais comandos/consultas (tickets, kanban, histórico) ⬜.
 
 ### Etapa 6.2 — crate `realtime` (gRPC Server Streaming) — 🚧
 - RPC de stream autenticado (ex.: `StreamAtendimentos`) — o cliente abre um
@@ -492,9 +545,11 @@ Ver detalhamento completo em [11-painel-admin-superusuario.md](./11-painel-admin
   mesmo interceptor das chamadas unárias.
 
 ### Etapa 6.3 — Autenticação/autorização — 🚧
-- JWT HS256 (access 15min) + refresh opaco 7d (rotação por família, reuse-
-  detection), blocklist, RBAC (`role`+`module_permissions`+`flow_permissions`),
-  rate limiting de login. **Defesa em 3 camadas** (interceptor → escopos → RLS).
+- **Implementado (✅):** JWT HS256 (access 15min) + refresh opaco 7d com **rotação
+  por família e reuse-detection**, blocklist e rate limiting de login (ports/adapters
+  no `data_redis`). **Pendente (⬜):** RBAC completo
+  (`role`+`module_permissions`+`flow_permissions`) e a **defesa em 3 camadas**
+  (interceptor → escopos → RLS) ponta-a-ponta.
   Detalhe no plano canônico `user-auth-module` e no doc
   [09-comunicacao-e-autenticacao.md](./09-comunicacao-e-autenticacao.md).
 
@@ -627,6 +682,9 @@ chat na F5). Aqui não se "constrói tudo do zero" — refina-se o conjunto.
 - [09-comunicacao-e-autenticacao.md](./09-comunicacao-e-autenticacao.md) — transporte + auth.
 - [10-plano-cicd-devops.md](./10-plano-cicd-devops.md)
   — plano-mãe CI/CD + DevOps (docs 11/12 a detalhar).
+- [15-plano-finalizacao-em-andamento.md](./15-plano-finalizacao-em-andamento.md)
+  — **plano de execução** que fecha as frentes 🚧 + Grafana, com observabilidade
+  obrigatória (cronograma S0.5–S9).
 - `.context/plans/user-auth-module.md` — plano canônico do auth (🚧).
 
 ---
