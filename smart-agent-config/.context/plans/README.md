@@ -3,7 +3,7 @@
 This directory contains plans for coordinating work across documentation and playbooks.
 
 ## Plan Queue
-1. [Camada Mensageria Whatsapp Evolution Go](./camada-mensageria-whatsapp-evolution-go.md)
+1. [Mvp Telas E Endurecimento](./mvp-telas-e-endurecimento.md)
 
 ## How To Create Or Update Plans
 - Run "dotcontext plan <name>" to scaffold a new plan template.

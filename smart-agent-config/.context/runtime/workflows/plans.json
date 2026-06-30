@@ -1,5 +1,14 @@
 {
-  "active": [],
+  "active": [
+    {
+      "slug": "mvp-telas-e-endurecimento",
+      "path": "plans/mvp-telas-e-endurecimento.md",
+      "title": "MVP: Telas & Endurecimento — Frontend operacional/admin + RBAC fino, user_agent, cache invalidation",
+      "summary": "Continuação do ciclo `finalizacao-mvp-operacional` (fechado como MVP parcial WS-0..WS-4 e",
+      "linkedAt": "2026-06-30T22:18:28.402Z",
+      "status": "active"
+    }
+  ],
   "completed": [],
-  "primary": null
+  "primary": "mvp-telas-e-endurecimento"
 }

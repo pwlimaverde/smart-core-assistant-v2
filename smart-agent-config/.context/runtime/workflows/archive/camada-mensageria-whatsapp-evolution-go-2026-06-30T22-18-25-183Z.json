@@ -1,12 +1,12 @@
 {
   "version": 2,
   "workflowType": "prevc",
-  "updatedAt": "2026-06-30T22:18:25.200Z",
+  "updatedAt": "2026-06-25T18:02:56.180Z",
   "status": {
     "project": {
-      "name": "mvp-telas-e-endurecimento",
+      "name": "camada-mensageria-whatsapp-evolution-go",
       "scale": 3,
-      "started": "2026-06-30T22:18:25.188Z",
+      "started": "2026-06-25T18:02:56.166Z",
       "current_phase": "P",
       "settings": {
         "autonomous_mode": false,
@@ -17,7 +17,7 @@
     "phases": {
       "P": {
         "status": "in_progress",
-        "started_at": "2026-06-30T22:18:25.188Z"
+        "started_at": "2026-06-25T18:02:56.166Z"
       },
       "R": {
         "status": "pending"
@@ -68,17 +68,17 @@
         {
           "phase": "P",
           "action": "started",
-          "timestamp": "2026-06-30T22:18:25.188Z"
+          "timestamp": "2026-06-25T18:02:56.166Z"
         }
       ],
-      "last_activity": "2026-06-30T22:18:25.188Z",
+      "last_activity": "2026-06-25T18:02:56.166Z",
       "resume_context": "Fase P (Planejamento) em progresso"
     }
   },
   "binding": {
-    "workflowName": "mvp-telas-e-endurecimento",
-    "sessionId": "97899052-479e-4a93-8f24-b6ec5530a099",
-    "createdAt": "2026-06-30T22:18:25.198Z",
-    "updatedAt": "2026-06-30T22:18:25.192Z"
+    "workflowName": "camada-mensageria-whatsapp-evolution-go",
+    "sessionId": "f383153c-85ac-48ab-b469-2c0fe2894dfd",
+    "createdAt": "2026-06-25T18:02:56.177Z",
+    "updatedAt": "2026-06-25T18:02:56.172Z"
   }
 }
