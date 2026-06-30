@@ -155,6 +155,41 @@ async fn main() -> anyhow::Result<()> {
                     .await
                 })
             }),
+        )
+        // --- WS-5.1: gestão de convites (tenant admin; RBAC fino aplicado no data_postgres) ---
+        .route(
+            "CreateInvite",
+            exigir_auth(deps.clone(), bus.clone(), false, move |deps, env| {
+                Box::pin(async move {
+                    handler_admin_forward(deps, env, "CreateInvite", "CreateInviteReply").await
+                })
+            }),
+        )
+        .route(
+            "AcceptInvite",
+            exigir_auth(deps.clone(), bus.clone(), false, move |deps, env| {
+                Box::pin(async move {
+                    handler_admin_forward(deps, env, "AcceptInvite", "AcceptInviteReply").await
+                })
+            }),
+        )
+        // --- WS-5.2: comandos de leitura operacional (fila, histórico) ---
+        .route(
+            "ListAtendimentos",
+            exigir_auth(deps.clone(), bus.clone(), false, move |deps, env| {
+                Box::pin(async move {
+                    handler_admin_forward(deps, env, "ListAtendimentos", "ListAtendimentosReply")
+                        .await
+                })
+            }),
+        )
+        .route(
+            "GetThread",
+            exigir_auth(deps.clone(), bus.clone(), false, move |deps, env| {
+                Box::pin(async move {
+                    handler_admin_forward(deps, env, "GetThread", "GetThreadReply").await
+                })
+            }),
         );
 
     tracing::info!("Servidor RPC da runtime_api configurado e pronto.");
