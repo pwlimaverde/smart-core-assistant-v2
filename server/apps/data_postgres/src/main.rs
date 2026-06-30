@@ -282,6 +282,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_upsert = state_clone.clone();
     let state_for_list = state_clone.clone();
     let state_for_create_tenant = state_clone.clone();
+    let state_for_create_invite = state_clone.clone();
+    let state_for_accept_invite = state_clone.clone();
     let state_for_create_superuser = state_clone.clone();
     let state_for_list_superusers = state_clone.clone();
     let state_for_delete_superuser = state_clone.clone();
@@ -316,7 +318,12 @@ async fn main() -> anyhow::Result<()> {
     let state_for_admin_list_all_connected_instances = state_clone.clone();
     let state_for_admin_deletar_instancia = state_clone.clone();
     let state_for_atualizar_estado_instancia = state_clone.clone();
-    let state_for_atualizar_instancia_provider_id = state_clone;
+    let state_for_atualizar_instancia_provider_id = state_clone.clone();
+    let state_for_verify_whatsapp_instance_token = state_clone.clone();
+    let state_for_is_phone_whitelisted = state_clone.clone();
+    let state_for_resolve_atendimento = state_clone.clone();
+    let state_for_aplicar_politica = state_clone.clone();
+    let state_for_update_status = state_clone;
 
     let server = Server::from_env("DATA_POSTGRES")
         .route("GetThread", move |env| {
@@ -326,6 +333,24 @@ async fn main() -> anyhow::Result<()> {
         .route("PersistMessage", move |env| {
             let state = state_for_persist.clone();
             Box::pin(async move { handler_persist_message(state.atendimento.as_ref(), env).await })
+        })
+        .route("ResolveAtendimentoParaContato", move |env| {
+            let state = state_for_resolve_atendimento.clone();
+            Box::pin(async move {
+                handler_resolve_atendimento_para_contato(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("UpdateMessageStatus", move |env| {
+            let state = state_for_update_status.clone();
+            Box::pin(
+                async move { handler_update_message_status(state.atendimento.as_ref(), env).await },
+            )
+        })
+        .route("AplicarPoliticaTicketKanban", move |env| {
+            let state = state_for_aplicar_politica.clone();
+            Box::pin(async move {
+                handler_aplicar_politica_ticket_kanban(state.atendimento.as_ref(), env).await
+            })
         })
         .route("VerifyCredentials", move |env| {
             let state = state_for_verify.clone();
@@ -347,6 +372,18 @@ async fn main() -> anyhow::Result<()> {
             let state = state_for_create_tenant.clone();
             Box::pin(async move {
                 handler_create_tenant(state.tenant.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("CreateInvite", move |env| {
+            let state = state_for_create_invite.clone();
+            Box::pin(async move {
+                handler_create_invite(state.tenant.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("AcceptInvite", move |env| {
+            let state = state_for_accept_invite.clone();
+            Box::pin(async move {
+                handler_accept_invite(state.tenant.as_ref(), state.audit.as_ref(), env).await
             })
         })
         .route("CreateSuperuser", move |env| {
@@ -565,6 +602,18 @@ async fn main() -> anyhow::Result<()> {
                 )
                 .await
             })
+        })
+        .route("VerifyWhatsappInstanceToken", move |env| {
+            let state = state_for_verify_whatsapp_instance_token.clone();
+            Box::pin(async move {
+                handler_verify_whatsapp_instance_token(state.whatsapp.as_ref(), env).await
+            })
+        })
+        .route("IsPhoneWhitelisted", move |env| {
+            let state = state_for_is_phone_whitelisted.clone();
+            Box::pin(
+                async move { handler_is_phone_whitelisted(state.whatsapp.as_ref(), env).await },
+            )
         });
 
     tracing::info!("Servidor RPC configurado e pronto.");
@@ -718,6 +767,207 @@ async fn handler_create_tenant(
                 &env,
                 "CreateTenantReply",
                 serde_json::json!({ "status": "success", "tenant": tenant }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_create_invite(
+    store: &dyn ports::TenantStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+
+    let email = match payload_json.get("email").and_then(|v| v.as_str()) {
+        Some(e) => e,
+        None => {
+            return erro(
+                error_core::AppError::Validation("email ausente".to_string()),
+                &env,
+            )
+        }
+    };
+    let name = match payload_json.get("name").and_then(|v| v.as_str()) {
+        Some(n) => n,
+        None => {
+            return erro(
+                error_core::AppError::Validation("name ausente".to_string()),
+                &env,
+            )
+        }
+    };
+    let role = payload_json
+        .get("role")
+        .and_then(|v| v.as_str())
+        .unwrap_or("staff");
+
+    // Gera token URL-safe seguro de 64 caracteres
+    let token = format!(
+        "{}{}",
+        uuid::Uuid::new_v4().simple(),
+        uuid::Uuid::new_v4().simple()
+    );
+    let expires_at = chrono::Utc::now() + chrono::Duration::days(7);
+    let ctx = contexto_do_envelope(&env);
+
+    match store
+        .criar_convite(&ctx, email, name, role, &token, expires_at)
+        .await
+    {
+        Ok(invite) => {
+            audit
+                .publish(
+                    &env,
+                    "tenant_invite_created",
+                    format!("Convite criado para '{}' <{}>", name, email),
+                    serde_json::json!({ "id": invite.id.to_string(), "email": email, "role": role }),
+                )
+                .await;
+
+            ok_reply(
+                &env,
+                "CreateInviteReply",
+                serde_json::json!({
+                    "status": "success",
+                    "invite": {
+                        "id": invite.id.to_string(),
+                        "tenant_id": invite.tenant_id.to_string(),
+                        "email": invite.email,
+                        "name": invite.name,
+                        "role": invite.role,
+                        "token": invite.token,
+                        "expires_at": invite.expires_at.timestamp_millis(),
+                        "used": invite.used,
+                        "created_at": invite.created_at.timestamp_millis(),
+                    }
+                }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_accept_invite(
+    store: &dyn ports::TenantStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+
+    let token = match payload_json.get("token").and_then(|v| v.as_str()) {
+        Some(t) => t,
+        None => {
+            return erro(
+                error_core::AppError::Validation("token ausente".to_string()),
+                &env,
+            )
+        }
+    };
+    let username = match payload_json.get("username").and_then(|v| v.as_str()) {
+        Some(u) => u,
+        None => {
+            return erro(
+                error_core::AppError::Validation("username ausente".to_string()),
+                &env,
+            )
+        }
+    };
+    let email = match payload_json.get("email").and_then(|v| v.as_str()) {
+        Some(e) => e,
+        None => {
+            return erro(
+                error_core::AppError::Validation("email ausente".to_string()),
+                &env,
+            )
+        }
+    };
+    let password = match payload_json.get("password").and_then(|v| v.as_str()) {
+        Some(p) => p,
+        None => {
+            return erro(
+                error_core::AppError::Validation("password ausente".to_string()),
+                &env,
+            )
+        }
+    };
+
+    // 1. Validar convite buscando pelo token (bypass RLS)
+    let invite_opt = match store.buscar_convite_por_token(token).await {
+        Ok(opt) => opt,
+        Err(err) => return erro(error_core::AppError::Database(err.to_string()), &env),
+    };
+
+    let invite = match invite_opt {
+        Some(i) => i,
+        None => {
+            return erro(
+                error_core::AppError::Validation("Convite não encontrado".to_string()),
+                &env,
+            )
+        }
+    };
+
+    if invite.used {
+        return erro(
+            error_core::AppError::Conflict("Convite já utilizado".to_string()),
+            &env,
+        );
+    }
+
+    if invite.expires_at < chrono::Utc::now() {
+        return erro(
+            error_core::AppError::Validation("Convite expirado".to_string()),
+            &env,
+        );
+    }
+
+    // Hash da senha usando argon2id
+    let password_hash = match infrastructure_postgres::hash_password(password) {
+        Ok(h) => h,
+        Err(err) => return erro(error_core::AppError::Validation(err.to_string()), &env),
+    };
+
+    // 2. Aceitar o convite transacionalmente
+    match store
+        .aceitar_convite(
+            invite.id,
+            username,
+            email,
+            &password_hash,
+            invite.tenant_id,
+            &invite.role,
+        )
+        .await
+    {
+        Ok(tenant_user) => {
+            audit
+                .publish(
+                    &env,
+                    "tenant_invite_accepted",
+                    format!("Convite aceito pelo usuário '{}'", username),
+                    serde_json::json!({ "invite_id": invite.id.to_string(), "tenant_id": invite.tenant_id.to_string(), "username": username }),
+                )
+                .await;
+
+            ok_reply(
+                &env,
+                "AcceptInviteReply",
+                serde_json::json!({
+                    "status": "success",
+                    "tenant_user": {
+                        "id": tenant_user.id,
+                        "user_id": tenant_user.user_id,
+                        "tenant_id": tenant_user.tenant_id.to_string(),
+                        "role": tenant_user.role,
+                        "module_permissions": tenant_user.module_permissions,
+                        "flow_permissions": tenant_user.flow_permissions,
+                        "is_active": tenant_user.is_active,
+                    }
+                }),
             )
         }
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
@@ -953,6 +1203,138 @@ async fn handler_persist_message(store: &dyn ports::AtendimentoStore, env: Envel
             &env,
             "PersistMessageReply",
             serde_json::json!({ "status": "success", "message_id": msg.id }),
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_resolve_atendimento_para_contato(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let phone = match payload_json.get("phone").and_then(|v| v.as_str()) {
+        Some(p) => p,
+        None => {
+            return erro(
+                error_core::AppError::Validation("phone ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let push_name = payload_json
+        .get("push_name")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .resolver_atendimento_para_contato(&ctx, phone, push_name)
+        .await
+    {
+        Ok((contato_id, atendimento, is_new)) => ok_reply(
+            &env,
+            "ResolveAtendimentoParaContatoReply",
+            serde_json::json!({
+                "status": "success",
+                "contato_id": contato_id,
+                "atendimento_id": atendimento.id,
+                "bot_pode_atender": atendimento.bot_pode_atender,
+                "atendente_humano_id": atendimento.atendente_humano_id,
+                "is_new": is_new,
+            }),
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_update_message_status(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let message_id_whatsapp = match payload_json
+        .get("message_id_whatsapp")
+        .and_then(|v| v.as_str())
+    {
+        Some(m) => m,
+        None => {
+            return erro(
+                error_core::AppError::Validation("message_id_whatsapp ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let status = match payload_json.get("status").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => {
+            return erro(
+                error_core::AppError::Validation("status ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .atualizar_status_mensagem(&ctx, message_id_whatsapp, status)
+        .await
+    {
+        Ok(_) => ok_reply(
+            &env,
+            "UpdateMessageStatusReply",
+            serde_json::json!({ "status": "success" }),
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_aplicar_politica_ticket_kanban(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .aplicar_politica_ticket_kanban(&ctx, atendimento_id)
+        .await
+    {
+        Ok(outcome) => ok_reply(
+            &env,
+            "AplicarPoliticaTicketKanbanReply",
+            serde_json::json!({
+                "status": "success",
+                "moved": outcome.moved,
+                "ticket_status": outcome.status,
+                "etapa_id": outcome.etapa_id,
+                "etapa_nome": outcome.etapa_nome,
+                "fluxo_id": outcome.fluxo_id,
+                "reason": outcome.reason,
+            }),
         ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }
@@ -2520,6 +2902,79 @@ async fn handler_atualizar_instancia_provider_id(
     }
 }
 
+async fn handler_verify_whatsapp_instance_token(
+    store: &dyn ports::WhatsappStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let id = match payload.get("id").and_then(|v| v.as_i64()) {
+        Some(i) => i as i32,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+
+    let token = match payload.get("token").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => {
+            return erro(
+                error_core::AppError::Validation("token ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.verificar_token(&ctx, id, token).await {
+        Ok(Some(inst)) => ok_reply(
+            &env,
+            "VerifyWhatsappInstanceTokenReply",
+            serde_json::json!({
+                "valid": true,
+                "phone_number": inst.phone_number,
+            }),
+        ),
+        Ok(None) => ok_reply(
+            &env,
+            "VerifyWhatsappInstanceTokenReply",
+            serde_json::json!({
+                "valid": false,
+                "phone_number": serde_json::Value::Null,
+            }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+async fn handler_is_phone_whitelisted(store: &dyn ports::WhatsappStore, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let phone = match payload.get("phone").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => {
+            return erro(
+                error_core::AppError::Validation("phone ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.verificar_telefone_whitelist(&ctx, phone).await {
+        Ok(whitelisted) => ok_reply(
+            &env,
+            "IsPhoneWhitelistedReply",
+            serde_json::json!({ "whitelisted": whitelisted }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
 /// Testes unitários do domínio WhatsApp (Fase 1, piloto Ports & Adapters).
 ///
 /// Substituem o antigo `test_handler_whatsapp_instance_flow` (que abria o banco
@@ -2725,6 +3180,51 @@ mod tests_whatsapp_unit {
         assert_eq!(resp.kind, MessageKind::Error as i32);
         let err = resp.error.expect("deveria ter envelope de erro");
         assert_eq!(err.code, "VALIDATION_FAILED", "veio: {err:?}");
+    }
+
+    #[tokio::test]
+    async fn verify_token_success() {
+        let mut store = MockWhatsappStore::new();
+        store
+            .expect_verificar_token()
+            .times(1)
+            .returning(|_ctx, id, token| {
+                assert_eq!(id, 1);
+                assert_eq!(token, "meu-token");
+                Ok(Some(instancia_fake("inst1")))
+            });
+
+        let env = envelope_com_payload(
+            "VerifyWhatsappInstanceToken",
+            serde_json::json!({ "id": 1, "token": "meu-token" }),
+        );
+        let resp = handler_verify_whatsapp_instance_token(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert!(body["valid"].as_bool().unwrap());
+    }
+
+    #[tokio::test]
+    async fn is_phone_whitelisted_true() {
+        let mut store = MockWhatsappStore::new();
+        store
+            .expect_verificar_telefone_whitelist()
+            .times(1)
+            .returning(|_ctx, phone| {
+                assert_eq!(phone, "5511999999999");
+                Ok(true)
+            });
+
+        let env = envelope_com_payload(
+            "IsPhoneWhitelisted",
+            serde_json::json!({ "phone": "5511999999999" }),
+        );
+        let resp = handler_is_phone_whitelisted(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert!(body["whitelisted"].as_bool().unwrap());
     }
 }
 

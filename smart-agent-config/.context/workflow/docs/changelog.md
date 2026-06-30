@@ -2,6 +2,37 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-06-30] - Finalização do MVP Operacional (parcial WS-0..WS-4)
+
+> Ciclo PREVC `finalizacao-mvp-operacional` fechado como **MVP PARCIAL** e arquivado via
+> `prevc-final-review`. Final-review: `final-review-finalizacao-mvp-operacional.md` — qualidade
+> **CORRIGIDO** (8 desvios corrigidos, 1 crítico de segurança). Entregues WS-0 (parcial), WS-1,
+> WS-2 (exceto 2.4), WS-3, WS-4. **Backlog:** WS-2.4 (ticket/kanban), WS-5 (Register/Invite/Accept
+> + RBAC), WS-6 (telas Flutter), WS-7 (control_plane CRUD + admin), WS-0.1/0.3/0.4 (stack LGTM,
+> e2e de trace, métricas de pool).
+
+### Adicionado
+
+- **WS-1 `webhook_ingress` — autenticação + whitelist + idempotência:** RPCs
+  `VerifyWhatsappInstanceToken` (comparação **constante-time** via `subtle`) e `IsPhoneWhitelisted`
+  no `data_postgres`; dedupe `SET NX EX` por tenant; rejeição segura 401/403 sem publicar no bus.
+  Token de instância em `secrecy::SecretString`; `traceparent` W3C semeado no envelope; telefone
+  mascarado na auditoria.
+- **WS-2 `worker` — orquestração de atendimento:** crate `domain_whatsapp` (normalização pura, sem
+  I/O); RPC `ResolveAtendimentoParaContato` (contato→atendimento em transação RLS, fim do
+  `atendimento_id` fixo); cliente RPC reusado no `AppState` (sem reconexão por evento); debounce
+  por contato; barreira de bot com eventos `bot.respondeu`/`bot.silenciado`.
+- **WS-3 outbound:** envio `worker` → `data_whatsapp` com retry/backoff exponencial (5xx/429);
+  confirmações de status (`mensagem.enviada`/`falha_envio`/`confirmada`).
+- **WS-4 realtime:** server streaming gRPC real (`StreamAtendimentos`, tonic) com JWT na abertura;
+  fan-out por tenant via Redis Pub/Sub 0.25 (subscriber em conexão **dedicada** `into_pubsub()`,
+  publisher em `MultiplexedConnection`); auditoria `stream.aberto/fechado/nao_autorizado`.
+
+### Removido
+
+- **`messaging_gateway` descomissionado (WS-0.2):** diretório `server/apps/messaging_gateway/` e
+  referências em `.env.example` removidos; papel migrou para `webhook_ingress` + `data_whatsapp`.
+
 ## [2026-06-25] - Camada de Mensageria WhatsApp (Evolution Go)
 
 > Ciclo PREVC `camada-mensageria-whatsapp-evolution-go` concluído e arquivado. Final-review:

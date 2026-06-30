@@ -70,6 +70,14 @@ pub trait MensagemRepository: Send + Sync {
         ctx: &RequestContext,
         atendimento_id: i32,
     ) -> Result<(), DbError>;
+
+    async fn atualizar_status_por_whatsapp_id(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        message_id_whatsapp: &str,
+        status: &str,
+    ) -> Result<(), DbError>;
 }
 
 pub struct PostgresMensagemRepository;
@@ -180,6 +188,30 @@ impl MensagemRepository for PostgresMensagemRepository {
             ctx.tenant_id,
             atendimento_id
         )
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(message_id_whatsapp = %message_id_whatsapp, status = %status))]
+    async fn atualizar_status_por_whatsapp_id(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        message_id_whatsapp: &str,
+        status: &str,
+    ) -> Result<(), DbError> {
+        sqlx::query(
+            r#"UPDATE oraculo_mensagem
+               SET status_envio = $3,
+                   data_entregue = CASE WHEN $3 = 'delivered' AND data_entregue IS NULL THEN NOW() ELSE data_entregue END,
+                   data_lida = CASE WHEN $3 = 'read' AND data_lida IS NULL THEN NOW() ELSE data_lida END,
+                   lido = CASE WHEN $3 = 'read' THEN true ELSE lido END
+               WHERE tenant_id = $1 AND message_id_whatsapp = $2"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(message_id_whatsapp)
+        .bind(status)
         .execute(&mut **tx)
         .await?;
         Ok(())

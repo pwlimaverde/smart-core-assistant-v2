@@ -88,6 +88,26 @@ pub trait AtendimentoRepository: Send + Sync {
         ctx: &RequestContext,
         atendimento_id: i32,
     ) -> Result<(), DbError>;
+
+    async fn buscar_ativo_por_contato(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        contato_id: i32,
+    ) -> Result<Option<Atendimento>, DbError>;
+
+    /// Posiciona o atendimento na etapa inicial do Kanban, atribuindo fluxo e
+    /// departamento padrão quando ainda ausentes e marcando o status como 'fila'.
+    /// Usado pela política de ticket/Kanban (WS-2.4).
+    async fn atribuir_fluxo_etapa(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        fluxo_id: i32,
+        departamento_id: Option<i32>,
+        etapa_id: i32,
+    ) -> Result<(), DbError>;
 }
 
 pub struct PostgresAtendimentoRepository;
@@ -270,6 +290,62 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
             ctx.tenant_id,
             atendimento_id
         )
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(contato_id = contato_id))]
+    async fn buscar_ativo_por_contato(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        contato_id: i32,
+    ) -> Result<Option<Atendimento>, DbError> {
+        let row = sqlx::query_as::<_, Atendimento>(
+            r#"SELECT id, tenant_id, contato_id, departamento_id, fluxo_atendimento_id,
+                      status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
+                      assunto, prioridade, atendente_humano_id, contexto_conversa,
+                      historico_status, tags, avaliacao, feedback,
+                      data_primeira_resposta, bot_pode_atender
+               FROM oraculo_atendimento
+               WHERE tenant_id = $1 AND contato_id = $2 
+                 AND status NOT IN ('resolvido', 'cancelado', 'arquivado')
+               LIMIT 1"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(contato_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+        Ok(row)
+    }
+
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, fluxo_id = fluxo_id, etapa_id = etapa_id))]
+    async fn atribuir_fluxo_etapa(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        fluxo_id: i32,
+        departamento_id: Option<i32>,
+        etapa_id: i32,
+    ) -> Result<(), DbError> {
+        ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+        // Query em runtime (sem macro) para não exigir cache .sqlx no build offline.
+        // COALESCE preserva fluxo/departamento já definidos; só preenche quando nulos.
+        sqlx::query(
+            r#"UPDATE oraculo_atendimento
+               SET fluxo_atendimento_id = COALESCE(fluxo_atendimento_id, $1),
+                   departamento_id = COALESCE(departamento_id, $2),
+                   etapa_atual_id = $3,
+                   status = 'fila'
+               WHERE tenant_id = $4 AND id = $5"#,
+        )
+        .bind(fluxo_id)
+        .bind(departamento_id)
+        .bind(etapa_id)
+        .bind(ctx.tenant_id)
+        .bind(atendimento_id)
         .execute(&mut **tx)
         .await?;
         Ok(())

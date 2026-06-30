@@ -54,4 +54,19 @@ pub trait WhatsappStore: Send + Sync {
         instance_id: &str,
         phone_number: Option<String>,
     ) -> Result<(), DbError>;
+
+    /// Verifica se a chave de API (token) bate com o configurado para a instância.
+    async fn verificar_token(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        token: &str,
+    ) -> Result<Option<WhatsappInstance>, DbError>;
+
+    /// Verifica se um número de telefone está na whitelist.
+    async fn verificar_telefone_whitelist(
+        &self,
+        ctx: &RequestContext,
+        phone_number: &str,
+    ) -> Result<bool, DbError>;
 }

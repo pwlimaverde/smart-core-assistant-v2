@@ -7,6 +7,9 @@ use sqlx::PgPool;
 use infrastructure_postgres::integracoes::whatsapp::{
     PostgresWhatsappInstanceRepository, WhatsappInstance, WhatsappInstanceRepository,
 };
+use infrastructure_postgres::integracoes::whitelist::{
+    PostgresWhiteListRepository, WhiteListRepository,
+};
 use infrastructure_postgres::{run_in_tenant_transaction, DbError, RequestContext};
 
 use crate::ports::WhatsappStore;
@@ -153,6 +156,54 @@ impl WhatsappStore for PgWhatsappStore {
             )
             .await?;
             Ok(((), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, instance_id = id))]
+    async fn verificar_token(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        token: &str,
+    ) -> Result<Option<WhatsappInstance>, DbError> {
+        let repo = PostgresWhatsappInstanceRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let token = token.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let inst_opt = repo.buscar_por_id(&mut tx, &ctx, id).await?;
+            if let Some(ref inst) = inst_opt {
+                // Comparação em tempo constante para evitar timing attack na validação do token.
+                use subtle::ConstantTimeEq;
+                let armazenado = inst.api_key.as_bytes();
+                let recebido = token.as_bytes();
+                // `ct_eq` só é constante para o mesmo comprimento; igualar tamanho antes mantém
+                // a comparação resistente a ataque de tempo independentemente do token enviado.
+                let iguais =
+                    armazenado.len() == recebido.len() && armazenado.ct_eq(recebido).into();
+                if iguais {
+                    return Ok((Some(inst.clone()), tx));
+                }
+            }
+            Ok((None, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, phone_number = phone_number))]
+    async fn verificar_telefone_whitelist(
+        &self,
+        ctx: &RequestContext,
+        phone_number: &str,
+    ) -> Result<bool, DbError> {
+        let repo = PostgresWhiteListRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let phone_number = phone_number.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let res = repo.esta_na_lista(&mut tx, &ctx, &phone_number).await?;
+            Ok((res, tx))
         })
         .await
     }

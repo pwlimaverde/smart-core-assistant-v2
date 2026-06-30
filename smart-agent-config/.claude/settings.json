@@ -144,7 +144,9 @@
       "PowerShell($base='C:\\\\PROJETOS\\\\FULL-STACK\\\\smart-core-assistant-v2\\\\infra'; $err=$null; [void][System.Management.Automation.Language.Parser]::ParseFile\\(\\(Join-Path $base 'create-superuser.ps1'\\), [ref]$null, [ref]$err\\); if\\($err\\){ Write-Host 'FAIL'; $err | ForEach-Object { Write-Host $_.Message } } else { Write-Host 'OK create-superuser.ps1' })",
       "Bash(bash -n infra/tunnel.sh)",
       "Bash(bash -n infra/cleanup-hostinger.sh)",
-      "Bash(timeout 25 ssh -o BatchMode=yes hostinger-root 'docker exec smart-core-v2-dev-control_plane-1 control_plane create-superuser --help 2>&1 | head -8 || docker exec smart-core-v2-dev-control_plane-1 control_plane --help 2>&1 | head -15')"
+      "Bash(timeout 25 ssh -o BatchMode=yes hostinger-root 'docker exec smart-core-v2-dev-control_plane-1 control_plane create-superuser --help 2>&1 | head -8 || docker exec smart-core-v2-dev-control_plane-1 control_plane --help 2>&1 | head -15')",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(SQLX_OFFLINE=true cargo clippy -p worker -p webhook_ingress -p runtime_api -p data_postgres -p infrastructure_evolution -p domain_whatsapp --all-targets -- -D warnings)"
     ],
     "additionalDirectories": [
       "c:\\c\\PROJETOS\\FULL-STACK\\smart-core-assistant-v2\\smart-agent-config\\.context\\plans"

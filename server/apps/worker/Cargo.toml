@@ -19,3 +19,4 @@ transport = { workspace = true }
 error_core = { workspace = true }
 observability = { workspace = true }
 tracing = { workspace = true }
+domain_whatsapp = { path = "../../crates/domain_whatsapp" }

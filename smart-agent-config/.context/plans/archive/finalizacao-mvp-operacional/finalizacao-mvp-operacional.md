@@ -1,6 +1,8 @@
 ---
-status: active
+status: completed
 generated: 2026-06-27
+closed: 2026-06-30
+closure_note: "Ciclo fechado como MVP PARCIAL via prevc-final-review. Entregues WS-0 (parcial), WS-1, WS-2 (exceto 2.4), WS-3, WS-4. Pendentes (backlog): WS-2.4 (ticket/kanban), WS-5 (Register/Invite/Accept + RBAC), WS-6 (telas Flutter), WS-7 (control_plane CRUD + admin), WS-0.1/0.3/0.4 (stack LGTM, e2e de trace, métricas de pool). Ver final-review-finalizacao-mvp-operacional.md."
 agents:
   - type: "architect-specialist"
     role: "Validar Ports & Adapters/SOLID e o contrato de observabilidade transversal entre os workstreams"
@@ -24,22 +26,22 @@ phases:
     name: "Review"
     prevc: "R"
     agent: "architect-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-e"
     name: "Execution"
     prevc: "E"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed-partial"
   - id: "phase-v"
     name: "Validation"
     prevc: "V"
     agent: "test-writer"
-    status: "pending"
+    status: "completed"
   - id: "phase-c"
     name: "Confirmation"
     prevc: "C"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
 ---
 
 # Finalização do MVP Operacional — Frentes em Andamento + Observabilidade

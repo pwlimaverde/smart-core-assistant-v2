@@ -10,6 +10,7 @@ use infrastructure_messaging::{
     Reactions, ReadReceipts, SendMessageResult, WebhookConfig,
 };
 use secrecy::{ExposeSecret, SecretString};
+use std::time::Duration;
 
 fn map_state(s: &str) -> ConnectionState {
     match s {
@@ -276,29 +277,69 @@ impl MessageSender for EvolutionProvider {
             "text": text
         });
 
-        let resp = self
-            .http
-            .post(format!("{}/send/text", self.base_url))
-            .header("apikey", instance_token.expose_secret())
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
+        let mut attempts = 0;
+        let mut last_error = None;
+        let max_attempts = 3;
+        let mut backoff = Duration::from_millis(500);
 
-        let resp = Self::ok_or_api(resp).await?;
-        let parsed: SendMessageResp = resp
-            .json()
-            .await
-            .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
+        while attempts < max_attempts {
+            attempts += 1;
+            let resp_res = self
+                .http
+                .post(format!("{}/send/text", self.base_url))
+                .header("apikey", instance_token.expose_secret())
+                .json(&body)
+                .send()
+                .await;
 
-        let id = parsed
-            .id
-            .or_else(|| parsed.key.map(|k| k.id))
-            .ok_or_else(|| {
-                MessagingProviderError::Deserialization("ID da mensagem ausente na resposta".into())
-            })?;
+            match resp_res {
+                Ok(resp) => {
+                    let status = resp.status();
+                    if status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS
+                    {
+                        last_error = Some(MessagingProviderError::Network(format!(
+                            "HTTP status {}",
+                            status
+                        )));
+                        if attempts < max_attempts {
+                            tokio::time::sleep(backoff).await;
+                            backoff *= 2;
+                            continue;
+                        }
+                    } else {
+                        let resp = Self::ok_or_api(resp).await?;
+                        let parsed: SendMessageResp = resp
+                            .json()
+                            .await
+                            .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
 
-        Ok(SendMessageResult { message_id: id })
+                        let id =
+                            parsed
+                                .id
+                                .or_else(|| parsed.key.map(|k| k.id))
+                                .ok_or_else(|| {
+                                    MessagingProviderError::Deserialization(
+                                        "ID da mensagem ausente na resposta".into(),
+                                    )
+                                })?;
+
+                        return Ok(SendMessageResult { message_id: id });
+                    }
+                }
+                Err(e) => {
+                    last_error = Some(MessagingProviderError::Network(e.to_string()));
+                    if attempts < max_attempts {
+                        tokio::time::sleep(backoff).await;
+                        backoff *= 2;
+                        continue;
+                    }
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            MessagingProviderError::Network("Falha de envio desconhecida".into())
+        }))
     }
 
     #[tracing::instrument(err, skip(self, instance_token, caption), fields(provider = "evolution", instance_name = %instance_name))]
@@ -328,31 +369,69 @@ impl MessageSender for EvolutionProvider {
             body["caption"] = serde_json::Value::String(c.to_string());
         }
 
-        let resp = self
-            .http
-            .post(format!("{}/send/media", self.base_url))
-            .header("apikey", instance_token.expose_secret())
-            .json(&body)
-            .send()
-            .await
-            .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
+        let mut attempts = 0;
+        let mut last_error = None;
+        let max_attempts = 3;
+        let mut backoff = Duration::from_millis(500);
 
-        let resp = Self::ok_or_api(resp).await?;
-        let parsed: SendMessageResp = resp
-            .json()
-            .await
-            .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
+        while attempts < max_attempts {
+            attempts += 1;
+            let resp_res = self
+                .http
+                .post(format!("{}/send/media", self.base_url))
+                .header("apikey", instance_token.expose_secret())
+                .json(&body)
+                .send()
+                .await;
 
-        let id = parsed
-            .id
-            .or_else(|| parsed.key.map(|k| k.id))
-            .ok_or_else(|| {
-                MessagingProviderError::Deserialization(
-                    "ID da mensagem de mídia ausente na resposta".into(),
-                )
-            })?;
+            match resp_res {
+                Ok(resp) => {
+                    let status = resp.status();
+                    if status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS
+                    {
+                        last_error = Some(MessagingProviderError::Network(format!(
+                            "HTTP status {}",
+                            status
+                        )));
+                        if attempts < max_attempts {
+                            tokio::time::sleep(backoff).await;
+                            backoff *= 2;
+                            continue;
+                        }
+                    } else {
+                        let resp = Self::ok_or_api(resp).await?;
+                        let parsed: SendMessageResp = resp
+                            .json()
+                            .await
+                            .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
 
-        Ok(SendMessageResult { message_id: id })
+                        let id =
+                            parsed
+                                .id
+                                .or_else(|| parsed.key.map(|k| k.id))
+                                .ok_or_else(|| {
+                                    MessagingProviderError::Deserialization(
+                                        "ID da mensagem de mídia ausente na resposta".into(),
+                                    )
+                                })?;
+
+                        return Ok(SendMessageResult { message_id: id });
+                    }
+                }
+                Err(e) => {
+                    last_error = Some(MessagingProviderError::Network(e.to_string()));
+                    if attempts < max_attempts {
+                        tokio::time::sleep(backoff).await;
+                        backoff *= 2;
+                        continue;
+                    }
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            MessagingProviderError::Network("Falha de envio desconhecida".into())
+        }))
     }
 }
 

@@ -104,13 +104,6 @@ services:
       data_postgres: { condition: service_started }
     restart: unless-stopped
 
-  messaging_gateway:
-    image: *server-image
-    command: ["messaging_gateway"]
-    env_file: [.env]
-    networks: [internal, observability]
-    restart: unless-stopped
-
   worker:
     image: *server-image
     command: ["worker"]

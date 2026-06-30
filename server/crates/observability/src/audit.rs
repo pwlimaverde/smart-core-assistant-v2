@@ -58,6 +58,18 @@ impl AuditLogger {
         }
     }
 
+    /// Inicializa um logger inativo (dummy) para testes isolados.
+    pub fn new_dummy(service_name: &str) -> Self {
+        Self {
+            service_name: service_name.to_string(),
+            redis_conn: None,
+            #[cfg(feature = "postgres-audit")]
+            tenant_pool: None,
+            #[cfg(feature = "postgres-audit")]
+            admin_pool: None,
+        }
+    }
+
     // ============================================================
     // Ações Vinculadas a Tenant (Inquilino)
     // ============================================================

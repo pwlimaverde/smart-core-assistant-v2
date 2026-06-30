@@ -7,6 +7,23 @@ use infrastructure_postgres::atendimentos::atendimentos::Atendimento;
 use infrastructure_postgres::atendimentos::mensagens::Mensagem;
 use infrastructure_postgres::{DbError, RequestContext};
 
+/// Resultado da aplicação da política de ticket/Kanban sobre um atendimento (WS-2.4).
+#[derive(Debug, Clone, Default)]
+pub struct TicketKanbanOutcome {
+    /// `true` quando o atendimento foi efetivamente posicionado/movido no Kanban.
+    pub moved: bool,
+    /// Status do ticket após a política (ex.: "fila").
+    pub status: String,
+    /// Etapa de destino, quando houve movimento.
+    pub etapa_id: Option<i32>,
+    /// Nome da etapa de destino (para auditoria/realtime).
+    pub etapa_nome: Option<String>,
+    /// Fluxo resolvido para o atendimento.
+    pub fluxo_id: Option<i32>,
+    /// Motivo quando `moved == false` (ex.: "ja_posicionado", "sem_fluxo", "sem_etapa_inicial").
+    pub reason: Option<String>,
+}
+
 /// Operações de persistência do domínio Atendimento expostas aos handlers RPC.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
@@ -40,4 +57,29 @@ pub trait AtendimentoStore: Send + Sync {
         remetente: &str,
         traceparent: &str,
     ) -> Result<Mensagem, DbError>;
+
+    /// Busca ou cria um contato pelo telefone, e busca ou cria um atendimento ativo para esse contato.
+    async fn resolver_atendimento_para_contato(
+        &self,
+        ctx: &RequestContext,
+        telefone: &str,
+        push_name: Option<String>,
+    ) -> Result<(i32, Atendimento, bool), DbError>;
+
+    /// Atualiza o status de leitura/entrega de uma mensagem pelo ID do WhatsApp.
+    async fn atualizar_status_mensagem(
+        &self,
+        ctx: &RequestContext,
+        message_id_whatsapp: &str,
+        status: &str,
+    ) -> Result<(), DbError>;
+
+    /// Aplica a política de ticket/Kanban: para um atendimento ainda não posicionado,
+    /// resolve o fluxo padrão, coloca-o na etapa inicial ('fila'), registra o
+    /// `MovimentoFluxo` automático e devolve o resultado para auditoria/realtime (WS-2.4).
+    async fn aplicar_politica_ticket_kanban(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<TicketKanbanOutcome, DbError>;
 }
