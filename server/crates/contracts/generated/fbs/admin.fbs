@@ -370,3 +370,12 @@ table ExportTenantsCsvResponse {
   chunk:[ubyte];
 }
 
+table StreamAtendimentosRequest {
+}
+
+table AtendimentoEvent {
+  event_type:string;
+  tenant_id:string;
+  payload:string;
+}
+

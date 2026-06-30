@@ -2,7 +2,9 @@
 //! O handler depende SOMENTE desta trait; a transação/SQL vive no adapter (DIP).
 
 use async_trait::async_trait;
-use infrastructure_postgres::tenants::tenants::Tenant;
+use chrono::{DateTime, Utc};
+use infrastructure_postgres::security::RequestContext;
+use infrastructure_postgres::tenants::tenants::{Tenant, TenantInvite, TenantUser};
 use infrastructure_postgres::DbError;
 use uuid::Uuid;
 
@@ -44,4 +46,29 @@ pub trait TenantStore: Send + Sync {
 
     /// Persiste um novo código de acesso; retorna `true` se algum registro foi afetado.
     async fn gerar_access_code(&self, id: Uuid, code: &str) -> Result<bool, DbError>;
+
+    /// Cria um convite para o tenant.
+    async fn criar_convite(
+        &self,
+        ctx: &RequestContext,
+        email: &str,
+        name: &str,
+        role: &str,
+        token: &str,
+        expires_at: DateTime<Utc>,
+    ) -> Result<TenantInvite, DbError>;
+
+    /// Busca um convite pelo token (bypass RLS).
+    async fn buscar_convite_por_token(&self, token: &str) -> Result<Option<TenantInvite>, DbError>;
+
+    /// Aceita um convite de forma transacional, criando usuário, TenantUser e marcando o convite como usado.
+    async fn aceitar_convite(
+        &self,
+        invite_id: Uuid,
+        username: &str,
+        email: &str,
+        password_hash: &str,
+        tenant_id: Uuid,
+        role: &str,
+    ) -> Result<TenantUser, DbError>;
 }

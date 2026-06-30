@@ -413,6 +413,17 @@ service AdminService {
   rpc GetServiceHealth(GetServiceHealthRequest) returns (GetServiceHealthResponse);
   rpc GetDashboardSummary(GetDashboardSummaryRequest) returns (GetDashboardSummaryResponse);
   rpc ExportTenantsCsv(ExportTenantsCsvRequest) returns (stream ExportTenantsCsvResponse);
+
+  // Realtime
+  rpc StreamAtendimentos(StreamAtendimentosRequest) returns (stream AtendimentoEvent);
+}
+
+message StreamAtendimentosRequest {}
+
+message AtendimentoEvent {
+  string event_type = 1;
+  string tenant_id = 2;
+  string payload = 3;
 }
 
 

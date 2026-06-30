@@ -1,0 +1,44 @@
+project:
+  name: "finalizacao-mvp-operacional"
+  scale: LARGE
+  started: "2026-06-27T18:03:07.155Z"
+  current_phase: C
+  closure: partial   # MVP parcial: WS-0..WS-4 entregues; WS-2.4/5/6/7 e WS-0.1/0.3/0.4 em backlog
+
+phases:
+  P:
+    status: filled
+    started_at: "2026-06-27T18:03:07.155Z"
+    completed_at: "2026-06-27T18:03:33.129Z"
+  R:
+    status: completed
+    started_at: "2026-06-27T18:03:33.136Z"
+    completed_at: "2026-06-27T18:03:42.382Z"
+  E:
+    status: completed-partial
+    started_at: "2026-06-27T18:03:42.384Z"
+    completed_at: "2026-06-30T00:00:00.000Z"
+  V:
+    status: completed
+    completed_at: "2026-06-30T00:00:00.000Z"
+  C:
+    status: completed
+    completed_at: "2026-06-30T00:00:00.000Z"
+    outputs:
+      - path: ".context/workflow/docs/final-review-finalizacao-mvp-operacional.md"
+
+execution:
+  history:
+    - timestamp: "2026-06-27T18:03:42.384Z"
+      phase: E
+      action: started
+    - timestamp: "2026-06-30T00:00:00.000Z"
+      phase: C
+      action: closed-partial
+  last_activity: "2026-06-30T00:00:00.000Z"
+  resume_context: "Ciclo fechado como MVP parcial via prevc-final-review. Backlog: WS-2.4, WS-5, WS-6, WS-7, WS-0.1/0.3/0.4."
+
+approval:
+  plan_created: true
+  plan_approved: true
+

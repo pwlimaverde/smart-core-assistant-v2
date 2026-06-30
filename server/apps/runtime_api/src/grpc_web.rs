@@ -13,6 +13,7 @@ use contracts::grpc::queries::admin_service_server::{AdminService, AdminServiceS
 use contracts::grpc::queries::auth_service_server::{AuthService, AuthServiceServer};
 use contracts::grpc::queries::{
     ApiKeyEntry as ProtoApiKeyEntry,
+    AtendimentoEvent,
     AuditLogEntry as ProtoAuditLogEntry,
     AuthResponse,
     CoreSetting as ProtoCoreSetting,
@@ -69,6 +70,7 @@ use contracts::grpc::queries::{
     SetFeatureFlagResponse,
     SetTenantActiveRequest,
     SetTenantActiveResponse,
+    StreamAtendimentosRequest,
     Subscription as ProtoSubscription,
     Tenant as ProtoTenant,
     // Fase 3 - Evolution Connection
@@ -394,6 +396,7 @@ pub struct AdminFacade {
     deps: Arc<AuthDeps>,
     bus: redis::aio::ConnectionManager,
     control: transport::MuxClient,
+    realtime: crate::realtime::RealtimeManager,
 }
 
 impl AdminFacade {
@@ -401,8 +404,14 @@ impl AdminFacade {
         deps: Arc<AuthDeps>,
         bus: redis::aio::ConnectionManager,
         control: transport::MuxClient,
+        realtime: crate::realtime::RealtimeManager,
     ) -> Self {
-        Self { deps, bus, control }
+        Self {
+            deps,
+            bus,
+            control,
+            realtime,
+        }
     }
 }
 
@@ -2406,6 +2415,113 @@ impl AdminService for AdminFacade {
         }
     }
 
+    type StreamAtendimentosStream =
+        tokio_stream::wrappers::ReceiverStream<Result<AtendimentoEvent, Status>>;
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "StreamAtendimentos", traceparent)
+    )]
+    async fn stream_atendimentos(
+        &self,
+        req: Request<StreamAtendimentosRequest>,
+    ) -> Result<Response<Self::StreamAtendimentosStream>, Status> {
+        let traceparent = traceparent_do_metadata(&req);
+        let ip = ip_do_metadata(&req);
+
+        let token = bearer_do_metadata(&req);
+        let token = token.strip_prefix("Bearer ").unwrap_or(&token).trim();
+        let claims = match application::jwt::validar_access_token(token) {
+            Ok(c) => c,
+            Err(_) => {
+                // Auditoria de tentativa de abertura de stream sem autorização (sem tenant conhecido).
+                let mut bus = self.bus.clone();
+                publicar_auditoria_borda(
+                    &mut bus,
+                    None,
+                    "WARN",
+                    "stream.nao_autorizado",
+                    "Tentativa de abrir stream de atendimentos com token inválido.".to_string(),
+                    serde_json::json!({ "reason": "invalid_token" }),
+                    None,
+                    &traceparent,
+                    ip.clone(),
+                )
+                .await;
+                return Err(Status::unauthenticated("errors.auth"));
+            }
+        };
+
+        let tenant_uuid = match Uuid::parse_str(&claims.tenant_id) {
+            Ok(u) => u,
+            Err(_) => {
+                let mut bus = self.bus.clone();
+                publicar_auditoria_borda(
+                    &mut bus,
+                    None,
+                    "WARN",
+                    "stream.nao_autorizado",
+                    "Tentativa de abrir stream com tenant_id inválido no token.".to_string(),
+                    serde_json::json!({ "user_id": claims.sub, "reason": "invalid_tenant" }),
+                    claims.sub.parse::<i32>().ok(),
+                    &traceparent,
+                    ip.clone(),
+                )
+                .await;
+                return Err(Status::invalid_argument("Invalid tenant UUID"));
+            }
+        };
+
+        tracing::info!(tenant_id = %tenant_uuid, user_id = %claims.sub, "Conexão de streaming de atendimentos aberta");
+
+        let mut bus = self.bus.clone();
+        publicar_auditoria_borda(
+            &mut bus,
+            Some(tenant_uuid),
+            "INFO",
+            "stream.aberto",
+            "Stream realtime de atendimentos aberto pelo usuário.".to_string(),
+            serde_json::json!({ "user_id": claims.sub }),
+            claims.sub.parse::<i32>().ok(),
+            &traceparent,
+            ip.clone(),
+        )
+        .await;
+
+        let mut broadcast_rx = self.realtime.obter_stream(tenant_uuid).await?;
+
+        let (tx, rx) = tokio::sync::mpsc::channel(100);
+
+        let mut bus_clone = self.bus.clone();
+        let traceparent_clone = traceparent.clone();
+        let ip_clone = ip;
+        let sub_clone = claims.sub.clone();
+        tokio::spawn(async move {
+            while let Ok(event) = broadcast_rx.recv().await {
+                if tx.send(Ok(event)).await.is_err() {
+                    break;
+                }
+            }
+
+            publicar_auditoria_borda(
+                &mut bus_clone,
+                Some(tenant_uuid),
+                "INFO",
+                "stream.fechado",
+                "Stream realtime de atendimentos encerrado.".to_string(),
+                serde_json::json!({ "user_id": sub_clone }),
+                sub_clone.parse::<i32>().ok(),
+                &traceparent_clone,
+                ip_clone,
+            )
+            .await;
+        });
+
+        Ok(Response::new(tokio_stream::wrappers::ReceiverStream::new(
+            rx,
+        )))
+    }
+
     type ExportTenantsCsvStream = std::pin::Pin<
         Box<
             dyn futures_util::Stream<Item = Result<ExportTenantsCsvResponse, Status>>
@@ -2489,9 +2605,14 @@ pub async fn serve(deps: Arc<AuthDeps>, bus: redis::aio::ConnectionManager) -> a
         .unwrap_or_else(|_| "0.0.0.0:50051".to_string())
         .parse()?;
 
+    let bus_url = std::env::var("REDIS_BUS_URL")
+        .or_else(|_| std::env::var("REDIS_URL"))
+        .unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+    let realtime = crate::realtime::RealtimeManager::new(&bus_url)?;
+
     let facade_auth = AuthServiceServer::new(AuthFacade::new(deps.clone(), bus.clone()));
     let control = transport::conectar_cliente("control_plane").await?;
-    let facade_admin = AdminServiceServer::new(AdminFacade::new(deps, bus, control));
+    let facade_admin = AdminServiceServer::new(AdminFacade::new(deps, bus, control, realtime));
 
     // CORS restritivo (defesa em profundidade mesmo servindo na mesma origem que o WASM).
     let cors = tower_http::cors::CorsLayer::new()

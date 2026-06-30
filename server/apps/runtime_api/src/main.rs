@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 mod audit;
 mod grpc_web;
+mod realtime;
 
 use audit::{publicar_auditoria_borda, publicar_reuso_detectado};
 

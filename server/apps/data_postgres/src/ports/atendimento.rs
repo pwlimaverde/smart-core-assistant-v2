@@ -40,4 +40,20 @@ pub trait AtendimentoStore: Send + Sync {
         remetente: &str,
         traceparent: &str,
     ) -> Result<Mensagem, DbError>;
+
+    /// Busca ou cria um contato pelo telefone, e busca ou cria um atendimento ativo para esse contato.
+    async fn resolver_atendimento_para_contato(
+        &self,
+        ctx: &RequestContext,
+        telefone: &str,
+        push_name: Option<String>,
+    ) -> Result<(i32, Atendimento, bool), DbError>;
+
+    /// Atualiza o status de leitura/entrega de uma mensagem pelo ID do WhatsApp.
+    async fn atualizar_status_mensagem(
+        &self,
+        ctx: &RequestContext,
+        message_id_whatsapp: &str,
+        status: &str,
+    ) -> Result<(), DbError>;
 }

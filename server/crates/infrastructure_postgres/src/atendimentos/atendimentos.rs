@@ -88,6 +88,13 @@ pub trait AtendimentoRepository: Send + Sync {
         ctx: &RequestContext,
         atendimento_id: i32,
     ) -> Result<(), DbError>;
+
+    async fn buscar_ativo_por_contato(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        contato_id: i32,
+    ) -> Result<Option<Atendimento>, DbError>;
 }
 
 pub struct PostgresAtendimentoRepository;
@@ -273,5 +280,30 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         .execute(&mut **tx)
         .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(contato_id = contato_id))]
+    async fn buscar_ativo_por_contato(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        contato_id: i32,
+    ) -> Result<Option<Atendimento>, DbError> {
+        let row = sqlx::query_as::<_, Atendimento>(
+            r#"SELECT id, tenant_id, contato_id, departamento_id, fluxo_atendimento_id,
+                      status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
+                      assunto, prioridade, atendente_humano_id, contexto_conversa,
+                      historico_status, tags, avaliacao, feedback,
+                      data_primeira_resposta, bot_pode_atender
+               FROM oraculo_atendimento
+               WHERE tenant_id = $1 AND contato_id = $2 
+                 AND status NOT IN ('resolvido', 'cancelado', 'arquivado')
+               LIMIT 1"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(contato_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+        Ok(row)
     }
 }

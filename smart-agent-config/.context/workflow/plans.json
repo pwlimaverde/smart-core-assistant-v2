@@ -2,6 +2,18 @@
   "active": [],
   "completed": [
     {
+      "slug": "finalizacao-mvp-operacional",
+      "path": "plans/archive/finalizacao-mvp-operacional/finalizacao-mvp-operacional.md",
+      "title": "Finalização do MVP Operacional — Frentes em Andamento + Observabilidade",
+      "summary": "Fechar todas as frentes do projeto e as lacunas da implementação inicial, levando o produto a um MVP operacional ponta-a-ponta. Fechado como MVP PARCIAL (WS-0..WS-4); WS-2.4/5/6/7 e WS-0.1/0.3/0.4 em backlog.",
+      "linkedAt": "2026-06-27T17:55:00.000Z",
+      "status": "completed",
+      "approval_status": "approved",
+      "approved_at": "2026-06-27T17:59:13.000Z",
+      "approved_by": "architect",
+      "completed_at": "2026-06-30T00:00:00.000Z"
+    },
+    {
       "slug": "refator-solid-ports-adapters",
       "path": "plans/archive/refator-solid-ports-adapters/refator-solid-ports-adapters.md",
       "title": "Refatoração SOLID (Ports & Adapters) — data_postgres e data_redis",

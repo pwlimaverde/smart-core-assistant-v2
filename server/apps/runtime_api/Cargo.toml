@@ -22,6 +22,7 @@ application = { workspace = true }
 infrastructure_redis = { path = "../../crates/infrastructure_redis" }
 redis = { workspace = true }
 tracing = { workspace = true }
+tokio-stream = "0.1"
 
 # Fachada gRPC-Web da borda do browser (Frente A do login-module).
 tonic = { workspace = true }

@@ -10,11 +10,11 @@ members = [
     "crates/transport",
     "crates/infrastructure_storage",
     "crates/application",
+    "crates/domain_whatsapp",
     "apps/data_postgres",
     "apps/data_redis",
     "apps/data_storage",
     "apps/runtime_api",
-    "apps/messaging_gateway",
     "apps/worker",
     "apps/control_plane",
     "crates/infrastructure_messaging",
@@ -62,6 +62,7 @@ async-trait   = "0.1.83"
 mockall       = "0.13"
 base64        = "0.22.1"
 secrecy       = "0.10.3"
+subtle        = "2.5"
 argon2        = { version = "0.5", features = ["std"] }
 redis         = { version = "0.25.0", features = ["aio", "tokio-comp", "connection-manager", "streams"] }
 tonic         = "0.14.6"

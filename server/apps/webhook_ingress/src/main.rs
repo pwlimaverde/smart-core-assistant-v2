@@ -6,11 +6,24 @@ use axum::{
     routing::post,
     Router,
 };
+use secrecy::{ExposeSecret, SecretString};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::env;
 use std::sync::Arc;
+use std::time::Duration;
 use transport::bus;
+
+/// Mascara um telefone para auditoria/log, preservando apenas os 4 últimos dígitos.
+/// Ex.: `5511999998888` → `*********8888`. Evita expor PII completa na trilha.
+fn mascarar_telefone(phone: &str) -> String {
+    let digitos: Vec<char> = phone.chars().collect();
+    if digitos.len() <= 4 {
+        return "*".repeat(digitos.len());
+    }
+    let visiveis: String = digitos[digitos.len() - 4..].iter().collect();
+    format!("{}{}", "*".repeat(digitos.len() - 4), visiveis)
+}
 
 pub trait WebhookNormalizer: Send + Sync {
     fn provider_name(&self) -> &'static str;
@@ -27,6 +40,9 @@ pub trait WebhookNormalizer: Send + Sync {
 struct AppState {
     redis: redis::aio::ConnectionManager,
     normalizers: HashMap<&'static str, Arc<dyn WebhookNormalizer>>,
+    #[allow(dead_code)]
+    audit_logger: observability::AuditLogger,
+    pg_client: Arc<transport::MuxClient>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -51,7 +67,14 @@ async fn main() -> anyhow::Result<()> {
     let evo_norm = Arc::new(EvolutionNormalizer);
     normalizers.insert(evo_norm.provider_name(), evo_norm);
 
-    let state = AppState { redis, normalizers };
+    let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await?);
+    let audit_logger = observability::AuditLogger::new_with_redis(redis.clone(), "webhook_ingress");
+    let state = AppState {
+        redis,
+        normalizers,
+        audit_logger,
+        pg_client,
+    };
 
     let app = Router::new()
         // axum 0.8 sintaxe: chaves {param}
@@ -67,8 +90,52 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn extrair_sender(event_type: &str, raw: &serde_json::Value) -> Option<String> {
+    let jid = match event_type {
+        "messages.upsert" => raw
+            .get("data")
+            .and_then(|d| d.get("key"))
+            .and_then(|k| k.get("remoteJid"))
+            .and_then(|j| j.as_str()),
+        "Message" => raw
+            .get("data")
+            .and_then(|d| d.get("Info"))
+            .and_then(|i| i.get("Sender"))
+            .and_then(|s| s.as_str()),
+        _ => None,
+    };
+
+    jid.map(|s| {
+        s.split('@')
+            .next()
+            .unwrap_or(s)
+            .split('-')
+            .next()
+            .unwrap_or(s)
+            .to_string()
+    })
+}
+
+fn extrair_message_id(event_type: &str, raw: &serde_json::Value) -> Option<String> {
+    match event_type {
+        "messages.upsert" => raw
+            .get("data")
+            .and_then(|d| d.get("key"))
+            .and_then(|k| k.get("id"))
+            .and_then(|id| id.as_str())
+            .map(|s| s.to_string()),
+        "Message" => raw
+            .get("data")
+            .and_then(|d| d.get("Info"))
+            .and_then(|i| i.get("ID"))
+            .and_then(|id| id.as_str())
+            .map(|s| s.to_string()),
+        _ => None,
+    }
+}
+
 #[tracing::instrument(
-    skip(state, body),
+    skip(state, headers, body),
     fields(
         provider    = %params.provider,
         tenant_id   = %params.tenant_id,
@@ -78,6 +145,7 @@ async fn main() -> anyhow::Result<()> {
 )]
 async fn handle_webhook(
     Path(params): Path<WebhookPath>,
+    headers: axum::http::HeaderMap,
     State(mut state): State<AppState>,
     body: Bytes,
 ) -> Result<impl IntoResponse, StatusCode> {
@@ -89,6 +157,95 @@ async fn handle_webhook(
     let event_type = raw.get("event").and_then(|e| e.as_str()).unwrap_or("");
     tracing::Span::current().record("event_type", event_type);
 
+    // 1. Extração do Token
+    let token = headers
+        .get("apikey")
+        .or_else(|| headers.get("x-api-key"))
+        .and_then(|h| h.to_str().ok())
+        .map(|s| s.to_string())
+        .or_else(|| {
+            raw.get("instanceToken")
+                .or_else(|| raw.get("apikey"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        });
+
+    // Carrega o token em SecretString para impedir vazamento acidental em log/Debug.
+    let token: SecretString = match token {
+        Some(t) => SecretString::from(t),
+        None => {
+            state.audit_logger.warn(
+                params.tenant_id,
+                "webhook.rejected",
+                "Token de autenticação do webhook ausente",
+                serde_json::json!({
+                    "provider": params.provider,
+                    "instance_id": params.instance_id,
+                    "reason": "missing_token"
+                }),
+                None,
+                None,
+                None,
+            );
+            return Err(StatusCode::UNAUTHORIZED);
+        }
+    };
+
+    // 2. Chamada RPC VerifyWhatsappInstanceToken
+    let req_payload = serde_json::json!({
+        "id": params.instance_id,
+        "token": token.expose_secret()
+    });
+    let req_envelope = contracts::Envelope {
+        kind: contracts::MessageKind::Request as i32,
+        method: "VerifyWhatsappInstanceToken".to_string(),
+        tenant_id: params.tenant_id.to_string(),
+        payload: serde_json::to_vec(&req_payload).unwrap(),
+        ..Default::default()
+    };
+    let resp = state
+        .pg_client
+        .call(req_envelope, Duration::from_secs(5))
+        .await
+        .map_err(|e| {
+            tracing::error!("Falha na chamada RPC VerifyWhatsappInstanceToken: {:?}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+
+    if resp.kind == contracts::MessageKind::Error as i32 {
+        let err_msg = resp
+            .error
+            .as_ref()
+            .map(|e| e.message.as_str())
+            .unwrap_or("Erro interno");
+        tracing::error!("Erro RPC ao verificar token: {}", err_msg);
+        return Err(StatusCode::INTERNAL_SERVER_ERROR);
+    }
+
+    let resp_payload: serde_json::Value =
+        serde_json::from_slice(&resp.payload).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+    let is_valid = resp_payload
+        .get("valid")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if !is_valid {
+        state.audit_logger.warn(
+            params.tenant_id,
+            "webhook.rejected",
+            "Token de autenticação do webhook inválido",
+            serde_json::json!({
+                "provider": params.provider,
+                "instance_id": params.instance_id,
+                "reason": "invalid_token"
+            }),
+            None,
+            None,
+            None,
+        );
+        return Err(StatusCode::UNAUTHORIZED);
+    }
+
     let normalizado = if let Some(normalizer) = state.normalizers.get(params.provider.as_str()) {
         normalizer.normalize(event_type, &raw, params.tenant_id, params.instance_id)
     } else {
@@ -97,6 +254,112 @@ async fn handle_webhook(
     };
 
     if let Some((topic, envelope)) = normalizado {
+        let is_msg_event = topic == "whatsapp.message.received" || topic == "message.received";
+
+        // 3. Verificação de Whitelist para mensagens recebidas
+        if is_msg_event {
+            if let Some(phone) = extrair_sender(event_type, &raw) {
+                let wl_payload = serde_json::json!({
+                    "phone": phone
+                });
+                let wl_envelope = contracts::Envelope {
+                    kind: contracts::MessageKind::Request as i32,
+                    method: "IsPhoneWhitelisted".to_string(),
+                    tenant_id: params.tenant_id.to_string(),
+                    payload: serde_json::to_vec(&wl_payload).unwrap(),
+                    ..Default::default()
+                };
+
+                let wl_resp = state
+                    .pg_client
+                    .call(wl_envelope, Duration::from_secs(5))
+                    .await
+                    .map_err(|e| {
+                        tracing::error!("Falha RPC IsPhoneWhitelisted: {:?}", e);
+                        StatusCode::INTERNAL_SERVER_ERROR
+                    })?;
+
+                if wl_resp.kind == contracts::MessageKind::Error as i32 {
+                    return Err(StatusCode::INTERNAL_SERVER_ERROR);
+                }
+
+                let wl_body: serde_json::Value = serde_json::from_slice(&wl_resp.payload)
+                    .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+
+                let whitelisted = wl_body
+                    .get("whitelisted")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                if !whitelisted {
+                    state.audit_logger.warn(
+                        params.tenant_id,
+                        "webhook.rejected",
+                        "Mensagem rejeitada: remetente não está na whitelist",
+                        serde_json::json!({
+                            "provider": params.provider,
+                            "instance_id": params.instance_id,
+                            "phone": mascarar_telefone(&phone),
+                            "reason": "not_whitelisted"
+                        }),
+                        None,
+                        None,
+                        None,
+                    );
+                    return Err(StatusCode::FORBIDDEN);
+                }
+            }
+        }
+
+        // 4. Verificação de Idempotência
+        if is_msg_event {
+            if let Some(msg_id) = extrair_message_id(event_type, &raw) {
+                let key = format!("webhook:idempotency:{}:{}", params.tenant_id, msg_id);
+                let set_res: Result<bool, _> = redis::cmd("SET")
+                    .arg(&key)
+                    .arg("1")
+                    .arg("NX")
+                    .arg("EX")
+                    .arg(86400)
+                    .query_async(&mut state.redis)
+                    .await;
+
+                match set_res {
+                    Ok(inserted) => {
+                        if !inserted {
+                            state.audit_logger.info(
+                                params.tenant_id,
+                                "webhook.duplicated",
+                                "Webhook duplicado rejeitado",
+                                serde_json::json!({
+                                    "provider": params.provider,
+                                    "instance_id": params.instance_id,
+                                    "message_id": msg_id
+                                }),
+                                None,
+                                None,
+                                None,
+                            );
+                            return Ok(StatusCode::ACCEPTED);
+                        }
+                    }
+                    Err(e) => {
+                        tracing::error!("Erro de Redis na idempotência: {:?}", e);
+                    }
+                }
+            }
+        }
+
+        // 5. Publicação no barramento.
+        // Semeia o traceparent W3C a partir do span atual para fechar a cadeia de trace
+        // distribuído webhook → bus → worker → RPC data_*.
+        let mut carrier = std::collections::HashMap::new();
+        observability::injetar_contexto_atual(&mut carrier);
+        let envelope = if let Some(tp) = carrier.get("traceparent") {
+            envelope.com_traceparent(tp.clone())
+        } else {
+            envelope
+        };
+
         bus::publicar_evento(&mut state.redis, &envelope)
             .await
             .map_err(|e| {
@@ -110,6 +373,20 @@ async fn handle_webhook(
             "Evento ignorado (não mapeado para este provedor)"
         );
     }
+
+    state.audit_logger.info(
+        params.tenant_id,
+        "webhook.received",
+        "Webhook recebido e processado com sucesso",
+        serde_json::json!({
+            "provider": params.provider,
+            "instance_id": params.instance_id,
+            "event_type": event_type
+        }),
+        None,
+        None,
+        None,
+    );
 
     Ok(StatusCode::ACCEPTED)
 }
@@ -373,12 +650,62 @@ mod tests {
     }
 
     async fn setup_test_app() -> Router {
+        // Inicializa o gRPC mock local do data_postgres
+        let pg_addr = "tcp://127.0.0.1:29259";
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+
+        let pg_endpoint = transport::runtime::Endpoint::parse(pg_addr).unwrap();
+        let pg_server = transport::runtime::Server::new(pg_endpoint, "flatbuffers")
+            .route("VerifyWhatsappInstanceToken", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({
+                        "valid": true,
+                        "phone_number": "5511999998888",
+                    });
+                    contracts::Envelope {
+                        kind: contracts::MessageKind::Reply as i32,
+                        method: "VerifyWhatsappInstanceTokenReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("IsPhoneWhitelisted", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({
+                        "whitelisted": true,
+                    });
+                    contracts::Envelope {
+                        kind: contracts::MessageKind::Reply as i32,
+                        method: "IsPhoneWhitelistedReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            });
+
+        // Roda o servidor em background
+        tokio::spawn(async move {
+            let _ = pg_server.run().await;
+        });
+
+        // Espera um pouco para o servidor iniciar
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
+
         let redis = fake_bus(29257).await;
         let mut normalizers: HashMap<&'static str, Arc<dyn WebhookNormalizer>> = HashMap::new();
         let evo_norm = Arc::new(EvolutionNormalizer);
         normalizers.insert(evo_norm.provider_name(), evo_norm);
 
-        let state = AppState { redis, normalizers };
+        let audit_logger = observability::AuditLogger::new_dummy("webhook_ingress");
+        let state = AppState {
+            redis,
+            normalizers,
+            audit_logger,
+            pg_client,
+        };
 
         Router::new()
             .route(
@@ -417,6 +744,7 @@ mod tests {
                     .method("POST")
                     .uri("/webhook/unknown_prov/00000000-0000-0000-0000-000000000001/42")
                     .header("content-type", "application/json")
+                    .header("apikey", "token-123")
                     .body(Body::from(
                         json!({ "event": "messages.upsert" }).to_string(),
                     ))
@@ -447,6 +775,7 @@ mod tests {
                     .method("POST")
                     .uri("/webhook/evolution/00000000-0000-0000-0000-000000000001/42")
                     .header("content-type", "application/json")
+                    .header("apikey", "token-123")
                     .body(Body::from(payload.to_string()))
                     .unwrap(),
             )
@@ -515,6 +844,7 @@ mod tests {
                     .method("POST")
                     .uri("/webhook/evolution/00000000-0000-0000-0000-000000000001/42")
                     .header("content-type", "application/json")
+                    .header("apikey", "token-123")
                     .body(Body::from(payload.to_string()))
                     .unwrap(),
             )
@@ -539,6 +869,7 @@ mod tests {
                     .method("POST")
                     .uri("/webhook/evolution/00000000-0000-0000-0000-000000000001/42")
                     .header("content-type", "application/json")
+                    .header("apikey", "token-123")
                     .body(Body::from(payload.to_string()))
                     .unwrap(),
             )

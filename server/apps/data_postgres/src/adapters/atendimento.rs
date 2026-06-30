@@ -10,6 +10,7 @@ use infrastructure_postgres::atendimentos::atendimentos::{
 use infrastructure_postgres::atendimentos::mensagens::{
     Mensagem, MensagemRepository, PostgresMensagemRepository,
 };
+use infrastructure_postgres::clientes::contatos::{ContatoRepository, PostgresContatoRepository};
 use infrastructure_postgres::{run_in_tenant_transaction, DbError, RequestContext};
 
 use crate::ports::AtendimentoStore;
@@ -100,6 +101,9 @@ impl AtendimentoStore for PgAtendimentoStore {
                 )
                 .await?;
 
+            let repo_atendimento = PostgresAtendimentoRepository;
+            repo_atendimento.touch_last_message(&mut tx, &ctx, atendimento_id).await?;
+
             // Padrão OUTBOX: insere o evento de domínio na MESMA transação ACID.
             let event_payload = serde_json::json!({
                 "message_id": msg.id.to_string(),
@@ -121,6 +125,73 @@ impl AtendimentoStore for PgAtendimentoStore {
             .await?;
 
             Ok((msg, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, telefone = %telefone))]
+    async fn resolver_atendimento_para_contato(
+        &self,
+        ctx: &RequestContext,
+        telefone: &str,
+        push_name: Option<String>,
+    ) -> Result<(i32, Atendimento, bool), DbError> {
+        let repo_contato = PostgresContatoRepository;
+        let repo_atendimento = PostgresAtendimentoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let telefone = telefone.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            // 1. Busca ou cria o contato
+            let contato = match repo_contato
+                .buscar_por_telefone(&mut tx, &ctx, &telefone)
+                .await?
+            {
+                Some(c) => c,
+                None => {
+                    repo_contato
+                        .salvar(&mut tx, &ctx, &telefone, push_name.as_deref())
+                        .await?
+                }
+            };
+
+            let mut is_new = false;
+            // 2. Busca se já existe um atendimento ativo para o contato
+            let atendimento = match repo_atendimento
+                .buscar_ativo_por_contato(&mut tx, &ctx, contato.id)
+                .await?
+            {
+                Some(a) => a,
+                None => {
+                    is_new = true;
+                    // Cria um novo atendimento
+                    repo_atendimento
+                        .criar(&mut tx, &ctx, contato.id, None, None, None)
+                        .await?
+                }
+            };
+
+            Ok(((contato.id, atendimento, is_new), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, message_id_whatsapp = %message_id_whatsapp, status = %status))]
+    async fn atualizar_status_mensagem(
+        &self,
+        ctx: &RequestContext,
+        message_id_whatsapp: &str,
+        status: &str,
+    ) -> Result<(), DbError> {
+        let repo = PostgresMensagemRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let message_id_whatsapp = message_id_whatsapp.to_string();
+        let status = status.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            repo.atualizar_status_por_whatsapp_id(&mut tx, &ctx, &message_id_whatsapp, &status)
+                .await?;
+            Ok(((), tx))
         })
         .await
     }

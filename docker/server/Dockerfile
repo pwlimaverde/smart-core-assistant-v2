@@ -42,7 +42,6 @@ COPY --from=builder \
      /app/target/release/data_redis \
      /app/target/release/data_storage \
      /app/target/release/control_plane \
-     /app/target/release/messaging_gateway \
      /app/target/release/runtime_api \
      /app/target/release/worker \
      /app/target/release/data_whatsapp \
