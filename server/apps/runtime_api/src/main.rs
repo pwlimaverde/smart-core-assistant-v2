@@ -192,6 +192,11 @@ async fn main() -> anyhow::Result<()> {
             }),
         );
 
+    // --- WS-7: CRUD administrativo (superusuário). O painel admin fala somente com a
+    // runtime_api (decisão de arquitetura), que encaminha para os handlers já
+    // existentes do data_postgres. Cada rota exige superusuário no interceptor. ---
+    let server = registrar_rotas_admin(server, deps.clone(), bus.clone());
+
     tracing::info!("Servidor RPC da runtime_api configurado e pronto.");
 
     // Fachada gRPC-Web da borda do browser (Flutter Web/WASM): roda em task paralela,
@@ -215,6 +220,57 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Registra o catálogo de rotas de administração (superusuário) que encaminham
+/// para os handlers já existentes do `data_postgres`. Mantém o `main` enxuto e
+/// centraliza o RBAC de borda (todas exigem superusuário no interceptor) — WS-7.
+/// Convenção: o nome da rota == método encaminhado; o reply == método + "Reply".
+fn registrar_rotas_admin(
+    mut server: Server,
+    deps: std::sync::Arc<AuthDeps>,
+    bus: redis::aio::ConnectionManager,
+) -> Server {
+    const ROTAS_ADMIN: &[&str] = &[
+        // Tenants
+        "ListTenants",
+        "GetTenant",
+        "UpdateTenant",
+        "SetTenantActive",
+        "GenerateAccessCode",
+        // Planos / assinatura
+        "ListPlans",
+        "CreatePlan",
+        "UpdatePlan",
+        "ListSubscriptions",
+        "RegisterPayment",
+        "ListPayments",
+        // Observabilidade administrativa
+        "QueryAuditLog",
+        "GetServiceHealth",
+        "GetDashboardSummary",
+        "ExportTenantsCsv",
+        // Feature flags
+        "ListFeatureFlags",
+        "SetFeatureFlag",
+        "SetFeatureFlagOverride",
+    ];
+
+    for metodo in ROTAS_ADMIN {
+        let metodo: &'static str = metodo;
+        // reply estático (`<Metodo>Reply`); o vazamento é único no boot do serviço.
+        let reply: &'static str = Box::leak(format!("{metodo}Reply").into_boxed_str());
+        let deps = deps.clone();
+        let bus = bus.clone();
+        server = server.route(
+            metodo,
+            exigir_auth(deps, bus, true, move |deps, env| {
+                Box::pin(async move { handler_admin_forward(deps, env, metodo, reply).await })
+            }),
+        );
+    }
+
+    server
 }
 
 /// Interpreta o formato "N/Ms" de `AUTH_LOGIN_RATE_LIMIT` (ex.: "5/60s").
