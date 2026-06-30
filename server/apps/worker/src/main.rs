@@ -7,6 +7,16 @@ use uuid::Uuid;
 
 use std::sync::Arc;
 
+/// Escopos de um ator de SISTEMA (worker). O worker é um serviço interno confiável
+/// que reage a eventos do barramento (não a um usuário final); as operações de
+/// persistência/orquestração que ele dispara exigem escopos de escrita no
+/// `data_postgres`. Usa-se o coringa `"*"` (acesso pleno intra-tenant) para não
+/// acoplar o worker ao catálogo de escopos — o RLS do Postgres continua isolando
+/// por `tenant_id` em todas as queries.
+fn escopos_sistema() -> Vec<String> {
+    vec!["*".to_string()]
+}
+
 /// Mascara um telefone para auditoria/log, preservando apenas os 4 últimos dígitos.
 /// Evita expor PII completa na trilha de auditoria.
 fn mascarar_telefone(phone: &str) -> String {
@@ -139,7 +149,7 @@ async fn processar_mensagem_recebida(
         payload: serde_json::to_vec(&resolve_payload).unwrap_or_default(),
         error: None,
         auth_user_id: 0,
-        auth_scopes: vec![],
+        auth_scopes: escopos_sistema(),
         auth_is_superuser: false,
     };
 
@@ -192,7 +202,7 @@ async fn processar_mensagem_recebida(
         payload: serde_json::to_vec(&persist_payload).unwrap_or_default(),
         error: None,
         auth_user_id: 0,
-        auth_scopes: vec![],
+        auth_scopes: escopos_sistema(),
         auth_is_superuser: false,
     };
 
@@ -292,6 +302,25 @@ async fn processar_mensagem_recebida(
             None,
             Some(envelope.event_id.to_string()),
         );
+
+        // Política de ticket/Kanban: posiciona o atendimento recém-aberto na etapa
+        // inicial do fluxo. Falha aqui não interrompe o processamento da mensagem
+        // (best-effort), mas é auditada/logada.
+        if let Err(e) = aplicar_politica_ticket_kanban(
+            state,
+            tenant_uuid,
+            &envelope.event_id.to_string(),
+            &envelope.traceparent,
+            atendimento_id,
+        )
+        .await
+        {
+            tracing::warn!(
+                atendimento_id = atendimento_id,
+                "Falha ao aplicar política de ticket/Kanban: {:?}",
+                e
+            );
+        }
     }
 
     // 4. Aplica o debounce de 2 segundos para regras do Bot/Kanban
@@ -357,7 +386,7 @@ async fn processar_mensagem_recebida(
                 payload: serde_json::to_vec(&outbound_payload).unwrap_or_default(),
                 error: None,
                 auth_user_id: 0,
-                auth_scopes: vec![],
+                auth_scopes: escopos_sistema(),
                 auth_is_superuser: false,
             };
 
@@ -435,6 +464,118 @@ async fn processar_mensagem_recebida(
     Ok(())
 }
 
+/// Aplica a política de ticket/Kanban a um atendimento recém-aberto via RPC ao
+/// `data_postgres` e, havendo movimento, audita `ticket.transicionado` + `kanban.movido`
+/// e publica o evento de realtime para o tenant (WS-2.4).
+async fn aplicar_politica_ticket_kanban(
+    state: &AppState,
+    tenant_uuid: Uuid,
+    causation_id: &str,
+    traceparent: &str,
+    atendimento_id: i32,
+) -> anyhow::Result<()> {
+    let payload = serde_json::json!({ "atendimento_id": atendimento_id });
+
+    let req_envelope = Envelope {
+        tenant_id: tenant_uuid.to_string(),
+        schema_version: 1,
+        message_id: Uuid::now_v7().to_string(),
+        causation_id: causation_id.to_string(),
+        traceparent: traceparent.to_string(),
+        occurred_at: chrono::Utc::now().timestamp_millis(),
+        kind: MessageKind::Request as i32,
+        method: "AplicarPoliticaTicketKanban".to_string(),
+        payload: serde_json::to_vec(&payload).unwrap_or_default(),
+        error: None,
+        auth_user_id: 0,
+        auth_scopes: escopos_sistema(),
+        auth_is_superuser: false,
+    };
+
+    let resp = state
+        .pg_client
+        .call(req_envelope, Duration::from_secs(5))
+        .await?;
+    if resp.kind == MessageKind::Error as i32 {
+        let err_msg = resp
+            .error
+            .as_ref()
+            .map(|e| e.message.as_str())
+            .unwrap_or("Erro desconhecido");
+        anyhow::bail!("Falha ao aplicar política de ticket/Kanban: {}", err_msg);
+    }
+
+    let body: serde_json::Value = serde_json::from_slice(&resp.payload)?;
+    let moved = body.get("moved").and_then(|v| v.as_bool()).unwrap_or(false);
+    if !moved {
+        // Sem fluxo configurado / já posicionado: nada a auditar como transição.
+        return Ok(());
+    }
+
+    let etapa_id = body.get("etapa_id").and_then(|v| v.as_i64());
+    let etapa_nome = body
+        .get("etapa_nome")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .to_string();
+    let ticket_status = body
+        .get("ticket_status")
+        .and_then(|v| v.as_str())
+        .unwrap_or("fila")
+        .to_string();
+
+    let contexto = serde_json::json!({
+        "atendimento_id": atendimento_id,
+        "etapa_id": etapa_id,
+        "etapa_nome": etapa_nome,
+        "status": ticket_status,
+    });
+
+    state.audit_logger.info(
+        tenant_uuid,
+        "ticket.transicionado",
+        "Ticket posicionado pela política automática de atendimento",
+        contexto.clone(),
+        None,
+        None,
+        Some(causation_id.to_string()),
+    );
+    state.audit_logger.info(
+        tenant_uuid,
+        "kanban.movido",
+        "Atendimento movido para a etapa inicial do Kanban",
+        contexto.clone(),
+        None,
+        None,
+        Some(causation_id.to_string()),
+    );
+
+    // Realtime: notifica o tenant sobre a movimentação no Kanban.
+    if let Some(ref redis_conn) = state.redis_conn {
+        let channel = format!("tenant:{}:events", tenant_uuid);
+        let event_payload = serde_json::json!({
+            "event_type": "kanban.movido",
+            "tenant_id": tenant_uuid.to_string(),
+            "payload": contexto,
+        });
+        let mut conn = redis_conn.clone();
+        let payload_str = event_payload.to_string();
+        let publish_res: Result<u32, _> = redis::cmd("PUBLISH")
+            .arg(&channel)
+            .arg(&payload_str)
+            .query_async(&mut conn)
+            .await;
+        if let Err(e) = publish_res {
+            tracing::error!(
+                "Erro ao publicar movimento de Kanban no Redis Pub/Sub: {:?}",
+                e
+            );
+        }
+    }
+
+    Ok(())
+}
+
 async fn processar_status_mensagem(
     state: &AppState,
     evt: transport::bus::EventoBruto,
@@ -487,7 +628,7 @@ async fn processar_status_mensagem(
         payload: serde_json::to_vec(&req_payload).unwrap_or_default(),
         error: None,
         auth_user_id: 0,
-        auth_scopes: vec![],
+        auth_scopes: escopos_sistema(),
         auth_is_superuser: false,
     };
 

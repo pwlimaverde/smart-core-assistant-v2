@@ -322,6 +322,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_verify_whatsapp_instance_token = state_clone.clone();
     let state_for_is_phone_whitelisted = state_clone.clone();
     let state_for_resolve_atendimento = state_clone.clone();
+    let state_for_aplicar_politica = state_clone.clone();
     let state_for_update_status = state_clone;
 
     let server = Server::from_env("DATA_POSTGRES")
@@ -344,6 +345,12 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(
                 async move { handler_update_message_status(state.atendimento.as_ref(), env).await },
             )
+        })
+        .route("AplicarPoliticaTicketKanban", move |env| {
+            let state = state_for_aplicar_politica.clone();
+            Box::pin(async move {
+                handler_aplicar_politica_ticket_kanban(state.atendimento.as_ref(), env).await
+            })
         })
         .route("VerifyCredentials", move |env| {
             let state = state_for_verify.clone();
@@ -1287,6 +1294,47 @@ async fn handler_update_message_status(
             &env,
             "UpdateMessageStatusReply",
             serde_json::json!({ "status": "success" }),
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+async fn handler_aplicar_politica_ticket_kanban(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .aplicar_politica_ticket_kanban(&ctx, atendimento_id)
+        .await
+    {
+        Ok(outcome) => ok_reply(
+            &env,
+            "AplicarPoliticaTicketKanbanReply",
+            serde_json::json!({
+                "status": "success",
+                "moved": outcome.moved,
+                "ticket_status": outcome.status,
+                "etapa_id": outcome.etapa_id,
+                "etapa_nome": outcome.etapa_nome,
+                "fluxo_id": outcome.fluxo_id,
+                "reason": outcome.reason,
+            }),
         ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }

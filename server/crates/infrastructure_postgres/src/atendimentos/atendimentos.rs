@@ -95,6 +95,19 @@ pub trait AtendimentoRepository: Send + Sync {
         ctx: &RequestContext,
         contato_id: i32,
     ) -> Result<Option<Atendimento>, DbError>;
+
+    /// Posiciona o atendimento na etapa inicial do Kanban, atribuindo fluxo e
+    /// departamento padrão quando ainda ausentes e marcando o status como 'fila'.
+    /// Usado pela política de ticket/Kanban (WS-2.4).
+    async fn atribuir_fluxo_etapa(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        fluxo_id: i32,
+        departamento_id: Option<i32>,
+        etapa_id: i32,
+    ) -> Result<(), DbError>;
 }
 
 pub struct PostgresAtendimentoRepository;
@@ -305,5 +318,36 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         .fetch_optional(&mut **tx)
         .await?;
         Ok(row)
+    }
+
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, fluxo_id = fluxo_id, etapa_id = etapa_id))]
+    async fn atribuir_fluxo_etapa(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        fluxo_id: i32,
+        departamento_id: Option<i32>,
+        etapa_id: i32,
+    ) -> Result<(), DbError> {
+        ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+        // Query em runtime (sem macro) para não exigir cache .sqlx no build offline.
+        // COALESCE preserva fluxo/departamento já definidos; só preenche quando nulos.
+        sqlx::query(
+            r#"UPDATE oraculo_atendimento
+               SET fluxo_atendimento_id = COALESCE(fluxo_atendimento_id, $1),
+                   departamento_id = COALESCE(departamento_id, $2),
+                   etapa_atual_id = $3,
+                   status = 'fila'
+               WHERE tenant_id = $4 AND id = $5"#,
+        )
+        .bind(fluxo_id)
+        .bind(departamento_id)
+        .bind(etapa_id)
+        .bind(ctx.tenant_id)
+        .bind(atendimento_id)
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
     }
 }

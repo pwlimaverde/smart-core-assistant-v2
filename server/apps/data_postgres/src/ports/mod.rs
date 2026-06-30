@@ -7,7 +7,7 @@ pub mod plans;
 pub mod tenant;
 pub mod whatsapp;
 
-pub use atendimento::AtendimentoStore;
+pub use atendimento::{AtendimentoStore, TicketKanbanOutcome};
 pub use audit::AuditPort;
 pub use auth::AuthStore;
 pub use cliente::ClienteStore;

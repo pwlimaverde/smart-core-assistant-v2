@@ -10,10 +10,17 @@ use infrastructure_postgres::atendimentos::atendimentos::{
 use infrastructure_postgres::atendimentos::mensagens::{
     Mensagem, MensagemRepository, PostgresMensagemRepository,
 };
+use infrastructure_postgres::atendimentos::movimentos::{
+    MovimentoFluxoRepository, PostgresMovimentoFluxoRepository,
+};
 use infrastructure_postgres::clientes::contatos::{ContatoRepository, PostgresContatoRepository};
+use infrastructure_postgres::operacional::fluxos::{
+    EtapaFluxoRepository, FluxoAtendimentoRepository, PostgresEtapaFluxoRepository,
+    PostgresFluxoAtendimentoRepository,
+};
 use infrastructure_postgres::{run_in_tenant_transaction, DbError, RequestContext};
 
-use crate::ports::AtendimentoStore;
+use crate::ports::{AtendimentoStore, TicketKanbanOutcome};
 
 /// Implementação Postgres da port Atendimento.
 #[derive(Clone)]
@@ -192,6 +199,117 @@ impl AtendimentoStore for PgAtendimentoStore {
             repo.atualizar_status_por_whatsapp_id(&mut tx, &ctx, &message_id_whatsapp, &status)
                 .await?;
             Ok(((), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn aplicar_politica_ticket_kanban(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<TicketKanbanOutcome, DbError> {
+        let repo_atendimento = PostgresAtendimentoRepository;
+        let repo_fluxo = PostgresFluxoAtendimentoRepository;
+        let repo_etapa = PostgresEtapaFluxoRepository;
+        let repo_movimento = PostgresMovimentoFluxoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let atendimento = match repo_atendimento
+                .buscar_por_id(&mut tx, &ctx, atendimento_id)
+                .await?
+            {
+                Some(a) => a,
+                None => {
+                    let outcome = TicketKanbanOutcome {
+                        status: "desconhecido".to_string(),
+                        reason: Some("atendimento_inexistente".to_string()),
+                        ..Default::default()
+                    };
+                    return Ok((outcome, tx));
+                }
+            };
+
+            // Idempotência: se já está numa etapa, não move de novo.
+            if atendimento.etapa_atual_id.is_some() {
+                let outcome = TicketKanbanOutcome {
+                    status: atendimento.status.clone(),
+                    fluxo_id: atendimento.fluxo_atendimento_id,
+                    etapa_id: atendimento.etapa_atual_id,
+                    reason: Some("ja_posicionado".to_string()),
+                    ..Default::default()
+                };
+                return Ok((outcome, tx));
+            }
+
+            // Resolve o fluxo: o do atendimento (se houver) ou o primeiro ativo do tenant.
+            let fluxo = match atendimento.fluxo_atendimento_id {
+                Some(fid) => repo_fluxo.buscar_por_id(&mut tx, &ctx, fid).await?,
+                None => repo_fluxo.buscar_primeiro_ativo(&mut tx, &ctx).await?,
+            };
+            let fluxo = match fluxo {
+                Some(f) => f,
+                None => {
+                    let outcome = TicketKanbanOutcome {
+                        status: atendimento.status.clone(),
+                        reason: Some("sem_fluxo".to_string()),
+                        ..Default::default()
+                    };
+                    return Ok((outcome, tx));
+                }
+            };
+
+            // Etapa de entrada (tipo 'fila') do fluxo.
+            let etapa = match repo_etapa
+                .get_etapa_inicial(&mut tx, &ctx, fluxo.id)
+                .await?
+            {
+                Some(e) => e,
+                None => {
+                    let outcome = TicketKanbanOutcome {
+                        status: atendimento.status.clone(),
+                        fluxo_id: Some(fluxo.id),
+                        reason: Some("sem_etapa_inicial".to_string()),
+                        ..Default::default()
+                    };
+                    return Ok((outcome, tx));
+                }
+            };
+
+            // Posiciona o atendimento e registra o movimento automático de entrada.
+            repo_atendimento
+                .atribuir_fluxo_etapa(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    fluxo.id,
+                    Some(fluxo.departamento_id),
+                    etapa.id,
+                )
+                .await?;
+            repo_movimento
+                .criar(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    None,
+                    etapa.id,
+                    None,
+                    Some("entrada automática no fluxo"),
+                    true,
+                )
+                .await?;
+
+            let outcome = TicketKanbanOutcome {
+                moved: true,
+                status: "fila".to_string(),
+                etapa_id: Some(etapa.id),
+                etapa_nome: Some(etapa.nome),
+                fluxo_id: Some(fluxo.id),
+                reason: None,
+            };
+            Ok((outcome, tx))
         })
         .await
     }

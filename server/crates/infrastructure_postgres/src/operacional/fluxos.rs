@@ -58,6 +58,14 @@ pub trait FluxoAtendimentoRepository: Send + Sync {
         ctx: &RequestContext,
         id: i32,
     ) -> Result<Option<FluxoAtendimento>, DbError>;
+
+    /// Retorna o primeiro fluxo ativo do tenant (menor id), usado como fluxo padrão
+    /// quando o atendimento ainda não tem fluxo atribuído (política de ticket/Kanban).
+    async fn buscar_primeiro_ativo(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+    ) -> Result<Option<FluxoAtendimento>, DbError>;
 }
 
 #[async_trait]
@@ -156,6 +164,27 @@ impl FluxoAtendimentoRepository for PostgresFluxoAtendimentoRepository {
             ctx.tenant_id,
             id
         )
+        .fetch_optional(&mut **tx)
+        .await?;
+        Ok(row)
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn buscar_primeiro_ativo(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+    ) -> Result<Option<FluxoAtendimento>, DbError> {
+        // Query em runtime (sem macro) para não exigir cache .sqlx no build offline.
+        let row = sqlx::query_as::<_, FluxoAtendimento>(
+            r#"SELECT id, tenant_id, departamento_id, nome, descricao, ativo,
+                      data_criacao, data_atualizacao
+               FROM oraculo_fluxo_atendimento
+               WHERE tenant_id = $1 AND ativo = true
+               ORDER BY id ASC
+               LIMIT 1"#,
+        )
+        .bind(ctx.tenant_id)
         .fetch_optional(&mut **tx)
         .await?;
         Ok(row)
