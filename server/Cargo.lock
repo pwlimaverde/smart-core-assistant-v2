@@ -1113,6 +1113,7 @@ dependencies = [
  "chrono",
  "contracts",
  "error_core",
+ "futures-util",
  "infrastructure_postgres",
  "infrastructure_redis",
  "mockall",

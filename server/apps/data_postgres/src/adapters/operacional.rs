@@ -38,6 +38,18 @@ impl PgOperacionalStore {
             conn,
         }
     }
+
+    /// Publica a invalidação do `TenantConfigCache` no canal `core:settings:invalidate`
+    /// (WS-7.2), para que outras réplicas do `data_postgres` também descartem a
+    /// entrada local. `tenant_id = None` sinaliza invalidação global (CoreSettings
+    /// afeta todos os tenants). Melhor-esforço: publish nunca falha a operação.
+    async fn publicar_invalidacao_cache(&self, tenant_id: Option<Uuid>) {
+        let mut conn = self.conn.clone();
+        let payload = serde_json::json!({ "tenant_id": tenant_id.map(|t| t.to_string()) });
+        let payload_str = payload.to_string();
+        let _: Result<(), redis::RedisError> =
+            redis::AsyncCommands::publish(&mut conn, "core:settings:invalidate", payload_str).await;
+    }
 }
 
 #[async_trait]
@@ -92,7 +104,12 @@ impl OperacionalStore for PgOperacionalStore {
             encrypted,
             description,
         )
-        .await
+        .await?;
+
+        // CoreSettings alimentam o RuntimeConfig de todos os tenants: invalida tudo.
+        self.config_cache.invalidate_all();
+        self.publicar_invalidacao_cache(None).await;
+        Ok(())
     }
 
     #[tracing::instrument(skip_all)]
@@ -103,7 +120,12 @@ impl OperacionalStore for PgOperacionalStore {
         )
         .execute(&self.pool)
         .await?;
-        Ok(res.rows_affected() > 0)
+        let deletado = res.rows_affected() > 0;
+        if deletado {
+            self.config_cache.invalidate_all();
+            self.publicar_invalidacao_cache(None).await;
+        }
+        Ok(deletado)
     }
 
     #[tracing::instrument(skip_all, fields(tenant_id = %tenant_id))]
@@ -352,6 +374,7 @@ impl OperacionalStore for PgOperacionalStore {
         tx.commit().await?;
 
         self.config_cache.invalidate(&tenant_id);
+        self.publicar_invalidacao_cache(Some(tenant_id)).await;
         Ok(chaves_alteradas)
     }
 

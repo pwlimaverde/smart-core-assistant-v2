@@ -10,6 +10,58 @@ use sqlx::PgPool;
 use transport::Server;
 use uuid::Uuid;
 
+/// Subscriber dedicado do canal `core:settings:invalidate` (WS-7.2). `payload.tenant_id`
+/// ausente ou nulo sinaliza invalidação global (mudança em CoreSettings); presente,
+/// invalida só a entrada daquele tenant. Retorna `Ok(())` quando o stream de mensagens
+/// encerra (Redis derrubou a conexão); o chamador decide se/quando reconectar.
+#[allow(deprecated)]
+async fn rodar_subscriber_invalidacao_cache(
+    redis_bus_url: &str,
+    config_cache: &infrastructure_postgres::TenantConfigCache,
+) -> anyhow::Result<()> {
+    use futures_util::StreamExt;
+
+    let client = infrastructure_redis::criar_cliente(redis_bus_url)?;
+    let con = client.get_async_connection().await?;
+    let mut pubsub = con.into_pubsub();
+    pubsub.subscribe("core:settings:invalidate").await?;
+    tracing::info!("Subscriber de invalidação do TenantConfigCache conectado");
+
+    let mut stream = pubsub.on_message();
+    while let Some(msg) = stream.next().await {
+        let payload_str: String = match msg.get_payload() {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!("Falha ao ler payload de core:settings:invalidate: {:?}", e);
+                continue;
+            }
+        };
+        let payload: serde_json::Value = match serde_json::from_str(&payload_str) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("Payload inválido em core:settings:invalidate: {:?}", e);
+                continue;
+            }
+        };
+        let tenant_id = payload
+            .get("tenant_id")
+            .and_then(|v| v.as_str())
+            .and_then(|s| Uuid::parse_str(s).ok());
+        match tenant_id {
+            Some(id) => {
+                config_cache.invalidate(&id);
+                tracing::debug!(tenant_id = %id, "TenantConfigCache invalidado via Pub/Sub");
+            }
+            None => {
+                config_cache.invalidate_all();
+                tracing::debug!("TenantConfigCache invalidado por completo via Pub/Sub");
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn contexto_do_envelope(env: &Envelope) -> RequestContext {
     RequestContext {
         tenant_id: Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil()),
@@ -99,6 +151,30 @@ async fn main() -> anyhow::Result<()> {
         pool.clone(),
         cipher.clone(),
     ));
+
+    // WS-7.2: subscriber dedicado de invalidação do TenantConfigCache (Redis Pub/Sub).
+    // Conexão SEPARADA da usada para publish (regra do realtime.rs: subscribe bloqueia
+    // a conexão até a próxima mensagem). Permite que outras réplicas do data_postgres
+    // descartem a entrada local quando UpdateTenantConfig/UpsertCoreSetting/
+    // DeleteCoreSetting mudam a configuração em outra instância.
+    {
+        let config_cache = config_cache.clone();
+        let redis_bus_url = redis_bus_url.clone();
+        tokio::spawn(async move {
+            loop {
+                match rodar_subscriber_invalidacao_cache(&redis_bus_url, &config_cache).await {
+                    Ok(()) => tracing::warn!(
+                        "Subscriber de invalidação do TenantConfigCache encerrado; reconectando em 5s"
+                    ),
+                    Err(e) => tracing::error!(
+                        "Erro no subscriber de invalidação do TenantConfigCache: {:?}; reconectando em 5s",
+                        e
+                    ),
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+        });
+    }
 
     let whatsapp_store: std::sync::Arc<dyn ports::WhatsappStore> = std::sync::Arc::new(
         adapters::PgWhatsappStore::new(pool.clone(), admin_pool.clone()),
