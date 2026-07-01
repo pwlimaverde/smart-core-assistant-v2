@@ -31,5 +31,7 @@ message Envelope {
   int32 auth_user_id = 11;          // ID do usuário autenticado (0 = público/não autenticado)
   repeated string auth_scopes = 12; // Escopos do usuário autenticado (claims > body)
   bool auth_is_superuser = 13;      // Flag que indica se o usuário é superusuário (admin global)
+  repeated int32 flow_permissions = 14; // IDs de fluxo (Kanban) que o usuário pode acessar
+  string user_agent = 15;           // User-Agent do cliente (auditoria, doc 08 §4.2) — metadado, não segredo
 }
 

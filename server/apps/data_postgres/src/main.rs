@@ -15,7 +15,7 @@ fn contexto_do_envelope(env: &Envelope) -> RequestContext {
         tenant_id: Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil()),
         user_id: env.auth_user_id,
         user_scopes: env.auth_scopes.clone(),
-        flow_permissions: vec![],
+        flow_permissions: env.flow_permissions.clone(),
     }
 }
 
@@ -288,6 +288,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_list_superusers = state_clone.clone();
     let state_for_delete_superuser = state_clone.clone();
     let state_for_get_user_identity = state_clone.clone();
+    let state_for_get_user_flow_permissions = state_clone.clone();
     let state_for_list_core_settings = state_clone.clone();
     let state_for_upsert_core_setting = state_clone.clone();
     let state_for_delete_core_setting = state_clone.clone();
@@ -405,6 +406,12 @@ async fn main() -> anyhow::Result<()> {
         .route("GetUserIdentity", move |env| {
             let state = state_for_get_user_identity.clone();
             Box::pin(async move { handler_get_user_identity(state.auth.as_ref(), env).await })
+        })
+        .route("GetUserFlowPermissions", move |env| {
+            let state = state_for_get_user_flow_permissions.clone();
+            Box::pin(
+                async move { handler_get_user_flow_permissions(state.auth.as_ref(), env).await },
+            )
         })
         .route("ListCoreSettings", move |env| {
             let state = state_for_list_core_settings.clone();
@@ -1560,6 +1567,7 @@ async fn publicar_auditoria(
         context,
         user_id: Some(env.auth_user_id),
         ip_address: None,
+        user_agent: (!env.user_agent.is_empty()).then(|| env.user_agent.clone()),
     };
 
     let envelope_auditoria =
@@ -1607,6 +1615,45 @@ async fn handler_get_user_identity(store: &dyn ports::AuthStore, env: Envelope) 
         Ok(None) => erro(
             error_core::AppError::Auth("usuário não encontrado".to_string()),
             &env,
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// Resolve os `flow_permissions` (IDs de fluxo Kanban) do vínculo TenantUser de um usuário.
+/// Fonte de verdade para o `FlowPermissionsProvider` do runtime_api (RPC + cache curto).
+async fn handler_get_user_flow_permissions(
+    store: &dyn ports::AuthStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let user_id = payload_json
+        .get("user_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+
+    match store.buscar_tenant_user(user_id).await {
+        Ok(Some(tu)) => {
+            let permissions: Vec<i32> = tu
+                .flow_permissions
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_i64())
+                        .map(|v| v as i32)
+                        .collect()
+                })
+                .unwrap_or_default();
+            ok_reply(
+                &env,
+                "GetUserFlowPermissionsReply",
+                serde_json::json!({ "permissions": permissions }),
+            )
+        }
+        Ok(None) => ok_reply(
+            &env,
+            "GetUserFlowPermissionsReply",
+            serde_json::json!({ "permissions": Vec::<i32>::new() }),
         ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }

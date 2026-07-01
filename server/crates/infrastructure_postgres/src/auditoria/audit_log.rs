@@ -21,6 +21,7 @@ pub struct AuditLogEntry {
     pub user_id: Option<i32>,
     pub ip_address: Option<String>,
     pub created_at: DateTime<Utc>,
+    pub user_agent: Option<String>,
 }
 
 /// Dados para inserir um novo registro de auditoria.
@@ -35,6 +36,7 @@ pub struct NewAuditLogEntry {
     pub context: serde_json::Value,
     pub user_id: Option<i32>,
     pub ip_address: Option<String>,
+    pub user_agent: Option<String>,
 }
 
 // ============================================================
@@ -56,8 +58,8 @@ pub async fn inserir_audit_log(
 ) -> Result<Uuid, DbError> {
     let row = sqlx::query(
         r#"
-        INSERT INTO audit_log (tenant_id, level, service, trace_id, event, message, context, user_id, ip_address)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        INSERT INTO audit_log (tenant_id, level, service, trace_id, event, message, context, user_id, ip_address, user_agent)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
         RETURNING id
         "#
     )
@@ -70,6 +72,7 @@ pub async fn inserir_audit_log(
     .bind(&entry.context)
     .bind(entry.user_id)
     .bind(&entry.ip_address)
+    .bind(&entry.user_agent)
     .fetch_one(&mut **tx)
     .await?;
 
@@ -90,8 +93,8 @@ pub async fn inserir_audit_log_global(
 ) -> Result<Uuid, DbError> {
     let row = sqlx::query(
         r#"
-        INSERT INTO audit_log (tenant_id, level, service, trace_id, event, message, context, user_id, ip_address)
-        VALUES (NULL, $1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO audit_log (tenant_id, level, service, trace_id, event, message, context, user_id, ip_address, user_agent)
+        VALUES (NULL, $1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING id
         "#
     )
@@ -103,6 +106,7 @@ pub async fn inserir_audit_log_global(
     .bind(&entry.context)
     .bind(entry.user_id)
     .bind(&entry.ip_address)
+    .bind(&entry.user_agent)
     .fetch_one(admin_pool)
     .await?;
 
@@ -126,7 +130,7 @@ pub async fn buscar_audit_logs(
     let rows = sqlx::query_as::<_, AuditLogEntry>(
         r#"
         SELECT id, tenant_id, timestamp, level, service, trace_id,
-               event, message, context, user_id, ip_address, created_at
+               event, message, context, user_id, ip_address, created_at, user_agent
         FROM audit_log
         WHERE tenant_id = $1
         ORDER BY timestamp DESC
@@ -159,7 +163,7 @@ pub async fn buscar_audit_logs_por_evento(
     let rows = sqlx::query_as::<_, AuditLogEntry>(
         r#"
         SELECT id, tenant_id, timestamp, level, service, trace_id,
-               event, message, context, user_id, ip_address, created_at
+               event, message, context, user_id, ip_address, created_at, user_agent
         FROM audit_log
         WHERE tenant_id = $1 AND event = $2
         ORDER BY timestamp DESC
@@ -193,7 +197,7 @@ pub async fn buscar_audit_logs_admin(
     let rows = sqlx::query_as::<_, AuditLogEntry>(
         r#"
         SELECT id, tenant_id, timestamp, level, service, trace_id,
-               event, message, context, user_id, ip_address, created_at
+               event, message, context, user_id, ip_address, created_at, user_agent
         FROM audit_log
         WHERE ($1::text IS NULL OR event = $1)
         ORDER BY timestamp DESC
@@ -220,7 +224,7 @@ pub async fn buscar_audit_logs_globais(
     let rows = sqlx::query_as::<_, AuditLogEntry>(
         r#"
         SELECT id, tenant_id, timestamp, level, service, trace_id,
-               event, message, context, user_id, ip_address, created_at
+               event, message, context, user_id, ip_address, created_at, user_agent
         FROM audit_log
         WHERE tenant_id IS NULL
         ORDER BY timestamp DESC

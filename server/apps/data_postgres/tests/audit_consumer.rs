@@ -97,6 +97,7 @@ async fn processa_evento_de_auditoria_persiste_no_audit_log() {
         context: serde_json::json!({}),
         user_id: Some(1),
         ip_address: Some("127.0.0.1".to_string()),
+        user_agent: Some("integration-test-suite/1.0".to_string()),
     };
     let payload_json_str = serde_json::to_string(&audit_payload).unwrap();
 

@@ -45,6 +45,7 @@ pub async fn processar_eventos_auditoria_lote(
             context: envelope.payload.context,
             user_id: envelope.payload.user_id,
             ip_address: envelope.payload.ip_address,
+            user_agent: envelope.payload.user_agent,
         };
 
         if let Some(tenant_id) = envelope.payload.tenant_id {

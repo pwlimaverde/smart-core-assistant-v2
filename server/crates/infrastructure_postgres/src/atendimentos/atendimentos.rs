@@ -199,7 +199,18 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         )
         .fetch_all(&mut **tx)
         .await?;
-        Ok(rows)
+
+        // RBAC fino por fluxo (WS-5a): atendimentos já roteados a um fluxo Kanban só
+        // aparecem para quem tem flow_permission (ou bypass kanban:admin/tenant:admin).
+        // Sem fluxo atribuído ainda (pré-roteamento) permanece visível a todos com escopo.
+        let visiveis = rows
+            .into_iter()
+            .filter(|a| match a.fluxo_atendimento_id {
+                Some(fluxo_id) => ctx.has_flow_permission(fluxo_id),
+                None => true,
+            })
+            .collect();
+        Ok(visiveis)
     }
 
     #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, novo_status = %novo_status))]

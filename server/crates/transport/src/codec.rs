@@ -67,6 +67,7 @@ impl Codec for FlatbuffersCodec {
         let causation_id_offset = fbb.create_string(&env.causation_id);
         let traceparent_offset = fbb.create_string(&env.traceparent);
         let method_offset = fbb.create_string(&env.method);
+        let user_agent_offset = fbb.create_string(&env.user_agent);
         let payload_offset = fbb.create_vector(&env.payload);
 
         let mut scopes_offsets = Vec::new();
@@ -74,6 +75,7 @@ impl Codec for FlatbuffersCodec {
             scopes_offsets.push(fbb.create_string(scope));
         }
         let scopes_vector = fbb.create_vector(&scopes_offsets);
+        let flow_permissions_vector = fbb.create_vector(&env.flow_permissions);
 
         // 3. Criar a tabela Envelope
         let env_args = contracts::fbs::envelope::EnvelopeArgs {
@@ -90,6 +92,8 @@ impl Codec for FlatbuffersCodec {
             auth_user_id: env.auth_user_id,
             auth_scopes: Some(scopes_vector),
             auth_is_superuser: env.auth_is_superuser,
+            flow_permissions: Some(flow_permissions_vector),
+            user_agent: Some(user_agent_offset),
         };
         let root = contracts::fbs::envelope::Envelope::create(&mut fbb, &env_args);
         fbb.finish(root, None);
@@ -154,6 +158,15 @@ impl Codec for FlatbuffersCodec {
             }
         }
 
+        let mut flow_permissions = Vec::new();
+        if let Some(flows) = fbs_env.flow_permissions() {
+            for i in 0..flows.len() {
+                flow_permissions.push(flows.get(i));
+            }
+        }
+
+        let user_agent = fbs_env.user_agent().unwrap_or("").to_string();
+
         Ok(Envelope {
             tenant_id,
             schema_version: fbs_env.schema_version(),
@@ -168,6 +181,8 @@ impl Codec for FlatbuffersCodec {
             auth_user_id: fbs_env.auth_user_id(),
             auth_scopes,
             auth_is_superuser: fbs_env.auth_is_superuser(),
+            flow_permissions,
+            user_agent,
         })
     }
 }
@@ -241,6 +256,8 @@ mod tests {
             auth_user_id: 0,
             auth_scopes: vec![],
             auth_is_superuser: false,
+            flow_permissions: vec![],
+            user_agent: String::new(),
         }
     }
 

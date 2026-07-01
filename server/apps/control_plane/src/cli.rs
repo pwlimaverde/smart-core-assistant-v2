@@ -51,6 +51,8 @@ pub async fn create_superuser(args: &[String]) -> anyhow::Result<()> {
         auth_user_id: 0,
         auth_scopes: vec![],
         auth_is_superuser: false,
+        flow_permissions: vec![],
+        user_agent: String::new(),
     };
 
     println!("Enviando cadastro do superusuário ao data_postgres...");
@@ -214,6 +216,8 @@ fn montar_envelope(method: &str, payload: serde_json::Value) -> anyhow::Result<E
         auth_user_id: 0,
         auth_scopes: vec![],
         auth_is_superuser: false,
+        flow_permissions: vec![],
+        user_agent: String::new(),
     })
 }
 

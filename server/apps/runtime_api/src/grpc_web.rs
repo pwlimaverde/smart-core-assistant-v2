@@ -150,6 +150,16 @@ fn ip_do_metadata<T>(req: &Request<T>) -> Option<String> {
         .filter(|s| !s.is_empty())
 }
 
+/// Extrai o `User-Agent` da requisição gRPC-Web (WS-5b). Metadado de auditoria,
+/// não segredo; truncado defensivamente para evitar payload abusivo no audit_log.
+fn user_agent_do_metadata<T>(req: &Request<T>) -> String {
+    req.metadata()
+        .get("user-agent")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.chars().take(512).collect::<String>())
+        .unwrap_or_default()
+}
+
 /// Guarda de borda gRPC-Web: valida JWT + blocklist Redis + privilégio de superusuário.
 async fn exigir_superuser_do_metadata<T>(
     deps: &AuthDeps,
@@ -206,6 +216,7 @@ async fn exigir_superuser_do_metadata<T>(
             claims.sub.parse::<i32>().ok(),
             &traceparent,
             ip,
+            Some(user_agent_do_metadata(req)),
         )
         .await;
         return Err(Status::permission_denied("errors.auth.forbidden"));
@@ -245,6 +256,7 @@ impl AuthService for AuthFacade {
     async fn login(&self, req: Request<LoginRequest>) -> Result<Response<AuthResponse>, Status> {
         let traceparent = traceparent_do_metadata(&req);
         let ip = ip_do_metadata(&req);
+        let user_agent = user_agent_do_metadata(&req);
         tracing::Span::current().record("traceparent", tracing::field::display(&traceparent));
 
         let LoginRequest { email, password } = req.into_inner();
@@ -271,6 +283,7 @@ impl AuthService for AuthFacade {
                     user_id,
                     &traceparent,
                     ip,
+                    Some(user_agent.clone()),
                 )
                 .await;
                 Ok(Response::new(extrair_tokens(&tokens)))
@@ -287,6 +300,7 @@ impl AuthService for AuthFacade {
                         None,
                         &traceparent,
                         ip,
+                        Some(user_agent.clone()),
                     )
                     .await;
                 }
@@ -313,6 +327,7 @@ impl AuthService for AuthFacade {
     ) -> Result<Response<AuthResponse>, Status> {
         let traceparent = traceparent_do_metadata(&req);
         let ip = ip_do_metadata(&req);
+        let user_agent = user_agent_do_metadata(&req);
         tracing::Span::current().record("traceparent", tracing::field::display(&traceparent));
 
         let refresh_token = req.into_inner().refresh_token;
@@ -323,7 +338,7 @@ impl AuthService for AuthFacade {
                 // Reuso de refresh rotacionado: publica `token_reuse_detected` igual ao handler.
                 if matches!(&err, error_core::AppError::Auth(m) if m == application::auth::refresh::REUSE_MARKER)
                 {
-                    publicar_reuso_detectado(&mut bus, &traceparent, ip).await;
+                    publicar_reuso_detectado(&mut bus, &traceparent, ip, Some(user_agent)).await;
                 }
                 error_core::registrar(
                     &err,
@@ -345,6 +360,7 @@ impl AuthService for AuthFacade {
     ) -> Result<Response<LogoutResponse>, Status> {
         let traceparent = traceparent_do_metadata(&req);
         let ip = ip_do_metadata(&req);
+        let user_agent = user_agent_do_metadata(&req);
         tracing::Span::current().record("traceparent", tracing::field::display(&traceparent));
 
         let bearer = bearer_do_metadata(&req);
@@ -373,6 +389,7 @@ impl AuthService for AuthFacade {
                     claims.sub.parse::<i32>().ok(),
                     &traceparent,
                     ip,
+                    Some(user_agent),
                 )
                 .await;
                 Ok(Response::new(LogoutResponse { revoked: true }))
@@ -1862,6 +1879,7 @@ impl AdminService for AdminFacade {
         let claims = exigir_superuser_do_metadata(&self.deps, &self.bus, &req).await?;
         let traceparent = traceparent_do_metadata(&req);
         let ip = ip_do_metadata(&req);
+        let user_agent = user_agent_do_metadata(&req);
         let inner = req.into_inner();
 
         let payload = serde_json::json!({
@@ -1923,6 +1941,7 @@ impl AdminService for AdminFacade {
                     claims.sub.parse::<i32>().ok(),
                     &traceparent,
                     ip,
+                    Some(user_agent),
                 )
                 .await;
 
@@ -2428,6 +2447,7 @@ impl AdminService for AdminFacade {
     ) -> Result<Response<Self::StreamAtendimentosStream>, Status> {
         let traceparent = traceparent_do_metadata(&req);
         let ip = ip_do_metadata(&req);
+        let user_agent = user_agent_do_metadata(&req);
 
         let token = bearer_do_metadata(&req);
         let token = token.strip_prefix("Bearer ").unwrap_or(&token).trim();
@@ -2446,6 +2466,7 @@ impl AdminService for AdminFacade {
                     None,
                     &traceparent,
                     ip.clone(),
+                    Some(user_agent.clone()),
                 )
                 .await;
                 return Err(Status::unauthenticated("errors.auth"));
@@ -2466,6 +2487,7 @@ impl AdminService for AdminFacade {
                     claims.sub.parse::<i32>().ok(),
                     &traceparent,
                     ip.clone(),
+                    Some(user_agent.clone()),
                 )
                 .await;
                 return Err(Status::invalid_argument("Invalid tenant UUID"));
@@ -2485,6 +2507,7 @@ impl AdminService for AdminFacade {
             claims.sub.parse::<i32>().ok(),
             &traceparent,
             ip.clone(),
+            Some(user_agent.clone()),
         )
         .await;
 
@@ -2495,6 +2518,7 @@ impl AdminService for AdminFacade {
         let mut bus_clone = self.bus.clone();
         let traceparent_clone = traceparent.clone();
         let ip_clone = ip;
+        let user_agent_clone = user_agent;
         let sub_clone = claims.sub.clone();
         tokio::spawn(async move {
             while let Ok(event) = broadcast_rx.recv().await {
@@ -2513,6 +2537,7 @@ impl AdminService for AdminFacade {
                 sub_clone.parse::<i32>().ok(),
                 &traceparent_clone,
                 ip_clone,
+                Some(user_agent_clone),
             )
             .await;
         });

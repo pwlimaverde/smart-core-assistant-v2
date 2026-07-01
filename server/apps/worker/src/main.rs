@@ -151,6 +151,8 @@ async fn processar_mensagem_recebida(
         auth_user_id: 0,
         auth_scopes: escopos_sistema(),
         auth_is_superuser: false,
+        flow_permissions: vec![],
+        user_agent: String::new(),
     };
 
     let resolve_resp = pg_client
@@ -204,6 +206,8 @@ async fn processar_mensagem_recebida(
         auth_user_id: 0,
         auth_scopes: escopos_sistema(),
         auth_is_superuser: false,
+        flow_permissions: vec![],
+        user_agent: String::new(),
     };
 
     let resp = pg_client
@@ -388,6 +392,8 @@ async fn processar_mensagem_recebida(
                 auth_user_id: 0,
                 auth_scopes: escopos_sistema(),
                 auth_is_superuser: false,
+                flow_permissions: vec![],
+                user_agent: String::new(),
             };
 
             let out_resp = state
@@ -490,6 +496,8 @@ async fn aplicar_politica_ticket_kanban(
         auth_user_id: 0,
         auth_scopes: escopos_sistema(),
         auth_is_superuser: false,
+        flow_permissions: vec![],
+        user_agent: String::new(),
     };
 
     let resp = state
@@ -630,6 +638,8 @@ async fn processar_status_mensagem(
         auth_user_id: 0,
         auth_scopes: escopos_sistema(),
         auth_is_superuser: false,
+        flow_permissions: vec![],
+        user_agent: String::new(),
     };
 
     let resp = pg_client.call(req_envelope, Duration::from_secs(5)).await?;
