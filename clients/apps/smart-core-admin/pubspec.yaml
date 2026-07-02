@@ -24,6 +24,8 @@ dependencies:
     path: ../../modulos/login_module
   admin_module:
     path: ../../modulos/admin_module
+  operacional_module:
+    path: ../../modulos/operacional_module
   cupertino_icons: ^1.0.8
 
 dev_dependencies:
