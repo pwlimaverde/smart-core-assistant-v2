@@ -1184,3 +1184,228 @@ const ExportTenantsCsvResponse$json = {
 final $typed_data.Uint8List exportTenantsCsvResponseDescriptor =
     $convert.base64Decode(
         'ChhFeHBvcnRUZW5hbnRzQ3N2UmVzcG9uc2USFAoFY2h1bmsYASABKAxSBWNodW5r');
+
+@$core.Deprecated('Use atendimentoResumoDescriptor instead')
+const AtendimentoResumo$json = {
+  '1': 'AtendimentoResumo',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'contato_id', '3': 2, '4': 1, '5': 5, '10': 'contatoId'},
+    {'1': 'status', '3': 3, '4': 1, '5': 9, '10': 'status'},
+    {'1': 'departamento_id', '3': 4, '4': 1, '5': 5, '10': 'departamentoId'},
+    {
+      '1': 'fluxo_atendimento_id',
+      '3': 5,
+      '4': 1,
+      '5': 5,
+      '10': 'fluxoAtendimentoId'
+    },
+    {'1': 'etapa_atual_id', '3': 6, '4': 1, '5': 5, '10': 'etapaAtualId'},
+    {'1': 'assunto', '3': 7, '4': 1, '5': 9, '10': 'assunto'},
+    {'1': 'prioridade', '3': 8, '4': 1, '5': 9, '10': 'prioridade'},
+    {
+      '1': 'atendente_humano_id',
+      '3': 9,
+      '4': 1,
+      '5': 5,
+      '10': 'atendenteHumanoId'
+    },
+    {'1': 'data_inicio', '3': 10, '4': 1, '5': 3, '10': 'dataInicio'},
+    {
+      '1': 'data_ultima_mensagem',
+      '3': 11,
+      '4': 1,
+      '5': 3,
+      '10': 'dataUltimaMensagem'
+    },
+  ],
+};
+
+/// Descriptor for `AtendimentoResumo`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List atendimentoResumoDescriptor = $convert.base64Decode(
+    'ChFBdGVuZGltZW50b1Jlc3VtbxIOCgJpZBgBIAEoBVICaWQSHQoKY29udGF0b19pZBgCIAEoBV'
+    'IJY29udGF0b0lkEhYKBnN0YXR1cxgDIAEoCVIGc3RhdHVzEicKD2RlcGFydGFtZW50b19pZBgE'
+    'IAEoBVIOZGVwYXJ0YW1lbnRvSWQSMAoUZmx1eG9fYXRlbmRpbWVudG9faWQYBSABKAVSEmZsdX'
+    'hvQXRlbmRpbWVudG9JZBIkCg5ldGFwYV9hdHVhbF9pZBgGIAEoBVIMZXRhcGFBdHVhbElkEhgK'
+    'B2Fzc3VudG8YByABKAlSB2Fzc3VudG8SHgoKcHJpb3JpZGFkZRgIIAEoCVIKcHJpb3JpZGFkZR'
+    'IuChNhdGVuZGVudGVfaHVtYW5vX2lkGAkgASgFUhFhdGVuZGVudGVIdW1hbm9JZBIfCgtkYXRh'
+    'X2luaWNpbxgKIAEoA1IKZGF0YUluaWNpbxIwChRkYXRhX3VsdGltYV9tZW5zYWdlbRgLIAEoA1'
+    'ISZGF0YVVsdGltYU1lbnNhZ2Vt');
+
+@$core.Deprecated('Use listAtendimentosRequestDescriptor instead')
+const ListAtendimentosRequest$json = {
+  '1': 'ListAtendimentosRequest',
+  '2': [
+    {'1': 'status', '3': 1, '4': 1, '5': 9, '10': 'status'},
+    {'1': 'departamento_id', '3': 2, '4': 1, '5': 5, '10': 'departamentoId'},
+    {'1': 'limit', '3': 3, '4': 1, '5': 5, '10': 'limit'},
+  ],
+};
+
+/// Descriptor for `ListAtendimentosRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listAtendimentosRequestDescriptor = $convert.base64Decode(
+    'ChdMaXN0QXRlbmRpbWVudG9zUmVxdWVzdBIWCgZzdGF0dXMYASABKAlSBnN0YXR1cxInCg9kZX'
+    'BhcnRhbWVudG9faWQYAiABKAVSDmRlcGFydGFtZW50b0lkEhQKBWxpbWl0GAMgASgFUgVsaW1p'
+    'dA==');
+
+@$core.Deprecated('Use listAtendimentosResponseDescriptor instead')
+const ListAtendimentosResponse$json = {
+  '1': 'ListAtendimentosResponse',
+  '2': [
+    {
+      '1': 'atendimentos',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.AtendimentoResumo',
+      '10': 'atendimentos'
+    },
+  ],
+};
+
+/// Descriptor for `ListAtendimentosResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listAtendimentosResponseDescriptor = $convert.base64Decode(
+    'ChhMaXN0QXRlbmRpbWVudG9zUmVzcG9uc2USUgoMYXRlbmRpbWVudG9zGAEgAygLMi4uc21hcn'
+    'Rjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkF0ZW5kaW1lbnRvUmVzdW1vUgxhdGVuZGltZW50b3M=');
+
+@$core.Deprecated('Use mensagemThreadDescriptor instead')
+const MensagemThread$json = {
+  '1': 'MensagemThread',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'atendimento_id', '3': 2, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'tipo', '3': 3, '4': 1, '5': 9, '10': 'tipo'},
+    {'1': 'conteudo', '3': 4, '4': 1, '5': 9, '10': 'conteudo'},
+    {'1': 'remetente', '3': 5, '4': 1, '5': 9, '10': 'remetente'},
+    {'1': 'timestamp', '3': 6, '4': 1, '5': 3, '10': 'timestamp'},
+    {'1': 'status_envio', '3': 7, '4': 1, '5': 9, '10': 'statusEnvio'},
+  ],
+};
+
+/// Descriptor for `MensagemThread`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List mensagemThreadDescriptor = $convert.base64Decode(
+    'Cg5NZW5zYWdlbVRocmVhZBIOCgJpZBgBIAEoBVICaWQSJQoOYXRlbmRpbWVudG9faWQYAiABKA'
+    'VSDWF0ZW5kaW1lbnRvSWQSEgoEdGlwbxgDIAEoCVIEdGlwbxIaCghjb250ZXVkbxgEIAEoCVII'
+    'Y29udGV1ZG8SHAoJcmVtZXRlbnRlGAUgASgJUglyZW1ldGVudGUSHAoJdGltZXN0YW1wGAYgAS'
+    'gDUgl0aW1lc3RhbXASIQoMc3RhdHVzX2VudmlvGAcgASgJUgtzdGF0dXNFbnZpbw==');
+
+@$core.Deprecated('Use getThreadRequestDescriptor instead')
+const GetThreadRequest$json = {
+  '1': 'GetThreadRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'limit', '3': 2, '4': 1, '5': 5, '10': 'limit'},
+    {'1': 'offset', '3': 3, '4': 1, '5': 5, '10': 'offset'},
+  ],
+};
+
+/// Descriptor for `GetThreadRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getThreadRequestDescriptor = $convert.base64Decode(
+    'ChBHZXRUaHJlYWRSZXF1ZXN0EiUKDmF0ZW5kaW1lbnRvX2lkGAEgASgFUg1hdGVuZGltZW50b0'
+    'lkEhQKBWxpbWl0GAIgASgFUgVsaW1pdBIWCgZvZmZzZXQYAyABKAVSBm9mZnNldA==');
+
+@$core.Deprecated('Use getThreadResponseDescriptor instead')
+const GetThreadResponse$json = {
+  '1': 'GetThreadResponse',
+  '2': [
+    {
+      '1': 'mensagens',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MensagemThread',
+      '10': 'mensagens'
+    },
+  ],
+};
+
+/// Descriptor for `GetThreadResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getThreadResponseDescriptor = $convert.base64Decode(
+    'ChFHZXRUaHJlYWRSZXNwb25zZRJJCgltZW5zYWdlbnMYASADKAsyKy5zbWFydGNvcmUuY29udH'
+    'JhY3RzLnF1ZXJpZXMuTWVuc2FnZW1UaHJlYWRSCW1lbnNhZ2Vucw==');
+
+@$core.Deprecated('Use moveAtendimentoEtapaRequestDescriptor instead')
+const MoveAtendimentoEtapaRequest$json = {
+  '1': 'MoveAtendimentoEtapaRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'etapa_destino_id', '3': 2, '4': 1, '5': 5, '10': 'etapaDestinoId'},
+    {'1': 'motivo', '3': 3, '4': 1, '5': 9, '10': 'motivo'},
+  ],
+};
+
+/// Descriptor for `MoveAtendimentoEtapaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List moveAtendimentoEtapaRequestDescriptor =
+    $convert.base64Decode(
+        'ChtNb3ZlQXRlbmRpbWVudG9FdGFwYVJlcXVlc3QSJQoOYXRlbmRpbWVudG9faWQYASABKAVSDW'
+        'F0ZW5kaW1lbnRvSWQSKAoQZXRhcGFfZGVzdGlub19pZBgCIAEoBVIOZXRhcGFEZXN0aW5vSWQS'
+        'FgoGbW90aXZvGAMgASgJUgZtb3Rpdm8=');
+
+@$core.Deprecated('Use moveAtendimentoEtapaResponseDescriptor instead')
+const MoveAtendimentoEtapaResponse$json = {
+  '1': 'MoveAtendimentoEtapaResponse',
+  '2': [
+    {'1': 'success', '3': 1, '4': 1, '5': 8, '10': 'success'},
+  ],
+};
+
+/// Descriptor for `MoveAtendimentoEtapaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List moveAtendimentoEtapaResponseDescriptor =
+    $convert.base64Decode(
+        'ChxNb3ZlQXRlbmRpbWVudG9FdGFwYVJlc3BvbnNlEhgKB3N1Y2Nlc3MYASABKAhSB3N1Y2Nlc3'
+        'M=');
+
+@$core.Deprecated('Use sendOutboundMessageRequestDescriptor instead')
+const SendOutboundMessageRequest$json = {
+  '1': 'SendOutboundMessageRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'conteudo', '3': 2, '4': 1, '5': 9, '10': 'conteudo'},
+    {'1': 'tipo', '3': 3, '4': 1, '5': 9, '10': 'tipo'},
+  ],
+};
+
+/// Descriptor for `SendOutboundMessageRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List sendOutboundMessageRequestDescriptor =
+    $convert.base64Decode(
+        'ChpTZW5kT3V0Ym91bmRNZXNzYWdlUmVxdWVzdBIlCg5hdGVuZGltZW50b19pZBgBIAEoBVINYX'
+        'RlbmRpbWVudG9JZBIaCghjb250ZXVkbxgCIAEoCVIIY29udGV1ZG8SEgoEdGlwbxgDIAEoCVIE'
+        'dGlwbw==');
+
+@$core.Deprecated('Use sendOutboundMessageResponseDescriptor instead')
+const SendOutboundMessageResponse$json = {
+  '1': 'SendOutboundMessageResponse',
+  '2': [
+    {'1': 'message_id', '3': 1, '4': 1, '5': 5, '10': 'messageId'},
+  ],
+};
+
+/// Descriptor for `SendOutboundMessageResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List sendOutboundMessageResponseDescriptor =
+    $convert.base64Decode(
+        'ChtTZW5kT3V0Ym91bmRNZXNzYWdlUmVzcG9uc2USHQoKbWVzc2FnZV9pZBgBIAEoBVIJbWVzc2'
+        'FnZUlk');
+
+@$core.Deprecated('Use streamAtendimentosRequestDescriptor instead')
+const StreamAtendimentosRequest$json = {
+  '1': 'StreamAtendimentosRequest',
+};
+
+/// Descriptor for `StreamAtendimentosRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List streamAtendimentosRequestDescriptor =
+    $convert.base64Decode('ChlTdHJlYW1BdGVuZGltZW50b3NSZXF1ZXN0');
+
+@$core.Deprecated('Use atendimentoEventDescriptor instead')
+const AtendimentoEvent$json = {
+  '1': 'AtendimentoEvent',
+  '2': [
+    {'1': 'event_type', '3': 1, '4': 1, '5': 9, '10': 'eventType'},
+    {'1': 'tenant_id', '3': 2, '4': 1, '5': 9, '10': 'tenantId'},
+    {'1': 'payload', '3': 3, '4': 1, '5': 9, '10': 'payload'},
+  ],
+};
+
+/// Descriptor for `AtendimentoEvent`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List atendimentoEventDescriptor = $convert.base64Decode(
+    'ChBBdGVuZGltZW50b0V2ZW50Eh0KCmV2ZW50X3R5cGUYASABKAlSCWV2ZW50VHlwZRIbCgl0ZW'
+    '5hbnRfaWQYAiABKAlSCHRlbmFudElkEhgKB3BheWxvYWQYAyABKAlSB3BheWxvYWQ=');

@@ -219,6 +219,46 @@ class AdminServiceClient extends $grpc.Client {
         options: options);
   }
 
+  /// Realtime
+  $grpc.ResponseStream<$0.AtendimentoEvent> streamAtendimentos(
+    $0.StreamAtendimentosRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createStreamingCall(
+        _$streamAtendimentos, $async.Stream.fromIterable([request]),
+        options: options);
+  }
+
+  /// Fase 6: Operacional (fila/Kanban/chat — WS-6). RBAC fino por fluxo (flow_permissions)
+  /// já é aplicado no data_postgres (WS-5a); estas rotas exigem só autenticação, não superuser.
+  $grpc.ResponseFuture<$0.ListAtendimentosResponse> listAtendimentos(
+    $0.ListAtendimentosRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listAtendimentos, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.GetThreadResponse> getThread(
+    $0.GetThreadRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$getThread, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.MoveAtendimentoEtapaResponse> moveAtendimentoEtapa(
+    $0.MoveAtendimentoEtapaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$moveAtendimentoEtapa, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SendOutboundMessageResponse> sendOutboundMessage(
+    $0.SendOutboundMessageRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$sendOutboundMessage, request, options: options);
+  }
+
   // method descriptors
 
   static final _$listCoreSettings = $grpc.ClientMethod<
@@ -347,6 +387,31 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/ExportTenantsCsv',
       ($0.ExportTenantsCsvRequest value) => value.writeToBuffer(),
       $0.ExportTenantsCsvResponse.fromBuffer);
+  static final _$streamAtendimentos =
+      $grpc.ClientMethod<$0.StreamAtendimentosRequest, $0.AtendimentoEvent>(
+          '/smartcore.contracts.queries.AdminService/StreamAtendimentos',
+          ($0.StreamAtendimentosRequest value) => value.writeToBuffer(),
+          $0.AtendimentoEvent.fromBuffer);
+  static final _$listAtendimentos = $grpc.ClientMethod<
+          $0.ListAtendimentosRequest, $0.ListAtendimentosResponse>(
+      '/smartcore.contracts.queries.AdminService/ListAtendimentos',
+      ($0.ListAtendimentosRequest value) => value.writeToBuffer(),
+      $0.ListAtendimentosResponse.fromBuffer);
+  static final _$getThread =
+      $grpc.ClientMethod<$0.GetThreadRequest, $0.GetThreadResponse>(
+          '/smartcore.contracts.queries.AdminService/GetThread',
+          ($0.GetThreadRequest value) => value.writeToBuffer(),
+          $0.GetThreadResponse.fromBuffer);
+  static final _$moveAtendimentoEtapa = $grpc.ClientMethod<
+          $0.MoveAtendimentoEtapaRequest, $0.MoveAtendimentoEtapaResponse>(
+      '/smartcore.contracts.queries.AdminService/MoveAtendimentoEtapa',
+      ($0.MoveAtendimentoEtapaRequest value) => value.writeToBuffer(),
+      $0.MoveAtendimentoEtapaResponse.fromBuffer);
+  static final _$sendOutboundMessage = $grpc.ClientMethod<
+          $0.SendOutboundMessageRequest, $0.SendOutboundMessageResponse>(
+      '/smartcore.contracts.queries.AdminService/SendOutboundMessage',
+      ($0.SendOutboundMessageRequest value) => value.writeToBuffer(),
+      $0.SendOutboundMessageResponse.fromBuffer);
 }
 
 @$pb.GrpcServiceName('smartcore.contracts.queries.AdminService')
@@ -571,6 +636,49 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.ExportTenantsCsvRequest.fromBuffer(value),
         ($0.ExportTenantsCsvResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.StreamAtendimentosRequest, $0.AtendimentoEvent>(
+            'StreamAtendimentos',
+            streamAtendimentos_Pre,
+            false,
+            true,
+            ($core.List<$core.int> value) =>
+                $0.StreamAtendimentosRequest.fromBuffer(value),
+            ($0.AtendimentoEvent value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListAtendimentosRequest,
+            $0.ListAtendimentosResponse>(
+        'ListAtendimentos',
+        listAtendimentos_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListAtendimentosRequest.fromBuffer(value),
+        ($0.ListAtendimentosResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.GetThreadRequest, $0.GetThreadResponse>(
+        'GetThread',
+        getThread_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.GetThreadRequest.fromBuffer(value),
+        ($0.GetThreadResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.MoveAtendimentoEtapaRequest,
+            $0.MoveAtendimentoEtapaResponse>(
+        'MoveAtendimentoEtapa',
+        moveAtendimentoEtapa_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.MoveAtendimentoEtapaRequest.fromBuffer(value),
+        ($0.MoveAtendimentoEtapaResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.SendOutboundMessageRequest,
+            $0.SendOutboundMessageResponse>(
+        'SendOutboundMessage',
+        sendOutboundMessage_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.SendOutboundMessageRequest.fromBuffer(value),
+        ($0.SendOutboundMessageResponse value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.ListCoreSettingsResponse> listCoreSettings_Pre(
@@ -792,4 +900,48 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Stream<$0.ExportTenantsCsvResponse> exportTenantsCsv(
       $grpc.ServiceCall call, $0.ExportTenantsCsvRequest request);
+
+  $async.Stream<$0.AtendimentoEvent> streamAtendimentos_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.StreamAtendimentosRequest> $request) async* {
+    yield* streamAtendimentos($call, await $request);
+  }
+
+  $async.Stream<$0.AtendimentoEvent> streamAtendimentos(
+      $grpc.ServiceCall call, $0.StreamAtendimentosRequest request);
+
+  $async.Future<$0.ListAtendimentosResponse> listAtendimentos_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListAtendimentosRequest> $request) async {
+    return listAtendimentos($call, await $request);
+  }
+
+  $async.Future<$0.ListAtendimentosResponse> listAtendimentos(
+      $grpc.ServiceCall call, $0.ListAtendimentosRequest request);
+
+  $async.Future<$0.GetThreadResponse> getThread_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.GetThreadRequest> $request) async {
+    return getThread($call, await $request);
+  }
+
+  $async.Future<$0.GetThreadResponse> getThread(
+      $grpc.ServiceCall call, $0.GetThreadRequest request);
+
+  $async.Future<$0.MoveAtendimentoEtapaResponse> moveAtendimentoEtapa_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MoveAtendimentoEtapaRequest> $request) async {
+    return moveAtendimentoEtapa($call, await $request);
+  }
+
+  $async.Future<$0.MoveAtendimentoEtapaResponse> moveAtendimentoEtapa(
+      $grpc.ServiceCall call, $0.MoveAtendimentoEtapaRequest request);
+
+  $async.Future<$0.SendOutboundMessageResponse> sendOutboundMessage_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.SendOutboundMessageRequest> $request) async {
+    return sendOutboundMessage($call, await $request);
+  }
+
+  $async.Future<$0.SendOutboundMessageResponse> sendOutboundMessage(
+      $grpc.ServiceCall call, $0.SendOutboundMessageRequest request);
 }
