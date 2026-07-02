@@ -14,6 +14,8 @@ use contracts::grpc::queries::auth_service_server::{AuthService, AuthServiceServ
 use contracts::grpc::queries::{
     ApiKeyEntry as ProtoApiKeyEntry,
     AtendimentoEvent,
+    // Fase 6 - Operacional (fila/Kanban/chat)
+    AtendimentoResumo as ProtoAtendimentoResumo,
     AuditLogEntry as ProtoAuditLogEntry,
     AuthResponse,
     CoreSetting as ProtoCoreSetting,
@@ -37,6 +39,10 @@ use contracts::grpc::queries::{
     GetTenantConfigResponse,
     GetTenantRequest,
     GetTenantResponse,
+    GetThreadRequest,
+    GetThreadResponse,
+    ListAtendimentosRequest,
+    ListAtendimentosResponse,
     ListCoreSettingsRequest,
     ListCoreSettingsResponse,
     // Fase 4 - Feature Flags
@@ -55,6 +61,9 @@ use contracts::grpc::queries::{
     LoginRequest,
     LogoutRequest,
     LogoutResponse,
+    MensagemThread as ProtoMensagemThread,
+    MoveAtendimentoEtapaRequest,
+    MoveAtendimentoEtapaResponse,
     PaymentRecord as ProtoPaymentRecord,
     Plan as ProtoPlan,
     // Fase 5 - Auditoria & Saúde
@@ -63,6 +72,8 @@ use contracts::grpc::queries::{
     RefreshRequest,
     RegisterPaymentRequest,
     RegisterPaymentResponse,
+    SendOutboundMessageRequest,
+    SendOutboundMessageResponse,
     ServiceHealth as ProtoServiceHealth,
     SetFeatureFlagOverrideRequest,
     SetFeatureFlagOverrideResponse,
@@ -166,8 +177,40 @@ async fn exigir_superuser_do_metadata<T>(
     bus: &redis::aio::ConnectionManager,
     req: &Request<T>,
 ) -> Result<application::jwt::Claims, Status> {
+    let claims = exigir_autenticado_do_metadata(deps, req).await?;
+
+    // Exigir privilégios de superusuário (rotas administrativas).
+    if !claims.is_superuser {
+        let traceparent = traceparent_do_metadata(req);
+        let ip = ip_do_metadata(req);
+        let mut bus_clone = bus.clone();
+        publicar_auditoria_borda(
+            &mut bus_clone,
+            None,
+            "WARN",
+            "auth_access_denied",
+            "Acesso admin via gRPC-Web negado (sem is_superuser).".to_string(),
+            serde_json::json!({}),
+            claims.sub.parse::<i32>().ok(),
+            &traceparent,
+            ip,
+            Some(user_agent_do_metadata(req)),
+        )
+        .await;
+        return Err(Status::permission_denied("errors.auth.forbidden"));
+    }
+
+    Ok(claims)
+}
+
+/// Guarda de borda gRPC-Web para rotas operacionais (WS-6): exige apenas JWT válido
+/// (não blocklistado), sem exigir superusuário. O RBAC fino por fluxo (`flow_permissions`,
+/// WS-5a) é aplicado adiante, no `data_postgres`, sobre cada atendimento/fluxo.
+async fn exigir_autenticado_do_metadata<T>(
+    deps: &AuthDeps,
+    req: &Request<T>,
+) -> Result<application::jwt::Claims, Status> {
     let traceparent = traceparent_do_metadata(req);
-    let ip = ip_do_metadata(req);
 
     // 1. Extrair access token do metadata authorization
     let bearer = bearer_do_metadata(req);
@@ -201,25 +244,6 @@ async fn exigir_superuser_do_metadata<T>(
             }
         }
         Err(_) => return Err(Status::internal("errors.internal")),
-    }
-
-    // 4. Exigir privilégios de superusuário
-    if !claims.is_superuser {
-        let mut bus_clone = bus.clone();
-        publicar_auditoria_borda(
-            &mut bus_clone,
-            None,
-            "WARN",
-            "auth_access_denied",
-            "Acesso admin via gRPC-Web negado (sem is_superuser).".to_string(),
-            serde_json::json!({}),
-            claims.sub.parse::<i32>().ok(),
-            &traceparent,
-            ip,
-            Some(user_agent_do_metadata(req)),
-        )
-        .await;
-        return Err(Status::permission_denied("errors.auth.forbidden"));
     }
 
     Ok(claims)
@@ -2429,6 +2453,452 @@ impl AdminService for AdminFacade {
                     monthly_recurring_revenue,
                     health,
                 }))
+            }
+            Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
+        }
+    }
+
+    // --- Fase 6: Operacional (fila/Kanban/chat — WS-6). Exige só autenticação (não
+    // superuser); o RBAC fino por fluxo (flow_permissions, WS-5a) é aplicado no
+    // data_postgres sobre cada atendimento/fluxo. ---
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListAtendimentos", traceparent)
+    )]
+    async fn list_atendimentos(
+        &self,
+        req: Request<ListAtendimentosRequest>,
+    ) -> Result<Response<ListAtendimentosResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+
+        let payload = serde_json::json!({
+            "status": if inner.status.is_empty() { "fila" } else { &inner.status },
+            "departamento_id": if inner.departamento_id > 0 { Some(inner.departamento_id) } else { None },
+            "limit": if inner.limit > 0 { inner.limit } else { 50 },
+        });
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "ListAtendimentos".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(resp) => {
+                if resp.kind == MessageKind::Error as i32 {
+                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
+                    return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
+                }
+
+                let val: serde_json::Value = serde_json::from_slice(&resp.payload)
+                    .map_err(|e| Status::internal(e.to_string()))?;
+
+                let mut atendimentos = Vec::new();
+                if let Some(arr) = val.get("atendimentos").and_then(|v| v.as_array()) {
+                    for item in arr {
+                        atendimentos.push(ProtoAtendimentoResumo {
+                            id: item.get("id").and_then(|v| v.as_i64()).unwrap_or_default() as i32,
+                            contato_id: item
+                                .get("contato_id")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or_default() as i32,
+                            status: item
+                                .get("status")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_string(),
+                            departamento_id: item
+                                .get("departamento_id")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or_default()
+                                as i32,
+                            fluxo_atendimento_id: item
+                                .get("fluxo_atendimento_id")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or_default()
+                                as i32,
+                            etapa_atual_id: item
+                                .get("etapa_atual_id")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or_default()
+                                as i32,
+                            assunto: item
+                                .get("assunto")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_string(),
+                            prioridade: item
+                                .get("prioridade")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_string(),
+                            atendente_humano_id: item
+                                .get("atendente_humano_id")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or_default()
+                                as i32,
+                            data_inicio: item
+                                .get("data_inicio")
+                                .and_then(|v| v.as_str())
+                                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                                .map(|d| d.timestamp_millis())
+                                .unwrap_or_default(),
+                            data_ultima_mensagem: item
+                                .get("data_ultima_mensagem")
+                                .and_then(|v| v.as_str())
+                                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                                .map(|d| d.timestamp_millis())
+                                .unwrap_or_default(),
+                        });
+                    }
+                }
+
+                Ok(Response::new(ListAtendimentosResponse { atendimentos }))
+            }
+            Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
+        }
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "GetThread", traceparent)
+    )]
+    async fn get_thread(
+        &self,
+        req: Request<GetThreadRequest>,
+    ) -> Result<Response<GetThreadResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+
+        let payload = serde_json::json!({
+            "atendimento_id": inner.atendimento_id,
+            "limit": if inner.limit > 0 { inner.limit } else { 50 },
+            "offset": inner.offset,
+        });
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "GetThread".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(resp) => {
+                if resp.kind == MessageKind::Error as i32 {
+                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
+                    return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
+                }
+
+                let val: serde_json::Value = serde_json::from_slice(&resp.payload)
+                    .map_err(|e| Status::internal(e.to_string()))?;
+
+                let mut mensagens = Vec::new();
+                if let Some(arr) = val.get("mensagens").and_then(|v| v.as_array()) {
+                    for item in arr {
+                        mensagens.push(ProtoMensagemThread {
+                            id: item.get("id").and_then(|v| v.as_i64()).unwrap_or_default() as i32,
+                            atendimento_id: item
+                                .get("atendimento_id")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or_default()
+                                as i32,
+                            tipo: item
+                                .get("tipo")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_string(),
+                            conteudo: item
+                                .get("conteudo")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_string(),
+                            remetente: item
+                                .get("remetente")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_string(),
+                            timestamp: item
+                                .get("timestamp")
+                                .and_then(|v| v.as_str())
+                                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                                .map(|d| d.timestamp_millis())
+                                .unwrap_or_default(),
+                            status_envio: item
+                                .get("status_envio")
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_string(),
+                        });
+                    }
+                }
+
+                Ok(Response::new(GetThreadResponse { mensagens }))
+            }
+            Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
+        }
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "MoveAtendimentoEtapa", traceparent)
+    )]
+    async fn move_atendimento_etapa(
+        &self,
+        req: Request<MoveAtendimentoEtapaRequest>,
+    ) -> Result<Response<MoveAtendimentoEtapaResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let ip = ip_do_metadata(&req);
+        let user_agent = user_agent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+
+        let payload = serde_json::json!({
+            "atendimento_id": inner.atendimento_id,
+            "etapa_destino_id": inner.etapa_destino_id,
+            "motivo": if inner.motivo.is_empty() { None } else { Some(inner.motivo.clone()) },
+        });
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "MoveAtendimentoEtapa".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(resp) => {
+                if resp.kind == MessageKind::Error as i32 {
+                    let err = resp.error.unwrap_or_default();
+                    // `AUTH_INSUFFICIENT_SCOPE` é o código estável de PermissionDenied
+                    // (RBAC fino por fluxo, WS-5a) — ver error_core::envelope_bridge.
+                    if err.code == "AUTH_INSUFFICIENT_SCOPE" {
+                        let mut bus = self.bus.clone();
+                        publicar_auditoria_borda(
+                            &mut bus,
+                            Some(tenant_uuid),
+                            "WARN",
+                            "autorizacao.negada",
+                            "Movimentação de Kanban barrada por RBAC fino de fluxo.".to_string(),
+                            serde_json::json!({ "atendimento_id": inner.atendimento_id }),
+                            claims.sub.parse::<i32>().ok(),
+                            &traceparent,
+                            ip,
+                            Some(user_agent),
+                        )
+                        .await;
+                        return Err(Status::permission_denied("errors.auth.forbidden"));
+                    }
+                    return Err(Status::internal(format!("Erro no banco: {}", err.message)));
+                }
+
+                let mut bus = self.bus.clone();
+                publicar_auditoria_borda(
+                    &mut bus,
+                    Some(tenant_uuid),
+                    "INFO",
+                    "kanban.movido",
+                    "Atendimento movido de etapa no Kanban.".to_string(),
+                    serde_json::json!({
+                        "atendimento_id": inner.atendimento_id,
+                        "etapa_destino_id": inner.etapa_destino_id,
+                    }),
+                    claims.sub.parse::<i32>().ok(),
+                    &traceparent,
+                    ip,
+                    Some(user_agent),
+                )
+                .await;
+
+                // Realtime: publica no mesmo canal Pub/Sub que o RealtimeManager já consome,
+                // para que outras telas conectadas reflitam o movimento sem polling.
+                let mut bus_evento = self.bus.clone();
+                let event_payload = serde_json::json!({
+                    "event_type": "kanban.movido",
+                    "tenant_id": tenant_uuid.to_string(),
+                    "payload": {
+                        "atendimento_id": inner.atendimento_id,
+                        "etapa_destino_id": inner.etapa_destino_id,
+                    }
+                });
+                let channel = format!("tenant:{}:events", tenant_uuid);
+                let publish_res: Result<u32, _> = redis::cmd("PUBLISH")
+                    .arg(&channel)
+                    .arg(event_payload.to_string())
+                    .query_async(&mut bus_evento)
+                    .await;
+                if let Err(e) = publish_res {
+                    tracing::error!("Erro ao publicar kanban.movido no Redis Pub/Sub: {:?}", e);
+                }
+
+                Ok(Response::new(MoveAtendimentoEtapaResponse {
+                    success: true,
+                }))
+            }
+            Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
+        }
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "SendOutboundMessage", traceparent)
+    )]
+    async fn send_outbound_message(
+        &self,
+        req: Request<SendOutboundMessageRequest>,
+    ) -> Result<Response<SendOutboundMessageResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let ip = ip_do_metadata(&req);
+        let user_agent = user_agent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+
+        if inner.conteudo.trim().is_empty() {
+            return Err(Status::invalid_argument("errors.validation"));
+        }
+
+        let payload = serde_json::json!({
+            "atendimento_id": inner.atendimento_id,
+            // NUNCA logar `conteudo` fora do payload RPC (é PII/mensagem do usuário).
+            "conteudo": inner.conteudo,
+            "tipo": if inner.tipo.is_empty() { "texto" } else { &inner.tipo },
+        });
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "SendOutboundMessage".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(resp) => {
+                if resp.kind == MessageKind::Error as i32 {
+                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
+                    return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
+                }
+
+                let val: serde_json::Value = serde_json::from_slice(&resp.payload)
+                    .map_err(|e| Status::internal(e.to_string()))?;
+                let message_id = val
+                    .get("message_id")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or_default() as i32;
+
+                // Auditoria SEM o conteúdo da mensagem (é PII) — só metadados.
+                let mut bus = self.bus.clone();
+                publicar_auditoria_borda(
+                    &mut bus,
+                    Some(tenant_uuid),
+                    "INFO",
+                    "mensagem.enviada",
+                    "Mensagem outbound enviada pelo atendente.".to_string(),
+                    serde_json::json!({
+                        "atendimento_id": inner.atendimento_id,
+                        "message_id": message_id,
+                    }),
+                    claims.sub.parse::<i32>().ok(),
+                    &traceparent,
+                    ip,
+                    Some(user_agent),
+                )
+                .await;
+
+                // Realtime: publica no mesmo canal Pub/Sub que o worker usa para
+                // `mensagem.recebida`, mantendo o chat lateral em tempo real também para
+                // mensagens outbound (sem incluir o conteúdo — a UI recarrega o thread).
+                let mut bus_evento = self.bus.clone();
+                let event_payload = serde_json::json!({
+                    "event_type": "mensagem.enviada",
+                    "tenant_id": tenant_uuid.to_string(),
+                    "payload": {
+                        "atendimento_id": inner.atendimento_id,
+                        "message_id": message_id,
+                    }
+                });
+                let channel = format!("tenant:{}:events", tenant_uuid);
+                let publish_res: Result<u32, _> = redis::cmd("PUBLISH")
+                    .arg(&channel)
+                    .arg(event_payload.to_string())
+                    .query_async(&mut bus_evento)
+                    .await;
+                if let Err(e) = publish_res {
+                    tracing::error!(
+                        "Erro ao publicar mensagem.enviada no Redis Pub/Sub: {:?}",
+                        e
+                    );
+                }
+
+                Ok(Response::new(SendOutboundMessageResponse { message_id }))
             }
             Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
         }

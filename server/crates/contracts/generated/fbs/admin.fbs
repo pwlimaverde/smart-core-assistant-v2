@@ -370,6 +370,70 @@ table ExportTenantsCsvResponse {
   chunk:[ubyte];
 }
 
+table AtendimentoResumo {
+  id:int;
+  contato_id:int;
+  status:string;
+  departamento_id:int;
+  fluxo_atendimento_id:int;
+  etapa_atual_id:int;
+  assunto:string;
+  prioridade:string;
+  atendente_humano_id:int;
+  data_inicio:long;
+  data_ultima_mensagem:long;
+}
+
+table ListAtendimentosRequest {
+  status:string;
+  departamento_id:int;
+  limit:int;
+}
+
+table ListAtendimentosResponse {
+  atendimentos:[smartcore.contracts.queries.AtendimentoResumo];
+}
+
+table MensagemThread {
+  id:int;
+  atendimento_id:int;
+  tipo:string;
+  conteudo:string;
+  remetente:string;
+  timestamp:long;
+  status_envio:string;
+}
+
+table GetThreadRequest {
+  atendimento_id:int;
+  limit:int;
+  offset:int;
+}
+
+table GetThreadResponse {
+  mensagens:[smartcore.contracts.queries.MensagemThread];
+}
+
+table MoveAtendimentoEtapaRequest {
+  atendimento_id:int;
+  etapa_destino_id:int;
+  motivo:string;
+}
+
+table MoveAtendimentoEtapaResponse {
+  success:bool;
+}
+
+table SendOutboundMessageRequest {
+  atendimento_id:int;
+  conteudo:string;
+  tipo:string;
+}
+
+table SendOutboundMessageResponse {
+  message_id:int;
+}
+
 table StreamAtendimentosRequest {
 }
 

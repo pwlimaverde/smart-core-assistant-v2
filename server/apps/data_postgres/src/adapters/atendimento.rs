@@ -313,4 +313,53 @@ impl AtendimentoStore for PgAtendimentoStore {
         })
         .await
     }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, etapa_destino_id = etapa_destino_id))]
+    async fn mover_etapa_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        etapa_destino_id: i32,
+        motivo: &str,
+    ) -> Result<(), DbError> {
+        let repo_atendimento = PostgresAtendimentoRepository;
+        let repo_movimento = PostgresMovimentoFluxoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let motivo = (!motivo.is_empty()).then(|| motivo.to_string());
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let atendimento = repo_atendimento
+                .buscar_por_id(&mut tx, &ctx, atendimento_id)
+                .await?
+                .ok_or(DbError::NotFound)?;
+
+            // RBAC fino por fluxo (WS-5a): só quem tem flow_permission do fluxo atual
+            // do atendimento (ou bypass kanban:admin/tenant:admin) pode movê-lo.
+            if let Some(fluxo_id) = atendimento.fluxo_atendimento_id {
+                ctx.exigir_fluxo(fluxo_id)?;
+            }
+
+            let etapa_origem_id = atendimento.etapa_atual_id;
+
+            repo_atendimento
+                .atualizar_etapa(&mut tx, &ctx, atendimento_id, etapa_destino_id, None)
+                .await?;
+
+            repo_movimento
+                .criar(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    etapa_origem_id,
+                    etapa_destino_id,
+                    None,
+                    motivo.as_deref(),
+                    false,
+                )
+                .await?;
+
+            Ok(((), tx))
+        })
+        .await
+    }
 }

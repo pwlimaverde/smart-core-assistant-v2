@@ -82,4 +82,20 @@ pub trait AtendimentoStore: Send + Sync {
         ctx: &RequestContext,
         atendimento_id: i32,
     ) -> Result<TicketKanbanOutcome, DbError>;
+
+    /// Move manualmente um atendimento para outra etapa do Kanban (drag-and-drop na
+    /// tela operacional — WS-6.2). Registra o `MovimentoFluxo` (não automático) na
+    /// MESMA transação da atualização de etapa, para auditoria/histórico. O RBAC fino
+    /// por fluxo (`flow_permissions`, WS-5a) já é aplicado em `atualizar_etapa`/`criar`
+    /// via `ctx.exigir_qualquer` — esta função não reimplementa a checagem.
+    ///
+    /// `motivo` vazio (`""`) equivale a ausente (convenção do trait, evita o lifetime
+    /// explícito que `Option<&str>` exigiria sob `mockall::automock`).
+    async fn mover_etapa_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        etapa_destino_id: i32,
+        motivo: &str,
+    ) -> Result<(), DbError>;
 }

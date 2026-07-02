@@ -190,6 +190,35 @@ async fn main() -> anyhow::Result<()> {
                     handler_admin_forward(deps, env, "GetThread", "GetThreadReply").await
                 })
             }),
+        )
+        // --- WS-6.2/6.3: fila/Kanban (mover etapa) e chat (envio outbound) ---
+        .route(
+            "MoveAtendimentoEtapa",
+            exigir_auth(deps.clone(), bus.clone(), false, move |deps, env| {
+                Box::pin(async move {
+                    handler_admin_forward(
+                        deps,
+                        env,
+                        "MoveAtendimentoEtapa",
+                        "MoveAtendimentoEtapaReply",
+                    )
+                    .await
+                })
+            }),
+        )
+        .route(
+            "SendOutboundMessage",
+            exigir_auth(deps.clone(), bus.clone(), false, move |deps, env| {
+                Box::pin(async move {
+                    handler_admin_forward(
+                        deps,
+                        env,
+                        "SendOutboundMessage",
+                        "SendOutboundMessageReply",
+                    )
+                    .await
+                })
+            }),
         );
 
     // --- WS-7: CRUD administrativo (superusuário). O painel admin fala somente com a
