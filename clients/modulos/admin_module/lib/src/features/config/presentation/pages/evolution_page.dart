@@ -83,6 +83,10 @@ class _EvolutionPageState extends State<EvolutionPage> {
             Expanded(
               child: ViewStateBuilder<EvolutionController, List<Tenant>>(
                 controller: _controller,
+                onError: (context, error) => AppErrorView(
+                  message: error.message,
+                  onRetry: _controller.fetchTenants,
+                ),
                 onSuccess: (context, tenants) {
                   if (tenants.isEmpty) {
                     return const Center(

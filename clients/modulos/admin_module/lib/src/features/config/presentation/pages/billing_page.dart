@@ -13,71 +13,103 @@ class BillingPage extends StatefulWidget {
   State<BillingPage> createState() => _BillingPageState();
 }
 
-class _BillingPageState extends State<BillingPage> {
+class _BillingPageState extends State<BillingPage> with SingleTickerProviderStateMixin {
   late final BillingController _controller;
+  late final TabController _tabController;
+  String? _tenantIdFiltro;
+  bool _rotaProcessada = false;
 
   @override
   void initState() {
     super.initState();
     _controller = inject<BillingController>();
+    _tabController = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _controller.fetchBillingData();
     });
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Encadeamento lista→faturamento: quando a navegação vem de TenantsPage
+    // ("Ver Pagamentos"), o tenant chega via query parameter `tenantId` —
+    // filtra o histórico e já abre direto na aba de Pagamentos.
+    if (!_rotaProcessada) {
+      final tenantId = GoRouterState.of(context).uri.queryParameters['tenantId'];
+      if (tenantId != null && tenantId.trim().isNotEmpty) {
+        _rotaProcessada = true;
+        _tenantIdFiltro = tenantId.trim();
+        _tabController.index = 2; // aba "Histórico Financeiro"
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
-      child: AppScaffold(
-        title: 'Faturamento & Planos',
-        drawer: const AdminDrawer(),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Recarregar dados',
-            onPressed: _controller.fetchBillingData,
-          ),
-        ],
-        body: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Painel de Faturamento',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-              ),
-              const SizedBox(height: 16),
-              TabBar(
-                labelColor: Theme.of(context).colorScheme.primary,
-                unselectedLabelColor: Theme.of(context).hintColor,
-                indicatorColor: Theme.of(context).colorScheme.primary,
-                tabs: const [
-                  Tab(icon: Icon(Icons.style), text: 'Planos'),
-                  Tab(icon: Icon(Icons.card_membership), text: 'Assinaturas'),
-                  Tab(icon: Icon(Icons.history_edu), text: 'Histórico Financeiro'),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Expanded(
-                child: ViewStateBuilder<BillingController, BillingState>(
-                  controller: _controller,
-                  onSuccess: (context, state) {
-                    return TabBarView(
-                      children: [
-                        _buildPlansTab(state.plans),
-                        _buildSubscriptionsTab(state.subscriptions),
-                        _buildPaymentsTab(state.payments),
-                      ],
-                    );
-                  },
+    return AppScaffold(
+      title: 'Faturamento & Planos',
+      drawer: const AdminDrawer(),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh),
+          tooltip: 'Recarregar dados',
+          onPressed: _controller.fetchBillingData,
+        ),
+      ],
+      body: Padding(
+        padding: const EdgeInsets.all(24.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Painel de Faturamento',
+              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+            const SizedBox(height: 16),
+            TabBar(
+              controller: _tabController,
+              labelColor: Theme.of(context).colorScheme.primary,
+              unselectedLabelColor: Theme.of(context).hintColor,
+              indicatorColor: Theme.of(context).colorScheme.primary,
+              tabs: const [
+                Tab(icon: Icon(Icons.style), text: 'Planos'),
+                Tab(icon: Icon(Icons.card_membership), text: 'Assinaturas'),
+                Tab(icon: Icon(Icons.history_edu), text: 'Histórico Financeiro'),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Expanded(
+              child: ViewStateBuilder<BillingController, BillingState>(
+                controller: _controller,
+                onError: (context, error) => AppErrorView(
+                  message: error.message,
+                  onRetry: _controller.fetchBillingData,
                 ),
+                onSuccess: (context, state) {
+                  final payments = _tenantIdFiltro == null
+                      ? state.payments
+                      : state.payments.where((p) => p.tenantId == _tenantIdFiltro).toList();
+                  return TabBarView(
+                    controller: _tabController,
+                    children: [
+                      _buildPlansTab(state.plans),
+                      _buildSubscriptionsTab(state.subscriptions),
+                      _buildPaymentsTab(payments),
+                    ],
+                  );
+                },
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -311,6 +343,14 @@ class _BillingPageState extends State<BillingPage> {
             ),
           ],
         ),
+        if (_tenantIdFiltro != null) ...[
+          const SizedBox(height: 8),
+          Chip(
+            avatar: const Icon(Icons.filter_alt, size: 16),
+            label: Text('Filtrado pelo tenant: $_tenantIdFiltro'),
+            onDeleted: () => setState(() => _tenantIdFiltro = null),
+          ),
+        ],
         const SizedBox(height: 16),
         Expanded(
           child: payments.isEmpty

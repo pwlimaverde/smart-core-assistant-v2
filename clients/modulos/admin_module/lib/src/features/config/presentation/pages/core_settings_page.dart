@@ -63,6 +63,10 @@ class _CoreSettingsPageState extends State<CoreSettingsPage> {
             Expanded(
               child: ViewStateBuilder<CoreSettingsController, List<CoreSetting>>(
                 controller: _controller,
+                onError: (context, error) => AppErrorView(
+                  message: error.message,
+                  onRetry: _controller.fetchSettings,
+                ),
                 onSuccess: (context, settings) {
                   if (settings.isEmpty) {
                     return const Center(

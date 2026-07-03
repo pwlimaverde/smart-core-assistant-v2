@@ -24,6 +24,13 @@ class _AuditPageState extends State<AuditPage> {
   String? _selectedEventType;
   bool _isExporting = false;
 
+  // Paginação client-side sobre o RPC QueryAuditLog (limit/offset já suportados
+  // pelo backend). Tamanho de página fixo; "próxima" fica disponível enquanto
+  // a última página vier completa (heurística sem contagem total do backend).
+  static const int _pageSize = 50;
+  int _currentOffset = 0;
+  int _lastPageLength = 0;
+
   final List<Map<String, String>> _eventTypes = const [
     {'label': 'Todos os Eventos', 'value': ''},
     {'label': 'Login Efetuado', 'value': 'auth_login'},
@@ -33,14 +40,30 @@ class _AuditPageState extends State<AuditPage> {
     {'label': 'Faturamento Modificado', 'value': 'billing_modified'},
   ];
 
+  bool _tenantPreenchidoPelaRota = false;
+
   @override
   void initState() {
     super.initState();
     _controller = inject<AuditController>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _controller.fetchAuditLogs();
+      _fetchPage();
       _loadFilterData();
     });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Encadeamento lista→auditoria: quando a navegação vem de TenantsPage
+    // ("Ver Auditoria"), o tenant chega via query parameter `tenantId`.
+    if (!_tenantPreenchidoPelaRota) {
+      final tenantId = GoRouterState.of(context).uri.queryParameters['tenantId'];
+      if (tenantId != null && tenantId.trim().isNotEmpty) {
+        _tenantPreenchidoPelaRota = true;
+        _selectedTenantId = tenantId.trim();
+      }
+    }
   }
 
   Future<void> _loadFilterData() async {
@@ -52,11 +75,36 @@ class _AuditPageState extends State<AuditPage> {
     }
   }
 
-  void _applyFilters() {
-    _controller.fetchAuditLogs(
+  Future<void> _fetchPage() async {
+    await _controller.fetchAuditLogs(
       tenantId: _selectedTenantId,
       eventType: _selectedEventType,
+      limit: _pageSize,
+      offset: _currentOffset,
     );
+    final state = _controller.state;
+    if (mounted && state is SuccessState<List<AuditLogEntry>>) {
+      setState(() {
+        _lastPageLength = state.data.length;
+      });
+    }
+  }
+
+  void _applyFilters() {
+    setState(() => _currentOffset = 0);
+    _fetchPage();
+  }
+
+  void _goToNextPage() {
+    if (_lastPageLength < _pageSize) return;
+    setState(() => _currentOffset += _pageSize);
+    _fetchPage();
+  }
+
+  void _goToPreviousPage() {
+    if (_currentOffset <= 0) return;
+    setState(() => _currentOffset = (_currentOffset - _pageSize).clamp(0, _currentOffset));
+    _fetchPage();
   }
 
   Future<void> _exportCsv() async {
@@ -107,7 +155,7 @@ class _AuditPageState extends State<AuditPage> {
         IconButton(
           icon: const Icon(Icons.refresh),
           tooltip: 'Recarregar',
-          onPressed: _applyFilters,
+          onPressed: _fetchPage,
         ),
       ],
       body: Padding(
@@ -221,6 +269,10 @@ class _AuditPageState extends State<AuditPage> {
             Expanded(
               child: ViewStateBuilder<AuditController, List<AuditLogEntry>>(
                 controller: _controller,
+                onError: (context, error) => AppErrorView(
+                  message: error.message,
+                  onRetry: _fetchPage,
+                ),
                 onSuccess: (context, logs) {
                   if (logs.isEmpty) {
                     return const Center(
@@ -231,9 +283,38 @@ class _AuditPageState extends State<AuditPage> {
                 },
               ),
             ),
+            const SizedBox(height: 12),
+            _buildPaginationBar(),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildPaginationBar() {
+    final paginaAtual = (_currentOffset ~/ _pageSize) + 1;
+    final temProxima = _lastPageLength >= _pageSize;
+    final temAnterior = _currentOffset > 0;
+
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.end,
+      children: [
+        Text(
+          'Página $paginaAtual',
+          style: TextStyle(color: Theme.of(context).hintColor),
+        ),
+        const SizedBox(width: 12),
+        IconButton(
+          icon: const Icon(Icons.chevron_left),
+          tooltip: 'Página anterior',
+          onPressed: temAnterior ? _goToPreviousPage : null,
+        ),
+        IconButton(
+          icon: const Icon(Icons.chevron_right),
+          tooltip: 'Próxima página',
+          onPressed: temProxima ? _goToNextPage : null,
+        ),
+      ],
     );
   }
 
