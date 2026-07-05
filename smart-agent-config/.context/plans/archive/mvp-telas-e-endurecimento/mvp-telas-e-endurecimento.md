@@ -4,8 +4,10 @@ name: "MVP: Telas & Endurecimento"
 planSlug: mvp-telas-e-endurecimento
 description: "Backlog restante da finalização do MVP: telas Flutter operacionais (fila/Kanban/chat realtime) e admin (endurecimento) + endurecimento de backend (RBAC fino por fluxo, user_agent na auditoria, invalidação do TenantConfigCache, e2e de trace)."
 summary: "Fechar o MVP operacional com as telas Flutter e o endurecimento de backend, herdando o DoD transversal de observabilidade/auditoria + SOLID/Ports & Adapters do ciclo anterior."
-status: active
+status: completed
 generated: 2026-06-30
+closed: 2026-07-05
+closure_note: "Ciclo fechado completo via prevc-final-review. Entregues WS-5a (RBAC fino por fluxo, incl. correção do gap na borda gRPC-Web encontrado no gate final), WS-5b (user_agent na auditoria), WS-7.2 (invalidação do TenantConfigCache), WS-0.3 (e2e de cadeia de trace, aceite do dono), WS-6 (telas operacionais Flutter novas: fila/Kanban/chat) e WS-7 telas (endurecimento do admin_module). WS-7.3 (telas de convite) parqueado por decisão do dono — é fluxo de admin de tenant, não do painel de superusuário; ver memória convites-tenant-nao-e-painel-superuser. Falha de ambiente pré-existente e documentada (role smartcore_app é bootstrap superuser no Postgres remoto de dev) não bloqueou o fechamento. Ver .context/workflow/docs/final-review.md."
 agents:
   - type: "frontend-specialist"
     role: "Telas operacionais (WS-6) e admin (WS-7) no smart-core-admin (Flutter): fila, Kanban DnD nativo, chat streaming gRPC-Web"
@@ -27,24 +29,24 @@ phases:
     name: "Review"
     prevc: "R"
     agent: "architect-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-e"
     name: "Execution"
     prevc: "E"
     agent: "frontend-specialist"
-    status: "pending"
+    status: "completed"
     required_sensors: [tests-passing]
     required_artifacts: [handoff-summary]
   - id: "phase-v"
     name: "Validation"
     prevc: "V"
     agent: "test-writer"
-    status: "pending"
+    status: "completed"
   - id: "phase-c"
     name: "Confirmation"
     prevc: "C"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
 ---
 
 # MVP: Telas & Endurecimento — Frontend operacional/admin + RBAC fino, user_agent, cache invalidation

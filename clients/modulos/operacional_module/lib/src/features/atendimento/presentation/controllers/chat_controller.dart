@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:developer' as developer;
 import 'dart:math';
 
 import 'package:presentation_module/presentation_module.dart';
@@ -98,11 +99,12 @@ final class ChatController extends BaseController<ChatViewModel> {
   }
 
   void _aoFalharStream(Object error, StackTrace stackTrace) {
-    // Log estruturado de reconexão — NUNCA o conteúdo/payload do evento.
-    // ignore: avoid_print
-    print(
-      '[operacional_module] stream de atendimentos caiu (tentativa=$_tentativa); '
-      'agendando reconexão.',
+    // Log estruturado de reconexão — NUNCA o conteúdo/payload do evento (pode
+    // carregar mensagem/PII). Só registra a tentativa para diagnóstico.
+    developer.log(
+      'stream de atendimentos caiu; agendando reconexão',
+      name: 'operacional_module.chat',
+      error: 'tentativa=$_tentativa',
     );
     _agendarReconexao();
   }

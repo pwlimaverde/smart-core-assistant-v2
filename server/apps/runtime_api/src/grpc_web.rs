@@ -249,6 +249,92 @@ async fn exigir_autenticado_do_metadata<T>(
     Ok(claims)
 }
 
+/// Resolve os `flow_permissions` (RBAC fino por fluxo — WS-5a) do usuário autenticado
+/// na borda gRPC-Web, espelhando a estratégia RPC+cache curto do `transport::Server`
+/// (ver `main::resolver_flow_permissions`). Sem isso, o `data_postgres` receberia o
+/// envelope com `flow_permissions` vazio e barraria todo atendente não-admin (a fila
+/// não mostraria cards com fluxo e mover etapa seria sempre negado).
+///
+/// Superusuário não tem `TenantUser`; o bypass de fluxo já ocorre via escopo
+/// (`kanban:admin`/`tenant:admin`) em `RequestContext::has_flow_permission`, então o
+/// chamador só invoca esta função para não-superusuários.
+async fn resolver_flow_permissions_web(
+    deps: &AuthDeps,
+    tenant_id: &str,
+    user_id: i32,
+    traceparent: &str,
+) -> Vec<i32> {
+    let tenant_uuid = Uuid::parse_str(tenant_id).unwrap_or_else(|_| Uuid::nil());
+    let lookup_payload = serde_json::json!({ "user_id": user_id });
+
+    // Cache-aside: tenta o cache curto no data_redis antes da fonte de verdade.
+    let cache_req = application::auth::login::montar_envelope_request(
+        tenant_uuid,
+        traceparent,
+        "GetCache",
+        &lookup_payload,
+    );
+    if let Ok(resp) = deps
+        .redis
+        .call(cache_req, std::time::Duration::from_secs(2))
+        .await
+    {
+        if resp.kind != MessageKind::Error as i32 {
+            if let Some(perms) = extrair_permissoes_web(&resp.payload) {
+                return perms;
+            }
+        }
+    }
+
+    // Cache miss: consulta a fonte de verdade (data_postgres).
+    let db_req = application::auth::login::montar_envelope_request(
+        tenant_uuid,
+        traceparent,
+        "GetUserFlowPermissions",
+        &lookup_payload,
+    );
+    let permissions = match deps
+        .pg
+        .call(db_req, std::time::Duration::from_secs(3))
+        .await
+    {
+        Ok(resp) if resp.kind != MessageKind::Error as i32 => {
+            extrair_permissoes_web(&resp.payload).unwrap_or_default()
+        }
+        _ => Vec::new(),
+    };
+
+    // Repovoa o cache (best-effort, TTL curto — não atrasa a resposta em caso de falha).
+    let set_payload = serde_json::json!({
+        "user_id": user_id,
+        "permissions": permissions,
+        "ttl": 30,
+    });
+    let set_req = application::auth::login::montar_envelope_request(
+        tenant_uuid,
+        traceparent,
+        "SetCache",
+        &set_payload,
+    );
+    let _ = deps
+        .redis
+        .call(set_req, std::time::Duration::from_secs(2))
+        .await;
+
+    permissions
+}
+
+fn extrair_permissoes_web(payload: &[u8]) -> Option<Vec<i32>> {
+    let json: serde_json::Value = serde_json::from_slice(payload).ok()?;
+    let arr = json.get("permissions")?.as_array()?;
+    Some(
+        arr.iter()
+            .filter_map(|v| v.as_i64())
+            .map(|v| v as i32)
+            .collect(),
+    )
+}
+
 /// Gera um `traceparent` W3C novo (`00-<trace32>-<span16>-01`) a partir de UUIDs.
 fn novo_traceparent() -> String {
     let trace = Uuid::now_v7().simple().to_string(); // 32 hex
@@ -2482,6 +2568,16 @@ impl AdminService for AdminFacade {
             "limit": if inner.limit > 0 { inner.limit } else { 50 },
         });
 
+        // RBAC fino por fluxo (WS-5a): popula flow_permissions para que o filtro do
+        // data_postgres (listar_por_status) mostre ao atendente só os fluxos permitidos.
+        let auth_user_id = claims.sub.parse::<i32>().unwrap_or(0);
+        let flow_permissions = if claims.is_superuser {
+            Vec::new()
+        } else {
+            resolver_flow_permissions_web(&self.deps, &claims.tenant_id, auth_user_id, &traceparent)
+                .await
+        };
+
         let env_req = Envelope {
             tenant_id: tenant_uuid.to_string(),
             schema_version: 1,
@@ -2492,9 +2588,10 @@ impl AdminService for AdminFacade {
             kind: MessageKind::Request as i32,
             method: "ListAtendimentos".to_string(),
             payload: serde_json::to_vec(&payload).unwrap(),
-            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_user_id,
             auth_scopes: claims.scopes.clone(),
             auth_is_superuser: claims.is_superuser,
+            flow_permissions,
             ..Default::default()
         };
 
@@ -2698,6 +2795,16 @@ impl AdminService for AdminFacade {
             "motivo": if inner.motivo.is_empty() { None } else { Some(inner.motivo.clone()) },
         });
 
+        // RBAC fino por fluxo (WS-5a): popula flow_permissions para que o exigir_fluxo
+        // do data_postgres autorize o atendente a mover cards do fluxo permitido.
+        let auth_user_id = claims.sub.parse::<i32>().unwrap_or(0);
+        let flow_permissions = if claims.is_superuser {
+            Vec::new()
+        } else {
+            resolver_flow_permissions_web(&self.deps, &claims.tenant_id, auth_user_id, &traceparent)
+                .await
+        };
+
         let env_req = Envelope {
             tenant_id: tenant_uuid.to_string(),
             schema_version: 1,
@@ -2708,9 +2815,10 @@ impl AdminService for AdminFacade {
             kind: MessageKind::Request as i32,
             method: "MoveAtendimentoEtapa".to_string(),
             payload: serde_json::to_vec(&payload).unwrap(),
-            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_user_id,
             auth_scopes: claims.scopes.clone(),
             auth_is_superuser: claims.is_superuser,
+            flow_permissions,
             ..Default::default()
         };
 
