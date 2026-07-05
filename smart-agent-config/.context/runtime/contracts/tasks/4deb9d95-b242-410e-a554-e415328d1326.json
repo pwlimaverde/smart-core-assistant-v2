@@ -1,0 +1,32 @@
+{
+  "id": "4deb9d95-b242-410e-a554-e415328d1326",
+  "title": "MVP: Telas & Endurecimento — Frontend operacional/admin + RBAC fino, user_agent, cache invalidation: Confirmation",
+  "description": "Derived from linked plan \"mvp-telas-e-endurecimento\" for PREVC phase C (Confirmation). Expected outputs: documentation, changelog, deploy.",
+  "sessionId": "97899052-479e-4a93-8f24-b6ec5530a099",
+  "owner": "documenter",
+  "status": "completed",
+  "inputs": [],
+  "expectedOutputs": [
+    "documentation",
+    "changelog",
+    "deploy"
+  ],
+  "acceptanceCriteria": [
+    "Complete Confirmation"
+  ],
+  "requiredSensors": [],
+  "requiredArtifacts": [],
+  "createdAt": "2026-07-04T19:44:13.816Z",
+  "updatedAt": "2026-07-05T22:19:05.790Z",
+  "metadata": {
+    "requirementsSource": "none",
+    "source": "workflow.plan",
+    "planSlug": "mvp-telas-e-endurecimento",
+    "prevcPhase": "C",
+    "planPhaseIds": [],
+    "planPhaseNames": [],
+    "planPhaseSummaries": [],
+    "derivedFrom": "workflow-phase-defaults",
+    "completionReason": "Workflow completed"
+  }
+}
