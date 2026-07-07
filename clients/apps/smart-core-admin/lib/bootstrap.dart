@@ -3,6 +3,7 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:initial_loading_module/initial_loading_module.dart';
 import 'package:login_module/login_module.dart';
 import 'package:admin_module/admin_module.dart';
+import 'package:operacional_module/operacional_module.dart';
 
 import 'app.dart';
 
@@ -24,6 +25,7 @@ Future<void> bootstrap(AppConfig config) async {
     InfraModule(config),
     LoginModule(),
     AdminModule(),
+    OperacionalModule(),
     InitialLoadingModule(),
   ];
 

@@ -32,6 +32,7 @@ async fn test_audit_log_tenant_insertion_and_retrieval_under_rls() {
         context: serde_json::json!({"test_key": "test_val"}),
         user_id: Some(1), // user_id = 1 é semeado por padrão no obter_pool_teste
         ip_address: Some("127.0.0.1".to_string()),
+        user_agent: Some("integration-test-suite/1.0".to_string()),
     };
 
     // 2. Act: Insere o registro de auditoria na transação do inquilino.
@@ -97,6 +98,7 @@ async fn test_audit_log_rls_isolation_enforced() {
         context: serde_json::json!({}),
         user_id: Some(1),
         ip_address: None,
+        user_agent: None,
     };
 
     // Insere o log para o Tenant A.
@@ -117,6 +119,7 @@ async fn test_audit_log_rls_isolation_enforced() {
         context: serde_json::json!({}),
         user_id: Some(1),
         ip_address: None,
+        user_agent: None,
     };
 
     // Insere o log para o Tenant B.
@@ -169,6 +172,7 @@ async fn test_audit_log_global_insertion_and_retrieval() {
         context: serde_json::json!({"admin_action": true}),
         user_id: None,
         ip_address: None,
+        user_agent: None,
     };
 
     // 2. Act: Insere no banco administrativo (dá commit implícito porque é chamado direto no pool).
@@ -231,6 +235,7 @@ async fn test_audit_log_cascading_deletion_on_tenant() {
         context: serde_json::json!({}),
         user_id: Some(1),
         ip_address: None,
+        user_agent: None,
     };
     let log_id = inserir_audit_log(&mut tx, &entry)
         .await
@@ -302,6 +307,7 @@ async fn test_audit_log_user_deletion_sets_null() {
         context: serde_json::json!({}),
         user_id: Some(temp_user_id),
         ip_address: None,
+        user_agent: None,
     };
     let log_id = inserir_audit_log(&mut tx, &entry)
         .await

@@ -17,3 +17,7 @@ export 'src/widgets/app_card.dart';
 export 'src/widgets/app_scaffold.dart';
 export 'src/widgets/app_error_view.dart';
 export 'src/widgets/app_logo.dart';
+
+// Widgets de Kanban (fila/board — WS-6.2)
+export 'src/widgets/kanban/kanban_card.dart';
+export 'src/widgets/kanban/kanban_drop_column.dart';

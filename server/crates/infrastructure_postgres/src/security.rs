@@ -54,6 +54,26 @@ impl RequestContext {
         );
         Err(DbError::PermissionDenied)
     }
+
+    /// Exige acesso ao fluxo Kanban `flow_id` (RBAC fino por fluxo — WS-5a).
+    ///
+    /// Mesmo ponto único de checagem que [`Self::exigir_qualquer`], mas por fluxo:
+    /// em caso de negação, registra o aviso de auditoria (`warn`) com `tenant_id`/
+    /// `user_id`/`flow_id` (nunca o conjunto completo de fluxos permitidos) e devolve
+    /// [`DbError::PermissionDenied`]. O chamador (handler com acesso ao `AuditPort`)
+    /// é responsável por gravar o evento `autorizacao.negada` no `audit_log`.
+    pub fn exigir_fluxo(&self, flow_id: i32) -> Result<(), DbError> {
+        if self.has_flow_permission(flow_id) {
+            return Ok(());
+        }
+        tracing::warn!(
+            user_id = self.user_id,
+            tenant_id = %self.tenant_id,
+            flow_id,
+            "acesso ao fluxo negado: usuário sem flow_permission para este fluxo"
+        );
+        Err(DbError::PermissionDenied)
+    }
 }
 
 #[cfg(test)]
@@ -115,5 +135,21 @@ mod tests {
             ctx.exigir_qualquer(&[]),
             Err(DbError::PermissionDenied)
         ));
+    }
+
+    #[test]
+    fn test_exigir_fluxo_concede_e_nega() {
+        let ctx = get_test_context(vec!["atendimentos:read"], vec![1, 2]);
+
+        assert!(ctx.exigir_fluxo(1).is_ok());
+        assert!(ctx.exigir_fluxo(2).is_ok());
+        assert!(matches!(
+            ctx.exigir_fluxo(3),
+            Err(DbError::PermissionDenied)
+        ));
+
+        // Bypass via kanban:admin mesmo sem o fluxo na lista.
+        let ctx_admin = get_test_context(vec!["kanban:admin"], vec![]);
+        assert!(ctx_admin.exigir_fluxo(99).is_ok());
     }
 }

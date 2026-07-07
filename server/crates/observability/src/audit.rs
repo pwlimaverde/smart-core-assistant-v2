@@ -20,6 +20,21 @@ pub struct AuditLogPayload {
     pub context: serde_json::Value,
     pub user_id: Option<i32>,
     pub ip_address: Option<String>,
+    /// User-Agent da requisição que originou o evento (doc 08 §4.2). Campo aditivo:
+    /// `#[serde(default)]` mantém retrocompatibilidade com payloads antigos sem ele.
+    #[serde(default)]
+    pub user_agent: Option<String>,
+}
+
+/// Metadados de ator/rede/trace de um evento de auditoria, agrupados para evitar
+/// que `info`/`warn`/`error` cresçam em mais parâmetros posicionais soltos (WS-5b).
+/// `Default` cobre call-sites de sistema (sem ator HTTP por trás do evento).
+#[derive(Debug, Clone, Default)]
+pub struct AuditContext {
+    pub user_id: Option<i32>,
+    pub ip_address: Option<String>,
+    pub user_agent: Option<String>,
+    pub trace_id: Option<String>,
 }
 
 /// Logger de auditoria que redireciona logs para o Redis Streams em produção.
@@ -87,6 +102,49 @@ impl AuditLogger {
         ip_address: Option<String>,
         trace_id: Option<String>,
     ) {
+        self.log_tenant_event_com_user_agent(
+            tenant_id, event, message, level, context, user_id, ip_address, None, trace_id,
+        );
+    }
+
+    /// Variante de [`Self::log_tenant_event`] que recebe o `AuditContext` agregado
+    /// (inclui `user_agent`) em vez de metadados soltos — eventos críticos (doc 08
+    /// §4.2) devem migrar para esta forma.
+    pub fn log_tenant_event_ctx(
+        &self,
+        tenant_id: Uuid,
+        event: &str,
+        message: &str,
+        level: &str,
+        context: serde_json::Value,
+        ctx: &AuditContext,
+    ) {
+        self.log_tenant_event_com_user_agent(
+            tenant_id,
+            event,
+            message,
+            level,
+            context,
+            ctx.user_id,
+            ctx.ip_address.clone(),
+            ctx.user_agent.clone(),
+            ctx.trace_id.clone(),
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn log_tenant_event_com_user_agent(
+        &self,
+        tenant_id: Uuid,
+        event: &str,
+        message: &str,
+        level: &str,
+        context: serde_json::Value,
+        user_id: Option<i32>,
+        ip_address: Option<String>,
+        user_agent: Option<String>,
+        trace_id: Option<String>,
+    ) {
         let service = self.service_name.clone();
         let event = event.to_string();
         let message = message.to_string();
@@ -105,6 +163,7 @@ impl AuditLogger {
                     context,
                     user_id,
                     ip_address,
+                    user_agent,
                 };
                 let traceparent = payload.trace_id.clone().unwrap_or_default();
                 let envelope = contracts::TenantEnvelope::novo(tenant_id, "audit_log", payload)
@@ -135,6 +194,7 @@ impl AuditLogger {
                             context,
                             user_id,
                             ip_address,
+                            user_agent,
                         };
 
                         let result = infrastructure_postgres::run_in_tenant_transaction(
@@ -179,6 +239,45 @@ impl AuditLogger {
         ip_address: Option<String>,
         trace_id: Option<String>,
     ) {
+        self.log_global_event_com_user_agent(
+            event, message, level, context, user_id, ip_address, None, trace_id,
+        );
+    }
+
+    /// Variante de [`Self::log_global_event`] que recebe o `AuditContext` agregado
+    /// (inclui `user_agent`) em vez de metadados soltos.
+    pub fn log_global_event_ctx(
+        &self,
+        event: &str,
+        message: &str,
+        level: &str,
+        context: serde_json::Value,
+        ctx: &AuditContext,
+    ) {
+        self.log_global_event_com_user_agent(
+            event,
+            message,
+            level,
+            context,
+            ctx.user_id,
+            ctx.ip_address.clone(),
+            ctx.user_agent.clone(),
+            ctx.trace_id.clone(),
+        );
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn log_global_event_com_user_agent(
+        &self,
+        event: &str,
+        message: &str,
+        level: &str,
+        context: serde_json::Value,
+        user_id: Option<i32>,
+        ip_address: Option<String>,
+        user_agent: Option<String>,
+        trace_id: Option<String>,
+    ) {
         let service = self.service_name.clone();
         let event = event.to_string();
         let message = message.to_string();
@@ -197,6 +296,7 @@ impl AuditLogger {
                     context,
                     user_id,
                     ip_address,
+                    user_agent,
                 };
                 let traceparent = payload.trace_id.clone().unwrap_or_default();
                 let envelope = contracts::TenantEnvelope::novo(Uuid::nil(), "audit_log", payload)
@@ -226,6 +326,7 @@ impl AuditLogger {
                             context,
                             user_id,
                             ip_address,
+                            user_agent,
                         };
 
                         let result =

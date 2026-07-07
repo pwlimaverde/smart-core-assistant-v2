@@ -27,5 +27,7 @@ table Envelope {
   auth_user_id:int;
   auth_scopes:[string];
   auth_is_superuser:bool;
+  flow_permissions:[int];
+  user_agent:string;
 }
 

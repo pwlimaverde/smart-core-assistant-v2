@@ -63,6 +63,10 @@ class _TenantsPageState extends State<TenantsPage> {
             Expanded(
               child: ViewStateBuilder<TenantsController, List<Tenant>>(
                 controller: _controller,
+                onError: (context, error) => AppErrorView(
+                  message: error.message,
+                  onRetry: _controller.fetchTenants,
+                ),
                 onSuccess: (context, tenants) {
                   if (tenants.isEmpty) {
                     return const Center(
@@ -162,6 +166,16 @@ class _TenantsPageState extends State<TenantsPage> {
                             icon: const Icon(Icons.settings, color: Colors.amber),
                             tooltip: 'Ver Configurações',
                             onPressed: () => context.go('/admin/tenant-config?id=${tenant.id}'),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.payment, color: Colors.green),
+                            tooltip: 'Ver Pagamentos',
+                            onPressed: () => context.go('/admin/billing?tenantId=${tenant.id}'),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.security, color: Colors.deepPurple),
+                            tooltip: 'Ver Auditoria',
+                            onPressed: () => context.go('/admin/audit?tenantId=${tenant.id}'),
                           ),
                         ],
                       ),

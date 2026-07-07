@@ -10,12 +10,64 @@ use sqlx::PgPool;
 use transport::Server;
 use uuid::Uuid;
 
+/// Subscriber dedicado do canal `core:settings:invalidate` (WS-7.2). `payload.tenant_id`
+/// ausente ou nulo sinaliza invalidação global (mudança em CoreSettings); presente,
+/// invalida só a entrada daquele tenant. Retorna `Ok(())` quando o stream de mensagens
+/// encerra (Redis derrubou a conexão); o chamador decide se/quando reconectar.
+#[allow(deprecated)]
+async fn rodar_subscriber_invalidacao_cache(
+    redis_bus_url: &str,
+    config_cache: &infrastructure_postgres::TenantConfigCache,
+) -> anyhow::Result<()> {
+    use futures_util::StreamExt;
+
+    let client = infrastructure_redis::criar_cliente(redis_bus_url)?;
+    let con = client.get_async_connection().await?;
+    let mut pubsub = con.into_pubsub();
+    pubsub.subscribe("core:settings:invalidate").await?;
+    tracing::info!("Subscriber de invalidação do TenantConfigCache conectado");
+
+    let mut stream = pubsub.on_message();
+    while let Some(msg) = stream.next().await {
+        let payload_str: String = match msg.get_payload() {
+            Ok(p) => p,
+            Err(e) => {
+                tracing::warn!("Falha ao ler payload de core:settings:invalidate: {:?}", e);
+                continue;
+            }
+        };
+        let payload: serde_json::Value = match serde_json::from_str(&payload_str) {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::warn!("Payload inválido em core:settings:invalidate: {:?}", e);
+                continue;
+            }
+        };
+        let tenant_id = payload
+            .get("tenant_id")
+            .and_then(|v| v.as_str())
+            .and_then(|s| Uuid::parse_str(s).ok());
+        match tenant_id {
+            Some(id) => {
+                config_cache.invalidate(&id);
+                tracing::debug!(tenant_id = %id, "TenantConfigCache invalidado via Pub/Sub");
+            }
+            None => {
+                config_cache.invalidate_all();
+                tracing::debug!("TenantConfigCache invalidado por completo via Pub/Sub");
+            }
+        }
+    }
+
+    Ok(())
+}
+
 fn contexto_do_envelope(env: &Envelope) -> RequestContext {
     RequestContext {
         tenant_id: Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil()),
         user_id: env.auth_user_id,
         user_scopes: env.auth_scopes.clone(),
-        flow_permissions: vec![],
+        flow_permissions: env.flow_permissions.clone(),
     }
 }
 
@@ -99,6 +151,30 @@ async fn main() -> anyhow::Result<()> {
         pool.clone(),
         cipher.clone(),
     ));
+
+    // WS-7.2: subscriber dedicado de invalidação do TenantConfigCache (Redis Pub/Sub).
+    // Conexão SEPARADA da usada para publish (regra do realtime.rs: subscribe bloqueia
+    // a conexão até a próxima mensagem). Permite que outras réplicas do data_postgres
+    // descartem a entrada local quando UpdateTenantConfig/UpsertCoreSetting/
+    // DeleteCoreSetting mudam a configuração em outra instância.
+    {
+        let config_cache = config_cache.clone();
+        let redis_bus_url = redis_bus_url.clone();
+        tokio::spawn(async move {
+            loop {
+                match rodar_subscriber_invalidacao_cache(&redis_bus_url, &config_cache).await {
+                    Ok(()) => tracing::warn!(
+                        "Subscriber de invalidação do TenantConfigCache encerrado; reconectando em 5s"
+                    ),
+                    Err(e) => tracing::error!(
+                        "Erro no subscriber de invalidação do TenantConfigCache: {:?}; reconectando em 5s",
+                        e
+                    ),
+                }
+                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+            }
+        });
+    }
 
     let whatsapp_store: std::sync::Arc<dyn ports::WhatsappStore> = std::sync::Arc::new(
         adapters::PgWhatsappStore::new(pool.clone(), admin_pool.clone()),
@@ -288,6 +364,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_list_superusers = state_clone.clone();
     let state_for_delete_superuser = state_clone.clone();
     let state_for_get_user_identity = state_clone.clone();
+    let state_for_get_user_flow_permissions = state_clone.clone();
     let state_for_list_core_settings = state_clone.clone();
     let state_for_upsert_core_setting = state_clone.clone();
     let state_for_delete_core_setting = state_clone.clone();
@@ -323,6 +400,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_is_phone_whitelisted = state_clone.clone();
     let state_for_resolve_atendimento = state_clone.clone();
     let state_for_aplicar_politica = state_clone.clone();
+    let state_for_move_atendimento_etapa = state_clone.clone();
+    let state_for_send_outbound_message = state_clone.clone();
     let state_for_update_status = state_clone;
 
     let server = Server::from_env("DATA_POSTGRES")
@@ -351,6 +430,18 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(async move {
                 handler_aplicar_politica_ticket_kanban(state.atendimento.as_ref(), env).await
             })
+        })
+        .route("MoveAtendimentoEtapa", move |env| {
+            let state = state_for_move_atendimento_etapa.clone();
+            Box::pin(async move {
+                handler_move_atendimento_etapa(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("SendOutboundMessage", move |env| {
+            let state = state_for_send_outbound_message.clone();
+            Box::pin(
+                async move { handler_send_outbound_message(state.atendimento.as_ref(), env).await },
+            )
         })
         .route("VerifyCredentials", move |env| {
             let state = state_for_verify.clone();
@@ -405,6 +496,12 @@ async fn main() -> anyhow::Result<()> {
         .route("GetUserIdentity", move |env| {
             let state = state_for_get_user_identity.clone();
             Box::pin(async move { handler_get_user_identity(state.auth.as_ref(), env).await })
+        })
+        .route("GetUserFlowPermissions", move |env| {
+            let state = state_for_get_user_flow_permissions.clone();
+            Box::pin(
+                async move { handler_get_user_flow_permissions(state.auth.as_ref(), env).await },
+            )
         })
         .route("ListCoreSettings", move |env| {
             let state = state_for_list_core_settings.clone();
@@ -1340,6 +1437,118 @@ async fn handler_aplicar_politica_ticket_kanban(
     }
 }
 
+/// Move manualmente um atendimento para outra etapa do Kanban (drag-and-drop — WS-6.2).
+/// O RBAC fino por fluxo (WS-5a) é aplicado dentro do adapter (`exigir_fluxo`).
+async fn handler_move_atendimento_etapa(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let etapa_destino_id = match payload_json
+        .get("etapa_destino_id")
+        .and_then(|v| v.as_i64())
+    {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("etapa_destino_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let motivo = payload_json
+        .get("motivo")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .mover_etapa_atendimento(&ctx, atendimento_id, etapa_destino_id, motivo)
+        .await
+    {
+        Ok(()) => ok_reply(
+            &env,
+            "MoveAtendimentoEtapaReply",
+            serde_json::json!({ "status": "success" }),
+        ),
+        // `.into()` preserva o ErrorCode (ex.: PermissionDenied → AuthInsufficientScope),
+        // permitindo à borda gRPC-Web diferenciar RBAC negado de erro de banco genérico.
+        Err(err) => erro(err.into(), &env),
+    }
+}
+
+/// Envia (persiste) uma mensagem outbound do atendente humano no thread do atendimento
+/// (WS-6.3). Reaproveita `persistir_mensagem` (padrão Outbox já existente); o disparo do
+/// envio real ao WhatsApp é responsabilidade do consumer do outbox (fora deste escopo).
+async fn handler_send_outbound_message(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    // Conteúdo é PII/mensagem do usuário: nunca logar em claro (mesma cautela de PersistMessage).
+    let conteudo = payload_json
+        .get("conteudo")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    if conteudo.is_empty() {
+        return erro(
+            error_core::AppError::Validation("conteudo ausente".into()),
+            &env,
+        );
+    }
+    let tipo = payload_json
+        .get("tipo")
+        .and_then(|v| v.as_str())
+        .filter(|t| !t.is_empty())
+        .unwrap_or("texto");
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .persistir_mensagem(
+            &ctx,
+            atendimento_id,
+            tipo,
+            conteudo,
+            "atendente",
+            &env.traceparent,
+        )
+        .await
+    {
+        Ok(msg) => ok_reply(
+            &env,
+            "SendOutboundMessageReply",
+            serde_json::json!({ "message_id": msg.id }),
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
 async fn handler_upsert_contact(store: &dyn ports::ClienteStore, env: Envelope) -> Envelope {
     let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
         Ok(v) => v,
@@ -1560,6 +1769,7 @@ async fn publicar_auditoria(
         context,
         user_id: Some(env.auth_user_id),
         ip_address: None,
+        user_agent: (!env.user_agent.is_empty()).then(|| env.user_agent.clone()),
     };
 
     let envelope_auditoria =
@@ -1607,6 +1817,45 @@ async fn handler_get_user_identity(store: &dyn ports::AuthStore, env: Envelope) 
         Ok(None) => erro(
             error_core::AppError::Auth("usuário não encontrado".to_string()),
             &env,
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// Resolve os `flow_permissions` (IDs de fluxo Kanban) do vínculo TenantUser de um usuário.
+/// Fonte de verdade para o `FlowPermissionsProvider` do runtime_api (RPC + cache curto).
+async fn handler_get_user_flow_permissions(
+    store: &dyn ports::AuthStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let user_id = payload_json
+        .get("user_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+
+    match store.buscar_tenant_user(user_id).await {
+        Ok(Some(tu)) => {
+            let permissions: Vec<i32> = tu
+                .flow_permissions
+                .as_array()
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_i64())
+                        .map(|v| v as i32)
+                        .collect()
+                })
+                .unwrap_or_default();
+            ok_reply(
+                &env,
+                "GetUserFlowPermissionsReply",
+                serde_json::json!({ "permissions": permissions }),
+            )
+        }
+        Ok(None) => ok_reply(
+            &env,
+            "GetUserFlowPermissionsReply",
+            serde_json::json!({ "permissions": Vec::<i32>::new() }),
         ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }

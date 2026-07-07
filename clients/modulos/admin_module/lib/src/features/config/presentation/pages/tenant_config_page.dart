@@ -44,12 +44,32 @@ class _TenantConfigPageState extends State<TenantConfigPage> with SingleTickerPr
   final _googleKeyCtrl = TextEditingController();
 
   bool _hasFetched = false;
+  bool _idPreenchidoPelaRota = false;
 
   @override
   void initState() {
     super.initState();
     _controller = inject<TenantConfigController>();
     _tabController = TabController(length: 4, vsync: this);
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Encadeamento lista→detalhe: quando a navegação vem de outra tela
+    // (ex.: "Ver Configurações" em TenantsPage) o id do tenant chega via
+    // query parameter `id` na URL. Pré-preenche e carrega automaticamente
+    // apenas uma vez, para não sobrescrever edição manual do usuário.
+    if (!_idPreenchidoPelaRota) {
+      final id = GoRouterState.of(context).uri.queryParameters['id'];
+      if (id != null && id.trim().isNotEmpty) {
+        _idPreenchidoPelaRota = true;
+        _tenantIdController.text = id.trim();
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _loadConfig(id.trim());
+        });
+      }
+    }
   }
 
   @override
@@ -162,6 +182,10 @@ class _TenantConfigPageState extends State<TenantConfigPage> with SingleTickerPr
               Expanded(
                 child: ViewStateBuilder<TenantConfigController, TenantConfig>(
                   controller: _controller,
+                  onError: (context, error) => AppErrorView(
+                    message: error.message,
+                    onRetry: () => _loadConfig(_tenantIdController.text),
+                  ),
                   onSuccess: (context, config) {
                     // Preenche os campos de texto na primeira renderização bem sucedida
                     _populateFields(config);

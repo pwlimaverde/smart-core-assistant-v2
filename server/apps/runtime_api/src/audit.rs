@@ -21,6 +21,7 @@ pub(crate) async fn publicar_auditoria_borda(
     user_id: Option<i32>,
     traceparent: &str,
     ip_address: Option<String>,
+    user_agent: Option<String>,
 ) {
     let audit_payload = observability::AuditLogPayload {
         tenant_id,
@@ -32,6 +33,7 @@ pub(crate) async fn publicar_auditoria_borda(
         context,
         user_id,
         ip_address,
+        user_agent,
     };
     let envelope_auditoria = contracts::TenantEnvelope::novo(
         tenant_id.unwrap_or_else(Uuid::nil),
@@ -51,6 +53,7 @@ pub(crate) async fn publicar_reuso_detectado(
     bus: &mut redis::aio::ConnectionManager,
     traceparent: &str,
     ip_address: Option<String>,
+    user_agent: Option<String>,
 ) {
     publicar_auditoria_borda(
         bus,
@@ -62,6 +65,7 @@ pub(crate) async fn publicar_reuso_detectado(
         None,
         traceparent,
         ip_address,
+        user_agent,
     )
     .await;
 }

@@ -22,6 +22,7 @@ use infrastructure_postgres::{
             PostgresFluxoAtendimentoRepository,
         },
     },
+    RequestContext,
 };
 
 #[tokio::test]
@@ -358,6 +359,98 @@ async fn test_atendimentos_rls_isolation() {
     assert!(
         lista_b.iter().all(|a| a.id != atendimento_a.id),
         "Tenant B listou atendimento do Tenant A por status!"
+    );
+
+    tx.rollback().await.unwrap();
+}
+
+/// RBAC fino por fluxo (WS-5a): `listar_por_status` só devolve atendimentos já
+/// roteados a um fluxo Kanban quando o `RequestContext` tem `flow_permission` para
+/// aquele fluxo; atendimentos sem fluxo atribuído (pré-roteamento) continuam visíveis.
+#[tokio::test]
+async fn test_listar_por_status_filtra_por_flow_permission() {
+    let pool = obter_pool_teste().await;
+    let mut tx = pool.begin().await.unwrap();
+
+    let depto_repo = PostgresDepartamentoRepository;
+    let fluxo_repo = PostgresFluxoAtendimentoRepository;
+    let contato_repo = PostgresContatoRepository;
+    let atendimento_repo = PostgresAtendimentoRepository;
+
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant Flow Permission").await;
+    configurar_tenant_transacao(&mut tx, tenant.id).await;
+    let ctx_admin = criar_contexto_teste(tenant.id);
+
+    let depto = depto_repo
+        .criar(&mut tx, &ctx_admin, "Suporte Fluxo", None)
+        .await
+        .unwrap();
+    let fluxo_permitido = fluxo_repo
+        .criar(&mut tx, &ctx_admin, depto.id, "Fluxo Permitido")
+        .await
+        .unwrap();
+    let fluxo_barrado = fluxo_repo
+        .criar(&mut tx, &ctx_admin, depto.id, "Fluxo Barrado")
+        .await
+        .unwrap();
+
+    let contato = contato_repo
+        .salvar(&mut tx, &ctx_admin, "5511900002222", Some("Contato Fluxo"))
+        .await
+        .unwrap();
+
+    let atendimento_fluxo_1 = atendimento_repo
+        .criar(
+            &mut tx,
+            &ctx_admin,
+            contato.id,
+            None,
+            Some(fluxo_permitido.id),
+            None,
+        )
+        .await
+        .unwrap();
+    let atendimento_fluxo_99 = atendimento_repo
+        .criar(
+            &mut tx,
+            &ctx_admin,
+            contato.id,
+            None,
+            Some(fluxo_barrado.id),
+            None,
+        )
+        .await
+        .unwrap();
+    let atendimento_sem_fluxo = atendimento_repo
+        .criar(&mut tx, &ctx_admin, contato.id, None, None, None)
+        .await
+        .unwrap();
+
+    // Atendente com flow_permission só para o fluxo permitido (sem bypass de admin).
+    let ctx_atendente = RequestContext {
+        tenant_id: tenant.id,
+        user_id: 2,
+        user_scopes: vec!["atendimentos:read".into()],
+        flow_permissions: vec![fluxo_permitido.id],
+    };
+
+    let lista = atendimento_repo
+        .listar_por_status(&mut tx, &ctx_atendente, "fila", None, 100)
+        .await
+        .unwrap();
+    let ids: Vec<i32> = lista.iter().map(|a| a.id).collect();
+
+    assert!(
+        ids.contains(&atendimento_fluxo_1.id),
+        "fluxo permitido deveria aparecer"
+    );
+    assert!(
+        !ids.contains(&atendimento_fluxo_99.id),
+        "fluxo sem permissão não deveria aparecer"
+    );
+    assert!(
+        ids.contains(&atendimento_sem_fluxo.id),
+        "atendimento sem fluxo atribuído deveria continuar visível"
     );
 
     tx.rollback().await.unwrap();

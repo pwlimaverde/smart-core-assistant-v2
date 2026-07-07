@@ -38,6 +38,8 @@ $pacotes = @(
     "modulos\dependencies_module",
     "modulos\initial_loading_module",
     "modulos\login_module",
+    "modulos\admin_module",
+    "modulos\operacional_module",
     "apps\smart-core-admin"
 )
 

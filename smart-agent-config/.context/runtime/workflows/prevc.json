@@ -1,26 +1,43 @@
 {
   "version": 2,
   "workflowType": "prevc",
-  "updatedAt": "2026-06-30T22:18:25.200Z",
+  "updatedAt": "2026-07-07T09:58:31.849Z",
   "status": {
     "project": {
-      "name": "mvp-telas-e-endurecimento",
+      "name": "n1-fechamento-mvp-scheduler",
       "scale": 3,
-      "started": "2026-06-30T22:18:25.188Z",
-      "current_phase": "P",
+      "started": "2026-07-06T21:38:57.416Z",
+      "current_phase": "R",
       "settings": {
         "autonomous_mode": false,
         "require_plan": true,
         "require_approval": true
-      }
+      },
+      "plan": "n1-fechamento-mvp-scheduler"
     },
     "phases": {
       "P": {
-        "status": "in_progress",
-        "started_at": "2026-06-30T22:18:25.188Z"
+        "status": "completed",
+        "started_at": "2026-07-06T21:38:57.416Z",
+        "completed_at": "2026-07-07T09:58:19.470Z",
+        "outputs": [
+          {
+            "path": ".context/plans/n1-fechamento-mvp-scheduler.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/n1-fechamento-mvp-scheduler/plano_completo_n1-fechamento-mvp-scheduler.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/n1-fechamento-mvp-scheduler/info_aux_n1-fechamento-mvp-scheduler.md",
+            "status": "filled"
+          }
+        ]
       },
       "R": {
-        "status": "pending"
+        "status": "in_progress",
+        "started_at": "2026-07-07T09:58:19.470Z"
       },
       "E": {
         "status": "pending"
@@ -60,7 +77,7 @@
       }
     },
     "approval": {
-      "plan_created": false,
+      "plan_created": true,
       "plan_approved": false
     },
     "execution": {
@@ -68,17 +85,41 @@
         {
           "phase": "P",
           "action": "started",
-          "timestamp": "2026-06-30T22:18:25.188Z"
+          "timestamp": "2026-07-06T21:38:57.416Z"
+        },
+        {
+          "phase": "P",
+          "action": "plan_linked",
+          "plan": "n1-fechamento-mvp-scheduler",
+          "timestamp": "2026-07-07T09:58:04.153Z"
+        },
+        {
+          "phase": "P",
+          "action": "completed",
+          "timestamp": "2026-07-07T09:58:19.470Z"
+        },
+        {
+          "phase": "R",
+          "action": "started",
+          "timestamp": "2026-07-07T09:58:19.470Z"
+        },
+        {
+          "phase": "R",
+          "action": "plan_phase_updated",
+          "plan": "n1-fechamento-mvp-scheduler",
+          "description": "Plan phase phase-p updated to completed",
+          "timestamp": "2026-07-07T09:58:31.847Z"
         }
       ],
-      "last_activity": "2026-06-30T22:18:25.188Z",
-      "resume_context": "Fase P (Planejamento) em progresso"
+      "last_activity": "2026-07-07T09:58:31.847Z",
+      "resume_context": "Fase do plano atualizada"
     }
   },
   "binding": {
-    "workflowName": "mvp-telas-e-endurecimento",
-    "sessionId": "97899052-479e-4a93-8f24-b6ec5530a099",
-    "createdAt": "2026-06-30T22:18:25.198Z",
-    "updatedAt": "2026-06-30T22:18:25.192Z"
+    "workflowName": "n1-fechamento-mvp-scheduler",
+    "sessionId": "fd8d332d-33af-4912-83e8-163660d737d3",
+    "activeTaskId": "77ab882d-15e6-4304-ab79-df3fa932e1bb",
+    "createdAt": "2026-07-06T21:38:57.425Z",
+    "updatedAt": "2026-07-07T09:58:19.494Z"
   }
 }

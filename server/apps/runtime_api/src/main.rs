@@ -190,6 +190,35 @@ async fn main() -> anyhow::Result<()> {
                     handler_admin_forward(deps, env, "GetThread", "GetThreadReply").await
                 })
             }),
+        )
+        // --- WS-6.2/6.3: fila/Kanban (mover etapa) e chat (envio outbound) ---
+        .route(
+            "MoveAtendimentoEtapa",
+            exigir_auth(deps.clone(), bus.clone(), false, move |deps, env| {
+                Box::pin(async move {
+                    handler_admin_forward(
+                        deps,
+                        env,
+                        "MoveAtendimentoEtapa",
+                        "MoveAtendimentoEtapaReply",
+                    )
+                    .await
+                })
+            }),
+        )
+        .route(
+            "SendOutboundMessage",
+            exigir_auth(deps.clone(), bus.clone(), false, move |deps, env| {
+                Box::pin(async move {
+                    handler_admin_forward(
+                        deps,
+                        env,
+                        "SendOutboundMessage",
+                        "SendOutboundMessageReply",
+                    )
+                    .await
+                })
+            }),
         );
 
     // --- WS-7: CRUD administrativo (superusuário). O painel admin fala somente com a
@@ -368,6 +397,77 @@ fn erro_internal(msg: &str, env: &Envelope) -> Envelope {
     }
 }
 
+// --- Provider de flow_permissions (RBAC fino por fluxo — WS-5a) ---
+//
+// Decisão (confirmada com o dono): RPC ao data_postgres como fonte de verdade,
+// com cache curto (TTL ~30s) no data_redis no caminho quente. Evita revogação
+// atrasada de acesso a fluxo (vs. claim estático no JWT) e mantém "banco só via
+// infra/RPC". Cache-aside: tenta o cache, na falta consulta o banco e repovoa.
+async fn resolver_flow_permissions(
+    deps: &AuthDeps,
+    tenant_id: &str,
+    user_id: i32,
+    traceparent: &str,
+) -> Vec<i32> {
+    let tenant_uuid = Uuid::parse_str(tenant_id).unwrap_or_else(|_| Uuid::nil());
+    let lookup_payload = serde_json::json!({ "user_id": user_id });
+
+    let cache_req = application::auth::login::montar_envelope_request(
+        tenant_uuid,
+        traceparent,
+        "GetCache",
+        &lookup_payload,
+    );
+    if let Ok(resp) = deps.redis.call(cache_req, Duration::from_secs(2)).await {
+        if resp.kind != MessageKind::Error as i32 {
+            if let Some(perms) = extrair_permissoes(&resp.payload) {
+                return perms;
+            }
+        }
+    }
+
+    // Cache miss (ou data_redis indisponível): consulta a fonte de verdade.
+    let db_req = application::auth::login::montar_envelope_request(
+        tenant_uuid,
+        traceparent,
+        "GetUserFlowPermissions",
+        &lookup_payload,
+    );
+    let permissions = match deps.pg.call(db_req, Duration::from_secs(3)).await {
+        Ok(resp) if resp.kind != MessageKind::Error as i32 => {
+            extrair_permissoes(&resp.payload).unwrap_or_default()
+        }
+        _ => Vec::new(),
+    };
+
+    // Repovoa o cache (best-effort, TTL curto — não atrasa a resposta em caso de falha).
+    let set_payload = serde_json::json!({
+        "user_id": user_id,
+        "permissions": permissions,
+        "ttl": 30,
+    });
+    let set_req = application::auth::login::montar_envelope_request(
+        tenant_uuid,
+        traceparent,
+        "SetCache",
+        &set_payload,
+    );
+    let _ = deps.redis.call(set_req, Duration::from_secs(2)).await;
+
+    permissions
+}
+
+fn extrair_permissoes(payload: &[u8]) -> Option<Vec<i32>> {
+    let json: serde_json::Value = serde_json::from_slice(payload).ok()?;
+    let arr = json.get("permissions")?.as_array()?;
+    Some(
+        arr.iter()
+            .filter_map(|v| v.as_i64())
+            .map(|v| v as i32)
+            .collect(),
+    )
+}
+
 // --- Wrapper / Interceptor de Autenticação na Camada de Transporte ---
 
 fn exigir_auth<F>(
@@ -458,6 +558,7 @@ where
                     claims.sub.parse::<i32>().ok(),
                     &env.traceparent,
                     None,
+                    None,
                 )
                 .await;
                 return erro_forbidden("Acesso negado: exige privilégios de superusuário", &env);
@@ -474,6 +575,19 @@ where
                 env.tenant_id = Uuid::nil().to_string();
             } else {
                 env.tenant_id = claims.tenant_id.clone();
+            }
+
+            // 5b. RBAC fino por fluxo (WS-5a): popula flow_permissions via RPC+cache curto.
+            // Superusuário não tem TenantUser; bypass de fluxo já ocorre via escopo
+            // (kanban:admin/tenant:admin) em RequestContext::has_flow_permission.
+            if !claims.is_superuser {
+                env.flow_permissions = resolver_flow_permissions(
+                    &deps,
+                    &claims.tenant_id,
+                    env.auth_user_id,
+                    &env.traceparent,
+                )
+                .await;
             }
 
             // 6. Encaminhar para o handler de destino
@@ -527,6 +641,7 @@ async fn handler_login(
                 user_id,
                 &env.traceparent,
                 None,
+                None,
             )
             .await;
             Envelope {
@@ -549,6 +664,7 @@ async fn handler_login(
                     serde_json::json!({}),
                     None,
                     &env.traceparent,
+                    None,
                     None,
                 )
                 .await;
@@ -594,7 +710,7 @@ async fn handler_refresh(
             // Aqui publicamos o evento de segurança `token_reuse_detected` no security:stream.
             if matches!(&err, error_core::AppError::Auth(m) if m == application::auth::refresh::REUSE_MARKER)
             {
-                publicar_reuso_detectado(&mut bus, &env.traceparent, None).await;
+                publicar_reuso_detectado(&mut bus, &env.traceparent, None, None).await;
             }
             registrar_erro_borda(&err, &env);
             let err_env = err.to_error_envelope(&env.traceparent, "runtime_api");
@@ -645,6 +761,7 @@ async fn handler_logout(
                 serde_json::json!({ "jti": claims.jti }),
                 claims.sub.parse::<i32>().ok(),
                 &env.traceparent,
+                None,
                 None,
             )
             .await;

@@ -40,6 +40,10 @@ class _DashboardPageState extends State<DashboardPage> {
         padding: const EdgeInsets.all(24.0),
         child: ViewStateBuilder<DashboardController, DashboardSummary>(
           controller: _controller,
+          onError: (context, error) => AppErrorView(
+            message: error.message,
+            onRetry: _controller.fetchSummary,
+          ),
           onSuccess: (context, summary) {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,

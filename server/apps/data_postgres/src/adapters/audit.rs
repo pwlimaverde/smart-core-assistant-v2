@@ -60,6 +60,7 @@ impl AuditPort for RedisAuditPort {
             context,
             user_id,
             ip_address: None,
+            user_agent: None,
         };
         let envelope_auditoria = contracts::TenantEnvelope::novo(
             tenant_id.unwrap_or_else(Uuid::nil),

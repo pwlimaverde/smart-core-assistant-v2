@@ -191,6 +191,10 @@ class _FeatureFlagsPageState extends State<FeatureFlagsPage> {
             Expanded(
               child: ViewStateBuilder<FeatureFlagsController, List<FeatureFlag>>(
                 controller: _controller,
+                onError: (context, error) => AppErrorView(
+                  message: error.message,
+                  onRetry: _controller.fetchFeatureFlags,
+                ),
                 onSuccess: (context, flags) {
                   if (flags.isEmpty) {
                     return const Center(

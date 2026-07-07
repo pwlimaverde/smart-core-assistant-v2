@@ -376,6 +376,71 @@ message ExportTenantsCsvResponse {
   bytes chunk = 1;
 }
 
+// --- Fase 6: Operacional (fila/Kanban/chat — WS-6) ---
+message AtendimentoResumo {
+  int32 id = 1;
+  int32 contato_id = 2;
+  string status = 3;
+  int32 departamento_id = 4;      // 0 = ausente
+  int32 fluxo_atendimento_id = 5; // 0 = ausente
+  int32 etapa_atual_id = 6;       // 0 = ausente
+  string assunto = 7;
+  string prioridade = 8;
+  int32 atendente_humano_id = 9;  // 0 = ausente
+  int64 data_inicio = 10;
+  int64 data_ultima_mensagem = 11;
+}
+
+message ListAtendimentosRequest {
+  string status = 1;         // default "fila" no cliente quando vazio
+  int32 departamento_id = 2; // 0 = todos os departamentos
+  int32 limit = 3;
+}
+
+message ListAtendimentosResponse {
+  repeated AtendimentoResumo atendimentos = 1;
+}
+
+message MensagemThread {
+  int32 id = 1;
+  int32 atendimento_id = 2;
+  string tipo = 3;
+  string conteudo = 4;
+  string remetente = 5;
+  int64 timestamp = 6;
+  string status_envio = 7;
+}
+
+message GetThreadRequest {
+  int32 atendimento_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message GetThreadResponse {
+  repeated MensagemThread mensagens = 1;
+}
+
+message MoveAtendimentoEtapaRequest {
+  int32 atendimento_id = 1;
+  int32 etapa_destino_id = 2;
+  string motivo = 3;
+}
+
+message MoveAtendimentoEtapaResponse {
+  bool success = 1;
+}
+
+message SendOutboundMessageRequest {
+  int32 atendimento_id = 1;
+  string conteudo = 2;
+  string tipo = 3; // default "texto" no cliente quando vazio
+}
+
+message SendOutboundMessageResponse {
+  int32 message_id = 1;
+}
+
 // --- Serviço Admin ---
 service AdminService {
   rpc ListCoreSettings(ListCoreSettingsRequest) returns (ListCoreSettingsResponse);
@@ -416,6 +481,13 @@ service AdminService {
 
   // Realtime
   rpc StreamAtendimentos(StreamAtendimentosRequest) returns (stream AtendimentoEvent);
+
+  // Fase 6: Operacional (fila/Kanban/chat — WS-6). RBAC fino por fluxo (flow_permissions)
+  // já é aplicado no data_postgres (WS-5a); estas rotas exigem só autenticação, não superuser.
+  rpc ListAtendimentos(ListAtendimentosRequest) returns (ListAtendimentosResponse);
+  rpc GetThread(GetThreadRequest) returns (GetThreadResponse);
+  rpc MoveAtendimentoEtapa(MoveAtendimentoEtapaRequest) returns (MoveAtendimentoEtapaResponse);
+  rpc SendOutboundMessage(SendOutboundMessageRequest) returns (SendOutboundMessageResponse);
 }
 
 message StreamAtendimentosRequest {}

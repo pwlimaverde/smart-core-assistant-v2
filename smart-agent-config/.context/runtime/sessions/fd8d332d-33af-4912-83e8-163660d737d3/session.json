@@ -1,0 +1,36 @@
+{
+  "id": "fd8d332d-33af-4912-83e8-163660d737d3",
+  "name": "n1-fechamento-mvp-scheduler",
+  "status": "active",
+  "repoPath": "c:\\PROJETOS\\FULL-STACK\\smart-core-assistant-v2\\smart-agent-config",
+  "createdAt": "2026-07-06T21:38:57.420Z",
+  "updatedAt": "2026-07-07T09:58:37.600Z",
+  "startedAt": "2026-07-06T21:38:57.420Z",
+  "traceCount": 13,
+  "artifactCount": 0,
+  "checkpointCount": 1,
+  "checkpoints": [
+    {
+      "id": "56ce9b92-ea5a-492b-ad7a-446013920f50",
+      "note": "Advanced workflow phase P -> R",
+      "data": {
+        "from": "P",
+        "to": "R",
+        "outputs": [
+          ".context/plans/n1-fechamento-mvp-scheduler.md",
+          ".context/plans/n1-fechamento-mvp-scheduler/plano_completo_n1-fechamento-mvp-scheduler.md",
+          ".context/plans/n1-fechamento-mvp-scheduler/info_aux_n1-fechamento-mvp-scheduler.md"
+        ],
+        "nextTaskContractId": "77ab882d-15e6-4304-ab79-df3fa932e1bb"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-07T09:58:19.494Z"
+    }
+  ],
+  "metadata": {
+    "workflow": true,
+    "description": "Fechamento do MVP pós mvp-telas-e-endurecimento: merge/validação em dev, scheduler temporal do worker (timeout de feedback + disparo de purga de mídia com lock Redis e idempotência), elo outbox→outbound do atendente com retry/backoff e status_envio, e dashboards/alertas Grafana provisionados como código. Envolve múltiplos serviços (worker, data_postgres, data_storage, data_whatsapp), RPCs novos e auditoria."
+  },
+  "lastTraceAt": "2026-07-07T09:58:37.600Z",
+  "lastCheckpointAt": "2026-07-07T09:58:19.494Z"
+}
