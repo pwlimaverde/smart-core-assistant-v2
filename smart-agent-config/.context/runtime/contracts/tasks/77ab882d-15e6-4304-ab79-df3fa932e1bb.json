@@ -1,0 +1,35 @@
+{
+  "id": "77ab882d-15e6-4304-ab79-df3fa932e1bb",
+  "title": "Fase N1 — Fechamento do MVP + Scheduler do Worker: Review",
+  "description": "Derived from linked plan \"n1-fechamento-mvp-scheduler\" for PREVC phase R (Review). Plan phases: Review. Expected outputs: architecture, adr, design-spec.",
+  "sessionId": "fd8d332d-33af-4912-83e8-163660d737d3",
+  "owner": "architect",
+  "status": "ready",
+  "inputs": [],
+  "expectedOutputs": [
+    "architecture",
+    "adr",
+    "design-spec"
+  ],
+  "acceptanceCriteria": [
+    "Complete Review"
+  ],
+  "requiredSensors": [],
+  "requiredArtifacts": [],
+  "createdAt": "2026-07-07T09:58:19.460Z",
+  "updatedAt": "2026-07-07T09:58:19.460Z",
+  "metadata": {
+    "requirementsSource": "none",
+    "source": "workflow.plan",
+    "planSlug": "n1-fechamento-mvp-scheduler",
+    "prevcPhase": "R",
+    "planPhaseIds": [
+      "phase-r"
+    ],
+    "planPhaseNames": [
+      "Review"
+    ],
+    "planPhaseSummaries": [],
+    "derivedFrom": "linked-plan"
+  }
+}

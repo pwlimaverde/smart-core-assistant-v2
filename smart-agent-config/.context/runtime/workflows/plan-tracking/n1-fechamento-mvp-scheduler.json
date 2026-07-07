@@ -1,0 +1,16 @@
+{
+  "planSlug": "n1-fechamento-mvp-scheduler",
+  "linkedAt": "2026-07-06T21:39:02.195Z",
+  "progress": 20,
+  "phases": {
+    "phase-p": {
+      "phaseId": "phase-p",
+      "status": "completed",
+      "startedAt": "2026-07-07T09:58:31.822Z",
+      "steps": [],
+      "completedAt": "2026-07-07T09:58:31.822Z"
+    }
+  },
+  "decisions": [],
+  "lastUpdated": "2026-07-07T09:58:31.822Z"
+}

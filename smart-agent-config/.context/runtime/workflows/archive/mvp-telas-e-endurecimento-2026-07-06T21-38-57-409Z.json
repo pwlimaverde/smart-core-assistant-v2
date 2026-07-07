@@ -1,0 +1,226 @@
+{
+  "version": 2,
+  "workflowType": "prevc",
+  "updatedAt": "2026-07-05T22:19:05.788Z",
+  "status": {
+    "project": {
+      "name": "mvp-telas-e-endurecimento",
+      "scale": 3,
+      "started": "2026-06-30T22:18:25.188Z",
+      "current_phase": "C",
+      "settings": {
+        "autonomous_mode": false,
+        "require_plan": true,
+        "require_approval": true
+      }
+    },
+    "phases": {
+      "P": {
+        "status": "completed",
+        "started_at": "2026-06-30T22:18:25.188Z",
+        "completed_at": "2026-06-30T22:39:35.379Z",
+        "outputs": [
+          {
+            "path": "plans/mvp-telas-e-endurecimento.md",
+            "status": "filled"
+          },
+          {
+            "path": "plans/mvp-telas-e-endurecimento/plano_completo_mvp-telas-e-endurecimento.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "R": {
+        "status": "completed",
+        "started_at": "2026-06-30T22:39:35.379Z",
+        "completed_at": "2026-06-30T22:39:52.481Z",
+        "outputs": [
+          {
+            "path": "plans/mvp-telas-e-endurecimento/plano_completo_mvp-telas-e-endurecimento.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "E": {
+        "status": "completed",
+        "started_at": "2026-06-30T22:39:52.481Z",
+        "completed_at": "2026-07-04T19:43:38.260Z",
+        "outputs": [
+          {
+            "path": "server/apps/data_postgres/tests/e2e_trace.rs",
+            "status": "filled"
+          },
+          {
+            "path": "clients/modulos/operacional_module",
+            "status": "filled"
+          },
+          {
+            "path": "clients/modulos/admin_module",
+            "status": "filled"
+          }
+        ]
+      },
+      "V": {
+        "status": "completed",
+        "started_at": "2026-07-04T19:43:38.260Z",
+        "completed_at": "2026-07-04T19:44:13.824Z",
+        "outputs": [
+          {
+            "path": "plans/mvp-telas-e-endurecimento.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "C": {
+        "status": "completed",
+        "started_at": "2026-07-04T19:44:13.824Z",
+        "completed_at": "2026-07-05T22:19:05.764Z",
+        "outputs": [
+          {
+            "path": "smart-agent-config/.context/workflow/docs/final-review.md",
+            "status": "filled"
+          },
+          {
+            "path": "smart-agent-config/.context/plans/archive/mvp-telas-e-endurecimento",
+            "status": "filled"
+          }
+        ]
+      }
+    },
+    "agents": {},
+    "roles": {
+      "planner": {
+        "status": "pending"
+      },
+      "designer": {
+        "status": "pending"
+      },
+      "architect": {
+        "status": "pending"
+      },
+      "developer": {
+        "status": "pending"
+      },
+      "qa": {
+        "status": "pending"
+      },
+      "reviewer": {
+        "status": "pending"
+      },
+      "documenter": {
+        "status": "pending"
+      },
+      "solo-dev": {
+        "status": "pending"
+      }
+    },
+    "approval": {
+      "plan_created": false,
+      "plan_approved": false
+    },
+    "execution": {
+      "history": [
+        {
+          "phase": "P",
+          "action": "started",
+          "timestamp": "2026-06-30T22:18:25.188Z"
+        },
+        {
+          "phase": "P",
+          "action": "decision_recorded",
+          "plan": "mvp-telas-e-endurecimento",
+          "description": "Decision recorded: WS-5a: origem do flow_permissions via RPC + cache TTL curto",
+          "timestamp": "2026-06-30T22:38:15.853Z"
+        },
+        {
+          "phase": "P",
+          "action": "decision_recorded",
+          "plan": "mvp-telas-e-endurecimento",
+          "description": "Decision recorded: WS-0.3: e2e de cadeia de trace incluído no escopo",
+          "timestamp": "2026-06-30T22:38:19.870Z"
+        },
+        {
+          "phase": "P",
+          "action": "completed",
+          "timestamp": "2026-06-30T22:39:35.379Z"
+        },
+        {
+          "phase": "R",
+          "action": "started",
+          "timestamp": "2026-06-30T22:39:35.379Z"
+        },
+        {
+          "phase": "R",
+          "action": "decision_recorded",
+          "plan": "mvp-telas-e-endurecimento",
+          "description": "Decision recorded: Arquitetura aprovada: Envelope aditivo + 3 ports novos",
+          "timestamp": "2026-06-30T22:39:49.803Z"
+        },
+        {
+          "phase": "R",
+          "action": "completed",
+          "timestamp": "2026-06-30T22:39:52.481Z"
+        },
+        {
+          "phase": "E",
+          "action": "started",
+          "timestamp": "2026-06-30T22:39:52.481Z"
+        },
+        {
+          "phase": "E",
+          "action": "decision_recorded",
+          "plan": "mvp-telas-e-endurecimento",
+          "description": "Decision recorded: Backend Rust do ciclo concluído: WS-5a, WS-5b, WS-7.2, WS-0.3",
+          "timestamp": "2026-07-02T17:09:20.241Z"
+        },
+        {
+          "phase": "E",
+          "action": "decision_recorded",
+          "plan": "mvp-telas-e-endurecimento",
+          "description": "Decision recorded: WS-7.3 (telas de convite) parqueado — gap de persona, não de rota",
+          "timestamp": "2026-07-03T23:09:23.967Z"
+        },
+        {
+          "phase": "V",
+          "action": "decision_recorded",
+          "plan": "mvp-telas-e-endurecimento",
+          "description": "Decision recorded: Validação consolidada: Rust + Flutter verdes",
+          "timestamp": "2026-07-04T19:41:28.869Z"
+        },
+        {
+          "phase": "E",
+          "action": "completed",
+          "timestamp": "2026-07-04T19:43:38.260Z"
+        },
+        {
+          "phase": "V",
+          "action": "started",
+          "timestamp": "2026-07-04T19:43:38.260Z"
+        },
+        {
+          "phase": "V",
+          "action": "completed",
+          "timestamp": "2026-07-04T19:44:13.824Z"
+        },
+        {
+          "phase": "C",
+          "action": "started",
+          "timestamp": "2026-07-04T19:44:13.824Z"
+        },
+        {
+          "phase": "C",
+          "action": "completed",
+          "timestamp": "2026-07-05T22:19:05.764Z"
+        }
+      ],
+      "last_activity": "2026-07-05T22:19:05.764Z",
+      "resume_context": "Fase C (Confirmação) concluída"
+    }
+  },
+  "binding": {
+    "workflowName": "mvp-telas-e-endurecimento",
+    "sessionId": "97899052-479e-4a93-8f24-b6ec5530a099",
+    "createdAt": "2026-06-30T22:18:25.198Z",
+    "updatedAt": "2026-07-05T22:19:05.774Z"
+  }
+}
