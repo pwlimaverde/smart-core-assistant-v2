@@ -1,0 +1,56 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 0 },
+      "id": 1,
+      "title": "Como usar",
+      "type": "text",
+      "options": {
+        "mode": "markdown",
+        "content": "Cole um `trace_id` no campo acima (copiado de um log no Loki — o painel de detalhe do log tem um link \"TraceID\" que já preenche esta variável) para ver a cadeia completa do trace, do webhook à resposta, no Tempo."
+      }
+    },
+    {
+      "gridPos": { "h": 16, "w": 24, "x": 0, "y": 4 },
+      "id": 2,
+      "title": "Cadeia de trace (Tempo)",
+      "type": "traces",
+      "datasource": { "type": "tempo", "uid": "tempo" },
+      "targets": [
+        {
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "query": "$trace_id",
+          "queryType": "traceql",
+          "refId": "A"
+        }
+      ]
+    }
+  ],
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["smartcore", "trace", "tempo", "n1"],
+  "templating": {
+    "list": [
+      {
+        "name": "trace_id",
+        "type": "textbox",
+        "label": "Trace ID",
+        "query": "",
+        "current": { "text": "", "value": "" }
+      }
+    ]
+  },
+  "time": { "from": "now-6h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Smart Core v2 - Cadeia de Trace (webhook -> resposta)",
+  "uid": "smartcore-trace-chain",
+  "version": 1
+}

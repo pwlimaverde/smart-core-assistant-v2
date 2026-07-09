@@ -15,7 +15,16 @@ processors:
 exporters:
   prometheus:
     endpoint: 0.0.0.0:8889
-    namespace: "smartcore"
+    # Sem "namespace": os nomes de métrica já nascem com o prefixo "smartcore_"
+    # no código da aplicação (ex.: smartcore_rpc_duration_ms); um namespace aqui
+    # duplicaria o prefixo (smartcore_smartcore_...) e quebraria as queries dos
+    # dashboards provisionados (N1.4).
+    # resource_to_telemetry_conversion: converte o atributo de recurso
+    # "service.name" (setado por observability::init_telemetry por binário) em
+    # label "service_name" nas métricas — sem isso, métricas de worker/
+    # data_postgres/data_whatsapp etc. ficam indistinguíveis entre si no Prometheus.
+    resource_to_telemetry_conversion:
+      enabled: true
 
   otlp/tempo:
     endpoint: tempo:4317

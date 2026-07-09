@@ -1,11 +1,16 @@
 apiVersion: 1
 
 providers:
+  # allowUiUpdates: false -> dashboards são código; edição só via arquivo JSON
+  # (N1.4). disableDeletion: false mantém o Grafana em sincronia quando um
+  # dashboard é removido do disco (o provider "possui" esta pasta por inteiro).
   - name: 'SmartCore Dashboards'
     orgId: 1
     folder: 'SmartCore v2'
     type: file
     disableDeletion: false
-    editable: true
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
     options:
       path: /etc/grafana/provisioning/dashboards/json
+      foldersFromFilesStructure: true
