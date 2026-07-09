@@ -7,6 +7,8 @@ use uuid::Uuid;
 
 use std::sync::Arc;
 
+mod scheduler;
+
 /// Escopos de um ator de SISTEMA (worker). O worker é um serviço interno confiável
 /// que reage a eventos do barramento (não a um usuário final); as operações de
 /// persistência/orquestração que ele dispara exigem escopos de escrita no
@@ -26,6 +28,47 @@ fn mascarar_telefone(phone: &str) -> String {
     }
     let visiveis: String = digitos[digitos.len() - 4..].iter().collect();
     format!("{}{}", "*".repeat(digitos.len() - 4), visiveis)
+}
+
+/// Chama uma RPC síncrona (`method`) em `client`, propagando `traceparent`/`causation_id`
+/// e os escopos de sistema do worker. Retorna o payload desserializado da resposta ou
+/// um erro (inclui o corpo de erro do serviço remoto na mensagem).
+pub(crate) async fn chamar_rpc(
+    client: &transport::MuxClient,
+    tenant_id: &str,
+    method: &str,
+    payload: serde_json::Value,
+    causation_id: &str,
+    traceparent: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let envelope = Envelope {
+        tenant_id: tenant_id.to_string(),
+        schema_version: 1,
+        message_id: Uuid::now_v7().to_string(),
+        causation_id: causation_id.to_string(),
+        traceparent: traceparent.to_string(),
+        occurred_at: chrono::Utc::now().timestamp_millis(),
+        kind: MessageKind::Request as i32,
+        method: method.to_string(),
+        payload: serde_json::to_vec(&payload).unwrap_or_default(),
+        error: None,
+        auth_user_id: 0,
+        auth_scopes: escopos_sistema(),
+        auth_is_superuser: false,
+        flow_permissions: vec![],
+        user_agent: String::new(),
+    };
+
+    let resp = client.call(envelope, Duration::from_secs(5)).await?;
+    if resp.kind == MessageKind::Error as i32 {
+        let err_msg = resp
+            .error
+            .as_ref()
+            .map(|e| e.message.as_str())
+            .unwrap_or("Erro desconhecido");
+        anyhow::bail!("RPC {} falhou: {}", method, err_msg);
+    }
+    Ok(serde_json::from_slice(&resp.payload)?)
 }
 
 #[derive(Clone)]
@@ -77,6 +120,10 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Consumidor do worker ativado e escutando eventos.");
 
+    // 3b. Scheduler temporal (F4.3b): timeout de feedback + disparo de purga de mídia.
+    // Roda em tokio::spawn paralelo ao loop de consumo do bus abaixo.
+    scheduler::iniciar(state.clone());
+
     // Loop de consumo
     let state_clone = state.clone();
     if let Err(e) = consumer
@@ -89,6 +136,8 @@ async fn main() -> anyhow::Result<()> {
                     processar_mensagem_recebida(&state, evt).await?;
                 } else if evt.event_type == "whatsapp.message.status" {
                     processar_status_mensagem(&state, evt).await?;
+                } else if evt.event_type == "message.persisted" {
+                    processar_mensagem_persistida(&state, evt).await?;
                 }
                 Ok(())
             }
@@ -372,9 +421,12 @@ async fn processar_mensagem_recebida(
             );
 
             let bot_text = "Olá! Sou o assistente virtual. Recebi sua mensagem e ela já está na nossa fila de atendimento. Em breve um atendente falará com você.";
+            // Chaves exigidas pelo handler de data_whatsapp (main.rs de data_whatsapp,
+            // handler_send_whatsapp_message): "id" (db id da instância) e "to_number"
+            // (telefone) — não "instance_id"/"to" (bug pré-existente corrigido na N1.3).
             let outbound_payload = serde_json::json!({
-                "instance_id": instance_id,
-                "to": msg_normalized.sender,
+                "id": instance_id,
+                "to_number": msg_normalized.sender,
                 "text": bot_text,
             });
 
@@ -697,6 +749,163 @@ async fn processar_status_mensagem(
     Ok(())
 }
 
+/// Consome "message.persisted" (drenado do outbox pelo `OutboxRelay` do data_postgres)
+/// e fecha o elo outbox->outbound do atendente (WS-6.3 / N1.3): quando `sender_id`
+/// é "atendente", resolve instância/telefone do contato e envia via
+/// `data_whatsapp::SendWhatsappMessage`, com retry/backoff e atualização de
+/// `status_envio`. Mensagens do contato/bot (`sender_id` != "atendente") também
+/// passam pelo outbox mas já foram entregues antes de chegar aqui — no-op.
+async fn processar_mensagem_persistida(
+    state: &AppState,
+    evt: transport::bus::EventoBruto,
+) -> anyhow::Result<()> {
+    let envelope = evt.desserializar::<serde_json::Value>()?;
+
+    let sender_id = envelope
+        .payload
+        .get("sender_id")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    if sender_id != "atendente" {
+        return Ok(());
+    }
+
+    let mensagem_id: i32 = envelope
+        .payload
+        .get("message_id")
+        .and_then(|v| v.as_str())
+        .and_then(|s| s.parse().ok())
+        .ok_or_else(|| {
+            anyhow::anyhow!("message_id ausente/inválido no evento message.persisted")
+        })?;
+
+    let tenant_id = envelope.tenant_id.to_string();
+    let causation_id = envelope.event_id.to_string();
+
+    let destino = chamar_rpc(
+        &state.pg_client,
+        &tenant_id,
+        "ResolverDestinoEnvioOutbound",
+        serde_json::json!({ "mensagem_id": mensagem_id }),
+        &causation_id,
+        &envelope.traceparent,
+    )
+    .await?;
+
+    let status_envio = destino
+        .get("status_envio")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    if status_envio != "pending" {
+        // Reentrega do consumer group (at-least-once) de um evento já processado
+        // (sent/failed): no-op idempotente — status_envio é a fonte de verdade.
+        tracing::debug!(
+            mensagem_id = mensagem_id,
+            status_envio = status_envio,
+            "mensagem outbound já processada, ignorando reentrega"
+        );
+        return Ok(());
+    }
+
+    let instance_id = destino
+        .get("instance_id")
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| anyhow::anyhow!("instance_id ausente na resolução de destino"))?;
+    let to_number = destino
+        .get("to_number")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| anyhow::anyhow!("to_number ausente na resolução de destino"))?
+        .to_string();
+    let conteudo = destino
+        .get("conteudo")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    let send_payload = serde_json::json!({
+        "id": instance_id,
+        "to_number": to_number,
+        "text": conteudo,
+    });
+
+    // Retry com backoff (1s/2s/4s) para falhas transitórias do provedor.
+    let backoffs_secs = [0u64, 1, 2, 4];
+    let mut ultimo_erro: Option<anyhow::Error> = None;
+    let mut stanza_id: Option<String> = None;
+    for espera_secs in backoffs_secs {
+        if espera_secs > 0 {
+            tokio::time::sleep(Duration::from_secs(espera_secs)).await;
+        }
+        match chamar_rpc(
+            &state.whatsapp_client,
+            &tenant_id,
+            "SendWhatsappMessage",
+            send_payload.clone(),
+            &causation_id,
+            &envelope.traceparent,
+        )
+        .await
+        {
+            Ok(resp) => {
+                stanza_id = resp
+                    .get("message_id")
+                    .and_then(|v| v.as_str())
+                    .map(|s| s.to_string());
+                ultimo_erro = None;
+                break;
+            }
+            Err(e) => ultimo_erro = Some(e),
+        }
+    }
+
+    if let Some(stanza_id) = stanza_id {
+        chamar_rpc(
+            &state.pg_client,
+            &tenant_id,
+            "MarcarMensagemEnviada",
+            serde_json::json!({ "mensagem_id": mensagem_id, "message_id_whatsapp": stanza_id }),
+            &causation_id,
+            &envelope.traceparent,
+        )
+        .await?;
+        return Ok(());
+    }
+
+    // Falha definitiva após esgotar as tentativas.
+    if let Err(e) = chamar_rpc(
+        &state.pg_client,
+        &tenant_id,
+        "MarcarMensagemFalhaEnvio",
+        serde_json::json!({ "mensagem_id": mensagem_id }),
+        &causation_id,
+        &envelope.traceparent,
+    )
+    .await
+    {
+        tracing::error!(
+            mensagem_id = mensagem_id,
+            "falha ao marcar status_envio='failed': {:?}",
+            e
+        );
+    }
+
+    state.audit_logger.warn(
+        envelope.tenant_id,
+        "mensagem.envio_falhou",
+        "Falha definitiva ao enviar mensagem outbound do atendente ao WhatsApp",
+        serde_json::json!({ "mensagem_id": mensagem_id }),
+        None,
+        None,
+        Some(causation_id),
+    );
+
+    anyhow::bail!(
+        "Falha definitiva ao enviar mensagem outbound (mensagem_id={}): {:?}",
+        mensagem_id,
+        ultimo_erro
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -900,6 +1109,188 @@ mod tests {
         };
         let resultado = processar_mensagem_recebida(&state, evt).await;
         assert!(resultado.is_err(), "Esperava erro de UUID inválido");
+
+        pg_handle.abort();
+    }
+
+    fn evento_message_persistida(sender_id: &str, mensagem_id: i64) -> EventoBruto {
+        let payload = serde_json::json!({
+            "message_id": mensagem_id.to_string(),
+            "sender_id": sender_id,
+            "content": "mensagem de teste do atendente",
+            "timestamp": chrono::Utc::now().timestamp_millis(),
+        });
+
+        EventoBruto {
+            stream_id: "9999-0".to_string(),
+            tenant_id: Uuid::new_v4().to_string(),
+            event_id: Uuid::now_v7().to_string(),
+            event_type: "message.persisted".to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            traceparent: "00-trace-worker-n13-01".to_string(),
+            payload: serde_json::to_string(&payload).unwrap(),
+        }
+    }
+
+    #[tokio::test]
+    async fn test_processar_mensagem_persistida_sender_contato_noop() {
+        let _guard = WORKER_TEST_MUTEX.lock().await;
+        // Servidor sem nenhuma rota registrada: se o código tentasse qualquer RPC
+        // aqui, receberia um erro do servidor (método desconhecido) e o teste falharia.
+        let pg_addr = "tcp://127.0.0.1:29390";
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+        std::env::set_var("SMARTCORE_DATA_WHATSAPP_ENDPOINT", pg_addr);
+
+        let pg_server = Server::new(Endpoint::parse(pg_addr).unwrap(), "flatbuffers");
+        let pg_handle = tokio::spawn(async move { pg_server.run().await.unwrap() });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
+        let whatsapp_client = Arc::new(transport::conectar_cliente("data_whatsapp").await.unwrap());
+        let state = AppState {
+            redis_conn: None,
+            audit_logger: observability::AuditLogger::new_dummy("worker"),
+            pg_client,
+            whatsapp_client,
+        };
+
+        let evt = evento_message_persistida("contato", 1);
+        let resultado = processar_mensagem_persistida(&state, evt).await;
+        assert!(
+            resultado.is_ok(),
+            "mensagem de contato/bot deve ser no-op: {:?}",
+            resultado
+        );
+
+        pg_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_processar_mensagem_persistida_sucesso_envia() {
+        let _guard = WORKER_TEST_MUTEX.lock().await;
+        let pg_addr = "tcp://127.0.0.1:29392";
+        let wa_addr = "tcp://127.0.0.1:29393";
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+        std::env::set_var("SMARTCORE_DATA_WHATSAPP_ENDPOINT", wa_addr);
+
+        let pg_server = Server::new(Endpoint::parse(pg_addr).unwrap(), "flatbuffers")
+            .route("ResolverDestinoEnvioOutbound", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({
+                        "atendimento_id": 42,
+                        "instance_id": 7,
+                        "to_number": "5511999998888",
+                        "status_envio": "pending",
+                        "conteudo": "mensagem de teste do atendente",
+                    });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "ResolverDestinoEnvioOutboundReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("MarcarMensagemEnviada", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({ "status": "ok" });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "MarcarMensagemEnviadaReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let wa_server = Server::new(Endpoint::parse(wa_addr).unwrap(), "flatbuffers").route(
+            "SendWhatsappMessage",
+            |env| {
+                Box::pin(async move {
+                    let reply =
+                        serde_json::json!({ "status": "success", "message_id": "WA-STANZA-1" });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "SendWhatsappMessageReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            },
+        );
+        let pg_handle = tokio::spawn(async move { pg_server.run().await.unwrap() });
+        let wa_handle = tokio::spawn(async move { wa_server.run().await.unwrap() });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
+        let whatsapp_client = Arc::new(transport::conectar_cliente("data_whatsapp").await.unwrap());
+        let state = AppState {
+            redis_conn: None,
+            audit_logger: observability::AuditLogger::new_dummy("worker"),
+            pg_client,
+            whatsapp_client,
+        };
+
+        let evt = evento_message_persistida("atendente", 100);
+        let resultado = processar_mensagem_persistida(&state, evt).await;
+        assert!(
+            resultado.is_ok(),
+            "Esperava sucesso, obteve: {:?}",
+            resultado
+        );
+
+        pg_handle.abort();
+        wa_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn test_processar_mensagem_persistida_idempotente_ja_enviada() {
+        let _guard = WORKER_TEST_MUTEX.lock().await;
+        let pg_addr = "tcp://127.0.0.1:29394";
+        // whatsapp aponta para o mesmo servidor mock (sem rota SendWhatsappMessage):
+        // se o código tentasse enviar de novo, receberia erro de método desconhecido —
+        // confirma que o caminho idempotente não chama SendWhatsappMessage.
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+        std::env::set_var("SMARTCORE_DATA_WHATSAPP_ENDPOINT", pg_addr);
+
+        let pg_server = Server::new(Endpoint::parse(pg_addr).unwrap(), "flatbuffers").route(
+            "ResolverDestinoEnvioOutbound",
+            |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({
+                        "atendimento_id": 42,
+                        "instance_id": 7,
+                        "to_number": "5511999998888",
+                        "status_envio": "sent",
+                        "conteudo": "já enviada antes",
+                    });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "ResolverDestinoEnvioOutboundReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            },
+        );
+        let pg_handle = tokio::spawn(async move { pg_server.run().await.unwrap() });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
+        let whatsapp_client = Arc::new(transport::conectar_cliente("data_whatsapp").await.unwrap());
+        let state = AppState {
+            redis_conn: None,
+            audit_logger: observability::AuditLogger::new_dummy("worker"),
+            pg_client,
+            whatsapp_client,
+        };
+
+        let evt = evento_message_persistida("atendente", 101);
+        let resultado = processar_mensagem_persistida(&state, evt).await;
+        assert!(
+            resultado.is_ok(),
+            "reentrega de mensagem já enviada deve ser idempotente (no-op): {:?}",
+            resultado
+        );
 
         pg_handle.abort();
     }

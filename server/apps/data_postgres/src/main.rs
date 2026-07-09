@@ -185,8 +185,9 @@ async fn main() -> anyhow::Result<()> {
         std::sync::Arc::new(adapters::PgTenantStore::new(pool.clone()));
     let auth_store: std::sync::Arc<dyn ports::AuthStore> =
         std::sync::Arc::new(adapters::PgAuthStore::new(pool.clone()));
-    let atendimento_store: std::sync::Arc<dyn ports::AtendimentoStore> =
-        std::sync::Arc::new(adapters::PgAtendimentoStore::new(pool.clone()));
+    let atendimento_store: std::sync::Arc<dyn ports::AtendimentoStore> = std::sync::Arc::new(
+        adapters::PgAtendimentoStore::new(pool.clone(), admin_pool.clone()),
+    );
     let cliente_store: std::sync::Arc<dyn ports::ClienteStore> =
         std::sync::Arc::new(adapters::PgClienteStore::new(pool.clone()));
     let operacional_store: std::sync::Arc<dyn ports::OperacionalStore> =
@@ -402,6 +403,13 @@ async fn main() -> anyhow::Result<()> {
     let state_for_aplicar_politica = state_clone.clone();
     let state_for_move_atendimento_etapa = state_clone.clone();
     let state_for_send_outbound_message = state_clone.clone();
+    let state_for_listar_feedback_vencido = state_clone.clone();
+    let state_for_marcar_feedback_expirado = state_clone.clone();
+    let state_for_listar_midias_expiradas = state_clone.clone();
+    let state_for_marcar_midia_purgada = state_clone.clone();
+    let state_for_resolver_destino_envio = state_clone.clone();
+    let state_for_marcar_mensagem_enviada = state_clone.clone();
+    let state_for_marcar_mensagem_falha_envio = state_clone.clone();
     let state_for_update_status = state_clone;
 
     let server = Server::from_env("DATA_POSTGRES")
@@ -442,6 +450,48 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(
                 async move { handler_send_outbound_message(state.atendimento.as_ref(), env).await },
             )
+        })
+        .route("ListarAtendimentosFeedbackVencido", move |env| {
+            let state = state_for_listar_feedback_vencido.clone();
+            Box::pin(async move {
+                handler_listar_feedback_vencido(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("MarcarFeedbackExpirado", move |env| {
+            let state = state_for_marcar_feedback_expirado.clone();
+            Box::pin(async move {
+                handler_marcar_feedback_expirado(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("ListarMidiasExpiradas", move |env| {
+            let state = state_for_listar_midias_expiradas.clone();
+            Box::pin(async move {
+                handler_listar_midias_expiradas(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("MarcarMidiaPurgada", move |env| {
+            let state = state_for_marcar_midia_purgada.clone();
+            Box::pin(
+                async move { handler_marcar_midia_purgada(state.atendimento.as_ref(), env).await },
+            )
+        })
+        .route("ResolverDestinoEnvioOutbound", move |env| {
+            let state = state_for_resolver_destino_envio.clone();
+            Box::pin(async move {
+                handler_resolver_destino_envio_outbound(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("MarcarMensagemEnviada", move |env| {
+            let state = state_for_marcar_mensagem_enviada.clone();
+            Box::pin(async move {
+                handler_marcar_mensagem_enviada(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("MarcarMensagemFalhaEnvio", move |env| {
+            let state = state_for_marcar_mensagem_falha_envio.clone();
+            Box::pin(async move {
+                handler_marcar_mensagem_falha_envio(state.atendimento.as_ref(), env).await
+            })
         })
         .route("VerifyCredentials", move |env| {
             let state = state_for_verify.clone();
@@ -1492,7 +1542,8 @@ async fn handler_move_atendimento_etapa(
 
 /// Envia (persiste) uma mensagem outbound do atendente humano no thread do atendimento
 /// (WS-6.3). Reaproveita `persistir_mensagem` (padrão Outbox já existente); o disparo do
-/// envio real ao WhatsApp é responsabilidade do consumer do outbox (fora deste escopo).
+/// envio real ao WhatsApp é feito pelo worker ao consumir "message.persisted" com
+/// sender_id="atendente" (N1.3 — ver `resolver_destino_envio_outbound` abaixo).
 async fn handler_send_outbound_message(
     store: &dyn ports::AtendimentoStore,
     env: Envelope,
@@ -1546,6 +1597,233 @@ async fn handler_send_outbound_message(
             serde_json::json!({ "message_id": msg.id }),
         ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// Varredura cross-tenant (scheduler do worker, F4.3b): atendimentos com feedback vencido.
+/// `limite`/`ttl_horas` vêm do payload; sem eles, usa defaults conservadores.
+async fn handler_listar_feedback_vencido(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let limite = payload_json
+        .get("limite")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(100);
+    let ttl_horas = payload_json
+        .get("ttl_horas")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(48);
+
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_feedback_vencido(&ctx, limite, ttl_horas).await {
+        Ok(list) => ok_reply(
+            &env,
+            "ListarAtendimentosFeedbackVencidoReply",
+            serde_json::json!({ "atendimentos": list }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// Marca um atendimento (tenant-scoped) como tendo o feedback expirado (idempotente).
+async fn handler_marcar_feedback_expirado(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.marcar_feedback_expirado(&ctx, atendimento_id).await {
+        Ok(()) => ok_reply(
+            &env,
+            "MarcarFeedbackExpiradoReply",
+            serde_json::json!({ "status": "ok" }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// Varredura cross-tenant (scheduler do worker, F4.3b): mensagens com mídia vencida.
+async fn handler_listar_midias_expiradas(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let limite = payload_json
+        .get("limite")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(100);
+    let idade_max_dias = payload_json
+        .get("idade_max_dias")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(30);
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .listar_midias_expiradas(&ctx, limite, idade_max_dias)
+        .await
+    {
+        Ok(list) => ok_reply(
+            &env,
+            "ListarMidiasExpiradasReply",
+            serde_json::json!({ "mensagens": list }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// Marca a mídia de uma mensagem (tenant-scoped) como purga solicitada (idempotente).
+async fn handler_marcar_midia_purgada(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let mensagem_id = match payload_json.get("mensagem_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("mensagem_id ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.marcar_midia_purgada(&ctx, mensagem_id).await {
+        Ok(()) => ok_reply(
+            &env,
+            "MarcarMidiaPurgadaReply",
+            serde_json::json!({ "status": "ok" }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// Resolve instância/telefone de destino para o envio outbound de uma mensagem do
+/// atendente (elo outbox->outbound, N1.3).
+async fn handler_resolver_destino_envio_outbound(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let mensagem_id = match payload_json.get("mensagem_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("mensagem_id ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .resolver_destino_envio_outbound(&ctx, mensagem_id)
+        .await
+    {
+        Ok(Some(destino)) => ok_reply(
+            &env,
+            "ResolverDestinoEnvioOutboundReply",
+            serde_json::to_value(&destino).unwrap_or_default(),
+        ),
+        Ok(None) => erro(
+            error_core::AppError::Database("não encontrado: destino de envio".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// Marca a mensagem outbound (tenant-scoped) como enviada com sucesso ao provedor.
+async fn handler_marcar_mensagem_enviada(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let mensagem_id = match payload_json.get("mensagem_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("mensagem_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let message_id_whatsapp = payload_json
+        .get("message_id_whatsapp")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .marcar_mensagem_enviada(&ctx, mensagem_id, message_id_whatsapp)
+        .await
+    {
+        Ok(()) => ok_reply(
+            &env,
+            "MarcarMensagemEnviadaReply",
+            serde_json::json!({ "status": "ok" }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// Marca falha definitiva no envio outbound (tenant-scoped), após esgotar retries.
+async fn handler_marcar_mensagem_falha_envio(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let mensagem_id = match payload_json.get("mensagem_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("mensagem_id ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.marcar_mensagem_falha_envio(&ctx, mensagem_id).await {
+        Ok(()) => ok_reply(
+            &env,
+            "MarcarMensagemFalhaEnvioReply",
+            serde_json::json!({ "status": "ok" }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }
 

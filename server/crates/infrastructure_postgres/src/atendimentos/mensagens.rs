@@ -32,6 +32,18 @@ pub struct Mensagem {
     pub data_lida: Option<DateTime<Utc>>,
 }
 
+/// Destino resolvido para o envio outbound de uma mensagem do atendente (N1.3):
+/// instância WhatsApp (id no banco) + telefone do contato + status_envio atual
+/// (para o consumidor decidir se é reentrega idempotente do consumer group).
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+pub struct DestinoEnvioOutbound {
+    pub atendimento_id: i32,
+    pub instance_id: i32,
+    pub to_number: String,
+    pub status_envio: String,
+    pub conteudo: String,
+}
+
 #[async_trait]
 pub trait MensagemRepository: Send + Sync {
     async fn criar(
@@ -77,6 +89,51 @@ pub trait MensagemRepository: Send + Sync {
         ctx: &RequestContext,
         message_id_whatsapp: &str,
         status: &str,
+    ) -> Result<(), DbError>;
+
+    /// Varredura CROSS-TENANT (scheduler do worker, F4.3b): mensagens com mídia
+    /// ainda não purgada e mais antigas que `idade_max_dias`. `ctx` só para escopo.
+    async fn listar_midias_expiradas(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        limite: i64,
+        idade_max_dias: i64,
+    ) -> Result<Vec<Mensagem>, DbError>;
+
+    /// Marca a mídia da mensagem como purga solicitada (idempotente).
+    async fn marcar_midia_purgada(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+    ) -> Result<(), DbError>;
+
+    /// Resolve o destino de envio (instância + telefone) de uma mensagem outbound
+    /// do atendente, a partir do contato do atendimento (WS-6.3 / N1.3).
+    async fn resolver_destino_envio_outbound(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+    ) -> Result<Option<DestinoEnvioOutbound>, DbError>;
+
+    /// Marca a mensagem como enviada com sucesso ao provedor, gravando o
+    /// `message_id_whatsapp` (stanzaId) para correlação futura com webhooks de status.
+    async fn marcar_mensagem_enviada(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+        message_id_whatsapp: &str,
+    ) -> Result<(), DbError>;
+
+    /// Marca falha definitiva no envio (após esgotar as tentativas de retry).
+    async fn marcar_mensagem_falha_envio(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        mensagem_id: i32,
     ) -> Result<(), DbError>;
 }
 
@@ -212,6 +269,123 @@ impl MensagemRepository for PostgresMensagemRepository {
         .bind(ctx.tenant_id)
         .bind(message_id_whatsapp)
         .bind(status)
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(limite = limite, idade_max_dias = idade_max_dias))]
+    async fn listar_midias_expiradas(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        limite: i64,
+        idade_max_dias: i64,
+    ) -> Result<Vec<Mensagem>, DbError> {
+        ctx.exigir_qualquer(&["operacional:admin"])?;
+        // Cross-tenant por desenho (scheduler): exige pool com BYPASSRLS (admin_pool).
+        let rows = sqlx::query_as::<_, Mensagem>(
+            r#"SELECT id, tenant_id, atendimento_id, tipo, conteudo, remetente,
+                      timestamp, message_id_whatsapp, metadados, respondida, lido,
+                      resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
+                      arquivo_midia, analise_midia, resumo_midia, mensagem_citada_id,
+                      quoted_preview, status_envio, data_entregue, data_lida
+               FROM oraculo_mensagem
+               WHERE arquivo_midia IS NOT NULL
+                 AND midia_purgada_em IS NULL
+                 AND timestamp < NOW() - ($1 || ' days')::interval
+               ORDER BY timestamp ASC
+               LIMIT $2"#,
+        )
+        .bind(idade_max_dias.to_string())
+        .bind(limite)
+        .fetch_all(&mut **tx)
+        .await?;
+        Ok(rows)
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, mensagem_id = mensagem_id))]
+    async fn marcar_midia_purgada(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+    ) -> Result<(), DbError> {
+        sqlx::query(
+            r#"UPDATE oraculo_mensagem
+               SET midia_purgada_em = NOW()
+               WHERE tenant_id = $1 AND id = $2 AND midia_purgada_em IS NULL"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(mensagem_id)
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, mensagem_id = mensagem_id))]
+    async fn resolver_destino_envio_outbound(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+    ) -> Result<Option<DestinoEnvioOutbound>, DbError> {
+        let row = sqlx::query_as::<_, DestinoEnvioOutbound>(
+            r#"SELECT om.atendimento_id, wc.instance_id, oc.telefone AS to_number,
+                      om.status_envio, om.conteudo
+               FROM oraculo_mensagem om
+               JOIN oraculo_atendimento oa
+                 ON oa.id = om.atendimento_id AND oa.tenant_id = om.tenant_id
+               JOIN oraculo_contato oc
+                 ON oc.id = oa.contato_id AND oc.tenant_id = oa.tenant_id
+               JOIN whatsapp_contact wc
+                 ON wc.contact_id = oc.id AND wc.tenant_id = oc.tenant_id AND wc.active = true
+               WHERE om.tenant_id = $1 AND om.id = $2 AND oc.telefone IS NOT NULL
+               ORDER BY wc.updated_at DESC
+               LIMIT 1"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(mensagem_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+        Ok(row)
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, mensagem_id = mensagem_id))]
+    async fn marcar_mensagem_enviada(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+        message_id_whatsapp: &str,
+    ) -> Result<(), DbError> {
+        sqlx::query(
+            r#"UPDATE oraculo_mensagem
+               SET status_envio = 'sent', message_id_whatsapp = $3
+               WHERE tenant_id = $1 AND id = $2 AND status_envio = 'pending'"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(mensagem_id)
+        .bind(message_id_whatsapp)
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, mensagem_id = mensagem_id))]
+    async fn marcar_mensagem_falha_envio(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+    ) -> Result<(), DbError> {
+        sqlx::query(
+            r#"UPDATE oraculo_mensagem
+               SET status_envio = 'failed'
+               WHERE tenant_id = $1 AND id = $2 AND status_envio = 'pending'"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(mensagem_id)
         .execute(&mut **tx)
         .await?;
         Ok(())
