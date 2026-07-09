@@ -4,10 +4,12 @@
     {
       "slug": "n1-fechamento-mvp-scheduler",
       "path": "plans/n1-fechamento-mvp-scheduler.md",
-      "title": "Fase N1 — Fechamento do MVP + Scheduler do Worker",
-      "summary": "Primeira fase do backlog pós-MVP (N1–N5). **DoD transversal inegociável (herdado):**",
+      "title": "n1-fechamento-mvp-scheduler",
       "linkedAt": "2026-07-06T21:39:02.195Z",
-      "status": "completed"
+      "status": "completed",
+      "approval_status": "approved",
+      "approved_at": "2026-07-07T10:45:03.277Z",
+      "approved_by": "architect"
     }
   ],
   "primary": "n1-fechamento-mvp-scheduler"

@@ -1,0 +1,39 @@
+{
+  "id": "3a616295-4b90-4ccc-b693-fb46c8d164e0",
+  "title": "Fase N1 — Fechamento do MVP + Scheduler do Worker: Validation",
+  "description": "Derived from linked plan \"n1-fechamento-mvp-scheduler\" for PREVC phase V (Validation). Plan phases: Validation. Expected outputs: test-report, review-comments, approval.",
+  "sessionId": "fd8d332d-33af-4912-83e8-163660d737d3",
+  "owner": "qa",
+  "status": "completed",
+  "inputs": [],
+  "expectedOutputs": [
+    "test-report",
+    "review-comments",
+    "approval"
+  ],
+  "acceptanceCriteria": [
+    "Complete Validation"
+  ],
+  "requiredSensors": [
+    "tests",
+    "lint"
+  ],
+  "requiredArtifacts": [],
+  "createdAt": "2026-07-09T22:08:10.620Z",
+  "updatedAt": "2026-07-09T22:08:20.602Z",
+  "metadata": {
+    "requirementsSource": "phase-defaults",
+    "source": "workflow.plan",
+    "planSlug": "n1-fechamento-mvp-scheduler",
+    "prevcPhase": "V",
+    "planPhaseIds": [
+      "phase-v"
+    ],
+    "planPhaseNames": [
+      "Validation"
+    ],
+    "planPhaseSummaries": [],
+    "derivedFrom": "linked-plan",
+    "completionReason": "Workflow advanced from V to C"
+  }
+}
