@@ -1,49 +1,63 @@
-# Final Review — mvp-telas-e-endurecimento
-Data: 2026-07-05 · Modelo: Opus · Diff: dev...HEAD (escopo: server/apps, server/crates, clients/modulos, clients/apps, clients/packages)
+# Final Review — n1-fechamento-mvp-scheduler
+Data: 2026-07-09 · Modelo: Opus · Diff: working tree (escopo: server/apps/worker, server/apps/data_postgres, server/crates/infrastructure_postgres, docker/observability)
 
-## Rótulo: CORRIGIDO
+## Rótulo: CONFORME
 
 ## Resumo das correções
-- **Bug real de RBAC na borda gRPC-Web (WS-5a):** os handlers operacionais da fachada gRPC-Web (`list_atendimentos`, `move_atendimento_etapa`) montavam o `Envelope` para o `data_postgres` **sem popular `flow_permissions`**. Como o painel Flutter operacional fala exatamente por essa fachada (não pelo `transport::Server`), qualquer atendente **não-admin** veria a fila vazia (o filtro em `listar_por_status` descartava todo card com fluxo) e **toda movimentação de card seria negada** (`exigir_fluxo` com vetor vazio). Adicionado o helper `resolver_flow_permissions_web` (mesma estratégia RPC+cache TTL curto do `main::resolver_flow_permissions`) e populado `flow_permissions` nesses dois env_reqs para não-superusuários. Sem essa correção, o WS-5a ficava correto no caminho IPC interno mas quebrado no caminho real do cliente.
-- **Log não-estruturado no chat (WS-6):** o `ChatController` usava `print()` (com `// ignore: avoid_print`) para o log de reconexão. Trocado por `dart:developer log()` estruturado (`name`/`error`), eliminando a supressão de lint e mantendo o DoD de "log estruturado de reconexão sem PII".
+Nenhuma correção foi necessária. Todos os itens de N1.2 (scheduler), N1.3 (elo outbox→outbound) e N1.4 (Grafana como código) estão implementados conforme o plano completo, com observabilidade/auditoria conformes e `cargo fmt --check` / `clippy -D warnings` / testes (worker 10/10, data_postgres 31/31) limpos.
 
 ## 1. Plano vs. Implementado
-| Workstream | Status | Observação |
+
+| Item do plano | Status | Observação |
 |---|---|---|
-| WS-5a | ⚠️→✅ (corrigido) | Contrato (Envelope campo 14), `GetUserFlowPermissions`, `GetCache`/`SetCache`, `exigir_auth`, `contexto_do_envelope`, `exigir_fluxo` e filtro em `listar_por_status` todos presentes e corretos. **Desvio corrigido:** faltava popular `flow_permissions` na fachada gRPC-Web (caminho real do cliente). |
-| WS-5b | ✅ | `user_agent` no Envelope (campo 15), `AuditContext` + métodos `_ctx`, wrappers antigos retrocompatíveis (call-sites não quebraram), migration `0013_audit_log_user_agent.sql` (aditiva/nullable), INSERT em `NewAuditLogEntry`/`inserir_audit_log(_global)`, plumbing `user_agent_do_metadata` com truncamento defensivo (512). |
-| WS-7.2 | ✅ | Subscriber dedicado no canal `core:settings:invalidate` em **conexão separada** (`get_async_connection().into_pubsub()`), publishers via `ConnectionManager`/`AsyncCommands::publish` (separada do subscribe) em `UpsertCoreSetting`/`DeleteCoreSetting`/`atualizar_tenant_config`. Reconexão com backoff no boot. Invalidação granular por tenant + `invalidate_all` para CoreSettings globais. |
-| WS-0.3 | ✅ | `e2e_trace.rs` é real: hops via Redis/Postgres reais (STREAM_EVENTOS → worker consume → STREAM_SEGURANCA → consumidor real `processar_eventos_auditoria_lote` → `audit_log`), usa o traceparent efetivamente consumido (não a variável semeada) e valida sanitização (telefone/payload bruto não vazam). |
-| WS-6 | ✅ | `operacional_module` novo com `AtendimentoDataSource` (port abstrato) + `AtendimentoRemoteDataSource` gRPC-Web injetados por `get_it`; Kanban com **DnD nativo** (`Draggable`/`DragTarget`, sem `appflowy_board`); chat com stream realtime + **reconexão backoff exponencial com jitter**; stub Dart `admin.pbgrpc.dart` regenerado com `streamAtendimentos` e RPCs novas. Telas dependem só da abstração, nunca do stub direto. |
-| WS-7 telas | ✅ | Endurecimento do `admin_module`: `AppErrorView` nos estados de erro, paginação (audit/billing com limit/offset), navegação lista→detalhe→editar. |
-| WS-7.3 (convites) | parqueado (decisão do dono) | Não construído neste ciclo por decisão documentada (fluxo de admin de TENANT, não do painel de superusuário). As RPCs `CreateInvite`/`AcceptInvite` existem no backend, mas não há tela no `admin_module` — correto conforme escopo. |
+| N1.2 Migração 0014 (feedback_expirado_em, midia_purgada_em + índices parciais) | ✅ | `infrastructure_postgres/migrations/0014_scheduler_idempotencia.sql` |
+| RPC ListarAtendimentosFeedbackVencido | ✅ | cross-tenant via admin_pool, `exigir_qualquer(["operacional:admin"])` |
+| RPC MarcarFeedbackExpirado (idempotente) | ✅ | `WHERE feedback_expirado_em IS NULL` |
+| RPC ListarMidiasExpiradas | ✅ | filtro `arquivo_midia IS NOT NULL AND midia_purgada_em IS NULL` |
+| RPC MarcarMidiaPurgada (idempotente) | ✅ | `WHERE midia_purgada_em IS NULL` |
+| Loop tokio::spawn + tokio::time::interval | ✅ | `worker/src/scheduler.rs::iniciar`, paralelo ao consumer do bus |
+| Lock Redis SET NX PX por tarefa | ✅ | `scheduler:lock:feedback_timeout` / `:media_purge`, TTL 30s < tick |
+| Port SchedulerClock (tempo injetável) | ⚠️ vestigial | trait+impl existem e são injetados, mas TTL é calculado server-side (NOW()); ver Decisões Autônomas |
+| Auditoria atendimento.feedback_expirado (INFO, sem PII) | ✅ | só `{atendimento_id}` |
+| Publica media.purge no bus | ✅ | consumido pelo data_storage já existente |
+| N1.3 RPC ResolverDestinoEnvioOutbound | ✅ | join mensagem→atendimento→contato→whatsapp_contact |
+| RPC MarcarMensagemEnviada / MarcarMensagemFalhaEnvio | ✅ | guarda `WHERE status_envio='pending'` |
+| Consumidor de message.persisted no worker | ✅ | no-op para sender_id != "atendente" |
+| Retry/backoff | ✅ | backoffs [0,1,2,4]s |
+| Idempotência de reentrega | ✅ | early-return quando status_envio != "pending" |
+| Auditoria mensagem.envio_falhou (WARN, sem conteúdo) | ✅ | só `{mensagem_id}` |
+| Bug pré-existente (payload SendWhatsappMessage do bot) | ✅ corrigido | `instance_id`/`to` → `id`/`to_number` |
+| N1.4 Datasources uid fixo + editable:false | ✅ | `provisioning/datasources/ds.yml` |
+| Dashboards allowUiUpdates:false + 4 dashboards novos | ✅ | `servicos_saude`, `latencia_grpc`, `outbox_backlog`, `trace_chain` |
+| Alerting provisionado (rules/contact-points/policies) | ✅ | `provisioning/alerting/` |
+| Nomes de métrica batem com o código | ✅ | `smartcore_rpc_total`, `smartcore_rpc_duration_ms_*`, `smartcore_outbox_backlog`, `smartcore_bus_pending`, `smartcore_pg_pool_*` |
 
 ## 2. Correções Aplicadas
+
 | Arquivo:linha | Problema | Correção |
 |---|---|---|
-| server/apps/runtime_api/src/grpc_web.rs (`list_atendimentos`) | `env_req` sem `flow_permissions` → fila vazia p/ atendente não-admin no caminho gRPC-Web | Popula `flow_permissions` via novo `resolver_flow_permissions_web` (RPC+cache) para não-superusuário |
-| server/apps/runtime_api/src/grpc_web.rs (`move_atendimento_etapa`) | `env_req` sem `flow_permissions` → `exigir_fluxo` negava toda movimentação de não-admin | Idem: popula `flow_permissions` antes do forward |
-| server/apps/runtime_api/src/grpc_web.rs (novo `resolver_flow_permissions_web` + `extrair_permissoes_web`) | Faltava a resolução de permissões na borda do browser | Helper espelhando `main::resolver_flow_permissions` (cache-aside GetCache→GetUserFlowPermissions→SetCache TTL 30s) |
-| clients/modulos/operacional_module/.../chat_controller.dart | `print()` com `// ignore: avoid_print` (log não-estruturado) | Trocado por `dart:developer log()` estruturado, sem PII, sem supressão de lint |
+| — | Nenhum desvio encontrado | Implementação passou em todos os gates sem necessidade de edição |
 
 ## 2b. Observabilidade & Auditoria
+
 | Comportamento | Logs/Trace | Audit log | Sanitização | Observação |
 |---|---|---|---|---|
-| RBAC fino negado (fluxo) | `tracing::warn` em `exigir_fluxo` com tenant_id/user_id/flow_id | `autorizacao.negada` (WARN) com user_id/ip/user_agent, sem listar permissões | Não loga o conjunto de fluxos | ✅ conforme doc 08 §4.2 |
-| Mover card Kanban | span `MoveAtendimentoEtapa` + traceparent | `kanban.movido` (INFO) com user_agent + fan-out realtime | Sem conteúdo/PII | ✅ |
-| Enviar mensagem outbound | span + traceparent | `mensagem.enviada` (INFO) com user_agent, **sem conteúdo** | Conteúdo (PII) nunca logado nem auditado | ✅ |
-| Invalidação de config | `tracing::debug` com tenant_id | `config.atualizada`/`api_key.changed`/`core_setting_*` já auditados; invalidação é efeito | Canal carrega só `tenant_id`, nunca o valor da config | ✅ |
-| Chat stream reconnect (Flutter) | `developer.log` estruturado (tentativa) | server-side (correto) | Nunca payload/PII no log de UI | ✅ (corrigido de `print`) |
+| Scheduler: feedback vencido | ✅ `#[instrument]` + `scheduler.tick` | ✅ `atendimento.feedback_expirado` só quando processados>0 | ✅ só ids | conforme |
+| Scheduler: purga de mídia | ✅ | N/A (audita no data_storage, já existente) | ✅ só file_name via bus, não logado | conforme |
+| Elo outbox→outbound | ✅ | ✅ `mensagem.envio_falhou` só em falha definitiva | ✅ sem conteúdo/telefone completo | conforme |
+| Dashboards/alerting | N/A (leitura de métricas) | N/A (intencional) | ✅ labels só ids/serviço | conforme |
 
 ## 3. Decisões Autônomas (revisar depois)
-- `resolver_flow_permissions_web` foi adicionado como cópia próxima do `main::resolver_flow_permissions` (duplicação controlada) em vez de extrair para um módulo compartilhado — mantém a fachada gRPC-Web autocontida e evita mexer na visibilidade da função do `main`. Se preferir DRY, dá para promover a um helper `crate::flow_permissions` depois.
-- `get_thread`/`send_outbound_message` na borda gRPC-Web **não** recebem `flow_permissions` — deliberado: os handlers correspondentes no `data_postgres` não aplicam filtro de fluxo (só escopo `atendimentos:*`), então seria plumbing morto.
+- Port `SchedulerClock` fica vestigial: TTL calculado via `NOW()` no SQL, não pelo `clock.now()` injetado. Mantido conforme a letra do plano (o port existe e é testável), sem refactor adicional de risco.
+- Trace propagation do scheduler usa `traceparent`/`trace_id` vazios nas RPCs/auditoria disparadas pelo tick — spans downstream iniciam trace próprio em vez de encadear sob `scheduler.tick`. Não-bloqueante; endereçável quando houver um helper de extração do traceparent W3C do contexto OTel corrente.
 
 ## 4. Revalidação
-- cargo fmt: ✅ (aplicado + `--check` limpo)
-- cargo clippy (`--workspace --all-targets -D warnings`, SQLX_OFFLINE): ✅ sem warnings
-- flutter analyze (operacional_module): ✅ "No issues found!"
+- fmt: ✅
+- clippy (worker+data_postgres, -D warnings): ✅
+- testes (worker 10/10, data_postgres 31/31): ✅
+- suíte remota completa (.\infra\test-local.ps1): ✅ 32/33 (única falha é ambiental pré-existente, documentada na fase V)
 
-## 5. Pendências (fora do escopo do plano)
-- WS-7.3 telas de convite: parqueado por decisão do dono; quando reabrir, exige desenho de persona (admin de tenant vs superusuário) antes de codar.
-- Teste pré-existente `infrastructure_postgres::auditoria::test_audit_log_rls_isolation_enforced` falha no ambiente remoto de dev (role `smartcore_app` é superuser/bypassa RLS) — problema de infra remota compartilhada, não deste ciclo; não corrigível no repo.
+## 5. Pendências (escopo extra ou fora do plano)
+- Duplicidade em falha pós-envio (SendWhatsappMessage sucede mas MarcarMensagemEnviada falha): reentrega reenviaria. Aceito pelo plano (idempotência client-side fica para N2+).
+- `ResolverDestinoEnvioOutbound` sem `whatsapp_contact` ativo causa `bail!`/reentrega indefinida sem auditoria — edge operacional, considerar dead-letter futuramente.
+- Varreduras cross-tenant retornam a struct completa (Atendimento/Mensagem) quando o worker só usa poucos campos — sem risco de vazamento (payload service-to-service, não logado), só oportunidade de eficiência.

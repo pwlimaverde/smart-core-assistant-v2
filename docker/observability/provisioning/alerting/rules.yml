@@ -1,0 +1,120 @@
+apiVersion: 1
+
+# Regras de alerta provisionadas como código (N1.4). Recursos provisionados não
+# são editáveis pela UI; recarregar via restart do Grafana ou Admin API.
+# Padrão de 3 estágios por regra (query A -> reduce B -> threshold C), igual ao
+# que o editor de alertas do Grafana gera: `condition` sempre aponta para o
+# estágio de threshold.
+groups:
+  - orgId: 1
+    name: smartcore-core
+    folder: smartcore
+    interval: 60s
+    rules:
+      - uid: outbox-backlog-alto
+        title: Backlog de outbox alto
+        condition: C
+        for: 5m
+        noDataState: NoData
+        execErrState: Alerting
+        labels:
+          severidade: critica
+        annotations:
+          resumo: "Outbox do PostgreSQL acumulando eventos não publicados (OutboxRelay possivelmente parado ou Redis indisponível)."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: "smartcore_outbox_backlog"
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [100]
+
+      - uid: bus-pending-alto
+        title: Lag do bus (PEL do Redis Streams) alto
+        condition: C
+        for: 5m
+        noDataState: NoData
+        execErrState: Alerting
+        labels:
+          severidade: critica
+        annotations:
+          resumo: "Mensagens pendentes na PEL do Redis Streams acima do limiar — consumidores (worker/data_postgres) possivelmente travados ou lentos."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: "smartcore_bus_pending"
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [500]
+
+      - uid: taxa-erro-grpc-alta
+        title: Taxa de erro gRPC/RPC interna alta
+        condition: C
+        for: 5m
+        noDataState: NoData
+        execErrState: Alerting
+        labels:
+          severidade: alta
+        annotations:
+          resumo: "Mais de 5% das chamadas RPC internas (transport::Server) estão falhando nos últimos 5 minutos."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: "100 * sum(rate(smartcore_rpc_total{error=\"true\"}[5m])) / sum(rate(smartcore_rpc_total[5m]))"
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [5]

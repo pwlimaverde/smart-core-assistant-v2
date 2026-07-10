@@ -2,6 +2,64 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-07-09] - Fase N1: Fechamento do MVP + Scheduler do Worker
+
+> Ciclo PREVC `n1-fechamento-mvp-scheduler` fechado e arquivado via `prevc-final-review`.
+> Final-review: qualidade **CONFORME** (nenhuma correção necessária). Fecha a única lacuna
+> estrutural remanescente da F4 (scheduler temporal do worker) e o elo outbox→outbound do
+> atendente; provisiona observabilidade (dashboards + alertas Grafana) como código.
+
+### Adicionado
+
+- **Scheduler temporal do `worker` (F4.3b):** `worker/src/scheduler.rs` novo — loop
+  `tokio::spawn` + `tokio::time::interval` (default 60s, configurável via
+  `SMARTCORE_SCHEDULER_TICK_SECS`) paralelo ao consumidor do bus. Port `Clock`
+  (`SystemClock`) para tempo injetável. Duas tarefas, cada uma sob lock Redis
+  cross-tenant `SET NX PX` (`scheduler:lock:feedback_timeout` / `:media_purge`):
+  timeout de feedback vencido (transiciona e audita `atendimento.feedback_expirado`)
+  e disparo de purga de mídia expirada (publica `media.purge` no bus, já consumido
+  pelo `data_storage`).
+- **Migração `0014_scheduler_idempotencia.sql`:** colunas `feedback_expirado_em`
+  (`oraculo_atendimento`) e `midia_purgada_em` (`oraculo_mensagem`) + índices
+  parciais, garantindo que 2 ticks seguidos não dupliquem efeito.
+- **RPCs de varredura no `data_postgres`:** `ListarAtendimentosFeedbackVencido`,
+  `MarcarFeedbackExpirado`, `ListarMidiasExpiradas`, `MarcarMidiaPurgada` — as duas
+  varreduras são cross-tenant via `admin_pool` (BYPASSRLS), mesmo padrão de
+  `AdminListAllConnectedInstances`.
+- **Elo outbox → outbound do atendente (WS-6.3 / N1.3):** worker consome
+  `message.persisted` (já drenado pelo `OutboxRelay`) e, quando `sender_id ==
+  "atendente"`, resolve destino (`ResolverDestinoEnvioOutbound`, novo RPC) e envia
+  via `data_whatsapp::SendWhatsappMessage` com retry/backoff (1/2/4s) e
+  idempotência por `status_envio` (reentrega do consumer group vira no-op).
+  Sucesso grava o `stanzaId` (`MarcarMensagemEnviada`); falha definitiva audita
+  `mensagem.envio_falhou` (WARN, sem conteúdo) via `MarcarMensagemFalhaEnvio`.
+- **Dashboards e alertas Grafana como código (N1.4):**
+  `docker/observability/provisioning/dashboards/json/{servicos_saude,latencia_grpc,
+  outbox_backlog,trace_chain}.json` (novo) e `provisioning/alerting/{rules,
+  contact-points,notification-policies}.yml` (novo); `allowUiUpdates: false` e
+  `editable: false` nos providers/datasources para dashboards-como-código de fato.
+
+### Corrigido
+
+- **Bug pré-existente no envio do bot:** `worker` montava o payload de
+  `SendWhatsappMessage` com as chaves `instance_id`/`to`, mas o handler em
+  `data_whatsapp` sempre esperou `id`/`to_number` — corrigido no mesmo call site
+  tocado pelo elo outbox→outbound.
+- **Duplicidade de prefixo de métrica no `otel-collector`:** `namespace:
+  "smartcore"` do exporter Prometheus duplicava o prefixo já presente nos nomes de
+  métrica da aplicação (`smartcore_rpc_duration_ms` → `smartcore_smartcore_...`).
+  Removido; adicionado `resource_to_telemetry_conversion.enabled: true` para expor
+  `service_name` como label por métrica (pré-requisito dos dashboards por serviço).
+
+### Pendências remanescentes (trabalho futuro)
+- TTL de feedback via env var global (`SMARTCORE_SCHEDULER_FEEDBACK_TTL_HORAS`), não
+  per-tenant — override por tenant fica para N4 (retenção por política de plano).
+- Sem chave de idempotência client-side para o envio outbound (depende de dedupe do
+  provedor por `stanzaId`); considerar dead-letter para falha de resolução de
+  destino sem `whatsapp_contact` ativo.
+- Validação de dashboards/alertas com tráfego real e Grafana rodando fica para
+  verificação manual em dev (ambiente de execução deste ciclo não tinha Docker).
+
 ## [2026-06-30] - Finalização do MVP Operacional (parcial WS-0..WS-4)
 
 > Ciclo PREVC `finalizacao-mvp-operacional` fechado como **MVP PARCIAL** e arquivado via

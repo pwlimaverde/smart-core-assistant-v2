@@ -4,7 +4,7 @@
 
 use async_trait::async_trait;
 use infrastructure_postgres::atendimentos::atendimentos::Atendimento;
-use infrastructure_postgres::atendimentos::mensagens::Mensagem;
+use infrastructure_postgres::atendimentos::mensagens::{DestinoEnvioOutbound, Mensagem};
 use infrastructure_postgres::{DbError, RequestContext};
 
 /// Resultado da aplicação da política de ticket/Kanban sobre um atendimento (WS-2.4).
@@ -99,5 +99,60 @@ pub trait AtendimentoStore: Send + Sync {
         atendimento_id: i32,
         etapa_destino_id: i32,
         motivo: &str,
+    ) -> Result<(), DbError>;
+
+    /// Varredura CROSS-TENANT do scheduler do worker (F4.3b): atendimentos
+    /// resolvidos aguardando feedback além do TTL. Exige `admin_pool` (BYPASSRLS).
+    async fn listar_feedback_vencido(
+        &self,
+        ctx: &RequestContext,
+        limite: i64,
+        ttl_horas: i64,
+    ) -> Result<Vec<Atendimento>, DbError>;
+
+    /// Marca o atendimento (tenant-scoped) como tendo o feedback expirado.
+    async fn marcar_feedback_expirado(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<(), DbError>;
+
+    /// Varredura CROSS-TENANT do scheduler do worker (F4.3b): mensagens com mídia
+    /// vencida (idade além do limite). Exige `admin_pool` (BYPASSRLS).
+    async fn listar_midias_expiradas(
+        &self,
+        ctx: &RequestContext,
+        limite: i64,
+        idade_max_dias: i64,
+    ) -> Result<Vec<Mensagem>, DbError>;
+
+    /// Marca a mídia da mensagem (tenant-scoped) como purga solicitada.
+    async fn marcar_midia_purgada(
+        &self,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+    ) -> Result<(), DbError>;
+
+    /// Resolve instância/telefone de destino para o envio outbound de uma
+    /// mensagem do atendente (elo outbox->outbound, N1.3).
+    async fn resolver_destino_envio_outbound(
+        &self,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+    ) -> Result<Option<DestinoEnvioOutbound>, DbError>;
+
+    /// Marca a mensagem outbound como enviada com sucesso, gravando o stanzaId.
+    async fn marcar_mensagem_enviada(
+        &self,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+        message_id_whatsapp: &str,
+    ) -> Result<(), DbError>;
+
+    /// Marca falha definitiva no envio outbound (após esgotar retries).
+    async fn marcar_mensagem_falha_envio(
+        &self,
+        ctx: &RequestContext,
+        mensagem_id: i32,
     ) -> Result<(), DbError>;
 }

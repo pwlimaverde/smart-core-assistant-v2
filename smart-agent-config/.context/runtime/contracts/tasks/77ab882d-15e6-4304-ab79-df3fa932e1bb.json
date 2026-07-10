@@ -4,7 +4,7 @@
   "description": "Derived from linked plan \"n1-fechamento-mvp-scheduler\" for PREVC phase R (Review). Plan phases: Review. Expected outputs: architecture, adr, design-spec.",
   "sessionId": "fd8d332d-33af-4912-83e8-163660d737d3",
   "owner": "architect",
-  "status": "ready",
+  "status": "completed",
   "inputs": [],
   "expectedOutputs": [
     "architecture",
@@ -17,7 +17,7 @@
   "requiredSensors": [],
   "requiredArtifacts": [],
   "createdAt": "2026-07-07T09:58:19.460Z",
-  "updatedAt": "2026-07-07T09:58:19.460Z",
+  "updatedAt": "2026-07-07T10:45:08.273Z",
   "metadata": {
     "requirementsSource": "none",
     "source": "workflow.plan",
@@ -30,6 +30,7 @@
       "Review"
     ],
     "planPhaseSummaries": [],
-    "derivedFrom": "linked-plan"
+    "derivedFrom": "linked-plan",
+    "completionReason": "Workflow advanced from R to E"
   }
 }

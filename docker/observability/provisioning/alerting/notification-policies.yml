@@ -1,0 +1,12 @@
+apiVersion: 1
+
+# ATENÇÃO: a árvore de notification policies provisionada sobrescreve a árvore
+# inteira do Grafana (não é incremental) — por isso versiona-se completa aqui,
+# mesmo sendo só a política raiz nesta fase (N1.4).
+policies:
+  - orgId: 1
+    receiver: smartcore-default
+    group_by: ['alertname']
+    group_wait: 30s
+    group_interval: 5m
+    repeat_interval: 4h

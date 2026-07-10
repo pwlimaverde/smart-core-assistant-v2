@@ -1,14 +1,14 @@
 {
   "id": "fd8d332d-33af-4912-83e8-163660d737d3",
   "name": "n1-fechamento-mvp-scheduler",
-  "status": "active",
+  "status": "completed",
   "repoPath": "c:\\PROJETOS\\FULL-STACK\\smart-core-assistant-v2\\smart-agent-config",
   "createdAt": "2026-07-06T21:38:57.420Z",
-  "updatedAt": "2026-07-07T09:58:37.600Z",
+  "updatedAt": "2026-07-09T23:09:54.338Z",
   "startedAt": "2026-07-06T21:38:57.420Z",
-  "traceCount": 13,
-  "artifactCount": 0,
-  "checkpointCount": 1,
+  "traceCount": 45,
+  "artifactCount": 1,
+  "checkpointCount": 4,
   "checkpoints": [
     {
       "id": "56ce9b92-ea5a-492b-ad7a-446013920f50",
@@ -25,12 +25,58 @@
       },
       "artifactIds": [],
       "createdAt": "2026-07-07T09:58:19.494Z"
+    },
+    {
+      "id": "1294008d-9039-49ae-8a3e-927369124122",
+      "note": "Advanced workflow phase R -> E",
+      "data": {
+        "from": "R",
+        "to": "E",
+        "outputs": [
+          "decisões de arquitetura registradas e plano aprovado (architect)"
+        ],
+        "nextTaskContractId": "db4e1391-3acd-48f9-af90-43df6bc0e999"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-07T10:45:08.264Z"
+    },
+    {
+      "id": "b3caf600-6ffa-4175-ac66-c5630b466248",
+      "note": "Advanced workflow phase E -> V",
+      "data": {
+        "from": "E",
+        "to": "V",
+        "outputs": [
+          "cargo fmt --check limpo",
+          "cargo clippy -D warnings limpo (worker+data_postgres)",
+          "test-local.ps1: 32/33 (única falha é pre-existente/ambiental, documentada)",
+          "worker 10/10 e data_postgres 31/31 revalidados isolados"
+        ],
+        "nextTaskContractId": "3a616295-4b90-4ccc-b693-fb46c8d164e0"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-09T22:08:10.643Z"
+    },
+    {
+      "id": "1244b151-ca79-4d99-bf91-6fc9cb9ae3d0",
+      "note": "Advanced workflow phase V -> C",
+      "data": {
+        "from": "V",
+        "to": "C",
+        "outputs": [
+          "evidência real de validação Rust documentada na decisão da fase V (sensors genéricas do harness são npm-only, não aplicáveis a este monorepo)"
+        ],
+        "nextTaskContractId": "33b7808b-916c-4402-8d7e-20556df7ca0d"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-09T22:08:20.593Z"
     }
   ],
   "metadata": {
     "workflow": true,
     "description": "Fechamento do MVP pós mvp-telas-e-endurecimento: merge/validação em dev, scheduler temporal do worker (timeout de feedback + disparo de purga de mídia com lock Redis e idempotência), elo outbox→outbound do atendente com retry/backoff e status_envio, e dashboards/alertas Grafana provisionados como código. Envolve múltiplos serviços (worker, data_postgres, data_storage, data_whatsapp), RPCs novos e auditoria."
   },
-  "lastTraceAt": "2026-07-07T09:58:37.600Z",
-  "lastCheckpointAt": "2026-07-07T09:58:19.494Z"
+  "lastTraceAt": "2026-07-09T23:09:54.338Z",
+  "lastCheckpointAt": "2026-07-09T22:08:20.593Z",
+  "completedAt": "2026-07-09T23:09:54.324Z"
 }

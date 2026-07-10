@@ -5,7 +5,7 @@ planSlug: n1-fechamento-mvp-scheduler
 description: "Primeira fase do backlog pós-MVP: merge e validação do MVP em dev, scheduler temporal do worker (F4.3b — timeout de feedback + disparo de purga de mídia), fechamento do elo outbox→outbound do atendente e dashboards/alertas Grafana provisionados como código."
 summary: "Consolidar o MVP ponta-a-ponta em dev/produção e fechar a única lacuna estrutural da F4 (scheduler do worker), herdando o DoD transversal de observabilidade/auditoria + SOLID/Ports & Adapters."
 status: filled
-progress: 20
+progress: 40
 generated: "2026-07-06"
 scaffoldVersion: "2.0.0"
 agents:
@@ -45,7 +45,7 @@ phases:
     prevc: "C"
     agent: "devops-specialist"
     status: "pending"
-lastUpdated: "2026-07-07T09:58:31.822Z"
+lastUpdated: "2026-07-09T22:08:09.779Z"
 ---
 
 # Fase N1 — Fechamento do MVP + Scheduler do Worker
@@ -79,8 +79,12 @@ observabilidade por tarefa e riscos no [plano completo](./n1-fechamento-mvp-sche
 
 ## Execution History
 
-> Last updated: 2026-07-07T09:58:31.822Z | Progress: 20%
+> Last updated: 2026-07-09T22:08:09.779Z | Progress: 40%
 
 ### phase-p [DONE]
 - Started: 2026-07-07T09:58:31.822Z
 - Completed: 2026-07-07T09:58:31.822Z
+
+### phase-r [DONE]
+- Started: 2026-07-07T10:45:04.464Z
+- Completed: 2026-07-07T10:45:04.464Z

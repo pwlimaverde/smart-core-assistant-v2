@@ -108,6 +108,28 @@ pub trait AtendimentoRepository: Send + Sync {
         departamento_id: Option<i32>,
         etapa_id: i32,
     ) -> Result<(), DbError>;
+
+    /// Varredura CROSS-TENANT (scheduler do worker, F4.3b): atendimentos resolvidos,
+    /// sem feedback registrado e ainda não marcados como expirados, cuja `data_fim`
+    /// ultrapassou o TTL. `ctx` é usado apenas para a checagem de escopo — a consulta
+    /// não filtra por tenant (exige pool com BYPASSRLS).
+    async fn listar_feedback_vencido(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        limite: i64,
+        ttl_horas: i64,
+    ) -> Result<Vec<Atendimento>, DbError>;
+
+    /// Marca o atendimento como tendo o feedback expirado (idempotente: chamada
+    /// futura para o mesmo id é no-op pois `feedback_expirado_em` já estará setado
+    /// e o `listar_feedback_vencido` não o retornará de novo).
+    async fn marcar_feedback_expirado(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<(), DbError>;
 }
 
 pub struct PostgresAtendimentoRepository;
@@ -355,6 +377,58 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         .bind(fluxo_id)
         .bind(departamento_id)
         .bind(etapa_id)
+        .bind(ctx.tenant_id)
+        .bind(atendimento_id)
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(limite = limite, ttl_horas = ttl_horas))]
+    async fn listar_feedback_vencido(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        limite: i64,
+        ttl_horas: i64,
+    ) -> Result<Vec<Atendimento>, DbError> {
+        ctx.exigir_qualquer(&["operacional:admin"])?;
+        // Cross-tenant por desenho (scheduler): exige pool com BYPASSRLS (admin_pool).
+        let rows = sqlx::query_as::<_, Atendimento>(
+            r#"SELECT id, tenant_id, contato_id, departamento_id, fluxo_atendimento_id,
+                      status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
+                      assunto, prioridade, atendente_humano_id, contexto_conversa,
+                      historico_status, tags, avaliacao, feedback,
+                      data_primeira_resposta, bot_pode_atender
+               FROM oraculo_atendimento
+               WHERE status = 'resolvido'
+                 AND feedback IS NULL
+                 AND avaliacao IS NULL
+                 AND feedback_expirado_em IS NULL
+                 AND data_fim IS NOT NULL
+                 AND data_fim < NOW() - ($1 || ' hours')::interval
+               ORDER BY data_fim ASC
+               LIMIT $2"#,
+        )
+        .bind(ttl_horas.to_string())
+        .bind(limite)
+        .fetch_all(&mut **tx)
+        .await?;
+        Ok(rows)
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn marcar_feedback_expirado(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<(), DbError> {
+        sqlx::query(
+            r#"UPDATE oraculo_atendimento
+               SET feedback_expirado_em = NOW()
+               WHERE tenant_id = $1 AND id = $2 AND feedback_expirado_em IS NULL"#,
+        )
         .bind(ctx.tenant_id)
         .bind(atendimento_id)
         .execute(&mut **tx)

@@ -8,7 +8,7 @@ use infrastructure_postgres::atendimentos::atendimentos::{
     Atendimento, AtendimentoRepository, PostgresAtendimentoRepository,
 };
 use infrastructure_postgres::atendimentos::mensagens::{
-    Mensagem, MensagemRepository, PostgresMensagemRepository,
+    DestinoEnvioOutbound, Mensagem, MensagemRepository, PostgresMensagemRepository,
 };
 use infrastructure_postgres::atendimentos::movimentos::{
     MovimentoFluxoRepository, PostgresMovimentoFluxoRepository,
@@ -23,14 +23,19 @@ use infrastructure_postgres::{run_in_tenant_transaction, DbError, RequestContext
 use crate::ports::{AtendimentoStore, TicketKanbanOutcome};
 
 /// Implementação Postgres da port Atendimento.
+/// `admin_pool` (BYPASSRLS) é usado apenas nas varreduras cross-tenant do
+/// scheduler do worker (F4.3b); quando ausente, recai no pool de aplicação
+/// (RLS ativa, resultado vazio) com aviso observável — mesmo padrão de
+/// `PgWhatsappStore::admin_listar_conectadas`.
 #[derive(Clone)]
 pub struct PgAtendimentoStore {
     pub pool: PgPool,
+    pub admin_pool: Option<PgPool>,
 }
 
 impl PgAtendimentoStore {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(pool: PgPool, admin_pool: Option<PgPool>) -> Self {
+        Self { pool, admin_pool }
     }
 }
 
@@ -358,6 +363,140 @@ impl AtendimentoStore for PgAtendimentoStore {
                 )
                 .await?;
 
+            Ok(((), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(limite = limite, ttl_horas = ttl_horas))]
+    async fn listar_feedback_vencido(
+        &self,
+        ctx: &RequestContext,
+        limite: i64,
+        ttl_horas: i64,
+    ) -> Result<Vec<Atendimento>, DbError> {
+        if self.admin_pool.is_none() {
+            tracing::warn!(
+                "listar_feedback_vencido sem DATABASE_ADMIN_URL: a RLS bloqueará a \
+                 varredura cross-tenant e a lista virá vazia"
+            );
+        }
+        let effective_pool = self.admin_pool.as_ref().unwrap_or(&self.pool);
+        let repo = PostgresAtendimentoRepository;
+        let mut tx = effective_pool.begin().await?;
+        let rows = repo
+            .listar_feedback_vencido(&mut tx, ctx, limite, ttl_horas)
+            .await?;
+        tx.commit().await?;
+        Ok(rows)
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn marcar_feedback_expirado(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<(), DbError> {
+        let repo = PostgresAtendimentoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            repo.marcar_feedback_expirado(&mut tx, &ctx, atendimento_id)
+                .await?;
+            Ok(((), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(limite = limite, idade_max_dias = idade_max_dias))]
+    async fn listar_midias_expiradas(
+        &self,
+        ctx: &RequestContext,
+        limite: i64,
+        idade_max_dias: i64,
+    ) -> Result<Vec<Mensagem>, DbError> {
+        if self.admin_pool.is_none() {
+            tracing::warn!(
+                "listar_midias_expiradas sem DATABASE_ADMIN_URL: a RLS bloqueará a \
+                 varredura cross-tenant e a lista virá vazia"
+            );
+        }
+        let effective_pool = self.admin_pool.as_ref().unwrap_or(&self.pool);
+        let repo = PostgresMensagemRepository;
+        let mut tx = effective_pool.begin().await?;
+        let rows = repo
+            .listar_midias_expiradas(&mut tx, ctx, limite, idade_max_dias)
+            .await?;
+        tx.commit().await?;
+        Ok(rows)
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, mensagem_id = mensagem_id))]
+    async fn marcar_midia_purgada(
+        &self,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+    ) -> Result<(), DbError> {
+        let repo = PostgresMensagemRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            repo.marcar_midia_purgada(&mut tx, &ctx, mensagem_id)
+                .await?;
+            Ok(((), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, mensagem_id = mensagem_id))]
+    async fn resolver_destino_envio_outbound(
+        &self,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+    ) -> Result<Option<DestinoEnvioOutbound>, DbError> {
+        let repo = PostgresMensagemRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let destino = repo
+                .resolver_destino_envio_outbound(&mut tx, &ctx, mensagem_id)
+                .await?;
+            Ok((destino, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, mensagem_id = mensagem_id))]
+    async fn marcar_mensagem_enviada(
+        &self,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+        message_id_whatsapp: &str,
+    ) -> Result<(), DbError> {
+        let repo = PostgresMensagemRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let message_id_whatsapp = message_id_whatsapp.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            repo.marcar_mensagem_enviada(&mut tx, &ctx, mensagem_id, &message_id_whatsapp)
+                .await?;
+            Ok(((), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, mensagem_id = mensagem_id))]
+    async fn marcar_mensagem_falha_envio(
+        &self,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+    ) -> Result<(), DbError> {
+        let repo = PostgresMensagemRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            repo.marcar_mensagem_falha_envio(&mut tx, &ctx, mensagem_id)
+                .await?;
             Ok(((), tx))
         })
         .await
