@@ -1,0 +1,17 @@
+# .dockerignore da RAIZ — usado pelo build do ia_engine (contexto = raiz do
+# repo, necessário para acessar o .proto canônico em server/crates/contracts).
+# Exclui diretórios pesados/irrelevantes ao build Python para reduzir o
+# contexto enviado ao daemon.
+.git
+old/
+clients/
+**/target/
+**/.venv/
+**/__pycache__/
+**/*.pyc
+**/node_modules/
+docker/**/.env
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+ia_engine/src/ia_engine/contracts/*_pb2*.py

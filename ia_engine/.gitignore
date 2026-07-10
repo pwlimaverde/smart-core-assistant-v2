@@ -1,0 +1,15 @@
+# Stubs gRPC gerados a partir do .proto canônico (gerados no build/CI)
+src/ia_engine/contracts/*_pb2.py
+src/ia_engine/contracts/*_pb2.pyi
+src/ia_engine/contracts/*_pb2_grpc.py
+
+# Ambiente / cache
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/

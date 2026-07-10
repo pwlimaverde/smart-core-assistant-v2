@@ -7,6 +7,8 @@ use uuid::Uuid;
 
 use std::sync::Arc;
 
+#[allow(dead_code)]
+mod ia_engine;
 mod scheduler;
 
 /// Escopos de um ator de SISTEMA (worker). O worker é um serviço interno confiável
@@ -78,6 +80,217 @@ struct AppState {
     audit_logger: observability::AuditLogger,
     pg_client: Arc<transport::MuxClient>,
     whatsapp_client: Arc<transport::MuxClient>,
+    ia_client: Arc<dyn ia_engine::IaEngineClient>,
+}
+
+/// Orquestra a resposta via IA (fase N2.5): resolve a config do tenant, embeda a
+/// mensagem, compõe o contexto de RAG (`data_postgres.QueryCompose`) e chama
+/// `ia_engine.Responder`. Passos de RAG/histórico são best-effort — só falham a
+/// chamada inteira se a config/embed/responder falharem; a barreira de bot
+/// (`processar_mensagem_recebida`) decide o fallback textual em caso de erro.
+///
+/// `skip_all` + `fields` explícitos: a mensagem do usuário é PII e nunca entra no
+/// span; só ids de correlação (`tenant_id`/`atendimento_id`).
+#[tracing::instrument(
+    skip_all,
+    name = "ia.responder",
+    fields(tenant_id = %tenant_uuid, atendimento_id = atendimento_id)
+)]
+async fn responder_via_ia(
+    state: &AppState,
+    tenant_uuid: Uuid,
+    atendimento_id: i32,
+    mensagem_texto: &str,
+    causation_id: &str,
+    traceparent: &str,
+) -> anyhow::Result<String> {
+    let tenant_id_str = tenant_uuid.to_string();
+
+    // 1. Config de IA do tenant (LLM + embeddings provider/api_key), resolvida
+    // pelo data_postgres (TenantConfigCache, api_key descriptografada).
+    let config_resp = chamar_rpc(
+        &state.pg_client,
+        &tenant_id_str,
+        "ResolverConfigIa",
+        serde_json::json!({}),
+        causation_id,
+        traceparent,
+    )
+    .await?;
+    let api_key = config_resp
+        .get("api_key")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let llm = ia_engine::LlmProviderConfigInput {
+        provider: config_resp
+            .get("llm_provider")
+            .and_then(|v| v.as_str())
+            .unwrap_or("openai")
+            .to_string(),
+        model: config_resp
+            .get("llm_model")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        api_key,
+        temperature: config_resp
+            .get("llm_temperature")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.7),
+    };
+    // Embeddings tem provider/api_key próprios: LLM e embeddings podem usar
+    // provedores distintos (ex.: LLM Groq + embeddings OpenAI), então a api_key do
+    // embeddings vem separada do data_postgres (nunca reaproveita a do LLM).
+    let embeddings_api_key = config_resp
+        .get("embeddings_api_key")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let embeddings_provider = ia_engine::LlmProviderConfigInput {
+        provider: config_resp
+            .get("embeddings_provider")
+            .and_then(|v| v.as_str())
+            .unwrap_or("openai")
+            .to_string(),
+        model: config_resp
+            .get("embeddings_model")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        api_key: embeddings_api_key,
+        temperature: 0.0,
+    };
+    let dados_empresa = config_resp
+        .get("dados_empresa")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let similarity_threshold = config_resp
+        .get("similarity_threshold")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.75);
+    let vector_distance_threshold = config_resp
+        .get("vector_distance_threshold")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.3);
+
+    // 2. Embedding da mensagem (necessário para o RAG).
+    let embed_out = state
+        .ia_client
+        .embed(
+            ia_engine::EmbedInput {
+                tenant_id: tenant_id_str.clone(),
+                textos: vec![mensagem_texto.to_string()],
+                embeddings_provider: embeddings_provider.clone(),
+            },
+            traceparent,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("ia_engine.Embed falhou: {e}"))?;
+    let query_embedding = embed_out.embeddings.into_iter().next().unwrap_or_default();
+
+    // 3. RAG via data_postgres.QueryCompose — best-effort: uma falha aqui não
+    // aborta a resposta, só segue sem contexto de treinamento.
+    let mut dados_treinamento = String::new();
+    if !query_embedding.is_empty() {
+        let qc_payload = serde_json::json!({
+            "query_embedding": query_embedding,
+            "distance_threshold": vector_distance_threshold,
+            "chunk_top_k": 3,
+        });
+        match chamar_rpc(
+            &state.pg_client,
+            &tenant_id_str,
+            "QueryCompose",
+            qc_payload,
+            causation_id,
+            traceparent,
+        )
+        .await
+        {
+            Ok(resp) => {
+                let mut partes: Vec<String> = Vec::new();
+                if let Some(c) = resp.get("comportamento").and_then(|v| v.as_str()) {
+                    partes.push(c.to_string());
+                }
+                if let Some(docs) = resp.get("documentos").and_then(|v| v.as_array()) {
+                    for d in docs {
+                        if let Some(c) = d.get("conteudo").and_then(|v| v.as_str()) {
+                            partes.push(c.to_string());
+                        }
+                    }
+                }
+                dados_treinamento = partes.join("\n\n");
+            }
+            Err(e) => tracing::warn!("QueryCompose falhou (seguindo sem RAG): {:?}", e),
+        }
+    }
+
+    // 4. Histórico recente — best-effort (uma falha só significa responder sem
+    // histórico, não aborta a resposta).
+    let mut historico = Vec::new();
+    if let Ok(thread_resp) = chamar_rpc(
+        &state.pg_client,
+        &tenant_id_str,
+        "GetThread",
+        serde_json::json!({ "atendimento_id": atendimento_id, "limit": 10 }),
+        causation_id,
+        traceparent,
+    )
+    .await
+    {
+        if let Some(mensagens) = thread_resp.get("mensagens").and_then(|v| v.as_array()) {
+            for m in mensagens {
+                let remetente = m.get("remetente").and_then(|v| v.as_str()).unwrap_or("");
+                let conteudo = m.get("conteudo").and_then(|v| v.as_str()).unwrap_or("");
+                if conteudo.is_empty() {
+                    continue;
+                }
+                let role = if remetente == "atendente" || remetente == "bot" {
+                    "ai"
+                } else {
+                    "human"
+                };
+                historico.push(ia_engine::ChatTurnInput {
+                    role: role.to_string(),
+                    conteudo: conteudo.to_string(),
+                });
+            }
+        }
+    }
+
+    // 5. Gera a resposta (Structured Output + score triádico + safety-net de
+    // transferência ficam dentro do ia_engine — ver features/responder.py).
+    //
+    // NOTA (simplificação conhecida deste ciclo): `fluxos_disponiveis` e
+    // `campos_coletados`/`campos_pendentes` ainda não são resolvidos aqui — a
+    // resolução de fluxos de transferência e extração de campos por tenant fica
+    // para um ciclo seguinte (mesmo espírito da simplificação "single-instance-
+    // per-tenant" documentada na fase N1).
+    let resposta = state
+        .ia_client
+        .responder(
+            ia_engine::ResponderInput {
+                tenant_id: tenant_id_str.clone(),
+                atendimento_id: atendimento_id.to_string(),
+                mensagem: mensagem_texto.to_string(),
+                historico,
+                fluxos_disponiveis: Vec::new(),
+                dados_empresa,
+                dados_treinamento,
+                campos_coletados: Vec::new(),
+                campos_pendentes: Vec::new(),
+                llm,
+                embeddings_provider,
+                similarity_threshold,
+            },
+            traceparent,
+        )
+        .await
+        .map_err(|e| anyhow::anyhow!("ia_engine.Responder falhou: {e}"))?;
+
+    Ok(resposta.resposta_texto)
 }
 
 #[tokio::main]
@@ -102,12 +315,25 @@ async fn main() -> anyhow::Result<()> {
     let whatsapp_client = Arc::new(transport::conectar_cliente("data_whatsapp").await?);
     tracing::info!("Cliente RPC data_whatsapp estabelecido.");
 
+    // Conecta ao ia_engine (gRPC real, HTTP/2 — não o protocolo interno transport::
+    // MuxClient) com resiliência (timeout+retry). `connect_lazy` não bloqueia o
+    // boot do worker: falhas de conectividade só aparecem na primeira chamada real
+    // e degradam graciosamente para o texto fixo (ver `responder_via_ia`).
+    let ia_engine_endpoint = std::env::var("SMARTCORE_IA_ENGINE_ENDPOINT")
+        .unwrap_or_else(|_| "http://127.0.0.1:50060".to_string());
+    let ia_client: Arc<dyn ia_engine::IaEngineClient> =
+        Arc::new(ia_engine::ResilientIaEngine::new(
+            ia_engine::TonicIaEngineClient::connect_lazy(&ia_engine_endpoint)?,
+        ));
+    tracing::info!(endpoint = %ia_engine_endpoint, "Cliente gRPC ia_engine estabelecido (lazy).");
+
     let audit_logger = observability::AuditLogger::new_with_redis(redis_conn.clone(), "worker");
     let state = AppState {
         redis_conn: Some(redis_conn),
         audit_logger,
         pg_client,
         whatsapp_client,
+        ia_client,
     };
 
     // 3. Inicia o consumidor do barramento (events:stream)
@@ -420,7 +646,61 @@ async fn processar_mensagem_recebida(
                 "Assistente virtual respondendo à mensagem..."
             );
 
-            let bot_text = "Olá! Sou o assistente virtual. Recebi sua mensagem e ela já está na nossa fila de atendimento. Em breve um atendente falará com você.";
+            const BOT_TEXT_FALLBACK: &str = "Olá! Sou o assistente virtual. Recebi sua mensagem e ela já está na nossa fila de atendimento. Em breve um atendente falará com você.";
+
+            // N2.5: tenta responder via ia_engine (RAG); degrada para o texto fixo
+            // em qualquer falha (timeout/indisponibilidade/erro do provedor) — a
+            // barreira de bot NUNCA trava o atendimento por causa da IA.
+            let bot_text = match responder_via_ia(
+                state,
+                tenant_uuid,
+                atendimento_id,
+                &msg_normalized.content,
+                &envelope.event_id.to_string(),
+                &envelope.traceparent,
+            )
+            .await
+            {
+                Ok(texto) if !texto.trim().is_empty() => texto,
+                Ok(_) => {
+                    tracing::warn!(
+                        atendimento_id = atendimento_id,
+                        "ia_engine devolveu resposta vazia; usando fallback"
+                    );
+                    state.audit_logger.warn(
+                        tenant_uuid,
+                        "bot.degradado",
+                        "Resposta da IA veio vazia — usando resposta padrão",
+                        serde_json::json!({ "atendimento_id": atendimento_id }),
+                        None,
+                        None,
+                        Some(envelope.event_id.to_string()),
+                    );
+                    BOT_TEXT_FALLBACK.to_string()
+                }
+                Err(e) => {
+                    tracing::warn!(
+                        atendimento_id = atendimento_id,
+                        "ia_engine indisponível/erro, usando fallback: {:?}",
+                        e
+                    );
+                    state.audit_logger.warn(
+                        tenant_uuid,
+                        "bot.degradado",
+                        "Falha ao consultar a IA — usando resposta padrão",
+                        serde_json::json!({
+                            "atendimento_id": atendimento_id,
+                            "motivo": e.to_string(),
+                        }),
+                        None,
+                        None,
+                        Some(envelope.event_id.to_string()),
+                    );
+                    BOT_TEXT_FALLBACK.to_string()
+                }
+            };
+            let bot_text = bot_text.as_str();
+
             // Chaves exigidas pelo handler de data_whatsapp (main.rs de data_whatsapp,
             // handler_send_whatsapp_message): "id" (db id da instância) e "to_number"
             // (telefone) — não "instance_id"/"to" (bug pré-existente corrigido na N1.3).
@@ -995,6 +1275,7 @@ mod tests {
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             whatsapp_client: pg_client.clone(),
             pg_client,
+            ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
         };
 
         let evt = evento_message_received(&Uuid::new_v4().to_string());
@@ -1042,6 +1323,7 @@ mod tests {
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             whatsapp_client: pg_client.clone(),
             pg_client,
+            ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
         };
 
         let evt = evento_message_received(&Uuid::new_v4().to_string());
@@ -1067,6 +1349,7 @@ mod tests {
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             whatsapp_client: pg_client.clone(),
             pg_client,
+            ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
         };
 
         let evt = evento_message_received(&Uuid::new_v4().to_string());
@@ -1096,6 +1379,7 @@ mod tests {
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             whatsapp_client: pg_client.clone(),
             pg_client,
+            ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
         };
 
         let evt = EventoBruto {
@@ -1152,6 +1436,7 @@ mod tests {
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             pg_client,
             whatsapp_client,
+            ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
         };
 
         let evt = evento_message_persistida("contato", 1);
@@ -1228,6 +1513,7 @@ mod tests {
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             pg_client,
             whatsapp_client,
+            ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
         };
 
         let evt = evento_message_persistida("atendente", 100);
@@ -1282,6 +1568,7 @@ mod tests {
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             pg_client,
             whatsapp_client,
+            ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
         };
 
         let evt = evento_message_persistida("atendente", 101);

@@ -13,6 +13,14 @@ final class MensagemThread {
   final DateTime timestamp;
   final String statusEnvio;
 
+  /// `true` quando a mensagem foi respondida pelo bot com IA (RAG). Opcional:
+  /// mensagens antigas/sem esse dado do backend chegam com `false`.
+  final bool geradoPorIa;
+
+  /// Resumo/análise da mídia (áudio/imagem/documento) associada à mensagem,
+  /// quando o backend produziu um. `null` quando não há mídia analisada.
+  final String? resumoMidia;
+
   const MensagemThread({
     required this.id,
     required this.atendimentoId,
@@ -21,6 +29,8 @@ final class MensagemThread {
     required this.remetente,
     required this.timestamp,
     required this.statusEnvio,
+    this.geradoPorIa = false,
+    this.resumoMidia,
   });
 
   @override

@@ -97,6 +97,7 @@ struct AppState {
     operacional: std::sync::Arc<dyn ports::OperacionalStore>,
     plans: std::sync::Arc<dyn ports::PlansStore>,
     audit: std::sync::Arc<dyn ports::AuditPort>,
+    treinamento: std::sync::Arc<dyn ports::TreinamentoStore>,
 }
 
 #[tokio::main]
@@ -199,6 +200,8 @@ async fn main() -> anyhow::Result<()> {
         ));
     let plans_store: std::sync::Arc<dyn ports::PlansStore> =
         std::sync::Arc::new(adapters::PgPlansStore::new(pool.clone()));
+    let treinamento_store: std::sync::Arc<dyn ports::TreinamentoStore> =
+        std::sync::Arc::new(adapters::PgTreinamentoStore::new(pool.clone()));
 
     let state = AppState {
         pool: pool.clone(),
@@ -214,6 +217,7 @@ async fn main() -> anyhow::Result<()> {
         operacional: operacional_store,
         plans: plans_store,
         audit: audit_port,
+        treinamento: treinamento_store,
     };
 
     // 4. Inicia o Relay de Outbox em background
@@ -410,6 +414,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_resolver_destino_envio = state_clone.clone();
     let state_for_marcar_mensagem_enviada = state_clone.clone();
     let state_for_marcar_mensagem_falha_envio = state_clone.clone();
+    let state_for_query_compose = state_clone.clone();
+    let state_for_resolver_config_ia = state_clone.clone();
     let state_for_update_status = state_clone;
 
     let server = Server::from_env("DATA_POSTGRES")
@@ -492,6 +498,10 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(async move {
                 handler_marcar_mensagem_falha_envio(state.atendimento.as_ref(), env).await
             })
+        })
+        .route("QueryCompose", move |env| {
+            let state = state_for_query_compose.clone();
+            Box::pin(async move { handler_query_compose(state.treinamento.as_ref(), env).await })
         })
         .route("VerifyCredentials", move |env| {
             let state = state_for_verify.clone();
@@ -585,6 +595,12 @@ async fn main() -> anyhow::Result<()> {
                 handler_update_tenant_config(state.operacional.as_ref(), state.audit.as_ref(), env)
                     .await
             })
+        })
+        .route("ResolverConfigIa", move |env| {
+            let state = state_for_resolver_config_ia.clone();
+            Box::pin(
+                async move { handler_resolver_config_ia(state.operacional.as_ref(), env).await },
+            )
         })
         .route("ListTenants", move |env| {
             let state = state_for_list_tenants.clone();
@@ -1981,6 +1997,56 @@ async fn handler_verify_credentials(
     }
 }
 
+/// RAG (fase N2, `ia_engine`): compõe o contexto de treinamento para uma mensagem
+/// já embedada pelo worker (via `ia_engine.Embed`) — busca vetorial pgvector sob
+/// RLS de tenant. `distance_threshold` default 0.3 (cosseno), `chunk_top_k` default 3.
+async fn handler_query_compose(store: &dyn ports::TreinamentoStore, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let query_embedding: Vec<f32> = match payload_json
+        .get("query_embedding")
+        .and_then(|v| v.as_array())
+    {
+        Some(arr) => arr
+            .iter()
+            .filter_map(|v| v.as_f64())
+            .map(|v| v as f32)
+            .collect(),
+        None => {
+            return erro(
+                error_core::AppError::Validation("query_embedding ausente ou inválido".into()),
+                &env,
+            )
+        }
+    };
+    let distance_threshold = payload_json
+        .get("distance_threshold")
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.3);
+    let chunk_top_k = payload_json
+        .get("chunk_top_k")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(3);
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .query_compose(&ctx, query_embedding, distance_threshold, chunk_top_k)
+        .await
+    {
+        Ok(resultado) => ok_reply(
+            &env,
+            "QueryComposeReply",
+            serde_json::json!({
+                "comportamento": resultado.comportamento,
+                "documentos": resultado.documentos,
+            }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
 // --- Helpers e Utilitários para os Handlers Admin ---
 
 fn erro(app_err: error_core::AppError, env: &Envelope) -> Envelope {
@@ -2277,6 +2343,37 @@ async fn handler_get_tenant_config(store: &dyn ports::OperacionalStore, env: Env
     match store.obter_tenant_config(tenant_id).await {
         Ok(Some(cfg)) => ok_reply(&env, "GetTenantConfigReply", cfg),
         Ok(None) => ok_reply(&env, "GetTenantConfigReply", serde_json::json!({})),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// RPC interno (fase N2, `ia_engine`): resolve a config de IA do tenant DA
+/// CONVERSA (não um tenant alvo arbitrário — ao contrário de `GetTenantConfig`,
+/// que é o CRUD do painel admin). A api_key vem descriptografada de verdade; este
+/// RPC nunca deve ser exposto ao painel/browser (só worker↔data_postgres).
+async fn handler_resolver_config_ia(
+    store: &dyn ports::OperacionalStore,
+    env: Envelope,
+) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    match store.resolver_config_ia(ctx.tenant_id).await {
+        Ok(cfg) => ok_reply(
+            &env,
+            "ResolverConfigIaReply",
+            serde_json::json!({
+                "dados_empresa": cfg.dados_empresa,
+                "persona_bot": cfg.persona_bot,
+                "llm_provider": cfg.llm_provider,
+                "llm_model": cfg.llm_model,
+                "llm_temperature": cfg.llm_temperature,
+                "embeddings_provider": cfg.embeddings_provider,
+                "embeddings_model": cfg.embeddings_model,
+                "similarity_threshold": cfg.similarity_threshold,
+                "vector_distance_threshold": cfg.vector_distance_threshold,
+                "api_key": cfg.api_key,
+                "embeddings_api_key": cfg.embeddings_api_key,
+            }),
+        ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }
 }

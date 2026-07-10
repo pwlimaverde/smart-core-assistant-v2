@@ -4,6 +4,7 @@
 
 use async_trait::async_trait;
 use redis::aio::ConnectionManager;
+use secrecy::ExposeSecret;
 use sqlx::{PgPool, Row};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -11,8 +12,38 @@ use uuid::Uuid;
 use infrastructure_postgres::crypto::CipherManager;
 use infrastructure_postgres::{DbError, TenantConfigCache};
 
-use crate::ports::operacional::CoreSetting;
+use crate::ports::operacional::{ConfigIa, CoreSetting};
 use crate::ports::OperacionalStore;
+
+/// Heurística de nome de provedor a partir do nome da classe LangChain configurada
+/// pelo tenant (convenção herdada da v1). Serve tanto para o LLM
+/// ("ChatOpenAI"/"ChatGroq"/"ChatGoogleGenerativeAI") quanto para embeddings
+/// ("OpenAIEmbeddings"/"GoogleGenerativeAIEmbeddings"): mapeia o nome da classe para
+/// o SLUG de provedor que o `ia_engine` passa a `init_chat_model`/`init_embeddings`
+/// ("openai"/"groq"/"google_genai") e decide qual api_key resolvida usar. Sem
+/// correspondência, cai em "openai" (provedor mais comum).
+fn provider_e_api_key_de(
+    class_name: &str,
+    cfg: &infrastructure_postgres::RuntimeConfig,
+) -> (String, String) {
+    let lower = class_name.to_lowercase();
+    if lower.contains("groq") {
+        (
+            "groq".to_string(),
+            cfg.groq_api_key.expose_secret().to_string(),
+        )
+    } else if lower.contains("google") || lower.contains("gemini") {
+        (
+            "google_genai".to_string(),
+            cfg.google_api_key.expose_secret().to_string(),
+        )
+    } else {
+        (
+            "openai".to_string(),
+            cfg.openai_api_key.expose_secret().to_string(),
+        )
+    }
+}
 
 /// Implementação Postgres+Redis da port Operacional.
 #[derive(Clone)]
@@ -641,5 +672,29 @@ impl OperacionalStore for PgOperacionalStore {
             "monthly_recurring_revenue": mrr.to_string(),
             "health": services,
         }))
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %tenant_id))]
+    async fn resolver_config_ia(&self, tenant_id: Uuid) -> Result<ConfigIa, DbError> {
+        let cfg = self.config_cache.get_config(tenant_id).await?;
+        let (llm_provider, api_key) = provider_e_api_key_de(&cfg.llm_class, &cfg);
+        // Embeddings passa pela MESMA normalização de classe->slug do LLM: o
+        // `embeddings_class` é um nome de classe LangChain (ex.: "OpenAIEmbeddings"),
+        // não um slug — enviá-lo cru quebraria o `init_embeddings` do ia_engine.
+        let (embeddings_provider, embeddings_api_key) =
+            provider_e_api_key_de(&cfg.embeddings_class, &cfg);
+        Ok(ConfigIa {
+            dados_empresa: cfg.dados_empresa.clone(),
+            persona_bot: cfg.persona_bot.clone(),
+            llm_provider,
+            llm_model: cfg.model.clone(),
+            llm_temperature: cfg.llm_temperature,
+            embeddings_provider,
+            embeddings_model: cfg.embeddings_model.clone(),
+            similarity_threshold: cfg.similarity_threshold,
+            vector_distance_threshold: cfg.vector_distance_threshold,
+            api_key,
+            embeddings_api_key,
+        })
     }
 }

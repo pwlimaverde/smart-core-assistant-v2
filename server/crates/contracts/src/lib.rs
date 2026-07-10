@@ -59,9 +59,4 @@ pub mod fbs {
             RegisterRequestArgs,
         };
     }
-    pub mod ai_engine {
-        pub use crate::fbs_generated::smartcore::contracts::{
-            AiRequest, AiRequestArgs, AiResponse, AiResponseArgs,
-        };
-    }
 }

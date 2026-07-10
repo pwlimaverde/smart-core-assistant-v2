@@ -16,6 +16,48 @@ pub struct CoreSetting {
     pub description: String,
 }
 
+/// Configuração de IA do tenant resolvida para o `worker` montar `LlmProviderConfig`
+/// ao chamar o `ia_engine` (fase N2). Ao contrário de `obter_tenant_config` (painel
+/// admin, chaves MASCARADAS), aqui a `api_key` vem DESCRIPTOGRAFADA de verdade — este
+/// RPC é interno (worker→data_postgres), nunca exposto ao painel/browser.
+#[derive(Clone, Default)]
+pub struct ConfigIa {
+    pub dados_empresa: String,
+    pub persona_bot: String,
+    pub llm_provider: String,
+    pub llm_model: String,
+    pub llm_temperature: f64,
+    pub embeddings_provider: String,
+    pub embeddings_model: String,
+    pub similarity_threshold: f64,
+    pub vector_distance_threshold: f64,
+    /// api_key do provedor do LLM (família resolvida de `llm_class`).
+    pub api_key: String,
+    /// api_key do provedor de embeddings (família resolvida de `embeddings_class`).
+    /// Pode diferir de `api_key` quando LLM e embeddings usam provedores distintos.
+    pub embeddings_api_key: String,
+}
+
+// `Debug` redigido: as api_keys resolvidas (em claro) nunca podem aparecer num
+// `{:?}` acidental (log/trace). Só os campos não-sensíveis são impressos.
+impl std::fmt::Debug for ConfigIa {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ConfigIa")
+            .field("dados_empresa", &self.dados_empresa)
+            .field("persona_bot", &self.persona_bot)
+            .field("llm_provider", &self.llm_provider)
+            .field("llm_model", &self.llm_model)
+            .field("llm_temperature", &self.llm_temperature)
+            .field("embeddings_provider", &self.embeddings_provider)
+            .field("embeddings_model", &self.embeddings_model)
+            .field("similarity_threshold", &self.similarity_threshold)
+            .field("vector_distance_threshold", &self.vector_distance_threshold)
+            .field("api_key", &"[REDACTED]")
+            .field("embeddings_api_key", &"[REDACTED]")
+            .finish()
+    }
+}
+
 /// Operações do domínio Operacional expostas aos handlers RPC.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
@@ -86,4 +128,9 @@ pub trait OperacionalStore: Send + Sync {
 
     /// Resumo do dashboard administrativo (contagens + MRR + health).
     async fn dashboard_summary(&self) -> Result<serde_json::Value, DbError>;
+
+    /// Resolve a config de IA do tenant (fase N2) via `TenantConfigCache` — mesma
+    /// cascata Tenant > CoreSettings já usada pelo painel admin, mas com a api_key
+    /// descriptografada de verdade (uso interno do worker, nunca do painel).
+    async fn resolver_config_ia(&self, tenant_id: Uuid) -> Result<ConfigIa, DbError>;
 }

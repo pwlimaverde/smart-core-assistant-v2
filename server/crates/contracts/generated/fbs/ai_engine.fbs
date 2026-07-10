@@ -2,11 +2,141 @@
 
 namespace smartcore.contracts.ai;
 
-table AiRequest {
-  prompt:string;
+table KeyValuePair {
+  key:string;
+  value:string;
 }
 
-table AiResponse {
-  text:string;
+table LlmProviderConfig {
+  provider:string;
+  model:string;
+  api_key:string;
+  temperature:double;
+  extra_params:[smartcore.contracts.ai.KeyValuePair];
+}
+
+table MediaRef {
+  url:string;
+  mimetype:string;
+  file_name:string;
+}
+
+table ChatTurn {
+  role:string;
+  conteudo:string;
+}
+
+table ChatHistory {
+  turnos:[smartcore.contracts.ai.ChatTurn];
+}
+
+table TranscribeRequest {
+  tenant_id:string;
+  media:smartcore.contracts.ai.MediaRef;
+  language:string;
+  transcription_provider:smartcore.contracts.ai.LlmProviderConfig;
+}
+
+table TranscribeResponse {
+  transcricao:string;
+  resumo:string;
+}
+
+table InterpretMediaRequest {
+  tenant_id:string;
+  media:smartcore.contracts.ai.MediaRef;
+  media_type:string;
+  vision_provider:smartcore.contracts.ai.LlmProviderConfig;
+}
+
+table InterpretMediaResponse {
+  analise:string;
+  resumo:string;
+}
+
+table AnalyseRequest {
+  tenant_id:string;
+  mensagem:string;
+  historico:smartcore.contracts.ai.ChatHistory;
+  valid_intent_types:string;
+  valid_entity_types:[string];
+  llm:smartcore.contracts.ai.LlmProviderConfig;
+}
+
+table Intent {
+  tipo:string;
+  confianca:double;
+}
+
+table Entidade {
+  tipo:string;
+  valor:string;
+  confianca:double;
+}
+
+table AnalyseResponse {
+  intents:[smartcore.contracts.ai.Intent];
+  entidades:[smartcore.contracts.ai.Entidade];
+}
+
+table EmbedRequest {
+  tenant_id:string;
+  textos:[string];
+  embeddings_provider:smartcore.contracts.ai.LlmProviderConfig;
+}
+
+table Embedding {
+  valores:[float];
+}
+
+table EmbedResponse {
+  embeddings:[smartcore.contracts.ai.Embedding];
+}
+
+table CampoColetado {
+  slug:string;
+  nome:string;
+  valor:string;
+}
+
+table CampoPendente {
+  slug:string;
+  nome:string;
+  descricao:string;
+  hint:string;
+}
+
+table ResponderRequest {
+  tenant_id:string;
+  atendimento_id:string;
+  mensagem:string;
+  historico:smartcore.contracts.ai.ChatHistory;
+  fluxos_disponiveis:[smartcore.contracts.ai.KeyValuePair];
+  dados_empresa:string;
+  dados_treinamento:string;
+  campos_coletados:[smartcore.contracts.ai.CampoColetado];
+  campos_pendentes:[smartcore.contracts.ai.CampoPendente];
+  llm:smartcore.contracts.ai.LlmProviderConfig;
+  embeddings_provider:smartcore.contracts.ai.LlmProviderConfig;
+  similarity_threshold:double;
+}
+
+table ResponderResponse {
+  resposta_texto:string;
+  transferir_atendimento:bool;
+  fluxo_transferencia:string;
+  confiabilidade:double;
+}
+
+table SentimentoRequest {
+  tenant_id:string;
+  historico:smartcore.contracts.ai.ChatHistory;
+  llm:smartcore.contracts.ai.LlmProviderConfig;
+}
+
+table SentimentoResponse {
+  nota:int;
+  sentimento:string;
+  feedback:string;
 }
 

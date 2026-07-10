@@ -143,6 +143,18 @@ services:
       data_postgres: { condition: service_started }
     restart: unless-stopped
 
+  # ---------- MOTOR DE IA (Python, gRPC — imagem própria) ----------
+  ia_engine:
+    image: ${IA_ENGINE_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-ia-engine:dev}
+    build:
+      # Contexto na RAIZ do repo: o Dockerfile gera os stubs a partir do
+      # .proto canônico em server/crates/contracts (fora de ia_engine/).
+      context: ../..
+      dockerfile: ia_engine/Dockerfile
+    env_file: [.env]
+    networks: [internal, observability]
+    restart: unless-stopped
+
   worker:
     image: *server-image
     command: ["worker"]
@@ -151,6 +163,7 @@ services:
     depends_on:
       data_postgres: { condition: service_started }
       data_redis: { condition: service_started }
+      ia_engine: { condition: service_started }
     restart: unless-stopped
 
   runtime_api:

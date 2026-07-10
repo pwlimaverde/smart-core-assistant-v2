@@ -13,6 +13,8 @@ chrono = { workspace = true }
 anyhow = { workspace = true }
 bytes = { workspace = true }
 redis = { workspace = true }
+tonic = { workspace = true }
+async-trait = { workspace = true }
 
 contracts = { workspace = true }
 transport = { workspace = true }
@@ -20,3 +22,6 @@ error_core = { workspace = true }
 observability = { workspace = true }
 tracing = { workspace = true }
 domain_whatsapp = { path = "../../crates/domain_whatsapp" }
+
+[dev-dependencies]
+mockall = { workspace = true }
