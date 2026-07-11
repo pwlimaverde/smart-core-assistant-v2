@@ -5,6 +5,7 @@ pub mod cliente;
 pub mod operacional;
 pub mod plans;
 pub mod tenant;
+pub mod treinamento;
 pub mod whatsapp;
 
 pub use atendimento::PgAtendimentoStore;
@@ -14,4 +15,5 @@ pub use cliente::PgClienteStore;
 pub use operacional::PgOperacionalStore;
 pub use plans::PgPlansStore;
 pub use tenant::PgTenantStore;
+pub use treinamento::PgTreinamentoStore;
 pub use whatsapp::PgWhatsappStore;

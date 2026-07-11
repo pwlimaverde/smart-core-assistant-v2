@@ -5,6 +5,7 @@ planSlug: n2-ia-engine
 description: "Camada de IA como serviço Python separado (gRPC, decisão travada — não FFI): skeleton uv/grpc.aio, contratos/stubs nos dois lados, reescrita da FeaturesCompose em LangChain 1.x/LCEL, análise (transcribe/interpret/analyse/embed 1536), resposta+RAG via RPC pgvector sob RLS, integração worker→IA com degradação graciosa e UI de chat."
 summary: "Entregar a inteligência do produto: bot responde com RAG e persona do tenant, mídia vira resumo/análise, com resiliência (fallback para a resposta fixa atual) e trace contínuo cruzando o processo Python."
 status: filled
+progress: 0
 generated: "2026-07-06"
 scaffoldVersion: "2.0.0"
 agents:
@@ -46,6 +47,7 @@ phases:
     prevc: "C"
     agent: "backend-specialist"
     status: "pending"
+lastUpdated: "2026-07-10T20:09:56.668Z"
 ---
 
 # Fase N2 — `ia_engine` (serviço Python de IA via gRPC)
@@ -81,3 +83,7 @@ reescrita em LCEL 1.x; pydantic v2; `init_chat_model`; setup OTel confirmado) no
 - **E:** skeleton → facade → features → RAG → integração → UI.
 - **V:** `.\infra\test-local.ps1` (RAG isolado por tenant, degradação) + `.\infra\test-flutter.ps1` (chat).
 - **C:** resposta de IA ponta-a-ponta no WhatsApp; trace contínuo no Tempo; gate `prevc-final-review`.
+
+## Execution History
+
+> Last updated: 2026-07-10T20:09:56.668Z | Progress: 0%

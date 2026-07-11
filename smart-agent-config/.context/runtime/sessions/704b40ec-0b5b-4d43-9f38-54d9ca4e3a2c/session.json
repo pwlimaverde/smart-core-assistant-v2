@@ -1,0 +1,79 @@
+{
+  "id": "704b40ec-0b5b-4d43-9f38-54d9ca4e3a2c",
+  "name": "n2-ia-engine",
+  "status": "completed",
+  "repoPath": "C:\\PROJETOS\\FULL-STACK\\smart-core-assistant-v2\\smart-agent-config",
+  "createdAt": "2026-07-10T10:15:31.946Z",
+  "updatedAt": "2026-07-10T20:37:44.501Z",
+  "startedAt": "2026-07-10T10:15:31.946Z",
+  "traceCount": 26,
+  "artifactCount": 1,
+  "checkpointCount": 4,
+  "checkpoints": [
+    {
+      "id": "fe8f22e5-6523-4e02-899b-a71376d43f71",
+      "note": "Advanced workflow phase P -> R",
+      "data": {
+        "from": "P",
+        "to": "R",
+        "outputs": [
+          ".context/plans/n2-ia-engine.md",
+          ".context/plans/n2-ia-engine/plano_completo_n2-ia-engine.md",
+          ".context/plans/n2-ia-engine/info_aux_n2-ia-engine.md"
+        ],
+        "nextTaskContractId": "9869b73f-e6e9-4cdf-b311-a9bfe6ed995a"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-10T10:15:38.734Z"
+    },
+    {
+      "id": "1828ed82-5a9d-4f86-a625-d2c294592bfc",
+      "note": "Advanced workflow phase R -> E",
+      "data": {
+        "from": "R",
+        "to": "E",
+        "outputs": [
+          "decisão de arquitetura registrada e plano aprovado (architect)"
+        ],
+        "nextTaskContractId": "86165791-1db8-4ca4-8156-bdda961a365a"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-10T10:16:05.276Z"
+    },
+    {
+      "id": "32f10a22-ef1a-4a32-b44f-7377f6d87659",
+      "note": "Advanced workflow phase E -> V",
+      "data": {
+        "from": "E",
+        "to": "V",
+        "outputs": [
+          "evidência real de validação documentada na decisão da fase V (sensor genérico do harness é npm-only, não aplicável a este monorepo)"
+        ],
+        "nextTaskContractId": "31e92388-b328-42c0-a818-3f794028a248"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-10T20:10:09.915Z"
+    },
+    {
+      "id": "f7f82a7e-9ff0-4670-a7f6-c452e719b4b9",
+      "note": "Advanced workflow phase V -> C",
+      "data": {
+        "from": "V",
+        "to": "C",
+        "outputs": [
+          "evidência real de validação Rust+Python+Flutter documentada na decisão da fase V"
+        ],
+        "nextTaskContractId": "d3f6d4f4-1866-4a2d-a532-e1ba1c3bb1e9"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-10T20:10:22.148Z"
+    }
+  ],
+  "metadata": {
+    "workflow": true,
+    "description": "Fase N2 — ia_engine: serviço Python de IA via gRPC (skeleton uv/grpc.aio, contratos, reescrita FeaturesCompose em LCEL 1.x, análise de mídia, resposta+RAG via RPC pgvector sob RLS, integração worker com degradação graciosa, UI de chat)"
+  },
+  "lastTraceAt": "2026-07-10T20:37:44.501Z",
+  "lastCheckpointAt": "2026-07-10T20:10:22.148Z",
+  "completedAt": "2026-07-10T20:37:44.484Z"
+}

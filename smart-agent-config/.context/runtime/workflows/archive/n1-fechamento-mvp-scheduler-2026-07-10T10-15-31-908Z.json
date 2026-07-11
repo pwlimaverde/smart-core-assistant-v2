@@ -1,0 +1,275 @@
+{
+  "version": 2,
+  "workflowType": "prevc",
+  "updatedAt": "2026-07-09T23:09:54.333Z",
+  "status": {
+    "project": {
+      "name": "n1-fechamento-mvp-scheduler",
+      "scale": 3,
+      "started": "2026-07-06T21:38:57.416Z",
+      "current_phase": "C",
+      "settings": {
+        "autonomous_mode": false,
+        "require_plan": true,
+        "require_approval": true
+      },
+      "plan": "n1-fechamento-mvp-scheduler"
+    },
+    "phases": {
+      "P": {
+        "status": "completed",
+        "started_at": "2026-07-06T21:38:57.416Z",
+        "completed_at": "2026-07-07T09:58:19.470Z",
+        "outputs": [
+          {
+            "path": ".context/plans/n1-fechamento-mvp-scheduler.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/n1-fechamento-mvp-scheduler/plano_completo_n1-fechamento-mvp-scheduler.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/n1-fechamento-mvp-scheduler/info_aux_n1-fechamento-mvp-scheduler.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "R": {
+        "status": "completed",
+        "started_at": "2026-07-07T09:58:19.470Z",
+        "completed_at": "2026-07-07T10:45:08.253Z",
+        "outputs": [
+          {
+            "path": "decisões de arquitetura registradas e plano aprovado (architect)",
+            "status": "filled"
+          }
+        ]
+      },
+      "E": {
+        "status": "completed",
+        "started_at": "2026-07-07T10:45:08.253Z",
+        "completed_at": "2026-07-09T22:08:10.629Z",
+        "outputs": [
+          {
+            "path": "cargo fmt --check limpo",
+            "status": "filled"
+          },
+          {
+            "path": "cargo clippy -D warnings limpo (worker+data_postgres)",
+            "status": "filled"
+          },
+          {
+            "path": "test-local.ps1: 32/33 (única falha é pre-existente/ambiental, documentada)",
+            "status": "filled"
+          },
+          {
+            "path": "worker 10/10 e data_postgres 31/31 revalidados isolados",
+            "status": "filled"
+          }
+        ]
+      },
+      "V": {
+        "status": "completed",
+        "started_at": "2026-07-09T22:08:10.629Z",
+        "completed_at": "2026-07-09T22:08:20.583Z",
+        "outputs": [
+          {
+            "path": "evidência real de validação Rust documentada na decisão da fase V (sensors genéricas do harness são npm-only, não aplicáveis a este monorepo)",
+            "status": "filled"
+          }
+        ]
+      },
+      "C": {
+        "status": "completed",
+        "started_at": "2026-07-09T22:08:20.583Z",
+        "completed_at": "2026-07-09T23:09:54.316Z",
+        "outputs": [
+          {
+            "path": "plano arquivado em .context/plans/archive/n1-fechamento-mvp-scheduler/",
+            "status": "filled"
+          },
+          {
+            "path": "final-review.md (CONFORME) registrado",
+            "status": "filled"
+          },
+          {
+            "path": "changelog.md atualizado",
+            "status": "filled"
+          }
+        ]
+      }
+    },
+    "agents": {},
+    "roles": {
+      "planner": {
+        "status": "pending"
+      },
+      "designer": {
+        "status": "pending"
+      },
+      "architect": {
+        "status": "pending"
+      },
+      "developer": {
+        "status": "pending"
+      },
+      "qa": {
+        "status": "pending"
+      },
+      "reviewer": {
+        "status": "pending"
+      },
+      "documenter": {
+        "status": "pending"
+      },
+      "solo-dev": {
+        "status": "pending"
+      }
+    },
+    "approval": {
+      "plan_created": true,
+      "plan_approved": true,
+      "approved_by": "architect",
+      "approved_at": "2026-07-07T10:45:03.277Z",
+      "approval_notes": "4 decisões de arquitetura registradas e aterradas no código real (SchedulerClock greenfield, lock Redis SET NX PX cross-tenant, migração 0014 com colunas de idempotência, elo outbox reusando message.persisted/sender_id). Aprovado para execução."
+    },
+    "execution": {
+      "history": [
+        {
+          "phase": "P",
+          "action": "started",
+          "timestamp": "2026-07-06T21:38:57.416Z"
+        },
+        {
+          "phase": "P",
+          "action": "plan_linked",
+          "plan": "n1-fechamento-mvp-scheduler",
+          "timestamp": "2026-07-07T09:58:04.153Z"
+        },
+        {
+          "phase": "P",
+          "action": "completed",
+          "timestamp": "2026-07-07T09:58:19.470Z"
+        },
+        {
+          "phase": "R",
+          "action": "started",
+          "timestamp": "2026-07-07T09:58:19.470Z"
+        },
+        {
+          "phase": "R",
+          "action": "plan_phase_updated",
+          "plan": "n1-fechamento-mvp-scheduler",
+          "description": "Plan phase phase-p updated to completed",
+          "timestamp": "2026-07-07T09:58:31.847Z"
+        },
+        {
+          "phase": "R",
+          "action": "decision_recorded",
+          "plan": "n1-fechamento-mvp-scheduler",
+          "description": "Decision recorded: SchedulerClock e loop do worker",
+          "timestamp": "2026-07-07T10:44:35.260Z"
+        },
+        {
+          "phase": "R",
+          "action": "decision_recorded",
+          "plan": "n1-fechamento-mvp-scheduler",
+          "description": "Decision recorded: Lock Redis por tarefa (SET NX PX)",
+          "timestamp": "2026-07-07T10:44:40.829Z"
+        },
+        {
+          "phase": "R",
+          "action": "decision_recorded",
+          "plan": "n1-fechamento-mvp-scheduler",
+          "description": "Decision recorded: Schema novo p/ idempotência (migração 0014) e critério de vencimento",
+          "timestamp": "2026-07-07T10:44:47.311Z"
+        },
+        {
+          "phase": "R",
+          "action": "decision_recorded",
+          "plan": "n1-fechamento-mvp-scheduler",
+          "description": "Decision recorded: Elo outbox->outbound do atendente: reusa message.persisted, sem mudar event_type",
+          "timestamp": "2026-07-07T10:44:55.495Z"
+        },
+        {
+          "phase": "R",
+          "action": "plan_approved",
+          "approved_by": "architect",
+          "timestamp": "2026-07-07T10:45:03.277Z"
+        },
+        {
+          "phase": "R",
+          "action": "plan_phase_updated",
+          "plan": "n1-fechamento-mvp-scheduler",
+          "description": "Plan phase phase-r updated to completed",
+          "timestamp": "2026-07-07T10:45:04.475Z"
+        },
+        {
+          "phase": "R",
+          "action": "completed",
+          "timestamp": "2026-07-07T10:45:08.253Z"
+        },
+        {
+          "phase": "E",
+          "action": "started",
+          "timestamp": "2026-07-07T10:45:08.253Z"
+        },
+        {
+          "phase": "E",
+          "action": "decision_recorded",
+          "plan": "n1-fechamento-mvp-scheduler",
+          "description": "Decision recorded: Correção no otel-collector: remove namespace duplicado, habilita service_name por métrica",
+          "timestamp": "2026-07-08T14:50:11.122Z"
+        },
+        {
+          "phase": "V",
+          "action": "decision_recorded",
+          "plan": "n1-fechamento-mvp-scheduler",
+          "description": "Decision recorded: Validação real via .\\infra\\test-local.ps1 (túnel remoto) + suítes isoladas",
+          "timestamp": "2026-07-09T22:08:09.835Z"
+        },
+        {
+          "phase": "E",
+          "action": "completed",
+          "timestamp": "2026-07-09T22:08:10.629Z"
+        },
+        {
+          "phase": "V",
+          "action": "started",
+          "timestamp": "2026-07-09T22:08:10.629Z"
+        },
+        {
+          "phase": "V",
+          "action": "completed",
+          "timestamp": "2026-07-09T22:08:20.583Z"
+        },
+        {
+          "phase": "C",
+          "action": "started",
+          "timestamp": "2026-07-09T22:08:20.583Z"
+        },
+        {
+          "phase": "C",
+          "action": "plan_phase_updated",
+          "plan": "n1-fechamento-mvp-scheduler",
+          "description": "Plan phase phase-c updated to completed",
+          "timestamp": "2026-07-09T23:09:50.298Z"
+        },
+        {
+          "phase": "C",
+          "action": "completed",
+          "timestamp": "2026-07-09T23:09:54.316Z"
+        }
+      ],
+      "last_activity": "2026-07-09T23:09:54.316Z",
+      "resume_context": "Fase C (Confirmação) concluída"
+    }
+  },
+  "binding": {
+    "workflowName": "n1-fechamento-mvp-scheduler",
+    "sessionId": "fd8d332d-33af-4912-83e8-163660d737d3",
+    "createdAt": "2026-07-06T21:38:57.425Z",
+    "updatedAt": "2026-07-09T23:09:54.324Z"
+  }
+}

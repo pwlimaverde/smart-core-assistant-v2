@@ -1,0 +1,37 @@
+{
+  "id": "54565a75-afa2-4b65-977d-a4ec88d235ad",
+  "title": "Fase N2 — `ia_engine` (serviço Python de IA via gRPC): Planning",
+  "description": "Derived from linked plan \"n2-ia-engine\" for PREVC phase P (Planning). Plan phases: Planning. Expected outputs: prd, tech-spec, requirements, wireframes.",
+  "sessionId": "704b40ec-0b5b-4d43-9f38-54d9ca4e3a2c",
+  "owner": "planner",
+  "status": "completed",
+  "inputs": [],
+  "expectedOutputs": [
+    "prd",
+    "tech-spec",
+    "requirements",
+    "wireframes"
+  ],
+  "acceptanceCriteria": [
+    "Complete Planning"
+  ],
+  "requiredSensors": [],
+  "requiredArtifacts": [],
+  "createdAt": "2026-07-10T10:15:34.601Z",
+  "updatedAt": "2026-07-10T10:15:38.743Z",
+  "metadata": {
+    "requirementsSource": "none",
+    "source": "workflow.plan",
+    "planSlug": "n2-ia-engine",
+    "prevcPhase": "P",
+    "planPhaseIds": [
+      "phase-p"
+    ],
+    "planPhaseNames": [
+      "Planning"
+    ],
+    "planPhaseSummaries": [],
+    "derivedFrom": "linked-plan",
+    "completionReason": "Workflow advanced from P to R"
+  }
+}

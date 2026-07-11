@@ -5,6 +5,7 @@ pub mod cliente;
 pub mod operacional;
 pub mod plans;
 pub mod tenant;
+pub mod treinamento;
 pub mod whatsapp;
 
 pub use atendimento::{AtendimentoStore, TicketKanbanOutcome};
@@ -14,6 +15,7 @@ pub use cliente::ClienteStore;
 pub use operacional::OperacionalStore;
 pub use plans::PlansStore;
 pub use tenant::TenantStore;
+pub use treinamento::{DocumentoTrecho, QueryComposeResultado, TreinamentoStore};
 pub use whatsapp::WhatsappStore;
 
 #[cfg(test)]
@@ -37,6 +39,9 @@ pub use plans::MockPlansStore;
 #[cfg(test)]
 #[allow(unused_imports)]
 pub use tenant::MockTenantStore;
+#[cfg(test)]
+#[allow(unused_imports)]
+pub use treinamento::MockTreinamentoStore;
 #[cfg(test)]
 #[allow(unused_imports)]
 pub use whatsapp::MockWhatsappStore;

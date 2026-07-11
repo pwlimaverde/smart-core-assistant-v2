@@ -1,10 +1,157 @@
 syntax = "proto3";
 package smartcore.contracts.ai;
 
-message AiRequest {
-  string prompt = 1;
+// Par chave/valor local (equivalente a `errors.proto:KeyValue`, mas
+// duplicado aqui em vez de importado): o passo `flatc --proto` deste
+// pipeline (ver build.rs) resolve imports relativos ao diretório do próprio
+// .proto e não recebe `-I schemas`, então `import "errors.proto"` a partir
+// de `schemas/ai/` falha. `map<string,string>` também não é suportado pela
+// conversão --proto do flatc.
+message KeyValuePair {
+  string key = 1;
+  string value = 2;
 }
 
-message AiResponse {
-  string text = 2;
+// Config do provedor LLM resolvida pelo worker por tenant (SecretString
+// descriptografada). Trafega só nesta mensagem, nunca em log. O `ia_engine`
+// nunca guarda config global de provedor — ela sempre chega por request.
+message LlmProviderConfig {
+  string provider = 1;    // "openai" | "anthropic" | "google_genai" | ...
+  string model = 2;
+  string api_key = 3;
+  double temperature = 4;
+  repeated KeyValuePair extra_params = 5;
+}
+
+// Ponteiro de mídia (URL pré-assinada R2, curta duração) — nunca binário
+// inline nas mensagens gRPC.
+message MediaRef {
+  string url = 1;
+  string mimetype = 2;
+  string file_name = 3; // preenchido para documentMessage
+}
+
+message ChatTurn {
+  string role = 1;     // "human" | "ai"
+  string conteudo = 2;
+}
+
+message ChatHistory {
+  repeated ChatTurn turnos = 1;
+}
+
+// --- Transcribe (áudio -> texto) ---
+message TranscribeRequest {
+  string tenant_id = 1;
+  MediaRef media = 2;
+  string language = 3; // default "pt"
+  LlmProviderConfig transcription_provider = 4;
+}
+message TranscribeResponse {
+  string transcricao = 1;
+  string resumo = 2;
+}
+
+// --- InterpretMedia (imagem/vídeo/documento) ---
+message InterpretMediaRequest {
+  string tenant_id = 1;
+  MediaRef media = 2;
+  string media_type = 3; // "imageMessage" | "videoMessage" | "documentMessage"
+  LlmProviderConfig vision_provider = 4;
+}
+message InterpretMediaResponse {
+  string analise = 1;
+  string resumo = 2;
+}
+
+// --- Analyse (intents/entidades — equivalente a analise_previa_mensagem) ---
+message AnalyseRequest {
+  string tenant_id = 1;
+  string mensagem = 2;
+  ChatHistory historico = 3;
+  string valid_intent_types = 4;
+  repeated string valid_entity_types = 5;
+  LlmProviderConfig llm = 6;
+}
+message Intent {
+  string tipo = 1;
+  double confianca = 2;
+}
+message Entidade {
+  string tipo = 1;
+  string valor = 2;
+  double confianca = 3;
+}
+message AnalyseResponse {
+  repeated Intent intents = 1;
+  repeated Entidade entidades = 2;
+}
+
+// --- Embed ---
+message EmbedRequest {
+  string tenant_id = 1;
+  repeated string textos = 2; // batch
+  LlmProviderConfig embeddings_provider = 3;
+}
+message Embedding {
+  repeated float valores = 1;
+}
+message EmbedResponse {
+  repeated Embedding embeddings = 1;
+}
+
+// --- Responder (resposta do bot; RAG textual já resolvido pelo worker via
+// data_postgres.QueryCompose antes desta chamada) ---
+message CampoColetado {
+  string slug = 1;
+  string nome = 2;
+  string valor = 3;
+}
+message CampoPendente {
+  string slug = 1;
+  string nome = 2;
+  string descricao = 3;
+  string hint = 4;
+}
+
+message ResponderRequest {
+  string tenant_id = 1;
+  string atendimento_id = 2;
+  string mensagem = 3;
+  ChatHistory historico = 4;
+  repeated KeyValuePair fluxos_disponiveis = 5; // key = "Setor - descrição"
+  string dados_empresa = 6;
+  string dados_treinamento = 7; // resolvido via data_postgres.QueryCompose
+  repeated CampoColetado campos_coletados = 8;
+  repeated CampoPendente campos_pendentes = 9;
+  LlmProviderConfig llm = 10;
+  LlmProviderConfig embeddings_provider = 11; // score triádico de confiabilidade
+  double similarity_threshold = 12;
+}
+message ResponderResponse {
+  string resposta_texto = 1;
+  bool transferir_atendimento = 2;
+  string fluxo_transferencia = 3;
+  double confiabilidade = 4;
+}
+
+// --- Sentimento (equivalente a analise_avaliacao) ---
+message SentimentoRequest {
+  string tenant_id = 1;
+  ChatHistory historico = 2;
+  LlmProviderConfig llm = 3;
+}
+message SentimentoResponse {
+  int32 nota = 1;
+  string sentimento = 2;
+  string feedback = 3;
+}
+
+service IaEngineService {
+  rpc Transcribe(TranscribeRequest) returns (TranscribeResponse);
+  rpc InterpretMedia(InterpretMediaRequest) returns (InterpretMediaResponse);
+  rpc Analyse(AnalyseRequest) returns (AnalyseResponse);
+  rpc Embed(EmbedRequest) returns (EmbedResponse);
+  rpc Responder(ResponderRequest) returns (ResponderResponse);
+  rpc Sentimento(SentimentoRequest) returns (SentimentoResponse);
 }

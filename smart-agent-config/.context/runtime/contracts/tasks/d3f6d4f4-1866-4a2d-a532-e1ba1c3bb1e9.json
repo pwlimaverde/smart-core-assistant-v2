@@ -1,0 +1,36 @@
+{
+  "id": "d3f6d4f4-1866-4a2d-a532-e1ba1c3bb1e9",
+  "title": "Fase N2 — `ia_engine` (serviço Python de IA via gRPC): Confirmation",
+  "description": "Derived from linked plan \"n2-ia-engine\" for PREVC phase C (Confirmation). Plan phases: Confirmation. Expected outputs: documentation, changelog, deploy.",
+  "sessionId": "704b40ec-0b5b-4d43-9f38-54d9ca4e3a2c",
+  "owner": "documenter",
+  "status": "completed",
+  "inputs": [],
+  "expectedOutputs": [
+    "documentation",
+    "changelog",
+    "deploy"
+  ],
+  "acceptanceCriteria": [
+    "Complete Confirmation"
+  ],
+  "requiredSensors": [],
+  "requiredArtifacts": [],
+  "createdAt": "2026-07-10T20:10:22.126Z",
+  "updatedAt": "2026-07-10T20:37:44.498Z",
+  "metadata": {
+    "requirementsSource": "none",
+    "source": "workflow.plan",
+    "planSlug": "n2-ia-engine",
+    "prevcPhase": "C",
+    "planPhaseIds": [
+      "phase-c"
+    ],
+    "planPhaseNames": [
+      "Confirmation"
+    ],
+    "planPhaseSummaries": [],
+    "derivedFrom": "linked-plan",
+    "completionReason": "Workflow completed"
+  }
+}

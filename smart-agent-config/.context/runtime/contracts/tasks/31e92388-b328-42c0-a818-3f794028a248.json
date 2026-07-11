@@ -1,0 +1,39 @@
+{
+  "id": "31e92388-b328-42c0-a818-3f794028a248",
+  "title": "Fase N2 — `ia_engine` (serviço Python de IA via gRPC): Validation",
+  "description": "Derived from linked plan \"n2-ia-engine\" for PREVC phase V (Validation). Plan phases: Validation. Expected outputs: test-report, review-comments, approval.",
+  "sessionId": "704b40ec-0b5b-4d43-9f38-54d9ca4e3a2c",
+  "owner": "qa",
+  "status": "completed",
+  "inputs": [],
+  "expectedOutputs": [
+    "test-report",
+    "review-comments",
+    "approval"
+  ],
+  "acceptanceCriteria": [
+    "Complete Validation"
+  ],
+  "requiredSensors": [
+    "tests",
+    "lint"
+  ],
+  "requiredArtifacts": [],
+  "createdAt": "2026-07-10T20:10:09.888Z",
+  "updatedAt": "2026-07-10T20:10:22.160Z",
+  "metadata": {
+    "requirementsSource": "phase-defaults",
+    "source": "workflow.plan",
+    "planSlug": "n2-ia-engine",
+    "prevcPhase": "V",
+    "planPhaseIds": [
+      "phase-v"
+    ],
+    "planPhaseNames": [
+      "Validation"
+    ],
+    "planPhaseSummaries": [],
+    "derivedFrom": "linked-plan",
+    "completionReason": "Workflow advanced from V to C"
+  }
+}

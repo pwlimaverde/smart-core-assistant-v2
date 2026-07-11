@@ -153,6 +153,9 @@ final class AtendimentoRemoteDataSource implements AtendimentoDataSource {
         remetente: m.remetente,
         timestamp: DateTime.fromMillisecondsSinceEpoch(m.timestamp.toInt()),
         statusEnvio: m.statusEnvio,
+        // Campos `gerado_por_ia`/`resumo_midia` ainda não existem no proto
+        // gerado (adicionados em paralelo). Enquanto isso, defaults seguros;
+        // ao regenerar o proto, mapear `m.geradoPorIa`/`m.resumoMidia` aqui.
       );
 
   static AtendimentoEvento _paraAtendimentoEvento(proto.AtendimentoEvent e) {

@@ -2,6 +2,71 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-07-10] - Fase N2: `ia_engine` (serviço Python de IA via gRPC)
+
+> Ciclo PREVC `n2-ia-engine` fechado e arquivado via `prevc-final-review`.
+> Final-review: qualidade **CORRIGIDO** (bug real de RAG corrigido durante a auditoria —
+> ver Corrigido). Cria `ia_engine`, o primeiro serviço Python do monorepo, dando ao bot do
+> WhatsApp resposta com RAG (pgvector), score de confiabilidade e degradação graciosa.
+
+### Adicionado
+
+- **`ia_engine/` (novo serviço Python):** `grpc.aio` real (HTTP/2, não o protocolo
+  interno `transport::MuxClient`), `uv`/`pyproject.toml`, OTel com propagação W3C via
+  interceptor (`opentelemetry-instrumentation-grpc`), healthcheck gRPC, graceful
+  shutdown. `FeaturesCompose` da v1 (langchain 0.1.x) reescrita em LCEL 1.x/pydantic v2:
+  score triádico de confiabilidade e safety-net de transferência portados
+  matematicamente exatos; `RespostaBot` via structured output. 6 RPCs:
+  `Transcribe`/`InterpretMedia`/`Analyse`/`Embed`/`Responder`/`Sentimento`. 35 testes
+  (LLM/embeddings fake determinístico), ruff/mypy limpos.
+- **Contrato gRPC:** `server/crates/contracts/schemas/ai/ai_engine.proto` reescrito com
+  `service IaEngineService` (era um placeholder sem `service`); `map<string,string>`
+  trocado por `repeated KeyValuePair` local (o pipeline `flatc --proto` deste crate não
+  suporta `map<>` nativo nem imports cross-diretório).
+- **RAG no `data_postgres`:** RPC `QueryCompose` (busca vetorial pgvector sob RLS de
+  tenant, reaproveita `QueryComposeRepository`/`DocumentoRepository` já existentes) e
+  RPC `ResolverConfigIa` (resolve `LlmProviderConfig` do tenant via `TenantConfigCache`
+  já existente, api_key descriptografada de verdade — RPC interno worker-only, distinto
+  do `GetTenantConfig` mascarado do painel admin).
+- **Integração `worker` → `ia_engine`:** `IaEngineClient`/`TonicIaEngineClient` (cliente
+  gRPC real via `tonic`, endpoint `http://`, worker ganha essa dependência pela primeira
+  vez) + `ResilientIaEngine` (timeout + retry bounded `[0,1,2]`s só para erros
+  transitórios). Barreira de bot reescrita: `Embed` → `QueryCompose` (RAG) → `Responder`,
+  com fallback gracioso para o texto fixo em qualquer falha (`bot.degradado`, WARN) —
+  nunca trava o atendimento.
+- **UI Flutter:** indicador "gerado por IA" + resumo de mídia no chat
+  (`chat_message_bubble.dart`/`mensagem_thread.dart`), sem lógica de IA no cliente.
+- **Docker compose dev/prod:** serviço `ia_engine` (imagem própria, contexto = raiz do
+  repo para acessar o `.proto` canônico), `worker` com `depends_on: ia_engine`.
+
+### Corrigido
+
+- **Bug de RAG em produção (achado pelo `prevc-final-review`):** `ResolverConfigIa`
+  enviava `embeddings_provider` como nome de classe LangChain cru (ex.:
+  `"OpenAIEmbeddings"`) em vez de slug de provedor — `init_embeddings` do lado Python
+  falhava sempre, mascarado pela própria degradação graciosa (o bot continuava
+  respondendo o texto fixo, sem erro visível). Normalizado para a mesma heurística de
+  slug já usada para o LLM; api_key de embeddings resolvida separadamente
+  (`ConfigIa.embeddings_api_key`, pode divergir do provedor do LLM).
+- **Sanitização reforçada:** `Debug` manual (redigido) em `ConfigIa`/
+  `LlmProviderConfigInput` — evita que um `{:?}` acidental vaze api_key em claro; teste
+  Python `test_api_key_nunca_aparece_em_logs` estendido para cobrir o caminho de erro
+  (`servicer._abort`), não só o de sucesso.
+
+### Pendências (fica para um ciclo seguinte)
+
+- `fluxos_disponiveis`/`campos_coletados`/`campos_pendentes` chegam vazios no
+  `Responder` — resolução de fluxos de transferência por tenant.
+- `Transcribe`/`InterpretMedia`/`Analyse`/`Sentimento` implementados e testados nos dois
+  lados mas **não ligados ao pipeline de mensagens ao vivo** (exige estender
+  `domain_whatsapp::NormalizedMessage` com URL de mídia).
+- Indicador "gerado por IA" no chat Flutter existe mas ainda recebe dado fixo
+  (`false`/`null`) — o proto do chat (`operacional`) precisa ganhar os campos
+  correspondentes e o backend precisa persisti-los.
+- Transcrição real de áudio no Python é um `PendingTranscriber` (interface completa,
+  provedor de voz real pendente); `pyproject.toml` só traz `langchain-openai` — Groq/
+  Google GenAI degradam graciosamente mas não funcionam de fato ainda.
+
 ## [2026-07-09] - Fase N1: Fechamento do MVP + Scheduler do Worker
 
 > Ciclo PREVC `n1-fechamento-mvp-scheduler` fechado e arquivado via `prevc-final-review`.

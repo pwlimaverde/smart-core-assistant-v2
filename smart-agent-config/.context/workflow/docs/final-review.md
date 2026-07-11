@@ -1,63 +1,51 @@
-# Final Review — n1-fechamento-mvp-scheduler
-Data: 2026-07-09 · Modelo: Opus · Diff: working tree (escopo: server/apps/worker, server/apps/data_postgres, server/crates/infrastructure_postgres, docker/observability)
+# Final Review — n2-ia-engine
+Data: 2026-07-10 · Modelo: Opus · Diff: working tree (escopo: contracts, worker, data_postgres, ia_engine/, clients/operacional_module, docker)
 
-## Rótulo: CONFORME
+## Rótulo: CORRIGIDO
 
 ## Resumo das correções
-Nenhuma correção foi necessária. Todos os itens de N1.2 (scheduler), N1.3 (elo outbox→outbound) e N1.4 (Grafana como código) estão implementados conforme o plano completo, com observabilidade/auditoria conformes e `cargo fmt --check` / `clippy -D warnings` / testes (worker 10/10, data_postgres 31/31) limpos.
+Bug de correctness que quebrava o caminho de RAG em produção: o `embeddings_provider` era enviado como nome de classe LangChain cru (ex.: "OpenAIEmbeddings") em vez de slug de provedor, fazendo `init_embeddings` falhar sempre (mascarado pela degradação graciosa). Normalizado no `data_postgres`, com api_key de embeddings própria propagada ao worker. Reforço de sanitização (`Debug` redigido para os dois structs que carregam api_key em claro), span de observabilidade na chamada à IA, e o teste de vazamento de api_key estendido para cobrir o caminho de erro.
 
 ## 1. Plano vs. Implementado
-
 | Item do plano | Status | Observação |
 |---|---|---|
-| N1.2 Migração 0014 (feedback_expirado_em, midia_purgada_em + índices parciais) | ✅ | `infrastructure_postgres/migrations/0014_scheduler_idempotencia.sql` |
-| RPC ListarAtendimentosFeedbackVencido | ✅ | cross-tenant via admin_pool, `exigir_qualquer(["operacional:admin"])` |
-| RPC MarcarFeedbackExpirado (idempotente) | ✅ | `WHERE feedback_expirado_em IS NULL` |
-| RPC ListarMidiasExpiradas | ✅ | filtro `arquivo_midia IS NOT NULL AND midia_purgada_em IS NULL` |
-| RPC MarcarMidiaPurgada (idempotente) | ✅ | `WHERE midia_purgada_em IS NULL` |
-| Loop tokio::spawn + tokio::time::interval | ✅ | `worker/src/scheduler.rs::iniciar`, paralelo ao consumer do bus |
-| Lock Redis SET NX PX por tarefa | ✅ | `scheduler:lock:feedback_timeout` / `:media_purge`, TTL 30s < tick |
-| Port SchedulerClock (tempo injetável) | ⚠️ vestigial | trait+impl existem e são injetados, mas TTL é calculado server-side (NOW()); ver Decisões Autônomas |
-| Auditoria atendimento.feedback_expirado (INFO, sem PII) | ✅ | só `{atendimento_id}` |
-| Publica media.purge no bus | ✅ | consumido pelo data_storage já existente |
-| N1.3 RPC ResolverDestinoEnvioOutbound | ✅ | join mensagem→atendimento→contato→whatsapp_contact |
-| RPC MarcarMensagemEnviada / MarcarMensagemFalhaEnvio | ✅ | guarda `WHERE status_envio='pending'` |
-| Consumidor de message.persisted no worker | ✅ | no-op para sender_id != "atendente" |
-| Retry/backoff | ✅ | backoffs [0,1,2,4]s |
-| Idempotência de reentrega | ✅ | early-return quando status_envio != "pending" |
-| Auditoria mensagem.envio_falhou (WARN, sem conteúdo) | ✅ | só `{mensagem_id}` |
-| Bug pré-existente (payload SendWhatsappMessage do bot) | ✅ corrigido | `instance_id`/`to` → `id`/`to_number` |
-| N1.4 Datasources uid fixo + editable:false | ✅ | `provisioning/datasources/ds.yml` |
-| Dashboards allowUiUpdates:false + 4 dashboards novos | ✅ | `servicos_saude`, `latencia_grpc`, `outbox_backlog`, `trace_chain` |
-| Alerting provisionado (rules/contact-points/policies) | ✅ | `provisioning/alerting/` |
-| Nomes de métrica batem com o código | ✅ | `smartcore_rpc_total`, `smartcore_rpc_duration_ms_*`, `smartcore_outbox_backlog`, `smartcore_bus_pending`, `smartcore_pg_pool_*` |
+| N2.1 Skeleton (uv, grpc.aio, healthcheck, OTel, compose, settings) | ✅ | `server.py` com graceful shutdown + health gRPC; `telemetry.py` com TracerProvider + `aio_server_interceptor` (propagação W3C); `settings.py` nunca guarda api_key; serviço nos dois compose (contexto=raiz p/ o `.proto` canônico). |
+| N2.2 Contratos/stubs + reescrita da FeaturesCompose em LCEL 1.x | ✅ | `.proto` com 6 RPCs; stubs Rust (tonic build) + Python (`gen_proto.py`); facade reescrita em `prompt \| llm.with_structured_output` (pydantic v2), `init_chat_model`/`init_embeddings`; 35 testes com fakes determinísticos. |
+| N2.3 Análise (transcribe/interpret/analyse/embed 1536) | ⚠️ | Todas implementadas e testadas nos 2 lados; `embed` valida dim 1536. **Não ligadas ao pipeline ao vivo** (simplificação #2, documentada em `ia_engine/mod.rs`); transcrição real = `PendingTranscriber` (#3, documentada em `transcribe.py`). |
+| N2.4 Resposta + RAG (QueryCompose sob RLS) + sentimento | ✅ (após correção) | RAG via RPC `QueryCompose` no `data_postgres` sob `run_in_tenant_transaction` (RLS); Python nunca abre Postgres. **Provider de embeddings estava quebrado — corrigido** (item 2 abaixo). Score triádico + safety-net portados exatos. |
+| N2.5 Integração worker→IA (timeout/retry/degradação) + mídia | ✅ (parcial) | `Arc<dyn IaEngineClient>` + `ResilientIaEngine` (timeout + retry [0,1,2]s, só erros transitórios) + degradação para texto fixo + auditoria `bot.respondeu`/`bot.degradado`. **Mídia no pipeline** (transcribe/interpret) fica para continuação (#2). |
+| N2.6 UI: resposta da IA + resumo de mídia no chat | ⚠️ | Model + widget (`_IndicadorIa`, `_ResumoMidia`) + teste prontos. **Mas o datasource envia `geradoPorIa=false`/`resumoMidia=null` fixos** porque o proto do chat não foi regenerado (documentado em comentário) — o indicador nunca recebe dado real ainda. Ver Pendências. |
 
 ## 2. Correções Aplicadas
-
 | Arquivo:linha | Problema | Correção |
 |---|---|---|
-| — | Nenhum desvio encontrado | Implementação passou em todos os gates sem necessidade de edição |
+| `data_postgres/src/adapters/operacional.rs:675-693` | `resolver_config_ia` enviava `embeddings_provider: cfg.embeddings_class` **cru** (nome de classe, ex.: "OpenAIEmbeddings"). O Python `init_embeddings(provider="OpenAIEmbeddings")` falha sempre → RAG/IA nunca funcionava (mascarado pela degradação). | Normaliza via a mesma heurística `provider_e_api_key_de` (classe→slug) usada no LLM; resolve também a `embeddings_api_key` da família correta. |
+| `data_postgres/src/ports/operacional.rs:33-35` · `main.rs:2373` · `worker/src/main.rs:134-155` | Faltava propagar a api_key de embeddings (LLM e embeddings podem ter provedores/keys distintos; antes reusava a do LLM). | Novo campo `ConfigIa.embeddings_api_key`, exposto no reply `ResolverConfigIa` e consumido no worker (LLM usa `api_key`, embeddings usa `embeddings_api_key`). |
+| `worker/src/ia_engine/client.rs:11-33` · `data_postgres/src/ports/operacional.rs:23-56` | `LlmProviderConfigInput` e `ConfigIa` derivavam `Debug` com api_key em **texto puro**; um `{:?}` acidental (log/trace) vazaria o segredo (a proteção `SecretString` termina ali). | `Debug` manual redigido (`api_key`/`embeddings_api_key` → `[REDACTED]`); redação propaga para os structs que os contêm (ex.: `ResponderInput`). |
+| `worker/src/main.rs:91-98` | `responder_via_ia` sem span (item de observabilidade do plano: "span da chamada à IA"). | `#[tracing::instrument(skip_all, name = "ia.responder", fields(tenant_id, atendimento_id))]` — correlação sem PII (mensagem do usuário fora do span). |
+| `ia_engine/tests/integration/test_server_roundtrip.py:131-172` | `test_api_key_nunca_aparece_em_logs` só exercia o caminho de **sucesso**; o crítico (`servicer._abort`, que loga tipo/mensagem da exceção) ficava sem cobertura. | Estendido para também disparar um request inválido (`_abort` → WARNING) com a api_key presente e afirmar que o segredo não aparece nos logs capturados. |
 
 ## 2b. Observabilidade & Auditoria
-
 | Comportamento | Logs/Trace | Audit log | Sanitização | Observação |
 |---|---|---|---|---|
-| Scheduler: feedback vencido | ✅ `#[instrument]` + `scheduler.tick` | ✅ `atendimento.feedback_expirado` só quando processados>0 | ✅ só ids | conforme |
-| Scheduler: purga de mídia | ✅ | N/A (audita no data_storage, já existente) | ✅ só file_name via bus, não logado | conforme |
-| Elo outbox→outbound | ✅ | ✅ `mensagem.envio_falhou` só em falha definitiva | ✅ sem conteúdo/telefone completo | conforme |
-| Dashboards/alerting | N/A (leitura de métricas) | N/A (intencional) | ✅ labels só ids/serviço | conforme |
+| IA respondeu (sucesso) | span `ia.responder` (novo) + `tracing::info`; traceparent W3C via metadata gRPC (webhook→worker→ia_engine→data_postgres) | `bot.respondeu` (INFO) + `mensagem.enviada` (INFO) — **sem regressão** vs. pré-N2 | contexto só com `atendimento_id` + telefone mascarado | Continuidade de trace mantida; `QueryCompose`/`resolver_config_ia` com `#[tracing::instrument(skip_all)]`. |
+| IA falhou/vazia (degradação) | `tracing::warn` por tentativa (`ResilientIaEngine`) + na barreira | `bot.degradado` (WARN) em ambos os caminhos (erro e resposta vazia) | `motivo = e.to_string()` — `IaEngineError`/`DbError` não contêm api_key | Fallback para texto fixo nunca trava o atendimento. |
+| Sanitização api_key | Python: `_abort` loga só rpc/tenant/tipo; `ProviderConfigError` não inclui detalhes do provedor. Rust: `Debug` redigido (novo) | n/a | api_key só trafega na mensagem gRPC interna; nunca em log/trace/erro nos 2 lados | `settings.py`/`RuntimeConfig(SecretString)` confirmam que segredo não é persistido no Python. |
 
 ## 3. Decisões Autônomas (revisar depois)
-- Port `SchedulerClock` fica vestigial: TTL calculado via `NOW()` no SQL, não pelo `clock.now()` injetado. Mantido conforme a letra do plano (o port existe e é testável), sem refactor adicional de risco.
-- Trace propagation do scheduler usa `traceparent`/`trace_id` vazios nas RPCs/auditoria disparadas pelo tick — spans downstream iniciam trace próprio em vez de encadear sob `scheduler.tick`. Não-bloqueante; endereçável quando houver um helper de extração do traceparent W3C do contexto OTel corrente.
+- **api_key separada para embeddings** (`ConfigIa.embeddings_api_key`): decidi resolver a chave pela família do `embeddings_class` (não reusar a do LLM), tornando correto o caso multi-provedor (ex.: LLM Groq + embeddings OpenAI). Compatível com o caso comum (mesmo provedor).
+- **`Debug` redigido** em vez de manter a garantia "por convenção" do comentário original: defesa estrutural alinhada ao requisito inviolável de sanitização. Nenhum log atual imprimia esses structs — é defesa em profundidade.
+- **Fortalecimento do teste** `test_api_key_nunca_aparece_em_logs` (não é teste novo; passou a cobrir o caminho de erro que o nome já prometia). Contagem segue 35 testes.
+- **Span `ia.responder`**: primeiro span explícito no pipeline de mensagens do worker (o resto usa eventos `tracing`); adicionado só onde o plano pede.
 
 ## 4. Revalidação
-- fmt: ✅
-- clippy (worker+data_postgres, -D warnings): ✅
-- testes (worker 10/10, data_postgres 31/31): ✅
-- suíte remota completa (.\infra\test-local.ps1): ✅ 32/33 (única falha é ambiental pré-existente, documentada na fase V)
+- fmt: ✅ (`cargo fmt --check` limpo)
+- clippy: ✅ (`cargo clippy --workspace --all-targets --all-features -D warnings` limpo)
+- testes Rust: ✅ `contracts` 2/2 · `data_postgres` 31/31 unit + integração (audit_consumer, e2e_trace, via túnel SSH) · `worker` 12/13 — a única falha (`scheduler::...midia_expirada`) é **ambiental pré-existente** (sem Redis fora do túnel), já documentada na fase V, **não é regressão N2**; os 3 testes do `ResilientIaEngine` e a barreira de bot passam.
+- ruff/mypy/pytest (ia_engine): ✅ ruff limpo · mypy `Success: no issues found in 20 source files` · pytest 35/35
+- flutter analyze: N/A — não alterei arquivos Flutter neste ciclo; a fase V já registrou `flutter analyze` limpo + operacional_module 20/20.
 
 ## 5. Pendências (escopo extra ou fora do plano)
-- Duplicidade em falha pós-envio (SendWhatsappMessage sucede mas MarcarMensagemEnviada falha): reentrega reenviaria. Aceito pelo plano (idempotência client-side fica para N2+).
-- `ResolverDestinoEnvioOutbound` sem `whatsapp_contact` ativo causa `bail!`/reentrega indefinida sem auditoria — edge operacional, considerar dead-letter futuramente.
-- Varreduras cross-tenant retornam a struct completa (Atendimento/Mensagem) quando o worker só usa poucos campos — sem risco de vazamento (payload service-to-service, não logado), só oportunidade de eficiência.
+- **N2.6 não fecha ponta-a-ponta**: `atendimento_remote_data_source.dart` mapeia `geradoPorIa`/`resumoMidia` como defaults fixos porque o proto do chat (`operacional`) não foi regenerado com esses campos. O widget existe e é testado, mas o indicador "Gerado por IA" e o resumo de mídia nunca recebem dado real do backend. Documentado em comentário no código; regenerar o proto + persistir/expor os campos no backend é um ciclo seguinte.
+- **Provedores além de OpenAI**: `pyproject.toml` só declara `langchain-openai`. Provider `groq`/`google_genai` resolvido pelo `data_postgres` faria `init_chat_model`/`init_embeddings` cair em `ImportError` → `ProviderConfigError` (degrada graciosamente, mas não funciona). Adicionar `langchain-groq`/`langchain-google-genai` quando esses provedores forem suportados de fato.
+- **Simplificações conhecidas confirmadas como documentadas** (não são desvios): #1 `fluxos_disponiveis`/`campos_*` vazios — comentário em `worker/src/main.rs:249-254`; #2 análise de mídia não ligada ao pipeline — comentário em `ia_engine/mod.rs:10-15`; #3 `PendingTranscriber` — docstring em `transcribe.py`. Todas presentes.
