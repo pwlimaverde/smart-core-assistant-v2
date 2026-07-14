@@ -20,7 +20,12 @@ from langchain_core.runnables import Runnable, RunnableLambda
 
 from ia_engine.contracts import ai_engine_pb2 as pb
 from ia_engine.contracts import ai_engine_pb2_grpc as pbg
-from ia_engine.domain.models import AnaliseAvaliacao, MediaAnalysis, RespostaBot
+from ia_engine.domain.models import (
+    AnaliseAvaliacao,
+    LlmProviderSpec,
+    MediaAnalysis,
+    RespostaBot,
+)
 from ia_engine.servicer import IaEngineServicer
 
 EMBEDDING_DIM = 1536
@@ -107,7 +112,7 @@ def _fake_chat() -> FakeChatModel:
 
 @pytest.fixture
 def fake_chat_factory():
-    def factory(_config: pb.LlmProviderConfig) -> FakeChatModel:
+    def factory(_spec: LlmProviderSpec) -> FakeChatModel:
         return _fake_chat()
 
     return factory
@@ -115,7 +120,7 @@ def fake_chat_factory():
 
 @pytest.fixture
 def fake_embeddings_factory():
-    def factory(_config: pb.LlmProviderConfig) -> FakeEmbeddings:
+    def factory(_spec: LlmProviderSpec) -> FakeEmbeddings:
         return FakeEmbeddings()
 
     return factory
@@ -123,7 +128,7 @@ def fake_embeddings_factory():
 
 @pytest.fixture
 def fake_transcriber_factory():
-    def factory(_config: pb.LlmProviderConfig) -> FakeTranscriber:
+    def factory(_spec: LlmProviderSpec) -> FakeTranscriber:
         return FakeTranscriber()
 
     return factory
@@ -135,16 +140,20 @@ def _patch_media_download(monkeypatch: pytest.MonkeyPatch) -> None:
 
     async def _fake_download(url: str, **_kwargs: Any) -> bytes:
         if not url:
-            from ia_engine.domain.errors import MediaDownloadError
+            from ia_engine.shared.media import MediaDownloadException
 
-            raise MediaDownloadError("URL da mídia não informada")
+            raise MediaDownloadException("URL da mídia não informada")
         return b"\x00\x01\x02fake-media-bytes"
 
     monkeypatch.setattr(
-        "ia_engine.features.interpret_media.download_media", _fake_download
+        "ia_engine.features.interpret_media.datasources"
+        ".interpret_media_datasource.download_media",
+        _fake_download,
     )
     monkeypatch.setattr(
-        "ia_engine.features.transcribe.download_media", _fake_download
+        "ia_engine.features.transcribe.datasources"
+        ".transcribe_datasource.download_media",
+        _fake_download,
     )
 
 

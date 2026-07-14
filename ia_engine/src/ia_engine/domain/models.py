@@ -6,7 +6,25 @@ internos das features, convertidos para proto pelo `servicer`.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from pydantic import BaseModel, Field
+
+
+@dataclass(frozen=True)
+class LlmProviderSpec:
+    """Config de provedor LLM já desacoplada do proto.
+
+    O `servicer` converte `pb.LlmProviderConfig` para este valor de domínio —
+    as camadas internas (parameters/datasources) nunca importam proto. A
+    `api_key` chega por request e nunca é logada nem persistida.
+    """
+
+    provider: str
+    model: str
+    api_key: str = ""
+    temperature: float = 0.0
+    extra_params: tuple[tuple[str, str], ...] = ()
 
 
 class RespostaBot(BaseModel):

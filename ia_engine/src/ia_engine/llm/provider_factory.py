@@ -1,4 +1,4 @@
-"""Constrói um chat model LangChain a partir de `LlmProviderConfig` (proto).
+"""Constrói um chat model LangChain a partir de `LlmProviderSpec`.
 
 A `api_key` chega por request e é passada direto ao construtor do provedor —
 nunca é logada nem persistida.
@@ -10,12 +10,11 @@ from typing import TYPE_CHECKING, Any
 
 from langchain.chat_models import init_chat_model
 
-from ia_engine.domain.errors import ProviderConfigError
+from ia_engine.domain.models import LlmProviderSpec
+from ia_engine.llm.errors import ProviderConfigException
 
 if TYPE_CHECKING:
     from langchain_core.language_models.chat_models import BaseChatModel
-
-    from ia_engine.contracts import ai_engine_pb2 as pb
 
 
 # Coerção leve dos `extra_params` (string no proto) para tipos usuais.
@@ -31,33 +30,34 @@ def _coerce(value: str) -> Any:
         return value
 
 
-def _extra_params(config: pb.LlmProviderConfig) -> dict[str, Any]:
-    return {kv.key: _coerce(kv.value) for kv in config.extra_params if kv.key}
+def _extra_params(spec: LlmProviderSpec) -> dict[str, Any]:
+    return {key: _coerce(value) for key, value in spec.extra_params if key}
 
 
-def build_chat_model(config: pb.LlmProviderConfig) -> BaseChatModel:
+def build_chat_model(spec: LlmProviderSpec) -> BaseChatModel:
     """Instancia o chat model do provedor informado no request.
 
     Raises:
-        ProviderConfigError: se `provider` ou `model` estiverem vazios.
+        ProviderConfigException: `provider`/`model` vazios ou falha na
+            inicialização (mensagem sanitizada, sem detalhes do provedor).
     """
-    provider = (config.provider or "").strip()
-    model = (config.model or "").strip()
+    provider = (spec.provider or "").strip()
+    model = (spec.model or "").strip()
     if not provider:
-        raise ProviderConfigError("provider do LLM não informado")
+        raise ProviderConfigException("provider do LLM não informado")
     if not model:
-        raise ProviderConfigError("model do LLM não informado")
+        raise ProviderConfigException("model do LLM não informado")
 
-    kwargs: dict[str, Any] = _extra_params(config)
-    kwargs["temperature"] = config.temperature
-    if config.api_key:
-        kwargs["api_key"] = config.api_key
+    kwargs: dict[str, Any] = _extra_params(spec)
+    kwargs["temperature"] = spec.temperature
+    if spec.api_key:
+        kwargs["api_key"] = spec.api_key
 
     try:
         return init_chat_model(model, model_provider=provider, **kwargs)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         # Não propaga detalhes do provedor (podem conter fragmentos sensíveis).
-        raise ProviderConfigError(
+        raise ProviderConfigException(
             f"falha ao inicializar chat model provider='{provider}' "
             f"model='{model}'"
         ) from exc
