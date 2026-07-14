@@ -4,7 +4,9 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use infrastructure_postgres::security::RequestContext;
-use infrastructure_postgres::tenants::tenants::{Tenant, TenantInvite, TenantUser};
+use infrastructure_postgres::tenants::tenants::{
+    Tenant, TenantInvite, TenantInviteListItem, TenantUser,
+};
 use infrastructure_postgres::DbError;
 use uuid::Uuid;
 
@@ -70,5 +72,38 @@ pub trait TenantStore: Send + Sync {
         password_hash: &str,
         tenant_id: Uuid,
         role: &str,
+    ) -> Result<TenantUser, DbError>;
+
+    /// Lista os TenantUser do tenant do `ctx` (RBAC `tenant:admin` no repositório).
+    async fn listar_usuarios(&self, ctx: &RequestContext) -> Result<Vec<TenantUser>, DbError>;
+
+    /// Atualiza role/permissões de um TenantUser do tenant do `ctx`; retorna `true`
+    /// se afetou alguma linha.
+    async fn atualizar_usuario(
+        &self,
+        ctx: &RequestContext,
+        user_id: i32,
+        role: Option<String>,
+        module_permissions: Option<serde_json::Value>,
+        flow_permissions: Option<serde_json::Value>,
+    ) -> Result<bool, DbError>;
+
+    /// Lista os convites do tenant do `ctx` (sem `token`; RBAC `tenant:admin`).
+    async fn listar_convites(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<TenantInviteListItem>, DbError>;
+
+    /// Revoga um convite do tenant do `ctx`; retorna `true` se o convite era válido.
+    async fn revogar_convite(&self, ctx: &RequestContext, invite_id: Uuid)
+        -> Result<bool, DbError>;
+
+    /// Cria o primeiro TenantUser admin de um tenant recém-criado (bootstrap do
+    /// CreateTenant). `module_permissions` são os escopos iniciais do admin.
+    async fn criar_primeiro_admin(
+        &self,
+        tenant_id: Uuid,
+        owner_id: i32,
+        module_permissions: serde_json::Value,
     ) -> Result<TenantUser, DbError>;
 }

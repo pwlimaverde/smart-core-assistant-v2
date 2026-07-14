@@ -9,10 +9,11 @@ use uuid::Uuid;
 
 use infrastructure_postgres::security::RequestContext;
 use infrastructure_postgres::tenants::tenants::{
-    PostgresTenantInviteRepository, PostgresTenantRepository, Tenant, TenantInvite,
-    TenantInviteRepository, TenantRepository, TenantUser,
+    PostgresTenantInviteRepository, PostgresTenantRepository, PostgresTenantUserRepository, Tenant,
+    TenantInvite, TenantInviteListItem, TenantInviteRepository, TenantRepository, TenantUser,
+    TenantUserRepository,
 };
-use infrastructure_postgres::DbError;
+use infrastructure_postgres::{run_in_tenant_transaction, DbError};
 
 use crate::ports::TenantStore;
 
@@ -215,5 +216,93 @@ impl TenantStore for PgTenantStore {
 
         tx.commit().await?;
         Ok(tenant_user)
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_usuarios(&self, ctx: &RequestContext) -> Result<Vec<TenantUser>, DbError> {
+        let repo = PostgresTenantUserRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let users = repo.listar_por_tenant(&mut tx, &ctx).await?;
+            Ok((users, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, user_id = user_id))]
+    async fn atualizar_usuario(
+        &self,
+        ctx: &RequestContext,
+        user_id: i32,
+        role: Option<String>,
+        module_permissions: Option<serde_json::Value>,
+        flow_permissions: Option<serde_json::Value>,
+    ) -> Result<bool, DbError> {
+        let repo = PostgresTenantUserRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let afetou = repo
+                .atualizar(
+                    &mut tx,
+                    &ctx,
+                    user_id,
+                    role.as_deref(),
+                    module_permissions,
+                    flow_permissions,
+                )
+                .await?;
+            Ok((afetou, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_convites(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<TenantInviteListItem>, DbError> {
+        let repo = PostgresTenantInviteRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let convites = repo.listar_por_tenant(&mut tx, &ctx).await?;
+            Ok((convites, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, invite_id = %invite_id))]
+    async fn revogar_convite(
+        &self,
+        ctx: &RequestContext,
+        invite_id: Uuid,
+    ) -> Result<bool, DbError> {
+        let repo = PostgresTenantInviteRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let afetou = repo.marcar_revogado(&mut tx, &ctx, invite_id).await?;
+            Ok((afetou, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %tenant_id, owner_id = owner_id))]
+    async fn criar_primeiro_admin(
+        &self,
+        tenant_id: Uuid,
+        owner_id: i32,
+        module_permissions: serde_json::Value,
+    ) -> Result<TenantUser, DbError> {
+        let repo = PostgresTenantUserRepository;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let tu = repo
+                .criar_admin_bootstrap(&mut tx, tenant_id, owner_id, module_permissions)
+                .await?;
+            Ok((tu, tx))
+        })
+        .await
     }
 }

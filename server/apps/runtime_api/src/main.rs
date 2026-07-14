@@ -173,6 +173,41 @@ async fn main() -> anyhow::Result<()> {
                 })
             }),
         )
+        // --- N3: painel do tenant (gestão de usuários/convites; RBAC fino no data_postgres) ---
+        .route(
+            "ListTenantUsers",
+            exigir_auth(deps.clone(), bus.clone(), false, move |deps, env| {
+                Box::pin(async move {
+                    handler_admin_forward(deps, env, "ListTenantUsers", "ListTenantUsersReply")
+                        .await
+                })
+            }),
+        )
+        .route(
+            "ListInvites",
+            exigir_auth(deps.clone(), bus.clone(), false, move |deps, env| {
+                Box::pin(async move {
+                    handler_admin_forward(deps, env, "ListInvites", "ListInvitesReply").await
+                })
+            }),
+        )
+        .route(
+            "RevokeInvite",
+            exigir_auth(deps.clone(), bus.clone(), false, move |deps, env| {
+                Box::pin(async move {
+                    handler_admin_forward(deps, env, "RevokeInvite", "RevokeInviteReply").await
+                })
+            }),
+        )
+        .route(
+            "UpdateTenantUser",
+            exigir_auth(deps.clone(), bus.clone(), false, move |deps, env| {
+                Box::pin(async move {
+                    handler_admin_forward(deps, env, "UpdateTenantUser", "UpdateTenantUserReply")
+                        .await
+                })
+            }),
+        )
         // --- WS-5.2: comandos de leitura operacional (fila, histórico) ---
         .route(
             "ListAtendimentos",

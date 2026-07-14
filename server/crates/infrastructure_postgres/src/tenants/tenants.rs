@@ -51,6 +51,22 @@ pub struct TenantInvite {
     pub created_by_id: Option<i32>,
 }
 
+/// Projeção de convite para listagem administrativa. Nunca inclui `token`
+/// (segredo do convite) — o painel do tenant só precisa de metadados e estado.
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+pub struct TenantInviteListItem {
+    pub id: Uuid,
+    pub email: String,
+    pub name: String,
+    pub role: String,
+    pub module_permissions: serde_json::Value,
+    pub flow_permissions: serde_json::Value,
+    pub expires_at: DateTime<Utc>,
+    pub used: bool,
+    pub revoked: bool,
+    pub created_at: DateTime<Utc>,
+}
+
 #[async_trait]
 pub trait TenantRepository: Send + Sync {
     /// Busca um tenant pelo ID dentro de uma transação com RLS configurado.
@@ -119,6 +135,39 @@ pub trait TenantUserRepository: Send + Sync {
         user_id: i32,
         role: &str,
     ) -> Result<TenantUser, DbError>;
+
+    /// Lista os TenantUser do tenant do `ctx`. Exige `tenant:admin` (dado sensível
+    /// de permissões). O `tenant_id` vem do `ctx` (nunca do payload); a query filtra
+    /// por `tenant_id` além do RLS.
+    async fn listar_por_tenant(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+    ) -> Result<Vec<TenantUser>, DbError>;
+
+    /// Atualiza role/permissões de um TenantUser do tenant do `ctx` (COALESCE:
+    /// campos `None` preservam o valor atual). Retorna `true` se afetou alguma linha.
+    async fn atualizar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        user_id: i32,
+        role: Option<&str>,
+        module_permissions: Option<serde_json::Value>,
+        flow_permissions: Option<serde_json::Value>,
+    ) -> Result<bool, DbError>;
+
+    /// Cria o primeiro TenantUser admin de um tenant recém-criado (bootstrap do
+    /// CreateTenant, operação de superusuário). Não faz checagem de `tenant:admin`
+    /// pois roda fora de um contexto de tenant do próprio usuário — o `tenant_id` é
+    /// o do tenant recém-criado e a borda (runtime_api) já exige superusuário.
+    async fn criar_admin_bootstrap(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        tenant_id: Uuid,
+        user_id: i32,
+        module_permissions: serde_json::Value,
+    ) -> Result<TenantUser, DbError>;
 }
 
 #[async_trait]
@@ -146,6 +195,23 @@ pub trait TenantInviteRepository: Send + Sync {
     /// Marca o convite como usado. Requer `admin_pool` com BYPASSRLS — o invite_id
     /// é resolvido fora do contexto de tenant.
     async fn marcar_usado(&self, admin_pool: &PgPool, invite_id: Uuid) -> Result<(), DbError>;
+
+    /// Lista os convites do tenant do `ctx` (sem expor `token`). Exige `tenant:admin`.
+    /// Filtra por `tenant_id` do `ctx` além do RLS.
+    async fn listar_por_tenant(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+    ) -> Result<Vec<TenantInviteListItem>, DbError>;
+
+    /// Revoga um convite ainda não usado/revogado/expirado do tenant do `ctx`.
+    /// Exige `tenant:admin`. Retorna `true` se afetou alguma linha (convite válido).
+    async fn marcar_revogado(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        invite_id: Uuid,
+    ) -> Result<bool, DbError>;
 }
 
 // ---- Implementações concretas ----
@@ -326,6 +392,76 @@ impl TenantUserRepository for PostgresTenantUserRepository {
         .map_err(DbError::from_sqlx_unique)?;
         Ok(row)
     }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_por_tenant(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+    ) -> Result<Vec<TenantUser>, DbError> {
+        ctx.exigir_qualquer(&["tenant:admin"])?;
+        // Query runtime (query_as::<_, T>) para não depender do cache offline do sqlx.
+        let rows = sqlx::query_as::<_, TenantUser>(
+            "SELECT id, user_id, tenant_id, role, module_permissions, \
+                    flow_permissions, is_active, created_at, created_by_id \
+             FROM tenants_tenantuser WHERE tenant_id = $1 ORDER BY created_at",
+        )
+        .bind(ctx.tenant_id)
+        .fetch_all(&mut **tx)
+        .await?;
+        Ok(rows)
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, user_id = user_id))]
+    async fn atualizar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        user_id: i32,
+        role: Option<&str>,
+        module_permissions: Option<serde_json::Value>,
+        flow_permissions: Option<serde_json::Value>,
+    ) -> Result<bool, DbError> {
+        ctx.exigir_qualquer(&["tenant:admin"])?;
+        let res = sqlx::query(
+            "UPDATE tenants_tenantuser \
+             SET role = COALESCE($1::text, role), \
+                 module_permissions = COALESCE($2::jsonb, module_permissions), \
+                 flow_permissions = COALESCE($3::jsonb, flow_permissions) \
+             WHERE tenant_id = $4 AND user_id = $5",
+        )
+        .bind(role)
+        .bind(module_permissions)
+        .bind(flow_permissions)
+        .bind(ctx.tenant_id)
+        .bind(user_id)
+        .execute(&mut **tx)
+        .await?;
+        Ok(res.rows_affected() > 0)
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %tenant_id, user_id = user_id))]
+    async fn criar_admin_bootstrap(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        tenant_id: Uuid,
+        user_id: i32,
+        module_permissions: serde_json::Value,
+    ) -> Result<TenantUser, DbError> {
+        let row = sqlx::query_as::<_, TenantUser>(
+            "INSERT INTO tenants_tenantuser (user_id, tenant_id, role, module_permissions) \
+             VALUES ($1, $2, 'admin', $3) \
+             RETURNING id, user_id, tenant_id, role, module_permissions, \
+                       flow_permissions, is_active, created_at, created_by_id",
+        )
+        .bind(user_id)
+        .bind(tenant_id)
+        .bind(module_permissions)
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(DbError::from_sqlx_unique)?;
+        Ok(row)
+    }
 }
 
 #[async_trait]
@@ -392,5 +528,44 @@ impl TenantInviteRepository for PostgresTenantInviteRepository {
         .execute(admin_pool)
         .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_por_tenant(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+    ) -> Result<Vec<TenantInviteListItem>, DbError> {
+        ctx.exigir_qualquer(&["tenant:admin"])?;
+        // Projeção sem `token` (segredo). Query runtime para não depender do cache offline.
+        let rows = sqlx::query_as::<_, TenantInviteListItem>(
+            "SELECT id, email, name, role, module_permissions, flow_permissions, \
+                    expires_at, used, revoked, created_at \
+             FROM tenants_tenantinvite WHERE tenant_id = $1 ORDER BY created_at DESC",
+        )
+        .bind(ctx.tenant_id)
+        .fetch_all(&mut **tx)
+        .await?;
+        Ok(rows)
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, invite_id = %invite_id))]
+    async fn marcar_revogado(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        invite_id: Uuid,
+    ) -> Result<bool, DbError> {
+        ctx.exigir_qualquer(&["tenant:admin"])?;
+        let res = sqlx::query(
+            "UPDATE tenants_tenantinvite SET revoked = TRUE, revoked_at = NOW() \
+             WHERE id = $1 AND tenant_id = $2 AND used = FALSE \
+                   AND revoked = FALSE AND expires_at > NOW()",
+        )
+        .bind(invite_id)
+        .bind(ctx.tenant_id)
+        .execute(&mut **tx)
+        .await?;
+        Ok(res.rows_affected() > 0)
     }
 }
