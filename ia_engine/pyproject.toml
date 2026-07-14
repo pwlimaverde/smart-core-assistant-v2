@@ -3,8 +3,9 @@ name = "ia_engine"
 version = "0.1.0"
 description = "Serviço gRPC de IA (RAG, análise de mídia, sentimento) do Smart Core Assistant v2"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.13"
 dependencies = [
+    "py-return-success-or-error>=1.0.0",
     "grpcio>=1.68",
     "grpcio-health-checking>=1.68",
     "protobuf>=5.28",
@@ -41,7 +42,7 @@ allow-direct-references = true
 
 [tool.ruff]
 line-length = 88
-target-version = "py312"
+target-version = "py313"
 extend-exclude = ["src/ia_engine/contracts"]
 
 [tool.ruff.lint]
@@ -49,13 +50,13 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.per-file-ignores]
 # Prompts de conteúdo (texto literal) excedem a largura de linha por design.
-"src/ia_engine/features/sentimento.py" = ["E501"]
+"src/ia_engine/features/sentimento/datasources/sentimento_datasource.py" = ["E501"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.13"
 ignore_missing_imports = true
 exclude = ["src/ia_engine/contracts"]

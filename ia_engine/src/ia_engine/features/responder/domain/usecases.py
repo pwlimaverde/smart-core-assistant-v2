@@ -1,27 +1,26 @@
-"""Geração da resposta do bot (RPC Responder) — feature crítica.
+"""Usecase da feature Responder: score triádico + decisão de transferência.
 
-Reescreve, em LCEL 1.x, a lógica de `FeaturesCompose.analise_mensage` da v1:
-structured output `RespostaBot` + score triádico de confiabilidade
-(pergunta/resposta/treinamento) + safety-net de transferência. O RAG textual já
-chega resolvido em `dados_treinamento` (o worker resolve via
-`data_postgres.QueryCompose` antes desta chamada).
-
-As funções de score e de decisão de transferência são puras e testáveis sem LLM.
+As funções de score e de decisão são puras (portadas matematicamente da v1) e
+testáveis sem LLM — o I/O (LLM + embeddings) mora no datasource.
 """
 
 from __future__ import annotations
 
 import math
 import re
-from datetime import datetime
 
-from langchain_core.embeddings import Embeddings
-from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from py_return_success_or_error import (
+    ErrorGeneric,
+    ReturnSuccessOrError,
+    UsecaseBaseCallData,
+)
 
-from ia_engine.domain.errors import ResponderError
 from ia_engine.domain.models import RespostaBot, RespostaFinal
-from ia_engine.features._history import ChatTurnTuple, to_lc_messages
+from ia_engine.features.responder.domain.errors import ResponderError
+from ia_engine.features.responder.domain.models import ResponderData
+from ia_engine.features.responder.domain.parameters import (
+    ResponderParameters,
+)
 
 # Limiar de confiança do LLM abaixo do qual (junto com score baixo) força
 # transferência. Espelha o valor da v1 (`llm_confidence_threshold = 0.5`).
@@ -178,139 +177,37 @@ def resolve_resposta(
 
 
 # --------------------------------------------------------------------------- #
-# Orquestração (LLM + embeddings)
+# Usecase
 # --------------------------------------------------------------------------- #
-async def responder(
-    *,
-    mensagem: str,
-    historico: list[ChatTurnTuple],
-    fluxos_disponiveis: dict[str, str],
-    dados_empresa: str,
-    dados_treinamento: str,
-    campos_coletados: list[dict[str, str]],
-    campos_pendentes: list[dict[str, str]],
-    similarity_threshold: float,
-    llm: BaseChatModel,
-    embeddings: Embeddings,
-) -> RespostaFinal:
-    """Gera a resposta do bot e decide transferência.
+class ResponderUsecase(
+    UsecaseBaseCallData[
+        RespostaFinal, ResponderData, ResponderParameters, ResponderError
+    ]
+):
+    """FETCH (LLM + embeddings) → PROCESS (score triádico + decisão)."""
 
-    Raises:
-        ResponderError: LLM retornou tipo inesperado.
-    """
-    system_prompt = _build_system_prompt(
-        fluxos_disponiveis=fluxos_disponiveis,
-        dados_empresa=dados_empresa,
-        dados_treinamento=dados_treinamento,
-        campos_coletados=campos_coletados,
-        campos_pendentes=campos_pendentes,
-    )
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            ("system", system_prompt),
-            MessagesPlaceholder(variable_name="chat_history"),
-            ("user", "{input}"),
-        ]
-    )
-    chain = prompt | llm.with_structured_output(RespostaBot)
-    result = await chain.ainvoke(
-        {"chat_history": to_lc_messages(historico), "input": mensagem}
-    )
-
-    if isinstance(result, RespostaBot):
-        resposta = result
-    elif isinstance(result, dict):
-        resposta = RespostaBot.model_validate(result)
-    else:
-        raise ResponderError("LLM retornou tipo inesperado na geração de resposta")
-
-    response_text = str(resposta.resposta_texto).strip()
-    message_vec = await embeddings.aembed_query(mensagem)
-    response_vec = await embeddings.aembed_query(response_text)
-    training_vec: list[float] | None = None
-    if dados_treinamento and dados_treinamento.strip():
-        training_vec = await embeddings.aembed_query(dados_treinamento)
-
-    final_score = evaluate_triple_similarity(
-        message_vec=list(message_vec),
-        response_vec=list(response_vec),
-        training_vec=list(training_vec) if training_vec is not None else None,
-    )
-
-    return resolve_resposta(
-        resposta=resposta,
-        fluxos_disponiveis=fluxos_disponiveis,
-        final_score=final_score,
-        similarity_threshold=similarity_threshold,
-    )
-
-
-def _build_system_prompt(
-    *,
-    fluxos_disponiveis: dict[str, str],
-    dados_empresa: str,
-    dados_treinamento: str,
-    campos_coletados: list[dict[str, str]],
-    campos_pendentes: list[dict[str, str]],
-) -> str:
-    data_atual = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
-    fluxos_txt = _formatar_fluxos(fluxos_disponiveis)
-    campos_txt = _formatar_campos(campos_coletados, campos_pendentes)
-    regras = (
-        "### Regras de Resposta (siga rigorosamente):\n"
-        "1. Analise o histórico para dar continuidade natural à conversa.\n"
-        "2. Baseie a resposta nos DADOS DO TREINAMENTO (RAG) e no fluxo da "
-        "conversa.\n"
-        "3. Se não houver informações relevantes, seja honesto e não invente.\n"
-        "4. Responda em português, de forma sóbria, organizada e educada.\n"
-        "5. Se faltarem informações essenciais, peça-as em UMA ÚNICA pergunta; "
-        "se o usuário não responder, transfira o atendimento.\n"
-        "6. Se for necessário transferir para um setor específico, preencha "
-        "'acao_transferencia' com o NOME EXATO do setor.\n"
-    )
-    return (
-        f"Data e Hora Atual: {data_atual}\n\n"
-        "Você é um assistente de atendimento ao cliente.\n\n"
-        f"{regras}"
-        f"{fluxos_txt}"
-        f"{campos_txt}\n\n"
-        f"### DADOS DA EMPRESA:\n{dados_empresa}\n\n"
-        f"### DADOS DO TREINAMENTO (RAG):\n{dados_treinamento}"
-    )
-
-
-def _formatar_fluxos(fluxos_disponiveis: dict[str, str]) -> str:
-    if not fluxos_disponiveis:
-        return (
-            "\n\n### SETORES DISPONÍVEIS PARA TRANSFERÊNCIA:\n"
-            "Nenhum setor disponível no momento.\n"
+    def process(
+        self, data: ResponderData, parameters: ResponderParameters
+    ) -> ReturnSuccessOrError[RespostaFinal, ResponderError]:
+        final_score = evaluate_triple_similarity(
+            message_vec=list(data.message_vec),
+            response_vec=list(data.response_vec),
+            training_vec=(
+                list(data.training_vec)
+                if data.training_vec is not None
+                else None
+            ),
         )
-    linhas = "\n\n### SETORES DISPONÍVEIS PARA TRANSFERÊNCIA:\n"
-    for key, desc in fluxos_disponiveis.items():
-        linhas += f"- **{key}**: {desc}\n"
-    return linhas
-
-
-def _formatar_campos(
-    campos_coletados: list[dict[str, str]],
-    campos_pendentes: list[dict[str, str]],
-) -> str:
-    partes: list[str] = []
-    if campos_coletados:
-        partes.append("\n\n### CAMPOS COLETADOS DO ATENDIMENTO:")
-        for c in campos_coletados:
-            nome = c.get("nome") or c.get("slug") or "?"
-            partes.append(f"- **{nome}**: {c.get('valor', '')}")
-    if campos_pendentes:
-        partes.append("\n\n### CAMPOS PENDENTES (ainda não coletados):")
-        for c in campos_pendentes:
-            nome = c.get("nome") or c.get("slug") or "?"
-            linha = f"- **{nome}**: {c.get('descricao', '')}"
-            if c.get("hint"):
-                linha += f" [{c['hint']}]"
-            partes.append(linha)
-        partes.append(
-            "\nSe a oportunidade surgir naturalmente, colete esses dados de "
-            "forma sutil e não intrusiva."
+        return self.ok(
+            resolve_resposta(
+                resposta=data.resposta,
+                fluxos_disponiveis=dict(parameters.fluxos_disponiveis),
+                final_score=final_score,
+                similarity_threshold=parameters.similarity_threshold,
+            )
         )
-    return "".join(partes)
+
+    def on_unexpected(self, exception: Exception) -> ResponderError:
+        return ErrorGeneric(
+            message=f"{type(exception).__name__}: {exception}"
+        )

@@ -8,7 +8,7 @@
 #   docker build -f ia_engine/Dockerfile -t smartcore-ia-engine .
 
 # ---------- builder: instala deps (com dev) e gera os stubs ----------
-FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
+FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
 
 ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
@@ -30,7 +30,7 @@ RUN uv run python scripts/gen_proto.py \
  && uv sync --frozen --no-dev
 
 # ---------- runtime: imagem enxuta só com o venv + app ----------
-FROM python:3.12-slim-bookworm AS runtime
+FROM python:3.13-slim-bookworm AS runtime
 
 ENV PATH="/app/ia_engine/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
