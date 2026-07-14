@@ -259,6 +259,64 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$sendOutboundMessage, request, options: options);
   }
 
+  /// Fase N3: Painel do Tenant. Exigem só autenticação (não superuser); o RBAC fino
+  /// `tenant:admin` é aplicado no data_postgres. AcceptInvite é rota pública (sem sessão).
+  $grpc.ResponseFuture<$0.CreateInviteResponse> createInvite(
+    $0.CreateInviteRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$createInvite, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.AcceptInviteResponse> acceptInvite(
+    $0.AcceptInviteRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$acceptInvite, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ListInvitesResponse> listInvites(
+    $0.ListInvitesRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listInvites, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.RevokeInviteResponse> revokeInvite(
+    $0.RevokeInviteRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$revokeInvite, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ListTenantUsersResponse> listTenantUsers(
+    $0.ListTenantUsersRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listTenantUsers, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.UpdateTenantUserResponse> updateTenantUser(
+    $0.UpdateTenantUserRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$updateTenantUser, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.GetTenantConfigResponse> getMyTenantConfig(
+    $0.GetMyTenantConfigRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$getMyTenantConfig, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.UpdateTenantConfigResponse> updateMyTenantConfig(
+    $0.UpdateMyTenantConfigRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$updateMyTenantConfig, request, options: options);
+  }
+
   // method descriptors
 
   static final _$listCoreSettings = $grpc.ClientMethod<
@@ -412,6 +470,46 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/SendOutboundMessage',
       ($0.SendOutboundMessageRequest value) => value.writeToBuffer(),
       $0.SendOutboundMessageResponse.fromBuffer);
+  static final _$createInvite =
+      $grpc.ClientMethod<$0.CreateInviteRequest, $0.CreateInviteResponse>(
+          '/smartcore.contracts.queries.AdminService/CreateInvite',
+          ($0.CreateInviteRequest value) => value.writeToBuffer(),
+          $0.CreateInviteResponse.fromBuffer);
+  static final _$acceptInvite =
+      $grpc.ClientMethod<$0.AcceptInviteRequest, $0.AcceptInviteResponse>(
+          '/smartcore.contracts.queries.AdminService/AcceptInvite',
+          ($0.AcceptInviteRequest value) => value.writeToBuffer(),
+          $0.AcceptInviteResponse.fromBuffer);
+  static final _$listInvites =
+      $grpc.ClientMethod<$0.ListInvitesRequest, $0.ListInvitesResponse>(
+          '/smartcore.contracts.queries.AdminService/ListInvites',
+          ($0.ListInvitesRequest value) => value.writeToBuffer(),
+          $0.ListInvitesResponse.fromBuffer);
+  static final _$revokeInvite =
+      $grpc.ClientMethod<$0.RevokeInviteRequest, $0.RevokeInviteResponse>(
+          '/smartcore.contracts.queries.AdminService/RevokeInvite',
+          ($0.RevokeInviteRequest value) => value.writeToBuffer(),
+          $0.RevokeInviteResponse.fromBuffer);
+  static final _$listTenantUsers =
+      $grpc.ClientMethod<$0.ListTenantUsersRequest, $0.ListTenantUsersResponse>(
+          '/smartcore.contracts.queries.AdminService/ListTenantUsers',
+          ($0.ListTenantUsersRequest value) => value.writeToBuffer(),
+          $0.ListTenantUsersResponse.fromBuffer);
+  static final _$updateTenantUser = $grpc.ClientMethod<
+          $0.UpdateTenantUserRequest, $0.UpdateTenantUserResponse>(
+      '/smartcore.contracts.queries.AdminService/UpdateTenantUser',
+      ($0.UpdateTenantUserRequest value) => value.writeToBuffer(),
+      $0.UpdateTenantUserResponse.fromBuffer);
+  static final _$getMyTenantConfig = $grpc.ClientMethod<
+          $0.GetMyTenantConfigRequest, $0.GetTenantConfigResponse>(
+      '/smartcore.contracts.queries.AdminService/GetMyTenantConfig',
+      ($0.GetMyTenantConfigRequest value) => value.writeToBuffer(),
+      $0.GetTenantConfigResponse.fromBuffer);
+  static final _$updateMyTenantConfig = $grpc.ClientMethod<
+          $0.UpdateMyTenantConfigRequest, $0.UpdateTenantConfigResponse>(
+      '/smartcore.contracts.queries.AdminService/UpdateMyTenantConfig',
+      ($0.UpdateMyTenantConfigRequest value) => value.writeToBuffer(),
+      $0.UpdateTenantConfigResponse.fromBuffer);
 }
 
 @$pb.GrpcServiceName('smartcore.contracts.queries.AdminService')
@@ -679,6 +777,78 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.SendOutboundMessageRequest.fromBuffer(value),
         ($0.SendOutboundMessageResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.CreateInviteRequest, $0.CreateInviteResponse>(
+            'CreateInvite',
+            createInvite_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.CreateInviteRequest.fromBuffer(value),
+            ($0.CreateInviteResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.AcceptInviteRequest, $0.AcceptInviteResponse>(
+            'AcceptInvite',
+            acceptInvite_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.AcceptInviteRequest.fromBuffer(value),
+            ($0.AcceptInviteResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.ListInvitesRequest, $0.ListInvitesResponse>(
+            'ListInvites',
+            listInvites_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.ListInvitesRequest.fromBuffer(value),
+            ($0.ListInvitesResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.RevokeInviteRequest, $0.RevokeInviteResponse>(
+            'RevokeInvite',
+            revokeInvite_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.RevokeInviteRequest.fromBuffer(value),
+            ($0.RevokeInviteResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListTenantUsersRequest,
+            $0.ListTenantUsersResponse>(
+        'ListTenantUsers',
+        listTenantUsers_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListTenantUsersRequest.fromBuffer(value),
+        ($0.ListTenantUsersResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.UpdateTenantUserRequest,
+            $0.UpdateTenantUserResponse>(
+        'UpdateTenantUser',
+        updateTenantUser_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.UpdateTenantUserRequest.fromBuffer(value),
+        ($0.UpdateTenantUserResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.GetMyTenantConfigRequest,
+            $0.GetTenantConfigResponse>(
+        'GetMyTenantConfig',
+        getMyTenantConfig_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.GetMyTenantConfigRequest.fromBuffer(value),
+        ($0.GetTenantConfigResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.UpdateMyTenantConfigRequest,
+            $0.UpdateTenantConfigResponse>(
+        'UpdateMyTenantConfig',
+        updateMyTenantConfig_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.UpdateMyTenantConfigRequest.fromBuffer(value),
+        ($0.UpdateTenantConfigResponse value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.ListCoreSettingsResponse> listCoreSettings_Pre(
@@ -944,4 +1114,75 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.SendOutboundMessageResponse> sendOutboundMessage(
       $grpc.ServiceCall call, $0.SendOutboundMessageRequest request);
+
+  $async.Future<$0.CreateInviteResponse> createInvite_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.CreateInviteRequest> $request) async {
+    return createInvite($call, await $request);
+  }
+
+  $async.Future<$0.CreateInviteResponse> createInvite(
+      $grpc.ServiceCall call, $0.CreateInviteRequest request);
+
+  $async.Future<$0.AcceptInviteResponse> acceptInvite_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.AcceptInviteRequest> $request) async {
+    return acceptInvite($call, await $request);
+  }
+
+  $async.Future<$0.AcceptInviteResponse> acceptInvite(
+      $grpc.ServiceCall call, $0.AcceptInviteRequest request);
+
+  $async.Future<$0.ListInvitesResponse> listInvites_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.ListInvitesRequest> $request) async {
+    return listInvites($call, await $request);
+  }
+
+  $async.Future<$0.ListInvitesResponse> listInvites(
+      $grpc.ServiceCall call, $0.ListInvitesRequest request);
+
+  $async.Future<$0.RevokeInviteResponse> revokeInvite_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.RevokeInviteRequest> $request) async {
+    return revokeInvite($call, await $request);
+  }
+
+  $async.Future<$0.RevokeInviteResponse> revokeInvite(
+      $grpc.ServiceCall call, $0.RevokeInviteRequest request);
+
+  $async.Future<$0.ListTenantUsersResponse> listTenantUsers_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListTenantUsersRequest> $request) async {
+    return listTenantUsers($call, await $request);
+  }
+
+  $async.Future<$0.ListTenantUsersResponse> listTenantUsers(
+      $grpc.ServiceCall call, $0.ListTenantUsersRequest request);
+
+  $async.Future<$0.UpdateTenantUserResponse> updateTenantUser_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.UpdateTenantUserRequest> $request) async {
+    return updateTenantUser($call, await $request);
+  }
+
+  $async.Future<$0.UpdateTenantUserResponse> updateTenantUser(
+      $grpc.ServiceCall call, $0.UpdateTenantUserRequest request);
+
+  $async.Future<$0.GetTenantConfigResponse> getMyTenantConfig_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.GetMyTenantConfigRequest> $request) async {
+    return getMyTenantConfig($call, await $request);
+  }
+
+  $async.Future<$0.GetTenantConfigResponse> getMyTenantConfig(
+      $grpc.ServiceCall call, $0.GetMyTenantConfigRequest request);
+
+  $async.Future<$0.UpdateTenantConfigResponse> updateMyTenantConfig_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.UpdateMyTenantConfigRequest> $request) async {
+    return updateMyTenantConfig($call, await $request);
+  }
+
+  $async.Future<$0.UpdateTenantConfigResponse> updateMyTenantConfig(
+      $grpc.ServiceCall call, $0.UpdateMyTenantConfigRequest request);
 }
