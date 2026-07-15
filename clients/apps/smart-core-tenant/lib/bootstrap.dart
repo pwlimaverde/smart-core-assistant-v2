@@ -2,7 +2,8 @@ import 'package:dependencies_module/dependencies_module.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:initial_loading_module/initial_loading_module.dart';
 import 'package:login_module/login_module.dart';
-import 'package:admin_module/admin_module.dart';
+import 'package:operacional_module/operacional_module.dart';
+import 'package:tenant_module/tenant_module.dart';
 
 import 'app.dart';
 
@@ -11,15 +12,16 @@ import 'app.dart';
 /// Chamado pelos entrypoints flavor-específicos (main_dev / main_prod).
 /// O boot assíncrono (runBootTasks) roda DENTRO da rota '/', não aqui.
 ///
-/// Este app é exclusivo do superusuário da plataforma (só `AdminModule`). O
-/// `OperacionalModule` (workspace/Kanban) foi movido para o `smart-core-tenant`,
-/// já que é usado pelos funcionários do tenant, não pelo superusuário.
+/// Este app é exclusivo de sessões de TENANT (donos/funcionários) — o painel
+/// do superusuário da plataforma é o `smart-core-admin`, que não hospeda mais
+/// o `OperacionalModule` (movido para cá, já que o workspace é dos
+/// funcionários do tenant, não do superusuário).
 Future<void> bootstrap(AppConfig config) async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Path URL strategy: URLs limpas sob /v2/admin/ (sem '#'); combina com
-  // --base-href /v2/admin/ e o SPA fallback (try_files) do Caddy. Sem isso,
-  // refresh/deep-link em /v2/admin/login retornaria 404.
+  // Path URL strategy: URLs limpas sob /v2/tenant/ (sem '#'); combina com
+  // --base-href /v2/tenant/ e o SPA fallback (try_files) do Caddy. Sem isso,
+  // refresh/deep-link em /v2/tenant/login retornaria 404.
   usePathUrlStrategy();
 
   // Ordem importa: InfraModule primeiro (registra SessionService/ApiClient);
@@ -27,7 +29,8 @@ Future<void> bootstrap(AppConfig config) async {
   final modules = <AppModule>[
     InfraModule(config),
     LoginModule(),
-    AdminModule(),
+    OperacionalModule(),
+    TenantModule(),
     InitialLoadingModule(),
   ];
 
@@ -36,5 +39,5 @@ Future<void> bootstrap(AppConfig config) async {
   // Disponibiliza a lista de módulos ao splash (InitialLoadingRoute).
   GetIt.instance.registerSingleton<List<AppModule>>(modules);
 
-  runApp(SmartCoreAdminApp(modules: modules));
+  runApp(SmartCoreTenantApp(modules: modules));
 }

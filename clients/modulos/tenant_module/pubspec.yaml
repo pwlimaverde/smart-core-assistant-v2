@@ -1,0 +1,44 @@
+name: tenant_module
+description: Módulo do painel do tenant (Flutter Web/WASM) — convites, gestão de usuários/flow_permissions e configuração do próprio tenant.
+version: 1.0.0
+publish_to: 'none'
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  dependencies_module:
+    path: ../dependencies_module
+  core_module:
+    path: ../core_module
+  login_module:
+    path: ../login_module
+  presentation_module:
+    path: ../presentation_module
+  api_client:
+    path: ../../packages/api_client
+  app_config:
+    path: ../../packages/app_config
+  domain_models:
+    path: ../../packages/domain_models
+  get_it_module:
+    path: ../../packages/get_it_module
+  design_system_module:
+    path: ../design_system_module
+  return_success_or_error: ^2.0.0
+  meta: ^1.15.0
+  web: ^1.1.0
+  flutter_bloc: ^9.1.1
+  bloc: ^9.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  bloc_test: ^10.0.0
+  mocktail: ^1.0.5
+
+resolution: workspace
