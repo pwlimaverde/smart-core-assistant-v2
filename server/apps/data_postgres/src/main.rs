@@ -961,16 +961,36 @@ async fn handler_create_tenant(
                 "atendimentos:write",
                 "clientes:write"
             ]);
-            if let Err(err) = store
+            match store
                 .criar_primeiro_admin(tenant.id, tenant.owner_id, escopos_admin)
                 .await
             {
-                tracing::error!(
-                    tenant_id = %tenant.id,
-                    owner_id = tenant.owner_id,
-                    erro = %err,
-                    "falha ao criar o primeiro TenantUser admin do tenant recém-criado"
-                );
+                Ok(_) => {
+                    // Auditoria obrigatória: a concessão do primeiro conjunto de permissões
+                    // (papel `admin` + escopos `tenant:admin`) é evento crítico de `TenantUser`
+                    // (diretriz de segurança §4.2). O `context` registra apenas identificadores,
+                    // nunca segredos.
+                    audit
+                        .publish(
+                            &env,
+                            "tenant_user_bootstrap_admin",
+                            "Primeiro admin do tenant provisionado (bootstrap do CreateTenant)"
+                                .to_string(),
+                            serde_json::json!({
+                                "tenant_id": tenant.id.to_string(),
+                                "user_id": tenant.owner_id,
+                            }),
+                        )
+                        .await;
+                }
+                Err(err) => {
+                    tracing::error!(
+                        tenant_id = %tenant.id,
+                        owner_id = tenant.owner_id,
+                        erro = %err,
+                        "falha ao criar o primeiro TenantUser admin do tenant recém-criado"
+                    );
+                }
             }
 
             ok_reply(

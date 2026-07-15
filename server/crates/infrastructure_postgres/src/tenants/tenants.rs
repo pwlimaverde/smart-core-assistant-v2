@@ -507,13 +507,15 @@ impl TenantInviteRepository for PostgresTenantInviteRepository {
         admin_pool: &PgPool,
         token: &str,
     ) -> Result<Option<TenantInvite>, DbError> {
-        let row = sqlx::query_as!(
-            TenantInvite,
-            r#"SELECT id, tenant_id, email, name, role, module_permissions,
-                      flow_permissions, token, expires_at, used, created_at, created_by_id
-               FROM tenants_tenantinvite WHERE token = $1"#,
-            token
+        // Convite revogado é tratado como inexistente (`AND revoked = FALSE`): a revogação
+        // (N3) precisa barrar o aceite, senão o link permaneceria válido após a revogação.
+        // Query runtime (query_as::<_, T>) para não depender do cache offline do sqlx.
+        let row = sqlx::query_as::<_, TenantInvite>(
+            "SELECT id, tenant_id, email, name, role, module_permissions, \
+                    flow_permissions, token, expires_at, used, created_at, created_by_id \
+             FROM tenants_tenantinvite WHERE token = $1 AND revoked = FALSE",
         )
+        .bind(token)
         .fetch_optional(admin_pool)
         .await?;
         Ok(row)
