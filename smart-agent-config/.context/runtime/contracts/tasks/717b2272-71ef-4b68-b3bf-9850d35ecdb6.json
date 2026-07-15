@@ -4,7 +4,7 @@
   "description": "Derived from linked plan \"n3-painel-do-tenant\" for PREVC phase C (Confirmation). Plan phases: Confirmation. Expected outputs: documentation, changelog, deploy.",
   "sessionId": "0b954ca6-243c-440d-80dc-6ed9c272b3c6",
   "owner": "documenter",
-  "status": "ready",
+  "status": "completed",
   "inputs": [],
   "expectedOutputs": [
     "documentation",
@@ -17,7 +17,7 @@
   "requiredSensors": [],
   "requiredArtifacts": [],
   "createdAt": "2026-07-15T00:16:06.646Z",
-  "updatedAt": "2026-07-15T00:16:06.646Z",
+  "updatedAt": "2026-07-15T18:35:43.677Z",
   "metadata": {
     "requirementsSource": "none",
     "source": "workflow.plan",
@@ -30,6 +30,7 @@
       "Confirmation"
     ],
     "planPhaseSummaries": [],
-    "derivedFrom": "linked-plan"
+    "derivedFrom": "linked-plan",
+    "completionReason": "Workflow completed"
   }
 }
