@@ -4,16 +4,46 @@ use crate::common::{
 use infrastructure_postgres::{
     config_cache::TenantConfigCache,
     crypto::CipherManager,
+    security::RequestContext,
     tenants::{
         plans::{
             PaymentRecordRepository, Plan, PostgresPaymentRecordRepository,
             PostgresSubscriptionRepository, SubscriptionRepository,
         },
-        tenants::{PostgresTenantRepository, TenantRepository},
+        tenants::{
+            PostgresTenantInviteRepository, PostgresTenantRepository, PostgresTenantUserRepository,
+            TenantInviteRepository, TenantRepository, TenantUserRepository,
+        },
     },
+    DbError,
 };
+use sqlx::{Postgres, Transaction};
 use std::sync::Arc;
 use uuid::Uuid;
+
+/// RequestContext de teste SEM o escopo `tenant:admin` (para checar negação de RBAC).
+fn contexto_sem_admin(tenant_id: Uuid) -> RequestContext {
+    RequestContext {
+        tenant_id,
+        user_id: 1,
+        user_scopes: vec!["atendimentos:read".into()],
+        flow_permissions: vec![],
+    }
+}
+
+/// Cria um auth_user de teste (tabela global, sem RLS) e retorna seu id.
+async fn criar_auth_user(tx: &mut Transaction<'_, Postgres>) -> i32 {
+    let sufixo = Uuid::new_v4().simple().to_string();
+    sqlx::query_scalar::<_, i32>(
+        "INSERT INTO auth_user (username, email, is_active, is_staff, is_superuser) \
+         VALUES ($1, $2, true, false, false) RETURNING id",
+    )
+    .bind(format!("user-{sufixo}"))
+    .bind(format!("{sufixo}@teste.com"))
+    .fetch_one(&mut **tx)
+    .await
+    .expect("Falha ao criar auth_user de teste")
+}
 
 #[tokio::test]
 async fn test_tenant_crud_and_rls() {
@@ -242,4 +272,202 @@ async fn test_core_settings_and_config_cache() {
         .await
         .unwrap();
     clean_tx.commit().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_tenant_user_listar_e_atualizar() {
+    let pool = obter_pool_teste().await;
+    let mut tx = pool.begin().await.unwrap();
+
+    let user_repo = PostgresTenantUserRepository;
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant Usuarios").await;
+    configurar_tenant_transacao(&mut tx, tenant.id).await;
+    let ctx = criar_contexto_teste(tenant.id);
+
+    // Cria dois auth_users e seus vínculos TenantUser.
+    let uid_a = criar_auth_user(&mut tx).await;
+    let uid_b = criar_auth_user(&mut tx).await;
+    user_repo
+        .criar(&mut tx, &ctx, uid_a, "staff")
+        .await
+        .unwrap();
+    user_repo
+        .criar(&mut tx, &ctx, uid_b, "staff")
+        .await
+        .unwrap();
+
+    // 1. Listagem retorna os dois usuários do tenant.
+    let usuarios = user_repo.listar_por_tenant(&mut tx, &ctx).await.unwrap();
+    assert_eq!(usuarios.len(), 2);
+    assert!(usuarios.iter().all(|u| u.tenant_id == tenant.id));
+
+    // 2. Atualização de role + module_permissions (escopos) + flow_permissions.
+    let novos_escopos = serde_json::json!(["tenant:admin", "clientes:write"]);
+    let novos_fluxos = serde_json::json!([7, 8]);
+    let afetou = user_repo
+        .atualizar(
+            &mut tx,
+            &ctx,
+            uid_a,
+            Some("admin"),
+            Some(novos_escopos.clone()),
+            Some(novos_fluxos.clone()),
+        )
+        .await
+        .unwrap();
+    assert!(afetou);
+
+    let usuarios = user_repo.listar_por_tenant(&mut tx, &ctx).await.unwrap();
+    let atualizado = usuarios.iter().find(|u| u.user_id == uid_a).unwrap();
+    assert_eq!(atualizado.role, "admin");
+    assert_eq!(atualizado.module_permissions, novos_escopos);
+    assert_eq!(atualizado.flow_permissions, novos_fluxos);
+
+    // 3. COALESCE: campos None preservam os valores atuais (só muda a role).
+    let afetou = user_repo
+        .atualizar(&mut tx, &ctx, uid_a, Some("staff"), None, None)
+        .await
+        .unwrap();
+    assert!(afetou);
+    let usuarios = user_repo.listar_por_tenant(&mut tx, &ctx).await.unwrap();
+    let atualizado = usuarios.iter().find(|u| u.user_id == uid_a).unwrap();
+    assert_eq!(atualizado.role, "staff");
+    assert_eq!(atualizado.module_permissions, novos_escopos);
+    assert_eq!(atualizado.flow_permissions, novos_fluxos);
+
+    // 4. Usuário inexistente no tenant → nenhuma linha afetada.
+    let afetou = user_repo
+        .atualizar(&mut tx, &ctx, 999_999, Some("admin"), None, None)
+        .await
+        .unwrap();
+    assert!(!afetou);
+
+    tx.rollback().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_tenant_user_rbac_negado_sem_admin() {
+    let pool = obter_pool_teste().await;
+    let mut tx = pool.begin().await.unwrap();
+
+    let user_repo = PostgresTenantUserRepository;
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant RBAC User").await;
+    configurar_tenant_transacao(&mut tx, tenant.id).await;
+    let ctx_negado = contexto_sem_admin(tenant.id);
+
+    // Sem tenant:admin, listar e atualizar devem falhar antes de tocar o banco.
+    assert!(matches!(
+        user_repo.listar_por_tenant(&mut tx, &ctx_negado).await,
+        Err(DbError::PermissionDenied)
+    ));
+    assert!(matches!(
+        user_repo
+            .atualizar(&mut tx, &ctx_negado, 1, Some("admin"), None, None)
+            .await,
+        Err(DbError::PermissionDenied)
+    ));
+
+    tx.rollback().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_invites_listar_e_revogar() {
+    let pool = obter_pool_teste().await;
+    let mut tx = pool.begin().await.unwrap();
+
+    let invite_repo = PostgresTenantInviteRepository;
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant Convites").await;
+    configurar_tenant_transacao(&mut tx, tenant.id).await;
+    let ctx = criar_contexto_teste(tenant.id);
+
+    let futuro = chrono::Utc::now() + chrono::Duration::days(7);
+
+    // Convite válido (será revogado), convite usado e convite expirado.
+    let valido = invite_repo
+        .criar(&mut tx, &ctx, "a@teste.com", "A", "staff", &token(), futuro)
+        .await
+        .unwrap();
+    let usado = invite_repo
+        .criar(&mut tx, &ctx, "b@teste.com", "B", "staff", &token(), futuro)
+        .await
+        .unwrap();
+    let passado = chrono::Utc::now() - chrono::Duration::days(1);
+    let expirado = invite_repo
+        .criar(
+            &mut tx,
+            &ctx,
+            "c@teste.com",
+            "C",
+            "staff",
+            &token(),
+            passado,
+        )
+        .await
+        .unwrap();
+    sqlx::query("UPDATE tenants_tenantinvite SET used = true WHERE id = $1")
+        .bind(usado.id)
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+
+    // 1. Listagem traz os três convites, todos ainda não revogados.
+    let convites = invite_repo.listar_por_tenant(&mut tx, &ctx).await.unwrap();
+    assert_eq!(convites.len(), 3);
+    assert!(convites.iter().all(|c| !c.revoked));
+
+    // 2. Revoga o convite válido → true; revogar de novo → false (já revogado).
+    assert!(invite_repo
+        .marcar_revogado(&mut tx, &ctx, valido.id)
+        .await
+        .unwrap());
+    assert!(!invite_repo
+        .marcar_revogado(&mut tx, &ctx, valido.id)
+        .await
+        .unwrap());
+
+    // 3. Convite usado e convite expirado não podem ser revogados.
+    assert!(!invite_repo
+        .marcar_revogado(&mut tx, &ctx, usado.id)
+        .await
+        .unwrap());
+    assert!(!invite_repo
+        .marcar_revogado(&mut tx, &ctx, expirado.id)
+        .await
+        .unwrap());
+
+    // 4. Após revogar, a listagem reflete revoked = true no convite correto.
+    let convites = invite_repo.listar_por_tenant(&mut tx, &ctx).await.unwrap();
+    let item = convites.iter().find(|c| c.id == valido.id).unwrap();
+    assert!(item.revoked);
+
+    tx.rollback().await.unwrap();
+}
+
+#[tokio::test]
+async fn test_invites_rbac_negado_sem_admin() {
+    let pool = obter_pool_teste().await;
+    let mut tx = pool.begin().await.unwrap();
+
+    let invite_repo = PostgresTenantInviteRepository;
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant RBAC Convite").await;
+    configurar_tenant_transacao(&mut tx, tenant.id).await;
+    let ctx_negado = contexto_sem_admin(tenant.id);
+
+    assert!(matches!(
+        invite_repo.listar_por_tenant(&mut tx, &ctx_negado).await,
+        Err(DbError::PermissionDenied)
+    ));
+    assert!(matches!(
+        invite_repo
+            .marcar_revogado(&mut tx, &ctx_negado, Uuid::new_v4())
+            .await,
+        Err(DbError::PermissionDenied)
+    ));
+
+    tx.rollback().await.unwrap();
+}
+
+/// Gera um token URL-safe de 64 caracteres para os convites de teste.
+fn token() -> String {
+    format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
 }

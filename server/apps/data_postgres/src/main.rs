@@ -365,6 +365,10 @@ async fn main() -> anyhow::Result<()> {
     let state_for_create_tenant = state_clone.clone();
     let state_for_create_invite = state_clone.clone();
     let state_for_accept_invite = state_clone.clone();
+    let state_for_list_tenant_users = state_clone.clone();
+    let state_for_list_invites = state_clone.clone();
+    let state_for_revoke_invite = state_clone.clone();
+    let state_for_update_tenant_user = state_clone.clone();
     let state_for_create_superuser = state_clone.clone();
     let state_for_list_superusers = state_clone.clone();
     let state_for_delete_superuser = state_clone.clone();
@@ -535,6 +539,26 @@ async fn main() -> anyhow::Result<()> {
             let state = state_for_accept_invite.clone();
             Box::pin(async move {
                 handler_accept_invite(state.tenant.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("ListTenantUsers", move |env| {
+            let state = state_for_list_tenant_users.clone();
+            Box::pin(async move { handler_list_tenant_users(state.tenant.as_ref(), env).await })
+        })
+        .route("ListInvites", move |env| {
+            let state = state_for_list_invites.clone();
+            Box::pin(async move { handler_list_invites(state.tenant.as_ref(), env).await })
+        })
+        .route("RevokeInvite", move |env| {
+            let state = state_for_revoke_invite.clone();
+            Box::pin(async move {
+                handler_revoke_invite(state.tenant.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("UpdateTenantUser", move |env| {
+            let state = state_for_update_tenant_user.clone();
+            Box::pin(async move {
+                handler_update_tenant_user(state.tenant.as_ref(), state.audit.as_ref(), env).await
             })
         })
         .route("CreateSuperuser", move |env| {
@@ -926,6 +950,49 @@ async fn handler_create_tenant(
                     serde_json::json!({ "id": tenant.id.to_string(), "name": name, "slug": slug }),
                 )
                 .await;
+
+            // Bootstrap do primeiro admin: cria o TenantUser do owner com os escopos
+            // iniciais. Roda em transação própria (o `criar` já commitou o tenant); uma
+            // falha aqui não faz rollback do tenant — apenas loga erro (o admin pode ser
+            // recriado via convite). `user_id` = owner_id autoritativo do tenant criado.
+            let escopos_admin = serde_json::json!([
+                "tenant:admin",
+                "atendimentos:read",
+                "atendimentos:write",
+                "clientes:write"
+            ]);
+            match store
+                .criar_primeiro_admin(tenant.id, tenant.owner_id, escopos_admin)
+                .await
+            {
+                Ok(_) => {
+                    // Auditoria obrigatória: a concessão do primeiro conjunto de permissões
+                    // (papel `admin` + escopos `tenant:admin`) é evento crítico de `TenantUser`
+                    // (diretriz de segurança §4.2). O `context` registra apenas identificadores,
+                    // nunca segredos.
+                    audit
+                        .publish(
+                            &env,
+                            "tenant_user_bootstrap_admin",
+                            "Primeiro admin do tenant provisionado (bootstrap do CreateTenant)"
+                                .to_string(),
+                            serde_json::json!({
+                                "tenant_id": tenant.id.to_string(),
+                                "user_id": tenant.owner_id,
+                            }),
+                        )
+                        .await;
+                }
+                Err(err) => {
+                    tracing::error!(
+                        tenant_id = %tenant.id,
+                        owner_id = tenant.owner_id,
+                        erro = %err,
+                        "falha ao criar o primeiro TenantUser admin do tenant recém-criado"
+                    );
+                }
+            }
+
             ok_reply(
                 &env,
                 "CreateTenantReply",
@@ -1133,6 +1200,207 @@ async fn handler_accept_invite(
                 }),
             )
         }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// Lista os TenantUser do tenant do requisitante (painel do tenant, N3).
+/// RBAC `tenant:admin` aplicado no repositório. Nunca expõe senha/hash.
+async fn handler_list_tenant_users(store: &dyn ports::TenantStore, env: Envelope) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_usuarios(&ctx).await {
+        Ok(users) => {
+            let list: Vec<serde_json::Value> = users
+                .iter()
+                .map(|u| {
+                    serde_json::json!({
+                        "id": u.id,
+                        "user_id": u.user_id,
+                        "role": u.role,
+                        "module_permissions": u.module_permissions,
+                        "flow_permissions": u.flow_permissions,
+                        "is_active": u.is_active,
+                        "created_at": u.created_at.timestamp_millis(),
+                    })
+                })
+                .collect();
+            ok_reply(
+                &env,
+                "ListTenantUsersReply",
+                serde_json::json!({ "users": list }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// Lista os convites do tenant do requisitante (painel do tenant, N3).
+/// RBAC `tenant:admin` no repositório. Nunca expõe o `token` do convite.
+async fn handler_list_invites(store: &dyn ports::TenantStore, env: Envelope) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_convites(&ctx).await {
+        Ok(invites) => {
+            let list: Vec<serde_json::Value> = invites
+                .iter()
+                .map(|i| {
+                    serde_json::json!({
+                        "id": i.id.to_string(),
+                        "email": i.email,
+                        "name": i.name,
+                        "role": i.role,
+                        "module_permissions": i.module_permissions,
+                        "flow_permissions": i.flow_permissions,
+                        "expires_at": i.expires_at.timestamp_millis(),
+                        "used": i.used,
+                        "revoked": i.revoked,
+                        "created_at": i.created_at.timestamp_millis(),
+                    })
+                })
+                .collect();
+            ok_reply(
+                &env,
+                "ListInvitesReply",
+                serde_json::json!({ "invites": list }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// Revoga um convite ainda não usado/revogado/expirado (painel do tenant, N3).
+/// RBAC `tenant:admin` no repositório. Auditoria WARN (convite é evento crítico);
+/// contexto só com `invite_id` (nunca e-mail/token).
+async fn handler_revoke_invite(
+    store: &dyn ports::TenantStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let invite_id = match payload_json
+        .get("invite_id")
+        .and_then(|v| v.as_str())
+        .and_then(|s| Uuid::parse_str(s).ok())
+    {
+        Some(id) => id,
+        None => {
+            return erro(
+                error_core::AppError::Validation("invite_id inválido ou ausente".to_string()),
+                &env,
+            )
+        }
+    };
+    let ctx = contexto_do_envelope(&env);
+
+    match store.revogar_convite(&ctx, invite_id).await {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "tenant_invite_revoked",
+                    "Convite revogado".to_string(),
+                    serde_json::json!({ "invite_id": invite_id.to_string() }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "RevokeInviteReply",
+                serde_json::json!({ "status": "success" }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Validation(
+                "convite inexistente, já usado, revogado ou expirado".to_string(),
+            ),
+            &env,
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// Atualiza role/permissões de um TenantUser do tenant (painel do tenant, N3).
+/// RBAC `tenant:admin` no repositório. `module_permissions` é a lista direta de
+/// escopos (array de strings) — mesmo formato consumido por `derivar_escopos` no login.
+/// Auditoria WARN por campo alterado; contexto só com ids (nunca nomes/telefones/e-mails).
+async fn handler_update_tenant_user(
+    store: &dyn ports::TenantStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let user_id = match payload_json.get("user_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("user_id ausente".to_string()),
+                &env,
+            )
+        }
+    };
+    let role = payload_json
+        .get("role")
+        .and_then(|v| v.as_str())
+        .map(|s| s.to_string());
+    let module_permissions = payload_json.get("module_permissions").cloned();
+    let flow_permissions = payload_json.get("flow_permissions").cloned();
+
+    if role.is_none() && module_permissions.is_none() && flow_permissions.is_none() {
+        return erro(
+            error_core::AppError::Validation("nenhum campo para atualizar".to_string()),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    let mudou_role_ou_modulos = role.is_some() || module_permissions.is_some();
+    let mudou_fluxos = flow_permissions.is_some();
+
+    match store
+        .atualizar_usuario(
+            &ctx,
+            user_id,
+            role.clone(),
+            module_permissions.clone(),
+            flow_permissions.clone(),
+        )
+        .await
+    {
+        Ok(true) => {
+            if mudou_role_ou_modulos {
+                audit
+                    .publish(
+                        &env,
+                        "tenant_user_role_change",
+                        "Role/permissões de módulo do usuário do tenant alteradas".to_string(),
+                        serde_json::json!({
+                            "user_id": user_id,
+                            "role_alterada": role.is_some(),
+                            "module_permissions_alteradas": module_permissions.is_some(),
+                        }),
+                    )
+                    .await;
+            }
+            if mudou_fluxos {
+                audit
+                    .publish(
+                        &env,
+                        "tenant_user_flow_permissions_alteradas",
+                        "flow_permissions do usuário do tenant alteradas".to_string(),
+                        serde_json::json!({ "user_id": user_id }),
+                    )
+                    .await;
+            }
+            ok_reply(
+                &env,
+                "UpdateTenantUserReply",
+                serde_json::json!({ "status": "success" }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Validation("usuário inexistente no tenant".to_string()),
+            &env,
+        ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }
 }
@@ -3859,7 +4127,7 @@ mod tests_tenant_unit {
     use super::*;
     use crate::ports::{MockAuditPort, MockTenantStore};
     use contracts::{Envelope, MessageKind};
-    use infrastructure_postgres::tenants::tenants::Tenant;
+    use infrastructure_postgres::tenants::tenants::{Tenant, TenantUser};
 
     /// Helper: monta um Envelope mínimo com payload arbitrário.
     fn envelope_com_payload(method: &str, payload: serde_json::Value) -> Envelope {
@@ -3892,6 +4160,20 @@ mod tests_tenant_unit {
         }
     }
 
+    fn tenant_user_fake(tenant_id: uuid::Uuid, user_id: i32) -> TenantUser {
+        TenantUser {
+            id: 1,
+            user_id,
+            tenant_id,
+            role: "admin".to_string(),
+            module_permissions: serde_json::json!([]),
+            flow_permissions: serde_json::json!([]),
+            is_active: true,
+            created_at: chrono::Utc::now(),
+            created_by_id: None,
+        }
+    }
+
     /// HAPPY PATH: criação chama a port uma vez, publica `tenant_created` e devolve Reply.
     #[tokio::test]
     async fn create_tenant_persists_and_audits() {
@@ -3901,6 +4183,11 @@ mod tests_tenant_unit {
             .expect_criar()
             .times(1)
             .returning(|name, _slug, _email, _phone| Ok(tenant_fake(name)));
+        // O handler cria o primeiro TenantUser admin do tenant recém-criado.
+        store
+            .expect_criar_primeiro_admin()
+            .times(1)
+            .returning(|tenant_id, owner_id, _perms| Ok(tenant_user_fake(tenant_id, owner_id)));
         let mut audit = MockAuditPort::new();
         audit
             .expect_publish()

@@ -1386,6 +1386,431 @@ final $typed_data.Uint8List sendOutboundMessageResponseDescriptor =
         'ChtTZW5kT3V0Ym91bmRNZXNzYWdlUmVzcG9uc2USHQoKbWVzc2FnZV9pZBgBIAEoBVIJbWVzc2'
         'FnZUlk');
 
+@$core.Deprecated('Use createInviteRequestDescriptor instead')
+const CreateInviteRequest$json = {
+  '1': 'CreateInviteRequest',
+  '2': [
+    {'1': 'email', '3': 1, '4': 1, '5': 9, '10': 'email'},
+    {'1': 'name', '3': 2, '4': 1, '5': 9, '10': 'name'},
+    {'1': 'role', '3': 3, '4': 1, '5': 9, '10': 'role'},
+    {
+      '1': 'module_permissions',
+      '3': 4,
+      '4': 3,
+      '5': 9,
+      '10': 'modulePermissions'
+    },
+    {'1': 'flow_permissions', '3': 5, '4': 3, '5': 5, '10': 'flowPermissions'},
+  ],
+};
+
+/// Descriptor for `CreateInviteRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createInviteRequestDescriptor = $convert.base64Decode(
+    'ChNDcmVhdGVJbnZpdGVSZXF1ZXN0EhQKBWVtYWlsGAEgASgJUgVlbWFpbBISCgRuYW1lGAIgAS'
+    'gJUgRuYW1lEhIKBHJvbGUYAyABKAlSBHJvbGUSLQoSbW9kdWxlX3Blcm1pc3Npb25zGAQgAygJ'
+    'UhFtb2R1bGVQZXJtaXNzaW9ucxIpChBmbG93X3Blcm1pc3Npb25zGAUgAygFUg9mbG93UGVybW'
+    'lzc2lvbnM=');
+
+@$core.Deprecated('Use tenantInviteCreatedDescriptor instead')
+const TenantInviteCreated$json = {
+  '1': 'TenantInviteCreated',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 9, '10': 'id'},
+    {'1': 'tenant_id', '3': 2, '4': 1, '5': 9, '10': 'tenantId'},
+    {'1': 'email', '3': 3, '4': 1, '5': 9, '10': 'email'},
+    {'1': 'name', '3': 4, '4': 1, '5': 9, '10': 'name'},
+    {'1': 'role', '3': 5, '4': 1, '5': 9, '10': 'role'},
+    {'1': 'token', '3': 6, '4': 1, '5': 9, '10': 'token'},
+    {'1': 'expires_at', '3': 7, '4': 1, '5': 3, '10': 'expiresAt'},
+    {'1': 'used', '3': 8, '4': 1, '5': 8, '10': 'used'},
+    {'1': 'created_at', '3': 9, '4': 1, '5': 3, '10': 'createdAt'},
+  ],
+};
+
+/// Descriptor for `TenantInviteCreated`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List tenantInviteCreatedDescriptor = $convert.base64Decode(
+    'ChNUZW5hbnRJbnZpdGVDcmVhdGVkEg4KAmlkGAEgASgJUgJpZBIbCgl0ZW5hbnRfaWQYAiABKA'
+    'lSCHRlbmFudElkEhQKBWVtYWlsGAMgASgJUgVlbWFpbBISCgRuYW1lGAQgASgJUgRuYW1lEhIK'
+    'BHJvbGUYBSABKAlSBHJvbGUSFAoFdG9rZW4YBiABKAlSBXRva2VuEh0KCmV4cGlyZXNfYXQYBy'
+    'ABKANSCWV4cGlyZXNBdBISCgR1c2VkGAggASgIUgR1c2VkEh0KCmNyZWF0ZWRfYXQYCSABKANS'
+    'CWNyZWF0ZWRBdA==');
+
+@$core.Deprecated('Use createInviteResponseDescriptor instead')
+const CreateInviteResponse$json = {
+  '1': 'CreateInviteResponse',
+  '2': [
+    {
+      '1': 'invite',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.TenantInviteCreated',
+      '10': 'invite'
+    },
+  ],
+};
+
+/// Descriptor for `CreateInviteResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createInviteResponseDescriptor = $convert.base64Decode(
+    'ChRDcmVhdGVJbnZpdGVSZXNwb25zZRJICgZpbnZpdGUYASABKAsyMC5zbWFydGNvcmUuY29udH'
+    'JhY3RzLnF1ZXJpZXMuVGVuYW50SW52aXRlQ3JlYXRlZFIGaW52aXRl');
+
+@$core.Deprecated('Use acceptInviteRequestDescriptor instead')
+const AcceptInviteRequest$json = {
+  '1': 'AcceptInviteRequest',
+  '2': [
+    {'1': 'token', '3': 1, '4': 1, '5': 9, '10': 'token'},
+    {'1': 'username', '3': 2, '4': 1, '5': 9, '10': 'username'},
+    {'1': 'email', '3': 3, '4': 1, '5': 9, '10': 'email'},
+    {'1': 'password', '3': 4, '4': 1, '5': 9, '10': 'password'},
+  ],
+};
+
+/// Descriptor for `AcceptInviteRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List acceptInviteRequestDescriptor = $convert.base64Decode(
+    'ChNBY2NlcHRJbnZpdGVSZXF1ZXN0EhQKBXRva2VuGAEgASgJUgV0b2tlbhIaCgh1c2VybmFtZR'
+    'gCIAEoCVIIdXNlcm5hbWUSFAoFZW1haWwYAyABKAlSBWVtYWlsEhoKCHBhc3N3b3JkGAQgASgJ'
+    'UghwYXNzd29yZA==');
+
+@$core.Deprecated('Use acceptedTenantUserDescriptor instead')
+const AcceptedTenantUser$json = {
+  '1': 'AcceptedTenantUser',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'user_id', '3': 2, '4': 1, '5': 5, '10': 'userId'},
+    {'1': 'tenant_id', '3': 3, '4': 1, '5': 9, '10': 'tenantId'},
+    {'1': 'role', '3': 4, '4': 1, '5': 9, '10': 'role'},
+    {
+      '1': 'module_permissions',
+      '3': 5,
+      '4': 3,
+      '5': 9,
+      '10': 'modulePermissions'
+    },
+    {'1': 'flow_permissions', '3': 6, '4': 3, '5': 5, '10': 'flowPermissions'},
+    {'1': 'is_active', '3': 7, '4': 1, '5': 8, '10': 'isActive'},
+  ],
+};
+
+/// Descriptor for `AcceptedTenantUser`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List acceptedTenantUserDescriptor = $convert.base64Decode(
+    'ChJBY2NlcHRlZFRlbmFudFVzZXISDgoCaWQYASABKAVSAmlkEhcKB3VzZXJfaWQYAiABKAVSBn'
+    'VzZXJJZBIbCgl0ZW5hbnRfaWQYAyABKAlSCHRlbmFudElkEhIKBHJvbGUYBCABKAlSBHJvbGUS'
+    'LQoSbW9kdWxlX3Blcm1pc3Npb25zGAUgAygJUhFtb2R1bGVQZXJtaXNzaW9ucxIpChBmbG93X3'
+    'Blcm1pc3Npb25zGAYgAygFUg9mbG93UGVybWlzc2lvbnMSGwoJaXNfYWN0aXZlGAcgASgIUghp'
+    'c0FjdGl2ZQ==');
+
+@$core.Deprecated('Use acceptInviteResponseDescriptor instead')
+const AcceptInviteResponse$json = {
+  '1': 'AcceptInviteResponse',
+  '2': [
+    {
+      '1': 'tenant_user',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.AcceptedTenantUser',
+      '10': 'tenantUser'
+    },
+  ],
+};
+
+/// Descriptor for `AcceptInviteResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List acceptInviteResponseDescriptor = $convert.base64Decode(
+    'ChRBY2NlcHRJbnZpdGVSZXNwb25zZRJQCgt0ZW5hbnRfdXNlchgBIAEoCzIvLnNtYXJ0Y29yZS'
+    '5jb250cmFjdHMucXVlcmllcy5BY2NlcHRlZFRlbmFudFVzZXJSCnRlbmFudFVzZXI=');
+
+@$core.Deprecated('Use listInvitesRequestDescriptor instead')
+const ListInvitesRequest$json = {
+  '1': 'ListInvitesRequest',
+};
+
+/// Descriptor for `ListInvitesRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listInvitesRequestDescriptor =
+    $convert.base64Decode('ChJMaXN0SW52aXRlc1JlcXVlc3Q=');
+
+@$core.Deprecated('Use tenantInviteItemDescriptor instead')
+const TenantInviteItem$json = {
+  '1': 'TenantInviteItem',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 9, '10': 'id'},
+    {'1': 'email', '3': 2, '4': 1, '5': 9, '10': 'email'},
+    {'1': 'name', '3': 3, '4': 1, '5': 9, '10': 'name'},
+    {'1': 'role', '3': 4, '4': 1, '5': 9, '10': 'role'},
+    {
+      '1': 'module_permissions',
+      '3': 5,
+      '4': 3,
+      '5': 9,
+      '10': 'modulePermissions'
+    },
+    {'1': 'flow_permissions', '3': 6, '4': 3, '5': 5, '10': 'flowPermissions'},
+    {'1': 'expires_at', '3': 7, '4': 1, '5': 3, '10': 'expiresAt'},
+    {'1': 'used', '3': 8, '4': 1, '5': 8, '10': 'used'},
+    {'1': 'revoked', '3': 9, '4': 1, '5': 8, '10': 'revoked'},
+    {'1': 'created_at', '3': 10, '4': 1, '5': 3, '10': 'createdAt'},
+  ],
+};
+
+/// Descriptor for `TenantInviteItem`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List tenantInviteItemDescriptor = $convert.base64Decode(
+    'ChBUZW5hbnRJbnZpdGVJdGVtEg4KAmlkGAEgASgJUgJpZBIUCgVlbWFpbBgCIAEoCVIFZW1haW'
+    'wSEgoEbmFtZRgDIAEoCVIEbmFtZRISCgRyb2xlGAQgASgJUgRyb2xlEi0KEm1vZHVsZV9wZXJt'
+    'aXNzaW9ucxgFIAMoCVIRbW9kdWxlUGVybWlzc2lvbnMSKQoQZmxvd19wZXJtaXNzaW9ucxgGIA'
+    'MoBVIPZmxvd1Blcm1pc3Npb25zEh0KCmV4cGlyZXNfYXQYByABKANSCWV4cGlyZXNBdBISCgR1'
+    'c2VkGAggASgIUgR1c2VkEhgKB3Jldm9rZWQYCSABKAhSB3Jldm9rZWQSHQoKY3JlYXRlZF9hdB'
+    'gKIAEoA1IJY3JlYXRlZEF0');
+
+@$core.Deprecated('Use listInvitesResponseDescriptor instead')
+const ListInvitesResponse$json = {
+  '1': 'ListInvitesResponse',
+  '2': [
+    {
+      '1': 'invites',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.TenantInviteItem',
+      '10': 'invites'
+    },
+  ],
+};
+
+/// Descriptor for `ListInvitesResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listInvitesResponseDescriptor = $convert.base64Decode(
+    'ChNMaXN0SW52aXRlc1Jlc3BvbnNlEkcKB2ludml0ZXMYASADKAsyLS5zbWFydGNvcmUuY29udH'
+    'JhY3RzLnF1ZXJpZXMuVGVuYW50SW52aXRlSXRlbVIHaW52aXRlcw==');
+
+@$core.Deprecated('Use revokeInviteRequestDescriptor instead')
+const RevokeInviteRequest$json = {
+  '1': 'RevokeInviteRequest',
+  '2': [
+    {'1': 'invite_id', '3': 1, '4': 1, '5': 9, '10': 'inviteId'},
+  ],
+};
+
+/// Descriptor for `RevokeInviteRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List revokeInviteRequestDescriptor =
+    $convert.base64Decode(
+        'ChNSZXZva2VJbnZpdGVSZXF1ZXN0EhsKCWludml0ZV9pZBgBIAEoCVIIaW52aXRlSWQ=');
+
+@$core.Deprecated('Use revokeInviteResponseDescriptor instead')
+const RevokeInviteResponse$json = {
+  '1': 'RevokeInviteResponse',
+  '2': [
+    {'1': 'success', '3': 1, '4': 1, '5': 8, '10': 'success'},
+  ],
+};
+
+/// Descriptor for `RevokeInviteResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List revokeInviteResponseDescriptor =
+    $convert.base64Decode(
+        'ChRSZXZva2VJbnZpdGVSZXNwb25zZRIYCgdzdWNjZXNzGAEgASgIUgdzdWNjZXNz');
+
+@$core.Deprecated('Use listTenantUsersRequestDescriptor instead')
+const ListTenantUsersRequest$json = {
+  '1': 'ListTenantUsersRequest',
+};
+
+/// Descriptor for `ListTenantUsersRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listTenantUsersRequestDescriptor =
+    $convert.base64Decode('ChZMaXN0VGVuYW50VXNlcnNSZXF1ZXN0');
+
+@$core.Deprecated('Use tenantUserItemDescriptor instead')
+const TenantUserItem$json = {
+  '1': 'TenantUserItem',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'user_id', '3': 2, '4': 1, '5': 5, '10': 'userId'},
+    {'1': 'role', '3': 3, '4': 1, '5': 9, '10': 'role'},
+    {
+      '1': 'module_permissions',
+      '3': 4,
+      '4': 3,
+      '5': 9,
+      '10': 'modulePermissions'
+    },
+    {'1': 'flow_permissions', '3': 5, '4': 3, '5': 5, '10': 'flowPermissions'},
+    {'1': 'is_active', '3': 6, '4': 1, '5': 8, '10': 'isActive'},
+    {'1': 'created_at', '3': 7, '4': 1, '5': 3, '10': 'createdAt'},
+  ],
+};
+
+/// Descriptor for `TenantUserItem`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List tenantUserItemDescriptor = $convert.base64Decode(
+    'Cg5UZW5hbnRVc2VySXRlbRIOCgJpZBgBIAEoBVICaWQSFwoHdXNlcl9pZBgCIAEoBVIGdXNlck'
+    'lkEhIKBHJvbGUYAyABKAlSBHJvbGUSLQoSbW9kdWxlX3Blcm1pc3Npb25zGAQgAygJUhFtb2R1'
+    'bGVQZXJtaXNzaW9ucxIpChBmbG93X3Blcm1pc3Npb25zGAUgAygFUg9mbG93UGVybWlzc2lvbn'
+    'MSGwoJaXNfYWN0aXZlGAYgASgIUghpc0FjdGl2ZRIdCgpjcmVhdGVkX2F0GAcgASgDUgljcmVh'
+    'dGVkQXQ=');
+
+@$core.Deprecated('Use listTenantUsersResponseDescriptor instead')
+const ListTenantUsersResponse$json = {
+  '1': 'ListTenantUsersResponse',
+  '2': [
+    {
+      '1': 'users',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.TenantUserItem',
+      '10': 'users'
+    },
+  ],
+};
+
+/// Descriptor for `ListTenantUsersResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listTenantUsersResponseDescriptor =
+    $convert.base64Decode(
+        'ChdMaXN0VGVuYW50VXNlcnNSZXNwb25zZRJBCgV1c2VycxgBIAMoCzIrLnNtYXJ0Y29yZS5jb2'
+        '50cmFjdHMucXVlcmllcy5UZW5hbnRVc2VySXRlbVIFdXNlcnM=');
+
+@$core.Deprecated('Use updateTenantUserRequestDescriptor instead')
+const UpdateTenantUserRequest$json = {
+  '1': 'UpdateTenantUserRequest',
+  '2': [
+    {'1': 'user_id', '3': 1, '4': 1, '5': 5, '10': 'userId'},
+    {'1': 'set_role', '3': 2, '4': 1, '5': 8, '10': 'setRole'},
+    {'1': 'role', '3': 3, '4': 1, '5': 9, '10': 'role'},
+    {
+      '1': 'set_module_permissions',
+      '3': 4,
+      '4': 1,
+      '5': 8,
+      '10': 'setModulePermissions'
+    },
+    {
+      '1': 'module_permissions',
+      '3': 5,
+      '4': 3,
+      '5': 9,
+      '10': 'modulePermissions'
+    },
+    {
+      '1': 'set_flow_permissions',
+      '3': 6,
+      '4': 1,
+      '5': 8,
+      '10': 'setFlowPermissions'
+    },
+    {'1': 'flow_permissions', '3': 7, '4': 3, '5': 5, '10': 'flowPermissions'},
+  ],
+};
+
+/// Descriptor for `UpdateTenantUserRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List updateTenantUserRequestDescriptor = $convert.base64Decode(
+    'ChdVcGRhdGVUZW5hbnRVc2VyUmVxdWVzdBIXCgd1c2VyX2lkGAEgASgFUgZ1c2VySWQSGQoIc2'
+    'V0X3JvbGUYAiABKAhSB3NldFJvbGUSEgoEcm9sZRgDIAEoCVIEcm9sZRI0ChZzZXRfbW9kdWxl'
+    'X3Blcm1pc3Npb25zGAQgASgIUhRzZXRNb2R1bGVQZXJtaXNzaW9ucxItChJtb2R1bGVfcGVybW'
+    'lzc2lvbnMYBSADKAlSEW1vZHVsZVBlcm1pc3Npb25zEjAKFHNldF9mbG93X3Blcm1pc3Npb25z'
+    'GAYgASgIUhJzZXRGbG93UGVybWlzc2lvbnMSKQoQZmxvd19wZXJtaXNzaW9ucxgHIAMoBVIPZm'
+    'xvd1Blcm1pc3Npb25z');
+
+@$core.Deprecated('Use updateTenantUserResponseDescriptor instead')
+const UpdateTenantUserResponse$json = {
+  '1': 'UpdateTenantUserResponse',
+  '2': [
+    {'1': 'success', '3': 1, '4': 1, '5': 8, '10': 'success'},
+  ],
+};
+
+/// Descriptor for `UpdateTenantUserResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List updateTenantUserResponseDescriptor =
+    $convert.base64Decode(
+        'ChhVcGRhdGVUZW5hbnRVc2VyUmVzcG9uc2USGAoHc3VjY2VzcxgBIAEoCFIHc3VjY2Vzcw==');
+
+@$core.Deprecated('Use getMyTenantConfigRequestDescriptor instead')
+const GetMyTenantConfigRequest$json = {
+  '1': 'GetMyTenantConfigRequest',
+};
+
+/// Descriptor for `GetMyTenantConfigRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getMyTenantConfigRequestDescriptor =
+    $convert.base64Decode('ChhHZXRNeVRlbmFudENvbmZpZ1JlcXVlc3Q=');
+
+@$core.Deprecated('Use updateMyTenantConfigRequestDescriptor instead')
+const UpdateMyTenantConfigRequest$json = {
+  '1': 'UpdateMyTenantConfigRequest',
+  '2': [
+    {'1': 'dados_empresa', '3': 1, '4': 1, '5': 9, '10': 'dadosEmpresa'},
+    {'1': 'persona_bot', '3': 2, '4': 1, '5': 9, '10': 'personaBot'},
+    {'1': 'bot_agent_name', '3': 3, '4': 1, '5': 9, '10': 'botAgentName'},
+    {'1': 'msg_fallback', '3': 4, '4': 1, '5': 9, '10': 'msgFallback'},
+    {'1': 'msg_sem_info', '3': 5, '4': 1, '5': 9, '10': 'msgSemInfo'},
+    {
+      '1': 'msg_transferencia',
+      '3': 6,
+      '4': 1,
+      '5': 9,
+      '10': 'msgTransferencia'
+    },
+    {'1': 'llm_class', '3': 7, '4': 1, '5': 9, '10': 'llmClass'},
+    {'1': 'model', '3': 8, '4': 1, '5': 9, '10': 'model'},
+    {'1': 'llm_temperature', '3': 9, '4': 1, '5': 9, '10': 'llmTemperature'},
+    {
+      '1': 'transcription_provider',
+      '3': 10,
+      '4': 1,
+      '5': 9,
+      '10': 'transcriptionProvider'
+    },
+    {
+      '1': 'transcription_model',
+      '3': 11,
+      '4': 1,
+      '5': 9,
+      '10': 'transcriptionModel'
+    },
+    {'1': 'vision_provider', '3': 12, '4': 1, '5': 9, '10': 'visionProvider'},
+    {'1': 'vision_model', '3': 13, '4': 1, '5': 9, '10': 'visionModel'},
+    {'1': 'embeddings_class', '3': 14, '4': 1, '5': 9, '10': 'embeddingsClass'},
+    {'1': 'embeddings_model', '3': 15, '4': 1, '5': 9, '10': 'embeddingsModel'},
+    {'1': 'chunk_size', '3': 16, '4': 1, '5': 5, '10': 'chunkSize'},
+    {'1': 'chunk_overlap', '3': 17, '4': 1, '5': 5, '10': 'chunkOverlap'},
+    {
+      '1': 'similarity_threshold',
+      '3': 18,
+      '4': 1,
+      '5': 9,
+      '10': 'similarityThreshold'
+    },
+    {
+      '1': 'vector_distance_threshold',
+      '3': 19,
+      '4': 1,
+      '5': 9,
+      '10': 'vectorDistanceThreshold'
+    },
+    {
+      '1': 'api_keys',
+      '3': 20,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.ApiKeyEntry',
+      '10': 'apiKeys'
+    },
+  ],
+};
+
+/// Descriptor for `UpdateMyTenantConfigRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List updateMyTenantConfigRequestDescriptor = $convert.base64Decode(
+    'ChtVcGRhdGVNeVRlbmFudENvbmZpZ1JlcXVlc3QSIwoNZGFkb3NfZW1wcmVzYRgBIAEoCVIMZG'
+    'Fkb3NFbXByZXNhEh8KC3BlcnNvbmFfYm90GAIgASgJUgpwZXJzb25hQm90EiQKDmJvdF9hZ2Vu'
+    'dF9uYW1lGAMgASgJUgxib3RBZ2VudE5hbWUSIQoMbXNnX2ZhbGxiYWNrGAQgASgJUgttc2dGYW'
+    'xsYmFjaxIgCgxtc2dfc2VtX2luZm8YBSABKAlSCm1zZ1NlbUluZm8SKwoRbXNnX3RyYW5zZmVy'
+    'ZW5jaWEYBiABKAlSEG1zZ1RyYW5zZmVyZW5jaWESGwoJbGxtX2NsYXNzGAcgASgJUghsbG1DbG'
+    'FzcxIUCgVtb2RlbBgIIAEoCVIFbW9kZWwSJwoPbGxtX3RlbXBlcmF0dXJlGAkgASgJUg5sbG1U'
+    'ZW1wZXJhdHVyZRI1ChZ0cmFuc2NyaXB0aW9uX3Byb3ZpZGVyGAogASgJUhV0cmFuc2NyaXB0aW'
+    '9uUHJvdmlkZXISLwoTdHJhbnNjcmlwdGlvbl9tb2RlbBgLIAEoCVISdHJhbnNjcmlwdGlvbk1v'
+    'ZGVsEicKD3Zpc2lvbl9wcm92aWRlchgMIAEoCVIOdmlzaW9uUHJvdmlkZXISIQoMdmlzaW9uX2'
+    '1vZGVsGA0gASgJUgt2aXNpb25Nb2RlbBIpChBlbWJlZGRpbmdzX2NsYXNzGA4gASgJUg9lbWJl'
+    'ZGRpbmdzQ2xhc3MSKQoQZW1iZWRkaW5nc19tb2RlbBgPIAEoCVIPZW1iZWRkaW5nc01vZGVsEh'
+    '0KCmNodW5rX3NpemUYECABKAVSCWNodW5rU2l6ZRIjCg1jaHVua19vdmVybGFwGBEgASgFUgxj'
+    'aHVua092ZXJsYXASMQoUc2ltaWxhcml0eV90aHJlc2hvbGQYEiABKAlSE3NpbWlsYXJpdHlUaH'
+    'Jlc2hvbGQSOgoZdmVjdG9yX2Rpc3RhbmNlX3RocmVzaG9sZBgTIAEoCVIXdmVjdG9yRGlzdGFu'
+    'Y2VUaHJlc2hvbGQSQwoIYXBpX2tleXMYFCADKAsyKC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZX'
+    'JpZXMuQXBpS2V5RW50cnlSB2FwaUtleXM=');
+
 @$core.Deprecated('Use streamAtendimentosRequestDescriptor instead')
 const StreamAtendimentosRequest$json = {
   '1': 'StreamAtendimentosRequest',

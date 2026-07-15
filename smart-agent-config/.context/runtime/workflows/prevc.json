@@ -1,88 +1,108 @@
 {
   "version": 2,
   "workflowType": "prevc",
-  "updatedAt": "2026-07-10T20:37:44.494Z",
+  "updatedAt": "2026-07-15T18:35:43.675Z",
   "status": {
     "project": {
-      "name": "n2-ia-engine",
+      "name": "n3-painel-do-tenant",
       "scale": 3,
-      "started": "2026-07-10T10:15:31.929Z",
+      "started": "2026-07-11T11:12:19.043Z",
       "current_phase": "C",
       "settings": {
         "autonomous_mode": false,
         "require_plan": true,
         "require_approval": true
       },
-      "plan": "n2-ia-engine"
+      "plan": "n3-painel-do-tenant"
     },
     "phases": {
       "P": {
         "status": "completed",
-        "started_at": "2026-07-10T10:15:31.929Z",
-        "completed_at": "2026-07-10T10:15:38.719Z",
+        "started_at": "2026-07-11T11:12:19.043Z",
+        "completed_at": "2026-07-11T11:30:36.932Z",
         "outputs": [
           {
-            "path": ".context/plans/n2-ia-engine.md",
+            "path": "decisão de empacotamento registrada: app Flutter dedicado ao tenant (admin+workspace)",
             "status": "filled"
           },
           {
-            "path": ".context/plans/n2-ia-engine/plano_completo_n2-ia-engine.md",
+            "path": "gaps reais mapeados: ListInvites/RevokeInvite/UpdateTenantUser/bootstrap 1º admin são 100% novos",
             "status": "filled"
           },
           {
-            "path": ".context/plans/n2-ia-engine/info_aux_n2-ia-engine.md",
+            "path": "invalidação de flow_permissions mantém TTL 30s passivo (decisão do dono)",
             "status": "filled"
           }
         ]
       },
       "R": {
         "status": "completed",
-        "started_at": "2026-07-10T10:15:38.719Z",
-        "completed_at": "2026-07-10T10:16:05.266Z",
+        "started_at": "2026-07-11T11:30:36.932Z",
+        "completed_at": "2026-07-11T11:31:51.521Z",
         "outputs": [
           {
-            "path": "decisão de arquitetura registrada e plano aprovado (architect)",
+            "path": "contratos aprovados: ListInvites, RevokeInvite, UpdateTenantUser, CreateTenant estendido",
+            "status": "filled"
+          },
+          {
+            "path": "arquitetura aprovada: novo app smart-core-tenant (LoginModule+OperacionalModule+TenantModule) com RBAC de UI via scopes",
             "status": "filled"
           }
         ]
       },
       "E": {
         "status": "completed",
-        "started_at": "2026-07-10T10:16:05.266Z",
-        "completed_at": "2026-07-10T20:10:09.898Z",
+        "started_at": "2026-07-11T11:31:51.521Z",
+        "completed_at": "2026-07-15T00:14:10.377Z",
         "outputs": [
           {
-            "path": "evidência real de validação documentada na decisão da fase V (sensor genérico do harness é npm-only, não aplicável a este monorepo)",
+            "path": "3 commits na branch feature/n3-painel-do-tenant",
+            "status": "filled"
+          },
+          {
+            "path": "test-local.ps1 e test-flutter.ps1 verdes (exceto falha conhecida pré-existente)",
+            "status": "filled"
+          },
+          {
+            "path": "handoff-summary registrado (sensor genérico tests-passing não aplicável a monorepo poliglota, mesmo precedente do n2-ia-engine)",
             "status": "filled"
           }
         ]
       },
       "V": {
         "status": "completed",
-        "started_at": "2026-07-10T20:10:09.898Z",
-        "completed_at": "2026-07-10T20:10:22.135Z",
+        "started_at": "2026-07-15T00:14:10.377Z",
+        "completed_at": "2026-07-15T00:16:06.652Z",
         "outputs": [
           {
-            "path": "evidência real de validação Rust+Python+Flutter documentada na decisão da fase V",
+            "path": "validação aceita via evidência automatizada",
+            "status": "filled"
+          },
+          {
+            "path": "limitação registrada: sem clique manual contra runtime real",
             "status": "filled"
           }
         ]
       },
       "C": {
         "status": "completed",
-        "started_at": "2026-07-10T20:10:22.135Z",
-        "completed_at": "2026-07-10T20:37:44.475Z",
+        "started_at": "2026-07-15T00:16:06.652Z",
+        "completed_at": "2026-07-15T18:35:43.622Z",
         "outputs": [
           {
-            "path": "plano arquivado em .context/plans/archive/n2-ia-engine/",
+            "path": "final-review.md registrado (CORRIGIDO)",
             "status": "filled"
           },
           {
-            "path": "final-review.md (CORRIGIDO) registrado",
+            "path": "changelog atualizado",
             "status": "filled"
           },
           {
-            "path": "changelog.md atualizado",
+            "path": "plano arquivado em .context/plans/archive/n3-painel-do-tenant/",
+            "status": "filled"
+          },
+          {
+            "path": "5 commits na branch feature/n3-painel-do-tenant",
             "status": "filled"
           }
         ]
@@ -119,103 +139,117 @@
       "plan_created": true,
       "plan_approved": true,
       "approved_by": "architect",
-      "approved_at": "2026-07-10T10:16:01.273Z",
-      "approval_notes": "Arquitetura aprovada: gRPC/porta única de banco/degradação graciosa confirmados. Sequenciamento N2.1→N2.2→(N2.3‖N2.4)→N2.5→N2.6 aprovado sem alterações ao plano completo."
+      "approved_at": "2026-07-11T11:31:48.019Z",
+      "approval_notes": "Contratos de UpdateTenantUser/ListInvites/RevokeInvite/CreateTenant e arquitetura do novo app smart-core-tenant aprovados. Fundamentado em levantamento real do código (nenhuma suposição do plano original ficou sem verificação)."
     },
     "execution": {
       "history": [
         {
           "phase": "P",
           "action": "started",
-          "timestamp": "2026-07-10T10:15:31.929Z"
+          "timestamp": "2026-07-11T11:12:19.043Z"
         },
         {
           "phase": "P",
           "action": "plan_linked",
-          "plan": "n2-ia-engine",
-          "timestamp": "2026-07-10T10:15:34.611Z"
+          "plan": "n3-painel-do-tenant",
+          "timestamp": "2026-07-11T11:12:19.191Z"
+        },
+        {
+          "phase": "P",
+          "action": "decision_recorded",
+          "plan": "n3-painel-do-tenant",
+          "description": "Decision recorded: N3.4 revisado: app Flutter dedicado para tudo que o tenant usa (admin + workspace operacional)",
+          "timestamp": "2026-07-11T11:30:28.861Z"
         },
         {
           "phase": "P",
           "action": "completed",
-          "timestamp": "2026-07-10T10:15:38.719Z"
+          "timestamp": "2026-07-11T11:30:36.932Z"
         },
         {
           "phase": "R",
           "action": "started",
-          "timestamp": "2026-07-10T10:15:38.719Z"
+          "timestamp": "2026-07-11T11:30:36.932Z"
         },
         {
           "phase": "R",
           "action": "decision_recorded",
-          "plan": "n2-ia-engine",
-          "description": "Decision recorded: Arquitetura N2 aprovada: gRPC (não FFI), banco de porta única, degradação graciosa",
-          "timestamp": "2026-07-10T10:15:56.717Z"
+          "plan": "n3-painel-do-tenant",
+          "description": "Decision recorded: Contratos e arquitetura aprovados para a fase E",
+          "timestamp": "2026-07-11T11:31:46.487Z"
         },
         {
           "phase": "R",
           "action": "plan_approved",
           "approved_by": "architect",
-          "timestamp": "2026-07-10T10:16:01.273Z"
+          "timestamp": "2026-07-11T11:31:48.019Z"
         },
         {
           "phase": "R",
           "action": "completed",
-          "timestamp": "2026-07-10T10:16:05.266Z"
+          "timestamp": "2026-07-11T11:31:51.521Z"
         },
         {
           "phase": "E",
           "action": "started",
-          "timestamp": "2026-07-10T10:16:05.266Z"
+          "timestamp": "2026-07-11T11:31:51.521Z"
         },
         {
           "phase": "E",
           "action": "decision_recorded",
-          "plan": "n2-ia-engine",
-          "description": "Decision recorded: N2 implementada de ponta a ponta; simplificações documentadas para continuação",
-          "timestamp": "2026-07-10T19:34:08.315Z"
+          "plan": "n3-painel-do-tenant",
+          "description": "Decision recorded: Correção crítica descoberta na execução: RPCs do N3 não são alcançáveis via gRPC-Web (faltava exposição na borda)",
+          "timestamp": "2026-07-13T17:48:13.593Z"
         },
         {
-          "phase": "V",
+          "phase": "E",
           "action": "decision_recorded",
-          "plan": "n2-ia-engine",
-          "description": "Decision recorded: Validação real da N2: workspace Rust + Python ia_engine + Flutter, todos verdes",
-          "timestamp": "2026-07-10T20:09:56.722Z"
+          "plan": "n3-painel-do-tenant",
+          "description": "Decision recorded: Fase E concluída: backend + gRPC-Web + frontend implementados e testados",
+          "timestamp": "2026-07-15T00:13:54.199Z"
         },
         {
           "phase": "E",
           "action": "completed",
-          "timestamp": "2026-07-10T20:10:09.898Z"
+          "timestamp": "2026-07-15T00:14:10.377Z"
         },
         {
           "phase": "V",
           "action": "started",
-          "timestamp": "2026-07-10T20:10:09.898Z"
+          "timestamp": "2026-07-15T00:14:10.377Z"
+        },
+        {
+          "phase": "V",
+          "action": "decision_recorded",
+          "plan": "n3-painel-do-tenant",
+          "description": "Decision recorded: Validação aceita via evidência automatizada (sem runtime real rodando)",
+          "timestamp": "2026-07-15T00:16:00.960Z"
         },
         {
           "phase": "V",
           "action": "completed",
-          "timestamp": "2026-07-10T20:10:22.135Z"
+          "timestamp": "2026-07-15T00:16:06.652Z"
         },
         {
           "phase": "C",
           "action": "started",
-          "timestamp": "2026-07-10T20:10:22.135Z"
+          "timestamp": "2026-07-15T00:16:06.652Z"
         },
         {
           "phase": "C",
           "action": "completed",
-          "timestamp": "2026-07-10T20:37:44.475Z"
+          "timestamp": "2026-07-15T18:35:43.622Z"
         }
       ],
-      "last_activity": "2026-07-10T20:37:44.475Z",
+      "last_activity": "2026-07-15T18:35:43.622Z",
       "resume_context": "Fase C (Confirmação) concluída"
     }
   },
   "binding": {
-    "workflowName": "n2-ia-engine",
-    "sessionId": "704b40ec-0b5b-4d43-9f38-54d9ca4e3a2c",
-    "createdAt": "2026-07-10T10:15:31.955Z",
-    "updatedAt": "2026-07-10T20:37:44.484Z"
+    "workflowName": "n3-painel-do-tenant",
+    "sessionId": "0b954ca6-243c-440d-80dc-6ed9c272b3c6",
+    "createdAt": "2026-07-11T11:12:19.057Z",
+    "updatedAt": "2026-07-15T18:35:43.660Z"
   }
 }

@@ -3,7 +3,6 @@ import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:initial_loading_module/initial_loading_module.dart';
 import 'package:login_module/login_module.dart';
 import 'package:admin_module/admin_module.dart';
-import 'package:operacional_module/operacional_module.dart';
 
 import 'app.dart';
 
@@ -11,6 +10,10 @@ import 'app.dart';
 ///
 /// Chamado pelos entrypoints flavor-específicos (main_dev / main_prod).
 /// O boot assíncrono (runBootTasks) roda DENTRO da rota '/', não aqui.
+///
+/// Este app é exclusivo do superusuário da plataforma (só `AdminModule`). O
+/// `OperacionalModule` (workspace/Kanban) foi movido para o `smart-core-tenant`,
+/// já que é usado pelos funcionários do tenant, não pelo superusuário.
 Future<void> bootstrap(AppConfig config) async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -25,7 +28,6 @@ Future<void> bootstrap(AppConfig config) async {
     InfraModule(config),
     LoginModule(),
     AdminModule(),
-    OperacionalModule(),
     InitialLoadingModule(),
   ];
 

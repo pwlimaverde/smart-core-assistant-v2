@@ -1,0 +1,41 @@
+name: smart_core_tenant
+description: App Web do tenant do Smart Core Assistant (workspace operacional + painel administrativo do próprio tenant).
+version: 1.0.0+1
+publish_to: 'none'
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=3.44.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  flutter_web_plugins:
+    sdk: flutter
+  app_config:
+    path: ../../packages/app_config
+  dependencies_module:
+    path: ../../modulos/dependencies_module
+  initial_loading_module:
+    path: ../../modulos/initial_loading_module
+  login_module:
+    path: ../../modulos/login_module
+  operacional_module:
+    path: ../../modulos/operacional_module
+  tenant_module:
+    path: ../../modulos/tenant_module
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  mocktail: ^1.0.4
+
+flutter:
+  generate: true
+  uses-material-design: true
+
+resolution: workspace

@@ -12,6 +12,10 @@ use application::auth::login::AuthDeps;
 use contracts::grpc::queries::admin_service_server::{AdminService, AdminServiceServer};
 use contracts::grpc::queries::auth_service_server::{AuthService, AuthServiceServer};
 use contracts::grpc::queries::{
+    // Fase N3 - Painel do Tenant (convites, usuários, config tenant-scoped)
+    AcceptInviteRequest,
+    AcceptInviteResponse,
+    AcceptedTenantUser,
     ApiKeyEntry as ProtoApiKeyEntry,
     AtendimentoEvent,
     // Fase 6 - Operacional (fila/Kanban/chat)
@@ -19,6 +23,8 @@ use contracts::grpc::queries::{
     AuditLogEntry as ProtoAuditLogEntry,
     AuthResponse,
     CoreSetting as ProtoCoreSetting,
+    CreateInviteRequest,
+    CreateInviteResponse,
     CreatePlanRequest,
     CreatePlanResponse,
     CreateTenantRequest,
@@ -33,6 +39,7 @@ use contracts::grpc::queries::{
     GenerateAccessCodeResponse,
     GetDashboardSummaryRequest,
     GetDashboardSummaryResponse,
+    GetMyTenantConfigRequest,
     GetServiceHealthRequest,
     GetServiceHealthResponse,
     GetTenantConfigRequest,
@@ -48,6 +55,8 @@ use contracts::grpc::queries::{
     // Fase 4 - Feature Flags
     ListFeatureFlagsRequest,
     ListFeatureFlagsResponse,
+    ListInvitesRequest,
+    ListInvitesResponse,
     ListPaymentsRequest,
     ListPaymentsResponse,
     // Fase 2 - Billing
@@ -55,6 +64,8 @@ use contracts::grpc::queries::{
     ListPlansResponse,
     ListSubscriptionsRequest,
     ListSubscriptionsResponse,
+    ListTenantUsersRequest,
+    ListTenantUsersResponse,
     // Fase 2 - Tenants
     ListTenantsRequest,
     ListTenantsResponse,
@@ -72,6 +83,8 @@ use contracts::grpc::queries::{
     RefreshRequest,
     RegisterPaymentRequest,
     RegisterPaymentResponse,
+    RevokeInviteRequest,
+    RevokeInviteResponse,
     SendOutboundMessageRequest,
     SendOutboundMessageResponse,
     ServiceHealth as ProtoServiceHealth,
@@ -84,15 +97,21 @@ use contracts::grpc::queries::{
     StreamAtendimentosRequest,
     Subscription as ProtoSubscription,
     Tenant as ProtoTenant,
+    TenantInviteCreated,
+    TenantInviteItem,
+    TenantUserItem,
     // Fase 3 - Evolution Connection
     TestEvolutionConnectionRequest,
     TestEvolutionConnectionResponse,
+    UpdateMyTenantConfigRequest,
     UpdatePlanRequest,
     UpdatePlanResponse,
     UpdateTenantConfigRequest,
     UpdateTenantConfigResponse,
     UpdateTenantRequest,
     UpdateTenantResponse,
+    UpdateTenantUserRequest,
+    UpdateTenantUserResponse,
     UpsertCoreSettingRequest,
     UpsertCoreSettingResponse,
 };
@@ -249,6 +268,21 @@ async fn exigir_autenticado_do_metadata<T>(
     Ok(claims)
 }
 
+/// Exige que a sessão (já autenticada) tenha o escopo `tenant:admin` (ou o coringa
+/// `*` de superusuário) — usado pelos RPCs tenant-scoped de config (N3.3), que expõem
+/// dado sensível (api keys, prompts) e não devem ficar abertos a qualquer `TenantUser`.
+fn exigir_escopo_tenant_admin(claims: &application::jwt::Claims) -> Result<(), Status> {
+    if claims.is_superuser
+        || claims
+            .scopes
+            .iter()
+            .any(|s| s == "tenant:admin" || s == "*")
+    {
+        return Ok(());
+    }
+    Err(Status::permission_denied("errors.auth.forbidden"))
+}
+
 /// Resolve os `flow_permissions` (RBAC fino por fluxo — WS-5a) do usuário autenticado
 /// na borda gRPC-Web, espelhando a estratégia RPC+cache curto do `transport::Server`
 /// (ver `main::resolver_flow_permissions`). Sem isso, o `data_postgres` receberia o
@@ -335,11 +369,88 @@ fn extrair_permissoes_web(payload: &[u8]) -> Option<Vec<i32>> {
     )
 }
 
+/// Extrai um array de strings de um campo JSON opcional (N3: `module_permissions`).
+fn json_strings(val: Option<&serde_json::Value>) -> Vec<String> {
+    val.and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(|s| s.to_string()))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Extrai um array de inteiros de um campo JSON opcional (N3: `flow_permissions`).
+fn json_i32s(val: Option<&serde_json::Value>) -> Vec<i32> {
+    val.and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_i64())
+                .map(|v| v as i32)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Gera um `traceparent` W3C novo (`00-<trace32>-<span16>-01`) a partir de UUIDs.
 fn novo_traceparent() -> String {
     let trace = Uuid::now_v7().simple().to_string(); // 32 hex
     let span = &Uuid::now_v7().simple().to_string()[..16]; // 16 hex
     format!("00-{trace}-{span}-01")
+}
+
+/// Mapeia o payload JSON de `GetTenantConfig`/`GetMyTenantConfig` (fonte de verdade no
+/// `data_postgres`) para a mensagem proto de resposta. Compartilhado entre o caminho de
+/// superusuário e o caminho tenant-scoped (N3.3) — mesma forma de resposta em ambos.
+fn mapear_tenant_config_response(val: &serde_json::Value) -> GetTenantConfigResponse {
+    let mut api_keys = std::collections::HashMap::new();
+    if let Some(keys_obj) = val.get("api_keys").and_then(|v| v.as_object()) {
+        for (k, v) in keys_obj {
+            if let Some(v_str) = v.as_str() {
+                api_keys.insert(k.clone(), v_str.to_string());
+            }
+        }
+    }
+    let api_keys_proto = api_keys
+        .into_iter()
+        .map(|(key, value)| ProtoApiKeyEntry { key, value })
+        .collect();
+
+    let campo_str = |chave: &str| {
+        val.get(chave)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+
+    GetTenantConfigResponse {
+        dados_empresa: campo_str("dados_empresa"),
+        persona_bot: campo_str("persona_bot"),
+        bot_agent_name: campo_str("bot_agent_name"),
+        msg_fallback: campo_str("msg_fallback"),
+        msg_sem_info: campo_str("msg_sem_info"),
+        msg_transferencia: campo_str("msg_transferencia"),
+        llm_class: campo_str("llm_class"),
+        model: campo_str("model"),
+        llm_temperature: campo_str("llm_temperature"),
+        transcription_provider: campo_str("transcription_provider"),
+        transcription_model: campo_str("transcription_model"),
+        vision_provider: campo_str("vision_provider"),
+        vision_model: campo_str("vision_model"),
+        embeddings_class: campo_str("embeddings_class"),
+        embeddings_model: campo_str("embeddings_model"),
+        chunk_size: val
+            .get("chunk_size")
+            .and_then(|v| v.as_i64())
+            .unwrap_or_default() as i32,
+        chunk_overlap: val
+            .get("chunk_overlap")
+            .and_then(|v| v.as_i64())
+            .unwrap_or_default() as i32,
+        similarity_threshold: campo_str("similarity_threshold"),
+        vector_distance_threshold: campo_str("vector_distance_threshold"),
+        api_keys: api_keys_proto,
+    }
 }
 
 /// Decodifica o JSON `{access_token, refresh_token, ...}` retornado por `application::auth`.
@@ -771,117 +882,7 @@ impl AdminService for AdminFacade {
 
                 let val: serde_json::Value = serde_json::from_slice(&resp.payload)
                     .map_err(|e| Status::internal(e.to_string()))?;
-
-                let mut api_keys = std::collections::HashMap::new();
-                if let Some(keys_obj) = val.get("api_keys").and_then(|v| v.as_object()) {
-                    for (k, v) in keys_obj {
-                        if let Some(v_str) = v.as_str() {
-                            api_keys.insert(k.clone(), v_str.to_string());
-                        }
-                    }
-                }
-
-                let mut api_keys_proto = Vec::new();
-                for (k, v) in api_keys {
-                    api_keys_proto.push(ProtoApiKeyEntry { key: k, value: v });
-                }
-
-                Ok(Response::new(GetTenantConfigResponse {
-                    dados_empresa: val
-                        .get("dados_empresa")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    persona_bot: val
-                        .get("persona_bot")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    bot_agent_name: val
-                        .get("bot_agent_name")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    msg_fallback: val
-                        .get("msg_fallback")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    msg_sem_info: val
-                        .get("msg_sem_info")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    msg_transferencia: val
-                        .get("msg_transferencia")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    llm_class: val
-                        .get("llm_class")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    model: val
-                        .get("model")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    llm_temperature: val
-                        .get("llm_temperature")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    transcription_provider: val
-                        .get("transcription_provider")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    transcription_model: val
-                        .get("transcription_model")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    vision_provider: val
-                        .get("vision_provider")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    vision_model: val
-                        .get("vision_model")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    embeddings_class: val
-                        .get("embeddings_class")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    embeddings_model: val
-                        .get("embeddings_model")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    chunk_size: val
-                        .get("chunk_size")
-                        .and_then(|v| v.as_i64())
-                        .unwrap_or_default() as i32,
-                    chunk_overlap: val
-                        .get("chunk_overlap")
-                        .and_then(|v| v.as_i64())
-                        .unwrap_or_default() as i32,
-                    similarity_threshold: val
-                        .get("similarity_threshold")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    vector_distance_threshold: val
-                        .get("vector_distance_threshold")
-                        .and_then(|v| v.as_str())
-                        .unwrap_or_default()
-                        .to_string(),
-                    api_keys: api_keys_proto,
-                }))
+                Ok(Response::new(mapear_tenant_config_response(&val)))
             }
             Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
         }
@@ -3195,6 +3196,615 @@ impl AdminService for AdminFacade {
                 Ok(Response::new(
                     Box::pin(stream) as Self::ExportTenantsCsvStream
                 ))
+            }
+            Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
+        }
+    }
+
+    // --- Fase N3: Painel do Tenant (convites, usuários, config tenant-scoped) ---
+    // Guard `exigir_autenticado_do_metadata` (não superuser): o RBAC fino `tenant:admin`
+    // é aplicado dentro do data_postgres. `tenant_id` sempre vem de `claims.tenant_id`,
+    // nunca do request (um tenant não pode agir sobre outro). Segue fielmente o padrão
+    // de passthrough já usado por `create_tenant`/`update_tenant` (sem auditoria própria
+    // na borda — a auditoria de negócio já acontece no `data_postgres`).
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "CreateInvite", traceparent)
+    )]
+    async fn create_invite(
+        &self,
+        req: Request<CreateInviteRequest>,
+    ) -> Result<Response<CreateInviteResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+
+        let payload = serde_json::json!({
+            "email": inner.email,
+            "name": inner.name,
+            "role": if inner.role.is_empty() { "staff" } else { &inner.role },
+            "module_permissions": inner.module_permissions,
+            "flow_permissions": inner.flow_permissions,
+        });
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "CreateInvite".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(resp) => {
+                if resp.kind == MessageKind::Error as i32 {
+                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
+                    return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
+                }
+                let val: serde_json::Value = serde_json::from_slice(&resp.payload)
+                    .map_err(|e| Status::internal(e.to_string()))?;
+                let invite = val.get("invite");
+
+                Ok(Response::new(CreateInviteResponse {
+                    invite: invite.map(|i| TenantInviteCreated {
+                        id: i
+                            .get("id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        tenant_id: i
+                            .get("tenant_id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        email: i
+                            .get("email")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        name: i
+                            .get("name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        role: i
+                            .get("role")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        token: i
+                            .get("token")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        expires_at: i
+                            .get("expires_at")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or_default(),
+                        used: i.get("used").and_then(|v| v.as_bool()).unwrap_or_default(),
+                        created_at: i
+                            .get("created_at")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or_default(),
+                    }),
+                }))
+            }
+            Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
+        }
+    }
+
+    /// AcceptInvite: rota PÚBLICA (sem sessão) — o convidado ainda não tem conta;
+    /// o tenant é resolvido pelo token do convite dentro do data_postgres.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "AcceptInvite", traceparent)
+    )]
+    async fn accept_invite(
+        &self,
+        req: Request<AcceptInviteRequest>,
+    ) -> Result<Response<AcceptInviteResponse>, Status> {
+        let traceparent = traceparent_do_metadata(&req);
+        let inner = req.into_inner();
+
+        let payload = serde_json::json!({
+            "token": inner.token,
+            "username": inner.username,
+            "email": inner.email,
+            "password": inner.password,
+        });
+
+        let env_req = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "AcceptInvite".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        };
+
+        match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(resp) => {
+                if resp.kind == MessageKind::Error as i32 {
+                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
+                    return Err(Status::invalid_argument(err_msg));
+                }
+                let val: serde_json::Value = serde_json::from_slice(&resp.payload)
+                    .map_err(|e| Status::internal(e.to_string()))?;
+                let tu = val.get("tenant_user");
+
+                Ok(Response::new(AcceptInviteResponse {
+                    tenant_user: tu.map(|u| AcceptedTenantUser {
+                        id: u.get("id").and_then(|v| v.as_i64()).unwrap_or_default() as i32,
+                        user_id: u
+                            .get("user_id")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or_default() as i32,
+                        tenant_id: u
+                            .get("tenant_id")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        role: u
+                            .get("role")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        module_permissions: json_strings(u.get("module_permissions")),
+                        flow_permissions: json_i32s(u.get("flow_permissions")),
+                        is_active: u
+                            .get("is_active")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or_default(),
+                    }),
+                }))
+            }
+            Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
+        }
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListInvites", traceparent)
+    )]
+    async fn list_invites(
+        &self,
+        req: Request<ListInvitesRequest>,
+    ) -> Result<Response<ListInvitesResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "ListInvites".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({})).unwrap(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(resp) => {
+                if resp.kind == MessageKind::Error as i32 {
+                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
+                    return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
+                }
+                let val: serde_json::Value = serde_json::from_slice(&resp.payload)
+                    .map_err(|e| Status::internal(e.to_string()))?;
+                let invites = val
+                    .get("invites")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .map(|item| TenantInviteItem {
+                                id: item
+                                    .get("id")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or_default()
+                                    .to_string(),
+                                email: item
+                                    .get("email")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or_default()
+                                    .to_string(),
+                                name: item
+                                    .get("name")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or_default()
+                                    .to_string(),
+                                role: item
+                                    .get("role")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or_default()
+                                    .to_string(),
+                                module_permissions: json_strings(item.get("module_permissions")),
+                                flow_permissions: json_i32s(item.get("flow_permissions")),
+                                expires_at: item
+                                    .get("expires_at")
+                                    .and_then(|v| v.as_i64())
+                                    .unwrap_or_default(),
+                                used: item
+                                    .get("used")
+                                    .and_then(|v| v.as_bool())
+                                    .unwrap_or_default(),
+                                revoked: item
+                                    .get("revoked")
+                                    .and_then(|v| v.as_bool())
+                                    .unwrap_or_default(),
+                                created_at: item
+                                    .get("created_at")
+                                    .and_then(|v| v.as_i64())
+                                    .unwrap_or_default(),
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Ok(Response::new(ListInvitesResponse { invites }))
+            }
+            Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
+        }
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "RevokeInvite", traceparent)
+    )]
+    async fn revoke_invite(
+        &self,
+        req: Request<RevokeInviteRequest>,
+    ) -> Result<Response<RevokeInviteResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+
+        let payload = serde_json::json!({ "invite_id": inner.invite_id });
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "RevokeInvite".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(resp) => {
+                if resp.kind == MessageKind::Error as i32 {
+                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
+                    return Err(Status::failed_precondition(err_msg));
+                }
+                Ok(Response::new(RevokeInviteResponse { success: true }))
+            }
+            Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
+        }
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListTenantUsers", traceparent)
+    )]
+    async fn list_tenant_users(
+        &self,
+        req: Request<ListTenantUsersRequest>,
+    ) -> Result<Response<ListTenantUsersResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "ListTenantUsers".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({})).unwrap(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(resp) => {
+                if resp.kind == MessageKind::Error as i32 {
+                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
+                    return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
+                }
+                let val: serde_json::Value = serde_json::from_slice(&resp.payload)
+                    .map_err(|e| Status::internal(e.to_string()))?;
+                let users = val
+                    .get("users")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .map(|item| TenantUserItem {
+                                id: item.get("id").and_then(|v| v.as_i64()).unwrap_or_default()
+                                    as i32,
+                                user_id: item
+                                    .get("user_id")
+                                    .and_then(|v| v.as_i64())
+                                    .unwrap_or_default()
+                                    as i32,
+                                role: item
+                                    .get("role")
+                                    .and_then(|v| v.as_str())
+                                    .unwrap_or_default()
+                                    .to_string(),
+                                module_permissions: json_strings(item.get("module_permissions")),
+                                flow_permissions: json_i32s(item.get("flow_permissions")),
+                                is_active: item
+                                    .get("is_active")
+                                    .and_then(|v| v.as_bool())
+                                    .unwrap_or_default(),
+                                created_at: item
+                                    .get("created_at")
+                                    .and_then(|v| v.as_i64())
+                                    .unwrap_or_default(),
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Ok(Response::new(ListTenantUsersResponse { users }))
+            }
+            Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
+        }
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "UpdateTenantUser", traceparent)
+    )]
+    async fn update_tenant_user(
+        &self,
+        req: Request<UpdateTenantUserRequest>,
+    ) -> Result<Response<UpdateTenantUserResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+
+        let mut payload = serde_json::Map::new();
+        payload.insert("user_id".to_string(), serde_json::json!(inner.user_id));
+        if inner.set_role {
+            payload.insert("role".to_string(), serde_json::json!(inner.role));
+        }
+        if inner.set_module_permissions {
+            payload.insert(
+                "module_permissions".to_string(),
+                serde_json::json!(inner.module_permissions),
+            );
+        }
+        if inner.set_flow_permissions {
+            payload.insert(
+                "flow_permissions".to_string(),
+                serde_json::json!(inner.flow_permissions),
+            );
+        }
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "UpdateTenantUser".to_string(),
+            payload: serde_json::to_vec(&serde_json::Value::Object(payload)).unwrap(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(resp) => {
+                if resp.kind == MessageKind::Error as i32 {
+                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
+                    return Err(Status::failed_precondition(err_msg));
+                }
+                Ok(Response::new(UpdateTenantUserResponse { success: true }))
+            }
+            Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
+        }
+    }
+
+    /// GetMyTenantConfig: variante tenant-scoped de `get_tenant_config` — `tenant_id`
+    /// vem de `claims.tenant_id` (nunca do request); exige escopo `tenant:admin`
+    /// (ou `*`) além de sessão autenticada, já que config do tenant é dado sensível.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "GetMyTenantConfig", traceparent)
+    )]
+    async fn get_my_tenant_config(
+        &self,
+        req: Request<GetMyTenantConfigRequest>,
+    ) -> Result<Response<GetTenantConfigResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo_tenant_admin(&claims)?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+
+        let payload = serde_json::json!({ "tenant_id": tenant_uuid.to_string() });
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "GetTenantConfig".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(resp) => {
+                if resp.kind == MessageKind::Error as i32 {
+                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
+                    return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
+                }
+                let val: serde_json::Value = serde_json::from_slice(&resp.payload)
+                    .map_err(|e| Status::internal(e.to_string()))?;
+                Ok(Response::new(mapear_tenant_config_response(&val)))
+            }
+            Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
+        }
+    }
+
+    /// UpdateMyTenantConfig: variante tenant-scoped de `update_tenant_config` —
+    /// `tenant_id` vem de `claims.tenant_id`; exige escopo `tenant:admin`.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "UpdateMyTenantConfig", traceparent)
+    )]
+    async fn update_my_tenant_config(
+        &self,
+        req: Request<UpdateMyTenantConfigRequest>,
+    ) -> Result<Response<UpdateTenantConfigResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo_tenant_admin(&claims)?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+
+        let mut api_keys_map = serde_json::Map::new();
+        for entry in inner.api_keys {
+            api_keys_map.insert(entry.key, serde_json::Value::String(entry.value));
+        }
+
+        let payload = serde_json::json!({
+            "tenant_id": tenant_uuid.to_string(),
+            "dados_empresa": inner.dados_empresa,
+            "persona_bot": inner.persona_bot,
+            "bot_agent_name": inner.bot_agent_name,
+            "msg_fallback": inner.msg_fallback,
+            "msg_sem_info": inner.msg_sem_info,
+            "msg_transferencia": inner.msg_transferencia,
+            "llm_class": inner.llm_class,
+            "model": inner.model,
+            "llm_temperature": inner.llm_temperature,
+            "transcription_provider": inner.transcription_provider,
+            "transcription_model": inner.transcription_model,
+            "vision_provider": inner.vision_provider,
+            "vision_model": inner.vision_model,
+            "embeddings_class": inner.embeddings_class,
+            "embeddings_model": inner.embeddings_model,
+            "chunk_size": inner.chunk_size,
+            "chunk_overlap": inner.chunk_overlap,
+            "similarity_threshold": inner.similarity_threshold,
+            "vector_distance_threshold": inner.vector_distance_threshold,
+            "api_keys": serde_json::Value::Object(api_keys_map),
+        });
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "UpdateTenantConfig".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(resp) => {
+                if resp.kind == MessageKind::Error as i32 {
+                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
+                    return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
+                }
+                Ok(Response::new(UpdateTenantConfigResponse { success: true }))
             }
             Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
         }

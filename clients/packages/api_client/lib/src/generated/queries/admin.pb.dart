@@ -5678,6 +5678,1644 @@ class SendOutboundMessageResponse extends $pb.GeneratedMessage {
   void clearMessageId() => $_clearField(1);
 }
 
+class CreateInviteRequest extends $pb.GeneratedMessage {
+  factory CreateInviteRequest({
+    $core.String? email,
+    $core.String? name,
+    $core.String? role,
+    $core.Iterable<$core.String>? modulePermissions,
+    $core.Iterable<$core.int>? flowPermissions,
+  }) {
+    final result = create();
+    if (email != null) result.email = email;
+    if (name != null) result.name = name;
+    if (role != null) result.role = role;
+    if (modulePermissions != null)
+      result.modulePermissions.addAll(modulePermissions);
+    if (flowPermissions != null) result.flowPermissions.addAll(flowPermissions);
+    return result;
+  }
+
+  CreateInviteRequest._();
+
+  factory CreateInviteRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CreateInviteRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CreateInviteRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'email')
+    ..aOS(2, _omitFieldNames ? '' : 'name')
+    ..aOS(3, _omitFieldNames ? '' : 'role')
+    ..pPS(4, _omitFieldNames ? '' : 'modulePermissions')
+    ..p<$core.int>(
+        5, _omitFieldNames ? '' : 'flowPermissions', $pb.PbFieldType.K3)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateInviteRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateInviteRequest copyWith(void Function(CreateInviteRequest) updates) =>
+      super.copyWith((message) => updates(message as CreateInviteRequest))
+          as CreateInviteRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CreateInviteRequest create() => CreateInviteRequest._();
+  @$core.override
+  CreateInviteRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CreateInviteRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CreateInviteRequest>(create);
+  static CreateInviteRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get email => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set email($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasEmail() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearEmail() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get name => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set name($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasName() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearName() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get role => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set role($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasRole() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearRole() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $pb.PbList<$core.String> get modulePermissions => $_getList(3);
+
+  @$pb.TagNumber(5)
+  $pb.PbList<$core.int> get flowPermissions => $_getList(4);
+}
+
+/// Convite recém-criado. É o ÚNICO ponto onde o `token` é exposto (momento da
+/// criação); as listagens jamais o retornam.
+class TenantInviteCreated extends $pb.GeneratedMessage {
+  factory TenantInviteCreated({
+    $core.String? id,
+    $core.String? tenantId,
+    $core.String? email,
+    $core.String? name,
+    $core.String? role,
+    $core.String? token,
+    $fixnum.Int64? expiresAt,
+    $core.bool? used,
+    $fixnum.Int64? createdAt,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (tenantId != null) result.tenantId = tenantId;
+    if (email != null) result.email = email;
+    if (name != null) result.name = name;
+    if (role != null) result.role = role;
+    if (token != null) result.token = token;
+    if (expiresAt != null) result.expiresAt = expiresAt;
+    if (used != null) result.used = used;
+    if (createdAt != null) result.createdAt = createdAt;
+    return result;
+  }
+
+  TenantInviteCreated._();
+
+  factory TenantInviteCreated.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory TenantInviteCreated.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'TenantInviteCreated',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'tenantId')
+    ..aOS(3, _omitFieldNames ? '' : 'email')
+    ..aOS(4, _omitFieldNames ? '' : 'name')
+    ..aOS(5, _omitFieldNames ? '' : 'role')
+    ..aOS(6, _omitFieldNames ? '' : 'token')
+    ..aInt64(7, _omitFieldNames ? '' : 'expiresAt')
+    ..aOB(8, _omitFieldNames ? '' : 'used')
+    ..aInt64(9, _omitFieldNames ? '' : 'createdAt')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TenantInviteCreated clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TenantInviteCreated copyWith(void Function(TenantInviteCreated) updates) =>
+      super.copyWith((message) => updates(message as TenantInviteCreated))
+          as TenantInviteCreated;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static TenantInviteCreated create() => TenantInviteCreated._();
+  @$core.override
+  TenantInviteCreated createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static TenantInviteCreated getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<TenantInviteCreated>(create);
+  static TenantInviteCreated? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get id => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set id($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get tenantId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set tenantId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasTenantId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearTenantId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get email => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set email($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasEmail() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearEmail() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get name => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set name($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasName() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearName() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get role => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set role($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasRole() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearRole() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.String get token => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set token($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasToken() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearToken() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $fixnum.Int64 get expiresAt => $_getI64(6);
+  @$pb.TagNumber(7)
+  set expiresAt($fixnum.Int64 value) => $_setInt64(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasExpiresAt() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearExpiresAt() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.bool get used => $_getBF(7);
+  @$pb.TagNumber(8)
+  set used($core.bool value) => $_setBool(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasUsed() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearUsed() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $fixnum.Int64 get createdAt => $_getI64(8);
+  @$pb.TagNumber(9)
+  set createdAt($fixnum.Int64 value) => $_setInt64(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasCreatedAt() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearCreatedAt() => $_clearField(9);
+}
+
+class CreateInviteResponse extends $pb.GeneratedMessage {
+  factory CreateInviteResponse({
+    TenantInviteCreated? invite,
+  }) {
+    final result = create();
+    if (invite != null) result.invite = invite;
+    return result;
+  }
+
+  CreateInviteResponse._();
+
+  factory CreateInviteResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CreateInviteResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CreateInviteResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOM<TenantInviteCreated>(1, _omitFieldNames ? '' : 'invite',
+        subBuilder: TenantInviteCreated.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateInviteResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateInviteResponse copyWith(void Function(CreateInviteResponse) updates) =>
+      super.copyWith((message) => updates(message as CreateInviteResponse))
+          as CreateInviteResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CreateInviteResponse create() => CreateInviteResponse._();
+  @$core.override
+  CreateInviteResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CreateInviteResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CreateInviteResponse>(create);
+  static CreateInviteResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  TenantInviteCreated get invite => $_getN(0);
+  @$pb.TagNumber(1)
+  set invite(TenantInviteCreated value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasInvite() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearInvite() => $_clearField(1);
+  @$pb.TagNumber(1)
+  TenantInviteCreated ensureInvite() => $_ensure(0);
+}
+
+/// Rota PÚBLICA (sem sessão): o convidado cria a própria conta a partir do token.
+class AcceptInviteRequest extends $pb.GeneratedMessage {
+  factory AcceptInviteRequest({
+    $core.String? token,
+    $core.String? username,
+    $core.String? email,
+    $core.String? password,
+  }) {
+    final result = create();
+    if (token != null) result.token = token;
+    if (username != null) result.username = username;
+    if (email != null) result.email = email;
+    if (password != null) result.password = password;
+    return result;
+  }
+
+  AcceptInviteRequest._();
+
+  factory AcceptInviteRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory AcceptInviteRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'AcceptInviteRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'token')
+    ..aOS(2, _omitFieldNames ? '' : 'username')
+    ..aOS(3, _omitFieldNames ? '' : 'email')
+    ..aOS(4, _omitFieldNames ? '' : 'password')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AcceptInviteRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AcceptInviteRequest copyWith(void Function(AcceptInviteRequest) updates) =>
+      super.copyWith((message) => updates(message as AcceptInviteRequest))
+          as AcceptInviteRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static AcceptInviteRequest create() => AcceptInviteRequest._();
+  @$core.override
+  AcceptInviteRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static AcceptInviteRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<AcceptInviteRequest>(create);
+  static AcceptInviteRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get token => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set token($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasToken() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearToken() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get username => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set username($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasUsername() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearUsername() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get email => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set email($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasEmail() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearEmail() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get password => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set password($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasPassword() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearPassword() => $_clearField(4);
+}
+
+class AcceptedTenantUser extends $pb.GeneratedMessage {
+  factory AcceptedTenantUser({
+    $core.int? id,
+    $core.int? userId,
+    $core.String? tenantId,
+    $core.String? role,
+    $core.Iterable<$core.String>? modulePermissions,
+    $core.Iterable<$core.int>? flowPermissions,
+    $core.bool? isActive,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (userId != null) result.userId = userId;
+    if (tenantId != null) result.tenantId = tenantId;
+    if (role != null) result.role = role;
+    if (modulePermissions != null)
+      result.modulePermissions.addAll(modulePermissions);
+    if (flowPermissions != null) result.flowPermissions.addAll(flowPermissions);
+    if (isActive != null) result.isActive = isActive;
+    return result;
+  }
+
+  AcceptedTenantUser._();
+
+  factory AcceptedTenantUser.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory AcceptedTenantUser.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'AcceptedTenantUser',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aI(2, _omitFieldNames ? '' : 'userId')
+    ..aOS(3, _omitFieldNames ? '' : 'tenantId')
+    ..aOS(4, _omitFieldNames ? '' : 'role')
+    ..pPS(5, _omitFieldNames ? '' : 'modulePermissions')
+    ..p<$core.int>(
+        6, _omitFieldNames ? '' : 'flowPermissions', $pb.PbFieldType.K3)
+    ..aOB(7, _omitFieldNames ? '' : 'isActive')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AcceptedTenantUser clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AcceptedTenantUser copyWith(void Function(AcceptedTenantUser) updates) =>
+      super.copyWith((message) => updates(message as AcceptedTenantUser))
+          as AcceptedTenantUser;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static AcceptedTenantUser create() => AcceptedTenantUser._();
+  @$core.override
+  AcceptedTenantUser createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static AcceptedTenantUser getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<AcceptedTenantUser>(create);
+  static AcceptedTenantUser? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get userId => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set userId($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasUserId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearUserId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get tenantId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set tenantId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasTenantId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearTenantId() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get role => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set role($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasRole() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearRole() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $pb.PbList<$core.String> get modulePermissions => $_getList(4);
+
+  @$pb.TagNumber(6)
+  $pb.PbList<$core.int> get flowPermissions => $_getList(5);
+
+  @$pb.TagNumber(7)
+  $core.bool get isActive => $_getBF(6);
+  @$pb.TagNumber(7)
+  set isActive($core.bool value) => $_setBool(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasIsActive() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearIsActive() => $_clearField(7);
+}
+
+class AcceptInviteResponse extends $pb.GeneratedMessage {
+  factory AcceptInviteResponse({
+    AcceptedTenantUser? tenantUser,
+  }) {
+    final result = create();
+    if (tenantUser != null) result.tenantUser = tenantUser;
+    return result;
+  }
+
+  AcceptInviteResponse._();
+
+  factory AcceptInviteResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory AcceptInviteResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'AcceptInviteResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOM<AcceptedTenantUser>(1, _omitFieldNames ? '' : 'tenantUser',
+        subBuilder: AcceptedTenantUser.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AcceptInviteResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AcceptInviteResponse copyWith(void Function(AcceptInviteResponse) updates) =>
+      super.copyWith((message) => updates(message as AcceptInviteResponse))
+          as AcceptInviteResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static AcceptInviteResponse create() => AcceptInviteResponse._();
+  @$core.override
+  AcceptInviteResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static AcceptInviteResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<AcceptInviteResponse>(create);
+  static AcceptInviteResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  AcceptedTenantUser get tenantUser => $_getN(0);
+  @$pb.TagNumber(1)
+  set tenantUser(AcceptedTenantUser value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTenantUser() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTenantUser() => $_clearField(1);
+  @$pb.TagNumber(1)
+  AcceptedTenantUser ensureTenantUser() => $_ensure(0);
+}
+
+class ListInvitesRequest extends $pb.GeneratedMessage {
+  factory ListInvitesRequest() => create();
+
+  ListInvitesRequest._();
+
+  factory ListInvitesRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListInvitesRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListInvitesRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListInvitesRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListInvitesRequest copyWith(void Function(ListInvitesRequest) updates) =>
+      super.copyWith((message) => updates(message as ListInvitesRequest))
+          as ListInvitesRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListInvitesRequest create() => ListInvitesRequest._();
+  @$core.override
+  ListInvitesRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListInvitesRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListInvitesRequest>(create);
+  static ListInvitesRequest? _defaultInstance;
+}
+
+class TenantInviteItem extends $pb.GeneratedMessage {
+  factory TenantInviteItem({
+    $core.String? id,
+    $core.String? email,
+    $core.String? name,
+    $core.String? role,
+    $core.Iterable<$core.String>? modulePermissions,
+    $core.Iterable<$core.int>? flowPermissions,
+    $fixnum.Int64? expiresAt,
+    $core.bool? used,
+    $core.bool? revoked,
+    $fixnum.Int64? createdAt,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (email != null) result.email = email;
+    if (name != null) result.name = name;
+    if (role != null) result.role = role;
+    if (modulePermissions != null)
+      result.modulePermissions.addAll(modulePermissions);
+    if (flowPermissions != null) result.flowPermissions.addAll(flowPermissions);
+    if (expiresAt != null) result.expiresAt = expiresAt;
+    if (used != null) result.used = used;
+    if (revoked != null) result.revoked = revoked;
+    if (createdAt != null) result.createdAt = createdAt;
+    return result;
+  }
+
+  TenantInviteItem._();
+
+  factory TenantInviteItem.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory TenantInviteItem.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'TenantInviteItem',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'email')
+    ..aOS(3, _omitFieldNames ? '' : 'name')
+    ..aOS(4, _omitFieldNames ? '' : 'role')
+    ..pPS(5, _omitFieldNames ? '' : 'modulePermissions')
+    ..p<$core.int>(
+        6, _omitFieldNames ? '' : 'flowPermissions', $pb.PbFieldType.K3)
+    ..aInt64(7, _omitFieldNames ? '' : 'expiresAt')
+    ..aOB(8, _omitFieldNames ? '' : 'used')
+    ..aOB(9, _omitFieldNames ? '' : 'revoked')
+    ..aInt64(10, _omitFieldNames ? '' : 'createdAt')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TenantInviteItem clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TenantInviteItem copyWith(void Function(TenantInviteItem) updates) =>
+      super.copyWith((message) => updates(message as TenantInviteItem))
+          as TenantInviteItem;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static TenantInviteItem create() => TenantInviteItem._();
+  @$core.override
+  TenantInviteItem createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static TenantInviteItem getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<TenantInviteItem>(create);
+  static TenantInviteItem? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get id => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set id($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get email => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set email($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasEmail() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearEmail() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get name => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set name($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasName() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearName() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get role => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set role($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasRole() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearRole() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $pb.PbList<$core.String> get modulePermissions => $_getList(4);
+
+  @$pb.TagNumber(6)
+  $pb.PbList<$core.int> get flowPermissions => $_getList(5);
+
+  @$pb.TagNumber(7)
+  $fixnum.Int64 get expiresAt => $_getI64(6);
+  @$pb.TagNumber(7)
+  set expiresAt($fixnum.Int64 value) => $_setInt64(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasExpiresAt() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearExpiresAt() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.bool get used => $_getBF(7);
+  @$pb.TagNumber(8)
+  set used($core.bool value) => $_setBool(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasUsed() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearUsed() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $core.bool get revoked => $_getBF(8);
+  @$pb.TagNumber(9)
+  set revoked($core.bool value) => $_setBool(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasRevoked() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearRevoked() => $_clearField(9);
+
+  @$pb.TagNumber(10)
+  $fixnum.Int64 get createdAt => $_getI64(9);
+  @$pb.TagNumber(10)
+  set createdAt($fixnum.Int64 value) => $_setInt64(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasCreatedAt() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearCreatedAt() => $_clearField(10);
+}
+
+class ListInvitesResponse extends $pb.GeneratedMessage {
+  factory ListInvitesResponse({
+    $core.Iterable<TenantInviteItem>? invites,
+  }) {
+    final result = create();
+    if (invites != null) result.invites.addAll(invites);
+    return result;
+  }
+
+  ListInvitesResponse._();
+
+  factory ListInvitesResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListInvitesResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListInvitesResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<TenantInviteItem>(1, _omitFieldNames ? '' : 'invites',
+        subBuilder: TenantInviteItem.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListInvitesResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListInvitesResponse copyWith(void Function(ListInvitesResponse) updates) =>
+      super.copyWith((message) => updates(message as ListInvitesResponse))
+          as ListInvitesResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListInvitesResponse create() => ListInvitesResponse._();
+  @$core.override
+  ListInvitesResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListInvitesResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListInvitesResponse>(create);
+  static ListInvitesResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<TenantInviteItem> get invites => $_getList(0);
+}
+
+class RevokeInviteRequest extends $pb.GeneratedMessage {
+  factory RevokeInviteRequest({
+    $core.String? inviteId,
+  }) {
+    final result = create();
+    if (inviteId != null) result.inviteId = inviteId;
+    return result;
+  }
+
+  RevokeInviteRequest._();
+
+  factory RevokeInviteRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory RevokeInviteRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'RevokeInviteRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'inviteId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RevokeInviteRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RevokeInviteRequest copyWith(void Function(RevokeInviteRequest) updates) =>
+      super.copyWith((message) => updates(message as RevokeInviteRequest))
+          as RevokeInviteRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static RevokeInviteRequest create() => RevokeInviteRequest._();
+  @$core.override
+  RevokeInviteRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static RevokeInviteRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<RevokeInviteRequest>(create);
+  static RevokeInviteRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get inviteId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set inviteId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasInviteId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearInviteId() => $_clearField(1);
+}
+
+class RevokeInviteResponse extends $pb.GeneratedMessage {
+  factory RevokeInviteResponse({
+    $core.bool? success,
+  }) {
+    final result = create();
+    if (success != null) result.success = success;
+    return result;
+  }
+
+  RevokeInviteResponse._();
+
+  factory RevokeInviteResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory RevokeInviteResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'RevokeInviteResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOB(1, _omitFieldNames ? '' : 'success')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RevokeInviteResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RevokeInviteResponse copyWith(void Function(RevokeInviteResponse) updates) =>
+      super.copyWith((message) => updates(message as RevokeInviteResponse))
+          as RevokeInviteResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static RevokeInviteResponse create() => RevokeInviteResponse._();
+  @$core.override
+  RevokeInviteResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static RevokeInviteResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<RevokeInviteResponse>(create);
+  static RevokeInviteResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.bool get success => $_getBF(0);
+  @$pb.TagNumber(1)
+  set success($core.bool value) => $_setBool(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSuccess() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSuccess() => $_clearField(1);
+}
+
+class ListTenantUsersRequest extends $pb.GeneratedMessage {
+  factory ListTenantUsersRequest() => create();
+
+  ListTenantUsersRequest._();
+
+  factory ListTenantUsersRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListTenantUsersRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListTenantUsersRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListTenantUsersRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListTenantUsersRequest copyWith(
+          void Function(ListTenantUsersRequest) updates) =>
+      super.copyWith((message) => updates(message as ListTenantUsersRequest))
+          as ListTenantUsersRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListTenantUsersRequest create() => ListTenantUsersRequest._();
+  @$core.override
+  ListTenantUsersRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListTenantUsersRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListTenantUsersRequest>(create);
+  static ListTenantUsersRequest? _defaultInstance;
+}
+
+class TenantUserItem extends $pb.GeneratedMessage {
+  factory TenantUserItem({
+    $core.int? id,
+    $core.int? userId,
+    $core.String? role,
+    $core.Iterable<$core.String>? modulePermissions,
+    $core.Iterable<$core.int>? flowPermissions,
+    $core.bool? isActive,
+    $fixnum.Int64? createdAt,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (userId != null) result.userId = userId;
+    if (role != null) result.role = role;
+    if (modulePermissions != null)
+      result.modulePermissions.addAll(modulePermissions);
+    if (flowPermissions != null) result.flowPermissions.addAll(flowPermissions);
+    if (isActive != null) result.isActive = isActive;
+    if (createdAt != null) result.createdAt = createdAt;
+    return result;
+  }
+
+  TenantUserItem._();
+
+  factory TenantUserItem.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory TenantUserItem.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'TenantUserItem',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aI(2, _omitFieldNames ? '' : 'userId')
+    ..aOS(3, _omitFieldNames ? '' : 'role')
+    ..pPS(4, _omitFieldNames ? '' : 'modulePermissions')
+    ..p<$core.int>(
+        5, _omitFieldNames ? '' : 'flowPermissions', $pb.PbFieldType.K3)
+    ..aOB(6, _omitFieldNames ? '' : 'isActive')
+    ..aInt64(7, _omitFieldNames ? '' : 'createdAt')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TenantUserItem clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TenantUserItem copyWith(void Function(TenantUserItem) updates) =>
+      super.copyWith((message) => updates(message as TenantUserItem))
+          as TenantUserItem;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static TenantUserItem create() => TenantUserItem._();
+  @$core.override
+  TenantUserItem createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static TenantUserItem getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<TenantUserItem>(create);
+  static TenantUserItem? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get userId => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set userId($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasUserId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearUserId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get role => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set role($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasRole() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearRole() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $pb.PbList<$core.String> get modulePermissions => $_getList(3);
+
+  @$pb.TagNumber(5)
+  $pb.PbList<$core.int> get flowPermissions => $_getList(4);
+
+  @$pb.TagNumber(6)
+  $core.bool get isActive => $_getBF(5);
+  @$pb.TagNumber(6)
+  set isActive($core.bool value) => $_setBool(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasIsActive() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearIsActive() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $fixnum.Int64 get createdAt => $_getI64(6);
+  @$pb.TagNumber(7)
+  set createdAt($fixnum.Int64 value) => $_setInt64(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasCreatedAt() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearCreatedAt() => $_clearField(7);
+}
+
+class ListTenantUsersResponse extends $pb.GeneratedMessage {
+  factory ListTenantUsersResponse({
+    $core.Iterable<TenantUserItem>? users,
+  }) {
+    final result = create();
+    if (users != null) result.users.addAll(users);
+    return result;
+  }
+
+  ListTenantUsersResponse._();
+
+  factory ListTenantUsersResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListTenantUsersResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListTenantUsersResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<TenantUserItem>(1, _omitFieldNames ? '' : 'users',
+        subBuilder: TenantUserItem.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListTenantUsersResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListTenantUsersResponse copyWith(
+          void Function(ListTenantUsersResponse) updates) =>
+      super.copyWith((message) => updates(message as ListTenantUsersResponse))
+          as ListTenantUsersResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListTenantUsersResponse create() => ListTenantUsersResponse._();
+  @$core.override
+  ListTenantUsersResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListTenantUsersResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListTenantUsersResponse>(create);
+  static ListTenantUsersResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<TenantUserItem> get users => $_getList(0);
+}
+
+/// Campos opcionais em proto3: como não há `optional`/wrappers no projeto e listas
+/// repetidas não distinguem "vazio" de "ausente", usamos flags companion `set_*`.
+/// Só os campos com a flag correspondente `true` são alterados no data_postgres.
+class UpdateTenantUserRequest extends $pb.GeneratedMessage {
+  factory UpdateTenantUserRequest({
+    $core.int? userId,
+    $core.bool? setRole,
+    $core.String? role,
+    $core.bool? setModulePermissions,
+    $core.Iterable<$core.String>? modulePermissions,
+    $core.bool? setFlowPermissions,
+    $core.Iterable<$core.int>? flowPermissions,
+  }) {
+    final result = create();
+    if (userId != null) result.userId = userId;
+    if (setRole != null) result.setRole = setRole;
+    if (role != null) result.role = role;
+    if (setModulePermissions != null)
+      result.setModulePermissions = setModulePermissions;
+    if (modulePermissions != null)
+      result.modulePermissions.addAll(modulePermissions);
+    if (setFlowPermissions != null)
+      result.setFlowPermissions = setFlowPermissions;
+    if (flowPermissions != null) result.flowPermissions.addAll(flowPermissions);
+    return result;
+  }
+
+  UpdateTenantUserRequest._();
+
+  factory UpdateTenantUserRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory UpdateTenantUserRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'UpdateTenantUserRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'userId')
+    ..aOB(2, _omitFieldNames ? '' : 'setRole')
+    ..aOS(3, _omitFieldNames ? '' : 'role')
+    ..aOB(4, _omitFieldNames ? '' : 'setModulePermissions')
+    ..pPS(5, _omitFieldNames ? '' : 'modulePermissions')
+    ..aOB(6, _omitFieldNames ? '' : 'setFlowPermissions')
+    ..p<$core.int>(
+        7, _omitFieldNames ? '' : 'flowPermissions', $pb.PbFieldType.K3)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateTenantUserRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateTenantUserRequest copyWith(
+          void Function(UpdateTenantUserRequest) updates) =>
+      super.copyWith((message) => updates(message as UpdateTenantUserRequest))
+          as UpdateTenantUserRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static UpdateTenantUserRequest create() => UpdateTenantUserRequest._();
+  @$core.override
+  UpdateTenantUserRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static UpdateTenantUserRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<UpdateTenantUserRequest>(create);
+  static UpdateTenantUserRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get userId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set userId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasUserId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearUserId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.bool get setRole => $_getBF(1);
+  @$pb.TagNumber(2)
+  set setRole($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasSetRole() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearSetRole() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get role => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set role($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasRole() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearRole() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.bool get setModulePermissions => $_getBF(3);
+  @$pb.TagNumber(4)
+  set setModulePermissions($core.bool value) => $_setBool(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasSetModulePermissions() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearSetModulePermissions() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $pb.PbList<$core.String> get modulePermissions => $_getList(4);
+
+  @$pb.TagNumber(6)
+  $core.bool get setFlowPermissions => $_getBF(5);
+  @$pb.TagNumber(6)
+  set setFlowPermissions($core.bool value) => $_setBool(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasSetFlowPermissions() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearSetFlowPermissions() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $pb.PbList<$core.int> get flowPermissions => $_getList(6);
+}
+
+class UpdateTenantUserResponse extends $pb.GeneratedMessage {
+  factory UpdateTenantUserResponse({
+    $core.bool? success,
+  }) {
+    final result = create();
+    if (success != null) result.success = success;
+    return result;
+  }
+
+  UpdateTenantUserResponse._();
+
+  factory UpdateTenantUserResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory UpdateTenantUserResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'UpdateTenantUserResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOB(1, _omitFieldNames ? '' : 'success')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateTenantUserResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateTenantUserResponse copyWith(
+          void Function(UpdateTenantUserResponse) updates) =>
+      super.copyWith((message) => updates(message as UpdateTenantUserResponse))
+          as UpdateTenantUserResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static UpdateTenantUserResponse create() => UpdateTenantUserResponse._();
+  @$core.override
+  UpdateTenantUserResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static UpdateTenantUserResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<UpdateTenantUserResponse>(create);
+  static UpdateTenantUserResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.bool get success => $_getBF(0);
+  @$pb.TagNumber(1)
+  set success($core.bool value) => $_setBool(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSuccess() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSuccess() => $_clearField(1);
+}
+
+/// N3.3: config do PRÓPRIO tenant (tenant_id vem das claims, não do request).
+/// Reaproveita GetTenantConfigResponse/UpdateTenantConfigResponse. As api_keys já
+/// vêm mascaradas do data_postgres (`••••••••`), igual ao caminho do superusuário.
+class GetMyTenantConfigRequest extends $pb.GeneratedMessage {
+  factory GetMyTenantConfigRequest() => create();
+
+  GetMyTenantConfigRequest._();
+
+  factory GetMyTenantConfigRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GetMyTenantConfigRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetMyTenantConfigRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyTenantConfigRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyTenantConfigRequest copyWith(
+          void Function(GetMyTenantConfigRequest) updates) =>
+      super.copyWith((message) => updates(message as GetMyTenantConfigRequest))
+          as GetMyTenantConfigRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GetMyTenantConfigRequest create() => GetMyTenantConfigRequest._();
+  @$core.override
+  GetMyTenantConfigRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GetMyTenantConfigRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetMyTenantConfigRequest>(create);
+  static GetMyTenantConfigRequest? _defaultInstance;
+}
+
+class UpdateMyTenantConfigRequest extends $pb.GeneratedMessage {
+  factory UpdateMyTenantConfigRequest({
+    $core.String? dadosEmpresa,
+    $core.String? personaBot,
+    $core.String? botAgentName,
+    $core.String? msgFallback,
+    $core.String? msgSemInfo,
+    $core.String? msgTransferencia,
+    $core.String? llmClass,
+    $core.String? model,
+    $core.String? llmTemperature,
+    $core.String? transcriptionProvider,
+    $core.String? transcriptionModel,
+    $core.String? visionProvider,
+    $core.String? visionModel,
+    $core.String? embeddingsClass,
+    $core.String? embeddingsModel,
+    $core.int? chunkSize,
+    $core.int? chunkOverlap,
+    $core.String? similarityThreshold,
+    $core.String? vectorDistanceThreshold,
+    $core.Iterable<ApiKeyEntry>? apiKeys,
+  }) {
+    final result = create();
+    if (dadosEmpresa != null) result.dadosEmpresa = dadosEmpresa;
+    if (personaBot != null) result.personaBot = personaBot;
+    if (botAgentName != null) result.botAgentName = botAgentName;
+    if (msgFallback != null) result.msgFallback = msgFallback;
+    if (msgSemInfo != null) result.msgSemInfo = msgSemInfo;
+    if (msgTransferencia != null) result.msgTransferencia = msgTransferencia;
+    if (llmClass != null) result.llmClass = llmClass;
+    if (model != null) result.model = model;
+    if (llmTemperature != null) result.llmTemperature = llmTemperature;
+    if (transcriptionProvider != null)
+      result.transcriptionProvider = transcriptionProvider;
+    if (transcriptionModel != null)
+      result.transcriptionModel = transcriptionModel;
+    if (visionProvider != null) result.visionProvider = visionProvider;
+    if (visionModel != null) result.visionModel = visionModel;
+    if (embeddingsClass != null) result.embeddingsClass = embeddingsClass;
+    if (embeddingsModel != null) result.embeddingsModel = embeddingsModel;
+    if (chunkSize != null) result.chunkSize = chunkSize;
+    if (chunkOverlap != null) result.chunkOverlap = chunkOverlap;
+    if (similarityThreshold != null)
+      result.similarityThreshold = similarityThreshold;
+    if (vectorDistanceThreshold != null)
+      result.vectorDistanceThreshold = vectorDistanceThreshold;
+    if (apiKeys != null) result.apiKeys.addAll(apiKeys);
+    return result;
+  }
+
+  UpdateMyTenantConfigRequest._();
+
+  factory UpdateMyTenantConfigRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory UpdateMyTenantConfigRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'UpdateMyTenantConfigRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'dadosEmpresa')
+    ..aOS(2, _omitFieldNames ? '' : 'personaBot')
+    ..aOS(3, _omitFieldNames ? '' : 'botAgentName')
+    ..aOS(4, _omitFieldNames ? '' : 'msgFallback')
+    ..aOS(5, _omitFieldNames ? '' : 'msgSemInfo')
+    ..aOS(6, _omitFieldNames ? '' : 'msgTransferencia')
+    ..aOS(7, _omitFieldNames ? '' : 'llmClass')
+    ..aOS(8, _omitFieldNames ? '' : 'model')
+    ..aOS(9, _omitFieldNames ? '' : 'llmTemperature')
+    ..aOS(10, _omitFieldNames ? '' : 'transcriptionProvider')
+    ..aOS(11, _omitFieldNames ? '' : 'transcriptionModel')
+    ..aOS(12, _omitFieldNames ? '' : 'visionProvider')
+    ..aOS(13, _omitFieldNames ? '' : 'visionModel')
+    ..aOS(14, _omitFieldNames ? '' : 'embeddingsClass')
+    ..aOS(15, _omitFieldNames ? '' : 'embeddingsModel')
+    ..aI(16, _omitFieldNames ? '' : 'chunkSize')
+    ..aI(17, _omitFieldNames ? '' : 'chunkOverlap')
+    ..aOS(18, _omitFieldNames ? '' : 'similarityThreshold')
+    ..aOS(19, _omitFieldNames ? '' : 'vectorDistanceThreshold')
+    ..pPM<ApiKeyEntry>(20, _omitFieldNames ? '' : 'apiKeys',
+        subBuilder: ApiKeyEntry.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateMyTenantConfigRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateMyTenantConfigRequest copyWith(
+          void Function(UpdateMyTenantConfigRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as UpdateMyTenantConfigRequest))
+          as UpdateMyTenantConfigRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static UpdateMyTenantConfigRequest create() =>
+      UpdateMyTenantConfigRequest._();
+  @$core.override
+  UpdateMyTenantConfigRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static UpdateMyTenantConfigRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<UpdateMyTenantConfigRequest>(create);
+  static UpdateMyTenantConfigRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get dadosEmpresa => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set dadosEmpresa($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasDadosEmpresa() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearDadosEmpresa() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get personaBot => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set personaBot($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasPersonaBot() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearPersonaBot() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get botAgentName => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set botAgentName($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasBotAgentName() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearBotAgentName() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get msgFallback => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set msgFallback($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasMsgFallback() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearMsgFallback() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get msgSemInfo => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set msgSemInfo($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasMsgSemInfo() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearMsgSemInfo() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.String get msgTransferencia => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set msgTransferencia($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasMsgTransferencia() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearMsgTransferencia() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $core.String get llmClass => $_getSZ(6);
+  @$pb.TagNumber(7)
+  set llmClass($core.String value) => $_setString(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasLlmClass() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearLlmClass() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.String get model => $_getSZ(7);
+  @$pb.TagNumber(8)
+  set model($core.String value) => $_setString(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasModel() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearModel() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $core.String get llmTemperature => $_getSZ(8);
+  @$pb.TagNumber(9)
+  set llmTemperature($core.String value) => $_setString(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasLlmTemperature() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearLlmTemperature() => $_clearField(9);
+
+  @$pb.TagNumber(10)
+  $core.String get transcriptionProvider => $_getSZ(9);
+  @$pb.TagNumber(10)
+  set transcriptionProvider($core.String value) => $_setString(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasTranscriptionProvider() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearTranscriptionProvider() => $_clearField(10);
+
+  @$pb.TagNumber(11)
+  $core.String get transcriptionModel => $_getSZ(10);
+  @$pb.TagNumber(11)
+  set transcriptionModel($core.String value) => $_setString(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasTranscriptionModel() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearTranscriptionModel() => $_clearField(11);
+
+  @$pb.TagNumber(12)
+  $core.String get visionProvider => $_getSZ(11);
+  @$pb.TagNumber(12)
+  set visionProvider($core.String value) => $_setString(11, value);
+  @$pb.TagNumber(12)
+  $core.bool hasVisionProvider() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearVisionProvider() => $_clearField(12);
+
+  @$pb.TagNumber(13)
+  $core.String get visionModel => $_getSZ(12);
+  @$pb.TagNumber(13)
+  set visionModel($core.String value) => $_setString(12, value);
+  @$pb.TagNumber(13)
+  $core.bool hasVisionModel() => $_has(12);
+  @$pb.TagNumber(13)
+  void clearVisionModel() => $_clearField(13);
+
+  @$pb.TagNumber(14)
+  $core.String get embeddingsClass => $_getSZ(13);
+  @$pb.TagNumber(14)
+  set embeddingsClass($core.String value) => $_setString(13, value);
+  @$pb.TagNumber(14)
+  $core.bool hasEmbeddingsClass() => $_has(13);
+  @$pb.TagNumber(14)
+  void clearEmbeddingsClass() => $_clearField(14);
+
+  @$pb.TagNumber(15)
+  $core.String get embeddingsModel => $_getSZ(14);
+  @$pb.TagNumber(15)
+  set embeddingsModel($core.String value) => $_setString(14, value);
+  @$pb.TagNumber(15)
+  $core.bool hasEmbeddingsModel() => $_has(14);
+  @$pb.TagNumber(15)
+  void clearEmbeddingsModel() => $_clearField(15);
+
+  @$pb.TagNumber(16)
+  $core.int get chunkSize => $_getIZ(15);
+  @$pb.TagNumber(16)
+  set chunkSize($core.int value) => $_setSignedInt32(15, value);
+  @$pb.TagNumber(16)
+  $core.bool hasChunkSize() => $_has(15);
+  @$pb.TagNumber(16)
+  void clearChunkSize() => $_clearField(16);
+
+  @$pb.TagNumber(17)
+  $core.int get chunkOverlap => $_getIZ(16);
+  @$pb.TagNumber(17)
+  set chunkOverlap($core.int value) => $_setSignedInt32(16, value);
+  @$pb.TagNumber(17)
+  $core.bool hasChunkOverlap() => $_has(16);
+  @$pb.TagNumber(17)
+  void clearChunkOverlap() => $_clearField(17);
+
+  @$pb.TagNumber(18)
+  $core.String get similarityThreshold => $_getSZ(17);
+  @$pb.TagNumber(18)
+  set similarityThreshold($core.String value) => $_setString(17, value);
+  @$pb.TagNumber(18)
+  $core.bool hasSimilarityThreshold() => $_has(17);
+  @$pb.TagNumber(18)
+  void clearSimilarityThreshold() => $_clearField(18);
+
+  @$pb.TagNumber(19)
+  $core.String get vectorDistanceThreshold => $_getSZ(18);
+  @$pb.TagNumber(19)
+  set vectorDistanceThreshold($core.String value) => $_setString(18, value);
+  @$pb.TagNumber(19)
+  $core.bool hasVectorDistanceThreshold() => $_has(18);
+  @$pb.TagNumber(19)
+  void clearVectorDistanceThreshold() => $_clearField(19);
+
+  @$pb.TagNumber(20)
+  $pb.PbList<ApiKeyEntry> get apiKeys => $_getList(19);
+}
+
 class StreamAtendimentosRequest extends $pb.GeneratedMessage {
   factory StreamAtendimentosRequest() => create();
 

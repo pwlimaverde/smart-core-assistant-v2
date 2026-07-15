@@ -441,6 +441,147 @@ message SendOutboundMessageResponse {
   int32 message_id = 1;
 }
 
+// --- Fase N3: Painel do Tenant (convites, usuários e config tenant-scoped) ---
+// Diferente das rotas de superusuário: exigem apenas autenticação (o RBAC fino
+// `tenant:admin` é aplicado dentro do data_postgres). O tenant_id NUNCA vem do
+// request — é sempre derivado das claims da sessão (um tenant não age sobre outro).
+
+message CreateInviteRequest {
+  string email = 1;
+  string name = 2;
+  string role = 3;
+  repeated string module_permissions = 4;
+  repeated int32 flow_permissions = 5;
+}
+
+// Convite recém-criado. É o ÚNICO ponto onde o `token` é exposto (momento da
+// criação); as listagens jamais o retornam.
+message TenantInviteCreated {
+  string id = 1;
+  string tenant_id = 2;
+  string email = 3;
+  string name = 4;
+  string role = 5;
+  string token = 6;
+  int64 expires_at = 7; // timestamp_millis
+  bool used = 8;
+  int64 created_at = 9; // timestamp_millis
+}
+
+message CreateInviteResponse {
+  TenantInviteCreated invite = 1;
+}
+
+// Rota PÚBLICA (sem sessão): o convidado cria a própria conta a partir do token.
+message AcceptInviteRequest {
+  string token = 1;
+  string username = 2;
+  string email = 3;
+  string password = 4;
+}
+
+message AcceptedTenantUser {
+  int32 id = 1;
+  int32 user_id = 2;
+  string tenant_id = 3;
+  string role = 4;
+  repeated string module_permissions = 5;
+  repeated int32 flow_permissions = 6;
+  bool is_active = 7;
+}
+
+message AcceptInviteResponse {
+  AcceptedTenantUser tenant_user = 1;
+}
+
+message ListInvitesRequest {}
+
+message TenantInviteItem {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string role = 4;
+  repeated string module_permissions = 5;
+  repeated int32 flow_permissions = 6;
+  int64 expires_at = 7; // timestamp_millis
+  bool used = 8;
+  bool revoked = 9;
+  int64 created_at = 10; // timestamp_millis
+}
+
+message ListInvitesResponse {
+  repeated TenantInviteItem invites = 1;
+}
+
+message RevokeInviteRequest {
+  string invite_id = 1;
+}
+
+message RevokeInviteResponse {
+  bool success = 1;
+}
+
+message ListTenantUsersRequest {}
+
+message TenantUserItem {
+  int32 id = 1;
+  int32 user_id = 2;
+  string role = 3;
+  repeated string module_permissions = 4;
+  repeated int32 flow_permissions = 5;
+  bool is_active = 6;
+  int64 created_at = 7; // timestamp_millis
+}
+
+message ListTenantUsersResponse {
+  repeated TenantUserItem users = 1;
+}
+
+// Campos opcionais em proto3: como não há `optional`/wrappers no projeto e listas
+// repetidas não distinguem "vazio" de "ausente", usamos flags companion `set_*`.
+// Só os campos com a flag correspondente `true` são alterados no data_postgres.
+message UpdateTenantUserRequest {
+  int32 user_id = 1;
+  bool set_role = 2;
+  string role = 3;
+  bool set_module_permissions = 4;
+  repeated string module_permissions = 5;
+  bool set_flow_permissions = 6;
+  repeated int32 flow_permissions = 7;
+}
+
+message UpdateTenantUserResponse {
+  bool success = 1;
+}
+
+// N3.3: config do PRÓPRIO tenant (tenant_id vem das claims, não do request).
+// Reaproveita GetTenantConfigResponse/UpdateTenantConfigResponse. As api_keys já
+// vêm mascaradas do data_postgres (`••••••••`), igual ao caminho do superusuário.
+message GetMyTenantConfigRequest {}
+
+message UpdateMyTenantConfigRequest {
+  string dados_empresa = 1;
+  string persona_bot = 2;
+  string bot_agent_name = 3;
+  string msg_fallback = 4;
+  string msg_sem_info = 5;
+  string msg_transferencia = 6;
+  string llm_class = 7;
+  string model = 8;
+  string llm_temperature = 9;
+  string transcription_provider = 10;
+  string transcription_model = 11;
+  string vision_provider = 12;
+  string vision_model = 13;
+  string embeddings_class = 14;
+  string embeddings_model = 15;
+  int32 chunk_size = 16;
+  int32 chunk_overlap = 17;
+  string similarity_threshold = 18;
+  string vector_distance_threshold = 19;
+  repeated ApiKeyEntry api_keys = 20;
+}
+
 // --- Serviço Admin ---
 service AdminService {
   rpc ListCoreSettings(ListCoreSettingsRequest) returns (ListCoreSettingsResponse);
@@ -488,6 +629,17 @@ service AdminService {
   rpc GetThread(GetThreadRequest) returns (GetThreadResponse);
   rpc MoveAtendimentoEtapa(MoveAtendimentoEtapaRequest) returns (MoveAtendimentoEtapaResponse);
   rpc SendOutboundMessage(SendOutboundMessageRequest) returns (SendOutboundMessageResponse);
+
+  // Fase N3: Painel do Tenant. Exigem só autenticação (não superuser); o RBAC fino
+  // `tenant:admin` é aplicado no data_postgres. AcceptInvite é rota pública (sem sessão).
+  rpc CreateInvite(CreateInviteRequest) returns (CreateInviteResponse);
+  rpc AcceptInvite(AcceptInviteRequest) returns (AcceptInviteResponse);
+  rpc ListInvites(ListInvitesRequest) returns (ListInvitesResponse);
+  rpc RevokeInvite(RevokeInviteRequest) returns (RevokeInviteResponse);
+  rpc ListTenantUsers(ListTenantUsersRequest) returns (ListTenantUsersResponse);
+  rpc UpdateTenantUser(UpdateTenantUserRequest) returns (UpdateTenantUserResponse);
+  rpc GetMyTenantConfig(GetMyTenantConfigRequest) returns (GetTenantConfigResponse);
+  rpc UpdateMyTenantConfig(UpdateMyTenantConfigRequest) returns (UpdateTenantConfigResponse);
 }
 
 message StreamAtendimentosRequest {}

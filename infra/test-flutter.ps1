@@ -40,7 +40,9 @@ $pacotes = @(
     "modulos\login_module",
     "modulos\admin_module",
     "modulos\operacional_module",
-    "apps\smart-core-admin"
+    "modulos\tenant_module",
+    "apps\smart-core-admin",
+    "apps\smart-core-tenant"
 )
 
 function Write-Etapa([string]$msg) {

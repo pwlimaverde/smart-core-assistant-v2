@@ -1,0 +1,7 @@
+{
+  "@@locale": "pt",
+  "appTitle": "Smart Core Tenant",
+  "@appTitle": {
+    "description": "Título da aplicação"
+  }
+}

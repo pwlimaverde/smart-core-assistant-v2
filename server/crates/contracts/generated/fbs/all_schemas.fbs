@@ -436,6 +436,136 @@ table SendOutboundMessageResponse {
   message_id:int;
 }
 
+table CreateInviteRequest {
+  email:string;
+  name:string;
+  role:string;
+  module_permissions:[string];
+  flow_permissions:[int];
+}
+
+table TenantInviteCreated {
+  id:string;
+  tenant_id:string;
+  email:string;
+  name:string;
+  role:string;
+  token:string;
+  expires_at:long;
+  used:bool;
+  created_at:long;
+}
+
+table CreateInviteResponse {
+  invite:TenantInviteCreated;
+}
+
+table AcceptInviteRequest {
+  token:string;
+  username:string;
+  email:string;
+  password:string;
+}
+
+table AcceptedTenantUser {
+  id:int;
+  user_id:int;
+  tenant_id:string;
+  role:string;
+  module_permissions:[string];
+  flow_permissions:[int];
+  is_active:bool;
+}
+
+table AcceptInviteResponse {
+  tenant_user:AcceptedTenantUser;
+}
+
+table ListInvitesRequest {
+}
+
+table TenantInviteItem {
+  id:string;
+  email:string;
+  name:string;
+  role:string;
+  module_permissions:[string];
+  flow_permissions:[int];
+  expires_at:long;
+  used:bool;
+  revoked:bool;
+  created_at:long;
+}
+
+table ListInvitesResponse {
+  invites:[TenantInviteItem];
+}
+
+table RevokeInviteRequest {
+  invite_id:string;
+}
+
+table RevokeInviteResponse {
+  success:bool;
+}
+
+table ListTenantUsersRequest {
+}
+
+table TenantUserItem {
+  id:int;
+  user_id:int;
+  role:string;
+  module_permissions:[string];
+  flow_permissions:[int];
+  is_active:bool;
+  created_at:long;
+}
+
+table ListTenantUsersResponse {
+  users:[TenantUserItem];
+}
+
+table UpdateTenantUserRequest {
+  user_id:int;
+  set_role:bool;
+  role:string;
+  set_module_permissions:bool;
+  module_permissions:[string];
+  set_flow_permissions:bool;
+  flow_permissions:[int];
+}
+
+table UpdateTenantUserResponse {
+  success:bool;
+}
+
+table GetMyTenantConfigRequest {
+}
+
+table UpdateMyTenantConfigRequest {
+  dados_empresa:string;
+  persona_bot:string;
+  bot_agent_name:string;
+  msg_fallback:string;
+  msg_sem_info:string;
+  msg_transferencia:string;
+  llm_class:string;
+  model:string;
+  llm_temperature:string;
+  transcription_provider:string;
+  transcription_model:string;
+  vision_provider:string;
+  vision_model:string;
+  embeddings_class:string;
+  embeddings_model:string;
+  chunk_size:int;
+  chunk_overlap:int;
+  similarity_threshold:string;
+  vector_distance_threshold:string;
+  api_keys:[ApiKeyEntry];
+}
+
 table StreamAtendimentosRequest {
 }
 

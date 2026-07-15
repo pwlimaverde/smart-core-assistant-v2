@@ -1,0 +1,36 @@
+{
+  "id": "717b2272-71ef-4b68-b3bf-9850d35ecdb6",
+  "title": "Fase N3 — Painel do Tenant (convites, usuários e permissões): Confirmation",
+  "description": "Derived from linked plan \"n3-painel-do-tenant\" for PREVC phase C (Confirmation). Plan phases: Confirmation. Expected outputs: documentation, changelog, deploy.",
+  "sessionId": "0b954ca6-243c-440d-80dc-6ed9c272b3c6",
+  "owner": "documenter",
+  "status": "completed",
+  "inputs": [],
+  "expectedOutputs": [
+    "documentation",
+    "changelog",
+    "deploy"
+  ],
+  "acceptanceCriteria": [
+    "Complete Confirmation"
+  ],
+  "requiredSensors": [],
+  "requiredArtifacts": [],
+  "createdAt": "2026-07-15T00:16:06.646Z",
+  "updatedAt": "2026-07-15T18:35:43.677Z",
+  "metadata": {
+    "requirementsSource": "none",
+    "source": "workflow.plan",
+    "planSlug": "n3-painel-do-tenant",
+    "prevcPhase": "C",
+    "planPhaseIds": [
+      "phase-c"
+    ],
+    "planPhaseNames": [
+      "Confirmation"
+    ],
+    "planPhaseSummaries": [],
+    "derivedFrom": "linked-plan",
+    "completionReason": "Workflow completed"
+  }
+}
