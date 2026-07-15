@@ -1,0 +1,221 @@
+{
+  "version": 2,
+  "workflowType": "prevc",
+  "updatedAt": "2026-07-10T20:37:44.494Z",
+  "status": {
+    "project": {
+      "name": "n2-ia-engine",
+      "scale": 3,
+      "started": "2026-07-10T10:15:31.929Z",
+      "current_phase": "C",
+      "settings": {
+        "autonomous_mode": false,
+        "require_plan": true,
+        "require_approval": true
+      },
+      "plan": "n2-ia-engine"
+    },
+    "phases": {
+      "P": {
+        "status": "completed",
+        "started_at": "2026-07-10T10:15:31.929Z",
+        "completed_at": "2026-07-10T10:15:38.719Z",
+        "outputs": [
+          {
+            "path": ".context/plans/n2-ia-engine.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/n2-ia-engine/plano_completo_n2-ia-engine.md",
+            "status": "filled"
+          },
+          {
+            "path": ".context/plans/n2-ia-engine/info_aux_n2-ia-engine.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "R": {
+        "status": "completed",
+        "started_at": "2026-07-10T10:15:38.719Z",
+        "completed_at": "2026-07-10T10:16:05.266Z",
+        "outputs": [
+          {
+            "path": "decisão de arquitetura registrada e plano aprovado (architect)",
+            "status": "filled"
+          }
+        ]
+      },
+      "E": {
+        "status": "completed",
+        "started_at": "2026-07-10T10:16:05.266Z",
+        "completed_at": "2026-07-10T20:10:09.898Z",
+        "outputs": [
+          {
+            "path": "evidência real de validação documentada na decisão da fase V (sensor genérico do harness é npm-only, não aplicável a este monorepo)",
+            "status": "filled"
+          }
+        ]
+      },
+      "V": {
+        "status": "completed",
+        "started_at": "2026-07-10T20:10:09.898Z",
+        "completed_at": "2026-07-10T20:10:22.135Z",
+        "outputs": [
+          {
+            "path": "evidência real de validação Rust+Python+Flutter documentada na decisão da fase V",
+            "status": "filled"
+          }
+        ]
+      },
+      "C": {
+        "status": "completed",
+        "started_at": "2026-07-10T20:10:22.135Z",
+        "completed_at": "2026-07-10T20:37:44.475Z",
+        "outputs": [
+          {
+            "path": "plano arquivado em .context/plans/archive/n2-ia-engine/",
+            "status": "filled"
+          },
+          {
+            "path": "final-review.md (CORRIGIDO) registrado",
+            "status": "filled"
+          },
+          {
+            "path": "changelog.md atualizado",
+            "status": "filled"
+          }
+        ]
+      }
+    },
+    "agents": {},
+    "roles": {
+      "planner": {
+        "status": "pending"
+      },
+      "designer": {
+        "status": "pending"
+      },
+      "architect": {
+        "status": "pending"
+      },
+      "developer": {
+        "status": "pending"
+      },
+      "qa": {
+        "status": "pending"
+      },
+      "reviewer": {
+        "status": "pending"
+      },
+      "documenter": {
+        "status": "pending"
+      },
+      "solo-dev": {
+        "status": "pending"
+      }
+    },
+    "approval": {
+      "plan_created": true,
+      "plan_approved": true,
+      "approved_by": "architect",
+      "approved_at": "2026-07-10T10:16:01.273Z",
+      "approval_notes": "Arquitetura aprovada: gRPC/porta única de banco/degradação graciosa confirmados. Sequenciamento N2.1→N2.2→(N2.3‖N2.4)→N2.5→N2.6 aprovado sem alterações ao plano completo."
+    },
+    "execution": {
+      "history": [
+        {
+          "phase": "P",
+          "action": "started",
+          "timestamp": "2026-07-10T10:15:31.929Z"
+        },
+        {
+          "phase": "P",
+          "action": "plan_linked",
+          "plan": "n2-ia-engine",
+          "timestamp": "2026-07-10T10:15:34.611Z"
+        },
+        {
+          "phase": "P",
+          "action": "completed",
+          "timestamp": "2026-07-10T10:15:38.719Z"
+        },
+        {
+          "phase": "R",
+          "action": "started",
+          "timestamp": "2026-07-10T10:15:38.719Z"
+        },
+        {
+          "phase": "R",
+          "action": "decision_recorded",
+          "plan": "n2-ia-engine",
+          "description": "Decision recorded: Arquitetura N2 aprovada: gRPC (não FFI), banco de porta única, degradação graciosa",
+          "timestamp": "2026-07-10T10:15:56.717Z"
+        },
+        {
+          "phase": "R",
+          "action": "plan_approved",
+          "approved_by": "architect",
+          "timestamp": "2026-07-10T10:16:01.273Z"
+        },
+        {
+          "phase": "R",
+          "action": "completed",
+          "timestamp": "2026-07-10T10:16:05.266Z"
+        },
+        {
+          "phase": "E",
+          "action": "started",
+          "timestamp": "2026-07-10T10:16:05.266Z"
+        },
+        {
+          "phase": "E",
+          "action": "decision_recorded",
+          "plan": "n2-ia-engine",
+          "description": "Decision recorded: N2 implementada de ponta a ponta; simplificações documentadas para continuação",
+          "timestamp": "2026-07-10T19:34:08.315Z"
+        },
+        {
+          "phase": "V",
+          "action": "decision_recorded",
+          "plan": "n2-ia-engine",
+          "description": "Decision recorded: Validação real da N2: workspace Rust + Python ia_engine + Flutter, todos verdes",
+          "timestamp": "2026-07-10T20:09:56.722Z"
+        },
+        {
+          "phase": "E",
+          "action": "completed",
+          "timestamp": "2026-07-10T20:10:09.898Z"
+        },
+        {
+          "phase": "V",
+          "action": "started",
+          "timestamp": "2026-07-10T20:10:09.898Z"
+        },
+        {
+          "phase": "V",
+          "action": "completed",
+          "timestamp": "2026-07-10T20:10:22.135Z"
+        },
+        {
+          "phase": "C",
+          "action": "started",
+          "timestamp": "2026-07-10T20:10:22.135Z"
+        },
+        {
+          "phase": "C",
+          "action": "completed",
+          "timestamp": "2026-07-10T20:37:44.475Z"
+        }
+      ],
+      "last_activity": "2026-07-10T20:37:44.475Z",
+      "resume_context": "Fase C (Confirmação) concluída"
+    }
+  },
+  "binding": {
+    "workflowName": "n2-ia-engine",
+    "sessionId": "704b40ec-0b5b-4d43-9f38-54d9ca4e3a2c",
+    "createdAt": "2026-07-10T10:15:31.955Z",
+    "updatedAt": "2026-07-10T20:37:44.484Z"
+  }
+}

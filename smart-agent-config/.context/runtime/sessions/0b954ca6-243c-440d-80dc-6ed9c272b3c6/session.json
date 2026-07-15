@@ -1,0 +1,82 @@
+{
+  "id": "0b954ca6-243c-440d-80dc-6ed9c272b3c6",
+  "name": "n3-painel-do-tenant",
+  "status": "active",
+  "repoPath": "C:\\PROJETOS\\FULL-STACK\\smart-core-assistant-v2\\smart-agent-config",
+  "createdAt": "2026-07-11T11:12:19.051Z",
+  "updatedAt": "2026-07-15T00:16:06.679Z",
+  "startedAt": "2026-07-11T11:12:19.051Z",
+  "traceCount": 27,
+  "artifactCount": 2,
+  "checkpointCount": 4,
+  "checkpoints": [
+    {
+      "id": "885bdd86-e0e0-440e-ab68-bef638930687",
+      "note": "Advanced workflow phase P -> R",
+      "data": {
+        "from": "P",
+        "to": "R",
+        "outputs": [
+          "decisão de empacotamento registrada: app Flutter dedicado ao tenant (admin+workspace)",
+          "gaps reais mapeados: ListInvites/RevokeInvite/UpdateTenantUser/bootstrap 1º admin são 100% novos",
+          "invalidação de flow_permissions mantém TTL 30s passivo (decisão do dono)"
+        ],
+        "nextTaskContractId": "492550f5-7b64-4253-82a0-ee27594a7be6"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-11T11:30:36.945Z"
+    },
+    {
+      "id": "f03614f4-d3c8-4786-b270-ef37d1449171",
+      "note": "Advanced workflow phase R -> E",
+      "data": {
+        "from": "R",
+        "to": "E",
+        "outputs": [
+          "contratos aprovados: ListInvites, RevokeInvite, UpdateTenantUser, CreateTenant estendido",
+          "arquitetura aprovada: novo app smart-core-tenant (LoginModule+OperacionalModule+TenantModule) com RBAC de UI via scopes"
+        ],
+        "nextTaskContractId": "1fdc1294-39cb-4d07-9732-515e8564d060"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-11T11:31:51.534Z"
+    },
+    {
+      "id": "975e1b70-1b8b-48c7-bb45-503483b53bee",
+      "note": "Advanced workflow phase E -> V",
+      "data": {
+        "from": "E",
+        "to": "V",
+        "outputs": [
+          "3 commits na branch feature/n3-painel-do-tenant",
+          "test-local.ps1 e test-flutter.ps1 verdes (exceto falha conhecida pré-existente)",
+          "handoff-summary registrado (sensor genérico tests-passing não aplicável a monorepo poliglota, mesmo precedente do n2-ia-engine)"
+        ],
+        "nextTaskContractId": "aee6d6ba-3e61-4737-b481-7612d4c2ee8f"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-15T00:14:10.388Z"
+    },
+    {
+      "id": "3bf480e4-2f3c-499f-8052-51e512c6b666",
+      "note": "Advanced workflow phase V -> C",
+      "data": {
+        "from": "V",
+        "to": "C",
+        "outputs": [
+          "validação aceita via evidência automatizada",
+          "limitação registrada: sem clique manual contra runtime real"
+        ],
+        "nextTaskContractId": "717b2272-71ef-4b68-b3bf-9850d35ecdb6"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-15T00:16:06.661Z"
+    }
+  ],
+  "metadata": {
+    "workflow": true,
+    "description": "Fase N3 — Painel do Tenant: telas de convite/aceite/register, gestão de usuários com UI de flow_permissions (RBAC fino), configuração do tenant, e decisão de empacotamento (módulo no smart-core-admin vs app dedicado)"
+  },
+  "lastTraceAt": "2026-07-15T00:16:06.679Z",
+  "lastCheckpointAt": "2026-07-15T00:16:06.661Z"
+}

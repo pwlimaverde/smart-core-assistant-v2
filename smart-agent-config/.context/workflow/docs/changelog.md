@@ -2,6 +2,64 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-07-15] - Fase N3: Painel do Tenant (convites, usuários e permissões)
+
+> Ciclo PREVC `n3-painel-do-tenant` fechado e arquivado via `prevc-final-review`.
+> Final-review: qualidade **CORRIGIDO** (falha de segurança real corrigida durante a auditoria —
+> ver Corrigido). Dá autonomia ao admin de tenant (persona distinta do superusuário): convites,
+> gestão de usuários com RBAC fino de `flow_permissions`, e configuração do próprio tenant, em um
+> app Flutter dedicado.
+
+### Adicionado
+
+- **Novo app `smart-core-tenant` (decisão revisada do dono, substitui a recomendação original de
+  módulo dentro do `smart-core-admin`):** app Flutter dedicado a tudo que o tenant usa — workspace
+  operacional (`OperacionalModule`, movido do `smart-core-admin`, que hoje ficava incorretamente
+  preso ao guard exclusivo do superusuário) + novo `TenantModule` (convites, gestão de usuários,
+  configuração do próprio tenant). `smart-core-admin` passa a ser exclusivo do superusuário da
+  plataforma (só `AdminModule`).
+- **RPCs de convites/usuários no `data_postgres`:** `ListInvites`, `RevokeInvite`,
+  `ListTenantUsers`, `UpdateTenantUser` — nenhum existia antes; `CreateTenant` estendido para criar
+  o primeiro `TenantUser` admin do `owner_id` na mesma operação (bootstrap do 1º admin de um tenant
+  novo, lacuna real do produto). RBAC `tenant:admin` aplicado no repositório
+  (`ctx.exigir_qualquer`). `module_permissions` do `TenantUser` é a lista PLANA de escopos do
+  usuário (mesmo formato usado por `derivar_escopos` no login) — não a estrutura aninhada por
+  módulo do legado Django.
+- **Exposição gRPC-Web dos 8 RPCs do painel do tenant (`server/apps/runtime_api/src/grpc_web.rs`):**
+  descoberta crítica durante a execução — nem `CreateInvite`/`AcceptInvite` (que já existiam no
+  roteador de envelope interno) eram alcançáveis pelo Flutter Web, que só fala gRPC-Web via
+  `AdminService` (métodos concretos gerados de `.proto`). Adicionados `CreateInvite`,
+  `AcceptInvite` (rota pública, sem sessão), `ListInvites`, `RevokeInvite`, `ListTenantUsers`,
+  `UpdateTenantUser`, `GetMyTenantConfig`, `UpdateMyTenantConfig` (variantes tenant-scoped de
+  `GetTenantConfig`/`UpdateTenantConfig`, com `tenant_id` sempre das claims da sessão, nunca do
+  request). Guard `exigir_autenticado_do_metadata` (não superuser); `GetMyTenantConfig`/
+  `UpdateMyTenantConfig` exigem também o escopo `tenant:admin`.
+- **`tenant_module` (Flutter):** `TenantAdminDataSource` (Ports & Adapters, RemoteOnly) → service →
+  8 usecases → controllers (`flutter_bloc`) → páginas de convites (gerar/listar/revogar + aceite
+  público), usuários (listar + editar role/escopos/`flow_permissions`) e configuração do tenant
+  (api keys mascaradas). RBAC de UI: guard de app nega superusuário puro; rotas administrativas
+  `/tenant/*` exigem escopo `tenant:admin` na sessão.
+- **Migração `0015_tenant_invite_revoked.sql`:** colunas `revoked`/`revoked_at` em
+  `tenants_tenantinvite`.
+
+### Corrigido (achado pelo `prevc-final-review`)
+
+- **Falha de segurança real:** convite **revogado** ainda podia ser **aceito** — `buscar_por_token`
+  ignorava a flag `revoked` e `AcceptInvite` nunca a checava, tornando a revogação cosmética (o
+  link continuava válido). Corrigido: `buscar_por_token` agora filtra `AND revoked = FALSE`.
+- **Lacuna de auditoria:** o bootstrap do primeiro admin em `CreateTenant` (concessão inicial de
+  `tenant:admin`) não publicava evento de auditoria. Adicionado `tenant_user_bootstrap_admin`.
+
+### Pendências (fica para um ciclo seguinte)
+
+- Validação manual contra runtime real (subir infra + clicar na UI) não foi realizada — decisão do
+  dono na fase V, aceitando a cobertura de testes automatizados (unit + integração, cobrindo RBAC
+  negado/concedido nos dois lados) como evidência suficiente.
+- Sem invalidação ativa do cache Redis de `flow_permissions` — mantido o TTL 30s passivo já
+  documentado (decisão confirmada, não é lacuna).
+- Mensagem de erro do `AcceptInvite` não distingue "convite revogado" de "convite inexistente"
+  (decisão consciente da correção de segurança, para não vazar o estado do convite).
+
 ## [2026-07-10] - Fase N2: `ia_engine` (serviço Python de IA via gRPC)
 
 > Ciclo PREVC `n2-ia-engine` fechado e arquivado via `prevc-final-review`.

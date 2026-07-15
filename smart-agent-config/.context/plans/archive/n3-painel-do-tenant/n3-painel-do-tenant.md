@@ -5,6 +5,7 @@ planSlug: n3-painel-do-tenant
 description: "Autonomia do admin de tenant: telas de convite/aceite/register (CreateInvite/AcceptInvite já expostos), gestão de usuários com UI de flow_permissions (RBAC fino validado ponta-a-ponta pela UI), configuração do tenant, e decisão de empacotamento (módulo no smart-core-admin com RBAC de UI — recomendada — vs app dedicado)."
 summary: "Dar autonomia ao admin de tenant (persona distinta do superusuário) construindo a UI sobre o backend de convites e RBAC fino já prontos; majoritariamente Flutter + RPC de escrita UpdateTenantUser."
 status: filled
+progress: 0
 generated: "2026-07-06"
 scaffoldVersion: "2.0.0"
 agents:
@@ -44,6 +45,7 @@ phases:
     prevc: "C"
     agent: "security-auditor"
     status: "pending"
+lastUpdated: "2026-07-15T00:16:00.955Z"
 ---
 
 # Fase N3 — Painel do Tenant (convites, usuários e permissões)
@@ -76,3 +78,7 @@ guardas `redirect` do go_router) no [plano completo](./n3-painel-do-tenant/plano
 - **E:** convites; gestão de usuários/fluxos; config do tenant.
 - **V:** `.\infra\test-flutter.ps1` contra runtime real; **RBAC fino validado pela UI** (conceder/revogar fluxo muda a fila/Kanban do atendente).
 - **C:** eventos críticos auditados com `user_agent`; sem PII/segredo; gate `prevc-final-review`.
+
+## Execution History
+
+> Last updated: 2026-07-15T00:16:00.955Z | Progress: 0%
