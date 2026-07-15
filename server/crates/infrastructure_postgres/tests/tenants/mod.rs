@@ -382,13 +382,38 @@ async fn test_invites_listar_e_revogar() {
 
     let futuro = chrono::Utc::now() + chrono::Duration::days(7);
 
-    // Convite válido (será revogado), convite usado e convite expirado.
+    // Convite válido (será revogado), convite usado e convite expirado. O convite
+    // carrega as permissões que o convidado herdará no aceite (N3).
+    let escopos = serde_json::json!(["atendimentos:read", "atendimentos:write"]);
+    let fluxos = serde_json::json!([1, 2]);
     let valido = invite_repo
-        .criar(&mut tx, &ctx, "a@teste.com", "A", "staff", &token(), futuro)
+        .criar(
+            &mut tx,
+            &ctx,
+            "a@teste.com",
+            "A",
+            "staff",
+            escopos.clone(),
+            fluxos.clone(),
+            &token(),
+            futuro,
+        )
         .await
         .unwrap();
+    assert_eq!(valido.module_permissions, escopos);
+    assert_eq!(valido.flow_permissions, fluxos);
     let usado = invite_repo
-        .criar(&mut tx, &ctx, "b@teste.com", "B", "staff", &token(), futuro)
+        .criar(
+            &mut tx,
+            &ctx,
+            "b@teste.com",
+            "B",
+            "staff",
+            escopos.clone(),
+            fluxos.clone(),
+            &token(),
+            futuro,
+        )
         .await
         .unwrap();
     let passado = chrono::Utc::now() - chrono::Duration::days(1);
@@ -399,6 +424,8 @@ async fn test_invites_listar_e_revogar() {
             "c@teste.com",
             "C",
             "staff",
+            escopos.clone(),
+            fluxos.clone(),
             &token(),
             passado,
         )

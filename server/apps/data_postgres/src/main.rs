@@ -1033,6 +1033,27 @@ async fn handler_create_invite(
         .get("role")
         .and_then(|v| v.as_str())
         .unwrap_or("staff");
+    // Permissões que o convidado receberá no aceite: `module_permissions` é a lista
+    // direta de escopos (mesmo formato de `derivar_escopos` no login); `flow_permissions`
+    // são os ids de fluxo do Kanban. Persistidas no convite e herdadas pelo TenantUser.
+    // Sem escopos explícitos, cai no default por role (espelha o fallback de
+    // `derivar_escopos`) — um convidado nunca deve nascer sem nenhum escopo.
+    let module_permissions = match payload_json.get("module_permissions") {
+        Some(v) if v.as_array().is_some_and(|a| !a.is_empty()) => v.clone(),
+        _ => match role {
+            "admin" | "owner" => serde_json::json!([
+                "tenant:admin",
+                "atendimentos:read",
+                "atendimentos:write",
+                "clientes:write"
+            ]),
+            _ => serde_json::json!(["atendimentos:read", "atendimentos:write", "clientes:write"]),
+        },
+    };
+    let flow_permissions = payload_json
+        .get("flow_permissions")
+        .cloned()
+        .unwrap_or_else(|| serde_json::json!([]));
 
     // Gera token URL-safe seguro de 64 caracteres
     let token = format!(
@@ -1044,7 +1065,16 @@ async fn handler_create_invite(
     let ctx = contexto_do_envelope(&env);
 
     match store
-        .criar_convite(&ctx, email, name, role, &token, expires_at)
+        .criar_convite(
+            &ctx,
+            email,
+            name,
+            role,
+            module_permissions,
+            flow_permissions,
+            &token,
+            expires_at,
+        )
         .await
     {
         Ok(invite) => {
@@ -1076,7 +1106,9 @@ async fn handler_create_invite(
                 }),
             )
         }
-        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+        // `err.into()` preserva a semântica do DbError (PermissionDenied →
+        // AUTH_INSUFFICIENT_SCOPE) em vez de achatar tudo em erro de banco.
+        Err(err) => erro(err.into(), &env),
     }
 }
 
@@ -1128,7 +1160,7 @@ async fn handler_accept_invite(
     // 1. Validar convite buscando pelo token (bypass RLS)
     let invite_opt = match store.buscar_convite_por_token(token).await {
         Ok(opt) => opt,
-        Err(err) => return erro(error_core::AppError::Database(err.to_string()), &env),
+        Err(err) => return erro(err.into(), &env),
     };
 
     let invite = match invite_opt {
@@ -1161,7 +1193,8 @@ async fn handler_accept_invite(
         Err(err) => return erro(error_core::AppError::Validation(err.to_string()), &env),
     };
 
-    // 2. Aceitar o convite transacionalmente
+    // 2. Aceitar o convite transacionalmente — o TenantUser herda as permissões
+    //    definidas no convite (module_permissions/flow_permissions).
     match store
         .aceitar_convite(
             invite.id,
@@ -1170,6 +1203,8 @@ async fn handler_accept_invite(
             &password_hash,
             invite.tenant_id,
             &invite.role,
+            invite.module_permissions.clone(),
+            invite.flow_permissions.clone(),
         )
         .await
     {
@@ -1200,7 +1235,7 @@ async fn handler_accept_invite(
                 }),
             )
         }
-        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+        Err(err) => erro(err.into(), &env),
     }
 }
 
@@ -1230,7 +1265,7 @@ async fn handler_list_tenant_users(store: &dyn ports::TenantStore, env: Envelope
                 serde_json::json!({ "users": list }),
             )
         }
-        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+        Err(err) => erro(err.into(), &env),
     }
 }
 
@@ -1263,7 +1298,7 @@ async fn handler_list_invites(store: &dyn ports::TenantStore, env: Envelope) -> 
                 serde_json::json!({ "invites": list }),
             )
         }
-        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+        Err(err) => erro(err.into(), &env),
     }
 }
 
@@ -1314,7 +1349,7 @@ async fn handler_revoke_invite(
             ),
             &env,
         ),
-        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+        Err(err) => erro(err.into(), &env),
     }
 }
 
@@ -1401,7 +1436,7 @@ async fn handler_update_tenant_user(
             error_core::AppError::Validation("usuário inexistente no tenant".to_string()),
             &env,
         ),
-        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+        Err(err) => erro(err.into(), &env),
     }
 }
 
@@ -4192,6 +4227,12 @@ mod tests_tenant_unit {
         audit
             .expect_publish()
             .withf(|_, event, _, _| event == "tenant_created")
+            .times(1)
+            .returning(|_, _, _, _| ());
+        // O bootstrap do 1º admin também é evento crítico auditado (doc 08 §4.2).
+        audit
+            .expect_publish()
+            .withf(|_, event, _, _| event == "tenant_user_bootstrap_admin")
             .times(1)
             .returning(|_, _, _, _| ());
         let env = envelope_com_payload(
