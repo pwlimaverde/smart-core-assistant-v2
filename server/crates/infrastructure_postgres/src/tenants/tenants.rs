@@ -172,6 +172,10 @@ pub trait TenantUserRepository: Send + Sync {
 
 #[async_trait]
 pub trait TenantInviteRepository: Send + Sync {
+    /// Cria o convite já com as permissões que o convidado receberá no aceite:
+    /// `module_permissions` (lista de escopos) e `flow_permissions` (ids de fluxo)
+    /// são persistidos no convite e copiados para o `TenantUser` em `aceitar_convite`.
+    #[allow(clippy::too_many_arguments)]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -179,6 +183,8 @@ pub trait TenantInviteRepository: Send + Sync {
         email: &str,
         name: &str,
         role: &str,
+        module_permissions: serde_json::Value,
+        flow_permissions: serde_json::Value,
         token: &str,
         expires_at: DateTime<Utc>,
     ) -> Result<TenantInvite, DbError>;
@@ -475,25 +481,30 @@ impl TenantInviteRepository for PostgresTenantInviteRepository {
         email: &str,
         name: &str,
         role: &str,
+        module_permissions: serde_json::Value,
+        flow_permissions: serde_json::Value,
         token: &str,
         expires_at: DateTime<Utc>,
     ) -> Result<TenantInvite, DbError> {
         ctx.exigir_qualquer(&["tenant:admin"])?;
-        let row = sqlx::query_as!(
-            TenantInvite,
-            r#"INSERT INTO tenants_tenantinvite
-                   (tenant_id, email, name, role, token, expires_at, created_by_id)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
-               RETURNING id, tenant_id, email, name, role, module_permissions,
-                         flow_permissions, token, expires_at, used, created_at, created_by_id"#,
-            ctx.tenant_id,
-            email,
-            name,
-            role,
-            token,
-            expires_at,
-            ctx.user_id
+        // Query runtime (query_as::<_, T>) para não depender do cache offline do sqlx.
+        let row = sqlx::query_as::<_, TenantInvite>(
+            "INSERT INTO tenants_tenantinvite \
+                 (tenant_id, email, name, role, module_permissions, flow_permissions, \
+                  token, expires_at, created_by_id) \
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) \
+             RETURNING id, tenant_id, email, name, role, module_permissions, \
+                       flow_permissions, token, expires_at, used, created_at, created_by_id",
         )
+        .bind(ctx.tenant_id)
+        .bind(email)
+        .bind(name)
+        .bind(role)
+        .bind(module_permissions)
+        .bind(flow_permissions)
+        .bind(token)
+        .bind(expires_at)
+        .bind(ctx.user_id)
         .fetch_one(&mut **tx)
         .await
         .map_err(DbError::from_sqlx_unique)?;

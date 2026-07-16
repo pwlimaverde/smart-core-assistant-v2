@@ -369,6 +369,22 @@ fn extrair_permissoes_web(payload: &[u8]) -> Option<Vec<i32>> {
     )
 }
 
+/// Converte o `ErrorEnvelope` devolvido pelo serviço interno num `Status` gRPC
+/// coerente para o cliente (N3): permissão insuficiente vira PERMISSION_DENIED
+/// (antes tudo achatava em `internal`, e uma negação de RBAC parecia erro 500).
+fn status_do_erro_interno(err: Option<contracts::ErrorEnvelope>) -> Status {
+    let Some(err) = err else {
+        return Status::internal("Erro no serviço interno");
+    };
+    match err.code.as_str() {
+        "AUTH_INSUFFICIENT_SCOPE" => Status::permission_denied("errors.auth.forbidden"),
+        "DB_RECORD_NOT_FOUND" => Status::not_found(err.message),
+        "VALIDATION_FAILED" => Status::invalid_argument(err.message),
+        "CONFLICT" | "DB_CONSTRAINT_VIOLATION" => Status::failed_precondition(err.message),
+        _ => Status::internal(format!("Erro no banco: {}", err.message)),
+    }
+}
+
 /// Extrai um array de strings de um campo JSON opcional (N3: `module_permissions`).
 fn json_strings(val: Option<&serde_json::Value>) -> Vec<String> {
     val.and_then(|v| v.as_array())
@@ -3254,8 +3270,7 @@ impl AdminService for AdminFacade {
         {
             Ok(resp) => {
                 if resp.kind == MessageKind::Error as i32 {
-                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
-                    return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
+                    return Err(status_do_erro_interno(resp.error));
                 }
                 let val: serde_json::Value = serde_json::from_slice(&resp.payload)
                     .map_err(|e| Status::internal(e.to_string()))?;
@@ -3350,8 +3365,7 @@ impl AdminService for AdminFacade {
         {
             Ok(resp) => {
                 if resp.kind == MessageKind::Error as i32 {
-                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
-                    return Err(Status::invalid_argument(err_msg));
+                    return Err(status_do_erro_interno(resp.error));
                 }
                 let val: serde_json::Value = serde_json::from_slice(&resp.payload)
                     .map_err(|e| Status::internal(e.to_string()))?;
@@ -3424,8 +3438,7 @@ impl AdminService for AdminFacade {
         {
             Ok(resp) => {
                 if resp.kind == MessageKind::Error as i32 {
-                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
-                    return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
+                    return Err(status_do_erro_interno(resp.error));
                 }
                 let val: serde_json::Value = serde_json::from_slice(&resp.payload)
                     .map_err(|e| Status::internal(e.to_string()))?;
@@ -3523,8 +3536,7 @@ impl AdminService for AdminFacade {
         {
             Ok(resp) => {
                 if resp.kind == MessageKind::Error as i32 {
-                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
-                    return Err(Status::failed_precondition(err_msg));
+                    return Err(status_do_erro_interno(resp.error));
                 }
                 Ok(Response::new(RevokeInviteResponse { success: true }))
             }
@@ -3569,8 +3581,7 @@ impl AdminService for AdminFacade {
         {
             Ok(resp) => {
                 if resp.kind == MessageKind::Error as i32 {
-                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
-                    return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
+                    return Err(status_do_erro_interno(resp.error));
                 }
                 let val: serde_json::Value = serde_json::from_slice(&resp.payload)
                     .map_err(|e| Status::internal(e.to_string()))?;
@@ -3668,8 +3679,7 @@ impl AdminService for AdminFacade {
         {
             Ok(resp) => {
                 if resp.kind == MessageKind::Error as i32 {
-                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
-                    return Err(Status::failed_precondition(err_msg));
+                    return Err(status_do_erro_interno(resp.error));
                 }
                 Ok(Response::new(UpdateTenantUserResponse { success: true }))
             }
@@ -3720,8 +3730,7 @@ impl AdminService for AdminFacade {
         {
             Ok(resp) => {
                 if resp.kind == MessageKind::Error as i32 {
-                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
-                    return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
+                    return Err(status_do_erro_interno(resp.error));
                 }
                 let val: serde_json::Value = serde_json::from_slice(&resp.payload)
                     .map_err(|e| Status::internal(e.to_string()))?;
@@ -3801,8 +3810,7 @@ impl AdminService for AdminFacade {
         {
             Ok(resp) => {
                 if resp.kind == MessageKind::Error as i32 {
-                    let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
-                    return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
+                    return Err(status_do_erro_interno(resp.error));
                 }
                 Ok(Response::new(UpdateTenantConfigResponse { success: true }))
             }

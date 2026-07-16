@@ -136,6 +136,8 @@ impl TenantStore for PgTenantStore {
         email: &str,
         name: &str,
         role: &str,
+        module_permissions: serde_json::Value,
+        flow_permissions: serde_json::Value,
         token: &str,
         expires_at: DateTime<Utc>,
     ) -> Result<TenantInvite, DbError> {
@@ -149,7 +151,17 @@ impl TenantStore for PgTenantStore {
             .await?;
 
         let invite = repo
-            .criar(&mut tx, ctx, email, name, role, token, expires_at)
+            .criar(
+                &mut tx,
+                ctx,
+                email,
+                name,
+                role,
+                module_permissions,
+                flow_permissions,
+                token,
+                expires_at,
+            )
             .await?;
         tx.commit().await?;
         Ok(invite)
@@ -170,10 +182,31 @@ impl TenantStore for PgTenantStore {
         password_hash: &str,
         tenant_id: Uuid,
         role: &str,
+        module_permissions: serde_json::Value,
+        flow_permissions: serde_json::Value,
     ) -> Result<TenantUser, DbError> {
         let mut tx = self.pool.begin().await?;
 
-        // 1. Criar o usuário auth_user (query runtime — evita cache offline do sqlx)
+        // 1. Configura o tenant_id na transação (RLS do TenantInvite/TenantUser)
+        sqlx::query("SELECT set_config('app.current_tenant', $1, true)")
+            .bind(tenant_id.to_string())
+            .execute(&mut *tx)
+            .await?;
+
+        // 2. Consumir o convite ANTES de criar qualquer registro, com guarda
+        //    `used = FALSE`: dois aceites concorrentes do mesmo token disputam esta
+        //    linha e só um prossegue — o outro sai com UniqueViolation (convite usado).
+        let consumido = sqlx::query(
+            "UPDATE tenants_tenantinvite SET used = true WHERE id = $1 AND used = FALSE",
+        )
+        .bind(invite_id)
+        .execute(&mut *tx)
+        .await?;
+        if consumido.rows_affected() == 0 {
+            return Err(DbError::UniqueViolation("convite já utilizado".to_string()));
+        }
+
+        // 3. Criar o usuário auth_user (query runtime — evita cache offline do sqlx)
         let row = sqlx::query(
             "INSERT INTO auth_user (username, email, password_hash, is_superuser) \
              VALUES ($1, $2, $3, false) \
@@ -188,31 +221,24 @@ impl TenantStore for PgTenantStore {
 
         let user_id: i32 = row.get("id");
 
-        // 2. Configura o tenant_id na transação para RLS do TenantUser
-        sqlx::query("SELECT set_config('app.current_tenant', $1, true)")
-            .bind(tenant_id.to_string())
-            .execute(&mut *tx)
-            .await?;
-
-        // 3. Criar o TenantUser (query_as runtime com FromRow — evita cache offline)
+        // 4. Criar o TenantUser herdando as permissões definidas no convite —
+        //    sem isso o usuário nasce com module_permissions '{}' e loga sem
+        //    nenhum escopo (derivar_escopos lê a lista direto do campo).
         let tenant_user = sqlx::query_as::<_, TenantUser>(
-            "INSERT INTO tenants_tenantuser (user_id, tenant_id, role) \
-             VALUES ($1, $2, $3) \
+            "INSERT INTO tenants_tenantuser \
+                 (user_id, tenant_id, role, module_permissions, flow_permissions) \
+             VALUES ($1, $2, $3, $4, $5) \
              RETURNING id, user_id, tenant_id, role, module_permissions, \
                        flow_permissions, is_active, created_at, created_by_id",
         )
         .bind(user_id)
         .bind(tenant_id)
         .bind(role)
+        .bind(module_permissions)
+        .bind(flow_permissions)
         .fetch_one(&mut *tx)
         .await
         .map_err(DbError::from_sqlx_unique)?;
-
-        // 4. Marcar o convite como usado
-        sqlx::query("UPDATE tenants_tenantinvite SET used = true WHERE id = $1")
-            .bind(invite_id)
-            .execute(&mut *tx)
-            .await?;
 
         tx.commit().await?;
         Ok(tenant_user)

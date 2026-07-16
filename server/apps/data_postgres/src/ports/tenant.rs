@@ -49,13 +49,17 @@ pub trait TenantStore: Send + Sync {
     /// Persiste um novo código de acesso; retorna `true` se algum registro foi afetado.
     async fn gerar_access_code(&self, id: Uuid, code: &str) -> Result<bool, DbError>;
 
-    /// Cria um convite para o tenant.
+    /// Cria um convite para o tenant, já com as permissões (`module_permissions` =
+    /// escopos; `flow_permissions` = ids de fluxo) que o convidado receberá no aceite.
+    #[allow(clippy::too_many_arguments)]
     async fn criar_convite(
         &self,
         ctx: &RequestContext,
         email: &str,
         name: &str,
         role: &str,
+        module_permissions: serde_json::Value,
+        flow_permissions: serde_json::Value,
         token: &str,
         expires_at: DateTime<Utc>,
     ) -> Result<TenantInvite, DbError>;
@@ -63,7 +67,9 @@ pub trait TenantStore: Send + Sync {
     /// Busca um convite pelo token (bypass RLS).
     async fn buscar_convite_por_token(&self, token: &str) -> Result<Option<TenantInvite>, DbError>;
 
-    /// Aceita um convite de forma transacional, criando usuário, TenantUser e marcando o convite como usado.
+    /// Aceita um convite de forma transacional, criando usuário e TenantUser (com as
+    /// permissões definidas no convite) e marcando o convite como usado.
+    #[allow(clippy::too_many_arguments)]
     async fn aceitar_convite(
         &self,
         invite_id: Uuid,
@@ -72,6 +78,8 @@ pub trait TenantStore: Send + Sync {
         password_hash: &str,
         tenant_id: Uuid,
         role: &str,
+        module_permissions: serde_json::Value,
+        flow_permissions: serde_json::Value,
     ) -> Result<TenantUser, DbError>;
 
     /// Lista os TenantUser do tenant do `ctx` (RBAC `tenant:admin` no repositório).
