@@ -1,0 +1,39 @@
+{
+  "id": "547e0ba4-d314-463b-a8a7-60f09c39e07c",
+  "title": "Fase N5 — Consolidação de Clientes + Offline (desktop, FFI, paridade Web): Validation",
+  "description": "Derived from linked plan \"n5-consolidacao-clientes-offline\" for PREVC phase V (Validation). Plan phases: Validation. Expected outputs: test-report, review-comments, approval.",
+  "sessionId": "7badfdff-3bf2-4a77-bf01-f2922145b391",
+  "owner": "qa",
+  "status": "completed",
+  "inputs": [],
+  "expectedOutputs": [
+    "test-report",
+    "review-comments",
+    "approval"
+  ],
+  "acceptanceCriteria": [
+    "Complete Validation"
+  ],
+  "requiredSensors": [
+    "tests",
+    "lint"
+  ],
+  "requiredArtifacts": [],
+  "createdAt": "2026-07-17T19:04:15.754Z",
+  "updatedAt": "2026-07-17T19:04:25.953Z",
+  "metadata": {
+    "requirementsSource": "phase-defaults",
+    "source": "workflow.plan",
+    "planSlug": "n5-consolidacao-clientes-offline",
+    "prevcPhase": "V",
+    "planPhaseIds": [
+      "phase-v"
+    ],
+    "planPhaseNames": [
+      "Validation"
+    ],
+    "planPhaseSummaries": [],
+    "derivedFrom": "linked-plan",
+    "completionReason": "Workflow advanced from V to C"
+  }
+}

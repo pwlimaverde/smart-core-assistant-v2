@@ -2,16 +2,16 @@
   "active": [],
   "completed": [
     {
-      "slug": "n4-endurecimento-producao",
-      "path": "plans/n4-endurecimento-producao.md",
-      "title": "Fase N4 — Endurecimento de Produção (billing, quotas, retenção, segurança)",
-      "summary": "Quarta fase do backlog pós-MVP (F9). **N4.1 é pré-condição de credibilidade** dos testes de",
-      "linkedAt": "2026-07-16T11:49:42.702Z",
+      "slug": "n5-consolidacao-clientes-offline",
+      "path": "plans/n5-consolidacao-clientes-offline.md",
+      "title": "Fase N5 — Consolidação de Clientes + Offline (desktop, FFI, paridade Web)",
+      "summary": "Quinta e última fase do backlog pós-MVP. **Só entra após N1–N4 estáveis em produção.**",
+      "linkedAt": "2026-07-17T00:39:28.343Z",
       "status": "completed",
       "approval_status": "approved",
-      "approved_at": "2026-07-16T11:50:05.578Z",
+      "approved_at": "2026-07-17T01:06:17.205Z",
       "approved_by": "architect"
     }
   ],
-  "primary": "n4-endurecimento-producao"
+  "primary": "n5-consolidacao-clientes-offline"
 }

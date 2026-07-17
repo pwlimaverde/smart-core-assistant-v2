@@ -5,6 +5,7 @@ planSlug: n5-consolidacao-clientes-offline
 description: "Pós-estabilização (F7/F8/F10): consolidação do app (navegação/estados/empacotamento Windows), local_engine FFI dual-target com índice SQLite, cache de mídia por hash e fila offline com sync (troca RemoteOnly→LocalEngineFFI sem tocar telas), e paridade Web completa com CORS de mídia no R2."
 summary: "Última fase do backlog: consolidar os clientes, provar o DataSource abstrato plugando o LocalEngineFFI sem reescrever telas, e fechar a paridade web com mídia servida por presign+CORS."
 status: filled
+progress: 0
 generated: "2026-07-06"
 scaffoldVersion: "2.0.0"
 agents:
@@ -44,6 +45,7 @@ phases:
     prevc: "C"
     agent: "devops-specialist"
     status: "pending"
+lastUpdated: "2026-07-17T19:03:52.122Z"
 ---
 
 # Fase N5 — Consolidação de Clientes + Offline (desktop, FFI, paridade Web)
@@ -75,3 +77,7 @@ com presigned URLs; gotchas de `AllowedOrigins`/`range`; `cors.json` versionado;
 - **E:** F7 consolida; F8 FFI/offline em incrementos; F10 paridade web.
 - **V:** `.\infra\test-flutter.ps1` — offline sem perda, troca de DataSource sem tocar telas, mídia web com CORS/range.
 - **C:** app empacotado; encerramento do backlog N1–N5; gate `prevc-final-review`.
+
+## Execution History
+
+> Last updated: 2026-07-17T19:03:52.122Z | Progress: 0%

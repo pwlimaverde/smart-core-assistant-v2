@@ -1,0 +1,214 @@
+{
+  "version": 2,
+  "workflowType": "prevc",
+  "updatedAt": "2026-07-16T23:57:57.563Z",
+  "status": {
+    "project": {
+      "name": "n4-endurecimento-producao",
+      "scale": 3,
+      "started": "2026-07-16T11:49:39.201Z",
+      "current_phase": "C",
+      "settings": {
+        "autonomous_mode": false,
+        "require_plan": true,
+        "require_approval": true
+      },
+      "plan": "n4-endurecimento-producao"
+    },
+    "phases": {
+      "P": {
+        "status": "completed",
+        "started_at": "2026-07-16T11:49:39.201Z",
+        "completed_at": "2026-07-16T11:49:58.478Z",
+        "outputs": [
+          {
+            "path": "Sequenciamento N4.1 → (N4.2 ‖ N4.3) → N4.4 confirmado",
+            "status": "filled"
+          },
+          {
+            "path": "Modelo de quota por recurso definido: instâncias, departamentos, storage de mídia, volume de mensagens",
+            "status": "filled"
+          },
+          {
+            "path": "Enforcement log-only → enforce via flag SMARTCORE_QUOTA_ENFORCE",
+            "status": "filled"
+          }
+        ]
+      },
+      "R": {
+        "status": "completed",
+        "started_at": "2026-07-16T11:49:58.478Z",
+        "completed_at": "2026-07-16T11:50:23.853Z",
+        "outputs": [
+          {
+            "path": "Plano aprovado: grants mínimos, QuotaGuard port+decorator, política de retenção",
+            "status": "filled"
+          },
+          {
+            "path": "5 tasks de execução criadas (N4.1-N4.4 + validação/review)",
+            "status": "filled"
+          }
+        ]
+      },
+      "E": {
+        "status": "completed",
+        "started_at": "2026-07-16T11:50:23.853Z",
+        "completed_at": "2026-07-16T23:57:31.198Z",
+        "outputs": [
+          {
+            "path": "Implementação N4.1-N4.4 concluída e validada: RLS 37 verde sob smartcore_app_rt; Redis 9 verde (fix do helper de teste); fmt+clippy+unit verdes",
+            "status": "filled"
+          },
+          {
+            "path": "handoff-summary registrado (final-review-n4-endurecimento-producao.md)",
+            "status": "filled"
+          }
+        ]
+      },
+      "V": {
+        "status": "completed",
+        "started_at": "2026-07-16T23:57:31.198Z",
+        "completed_at": "2026-07-16T23:57:38.404Z",
+        "outputs": [
+          {
+            "path": "Validação: isolamento RLS verde com a role real smartcore_app_rt (37 testes); Redis 9 verde; quota/inadimplência log-only e rate limiting exercitados; R2 opt-in bloqueado só por DNS ambiental",
+            "status": "filled"
+          },
+          {
+            "path": "Final-review Opus concluído (rótulo CORRIGIDO): .context/workflow/docs/final-review-n4-endurecimento-producao.md",
+            "status": "filled"
+          }
+        ]
+      },
+      "C": {
+        "status": "in_progress",
+        "started_at": "2026-07-16T23:57:38.404Z"
+      }
+    },
+    "agents": {},
+    "roles": {
+      "planner": {
+        "status": "pending"
+      },
+      "designer": {
+        "status": "pending"
+      },
+      "architect": {
+        "status": "pending"
+      },
+      "developer": {
+        "status": "pending"
+      },
+      "qa": {
+        "status": "pending"
+      },
+      "reviewer": {
+        "status": "pending"
+      },
+      "documenter": {
+        "status": "pending"
+      },
+      "solo-dev": {
+        "status": "pending"
+      }
+    },
+    "approval": {
+      "plan_created": true,
+      "plan_approved": true,
+      "approved_by": "architect",
+      "approved_at": "2026-07-16T11:50:05.578Z",
+      "approval_notes": "Grants mínimos aprovados (SQL de referência do info_aux); QuotaGuard como port+decorator (padrão data_redis/ports); política de retenção com scheduler N1.2 + R2 lifecycle como defesa em profundidade. Aprovado para execução."
+    },
+    "execution": {
+      "history": [
+        {
+          "phase": "P",
+          "action": "started",
+          "timestamp": "2026-07-16T11:49:39.201Z"
+        },
+        {
+          "phase": "P",
+          "action": "plan_linked",
+          "plan": "n4-endurecimento-producao",
+          "timestamp": "2026-07-16T11:49:42.728Z"
+        },
+        {
+          "phase": "P",
+          "action": "completed",
+          "timestamp": "2026-07-16T11:49:58.478Z"
+        },
+        {
+          "phase": "R",
+          "action": "started",
+          "timestamp": "2026-07-16T11:49:58.478Z"
+        },
+        {
+          "phase": "R",
+          "action": "plan_approved",
+          "approved_by": "architect",
+          "timestamp": "2026-07-16T11:50:05.578Z"
+        },
+        {
+          "phase": "R",
+          "action": "completed",
+          "timestamp": "2026-07-16T11:50:23.853Z"
+        },
+        {
+          "phase": "E",
+          "action": "started",
+          "timestamp": "2026-07-16T11:50:23.853Z"
+        },
+        {
+          "phase": "E",
+          "action": "completed",
+          "timestamp": "2026-07-16T23:57:31.198Z"
+        },
+        {
+          "phase": "V",
+          "action": "started",
+          "timestamp": "2026-07-16T23:57:31.198Z"
+        },
+        {
+          "phase": "V",
+          "action": "completed",
+          "timestamp": "2026-07-16T23:57:38.404Z"
+        },
+        {
+          "phase": "C",
+          "action": "started",
+          "timestamp": "2026-07-16T23:57:38.404Z"
+        },
+        {
+          "phase": "C",
+          "action": "plan_phase_updated",
+          "plan": "n4-endurecimento-producao",
+          "description": "Plan phase phase-2 updated to completed",
+          "timestamp": "2026-07-16T23:57:51.789Z"
+        },
+        {
+          "phase": "C",
+          "action": "plan_phase_updated",
+          "plan": "n4-endurecimento-producao",
+          "description": "Plan phase phase-v updated to completed",
+          "timestamp": "2026-07-16T23:57:54.800Z"
+        },
+        {
+          "phase": "C",
+          "action": "plan_phase_updated",
+          "plan": "n4-endurecimento-producao",
+          "description": "Plan phase phase-c updated to completed",
+          "timestamp": "2026-07-16T23:57:57.562Z"
+        }
+      ],
+      "last_activity": "2026-07-16T23:57:57.562Z",
+      "resume_context": "Fase do plano atualizada"
+    }
+  },
+  "binding": {
+    "workflowName": "n4-endurecimento-producao",
+    "sessionId": "4857e545-b4b1-4c8b-a344-ac999f099451",
+    "activeTaskId": "9721d99a-9382-4388-ba39-8b9b592e7dae",
+    "createdAt": "2026-07-16T11:49:39.213Z",
+    "updatedAt": "2026-07-16T23:57:38.416Z"
+  }
+}
