@@ -129,9 +129,15 @@ impl From<SyncReport> for SyncReportFfi {
 /// Adapter do trait [`SyncTransport`] que delega cada operação a um callback
 /// **Dart** assíncrono (via `flutter_rust_bridge`). Mantém o gRPC do lado Dart —
 /// reusa o canal autenticado (`GrpcNativeApiClient`, com refresh de token), sem
-/// um segundo cliente gRPC em Rust que ficaria defasado no refresh. Os callbacks
-/// devolvem uma `String`: vazia = sucesso; não vazia = mensagem de erro (a ação
-/// permanece na fila para nova tentativa).
+/// um segundo cliente gRPC em Rust que ficaria defasado no refresh.
+///
+/// Contrato dos callbacks (`String` de retorno):
+/// - `on_move`: vazia = sucesso; não vazia = mensagem de erro.
+/// - `on_send`: sucesso = **id definitivo** da mensagem no servidor, em decimal
+///   (o motor promove a linha pendente local a esse id); falha = `"ERR <msg>"`.
+///   Vazia é aceita como sucesso sem id (não promove — retrocompatibilidade).
+///
+/// Em erro, a ação permanece na fila para nova tentativa.
 struct DartSyncTransport<M, S>
 where
     M: Fn(String, i64, i64, String) -> DartFnFuture<String> + Send + Sync,
@@ -175,19 +181,19 @@ where
         conteudo: &str,
         tipo: &str,
     ) -> Result<i64, SyncError> {
-        let erro = (self.on_send)(
+        let retorno = (self.on_send)(
             action_id.to_string(),
             atendimento_id,
             conteudo.to_string(),
             tipo.to_string(),
         )
         .await;
-        if erro.is_empty() {
-            // O `sincronizar` ignora o id retornado (só marca como sincronizado).
-            Ok(0)
-        } else {
-            Err(SyncError::Transport(erro))
+        if let Some(msg) = retorno.strip_prefix("ERR ") {
+            return Err(SyncError::Transport(msg.to_string()));
         }
+        // Sucesso: id definitivo em decimal ("" ou não-numérico = sem id, não
+        // promove a pendente — o motor trata `0` como desconhecido.
+        Ok(retorno.trim().parse::<i64>().unwrap_or(0))
     }
 }
 

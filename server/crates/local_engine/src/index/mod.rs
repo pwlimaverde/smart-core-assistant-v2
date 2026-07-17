@@ -205,4 +205,24 @@ impl SqliteIndex {
         .await?;
         Ok(novo_id)
     }
+
+    /// Promove uma mensagem pendente (id client-side negativo) ao id definitivo
+    /// do servidor após o sync. `UPDATE OR REPLACE`: se o servidor já tiver sido
+    /// re-ingestado (linha com o id definitivo já existe), a pendente a substitui
+    /// — sobra exatamente uma linha, sem duplicata fantasma. Idempotente: linha
+    /// pendente ausente é no-op.
+    pub async fn promover_mensagem_pendente(
+        &self,
+        local_id: i64,
+        definitivo_id: i64,
+    ) -> LocalResult<()> {
+        sqlx::query(
+            "UPDATE OR REPLACE mensagens SET id = ?, status_envio = 'enviado' WHERE id = ?",
+        )
+        .bind(definitivo_id)
+        .bind(local_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
 }
