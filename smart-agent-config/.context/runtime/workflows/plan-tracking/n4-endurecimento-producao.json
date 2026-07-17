@@ -1,0 +1,33 @@
+{
+  "planSlug": "n4-endurecimento-producao",
+  "linkedAt": "2026-07-16T11:49:42.702Z",
+  "progress": 60,
+  "phases": {
+    "phase-2": {
+      "phaseId": "phase-2",
+      "status": "completed",
+      "startedAt": "2026-07-16T23:57:51.776Z",
+      "steps": [],
+      "completedAt": "2026-07-16T23:57:51.776Z"
+    },
+    "phase-v": {
+      "phaseId": "phase-v",
+      "status": "completed",
+      "startedAt": "2026-07-16T23:57:54.790Z",
+      "steps": [],
+      "completedAt": "2026-07-16T23:57:54.790Z"
+    },
+    "phase-c": {
+      "phaseId": "phase-c",
+      "status": "completed",
+      "startedAt": "2026-07-16T23:57:57.551Z",
+      "steps": [],
+      "completedAt": "2026-07-16T23:57:57.551Z"
+    }
+  },
+  "approvalStatus": "approved",
+  "approvedAt": "2026-07-16T11:50:05.578Z",
+  "approvedBy": "architect",
+  "decisions": [],
+  "lastUpdated": "2026-07-16T23:57:57.551Z"
+}

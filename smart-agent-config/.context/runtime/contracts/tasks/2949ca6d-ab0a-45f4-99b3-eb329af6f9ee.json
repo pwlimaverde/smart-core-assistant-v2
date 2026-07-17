@@ -1,0 +1,39 @@
+{
+  "id": "2949ca6d-ab0a-45f4-99b3-eb329af6f9ee",
+  "title": "Fase N4 — Endurecimento de Produção (billing, quotas, retenção, segurança): Execution",
+  "description": "Derived from linked plan \"n4-endurecimento-producao\" for PREVC phase E (Execution). Plan phases: Execution. Expected outputs: code, unit-tests.",
+  "sessionId": "4857e545-b4b1-4c8b-a344-ac999f099451",
+  "owner": "developer",
+  "status": "completed",
+  "inputs": [],
+  "expectedOutputs": [
+    "code",
+    "unit-tests"
+  ],
+  "acceptanceCriteria": [
+    "Complete Execution"
+  ],
+  "requiredSensors": [
+    "tests-passing"
+  ],
+  "requiredArtifacts": [
+    "handoff-summary"
+  ],
+  "createdAt": "2026-07-16T11:50:23.845Z",
+  "updatedAt": "2026-07-16T23:57:31.214Z",
+  "metadata": {
+    "requirementsSource": "plan-frontmatter",
+    "source": "workflow.plan",
+    "planSlug": "n4-endurecimento-producao",
+    "prevcPhase": "E",
+    "planPhaseIds": [
+      "phase-2"
+    ],
+    "planPhaseNames": [
+      "Execution"
+    ],
+    "planPhaseSummaries": [],
+    "derivedFrom": "linked-plan",
+    "completionReason": "Workflow advanced from E to V"
+  }
+}

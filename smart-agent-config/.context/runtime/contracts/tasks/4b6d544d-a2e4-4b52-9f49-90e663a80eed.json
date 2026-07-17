@@ -1,0 +1,39 @@
+{
+  "id": "4b6d544d-a2e4-4b52-9f49-90e663a80eed",
+  "title": "Fase N4 — Endurecimento de Produção (billing, quotas, retenção, segurança): Validation",
+  "description": "Derived from linked plan \"n4-endurecimento-producao\" for PREVC phase V (Validation). Plan phases: Validation. Expected outputs: test-report, review-comments, approval.",
+  "sessionId": "4857e545-b4b1-4c8b-a344-ac999f099451",
+  "owner": "qa",
+  "status": "completed",
+  "inputs": [],
+  "expectedOutputs": [
+    "test-report",
+    "review-comments",
+    "approval"
+  ],
+  "acceptanceCriteria": [
+    "Complete Validation"
+  ],
+  "requiredSensors": [
+    "tests",
+    "lint"
+  ],
+  "requiredArtifacts": [],
+  "createdAt": "2026-07-16T23:57:31.189Z",
+  "updatedAt": "2026-07-16T23:57:38.427Z",
+  "metadata": {
+    "requirementsSource": "phase-defaults",
+    "source": "workflow.plan",
+    "planSlug": "n4-endurecimento-producao",
+    "prevcPhase": "V",
+    "planPhaseIds": [
+      "phase-v"
+    ],
+    "planPhaseNames": [
+      "Validation"
+    ],
+    "planPhaseSummaries": [],
+    "derivedFrom": "linked-plan",
+    "completionReason": "Workflow advanced from V to C"
+  }
+}

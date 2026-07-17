@@ -5,6 +5,7 @@ planSlug: n4-endurecimento-producao
 description: "Prontidão comercial: role Postgres não-superuser (destrava os testes de RLS), medição de uso e enforcement de plan/subscription com QuotaGuard (log-only → enforce), bloqueio por inadimplência, retenção de mídia por política (+ R2 lifecycle como defesa em profundidade), rate limiting amplo e testes de carga/vazamento."
 summary: "Fechar os buracos que separam o MVP de uma operação comercial: RLS provado de verdade, limites de plano aplicados no caminho quente e retenção de mídia governada por política."
 status: filled
+progress: 60
 generated: "2026-07-06"
 scaffoldVersion: "2.0.0"
 agents:
@@ -44,6 +45,7 @@ phases:
     prevc: "C"
     agent: "devops-specialist"
     status: "pending"
+lastUpdated: "2026-07-16T23:57:57.551Z"
 ---
 
 # Fase N4 — Endurecimento de Produção (billing, quotas, retenção, segurança)
@@ -76,3 +78,19 @@ promovido a passo) no [plano completo](./n4-endurecimento-producao/plano_complet
 - **E:** role; enforcement; retenção; rate limiting/carga.
 - **V:** `.\infra\test-local.ps1` — isolamento **verde com a role real** + quota/bloqueio + carga.
 - **C:** métricas de uso; eventos auditados; varredura de logs limpa; gate `prevc-final-review`.
+
+## Execution History
+
+> Last updated: 2026-07-16T23:57:57.551Z | Progress: 60%
+
+### phase-2 [DONE]
+- Started: 2026-07-16T23:57:51.776Z
+- Completed: 2026-07-16T23:57:51.776Z
+
+### phase-c [DONE]
+- Started: 2026-07-16T23:57:57.551Z
+- Completed: 2026-07-16T23:57:57.551Z
+
+### phase-v [DONE]
+- Started: 2026-07-16T23:57:54.790Z
+- Completed: 2026-07-16T23:57:54.790Z
