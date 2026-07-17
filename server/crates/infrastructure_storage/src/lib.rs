@@ -56,6 +56,12 @@ impl StorageClient {
         connection::garantir_lifecycle(&self.client, &self.bucket, expiration_days).await
     }
 
+    /// Aplica a política de CORS do bucket (N5.3 — paridade Web; mídia entregue
+    /// por presign para origem cross-site). Best-effort: nunca falha o boot.
+    pub async fn garantir_cors(&self, allowed_origins: &[String]) {
+        connection::garantir_cors(&self.client, &self.bucket, allowed_origins).await
+    }
+
     /// Confirma o acesso ao bucket (healthcheck).
     pub async fn health(&self) -> Result<(), StorageError> {
         connection::health(&self.client, &self.bucket).await

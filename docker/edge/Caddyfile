@@ -26,7 +26,7 @@ smartcoreassistant.com.br {
 dev.smartcoreassistant.com.br {
 	encode gzip zstd
 
-	# Bundle estatico do client (web container). handle_path remove o prefixo;
+	# Bundle estatico do client admin (web container). handle_path remove o prefixo;
 	# o web container serve /srv com fallback SPA.
 	handle_path /v2/admin/* {
 		reverse_proxy host.docker.internal:8081
@@ -40,7 +40,23 @@ dev.smartcoreassistant.com.br {
 		}
 	}
 
-	# gRPC-Web (HTTP/1.1 plano; SEM h2c) -> runtime_api do v2 dev.
+	# Bundle estatico do app operacional/tenant (web-tenant container). Mesmo padrao
+	# do admin, porta propria. A midia deste app vem por presign direto do R2
+	# (cross-site) — depende do CORS do bucket aplicado por data_storage (N5.3);
+	# por isso connect-src/img-src/media-src liberam https: para *.r2.cloudflarestorage.com.
+	handle_path /v2/tenant/* {
+		reverse_proxy host.docker.internal:8083
+		header {
+			Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' https:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+			Strict-Transport-Security "max-age=31536000; includeSubDomains"
+			X-Content-Type-Options "nosniff"
+			X-Frame-Options "DENY"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			-Server
+		}
+	}
+
+	# gRPC-Web (HTTP/1.1 plano; SEM h2c) -> runtime_api do v2 dev (admin + tenant).
 	handle {
 		reverse_proxy host.docker.internal:50051
 	}

@@ -40,6 +40,18 @@ async fn main() -> anyhow::Result<()> {
         .unwrap_or(90);
     client.garantir_lifecycle(lifecycle_days).await;
 
+    // N5.3: CORS do bucket para paridade Web. A mídia é entregue ao Flutter Web por
+    // presign (origem cross-site), e o browser aplica CORS mesmo com URL assinada.
+    // Origens permitidas vêm de S3_CORS_ALLOWED_ORIGINS (comma-separated); a origem
+    // da verdade versionada é infra/r2-cors.json. Best-effort — não trava o boot.
+    let cors_origins: Vec<String> = std::env::var("S3_CORS_ALLOWED_ORIGINS")
+        .unwrap_or_default()
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    client.garantir_cors(&cors_origins).await;
+
     let state = AppState { client };
 
     // 4. Inicia o Consumidor de Purga de Mídia em background

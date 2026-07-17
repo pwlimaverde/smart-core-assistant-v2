@@ -1,4 +1,3 @@
-import 'package:api_client/grpc_web_client.dart';
 import 'package:dependencies_module/dependencies_module.dart';
 
 import 'data/datasources/tenant_admin_grpc_datasource.dart';
@@ -27,10 +26,10 @@ final class TenantModule extends AppModule {
   void globalBinds(Injector i) {
     i.lazySingleton<TenantAdminDataSource>(() {
       final client = inject<ApiClient>();
-      if (client is GrpcApiClient) {
+      if (client is GrpcTransport) {
         return TenantAdminGrpcDatasourceImpl(client: client.admin);
       }
-      throw StateError('ApiClient não é do tipo GrpcApiClient esperado.');
+      throw StateError('ApiClient não é do tipo GrpcTransport esperado.');
     });
 
     i.lazySingleton<TenantAdminService>(

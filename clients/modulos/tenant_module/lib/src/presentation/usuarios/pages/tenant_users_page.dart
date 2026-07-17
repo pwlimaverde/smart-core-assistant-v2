@@ -51,7 +51,11 @@ class _TenantUsersPageState extends State<TenantUsersPage> {
           ),
           onSuccess: (context, users) {
             if (users.isEmpty) {
-              return const Center(child: Text('Nenhum usuário neste tenant.'));
+              return const AppEmptyView(
+                icon: Icons.people_outline,
+                title: 'Nenhum usuario neste tenant',
+                subtitle: 'Convidados que aceitarem o convite aparecem aqui.',
+              );
             }
             return SingleChildScrollView(
               child: AppCard(

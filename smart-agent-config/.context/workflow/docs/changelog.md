@@ -2,6 +2,55 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-07-17] - Fase N5: Consolidação de Clientes + Offline (desktop, FFI, paridade Web)
+
+> Ciclo PREVC `n5-consolidacao-clientes-offline` fechado e arquivado via `prevc-final-review`.
+> Final-review: qualidade **CORRIGIDO** (transporte gRPC nativo para desbloquear o link do build
+> Windows + fix de reprodutibilidade no Cargokit — ver Corrigido). Última fase do backlog N1–N5:
+> consolida os clientes, prova o `DataSource` abstrato plugando o `LocalEngineFFI` sem reescrever
+> telas (LSP), e fecha a paridade Web com mídia servida por presign+CORS.
+
+### Adicionado
+
+- **N5.1 — Consolidação do app:** navegação (`go_router`) e guardas por papel consolidados no
+  `smart-core-tenant`; estados padronizados de carregamento/erro/vazio (`AppEmptyView` novo no
+  `design_system_module`, aplicado no Kanban/chat/convites/usuários); acessibilidade (tooltips,
+  labels semânticos). Plataforma **Windows** adicionada ao app (`flutter create
+  --platforms=windows`); `flutter build windows --release` empacota o `.exe` real.
+- **N5.2 — `local_engine` (FFI) + mídia local:** novo crate Rust dual-target
+  (`crate-type = ["staticlib","cdylib","lib"]`), 100% client-local (sem infra multi-tenant do
+  servidor) — índice **SQLite** para leitura offline rápida, **cache de mídia por hash** (download
+  único via URL pré-assinada, verificação sha256, sem lixo corrompido), **fila offline** com
+  resolução **last-write-wins por versão** (`resolve_lww`) e auditoria 100% server-side no sync
+  (nunca no cliente). Integração real via `flutter_rust_bridge` (codegen rodado, pacote
+  `local_engine_ffi` gerado) — `LocalEngineFfiDataSource` troca `RemoteOnly`↔`LocalEngineFFI` por
+  **import condicional**, **sem tocar nenhuma tela/controller/usecase** (prova final do princípio
+  Ports & Adapters do projeto). `SyncTransport` da fila offline fiado via callbacks Dart,
+  reaproveitando o canal gRPC autenticado já existente (com refresh de token).
+- **N5.3 — Paridade Web:** CORS de mídia no bucket R2 (`garantir_cors`, best-effort, mesmo padrão
+  do lifecycle da N4.3) com atenção à pegadinha de range request (`Content-Range`/`Accept-Ranges`
+  expostos, senão o seek de áudio/vídeo quebra silenciosamente); política versionada em
+  `infra/r2-cors.json`. Deploy Web do app operacional/tenant (`infra/caddy/tenant.caddy`, serviço
+  Docker dedicado, job de CI) seguindo o mesmo padrão same-origin já usado pelo admin.
+
+### Corrigido
+
+- **Build Windows não linkava (achado real, fora do plano original):** `GrpcApiClient` (transporte
+  gRPC-Web, `dart:js_interop`-only) era importado incondicionalmente por 4 módulos, quebrando a
+  compilação nativa (`'JSObject' isn't a type`). Corrigido com `GrpcNativeApiClient` (canal
+  `package:grpc/grpc.dart` sobre `dart:io`) + interface `GrpcTransport` + seleção Web↔nativo por
+  **import condicional** (não runtime-check — só isso evita compilar o código web-only no alvo
+  nativo).
+- **Cargokit sem `-NoProfile`:** o build nativo do `local_engine_ffi` chamava `powershell` sem
+  `-NoProfile`, herdando o perfil interativo de quem roda o build. Corrigido (build reprodutível,
+  independente de módulos de terminal instalados na máquina de quem builda).
+
+### Encerramento do backlog N1–N5
+
+Com a N5 fechada, o produto tem: MVP operacional endurecido (N1), IA plugada (N2), autonomia do
+tenant (N3), prontidão comercial (N4) e clientes consolidados com offline/Web (N5). Novas frentes
+entram como ciclos PREVC próprios, sempre aterrados no código real.
+
 ## [2026-07-16] - Fase N4: Endurecimento de Produção (role não-superuser, quotas, retenção, segurança)
 
 > Ciclo PREVC `n4-endurecimento-producao` fechado e arquivado via `prevc-final-review`.

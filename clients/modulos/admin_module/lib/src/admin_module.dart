@@ -1,4 +1,3 @@
-import 'package:api_client/grpc_web_client.dart';
 import 'package:dependencies_module/dependencies_module.dart';
 
 import 'features/config/data/datasources/admin_grpc_datasource.dart';
@@ -45,10 +44,10 @@ final class AdminModule extends AppModule {
     // Registra o client gRPC-Web recuperando-o do ApiClient global
     i.lazySingleton<AdminServiceClient>(() {
       final client = inject<ApiClient>();
-      if (client is GrpcApiClient) {
+      if (client is GrpcTransport) {
         return client.admin;
       }
-      throw StateError('ApiClient não é do tipo GrpcApiClient esperado.');
+      throw StateError('ApiClient não é do tipo GrpcTransport esperado.');
     });
 
     // Datasource

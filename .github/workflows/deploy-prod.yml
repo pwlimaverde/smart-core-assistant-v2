@@ -93,9 +93,63 @@ jobs:
           cache-from: type=gha,scope=web
           cache-to: type=gha,mode=max,scope=web
 
+  # Paridade com o admin: a imagem do tenant e construida na tag, e o servico
+  # web-tenant sobe no compose prod. O ROTEAMENTO prod do app (Caddy) segue
+  # pendente de decisao (ver infra/caddy/tenant.caddy e docker/edge/Caddyfile) —
+  # o container roda sem rota publica ate a decisao, exatamente como o admin prod.
+  build-web-tenant:
+    name: Build Web Tenant/Operacional (PROD)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: stable
+          cache: true
+
+      - name: Build web tenant (PROD, --wasm)
+        working-directory: clients
+        run: |
+          flutter pub get
+          cd apps/smart-core-tenant
+          flutter build web --wasm \
+            --base-href /v2/tenant/ \
+            -t lib/main_prod.dart \
+            --dart-define=SMARTCORE_API_ENDPOINT=https://smartcoreassistant.com.br
+
+      - name: Prepara contexto (./web)
+        run: cp -r clients/apps/smart-core-tenant/build/web ./web
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/smartcore-web-tenant
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/web/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=web-tenant
+          cache-to: type=gha,mode=max,scope=web-tenant
+
   deploy-prod:
     name: Deploy PROD (compose)
-    needs: [build-server, build-web]
+    needs: [build-server, build-web, build-web-tenant]
     runs-on: [self-hosted, hostinger]
     environment: production
     steps:

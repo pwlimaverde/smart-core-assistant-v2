@@ -157,6 +157,58 @@ providers sem suporte total a lifecycle não travam o `data_storage`.
 
 ---
 
+## 7.5 CORS de mídia para paridade Web (N5.3)
+
+Com o app operacional/tenant rodando também como **Flutter Web** (F10 — paridade
+Web), a entrega de mídia passa a esbarrar na política de **CORS** do browser. O
+app baixa a mídia por **URL pré-assinada** (presigned GET, §5/§6.2) direto do R2, ou
+seja, de uma origem (`*.r2.cloudflarestorage.com`) **diferente** da origem do app
+(`dev.smartcoreassistant.com.br` / `smartcoreassistant.com.br`).
+
+**Por que CORS é necessário mesmo com URL pré-assinada:** o presign resolve a
+*autenticação/autorização* da requisição (a assinatura na query string), mas **não
+isenta a política de CORS**. Para qualquer `fetch`, `<img>`, `<audio>` ou
+`<video src>` cross-origin, o browser ainda exige que a resposta do bucket traga os
+headers `Access-Control-Allow-Origin` compatíveis — caso contrário a resposta é
+bloqueada no cliente (a request até sai e o objeto existe, mas o JS/DOM não pode
+lê-lo). No app nativo (mobile/desktop) isso não acontece porque não há origem web
+nem enforcement de CORS; por isso o problema é específico da paridade Web.
+
+**Pegadinha das range requests (`Content-Range`/`Accept-Ranges`):** players de mídia
+HTML5 fazem **range requests** para dar seek em áudio/vídeo (`Range: bytes=...`) e
+leem `Content-Range`, `Accept-Ranges` e `Content-Length` da resposta. Numa resposta
+cross-origin, o browser **oculta** do JS/player qualquer header que não esteja
+listado em `Access-Control-Expose-Headers`. Sem expor esses três (mais `ETag` para
+cache/validação), o seek quebra **silenciosamente** mesmo com o CORS "funcionando"
+para o GET simples — a mídia começa a tocar mas não permite avançar. Por isso a
+regra os expõe explicitamente.
+
+**Política aplicada** (origem da verdade versionada em `infra/r2-cors.json`):
+
+| Campo | Valor |
+|---|---|
+| `AllowedMethods` | `GET`, `HEAD` (só leitura; upload continua server-side via `data_storage`) |
+| `AllowedOrigins` | `https://dev.smartcoreassistant.com.br` (dev), `https://smartcoreassistant.com.br` (prod) |
+| `AllowedHeaders` | `*` |
+| `ExposeHeaders` | `Content-Range`, `Accept-Ranges`, `Content-Length`, `ETag` |
+| `MaxAgeSeconds` | `3600` |
+
+**Como é aplicada:** `data_storage` aplica a política no boot via
+`put_bucket_cors` (`aws-sdk-s3`,
+`infrastructure_storage::connection::garantir_cors`), lendo as origens de
+`S3_CORS_ALLOWED_ORIGINS` (comma-separated). **Best-effort** e no mesmo espírito do
+lifecycle (§7.1): se a lista vier vazia ou o provider não suportar, loga e segue —
+não trava o boot. O `infra/r2-cors.json` mantém a política pretendida versionada
+(formato `aws s3api put-bucket-cors --cors-configuration file://infra/r2-cors.json`),
+espelhando exatamente o que o código aplica.
+
+> **Prod (pendente de decisão):** a origem prod `https://smartcoreassistant.com.br`
+> já consta na política, mas o **local onde o app Web é servido** em produção segue
+> pendente (o domínio hoje serve o painel Django legado — ver `infra/caddy/*.caddy`).
+> A regra de CORS é inofensiva mesmo antes de o app prod ir ao ar.
+
+---
+
 ## 8. Testes e Validação
 
 - Testes unitários inline em `apps/data_storage` cobrem o fluxo

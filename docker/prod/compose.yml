@@ -148,6 +148,18 @@ services:
     networks: [internal]
     restart: unless-stopped
 
+  # Client operacional/tenant (Flutter Web) — mesma imagem generica do docker/web.
+  # Publicado no host; o edge faz reverse_proxy p/ host.docker.internal:
+  # ${WEB_TENANT_HOST_PORT} no /v2/tenant/*. PROD do tenant segue pendente de
+  # decisao (ver infra/caddy/tenant.caddy), mas o servico ja fica pronto por paridade.
+  # A midia deste app depende do CORS do bucket R2 (S3_CORS_ALLOWED_ORIGINS, N5.3).
+  web-tenant:
+    image: ${WEB_TENANT_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-web-tenant:latest}
+    ports:
+      - "${WEB_TENANT_HOST_PORT:-8084}:80"
+    networks: [internal]
+    restart: unless-stopped
+
   # ---------- MENSAGERIA / WHATSAPP ----------
   data_whatsapp:
     image: *server-image

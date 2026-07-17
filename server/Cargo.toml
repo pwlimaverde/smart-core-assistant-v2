@@ -21,6 +21,7 @@ members = [
     "crates/infrastructure_evolution",
     "apps/webhook_ingress",
     "apps/data_whatsapp",
+    "crates/local_engine",
 ]
 
 [workspace.package]

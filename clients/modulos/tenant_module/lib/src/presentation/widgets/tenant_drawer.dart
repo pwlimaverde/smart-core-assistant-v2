@@ -10,8 +10,8 @@ class TenantDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
-    final scopes = inject<AuthService>().currentSession?.scopes ?? const <String>[];
-    final isTenantAdmin = scopes.contains('tenant:admin') || scopes.contains('*');
+    final isTenantAdmin =
+        inject<AuthService>().currentSession?.isTenantAdmin ?? false;
 
     return Drawer(
       child: Column(

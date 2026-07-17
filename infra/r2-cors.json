@@ -1,0 +1,14 @@
+{
+  "CORSRules": [
+    {
+      "AllowedOrigins": [
+        "https://dev.smartcoreassistant.com.br",
+        "https://smartcoreassistant.com.br"
+      ],
+      "AllowedMethods": ["GET", "HEAD"],
+      "AllowedHeaders": ["*"],
+      "ExposeHeaders": ["Content-Range", "Accept-Ranges", "Content-Length", "ETag"],
+      "MaxAgeSeconds": 3600
+    }
+  ]
+}

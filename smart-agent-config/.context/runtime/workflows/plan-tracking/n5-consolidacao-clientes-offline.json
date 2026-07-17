@@ -1,0 +1,93 @@
+{
+  "planSlug": "n5-consolidacao-clientes-offline",
+  "linkedAt": "2026-07-17T00:39:28.343Z",
+  "progress": 100,
+  "phases": {
+    "phase-p": {
+      "phaseId": "phase-p",
+      "status": "completed",
+      "startedAt": "2026-07-17T20:13:03.393Z",
+      "steps": [],
+      "completedAt": "2026-07-17T20:13:03.393Z"
+    },
+    "phase-r": {
+      "phaseId": "phase-r",
+      "status": "completed",
+      "startedAt": "2026-07-17T20:13:04.058Z",
+      "steps": [],
+      "completedAt": "2026-07-17T20:13:04.058Z"
+    },
+    "phase-2": {
+      "phaseId": "phase-2",
+      "status": "completed",
+      "startedAt": "2026-07-17T20:13:05.035Z",
+      "steps": [],
+      "completedAt": "2026-07-17T20:13:05.035Z"
+    },
+    "phase-v": {
+      "phaseId": "phase-v",
+      "status": "completed",
+      "startedAt": "2026-07-17T20:13:05.408Z",
+      "steps": [],
+      "completedAt": "2026-07-17T20:13:05.408Z"
+    },
+    "phase-c": {
+      "phaseId": "phase-c",
+      "status": "completed",
+      "startedAt": "2026-07-17T20:13:12.121Z",
+      "steps": [],
+      "completedAt": "2026-07-17T20:13:12.121Z"
+    }
+  },
+  "approvalStatus": "approved",
+  "approvedAt": "2026-07-17T01:06:17.205Z",
+  "approvedBy": "architect",
+  "decisions": [
+    {
+      "title": "Escopo e sequenciamento N5 confirmados; flutter_rust_bridge revalidado (Context7)",
+      "description": "Revalidação via Context7 (/fzyzcjy/flutter_rust_bridge, doc atual): projeto usa `flutter_rust_bridge_codegen integrate --rust-crate-dir ../local_engine` para integrar o crate a um pacote Flutter existente (não um app novo); crate-type [\"staticlib\",\"cdylib\"] cobre Windows+mobile futuro; erros Rust (anyhow/enum custom) viram exceptions Dart automaticamente — mapeado ao error_core do server via adapter na fronteira FFI; streaming via StreamSink<T> cobre updates de sync incremental. Sequenciamento confirmado: N5.1 (consolidação do app, sem dependência de FFI) → N5.2 (crate local_engine: dual-target, SQLite, cache de mídia por hash, DataSource LocalEngineFFI plugado via get_it, fila offline+sync LWW+versionamento) → N5.3 (paridade web do app operacional/tenant + CORS de mídia no R2, reaproveitando packages e o padrão Caddy same-origin já usado pelo admin).",
+      "phase": "P",
+      "alternatives": [
+        "Começar por N5.2 (FFI) antes do N5.1 — rejeitado: N5.1 não depende de FFI e reduz risco de bloquear o backlog inteiro no maior risco técnico",
+        "Usar flutter_rust_bridge apenas com cdylib (sem staticlib) — rejeitado: staticlib mantém opção de mobile futuro sem retrabalho, custo marginal baixo"
+      ],
+      "status": "accepted",
+      "id": "dec-1784250350569",
+      "decidedAt": "2026-07-17T01:05:50.569Z"
+    },
+    {
+      "title": "Arquitetura N5 aprovada: contrato LocalEngineFFI, estratégia de sync e paridade web",
+      "description": "Contrato LSP verificado no código real: AtendimentoDataSource (operacional_module) expõe listAtendimentos/getThread/moveAtendimentoEtapa/sendOutboundMessage/streamAtendimentos — é este o port que LocalEngineFFI deve satisfazer sem alterar telas/controllers/usecases (só o binding em OperacionalModule.globalBinds troca). Aprovado: (1) local_engine crate-type [\"staticlib\",\"cdylib\"], integrado via `flutter_rust_bridge_codegen integrate --rust-crate-dir`, exceptions Dart mapeadas a partir de enum de erro Rust (espelhando AppError/domain_models, não reexpondo error_core do server — FFI é client-local); (2) índice SQLite local para leitura rápida offline (fila/thread) + cache de mídia em disco por hash (download único via URL pré-assinada do infrastructure_storage); (3) fila offline: ações do atendente gravadas localmente com id idempotente + versão; sync ao reconectar aplica last-write-wins por versão, auditado server-side no momento do sync (client não audita); (4) streamAtendimentos em modo FFI: sink local alimentado pelo próprio sync (sem WebSocket/gRPC-stream direto do FFI); (5) N5.3 web reaproveita RemoteOnly (sem local_engine_ffi no target web) + CORS versionado no bucket R2 (cors.json) para as URLs pré-assinadas de mídia.",
+      "phase": "R",
+      "alternatives": [
+        "LocalEngineFFI reimplementar streamAtendimentos via long-poll direto ao server — rejeitado: duplicaria a lógica de sync e quebraria a garantia de 'sem perda' offline",
+        "Auditar ações offline no cliente antes do sync — rejeitado: cliente não deve emitir auditoria (contrato de observabilidade do plano); auditoria é sempre server-side"
+      ],
+      "status": "accepted",
+      "id": "dec-1784250375968",
+      "decidedAt": "2026-07-17T01:06:15.968Z"
+    },
+    {
+      "title": "Achado real do N5.1: build Windows precisa de transporte gRPC nativo além do LocalEngineFFI",
+      "description": "O agente do N5.1 confirmou por execução real que `flutter build windows --release` falha na LINKAGEM (não só em runtime): `GrpcApiClient` (api_client/src/grpc_api_client.dart) importa `package:grpc/grpc_web.dart` → `dart:js_interop`/`package:web`, e `operacional_module`/`tenant_module`/`login_module` importam esse arquivo incondicionalmente na composição (`globalBinds`), então o target nativo tenta compilar tipos só-web e falha ('JSObject' isn't a type). Isso é ortogonal ao `local_engine` (FFI só cobre os dados operacionais/fila offline) — o app desktop também precisa logar (login_module) e, quando online, falar com o servidor por um transporte que funcione fora do browser. Decisão: (1) criar `GrpcNativeApiClient implements ApiClient` em `api_client` usando `package:grpc/grpc.dart` (ClientChannel nativo sobre `dart:io`/HTTP2 — a mesma lib `grpc` já usada já tem essa variante nativa, não precisa de FFI nem de lib nova) atrás de um entrypoint neutro tipo `grpc_native_client.dart` (mesmo padrão de `grpc_web_client.dart`); (2) escolher `GrpcApiClient` (web) vs `GrpcNativeApiClient` (nativo) por IMPORT CONDICIONAL (`if (dart.library.js_interop)`/equivalente, não `kIsWeb` em runtime — runtime não evita a compilação do import) no ponto único onde o app registra `ApiClient` (bootstrap/dependencies_module), não duplicado por módulo; (3) o `SyncTransport` do `local_engine` (fila offline) usa esse mesmo `GrpcNativeApiClient` no desktop. Isso destrava o `flutter build windows --release` independente do estágio do FFI, e é pré-requisito real para o DoD do N5.1 ('app Windows empacotado').",
+      "phase": "E",
+      "alternatives": [
+        "Manter GrpcApiClient (web-only) e só completar via LocalEngineFFI achando que cobriria tudo — rejeitado: comprovado por build real que não linka; login/auth também precisa de transporte no desktop, não só dados operacionais",
+        "Usar package:grpc/grpc_web.dart também no desktop via algum shim — rejeitado: grpc_web depende de APIs de browser (XHR/fetch via JS interop), não existem fora do navegador; a própria lib grpc já oferece ClientChannel nativo para isso"
+      ],
+      "status": "accepted",
+      "id": "dec-1784284938536",
+      "decidedAt": "2026-07-17T10:42:18.535Z"
+    },
+    {
+      "title": "Validação N5 completa: Flutter e Rust verdes, builds Windows/Web reais confirmados",
+      "description": "Validação real executada nesta sessão (não apenas revisão estática): `.\\infra\\test-flutter.ps1` — analyze do workspace limpo + 140 testes verdes (16 pacotes, incluindo smart-core-tenant e operacional_module). `flutter build windows --release -t lib/main_dev.dart` a partir de `clients/apps/smart-core-tenant` — sucesso real (smart_core_tenant.exe gerado), confirmado 2x (antes e depois do SyncTransport). `flutter build web --release` — sucesso, confirma que a troca RemoteOnly/LocalEngineFFI por import condicional não quebrou o alvo Web. `.\\infra\\test-local.ps1` (Rust) rodado 2x completo: fmt+clippy limpos, e a suíte inteira (unit+integração via túnel SSH) 100% verde em todas as linhas visíveis — 37 testes de RLS/isolamento (infrastructure_postgres), 3 testes de R2 real (infrastructure_storage — DNS que bloqueava na N4 já resolve agora), 8 testes do novo crate local_engine, e todos os demais crates/apps sem nenhuma falha. Ambas as rodadas do test-local.ps1 foram cortadas pelo cap de 10min da ferramenta de shell bem no finalzinho (faltando só doc-tests triviais de 0 testes e o eco final do script) — não há qualquer falha registrada em nenhuma das duas execuções completas.",
+      "phase": "V",
+      "alternatives": [],
+      "status": "accepted",
+      "id": "dec-1784315032124",
+      "decidedAt": "2026-07-17T19:03:52.122Z"
+    }
+  ],
+  "lastUpdated": "2026-07-17T20:13:12.121Z"
+}

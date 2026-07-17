@@ -65,7 +65,11 @@ class _InvitesPageState extends State<InvitesPage> {
                 ),
                 onSuccess: (context, invites) {
                   if (invites.isEmpty) {
-                    return const Center(child: Text('Nenhum convite ainda.'));
+                    return const AppEmptyView(
+                      icon: Icons.mail_outline,
+                      title: 'Nenhum convite ainda',
+                      subtitle: 'Use "Novo Convite" para convidar alguem ao tenant.',
+                    );
                   }
                   return _buildInvitesTable(invites);
                 },

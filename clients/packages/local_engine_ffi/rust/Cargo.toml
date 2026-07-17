@@ -1,0 +1,24 @@
+[package]
+name = "local_engine_ffi"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+flutter_rust_bridge = "=2.12.0"
+# Reaproveita o crate Rust puro do motor local (índice/fila/cache). O binding FFI
+# é só uma casca fina em cima dele — a lógica NÃO é reimplementada aqui.
+local_engine = { path = "../../../../server/crates/local_engine" }
+anyhow = "1"
+# Runtime tokio vive DENTRO da casca FFI: o `local_engine` é async (sqlx/reqwest)
+# e as chamadas FRB despacham nele via `spawn`. Decisão registrada no relatório.
+tokio = { version = "1", features = ["rt-multi-thread"] }
+# `async-trait`/`uuid` casam com a assinatura do trait `SyncTransport` reexposto
+# pelo `local_engine` (implementado aqui por um adapter que delega ao Dart).
+async-trait = "0.1"
+uuid = "1"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

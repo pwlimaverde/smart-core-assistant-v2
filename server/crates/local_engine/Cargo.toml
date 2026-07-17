@@ -1,0 +1,34 @@
+[package]
+name = "local_engine"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+# Dual-target: `staticlib`/`cdylib` para o binding FFI (flutter_rust_bridge) numa
+# tarefa futura; `lib` para poder ser testado e usado como dependência normal.
+[lib]
+crate-type = ["staticlib", "cdylib", "lib"]
+
+[dependencies]
+tokio       = { workspace = true }
+serde       = { workspace = true }
+serde_json  = { workspace = true }
+thiserror   = { workspace = true }
+tracing     = { workspace = true }
+uuid        = { workspace = true }
+sha2        = { workspace = true }
+async-trait = { workspace = true }
+
+# SQLite local: NÃO herda `workspace.dependencies.sqlx` (fixado em `postgres`).
+# Índice/fila offline são 100% client-local, sem TLS (arquivo em disco).
+[dependencies.sqlx]
+version = "0.9"
+default-features = false
+features = ["sqlite", "runtime-tokio", "macros", "migrate"]
+
+# Cliente HTTP mínimo só para baixar mídia via URL pré-assinada (GET). rustls
+# em vez de native-tls para não arrastar OpenSSL; sem features supérfluas.
+[dependencies.reqwest]
+version = "0.12"
+default-features = false
+features = ["rustls-tls"]

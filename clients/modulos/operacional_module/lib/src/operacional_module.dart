@@ -1,7 +1,7 @@
-import 'package:api_client/grpc_web_client.dart';
+import 'package:core_module/core_module.dart' as core;
 import 'package:dependencies_module/dependencies_module.dart';
 
-import 'features/atendimento/data/datasources/atendimento_remote_data_source.dart';
+import 'features/atendimento/data/datasources/platform/atendimento_data_source_factory.dart';
 import 'features/atendimento/data/services/atendimento_service_impl.dart';
 import 'features/atendimento/domain/datasources/atendimento_data_source.dart';
 import 'features/atendimento/domain/services/atendimento_service.dart';
@@ -17,19 +17,23 @@ import 'features/atendimento/presentation/routes/kanban_route.dart';
 ///
 /// **Ports & Adapters:** telas/controllers dependem SOMENTE de
 /// [AtendimentoDataSource]/[AtendimentoService] via `get_it` — nunca do stub
-/// gRPC direto. Trocar por `LocalEngineFFI` (Windows/F8) exige só um novo
-/// binding aqui, sem tocar nenhuma tela.
+/// gRPC direto. O adapter concreto é escolhido por import condicional: Web usa o
+/// RemoteOnly (gRPC-Web), o desktop usa o motor local via FFI. Nenhuma tela muda.
 final class OperacionalModule extends AppModule {
   @override
   void globalBinds(Injector i) {
-    // Datasource RemoteOnly (gRPC-Web) — reaproveita o AdminServiceClient já
-    // exposto pelo GrpcApiClient global (mesma borda usada pelo admin_module).
+    // Adapter do port escolhido por plataforma (Web: gRPC-Web; desktop: FFI).
+    // O `AdminServiceClient` (do GrpcTransport global) serve o Web hoje e o
+    // transporte de sync do desktop amanhã; o tenant vem da sessão.
     i.lazySingleton<AtendimentoDataSource>(() {
       final client = inject<ApiClient>();
-      if (client is GrpcApiClient) {
-        return AtendimentoRemoteDataSource(client: client.admin);
+      if (client is! GrpcTransport) {
+        throw StateError('ApiClient não é do tipo GrpcTransport esperado.');
       }
-      throw StateError('ApiClient não é do tipo GrpcApiClient esperado.');
+      return createAtendimentoDataSource(
+        adminClient: client.admin,
+        tenantIdProvider: () => inject<core.SessionService>().tenantId,
+      );
     });
 
     i.lazySingleton<AtendimentoService>(
