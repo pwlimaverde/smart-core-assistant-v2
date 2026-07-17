@@ -1,10 +1,14 @@
 # Smart Core Assistant v2 — Fases de Desenvolvimento
 
-> **Status:** Guia operacional de construção — **atualizado em 2026-07-06** após o
-> fechamento de dois ciclos PREVC: `finalizacao-mvp-operacional` (WS-0..WS-4) e
-> `mvp-telas-e-endurecimento` (RBAC fino, user_agent, cache invalidation, telas
-> operacionais/admin, e2e de trace). **O MVP operacional ponta-a-ponta está
-> fechado.** Inclui **próximos passos divididos em fases** ao final do snapshot.
+> **Status:** Guia operacional de construção — **atualizado em 2026-07-17** após o
+> fechamento do **backlog pós-MVP completo N1–N5** (cinco ciclos PREVC arquivados:
+> `n1-fechamento-mvp-scheduler`, `n2-ia-engine`, `n3-painel-do-tenant`,
+> `n4-endurecimento-producao`, `n5-consolidacao-clientes-offline` — detalhes no
+> changelog). **O produto v2 está funcionalmente completo**: MVP endurecido, IA
+> plugada com RAG, autonomia do tenant, prontidão comercial e clientes
+> consolidados com offline/Web. O que resta é o **port final** (fechamento das
+> pendências acumuladas + migração de dados v1→v2 + cutover de produção) —
+> cronograma **N6–N8** ao final do snapshot.
 > **Idioma:** Português (comunicação/documentação). Código e identificadores em inglês.
 > **Origem:** Deriva de [00-planejamento-inicial.md](./00-planejamento-inicial.md)
 > (visão/arquitetura) e [01-estrutura-do-projeto.md](./01-estrutura-do-projeto.md)
@@ -98,23 +102,34 @@
   vazamento de PII); métricas de pool/outbox (`smartcore_outbox_backlog` etc.);
   `user_agent` persistido nos eventos críticos de auditoria (doc 08 §4.2).
 
-### O que está pendente (⬜) — visão executiva
+### O que está pendente (⬜) — visão executiva (pós N1–N5, snapshot 2026-07-17)
 
-- **`ia_engine` (F5)** — serviço Python (gRPC/FlatBuffers) — pasta ainda ausente.
-  **Maior bloco restante.** Decisão registrada: worker ↔ ia_engine via **gRPC**
-  (não FFI); `FeaturesCompose` da v1 é reaproveitada.
-- **Scheduler do `worker` (F4.3b)** — timeout de feedback + purga de mídias
-  (substitui o Celery beat da v1). Única etapa da F4 não entregue.
-- **Painel do tenant (novo)** — convites (`CreateInvite`/`AcceptInvite` **já
-  expostos na borda**; telas parqueadas por decisão do dono — são fluxo de **admin
-  de tenant**, não do painel superusuário), gestão de usuários e de
-  `flow_permissions` pelo admin do tenant.
-- **Endurecimento de produção (F9)** — enforcement de billing/quotas, retenção de
-  mídia (lifecycle R2/purga), segurança/carga (incl. **role Postgres dedicada
-  não-superuser** no ambiente — hoje `smartcore_app` é bootstrap superuser e o RLS
-  não é exercitado de verdade em dev), dashboards/alertas Grafana com dados reais.
-- **Local engine `local_engine` (FFI)** — F8 — e **paridade Web completa** — F10
-  (o admin já roda na web; falta o app do tenant/operacional standalone, se mantido).
+> Tudo abaixo é **pendência registrada nos changelogs dos ciclos N1–N5** ou
+> trabalho de cutover — nenhuma fase estrutural nova. Consolidado no cronograma
+> **N6–N8** (seção "Próximos passos").
+
+- **IA no fluxo vivo (resto da N2)** — `Transcribe`/`InterpretMedia`/`Analyse`/
+  `Sentimento` implementados e testados dos dois lados mas **não ligados ao
+  pipeline de mensagens ao vivo** (falta URL de mídia no `NormalizedMessage`);
+  indicador "gerado por IA" no chat recebe dado fixo (proto do chat sem os
+  campos); `fluxos_disponiveis`/`campos_*` vazios no `Responder`; transcrição de
+  áudio é `PendingTranscriber`; só `langchain-openai` instalado de fato.
+- **Quotas restantes (resto da N4)** — storage é só medição (falta
+  `max_storage_bytes` + guard no `data_storage`); `Departamentos` no enum/RPC sem
+  caller; `SMARTCORE_QUOTA_ENFORCE` ainda `false` (rollout do enforce pendente);
+  contadores de rate-limit do webhook vivem no redis-bus (centralizar via RPC);
+  testes de rajada/carga são validação manual pendente.
+- **Sync offline (resto da N5)** — `action_id` (idempotência) chega aos callbacks
+  mas os RPCs não têm campo dedicado no proto; gatilho de sync é só best-effort na
+  abertura da fila (falta trigger por conectividade/timer); dead-letter para
+  outbound sem destino (pendência N1).
+- **Operação/validação manual** — dashboards/alertas Grafana ainda sem validação
+  com tráfego real; validação manual E2E das UIs do tenant (pendência N3).
+- **Port final / cutover (F10 + legado)** — o domínio de produção ainda serve o
+  **painel Django da v1**; falta migração de dados v1→v2, roteamento prod dos
+  apps web (`/v2/admin` esboçado, `/v2/tenant` criado mas não habilitado),
+  decisões pendentes de confirmação (path `/v2/tenant/`, portas 8083/8084) e o
+  desligamento do legado.
 
 ### Inventário de crates/apps × status
 
@@ -131,7 +146,7 @@
 | `error_core` | crate base | ✅ | taxonomia e erros com `ErrorEnvelope` serializável (códigos estáveis na borda) |
 | `test_support` | crate base | ✅ | suporte a testes (túnel SSH, fixtures) |
 | `application` | crate aplicação | ✅ | casos de uso de auth + montagem de envelopes; regras de domínio residuais no `worker` |
-| `local_engine` | crate (FFI) | ⬜ | F8; motor local embarcado |
+| `local_engine` | crate (FFI) | ✅ | N5.2: índice SQLite, cache de mídia por hash, fila offline LWW; exposto via `local_engine_ffi` (flutter_rust_bridge) |
 | `data_postgres` | app | ✅ | RPC Postgres + outbox relay + `TenantConfigCache` com invalidação Pub/Sub; Ports & Adapters |
 | `data_redis` | app | ✅ | RPC Redis (tokens, cache, locks, rate limiter); Ports & Adapters |
 | `data_storage` | app | ✅ | RPC (PutFile/GetFile/PresignFile) + consumer de purga; backend R2 real |
@@ -140,7 +155,9 @@
 | `control_plane` | app | ✅ (escopo revisado) | CLI de bootstrap de superusuário; **CRUD admin migrou para o `runtime_api`** (decisão de arquitetura) |
 | `worker` | app | ✅ (exceto scheduler) | orquestração completa: resolução, debounce, ticket/Kanban, bot, outbound; **falta F4.3b** |
 | `runtime_api` | app | ✅ | auth + realtime + 18 rotas admin + rotas operacionais (fila/thread/mover etapa/outbound) + RBAC fino |
-| `clients/apps/smart-core-admin` | app Flutter | ✅ | login + painel admin + telas operacionais; **deployado na web sob `/v2/admin`** |
+| `clients/apps/smart-core-admin` | app Flutter | ✅ | exclusivo do **superusuário** (N3: `OperacionalModule` migrou para o app do tenant); **deployado na web sob `/v2/admin`** |
+| `clients/apps/smart-core-tenant` | app Flutter | ✅ | N3/N5: workspace operacional + painel do tenant; **plataforma Windows empacotada** (`.exe` real); deploy web preparado (`/v2/tenant`, prod pendente) |
+| `clients/packages/local_engine_ffi` | pacote Flutter | ✅ | N5.2: binding flutter_rust_bridge do `local_engine` (Cargokit, dual-target) |
 | `clients/modulos/login_module` | módulo Flutter | ✅ | login/logout/refresh via gRPC + guarda de sessão |
 | `clients/modulos/admin_module` | módulo Flutter | ✅ | 18 rotas cobertas; estados de erro/paginação/encadeamento endurecidos |
 | `clients/modulos/operacional_module` | módulo Flutter | ✅ | fila + Kanban DnD nativo + chat streaming + outbound |
@@ -148,7 +165,7 @@
 | `clients/packages/api_client` | pacote Flutter | ✅ | cliente gRPC-Web único; stubs regerados (incl. `streamAtendimentos`) |
 | `clients/packages/domain_models` | pacote Flutter | ✅ | DTOs do `.proto` |
 | `evolution/` | stack Go | ✅ | Evolution Go 0.7.1 pinado, compose próprio no deploy |
-| `ia_engine` | stack Python | ⬜ | F5; gRPC/FlatBuffers IA engine (pasta ausente) |
+| `ia_engine` | stack Python | ✅ | N2: `grpc.aio`, 6 RPCs, `FeaturesCompose` portada (LCEL/pydantic v2), RAG pgvector via `data_postgres`, degradação graciosa; **mídia ao vivo → N6** |
 
 > **Removido do inventário:** `messaging_gateway` — o papel foi **absorvido** por
 > `webhook_ingress` (ingestão) e `data_whatsapp` (envio); o app não existe mais.
@@ -245,14 +262,76 @@ F0 Fundação ──► F1 Banco+RLS+Storage ──► Bootstrap CLI superuser
 
 ---
 
-## Próximos passos (a partir de 2026-07-06) — divididos em fases
+## Próximos passos (a partir de 2026-07-17) — Port final (fases N6–N8)
 
-> Backlog pós-MVP, dividido em **fases N1–N5** por dependência e valor. Cada fase
-> é um ciclo PREVC próprio (planejar via `/plan-restructuring` → canonizar em
-> `.context/plans/`). O DoD transversal de observabilidade/auditoria e
-> SOLID/Ports & Adapters (princípios 1–9) vale para todas.
+> Com o backlog N1–N5 **inteiramente concluído** (ciclos PREVC arquivados em
+> `.context/plans/archive/`), o que separa o projeto do **fim do port v1→v2** são
+> três frentes: fechar a IA no fluxo vivo, quitar as pendências de
+> endurecimento/operação, e executar a migração de dados + cutover de produção
+> (desligando o painel Django legado). Cada fase é um ciclo PREVC próprio
+> (planejar via `/plan-restructuring` → canonizar em `.context/plans/`). O DoD
+> transversal de observabilidade/auditoria e SOLID/Ports & Adapters
+> (princípios 1–9) vale para todas.
 
-### Fase N1 — Fechamento do ciclo + scheduler do worker (curto prazo)
+### Fase N6 — IA no fluxo vivo (fechamento funcional)
+
+**Objetivo:** ligar ao pipeline de mensagens real o que a N2 entregou pronto mas
+não cabeado. Detalhe: [21-fase-N6-ia-fluxo-vivo.md](./21-fase-N6-ia-fluxo-vivo.md).
+
+| # | Entregável | Origem |
+|---|---|---|
+| N6.1 | URL de mídia no `NormalizedMessage` → worker chama `Transcribe`/`InterpretMedia`/`Analyse`; resumo/análise persistidos via RPC | pendência N2 |
+| N6.2 | Campos `gerado_por_ia`/`resumo_midia` no proto do chat + persistência + UI real (hoje dado fixo) | pendência N2 |
+| N6.3 | Resolução de fluxos de transferência por tenant no `Responder` (`fluxos_disponiveis`/`campos_coletados`/`campos_pendentes`) | pendência N2 |
+| N6.4 | Transcrição de áudio real (substituir `PendingTranscriber`) + providers Groq/Google GenAI instalados de fato | pendência N2 |
+| N6.5 | Análise de sentimento ligada ao fluxo (persistência + exibição) | pendência N2 |
+
+### Fase N7 — Endurecimento residual + operação validada (pré-cutover)
+
+**Objetivo:** quitar as pendências técnicas acumuladas de N1/N4/N5 e validar a
+operação com tráfego real. Detalhe: [22-fase-N7-endurecimento-residual.md](./22-fase-N7-endurecimento-residual.md).
+
+| # | Entregável | Origem |
+|---|---|---|
+| N7.1 | Quota de storage (`max_storage_bytes` em `tenants_plan` + guard no `data_storage`) e de departamentos (caller no CRUD) | pendência N4 |
+| N7.2 | Idempotência do sync no proto (`action_id` em `MoveAtendimentoEtapa`/`SendOutboundMessage`, dedupe server-side) + dead-letter para outbound sem destino | pendências N5/N1 |
+| N7.3 | Centralizar contadores de rate-limit do webhook via RPC `RegisterRateLimitAttempt` (sair do redis-bus) | pendência N4 |
+| N7.4 | Trigger de sync offline por conectividade/timer no desktop (hoje só best-effort na abertura da fila) + melhorias `local_engine` (atomicidade de versão, `Lagged` no stream) | pendência N5 |
+| N7.5 | Validação operacional manual: testes de rajada/carga (túnel/`test_support`), dashboards/alertas Grafana com tráfego real, E2E manual das UIs do tenant | pendências N4/N1/N3 |
+
+### Fase N8 — Migração de dados v1→v2 + cutover de produção (fim do port)
+
+**Objetivo:** migrar os dados do sistema legado (Django, `old/`) para a v2,
+habilitar produção completa e desligar o legado. Detalhe:
+[23-fase-N8-migracao-e-cutover.md](./23-fase-N8-migracao-e-cutover.md).
+
+| # | Entregável | Origem |
+|---|---|---|
+| N8.1 | ETL v1→v2: tenants/planos/assinaturas, usuários+RBAC, contatos/atendimentos/histórico, documentos+embeddings (pgvector), configs/credenciais (recifradas), instâncias Evolution — com dry-run e conciliação | port |
+| N8.2 | Produção web completa: habilitar `/v2/admin` e `/v2/tenant` no domínio prod (confirmar path/portas — pendências N5.3), provisionar em prod role não-superuser, CORS e lifecycle do R2 | pendências N5/N4 |
+| N8.3 | Rollout do enforce: janela log-only observada → `SMARTCORE_QUOTA_ENFORCE=true`; rate limiting ativo em prod | pendência N4 |
+| N8.4 | Cutover: janela de migração, DNS/rotas para a v2, plano de rollback, desligamento do painel Django legado (`old/`) | port |
+
+### Sequenciamento e riscos (N6–N8)
+
+- **Ordem recomendada:** N6 → N7 → N8. N6 e N7 têm sobreposição possível (N6 é
+  worker/ia_engine/proto; N7 é infra/ops), mas N8 **exige N7 completo** (não se
+  faz cutover sem enforce validado e operação observada).
+- **N8.1 (ETL) é a maior incógnita** — modelagem v1 (Django) → v2 tem
+  transformações não triviais (RBAC aninhado → escopos planos, como visto na N3;
+  credenciais Fernet → AES-256-GCM). Fazer dry-run cedo contra um dump real.
+- **Decisões humanas pendentes antes do N8.2:** path definitivo (`/v2/tenant/`),
+  portas (8083/8084), estratégia de convivência com o Django durante a janela.
+
+---
+
+## Backlog pós-MVP N1–N5 — ✅ CONCLUÍDO (histórico)
+
+> As cinco fases abaixo foram **executadas e arquivadas** (ciclos PREVC completos
+> com final-review; ver changelog e `.context/plans/archive/`). Mantidas aqui como
+> registro histórico do planejado × entregue.
+
+### Fase N1 — Fechamento do ciclo + scheduler do worker — ✅ (2026-07-09)
 
 **Objetivo:** consolidar o MVP em `dev`/produção e fechar a única lacuna da F4.
 
@@ -266,7 +345,7 @@ F0 Fundação ──► F1 Banco+RLS+Storage ──► Bootstrap CLI superuser
 **DoD:** MVP rodando em dev com scheduler ativo; mensagem de atendente sai de
 ponta a ponta; dashboards refletindo tráfego real.
 
-### Fase N2 — `ia_engine` (F5 — maior bloco)
+### Fase N2 — `ia_engine` (F5 — maior bloco) — ✅ (2026-07-10; mídia ao vivo → N6)
 
 **Objetivo:** camada de IA como serviço Python separado, consumido pelo `worker`
 via **gRPC** (decisão registrada; `FeaturesCompose` da v1 reaproveitada).
@@ -285,7 +364,7 @@ passa a ser gerada pela IA com RAG; falha da IA degrada para a resposta
 temporária atual sem travar o fluxo. Observabilidade: `traceparent` cruza o
 processo Python; nenhum conteúdo de mensagem em log.
 
-### Fase N3 — Painel do tenant (convites, usuários e permissões)
+### Fase N3 — Painel do tenant (convites, usuários e permissões) — ✅ (2026-07-15; app dedicado `smart-core-tenant`)
 
 **Objetivo:** dar autonomia ao **admin de tenant** (persona distinta do
 superusuário — ver memória `convites-tenant-nao-e-painel-superuser`).
@@ -301,7 +380,7 @@ superusuário — ver memória `convites-tenant-nao-e-painel-superuser`).
 atendente logado vê apenas os fluxos concedidos (validando o RBAC fino de ponta
 a ponta pela UI). Eventos `tenant_user.role_change` auditados com `user_agent`.
 
-### Fase N4 — Endurecimento de produção (F9)
+### Fase N4 — Endurecimento de produção (F9) — ✅ (2026-07-16; quotas residuais → N7)
 
 **Objetivo:** prontidão para operação comercial.
 
@@ -316,7 +395,7 @@ a ponta pela UI). Eventos `tenant_user.role_change` auditados com `user_agent`.
 verdes com a role não-superuser; rastreio webhook→resposta correlacionado por
 tenant no Grafana.
 
-### Fase N5 — Consolidação de clientes + offline (F7/F8/F10)
+### Fase N5 — Consolidação de clientes + offline (F7/F8/F10) — ✅ (2026-07-17; prod web → N8)
 
 **Objetivo:** pós-estabilização — só entra após N1–N4 estáveis em produção.
 
@@ -482,7 +561,7 @@ permanece como CLI de bootstrap. Ver
 
 ---
 
-## Fase 5 — `ia_engine` (Python, serviço RPC) — ⬜ → **Fase N2**
+## Fase 5 — `ia_engine` (Python, serviço RPC) — ✅ (entregue na **Fase N2**; mídia ao vivo → N6)
 
 **Objetivo:** mídia→texto, intents/entidades, RAG, resposta e sentimento, como
 serviço Python exposto por **gRPC** (decisão registrada — não FFI) e consumido
@@ -522,7 +601,7 @@ Detalhamento operacional na **Fase N2** (próximos passos).
 
 ---
 
-## Fase 7 — Consolidação do app (RemoteOnly) — 🚧 → **Fase N5.1**
+## Fase 7 — Consolidação do app (RemoteOnly) — ✅ (entregue na **Fase N5.1**)
 
 As telas nasceram coladas às features (F6.5, F2, F4.6); a F7 é **consolidação**:
 navegação, estados de carga/erro/vazio, acessibilidade, consistência visual e
@@ -531,7 +610,7 @@ está resolvido (Caddy `/v2/admin`, same-origin). Pendências concentradas em N5
 
 ---
 
-## Fase 8 — Local Engine (FFI) + mídia local — ⬜ → **Fase N5.2**
+## Fase 8 — Local Engine (FFI) + mídia local — ✅ (entregue na **Fase N5.2**; triggers de sync → N7)
 
 - **8.1** `local_engine` dual-target (lib + `cdylib`/`staticlib`).
 - **8.2** índice SQLite + cache de dados.
@@ -541,7 +620,7 @@ está resolvido (Caddy `/v2/admin`, same-origin). Pendências concentradas em N5
 
 ---
 
-## Fase 9 — Endurecimento, billing e produção — 🚧 → **Fase N4** (+ N1.4)
+## Fase 9 — Endurecimento, billing e produção — ✅ (entregue nas **Fases N1.4/N4**; quotas residuais e enforce → N7/N8)
 
 - **9.1 Observabilidade completa** — 🚧: stack LGTM no ar e cadeia de trace
   **validada por teste e2e** (webhook → `audit_log` com o mesmo `trace_id`);
@@ -554,7 +633,7 @@ está resolvido (Caddy `/v2/admin`, same-origin). Pendências concentradas em N5
 
 ---
 
-## Fase 10 — Port para Web — 🚧 (parcial) → **Fase N5.3**
+## Fase 10 — Port para Web — 🚧 (dev ✅ na **Fase N5.3**; produção → **N8.2**)
 
 - **10.1** `flutter_web` RemoteOnly — 🚧: o **admin já roda na web** em
   `/v2/admin` (dev+prod, same-origin, gRPC-Web), incluindo os módulos
@@ -602,9 +681,10 @@ está resolvido (Caddy `/v2/admin`, same-origin). Pendências concentradas em N5
 | RBAC (`role`+`module_permissions`+`flow_permissions`) | escopos + `flow_permissions` fim-a-fim (WS-5a) | ✅ (UI de gestão → N3) |
 | `AttendanceOrchestrator` (orquestração) | `worker` (resolução/debounce/ticket/Kanban/bot) | ✅ |
 | Celery: `process_contact_response_task` | `worker` consumindo Streams | ✅ |
-| Celery: feedback/purga de mídia | scheduler do `worker` (F4.3b) | ⬜ → N1.2 |
+| Celery: feedback/purga de mídia | scheduler do `worker` (F4.3b, entregue na N1.2) | ✅ |
 | `message_buffer` (debounce) | lock de debounce no Redis (worker) | ✅ |
-| `FeaturesCompose` (IA pura) | `ia_engine` (gRPC) | ⬜ → N2 |
+| `FeaturesCompose` (IA pura) | `ia_engine` (gRPC, entregue na N2 — score/safety-net exatos) | ✅ (mídia ao vivo → N6) |
+| **Dados de produção da v1** (tenants, histórico, docs/embeddings, credenciais) | **ETL v1→v2** | ⬜ → **N8.1** |
 
 ## Apêndice C — Planos relacionados
 
@@ -635,6 +715,15 @@ está resolvido (Caddy `/v2/admin`, same-origin). Pendências concentradas em N5
   — **N4:** role Postgres não-superuser, billing/quotas, retenção de mídia, segurança/carga (F9).
 - [20-fase-N5-consolidacao-clientes-offline.md](./20-fase-N5-consolidacao-clientes-offline.md)
   — **N5:** consolidação desktop (F7), local engine FFI/offline (F8), paridade Web (F10).
+
+### Planos do port final (cronograma N6–N8)
+
+- [21-fase-N6-ia-fluxo-vivo.md](./21-fase-N6-ia-fluxo-vivo.md)
+  — **N6:** IA no fluxo vivo — mídia no pipeline, campos de IA no chat, fluxos de transferência, transcrição real.
+- [22-fase-N7-endurecimento-residual.md](./22-fase-N7-endurecimento-residual.md)
+  — **N7:** quotas restantes, idempotência do sync, rate-limit centralizado, triggers offline, validação operacional.
+- [23-fase-N8-migracao-e-cutover.md](./23-fase-N8-migracao-e-cutover.md)
+  — **N8:** ETL v1→v2, produção web completa, rollout do enforce, cutover e desligamento do legado.
 
 ---
 
