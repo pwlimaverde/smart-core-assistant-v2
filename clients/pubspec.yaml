@@ -9,6 +9,7 @@ workspace:
   - packages/domain_models
   - packages/get_it_module
   - packages/api_client
+  - packages/local_engine_ffi
   - modulos/presentation_module
   - modulos/design_system_module
   - modulos/navigation_module

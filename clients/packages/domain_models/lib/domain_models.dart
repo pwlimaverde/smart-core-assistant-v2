@@ -7,3 +7,4 @@
 library;
 
 export 'src/errors/auth_errors.dart';
+export 'src/errors/local_engine_errors.dart';

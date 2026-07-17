@@ -6,8 +6,8 @@
 
 use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
 use aws_sdk_s3::types::{
-    BucketLifecycleConfiguration, ExpirationStatus, LifecycleExpiration, LifecycleRule,
-    LifecycleRuleFilter,
+    BucketLifecycleConfiguration, CorsConfiguration, CorsRule, ExpirationStatus,
+    LifecycleExpiration, LifecycleRule, LifecycleRuleFilter,
 };
 use aws_sdk_s3::{Client, Config};
 use secrecy::{ExposeSecret, SecretString};
@@ -156,6 +156,75 @@ pub async fn garantir_lifecycle(client: &Client, bucket: &str, expiration_days: 
         Err(e) => tracing::warn!(
             bucket = %bucket,
             "falha ao aplicar lifecycle do bucket (best-effort, prosseguindo): {e}"
+        ),
+    }
+}
+
+/// Aplica a política de CORS do bucket (N5.3 — paridade Web). A mídia é entregue
+/// ao Flutter Web por **URL pré-assinada** (presigned GET) direto do R2, ou seja,
+/// numa origem (`*.r2.cloudflarestorage.com`) diferente da do app. O browser aplica
+/// CORS a esses `fetch`/`<img>`/`<video src>` cross-origin mesmo com presign — o
+/// presign autentica a requisição, mas não isenta a política de CORS. Sem esta
+/// regra, a mídia falha silenciosamente no cliente Web.
+///
+/// **Pegadinha de range request:** players de mídia HTML5 fazem *range requests*
+/// (seek em áudio/vídeo) e leem `Content-Range`/`Accept-Ranges`/`Content-Length`
+/// da resposta. Se esses headers não estiverem em `expose_headers`, o browser os
+/// oculta do JS/player e o seek quebra silenciosamente — mesmo com o CORS
+/// "funcionando" para o GET simples. Por isso eles são expostos explicitamente.
+///
+/// Best-effort: falha aqui não impede o boot do serviço (loga e segue). Providers
+/// S3 sem suporte a `put_bucket_cors` não devem travar o boot de `data_storage`.
+/// A origem da verdade da política versionada é `infra/r2-cors.json`; as origens
+/// chegam aqui via `S3_CORS_ALLOWED_ORIGINS` (comma-separated) no boot.
+pub async fn garantir_cors(client: &Client, bucket: &str, allowed_origins: &[String]) {
+    if allowed_origins.is_empty() {
+        tracing::info!("CORS do bucket desabilitado (S3_CORS_ALLOWED_ORIGINS vazio)");
+        return;
+    }
+
+    let regra = match CorsRule::builder()
+        .set_allowed_origins(Some(allowed_origins.to_vec()))
+        .allowed_methods("GET")
+        .allowed_methods("HEAD")
+        .allowed_headers("*")
+        .expose_headers("Content-Range")
+        .expose_headers("Accept-Ranges")
+        .expose_headers("Content-Length")
+        .expose_headers("ETag")
+        .max_age_seconds(3600)
+        .build()
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!("falha ao montar regra de CORS do bucket: {e}");
+            return;
+        }
+    };
+
+    let config = match CorsConfiguration::builder().cors_rules(regra).build() {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!("falha ao montar CORS configuration do bucket: {e}");
+            return;
+        }
+    };
+
+    match client
+        .put_bucket_cors()
+        .bucket(bucket)
+        .cors_configuration(config)
+        .send()
+        .await
+    {
+        Ok(_) => tracing::info!(
+            bucket = %bucket,
+            origins = ?allowed_origins,
+            "CORS do bucket aplicado (paridade Web — mídia entregue por presign)"
+        ),
+        Err(e) => tracing::warn!(
+            bucket = %bucket,
+            "falha ao aplicar CORS do bucket (best-effort, prosseguindo): {e}"
         ),
     }
 }

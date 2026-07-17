@@ -20,6 +20,8 @@ dependencies:
     path: ../design_system_module
   api_client:
     path: ../../packages/api_client
+  local_engine_ffi:
+    path: ../../packages/local_engine_ffi
   app_config:
     path: ../../packages/app_config
   domain_models:

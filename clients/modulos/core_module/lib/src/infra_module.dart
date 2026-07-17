@@ -17,8 +17,10 @@ import 'services/session_service.dart';
 /// `ApiClient`, `AuthService` e `LocalStorageService` NÃO são registrados aqui:
 /// suas implementações reais vêm do `login_module` (que compõe depois do
 /// InfraModule e registra-as via `globalBinds`). Isso mantém o `core_module`
-/// neutro (VM+web): o `GrpcApiClient` arrasta `package:web` e fica no módulo de
-/// borda. As `bootTasks` apenas consomem os contratos (`ApiClient` é interface).
+/// neutro (VM+web+desktop): há duas implementações concretas de `ApiClient`
+/// (gRPC-Web arrastando `package:web`, e gRPC nativo sobre `dart:io`), escolhidas
+/// por import condicional na factory do `login_module`. As `bootTasks` apenas
+/// consomem os contratos (`ApiClient` é interface).
 final class InfraModule extends AppModule {
   final AppConfig config;
   InfraModule(this.config);

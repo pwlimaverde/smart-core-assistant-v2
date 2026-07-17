@@ -31,6 +31,10 @@ String? tenantAuthRedirectTarget({
   if (location == '/login' || location == '/' || location == '/home') {
     return '/atendimentos';
   }
+  // Regra espelhada de `scopesGrantTenantAdmin`/`Session.isTenantAdmin`
+  // (login_module). NÃO importamos aquele predicado aqui de propósito: este
+  // guard é puro/testável na VM e não pode arrastar o transporte (grpc-web)
+  // que o barrel do login_module traz junto.
   final isTenantAdmin = scopes.contains('tenant:admin') || scopes.contains('*');
   if (location.startsWith('/tenant/') && !isTenantAdmin) {
     return '/atendimentos';

@@ -1,0 +1,70 @@
+# ============================================================================
+# Smart Core Tenant/Operacional (Flutter web) — roteamento Caddy
+# ============================================================================
+# Snippet versionado da config do app operacional/tenant (fila/Kanban/chat +
+# painel do proprio tenant). Instalar no servidor como
+# /etc/caddy/conf.d/tenant.caddy e garantir no /etc/caddy/Caddyfile a linha:
+#     import /etc/caddy/conf.d/*.caddy
+# Depois: caddy validate --config /etc/caddy/Caddyfile && systemctl reload caddy
+#
+# Mesmo padrao do admin.caddy: o app e 100% ESTATICO (build web --wasm), servido
+# em /v2/tenant/ ; as chamadas gRPC-Web do browser vao para a RAIZ do mesmo
+# dominio (mesma origem, sem CORS) e sao encaminhadas para a MESMA fachada
+# gRPC-Web da runtime_api (tonic_web, HTTP/1.1) que o admin usa.
+#
+# MIDIA: este app baixa audio/imagem/video por URL pre-assinada direto do R2
+# (origem *.r2.cloudflarestorage.com, cross-site). Isso EXIGE a politica de CORS
+# do bucket aplicada por data_storage (S3_CORS_ALLOWED_ORIGINS / infra/r2-cors.json,
+# N5.3) — inclusive expondo Content-Range/Accept-Ranges para seek de midia HTML5.
+# ============================================================================
+
+# ── DEV ─────────────────────────────────────────────────────────────────────
+# Build: --base-href /v2/tenant/ , endpoint https://dev.smartcoreassistant.com.br
+# runtime_api dev expoe gRPC-Web em 0.0.0.0:50051 (compartilhado com o admin).
+dev.smartcoreassistant.com.br {
+	# Estaticos do tenant sob /v2/tenant/ (handle_path remove o prefixo).
+	handle_path /v2/tenant/* {
+		root * /srv/smart-core-tenant/dev/web
+		try_files {path} /index.html
+		file_server
+	}
+
+	# Demais rotas = gRPC-Web da runtime_api (login, etc.) — mesma fachada do admin.
+	handle {
+		reverse_proxy localhost:50051 {
+			flush_interval -1
+		}
+	}
+
+	header {
+		Strict-Transport-Security max-age=31536000; includeSubDomains
+		X-Content-Type-Options nosniff
+	}
+	log {
+		output file /var/log/caddy/tenant-dev.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+	}
+}
+
+# ── PROD (pendente de decisao) ──────────────────────────────────────────────
+# Igual ao admin.caddy: o dominio prod smartcoreassistant.com.br HOJE serve o
+# painel Django legado. Servir o tenant em smartcoreassistant.com.br/v2/tenant/
+# exige inserir um handle /v2/tenant/* ANTES do reverse_proxy do painel naquele
+# site block — alterando a config de um sistema em producao. Definir com cuidado
+# antes de habilitar. Esboco:
+#
+# smartcoreassistant.com.br {
+#     handle_path /v2/tenant/* {
+#         root * /srv/smart-core-tenant/prod/web
+#         try_files {path} /index.html
+#         file_server
+#     }
+#     handle /grpc.runtime/* {        # ajustar ao path real do gRPC-Web prod
+#         reverse_proxy localhost:<porta_grpc_web_prod>
+#     }
+#     handle {
+#         reverse_proxy 172.18.0.5:8000 { header_up X-Real-IP {remote_host}; header_up Host {host} }
+#     }
+# }

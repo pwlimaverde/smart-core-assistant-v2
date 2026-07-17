@@ -5,6 +5,7 @@
 //
 // ignore_for_file: implementation_imports
 export 'src/api_client.dart';
+export 'src/grpc_transport.dart';
 export 'src/interceptors/auth_token_interceptor.dart';
 
 // Stubs gerados do auth.proto (mensagens + AuthServiceClient). Usam apenas

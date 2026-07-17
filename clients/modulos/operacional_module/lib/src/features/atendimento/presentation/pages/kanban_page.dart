@@ -77,6 +77,14 @@ class _KanbanBoard extends StatelessWidget {
   Widget build(BuildContext context) {
     final etapas = viewModel.porEtapa.keys.toList()..sort();
 
+    if (etapas.isEmpty) {
+      return const AppEmptyView(
+        icon: Icons.inbox_outlined,
+        title: 'Nenhum atendimento na fila',
+        subtitle: 'Novos atendimentos aparecem aqui automaticamente.',
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.all(AppSpacing.md),
       child: SingleChildScrollView(

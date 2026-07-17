@@ -1,9 +1,9 @@
 import 'package:api_client/api_client.dart';
-import 'package:api_client/grpc_web_client.dart';
 import 'package:app_config/app_config.dart';
 import 'package:core_module/core_module.dart' as core;
 import 'package:get_it_module/get_it_module.dart';
 
+import 'platform/api_client_factory.dart';
 import 'features/login/data/datasources/login_grpc_datasource.dart';
 import 'features/login/data/datasources/logout_grpc_datasource.dart';
 import 'features/login/data/datasources/refresh_grpc_datasource.dart';
@@ -23,10 +23,11 @@ import 'features/login/presentation/routes/login_route.dart';
 final class LoginModule extends AppModule {
   @override
   void globalBinds(Injector i) {
-    // Cliente gRPC-Web real (borda do browser) — o access token vem do
-    // SessionService (memória). Fica no módulo de borda, não no core_module.
+    // Cliente gRPC real da plataforma (gRPC-Web no browser, sockets HTTP/2 no
+    // desktop) — escolhido por import condicional na factory. O access token vem
+    // do SessionService (memória). Fica no módulo de borda, não no core_module.
     i.lazySingleton<ApiClient>(
-      () => GrpcApiClient(
+      () => createPlatformApiClient(
         endpoint: inject<AppConfig>().apiEndpoint,
         readAccessToken: () async => inject<core.SessionService>().token,
         enableLogging: inject<AppConfig>().enableLogging,
@@ -43,7 +44,7 @@ final class LoginModule extends AppModule {
 
     // Serviço de auth real (instância única para os dois contratos).
     i.lazySingleton<AuthServiceImpl>(() {
-      final authClient = (inject<ApiClient>() as GrpcApiClient).auth;
+      final authClient = (inject<ApiClient>() as GrpcTransport).auth;
       return AuthServiceImpl(
         loginDatasource: LoginGrpcDatasource(client: authClient),
         refreshDatasource: RefreshGrpcDatasource(client: authClient),

@@ -1,11 +1,11 @@
 import 'package:dependencies_module/dependencies_module.dart';
-import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:initial_loading_module/initial_loading_module.dart';
 import 'package:login_module/login_module.dart';
 import 'package:operacional_module/operacional_module.dart';
 import 'package:tenant_module/tenant_module.dart';
 
 import 'app.dart';
+import 'platform/url_strategy.dart';
 
 /// Compõe os módulos, registra os serviços globais e sobe o app.
 ///
@@ -21,8 +21,9 @@ Future<void> bootstrap(AppConfig config) async {
 
   // Path URL strategy: URLs limpas sob /v2/tenant/ (sem '#'); combina com
   // --base-href /v2/tenant/ e o SPA fallback (try_files) do Caddy. Sem isso,
-  // refresh/deep-link em /v2/tenant/login retornaria 404.
-  usePathUrlStrategy();
+  // refresh/deep-link em /v2/tenant/login retornaria 404. Só faz sentido na
+  // Web — no desktop (Windows) é no-op (import condicional).
+  usePlatformUrlStrategy();
 
   // Ordem importa: InfraModule primeiro (registra SessionService/ApiClient);
   // LoginModule depois (registra AuthService/LocalStorageService reais).

@@ -99,18 +99,15 @@ class _ChatBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = context.colors;
-
     return Column(
       children: [
         ChatConnectionBadge(status: viewModel.connectionStatus),
         Expanded(
           child: viewModel.mensagens.isEmpty
-              ? Center(
-                  child: Text(
-                    'Nenhuma mensagem ainda.',
-                    style: TextStyle(color: colors.fgMuted),
-                  ),
+              ? const AppEmptyView(
+                  icon: Icons.chat_bubble_outline,
+                  title: 'Nenhuma mensagem ainda',
+                  subtitle: 'Envie a primeira mensagem para iniciar a conversa.',
                 )
               : ListView.builder(
                   reverse: true,
@@ -138,6 +135,7 @@ class _ChatBody extends StatelessWidget {
               const SizedBox(width: AppSpacing.sm),
               IconButton.filled(
                 onPressed: onEnviar,
+                tooltip: 'Enviar mensagem',
                 icon: const Icon(Icons.send),
               ),
             ],
