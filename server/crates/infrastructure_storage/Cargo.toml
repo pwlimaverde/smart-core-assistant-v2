@@ -11,4 +11,5 @@ tracing = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 aws-sdk-s3 = { workspace = true }
+secrecy    = { workspace = true }
 error_core = { path = "../error_core" }

@@ -31,6 +31,15 @@ async fn main() -> anyhow::Result<()> {
     client.garantir_bucket().await?;
     tracing::info!(bucket = %client.bucket(), "cliente de storage S3 pronto.");
 
+    // N4.3: lifecycle do bucket como defesa em profundidade (best-effort — não
+    // impede o boot). Margem conservadora sobre a retenção por plano (default 30d
+    // da purga aplicativa): default 90d aqui, configurável por ambiente.
+    let lifecycle_days: i32 = std::env::var("S3_LIFECYCLE_EXPIRATION_DAYS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(90);
+    client.garantir_lifecycle(lifecycle_days).await;
+
     let state = AppState { client };
 
     // 4. Inicia o Consumidor de Purga de Mídia em background
@@ -178,6 +187,10 @@ async fn handler_put_file(client: StorageClient, env: Envelope) -> Envelope {
 
     match client.put(tenant_id, &file_name, &conteudo).await {
         Ok(uri) => {
+            // N4.2: medição de uso de armazenamento de mídia por tenant (contador
+            // agregado — sem PII/nome de arquivo). Storage ainda não tem campo de
+            // limite no plano (`tenants_plan`); por ora é medição, não bloqueio.
+            observability::usage_metrics::registrar_midia_armazenada(&env.tenant_id);
             let res = serde_json::json!({ "uri": uri });
             Envelope {
                 kind: MessageKind::Reply as i32,

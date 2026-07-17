@@ -2,6 +2,65 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-07-16] - Fase N4: Endurecimento de Produção (role não-superuser, quotas, retenção, segurança)
+
+> Ciclo PREVC `n4-endurecimento-producao` fechado e arquivado via `prevc-final-review`.
+> Final-review: qualidade **CORRIGIDO** (eliminada inundação da trilha de auditoria no caminho
+> quente durante a auditoria — ver Corrigido). Fecha os buracos que separam o MVP de uma operação
+> comercial: RLS provado de verdade sob role não-superuser, limites de plano aplicados no caminho
+> quente e retenção de mídia governada por política.
+
+### Adicionado
+
+- **N4.1 — Role Postgres não-superuser (`smartcore_app_rt`, `NOSUPERUSER NOBYPASSRLS`):** o
+  bootstrap user do container (`smartcore_app`) precisa continuar superuser (exigência do próprio
+  Postgres), então a role de runtime real é **nova e aditiva** — provisionada por infra
+  (`infra/provision-db-role.sh` em dev/prod; bootstrap do workflow no CI), com grants DML mínimos
+  e `ALTER DEFAULT PRIVILEGES` (migrations `0016`/`0018`, idempotentes/condicionais). O runtime
+  conecta por essa role (RLS respeitado); operações cross-tenant (assinaturas/pagamentos, audit
+  global) usam o `admin_pool` separado — fronteira `pool` × `admin_pool` documentada em
+  `connection::criar_admin_pool` e `PgPlansStore::cross_tenant_pool`. **RLS agora é provado de
+  verdade:** suíte de isolamento **37 verde sob a role não-superuser** (antes cega sob superuser).
+- **N4.2 — Billing/usage e quotas:** medição de uso por tenant (mensagens recebidas/enviadas,
+  mídia) exposta como contadores Prometheus (`observability::usage_metrics`); `QuotaStore` (port em
+  `data_postgres/ports/quota.rs`) + adapter RPC + `verificar_quota`/`verificar_inadimplencia` na
+  infra, aplicado como **decorator** (`aplicar_quota_guard`) no provisionamento de instância e como
+  checagem de inadimplência na ingestão do `webhook_ingress`. **Modo log-only por padrão**
+  (`SMARTCORE_QUOTA_ENFORCE=false`) → enforce (402 `PAYMENT_REQUIRED`) por flag. Quota de instância
+  cabeada (`COUNT active` vs `plan.max_instances`).
+- **N4.3 — Retenção de mídia por política:** `tenants_plan.retention_days` (migration `0017`) +
+  `COALESCE(p.retention_days, $1)` em `listar_midias_expiradas` — o scheduler consulta a política e
+  dispara a purga do R2 (o resumo/análise persiste). **R2 lifecycle versionado** como defesa em
+  profundidade (`garantir_lifecycle` via `put_bucket_lifecycle_configuration`,
+  `S3_LIFECYCLE_EXPIRATION_DAYS`, best-effort no boot). Documentado em `08-infraestrutura-storage`.
+- **N4.4 — Segurança e carga:** rate limiting amplo — `rate_limiter_generico` (port+adapter no
+  `data_redis`, rota `RegisterRateLimitAttempt`) aplicado ao webhook (por `tenant:instance`) e ao
+  `runtime_api` (por `tenant:user`), fail-open e auditado; `SecretString` no `S3Config`; auditoria
+  RLS validada com a role real (vazamento cross-tenant provado verde).
+
+### Corrigido
+
+- **Inundação da trilha de auditoria no caminho quente (achado do final-review Opus):** `CheckQuota`
+  auditava `quota.excedida`/`tenant.bloqueado_inadimplencia` em toda chamada — e o webhook invoca
+  `CheckQuota` por mensagem recebida só para ler `inadimplente`, então um tenant saudável **no
+  limite** do plano geraria uma linha de auditoria por mensagem. Auditoria movida para um flag
+  explícito `auditar` (default `false`), setado só no ponto de enforcement real; em log-only apenas
+  `tracing::warn` + métricas.
+- **Bug latente no helper de teste do Redis (`url_redis_teste`):** concatenava `/15` à `REDIS_URL`
+  sem reescrever o índice de DB, gerando `.../1/15` (rejeitado pelo redis) quando a URL já tinha
+  índice — formato canônico do `.env.example`. Agora reescreve o índice (`com_db_logico`); suíte de
+  integração do Redis **9 verde**.
+
+### Notas
+
+- Testes opt-in de R2 real (`infrastructure_storage/tests/objetos`) não passaram nesta sessão por
+  **DNS não resolver o endpoint R2 desta máquina** (ambiental, `dispatch failure`) — verify de teste
+  intocado pela N4. Não é desvio de código.
+- **Pendências (follow-up):** quota de storage/departamentos medida mas não cabeada (falta coluna de
+  limite + caller); testes de rajada da N4.4 pendentes de validação manual documentada; contadores de
+  rate-limit do webhook vivem no `redis-bus` (avaliar centralizar via RPC em prod). Detalhes no
+  `final-review-n4-endurecimento-producao.md`.
+
 ## [2026-07-15] - Fase N3: Painel do Tenant (convites, usuários e permissões)
 
 > Ciclo PREVC `n3-painel-do-tenant` fechado e arquivado via `prevc-final-review`.

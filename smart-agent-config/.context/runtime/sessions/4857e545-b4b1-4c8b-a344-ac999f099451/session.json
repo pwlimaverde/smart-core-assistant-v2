@@ -1,0 +1,81 @@
+{
+  "id": "4857e545-b4b1-4c8b-a344-ac999f099451",
+  "name": "n4-endurecimento-producao",
+  "status": "active",
+  "repoPath": "C:\\PROJETOS\\FULL-STACK\\smart-core-assistant-v2\\smart-agent-config",
+  "createdAt": "2026-07-16T11:49:39.207Z",
+  "updatedAt": "2026-07-16T23:58:00.070Z",
+  "startedAt": "2026-07-16T11:49:39.207Z",
+  "traceCount": 24,
+  "artifactCount": 1,
+  "checkpointCount": 4,
+  "checkpoints": [
+    {
+      "id": "3abd790a-9772-4f7b-b715-fd82ae49470d",
+      "note": "Advanced workflow phase P -> R",
+      "data": {
+        "from": "P",
+        "to": "R",
+        "outputs": [
+          "Sequenciamento N4.1 → (N4.2 ‖ N4.3) → N4.4 confirmado",
+          "Modelo de quota por recurso definido: instâncias, departamentos, storage de mídia, volume de mensagens",
+          "Enforcement log-only → enforce via flag SMARTCORE_QUOTA_ENFORCE"
+        ],
+        "nextTaskContractId": "1500099a-ac0a-410c-b7d9-f99d106fbf2d"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-16T11:49:58.486Z"
+    },
+    {
+      "id": "3fd9710a-f238-49fe-a910-8732b531cd6e",
+      "note": "Advanced workflow phase R -> E",
+      "data": {
+        "from": "R",
+        "to": "E",
+        "outputs": [
+          "Plano aprovado: grants mínimos, QuotaGuard port+decorator, política de retenção",
+          "5 tasks de execução criadas (N4.1-N4.4 + validação/review)"
+        ],
+        "nextTaskContractId": "2949ca6d-ab0a-45f4-99b3-eb329af6f9ee"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-16T11:50:23.862Z"
+    },
+    {
+      "id": "b6aa7306-1018-456c-b16b-9e1b80a8af70",
+      "note": "Advanced workflow phase E -> V",
+      "data": {
+        "from": "E",
+        "to": "V",
+        "outputs": [
+          "Implementação N4.1-N4.4 concluída e validada: RLS 37 verde sob smartcore_app_rt; Redis 9 verde (fix do helper de teste); fmt+clippy+unit verdes",
+          "handoff-summary registrado (final-review-n4-endurecimento-producao.md)"
+        ],
+        "nextTaskContractId": "4b6d544d-a2e4-4b52-9f49-90e663a80eed"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-16T23:57:31.205Z"
+    },
+    {
+      "id": "865490a5-fcc2-49bc-9615-2b6f1773c7e9",
+      "note": "Advanced workflow phase V -> C",
+      "data": {
+        "from": "V",
+        "to": "C",
+        "outputs": [
+          "Validação: isolamento RLS verde com a role real smartcore_app_rt (37 testes); Redis 9 verde; quota/inadimplência log-only e rate limiting exercitados; R2 opt-in bloqueado só por DNS ambiental",
+          "Final-review Opus concluído (rótulo CORRIGIDO): .context/workflow/docs/final-review-n4-endurecimento-producao.md"
+        ],
+        "nextTaskContractId": "9721d99a-9382-4388-ba39-8b9b592e7dae"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-16T23:57:38.416Z"
+    }
+  ],
+  "metadata": {
+    "workflow": true,
+    "description": "Fase N4 — Endurecimento de Produção: role Postgres não-superuser (destrava RLS), billing/quotas com QuotaGuard (log-only → enforce), bloqueio por inadimplência, retenção de mídia por política + R2 lifecycle, rate limiting amplo e auditoria de segurança/carga."
+  },
+  "lastTraceAt": "2026-07-16T23:58:00.070Z",
+  "lastCheckpointAt": "2026-07-16T23:57:38.416Z"
+}

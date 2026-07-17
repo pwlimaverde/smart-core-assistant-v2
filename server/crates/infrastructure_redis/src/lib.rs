@@ -18,7 +18,8 @@ pub mod keys;
 
 // Re-exports de conveniência para os binários/consumidores.
 pub use auth_tokens::{
-    registrar_tentativa_login, RefreshTokenStore, RegistroRefresh, TokenBlocklist,
+    registrar_tentativa_login, registrar_tentativa_recurso, RefreshTokenStore, RegistroRefresh,
+    TokenBlocklist,
 };
 pub use cache::{CachePermissoes, TTL_FLOW_PERMISSIONS_SEGUNDOS};
 pub use connection::{

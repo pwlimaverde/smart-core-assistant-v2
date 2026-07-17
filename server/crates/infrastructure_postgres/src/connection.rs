@@ -94,6 +94,17 @@ pub async fn criar_pool(max_connections: u32) -> Result<PgPool, DbError> {
 /// Uso restrito a operações que exigem DDL/elevação (ex.: rodar migrations) e a
 /// lookups pré-tenant que precisam contornar o RLS. O runtime de negócio usa
 /// sempre [`criar_pool`] (role da aplicação + RLS).
+///
+/// Fronteira `pool` × `admin_pool` (N4.1): `DATABASE_URL`/[`criar_pool`] conecta
+/// como `smartcore_app_rt` — role NOSUPERUSER NOBYPASSRLS criada de forma aditiva
+/// por `infra/provision-db-role.sh`, sujeita de verdade às policies de RLS.
+/// `DATABASE_ADMIN_URL`/[`criar_admin_pool`] continua em `smartcore_app` — o
+/// bootstrap user do container Postgres, sempre SUPERUSER (o Postgres proíbe
+/// removê-lo: "the bootstrap user must have the SUPERUSER attribute"), dono dos
+/// objetos do schema (migrations/DDL) e usado para os poucos lookups cross-tenant
+/// legítimos (ex.: scheduler com `SISTEMA_TENANT_PLACEHOLDER`, auditoria global).
+/// Nunca usar `admin_pool` no caminho de negócio comum — só onde o bypass de RLS
+/// é intencional e documentado.
 #[tracing::instrument(fields(max_connections), err)]
 pub async fn criar_admin_pool(max_connections: u32) -> Result<PgPool, DbError> {
     let url = std::env::var("DATABASE_ADMIN_URL")

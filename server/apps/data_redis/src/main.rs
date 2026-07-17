@@ -38,6 +38,7 @@ struct AppState {
     refresh_token: std::sync::Arc<dyn ports::RefreshTokenPort>,
     blocklist: std::sync::Arc<dyn ports::TokenBlocklist>,
     rate_limiter: std::sync::Arc<dyn ports::LoginRateLimiter>,
+    rate_limiter_generico: std::sync::Arc<dyn ports::RateLimiter>,
 }
 
 #[tokio::main]
@@ -63,12 +64,15 @@ async fn main() -> anyhow::Result<()> {
         std::sync::Arc::new(adapters::RedisTokenBlocklist::new(redis_conn.clone()));
     let rate_limiter: std::sync::Arc<dyn ports::LoginRateLimiter> =
         std::sync::Arc::new(adapters::RedisLoginRateLimiter::new(redis_conn.clone()));
+    let rate_limiter_generico: std::sync::Arc<dyn ports::RateLimiter> =
+        std::sync::Arc::new(adapters::RedisRateLimiter::new(redis_conn.clone()));
 
     let state = AppState {
         cache,
         refresh_token,
         blocklist,
         rate_limiter,
+        rate_limiter_generico,
     };
 
     // 4. Inicia o Servidor RPC síncrono nos 3 protocolos
@@ -80,7 +84,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_revoke = state_clone.clone();
     let state_for_block = state_clone.clone();
     let state_for_is_blocked = state_clone.clone();
-    let state_for_login_attempt = state_clone;
+    let state_for_login_attempt = state_clone.clone();
+    let state_for_rate_limit_attempt = state_clone;
 
     let server = transport::Server::from_env("DATA_REDIS")
         .route("GetCache", move |env| {
@@ -119,6 +124,12 @@ async fn main() -> anyhow::Result<()> {
             let state = state_for_login_attempt.clone();
             Box::pin(async move {
                 handler_register_login_attempt(state.rate_limiter.as_ref(), env).await
+            })
+        })
+        .route("RegisterRateLimitAttempt", move |env| {
+            let state = state_for_rate_limit_attempt.clone();
+            Box::pin(async move {
+                handler_register_rate_limit_attempt(state.rate_limiter_generico.as_ref(), env).await
             })
         });
 
@@ -382,6 +393,50 @@ async fn handler_register_login_attempt(
         Err(e) => erro(
             &env,
             "RegisterLoginAttemptReply",
+            error_core::AppError::Cache(e.to_string()),
+        ),
+    }
+}
+
+/// N4.4 — rate limiting amplo (recurso genérico, ex.: webhook por instância/tenant,
+/// rotas quentes do `runtime_api`). Payload: `{ recurso, id, window_s }` — `id` deve
+/// ser um identificador opaco. Reply: `{ attempts }`.
+async fn handler_register_rate_limit_attempt(
+    rate_limiter: &dyn ports::RateLimiter,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let recurso = payload_json
+        .get("recurso")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let id = payload_json
+        .get("id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let window_s = payload_json
+        .get("window_s")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(60);
+
+    if recurso.is_empty() || id.is_empty() {
+        return erro(
+            &env,
+            "RegisterRateLimitAttemptReply",
+            error_core::AppError::Validation("recurso e id são obrigatórios".to_string()),
+        );
+    }
+
+    match rate_limiter.register_attempt(recurso, id, window_s).await {
+        Ok(attempts) => ok_reply(
+            &env,
+            "RegisterRateLimitAttemptReply",
+            serde_json::json!({ "attempts": attempts }),
+        ),
+        Err(e) => erro(
+            &env,
+            "RegisterRateLimitAttemptReply",
             error_core::AppError::Cache(e.to_string()),
         ),
     }

@@ -284,20 +284,25 @@ impl MensagemRepository for PostgresMensagemRepository {
     ) -> Result<Vec<Mensagem>, DbError> {
         ctx.exigir_qualquer(&["operacional:admin"])?;
         // Cross-tenant por desenho (scheduler): exige pool com BYPASSRLS (admin_pool).
+        // N4.3: retenção por plano (tenants_plan.retention_days) tem prioridade sobre
+        // o default global recebido em `idade_max_dias`; COALESCE cai no default
+        // quando o tenant não tem assinatura/plano ou o plano não define override.
         let rows = sqlx::query_as::<_, Mensagem>(
-            r#"SELECT id, tenant_id, atendimento_id, tipo, conteudo, remetente,
-                      timestamp, message_id_whatsapp, metadados, respondida, lido,
-                      resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
-                      arquivo_midia, analise_midia, resumo_midia, mensagem_citada_id,
-                      quoted_preview, status_envio, data_entregue, data_lida
-               FROM oraculo_mensagem
-               WHERE arquivo_midia IS NOT NULL
-                 AND midia_purgada_em IS NULL
-                 AND timestamp < NOW() - ($1 || ' days')::interval
-               ORDER BY timestamp ASC
+            r#"SELECT m.id, m.tenant_id, m.atendimento_id, m.tipo, m.conteudo, m.remetente,
+                      m.timestamp, m.message_id_whatsapp, m.metadados, m.respondida, m.lido,
+                      m.resposta_bot, m.intent_detectado, m.entidades_extraidas, m.confianca_resposta,
+                      m.arquivo_midia, m.analise_midia, m.resumo_midia, m.mensagem_citada_id,
+                      m.quoted_preview, m.status_envio, m.data_entregue, m.data_lida
+               FROM oraculo_mensagem m
+               LEFT JOIN tenants_subscription s ON s.tenant_id = m.tenant_id
+               LEFT JOIN tenants_plan p ON p.id = s.plan_id
+               WHERE m.arquivo_midia IS NOT NULL
+                 AND m.midia_purgada_em IS NULL
+                 AND m.timestamp < NOW() - (COALESCE(p.retention_days, $1)::text || ' days')::interval
+               ORDER BY m.timestamp ASC
                LIMIT $2"#,
         )
-        .bind(idade_max_dias.to_string())
+        .bind(idade_max_dias as i32)
         .bind(limite)
         .fetch_all(&mut **tx)
         .await?;

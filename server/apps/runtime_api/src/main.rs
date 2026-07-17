@@ -420,6 +420,19 @@ fn erro_forbidden(msg: &str, env: &Envelope) -> Envelope {
     }
 }
 
+fn erro_rate_limit(msg: &str, env: &Envelope) -> Envelope {
+    let app_err = error_core::AppError::RateLimit(msg.to_string());
+    registrar_erro_borda(&app_err, env);
+    tracing::warn!(method = %env.method, user_id = env.auth_user_id, "requisição rejeitada: rate limit excedido");
+    let err_env = app_err.to_error_envelope(&env.traceparent, "runtime_api");
+    Envelope {
+        kind: MessageKind::Error as i32,
+        method: format!("{}Reply", env.method),
+        error: Some(err_env),
+        ..env.clone()
+    }
+}
+
 fn erro_internal(msg: &str, env: &Envelope) -> Envelope {
     let app_err = error_core::AppError::Internal(msg.to_string());
     registrar_erro_borda(&app_err, env);
@@ -623,6 +636,57 @@ where
                     &env.traceparent,
                 )
                 .await;
+            }
+
+            // 5c. Rate limiting amplo por usuário autenticado (N4.4). Fail-open: erro
+            // na checagem não bloqueia a requisição (mesmo espírito do QuotaGuard).
+            let rl_max = std::env::var("RUNTIME_API_RATE_LIMIT_MAX")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(300);
+            let rl_window_s = std::env::var("RUNTIME_API_RATE_LIMIT_WINDOW_S")
+                .ok()
+                .and_then(|s| s.parse::<u64>().ok())
+                .unwrap_or(60);
+            let rl_id = format!("{}:{}", env.tenant_id, env.auth_user_id);
+            let rl_payload = serde_json::json!({ "recurso": "runtime_api", "id": rl_id, "window_s": rl_window_s });
+            let rl_req = application::auth::login::montar_envelope_request(
+                Uuid::nil(),
+                &env.traceparent,
+                "RegisterRateLimitAttempt",
+                &rl_payload,
+            );
+            match deps.redis.call(rl_req, Duration::from_secs(3)).await {
+                Ok(resp) if resp.kind != MessageKind::Error as i32 => {
+                    if let Ok(body) = serde_json::from_slice::<serde_json::Value>(&resp.payload) {
+                        let attempts = body.get("attempts").and_then(|v| v.as_u64()).unwrap_or(0);
+                        if attempts > rl_max {
+                            publicar_auditoria_borda(
+                                &mut bus,
+                                Uuid::parse_str(&env.tenant_id).ok().filter(|u| !u.is_nil()),
+                                "WARN",
+                                "rate_limit_exceeded",
+                                format!("Rate limit excedido na rota '{}'", env.method),
+                                serde_json::json!({ "method": env.method, "attempts": attempts, "max": rl_max }),
+                                claims.sub.parse::<i32>().ok(),
+                                &env.traceparent,
+                                None,
+                                None,
+                            )
+                            .await;
+                            return erro_rate_limit(
+                                "Muitas requisições; aguarde antes de tentar novamente",
+                                &env,
+                            );
+                        }
+                    }
+                }
+                Ok(_) => {
+                    tracing::warn!(method = %env.method, "falha ao registrar rate limit (fail-open)");
+                }
+                Err(e) => {
+                    tracing::warn!(method = %env.method, "erro RPC no rate limit (fail-open): {:?}", e);
+                }
             }
 
             // 6. Encaminhar para o handler de destino

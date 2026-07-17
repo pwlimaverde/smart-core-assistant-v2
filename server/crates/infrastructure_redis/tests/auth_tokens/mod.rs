@@ -3,6 +3,44 @@ use uuid::Uuid;
 
 use crate::common::conexao_limpa;
 
+/// N4.4 — teste de rajada do rate limiter genérico: simula N tentativas rápidas
+/// (mesma janela) do mesmo recurso/id e valida que o contador cresce
+/// monotonicamente e sem perda (INCR é atômico no Redis — não deve haver
+/// condição de corrida mesmo disparando concorrentemente).
+#[tokio::test]
+async fn test_registrar_tentativa_recurso_rajada_conta_sem_perda() {
+    let con = conexao_limpa().await;
+    let rajada = 50u64;
+
+    let mut handles = Vec::with_capacity(rajada as usize);
+    for _ in 0..rajada {
+        let mut con = con.clone();
+        handles.push(tokio::spawn(async move {
+            infrastructure_redis::registrar_tentativa_recurso(&mut con, "webhook", "tenant-x:1", 60)
+                .await
+        }));
+    }
+
+    let mut totais = Vec::with_capacity(rajada as usize);
+    for h in handles {
+        totais.push(
+            h.await
+                .unwrap()
+                .expect("registrar_tentativa_recurso falhou na rajada"),
+        );
+    }
+
+    // Todas as RAJADA chamadas concorrentes devem ter incrementado o MESMO
+    // contador (INCR atômico) — o maior total observado deve ser exatamente RAJADA.
+    assert_eq!(
+        *totais.iter().max().unwrap(),
+        rajada,
+        "contador final deve refletir todas as tentativas da rajada, sem perda"
+    );
+    // Nenhum total pode exceder a rajada (não pode haver dupla-contagem).
+    assert!(totais.iter().all(|&t| t <= rajada));
+}
+
 #[tokio::test]
 async fn test_should_rotacionar_refresh_quando_token_valido() {
     let mut store = RefreshTokenStore::new(conexao_limpa().await);

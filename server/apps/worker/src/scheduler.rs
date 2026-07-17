@@ -186,8 +186,9 @@ async fn processar_feedback_vencido(state: &AppState) -> anyhow::Result<usize> {
 
 /// Varre mensagens com mídia expirada (RPC cross-tenant); para cada uma, marca a
 /// purga como solicitada (idempotência) e publica `media.purge` no bus — o
-/// `data_storage` já consome esse evento (`processar_purga_midia`) e audita
-/// `midia.purgada` no lado dele.
+/// `data_storage` consome esse evento (`processar_purga_midia`) e faz a deleção
+/// física do objeto. A auditoria `midia.purgada` (um evento por arquivo) é emitida
+/// aqui, no ponto de disparo da purga.
 async fn processar_midia_expirada(state: &AppState) -> anyhow::Result<usize> {
     let limite = env_u64("SMARTCORE_SCHEDULER_LOTE", 100);
     let idade_max_dias = env_u64("SMARTCORE_SCHEDULER_MEDIA_IDADE_MAX_DIAS", 30);
@@ -234,7 +235,7 @@ async fn processar_midia_expirada(state: &AppState) -> anyhow::Result<usize> {
         }
 
         let acao_payload = serde_json::json!({ "mensagem_id": mensagem_id });
-        if let Err(e) = chamar_rpc(
+        let marcado = chamar_rpc(
             &state.pg_client,
             &tenant_id,
             "MarcarMidiaPurgada",
@@ -242,14 +243,26 @@ async fn processar_midia_expirada(state: &AppState) -> anyhow::Result<usize> {
             "scheduler.tick",
             "",
         )
-        .await
-        {
+        .await;
+
+        if let Err(e) = &marcado {
             // Publicação já ocorreu (delete é idempotente do lado do data_storage);
             // não marcar aqui só adia a purga para o próximo tick, não duplica risco.
             tracing::error!(
                 mensagem_id = mensagem_id,
                 "scheduler: falha ao marcar mídia purgada: {:?}",
                 e
+            );
+        } else {
+            let tenant_uuid = uuid::Uuid::parse_str(&tenant_id).unwrap_or(uuid::Uuid::nil());
+            state.audit_logger.info(
+                tenant_uuid,
+                "midia.purgada",
+                "Mídia expirada pela política de retenção; purga disparada",
+                serde_json::json!({ "mensagem_id": mensagem_id }),
+                None,
+                None,
+                None,
             );
         }
         processados += 1;
