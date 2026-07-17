@@ -20,9 +20,14 @@ final class GrpcNativeApiClient implements GrpcTransport {
   late final AuthServiceClient _auth;
   late final AdminServiceClient _admin;
 
-  /// [endpoint] é o endereço da fachada (pode vir como `tcp://host:porta`,
-  /// `http://host:porta` ou `host:porta`); [readAccessToken] devolve o access
-  /// token atual (memória) para o interceptor.
+  /// [endpoint] é o endereço da fachada (pode vir como `https://host`,
+  /// `tcp://host:porta`, `http://host:porta` ou `host:porta`); [readAccessToken]
+  /// devolve o access token atual (memória) para o interceptor.
+  ///
+  /// TLS segue o esquema do endpoint: `https` → canal seguro (porta padrão 443);
+  /// demais → texto claro (porta padrão 80). Sem isso, o desktop apontado para o
+  /// endpoint público (https) tentaria HTTP/2 em claro na porta 80 contra o edge
+  /// TLS e nunca conectaria.
   GrpcNativeApiClient({
     required String endpoint,
     required Future<String?> Function() readAccessToken,
@@ -34,9 +39,10 @@ final class GrpcNativeApiClient implements GrpcTransport {
     _channel = ClientChannel(
       _host,
       port: _port,
-      options: const ChannelOptions(
-        // Dev: HTTP/2 em texto claro (sem TLS), coerente com o endpoint interno.
-        credentials: ChannelCredentials.insecure(),
+      options: ChannelOptions(
+        credentials: _usaTls(endpoint)
+            ? const ChannelCredentials.secure()
+            : const ChannelCredentials.insecure(),
       ),
     );
     _auth = AuthServiceClient(
@@ -71,11 +77,16 @@ final class GrpcNativeApiClient implements GrpcTransport {
     return uri.host.isNotEmpty ? uri.host : 'localhost';
   }
 
-  /// Extrai a porta; assume 80 quando ausente (dev em texto claro).
+  /// Extrai a porta; quando ausente assume a padrão do esquema (443 para
+  /// `https`, 80 para os demais).
   static int _extrairPorta(String endpoint) {
     final uri = _parse(endpoint);
-    return uri.hasPort ? uri.port : 80;
+    if (uri.hasPort) return uri.port;
+    return _usaTls(endpoint) ? 443 : 80;
   }
+
+  /// TLS quando o esquema do endpoint é `https`.
+  static bool _usaTls(String endpoint) => _parse(endpoint).scheme == 'https';
 
   static Uri _parse(String endpoint) {
     final uri = Uri.parse(endpoint);

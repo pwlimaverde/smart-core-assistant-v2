@@ -43,7 +43,15 @@ pub enum OfflineActionKind {
         motivo: String,
     },
     /// Enviar mensagem outbound. `conteudo` é PII — nunca logar.
-    SendOutbound { conteudo: String, tipo: String },
+    SendOutbound {
+        conteudo: String,
+        tipo: String,
+        /// Id client-side (negativo) da linha pendente em `mensagens`, para o
+        /// sync promovê-la ao id definitivo do servidor. `0` = desconhecido
+        /// (ações antigas serializadas antes deste campo — via serde default).
+        #[serde(default)]
+        local_msg_id: i64,
+    },
 }
 
 impl OfflineActionKind {
@@ -269,6 +277,7 @@ mod tests {
                 OfflineActionKind::SendOutbound {
                     conteudo: "a".into(),
                     tipo: "texto".into(),
+                    local_msg_id: -1,
                 },
             ),
             acao(
@@ -278,6 +287,7 @@ mod tests {
                 OfflineActionKind::SendOutbound {
                     conteudo: "b".into(),
                     tipo: "texto".into(),
+                    local_msg_id: -2,
                 },
             ),
         ];

@@ -109,16 +109,19 @@ final class LocalEngineFfiDataSource implements AtendimentoDataSource {
         onSend: (actionId, atendimentoId, conteudo, tipo) async {
           try {
             // NUNCA logar `conteudo` (PII) — só trafega no corpo da chamada RPC.
-            await _admin.sendOutboundMessage(
+            final resp = await _admin.sendOutboundMessage(
               proto.SendOutboundMessageRequest(
                 atendimentoId: atendimentoId,
                 conteudo: conteudo,
                 tipo: tipo,
               ),
             );
-            return '';
+            // Sucesso = id definitivo em decimal: o motor promove a mensagem
+            // pendente local (id negativo) a este id, evitando duplicata na
+            // re-ingestão. Falha = prefixo "ERR " (contrato do DartSyncTransport).
+            return '${resp.messageId}';
           } catch (e) {
-            return '$e';
+            return 'ERR $e';
           }
         },
       );

@@ -183,6 +183,7 @@ impl LocalEngine {
             kind: OfflineActionKind::SendOutbound {
                 conteudo: conteudo.to_string(),
                 tipo: tipo.to_string(),
+                local_msg_id: id_local,
             },
             created_at: ts,
         };
@@ -269,12 +270,24 @@ impl LocalEngine {
                         }
                     }
                 }
-                OfflineActionKind::SendOutbound { conteudo, tipo } => {
+                OfflineActionKind::SendOutbound {
+                    conteudo,
+                    tipo,
+                    local_msg_id,
+                } => {
                     match transporte
                         .send_outbound_message(acao.id, acao.atendimento_id, conteudo, tipo)
                         .await
                     {
-                        Ok(_) => {
+                        Ok(id_definitivo) => {
+                            // Promove a linha pendente ao id do servidor — sem
+                            // isto a mensagem ficaria "pendente" para sempre e a
+                            // re-ingestão criaria uma duplicata fantasma.
+                            if *local_msg_id != 0 && id_definitivo > 0 {
+                                self.index
+                                    .promover_mensagem_pendente(*local_msg_id, id_definitivo)
+                                    .await?;
+                            }
                             self.queue.mark_synced(acao.id).await?;
                             report.aplicadas += 1;
                         }
@@ -407,5 +420,65 @@ mod tests {
         let thread = engine.get_thread(1, 50, 0).await.unwrap();
         assert_eq!(thread.len(), 1);
         assert_eq!(thread[0].status_envio, "pendente");
+    }
+
+    /// Transporte-stub de teste: aceita tudo e devolve um id fixo do "servidor".
+    struct TransporteOk {
+        id_definitivo: i64,
+    }
+
+    #[async_trait::async_trait]
+    impl SyncTransport for TransporteOk {
+        async fn move_atendimento_etapa(
+            &self,
+            _action_id: Uuid,
+            _atendimento_id: i64,
+            _etapa_destino_id: i64,
+            _motivo: &str,
+        ) -> Result<(), SyncError> {
+            Ok(())
+        }
+
+        async fn send_outbound_message(
+            &self,
+            _action_id: Uuid,
+            _atendimento_id: i64,
+            _conteudo: &str,
+            _tipo: &str,
+        ) -> Result<i64, SyncError> {
+            Ok(self.id_definitivo)
+        }
+    }
+
+    #[tokio::test]
+    async fn sincronizar_promove_mensagem_pendente_ao_id_definitivo() {
+        let engine = engine_em_memoria().await;
+        engine
+            .ingest_atendimento(&resumo(1, "fila", Some(10)))
+            .await
+            .unwrap();
+
+        let id_local = engine
+            .send_outbound_message(1, "oi", "texto")
+            .await
+            .unwrap();
+        assert!(id_local < 0);
+
+        let report = engine
+            .sincronizar(&TransporteOk { id_definitivo: 777 })
+            .await
+            .unwrap();
+        assert_eq!(report.aplicadas, 1);
+        assert_eq!(report.falhas, 0);
+
+        // A pendente virou a mensagem definitiva: id do servidor, status enviado,
+        // sem sobrar linha com id negativo.
+        let thread = engine.get_thread(1, 50, 0).await.unwrap();
+        assert_eq!(thread.len(), 1);
+        assert_eq!(thread[0].id, 777);
+        assert_eq!(thread[0].status_envio, "enviado");
+
+        // Nada mais pendente na fila.
+        assert!(engine.queue.pending().await.unwrap().is_empty());
     }
 }
