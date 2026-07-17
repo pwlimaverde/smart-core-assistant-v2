@@ -127,7 +127,33 @@ media/{tenant_id}/{instance_id}/{media_type}/{hash}[.{ext}]
 
 ## 7. Configuração e ambiente
 
-As variáveis `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` e `S3_BUCKET` são lidas exclusivamente pelo processo `data_storage` e expostas via arquivo `.env`.
+As variáveis `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` e `S3_BUCKET` são lidas exclusivamente pelo processo `data_storage` e expostas via arquivo `.env`. `S3_LIFECYCLE_EXPIRATION_DAYS` (N4.3, default `90`) configura o lifecycle do bucket — ver §8.
+
+---
+
+## 7.1 Retenção de mídia por política + lifecycle do bucket (N4.3)
+
+**Purga primária (aplicativa):** o scheduler do `worker` (`scheduler.rs::processar_midia_expirada`)
+varre `oraculo_mensagem` a cada tick (`SMARTCORE_SCHEDULER_TICK_SECS`) procurando
+mídia mais antiga que a política de retenção efetiva, publica `media.purge` no bus
+e marca `midia_purgada_em` (idempotente). `data_storage` consome o evento e deleta
+o objeto do bucket (`processar_purga_midia`). **O resumo/análise da mídia permanece**
+em `oraculo_mensagem.resumo_midia`/`analise_midia` — só o binário é removido.
+
+**Política por plano:** `tenants_plan.retention_days` (migration `0017`, nullable —
+`NULL` usa o default global `SMARTCORE_SCHEDULER_MEDIA_IDADE_MAX_DIAS`, hoje 30 dias).
+A consulta `listar_midias_expiradas` (`infrastructure_postgres::atendimentos::mensagens`)
+faz `LEFT JOIN tenants_subscription`/`tenants_plan` e usa
+`COALESCE(plan.retention_days, default_global)` por tenant.
+
+**Lifecycle do bucket (defesa em profundidade):** `data_storage` aplica, no boot,
+uma regra de lifecycle via `put_bucket_lifecycle_configuration` (`aws-sdk-s3`,
+`infrastructure_storage::connection::garantir_lifecycle`) com `Expiration.Days`
+configurável (`S3_LIFECYCLE_EXPIRATION_DAYS`, default `90` — margem generosa sobre
+os ~30 dias da política padrão, para nunca competir com a purga aplicativa). Aplica-se
+ao bucket inteiro (sem `Filter.Prefix`, já que todo o conteúdo do bucket é mídia
+transitória). Best-effort: falha ao aplicar não impede o boot (loga e segue) —
+providers sem suporte total a lifecycle não travam o `data_storage`.
 
 ---
 

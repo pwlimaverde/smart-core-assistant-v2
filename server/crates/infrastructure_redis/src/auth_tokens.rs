@@ -172,22 +172,48 @@ impl TokenBlocklist {
     }
 }
 
+/// Registra uma tentativa sob uma chave já montada e devolve o total acumulado na
+/// janela corrente. INCR + EXPIRE: a primeira tentativa da janela define a
+/// expiração; as demais apenas incrementam. N4.4: núcleo compartilhado por
+/// `registrar_tentativa_login` (login) e `registrar_tentativa_recurso` (rate
+/// limiting amplo — webhook, rotas quentes do runtime_api).
+#[tracing::instrument(skip(con, chave), fields(janela_segundos), err)]
+async fn registrar_tentativa(
+    con: &mut ConnectionManager,
+    chave: &str,
+    janela_segundos: u64,
+) -> Result<u64, RedisError> {
+    let total: u64 = con.incr(chave, 1).await?;
+    if total == 1 {
+        let _: bool = con.expire(chave, janela_segundos as i64).await?;
+    }
+    Ok(total)
+}
+
 /// Registra uma tentativa de login e devolve o total acumulado na janela corrente.
 ///
-/// Implementa o rate limiting do login (doc 09 §6.5) com INCR + EXPIRE: a primeira
-/// tentativa da janela define a expiração; as demais apenas incrementam. O caller
-/// compara o total devolvido com o limite configurado (`AUTH_LOGIN_RATE_LIMIT`).
+/// Implementa o rate limiting do login (doc 09 §6.5). O caller compara o total
+/// devolvido com o limite configurado (`AUTH_LOGIN_RATE_LIMIT`).
 // `id_hash` é o hash do identificador (ex.: SHA-256 do e-mail) — nunca o valor em claro.
-#[tracing::instrument(skip(con, id_hash), fields(janela_segundos), err)]
 pub async fn registrar_tentativa_login(
     con: &mut ConnectionManager,
     id_hash: &str,
     janela_segundos: u64,
 ) -> Result<u64, RedisError> {
     let chave = keys::chave_rate_limit_login(id_hash);
-    let total: u64 = con.incr(&chave, 1).await?;
-    if total == 1 {
-        let _: bool = con.expire(&chave, janela_segundos as i64).await?;
-    }
-    Ok(total)
+    registrar_tentativa(con, &chave, janela_segundos).await
+}
+
+/// Registra uma tentativa de um recurso genérico (N4.4 — rate limiting amplo:
+/// webhook por instância/tenant, rotas quentes do `runtime_api`) e devolve o total
+/// acumulado na janela corrente. `id` deve ser um identificador opaco (ex.:
+/// `"{tenant_id}:{instance_id}"`) — nunca PII em claro.
+pub async fn registrar_tentativa_recurso(
+    con: &mut ConnectionManager,
+    recurso: &str,
+    id: &str,
+    janela_segundos: u64,
+) -> Result<u64, RedisError> {
+    let chave = keys::chave_rate_limit(recurso, id);
+    registrar_tentativa(con, &chave, janela_segundos).await
 }

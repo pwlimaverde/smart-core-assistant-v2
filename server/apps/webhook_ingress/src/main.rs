@@ -134,6 +134,41 @@ fn extrair_message_id(event_type: &str, raw: &serde_json::Value) -> Option<Strin
     }
 }
 
+/// N4.2 — consulta `CheckQuota` no data_postgres só para ler `inadimplente`
+/// (o recurso "instancias" é irrelevante aqui, descartado). Fail-open: qualquer
+/// falha na checagem não bloqueia a ingestão.
+async fn verificar_bloqueio_inadimplencia(
+    pg_client: &transport::MuxClient,
+    tenant_id: uuid::Uuid,
+) -> bool {
+    let req_payload = serde_json::json!({ "recurso": "instancias" });
+    let req_envelope = contracts::Envelope {
+        kind: contracts::MessageKind::Request as i32,
+        method: "CheckQuota".to_string(),
+        tenant_id: tenant_id.to_string(),
+        payload: serde_json::to_vec(&req_payload).unwrap_or_default(),
+        ..Default::default()
+    };
+    let resp = match pg_client.call(req_envelope, Duration::from_secs(5)).await {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!(
+                "falha ao verificar quota/inadimplência (fail-open): {:?}",
+                e
+            );
+            return false;
+        }
+    };
+    if resp.kind == contracts::MessageKind::Error as i32 {
+        tracing::warn!("CheckQuota retornou erro (fail-open)");
+        return false;
+    }
+    let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap_or_default();
+    body.get("inadimplente")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+}
+
 #[tracing::instrument(
     skip(state, headers, body),
     fields(
@@ -246,6 +281,54 @@ async fn handle_webhook(
         return Err(StatusCode::UNAUTHORIZED);
     }
 
+    // 2c. Rate limiting amplo por instância/tenant (N4.4). Fail-open: erro no Redis
+    // não derruba a ingestão (mesmo espírito do QuotaGuard).
+    {
+        let max = env::var("WEBHOOK_RATE_LIMIT_MAX")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(120);
+        let window_s = env::var("WEBHOOK_RATE_LIMIT_WINDOW_S")
+            .ok()
+            .and_then(|s| s.parse::<u64>().ok())
+            .unwrap_or(60);
+        let id = format!("{}:{}", params.tenant_id, params.instance_id);
+        match infrastructure_redis::registrar_tentativa_recurso(
+            &mut state.redis,
+            "webhook",
+            &id,
+            window_s,
+        )
+        .await
+        {
+            Ok(total) if total > max => {
+                state.audit_logger.warn(
+                    params.tenant_id,
+                    "webhook.rejected",
+                    "Rate limit do webhook excedido",
+                    serde_json::json!({
+                        "provider": params.provider,
+                        "instance_id": params.instance_id,
+                        "reason": "rate_limited",
+                        "attempts": total,
+                        "max": max
+                    }),
+                    None,
+                    None,
+                    None,
+                );
+                return Err(StatusCode::TOO_MANY_REQUESTS);
+            }
+            Ok(_) => {}
+            Err(e) => {
+                tracing::warn!(
+                    "falha ao registrar rate limit do webhook (fail-open): {:?}",
+                    e
+                );
+            }
+        }
+    }
+
     let normalizado = if let Some(normalizer) = state.normalizers.get(params.provider.as_str()) {
         normalizer.normalize(event_type, &raw, params.tenant_id, params.instance_id)
     } else {
@@ -255,6 +338,44 @@ async fn handle_webhook(
 
     if let Some((topic, envelope)) = normalizado {
         let is_msg_event = topic == "whatsapp.message.received" || topic == "message.received";
+
+        // 2b. QuotaGuard — bloqueio por inadimplência (N4.2). Log-only por padrão
+        // (SMARTCORE_QUOTA_ENFORCE=false); vira 402 real quando a flag é true.
+        if is_msg_event {
+            let inadimplente =
+                verificar_bloqueio_inadimplencia(&state.pg_client, params.tenant_id).await;
+            if inadimplente {
+                let enforce = env::var("SMARTCORE_QUOTA_ENFORCE")
+                    .map(|v| v.eq_ignore_ascii_case("true"))
+                    .unwrap_or(false);
+                if enforce {
+                    // Rejeição real: evento pontual na trilha de auditoria.
+                    state.audit_logger.warn(
+                        params.tenant_id,
+                        "webhook.rejected",
+                        "Ingestão rejeitada: assinatura inadimplente",
+                        serde_json::json!({
+                            "provider": params.provider,
+                            "instance_id": params.instance_id,
+                            "reason": "inadimplencia",
+                            "enforced": true
+                        }),
+                        None,
+                        None,
+                        None,
+                    );
+                    return Err(StatusCode::PAYMENT_REQUIRED);
+                }
+                // Log-only: não auditar por-mensagem (inundaria a trilha para um
+                // tenant inadimplente com tráfego). Apenas sinaliza no log; as
+                // métricas de uso captam o volume.
+                tracing::warn!(
+                    tenant_id = %params.tenant_id,
+                    instance_id = params.instance_id,
+                    "assinatura inadimplente detectada (log-only; SMARTCORE_QUOTA_ENFORCE=false)"
+                );
+            }
+        }
 
         // 3. Verificação de Whitelist para mensagens recebidas
         if is_msg_event {
@@ -367,6 +488,13 @@ async fn handle_webhook(
                 StatusCode::INTERNAL_SERVER_ERROR
             })?;
         tracing::info!(topico = topic, "Evento normalizado publicado no barramento");
+
+        if is_msg_event {
+            observability::usage_metrics::registrar_mensagem(
+                &params.tenant_id.to_string(),
+                observability::usage_metrics::DirecaoMensagem::Recebida,
+            );
+        }
     } else {
         tracing::debug!(
             event = event_type,

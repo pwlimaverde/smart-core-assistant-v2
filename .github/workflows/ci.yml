@@ -78,25 +78,27 @@ jobs:
           SQLX_OFFLINE: "true"
         run: cargo clippy --all-targets --all-features -- -D warnings
 
-      # Cria o role restrito smartcore_app (NOBYPASSRLS) e configura privilégios
+      # Cria o role restrito smartcore_app_rt (NOBYPASSRLS) e configura privilégios
       # padrão para as tabelas que as migrations criam em runtime (rodadas pelo
       # role admin = postgres). Sem isto, a conexão DATABASE_URL (app) não enxerga
-      # as tabelas e o RLS não pode ser validado.
+      # as tabelas e o RLS não pode ser validado. Nome unificado com dev/prod
+      # (N4.1 — ver infra/provision-db-role.sh): smartcore_app_rt é sempre a role
+      # de runtime restrita; a role admin varia por ambiente (aqui, postgres).
       - name: Bootstrap do banco de teste (role app + RLS)
         env:
           PGPASSWORD: postgres
         run: |
           psql -h localhost -p 5434 -U postgres -d smartcore_v2 -v ON_ERROR_STOP=1 <<'SQL'
           DO $$ BEGIN
-            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'smartcore_app') THEN
-              CREATE ROLE smartcore_app LOGIN PASSWORD 'smartcore_app' NOBYPASSRLS;
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'smartcore_app_rt') THEN
+              CREATE ROLE smartcore_app_rt LOGIN PASSWORD 'smartcore_app_rt' NOBYPASSRLS;
             END IF;
           END $$;
-          GRANT USAGE ON SCHEMA public TO smartcore_app;
+          GRANT USAGE ON SCHEMA public TO smartcore_app_rt;
           ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO smartcore_app;
+            GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO smartcore_app_rt;
           ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-            GRANT USAGE, SELECT ON SEQUENCES TO smartcore_app;
+            GRANT USAGE, SELECT ON SEQUENCES TO smartcore_app_rt;
           SQL
 
       # Cria o schema do zero via migrations sqlx. Antes isso era efeito colateral dos
@@ -116,7 +118,7 @@ jobs:
         working-directory: server
         env:
           SQLX_OFFLINE: "true"
-          DATABASE_URL: postgres://smartcore_app:smartcore_app@localhost:5434/smartcore_v2
+          DATABASE_URL: postgres://smartcore_app_rt:smartcore_app_rt@localhost:5434/smartcore_v2
           DATABASE_ADMIN_URL: postgres://postgres:postgres@localhost:5434/smartcore_v2
           REDIS_URL: redis://localhost:6380
           # No CI há apenas um Redis (porta 6380). REDIS_BUS_URL aponta para ele também

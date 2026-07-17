@@ -184,6 +184,66 @@ async fn chamar_data_postgres(
     Ok(val)
 }
 
+/// N4.2 — QuotaGuard (decorator): consulta `CheckQuota` no data_postgres antes de
+/// operações sujeitas a limite de plano (hoje: provisionamento de instância).
+/// Modo log-only por padrão (`SMARTCORE_QUOTA_ENFORCE=false`) — só loga e segue;
+/// vira bloqueio real quando a flag é `true`. Falha na própria checagem (RPC fora
+/// do ar) é fail-open: não derruba o caminho de negócio por causa do guard.
+async fn aplicar_quota_guard(recurso: &str, env: &Envelope) -> Result<(), error_core::AppError> {
+    // `auditar: true` — este é o ponto de enforcement (provisionamento), onde a
+    // auditoria de `quota.excedida`/inadimplência é um evento pontual legítimo.
+    let status = match chamar_data_postgres(
+        "CheckQuota",
+        &env.tenant_id,
+        serde_json::json!({ "recurso": recurso, "auditar": true }),
+        env,
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(erro = %e, recurso, "falha ao verificar quota; prosseguindo (fail-open)");
+            return Ok(());
+        }
+    };
+
+    let excedido = status
+        .get("excedido")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let inadimplente = status
+        .get("inadimplente")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    if !excedido && !inadimplente {
+        return Ok(());
+    }
+
+    let enforce = std::env::var("SMARTCORE_QUOTA_ENFORCE")
+        .map(|v| v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+
+    if !enforce {
+        tracing::warn!(
+            recurso,
+            excedido,
+            inadimplente,
+            "quota/inadimplência detectada (log-only; SMARTCORE_QUOTA_ENFORCE=false)"
+        );
+        return Ok(());
+    }
+
+    if inadimplente {
+        return Err(error_core::AppError::RateLimit(
+            "assinatura inadimplente; operação bloqueada".into(),
+        ));
+    }
+    Err(error_core::AppError::RateLimit(format!(
+        "quota de '{recurso}' excedida"
+    )))
+}
+
 #[tracing::instrument(skip_all, fields(rpc = "CreateWhatsappInstance", tenant_id = %env.tenant_id))]
 async fn handler_create_whatsapp_instance(mut state: AppState, env: Envelope) -> Envelope {
     let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
@@ -205,6 +265,11 @@ async fn handler_create_whatsapp_instance(mut state: AppState, env: Envelope) ->
         .get("provider")
         .and_then(|v| v.as_str())
         .unwrap_or("evolution");
+
+    // 0. QuotaGuard: quota de instâncias do plano vigente (N4.2).
+    if let Err(e) = aplicar_quota_guard("instancias", &env).await {
+        return erro(e, &env);
+    }
 
     let p = match state.registry.resolve(provider_name) {
         Ok(prov) => prov,
@@ -682,14 +747,20 @@ async fn handler_send_whatsapp_message(state: AppState, env: Envelope) -> Envelo
     let api_key_sec = SecretString::from(api_key.to_string());
 
     match p.send_text(name, &api_key_sec, to_number, text).await {
-        Ok(res) => ok_reply(
-            &env,
-            "SendWhatsappMessageReply",
-            serde_json::json!({
-                "status": "success",
-                "message_id": res.message_id
-            }),
-        ),
+        Ok(res) => {
+            observability::usage_metrics::registrar_mensagem(
+                &env.tenant_id,
+                observability::usage_metrics::DirecaoMensagem::Enviada,
+            );
+            ok_reply(
+                &env,
+                "SendWhatsappMessageReply",
+                serde_json::json!({
+                    "status": "success",
+                    "message_id": res.message_id
+                }),
+            )
+        }
         Err(e) => erro(
             error_core::AppError::Internal(format!("Falha ao enviar mensagem pelo provedor: {e}")),
             &env,

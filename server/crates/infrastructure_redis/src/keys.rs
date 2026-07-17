@@ -35,6 +35,13 @@ pub fn chave_rate_limit_login(id_hash: &str) -> String {
     format!("auth:rate_limit:login:{id_hash}")
 }
 
+/// Contador de tentativas por janela para um recurso genérico (N4.4 — rate
+/// limiting amplo: webhook por instância/tenant, rotas quentes do `runtime_api`).
+/// `id` deve ser um identificador opaco — nunca PII em claro.
+pub fn chave_rate_limit(recurso: &str, id: &str) -> String {
+    format!("rate_limit:{recurso}:{id}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

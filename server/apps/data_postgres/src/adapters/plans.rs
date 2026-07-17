@@ -12,14 +12,34 @@ use infrastructure_postgres::DbError;
 use crate::ports::PlansStore;
 
 /// Implementação Postgres da port Plans/Billing.
+///
+/// N4.1: todos os consumidores desta port são rotas admin (`exigir_superuser=true`,
+/// ver `ROTAS_ADMIN`) que leem/escrevem `tenants_subscription`/`tenants_paymentrecord`
+/// (RLS FORCE, sem contexto de tenant setado nesta camada) — por isso as operações
+/// cross-tenant usam `admin_pool` (BYPASSRLS). `tenants_plan` não tem RLS (tabela
+/// global do SaaS), então `listar_planos`/`criar_plano`/`atualizar_plano` continuam
+/// em `pool` sem prejuízo.
 #[derive(Clone)]
 pub struct PgPlansStore {
     pub pool: PgPool,
+    pub admin_pool: Option<PgPool>,
 }
 
 impl PgPlansStore {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(pool: PgPool, admin_pool: Option<PgPool>) -> Self {
+        Self { pool, admin_pool }
+    }
+
+    /// Pool efetivo para operações cross-tenant (assinaturas/pagamentos, RLS FORCE).
+    fn cross_tenant_pool(&self) -> &PgPool {
+        if self.admin_pool.is_none() {
+            tracing::warn!(
+                "PgPlansStore sem DATABASE_ADMIN_URL: a RLS bloqueará consultas/gravações \
+                 cross-tenant de assinaturas/pagamentos e o resultado virá vazio ou a \
+                 gravação será rejeitada"
+            );
+        }
+        self.admin_pool.as_ref().unwrap_or(&self.pool)
     }
 }
 
@@ -123,7 +143,7 @@ impl PlansStore for PgPlansStore {
             r#"SELECT id, tenant_id, plan_id, status, current_period_start, current_period_end, payment_gateway, external_customer_id, external_subscription_id, updated_at
                FROM tenants_subscription ORDER BY id"#,
         )
-        .fetch_all(&self.pool)
+        .fetch_all(self.cross_tenant_pool())
         .await?;
         Ok(rows
             .iter()
@@ -169,7 +189,7 @@ impl PlansStore for PgPlansStore {
         .bind(period_end)
         .bind(notes)
         .bind(recorded_by)
-        .fetch_one(&self.pool)
+        .fetch_one(self.cross_tenant_pool())
         .await?;
         Ok(payment_row_to_json(&row))
     }
@@ -185,14 +205,14 @@ impl PlansStore for PgPlansStore {
                    FROM tenants_paymentrecord WHERE tenant_id = $1 ORDER BY payment_date DESC"#,
             )
             .bind(t)
-            .fetch_all(&self.pool)
+            .fetch_all(self.cross_tenant_pool())
             .await?
         } else {
             sqlx::query(
                 r#"SELECT id, tenant_id, amount, payment_date, payment_method, period_start, period_end, notes, recorded_by_id, created_at
                    FROM tenants_paymentrecord ORDER BY payment_date DESC"#,
             )
-            .fetch_all(&self.pool)
+            .fetch_all(self.cross_tenant_pool())
             .await?
         };
         Ok(rows.iter().map(payment_row_to_json).collect())

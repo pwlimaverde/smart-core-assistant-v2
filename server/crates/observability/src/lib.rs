@@ -9,6 +9,7 @@ pub mod audit;
 pub mod propagation;
 pub mod span_helpers;
 pub mod telemetry;
+pub mod usage_metrics;
 
 #[cfg(feature = "pool-metrics")]
 pub mod pool_metrics;

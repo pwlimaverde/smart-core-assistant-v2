@@ -50,6 +50,12 @@ impl StorageClient {
         connection::garantir_bucket(&self.client, &self.bucket).await
     }
 
+    /// Aplica a regra de lifecycle do bucket (N4.3 — defesa em profundidade da
+    /// retenção). Best-effort: nunca falha o boot do serviço.
+    pub async fn garantir_lifecycle(&self, expiration_days: i32) {
+        connection::garantir_lifecycle(&self.client, &self.bucket, expiration_days).await
+    }
+
     /// Confirma o acesso ao bucket (healthcheck).
     pub async fn health(&self) -> Result<(), StorageError> {
         connection::health(&self.client, &self.bucket).await

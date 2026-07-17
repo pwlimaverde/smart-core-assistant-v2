@@ -96,6 +96,7 @@ struct AppState {
     cliente: std::sync::Arc<dyn ports::ClienteStore>,
     operacional: std::sync::Arc<dyn ports::OperacionalStore>,
     plans: std::sync::Arc<dyn ports::PlansStore>,
+    quota: std::sync::Arc<dyn ports::QuotaStore>,
     audit: std::sync::Arc<dyn ports::AuditPort>,
     treinamento: std::sync::Arc<dyn ports::TreinamentoStore>,
 }
@@ -198,8 +199,11 @@ async fn main() -> anyhow::Result<()> {
             config_cache.clone(),
             bus_conn.clone(),
         ));
-    let plans_store: std::sync::Arc<dyn ports::PlansStore> =
-        std::sync::Arc::new(adapters::PgPlansStore::new(pool.clone()));
+    let plans_store: std::sync::Arc<dyn ports::PlansStore> = std::sync::Arc::new(
+        adapters::PgPlansStore::new(pool.clone(), admin_pool.clone()),
+    );
+    let quota_store: std::sync::Arc<dyn ports::QuotaStore> =
+        std::sync::Arc::new(adapters::PgQuotaStore::new(pool.clone()));
     let treinamento_store: std::sync::Arc<dyn ports::TreinamentoStore> =
         std::sync::Arc::new(adapters::PgTreinamentoStore::new(pool.clone()));
 
@@ -216,6 +220,7 @@ async fn main() -> anyhow::Result<()> {
         cliente: cliente_store,
         operacional: operacional_store,
         plans: plans_store,
+        quota: quota_store,
         audit: audit_port,
         treinamento: treinamento_store,
     };
@@ -385,6 +390,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_set_tenant_active = state_clone.clone();
     let state_for_generate_access_code = state_clone.clone();
     let state_for_list_plans = state_clone.clone();
+    let state_for_check_quota = state_clone.clone();
     let state_for_create_plan = state_clone.clone();
     let state_for_update_plan = state_clone.clone();
     let state_for_list_subscriptions = state_clone.clone();
@@ -655,6 +661,12 @@ async fn main() -> anyhow::Result<()> {
         .route("ListPlans", move |env| {
             let state = state_for_list_plans.clone();
             Box::pin(async move { handler_list_plans(state.plans.as_ref(), env).await })
+        })
+        .route("CheckQuota", move |env| {
+            let state = state_for_check_quota.clone();
+            Box::pin(async move {
+                handler_check_quota(state.quota.as_ref(), state.audit.as_ref(), env).await
+            })
         })
         .route("CreatePlan", move |env| {
             let state = state_for_create_plan.clone();
@@ -2958,6 +2970,80 @@ async fn handler_list_plans(store: &dyn ports::PlansStore, env: Envelope) -> Env
             "ListPlansReply",
             serde_json::json!({ "plans": plans }),
         ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+// --- N4.2: verificação de quota/inadimplência (chamado internamente por
+// webhook_ingress/data_whatsapp via QuotaGuard antes de ingestão/envio) ---
+
+#[tracing::instrument(skip_all, fields(rpc = "CheckQuota", tenant_id = %env.tenant_id))]
+async fn handler_check_quota(
+    store: &dyn ports::QuotaStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let recurso = payload_json
+        .get("recurso")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    // `auditar` = a chamada é um ponto de ENFORCEMENT (ex.: provisionamento de
+    // instância no data_whatsapp), onde `quota.excedida`/`tenant.bloqueado_inadimplencia`
+    // são eventos pontuais legítimos. O caminho quente de ingestão (webhook_ingress)
+    // chama CheckQuota só para LER `inadimplente` e envia `auditar=false` — do
+    // contrário um tenant saudável no limite do plano geraria uma linha de auditoria
+    // por mensagem recebida (inundação da trilha, contra doc 08 §4.2).
+    let auditar = payload_json
+        .get("auditar")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let tenant_id = match Uuid::parse_str(&env.tenant_id) {
+        Ok(u) => u,
+        Err(_) => {
+            return erro(
+                error_core::AppError::Validation("tenant_id inválido".to_string()),
+                &env,
+            )
+        }
+    };
+
+    match store.verificar_quota(tenant_id, recurso).await {
+        Ok(status) => {
+            let excedido = status
+                .get("excedido")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let inadimplente = status
+                .get("inadimplente")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+
+            if excedido && auditar {
+                tracing::warn!(tenant_id = %env.tenant_id, recurso, "quota excedida");
+                audit
+                    .publish(
+                        &env,
+                        "quota.excedida",
+                        format!("Quota de '{}' excedida", recurso),
+                        status.clone(),
+                    )
+                    .await;
+            }
+            if inadimplente && auditar {
+                tracing::warn!(tenant_id = %env.tenant_id, "assinatura inadimplente");
+                audit
+                    .publish(
+                        &env,
+                        "tenant.bloqueado_inadimplencia",
+                        "Assinatura fora de dia; ingestão/envio sujeitos a bloqueio".to_string(),
+                        status.clone(),
+                    )
+                    .await;
+            }
+            ok_reply(&env, "CheckQuotaReply", status)
+        }
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }
 }

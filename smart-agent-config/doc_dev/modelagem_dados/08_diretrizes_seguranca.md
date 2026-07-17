@@ -18,6 +18,21 @@ Para garantir que falhas de lógica em consultas SQL complexas não causem vazam
 * **Restrição de Superusuário:** O pool global de conexões (`PgPool`) do backend Rust **nunca** deve se conectar ao PostgreSQL utilizando a role de `superuser` (como `postgres`) ou a role dona das tabelas (*table owner*). No PostgreSQL, roles superusuárias e donas de tabelas contornam o RLS por padrão (`BYPASSRLS`).
 * **Role da Aplicação:** Deve ser criada uma role específica de privilégios mínimos (ex: `app_runtime`) que tenha permissão para realizar operações de DML (`SELECT`, `INSERT`, `UPDATE`, `DELETE`) nas tabelas necessárias, mas seja estritamente submetida às políticas de RLS (`NOBYPASSRLS`).
 
+**Estado real (N4.1, implementado):** `smartcore_app` é o *bootstrap user* do
+container Postgres — o próprio PostgreSQL exige que ele permaneça `SUPERUSER`
+("the bootstrap user must have the SUPERUSER attribute"), então ele **não pode**
+ser rebaixado; continua sendo a role administrativa (`DATABASE_ADMIN_URL`, dona
+das tabelas, usada só para migrations/DDL e os poucos lookups cross-tenant
+legítimos). A role de runtime é uma role **nova e aditiva**, `smartcore_app_rt`
+(`DATABASE_URL` — NOSUPERUSER NOBYPASSRLS) — é ela quem passa de verdade pelas
+policies de RLS. A criação é aplicada uma vez por ambiente via
+`infra/provision-db-role.sh` (idempotente); os grants de DML da role de runtime
+são mantidos em sincronia a cada migration por
+`server/crates/infrastructure_postgres/migrations/0018_app_rt_role_grants.sql`
+(condicional/idempotente; `0016_app_runtime_role.sql` cobre a role administrativa).
+Fronteira `pool` × `admin_pool` documentada em
+`infrastructure_postgres::connection::criar_admin_pool`.
+
 ### 1.3 Exemplo de SQL para Ativação e Política de RLS
 Abaixo está o padrão para a criação e ativação das políticas nas tabelas de inquilino:
 

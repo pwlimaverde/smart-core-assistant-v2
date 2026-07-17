@@ -39,7 +39,19 @@ pub fn carregar_env_teste() {
 pub fn url_redis_teste() -> String {
     carregar_env_teste();
     let base = std::env::var("REDIS_URL").expect("REDIS_URL não configurada para testes");
-    format!("{}/15", base.trim_end_matches('/'))
+    com_db_logico(&base, 15)
+}
+
+/// Reescreve (ou acrescenta) o índice de banco lógico da `REDIS_URL` para `db`.
+/// Robusto tanto para URLs sem índice (`redis://host:6379`) quanto com índice
+/// (`redis://host:6379/0`, formato canônico do `.env.example`): sem isto, o append
+/// ingênuo de `/15` produziria `.../0/15` e o redis recusaria com "Invalid database number".
+/// A autoridade vai até a primeira `/` após `://`; a senha em URL é percent-encoded,
+/// então nunca conterá uma `/` literal que confunda a separação.
+fn com_db_logico(base: &str, db: u8) -> String {
+    let (esquema, resto) = base.split_once("://").unwrap_or(("redis", base));
+    let autoridade = resto.split('/').next().unwrap_or(resto);
+    format!("{esquema}://{autoridade}/{db}")
 }
 
 /// Conexão de teste com o banco lógico limpo (`FLUSHDB`). Como `RUST_TEST_THREADS=1`, os

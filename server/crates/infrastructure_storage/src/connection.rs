@@ -5,17 +5,25 @@
 //! `endpoint_url` + `force_path_style`, sem `aws-config`.
 
 use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
+use aws_sdk_s3::types::{
+    BucketLifecycleConfiguration, ExpirationStatus, LifecycleExpiration, LifecycleRule,
+    LifecycleRuleFilter,
+};
 use aws_sdk_s3::{Client, Config};
+use secrecy::{ExposeSecret, SecretString};
 
 use crate::errors::StorageError;
 
 /// Configuração de conexão lida do ambiente.
+///
+/// N4.4: `secret_access_key` em `SecretString` — impede vazamento acidental via
+/// `Debug`/log (o `#[derive(Debug)]` do `secrecy` redige o valor automaticamente).
 #[derive(Debug, Clone)]
 pub struct S3Config {
     pub endpoint: String,
     pub region: String,
     pub access_key_id: String,
-    pub secret_access_key: String,
+    pub secret_access_key: SecretString,
     pub bucket: String,
     pub force_path_style: bool,
 }
@@ -36,7 +44,7 @@ impl S3Config {
             endpoint: env_obrigatoria("S3_ENDPOINT")?,
             region: std::env::var("S3_REGION").unwrap_or_else(|_| "auto".to_string()),
             access_key_id: env_obrigatoria("S3_ACCESS_KEY_ID")?,
-            secret_access_key: env_obrigatoria("S3_SECRET_ACCESS_KEY")?,
+            secret_access_key: SecretString::from(env_obrigatoria("S3_SECRET_ACCESS_KEY")?),
             bucket: env_obrigatoria("S3_BUCKET")?,
             force_path_style: std::env::var("S3_FORCE_PATH_STYLE")
                 .map(|v| v.eq_ignore_ascii_case("true"))
@@ -50,7 +58,7 @@ impl S3Config {
 pub fn criar_cliente_com_config(cfg: &S3Config) -> Client {
     let creds = Credentials::new(
         cfg.access_key_id.clone(),
-        cfg.secret_access_key.clone(),
+        cfg.secret_access_key.expose_secret().to_string(),
         None,
         None,
         "static",
@@ -93,6 +101,63 @@ pub async fn garantir_bucket(client: &Client, bucket: &str) -> Result<(), Storag
                 "bucket '{bucket}' inexistente ou inacessível (provisione-o no painel do R2): {e}"
             ))
         })
+}
+
+/// Aplica a regra de lifecycle do bucket (N4.3 — defesa em profundidade da
+/// retenção de mídia). A purga primária continua aplicativa (scheduler →
+/// `media.purge` → `StorageClient::delete`, que respeita a política por plano e
+/// preserva o resumo/análise no Postgres); esta regra é uma rede de segurança
+/// adicional no próprio bucket, com margem conservadora (deve ser bem maior que a
+/// retenção por plano — ver `S3_LIFECYCLE_EXPIRATION_DAYS`).
+///
+/// Best-effort: falha aqui não impede o boot do serviço (loga e segue). Providers
+/// S3 sem suporte a lifecycle (ex.: MinIO em dev, dependendo da versão) não devem
+/// travar o boot de `data_storage`.
+pub async fn garantir_lifecycle(client: &Client, bucket: &str, expiration_days: i32) {
+    if expiration_days <= 0 {
+        tracing::info!("lifecycle do bucket desabilitado (S3_LIFECYCLE_EXPIRATION_DAYS <= 0)");
+        return;
+    }
+
+    let regra = match LifecycleRule::builder()
+        .id("smartcore-expira-midia")
+        .status(ExpirationStatus::Enabled)
+        .filter(LifecycleRuleFilter::builder().prefix("").build())
+        .expiration(LifecycleExpiration::builder().days(expiration_days).build())
+        .build()
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!("falha ao montar regra de lifecycle do bucket: {e}");
+            return;
+        }
+    };
+
+    let config = match BucketLifecycleConfiguration::builder().rules(regra).build() {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!("falha ao montar lifecycle configuration do bucket: {e}");
+            return;
+        }
+    };
+
+    match client
+        .put_bucket_lifecycle_configuration()
+        .bucket(bucket)
+        .lifecycle_configuration(config)
+        .send()
+        .await
+    {
+        Ok(_) => tracing::info!(
+            bucket = %bucket,
+            expiration_days,
+            "lifecycle do bucket aplicado (defesa em profundidade da retenção de mídia)"
+        ),
+        Err(e) => tracing::warn!(
+            bucket = %bucket,
+            "falha ao aplicar lifecycle do bucket (best-effort, prosseguindo): {e}"
+        ),
+    }
 }
 
 /// Healthcheck simples: confirma o acesso ao bucket via `head_bucket`.
