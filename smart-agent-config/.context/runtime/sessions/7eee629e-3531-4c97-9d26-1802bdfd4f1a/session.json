@@ -1,0 +1,18 @@
+{
+  "id": "7eee629e-3531-4c97-9d26-1802bdfd4f1a",
+  "name": "n6-ia-fluxo-vivo",
+  "status": "active",
+  "repoPath": "C:\\PROJETOS\\FULL-STACK\\smart-core-assistant-v2\\smart-agent-config",
+  "createdAt": "2026-07-18T12:15:24.311Z",
+  "updatedAt": "2026-07-18T12:15:36.078Z",
+  "startedAt": "2026-07-18T12:15:24.311Z",
+  "traceCount": 5,
+  "artifactCount": 0,
+  "checkpointCount": 0,
+  "checkpoints": [],
+  "metadata": {
+    "workflow": true,
+    "description": "Fase N6 — IA no fluxo vivo: mídia no pipeline real (download via data_whatsapp + R2 + Transcribe/InterpretMedia), campos gerado_por_ia/resumo_midia reais no chat (proto aditivo), fluxos de transferência por tenant no Responder, transcrição via Groq com fallback OpenAI, sentimento persistido. Primeira fase do port final N6–N8."
+  },
+  "lastTraceAt": "2026-07-18T12:15:36.078Z"
+}

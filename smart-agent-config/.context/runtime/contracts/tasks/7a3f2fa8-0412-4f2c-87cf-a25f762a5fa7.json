@@ -1,0 +1,36 @@
+{
+  "id": "7a3f2fa8-0412-4f2c-87cf-a25f762a5fa7",
+  "title": "Fase N6 — IA no fluxo vivo (mídia, campos de IA no chat, fluxos de transferência): Planning",
+  "description": "Derived from linked plan \"n6-ia-fluxo-vivo\" for PREVC phase P (Planning). Plan phases: Planning. Expected outputs: prd, tech-spec, requirements, wireframes.",
+  "sessionId": "7eee629e-3531-4c97-9d26-1802bdfd4f1a",
+  "owner": "planner",
+  "status": "ready",
+  "inputs": [],
+  "expectedOutputs": [
+    "prd",
+    "tech-spec",
+    "requirements",
+    "wireframes"
+  ],
+  "acceptanceCriteria": [
+    "Complete Planning"
+  ],
+  "requiredSensors": [],
+  "requiredArtifacts": [],
+  "createdAt": "2026-07-18T12:15:30.081Z",
+  "updatedAt": "2026-07-18T12:15:30.081Z",
+  "metadata": {
+    "requirementsSource": "none",
+    "source": "workflow.plan",
+    "planSlug": "n6-ia-fluxo-vivo",
+    "prevcPhase": "P",
+    "planPhaseIds": [
+      "phase-p"
+    ],
+    "planPhaseNames": [
+      "Planning"
+    ],
+    "planPhaseSummaries": [],
+    "derivedFrom": "linked-plan"
+  }
+}
