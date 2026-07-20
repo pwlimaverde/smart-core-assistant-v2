@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:get_it_module/get_it_module.dart';
+import 'package:get_it_module/src/get_it_module_scope.dart';
 
 // Serviço fictício para os testes
 abstract interface class _FakeService {
@@ -47,6 +48,9 @@ final class _FakeRoute extends GetItModule {
   @override
   void binds(Injector i) {}
 }
+
+// Módulo sem overrides: prova os defaults declarados em AppModule.
+final class _DefaultModule extends AppModule {}
 
 // Módulo que contribui rotas ao app
 final class _RouteModule extends AppModule {
@@ -100,5 +104,29 @@ void main() {
     final log = <String>[];
     await bootModules([_BootModule(log)]);
     expect(log, ['infra', 'session']);
+  });
+
+  test('Injector.singleton registra a instância exata (sem recriar)', () {
+    final injector = Injector(GetIt.instance);
+    final instance = _FakeServiceImpl();
+    injector.singleton<_FakeService>(instance);
+    expect(identical(inject<_FakeService>(), instance), isTrue);
+  });
+
+  test('AppModule sem overrides usa os defaults: sem rotas, sem bootTasks, '
+      'globalBinds não registra nada', () {
+    final module = _DefaultModule();
+    expect(module.routes(), isEmpty);
+    expect(module.bootTasks(), isEmpty);
+    // globalBinds() default é um no-op — não deve lançar nem registrar nada.
+    module.globalBinds(Injector(GetIt.instance));
+    expect(GetIt.instance.isRegistered<_FakeService>(), isFalse);
+  });
+
+  test('GetItModule.toRoute() resolve para um GetItModuleScope deste módulo', () {
+    final route = _FakeRoute('/x');
+    final widget = route.toRoute();
+    expect(widget, isA<GetItModuleScope>());
+    expect((widget as GetItModuleScope).module, same(route));
   });
 }
