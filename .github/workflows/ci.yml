@@ -153,13 +153,16 @@ jobs:
       # Cobertura COMBINADA (unit + integração): roda a suíte inteira (sem o filtro
       # --lib --bins) contra os MESMOS service containers efêmeros já provisionados
       # acima — os testes de integração detectam a porta aberta (5434/6380) e não
-      # tentam abrir túnel SSH (ver comentário no topo do job). É a primeira vez que a
-      # suíte de integração roda no CI (antes só localmente, via test-local.ps1, contra
-      # o banco remoto da Hostinger) — por isso o passo é INFORMATIVO
-      # (continue-on-error): não bloqueia o pipeline se aparecer alguma instabilidade
-      # nesta rodada inicial. Testes opt-in de R2 (infrastructure_storage/tests/objetos)
-      # pulam sozinhos sem as env vars S3_* (sem secret novo necessário aqui). O
-      # ratchet (falhar se a cobertura cair) entra depois que a etapa provar estável.
+      # tentam abrir túnel SSH (ver comentário no topo do job). Ainda é recente a
+      # suíte de integração rodar no CI (antes só localmente, via test-local.ps1,
+      # contra o banco remoto da Hostinger) — por isso o passo continua INFORMATIVO
+      # (continue-on-error): não bloqueia o pipeline se aparecer alguma instabilidade.
+      # Testes opt-in de R2 (infrastructure_storage/tests/objetos) pulam sozinhos sem
+      # as env vars S3_* (sem secret novo necessário aqui). `--ignore-filename-regex`
+      # exclui código GERADO pelo build.rs de contracts (flatc/protoc, compilado em
+      # target/**/out/) — não é código nosso, não faz sentido cobrir. O ratchet
+      # numérico (--fail-under-lines) fica para quando a suíte provar mais estável em
+      # CI (poucas rodadas até agora); ver .context/docs/testing-strategy.md.
       - name: cargo llvm-cov (cobertura combinada, informativo)
         working-directory: server
         continue-on-error: true
@@ -173,8 +176,9 @@ jobs:
           RUST_TEST_THREADS: "1"
         run: |
           mkdir -p coverage
-          cargo llvm-cov --workspace --lcov --output-path coverage/rust-lcov.info -- --test-threads=1
-          cargo llvm-cov report --summary-only
+          cargo llvm-cov --workspace --ignore-filename-regex '.*/target/.*/out/.*' \
+            --lcov --output-path coverage/rust-lcov.info -- --test-threads=1
+          cargo llvm-cov report --ignore-filename-regex '.*/target/.*/out/.*' --summary-only
 
       - name: Publica lcov Rust como artefato
         if: always()
@@ -223,9 +227,12 @@ jobs:
         working-directory: ia_engine
         run: uv run python scripts/gen_proto.py
 
-      - name: uv run pytest --cov
+      # Ratchet ativo (etapa C5 do plano de cobertura): baseline medido em 99% do
+      # código não-bootstrap (ver testing-strategy.md); piso com margem de segurança
+      # para não travar o CI por flutuação pontual, mas pegar regressão real.
+      - name: "uv run pytest --cov (ratchet: falha abaixo de 90%)"
         working-directory: ia_engine
-        run: uv run pytest --cov=ia_engine --cov-report=xml --cov-report=term-missing
+        run: uv run pytest --cov=ia_engine --cov-report=xml --cov-report=term-missing --cov-fail-under=90
 
       - name: Publica cobertura ia_engine como artefato
         if: always()
@@ -285,8 +292,9 @@ jobs:
 
       # Agrega os coverage/lcov.info gerados pelo `flutter test --coverage` de cada
       # pacote (melos test já roda com --coverage) num único lcov combinado + resumo
-      # em %. Informativo: nunca falha o job por si (o gate é o teste em si, acima).
-      - name: Agrega cobertura Flutter (lcov combinado)
+      # em %. Ratchet ativo (etapa C5 do plano de cobertura): baseline medido em
+      # 93,5% agregado (ver testing-strategy.md); piso com margem de segurança.
+      - name: "Agrega cobertura Flutter (lcov combinado, ratchet: falha abaixo de 85%)"
         working-directory: clients
         run: |
           mkdir -p ../coverage
@@ -299,8 +307,14 @@ jobs:
             lh=$(grep '^LH:' "$lcov" | awk -F: '{s+=$2} END {print s+0}')
             total_lf=$((total_lf + lf)); total_lh=$((total_lh + lh))
           done < <(find . -path '*/coverage/lcov.info' -print0)
-          pct=$(awk -v lh="$total_lh" -v lf="$total_lf" 'BEGIN { if (lf>0) printf "%.1f", 100*lh/lf; else print "0" }')
-          echo "TOTAL Flutter: ${total_lh}/${total_lf} = ${pct}%"
+          awk -v lh="$total_lh" -v lf="$total_lf" -v floor=85 'BEGIN {
+            pct = (lf > 0) ? 100 * lh / lf : 0
+            printf "TOTAL Flutter: %d/%d = %.1f%% (piso %d%%)\n", lh, lf, pct, floor
+            if (pct < floor) {
+              printf "FALHA: cobertura Flutter %.1f%% abaixo do piso %d%%\n", pct, floor
+              exit 1
+            }
+          }'
 
       - name: Publica lcov Flutter como artefato
         if: always()
