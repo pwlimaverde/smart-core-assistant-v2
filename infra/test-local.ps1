@@ -93,6 +93,32 @@ Write-Host "Conectando ao banco dev remoto (smartcore_v2) via tunel SSH automati
 $falhas = @()
 
 # --------------------------------------------
+# 1.5 Codigo-fonte .rs/.sql ignorado pelo git (nao vai pro CI)
+#     Pega o caso "passa local, quebra no CI": um arquivo de codigo que casa o
+#     .gitignore existe na sua maquina (fmt/clippy/testes locais passam) mas nunca
+#     foi commitado — o CI nao o tem e o build quebra. Foi exatamente o que
+#     aconteceu com server/crates/local_engine/src/media_cache/mod.rs (regra
+#     generica "media_cache/" pegava tambem o diretorio de codigo homonimo).
+# --------------------------------------------
+Write-Etapa "Codigo .rs/.sql ignorado pelo git (nao vai pro CI)"
+Push-Location $repoRoot
+try {
+    # --others --ignored lista arquivos ignorados; filtra fontes reais (.rs/.sql)
+    # fora de target/ (artefatos de build, legitimamente ignorados).
+    $ignorados = git ls-files --others --ignored --exclude-standard server |
+        Where-Object { $_ -match '\.(rs|sql)$' -and $_ -notmatch '(^|/)target/' }
+    if ($ignorados) {
+        $falhas += "git-ignored"
+        Write-Host "ha codigo .rs/.sql ignorado pelo git (nao vai pro CI):" -ForegroundColor Red
+        $ignorados | ForEach-Object { Write-Host "    $_" -ForegroundColor Yellow }
+    } else {
+        Write-Host "ok" -ForegroundColor Green
+    }
+} finally {
+    Pop-Location
+}
+
+# --------------------------------------------
 # 2. cargo fmt --check (mesmo gate do CI)
 # --------------------------------------------
 Write-Etapa "cargo fmt --check"

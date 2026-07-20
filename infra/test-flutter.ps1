@@ -31,6 +31,7 @@ $pacotes = @(
     "packages\domain_models",
     "packages\get_it_module",
     "packages\api_client",
+    "packages\local_engine_ffi",
     "modulos\presentation_module",
     "modulos\design_system_module",
     "modulos\navigation_module",
@@ -80,22 +81,35 @@ try {
 }
 
 # --------------------------------------------
-# 1. flutter analyze (equivalente ao clippy)
-#    Roda no workspace raiz — cobre todos os pacotes de uma vez.
-#    SEM --no-fatal-infos: o CI roda `melos exec -- flutter analyze .` (ver
-#    clients/pubspec.yaml, script melos "analyze"), que trata QUALQUER issue
-#    (inclusive info) como falha. O gate local precisa do mesmo rigor, senão
-#    um lint info passa aqui e quebra o CI.
+# 1. flutter analyze POR PACOTE (espelha `melos exec -- flutter analyze .` do CI)
+#    NAO usar `flutter analyze` unico no raiz: ele NAO desce em subpacotes
+#    aninhados (ex.: local_engine_ffi/cargokit/, tool vendorizada do
+#    flutter_rust_bridge) e por isso deixou passar 62 issues que quebraram o CI.
+#    O melos roda `flutter analyze .` DENTRO de cada pacote, o que desce nos
+#    subdiretorios — replicamos isso aqui, iterando os mesmos pacotes.
+#    SEM --no-fatal-infos: o CI trata QUALQUER issue (inclusive info) como falha.
 # --------------------------------------------
 if (-not $SkipAnalyze) {
-    Write-Etapa "flutter analyze (workspace)"
-    Push-Location $clientDir
-    try {
-        flutter analyze 2>&1
-        if ($LASTEXITCODE -ne 0) { $falhas += "analyze"; Write-Fail "analyze" }
-        else { Write-Ok }
-    } finally {
-        Pop-Location
+    Write-Etapa "flutter analyze (por pacote, espelha o CI)"
+    foreach ($rel in $pacotes) {
+        $pkgPath = Join-Path $clientDir $rel
+        $pkgName = Split-Path -Leaf $rel
+        Write-Host "  $pkgName" -NoNewline
+        Push-Location $pkgPath
+        try {
+            $out = flutter analyze . 2>&1 | Out-String
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host " -- FALHOU" -ForegroundColor Red
+                $falhas += "analyze:$pkgName"
+                $clean = [regex]::Replace($out, '\x1b\[[0-9;]*m', '')
+                ($clean -split "`n" | Where-Object { $_ -match ' - |•' } | Select-Object -First 12) |
+                    ForEach-Object { Write-Host "      $($_.Trim())" -ForegroundColor Yellow }
+            } else {
+                Write-Host " -- ok" -ForegroundColor Green
+            }
+        } finally {
+            Pop-Location
+        }
     }
 }
 
