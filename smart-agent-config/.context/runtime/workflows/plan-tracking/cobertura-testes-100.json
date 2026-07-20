@@ -45,9 +45,17 @@
           "completedAt": "2026-07-20T17:10:57.282Z",
           "output": "clients/*/test/ (201 testes)",
           "notes": "C3: Flutter agregado 76,4% -> 93,5% (613/802 -> 848/907). 5 modulos fracos elevados (initial_loading 100%, get_it 97,6%, design_system 96,9%, domain_models 91,1%, operacional 90,6%). analyze limpo. Merge --no-ff em dev (c16251c), CI 4/4 verde."
+        },
+        {
+          "stepIndex": 4,
+          "description": "Step 4",
+          "status": "completed",
+          "completedAt": "2026-07-20T17:31:45.086Z",
+          "output": "server/crates/{application,domain_whatsapp,local_engine}, server/apps/{data_postgres,data_redis}",
+          "notes": "C4: application isolado 0->80,87%; domain_whatsapp 54,15%->99,30%; local_engine 73,45%->97,17% (isolado); workspace unitario 48%->54,31% (excluindo worker, problema ambiental de porta Redis local). Achado fora de escopo documentado: race condition em OfflineQueue::next_version (SELECT MAX+1 sem atomicidade) - teste que comprova a corrida foi escrito, fix arquitetural fica para follow-up. fmt/clippy limpos. Merge --no-ff em dev (e289771), CI 4/4 verde (incluindo llvm-cov combinado do CI da C1 rodando os novos testes)."
         }
       ],
-      "completedAt": "2026-07-20T17:10:57.282Z"
+      "completedAt": "2026-07-20T17:31:45.086Z"
     }
   },
   "decisions": [
@@ -64,5 +72,5 @@
       "decidedAt": "2026-07-20T14:56:51.192Z"
     }
   ],
-  "lastUpdated": "2026-07-20T17:10:57.282Z"
+  "lastUpdated": "2026-07-20T17:31:45.086Z"
 }
