@@ -47,7 +47,7 @@ phases:
     prevc: "C"
     agent: "documentation-writer"
     status: "pending"
-lastUpdated: "2026-07-20T17:31:45.086Z"
+lastUpdated: "2026-07-20T17:56:19.288Z"
 ---
 
 # Cobertura de Testes — rumo aos 100%
@@ -92,11 +92,11 @@ lastUpdated: "2026-07-20T17:31:45.086Z"
 
 ## Execution History
 
-> Last updated: 2026-07-20T17:31:45.086Z | Progress: 100%
+> Last updated: 2026-07-20T17:56:19.288Z | Progress: 100%
 
 ### phase-2 [DONE]
 - Started: 2026-07-20T14:56:55.681Z
-- Completed: 2026-07-20T17:31:45.086Z
+- Completed: 2026-07-20T17:56:19.288Z
 
 - [x] Step 1: Step 1 *(2026-07-20T15:16:04.967Z)*
   - Output: .github/workflows/ci.yml, clients/pubspec.yaml
@@ -110,6 +110,9 @@ lastUpdated: "2026-07-20T17:31:45.086Z"
 - [x] Step 4: Step 4 *(2026-07-20T17:31:45.086Z)*
   - Output: server/crates/{application,domain_whatsapp,local_engine}, server/apps/{data_postgres,data_redis}
   - Notes: C4: application isolado 0->80,87%; domain_whatsapp 54,15%->99,30%; local_engine 73,45%->97,17% (isolado); workspace unitario 48%->54,31% (excluindo worker, problema ambiental de porta Redis local). Achado fora de escopo documentado: race condition em OfflineQueue::next_version (SELECT MAX+1 sem atomicidade) - teste que comprova a corrida foi escrito, fix arquitetural fica para follow-up. fmt/clippy limpos. Merge --no-ff em dev (e289771), CI 4/4 verde (incluindo llvm-cov combinado do CI da C1 rodando os novos testes).
+- [x] Step 5: Step 5 *(2026-07-20T17:56:19.288Z)*
+  - Output: .github/workflows/ci.yml, testing-strategy.md
+  - Notes: C5: ratchet ativo (Python --cov-fail-under=90, Flutter piso 85% no lcov agregado); Rust mantido informativo (poucas rodadas da suite combinada em CI ainda). Exclusoes revisadas por stack, incluindo correcao da hipotese de excluir main.rs (C4 provou logica real la). testing-strategy.md atualizado com numeros finais C1-C4. Merge --no-ff em dev (0838a42), CI 4/4 verde.
 
 ### phase-p [DONE]
 - Started: 2026-07-20T14:56:51.991Z
