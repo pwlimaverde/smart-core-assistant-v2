@@ -145,6 +145,45 @@ jobs:
           RUST_TEST_THREADS: "1"
         run: cargo test --workspace --lib --bins -- --test-threads=1 2>&1
 
+      - name: Instala cargo-llvm-cov
+        run: |
+          rustup component add llvm-tools-preview
+          cargo install cargo-llvm-cov --locked || true
+
+      # Cobertura COMBINADA (unit + integração): roda a suíte inteira (sem o filtro
+      # --lib --bins) contra os MESMOS service containers efêmeros já provisionados
+      # acima — os testes de integração detectam a porta aberta (5434/6380) e não
+      # tentam abrir túnel SSH (ver comentário no topo do job). É a primeira vez que a
+      # suíte de integração roda no CI (antes só localmente, via test-local.ps1, contra
+      # o banco remoto da Hostinger) — por isso o passo é INFORMATIVO
+      # (continue-on-error): não bloqueia o pipeline se aparecer alguma instabilidade
+      # nesta rodada inicial. Testes opt-in de R2 (infrastructure_storage/tests/objetos)
+      # pulam sozinhos sem as env vars S3_* (sem secret novo necessário aqui). O
+      # ratchet (falhar se a cobertura cair) entra depois que a etapa provar estável.
+      - name: cargo llvm-cov (cobertura combinada, informativo)
+        working-directory: server
+        continue-on-error: true
+        env:
+          SQLX_OFFLINE: "true"
+          DATABASE_URL: postgres://smartcore_app_rt:smartcore_app_rt@localhost:5434/smartcore_v2
+          DATABASE_ADMIN_URL: postgres://postgres:postgres@localhost:5434/smartcore_v2
+          REDIS_URL: redis://localhost:6380
+          REDIS_BUS_URL: redis://localhost:6380
+          ENCRYPTION_KEY: MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=
+          RUST_TEST_THREADS: "1"
+        run: |
+          mkdir -p coverage
+          cargo llvm-cov --workspace --lcov --output-path coverage/rust-lcov.info -- --test-threads=1
+          cargo llvm-cov report --summary-only
+
+      - name: Publica lcov Rust como artefato
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-lcov
+          path: server/coverage/rust-lcov.info
+          if-no-files-found: ignore
+
       # Valida que o cache .sqlx/ versionado está em sincronia com as queries do código.
       # Sem isto, uma query nova/alterada sem `cargo sqlx prepare` quebraria o build de
       # release no deploy (que usa SQLX_OFFLINE). O --check falha se houver drift.
@@ -158,6 +197,43 @@ jobs:
           # prepare --check conecta no banco para revalidar as queries; o schema já
           # foi criado pelas migrations no step de testes (mesmo container persiste).
           DATABASE_URL: postgres://postgres:postgres@localhost:5434/smartcore_v2
+
+  # Fecha a lacuna histórica: os 44 testes do ia_engine nunca rodaram no CI (só
+  # localmente). Job próprio, sem dependência do banco (o ia_engine não fala com
+  # Postgres/Redis diretamente — é o worker Rust que faz a ponte via gRPC).
+  ia_engine:
+    name: ia_engine — testes e cobertura (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instala uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: uv sync (dev)
+        working-directory: ia_engine
+        run: uv sync --dev
+
+      # Stubs gRPC gerados a partir do .proto canônico compartilhado com o Rust
+      # (server/crates/contracts/schemas/ai/ai_engine.proto); necessários para
+      # importar ia_engine.contracts nos testes e no servicer.
+      - name: Gera stubs gRPC (proto canônico)
+        working-directory: ia_engine
+        run: uv run python scripts/gen_proto.py
+
+      - name: uv run pytest --cov
+        working-directory: ia_engine
+        run: uv run pytest --cov=ia_engine --cov-report=xml --cov-report=term-missing
+
+      - name: Publica cobertura ia_engine como artefato
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ia-engine-coverage
+          path: ia_engine/coverage.xml
+          if-no-files-found: ignore
 
   # Detecta se o app Flutter já existe.
   # hashFiles() NÃO funciona em if de nível de job (avaliado antes do checkout),
@@ -206,6 +282,33 @@ jobs:
       - name: melos test
         working-directory: clients
         run: melos run test
+
+      # Agrega os coverage/lcov.info gerados pelo `flutter test --coverage` de cada
+      # pacote (melos test já roda com --coverage) num único lcov combinado + resumo
+      # em %. Informativo: nunca falha o job por si (o gate é o teste em si, acima).
+      - name: Agrega cobertura Flutter (lcov combinado)
+        working-directory: clients
+        run: |
+          mkdir -p ../coverage
+          dest=../coverage/flutter-lcov.info
+          rm -f "$dest"
+          total_lf=0; total_lh=0
+          while IFS= read -r -d '' lcov; do
+            cat "$lcov" >> "$dest"
+            lf=$(grep '^LF:' "$lcov" | awk -F: '{s+=$2} END {print s+0}')
+            lh=$(grep '^LH:' "$lcov" | awk -F: '{s+=$2} END {print s+0}')
+            total_lf=$((total_lf + lf)); total_lh=$((total_lh + lh))
+          done < <(find . -path '*/coverage/lcov.info' -print0)
+          pct=$(awk -v lh="$total_lh" -v lf="$total_lf" 'BEGIN { if (lf>0) printf "%.1f", 100*lh/lf; else print "0" }')
+          echo "TOTAL Flutter: ${total_lh}/${total_lf} = ${pct}%"
+
+      - name: Publica lcov Flutter como artefato
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-lcov
+          path: coverage/flutter-lcov.info
+          if-no-files-found: ignore
 
       # Smoke de build web/WASM: pega quebras de compilação cedo (ex.: flutter_secure_storage).
       - name: Smoke build web (--wasm)

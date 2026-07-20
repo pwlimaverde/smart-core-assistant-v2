@@ -1,7 +1,7 @@
 {
   "version": 2,
   "workflowType": "prevc",
-  "updatedAt": "2026-07-18T12:15:30.091Z",
+  "updatedAt": "2026-07-20T14:56:55.692Z",
   "status": {
     "project": {
       "name": "n6-ia-fluxo-vivo",
@@ -13,7 +13,7 @@
         "require_plan": true,
         "require_approval": true
       },
-      "plan": "n6-ia-fluxo-vivo"
+      "plan": "cobertura-testes-100"
     },
     "phases": {
       "P": {
@@ -76,17 +76,51 @@
           "action": "plan_linked",
           "plan": "n6-ia-fluxo-vivo",
           "timestamp": "2026-07-18T12:15:30.091Z"
+        },
+        {
+          "phase": "P",
+          "action": "plan_linked",
+          "plan": "cobertura-testes-100",
+          "timestamp": "2026-07-20T14:56:38.886Z"
+        },
+        {
+          "phase": "P",
+          "action": "decision_recorded",
+          "plan": "cobertura-testes-100",
+          "description": "Decision recorded: Exclusões, alvo por camada e escala do ratchet confirmados",
+          "timestamp": "2026-07-20T14:56:51.197Z"
+        },
+        {
+          "phase": "P",
+          "action": "plan_phase_updated",
+          "plan": "cobertura-testes-100",
+          "description": "Plan phase phase-p updated to completed",
+          "timestamp": "2026-07-20T14:56:52.004Z"
+        },
+        {
+          "phase": "P",
+          "action": "plan_phase_updated",
+          "plan": "cobertura-testes-100",
+          "description": "Plan phase phase-r updated to completed",
+          "timestamp": "2026-07-20T14:56:52.692Z"
+        },
+        {
+          "phase": "P",
+          "action": "plan_phase_updated",
+          "plan": "cobertura-testes-100",
+          "description": "Plan phase phase-2 updated to in_progress",
+          "timestamp": "2026-07-20T14:56:55.691Z"
         }
       ],
-      "last_activity": "2026-07-18T12:15:30.091Z",
-      "resume_context": "Plano vinculado - aguardando revisão"
+      "last_activity": "2026-07-20T14:56:55.691Z",
+      "resume_context": "Fase do plano atualizada"
     }
   },
   "binding": {
     "workflowName": "n6-ia-fluxo-vivo",
     "sessionId": "7eee629e-3531-4c97-9d26-1802bdfd4f1a",
-    "activeTaskId": "7a3f2fa8-0412-4f2c-87cf-a25f762a5fa7",
+    "activeTaskId": "d0a6a335-9dd6-46cb-ad7e-5fc9add13baf",
     "createdAt": "2026-07-18T12:15:24.319Z",
-    "updatedAt": "2026-07-18T12:15:30.081Z"
+    "updatedAt": "2026-07-20T14:56:38.877Z"
   }
 }
