@@ -1,7 +1,7 @@
 {
   "version": 2,
   "workflowType": "prevc",
-  "updatedAt": "2026-07-20T17:56:19.302Z",
+  "updatedAt": "2026-07-20T17:56:50.862Z",
   "status": {
     "project": {
       "name": "n6-ia-fluxo-vivo",
@@ -165,10 +165,31 @@
           "output": ".github/workflows/ci.yml, testing-strategy.md",
           "notes": "C5: ratchet ativo (Python --cov-fail-under=90, Flutter piso 85% no lcov agregado); Rust mantido informativo (poucas rodadas da suite combinada em CI ainda). Exclusoes revisadas por stack, incluindo correcao da hipotese de excluir main.rs (C4 provou logica real la). testing-strategy.md atualizado com numeros finais C1-C4. Merge --no-ff em dev (0838a42), CI 4/4 verde.",
           "timestamp": "2026-07-20T17:56:19.301Z"
+        },
+        {
+          "phase": "P",
+          "action": "plan_phase_updated",
+          "plan": "cobertura-testes-100",
+          "description": "Plan phase phase-2 updated to completed",
+          "timestamp": "2026-07-20T17:56:20.032Z"
+        },
+        {
+          "phase": "P",
+          "action": "plan_phase_updated",
+          "plan": "cobertura-testes-100",
+          "description": "Plan phase phase-v updated to completed",
+          "timestamp": "2026-07-20T17:56:20.709Z"
+        },
+        {
+          "phase": "P",
+          "action": "plan_phase_updated",
+          "plan": "cobertura-testes-100",
+          "description": "Plan phase phase-c updated to completed",
+          "timestamp": "2026-07-20T17:56:50.860Z"
         }
       ],
-      "last_activity": "2026-07-20T17:56:19.301Z",
-      "resume_context": "Concluído: Step 5"
+      "last_activity": "2026-07-20T17:56:50.860Z",
+      "resume_context": "Fase do plano atualizada"
     }
   },
   "binding": {
