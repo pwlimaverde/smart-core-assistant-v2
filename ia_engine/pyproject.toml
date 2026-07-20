@@ -26,6 +26,7 @@ dev = [
     "grpcio-tools>=1.68",
     "pytest>=8.3",
     "pytest-asyncio>=0.24",
+    "pytest-cov>=5.0",
     "ruff>=0.7",
     "mypy>=1.13",
 ]
@@ -55,6 +56,26 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+# Cobertura (pytest-cov). Medição é bússola, não meta cega (ver testing-strategy).
+# Os stubs gRPC gerados (contracts) ficam de fora — não são código nosso.
+[tool.coverage.run]
+source = ["ia_engine"]
+branch = true
+omit = [
+    "src/ia_engine/contracts/*",
+    "*/__main__.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
 
 [tool.mypy]
 python_version = "3.13"

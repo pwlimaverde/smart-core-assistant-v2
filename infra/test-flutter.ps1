@@ -16,7 +16,8 @@
 # ============================================
 
 param(
-    [switch]$SkipAnalyze
+    [switch]$SkipAnalyze,
+    [switch]$Coverage   # roda `flutter test --coverage` por pacote e agrega o lcov (coverage/flutter-lcov.info)
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -131,7 +132,8 @@ foreach ($rel in $pacotes) {
 
     Push-Location $pkgPath
     try {
-        $out = flutter test --reporter compact 2>&1 | Out-String
+        $covArg = if ($Coverage) { '--coverage' } else { $null }
+        $out = flutter test --reporter compact $covArg 2>&1 | Out-String
 
         # Extrai contagem: remove codigos ANSI antes de parsear
         $clean = [regex]::Replace($out, '\x1b\[[0-9;]*m', '')
@@ -151,6 +153,31 @@ foreach ($rel in $pacotes) {
     } finally {
         Pop-Location
     }
+}
+
+# --------------------------------------------
+# Cobertura: agrega os lcov.info de cada pacote (quando -Coverage)
+# --------------------------------------------
+if ($Coverage) {
+    Write-Etapa "cobertura Flutter (agrega lcov por pacote)"
+    $totLF = 0; $totLH = 0
+    $covDir = Join-Path $repoRoot "coverage"
+    New-Item -ItemType Directory -Force -Path $covDir | Out-Null
+    $destLcov = Join-Path $covDir "flutter-lcov.info"
+    if (Test-Path $destLcov) { Remove-Item $destLcov -Force }
+    foreach ($rel in $pacotes) {
+        $lcov = Join-Path $clientDir (Join-Path $rel "coverage\lcov.info")
+        if (-not (Test-Path $lcov)) { continue }
+        Get-Content $lcov | Add-Content $destLcov
+        # [int](...) tolera pacote sem linhas cobriveis (Select-String sem match -> Sum nulo -> 0).
+        $lf = [int]((Select-String -Path $lcov -Pattern '^LF:(\d+)' | ForEach-Object { [int]$_.Matches[0].Groups[1].Value } | Measure-Object -Sum).Sum)
+        $lh = [int]((Select-String -Path $lcov -Pattern '^LH:(\d+)' | ForEach-Object { [int]$_.Matches[0].Groups[1].Value } | Measure-Object -Sum).Sum)
+        $pct = if ($lf) { [math]::Round(100 * $lh / $lf, 1) } else { 0 }
+        Write-Host ("  {0,-32} {1,5}/{2,-5} = {3}%" -f (Split-Path -Leaf $rel), $lh, $lf, $pct)
+        $totLF += $lf; $totLH += $lh
+    }
+    $totPct = if ($totLF) { [math]::Round(100 * $totLH / $totLF, 1) } else { 0 }
+    Write-Host ("  TOTAL Flutter: {0}/{1} = {2}% (lcov agregado em coverage/flutter-lcov.info)" -f $totLH, $totLF, $totPct) -ForegroundColor Cyan
 }
 
 # --------------------------------------------
