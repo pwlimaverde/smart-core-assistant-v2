@@ -24,7 +24,8 @@
 
 param(
     [switch]$Fast,
-    [switch]$ResetTunnel
+    [switch]$ResetTunnel,
+    [switch]$Coverage   # mede cobertura unitaria (cargo llvm-cov --lib --bins), gera coverage/rust-lcov.info
 )
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -141,7 +142,21 @@ try {
     #    padrao: suite COMPLETA (unit + integracao) - o test_support abre o
     #            tunel SSH sozinho na primeira suite que precisar do banco
     # --------------------------------------------
-    if ($Fast) {
+    if ($Coverage) {
+        # Cobertura unitaria (sem banco). Bussola, nao meta cega (testing-strategy).
+        Write-Etapa "cobertura: cargo llvm-cov --workspace --lib --bins"
+        if (Get-Command cargo-llvm-cov -ErrorAction SilentlyContinue) {
+            $env:RUST_TEST_THREADS = "1"
+            $covDir = Join-Path $repoRoot "coverage"
+            New-Item -ItemType Directory -Force -Path $covDir | Out-Null
+            cargo llvm-cov --workspace --lib --bins --lcov `
+                --output-path (Join-Path $covDir "rust-lcov.info") -- --test-threads=1
+            cargo llvm-cov report --summary-only
+        } else {
+            Write-Host "cargo-llvm-cov nao instalado: cargo install cargo-llvm-cov --locked" -ForegroundColor Yellow
+            $falhas += "coverage-tool-missing"
+        }
+    } elseif ($Fast) {
         Write-Etapa "cargo test --workspace --lib --bins (modo rapido, sem banco)"
         # Serializa threads para evitar exaustao de conexoes ao banco (ver ci.yml)
         $env:RUST_TEST_THREADS = "1"

@@ -91,6 +91,13 @@ target/
 # Symbols / coverage
 **/coverage/
 *.symbols
+# Artefatos de cobertura (pytest-cov / llvm-cov / flutter test --coverage)
+.coverage
+coverage.json
+coverage.xml
+htmlcov/
+*.lcov
+lcov.info
 
 # =============================================================================
 # PYTHON (services/ai_orchestrator)
