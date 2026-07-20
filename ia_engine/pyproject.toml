@@ -65,6 +65,13 @@ branch = true
 omit = [
     "src/ia_engine/contracts/*",
     "*/__main__.py",
+    # Bootstrap/entrypoint (glue de processo, sem lógica de domínio a
+    # testar): sobem o servidor gRPC, resolvem settings de ambiente e
+    # inicializam o exporter OTLP. Exclusão justificada pela política
+    # "bússola, não meta cega" (ver testing-strategy).
+    "src/ia_engine/server.py",
+    "src/ia_engine/settings.py",
+    "src/ia_engine/telemetry.py",
 ]
 
 [tool.coverage.report]

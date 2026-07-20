@@ -39,6 +39,11 @@ def test_cosine_zero_vector_raises():
         calculate_embedding_similarity([0.0, 0.0], [1.0, 0.0])
 
 
+def test_cosine_vetores_vazios_raises():
+    with pytest.raises(ValueError, match="não podem estar vazios"):
+        calculate_embedding_similarity([], [])
+
+
 # --- score triádico (portado da v1) ---------------------------------------- #
 def test_triple_no_training_applies_075_sr():
     # sr = 1.0 -> 0.75 * 1.0
