@@ -63,7 +63,25 @@
           "notes": "C5: ratchet ativo (Python --cov-fail-under=90, Flutter piso 85% no lcov agregado); Rust mantido informativo (poucas rodadas da suite combinada em CI ainda). Exclusoes revisadas por stack, incluindo correcao da hipotese de excluir main.rs (C4 provou logica real la). testing-strategy.md atualizado com numeros finais C1-C4. Merge --no-ff em dev (0838a42), CI 4/4 verde."
         }
       ],
-      "completedAt": "2026-07-20T17:56:19.288Z"
+      "completedAt": "2026-07-20T17:56:20.015Z",
+      "commitHash": "13a9a6c89dc442cf2940bf4af4672ad7d64877a4",
+      "commitShortHash": "13a9a6c",
+      "committedAt": "2026-07-20T17:56:19.774Z",
+      "committedBy": "AI Context Agent"
+    },
+    "phase-v": {
+      "phaseId": "phase-v",
+      "status": "completed",
+      "startedAt": "2026-07-20T17:56:20.693Z",
+      "steps": [],
+      "completedAt": "2026-07-20T17:56:20.693Z"
+    },
+    "phase-c": {
+      "phaseId": "phase-c",
+      "status": "completed",
+      "startedAt": "2026-07-20T17:56:50.846Z",
+      "steps": [],
+      "completedAt": "2026-07-20T17:56:50.846Z"
     }
   },
   "decisions": [
@@ -80,5 +98,5 @@
       "decidedAt": "2026-07-20T14:56:51.192Z"
     }
   ],
-  "lastUpdated": "2026-07-20T17:56:19.288Z"
+  "lastUpdated": "2026-07-20T17:56:50.846Z"
 }

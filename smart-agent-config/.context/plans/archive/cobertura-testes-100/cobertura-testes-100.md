@@ -47,7 +47,7 @@ phases:
     prevc: "C"
     agent: "documentation-writer"
     status: "pending"
-lastUpdated: "2026-07-20T17:56:19.288Z"
+lastUpdated: "2026-07-20T17:56:50.846Z"
 ---
 
 # Cobertura de Testes — rumo aos 100%
@@ -59,8 +59,8 @@ lastUpdated: "2026-07-20T17:56:19.288Z"
 > (entrypoints, stubs gerados, glue de FFI, DI puro).
 
 ## Artefatos detalhados
-- **Plano completo** (verdade técnica): [plano_completo_cobertura-testes-100.md](./cobertura-testes-100/plano_completo_cobertura-testes-100.md)
-- **Documentação auxiliar** (ferramentas + baseline medido + padrões): [info_aux_cobertura-testes-100.md](./cobertura-testes-100/info_aux_cobertura-testes-100.md)
+- **Plano completo** (verdade técnica): [plano_completo_cobertura-testes-100.md](./plano_completo_cobertura-testes-100.md)
+- **Documentação auxiliar** (ferramentas + baseline medido + padrões): [info_aux_cobertura-testes-100.md](./info_aux_cobertura-testes-100.md)
 - **Origem:** `doc_dev/planejamento/24-cobertura-testes-100.md` (agora histórico)
 
 ## Baseline medido (2026-07-20)
@@ -81,7 +81,7 @@ lastUpdated: "2026-07-20T17:56:19.288Z"
 
 ## Sequenciamento
 **C1 → (C2 ‖ C3 ‖ C4) → C5.** Detalhes, exemplos e a sub-seção
-"Observabilidade & Auditoria" por etapa no [plano completo](./cobertura-testes-100/plano_completo_cobertura-testes-100.md).
+"Observabilidade & Auditoria" por etapa no [plano completo](./plano_completo_cobertura-testes-100.md).
 
 ## Fases (PREVC)
 - **P:** confirmar exclusões (o que não conta pro 100%), alvo por camada e escala do ratchet.
@@ -92,11 +92,11 @@ lastUpdated: "2026-07-20T17:56:19.288Z"
 
 ## Execution History
 
-> Last updated: 2026-07-20T17:56:19.288Z | Progress: 100%
+> Last updated: 2026-07-20T17:56:50.846Z | Progress: 100%
 
 ### phase-2 [DONE]
 - Started: 2026-07-20T14:56:55.681Z
-- Completed: 2026-07-20T17:56:19.288Z
+- Completed: 2026-07-20T17:56:20.015Z
 
 - [x] Step 1: Step 1 *(2026-07-20T15:16:04.967Z)*
   - Output: .github/workflows/ci.yml, clients/pubspec.yaml
@@ -114,6 +114,10 @@ lastUpdated: "2026-07-20T17:56:19.288Z"
   - Output: .github/workflows/ci.yml, testing-strategy.md
   - Notes: C5: ratchet ativo (Python --cov-fail-under=90, Flutter piso 85% no lcov agregado); Rust mantido informativo (poucas rodadas da suite combinada em CI ainda). Exclusoes revisadas por stack, incluindo correcao da hipotese de excluir main.rs (C4 provou logica real la). testing-strategy.md atualizado com numeros finais C1-C4. Merge --no-ff em dev (0838a42), CI 4/4 verde.
 
+### phase-c [DONE]
+- Started: 2026-07-20T17:56:50.846Z
+- Completed: 2026-07-20T17:56:50.846Z
+
 ### phase-p [DONE]
 - Started: 2026-07-20T14:56:51.991Z
 - Completed: 2026-07-20T14:56:51.991Z
@@ -121,3 +125,7 @@ lastUpdated: "2026-07-20T17:56:19.288Z"
 ### phase-r [DONE]
 - Started: 2026-07-20T14:56:52.682Z
 - Completed: 2026-07-20T14:56:52.682Z
+
+### phase-v [DONE]
+- Started: 2026-07-20T17:56:20.693Z
+- Completed: 2026-07-20T17:56:20.693Z
