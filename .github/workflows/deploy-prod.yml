@@ -147,9 +147,40 @@ jobs:
           cache-from: type=gha,scope=web-tenant
           cache-to: type=gha,mode=max,scope=web-tenant
 
+  # Imagem Python do ia_engine (paridade com o dev). O compose de prod referencia
+  # ghcr.io/.../smartcore-ia-engine:latest via `docker compose pull`; sem este job
+  # a imagem nunca é publicada e o "Compose pull & up (PROD)" falha com "not found".
+  # Contexto = raiz do repo (o Dockerfile gera os stubs do .proto do contracts).
+  build-ia-engine:
+    name: Build IA Engine (PROD)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/smartcore-ia-engine
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ia_engine/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=ia-engine
+          cache-to: type=gha,mode=max,scope=ia-engine
+
   deploy-prod:
     name: Deploy PROD (compose)
-    needs: [build-server, build-web, build-web-tenant]
+    needs: [build-server, build-web, build-web-tenant, build-ia-engine]
     runs-on: [self-hosted, hostinger]
     environment: production
     steps:
