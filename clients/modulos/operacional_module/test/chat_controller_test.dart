@@ -154,4 +154,43 @@ void main() {
       await controller.close();
     });
   });
+
+  group('ChatController — queda do stream realtime', () {
+    test(
+      'erro no stream muda connectionStatus para reconectando (sem derrubar '
+      'o thread já carregado) e agenda a reconexão',
+      () async {
+        final service = _FakeAtendimentoService(
+          threadResult: SuccessReturn(success: [_mensagem(1)]),
+        );
+        final controller = ChatController(
+          getThreadUsecase: GetThreadUsecase(service: service),
+          sendUsecase: SendOutboundMessageUsecase(service: service),
+          service: service,
+        );
+
+        await controller.abrir(1);
+        expect(
+          (controller.state as SuccessState<ChatViewModel>).data.connectionStatus,
+          ChatConnectionStatus.conectando,
+        );
+
+        service.streamController.addError(Exception('conexão caiu'));
+        // A atualização de status ao falhar o stream é síncrona (mesmo
+        // microtask do callback onError) — não precisa esperar o backoff.
+        await Future<void>.delayed(Duration.zero);
+
+        final estado = controller.state as SuccessState<ChatViewModel>;
+        expect(estado.connectionStatus, ChatConnectionStatus.reconectando);
+        // O thread carregado continua intacto — só o indicador de conexão muda.
+        expect(estado.data.mensagens, hasLength(1));
+
+        await controller.close();
+      },
+    );
+  });
+}
+
+extension on SuccessState<ChatViewModel> {
+  ChatConnectionStatus get connectionStatus => data.connectionStatus;
 }

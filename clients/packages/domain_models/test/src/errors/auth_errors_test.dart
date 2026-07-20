@@ -33,6 +33,16 @@ void main() {
         const error = ErrorAuth(message: 'Erro MSG');
         expect(error.toString(), contains('ErrorAuth - Erro MSG'));
       });
+
+      test('mensagem padrão quando nenhuma é informada', () {
+        expect(const ErrorAuth().message, 'Falha ao autenticar.');
+      });
+
+      test('é igual a si mesma (identidade) e diferente de outro tipo de erro', () {
+        const error = ErrorAuth(message: 'x');
+        expect(error == error, isTrue);
+        expect(error, isNot(equals(const ErrorValidation(message: 'x'))));
+      });
     });
 
     group('ErrorUnauthorized', () {
@@ -57,6 +67,15 @@ void main() {
         const error = ErrorUnauthorized(message: 'msg');
         expect(error.toString(), contains('ErrorUnauthorized - msg'));
       });
+
+      test('mensagem padrão quando nenhuma é informada', () {
+        expect(const ErrorUnauthorized().message, 'Sessão expirada. Entre novamente.');
+      });
+
+      test('diferente de outro tipo de erro com a mesma mensagem', () {
+        const error = ErrorUnauthorized(message: 'x');
+        expect(error, isNot(equals(const ErrorAuth(message: 'x'))));
+      });
     });
 
     group('ErrorNetwork', () {
@@ -80,6 +99,15 @@ void main() {
         const error = ErrorNetwork(message: 'msg');
         expect(error.toString(), contains('ErrorNetwork - msg'));
       });
+
+      test('mensagem padrão quando nenhuma é informada', () {
+        expect(const ErrorNetwork().message, 'Servidor indisponível. Tente novamente.');
+      });
+
+      test('diferente de outro tipo de erro com a mesma mensagem', () {
+        const error = ErrorNetwork(message: 'x');
+        expect(error, isNot(equals(const ErrorAuth(message: 'x'))));
+      });
     });
 
     group('ErrorValidation', () {
@@ -102,6 +130,15 @@ void main() {
       test('toString', () {
         const error = ErrorValidation(message: 'msg');
         expect(error.toString(), contains('ErrorValidation - msg'));
+      });
+
+      test('mensagem padrão quando nenhuma é informada', () {
+        expect(const ErrorValidation().message, 'Dados inválidos.');
+      });
+
+      test('diferente de outro tipo de erro com a mesma mensagem', () {
+        const error = ErrorValidation(message: 'x');
+        expect(error, isNot(equals(const ErrorAuth(message: 'x'))));
       });
     });
   });

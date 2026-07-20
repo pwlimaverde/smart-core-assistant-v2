@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:bloc_test/bloc_test.dart';
 import 'package:domain_models/domain_models.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -17,18 +19,24 @@ import 'package:return_success_or_error/return_success_or_error.dart';
 class _FakeAtendimentoService implements AtendimentoService {
   ReturnSuccessOrError<List<AtendimentoResumo>> listResult;
   ReturnSuccessOrError<Unit> moveResult;
+  final StreamController<AtendimentoEvento> streamController;
+  int listCalls = 0;
 
   _FakeAtendimentoService({
     required this.listResult,
     this.moveResult = const SuccessReturn(success: unit),
-  });
+    StreamController<AtendimentoEvento>? streamController,
+  }) : streamController = streamController ?? StreamController.broadcast();
 
   @override
   Future<ReturnSuccessOrError<List<AtendimentoResumo>>> listAtendimentos({
     String status = 'fila',
     int? departamentoId,
     int limit = 50,
-  }) async => listResult;
+  }) async {
+    listCalls++;
+    return listResult;
+  }
 
   @override
   Future<ReturnSuccessOrError<Unit>> moveAtendimentoEtapa({
@@ -52,7 +60,7 @@ class _FakeAtendimentoService implements AtendimentoService {
   }) async => const SuccessReturn(success: 1);
 
   @override
-  Stream<AtendimentoEvento> streamAtendimentos() => const Stream.empty();
+  Stream<AtendimentoEvento> streamAtendimentos() => streamController.stream;
 }
 
 AtendimentoResumo _atendimento({required int id, int? etapaAtualId}) =>
@@ -161,6 +169,59 @@ void main() {
         // Revertido: o card volta para a coluna de origem.
         expect(estado.data.porEtapa[10]?.single.id, 1);
         expect(estado.data.porEtapa[20], isEmpty);
+        await controller.close();
+      },
+    );
+  });
+
+  group('KanbanController — stream realtime', () {
+    test(
+      'evento no stream recarrega a fila (debounced) via recarregarAposEvento',
+      () async {
+        final service = _FakeAtendimentoService(
+          listResult: SuccessReturn(success: [_atendimento(id: 1, etapaAtualId: 10)]),
+        );
+        final controller = KanbanController(
+          service: service,
+          listUsecase: ListAtendimentosUsecase(service: service),
+          moveUsecase: MoveAtendimentoEtapaUsecase(service: service),
+        );
+        await controller.carregarFila();
+        final chamadasAntes = service.listCalls;
+
+        service.streamController.add(
+          const AtendimentoEvento(
+            tipo: 'kanban.movido',
+            tenantId: 'tenant-1',
+            payload: {'atendimento_id': 1},
+          ),
+        );
+        // O debounce agrupa rajadas em 400ms antes de recarregar.
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+
+        expect(service.listCalls, greaterThan(chamadasAntes));
+        await controller.close();
+      },
+    );
+
+    test(
+      'erro no stream realtime não derruba nem altera o estado já carregado',
+      () async {
+        final service = _FakeAtendimentoService(
+          listResult: SuccessReturn(success: [_atendimento(id: 1, etapaAtualId: 10)]),
+        );
+        final controller = KanbanController(
+          service: service,
+          listUsecase: ListAtendimentosUsecase(service: service),
+          moveUsecase: MoveAtendimentoEtapaUsecase(service: service),
+        );
+        await controller.carregarFila();
+        final estadoAntes = controller.state;
+
+        service.streamController.addError(Exception('conexão instável'));
+        await Future<void>.delayed(const Duration(milliseconds: 500));
+
+        expect(controller.state, same(estadoAntes));
         await controller.close();
       },
     );

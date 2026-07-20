@@ -14,6 +14,14 @@ final class _FakeModule extends AppModule {
   ];
 }
 
+// Módulo fake cujo bootTask sempre falha (simula erro de infra no boot).
+final class _FailingModule extends AppModule {
+  @override
+  List<BootTask> bootTasks() => [
+    BootTask(BootStage.infra, () async => throw Exception('falha no boot')),
+  ];
+}
+
 void main() {
   late BootState bootState;
   late List<AppModule> modules;
@@ -37,6 +45,19 @@ void main() {
     verify: (_) {
       expect(bootState.value, isTrue);
       expect(log, contains('infra'));
+    },
+  );
+
+  blocTest<InitialLoadingController, ViewState<void>>(
+    'bootstrap com bootTask que falha emite apenas [Loading], propaga o erro '
+    'e mantém BootState=false (rotas continuam barradas)',
+    build: () =>
+        InitialLoadingController(modules: [_FailingModule()], bootState: bootState),
+    act: (c) => c.bootstrap(),
+    expect: () => [isA<LoadingState<void>>()],
+    errors: () => [isA<Exception>()],
+    verify: (_) {
+      expect(bootState.value, isFalse);
     },
   );
 }
