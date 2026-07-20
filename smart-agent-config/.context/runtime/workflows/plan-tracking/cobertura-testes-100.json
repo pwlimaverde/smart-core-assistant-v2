@@ -37,9 +37,17 @@
           "completedAt": "2026-07-20T16:35:06.254Z",
           "output": "ia_engine/tests/ (130 testes)",
           "notes": "C2: ia_engine 73% -> 99% (nao-bootstrap). 86 testes novos (44->130). ruff/mypy limpos. Merge --no-ff em dev (048daa5), CI 4/4 verde."
+        },
+        {
+          "stepIndex": 3,
+          "description": "Step 3",
+          "status": "completed",
+          "completedAt": "2026-07-20T17:10:57.282Z",
+          "output": "clients/*/test/ (201 testes)",
+          "notes": "C3: Flutter agregado 76,4% -> 93,5% (613/802 -> 848/907). 5 modulos fracos elevados (initial_loading 100%, get_it 97,6%, design_system 96,9%, domain_models 91,1%, operacional 90,6%). analyze limpo. Merge --no-ff em dev (c16251c), CI 4/4 verde."
         }
       ],
-      "completedAt": "2026-07-20T16:35:06.254Z"
+      "completedAt": "2026-07-20T17:10:57.282Z"
     }
   },
   "decisions": [
@@ -56,5 +64,5 @@
       "decidedAt": "2026-07-20T14:56:51.192Z"
     }
   ],
-  "lastUpdated": "2026-07-20T16:35:06.254Z"
+  "lastUpdated": "2026-07-20T17:10:57.282Z"
 }
