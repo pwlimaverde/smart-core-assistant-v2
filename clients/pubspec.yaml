@@ -33,4 +33,4 @@ melos:
     analyze:
       run: melos exec -- flutter analyze .
     test:
-      run: melos exec --dir-exists=test -- flutter test
+      run: melos exec --dir-exists=test -- flutter test --coverage

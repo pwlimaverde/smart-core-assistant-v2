@@ -1,0 +1,42 @@
+{
+  "planSlug": "cobertura-testes-100",
+  "linkedAt": "2026-07-20T14:56:38.847Z",
+  "progress": 40,
+  "phases": {
+    "phase-p": {
+      "phaseId": "phase-p",
+      "status": "completed",
+      "startedAt": "2026-07-20T14:56:51.991Z",
+      "steps": [],
+      "completedAt": "2026-07-20T14:56:51.991Z"
+    },
+    "phase-r": {
+      "phaseId": "phase-r",
+      "status": "completed",
+      "startedAt": "2026-07-20T14:56:52.682Z",
+      "steps": [],
+      "completedAt": "2026-07-20T14:56:52.682Z"
+    },
+    "phase-2": {
+      "phaseId": "phase-2",
+      "status": "in_progress",
+      "startedAt": "2026-07-20T14:56:55.681Z",
+      "steps": []
+    }
+  },
+  "decisions": [
+    {
+      "title": "Exclusões, alvo por camada e escala do ratchet confirmados",
+      "description": "Exclusões: entrypoints (main.rs/server.py/settings.py/telemetry.py), stubs gerados, glue de FFI (cargokit), DI puro (get_it_module). Alvo por camada: ~95% Python não-bootstrap, ~90% Flutter nos módulos de feature, ~90% Rust nos crates de lógica (application/domain/local_engine). Ratchet: começa informativo no CI (C1), depois --cov-fail-under travando regressão (C5), nunca exigindo 100% de cara.",
+      "phase": "P",
+      "alternatives": [
+        "Exigir 100% real sem exclusões (rejeitado: gera testes de baixo valor em bootstrap/stubs)",
+        "Ratchet com threshold fixo desde o início (rejeitado: quebraria o CI antes de fechar as lacunas)"
+      ],
+      "status": "accepted",
+      "id": "dec-1784559411192",
+      "decidedAt": "2026-07-20T14:56:51.192Z"
+    }
+  ],
+  "lastUpdated": "2026-07-20T14:56:55.681Z"
+}

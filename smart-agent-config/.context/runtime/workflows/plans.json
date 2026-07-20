@@ -7,6 +7,14 @@
       "summary": "Primeira fase do cronograma de **port final** (N6–N8). **Nenhuma arquitetura",
       "linkedAt": "2026-07-18T12:15:30.057Z",
       "status": "active"
+    },
+    {
+      "slug": "cobertura-testes-100",
+      "path": "plans/cobertura-testes-100.md",
+      "title": "Cobertura de Testes — rumo aos 100%",
+      "summary": "Iniciativa de qualidade **paralela** ao port (N6–N8). A **instrumentação** e o",
+      "linkedAt": "2026-07-20T14:56:38.847Z",
+      "status": "active"
     }
   ],
   "completed": [],

@@ -60,7 +60,7 @@ O projeto possui **três ambientes distintos**:
 | Ambiente | Onde roda | Suite executada | Gatilho |
 |----------|-----------|-----------------|---------|
 | **Local (Windows)** | máquina do dev | completa: unit + integração | manual, pré-push |
-| **CI (GitHub Actions)** | ubuntu-latest | somente `--lib --bins` | push/PR automático |
+| **CI (GitHub Actions)** | ubuntu-latest | gate: `--lib --bins`; cobertura combinada (`--workspace`, unit+integração) informativa via `cargo llvm-cov` | push/PR automático |
 | **Hostinger dev/prod** | VPS remota | deploy automático pós-CI verde | CI verde em `dev`/`main` |
 
 ## Workflow ao escrever um novo teste
@@ -93,13 +93,21 @@ antes do push** para exercitar a integração.
 
 ## Esteira local pré-push (`infra/test-local.ps1`)
 
-O CI (`ci.yml`) roda apenas `--lib --bins` com serviços efêmeros do runner. A **suíte
+O gate do CI (`ci.yml`) roda `--lib --bins` com serviços efêmeros do runner. A **suíte
 completa** (unit + integração contra o banco real da Hostinger) roda **localmente, antes
 do push**, com a mesma sequência de gates do CI:
 
 ```
 fmt → clippy → cargo test --workspace → cargo sqlx prepare --check
 ```
+
+Desde a etapa **C1** do plano de cobertura (`.context/plans/cobertura-testes-100.md`), o
+CI também roda `cargo llvm-cov --workspace` (unit+integração combinada, contra os mesmos
+service containers efêmeros) como passo **informativo** (`continue-on-error`) — é a
+primeira vez que a suíte de integração roda no CI (antes só localmente), então ainda não
+bloqueia o pipeline. Vira gate (ratchet) na etapa C5, depois de provar estável. `ia_engine`
+também ganhou job próprio no CI (`uv sync` + `uv run pytest --cov`) — antes os 44 testes
+Python nunca rodavam no pipeline.
 
 Pré-requisitos: `infra/.env.deploy` (credenciais SSH) e `server/.env`
 (`DATABASE_URL`/`DATABASE_ADMIN_URL`/`REDIS_URL`/`REDIS_BUS_URL` apontando para
