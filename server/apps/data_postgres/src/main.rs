@@ -4902,3 +4902,149 @@ mod tests_plans_unit {
         assert_eq!(err.code, "VALIDATION_FAILED", "veio: {err:?}");
     }
 }
+
+#[cfg(test)]
+mod tests_quota_unit {
+    use super::*;
+    use crate::ports::{MockAuditPort, MockQuotaStore};
+    use contracts::{Envelope, MessageKind};
+
+    /// Helper: monta um Envelope mínimo com método e payload arbitrários, com um
+    /// `tenant_id` válido (a rota exige contexto de tenant).
+    fn envelope_com_payload(method: &str, payload: serde_json::Value) -> Envelope {
+        Envelope {
+            kind: MessageKind::Request as i32,
+            method: method.to_string(),
+            tenant_id: uuid::Uuid::nil().to_string(),
+            traceparent: "00-trace-span-01".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        }
+    }
+
+    /// FAIL-CLOSED: `tenant_id` inválido no envelope nem chega a consultar a store.
+    #[tokio::test]
+    async fn check_quota_rejects_tenant_id_invalido_sem_tocar_a_store() {
+        let mut store = MockQuotaStore::new();
+        store.expect_verificar_quota().never();
+        let audit = MockAuditPort::new();
+        let env = Envelope {
+            tenant_id: "nao-e-um-uuid".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({ "recurso": "instancias" })).unwrap(),
+            ..Default::default()
+        };
+
+        let resp = handler_check_quota(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        let err = resp.error.expect("deveria ter envelope de erro");
+        assert_eq!(err.code, "VALIDATION_FAILED", "veio: {err:?}");
+    }
+
+    /// Quota excedida COM `auditar=true` publica o evento `quota.excedida`.
+    #[tokio::test]
+    async fn check_quota_excedida_com_auditar_publica_evento() {
+        let mut store = MockQuotaStore::new();
+        store
+            .expect_verificar_quota()
+            .times(1)
+            .returning(|_, _| Ok(serde_json::json!({ "excedido": true, "inadimplente": false })));
+        let mut audit = MockAuditPort::new();
+        audit
+            .expect_publish()
+            .withf(|_, event, _, _| event == "quota.excedida")
+            .times(1)
+            .returning(|_, _, _, _| ());
+        let env = envelope_com_payload(
+            "CheckQuota",
+            serde_json::json!({ "recurso": "instancias", "auditar": true }),
+        );
+
+        let resp = handler_check_quota(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    /// Quota excedida SEM `auditar` (default false) NÃO publica — regra que evita
+    /// inundar a trilha de auditoria no caminho quente de ingestão (doc 08 §4.2).
+    #[tokio::test]
+    async fn check_quota_excedida_sem_auditar_nao_publica_evento() {
+        let mut store = MockQuotaStore::new();
+        store
+            .expect_verificar_quota()
+            .times(1)
+            .returning(|_, _| Ok(serde_json::json!({ "excedido": true, "inadimplente": false })));
+        let mut audit = MockAuditPort::new();
+        audit.expect_publish().never();
+        let env =
+            envelope_com_payload("CheckQuota", serde_json::json!({ "recurso": "instancias" }));
+
+        let resp = handler_check_quota(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    /// Tenant inadimplente COM `auditar=true` publica o evento
+    /// `tenant.bloqueado_inadimplencia`, distinto do evento de quota.
+    #[tokio::test]
+    async fn check_quota_inadimplente_com_auditar_publica_evento_distinto() {
+        let mut store = MockQuotaStore::new();
+        store
+            .expect_verificar_quota()
+            .times(1)
+            .returning(|_, _| Ok(serde_json::json!({ "excedido": false, "inadimplente": true })));
+        let mut audit = MockAuditPort::new();
+        audit
+            .expect_publish()
+            .withf(|_, event, _, _| event == "tenant.bloqueado_inadimplencia")
+            .times(1)
+            .returning(|_, _, _, _| ());
+        let env = envelope_com_payload(
+            "CheckQuota",
+            serde_json::json!({ "recurso": "departamentos", "auditar": true }),
+        );
+
+        let resp = handler_check_quota(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    /// Nem excedido nem inadimplente: nunca audita, mesmo com `auditar=true`.
+    #[tokio::test]
+    async fn check_quota_dentro_do_limite_nunca_publica_mesmo_com_auditar() {
+        let mut store = MockQuotaStore::new();
+        store
+            .expect_verificar_quota()
+            .times(1)
+            .returning(|_, _| Ok(serde_json::json!({ "excedido": false, "inadimplente": false })));
+        let mut audit = MockAuditPort::new();
+        audit.expect_publish().never();
+        let env = envelope_com_payload(
+            "CheckQuota",
+            serde_json::json!({ "recurso": "instancias", "auditar": true }),
+        );
+
+        let resp = handler_check_quota(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    /// Falha da store vira `AppError::Database` — a rota não audita nesse caminho.
+    #[tokio::test]
+    async fn check_quota_erro_da_store_retorna_database_error() {
+        let mut store = MockQuotaStore::new();
+        store
+            .expect_verificar_quota()
+            .times(1)
+            .returning(|_, _| Err(infrastructure_postgres::DbError::NotFound));
+        let mut audit = MockAuditPort::new();
+        audit.expect_publish().never();
+        let env =
+            envelope_com_payload("CheckQuota", serde_json::json!({ "recurso": "instancias" }));
+
+        let resp = handler_check_quota(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert!(resp.error.is_some());
+    }
+}

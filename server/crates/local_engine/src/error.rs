@@ -54,3 +54,46 @@ impl From<std::io::Error> for LocalEngineError {
         LocalEngineError::Io(e.to_string())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sqlx_row_not_found_vira_not_found() {
+        let erro: LocalEngineError = sqlx::Error::RowNotFound.into();
+        assert!(matches!(erro, LocalEngineError::NotFound(_)));
+    }
+
+    #[test]
+    fn sqlx_erro_generico_vira_storage() {
+        let erro: LocalEngineError = sqlx::Error::PoolClosed.into();
+        assert!(matches!(erro, LocalEngineError::Storage(_)));
+    }
+
+    #[test]
+    fn io_error_vira_local_engine_error_io() {
+        let origem = std::io::Error::new(std::io::ErrorKind::NotFound, "arquivo ausente");
+        let erro: LocalEngineError = origem.into();
+        assert!(matches!(erro, LocalEngineError::Io(msg) if msg.contains("arquivo ausente")));
+    }
+
+    #[test]
+    fn todas_as_variantes_tem_mensagem_de_display_no_idioma_esperado() {
+        // Garante que o `#[error(...)]` de cada variante está ligado corretamente
+        // (regressão simples contra erro de copy-paste entre variantes).
+        assert!(LocalEngineError::Storage("x".into())
+            .to_string()
+            .contains("armazenamento local"));
+        assert!(LocalEngineError::Sync("x".into())
+            .to_string()
+            .contains("sincronização"));
+        assert!(LocalEngineError::NotFound("x".into())
+            .to_string()
+            .contains("não encontrado"));
+        assert!(LocalEngineError::Io("x".into()).to_string().contains("I/O"));
+        assert!(LocalEngineError::Media("x".into())
+            .to_string()
+            .contains("mídia"));
+    }
+}

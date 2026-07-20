@@ -204,3 +204,62 @@ fn derivar_escopos_refresh(is_superuser: bool, user_info: &serde_json::Value) ->
     }
     vec!["atendimentos:read".into(), "clientes:write".into()]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reuse_marker_e_o_texto_estavel_esperado_pela_runtime_api() {
+        // A runtime_api casa este marcador literalmente no texto do erro (ver
+        // doc-comment da constante); mudar o valor quebraria a detecção de
+        // reuso de refresh token sem aviso de compilação.
+        assert_eq!(REUSE_MARKER, "token_reuse_detected");
+    }
+
+    #[test]
+    fn derivar_escopos_refresh_superusuario_ignora_module_permissions() {
+        let info = serde_json::json!({ "module_permissions": ["clientes:write"] });
+        assert_eq!(derivar_escopos_refresh(true, &info), vec!["*".to_string()]);
+    }
+
+    #[test]
+    fn derivar_escopos_refresh_usa_module_permissions_quando_e_array() {
+        let info = serde_json::json!({
+            "module_permissions": ["atendimentos:read", "tenant:admin"],
+        });
+        assert_eq!(
+            derivar_escopos_refresh(false, &info),
+            vec!["atendimentos:read".to_string(), "tenant:admin".to_string()]
+        );
+    }
+
+    #[test]
+    fn derivar_escopos_refresh_sem_module_permissions_usa_fallback_padrao() {
+        let info = serde_json::json!({});
+        assert_eq!(
+            derivar_escopos_refresh(false, &info),
+            vec![
+                "atendimentos:read".to_string(),
+                "clientes:write".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn derivar_escopos_refresh_module_permissions_como_objeto_cai_no_fallback() {
+        // Diferente de `derivar_escopos` (login.rs), esta variante só reconhece
+        // `module_permissions` como array — um objeto de flags não é tratado e
+        // cai no fallback padrão. Comportamento existente documentado pelo teste.
+        let info = serde_json::json!({
+            "module_permissions": { "tenant:admin": true },
+        });
+        assert_eq!(
+            derivar_escopos_refresh(false, &info),
+            vec![
+                "atendimentos:read".to_string(),
+                "clientes:write".to_string()
+            ]
+        );
+    }
+}

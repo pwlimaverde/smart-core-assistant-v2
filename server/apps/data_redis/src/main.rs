@@ -449,7 +449,8 @@ async fn handler_register_rate_limit_attempt(
 mod tests {
     use super::*;
     use crate::ports::{
-        MockCacheStore, MockLoginRateLimiter, MockRefreshTokenPort, MockTokenBlocklist,
+        MockCacheStore, MockLoginRateLimiter, MockRateLimiter, MockRefreshTokenPort,
+        MockTokenBlocklist,
     };
     use infrastructure_redis::{RedisError, RegistroRefresh};
 
@@ -619,5 +620,267 @@ mod tests {
         assert_eq!(resp.kind, MessageKind::Reply as i32);
         let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
         assert_eq!(body["attempts"].as_u64().unwrap(), 3);
+    }
+
+    // -- ok_reply / erro (helpers puros) ------------------------------------
+
+    #[test]
+    fn ok_reply_preenche_kind_reply_e_preserva_contexto_do_envelope() {
+        let env = envelope_com_payload("GetCache", serde_json::json!({}));
+        let resp = ok_reply(&env, "GetCacheReply", serde_json::json!({ "ok": true }));
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        assert_eq!(resp.method, "GetCacheReply");
+        assert_eq!(resp.tenant_id, env.tenant_id);
+        assert_eq!(resp.traceparent, env.traceparent);
+        assert!(resp.error.is_none());
+    }
+
+    #[test]
+    fn erro_preenche_kind_error_com_envelope_de_erro() {
+        let env = envelope_com_payload("GetCache", serde_json::json!({}));
+        let resp = erro(
+            &env,
+            "GetCacheReply",
+            error_core::AppError::Cache("indisponível".to_string()),
+        );
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert_eq!(resp.method, "GetCacheReply");
+        assert!(resp.error.is_some());
+    }
+
+    // -- handler_get_cache: erro de infraestrutura (não miss) ---------------
+
+    #[tokio::test]
+    async fn get_cache_infra_error_returns_error_envelope() {
+        let mut cache = MockCacheStore::new();
+        cache
+            .expect_get_flow_permissions()
+            .times(1)
+            .returning(|_, _| Err(RedisError::ConfigError("sem conexão".to_string())));
+        let env = envelope_com_payload("GetCache", serde_json::json!({ "user_id": 1 }));
+
+        let resp = handler_get_cache(&cache, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert!(resp.error.is_some());
+    }
+
+    // -- handler_set_cache ----------------------------------------------------
+
+    #[tokio::test]
+    async fn set_cache_success_returns_status_ok() {
+        let mut cache = MockCacheStore::new();
+        cache
+            .expect_set_flow_permissions()
+            .times(1)
+            .returning(|_, _, _, _| Ok(()));
+        let env = envelope_com_payload(
+            "SetCache",
+            serde_json::json!({ "user_id": 1, "permissions": [1, 2], "ttl": 30 }),
+        );
+
+        let resp = handler_set_cache(&cache, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["status"], "success");
+    }
+
+    #[tokio::test]
+    async fn set_cache_infra_error_returns_error_envelope() {
+        let mut cache = MockCacheStore::new();
+        cache
+            .expect_set_flow_permissions()
+            .times(1)
+            .returning(|_, _, _, _| Err(RedisError::NotFound));
+        let env = envelope_com_payload("SetCache", serde_json::json!({ "user_id": 1 }));
+
+        let resp = handler_set_cache(&cache, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert!(resp.error.is_some());
+    }
+
+    // -- handler_store_refresh_token ------------------------------------------
+
+    #[tokio::test]
+    async fn store_refresh_token_success_returns_status_ok() {
+        let mut store = MockRefreshTokenPort::new();
+        store
+            .expect_store()
+            .times(1)
+            .returning(|_, _, _, _, _| Ok(()));
+        let env = envelope_com_payload(
+            "StoreRefreshToken",
+            serde_json::json!({ "token_hash": "h", "user_id": 1, "family_id": "f", "ttl": 100 }),
+        );
+
+        let resp = handler_store_refresh_token(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["status"], "success");
+    }
+
+    #[tokio::test]
+    async fn store_refresh_token_infra_error_returns_error_envelope() {
+        let mut store = MockRefreshTokenPort::new();
+        store
+            .expect_store()
+            .times(1)
+            .returning(|_, _, _, _, _| Err(RedisError::ConfigError("falha".to_string())));
+        let env = envelope_com_payload("StoreRefreshToken", serde_json::json!({}));
+
+        let resp = handler_store_refresh_token(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert!(resp.error.is_some());
+    }
+
+    // -- handler_revoke_family -------------------------------------------------
+
+    #[tokio::test]
+    async fn revoke_family_success_returns_status_ok() {
+        let mut store = MockRefreshTokenPort::new();
+        store.expect_revoke_family().times(1).returning(|_| Ok(()));
+        let env = envelope_com_payload("RevokeFamily", serde_json::json!({ "family_id": "f" }));
+
+        let resp = handler_revoke_family(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["status"], "success");
+    }
+
+    #[tokio::test]
+    async fn revoke_family_infra_error_returns_error_envelope() {
+        let mut store = MockRefreshTokenPort::new();
+        store
+            .expect_revoke_family()
+            .times(1)
+            .returning(|_| Err(RedisError::NotFound));
+        let env = envelope_com_payload("RevokeFamily", serde_json::json!({ "family_id": "f" }));
+
+        let resp = handler_revoke_family(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert!(resp.error.is_some());
+    }
+
+    // -- handler_block_token / handler_is_token_blocked ------------------------
+
+    #[tokio::test]
+    async fn block_token_success_returns_status_ok() {
+        let mut blocklist = MockTokenBlocklist::new();
+        blocklist.expect_block().times(1).returning(|_, _| Ok(()));
+        let env = envelope_com_payload("BlockToken", serde_json::json!({ "jti": "j", "ttl": 60 }));
+
+        let resp = handler_block_token(&blocklist, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["status"], "success");
+    }
+
+    #[tokio::test]
+    async fn block_token_infra_error_returns_error_envelope() {
+        let mut blocklist = MockTokenBlocklist::new();
+        blocklist
+            .expect_block()
+            .times(1)
+            .returning(|_, _| Err(RedisError::ConfigError("falha".to_string())));
+        let env = envelope_com_payload("BlockToken", serde_json::json!({ "jti": "j" }));
+
+        let resp = handler_block_token(&blocklist, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert!(resp.error.is_some());
+    }
+
+    #[tokio::test]
+    async fn is_token_blocked_infra_error_returns_error_envelope() {
+        let mut blocklist = MockTokenBlocklist::new();
+        blocklist
+            .expect_is_blocked()
+            .times(1)
+            .returning(|_| Err(RedisError::NotFound));
+        let env = envelope_com_payload("IsTokenBlocked", serde_json::json!({ "jti": "j" }));
+
+        let resp = handler_is_token_blocked(&blocklist, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert!(resp.error.is_some());
+    }
+
+    // -- handler_register_rate_limit_attempt (N4.4) -----------------------------
+
+    #[tokio::test]
+    async fn register_rate_limit_attempt_rejects_recurso_vazio_sem_tocar_a_port() {
+        let mut rate_limiter = MockRateLimiter::new();
+        rate_limiter.expect_register_attempt().never();
+        let env = envelope_com_payload(
+            "RegisterRateLimitAttempt",
+            serde_json::json!({ "id": "algum-id", "window_s": 60 }),
+        );
+
+        let resp = handler_register_rate_limit_attempt(&rate_limiter, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        let err = resp.error.expect("deveria ter envelope de erro");
+        assert_eq!(err.code, "VALIDATION_FAILED", "veio: {err:?}");
+    }
+
+    #[tokio::test]
+    async fn register_rate_limit_attempt_rejects_id_vazio_sem_tocar_a_port() {
+        let mut rate_limiter = MockRateLimiter::new();
+        rate_limiter.expect_register_attempt().never();
+        let env = envelope_com_payload(
+            "RegisterRateLimitAttempt",
+            serde_json::json!({ "recurso": "webhook", "window_s": 60 }),
+        );
+
+        let resp = handler_register_rate_limit_attempt(&rate_limiter, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert!(resp.error.is_some());
+    }
+
+    #[tokio::test]
+    async fn register_rate_limit_attempt_returns_count_on_success() {
+        let mut rate_limiter = MockRateLimiter::new();
+        rate_limiter
+            .expect_register_attempt()
+            .times(1)
+            .returning(|_, _, _| Ok(5));
+        let env = envelope_com_payload(
+            "RegisterRateLimitAttempt",
+            serde_json::json!({ "recurso": "webhook", "id": "inst-1", "window_s": 60 }),
+        );
+
+        let resp = handler_register_rate_limit_attempt(&rate_limiter, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["attempts"].as_u64().unwrap(), 5);
+    }
+
+    #[tokio::test]
+    async fn register_rate_limit_attempt_infra_error_returns_error_envelope() {
+        let mut rate_limiter = MockRateLimiter::new();
+        rate_limiter
+            .expect_register_attempt()
+            .times(1)
+            .returning(|_, _, _| Err(RedisError::ConfigError("falha".to_string())));
+        let env = envelope_com_payload(
+            "RegisterRateLimitAttempt",
+            serde_json::json!({ "recurso": "webhook", "id": "inst-1", "window_s": 60 }),
+        );
+
+        let resp = handler_register_rate_limit_attempt(&rate_limiter, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert!(resp.error.is_some());
     }
 }

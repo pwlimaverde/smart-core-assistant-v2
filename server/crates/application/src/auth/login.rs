@@ -274,3 +274,125 @@ fn derivar_escopos(is_superuser: bool, user_info: &serde_json::Value) -> Vec<Str
         ],
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // -- derivar_escopos --------------------------------------------------
+
+    #[test]
+    fn derivar_escopos_superusuario_ignora_module_permissions_e_role() {
+        let info = serde_json::json!({
+            "module_permissions": ["atendimentos:read"],
+            "role": "atendente",
+        });
+        assert_eq!(derivar_escopos(true, &info), vec!["*".to_string()]);
+    }
+
+    #[test]
+    fn derivar_escopos_usa_module_permissions_quando_e_array() {
+        let info = serde_json::json!({
+            "module_permissions": ["atendimentos:read", "clientes:write"],
+        });
+        assert_eq!(
+            derivar_escopos(false, &info),
+            vec![
+                "atendimentos:read".to_string(),
+                "clientes:write".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn derivar_escopos_usa_module_permissions_quando_e_objeto_de_flags() {
+        let info = serde_json::json!({
+            "module_permissions": {
+                "atendimentos:read": true,
+                "clientes:write": false,
+                "tenant:admin": true,
+            },
+        });
+        let mut escopos = derivar_escopos(false, &info);
+        escopos.sort();
+        assert_eq!(
+            escopos,
+            vec!["atendimentos:read".to_string(), "tenant:admin".to_string()]
+        );
+    }
+
+    #[test]
+    fn derivar_escopos_fallback_para_admin_inclui_tenant_admin() {
+        let info = serde_json::json!({ "role": "admin" });
+        let escopos = derivar_escopos(false, &info);
+        assert!(escopos.contains(&"tenant:admin".to_string()));
+    }
+
+    #[test]
+    fn derivar_escopos_fallback_para_owner_inclui_tenant_admin() {
+        let info = serde_json::json!({ "role": "owner" });
+        let escopos = derivar_escopos(false, &info);
+        assert!(escopos.contains(&"tenant:admin".to_string()));
+    }
+
+    #[test]
+    fn derivar_escopos_fallback_para_role_desconhecida_e_restrito() {
+        let info = serde_json::json!({ "role": "atendente" });
+        let escopos = derivar_escopos(false, &info);
+        assert!(!escopos.contains(&"tenant:admin".to_string()));
+        assert_eq!(
+            escopos,
+            vec![
+                "atendimentos:read".to_string(),
+                "atendimentos:write".to_string(),
+                "clientes:write".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn derivar_escopos_sem_role_nem_permissoes_usa_o_fallback_padrao() {
+        let info = serde_json::json!({});
+        let escopos = derivar_escopos(false, &info);
+        assert_eq!(
+            escopos,
+            vec![
+                "atendimentos:read".to_string(),
+                "atendimentos:write".to_string(),
+                "clientes:write".to_string(),
+            ]
+        );
+    }
+
+    // -- montar_envelope_request -------------------------------------------
+
+    #[test]
+    fn montar_envelope_request_preenche_campos_basicos_do_envelope() {
+        let tenant_id = Uuid::now_v7();
+        let payload = serde_json::json!({ "chave": "valor" });
+
+        let envelope = montar_envelope_request(tenant_id, "trace-abc", "MinhaRpc", &payload);
+
+        assert_eq!(envelope.tenant_id, tenant_id.to_string());
+        assert_eq!(envelope.schema_version, 1);
+        assert_eq!(envelope.traceparent, "trace-abc");
+        assert_eq!(envelope.method, "MinhaRpc");
+        assert_eq!(envelope.kind, MessageKind::Request as i32);
+        assert!(envelope.error.is_none());
+        assert_eq!(envelope.auth_user_id, 0);
+        assert!(envelope.auth_scopes.is_empty());
+        assert!(!envelope.auth_is_superuser);
+
+        let payload_de_volta: serde_json::Value =
+            serde_json::from_slice(&envelope.payload).unwrap();
+        assert_eq!(payload_de_volta, payload);
+    }
+
+    #[test]
+    fn montar_envelope_request_gera_message_id_unico_por_chamada() {
+        let payload = serde_json::json!({});
+        let e1 = montar_envelope_request(Uuid::nil(), "t", "M", &payload);
+        let e2 = montar_envelope_request(Uuid::nil(), "t", "M", &payload);
+        assert_ne!(e1.message_id, e2.message_id);
+    }
+}
