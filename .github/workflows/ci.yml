@@ -93,6 +93,14 @@ jobs:
             IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'smartcore_app_rt') THEN
               CREATE ROLE smartcore_app_rt LOGIN PASSWORD 'smartcore_app_rt' NOBYPASSRLS;
             END IF;
+            -- A migration 0016 concede DML à role legada `smartcore_app` (sem guarda,
+            -- nome anterior à renomeação da N4.1 para `smartcore_app_rt`). Em dev/prod
+            -- essa role existe; no container efêmero do CI precisamos criá-la para a
+            -- 0016 não falhar com "role smartcore_app does not exist". A role de runtime
+            -- real dos testes continua sendo smartcore_app_rt (grants pela 0018).
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'smartcore_app') THEN
+              CREATE ROLE smartcore_app LOGIN PASSWORD 'smartcore_app' NOBYPASSRLS;
+            END IF;
           END $$;
           GRANT USAGE ON SCHEMA public TO smartcore_app_rt;
           ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public

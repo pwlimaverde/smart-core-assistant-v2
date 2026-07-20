@@ -24,6 +24,7 @@ jobs:
       server: ${{ steps.filter.outputs.server }}
       web: ${{ steps.filter.outputs.web }}
       edge: ${{ steps.filter.outputs.edge }}
+      ia_engine: ${{ steps.filter.outputs.ia_engine }}
       compose: ${{ steps.filter.outputs.compose }}
     steps:
       - uses: actions/checkout@v5
@@ -41,6 +42,11 @@ jobs:
               - '.github/workflows/deploy-dev.yml'
             edge:
               - 'docker/edge/**'
+              - '.github/workflows/deploy-dev.yml'
+            ia_engine:
+              - 'ia_engine/**'
+              # Os stubs gRPC do ia_engine são gerados do .proto canônico do contracts.
+              - 'server/crates/contracts/**'
               - '.github/workflows/deploy-dev.yml'
             compose:
               - 'docker/dev/**'
@@ -189,18 +195,53 @@ jobs:
           cache-from: type=gha,scope=edge
           cache-to: type=gha,mode=max,scope=edge
 
+  # Imagem Python do ia_engine. O compose (docker/dev/compose.yml) referencia
+  # ghcr.io/.../smartcore-ia-engine:dev via `docker compose pull`; sem este job a
+  # imagem nunca é publicada e o "Compose pull & up" falha com "not found".
+  # Contexto = raiz do repo (o Dockerfile gera os stubs do .proto do contracts).
+  build-ia-engine:
+    name: Build IA Engine (DEV)
+    needs: changes
+    if: needs.changes.outputs.ia_engine == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/smartcore-ia-engine
+          tags: |
+            type=ref,event=branch
+            type=sha,format=short
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ia_engine/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=ia-engine
+          cache-to: type=gha,mode=max,scope=ia-engine
+
   deploy-dev:
     name: Deploy DEV (compose)
-    needs: [changes, build-server, build-web, build-web-tenant, build-edge]
+    needs: [changes, build-server, build-web, build-web-tenant, build-edge, build-ia-engine]
     if: >-
       ${{ always()
           && needs.build-server.result != 'failure'
           && needs.build-web.result != 'failure'
           && needs.build-web-tenant.result != 'failure'
           && needs.build-edge.result != 'failure'
+          && needs.build-ia-engine.result != 'failure'
           && (needs.changes.outputs.server == 'true'
               || needs.changes.outputs.web == 'true'
               || needs.changes.outputs.edge == 'true'
+              || needs.changes.outputs.ia_engine == 'true'
               || needs.changes.outputs.compose == 'true') }}
     runs-on: [self-hosted, hostinger]
     environment: dev
