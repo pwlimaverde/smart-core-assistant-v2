@@ -296,6 +296,176 @@ mod tests {
     }
 
     #[test]
+    fn lww_com_lista_vazia_nao_produz_resultado() {
+        let resolvidas = resolve_lww(Vec::new());
+        assert!(resolvidas.is_empty());
+    }
+
+    #[test]
+    fn lww_mistura_move_e_outbound_do_mesmo_atendimento() {
+        let acoes = vec![
+            acao(
+                1,
+                1,
+                100,
+                OfflineActionKind::MoveEtapa {
+                    etapa_destino_id: 10,
+                    motivo: String::new(),
+                },
+            ),
+            acao(
+                2,
+                2,
+                100,
+                OfflineActionKind::SendOutbound {
+                    conteudo: "msg".into(),
+                    tipo: "texto".into(),
+                    local_msg_id: -1,
+                },
+            ),
+        ];
+        let resolvidas = resolve_lww(acoes);
+        // A mensagem outbound é aditiva e o move (único) vence por ser o maior —
+        // ambas sobrevivem à resolução.
+        assert_eq!(resolvidas.len(), 2);
+    }
+
+    #[test]
+    fn offline_action_kind_tag_identifica_a_variante() {
+        let mv = OfflineActionKind::MoveEtapa {
+            etapa_destino_id: 1,
+            motivo: String::new(),
+        };
+        let out = OfflineActionKind::SendOutbound {
+            conteudo: String::new(),
+            tipo: String::new(),
+            local_msg_id: 0,
+        };
+        assert_eq!(mv.tag(), "move_etapa");
+        assert_eq!(out.tag(), "send_outbound");
+    }
+
+    #[test]
+    fn sync_error_transport_converte_para_local_engine_error_sync() {
+        let erro: LocalEngineError = SyncError::Transport("indisponível".to_string()).into();
+        assert!(matches!(erro, LocalEngineError::Sync(_)));
+    }
+
+    #[test]
+    fn sync_error_rejected_converte_para_local_engine_error_sync() {
+        let erro: LocalEngineError = SyncError::Rejected("validação".to_string()).into();
+        assert!(matches!(erro, LocalEngineError::Sync(_)));
+    }
+
+    #[tokio::test]
+    async fn enqueue_pending_e_mark_synced_fluxo_completo() {
+        let index = crate::index::SqliteIndex::open_in_memory().await.unwrap();
+        let queue = OfflineQueue::new(index.pool().clone());
+
+        let a1 = acao(
+            1,
+            1,
+            100,
+            OfflineActionKind::MoveEtapa {
+                etapa_destino_id: 10,
+                motivo: "teste".into(),
+            },
+        );
+        queue.enqueue(&a1).await.unwrap();
+
+        let pendentes = queue.pending().await.unwrap();
+        assert_eq!(pendentes.len(), 1);
+        assert_eq!(pendentes[0].id, a1.id);
+        assert_eq!(pendentes[0].kind, a1.kind);
+
+        queue.mark_synced(a1.id).await.unwrap();
+        let pendentes_apos = queue.pending().await.unwrap();
+        assert!(pendentes_apos.is_empty());
+    }
+
+    #[tokio::test]
+    async fn next_version_comeca_em_um_e_incrementa_apos_enqueue() {
+        let index = crate::index::SqliteIndex::open_in_memory().await.unwrap();
+        let queue = OfflineQueue::new(index.pool().clone());
+
+        assert_eq!(queue.next_version().await.unwrap(), 1);
+
+        let a1 = acao(
+            1,
+            1,
+            100,
+            OfflineActionKind::SendOutbound {
+                conteudo: "a".into(),
+                tipo: "texto".into(),
+                local_msg_id: -1,
+            },
+        );
+        queue.enqueue(&a1).await.unwrap();
+
+        assert_eq!(queue.next_version().await.unwrap(), 2);
+    }
+
+    #[tokio::test]
+    async fn pending_ignora_acoes_ja_sincronizadas() {
+        let index = crate::index::SqliteIndex::open_in_memory().await.unwrap();
+        let queue = OfflineQueue::new(index.pool().clone());
+
+        let a1 = acao(
+            1,
+            1,
+            100,
+            OfflineActionKind::SendOutbound {
+                conteudo: "a".into(),
+                tipo: "texto".into(),
+                local_msg_id: -1,
+            },
+        );
+        let a2 = acao(
+            2,
+            2,
+            100,
+            OfflineActionKind::SendOutbound {
+                conteudo: "b".into(),
+                tipo: "texto".into(),
+                local_msg_id: -2,
+            },
+        );
+        queue.enqueue(&a1).await.unwrap();
+        queue.enqueue(&a2).await.unwrap();
+        queue.mark_synced(a1.id).await.unwrap();
+
+        let pendentes = queue.pending().await.unwrap();
+        assert_eq!(pendentes.len(), 1);
+        assert_eq!(pendentes[0].id, a2.id);
+    }
+
+    // ACHADO (fora do escopo desta tarefa de testes — não corrigido aqui):
+    // `next_version()` faz `SELECT MAX(version)+1` numa consulta separada do
+    // `INSERT` subsequente em `enqueue()`, sem uma transação/lock que amarre as
+    // duas operações. Em uso concorrente (duas chamadas a `next_version` antes de
+    // qualquer `enqueue` completar) duas ações podem receber a mesma `version`,
+    // quebrando a garantia de unicidade que `resolve_lww` assume implicitamente
+    // (desempate por `HashMap::entry().and_modify` quando `version` empata não é
+    // determinístico). O teste abaixo comprova a corrida deliberadamente — ela
+    // não é regressão de código de produção, é a evidência do achado.
+    #[tokio::test]
+    async fn achado_next_version_nao_e_atomico_sob_concorrencia() {
+        let index = crate::index::SqliteIndex::open_in_memory().await.unwrap();
+        let queue = OfflineQueue::new(index.pool().clone());
+
+        // Duas leituras de `next_version()` antes de qualquer `enqueue`: como a
+        // leitura e a escrita não estão na mesma transação, ambas veem a fila
+        // vazia e calculam a mesma próxima versão.
+        let v1 = queue.next_version().await.unwrap();
+        let v2 = queue.next_version().await.unwrap();
+        assert_eq!(
+            v1, v2,
+            "demonstra que duas leituras concorrentes obtêm a mesma versão \
+             candidata — não há atomicidade entre o SELECT MAX e o INSERT"
+        );
+    }
+
+    #[test]
     fn lww_isola_moves_de_atendimentos_distintos() {
         let acoes = vec![
             acao(

@@ -226,3 +226,201 @@ impl SqliteIndex {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn resumo(id: i64, status: &str, departamento_id: Option<i64>) -> AtendimentoResumo {
+        AtendimentoResumo {
+            id,
+            contato_id: 10,
+            status: status.to_string(),
+            departamento_id,
+            fluxo_atendimento_id: None,
+            etapa_atual_id: None,
+            assunto: "assunto".to_string(),
+            prioridade: "normal".to_string(),
+            atendente_humano_id: None,
+            data_inicio: 1_000,
+            data_ultima_mensagem: None,
+        }
+    }
+
+    fn mensagem(id: i64, atendimento_id: i64, timestamp: i64) -> MensagemThread {
+        MensagemThread {
+            id,
+            atendimento_id,
+            tipo: "texto".to_string(),
+            conteudo: "oi".to_string(),
+            remetente: "cliente".to_string(),
+            timestamp,
+            status_envio: "enviado".to_string(),
+            gerado_por_ia: false,
+            resumo_midia: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn upsert_atendimento_insere_e_depois_atualiza_por_conflito() {
+        let idx = SqliteIndex::open_in_memory().await.unwrap();
+        idx.upsert_atendimento(&resumo(1, "fila", Some(5)))
+            .await
+            .unwrap();
+
+        // Segunda chamada com o mesmo id deve atualizar (ON CONFLICT), não duplicar.
+        idx.upsert_atendimento(&resumo(1, "em_atendimento", Some(5)))
+            .await
+            .unwrap();
+
+        let lista = idx
+            .list_atendimentos("em_atendimento", Some(5), 10)
+            .await
+            .unwrap();
+        assert_eq!(lista.len(), 1);
+        assert_eq!(lista[0].status, "em_atendimento");
+
+        // O status antigo não deve mais aparecer.
+        let antigos = idx.list_atendimentos("fila", Some(5), 10).await.unwrap();
+        assert!(antigos.is_empty());
+    }
+
+    #[tokio::test]
+    async fn list_atendimentos_com_departamento_none_ignora_o_filtro() {
+        let idx = SqliteIndex::open_in_memory().await.unwrap();
+        idx.upsert_atendimento(&resumo(1, "fila", Some(5)))
+            .await
+            .unwrap();
+        idx.upsert_atendimento(&resumo(2, "fila", Some(9)))
+            .await
+            .unwrap();
+
+        let todos = idx.list_atendimentos("fila", None, 10).await.unwrap();
+        assert_eq!(todos.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn list_atendimentos_respeita_o_limit() {
+        let idx = SqliteIndex::open_in_memory().await.unwrap();
+        for i in 1..=5 {
+            idx.upsert_atendimento(&resumo(i, "fila", None))
+                .await
+                .unwrap();
+        }
+        let pagina = idx.list_atendimentos("fila", None, 2).await.unwrap();
+        assert_eq!(pagina.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn upsert_mensagem_insere_e_atualiza_por_conflito() {
+        let idx = SqliteIndex::open_in_memory().await.unwrap();
+        idx.upsert_mensagem(&mensagem(1, 100, 10)).await.unwrap();
+
+        let mut atualizada = mensagem(1, 100, 10);
+        atualizada.conteudo = "conteudo editado".to_string();
+        idx.upsert_mensagem(&atualizada).await.unwrap();
+
+        let thread = idx.get_thread(100, 10, 0).await.unwrap();
+        assert_eq!(thread.len(), 1);
+        assert_eq!(thread[0].conteudo, "conteudo editado");
+    }
+
+    #[tokio::test]
+    async fn get_thread_ordena_por_timestamp_e_pagina_com_limit_offset() {
+        let idx = SqliteIndex::open_in_memory().await.unwrap();
+        idx.upsert_mensagem(&mensagem(1, 100, 30)).await.unwrap();
+        idx.upsert_mensagem(&mensagem(2, 100, 10)).await.unwrap();
+        idx.upsert_mensagem(&mensagem(3, 100, 20)).await.unwrap();
+
+        let pagina1 = idx.get_thread(100, 2, 0).await.unwrap();
+        assert_eq!(pagina1.iter().map(|m| m.id).collect::<Vec<_>>(), vec![2, 3]);
+
+        let pagina2 = idx.get_thread(100, 2, 2).await.unwrap();
+        assert_eq!(pagina2.iter().map(|m| m.id).collect::<Vec<_>>(), vec![1]);
+    }
+
+    #[tokio::test]
+    async fn update_etapa_altera_a_etapa_atual_do_atendimento_existente() {
+        let idx = SqliteIndex::open_in_memory().await.unwrap();
+        idx.upsert_atendimento(&resumo(1, "fila", None))
+            .await
+            .unwrap();
+
+        idx.update_etapa(1, 42).await.unwrap();
+
+        let lista = idx.list_atendimentos("fila", None, 10).await.unwrap();
+        assert_eq!(lista[0].etapa_atual_id, Some(42));
+    }
+
+    #[tokio::test]
+    async fn update_etapa_em_atendimento_inexistente_retorna_not_found() {
+        let idx = SqliteIndex::open_in_memory().await.unwrap();
+        let err = idx.update_etapa(999, 1).await.unwrap_err();
+        assert!(matches!(err, LocalEngineError::NotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn insert_pending_mensagem_atribui_ids_negativos_decrescentes() {
+        let idx = SqliteIndex::open_in_memory().await.unwrap();
+        let id1 = idx
+            .insert_pending_mensagem(1, "primeira", "texto", "atendente", 100)
+            .await
+            .unwrap();
+        let id2 = idx
+            .insert_pending_mensagem(1, "segunda", "texto", "atendente", 200)
+            .await
+            .unwrap();
+
+        assert_eq!(id1, -1);
+        assert_eq!(id2, -2);
+
+        let thread = idx.get_thread(1, 10, 0).await.unwrap();
+        assert_eq!(thread.len(), 2);
+        assert!(thread.iter().all(|m| m.status_envio == "pendente"));
+    }
+
+    #[tokio::test]
+    async fn promover_mensagem_pendente_troca_o_id_e_marca_como_enviado() {
+        let idx = SqliteIndex::open_in_memory().await.unwrap();
+        let id_local = idx
+            .insert_pending_mensagem(1, "oi", "texto", "atendente", 100)
+            .await
+            .unwrap();
+
+        idx.promover_mensagem_pendente(id_local, 777).await.unwrap();
+
+        let thread = idx.get_thread(1, 10, 0).await.unwrap();
+        assert_eq!(thread.len(), 1);
+        assert_eq!(thread[0].id, 777);
+        assert_eq!(thread[0].status_envio, "enviado");
+    }
+
+    #[tokio::test]
+    async fn promover_mensagem_pendente_sem_linha_correspondente_e_no_op() {
+        let idx = SqliteIndex::open_in_memory().await.unwrap();
+        // Nenhuma linha com id -5: a promoção não deve falhar nem criar nada.
+        idx.promover_mensagem_pendente(-5, 777).await.unwrap();
+
+        let thread = idx.get_thread(1, 10, 0).await.unwrap();
+        assert!(thread.is_empty());
+    }
+
+    #[tokio::test]
+    async fn promover_mensagem_pendente_substitui_quando_id_definitivo_ja_existe() {
+        // Cenário de re-ingestão: o servidor já mandou a mensagem definitiva
+        // (id 777) antes da promoção local rodar. UPDATE OR REPLACE deve deixar
+        // exatamente uma linha, sem duplicata fantasma.
+        let idx = SqliteIndex::open_in_memory().await.unwrap();
+        idx.upsert_mensagem(&mensagem(777, 1, 500)).await.unwrap();
+        let id_local = idx
+            .insert_pending_mensagem(1, "pendente", "texto", "atendente", 100)
+            .await
+            .unwrap();
+
+        idx.promover_mensagem_pendente(id_local, 777).await.unwrap();
+
+        let thread = idx.get_thread(1, 10, 0).await.unwrap();
+        assert_eq!(thread.len(), 1);
+        assert_eq!(thread[0].id, 777);
+    }
+}

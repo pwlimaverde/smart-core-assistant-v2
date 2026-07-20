@@ -145,4 +145,72 @@ mod tests {
 
         tokio::fs::remove_dir_all(&dir).await.ok();
     }
+
+    fn dir_temp_unico(prefixo: &str) -> PathBuf {
+        let sufixo = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        std::env::temp_dir().join(format!("{prefixo}_{sufixo}"))
+    }
+
+    #[tokio::test]
+    async fn ensure_sem_cache_e_com_rede_indisponivel_retorna_erro_de_midia() {
+        let dir = dir_temp_unico("le_media_miss");
+        let cache = MediaCache::new(&dir);
+
+        // Porta `0` nunca aceita conexão — falha de rede imediata e determinística.
+        let resultado = cache
+            .ensure("http://127.0.0.1:0/arquivo", "hash-qualquer")
+            .await;
+
+        assert!(matches!(resultado, Err(LocalEngineError::Media(_))));
+        tokio::fs::remove_dir_all(&dir).await.ok();
+    }
+
+    #[tokio::test]
+    async fn ensure_com_arquivo_cacheado_corrompido_descarta_antes_de_tentar_rebaixar() {
+        let dir = dir_temp_unico("le_media_corrupt");
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+        let cache = MediaCache::new(&dir);
+
+        let hash_esperado = MediaCache::hash_bytes(b"conteudo correto");
+        // Grava um arquivo cujo conteúdo NÃO bate com o hash esperado.
+        let destino = cache.caminho_para(&hash_esperado);
+        tokio::fs::write(&destino, b"conteudo errado")
+            .await
+            .unwrap();
+        assert!(destino.exists());
+
+        let resultado = cache
+            .ensure("http://127.0.0.1:0/inexistente", &hash_esperado)
+            .await;
+
+        // A rede está indisponível, então o rebaixamento falha — mas o arquivo
+        // corrompido já deve ter sido removido antes da tentativa.
+        assert!(resultado.is_err());
+        assert!(
+            !destino.exists(),
+            "arquivo corrompido deveria ter sido descartado do cache"
+        );
+
+        tokio::fs::remove_dir_all(&dir).await.ok();
+    }
+
+    #[test]
+    fn caminho_para_junta_o_diretorio_base_com_o_hash() {
+        let cache = MediaCache::new(PathBuf::from("/tmp/media"));
+        let caminho = cache.caminho_para("abc123");
+        assert_eq!(caminho, PathBuf::from("/tmp/media").join("abc123"));
+    }
+
+    #[test]
+    fn with_client_reaproveita_um_cliente_http_externo() {
+        let http = reqwest::Client::new();
+        let cache = MediaCache::with_client("/tmp/media", http);
+        assert_eq!(
+            cache.caminho_para("x"),
+            PathBuf::from("/tmp/media").join("x")
+        );
+    }
 }

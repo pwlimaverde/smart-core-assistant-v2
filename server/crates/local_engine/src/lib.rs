@@ -481,4 +481,182 @@ mod tests {
         // Nada mais pendente na fila.
         assert!(engine.queue.pending().await.unwrap().is_empty());
     }
+
+    /// Transporte-stub que rejeita tudo — simula servidor indisponível/recusando.
+    struct TransporteFalha;
+
+    #[async_trait::async_trait]
+    impl SyncTransport for TransporteFalha {
+        async fn move_atendimento_etapa(
+            &self,
+            _action_id: Uuid,
+            _atendimento_id: i64,
+            _etapa_destino_id: i64,
+            _motivo: &str,
+        ) -> Result<(), SyncError> {
+            Err(SyncError::Transport("servidor indisponível".into()))
+        }
+
+        async fn send_outbound_message(
+            &self,
+            _action_id: Uuid,
+            _atendimento_id: i64,
+            _conteudo: &str,
+            _tipo: &str,
+        ) -> Result<i64, SyncError> {
+            Err(SyncError::Rejected("payload inválido".into()))
+        }
+    }
+
+    #[tokio::test]
+    async fn sincronizar_com_transporte_falhando_mantem_acoes_na_fila() {
+        let engine = engine_em_memoria().await;
+        engine
+            .ingest_atendimento(&resumo(1, "fila", Some(10)))
+            .await
+            .unwrap();
+
+        engine
+            .move_atendimento_etapa(1, 20, "arrastou")
+            .await
+            .unwrap();
+
+        let report = engine.sincronizar(&TransporteFalha).await.unwrap();
+        assert_eq!(report.aplicadas, 0);
+        assert_eq!(report.falhas, 1);
+
+        // A ação continua pendente para nova tentativa.
+        assert_eq!(engine.queue.pending().await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn sincronizar_aplica_lww_e_marca_moves_superados_como_sincronizados() {
+        let engine = engine_em_memoria().await;
+        engine
+            .ingest_atendimento(&resumo(1, "fila", Some(10)))
+            .await
+            .unwrap();
+
+        // Duas movimentações do mesmo atendimento: só a de maior versão deve ser
+        // enviada, mas ambas devem sair da fila de pendentes após o sync.
+        engine
+            .move_atendimento_etapa(1, 20, "primeira")
+            .await
+            .unwrap();
+        engine
+            .move_atendimento_etapa(1, 30, "segunda")
+            .await
+            .unwrap();
+        assert_eq!(engine.queue.pending().await.unwrap().len(), 2);
+
+        let report = engine
+            .sincronizar(&TransporteOk { id_definitivo: 1 })
+            .await
+            .unwrap();
+
+        assert_eq!(report.aplicadas, 1, "só a vencedora do LWW é aplicada");
+        assert_eq!(report.descartadas_lww, 1);
+        assert!(
+            engine.queue.pending().await.unwrap().is_empty(),
+            "a superada também deve ser marcada como sincronizada"
+        );
+    }
+
+    #[tokio::test]
+    async fn stream_atendimentos_recebe_evento_emitido_pelo_move_de_etapa() {
+        let engine = engine_em_memoria().await;
+        engine
+            .ingest_atendimento(&resumo(1, "fila", Some(10)))
+            .await
+            .unwrap();
+
+        let mut receiver = engine.stream_atendimentos();
+        engine
+            .move_atendimento_etapa(1, 20, "arrastou")
+            .await
+            .unwrap();
+
+        let evento = receiver
+            .try_recv()
+            .expect("evento deveria ter sido emitido");
+        assert_eq!(evento.tipo, "atendimento.etapa_movida");
+        assert_eq!(evento.tenant_id, "tenant-teste");
+    }
+
+    #[tokio::test]
+    async fn ensure_media_delega_para_o_cache_e_retorna_o_caminho() {
+        let dir = std::env::temp_dir().join(format!(
+            "le_engine_media_{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        tokio::fs::create_dir_all(&dir).await.unwrap();
+
+        let index = SqliteIndex::open_in_memory().await.unwrap();
+        let queue = OfflineQueue::new(index.pool().clone());
+        let media = MediaCache::new(&dir);
+        let (eventos, _) = broadcast::channel(CAPACIDADE_EVENTOS);
+        let engine = LocalEngine {
+            index,
+            queue,
+            media,
+            eventos,
+            tenant_id: "tenant-teste".to_string(),
+        };
+
+        let conteudo = b"midia de teste";
+        let hash = MediaCache::hash_bytes(conteudo);
+        tokio::fs::write(dir.join(&hash), conteudo).await.unwrap();
+
+        let caminho = engine
+            .ensure_media("http://127.0.0.1:0/nao-usado", &hash)
+            .await
+            .unwrap();
+        assert_eq!(caminho, dir.join(&hash));
+
+        tokio::fs::remove_dir_all(&dir).await.ok();
+    }
+
+    #[tokio::test]
+    async fn abrir_index_atalho_abre_um_indice_utilizavel() {
+        let sufixo = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let db_path = std::env::temp_dir().join(format!("le_abrir_index_{sufixo}.sqlite"));
+
+        let idx = abrir_index(&db_path).await.unwrap();
+        idx.upsert_atendimento(&resumo(1, "fila", None))
+            .await
+            .unwrap();
+        let lista = idx.list_atendimentos("fila", None, 10).await.unwrap();
+        assert_eq!(lista.len(), 1);
+
+        tokio::fs::remove_file(&db_path).await.ok();
+    }
+
+    #[tokio::test]
+    async fn abrir_cria_o_motor_completo_a_partir_da_configuracao() {
+        let sufixo = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0);
+        let base = std::env::temp_dir().join(format!("le_abrir_engine_{sufixo}"));
+        // `SqliteConnectOptions::create_if_missing` cria o arquivo, mas não o
+        // diretório pai — o diretório base precisa existir antes de abrir.
+        tokio::fs::create_dir_all(&base).await.unwrap();
+        let config = LocalEngineConfig {
+            db_path: base.join("indice.sqlite"),
+            media_dir: base.join("media"),
+            tenant_id: "tenant-abrir".to_string(),
+        };
+
+        let engine = LocalEngine::abrir(config).await.unwrap();
+        let lista = engine.list_atendimentos("fila", None, 10).await.unwrap();
+        assert!(lista.is_empty());
+
+        tokio::fs::remove_dir_all(&base).await.ok();
+    }
 }
