@@ -47,7 +47,7 @@ phases:
     prevc: "C"
     agent: "documentation-writer"
     status: "pending"
-lastUpdated: "2026-07-20T15:16:04.967Z"
+lastUpdated: "2026-07-20T16:35:06.254Z"
 ---
 
 # Cobertura de Testes — rumo aos 100%
@@ -92,15 +92,18 @@ lastUpdated: "2026-07-20T15:16:04.967Z"
 
 ## Execution History
 
-> Last updated: 2026-07-20T15:16:04.967Z | Progress: 100%
+> Last updated: 2026-07-20T16:35:06.254Z | Progress: 100%
 
 ### phase-2 [DONE]
 - Started: 2026-07-20T14:56:55.681Z
-- Completed: 2026-07-20T15:16:04.967Z
+- Completed: 2026-07-20T16:35:06.254Z
 
 - [x] Step 1: Step 1 *(2026-07-20T15:16:04.967Z)*
   - Output: .github/workflows/ci.yml, clients/pubspec.yaml
   - Notes: C1: cargo llvm-cov combinado (informativo) + job novo ia_engine (pytest --cov) + flutter test --coverage agregado. CI 100% verde (4/4 jobs) na branch feature/cobertura-testes-100-c1-gate-ci, merge --no-ff em dev (072665f).
+- [x] Step 2: Step 2 *(2026-07-20T16:35:06.254Z)*
+  - Output: ia_engine/tests/ (130 testes)
+  - Notes: C2: ia_engine 73% -> 99% (nao-bootstrap). 86 testes novos (44->130). ruff/mypy limpos. Merge --no-ff em dev (048daa5), CI 4/4 verde.
 
 ### phase-p [DONE]
 - Started: 2026-07-20T14:56:51.991Z

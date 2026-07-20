@@ -1,7 +1,7 @@
 {
   "version": 2,
   "workflowType": "prevc",
-  "updatedAt": "2026-07-20T15:16:04.976Z",
+  "updatedAt": "2026-07-20T16:35:06.836Z",
   "status": {
     "project": {
       "name": "n6-ia-fluxo-vivo",
@@ -121,10 +121,21 @@
           "output": ".github/workflows/ci.yml, clients/pubspec.yaml",
           "notes": "C1: cargo llvm-cov combinado (informativo) + job novo ia_engine (pytest --cov) + flutter test --coverage agregado. CI 100% verde (4/4 jobs) na branch feature/cobertura-testes-100-c1-gate-ci, merge --no-ff em dev (072665f).",
           "timestamp": "2026-07-20T15:16:04.975Z"
+        },
+        {
+          "phase": "P",
+          "action": "step_completed",
+          "plan": "cobertura-testes-100",
+          "planPhase": "phase-2",
+          "stepIndex": 2,
+          "stepDescription": "Step 2",
+          "output": "ia_engine/tests/ (130 testes)",
+          "notes": "C2: ia_engine 73% -> 99% (nao-bootstrap). 86 testes novos (44->130). ruff/mypy limpos. Merge --no-ff em dev (048daa5), CI 4/4 verde.",
+          "timestamp": "2026-07-20T16:35:06.813Z"
         }
       ],
-      "last_activity": "2026-07-20T15:16:04.975Z",
-      "resume_context": "Concluído: Step 1"
+      "last_activity": "2026-07-20T16:35:06.813Z",
+      "resume_context": "Concluído: Step 2"
     }
   },
   "binding": {
