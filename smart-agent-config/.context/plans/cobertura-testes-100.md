@@ -5,7 +5,7 @@ planSlug: cobertura-testes-100
 description: "Iniciativa de qualidade: com a medição instrumentada e o baseline medido (Python 73%, Flutter 76,4%, Rust unit 48% — real ≫ com integração), fechar as lacunas de cobertura significativa até o norte de 100% (exclusões justificadas de entrypoints/stubs/FFI), instrumentar o gate de cobertura no CI (ratchet) e cobrir a lacuna do ia_engine sem job no CI. Política: bússola, não meta cega."
 summary: "Medir → priorizar por valor → fechar lacunas por stack (factories/repositories Python, initial_loading/get_it/design_system Flutter, usecases application/domain Rust) → ratchet no CI. Nenhum serviço externo novo; foco em testes e no gate de cobertura."
 status: filled
-progress: 0
+progress: 100
 generated: "2026-07-20"
 scaffoldVersion: "2.0.0"
 agents:
@@ -47,7 +47,7 @@ phases:
     prevc: "C"
     agent: "documentation-writer"
     status: "pending"
-lastUpdated: "2026-07-20"
+lastUpdated: "2026-07-20T15:16:04.967Z"
 ---
 
 # Cobertura de Testes — rumo aos 100%
@@ -92,4 +92,20 @@ lastUpdated: "2026-07-20"
 
 ## Execution History
 
-> Last updated: 2026-07-20 | Progress: 0%
+> Last updated: 2026-07-20T15:16:04.967Z | Progress: 100%
+
+### phase-2 [DONE]
+- Started: 2026-07-20T14:56:55.681Z
+- Completed: 2026-07-20T15:16:04.967Z
+
+- [x] Step 1: Step 1 *(2026-07-20T15:16:04.967Z)*
+  - Output: .github/workflows/ci.yml, clients/pubspec.yaml
+  - Notes: C1: cargo llvm-cov combinado (informativo) + job novo ia_engine (pytest --cov) + flutter test --coverage agregado. CI 100% verde (4/4 jobs) na branch feature/cobertura-testes-100-c1-gate-ci, merge --no-ff em dev (072665f).
+
+### phase-p [DONE]
+- Started: 2026-07-20T14:56:51.991Z
+- Completed: 2026-07-20T14:56:51.991Z
+
+### phase-r [DONE]
+- Started: 2026-07-20T14:56:52.682Z
+- Completed: 2026-07-20T14:56:52.682Z

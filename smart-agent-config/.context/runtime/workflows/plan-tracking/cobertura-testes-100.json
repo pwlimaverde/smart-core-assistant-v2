@@ -1,7 +1,7 @@
 {
   "planSlug": "cobertura-testes-100",
   "linkedAt": "2026-07-20T14:56:38.847Z",
-  "progress": 40,
+  "progress": 100,
   "phases": {
     "phase-p": {
       "phaseId": "phase-p",
@@ -19,9 +19,19 @@
     },
     "phase-2": {
       "phaseId": "phase-2",
-      "status": "in_progress",
+      "status": "completed",
       "startedAt": "2026-07-20T14:56:55.681Z",
-      "steps": []
+      "steps": [
+        {
+          "stepIndex": 1,
+          "description": "Step 1",
+          "status": "completed",
+          "completedAt": "2026-07-20T15:16:04.967Z",
+          "output": ".github/workflows/ci.yml, clients/pubspec.yaml",
+          "notes": "C1: cargo llvm-cov combinado (informativo) + job novo ia_engine (pytest --cov) + flutter test --coverage agregado. CI 100% verde (4/4 jobs) na branch feature/cobertura-testes-100-c1-gate-ci, merge --no-ff em dev (072665f)."
+        }
+      ],
+      "completedAt": "2026-07-20T15:16:04.967Z"
     }
   },
   "decisions": [
@@ -38,5 +48,5 @@
       "decidedAt": "2026-07-20T14:56:51.192Z"
     }
   ],
-  "lastUpdated": "2026-07-20T14:56:55.681Z"
+  "lastUpdated": "2026-07-20T15:16:04.967Z"
 }
