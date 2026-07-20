@@ -148,6 +148,10 @@ storage/
 uploads/
 tmp/
 temp/
+# Exceção: media_cache/ acima é dado de runtime, mas o módulo de código-fonte
+# homônimo do local_engine NÃO é — precisa ser versionado (senão o CI não compila).
+!server/crates/local_engine/src/media_cache/
+!server/crates/local_engine/src/media_cache/**
 
 # SQLite local (índice do local_engine)
 *.sqlite
