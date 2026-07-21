@@ -369,4 +369,95 @@ mod tests {
         assert_eq!(resp.method, "PresignFileReply");
         assert_eq!(resp.kind, MessageKind::Error as i32);
     }
+
+    // ------------------------------------------------------------------
+    // Ramos de validação dos handlers RPC. Todos retornam ANTES de tocar o
+    // R2 (rede), então exercitam a lógica de validação sem I/O externo. O
+    // `StorageClient` é montado por `from_env` (só constrói o cliente S3; não
+    // conecta) com credenciais fictícias — o caminho de sucesso (put/get/presign
+    // reais) é integração opt-in, fora do escopo unitário.
+    // ------------------------------------------------------------------
+
+    /// Monta um `StorageClient` fictício sem conectar (from_env só constrói).
+    fn dummy_storage_client() -> StorageClient {
+        std::env::set_var("S3_ENDPOINT", "http://127.0.0.1:9000");
+        std::env::set_var("S3_ACCESS_KEY_ID", "test-key");
+        std::env::set_var("S3_SECRET_ACCESS_KEY", "test-secret");
+        std::env::set_var("S3_BUCKET", "test-bucket");
+        StorageClient::from_env().expect("from_env deveria montar o cliente sem conectar")
+    }
+
+    /// Monta um Envelope de requisição com payload JSON serializado.
+    fn env_com_payload(payload: serde_json::Value) -> Envelope {
+        Envelope {
+            tenant_id: "550e8400-e29b-41d4-a716-446655440000".to_string(),
+            traceparent: "00-trace-span-01".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn handler_put_file_sem_file_name_responde_validation() {
+        let client = dummy_storage_client();
+        let env = env_com_payload(serde_json::json!({ "content_base64": "AAAA" }));
+        let resp = handler_put_file(client, env).await;
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert_eq!(resp.method, "PutFileReply");
+        assert!(resp.error.is_some());
+    }
+
+    #[tokio::test]
+    async fn handler_put_file_sem_content_base64_responde_validation() {
+        let client = dummy_storage_client();
+        let env = env_com_payload(serde_json::json!({ "file_name": "a.pdf" }));
+        let resp = handler_put_file(client, env).await;
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert_eq!(resp.method, "PutFileReply");
+    }
+
+    #[tokio::test]
+    async fn handler_put_file_content_base64_invalido_responde_validation() {
+        let client = dummy_storage_client();
+        let env = env_com_payload(serde_json::json!({
+            "file_name": "a.pdf",
+            "content_base64": "!!! não é base64 !!!"
+        }));
+        let resp = handler_put_file(client, env).await;
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert_eq!(resp.method, "PutFileReply");
+    }
+
+    #[tokio::test]
+    async fn handler_get_file_sem_file_name_responde_validation() {
+        let client = dummy_storage_client();
+        let env = env_com_payload(serde_json::json!({}));
+        let resp = handler_get_file(client, env).await;
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert_eq!(resp.method, "GetFileReply");
+    }
+
+    #[tokio::test]
+    async fn handler_presign_file_sem_file_name_responde_validation() {
+        let client = dummy_storage_client();
+        let env = env_com_payload(serde_json::json!({ "expires_in": 120 }));
+        let resp = handler_presign_file(client, env).await;
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert_eq!(resp.method, "PresignFileReply");
+    }
+
+    #[tokio::test]
+    async fn handler_put_file_tenant_invalido_ainda_valida_payload() {
+        // tenant_id inválido cai em Uuid::nil() (não é erro); a validação de payload
+        // segue normalmente — aqui falta content_base64 → Validation.
+        let client = dummy_storage_client();
+        let env = Envelope {
+            tenant_id: "não-é-uuid".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({ "file_name": "x.bin" })).unwrap(),
+            ..Default::default()
+        };
+        let resp = handler_put_file(client, env).await;
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert_eq!(resp.method, "PutFileReply");
+    }
 }
