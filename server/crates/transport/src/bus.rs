@@ -755,4 +755,113 @@ mod tests {
         };
         assert!(raw.desserializar::<serde_json::Value>().is_err());
     }
+
+    // --- extrair_eventos: conversão pura de StreamReadReply → Vec<EventoBruto> ---
+
+    use redis::streams::{StreamId, StreamKey, StreamReadReply};
+    use redis::Value;
+    use std::collections::HashMap;
+
+    /// Monta um `StreamId` com os campos informados (valores como bulk string).
+    fn stream_id(id: &str, campos: &[(&str, &str)]) -> StreamId {
+        let mut map = HashMap::new();
+        for (k, v) in campos {
+            map.insert(k.to_string(), Value::Data(v.as_bytes().to_vec()));
+        }
+        StreamId {
+            id: id.to_string(),
+            map,
+        }
+    }
+
+    #[test]
+    fn extrair_eventos_mapeia_todos_os_campos() {
+        let reply = StreamReadReply {
+            keys: vec![StreamKey {
+                key: STREAM_EVENTOS.to_string(),
+                ids: vec![stream_id(
+                    "1526984818136-0",
+                    &[
+                        ("tenant_id", "t-1"),
+                        ("event_id", "e-1"),
+                        ("event_type", "message.received"),
+                        ("timestamp", "2026-07-20T00:00:00Z"),
+                        ("traceparent", "00-abc-def-01"),
+                        ("payload", "{\"x\":1}"),
+                    ],
+                )],
+            }],
+        };
+
+        let eventos = extrair_eventos(reply);
+        assert_eq!(eventos.len(), 1);
+        let e = &eventos[0];
+        assert_eq!(e.stream_id, "1526984818136-0");
+        assert_eq!(e.tenant_id, "t-1");
+        assert_eq!(e.event_id, "e-1");
+        assert_eq!(e.event_type, "message.received");
+        assert_eq!(e.timestamp, "2026-07-20T00:00:00Z");
+        assert_eq!(e.traceparent, "00-abc-def-01");
+        assert_eq!(e.payload, "{\"x\":1}");
+    }
+
+    #[test]
+    fn extrair_eventos_campos_ausentes_viram_string_vazia() {
+        // Entrada só com o payload: os demais campos caem no unwrap_or_default (vazio).
+        let reply = StreamReadReply {
+            keys: vec![StreamKey {
+                key: STREAM_EVENTOS.to_string(),
+                ids: vec![stream_id("2-0", &[("payload", "{}")])],
+            }],
+        };
+
+        let eventos = extrair_eventos(reply);
+        assert_eq!(eventos.len(), 1);
+        let e = &eventos[0];
+        assert_eq!(e.stream_id, "2-0");
+        assert_eq!(e.tenant_id, "");
+        assert_eq!(e.event_id, "");
+        assert_eq!(e.event_type, "");
+        assert_eq!(e.traceparent, "");
+        assert_eq!(e.payload, "{}");
+    }
+
+    #[test]
+    fn extrair_eventos_multiplas_chaves_e_ids_preserva_ordem() {
+        let reply = StreamReadReply {
+            keys: vec![
+                StreamKey {
+                    key: STREAM_EVENTOS.to_string(),
+                    ids: vec![
+                        stream_id("1-0", &[("event_type", "a")]),
+                        stream_id("2-0", &[("event_type", "b")]),
+                    ],
+                },
+                StreamKey {
+                    key: STREAM_SEGURANCA.to_string(),
+                    ids: vec![stream_id("3-0", &[("event_type", "c")])],
+                },
+            ],
+        };
+
+        let eventos = extrair_eventos(reply);
+        let tipos: Vec<&str> = eventos.iter().map(|e| e.event_type.as_str()).collect();
+        assert_eq!(tipos, vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn extrair_eventos_reply_vazio_gera_lista_vazia() {
+        let reply = StreamReadReply { keys: vec![] };
+        assert!(extrair_eventos(reply).is_empty());
+    }
+
+    #[test]
+    fn consumer_new_guarda_campos() {
+        // Construtor puro: não abre conexão. `Client::open` valida a URL sem conectar.
+        let client = redis::Client::open("redis://127.0.0.1:6379").unwrap();
+        let consumer = Consumer::new("meu:stream", "grupo-x", "consumidor-y", client);
+        assert_eq!(consumer.stream, "meu:stream");
+        assert_eq!(consumer.grupo, "grupo-x");
+        assert_eq!(consumer.consumidor, "consumidor-y");
+    }
 }

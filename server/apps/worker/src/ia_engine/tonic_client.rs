@@ -266,3 +266,152 @@ impl IaEngineClient for TonicIaEngineClient {
         })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tonic::Code;
+
+    // Mapeamento de status gRPC → IaEngineError: cada Code deve virar a variante certa,
+    // pois é isso que o `ResilientIaEngine` usa para decidir se retenta.
+
+    #[test]
+    fn mapear_status_deadline_vira_timeout() {
+        let err = mapear_status(tonic::Status::new(Code::DeadlineExceeded, "estourou"));
+        assert!(matches!(err, IaEngineError::Timeout));
+    }
+
+    #[test]
+    fn mapear_status_unavailable_vira_unavailable() {
+        let err = mapear_status(tonic::Status::new(Code::Unavailable, "fora do ar"));
+        match err {
+            IaEngineError::Unavailable(m) => assert_eq!(m, "fora do ar"),
+            outro => panic!("esperava Unavailable, veio {outro:?}"),
+        }
+    }
+
+    #[test]
+    fn mapear_status_resource_exhausted_vira_unavailable() {
+        // ResourceExhausted (rate limit) é transitório → tratado como Unavailable (retentável).
+        let err = mapear_status(tonic::Status::new(Code::ResourceExhausted, "limite"));
+        assert!(matches!(err, IaEngineError::Unavailable(_)));
+        assert!(err.retentavel());
+    }
+
+    #[test]
+    fn mapear_status_invalid_argument_vira_invalid() {
+        let err = mapear_status(tonic::Status::new(Code::InvalidArgument, "campo ruim"));
+        match err {
+            IaEngineError::Invalid(m) => assert_eq!(m, "campo ruim"),
+            outro => panic!("esperava Invalid, veio {outro:?}"),
+        }
+        assert!(!mapear_status(tonic::Status::new(Code::InvalidArgument, "x")).retentavel());
+    }
+
+    #[test]
+    fn mapear_status_not_found_vira_invalid() {
+        let err = mapear_status(tonic::Status::new(Code::NotFound, "sumiu"));
+        assert!(matches!(err, IaEngineError::Invalid(_)));
+    }
+
+    #[test]
+    fn mapear_status_desconhecido_vira_internal() {
+        // Qualquer código fora dos casos explícitos cai no ramo default → Internal.
+        let err = mapear_status(tonic::Status::new(Code::Internal, "boom"));
+        match err {
+            IaEngineError::Internal(m) => assert_eq!(m, "boom"),
+            outro => panic!("esperava Internal, veio {outro:?}"),
+        }
+    }
+
+    #[test]
+    fn com_traceparent_valido_injeta_metadata() {
+        let traceparent = "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01";
+        let req = com_traceparent(42u32, traceparent);
+        let val = req
+            .metadata()
+            .get("traceparent")
+            .expect("traceparent deveria estar no metadata");
+        assert_eq!(val.to_str().unwrap(), traceparent);
+        assert_eq!(*req.get_ref(), 42);
+    }
+
+    #[test]
+    fn com_traceparent_invalido_nao_injeta_metadata() {
+        // Caractere de controle (quebra de linha) não é um valor de metadata gRPC
+        // válido: o parse falha e o header simplesmente não é inserido (sem panic,
+        // sem propagar erro).
+        let req = com_traceparent(1u32, "trace\ninválido");
+        assert!(req.metadata().get("traceparent").is_none());
+    }
+
+    #[test]
+    fn provider_para_proto_mapeia_campos() {
+        let cfg = LlmProviderConfigInput {
+            provider: "openai".to_string(),
+            model: "gpt-4o".to_string(),
+            api_key: "segredo".to_string(),
+            temperature: 0.7,
+        };
+        let pb = provider_para_proto(cfg);
+        assert_eq!(pb.provider, "openai");
+        assert_eq!(pb.model, "gpt-4o");
+        assert_eq!(pb.api_key, "segredo");
+        assert_eq!(pb.temperature, 0.7);
+        assert!(pb.extra_params.is_empty());
+    }
+
+    #[test]
+    fn media_para_proto_mapeia_campos() {
+        let m = MediaRefInput {
+            url: "http://midia/a.ogg".to_string(),
+            mimetype: "audio/ogg".to_string(),
+            file_name: "a.ogg".to_string(),
+        };
+        let pb = media_para_proto(m);
+        assert_eq!(pb.url, "http://midia/a.ogg");
+        assert_eq!(pb.mimetype, "audio/ogg");
+        assert_eq!(pb.file_name, "a.ogg");
+    }
+
+    #[test]
+    fn historico_para_proto_preserva_ordem_e_conteudo() {
+        let turnos = vec![
+            ChatTurnInput {
+                role: "user".to_string(),
+                conteudo: "oi".to_string(),
+            },
+            ChatTurnInput {
+                role: "assistant".to_string(),
+                conteudo: "olá".to_string(),
+            },
+        ];
+        let pb = historico_para_proto(turnos);
+        assert_eq!(pb.turnos.len(), 2);
+        assert_eq!(pb.turnos[0].role, "user");
+        assert_eq!(pb.turnos[0].conteudo, "oi");
+        assert_eq!(pb.turnos[1].role, "assistant");
+        assert_eq!(pb.turnos[1].conteudo, "olá");
+    }
+
+    #[test]
+    fn historico_para_proto_vazio_gera_lista_vazia() {
+        let pb = historico_para_proto(vec![]);
+        assert!(pb.turnos.is_empty());
+    }
+
+    #[tokio::test]
+    async fn connect_lazy_com_endpoint_valido_retorna_ok() {
+        // `connect_lazy` não abre conexão, mas o `connect_lazy` do hyper exige estar
+        // dentro de um runtime Tokio (registra o reactor). Não há I/O de rede aqui.
+        let cliente = TonicIaEngineClient::connect_lazy("http://127.0.0.1:50051");
+        assert!(cliente.is_ok());
+    }
+
+    #[test]
+    fn connect_lazy_com_endpoint_invalido_retorna_err() {
+        // URI malformada é rejeitada por `Channel::from_shared` antes de qualquer I/O.
+        let cliente = TonicIaEngineClient::connect_lazy("http://exemplo com espaco");
+        assert!(cliente.is_err());
+    }
+}

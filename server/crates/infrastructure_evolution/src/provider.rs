@@ -673,3 +673,38 @@ impl MessagingProvider for EvolutionProvider {
         Some(self)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // `map_state` é lógica pura de normalização dos vários rótulos de estado que a
+    // Evolution API retorna para o enum canônico `ConnectionState`. Testável sem HTTP.
+
+    #[test]
+    fn map_state_open_e_connected_viram_connected() {
+        assert_eq!(map_state("open"), ConnectionState::Connected);
+        assert_eq!(map_state("connected"), ConnectionState::Connected);
+    }
+
+    #[test]
+    fn map_state_variantes_de_desconexao_viram_disconnected() {
+        assert_eq!(map_state("close"), ConnectionState::Disconnected);
+        assert_eq!(map_state("disconnected"), ConnectionState::Disconnected);
+        assert_eq!(map_state("loggedOut"), ConnectionState::Disconnected);
+    }
+
+    #[test]
+    fn map_state_connecting_vira_connecting() {
+        assert_eq!(map_state("connecting"), ConnectionState::Connecting);
+    }
+
+    #[test]
+    fn map_state_desconhecido_vira_unknown() {
+        // Qualquer rótulo fora do conjunto conhecido cai em Unknown (fail-safe).
+        assert_eq!(map_state("qualquer-coisa"), ConnectionState::Unknown);
+        assert_eq!(map_state(""), ConnectionState::Unknown);
+        // Sensível a maiúsculas: "OPEN" não é "open".
+        assert_eq!(map_state("OPEN"), ConnectionState::Unknown);
+    }
+}

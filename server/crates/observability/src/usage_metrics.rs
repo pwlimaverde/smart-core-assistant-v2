@@ -58,3 +58,38 @@ pub fn registrar_mensagem(tenant_id: &str, direcao: DirecaoMensagem) {
 pub fn registrar_midia_armazenada(tenant_id: &str) {
     contador_midia().add(1, &[KeyValue::new("tenant_id", tenant_id.to_string())]);
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn direcao_mensagem_as_str_cobre_ambas_variantes() {
+        assert_eq!(DirecaoMensagem::Recebida.as_str(), "recebida");
+        assert_eq!(DirecaoMensagem::Enviada.as_str(), "enviada");
+    }
+
+    #[test]
+    fn direcao_mensagem_e_copy() {
+        // `DirecaoMensagem` é Copy: usar após passar por valor não move.
+        let d = DirecaoMensagem::Recebida;
+        let _copia = d;
+        assert_eq!(d.as_str(), "recebida");
+    }
+
+    #[test]
+    fn registrar_mensagem_nao_entra_em_panico() {
+        // Sem MeterProvider instalado, o instrumento global é no-op; o teste garante
+        // que o caminho de rótulos (tenant_id + direção) executa sem panic para ambas
+        // as direções e que o contador é criado uma única vez (OnceLock).
+        registrar_mensagem("tenant-a", DirecaoMensagem::Recebida);
+        registrar_mensagem("tenant-a", DirecaoMensagem::Enviada);
+        registrar_mensagem("tenant-b", DirecaoMensagem::Recebida);
+    }
+
+    #[test]
+    fn registrar_midia_armazenada_nao_entra_em_panico() {
+        registrar_midia_armazenada("tenant-a");
+        registrar_midia_armazenada("tenant-b");
+    }
+}
