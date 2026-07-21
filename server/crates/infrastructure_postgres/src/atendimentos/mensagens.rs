@@ -25,6 +25,7 @@ pub struct Mensagem {
     pub arquivo_midia: Option<String>,
     pub analise_midia: Option<String>,
     pub resumo_midia: Option<String>,
+    pub gerado_por_ia: bool,
     pub mensagem_citada_id: Option<i32>,
     pub quoted_preview: Option<serde_json::Value>,
     pub status_envio: String,
@@ -175,7 +176,7 @@ impl MensagemRepository for PostgresMensagemRepository {
                RETURNING id, tenant_id, atendimento_id, tipo, conteudo, remetente,
                          timestamp, message_id_whatsapp, metadados, respondida, lido,
                          resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
-                         arquivo_midia, analise_midia, resumo_midia, mensagem_citada_id,
+                         arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,
                          quoted_preview, status_envio, data_entregue, data_lida"#,
             ctx.tenant_id,
             atendimento_id,
@@ -205,7 +206,7 @@ impl MensagemRepository for PostgresMensagemRepository {
             r#"SELECT id, tenant_id, atendimento_id, tipo, conteudo, remetente,
                       timestamp, message_id_whatsapp, metadados, respondida, lido,
                       resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
-                      arquivo_midia, analise_midia, resumo_midia, mensagem_citada_id,
+                      arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,
                       quoted_preview, status_envio, data_entregue, data_lida
                FROM oraculo_mensagem
                WHERE tenant_id = $1 AND atendimento_id = $2
@@ -303,7 +304,7 @@ impl MensagemRepository for PostgresMensagemRepository {
             r#"SELECT m.id, m.tenant_id, m.atendimento_id, m.tipo, m.conteudo, m.remetente,
                       m.timestamp, m.message_id_whatsapp, m.metadados, m.respondida, m.lido,
                       m.resposta_bot, m.intent_detectado, m.entidades_extraidas, m.confianca_resposta,
-                      m.arquivo_midia, m.analise_midia, m.resumo_midia, m.mensagem_citada_id,
+                      m.arquivo_midia, m.analise_midia, m.resumo_midia, m.gerado_por_ia, m.mensagem_citada_id,
                       m.quoted_preview, m.status_envio, m.data_entregue, m.data_lida
                FROM oraculo_mensagem m
                LEFT JOIN tenants_subscription s ON s.tenant_id = m.tenant_id

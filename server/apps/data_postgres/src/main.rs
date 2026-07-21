@@ -4618,6 +4618,7 @@ mod tests_atendimento_cliente_unit {
             arquivo_midia: None,
             analise_midia: None,
             resumo_midia: None,
+            gerado_por_ia: false,
             mensagem_citada_id: None,
             quoted_preview: None,
             status_envio: "enviado".to_string(),

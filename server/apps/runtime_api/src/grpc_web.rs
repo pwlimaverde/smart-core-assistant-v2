@@ -2780,6 +2780,16 @@ impl AdminService for AdminFacade {
                                 .and_then(|v| v.as_str())
                                 .unwrap_or_default()
                                 .to_string(),
+                            // Passagem direta (N6.2): campos de IA vêm prontos do
+                            // data_postgres; ausência/null viram default (false/None).
+                            gerado_por_ia: item
+                                .get("gerado_por_ia")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false),
+                            resumo_midia: item
+                                .get("resumo_midia")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string()),
                         });
                     }
                 }

@@ -409,6 +409,8 @@ message MensagemThread {
   string remetente = 5;
   int64 timestamp = 6;
   string status_envio = 7;
+  bool gerado_por_ia = 8;            // selo "gerado por IA" no chat (N6.2)
+  optional string resumo_midia = 9;  // resumo/transcrição da mídia analisada (N6.1/N6.2)
 }
 
 message GetThreadRequest {

@@ -404,6 +404,8 @@ table MensagemThread {
   remetente:string;
   timestamp:long;
   status_envio:string;
+  gerado_por_ia:bool;
+  resumo_midia:string;
 }
 
 table GetThreadRequest {
