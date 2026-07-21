@@ -135,6 +135,18 @@ pub trait MensagemRepository: Send + Sync {
         ctx: &RequestContext,
         mensagem_id: i32,
     ) -> Result<(), DbError>;
+
+    /// Anexa a análise de mídia (ponteiro do arquivo no storage + resumo/análise
+    /// da IA) a uma mensagem já persistida (N6.1). Campos `None` não são sobrescritos.
+    async fn anexar_analise_midia(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+        arquivo_midia: Option<&str>,
+        analise_midia: Option<&str>,
+        resumo_midia: Option<&str>,
+    ) -> Result<(), DbError>;
 }
 
 pub struct PostgresMensagemRepository;
@@ -391,6 +403,37 @@ impl MensagemRepository for PostgresMensagemRepository {
         )
         .bind(ctx.tenant_id)
         .bind(mensagem_id)
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
+    // `analise_midia`/`resumo_midia` podem conter transcrição/interpretação: PII,
+    // por isso `skip_all` — nunca registrar o conteúdo no span.
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, mensagem_id = mensagem_id))]
+    async fn anexar_analise_midia(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+        arquivo_midia: Option<&str>,
+        analise_midia: Option<&str>,
+        resumo_midia: Option<&str>,
+    ) -> Result<(), DbError> {
+        // COALESCE preserva o valor atual quando o parâmetro chega `NULL`, para
+        // atualização parcial (ex.: áudio grava resumo/transcrição, sem análise de visão).
+        sqlx::query(
+            r#"UPDATE oraculo_mensagem
+               SET arquivo_midia = COALESCE($3, arquivo_midia),
+                   analise_midia = COALESCE($4, analise_midia),
+                   resumo_midia  = COALESCE($5, resumo_midia)
+               WHERE tenant_id = $1 AND id = $2"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(mensagem_id)
+        .bind(arquivo_midia)
+        .bind(analise_midia)
+        .bind(resumo_midia)
         .execute(&mut **tx)
         .await?;
         Ok(())

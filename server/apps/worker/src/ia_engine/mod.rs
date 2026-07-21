@@ -6,13 +6,12 @@ pub mod client;
 pub mod resilient;
 pub mod tonic_client;
 
-// Reexporta só o que é consumido hoje fora do módulo (barreira de bot em
-// `main.rs`: caminho Embed -> QueryCompose -> Responder). Os demais tipos
-// (Transcribe/InterpretMedia/Analyse/Sentimento) já estão implementados e
-// testados no client/adapter — ver `client.rs` — mas ainda não têm chamador no
-// pipeline de mensagens deste ciclo (fica para uma continuação: exige estender
-// `domain_whatsapp::NormalizedMessage` com URL de mídia). Acessíveis via
-// caminho completo `ia_engine::client::*` quando forem ligados.
+// Reexporta o que é consumido fora do módulo: a barreira de bot em `main.rs`
+// (Embed -> QueryCompose -> Responder) e o pipeline de mídia N6.1
+// (Transcribe/InterpretMedia). Os tipos de entrada de mídia
+// (`MediaRefInput`/`TranscribeInput`/`InterpretMediaInput`) continuam acessíveis
+// via caminho completo `ia_engine::client::*`. Analyse/Sentimento seguem
+// implementados no client/adapter, ainda sem chamador no pipeline deste ciclo.
 pub use client::{
     ChatTurnInput, EmbedInput, IaEngineClient, LlmProviderConfigInput, ResponderInput,
 };

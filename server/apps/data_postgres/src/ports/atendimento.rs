@@ -155,4 +155,16 @@ pub trait AtendimentoStore: Send + Sync {
         ctx: &RequestContext,
         mensagem_id: i32,
     ) -> Result<(), DbError>;
+
+    /// Anexa análise/resumo de mídia + ponteiro do arquivo a uma mensagem já
+    /// persistida (pipeline de mídia do worker, N6.1). Campos vazios (`""`) são
+    /// tratados como ausentes e não sobrescrevem o valor atual.
+    async fn anexar_analise_midia(
+        &self,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+        arquivo_midia: &str,
+        analise_midia: &str,
+        resumo_midia: &str,
+    ) -> Result<(), DbError>;
 }

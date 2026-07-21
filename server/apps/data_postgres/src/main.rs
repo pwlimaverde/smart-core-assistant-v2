@@ -424,6 +424,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_resolver_destino_envio = state_clone.clone();
     let state_for_marcar_mensagem_enviada = state_clone.clone();
     let state_for_marcar_mensagem_falha_envio = state_clone.clone();
+    let state_for_anexar_analise_midia = state_clone.clone();
     let state_for_query_compose = state_clone.clone();
     let state_for_resolver_config_ia = state_clone.clone();
     let state_for_update_status = state_clone;
@@ -496,6 +497,12 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(async move {
                 handler_resolver_destino_envio_outbound(state.atendimento.as_ref(), env).await
             })
+        })
+        .route("AnexarAnaliseMidia", move |env| {
+            let state = state_for_anexar_analise_midia.clone();
+            Box::pin(
+                async move { handler_anexar_analise_midia(state.atendimento.as_ref(), env).await },
+            )
         })
         .route("MarcarMensagemEnviada", move |env| {
             let state = state_for_marcar_mensagem_enviada.clone();
@@ -2047,6 +2054,59 @@ async fn handler_marcar_midia_purgada(
         Ok(()) => ok_reply(
             &env,
             "MarcarMidiaPurgadaReply",
+            serde_json::json!({ "status": "ok" }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// Anexa análise/resumo de mídia + ponteiro do arquivo a uma mensagem já
+/// persistida (pipeline de mídia do worker, N6.1). `analise`/`resumo` podem conter
+/// transcrição/interpretação (PII): nunca são logados aqui.
+async fn handler_anexar_analise_midia(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let mensagem_id = match payload_json.get("mensagem_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("mensagem_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let arquivo_midia = payload_json
+        .get("arquivo_midia")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let analise_midia = payload_json
+        .get("analise")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let resumo_midia = payload_json
+        .get("resumo")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .anexar_analise_midia(
+            &ctx,
+            mensagem_id,
+            arquivo_midia,
+            analise_midia,
+            resumo_midia,
+        )
+        .await
+    {
+        Ok(()) => ok_reply(
+            &env,
+            "AnexarAnaliseMidiaReply",
             serde_json::json!({ "status": "ok" }),
         ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
@@ -4626,6 +4686,53 @@ mod tests_atendimento_cliente_unit {
         assert_eq!(resp.kind, MessageKind::Reply as i32);
         let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
         assert_eq!(body["message_id"].as_i64().unwrap(), 7);
+    }
+
+    /// HAPPY PATH: anexar_analise_midia repassa os campos ao store e confirma ok.
+    #[tokio::test]
+    async fn anexar_analise_midia_repassa_ao_store() {
+        // Arrange
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_anexar_analise_midia()
+            .times(1)
+            .withf(|_, mensagem_id, arquivo, analise, resumo| {
+                *mensagem_id == 7
+                    && arquivo == "media/t/1/audio/hash"
+                    && analise.is_empty()
+                    && resumo == "resumo do áudio"
+            })
+            .returning(|_, _, _, _, _| Ok(()));
+        let env = envelope_com_payload(
+            "AnexarAnaliseMidia",
+            serde_json::json!({
+                "mensagem_id": 7,
+                "arquivo_midia": "media/t/1/audio/hash",
+                "resumo": "resumo do áudio",
+            }),
+        );
+
+        // Act
+        let resp = handler_anexar_analise_midia(&store, env).await;
+
+        // Assert
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["status"].as_str(), Some("ok"));
+    }
+
+    /// FAIL-CLOSED: mensagem_id ausente vira erro de validação.
+    #[tokio::test]
+    async fn anexar_analise_midia_sem_mensagem_id_valida() {
+        let store = MockAtendimentoStore::new();
+        let env = envelope_com_payload(
+            "AnexarAnaliseMidia",
+            serde_json::json!({ "arquivo_midia": "x" }),
+        );
+
+        let resp = handler_anexar_analise_midia(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
     }
 
     /// FAIL-CLOSED: erro de persistência da mensagem vira erro interno no envelope.

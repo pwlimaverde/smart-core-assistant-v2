@@ -15,6 +15,7 @@ bytes = { workspace = true }
 redis = { workspace = true }
 tonic = { workspace = true }
 async-trait = { workspace = true }
+sha2 = { workspace = true }
 
 contracts = { workspace = true }
 transport = { workspace = true }

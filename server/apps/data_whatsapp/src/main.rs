@@ -1529,19 +1529,48 @@ async fn handler_download_whatsapp_media(state: AppState, env: Envelope) -> Enve
     };
 
     match downloader.download_media(name, &api_key_sec, message).await {
-        Ok(res) => ok_reply(
-            &env,
-            "DownloadWhatsappMediaReply",
-            serde_json::json!({
-                "base64": res.base64,
-                "mime_type": res.mime_type
-            }),
-        ),
+        Ok(res) => {
+            // Limite de tamanho (env, default 20 MB — abaixo do teto de 25 MB das APIs
+            // de transcrição). Acima do limite é erro tratável, nunca pânico.
+            let max_bytes = limite_midia_bytes();
+            let bytes_estimados = bytes_estimados_base64(res.base64.len());
+            if bytes_estimados > max_bytes {
+                return erro(
+                    error_core::AppError::Validation(format!(
+                        "mídia excede o limite de {max_bytes} bytes (estimado {bytes_estimados})"
+                    )),
+                    &env,
+                );
+            }
+            ok_reply(
+                &env,
+                "DownloadWhatsappMediaReply",
+                serde_json::json!({
+                    "base64": res.base64,
+                    "mime_type": res.mime_type
+                }),
+            )
+        }
         Err(e) => erro(
             error_core::AppError::Internal(format!("Falha ao baixar mídia no provedor: {e}")),
             &env,
         ),
     }
+}
+
+/// Limite de tamanho de mídia baixada, em bytes. Configurável por
+/// `SMARTCORE_MEDIA_MAX_BYTES`; default 20 MiB.
+fn limite_midia_bytes() -> u64 {
+    std::env::var("SMARTCORE_MEDIA_MAX_BYTES")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .unwrap_or(20 * 1024 * 1024)
+}
+
+/// Estima os bytes decodificados a partir do comprimento de uma string base64
+/// (evita decodificar só para medir). base64 padrão: cada 4 chars ≈ 3 bytes.
+fn bytes_estimados_base64(base64_len: usize) -> u64 {
+    (base64_len as u64).saturating_mul(3) / 4
 }
 
 #[cfg(test)]
@@ -2151,5 +2180,28 @@ mod tests {
 
         pg_handle_fake.abort();
         pg_handle.abort();
+    }
+
+    #[test]
+    fn bytes_estimados_base64_aproxima_tres_quartos() {
+        // 100 chars base64 ≈ 75 bytes decodificados.
+        assert_eq!(bytes_estimados_base64(100), 75);
+        assert_eq!(bytes_estimados_base64(0), 0);
+        // Comprimento gigante não estoura (saturating_mul).
+        assert!(bytes_estimados_base64(usize::MAX) > 0);
+    }
+
+    #[test]
+    fn limite_midia_bytes_usa_default_e_override() {
+        std::env::remove_var("SMARTCORE_MEDIA_MAX_BYTES");
+        assert_eq!(limite_midia_bytes(), 20 * 1024 * 1024);
+
+        std::env::set_var("SMARTCORE_MEDIA_MAX_BYTES", "1048576");
+        assert_eq!(limite_midia_bytes(), 1_048_576);
+
+        // Valor inválido cai no default.
+        std::env::set_var("SMARTCORE_MEDIA_MAX_BYTES", "nao-numero");
+        assert_eq!(limite_midia_bytes(), 20 * 1024 * 1024);
+        std::env::remove_var("SMARTCORE_MEDIA_MAX_BYTES");
     }
 }

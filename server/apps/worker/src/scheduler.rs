@@ -319,6 +319,7 @@ mod tests {
             redis_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             whatsapp_client: pg_client.clone(),
+            storage_client: pg_client.clone(),
             pg_client,
             ia_client: std::sync::Arc::new(crate::ia_engine::MockIaEngineClient::new()),
         }
