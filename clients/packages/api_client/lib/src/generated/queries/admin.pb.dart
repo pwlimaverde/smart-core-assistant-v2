@@ -5152,6 +5152,8 @@ class MensagemThread extends $pb.GeneratedMessage {
     $core.String? remetente,
     $fixnum.Int64? timestamp,
     $core.String? statusEnvio,
+    $core.bool? geradoPorIa,
+    $core.String? resumoMidia,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -5161,6 +5163,8 @@ class MensagemThread extends $pb.GeneratedMessage {
     if (remetente != null) result.remetente = remetente;
     if (timestamp != null) result.timestamp = timestamp;
     if (statusEnvio != null) result.statusEnvio = statusEnvio;
+    if (geradoPorIa != null) result.geradoPorIa = geradoPorIa;
+    if (resumoMidia != null) result.resumoMidia = resumoMidia;
     return result;
   }
 
@@ -5185,6 +5189,8 @@ class MensagemThread extends $pb.GeneratedMessage {
     ..aOS(5, _omitFieldNames ? '' : 'remetente')
     ..aInt64(6, _omitFieldNames ? '' : 'timestamp')
     ..aOS(7, _omitFieldNames ? '' : 'statusEnvio')
+    ..aOB(8, _omitFieldNames ? '' : 'geradoPorIa')
+    ..aOS(9, _omitFieldNames ? '' : 'resumoMidia')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5268,6 +5274,24 @@ class MensagemThread extends $pb.GeneratedMessage {
   $core.bool hasStatusEnvio() => $_has(6);
   @$pb.TagNumber(7)
   void clearStatusEnvio() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.bool get geradoPorIa => $_getBF(7);
+  @$pb.TagNumber(8)
+  set geradoPorIa($core.bool value) => $_setBool(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasGeradoPorIa() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearGeradoPorIa() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $core.String get resumoMidia => $_getSZ(8);
+  @$pb.TagNumber(9)
+  set resumoMidia($core.String value) => $_setString(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasResumoMidia() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearResumoMidia() => $_clearField(9);
 }
 
 class GetThreadRequest extends $pb.GeneratedMessage {

@@ -1279,6 +1279,19 @@ const MensagemThread$json = {
     {'1': 'remetente', '3': 5, '4': 1, '5': 9, '10': 'remetente'},
     {'1': 'timestamp', '3': 6, '4': 1, '5': 3, '10': 'timestamp'},
     {'1': 'status_envio', '3': 7, '4': 1, '5': 9, '10': 'statusEnvio'},
+    {'1': 'gerado_por_ia', '3': 8, '4': 1, '5': 8, '10': 'geradoPorIa'},
+    {
+      '1': 'resumo_midia',
+      '3': 9,
+      '4': 1,
+      '5': 9,
+      '9': 0,
+      '10': 'resumoMidia',
+      '17': true
+    },
+  ],
+  '8': [
+    {'1': '_resumo_midia'},
   ],
 };
 
@@ -1287,7 +1300,9 @@ final $typed_data.Uint8List mensagemThreadDescriptor = $convert.base64Decode(
     'Cg5NZW5zYWdlbVRocmVhZBIOCgJpZBgBIAEoBVICaWQSJQoOYXRlbmRpbWVudG9faWQYAiABKA'
     'VSDWF0ZW5kaW1lbnRvSWQSEgoEdGlwbxgDIAEoCVIEdGlwbxIaCghjb250ZXVkbxgEIAEoCVII'
     'Y29udGV1ZG8SHAoJcmVtZXRlbnRlGAUgASgJUglyZW1ldGVudGUSHAoJdGltZXN0YW1wGAYgAS'
-    'gDUgl0aW1lc3RhbXASIQoMc3RhdHVzX2VudmlvGAcgASgJUgtzdGF0dXNFbnZpbw==');
+    'gDUgl0aW1lc3RhbXASIQoMc3RhdHVzX2VudmlvGAcgASgJUgtzdGF0dXNFbnZpbxIiCg1nZXJh'
+    'ZG9fcG9yX2lhGAggASgIUgtnZXJhZG9Qb3JJYRImCgxyZXN1bW9fbWlkaWEYCSABKAlIAFILcm'
+    'VzdW1vTWlkaWGIAQFCDwoNX3Jlc3Vtb19taWRpYQ==');
 
 @$core.Deprecated('Use getThreadRequestDescriptor instead')
 const GetThreadRequest$json = {
