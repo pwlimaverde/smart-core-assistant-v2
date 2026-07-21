@@ -157,27 +157,40 @@ foreach ($rel in $pacotes) {
 
 # --------------------------------------------
 # Cobertura: agrega os lcov.info de cada pacote (quando -Coverage)
+#
+# EXCLUSAO POR POLITICA (igual ao CI): o `flutter test --coverage` nao tem `omit`,
+# entao a exclusao e' aplicada na agregacao. Nao contam para o denominador os
+# arquivos fora do alcance do teste de unidade (ver testing-strategy):
+#   data/datasources/*        -> fronteira externa (gRPC/remoto/FFI), cobertos por integracao
+#   presentation/pages|routes -> layout/navegacao de UI pura
+# Widgets continuam contando (o design_system os testa de verdade).
 # --------------------------------------------
 if ($Coverage) {
-    Write-Etapa "cobertura Flutter (agrega lcov por pacote)"
+    Write-Etapa "cobertura Flutter (agrega lcov por pacote, excl. datasources/pages/routes)"
     $totLF = 0; $totLH = 0
     $covDir = Join-Path $repoRoot "coverage"
     New-Item -ItemType Directory -Force -Path $covDir | Out-Null
     $destLcov = Join-Path $covDir "flutter-lcov.info"
     if (Test-Path $destLcov) { Remove-Item $destLcov -Force }
+    # Casa tanto separador \ (Windows) quanto / (lcov gerado no CI Linux).
+    $regexExcluir = '[\\/](data[\\/]datasources|presentation[\\/](pages|routes))[\\/]'
     foreach ($rel in $pacotes) {
         $lcov = Join-Path $clientDir (Join-Path $rel "coverage\lcov.info")
         if (-not (Test-Path $lcov)) { continue }
         Get-Content $lcov | Add-Content $destLcov
-        # [int](...) tolera pacote sem linhas cobriveis (Select-String sem match -> Sum nulo -> 0).
-        $lf = [int]((Select-String -Path $lcov -Pattern '^LF:(\d+)' | ForEach-Object { [int]$_.Matches[0].Groups[1].Value } | Measure-Object -Sum).Sum)
-        $lh = [int]((Select-String -Path $lcov -Pattern '^LH:(\d+)' | ForEach-Object { [int]$_.Matches[0].Groups[1].Value } | Measure-Object -Sum).Sum)
-        $pct = if ($lf) { [math]::Round(100 * $lh / $lf, 1) } else { 0 }
-        Write-Host ("  {0,-32} {1,5}/{2,-5} = {3}%" -f (Split-Path -Leaf $rel), $lh, $lf, $pct)
-        $totLF += $lf; $totLH += $lh
+        # Percorre os registros (SF: ... end_of_record) somando LF/LH so' dos nao-excluidos.
+        $pkgLF = 0; $pkgLH = 0; $excl = $false
+        foreach ($linha in Get-Content $lcov) {
+            if ($linha -like 'SF:*') { $excl = ($linha -match $regexExcluir) }
+            elseif ($linha -like 'LF:*' -and -not $excl) { $pkgLF += [int]($linha.Substring(3)) }
+            elseif ($linha -like 'LH:*' -and -not $excl) { $pkgLH += [int]($linha.Substring(3)) }
+        }
+        $pct = if ($pkgLF) { [math]::Round(100 * $pkgLH / $pkgLF, 1) } else { 0 }
+        Write-Host ("  {0,-32} {1,5}/{2,-5} = {3}%" -f (Split-Path -Leaf $rel), $pkgLH, $pkgLF, $pct)
+        $totLF += $pkgLF; $totLH += $pkgLH
     }
     $totPct = if ($totLF) { [math]::Round(100 * $totLH / $totLF, 1) } else { 0 }
-    Write-Host ("  TOTAL Flutter: {0}/{1} = {2}% (lcov agregado em coverage/flutter-lcov.info)" -f $totLH, $totLF, $totPct) -ForegroundColor Cyan
+    Write-Host ("  TOTAL Flutter (significativo): {0}/{1} = {2}% (lcov agregado em coverage/flutter-lcov.info)" -f $totLH, $totLF, $totPct) -ForegroundColor Cyan
 }
 
 # --------------------------------------------

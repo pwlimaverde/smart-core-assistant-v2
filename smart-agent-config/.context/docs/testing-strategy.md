@@ -167,16 +167,25 @@ Pré-requisitos: `infra/.env.deploy` (credenciais SSH) e `server/.env`
 | Stack | Baseline | Final medido | Ratchet no CI |
 |---|---|---|---|
 | Python (`ia_engine`, não-bootstrap) | 73% | **99%** (878 stmts, 130 testes) | ✅ ativo — `--cov-fail-under=90` |
-| Flutter (`clients`, agregado) | 76,4% (613/802) | **93,5%** (848/907, 201 testes) | ✅ ativo — piso 85% no job `flutter` |
-| Rust (unitário, `--lib --bins`) | 48% (16.623 linhas) | **~54%** (workspace; `application` 0%→80,9%, `domain_whatsapp` 54%→99,3%, `local_engine` 73,5%→97,2% isolado) | ⏸️ informativo — combinado real (unit+integração) rodou pela primeira vez no CI nesta etapa (58,4% na 1ª medição); threshold numérico fica para quando a suíte provar mais rodadas estáveis |
+| Flutter (`clients`, agregado significativo) | 76,4% | **95,1%** (1143/1202, 337 testes) | ✅ ativo — piso 85% no job `flutter` |
+| Rust (unitário, `--lib --bins`) | 48% (16.623 linhas) | **~56%** (workspace) | ⏸️ informativo — combinado real (unit+integração) no CI; threshold numérico quando a suíte provar mais rodadas estáveis |
 
-### Exclusões revisadas (Grupo A do plano — justificadas, não meta cega)
-- **Python**: `[tool.coverage.run] omit` em `ia_engine/pyproject.toml` — stubs gRPC gerados (`contracts/*`), `__main__.py`, e bootstrap (`server.py`, `settings.py`, `telemetry.py`, adicionados na C2). O único trecho residual sem cobertura (`features/transcribe/domain/services.py`, corpo `...` de um `Protocol` estrutural) é estruturalmente não-invocável, não omissão.
-- **Rust**: `--ignore-filename-regex '.*/target/.*/out/.*'` no passo de cobertura combinada do CI, excluindo o código FlatBuffers/protobuf gerado pelo `build.rs` de `contracts` (nunca escrito à mão). **Correção em relação ao Planning original**: a hipótese inicial era excluir todo `main.rs` de `apps/*` como "entrypoint fino" — a C4 mostrou que isso é falso neste projeto (`apps/data_redis/src/main.rs` foi de 44% para 83% com testes de lógica real de handler); `main.rs` **não** é excluído.
-- **Flutter**: sem mecanismo de `omit` nativo do `flutter test --coverage`. Exclusão é por **política**, não config: datasources que dependem de runtime nativo/rede real (`atendimento_local_engine_data_source.dart` via FFI/Rust, `atendimento_remote_data_source.dart` via gRPC real) ficam fora do escopo de teste automatizado — cobertos indiretamente por integração manual/E2E, não por `flutter test`.
+Crates/módulos Rust de lógica cobertos com folga: `error_core` 97–100%, `application` (`jwt` 97%, `tokens` 100%, `login` 91%), `domain_whatsapp` 99%, `local_engine` 97–99%, `transport` (`codec`/`framing` 98–100%), `infrastructure_postgres` (repos 80–100%), `contracts/envelope` 100%.
+
+### Cobertura residual (pós-C5, 2026-07-20 — lacunas fora do escopo original do plano)
+Um levantamento pós-plano revelou áreas nunca visadas pelas etapas C1–C5; fechadas em seguida:
+- **Flutter `admin_module`** (painel do superusuário): tinha **0 testes** (67 arquivos, nem diretório `test/`) → **100% do código significativo** (315 linhas, 136 testes: 25 métodos do `admin_service_impl`, `grpc_error_mapper`, 8 controllers via `bloc_test`, 22 usecases, 12 models).
+- **Rust `runtime_api`**: `grpc_web.rs` 11%→34% e `realtime.rs` 0%→63% (24 testes; partes puras — extração de metadata, guardas de escopo, mapeamento de erro, gerência de canais broadcast do `RealtimeManager`).
+- **Rust secundários**: `worker/ia_engine/tonic_client.rs` 0%→82%, `observability/usage_metrics.rs` 64%→100% e `pool_metrics.rs` 0%→70%, `data_storage/main.rs` 26%→55%, `transport/bus.rs` 27%→47%, `infrastructure_evolution/provider.rs` (unit + wiremock em `tests/`); 49 testes.
+
+### Exclusões revisadas (justificadas, não meta cega)
+- **Python**: `[tool.coverage.run] omit` em `ia_engine/pyproject.toml` — stubs gRPC gerados (`contracts/*`), `__main__.py`, e bootstrap (`server.py`, `settings.py`, `telemetry.py`). O único trecho residual (`features/transcribe/domain/services.py`, corpo `...` de um `Protocol`) é estruturalmente não-invocável.
+- **Rust**: `--ignore-filename-regex '.*/target/.*/out/.*'` no CI, excluindo código FlatBuffers/protobuf gerado pelo `build.rs`. **Correção do Planning original**: a hipótese de excluir todo `main.rs` de `apps/*` como "entrypoint fino" é falsa aqui — a C4 elevou `apps/data_redis/src/main.rs` de 44% para 83% com testes de lógica real; `main.rs` **não** é excluído. Áreas genuinamente integração-only (handlers RPC de `grpc_web`/`data_postgres` adapters, chamadas tonic reais, callbacks de gauge OTLP, `control_plane/cli` interativo) são cobertas por `tests/` de integração, não por unit.
+- **Flutter**: o `flutter test --coverage` não tem `omit` nativo, então a exclusão é aplicada **na agregação do lcov** (CI `ci.yml` e `infra/test-flutter.ps1`, mesma regra): não contam para o denominador `data/datasources/*` (fronteira externa gRPC/remoto/FFI — cobertos por integração/E2E) nem `presentation/pages|routes/*` (layout/navegação de UI pura). Widgets **contam** (o `design_system` os testa de verdade). Sem isso, um módulo UI-pesado como o `admin_module` (datasource gRPC de 331 linhas + páginas) afundaria o agregado sem refletir a cobertura significativa real.
 
 ### Achados registrados para follow-up (fora do escopo desta iniciativa de testes)
 - `local_engine::offline_queue::OfflineQueue::next_version()` faz `SELECT MAX(version)+1` numa query separada do `INSERT` de `enqueue()`, sem transação/lock — corrida sob concorrência comprovada por teste dedicado (`achado_next_version_nao_e_atomico_sob_concorrencia`, em `server/crates/local_engine/src/offline_queue/mod.rs`). Fix arquitetural não foi feito aqui (fora de escopo de uma tarefa de testes).
+- Falha pré-existente e ambiental em `apps/worker/src/scheduler.rs::test_processar_midia_expirada_marca_e_publica` quando `REDIS_URL` aponta para `localhost:6379` (porta de outro projeto local); passa no CI (container próprio). Ver memória `deploy-evolution-remove-orphans`.
 
 ## Related Resources
 

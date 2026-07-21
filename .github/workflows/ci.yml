@@ -292,29 +292,38 @@ jobs:
 
       # Agrega os coverage/lcov.info gerados pelo `flutter test --coverage` de cada
       # pacote (melos test já roda com --coverage) num único lcov combinado + resumo
-      # em %. Ratchet ativo (etapa C5 do plano de cobertura): baseline medido em
-      # 93,5% agregado (ver testing-strategy.md); piso com margem de segurança.
-      - name: "Agrega cobertura Flutter (lcov combinado, ratchet: falha abaixo de 85%)"
+      # em %. Ratchet ativo (etapa C5 do plano de cobertura); piso com margem.
+      #
+      # EXCLUSÃO POR POLÍTICA (o `flutter test --coverage` não tem `omit` nativo, então
+      # a exclusão é aplicada AQUI, na agregação): não contam para o denominador os
+      # arquivos que a testing-strategy declara fora do alcance do teste de unidade —
+      # `data/datasources/*` (fronteira externa: gRPC/remoto/FFI, cobertos por
+      # integração/E2E) e `presentation/pages|routes/*` (layout/navegação de UI pura).
+      # Widgets continuam contando (o design_system os testa de verdade). Sem isso, um
+      # módulo UI-pesado como o admin_module (datasource gRPC de 331 linhas + páginas)
+      # afundaria o agregado sem refletir a cobertura significativa real.
+      - name: "Agrega cobertura Flutter (lcov, excl. datasources/pages/routes, ratchet: piso 85%)"
         working-directory: clients
         run: |
           mkdir -p ../coverage
           dest=../coverage/flutter-lcov.info
           rm -f "$dest"
-          total_lf=0; total_lh=0
           while IFS= read -r -d '' lcov; do
             cat "$lcov" >> "$dest"
-            lf=$(grep '^LF:' "$lcov" | awk -F: '{s+=$2} END {print s+0}')
-            lh=$(grep '^LH:' "$lcov" | awk -F: '{s+=$2} END {print s+0}')
-            total_lf=$((total_lf + lf)); total_lh=$((total_lh + lh))
           done < <(find . -path '*/coverage/lcov.info' -print0)
-          awk -v lh="$total_lh" -v lf="$total_lf" -v floor=85 'BEGIN {
-            pct = (lf > 0) ? 100 * lh / lf : 0
-            printf "TOTAL Flutter: %d/%d = %.1f%% (piso %d%%)\n", lh, lf, pct, floor
-            if (pct < floor) {
-              printf "FALHA: cobertura Flutter %.1f%% abaixo do piso %d%%\n", pct, floor
-              exit 1
+          awk -v floor=85 '
+            /^SF:/ { excl = ($0 ~ /(data\/datasources|presentation\/(pages|routes))\//) ? 1 : 0 }
+            /^LF:/ { if (!excl) lf += substr($0,4)+0 }
+            /^LH:/ { if (!excl) lh += substr($0,4)+0 }
+            END {
+              pct = (lf > 0) ? 100 * lh / lf : 0
+              printf "TOTAL Flutter (significativo): %d/%d = %.1f%% (piso %d%%)\n", lh, lf, pct, floor
+              if (pct < floor) {
+                printf "FALHA: cobertura Flutter %.1f%% abaixo do piso %d%%\n", pct, floor
+                exit 1
+              }
             }
-          }'
+          ' "$dest"
 
       - name: Publica lcov Flutter como artefato
         if: always()
