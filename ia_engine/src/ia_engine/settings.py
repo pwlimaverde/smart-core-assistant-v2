@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     grpc_max_workers: int = 16
     # Graceful shutdown: prazo (s) para drenar RPCs em andamento no SIGTERM.
     grpc_grace_seconds: float = 10.0
+    # Transcrição de áudio desligada por padrão (custo/latência). O pipeline de
+    # mídia do worker respeita a flag por tenant antes de chamar; esta é o
+    # kill-switch global do processo — com ela off, o RPC Transcribe
+    # curto-circuita e devolve resposta vazia.
+    transcription_enabled: bool = False
 
 
 def get_settings() -> Settings:

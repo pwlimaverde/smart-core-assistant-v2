@@ -22,7 +22,6 @@ from langchain_core.messages import AIMessage
 from ia_engine.contracts import ai_engine_pb2 as pb
 from ia_engine.contracts import ai_engine_pb2_grpc as pbg
 from ia_engine.domain.errors import InvalidRequestError
-from ia_engine.features.transcribe import PendingTranscriber
 from ia_engine.servicer import IaEngineServicer
 from tests.conftest import FakeChatModel, FakeEmbeddings
 
@@ -48,51 +47,58 @@ def _spec() -> pb.LlmProviderConfig:
 
 
 # ------------------------------------------------------------------ Transcribe
+class _FakeTranscriberVazio:
+    """Simula todos os provedores falhando: degrada para texto vazio."""
+
+    async def __call__(
+        self, _audio_bytes: bytes, _mimetype: str, _language: str
+    ) -> str:
+        return ""
+
+
+def _transcribe_request() -> pb.TranscribeRequest:
+    return pb.TranscribeRequest(
+        tenant_id="t1",
+        media=pb.MediaRef(
+            url="https://r2.example/audio.ogg", mimetype="audio/ogg"
+        ),
+        language="pt",
+        transcription_provider=_spec(),
+    )
+
+
 @pytest.mark.asyncio
-async def test_transcribe_pendente_aborta_com_internal(fake_chat_factory):
-    """`PendingTranscriber` (padrão de produção) ainda não integrado a um
-    provedor concreto — o RPC não trava, aborta com INTERNAL e mensagem
-    sem detalhes sensíveis."""
+async def test_transcribe_desligada_por_flag_curto_circuita_vazio(
+    fake_chat_factory,
+):
+    """Flag global off (padrão): o RPC não chama provedor nenhum, devolve
+    resposta vazia sem erro (kill-switch de custo/latência)."""
     servicer = IaEngineServicer(
         chat_model_factory=fake_chat_factory,
-        transcriber_factory=lambda _spec: PendingTranscriber(),
+        transcriber_factory=lambda _spec: _FakeTranscriberVazio(),
+        # transcription_enabled=False por padrão
+    )
+    async with _stub_for(servicer) as stub:
+        resp = await stub.Transcribe(_transcribe_request())
+    assert resp.transcricao == ""
+    assert resp.resumo == ""
+
+
+@pytest.mark.asyncio
+async def test_transcribe_provedores_falham_degrada_e_aborta_internal(
+    fake_chat_factory,
+):
+    """Com a flag ligada, se todos os provedores degradam (texto vazio), o
+    usecase falha com `TranscricaoVaziaError` — o RPC não trava, aborta com
+    INTERNAL."""
+    servicer = IaEngineServicer(
+        chat_model_factory=fake_chat_factory,
+        transcriber_factory=lambda _spec: _FakeTranscriberVazio(),
+        transcription_enabled=True,
     )
     async with _stub_for(servicer) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
-            await stub.Transcribe(
-                pb.TranscribeRequest(
-                    tenant_id="t1",
-                    media=pb.MediaRef(
-                        url="https://r2.example/audio.ogg", mimetype="audio/ogg"
-                    ),
-                    language="pt",
-                    transcription_provider=_spec(),
-                )
-            )
-    assert exc_info.value.code() == grpc.StatusCode.INTERNAL
-
-
-@pytest.mark.asyncio
-async def test_transcribe_com_fabrica_padrao_usa_pending_transcriber(
-    fake_chat_factory,
-):
-    """Sem `transcriber_factory` explícito no construtor, o servicer cai no
-    padrão de produção (`PendingTranscriber` via `_default_transcriber_factory`)
-    — mesmo comportamento gracioso do teste acima, mas exercitando o valor
-    padrão do parâmetro em vez de uma fábrica injetada."""
-    servicer = IaEngineServicer(chat_model_factory=fake_chat_factory)
-    async with _stub_for(servicer) as stub:
-        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
-            await stub.Transcribe(
-                pb.TranscribeRequest(
-                    tenant_id="t1",
-                    media=pb.MediaRef(
-                        url="https://r2.example/audio.ogg", mimetype="audio/ogg"
-                    ),
-                    language="pt",
-                    transcription_provider=_spec(),
-                )
-            )
+            await stub.Transcribe(_transcribe_request())
     assert exc_info.value.code() == grpc.StatusCode.INTERNAL
 
 

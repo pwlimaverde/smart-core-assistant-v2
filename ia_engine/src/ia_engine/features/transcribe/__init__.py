@@ -19,18 +19,22 @@ from ia_engine.features.transcribe.domain.usecases import TranscribeUsecase
 from ia_engine.features.transcribe.repositories.transcribe_repository import (
     TranscribeRepository,
 )
-from ia_engine.features.transcribe.services.pending_transcriber import (
-    PendingTranscriber,
+from ia_engine.features.transcribe.services.api_transcriber import (
+    ApiTranscriber,
+    TranscriberAttempt,
+    build_transcriber,
 )
 
 __all__ = [
+    "ApiTranscriber",
     "AudioTranscriber",
-    "PendingTranscriber",
     "TranscribeDataSource",
     "TranscribeError",
     "TranscribeParameters",
     "TranscribeRepository",
     "TranscribeUsecase",
+    "TranscriberAttempt",
     "TranscricaoIndisponivelError",
     "TranscricaoVaziaError",
+    "build_transcriber",
 ]

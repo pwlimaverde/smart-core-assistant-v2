@@ -168,6 +168,7 @@ async def ia_stub(
         chat_model_factory=fake_chat_factory,
         embeddings_factory=fake_embeddings_factory,
         transcriber_factory=fake_transcriber_factory,
+        transcription_enabled=True,
     )
     server = grpc.aio.server()
     pbg.add_IaEngineServiceServicer_to_server(servicer, server)

@@ -12,6 +12,12 @@ from ia_engine.llm.errors import ProviderConfigException
 if TYPE_CHECKING:
     from langchain_core.embeddings import Embeddings
 
+# Dimensão do schema pgvector `vector(1536)` (validada em EmbedUsecase). O
+# default do Google (`gemini-embedding-001`) é 3072 — sem forçar 1536 aqui o
+# RAG quebraria silenciosamente na gravação. Nunca deixar implícito.
+_PGVECTOR_DIM = 1536
+_GOOGLE_PROVIDER = "google_genai"
+
 
 def build_embeddings(spec: LlmProviderSpec) -> Embeddings:
     """Instancia o modelo de embeddings do provedor informado no request.
@@ -30,6 +36,9 @@ def build_embeddings(spec: LlmProviderSpec) -> Embeddings:
     kwargs: dict[str, Any] = {}
     if spec.api_key:
         kwargs["api_key"] = spec.api_key
+    if provider == _GOOGLE_PROVIDER:
+        # pgvector espera 1536; o default 3072 do Google romperia o schema.
+        kwargs["output_dimensionality"] = _PGVECTOR_DIM
 
     try:
         return init_embeddings(model, provider=provider, **kwargs)
