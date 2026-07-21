@@ -3949,4 +3949,227 @@ mod tests {
         assert_eq!(resp.access_token, "acc");
         assert_eq!(resp.refresh_token, "ref");
     }
+
+    #[test]
+    fn extrai_tokens_ausentes_vira_string_vazia() {
+        // JSON sem os campos esperados não deve entrar em pânico — vira default vazio.
+        let resp = extrair_tokens(&serde_json::json!({}));
+        assert_eq!(resp.access_token, "");
+        assert_eq!(resp.refresh_token, "");
+    }
+
+    #[test]
+    fn mapeia_database_nao_encontrado_para_not_found_mas_outro_erro_para_internal() {
+        // O guard só vira NotFound quando a mensagem carrega "não encontrado".
+        assert_eq!(
+            app_err_para_status(&error_core::AppError::Cache(
+                "registro não encontrado".into()
+            ))
+            .code(),
+            tonic::Code::NotFound
+        );
+        assert_eq!(
+            app_err_para_status(&error_core::AppError::Storage("não encontrado".into())).code(),
+            tonic::Code::NotFound
+        );
+        // Database sem a substring cai no ramo genérico (Internal).
+        assert_eq!(
+            app_err_para_status(&error_core::AppError::Database("conexão caiu".into())).code(),
+            tonic::Code::Internal
+        );
+    }
+
+    #[test]
+    fn user_agent_do_metadata_extrai_e_trunca() {
+        // Presente: é lido tal qual (dentro do limite).
+        let mut req = Request::new(LogoutRequest {
+            refresh_token: String::new(),
+        });
+        req.metadata_mut()
+            .insert("user-agent", "Mozilla/5.0 Flutter".parse().unwrap());
+        assert_eq!(user_agent_do_metadata(&req), "Mozilla/5.0 Flutter");
+
+        // Ausente: string vazia (não pânico).
+        let req_vazio = Request::new(LogoutRequest {
+            refresh_token: String::new(),
+        });
+        assert_eq!(user_agent_do_metadata(&req_vazio), "");
+    }
+
+    #[test]
+    fn user_agent_do_metadata_trunca_em_512_chars() {
+        // Payload abusivo é truncado defensivamente em 512 caracteres.
+        let ua = "a".repeat(1000);
+        let mut req = Request::new(LogoutRequest {
+            refresh_token: String::new(),
+        });
+        req.metadata_mut().insert("user-agent", ua.parse().unwrap());
+        assert_eq!(user_agent_do_metadata(&req).len(), 512);
+    }
+
+    /// Constrói `Claims` mínimos para testar as guardas de escopo (sem tocar em JWT real).
+    fn claims_com(scopes: &[&str], is_superuser: bool) -> application::jwt::Claims {
+        application::jwt::Claims {
+            sub: "1".into(),
+            tenant_id: "t".into(),
+            scopes: scopes.iter().map(|s| s.to_string()).collect(),
+            is_superuser,
+            jti: "j".into(),
+            iat: 0,
+            exp: 0,
+        }
+    }
+
+    #[test]
+    fn exigir_escopo_tenant_admin_aceita_superuser_e_escopos_validos() {
+        // Superusuário passa mesmo sem escopo explícito.
+        assert!(exigir_escopo_tenant_admin(&claims_com(&[], true)).is_ok());
+        // Escopo tenant:admin passa.
+        assert!(exigir_escopo_tenant_admin(&claims_com(&["tenant:admin"], false)).is_ok());
+        // Coringa de superusuário `*` passa.
+        assert!(exigir_escopo_tenant_admin(&claims_com(&["*"], false)).is_ok());
+    }
+
+    #[test]
+    fn exigir_escopo_tenant_admin_nega_sem_escopo() {
+        // Usuário comum sem os escopos exigidos recebe PERMISSION_DENIED.
+        let err = exigir_escopo_tenant_admin(&claims_com(&["kanban:read"], false)).unwrap_err();
+        assert_eq!(err.code(), tonic::Code::PermissionDenied);
+        assert_eq!(err.message(), "errors.auth.forbidden");
+    }
+
+    #[test]
+    fn extrair_permissoes_web_le_array_de_inteiros() {
+        let payload = serde_json::json!({ "permissions": [1, 2, 3] }).to_string();
+        assert_eq!(
+            extrair_permissoes_web(payload.as_bytes()),
+            Some(vec![1, 2, 3])
+        );
+    }
+
+    #[test]
+    fn extrair_permissoes_web_retorna_none_para_payload_invalido() {
+        // JSON inválido → None.
+        assert_eq!(extrair_permissoes_web(b"not json"), None);
+        // Sem o campo permissions → None.
+        assert_eq!(
+            extrair_permissoes_web(serde_json::json!({}).to_string().as_bytes()),
+            None
+        );
+        // permissions não é array → None.
+        assert_eq!(
+            extrair_permissoes_web(
+                serde_json::json!({ "permissions": 5 })
+                    .to_string()
+                    .as_bytes()
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn status_do_erro_interno_mapeia_cada_codigo() {
+        let mk = |code: &str| {
+            status_do_erro_interno(Some(contracts::ErrorEnvelope {
+                code: code.into(),
+                message: "detalhe".into(),
+                ..Default::default()
+            }))
+            .code()
+        };
+        assert_eq!(mk("AUTH_INSUFFICIENT_SCOPE"), tonic::Code::PermissionDenied);
+        assert_eq!(mk("DB_RECORD_NOT_FOUND"), tonic::Code::NotFound);
+        assert_eq!(mk("VALIDATION_FAILED"), tonic::Code::InvalidArgument);
+        assert_eq!(mk("CONFLICT"), tonic::Code::FailedPrecondition);
+        assert_eq!(
+            mk("DB_CONSTRAINT_VIOLATION"),
+            tonic::Code::FailedPrecondition
+        );
+        assert_eq!(mk("QUALQUER_OUTRO"), tonic::Code::Internal);
+    }
+
+    #[test]
+    fn status_do_erro_interno_sem_envelope_vira_internal() {
+        assert_eq!(status_do_erro_interno(None).code(), tonic::Code::Internal);
+    }
+
+    #[test]
+    fn json_strings_extrai_array_ou_vazio() {
+        let val = serde_json::json!(["kanban", "billing", 42, "audit"]);
+        // Ignora o não-string (42) e mantém a ordem.
+        assert_eq!(json_strings(Some(&val)), vec!["kanban", "billing", "audit"]);
+        // None → vetor vazio.
+        assert!(json_strings(None).is_empty());
+        // Valor que não é array → vetor vazio.
+        assert!(json_strings(Some(&serde_json::json!("x"))).is_empty());
+    }
+
+    #[test]
+    fn json_i32s_extrai_array_ou_vazio() {
+        let val = serde_json::json!([10, 20, "nao_int", 30]);
+        assert_eq!(json_i32s(Some(&val)), vec![10, 20, 30]);
+        assert!(json_i32s(None).is_empty());
+        assert!(json_i32s(Some(&serde_json::json!(7))).is_empty());
+    }
+
+    #[test]
+    fn novo_traceparent_segue_formato_w3c() {
+        let tp = novo_traceparent();
+        let partes: Vec<&str> = tp.split('-').collect();
+        assert_eq!(partes.len(), 4);
+        assert_eq!(partes[0], "00");
+        assert_eq!(partes[1].len(), 32);
+        assert_eq!(partes[2].len(), 16);
+        assert_eq!(partes[3], "01");
+        // Dois traceparents consecutivos não colidem no trace-id.
+        assert_ne!(novo_traceparent(), novo_traceparent());
+    }
+
+    #[test]
+    fn mapear_tenant_config_response_mapeia_todos_os_campos() {
+        let val = serde_json::json!({
+            "dados_empresa": "Acme",
+            "persona_bot": "cordial",
+            "bot_agent_name": "Ana",
+            "msg_fallback": "fb",
+            "msg_sem_info": "si",
+            "msg_transferencia": "tr",
+            "llm_class": "openai",
+            "model": "gpt",
+            "llm_temperature": "0.7",
+            "transcription_provider": "whisper",
+            "transcription_model": "large",
+            "vision_provider": "vp",
+            "vision_model": "vm",
+            "embeddings_class": "emb",
+            "embeddings_model": "text-emb",
+            "chunk_size": 512,
+            "chunk_overlap": 64,
+            "similarity_threshold": "0.8",
+            "vector_distance_threshold": "0.5",
+            "api_keys": { "openai": "sk-abc" },
+        });
+
+        let resp = mapear_tenant_config_response(&val);
+
+        assert_eq!(resp.dados_empresa, "Acme");
+        assert_eq!(resp.bot_agent_name, "Ana");
+        assert_eq!(resp.chunk_size, 512);
+        assert_eq!(resp.chunk_overlap, 64);
+        assert_eq!(resp.similarity_threshold, "0.8");
+        assert_eq!(resp.api_keys.len(), 1);
+        assert_eq!(resp.api_keys[0].key, "openai");
+        assert_eq!(resp.api_keys[0].value, "sk-abc");
+    }
+
+    #[test]
+    fn mapear_tenant_config_response_usa_defaults_para_json_vazio() {
+        // JSON sem campos → strings vazias, inteiros zero, sem api keys (não pânico).
+        let resp = mapear_tenant_config_response(&serde_json::json!({}));
+        assert_eq!(resp.dados_empresa, "");
+        assert_eq!(resp.model, "");
+        assert_eq!(resp.chunk_size, 0);
+        assert_eq!(resp.chunk_overlap, 0);
+        assert!(resp.api_keys.is_empty());
+    }
 }
