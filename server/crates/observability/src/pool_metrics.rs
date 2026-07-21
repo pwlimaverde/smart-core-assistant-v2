@@ -67,3 +67,28 @@ pub fn monitorar_pool(pool: PgPool, intervalo: Duration) {
         }
     });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sqlx::postgres::PgPoolOptions;
+
+    #[tokio::test]
+    async fn monitorar_pool_registra_gauges_e_amostra_sem_panico() {
+        // `connect_lazy` NÃO abre conexão: `size()`/`num_idle()` retornam 0 e o teste
+        // roda sem banco. Cobre o registro dos três ObservableGauge e a task de
+        // amostragem periódica (o corpo do loop executa em ao menos um tick).
+        //
+        // Os callbacks de observação dos gauges (`with_callback`) só disparam num
+        // ciclo real de coleta de métricas (PeriodicReader/OTLP), o que é território
+        // de integração — não coberto aqui por não haver pipeline de exportação.
+        let pool = PgPoolOptions::new()
+            .connect_lazy("postgres://user:pass@127.0.0.1:5432/db")
+            .expect("connect_lazy não deve tentar conectar");
+
+        monitorar_pool(pool, Duration::from_millis(5));
+
+        // Aguarda alguns intervalos para exercitar o corpo do loop de amostragem.
+        tokio::time::sleep(Duration::from_millis(30)).await;
+    }
+}
