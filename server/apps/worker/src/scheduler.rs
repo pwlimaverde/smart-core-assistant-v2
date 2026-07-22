@@ -322,6 +322,7 @@ mod tests {
             storage_client: pg_client.clone(),
             pg_client,
             ia_client: std::sync::Arc::new(crate::ia_engine::MockIaEngineClient::new()),
+            fluxos_cache: crate::FluxosCache::novo(),
         }
     }
 

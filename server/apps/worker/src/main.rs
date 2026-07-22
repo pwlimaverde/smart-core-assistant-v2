@@ -3,10 +3,60 @@
 use contracts::{Envelope, MessageKind};
 use redis::aio::ConnectionManager;
 use sha2::{Digest, Sha256};
-use std::time::Duration;
+use std::collections::HashMap;
+use std::time::{Duration, Instant};
 use uuid::Uuid;
 
 use std::sync::Arc;
+
+/// Um fluxo do tenant já formatado para o Responder: `chave` = "Setor - descrição"
+/// (convenção da v1, casada pelo ia_engine) e `fluxo_id` (para mapear a decisão de
+/// transferência de volta ao fluxo real).
+#[derive(Clone)]
+struct FluxoItem {
+    chave: String,
+    fluxo_id: i32,
+}
+
+/// Entrada do cache de fluxos: instante de gravação + fluxos do tenant.
+type EntradaCacheFluxos = (Instant, Arc<Vec<FluxoItem>>);
+
+/// Cache in-memory por tenant dos fluxos disponíveis (N6.3). TTL curto (~30s) para
+/// não bater no `data_postgres` a cada mensagem — a topologia de fluxos muda raramente.
+/// Não havia cache equivalente no worker; este é novo e mínimo.
+#[derive(Clone)]
+struct FluxosCache {
+    inner: Arc<tokio::sync::Mutex<HashMap<Uuid, EntradaCacheFluxos>>>,
+    ttl: Duration,
+}
+
+impl FluxosCache {
+    fn novo() -> Self {
+        let ttl_secs = std::env::var("SMARTCORE_FLUXOS_CACHE_TTL_SEGUNDOS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(30);
+        Self {
+            inner: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            ttl: Duration::from_secs(ttl_secs),
+        }
+    }
+
+    /// Devolve os fluxos do tenant do cache (se fresco) ou `None` para o chamador carregar.
+    async fn obter(&self, tenant: Uuid) -> Option<Arc<Vec<FluxoItem>>> {
+        let guard = self.inner.lock().await;
+        guard.get(&tenant).and_then(|(gravado_em, fluxos)| {
+            (gravado_em.elapsed() < self.ttl).then(|| fluxos.clone())
+        })
+    }
+
+    async fn gravar(&self, tenant: Uuid, fluxos: Arc<Vec<FluxoItem>>) {
+        self.inner
+            .lock()
+            .await
+            .insert(tenant, (Instant::now(), fluxos));
+    }
+}
 
 #[allow(dead_code)]
 mod ia_engine;
@@ -83,6 +133,155 @@ struct AppState {
     whatsapp_client: Arc<transport::MuxClient>,
     storage_client: Arc<transport::MuxClient>,
     ia_client: Arc<dyn ia_engine::IaEngineClient>,
+    fluxos_cache: FluxosCache,
+}
+
+/// Carrega os fluxos disponíveis do tenant (via `ListarFluxosDoTenant` no
+/// data_postgres), com cache TTL curto por tenant. Best-effort: se a RPC falhar ou o
+/// tenant não tiver fluxos, devolve lista vazia — o bot segue sem transferência (N6.3).
+async fn carregar_fluxos_disponiveis(
+    state: &AppState,
+    tenant_uuid: Uuid,
+    causation_id: &str,
+    traceparent: &str,
+) -> Arc<Vec<FluxoItem>> {
+    if let Some(fluxos) = state.fluxos_cache.obter(tenant_uuid).await {
+        return fluxos;
+    }
+
+    let resp = match chamar_rpc(
+        &state.pg_client,
+        &tenant_uuid.to_string(),
+        "ListarFluxosDoTenant",
+        serde_json::json!({}),
+        causation_id,
+        traceparent,
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(erro = %e, "ListarFluxosDoTenant falhou; seguindo sem fluxos");
+            return Arc::new(Vec::new());
+        }
+    };
+
+    let mut itens = Vec::new();
+    if let Some(arr) = resp.get("fluxos").and_then(|v| v.as_array()) {
+        for f in arr {
+            let Some(fluxo_id) = f.get("id").and_then(|v| v.as_i64()) else {
+                continue;
+            };
+            let setor = f.get("setor").and_then(|v| v.as_str()).unwrap_or_default();
+            // Descrição do fluxo compõe a chave "Setor - descrição"; na falta dela,
+            // usa o nome do fluxo para o setor não ficar sem qualificador.
+            let descricao = f
+                .get("descricao")
+                .and_then(|v| v.as_str())
+                .filter(|s| !s.is_empty())
+                .or_else(|| f.get("nome").and_then(|v| v.as_str()))
+                .unwrap_or_default();
+            itens.push(FluxoItem {
+                chave: format!("{setor} - {descricao}"),
+                fluxo_id: fluxo_id as i32,
+            });
+        }
+    }
+
+    let fluxos = Arc::new(itens);
+    state.fluxos_cache.gravar(tenant_uuid, fluxos.clone()).await;
+    fluxos
+}
+
+/// Aplica a transferência de fluxo decidida pela IA (N6.3): mapeia a chave devolvida em
+/// `fluxo_transferencia` de volta ao `fluxo_id` e chama `TransferirAtendimentoParaFluxo`
+/// no data_postgres. Best-effort: qualquer falha só significa "sem transferência", nunca
+/// trava o atendimento. Audita `atendimento.transferido_por_ia` quando efetiva.
+async fn aplicar_transferencia_ia(
+    state: &AppState,
+    tenant_uuid: Uuid,
+    atendimento_id: i32,
+    fluxos: &[FluxoItem],
+    fluxo_transferencia: &str,
+    causation_id: &str,
+    traceparent: &str,
+) {
+    let Some(item) = fluxos.iter().find(|f| f.chave == fluxo_transferencia) else {
+        tracing::warn!(
+            "IA indicou transferência para fluxo desconhecido; ignorando (sem transferência)"
+        );
+        return;
+    };
+
+    let resp = match chamar_rpc(
+        &state.pg_client,
+        &tenant_uuid.to_string(),
+        "TransferirAtendimentoParaFluxo",
+        serde_json::json!({ "atendimento_id": atendimento_id, "fluxo_id": item.fluxo_id }),
+        causation_id,
+        traceparent,
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(erro = %e, "TransferirAtendimentoParaFluxo falhou; atendimento segue no fluxo atual");
+            return;
+        }
+    };
+
+    if !resp
+        .get("transferido")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        tracing::warn!(
+            motivo = resp
+                .get("reason")
+                .and_then(|v| v.as_str())
+                .unwrap_or("desconhecido"),
+            "transferência por IA não efetivada"
+        );
+        return;
+    }
+
+    // Auditoria: SEM conteúdo da conversa — só ids/fluxo destino.
+    state.audit_logger.info(
+        tenant_uuid,
+        "atendimento.transferido_por_ia",
+        "Atendimento transferido automaticamente pela IA para outro fluxo",
+        serde_json::json!({
+            "atendimento_id": atendimento_id,
+            "fluxo_id": item.fluxo_id,
+            "etapa_id": resp.get("etapa_id"),
+        }),
+        None,
+        None,
+        Some(causation_id.to_string()),
+    );
+
+    // Realtime: notifica o tenant sobre a movimentação no Kanban (mesmo padrão da
+    // política automática de ticket/Kanban).
+    if let Some(ref redis_conn) = state.redis_conn {
+        let channel = format!("tenant:{tenant_uuid}:events");
+        let event_payload = serde_json::json!({
+            "event_type": "kanban.movido",
+            "tenant_id": tenant_uuid.to_string(),
+            "payload": {
+                "atendimento_id": atendimento_id,
+                "fluxo_id": item.fluxo_id,
+                "etapa_id": resp.get("etapa_id"),
+                "etapa_nome": resp.get("etapa_nome"),
+            }
+        });
+        let mut conn = redis_conn.clone();
+        let payload_str = event_payload.to_string();
+        let _: Result<u32, _> = redis::cmd("PUBLISH")
+            .arg(&channel)
+            .arg(&payload_str)
+            .query_async(&mut conn)
+            .await;
+    }
 }
 
 /// Orquestra a resposta via IA (fase N2.5): resolve a config do tenant, embeda a
@@ -96,7 +295,12 @@ struct AppState {
 #[tracing::instrument(
     skip_all,
     name = "ia.responder",
-    fields(tenant_id = %tenant_uuid, atendimento_id = atendimento_id)
+    fields(
+        tenant_id = %tenant_uuid,
+        atendimento_id = atendimento_id,
+        fluxos_count = tracing::field::Empty,
+        campos_pendentes_count = tracing::field::Empty,
+    )
 )]
 async fn responder_via_ia(
     state: &AppState,
@@ -262,14 +466,73 @@ async fn responder_via_ia(
         }
     }
 
+    // 4b. Fluxos disponíveis do tenant (N6.3): dá ao Responder o catálogo para
+    // decidir transferência. Best-effort/cacheado; lista vazia = sem transferência.
+    let fluxos = carregar_fluxos_disponiveis(state, tenant_uuid, causation_id, traceparent).await;
+    let fluxos_kv: Vec<(String, String)> = fluxos
+        .iter()
+        .map(|f| (f.chave.clone(), f.fluxo_id.to_string()))
+        .collect();
+
+    // 4c. Campos personalizados do atendimento (N6.3): input-only para o Responder —
+    // o contrato do Responder não devolve campos extraídos, então não há write-back
+    // aqui (ver decisão registrada no plano). Best-effort: falha = seguir sem campos.
+    let (campos_coletados, campos_pendentes) = match chamar_rpc(
+        &state.pg_client,
+        &tenant_id_str,
+        "ResolverCamposAtendimento",
+        serde_json::json!({ "atendimento_id": atendimento_id }),
+        causation_id,
+        traceparent,
+    )
+    .await
+    {
+        Ok(resp) => {
+            let coletados = resp
+                .get("coletados")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|c| {
+                            Some(ia_engine::client::CampoColetadoInput {
+                                slug: c.get("slug")?.as_str()?.to_string(),
+                                nome: c.get("nome")?.as_str()?.to_string(),
+                                valor: c.get("valor")?.as_str()?.to_string(),
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let pendentes = resp
+                .get("pendentes")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|c| {
+                            Some(ia_engine::client::CampoPendenteInput {
+                                slug: c.get("slug")?.as_str()?.to_string(),
+                                nome: c.get("nome")?.as_str()?.to_string(),
+                                descricao: c.get("descricao")?.as_str()?.to_string(),
+                                hint: c.get("hint")?.as_str()?.to_string(),
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            (coletados, pendentes)
+        }
+        Err(e) => {
+            tracing::warn!(erro = %e, "ResolverCamposAtendimento falhou; seguindo sem campos");
+            (Vec::new(), Vec::new())
+        }
+    };
+
+    let span = tracing::Span::current();
+    span.record("fluxos_count", fluxos.len());
+    span.record("campos_pendentes_count", campos_pendentes.len());
+
     // 5. Gera a resposta (Structured Output + score triádico + safety-net de
     // transferência ficam dentro do ia_engine — ver features/responder.py).
-    //
-    // NOTA (simplificação conhecida deste ciclo): `fluxos_disponiveis` e
-    // `campos_coletados`/`campos_pendentes` ainda não são resolvidos aqui — a
-    // resolução de fluxos de transferência e extração de campos por tenant fica
-    // para um ciclo seguinte (mesmo espírito da simplificação "single-instance-
-    // per-tenant" documentada na fase N1).
     let resposta = state
         .ia_client
         .responder(
@@ -278,11 +541,11 @@ async fn responder_via_ia(
                 atendimento_id: atendimento_id.to_string(),
                 mensagem: mensagem_texto.to_string(),
                 historico,
-                fluxos_disponiveis: Vec::new(),
+                fluxos_disponiveis: fluxos_kv,
                 dados_empresa,
                 dados_treinamento,
-                campos_coletados: Vec::new(),
-                campos_pendentes: Vec::new(),
+                campos_coletados,
+                campos_pendentes,
                 llm,
                 embeddings_provider,
                 similarity_threshold,
@@ -291,6 +554,21 @@ async fn responder_via_ia(
         )
         .await
         .map_err(|e| anyhow::anyhow!("ia_engine.Responder falhou: {e}"))?;
+
+    // N6.3: quando a IA decide transferir e devolve um fluxo válido, move o atendimento
+    // para o fluxo/etapa certos. Best-effort — nunca falha a resposta ao usuário.
+    if resposta.transferir_atendimento && !resposta.fluxo_transferencia.is_empty() {
+        aplicar_transferencia_ia(
+            state,
+            tenant_uuid,
+            atendimento_id,
+            &fluxos,
+            &resposta.fluxo_transferencia,
+            causation_id,
+            traceparent,
+        )
+        .await;
+    }
 
     Ok(resposta.resposta_texto)
 }
@@ -342,6 +620,7 @@ async fn main() -> anyhow::Result<()> {
         whatsapp_client,
         storage_client,
         ia_client,
+        fluxos_cache: FluxosCache::novo(),
     };
 
     // 3. Inicia o consumidor do barramento (events:stream)
@@ -1621,6 +1900,7 @@ mod tests {
             redis_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
+            fluxos_cache: FluxosCache::novo(),
             whatsapp_client: pg_client.clone(),
             pg_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
@@ -1670,6 +1950,7 @@ mod tests {
             redis_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
+            fluxos_cache: FluxosCache::novo(),
             whatsapp_client: pg_client.clone(),
             pg_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
@@ -1697,6 +1978,7 @@ mod tests {
             redis_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
+            fluxos_cache: FluxosCache::novo(),
             whatsapp_client: pg_client.clone(),
             pg_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
@@ -1728,6 +2010,7 @@ mod tests {
             redis_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
+            fluxos_cache: FluxosCache::novo(),
             whatsapp_client: pg_client.clone(),
             pg_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
@@ -1786,6 +2069,7 @@ mod tests {
             redis_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
+            fluxos_cache: FluxosCache::novo(),
             pg_client,
             whatsapp_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
@@ -1864,6 +2148,7 @@ mod tests {
             redis_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
+            fluxos_cache: FluxosCache::novo(),
             pg_client,
             whatsapp_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
@@ -1920,6 +2205,7 @@ mod tests {
             redis_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
+            fluxos_cache: FluxosCache::novo(),
             pg_client,
             whatsapp_client,
             ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
@@ -2078,6 +2364,7 @@ mod tests {
             whatsapp_client,
             storage_client,
             ia_client: Arc::new(mock_ia),
+            fluxos_cache: FluxosCache::novo(),
         };
 
         let tenant = Uuid::new_v4();
@@ -2111,5 +2398,112 @@ mod tests {
         pg_handle.abort();
         wa_handle.abort();
         st_handle.abort();
+    }
+
+    #[tokio::test]
+    async fn fluxos_cache_respeita_ttl() {
+        let cache = FluxosCache {
+            inner: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
+            ttl: Duration::from_millis(50),
+        };
+        let tenant = Uuid::new_v4();
+        assert!(cache.obter(tenant).await.is_none(), "vazio no início");
+
+        cache
+            .gravar(
+                tenant,
+                Arc::new(vec![FluxoItem {
+                    chave: "Vendas - funil".to_string(),
+                    fluxo_id: 1,
+                }]),
+            )
+            .await;
+        assert!(cache.obter(tenant).await.is_some(), "fresco após gravar");
+
+        tokio::time::sleep(Duration::from_millis(80)).await;
+        assert!(cache.obter(tenant).await.is_none(), "expira após o TTL");
+    }
+
+    /// A transferência só dispara a RPC quando a chave devolvida pela IA casa um fluxo
+    /// conhecido; chave desconhecida é ignorada (sem transferência).
+    #[tokio::test]
+    async fn aplicar_transferencia_ia_chama_rpc_quando_chave_casa() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let _guard = WORKER_TEST_MUTEX.lock().await;
+        let pg_addr = "tcp://127.0.0.1:29430";
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+
+        let transferiu = Arc::new(AtomicBool::new(false));
+        let transferiu_c = transferiu.clone();
+        let pg_server = Server::new(Endpoint::parse(pg_addr).unwrap(), "flatbuffers").route(
+            "TransferirAtendimentoParaFluxo",
+            move |env| {
+                let flag = transferiu_c.clone();
+                Box::pin(async move {
+                    flag.store(true, Ordering::SeqCst);
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(
+                            &serde_json::json!({ "transferido": true, "etapa_id": 11 }),
+                        )
+                        .unwrap(),
+                        ..env
+                    }
+                })
+            },
+        );
+        let pg_handle = tokio::spawn(async move { pg_server.run().await.unwrap() });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
+        let state = AppState {
+            redis_conn: None,
+            audit_logger: observability::AuditLogger::new_dummy("worker"),
+            whatsapp_client: pg_client.clone(),
+            storage_client: pg_client.clone(),
+            pg_client,
+            ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
+            fluxos_cache: FluxosCache::novo(),
+        };
+
+        let fluxos = vec![FluxoItem {
+            chave: "Vendas - funil".to_string(),
+            fluxo_id: 7,
+        }];
+
+        // Chave desconhecida: não transfere.
+        aplicar_transferencia_ia(
+            &state,
+            Uuid::new_v4(),
+            42,
+            &fluxos,
+            "Inexistente - x",
+            "c",
+            "tp",
+        )
+        .await;
+        assert!(
+            !transferiu.load(Ordering::SeqCst),
+            "chave desconhecida não transfere"
+        );
+
+        // Chave conhecida: dispara a RPC de transferência.
+        aplicar_transferencia_ia(
+            &state,
+            Uuid::new_v4(),
+            42,
+            &fluxos,
+            "Vendas - funil",
+            "c",
+            "tp",
+        )
+        .await;
+        assert!(
+            transferiu.load(Ordering::SeqCst),
+            "chave conhecida transfere"
+        );
+
+        pg_handle.abort();
     }
 }

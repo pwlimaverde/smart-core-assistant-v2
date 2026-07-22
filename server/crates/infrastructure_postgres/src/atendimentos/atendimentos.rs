@@ -109,6 +109,19 @@ pub trait AtendimentoRepository: Send + Sync {
         etapa_id: i32,
     ) -> Result<(), DbError>;
 
+    /// Transfere o atendimento para outro fluxo (N6.3): SOBRESCREVE fluxo/departamento/
+    /// etapa (diferente de `atribuir_fluxo_etapa`, que preserva o fluxo já definido via
+    /// COALESCE). Usado pela transferência automática decidida pela IA.
+    async fn transferir_fluxo_etapa(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        fluxo_id: i32,
+        departamento_id: i32,
+        etapa_id: i32,
+    ) -> Result<(), DbError>;
+
     /// Varredura CROSS-TENANT (scheduler do worker, F4.3b): atendimentos resolvidos,
     /// sem feedback registrado e ainda não marcados como expirados, cuja `data_fim`
     /// ultrapassou o TTL. `ctx` é usado apenas para a checagem de escopo — a consulta
@@ -370,6 +383,37 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
             r#"UPDATE oraculo_atendimento
                SET fluxo_atendimento_id = COALESCE(fluxo_atendimento_id, $1),
                    departamento_id = COALESCE(departamento_id, $2),
+                   etapa_atual_id = $3,
+                   status = 'fila'
+               WHERE tenant_id = $4 AND id = $5"#,
+        )
+        .bind(fluxo_id)
+        .bind(departamento_id)
+        .bind(etapa_id)
+        .bind(ctx.tenant_id)
+        .bind(atendimento_id)
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, fluxo_id = fluxo_id, etapa_id = etapa_id))]
+    async fn transferir_fluxo_etapa(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        fluxo_id: i32,
+        departamento_id: i32,
+        etapa_id: i32,
+    ) -> Result<(), DbError> {
+        ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+        // Query em runtime (sem macro) para não exigir cache .sqlx no build offline.
+        // SOBRESCREVE (sem COALESCE): a transferência muda o fluxo de fato.
+        sqlx::query(
+            r#"UPDATE oraculo_atendimento
+               SET fluxo_atendimento_id = $1,
+                   departamento_id = $2,
                    etapa_atual_id = $3,
                    status = 'fila'
                WHERE tenant_id = $4 AND id = $5"#,

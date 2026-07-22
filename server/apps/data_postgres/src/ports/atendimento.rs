@@ -5,7 +5,46 @@
 use async_trait::async_trait;
 use infrastructure_postgres::atendimentos::atendimentos::Atendimento;
 use infrastructure_postgres::atendimentos::mensagens::{DestinoEnvioOutbound, Mensagem};
+use infrastructure_postgres::operacional::fluxos::FluxoDisponivel;
 use infrastructure_postgres::{DbError, RequestContext};
+
+/// Campo já coletado de um atendimento (N6.3, input-only para o Responder).
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct CampoColetadoDto {
+    pub slug: String,
+    pub nome: String,
+    pub valor: String,
+}
+
+/// Campo obrigatório ainda não coletado de um atendimento (N6.3, input-only).
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct CampoPendenteDto {
+    pub slug: String,
+    pub nome: String,
+    pub descricao: String,
+    pub hint: String,
+}
+
+/// Campos personalizados resolvidos de um atendimento: já coletados (com valor)
+/// e obrigatórios ainda pendentes (N6.3, input-only para o Responder).
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct CamposAtendimentoDto {
+    pub coletados: Vec<CampoColetadoDto>,
+    pub pendentes: Vec<CampoPendenteDto>,
+}
+
+/// Resultado de uma transferência de atendimento para outro fluxo decidida pela IA (N6.3).
+#[derive(Debug, Clone, Default)]
+pub struct TransferenciaFluxoOutcome {
+    /// `true` quando a transferência efetivamente ocorreu.
+    pub transferido: bool,
+    pub fluxo_id: Option<i32>,
+    pub fluxo_nome: Option<String>,
+    pub etapa_id: Option<i32>,
+    pub etapa_nome: Option<String>,
+    /// Motivo quando `transferido == false` (ex.: "fluxo_inexistente", "sem_etapa_inicial").
+    pub reason: Option<String>,
+}
 
 /// Resultado da aplicação da política de ticket/Kanban sobre um atendimento (WS-2.4).
 #[derive(Debug, Clone, Default)]
@@ -167,4 +206,30 @@ pub trait AtendimentoStore: Send + Sync {
         analise_midia: &str,
         resumo_midia: &str,
     ) -> Result<(), DbError>;
+
+    /// Lista os fluxos ativos do tenant (setor/nome/descrição) para o Responder (N6.3).
+    async fn listar_fluxos_do_tenant(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<FluxoDisponivel>, DbError>;
+
+    /// Transfere o atendimento para `fluxo_id`: resolve a etapa inicial do fluxo
+    /// destino, sobrescreve fluxo/departamento/etapa e registra o `MovimentoFluxo`
+    /// na mesma transação. Transferência automática decidida pela IA (N6.3).
+    async fn transferir_atendimento_para_fluxo(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        fluxo_id: i32,
+    ) -> Result<TransferenciaFluxoOutcome, DbError>;
+
+    /// Resolve os campos personalizados (globais + do fluxo atual) do atendimento:
+    /// já coletados (com valor) e obrigatórios pendentes (sem valor). Input-only
+    /// para o Responder (N6.3) — o contrato do Responder não devolve campos
+    /// extraídos, então não há write-back aqui.
+    async fn resolver_campos_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<CamposAtendimentoDto, DbError>;
 }

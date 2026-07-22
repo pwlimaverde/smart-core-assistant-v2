@@ -7,6 +7,10 @@ use sqlx::PgPool;
 use infrastructure_postgres::atendimentos::atendimentos::{
     Atendimento, AtendimentoRepository, PostgresAtendimentoRepository,
 };
+use infrastructure_postgres::atendimentos::campos::{
+    CampoPersonalizadoRepository, PostgresCampoPersonalizadoRepository,
+    PostgresValorCampoRepository, ValorCampoRepository,
+};
 use infrastructure_postgres::atendimentos::mensagens::{
     DestinoEnvioOutbound, Mensagem, MensagemRepository, PostgresMensagemRepository,
 };
@@ -15,12 +19,15 @@ use infrastructure_postgres::atendimentos::movimentos::{
 };
 use infrastructure_postgres::clientes::contatos::{ContatoRepository, PostgresContatoRepository};
 use infrastructure_postgres::operacional::fluxos::{
-    EtapaFluxoRepository, FluxoAtendimentoRepository, PostgresEtapaFluxoRepository,
-    PostgresFluxoAtendimentoRepository,
+    EtapaFluxoRepository, FluxoAtendimentoRepository, FluxoDisponivel,
+    PostgresEtapaFluxoRepository, PostgresFluxoAtendimentoRepository,
 };
 use infrastructure_postgres::{run_in_tenant_transaction, DbError, RequestContext};
 
-use crate::ports::{AtendimentoStore, TicketKanbanOutcome};
+use crate::ports::{
+    AtendimentoStore, CampoColetadoDto, CampoPendenteDto, CamposAtendimentoDto,
+    TicketKanbanOutcome, TransferenciaFluxoOutcome,
+};
 
 /// Implementação Postgres da port Atendimento.
 /// `admin_pool` (BYPASSRLS) é usado apenas nas varreduras cross-tenant do
@@ -529,6 +536,176 @@ impl AtendimentoStore for PgAtendimentoStore {
             )
             .await?;
             Ok(((), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_fluxos_do_tenant(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<FluxoDisponivel>, DbError> {
+        let repo = PostgresFluxoAtendimentoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let fluxos = repo.listar_ativos_do_tenant(&mut tx, &ctx).await?;
+            Ok((fluxos, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, fluxo_id = fluxo_id))]
+    async fn transferir_atendimento_para_fluxo(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        fluxo_id: i32,
+    ) -> Result<TransferenciaFluxoOutcome, DbError> {
+        let repo_atendimento = PostgresAtendimentoRepository;
+        let repo_fluxo = PostgresFluxoAtendimentoRepository;
+        let repo_etapa = PostgresEtapaFluxoRepository;
+        let repo_movimento = PostgresMovimentoFluxoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            // Fluxo destino precisa existir e estar ativo.
+            let fluxo = match repo_fluxo.buscar_por_id(&mut tx, &ctx, fluxo_id).await? {
+                Some(f) if f.ativo => f,
+                _ => {
+                    let outcome = TransferenciaFluxoOutcome {
+                        reason: Some("fluxo_inexistente".to_string()),
+                        ..Default::default()
+                    };
+                    return Ok((outcome, tx));
+                }
+            };
+
+            // Etapa de entrada (tipo 'fila') do fluxo destino.
+            let etapa = match repo_etapa
+                .get_etapa_inicial(&mut tx, &ctx, fluxo.id)
+                .await?
+            {
+                Some(e) => e,
+                None => {
+                    let outcome = TransferenciaFluxoOutcome {
+                        fluxo_id: Some(fluxo.id),
+                        fluxo_nome: Some(fluxo.nome),
+                        reason: Some("sem_etapa_inicial".to_string()),
+                        ..Default::default()
+                    };
+                    return Ok((outcome, tx));
+                }
+            };
+
+            let etapa_origem = repo_atendimento
+                .buscar_por_id(&mut tx, &ctx, atendimento_id)
+                .await?
+                .and_then(|a| a.etapa_atual_id);
+
+            repo_atendimento
+                .transferir_fluxo_etapa(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    fluxo.id,
+                    fluxo.departamento_id,
+                    etapa.id,
+                )
+                .await?;
+            repo_movimento
+                .criar(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    etapa_origem,
+                    etapa.id,
+                    None,
+                    Some("transferência automática pela IA"),
+                    true,
+                )
+                .await?;
+
+            let outcome = TransferenciaFluxoOutcome {
+                transferido: true,
+                fluxo_id: Some(fluxo.id),
+                fluxo_nome: Some(fluxo.nome),
+                etapa_id: Some(etapa.id),
+                etapa_nome: Some(etapa.nome),
+                reason: None,
+            };
+            Ok((outcome, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn resolver_campos_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<CamposAtendimentoDto, DbError> {
+        let repo_atendimento = PostgresAtendimentoRepository;
+        let repo_campo = PostgresCampoPersonalizadoRepository;
+        let repo_valor = PostgresValorCampoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let fluxo_id = repo_atendimento
+                .buscar_por_id(&mut tx, &ctx, atendimento_id)
+                .await?
+                .and_then(|a| a.fluxo_atendimento_id);
+
+            // Catálogo aplicável: globais (sem filtro de fluxo) + os do fluxo atual
+            // do atendimento, quando houver.
+            let mut definicoes = repo_campo
+                .listar_por_escopo(&mut tx, &ctx, "GLOBAL", None)
+                .await?;
+            if let Some(fluxo_id) = fluxo_id {
+                definicoes.extend(
+                    repo_campo
+                        .listar_por_escopo(&mut tx, &ctx, "FLUXO", Some(fluxo_id))
+                        .await?,
+                );
+            }
+
+            let valores = repo_valor
+                .listar_por_atendimento(&mut tx, &ctx, atendimento_id)
+                .await?;
+
+            let mut coletados = Vec::new();
+            let mut pendentes = Vec::new();
+            for def in definicoes {
+                let valor_existente = valores.iter().find(|v| v.campo_id == def.id);
+                match valor_existente {
+                    Some(v) => coletados.push(CampoColetadoDto {
+                        slug: def.slug,
+                        nome: def.nome,
+                        // O valor é JSONB livre; string "crua" evita aspas duplas
+                        // indevidas quando já é uma string JSON.
+                        valor: v
+                            .valor
+                            .as_str()
+                            .map(str::to_string)
+                            .unwrap_or_else(|| v.valor.to_string()),
+                    }),
+                    None if def.obrigatorio => pendentes.push(CampoPendenteDto {
+                        slug: def.slug,
+                        nome: def.nome,
+                        descricao: def.descricao,
+                        hint: def.extrair_hint,
+                    }),
+                    None => {}
+                }
+            }
+
+            Ok((
+                CamposAtendimentoDto {
+                    coletados,
+                    pendentes,
+                },
+                tx,
+            ))
         })
         .await
     }

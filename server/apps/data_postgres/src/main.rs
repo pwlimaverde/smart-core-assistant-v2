@@ -425,6 +425,9 @@ async fn main() -> anyhow::Result<()> {
     let state_for_marcar_mensagem_enviada = state_clone.clone();
     let state_for_marcar_mensagem_falha_envio = state_clone.clone();
     let state_for_anexar_analise_midia = state_clone.clone();
+    let state_for_listar_fluxos_tenant = state_clone.clone();
+    let state_for_transferir_fluxo = state_clone.clone();
+    let state_for_resolver_campos_atendimento = state_clone.clone();
     let state_for_query_compose = state_clone.clone();
     let state_for_resolver_config_ia = state_clone.clone();
     let state_for_update_status = state_clone;
@@ -503,6 +506,24 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(
                 async move { handler_anexar_analise_midia(state.atendimento.as_ref(), env).await },
             )
+        })
+        .route("ListarFluxosDoTenant", move |env| {
+            let state = state_for_listar_fluxos_tenant.clone();
+            Box::pin(async move {
+                handler_listar_fluxos_do_tenant(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("TransferirAtendimentoParaFluxo", move |env| {
+            let state = state_for_transferir_fluxo.clone();
+            Box::pin(async move {
+                handler_transferir_atendimento_para_fluxo(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("ResolverCamposAtendimento", move |env| {
+            let state = state_for_resolver_campos_atendimento.clone();
+            Box::pin(async move {
+                handler_resolver_campos_atendimento(state.atendimento.as_ref(), env).await
+            })
         })
         .route("MarcarMensagemEnviada", move |env| {
             let state = state_for_marcar_mensagem_enviada.clone();
@@ -2108,6 +2129,109 @@ async fn handler_anexar_analise_midia(
             &env,
             "AnexarAnaliseMidiaReply",
             serde_json::json!({ "status": "ok" }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// Lista os fluxos ativos do tenant (setor/nome/descrição) para o worker montar
+/// `fluxos_disponiveis` do Responder (N6.3).
+async fn handler_listar_fluxos_do_tenant(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_fluxos_do_tenant(&ctx).await {
+        Ok(fluxos) => ok_reply(
+            &env,
+            "ListarFluxosDoTenantReply",
+            serde_json::json!({ "fluxos": fluxos }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// Transfere o atendimento para outro fluxo (transferência automática pela IA, N6.3).
+async fn handler_transferir_atendimento_para_fluxo(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let fluxo_id = match payload_json.get("fluxo_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("fluxo_id ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .transferir_atendimento_para_fluxo(&ctx, atendimento_id, fluxo_id)
+        .await
+    {
+        Ok(outcome) => ok_reply(
+            &env,
+            "TransferirAtendimentoParaFluxoReply",
+            serde_json::json!({
+                "transferido": outcome.transferido,
+                "fluxo_id": outcome.fluxo_id,
+                "fluxo_nome": outcome.fluxo_nome,
+                "etapa_id": outcome.etapa_id,
+                "etapa_nome": outcome.etapa_nome,
+                "reason": outcome.reason,
+            }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// Resolve campos personalizados (coletados + pendentes obrigatórios) do
+/// atendimento para o Responder — input-only, sem write-back (N6.3).
+async fn handler_resolver_campos_atendimento(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .resolver_campos_atendimento(&ctx, atendimento_id)
+        .await
+    {
+        Ok(campos) => ok_reply(
+            &env,
+            "ResolverCamposAtendimentoReply",
+            serde_json::json!({
+                "coletados": campos.coletados,
+                "pendentes": campos.pendentes,
+            }),
         ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
@@ -4733,6 +4857,123 @@ mod tests_atendimento_cliente_unit {
 
         let resp = handler_anexar_analise_midia(&store, env).await;
 
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    /// HAPPY PATH: listar_fluxos_do_tenant devolve os fluxos no envelope de reply.
+    #[tokio::test]
+    async fn listar_fluxos_do_tenant_retorna_fluxos() {
+        use infrastructure_postgres::operacional::fluxos::FluxoDisponivel;
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_listar_fluxos_do_tenant()
+            .times(1)
+            .returning(|_| {
+                Ok(vec![FluxoDisponivel {
+                    id: 3,
+                    setor: "Vendas".to_string(),
+                    nome: "Funil".to_string(),
+                    descricao: Some("negociação".to_string()),
+                }])
+            });
+        let env = envelope_com_payload("ListarFluxosDoTenant", serde_json::json!({}));
+
+        let resp = handler_listar_fluxos_do_tenant(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["fluxos"].as_array().unwrap().len(), 1);
+        assert_eq!(body["fluxos"][0]["setor"].as_str(), Some("Vendas"));
+    }
+
+    /// HAPPY PATH: transferir repassa os ids ao store e devolve o outcome.
+    #[tokio::test]
+    async fn transferir_atendimento_para_fluxo_repassa_ao_store() {
+        use crate::ports::TransferenciaFluxoOutcome;
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_transferir_atendimento_para_fluxo()
+            .times(1)
+            .withf(|_, atendimento_id, fluxo_id| *atendimento_id == 42 && *fluxo_id == 7)
+            .returning(|_, _, _| {
+                Ok(TransferenciaFluxoOutcome {
+                    transferido: true,
+                    fluxo_id: Some(7),
+                    fluxo_nome: Some("Suporte".to_string()),
+                    etapa_id: Some(11),
+                    etapa_nome: Some("Fila".to_string()),
+                    reason: None,
+                })
+            });
+        let env = envelope_com_payload(
+            "TransferirAtendimentoParaFluxo",
+            serde_json::json!({ "atendimento_id": 42, "fluxo_id": 7 }),
+        );
+
+        let resp = handler_transferir_atendimento_para_fluxo(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["transferido"].as_bool(), Some(true));
+        assert_eq!(body["etapa_id"].as_i64(), Some(11));
+    }
+
+    /// FAIL-CLOSED: transferir sem fluxo_id vira erro de validação.
+    #[tokio::test]
+    async fn transferir_atendimento_sem_fluxo_id_valida() {
+        let store = MockAtendimentoStore::new();
+        let env = envelope_com_payload(
+            "TransferirAtendimentoParaFluxo",
+            serde_json::json!({ "atendimento_id": 42 }),
+        );
+        let resp = handler_transferir_atendimento_para_fluxo(&store, env).await;
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    /// HAPPY PATH: resolver_campos_atendimento devolve coletados/pendentes no reply.
+    #[tokio::test]
+    async fn resolver_campos_atendimento_retorna_coletados_e_pendentes() {
+        use crate::ports::{CampoColetadoDto, CampoPendenteDto, CamposAtendimentoDto};
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_resolver_campos_atendimento()
+            .times(1)
+            .withf(|_, atendimento_id| *atendimento_id == 42)
+            .returning(|_, _| {
+                Ok(CamposAtendimentoDto {
+                    coletados: vec![CampoColetadoDto {
+                        slug: "nome".to_string(),
+                        nome: "Nome".to_string(),
+                        valor: "Maria".to_string(),
+                    }],
+                    pendentes: vec![CampoPendenteDto {
+                        slug: "cpf".to_string(),
+                        nome: "CPF".to_string(),
+                        descricao: "Documento".to_string(),
+                        hint: "número do CPF".to_string(),
+                    }],
+                })
+            });
+        let env = envelope_com_payload(
+            "ResolverCamposAtendimento",
+            serde_json::json!({ "atendimento_id": 42 }),
+        );
+
+        let resp = handler_resolver_campos_atendimento(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["coletados"].as_array().unwrap().len(), 1);
+        assert_eq!(body["coletados"][0]["slug"].as_str(), Some("nome"));
+        assert_eq!(body["pendentes"][0]["slug"].as_str(), Some("cpf"));
+    }
+
+    /// FAIL-CLOSED: resolver_campos_atendimento sem atendimento_id vira erro de validação.
+    #[tokio::test]
+    async fn resolver_campos_atendimento_sem_atendimento_id_valida() {
+        let store = MockAtendimentoStore::new();
+        let env = envelope_com_payload("ResolverCamposAtendimento", serde_json::json!({}));
+        let resp = handler_resolver_campos_atendimento(&store, env).await;
         assert_eq!(resp.kind, MessageKind::Error as i32);
     }
 
