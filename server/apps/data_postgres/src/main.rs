@@ -428,6 +428,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_listar_fluxos_tenant = state_clone.clone();
     let state_for_transferir_fluxo = state_clone.clone();
     let state_for_resolver_campos_atendimento = state_clone.clone();
+    let state_for_atualizar_sentimento = state_clone.clone();
     let state_for_query_compose = state_clone.clone();
     let state_for_resolver_config_ia = state_clone.clone();
     let state_for_update_status = state_clone;
@@ -524,6 +525,12 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(async move {
                 handler_resolver_campos_atendimento(state.atendimento.as_ref(), env).await
             })
+        })
+        .route("AtualizarSentimentoAtendimento", move |env| {
+            let state = state_for_atualizar_sentimento.clone();
+            Box::pin(
+                async move { handler_atualizar_sentimento(state.atendimento.as_ref(), env).await },
+            )
         })
         .route("MarcarMensagemEnviada", move |env| {
             let state = state_for_marcar_mensagem_enviada.clone();
@@ -2195,6 +2202,47 @@ async fn handler_transferir_atendimento_para_fluxo(
                 "etapa_nome": outcome.etapa_nome,
                 "reason": outcome.reason,
             }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// Atualiza a última leitura de sentimento do atendimento (N6.5, best-effort).
+async fn handler_atualizar_sentimento(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let nota = payload_json
+        .get("nota")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let label = payload_json
+        .get("label")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .atualizar_sentimento(&ctx, atendimento_id, nota, label)
+        .await
+    {
+        Ok(()) => ok_reply(
+            &env,
+            "AtualizarSentimentoAtendimentoReply",
+            serde_json::json!({}),
         ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
@@ -4974,6 +5022,39 @@ mod tests_atendimento_cliente_unit {
         let store = MockAtendimentoStore::new();
         let env = envelope_com_payload("ResolverCamposAtendimento", serde_json::json!({}));
         let resp = handler_resolver_campos_atendimento(&store, env).await;
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    /// HAPPY PATH: atualizar_sentimento repassa nota/label ao store.
+    #[tokio::test]
+    async fn atualizar_sentimento_repassa_ao_store() {
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_atualizar_sentimento()
+            .times(1)
+            .withf(|_, atendimento_id, nota, label| {
+                *atendimento_id == 42 && *nota == 7 && label == "positivo"
+            })
+            .returning(|_, _, _, _| Ok(()));
+        let env = envelope_com_payload(
+            "AtualizarSentimentoAtendimento",
+            serde_json::json!({ "atendimento_id": 42, "nota": 7, "label": "positivo" }),
+        );
+
+        let resp = handler_atualizar_sentimento(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    /// FAIL-CLOSED: atualizar_sentimento sem atendimento_id vira erro de validação.
+    #[tokio::test]
+    async fn atualizar_sentimento_sem_atendimento_id_valida() {
+        let store = MockAtendimentoStore::new();
+        let env = envelope_com_payload(
+            "AtualizarSentimentoAtendimento",
+            serde_json::json!({ "nota": 7, "label": "positivo" }),
+        );
+        let resp = handler_atualizar_sentimento(&store, env).await;
         assert_eq!(resp.kind, MessageKind::Error as i32);
     }
 

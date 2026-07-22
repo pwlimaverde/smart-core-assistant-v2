@@ -232,4 +232,14 @@ pub trait AtendimentoStore: Send + Sync {
         ctx: &RequestContext,
         atendimento_id: i32,
     ) -> Result<CamposAtendimentoDto, DbError>;
+
+    /// Atualiza a última leitura de sentimento do atendimento, calculada pela IA
+    /// a partir de mensagens inbound de texto/transcrição de áudio (N6.5, best-effort).
+    async fn atualizar_sentimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        nota: i32,
+        label: &str,
+    ) -> Result<(), DbError>;
 }

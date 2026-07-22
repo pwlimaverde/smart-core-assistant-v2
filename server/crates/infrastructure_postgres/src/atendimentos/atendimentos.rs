@@ -122,6 +122,18 @@ pub trait AtendimentoRepository: Send + Sync {
         etapa_id: i32,
     ) -> Result<(), DbError>;
 
+    /// Atualiza a última leitura de sentimento do atendimento (N6.5, best-effort —
+    /// não é `avaliacao`/`feedback` de satisfação do cliente, é a análise da IA
+    /// sobre o tom da conversa). Sobrescreve sempre com a leitura mais recente.
+    async fn atualizar_sentimento(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        nota: i32,
+        label: &str,
+    ) -> Result<(), DbError>;
+
     /// Varredura CROSS-TENANT (scheduler do worker, F4.3b): atendimentos resolvidos,
     /// sem feedback registrado e ainda não marcados como expirados, cuja `data_fim`
     /// ultrapassou o TTL. `ctx` é usado apenas para a checagem de escopo — a consulta
@@ -421,6 +433,30 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         .bind(fluxo_id)
         .bind(departamento_id)
         .bind(etapa_id)
+        .bind(ctx.tenant_id)
+        .bind(atendimento_id)
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, nota = nota))]
+    async fn atualizar_sentimento(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        nota: i32,
+        label: &str,
+    ) -> Result<(), DbError> {
+        // Query em runtime (sem macro) para não exigir cache .sqlx no build offline.
+        sqlx::query(
+            r#"UPDATE oraculo_atendimento
+               SET sentimento_nota = $1, sentimento_label = $2
+               WHERE tenant_id = $3 AND id = $4"#,
+        )
+        .bind(nota)
+        .bind(label)
         .bind(ctx.tenant_id)
         .bind(atendimento_id)
         .execute(&mut **tx)

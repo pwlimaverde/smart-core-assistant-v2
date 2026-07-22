@@ -709,4 +709,24 @@ impl AtendimentoStore for PgAtendimentoStore {
         })
         .await
     }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, nota = nota))]
+    async fn atualizar_sentimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        nota: i32,
+        label: &str,
+    ) -> Result<(), DbError> {
+        let repo = PostgresAtendimentoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let label = label.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            repo.atualizar_sentimento(&mut tx, &ctx, atendimento_id, nota, &label)
+                .await?;
+            Ok(((), tx))
+        })
+        .await
+    }
 }

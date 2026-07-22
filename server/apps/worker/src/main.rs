@@ -876,11 +876,36 @@ async fn processar_mensagem_recebida(
                 tenant_uuid,
                 &tenant_str,
                 instance_id,
+                atendimento_id,
                 mensagem_id,
                 media_type,
                 media_mime,
                 media_payload,
                 &raw_event,
+                &causation,
+                &traceparent,
+            )
+            .await;
+        });
+    }
+
+    // 2d. Sentimento (N6.5): mensagens de texto avaliam o tom da conversa em
+    // background, best-effort (mensagens de mídia sem legenda ficam para quando a
+    // transcrição terminar — ver `processar_pipeline_midia`). Nunca bloqueia nem
+    // falha o handler principal.
+    if msg_normalized.media_payload.is_none() && !msg_normalized.content.trim().is_empty() {
+        let state_sentimento = state.clone();
+        let texto = msg_normalized.content.clone();
+        let tenant_str = envelope.tenant_id.to_string();
+        let causation = envelope.event_id.to_string();
+        let traceparent = envelope.traceparent.clone();
+        tokio::spawn(async move {
+            avaliar_sentimento_best_effort(
+                &state_sentimento,
+                tenant_uuid,
+                &tenant_str,
+                atendimento_id,
+                &texto,
                 &causation,
                 &traceparent,
             )
@@ -1172,6 +1197,7 @@ async fn processar_pipeline_midia(
     tenant_uuid: Uuid,
     tenant_str: &str,
     instance_id: i32,
+    atendimento_id: i32,
     mensagem_id: i32,
     media_type: domain_whatsapp::MediaType,
     media_mime: Option<String>,
@@ -1373,6 +1399,28 @@ async fn processar_pipeline_midia(
         return;
     }
 
+    // 6b. Sentimento (N6.5): áudio transcrito também avalia o tom da conversa,
+    // best-effort, em background — não atrasa o retorno deste pipeline.
+    if matches!(media_type, domain_whatsapp::MediaType::Audio) && !analise.is_empty() {
+        let state_sentimento = state.clone();
+        let tenant_str_owned = tenant_str.to_string();
+        let texto = analise.clone();
+        let causation = causation_id.to_string();
+        let traceparent_owned = traceparent.to_string();
+        tokio::spawn(async move {
+            avaliar_sentimento_best_effort(
+                &state_sentimento,
+                tenant_uuid,
+                &tenant_str_owned,
+                atendimento_id,
+                &texto,
+                &causation,
+                &traceparent_owned,
+            )
+            .await;
+        });
+    }
+
     // Auditoria: mídia analisada (nível INFO). SEM conteúdo/transcrição — só
     // metadados operacionais. O download em si não gera evento (o span já o rastreia).
     let duracao_ms = inicio.elapsed().as_millis() as i64;
@@ -1426,6 +1474,75 @@ async fn resolver_provider_ia(
             .to_string(),
         temperature: 0.0,
     })
+}
+
+/// Avalia o sentimento de uma mensagem inbound (texto ou transcrição de áudio) e
+/// persiste a leitura mais recente no atendimento (N6.5). Best-effort: qualquer
+/// falha (config/RPC/parsing) só significa "sentimento não atualizado desta vez",
+/// nunca afeta o atendimento. `skip_all`: o texto da mensagem é PII e nunca entra
+/// no span — só a nota (número) é registrada.
+#[tracing::instrument(
+    skip_all,
+    name = "ia.sentimento",
+    fields(tenant_id = %tenant_uuid, atendimento_id = atendimento_id, nota = tracing::field::Empty)
+)]
+async fn avaliar_sentimento_best_effort(
+    state: &AppState,
+    tenant_uuid: Uuid,
+    tenant_str: &str,
+    atendimento_id: i32,
+    texto: &str,
+    causation_id: &str,
+    traceparent: &str,
+) {
+    let provider = match resolver_provider_ia(state, tenant_str, causation_id, traceparent).await {
+        Ok(p) => p,
+        Err(e) => {
+            tracing::warn!(erro = %e, "config de IA indisponível; sentimento não avaliado");
+            return;
+        }
+    };
+
+    let saida = match state
+        .ia_client
+        .sentimento(
+            ia_engine::client::SentimentoInput {
+                tenant_id: tenant_str.to_string(),
+                historico: vec![ia_engine::ChatTurnInput {
+                    role: "human".to_string(),
+                    conteudo: texto.to_string(),
+                }],
+                llm: provider,
+            },
+            traceparent,
+        )
+        .await
+    {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(erro = %e, "ia_engine.Sentimento falhou; sentimento não atualizado");
+            return;
+        }
+    };
+
+    tracing::Span::current().record("nota", saida.nota);
+
+    if let Err(e) = chamar_rpc(
+        &state.pg_client,
+        tenant_str,
+        "AtualizarSentimentoAtendimento",
+        serde_json::json!({
+            "atendimento_id": atendimento_id,
+            "nota": saida.nota,
+            "label": saida.sentimento,
+        }),
+        causation_id,
+        traceparent,
+    )
+    .await
+    {
+        tracing::warn!(erro = %e, "falha ao persistir sentimento do atendimento");
+    }
 }
 
 /// Aplica a política de ticket/Kanban a um atendimento recém-aberto via RPC ao
@@ -2380,6 +2497,7 @@ mod tests {
             tenant,
             &tenant.to_string(),
             42,
+            99,
             7,
             domain_whatsapp::MediaType::Audio,
             Some("audio/ogg".to_string()),
@@ -2502,6 +2620,89 @@ mod tests {
         assert!(
             transferiu.load(Ordering::SeqCst),
             "chave conhecida transfere"
+        );
+
+        pg_handle.abort();
+    }
+
+    /// Sentimento avaliado com sucesso persiste nota/label via
+    /// `AtualizarSentimentoAtendimento`; best-effort, nunca propaga erro.
+    #[tokio::test]
+    async fn avaliar_sentimento_best_effort_persiste_nota_e_label() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let _guard = WORKER_TEST_MUTEX.lock().await;
+        let pg_addr = "tcp://127.0.0.1:29431";
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+
+        let persistiu = Arc::new(AtomicBool::new(false));
+        let persistiu_c = persistiu.clone();
+        let pg_server = Server::new(Endpoint::parse(pg_addr).unwrap(), "flatbuffers")
+            .route("ResolverConfigIa", |env| {
+                Box::pin(async move {
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&serde_json::json!({
+                            "llm_provider": "openai",
+                            "llm_model": "gpt-4o-mini",
+                            "api_key": "sk-teste",
+                        }))
+                        .unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("AtualizarSentimentoAtendimento", move |env| {
+                let flag = persistiu_c.clone();
+                Box::pin(async move {
+                    let body: serde_json::Value = serde_json::from_slice(&env.payload).unwrap();
+                    assert_eq!(body["nota"].as_i64(), Some(8));
+                    assert_eq!(body["label"].as_str(), Some("positivo"));
+                    flag.store(true, Ordering::SeqCst);
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&serde_json::json!({})).unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let pg_handle = tokio::spawn(async move { pg_server.run().await.unwrap() });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let mut mock_ia = ia_engine::MockIaEngineClient::new();
+        mock_ia.expect_sentimento().times(1).returning(|_, _| {
+            Ok(ia_engine::client::SentimentoOutput {
+                nota: 8,
+                sentimento: "positivo".to_string(),
+                feedback: "cliente satisfeito".to_string(),
+            })
+        });
+
+        let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
+        let state = AppState {
+            redis_conn: None,
+            audit_logger: observability::AuditLogger::new_dummy("worker"),
+            whatsapp_client: pg_client.clone(),
+            storage_client: pg_client.clone(),
+            pg_client,
+            ia_client: Arc::new(mock_ia),
+            fluxos_cache: FluxosCache::novo(),
+        };
+
+        avaliar_sentimento_best_effort(
+            &state,
+            Uuid::new_v4(),
+            "tenant-x",
+            42,
+            "estou muito feliz com o atendimento",
+            "c",
+            "tp",
+        )
+        .await;
+
+        assert!(
+            persistiu.load(Ordering::SeqCst),
+            "deveria ter persistido a nota/label do sentimento"
         );
 
         pg_handle.abort();
