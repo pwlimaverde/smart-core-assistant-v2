@@ -2683,6 +2683,16 @@ impl AdminService for AdminFacade {
                                 .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                                 .map(|d| d.timestamp_millis())
                                 .unwrap_or_default(),
+                            // Passagem direta (N6.5): sentimento vem pronto do
+                            // data_postgres; ausência/null viram None.
+                            sentimento_nota: item
+                                .get("sentimento_nota")
+                                .and_then(|v| v.as_i64())
+                                .map(|n| n as i32),
+                            sentimento_label: item
+                                .get("sentimento_label")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string()),
                         });
                     }
                 }

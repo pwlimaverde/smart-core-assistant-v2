@@ -389,6 +389,8 @@ message AtendimentoResumo {
   int32 atendente_humano_id = 9;  // 0 = ausente
   int64 data_inicio = 10;
   int64 data_ultima_mensagem = 11;
+  optional int32 sentimento_nota = 12;    // última leitura de sentimento da IA (N6.5)
+  optional string sentimento_label = 13; // ex.: positivo/neutro/negativo
 }
 
 message ListAtendimentosRequest {

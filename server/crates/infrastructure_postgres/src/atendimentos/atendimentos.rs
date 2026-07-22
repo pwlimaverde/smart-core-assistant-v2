@@ -27,6 +27,10 @@ pub struct Atendimento {
     pub feedback: Option<String>,
     pub data_primeira_resposta: Option<DateTime<Utc>>,
     pub bot_pode_atender: bool,
+    /// Última leitura de sentimento da IA (N6.5); `None` enquanto não avaliado.
+    /// Não confundir com `avaliacao`/`feedback` (satisfação informada pelo cliente).
+    pub sentimento_nota: Option<i32>,
+    pub sentimento_label: Option<String>,
 }
 
 #[async_trait]
@@ -181,7 +185,8 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                          status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
                          assunto, prioridade, atendente_humano_id, contexto_conversa,
                          historico_status, tags, avaliacao, feedback,
-                         data_primeira_resposta, bot_pode_atender"#,
+                         data_primeira_resposta, bot_pode_atender,
+                         sentimento_nota, sentimento_label"#,
             ctx.tenant_id,
             contato_id,
             departamento_id,
@@ -206,7 +211,8 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                       status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
                       assunto, prioridade, atendente_humano_id, contexto_conversa,
                       historico_status, tags, avaliacao, feedback,
-                      data_primeira_resposta, bot_pode_atender
+                      data_primeira_resposta, bot_pode_atender,
+                      sentimento_nota, sentimento_label
                FROM oraculo_atendimento
                WHERE tenant_id = $1 AND id = $2"#,
             ctx.tenant_id,
@@ -233,7 +239,8 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                       status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
                       assunto, prioridade, atendente_humano_id, contexto_conversa,
                       historico_status, tags, avaliacao, feedback,
-                      data_primeira_resposta, bot_pode_atender
+                      data_primeira_resposta, bot_pode_atender,
+                      sentimento_nota, sentimento_label
                FROM oraculo_atendimento
                WHERE tenant_id = $1 AND status = $2
                  AND ($3::int IS NULL OR departamento_id = $3)
@@ -365,7 +372,8 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                       status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
                       assunto, prioridade, atendente_humano_id, contexto_conversa,
                       historico_status, tags, avaliacao, feedback,
-                      data_primeira_resposta, bot_pode_atender
+                      data_primeira_resposta, bot_pode_atender,
+                      sentimento_nota, sentimento_label
                FROM oraculo_atendimento
                WHERE tenant_id = $1 AND contato_id = $2 
                  AND status NOT IN ('resolvido', 'cancelado', 'arquivado')
@@ -479,7 +487,8 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                       status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
                       assunto, prioridade, atendente_humano_id, contexto_conversa,
                       historico_status, tags, avaliacao, feedback,
-                      data_primeira_resposta, bot_pode_atender
+                      data_primeira_resposta, bot_pode_atender,
+                      sentimento_nota, sentimento_label
                FROM oraculo_atendimento
                WHERE status = 'resolvido'
                  AND feedback IS NULL

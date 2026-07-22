@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, tenant_id, contato_id, departamento_id, fluxo_atendimento_id,\n                      status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,\n                      assunto, prioridade, atendente_humano_id, contexto_conversa,\n                      historico_status, tags, avaliacao, feedback,\n                      data_primeira_resposta, bot_pode_atender\n               FROM oraculo_atendimento\n               WHERE tenant_id = $1 AND id = $2",
+  "query": "INSERT INTO oraculo_atendimento\n                   (tenant_id, contato_id, departamento_id, fluxo_atendimento_id, etapa_atual_id)\n               VALUES ($1, $2, $3, $4, $5)\n               RETURNING id, tenant_id, contato_id, departamento_id, fluxo_atendimento_id,\n                         status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,\n                         assunto, prioridade, atendente_humano_id, contexto_conversa,\n                         historico_status, tags, avaliacao, feedback,\n                         data_primeira_resposta, bot_pode_atender,\n                         sentimento_nota, sentimento_label",
   "describe": {
     "columns": [
       {
@@ -222,11 +222,36 @@
             "name": "bot_pode_atender"
           }
         }
+      },
+      {
+        "ordinal": 20,
+        "name": "sentimento_nota",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "sentimento_nota"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
+        "name": "sentimento_label",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "sentimento_label"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
+        "Int4",
+        "Int4",
+        "Int4",
         "Int4"
       ]
     },
@@ -250,8 +275,10 @@
       true,
       true,
       true,
-      false
+      false,
+      true,
+      true
     ]
   },
-  "hash": "8335906d5283e5a4ebfd7318a79326863df7bc0441c7b9a02e8596862ce7f796"
+  "hash": "81a48b06c5dc5903defa223acbb01e270a2bffe7c709c21a96a79a3a188aa734"
 }

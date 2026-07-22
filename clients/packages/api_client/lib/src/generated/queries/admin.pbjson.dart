@@ -1218,6 +1218,28 @@ const AtendimentoResumo$json = {
       '5': 3,
       '10': 'dataUltimaMensagem'
     },
+    {
+      '1': 'sentimento_nota',
+      '3': 12,
+      '4': 1,
+      '5': 5,
+      '9': 0,
+      '10': 'sentimentoNota',
+      '17': true
+    },
+    {
+      '1': 'sentimento_label',
+      '3': 13,
+      '4': 1,
+      '5': 9,
+      '9': 1,
+      '10': 'sentimentoLabel',
+      '17': true
+    },
+  ],
+  '8': [
+    {'1': '_sentimento_nota'},
+    {'1': '_sentimento_label'},
   ],
 };
 
@@ -1230,7 +1252,9 @@ final $typed_data.Uint8List atendimentoResumoDescriptor = $convert.base64Decode(
     'B2Fzc3VudG8YByABKAlSB2Fzc3VudG8SHgoKcHJpb3JpZGFkZRgIIAEoCVIKcHJpb3JpZGFkZR'
     'IuChNhdGVuZGVudGVfaHVtYW5vX2lkGAkgASgFUhFhdGVuZGVudGVIdW1hbm9JZBIfCgtkYXRh'
     'X2luaWNpbxgKIAEoA1IKZGF0YUluaWNpbxIwChRkYXRhX3VsdGltYV9tZW5zYWdlbRgLIAEoA1'
-    'ISZGF0YVVsdGltYU1lbnNhZ2Vt');
+    'ISZGF0YVVsdGltYU1lbnNhZ2VtEiwKD3NlbnRpbWVudG9fbm90YRgMIAEoBUgAUg5zZW50aW1l'
+    'bnRvTm90YYgBARIuChBzZW50aW1lbnRvX2xhYmVsGA0gASgJSAFSD3NlbnRpbWVudG9MYWJlbI'
+    'gBAUISChBfc2VudGltZW50b19ub3RhQhMKEV9zZW50aW1lbnRvX2xhYmVs');
 
 @$core.Deprecated('Use listAtendimentosRequestDescriptor instead')
 const ListAtendimentosRequest$json = {

@@ -142,6 +142,8 @@ final class AtendimentoRemoteDataSource implements AtendimentoDataSource {
     dataUltimaMensagem: a.dataUltimaMensagem.toInt() > 0
         ? DateTime.fromMillisecondsSinceEpoch(a.dataUltimaMensagem.toInt())
         : null,
+    sentimentoNota: a.hasSentimentoNota() ? a.sentimentoNota : null,
+    sentimentoLabel: a.hasSentimentoLabel() ? a.sentimentoLabel : null,
   );
 
   static MensagemThread _paraMensagemThread(proto.MensagemThread m) =>

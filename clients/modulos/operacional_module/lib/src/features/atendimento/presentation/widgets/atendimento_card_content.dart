@@ -33,6 +33,11 @@ class AtendimentoCardContent extends StatelessWidget {
         Row(
           children: [
             _PrioridadeChip(prioridade: atendimento.prioridade),
+            if (atendimento.sentimentoLabel case final label?
+                when label.isNotEmpty) ...[
+              const SizedBox(width: AppSpacing.xs),
+              _SentimentoChip(label: label),
+            ],
             const SizedBox(width: AppSpacing.xs),
             Expanded(
               child: Text(
@@ -75,6 +80,34 @@ class _PrioridadeChip extends StatelessWidget {
         style: Theme.of(
           context,
         ).textTheme.labelSmall?.copyWith(color: cor),
+      ),
+    );
+  }
+}
+
+/// Indicador mínimo de sentimento (N6.5): rótulo textual com cor por tom —
+/// sem dashboard novo, só um sinal visual rápido na fila/Kanban.
+class _SentimentoChip extends StatelessWidget {
+  final String label;
+
+  const _SentimentoChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final normalizado = label.toLowerCase();
+    final (cor, corSuave) = switch (normalizado) {
+      'positivo' => (colors.success, colors.successSoft),
+      'negativo' => (colors.danger, colors.dangerSoft),
+      _ => (colors.fgMuted, colors.infoSoft),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+      decoration: BoxDecoration(color: corSuave, borderRadius: AppRadius.sm),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(color: cor),
       ),
     );
   }

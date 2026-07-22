@@ -4848,6 +4848,8 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
     $core.int? atendenteHumanoId,
     $fixnum.Int64? dataInicio,
     $fixnum.Int64? dataUltimaMensagem,
+    $core.int? sentimentoNota,
+    $core.String? sentimentoLabel,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -4863,6 +4865,8 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
     if (dataInicio != null) result.dataInicio = dataInicio;
     if (dataUltimaMensagem != null)
       result.dataUltimaMensagem = dataUltimaMensagem;
+    if (sentimentoNota != null) result.sentimentoNota = sentimentoNota;
+    if (sentimentoLabel != null) result.sentimentoLabel = sentimentoLabel;
     return result;
   }
 
@@ -4891,6 +4895,8 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
     ..aI(9, _omitFieldNames ? '' : 'atendenteHumanoId')
     ..aInt64(10, _omitFieldNames ? '' : 'dataInicio')
     ..aInt64(11, _omitFieldNames ? '' : 'dataUltimaMensagem')
+    ..aI(12, _omitFieldNames ? '' : 'sentimentoNota')
+    ..aOS(13, _omitFieldNames ? '' : 'sentimentoLabel')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5010,6 +5016,24 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
   $core.bool hasDataUltimaMensagem() => $_has(10);
   @$pb.TagNumber(11)
   void clearDataUltimaMensagem() => $_clearField(11);
+
+  @$pb.TagNumber(12)
+  $core.int get sentimentoNota => $_getIZ(11);
+  @$pb.TagNumber(12)
+  set sentimentoNota($core.int value) => $_setSignedInt32(11, value);
+  @$pb.TagNumber(12)
+  $core.bool hasSentimentoNota() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearSentimentoNota() => $_clearField(12);
+
+  @$pb.TagNumber(13)
+  $core.String get sentimentoLabel => $_getSZ(12);
+  @$pb.TagNumber(13)
+  set sentimentoLabel($core.String value) => $_setString(12, value);
+  @$pb.TagNumber(13)
+  $core.bool hasSentimentoLabel() => $_has(12);
+  @$pb.TagNumber(13)
+  void clearSentimentoLabel() => $_clearField(13);
 }
 
 class ListAtendimentosRequest extends $pb.GeneratedMessage {

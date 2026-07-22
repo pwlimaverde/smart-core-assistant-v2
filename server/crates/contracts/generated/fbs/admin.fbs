@@ -382,6 +382,8 @@ table AtendimentoResumo {
   atendente_humano_id:int;
   data_inicio:long;
   data_ultima_mensagem:long;
+  sentimento_nota:int;
+  sentimento_label:string;
 }
 
 table ListAtendimentosRequest {
