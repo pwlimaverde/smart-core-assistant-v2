@@ -1,0 +1,35 @@
+{
+  "id": "44aacb26-dfd3-4945-b04f-5b8851ad4dd8",
+  "title": "Fase N6 — IA no fluxo vivo (mídia, campos de IA no chat, fluxos de transferência): Confirmation",
+  "description": "Derived from linked plan \"n6-ia-fluxo-vivo\" for PREVC phase C (Confirmation). Plan phases: Confirmation. Expected outputs: documentation, changelog, deploy.",
+  "sessionId": "7eee629e-3531-4c97-9d26-1802bdfd4f1a",
+  "owner": "documenter",
+  "status": "ready",
+  "inputs": [],
+  "expectedOutputs": [
+    "documentation",
+    "changelog",
+    "deploy"
+  ],
+  "acceptanceCriteria": [
+    "Complete Confirmation"
+  ],
+  "requiredSensors": [],
+  "requiredArtifacts": [],
+  "createdAt": "2026-07-22T19:45:33.132Z",
+  "updatedAt": "2026-07-22T19:45:33.132Z",
+  "metadata": {
+    "requirementsSource": "none",
+    "source": "workflow.plan",
+    "planSlug": "n6-ia-fluxo-vivo",
+    "prevcPhase": "C",
+    "planPhaseIds": [
+      "phase-c"
+    ],
+    "planPhaseNames": [
+      "Confirmation"
+    ],
+    "planPhaseSummaries": [],
+    "derivedFrom": "linked-plan"
+  }
+}

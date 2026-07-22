@@ -1,36 +1,92 @@
 {
   "version": 2,
   "workflowType": "prevc",
-  "updatedAt": "2026-07-20T17:56:50.862Z",
+  "updatedAt": "2026-07-22T19:45:33.150Z",
   "status": {
     "project": {
       "name": "n6-ia-fluxo-vivo",
       "scale": 3,
       "started": "2026-07-18T12:15:24.302Z",
-      "current_phase": "P",
+      "current_phase": "C",
       "settings": {
         "autonomous_mode": false,
         "require_plan": true,
         "require_approval": true
       },
-      "plan": "cobertura-testes-100"
+      "plan": "n6-ia-fluxo-vivo"
     },
     "phases": {
       "P": {
-        "status": "in_progress",
-        "started_at": "2026-07-18T12:15:24.302Z"
+        "status": "completed",
+        "started_at": "2026-07-18T12:15:24.302Z",
+        "completed_at": "2026-07-21T10:15:05.155Z",
+        "outputs": [
+          {
+            "path": "smart-agent-config/.context/plans/n6-ia-fluxo-vivo/plano_completo_n6-ia-fluxo-vivo.md",
+            "status": "filled"
+          },
+          {
+            "path": "smart-agent-config/.context/plans/n6-ia-fluxo-vivo/info_aux_n6-ia-fluxo-vivo.md",
+            "status": "filled"
+          }
+        ]
       },
       "R": {
-        "status": "pending"
+        "status": "completed",
+        "started_at": "2026-07-21T10:15:05.155Z",
+        "completed_at": "2026-07-21T10:15:45.921Z",
+        "outputs": [
+          {
+            "path": "decisions recorded in plan n6-ia-fluxo-vivo phase R",
+            "status": "filled"
+          },
+          {
+            "path": "plan approved by architect",
+            "status": "filled"
+          }
+        ]
       },
       "E": {
-        "status": "pending"
+        "status": "completed",
+        "started_at": "2026-07-21T10:15:45.921Z",
+        "completed_at": "2026-07-22T19:42:43.547Z",
+        "outputs": [
+          {
+            "path": "handoff-summary consolidado registrado como artefato do workflow",
+            "status": "filled"
+          },
+          {
+            "path": "5 commits na branch feature/n6-ia-fluxo-vivo (N6.1-N6.5)",
+            "status": "filled"
+          }
+        ]
       },
       "V": {
-        "status": "pending"
+        "status": "completed",
+        "started_at": "2026-07-22T19:42:43.547Z",
+        "completed_at": "2026-07-22T19:45:33.137Z",
+        "outputs": [
+          {
+            "path": "Rust: fmt/clippy/test/sqlx-prepare verdes",
+            "status": "filled"
+          },
+          {
+            "path": "Flutter: 337 testes verdes",
+            "status": "filled"
+          },
+          {
+            "path": "ia_engine: 150 testes, 99.82% cobertura",
+            "status": "filled"
+          },
+          {
+            "path": "teste manual de mídia real documentado como pendência pós-merge",
+            "status": "filled"
+          }
+        ]
       },
       "C": {
-        "status": "pending"
+        "status": "in_progress",
+        "started_at": "2026-07-22T19:45:33.137Z"
       }
     },
     "agents": {},
@@ -62,7 +118,10 @@
     },
     "approval": {
       "plan_created": true,
-      "plan_approved": false
+      "plan_approved": true,
+      "approved_by": "architect",
+      "approved_at": "2026-07-21T10:15:43.882Z",
+      "approval_notes": "Aprovado com base no plano completo (plano_completo_n6-ia-fluxo-vivo.md) e nas 5 decisões registradas na fase R: campos aditivos 8/9 do proto, download via RPC data_whatsapp, ciclo mínimo de campos, limite de mídia + flag de transcrição por tenant, Groq primary/OpenAI fallback + embeddings 1536."
     },
     "execution": {
       "history": [
@@ -186,17 +245,139 @@
           "plan": "cobertura-testes-100",
           "description": "Plan phase phase-c updated to completed",
           "timestamp": "2026-07-20T17:56:50.860Z"
+        },
+        {
+          "phase": "P",
+          "action": "plan_phase_updated",
+          "plan": "n6-ia-fluxo-vivo",
+          "description": "Plan phase phase-p updated to completed",
+          "timestamp": "2026-07-21T10:15:04.410Z"
+        },
+        {
+          "phase": "P",
+          "action": "completed",
+          "timestamp": "2026-07-21T10:15:05.155Z"
+        },
+        {
+          "phase": "R",
+          "action": "started",
+          "timestamp": "2026-07-21T10:15:05.155Z"
+        },
+        {
+          "phase": "R",
+          "action": "decision_recorded",
+          "plan": "n6-ia-fluxo-vivo",
+          "description": "Decision recorded: Campos aditivos do proto do chat",
+          "timestamp": "2026-07-21T10:15:15.505Z"
+        },
+        {
+          "phase": "R",
+          "action": "decision_recorded",
+          "plan": "n6-ia-fluxo-vivo",
+          "description": "Decision recorded: Ponto de download de mídia: worker via RPC data_whatsapp",
+          "timestamp": "2026-07-21T10:15:18.040Z"
+        },
+        {
+          "phase": "R",
+          "action": "decision_recorded",
+          "plan": "n6-ia-fluxo-vivo",
+          "description": "Decision recorded: Ciclo mínimo de campos_coletados/campos_pendentes",
+          "timestamp": "2026-07-21T10:15:19.865Z"
+        },
+        {
+          "phase": "R",
+          "action": "decision_recorded",
+          "plan": "n6-ia-fluxo-vivo",
+          "description": "Decision recorded: Limite de tamanho de mídia e flag de transcrição por tenant",
+          "timestamp": "2026-07-21T10:15:22.022Z"
+        },
+        {
+          "phase": "R",
+          "action": "decision_recorded",
+          "plan": "n6-ia-fluxo-vivo",
+          "description": "Decision recorded: Transcrição: Groq primary (ogg nativo), fallback OpenAI; embeddings Google fixos em 1536",
+          "timestamp": "2026-07-21T10:15:24.388Z"
+        },
+        {
+          "phase": "R",
+          "action": "plan_phase_updated",
+          "plan": "n6-ia-fluxo-vivo",
+          "description": "Plan phase phase-r updated to completed",
+          "timestamp": "2026-07-21T10:15:27.366Z"
+        },
+        {
+          "phase": "R",
+          "action": "plan_linked",
+          "plan": "n6-ia-fluxo-vivo",
+          "timestamp": "2026-07-21T10:15:39.103Z"
+        },
+        {
+          "phase": "R",
+          "action": "plan_approved",
+          "approved_by": "architect",
+          "timestamp": "2026-07-21T10:15:43.882Z"
+        },
+        {
+          "phase": "R",
+          "action": "completed",
+          "timestamp": "2026-07-21T10:15:45.921Z"
+        },
+        {
+          "phase": "E",
+          "action": "started",
+          "timestamp": "2026-07-21T10:15:45.921Z"
+        },
+        {
+          "phase": "E",
+          "action": "decision_recorded",
+          "plan": "n6-ia-fluxo-vivo",
+          "description": "Decision recorded: Ajuste N6.2: coluna gerado_por_ia não existia — migration aditiva agora",
+          "timestamp": "2026-07-21T12:57:51.892Z"
+        },
+        {
+          "phase": "E",
+          "action": "decision_recorded",
+          "plan": "n6-ia-fluxo-vivo",
+          "description": "Decision recorded: Ajuste N6.3: campos_coletados/campos_pendentes são input-only nesta fase",
+          "timestamp": "2026-07-21T13:41:04.318Z"
+        },
+        {
+          "phase": "E",
+          "action": "completed",
+          "timestamp": "2026-07-22T19:42:43.547Z"
+        },
+        {
+          "phase": "V",
+          "action": "started",
+          "timestamp": "2026-07-22T19:42:43.547Z"
+        },
+        {
+          "phase": "V",
+          "action": "decision_recorded",
+          "plan": "n6-ia-fluxo-vivo",
+          "description": "Decision recorded: Validação fechada com suites automatizadas; teste manual de mídia real fica pendente pós-merge",
+          "timestamp": "2026-07-22T19:45:29.532Z"
+        },
+        {
+          "phase": "V",
+          "action": "completed",
+          "timestamp": "2026-07-22T19:45:33.137Z"
+        },
+        {
+          "phase": "C",
+          "action": "started",
+          "timestamp": "2026-07-22T19:45:33.137Z"
         }
       ],
-      "last_activity": "2026-07-20T17:56:50.860Z",
-      "resume_context": "Fase do plano atualizada"
+      "last_activity": "2026-07-22T19:45:33.137Z",
+      "resume_context": "Fase C (Confirmação) em progresso"
     }
   },
   "binding": {
     "workflowName": "n6-ia-fluxo-vivo",
     "sessionId": "7eee629e-3531-4c97-9d26-1802bdfd4f1a",
-    "activeTaskId": "d0a6a335-9dd6-46cb-ad7e-5fc9add13baf",
+    "activeTaskId": "44aacb26-dfd3-4945-b04f-5b8851ad4dd8",
     "createdAt": "2026-07-18T12:15:24.319Z",
-    "updatedAt": "2026-07-20T14:56:38.877Z"
+    "updatedAt": "2026-07-22T19:45:33.146Z"
   }
 }

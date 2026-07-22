@@ -1,0 +1,11 @@
+{
+  "id": "85e0ef80-682e-4ae8-bf7e-46a0485bf1ad",
+  "sessionId": "7eee629e-3531-4c97-9d26-1802bdfd4f1a",
+  "name": "handoff-summary-n6.5",
+  "kind": "text",
+  "createdAt": "2026-07-22T19:12:41.578Z",
+  "content": "N6.5 (sentimento ligado ao fluxo) — CONCLUÍDO no backend e validado.\nMigration aditiva 0020_atendimento_sentimento.sql (sentimento_nota/sentimento_label em oraculo_atendimento, aplicada no DB dev remoto). infrastructure_postgres::AtendimentoRepository::atualizar_sentimento (UPDATE simples, sem afetar avaliacao/feedback de satisfação do cliente que já existiam). data_postgres: RPC nova AtualizarSentimentoAtendimento. worker: avaliar_sentimento_best_effort chama ia_engine.Sentimento (best-effort, fire-and-forget) para mensagens de texto (processar_mensagem_recebida) e para áudio transcrito (processar_pipeline_midia, após transcrição bem-sucedida); persiste via a RPC nova. Span ia.sentimento com a nota (número, nunca o texto).\nGap identificado: o design system Flutter NÃO tem badge de sentimento pronto como o plano presumia (mesma classe de erro do gerado_por_ia) — exibição no chat/fila (proto+UI) ainda não implementada, decisão de escopo pendente com o dono do produto.\nValidação: .\\infra\\test-local.ps1 -ResetTunnel: fmt/clippy/test/sqlx-prepare todos verdes, zero FAILED (testes novos: handler mock + teste de integração via mock server para avaliar_sentimento_best_effort).",
+  "metadata": {
+    "action": "workflow-manage.recordArtifact"
+  }
+}

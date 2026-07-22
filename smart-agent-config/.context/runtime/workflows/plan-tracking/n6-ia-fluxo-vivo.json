@@ -1,8 +1,95 @@
 {
   "planSlug": "n6-ia-fluxo-vivo",
   "linkedAt": "2026-07-18T12:15:30.057Z",
-  "progress": 0,
-  "phases": {},
-  "decisions": [],
-  "lastUpdated": "2026-07-18T12:15:30.057Z"
+  "progress": 40,
+  "phases": {
+    "phase-p": {
+      "phaseId": "phase-p",
+      "status": "completed",
+      "startedAt": "2026-07-21T10:15:04.401Z",
+      "steps": [],
+      "completedAt": "2026-07-21T10:15:04.401Z"
+    },
+    "phase-r": {
+      "phaseId": "phase-r",
+      "status": "completed",
+      "startedAt": "2026-07-21T10:15:27.355Z",
+      "steps": [],
+      "completedAt": "2026-07-21T10:15:27.355Z"
+    }
+  },
+  "approvalStatus": "approved",
+  "approvedAt": "2026-07-21T10:15:43.882Z",
+  "approvedBy": "architect",
+  "decisions": [
+    {
+      "title": "Campos aditivos do proto do chat",
+      "description": "MensagemThread ganha bool gerado_por_ia = 8 e optional string resumo_midia = 9, aditivo, sem renumerar 1-7 (admin.proto:404-412).",
+      "phase": "R",
+      "status": "accepted",
+      "id": "dec-1784628915500",
+      "decidedAt": "2026-07-21T10:15:15.500Z"
+    },
+    {
+      "title": "Ponto de download de mídia: worker via RPC data_whatsapp",
+      "description": "Download acontece no worker, chamando RPC novo DownloadMediaMessage no data_whatsapp (que reusa MediaDownloader::download_media já existente em infrastructure_evolution). Nunca chamar infrastructure_evolution direto do worker — princípio de porta única por sistema externo.",
+      "phase": "R",
+      "alternatives": [
+        "Worker chamando infrastructure_evolution diretamente (rejeitado: viola porta única)",
+        "Download no webhook (rejeitado: nada de regra pesada no webhook)"
+      ],
+      "status": "accepted",
+      "id": "dec-1784628918035",
+      "decidedAt": "2026-07-21T10:15:18.035Z"
+    },
+    {
+      "title": "Ciclo mínimo de campos_coletados/campos_pendentes",
+      "description": "Persistir estado conversacional mínimo (campos_personalizados já existe no schema) e reenviar no request seguinte ao Responder. Sem DSL nova — risco já registrado no plano base a ser evitado.",
+      "phase": "R",
+      "status": "accepted",
+      "id": "dec-1784628919859",
+      "decidedAt": "2026-07-21T10:15:19.859Z"
+    },
+    {
+      "title": "Limite de tamanho de mídia e flag de transcrição por tenant",
+      "description": "SMARTCORE_MEDIA_MAX_BYTES configurável (default ~20MB, abaixo do teto de 25MB das APIs de transcrição). Transcrição por tenant via CoreSettings, off por padrão (custo/latência); pipeline N6.1 respeita a flag e degrada graciosamente se desligada ou se a IA falhar.",
+      "phase": "R",
+      "status": "accepted",
+      "id": "dec-1784628922017",
+      "decidedAt": "2026-07-21T10:15:22.017Z"
+    },
+    {
+      "title": "Transcrição: Groq primary (ogg nativo), fallback OpenAI; embeddings Google fixos em 1536",
+      "description": "ApiTranscriber via SDK openai (AsyncOpenAI) com base_url intercambiável: primary Groq whisper-large-v3-turbo (único com ogg/opus nativo), fallback OpenAI gpt-4o-mini-transcribe. GoogleGenerativeAIEmbeddings sempre com output_dimensionality=1536 (obrigatório para não quebrar o pgvector/RAG silenciosamente).",
+      "phase": "R",
+      "status": "accepted",
+      "id": "dec-1784628924383",
+      "decidedAt": "2026-07-21T10:15:24.383Z"
+    },
+    {
+      "title": "Ajuste N6.2: coluna gerado_por_ia não existia — migration aditiva agora",
+      "description": "O plano assumia (incorretamente) que oraculo_mensagem já tinha gerado_por_ia desde a N2 — só resumo_midia/analise_midia existem. Além disso, respostas do bot não são persistidas hoje como linha em oraculo_mensagem (só enviadas via WhatsApp). Decisão: adicionar migration ALTER TABLE oraculo_mensagem ADD gerado_por_ia BOOLEAN NOT NULL DEFAULT FALSE + campo no struct/SELECT agora (Opção A). O contrato proto/gRPC/Flutter fica completo; o selo permanece false até uma etapa futura persistir as mensagens do bot com a flag — fora do escopo desta fase.",
+      "phase": "E",
+      "status": "accepted",
+      "id": "dec-1784638671864",
+      "decidedAt": "2026-07-21T12:57:51.863Z"
+    },
+    {
+      "title": "Ajuste N6.3: campos_coletados/campos_pendentes são input-only nesta fase",
+      "description": "O ResponderResponse do ia_engine (resposta_texto/transferir_atendimento/fluxo_transferencia/confiabilidade) não retorna campos extraídos — o contrato não suporta write-back de campos coletados. Decisão: campos_coletados/campos_pendentes viram apenas contexto de entrada pro Responder (lidos de atu_valor_campo/atu_campo_personalizado), sem persistir de volta nenhuma extração nesta fase — extração via RPC Analyse fica para uma etapa futura dedicada, fora do escopo da N6.3. Consistente com a decisão da fase R de não inventar DSL/mecanismo novo. Também aprovado: cache in-memory próprio no worker para ListarFluxosDoTenant (TTL ~30s, já que não existe cache de flow_permissions reaproveitável) e RPC nova TransferirAtendimentoParaFluxo no data_postgres (nenhuma rota existente força troca de fluxo).",
+      "phase": "E",
+      "status": "accepted",
+      "id": "dec-1784641264253",
+      "decidedAt": "2026-07-21T13:41:04.250Z"
+    },
+    {
+      "title": "Validação fechada com suites automatizadas; teste manual de mídia real fica pendente pós-merge",
+      "description": "Rust (.\\infra\\test-local.ps1 -ResetTunnel: fmt/clippy/test/sqlx-prepare), Flutter (.\\infra\\test-flutter.ps1: 337 testes) e Python/ia_engine (pytest 150 testes, 99.82% cobertura) validados verdes nesta sessão. O teste manual do plano (áudio real via WhatsApp em dev → R2 → transcrição → selo no chat) exige instância WhatsApp conectada e fica como pendência documentada para o dono do produto rodar quando quiser, não bloqueia o fechamento da fase V.",
+      "phase": "V",
+      "status": "accepted",
+      "id": "dec-1784749529518",
+      "decidedAt": "2026-07-22T19:45:29.518Z"
+    }
+  ],
+  "lastUpdated": "2026-07-22T19:45:29.518Z"
 }

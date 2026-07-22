@@ -2,6 +2,55 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-07-22] - Fase N6: IA no fluxo vivo (mídia, campos de IA no chat, fluxos de transferência)
+
+> Ciclo PREVC `n6-ia-fluxo-vivo` fechado e arquivado via `prevc-final-review`.
+> Final-review: qualidade **CONFORME** (nenhuma correção necessária). Primeira fase do
+> port final (N6–N8): liga ao pipeline de mensagens real o que a N2 entregou pronto mas
+> não estava cabeado. Nenhuma arquitetura nova — degradação graciosa preservada em
+> todos os pontos (falha de IA nunca trava o atendimento).
+
+### Adicionado
+
+- **N6.1 — Mídia no pipeline vivo:** `NormalizedMessage` ganha `media_payload`/`media_mime`/
+  `media_file_size`; o worker dispara, em background após a persistência, download da mídia
+  (rota `DownloadWhatsappMedia` do `data_whatsapp`, com limite configurável via
+  `SMARTCORE_MEDIA_MAX_BYTES`) → gravação no R2 (`data_storage`) → transcrição/interpretação
+  via `ia_engine` → persistência do resumo/análise (`AnexarAnaliseMidia`, RPC nova no
+  `data_postgres`). Span `midia.pipeline` + auditoria `midia.analisada` (sem conteúdo).
+- **N6.2 — Campos de IA no chat:** `MensagemThread` ganha `gerado_por_ia`/`resumo_midia`
+  (proto aditivo, campos 8/9); `resumo_midia` sai real de ponta a ponta. Stubs Rust e Dart
+  regenerados; UI do chat (selo "gerado por IA" e resumo de mídia) passa a exibir dado real.
+- **N6.3 — Fluxos de transferência por tenant:** RPCs novos `ListarFluxosDoTenant`,
+  `TransferirAtendimentoParaFluxo` e `ResolverCamposAtendimento` no `data_postgres`; o worker
+  monta `fluxos_disponiveis` (cache TTL 30s) e `campos_coletados`/`campos_pendentes` (input-only)
+  para o `Responder`, e aplica a transferência automática indicada pela IA (auditoria
+  `atendimento.transferido_por_ia`, Kanban atualizado via realtime).
+- **N6.4 — Transcrição real + providers Groq/Google:** `ApiTranscriber` substitui o
+  `PendingTranscriber` — primary Groq `whisper-large-v3-turbo` (ogg nativo), fallback OpenAI,
+  degradação graciosa se ambos falharem. Providers `groq:`/`google_genai:` passam a resolver de
+  verdade via `init_chat_model`; embeddings Google forçam `output_dimensionality=1536`
+  (obrigatório para não quebrar o pgvector). Flag `transcription_enabled` (off por padrão).
+- **N6.5 — Sentimento ligado ao fluxo:** mensagens de texto e áudio transcrito disparam
+  avaliação de sentimento best-effort (`ia_engine.Sentimento`); nota/label persistidos no
+  atendimento (`AtualizarSentimentoAtendimento`) e exibidos no Kanban/fila via um indicador
+  mínimo (`_SentimentoChip`, mesmo padrão do chip de prioridade já existente).
+- **Migrations aditivas:** `0019_mensagem_gerado_por_ia.sql` (coluna não existia como o plano
+  original assumia) e `0020_atendimento_sentimento.sql`.
+
+### Pendências remanescentes (trabalho futuro)
+
+- **`gerado_por_ia` sempre `false`:** as respostas do bot ainda não são persistidas como linha
+  em `oraculo_mensagem` — flag fica pronta no contrato, mas sem fonte real até essa etapa futura.
+- **`campos_coletados`/`campos_pendentes` são input-only:** o `ResponderResponse` do `ia_engine`
+  não retorna campos extraídos; extração/write-back real exigiria a RPC `Analyse` (fora de escopo).
+- **`local_engine`/`local_engine_ffi` (mirror offline) não espelham sentimento** — só a via
+  remota (online) exibe o indicador por enquanto.
+- **Teste manual de mídia real em dev** (áudio via WhatsApp → R2 → transcrição → selo no chat)
+  não executado neste ciclo — requer instância WhatsApp conectada.
+- **Simplificação conhecida:** transcrição/interpretação de mídia reusam o provider LLM do
+  tenant em vez de um provider dedicado; mitigado pelo fallback e pelo kill-switch.
+
 ## [2026-07-17] - Fase N5: Consolidação de Clientes + Offline (desktop, FFI, paridade Web)
 
 > Ciclo PREVC `n5-consolidacao-clientes-offline` fechado e arquivado via `prevc-final-review`.

@@ -1,0 +1,39 @@
+{
+  "id": "421a6b47-93ab-47c0-bc82-0a618816945d",
+  "title": "Fase N6 — IA no fluxo vivo (mídia, campos de IA no chat, fluxos de transferência): Execution",
+  "description": "Derived from linked plan \"n6-ia-fluxo-vivo\" for PREVC phase E (Execution). Plan phases: Execution. Expected outputs: code, unit-tests.",
+  "sessionId": "7eee629e-3531-4c97-9d26-1802bdfd4f1a",
+  "owner": "developer",
+  "status": "completed",
+  "inputs": [],
+  "expectedOutputs": [
+    "code",
+    "unit-tests"
+  ],
+  "acceptanceCriteria": [
+    "Complete Execution"
+  ],
+  "requiredSensors": [
+    "tests-passing"
+  ],
+  "requiredArtifacts": [
+    "handoff-summary"
+  ],
+  "createdAt": "2026-07-21T10:15:45.915Z",
+  "updatedAt": "2026-07-22T19:42:43.565Z",
+  "metadata": {
+    "requirementsSource": "plan-frontmatter",
+    "source": "workflow.plan",
+    "planSlug": "n6-ia-fluxo-vivo",
+    "prevcPhase": "E",
+    "planPhaseIds": [
+      "phase-2"
+    ],
+    "planPhaseNames": [
+      "Execution"
+    ],
+    "planPhaseSummaries": [],
+    "derivedFrom": "linked-plan",
+    "completionReason": "Workflow advanced from E to V"
+  }
+}
