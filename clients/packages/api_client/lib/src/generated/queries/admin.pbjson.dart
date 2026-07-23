@@ -1,6 +1,6 @@
 // This is a generated file - do not edit.
 //
-// Generated from admin.proto.
+// Generated from queries/admin.proto.
 
 // @dart = 3.3
 
@@ -1370,15 +1370,27 @@ const MoveAtendimentoEtapaRequest$json = {
     {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
     {'1': 'etapa_destino_id', '3': 2, '4': 1, '5': 5, '10': 'etapaDestinoId'},
     {'1': 'motivo', '3': 3, '4': 1, '5': 9, '10': 'motivo'},
+    {
+      '1': 'action_id',
+      '3': 4,
+      '4': 1,
+      '5': 9,
+      '9': 0,
+      '10': 'actionId',
+      '17': true
+    },
+  ],
+  '8': [
+    {'1': '_action_id'},
   ],
 };
 
 /// Descriptor for `MoveAtendimentoEtapaRequest`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List moveAtendimentoEtapaRequestDescriptor =
-    $convert.base64Decode(
-        'ChtNb3ZlQXRlbmRpbWVudG9FdGFwYVJlcXVlc3QSJQoOYXRlbmRpbWVudG9faWQYASABKAVSDW'
-        'F0ZW5kaW1lbnRvSWQSKAoQZXRhcGFfZGVzdGlub19pZBgCIAEoBVIOZXRhcGFEZXN0aW5vSWQS'
-        'FgoGbW90aXZvGAMgASgJUgZtb3Rpdm8=');
+final $typed_data.Uint8List moveAtendimentoEtapaRequestDescriptor = $convert.base64Decode(
+    'ChtNb3ZlQXRlbmRpbWVudG9FdGFwYVJlcXVlc3QSJQoOYXRlbmRpbWVudG9faWQYASABKAVSDW'
+    'F0ZW5kaW1lbnRvSWQSKAoQZXRhcGFfZGVzdGlub19pZBgCIAEoBVIOZXRhcGFEZXN0aW5vSWQS'
+    'FgoGbW90aXZvGAMgASgJUgZtb3Rpdm8SIAoJYWN0aW9uX2lkGAQgASgJSABSCGFjdGlvbklkiA'
+    'EBQgwKCl9hY3Rpb25faWQ=');
 
 @$core.Deprecated('Use moveAtendimentoEtapaResponseDescriptor instead')
 const MoveAtendimentoEtapaResponse$json = {
@@ -1401,15 +1413,26 @@ const SendOutboundMessageRequest$json = {
     {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
     {'1': 'conteudo', '3': 2, '4': 1, '5': 9, '10': 'conteudo'},
     {'1': 'tipo', '3': 3, '4': 1, '5': 9, '10': 'tipo'},
+    {
+      '1': 'action_id',
+      '3': 4,
+      '4': 1,
+      '5': 9,
+      '9': 0,
+      '10': 'actionId',
+      '17': true
+    },
+  ],
+  '8': [
+    {'1': '_action_id'},
   ],
 };
 
 /// Descriptor for `SendOutboundMessageRequest`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List sendOutboundMessageRequestDescriptor =
-    $convert.base64Decode(
-        'ChpTZW5kT3V0Ym91bmRNZXNzYWdlUmVxdWVzdBIlCg5hdGVuZGltZW50b19pZBgBIAEoBVINYX'
-        'RlbmRpbWVudG9JZBIaCghjb250ZXVkbxgCIAEoCVIIY29udGV1ZG8SEgoEdGlwbxgDIAEoCVIE'
-        'dGlwbw==');
+final $typed_data.Uint8List sendOutboundMessageRequestDescriptor = $convert.base64Decode(
+    'ChpTZW5kT3V0Ym91bmRNZXNzYWdlUmVxdWVzdBIlCg5hdGVuZGltZW50b19pZBgBIAEoBVINYX'
+    'RlbmRpbWVudG9JZBIaCghjb250ZXVkbxgCIAEoCVIIY29udGV1ZG8SEgoEdGlwbxgDIAEoCVIE'
+    'dGlwbxIgCglhY3Rpb25faWQYBCABKAlIAFIIYWN0aW9uSWSIAQFCDAoKX2FjdGlvbl9pZA==');
 
 @$core.Deprecated('Use sendOutboundMessageResponseDescriptor instead')
 const SendOutboundMessageResponse$json = {

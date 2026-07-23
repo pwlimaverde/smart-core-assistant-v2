@@ -376,15 +376,33 @@ impl LocalEngineApi {
     /// Assina o stream local de eventos (mutações otimistas). Encaminha cada
     /// evento do bus `broadcast` do motor para o [sink] do Dart. Emite só os
     /// eventos locais; o merge com o realtime do servidor é da camada acima.
+    ///
+    /// N7.4: se o consumidor Dart ficar para trás do buffer (`CAPACIDADE_EVENTOS`
+    /// = 128), `recv()` devolve `RecvError::Lagged(n)` — antes o laço `while let
+    /// Ok(...)` tratava isso como fim de stream e encerrava silenciosamente
+    /// (nenhum evento novo chegava ao Dart até reabrir o app). Agora só loga os
+    /// eventos perdidos e continua: `recv()` já reposiciona o receiver após um
+    /// `Lagged` (resubscribe implícito), sem precisar recriar o `Receiver`.
     pub async fn stream_atendimentos(
         &self,
         sink: StreamSink<AtendimentoEventoFfi>,
     ) -> anyhow::Result<()> {
         let mut rx = self.engine.stream_atendimentos();
         self.rt.spawn(async move {
-            while let Ok(ev) = rx.recv().await {
-                if sink.add(AtendimentoEventoFfi::from(ev)).is_err() {
-                    break;
+            loop {
+                match rx.recv().await {
+                    Ok(ev) => {
+                        if sink.add(AtendimentoEventoFfi::from(ev)).is_err() {
+                            break;
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(perdidos)) => {
+                        tracing::warn!(
+                            perdidos,
+                            "stream de eventos atrasado; eventos perdidos, continuando"
+                        );
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => break,
                 }
             }
         });

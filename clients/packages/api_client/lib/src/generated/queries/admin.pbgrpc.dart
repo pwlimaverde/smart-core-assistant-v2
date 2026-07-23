@@ -1,6 +1,6 @@
 // This is a generated file - do not edit.
 //
-// Generated from admin.proto.
+// Generated from queries/admin.proto.
 
 // @dart = 3.3
 
