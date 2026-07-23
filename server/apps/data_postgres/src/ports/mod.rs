@@ -9,7 +9,10 @@ pub mod tenant;
 pub mod treinamento;
 pub mod whatsapp;
 
-pub use atendimento::{AtendimentoStore, TicketKanbanOutcome};
+pub use atendimento::{
+    AtendimentoStore, CampoColetadoDto, CampoPendenteDto, CamposAtendimentoDto,
+    TicketKanbanOutcome, TransferenciaFluxoOutcome,
+};
 pub use audit::AuditPort;
 pub use auth::AuthStore;
 pub use cliente::ClienteStore;

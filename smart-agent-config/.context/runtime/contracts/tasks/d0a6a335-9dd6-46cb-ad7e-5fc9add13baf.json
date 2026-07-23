@@ -4,7 +4,7 @@
   "description": "Derived from linked plan \"cobertura-testes-100\" for PREVC phase P (Planning). Plan phases: Planning. Expected outputs: prd, tech-spec, requirements, wireframes.",
   "sessionId": "7eee629e-3531-4c97-9d26-1802bdfd4f1a",
   "owner": "planner",
-  "status": "ready",
+  "status": "completed",
   "inputs": [],
   "expectedOutputs": [
     "prd",
@@ -18,7 +18,7 @@
   "requiredSensors": [],
   "requiredArtifacts": [],
   "createdAt": "2026-07-20T14:56:38.877Z",
-  "updatedAt": "2026-07-20T14:56:38.877Z",
+  "updatedAt": "2026-07-21T10:15:05.168Z",
   "metadata": {
     "requirementsSource": "none",
     "source": "workflow.plan",
@@ -31,6 +31,7 @@
       "Planning"
     ],
     "planPhaseSummaries": [],
-    "derivedFrom": "linked-plan"
+    "derivedFrom": "linked-plan",
+    "completionReason": "Workflow advanced from P to R"
   }
 }

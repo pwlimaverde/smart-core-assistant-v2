@@ -1,0 +1,11 @@
+{
+  "id": "3fb8496a-bf74-4cdf-9b74-4d40ea976476",
+  "sessionId": "7eee629e-3531-4c97-9d26-1802bdfd4f1a",
+  "name": "handoff-summary",
+  "kind": "text",
+  "createdAt": "2026-07-22T19:42:39.006Z",
+  "content": "Handoff consolidado da fase Execution — plano n6-ia-fluxo-vivo (N6.1 a N6.5), todos implementados, revisados e commitados na branch feature/n6-ia-fluxo-vivo:\n- N6.1 mídia no pipeline vivo (commit f25bfe3)\n- N6.4 transcrição real Groq/OpenAI (commit 92c7fe8)\n- N6.2 campos gerado_por_ia/resumo_midia no proto (commits 28a2751, 635b557)\n- N6.3 fluxos de transferência por tenant (commit 0a0899f)\n- N6.5 sentimento ligado ao fluxo, backend + exibição (commits 28cc142, d7615a2)\n\nValidação real (o sensor genérico \"tests-passing\" desta harness é baseado em `npm test` e não se aplica a este repo poliglota Rust/Flutter/Python — falso negativo esperado, documentado aqui):\n- Rust: .\\infra\\test-local.ps1 -ResetTunnel — fmt, clippy -D warnings, cargo test --workspace (unit+integração via túnel SSH real), cargo sqlx prepare --check. Todos verdes, zero FAILED, em múltiplas rodadas ao longo da execução.\n- Flutter: .\\infra\\test-flutter.ps1 — flutter analyze (17 pacotes) + flutter test (337 testes). Tudo verde.\n- Python (ia_engine): uv run pytest --cov=ia_engine --cov-fail-under=90 (150 testes, 99.82% cobertura) + ruff check + mypy. Tudo limpo.\n\nGaps conhecidos e aceitos (decisões registradas na fase E): gerado_por_ia sempre false até etapa futura persistir mensagens do bot no thread; campos_coletados/campos_pendentes input-only (sem write-back, contrato do Responder não extrai campos); local_engine/local_engine_ffi (mirror offline) não espelham sentimento_nota/label.\nUm subagente (n6-backend-n61) atingiu o limite mensal de gasto da conta durante a N6.3; a sessão principal assumiu e concluiu a partir do estado parcial preservado no working tree, sem perda de trabalho.",
+  "metadata": {
+    "action": "workflow-manage.recordArtifact"
+  }
+}

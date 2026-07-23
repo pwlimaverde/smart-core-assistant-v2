@@ -184,24 +184,24 @@ impl SqliteIndex {
         remetente: &str,
         timestamp: i64,
     ) -> LocalResult<i64> {
-        // Próximo id negativo: um a menos que o menor id atual (ou -1).
-        let menor: Option<i64> = sqlx::query_scalar("SELECT MIN(id) FROM mensagens WHERE id < 0")
-            .fetch_one(&self.pool)
-            .await?;
-        let novo_id = menor.unwrap_or(0) - 1;
-
-        sqlx::query(
+        // N7.4: id negativo atribuído ATOMICAMENTE num único statement
+        // (`INSERT ... SELECT COALESCE(MIN(id),0)-1 ...`), em vez de um
+        // `SELECT MIN` seguido de `INSERT` separados — a mesma classe de corrida
+        // corrigida em `OfflineQueue::enqueue` (duas conexões do pool podiam ler
+        // o mesmo `MIN` antes de qualquer uma commitar, colidindo no id).
+        let novo_id: i64 = sqlx::query_scalar(
             "INSERT INTO mensagens (id, atendimento_id, tipo, conteudo, remetente, \
              timestamp, status_envio, gerado_por_ia, resumo_midia) \
-             VALUES (?, ?, ?, ?, ?, ?, 'pendente', 0, NULL)",
+             SELECT COALESCE(MIN(id), 0) - 1, ?, ?, ?, ?, ?, 'pendente', 0, NULL \
+             FROM mensagens WHERE id < 0 \
+             RETURNING id",
         )
-        .bind(novo_id)
         .bind(atendimento_id)
         .bind(tipo)
         .bind(conteudo)
         .bind(remetente)
         .bind(timestamp)
-        .execute(&self.pool)
+        .fetch_one(&self.pool)
         .await?;
         Ok(novo_id)
     }
@@ -377,6 +377,34 @@ mod tests {
         let thread = idx.get_thread(1, 10, 0).await.unwrap();
         assert_eq!(thread.len(), 2);
         assert!(thread.iter().all(|m| m.status_envio == "pendente"));
+    }
+
+    /// N7.4 — regressão: `insert_pending_mensagem` atribui o id negativo num
+    /// único statement (`INSERT ... SELECT COALESCE(MIN(id),0)-1 ...`), em vez
+    /// de um `SELECT MIN` seguido de `INSERT` separados. Duas inserções
+    /// concorrentes devem sempre sair com ids distintos, nunca colidindo.
+    #[tokio::test]
+    async fn insert_pending_mensagem_concorrente_atribui_ids_distintos() {
+        let idx = SqliteIndex::open_in_memory().await.unwrap();
+        let idx1 = idx.clone();
+        let idx2 = idx.clone();
+
+        let (id1, id2) = tokio::join!(
+            idx1.insert_pending_mensagem(1, "a", "texto", "atendente", 100),
+            idx2.insert_pending_mensagem(1, "b", "texto", "atendente", 200),
+        );
+        let (id1, id2) = (id1.unwrap(), id2.unwrap());
+
+        assert_ne!(
+            id1, id2,
+            "duas inserções concorrentes não podem colidir no id"
+        );
+        let thread = idx.get_thread(1, 10, 0).await.unwrap();
+        assert_eq!(
+            thread.len(),
+            2,
+            "ambas as mensagens devem ter sido persistidas"
+        );
     }
 
     #[tokio::test]

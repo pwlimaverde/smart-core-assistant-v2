@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart' as proto;
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:domain_models/domain_models.dart';
 import 'package:local_engine_ffi/local_engine_ffi.dart';
 
@@ -11,6 +12,16 @@ import '../../domain/model/atendimento_evento.dart';
 import '../../domain/model/atendimento_resumo.dart';
 import '../../domain/model/mensagem_thread.dart';
 
+/// Debounce do gatilho de reconexão (N7.4): `connectivity_plus` reporta o tipo
+/// de interface (não garante alcance real à internet) e pode disparar eventos
+/// duplicados, especialmente iOS/macOS. Aguarda a rede estabilizar antes de
+/// tentar sincronizar.
+const _debounceReconexao = Duration(seconds: 3);
+
+/// Timer de fundo (N7.4): cobre o caso de a conectividade não mudar mas o
+/// servidor ter voltado (ex.: reinício do backend sem queda de rede local).
+const _intervaloSyncPeriodico = Duration(seconds: 60);
+
 /// Implementação nativa (desktop/`dart:io`) do [AtendimentoDataSource] sobre o
 /// motor local Rust via FFI (`local_engine_ffi`) — F8.
 ///
@@ -18,8 +29,10 @@ import '../../domain/model/mensagem_thread.dart';
 /// trocar Web↔desktop (DIP). Aqui as leituras vêm do índice SQLite local e as
 /// mutações são otimistas + enfileiradas offline; a reconciliação com o servidor
 /// (sync da fila) usa [sincronizarFilaOffline], disparada em best-effort ao
-/// carregar a fila (`listAtendimentos`) — o transporte é o gRPC autenticado
-/// (`AdminServiceClient`), injetado, mantendo o refresh de token do lado Dart.
+/// carregar a fila (`listAtendimentos`) e, desde a N7.4, também ao reconectar a
+/// rede (`connectivity_plus`, com debounce) e por um timer periódico de fundo —
+/// o transporte é o gRPC autenticado (`AdminServiceClient`), injetado, mantendo
+/// o refresh de token do lado Dart.
 ///
 /// A abertura do motor é **preguiçosa**: `RustLib.init()` carrega a lib nativa
 /// uma única vez e `LocalEngineApi.open` cria/migra o índice sob `%APPDATA%`. As
@@ -29,6 +42,11 @@ final class LocalEngineFfiDataSource implements AtendimentoDataSource {
   final proto.AdminServiceClient _admin;
   Future<LocalEngineApi>? _engineFuture;
   bool _sincronizando = false;
+
+  StreamSubscription<List<ConnectivityResult>>? _conectividadeSub;
+  Timer? _debounceTimer;
+  Timer? _syncPeriodicoTimer;
+  bool _gatilhosDeSyncIniciados = false;
 
   LocalEngineFfiDataSource({
     required String? Function() tenantIdProvider,
@@ -47,11 +65,50 @@ final class LocalEngineFfiDataSource implements AtendimentoDataSource {
     final base = _baseDir();
     await Directory(base).create(recursive: true);
     final sep = Platform.pathSeparator;
-    return LocalEngineApi.open(
+    final engine = await LocalEngineApi.open(
       dbPath: [base, 'index.sqlite'].join(sep),
       mediaDir: [base, 'media_cache'].join(sep),
       tenantId: _tenantIdProvider() ?? 'default',
     );
+    _iniciarGatilhosDeSincronizacao();
+    return engine;
+  }
+
+  /// N7.4 — dispara [sincronizarFilaOffline] sozinho: (a) ao reconectar a rede
+  /// (`connectivity_plus`, debounced) e (b) por um timer periódico de fundo.
+  /// Idempotente (só arma os listeners uma vez); best-effort (nunca lança).
+  void _iniciarGatilhosDeSincronizacao() {
+    if (_gatilhosDeSyncIniciados) return;
+    _gatilhosDeSyncIniciados = true;
+
+    _conectividadeSub = Connectivity().onConnectivityChanged.listen((
+      resultados,
+    ) {
+      // Evento é oportunista (tipo de interface, não garante internet real):
+      // se o transporte falhar depois, as ações seguem na fila para retry.
+      if (resultados.contains(ConnectivityResult.none)) return;
+      _debounceTimer?.cancel();
+      _debounceTimer = Timer(
+        _debounceReconexao,
+        () => unawaited(_sincronizarBestEffort()),
+      );
+    });
+
+    _syncPeriodicoTimer = Timer.periodic(
+      _intervaloSyncPeriodico,
+      (_) => unawaited(_sincronizarBestEffort()),
+    );
+  }
+
+  /// Encerra os gatilhos de sincronização (assinatura de conectividade + timer
+  /// periódico). Não faz parte do [AtendimentoDataSource] (a instância é
+  /// tipicamente um singleton de vida igual à do app) — disponível para quem
+  /// monta/desmonta a instância explicitamente (ex.: testes, hot-restart).
+  void dispose() {
+    _conectividadeSub?.cancel();
+    _conectividadeSub = null;
+    _debounceTimer?.cancel();
+    _syncPeriodicoTimer?.cancel();
   }
 
   /// Diretório base do motor local (índice + cache) sob dados do usuário.
@@ -99,6 +156,9 @@ final class LocalEngineFfiDataSource implements AtendimentoDataSource {
                 atendimentoId: atendimentoId,
                 etapaDestinoId: etapaDestinoId,
                 motivo: motivo,
+                // N7.2: idempotência do sync — reenviar a mesma ação (retry/
+                // reconexão) não duplica o movimento no servidor.
+                actionId: actionId,
               ),
             );
             return '';
@@ -114,6 +174,9 @@ final class LocalEngineFfiDataSource implements AtendimentoDataSource {
                 atendimentoId: atendimentoId,
                 conteudo: conteudo,
                 tipo: tipo,
+                // N7.2: idempotência do sync — reenviar a mesma ação devolve o
+                // mesmo message_id definitivo, sem duplicar a mensagem.
+                actionId: actionId,
               ),
             );
             // Sucesso = id definitivo em decimal: o motor promove a mensagem

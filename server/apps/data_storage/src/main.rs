@@ -3,6 +3,7 @@
 
 use contracts::{Envelope, MessageKind};
 use infrastructure_storage::StorageClient;
+use std::time::Duration;
 use transport::Server;
 use uuid::Uuid;
 
@@ -148,6 +149,115 @@ fn extrair_file_name(payload_json: &serde_json::Value) -> Option<String> {
         .map(String::from)
 }
 
+async fn chamar_data_postgres(
+    method: &str,
+    tenant_id: &str,
+    payload: serde_json::Value,
+    env: &Envelope,
+) -> Result<serde_json::Value, error_core::AppError> {
+    let pg_client = transport::conectar_cliente("data_postgres")
+        .await
+        .map_err(|e| {
+            error_core::AppError::Internal(format!("Falha ao conectar no data_postgres: {e}"))
+        })?;
+
+    let req = Envelope {
+        kind: MessageKind::Request as i32,
+        method: method.to_string(),
+        tenant_id: tenant_id.to_string(),
+        payload: serde_json::to_vec(&payload).unwrap_or_default(),
+        traceparent: env.traceparent.clone(),
+        auth_user_id: env.auth_user_id,
+        auth_scopes: env.auth_scopes.clone(),
+        ..Default::default()
+    };
+
+    let resp = pg_client
+        .call(req, Duration::from_secs(5))
+        .await
+        .map_err(|e| {
+            error_core::AppError::Internal(format!("Falha ao chamar RPC {method}: {e}"))
+        })?;
+
+    if resp.kind == MessageKind::Error as i32 {
+        let msg = resp
+            .error
+            .map(|err| err.message)
+            .unwrap_or_else(|| "Erro desconhecido".to_string());
+        return Err(error_core::AppError::Database(msg));
+    }
+
+    let val: serde_json::Value = serde_json::from_slice(&resp.payload).map_err(|e| {
+        error_core::AppError::Validation(format!(
+            "Falha ao parsear payload de resposta da RPC {method}: {e}"
+        ))
+    })?;
+
+    Ok(val)
+}
+
+/// N7.1 — QuotaGuard do recurso `"storage"` (mesmo padrão N4.2 do `data_whatsapp`):
+/// consulta `CheckQuota` no data_postgres ANTES do upload ao R2. Modo log-only por
+/// padrão (`SMARTCORE_QUOTA_ENFORCE=false`) — só loga e segue; vira bloqueio real
+/// quando a flag é `true`. Falha na própria checagem é fail-open: não derruba o
+/// upload por causa do guard.
+async fn aplicar_quota_guard_storage(env: &Envelope) -> Result<(), error_core::AppError> {
+    // Auditoria só no ponto de enforce real (invariante N4/N7): em log-only puro
+    // (enforce=false) a quota excedida é apenas medição, não deve gerar evento de
+    // auditoria. Por isso `auditar` acompanha a flag — o CheckQuota só publica
+    // `quota.excedida` quando o guard de fato vai bloquear o upload.
+    let enforce = std::env::var("SMARTCORE_QUOTA_ENFORCE")
+        .map(|v| v.eq_ignore_ascii_case("true"))
+        .unwrap_or(false);
+
+    let status = match chamar_data_postgres(
+        "CheckQuota",
+        &env.tenant_id,
+        serde_json::json!({ "recurso": "storage", "auditar": enforce }),
+        env,
+    )
+    .await
+    {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(erro = %e, "falha ao verificar quota de storage; prosseguindo (fail-open)");
+            return Ok(());
+        }
+    };
+
+    let excedido = status
+        .get("excedido")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if !excedido {
+        return Ok(());
+    }
+
+    if !enforce {
+        tracing::warn!("quota de storage excedida (log-only; SMARTCORE_QUOTA_ENFORCE=false)");
+        return Ok(());
+    }
+
+    Err(error_core::AppError::RateLimit(
+        "quota de armazenamento excedida".to_string(),
+    ))
+}
+
+/// N7.1 — registra o uso de armazenamento após um upload bem-sucedido. Best-effort
+/// (nunca falha o upload já concluído por causa disso): erro só gera WARN.
+async fn registrar_uso_storage(env: &Envelope, delta_bytes: i64) {
+    if let Err(e) = chamar_data_postgres(
+        "RegisterStorageUsage",
+        &env.tenant_id,
+        serde_json::json!({ "delta_bytes": delta_bytes }),
+        env,
+    )
+    .await
+    {
+        tracing::warn!(erro = %e, "falha ao registrar uso de storage (best-effort)");
+    }
+}
+
 /// Resposta de erro padronizada dos handlers de storage.
 fn responder_erro(app_err: error_core::AppError, env: Envelope, method: &str) -> Envelope {
     let err_env = app_err.to_error_envelope(&env.traceparent, "data_storage");
@@ -197,12 +307,18 @@ async fn handler_put_file(client: StorageClient, env: Envelope) -> Envelope {
         }
     };
 
+    // N7.1: guard de quota de storage ANTES do upload (log-only por padrão).
+    if let Err(e) = aplicar_quota_guard_storage(&env).await {
+        return responder_erro(e, env, "PutFileReply");
+    }
+
     match client.put(tenant_id, &file_name, &conteudo).await {
         Ok(uri) => {
-            // N4.2: medição de uso de armazenamento de mídia por tenant (contador
-            // agregado — sem PII/nome de arquivo). Storage ainda não tem campo de
-            // limite no plano (`tenants_plan`); por ora é medição, não bloqueio.
+            // N4.2: contador agregado de arquivos (sem PII/nome de arquivo).
             observability::usage_metrics::registrar_midia_armazenada(&env.tenant_id);
+            // N7.1: uso em bytes persistido no data_postgres, para a próxima checagem
+            // de quota de storage (best-effort — não falha o upload já concluído).
+            registrar_uso_storage(&env, conteudo.len() as i64).await;
             let res = serde_json::json!({ "uri": uri });
             Envelope {
                 kind: MessageKind::Reply as i32,

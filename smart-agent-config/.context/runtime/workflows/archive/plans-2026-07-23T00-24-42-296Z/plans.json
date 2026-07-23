@@ -1,0 +1,23 @@
+{
+  "active": [],
+  "completed": [
+    {
+      "slug": "n6-ia-fluxo-vivo",
+      "path": "plans/n6-ia-fluxo-vivo.md",
+      "title": "n6-ia-fluxo-vivo",
+      "linkedAt": "2026-07-18T12:15:30.057Z",
+      "status": "completed",
+      "approval_status": "approved",
+      "approved_at": "2026-07-21T10:15:43.882Z",
+      "approved_by": "architect"
+    },
+    {
+      "slug": "cobertura-testes-100",
+      "path": "plans/cobertura-testes-100.md",
+      "title": "cobertura-testes-100",
+      "linkedAt": "2026-07-20T14:56:38.847Z",
+      "status": "completed"
+    }
+  ],
+  "primary": "n6-ia-fluxo-vivo"
+}

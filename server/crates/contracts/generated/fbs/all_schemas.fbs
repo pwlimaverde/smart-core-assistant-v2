@@ -384,6 +384,8 @@ table AtendimentoResumo {
   atendente_humano_id:int;
   data_inicio:long;
   data_ultima_mensagem:long;
+  sentimento_nota:int;
+  sentimento_label:string;
 }
 
 table ListAtendimentosRequest {
@@ -404,6 +406,8 @@ table MensagemThread {
   remetente:string;
   timestamp:long;
   status_envio:string;
+  gerado_por_ia:bool;
+  resumo_midia:string;
 }
 
 table GetThreadRequest {
@@ -420,6 +424,7 @@ table MoveAtendimentoEtapaRequest {
   atendimento_id:int;
   etapa_destino_id:int;
   motivo:string;
+  action_id:string;
 }
 
 table MoveAtendimentoEtapaResponse {
@@ -430,6 +435,7 @@ table SendOutboundMessageRequest {
   atendimento_id:int;
   conteudo:string;
   tipo:string;
+  action_id:string;
 }
 
 table SendOutboundMessageResponse {

@@ -1,0 +1,11 @@
+{
+  "id": "592291a1-8d57-44e3-9119-d7ee2e598328",
+  "sessionId": "7eee629e-3531-4c97-9d26-1802bdfd4f1a",
+  "name": "handoff-summary-n6.1",
+  "kind": "text",
+  "createdAt": "2026-07-21T12:47:44.465Z",
+  "content": "N6.1 (mídia no pipeline vivo) — CONCLUÍDO e validado.\nArquivos: domain_whatsapp/src/lib.rs (media_payload/media_mime/media_file_size + 4 testes), data_whatsapp/src/main.rs (limite SMARTCORE_MEDIA_MAX_BYTES no handler DownloadWhatsappMedia existente, reusado em vez de criar rota nova + 2 testes), worker/src/main.rs (+531 linhas: pipeline fire-and-forget download->PutFile->PresignFile->Transcribe/InterpretMedia->AnexarAnaliseMidia, span midia.pipeline, auditoria midia.analisada, 3 testes), data_postgres (rota AnexarAnaliseMidia criada do zero: port+adapter+handler, 2 testes), infrastructure_postgres/atendimentos/mensagens.rs (UPDATE COALESCE), worker/Cargo.toml (+sha2).\nValidação: cargo fmt --check ok, cargo clippy --all-targets --all-features -D warnings ok, cargo test --workspace ok (2 falhas em infrastructure_redis::event_bus por condição de corrida do --workspace, confirmadas não-regressão via rerun isolado -p infrastructure_redis, crate não tocado pela N6.1).\nSem alteração de .proto (RPCs internos usam JSON no Envelope).",
+  "metadata": {
+    "action": "workflow-manage.recordArtifact"
+  }
+}

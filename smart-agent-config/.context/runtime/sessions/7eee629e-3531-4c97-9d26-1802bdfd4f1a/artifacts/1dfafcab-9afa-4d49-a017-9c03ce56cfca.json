@@ -1,0 +1,11 @@
+{
+  "id": "1dfafcab-9afa-4d49-a017-9c03ce56cfca",
+  "sessionId": "7eee629e-3531-4c97-9d26-1802bdfd4f1a",
+  "name": "handoff-summary-n6.3",
+  "kind": "text",
+  "createdAt": "2026-07-22T00:48:46.535Z",
+  "content": "N6.3 (fluxos de transferência por tenant no Responder) — CONCLUÍDO e validado.\ndata_postgres: RPCs novas ListarFluxosDoTenant (repo listar_ativos_do_tenant, JOIN com departamento), TransferirAtendimentoParaFluxo (repo transferir_fluxo_etapa, sobrescreve fluxo/departamento/etapa + MovimentoFluxo) e ResolverCamposAtendimento (lê atu_valor_campo/atu_campo_personalizado, GLOBAL+FLUXO, input-only).\nworker: FluxosCache in-memory (TTL 30s, env SMARTCORE_FLUXOS_CACHE_TTL_SEGUNDOS); responder_via_ia popula fluxos_disponiveis e campos_coletados/campos_pendentes; aplicar_transferencia_ia mapeia fluxo_transferencia->fluxo_id e chama TransferirAtendimentoParaFluxo, audita atendimento.transferido_por_ia, publica kanban.movido. Span ia.responder com fluxos_count/campos_pendentes_count. Degradação graciosa em toda a cadeia.\nAjuste vs. plano: campos_coletados/campos_pendentes são input-only (contrato do Responder não retorna campos extraídos — sem write-back nesta fase, decisão registrada).\nValidação: .\\infra\\test-local.ps1 -ResetTunnel: fmt/clippy/test/sqlx-prepare todos verdes (2 testes novos: resolver_campos_atendimento happy-path + validação).\nNota: subagente n6-backend-n61 atingiu limite mensal de gasto da conta durante a implementação; a etapa final (RPC ResolverCamposAtendimento + validação completa) foi concluída diretamente pela sessão principal a partir do estado parcial preservado no working tree.",
+  "metadata": {
+    "action": "workflow-manage.recordArtifact"
+  }
+}

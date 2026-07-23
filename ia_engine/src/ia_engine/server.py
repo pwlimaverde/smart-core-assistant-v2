@@ -27,7 +27,12 @@ async def _build_server(
     interceptors = setup_telemetry(settings)
     server = grpc.aio.server(interceptors=interceptors)
 
-    pbg.add_IaEngineServiceServicer_to_server(IaEngineServicer(), server)
+    pbg.add_IaEngineServiceServicer_to_server(
+        IaEngineServicer(
+            transcription_enabled=settings.transcription_enabled
+        ),
+        server,
+    )
 
     health_servicer = health.aio.HealthServicer()
     health_pb2_grpc.add_HealthServicer_to_server(health_servicer, server)

@@ -3,9 +3,11 @@
 This directory contains plans for coordinating work across documentation and playbooks.
 
 ## Plan Queue
-1. [N6 Ia Fluxo Vivo](./n6-ia-fluxo-vivo.md)
-2. [N7 Endurecimento Residual](./n7-endurecimento-residual.md)
-3. [N8 Migracao E Cutover](./n8-migracao-e-cutover.md)
+1. [N8 Migracao E Cutover](./n8-migracao-e-cutover.md)
+
+## Concluídos (ver `archive/`)
+- N6 Ia Fluxo Vivo
+- N7 Endurecimento Residual
 
 ## How To Create Or Update Plans
 - Run "dotcontext plan <name>" to scaffold a new plan template.

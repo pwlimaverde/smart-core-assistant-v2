@@ -11,12 +11,22 @@ use uuid::Uuid;
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait QuotaStore: Send + Sync {
-    /// Verifica o uso atual do recurso (`"instancias"` | `"departamentos"`) contra
-    /// o limite do plano vigente, e a situação de inadimplência da assinatura, em
-    /// uma única transação de tenant. Retorna o JSON estável de `CheckQuotaReply`.
+    /// Verifica o uso atual do recurso (`"instancias"` | `"departamentos"` |
+    /// `"storage"`) contra o limite do plano vigente, e a situação de
+    /// inadimplência da assinatura, em uma única transação de tenant. Retorna o
+    /// JSON estável de `CheckQuotaReply`.
     async fn verificar_quota(
         &self,
         tenant_id: Uuid,
         recurso: &str,
     ) -> Result<serde_json::Value, DbError>;
+
+    /// Incrementa o uso de armazenamento agregado do tenant (N7.1), chamado pelo
+    /// `data_storage` após um `PutFile` bem-sucedido. Retorna o total após o
+    /// incremento.
+    async fn registrar_uso_storage(
+        &self,
+        tenant_id: Uuid,
+        delta_bytes: i64,
+    ) -> Result<i64, DbError>;
 }

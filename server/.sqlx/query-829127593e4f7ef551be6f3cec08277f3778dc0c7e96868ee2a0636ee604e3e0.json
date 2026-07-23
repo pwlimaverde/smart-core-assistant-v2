@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, tenant_id, atendimento_id, tipo, conteudo, remetente,\n                      timestamp, message_id_whatsapp, metadados, respondida, lido,\n                      resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,\n                      arquivo_midia, analise_midia, resumo_midia, mensagem_citada_id,\n                      quoted_preview, status_envio, data_entregue, data_lida\n               FROM oraculo_mensagem\n               WHERE tenant_id = $1 AND atendimento_id = $2\n               ORDER BY timestamp ASC, id ASC\n               LIMIT $3 OFFSET $4",
+  "query": "INSERT INTO oraculo_mensagem\n                   (tenant_id, atendimento_id, tipo, conteudo, remetente,\n                    message_id_whatsapp, mensagem_citada_id)\n               VALUES ($1, $2, $3, $4, $5, $6, $7)\n               RETURNING id, tenant_id, atendimento_id, tipo, conteudo, remetente,\n                         timestamp, message_id_whatsapp, metadados, respondida, lido,\n                         resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,\n                         arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,\n                         quoted_preview, status_envio, data_entregue, data_lida",
   "describe": {
     "columns": [
       {
@@ -203,6 +203,17 @@
       },
       {
         "ordinal": 18,
+        "name": "gerado_por_ia",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "gerado_por_ia"
+          }
+        }
+      },
+      {
+        "ordinal": 19,
         "name": "mensagem_citada_id",
         "type_info": "Int4",
         "origin": {
@@ -213,7 +224,7 @@
         }
       },
       {
-        "ordinal": 19,
+        "ordinal": 20,
         "name": "quoted_preview",
         "type_info": "Jsonb",
         "origin": {
@@ -224,7 +235,7 @@
         }
       },
       {
-        "ordinal": 20,
+        "ordinal": 21,
         "name": "status_envio",
         "type_info": "Varchar",
         "origin": {
@@ -235,7 +246,7 @@
         }
       },
       {
-        "ordinal": 21,
+        "ordinal": 22,
         "name": "data_entregue",
         "type_info": "Timestamptz",
         "origin": {
@@ -246,7 +257,7 @@
         }
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "data_lida",
         "type_info": "Timestamptz",
         "origin": {
@@ -261,8 +272,11 @@
       "Left": [
         "Uuid",
         "Int4",
-        "Int8",
-        "Int8"
+        "Varchar",
+        "Text",
+        "Varchar",
+        "Varchar",
+        "Int4"
       ]
     },
     "nullable": [
@@ -284,6 +298,7 @@
       true,
       true,
       true,
+      false,
       true,
       true,
       false,
@@ -291,5 +306,5 @@
       true
     ]
   },
-  "hash": "533523a4efb3e556405a50e0f01dfdc056c54189e63becc6887e8db2d40ceb93"
+  "hash": "829127593e4f7ef551be6f3cec08277f3778dc0c7e96868ee2a0636ee604e3e0"
 }

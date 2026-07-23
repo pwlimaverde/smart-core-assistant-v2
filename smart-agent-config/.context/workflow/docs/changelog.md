@@ -2,6 +2,106 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-07-23] - Fase N7: Endurecimento residual + operação validada (pré-cutover)
+
+> Ciclo PREVC `n7-endurecimento-residual` fechado e arquivado via `prevc-final-review`.
+> Final-review: qualidade **CORRIGIDO** (auditoria vazando em log-only no guard de storage e
+> falta de guard de escopo no reprocessamento de dead-letter — ver Corrigido). Segunda fase do
+> port final (N6–N8): quita pendências técnicas de N1/N4/N5 e valida a operação com tráfego
+> real — pré-condição dura do cutover (N8). Nenhum enforcement novo ligado em produção
+> (`SMARTCORE_QUOTA_ENFORCE` continua `false` por padrão).
+
+### Adicionado
+
+- **N7.1 — Quotas restantes:** migration `0021` (`tenants_plan.max_storage_bytes` +
+  `tenants_storage_usage`); recurso `"storage"` em `verificar_quota`; RPC novo
+  `RegisterStorageUsage` (chamado pelo `data_storage` após `PutFile`) + guard log-only antes do
+  upload ao R2. RPC novo `CreateDepartamento` (não existia nenhum antes) com o caller de quota
+  de `"departamentos"` embutido.
+- **N7.2 — Idempotência do sync + dead-letter:** migration `0022` (`applied_actions`,
+  `mensagem_dead_letter`); `action_id` aditivo/opcional em `MoveAtendimentoEtapaRequest`/
+  `SendOutboundMessageRequest` (proto + stubs Rust/Dart regenerados), dedupe atômico (mesma
+  transação da mutação) em `mover_etapa_atendimento`/`persistir_mensagem`. Outbound sem
+  `whatsapp_contact` ativo vira dead-letter auditável (`mensagem.dead_letter`) em vez de erro
+  silencioso; RPC administrativo `ReprocessarDeadLetter` reenfileira no outbox.
+- **N7.3 — Rate-limit unificado:** `webhook_ingress` migrado do contador próprio (`redis-bus`)
+  para o RPC `RegisterRateLimitAttempt` do `data_redis` (mesma chave Redis do `runtime_api` —
+  upgrade transparente, sem descontinuidade de janela).
+- **N7.4 — Sync offline robusto:** atomicidade single-statement em `OfflineQueue::enqueue`
+  (versão) e `SqliteIndex::insert_pending_mensagem` (id negativo) — elimina a corrida entre
+  conexões do pool SQLite; `RecvError::Lagged` no stream FFI vira WARN + continua (nunca encerra
+  o stream); gatilho de sincronização por reconexão (`connectivity_plus`, debounce 3s) + timer
+  periódico (60s) no `operacional_module`.
+- **N7.5 — Validação operacional:** relatório arquivado documentando o que foi validado
+  automaticamente nesta sessão (Rust `fmt`/`clippy`/`test --workspace` via túnel real, incluindo
+  RLS; Flutter 337/337) e o checklist manual (rajada, dashboards/alertas, E2E, dedupe/dead-letter
+  com tráfego real) que fica pendente do dono do produto — pré-condição dura do N8.
+
+### Corrigido (final-review)
+
+- Guard de quota de storage no `data_storage` auditava `quota.excedida` mesmo em modo log-only
+  (`SMARTCORE_QUOTA_ENFORCE=false`); passou a auditar só quando o enforce real bloqueia.
+- RPC `ReprocessarDeadLetter` (mutação administrativa) ganhou checagem de escopo
+  (`operacional:admin`/`tenant:admin`), ausente na primeira versão.
+
+### Pendências remanescentes (trabalho futuro)
+
+- `CreateDepartamento` e `ReprocessarDeadLetter` ainda não têm chamador em `runtime_api`/cliente
+  — quando expostos via gRPC-Web, exigem registro explícito no `AdminService`.
+- As 4 validações manuais da N7.5 (rajada, dashboards/alertas, E2E, dedupe/dead-letter com
+  tráfego real) são pré-condição dura do N8 — dependem do ambiente do dono do produto.
+- `LocalEngineFfiDataSource` (gatilho de conectividade) ainda não está registrada no DI de
+  produção — classe preparatória para o F8 (desktop).
+
+## [2026-07-22] - Fase N6: IA no fluxo vivo (mídia, campos de IA no chat, fluxos de transferência)
+
+> Ciclo PREVC `n6-ia-fluxo-vivo` fechado e arquivado via `prevc-final-review`.
+> Final-review: qualidade **CONFORME** (nenhuma correção necessária). Primeira fase do
+> port final (N6–N8): liga ao pipeline de mensagens real o que a N2 entregou pronto mas
+> não estava cabeado. Nenhuma arquitetura nova — degradação graciosa preservada em
+> todos os pontos (falha de IA nunca trava o atendimento).
+
+### Adicionado
+
+- **N6.1 — Mídia no pipeline vivo:** `NormalizedMessage` ganha `media_payload`/`media_mime`/
+  `media_file_size`; o worker dispara, em background após a persistência, download da mídia
+  (rota `DownloadWhatsappMedia` do `data_whatsapp`, com limite configurável via
+  `SMARTCORE_MEDIA_MAX_BYTES`) → gravação no R2 (`data_storage`) → transcrição/interpretação
+  via `ia_engine` → persistência do resumo/análise (`AnexarAnaliseMidia`, RPC nova no
+  `data_postgres`). Span `midia.pipeline` + auditoria `midia.analisada` (sem conteúdo).
+- **N6.2 — Campos de IA no chat:** `MensagemThread` ganha `gerado_por_ia`/`resumo_midia`
+  (proto aditivo, campos 8/9); `resumo_midia` sai real de ponta a ponta. Stubs Rust e Dart
+  regenerados; UI do chat (selo "gerado por IA" e resumo de mídia) passa a exibir dado real.
+- **N6.3 — Fluxos de transferência por tenant:** RPCs novos `ListarFluxosDoTenant`,
+  `TransferirAtendimentoParaFluxo` e `ResolverCamposAtendimento` no `data_postgres`; o worker
+  monta `fluxos_disponiveis` (cache TTL 30s) e `campos_coletados`/`campos_pendentes` (input-only)
+  para o `Responder`, e aplica a transferência automática indicada pela IA (auditoria
+  `atendimento.transferido_por_ia`, Kanban atualizado via realtime).
+- **N6.4 — Transcrição real + providers Groq/Google:** `ApiTranscriber` substitui o
+  `PendingTranscriber` — primary Groq `whisper-large-v3-turbo` (ogg nativo), fallback OpenAI,
+  degradação graciosa se ambos falharem. Providers `groq:`/`google_genai:` passam a resolver de
+  verdade via `init_chat_model`; embeddings Google forçam `output_dimensionality=1536`
+  (obrigatório para não quebrar o pgvector). Flag `transcription_enabled` (off por padrão).
+- **N6.5 — Sentimento ligado ao fluxo:** mensagens de texto e áudio transcrito disparam
+  avaliação de sentimento best-effort (`ia_engine.Sentimento`); nota/label persistidos no
+  atendimento (`AtualizarSentimentoAtendimento`) e exibidos no Kanban/fila via um indicador
+  mínimo (`_SentimentoChip`, mesmo padrão do chip de prioridade já existente).
+- **Migrations aditivas:** `0019_mensagem_gerado_por_ia.sql` (coluna não existia como o plano
+  original assumia) e `0020_atendimento_sentimento.sql`.
+
+### Pendências remanescentes (trabalho futuro)
+
+- **`gerado_por_ia` sempre `false`:** as respostas do bot ainda não são persistidas como linha
+  em `oraculo_mensagem` — flag fica pronta no contrato, mas sem fonte real até essa etapa futura.
+- **`campos_coletados`/`campos_pendentes` são input-only:** o `ResponderResponse` do `ia_engine`
+  não retorna campos extraídos; extração/write-back real exigiria a RPC `Analyse` (fora de escopo).
+- **`local_engine`/`local_engine_ffi` (mirror offline) não espelham sentimento** — só a via
+  remota (online) exibe o indicador por enquanto.
+- **Teste manual de mídia real em dev** (áudio via WhatsApp → R2 → transcrição → selo no chat)
+  não executado neste ciclo — requer instância WhatsApp conectada.
+- **Simplificação conhecida:** transcrição/interpretação de mídia reusam o provider LLM do
+  tenant em vez de um provider dedicado; mitigado pelo fallback e pelo kill-switch.
+
 ## [2026-07-17] - Fase N5: Consolidação de Clientes + Offline (desktop, FFI, paridade Web)
 
 > Ciclo PREVC `n5-consolidacao-clientes-offline` fechado e arquivado via `prevc-final-review`.

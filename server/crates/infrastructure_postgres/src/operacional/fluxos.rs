@@ -17,6 +17,17 @@ pub struct FluxoAtendimento {
     pub data_atualizacao: DateTime<Utc>,
 }
 
+/// Projeção leve de um fluxo ativo do tenant para o Responder (N6.3): inclui o nome
+/// do setor (departamento) para compor a chave "Setor - descrição" esperada pelo
+/// ia_engine.
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+pub struct FluxoDisponivel {
+    pub id: i32,
+    pub setor: String,
+    pub nome: String,
+    pub descricao: Option<String>,
+}
+
 #[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
 pub struct EtapaFluxo {
     pub id: i32,
@@ -66,6 +77,14 @@ pub trait FluxoAtendimentoRepository: Send + Sync {
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
     ) -> Result<Option<FluxoAtendimento>, DbError>;
+
+    /// Lista todos os fluxos ativos do tenant (com o nome do setor/departamento),
+    /// para o worker montar `fluxos_disponiveis` do Responder (N6.3).
+    async fn listar_ativos_do_tenant(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+    ) -> Result<Vec<FluxoDisponivel>, DbError>;
 }
 
 #[async_trait]
@@ -188,6 +207,27 @@ impl FluxoAtendimentoRepository for PostgresFluxoAtendimentoRepository {
         .fetch_optional(&mut **tx)
         .await?;
         Ok(row)
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_ativos_do_tenant(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+    ) -> Result<Vec<FluxoDisponivel>, DbError> {
+        // Query em runtime (sem macro) para não exigir cache .sqlx no build offline.
+        let rows = sqlx::query_as::<_, FluxoDisponivel>(
+            r#"SELECT f.id, d.nome AS setor, f.nome, f.descricao
+               FROM oraculo_fluxo_atendimento f
+               JOIN oraculo_departamento d
+                 ON d.id = f.departamento_id AND d.tenant_id = f.tenant_id
+               WHERE f.tenant_id = $1 AND f.ativo = true AND d.ativo = true
+               ORDER BY d.nome, f.nome"#,
+        )
+        .bind(ctx.tenant_id)
+        .fetch_all(&mut **tx)
+        .await?;
+        Ok(rows)
     }
 }
 

@@ -1,6 +1,6 @@
 // This is a generated file - do not edit.
 //
-// Generated from admin.proto.
+// Generated from queries/admin.proto.
 
 // @dart = 3.3
 
@@ -1218,6 +1218,28 @@ const AtendimentoResumo$json = {
       '5': 3,
       '10': 'dataUltimaMensagem'
     },
+    {
+      '1': 'sentimento_nota',
+      '3': 12,
+      '4': 1,
+      '5': 5,
+      '9': 0,
+      '10': 'sentimentoNota',
+      '17': true
+    },
+    {
+      '1': 'sentimento_label',
+      '3': 13,
+      '4': 1,
+      '5': 9,
+      '9': 1,
+      '10': 'sentimentoLabel',
+      '17': true
+    },
+  ],
+  '8': [
+    {'1': '_sentimento_nota'},
+    {'1': '_sentimento_label'},
   ],
 };
 
@@ -1230,7 +1252,9 @@ final $typed_data.Uint8List atendimentoResumoDescriptor = $convert.base64Decode(
     'B2Fzc3VudG8YByABKAlSB2Fzc3VudG8SHgoKcHJpb3JpZGFkZRgIIAEoCVIKcHJpb3JpZGFkZR'
     'IuChNhdGVuZGVudGVfaHVtYW5vX2lkGAkgASgFUhFhdGVuZGVudGVIdW1hbm9JZBIfCgtkYXRh'
     'X2luaWNpbxgKIAEoA1IKZGF0YUluaWNpbxIwChRkYXRhX3VsdGltYV9tZW5zYWdlbRgLIAEoA1'
-    'ISZGF0YVVsdGltYU1lbnNhZ2Vt');
+    'ISZGF0YVVsdGltYU1lbnNhZ2VtEiwKD3NlbnRpbWVudG9fbm90YRgMIAEoBUgAUg5zZW50aW1l'
+    'bnRvTm90YYgBARIuChBzZW50aW1lbnRvX2xhYmVsGA0gASgJSAFSD3NlbnRpbWVudG9MYWJlbI'
+    'gBAUISChBfc2VudGltZW50b19ub3RhQhMKEV9zZW50aW1lbnRvX2xhYmVs');
 
 @$core.Deprecated('Use listAtendimentosRequestDescriptor instead')
 const ListAtendimentosRequest$json = {
@@ -1279,6 +1303,19 @@ const MensagemThread$json = {
     {'1': 'remetente', '3': 5, '4': 1, '5': 9, '10': 'remetente'},
     {'1': 'timestamp', '3': 6, '4': 1, '5': 3, '10': 'timestamp'},
     {'1': 'status_envio', '3': 7, '4': 1, '5': 9, '10': 'statusEnvio'},
+    {'1': 'gerado_por_ia', '3': 8, '4': 1, '5': 8, '10': 'geradoPorIa'},
+    {
+      '1': 'resumo_midia',
+      '3': 9,
+      '4': 1,
+      '5': 9,
+      '9': 0,
+      '10': 'resumoMidia',
+      '17': true
+    },
+  ],
+  '8': [
+    {'1': '_resumo_midia'},
   ],
 };
 
@@ -1287,7 +1324,9 @@ final $typed_data.Uint8List mensagemThreadDescriptor = $convert.base64Decode(
     'Cg5NZW5zYWdlbVRocmVhZBIOCgJpZBgBIAEoBVICaWQSJQoOYXRlbmRpbWVudG9faWQYAiABKA'
     'VSDWF0ZW5kaW1lbnRvSWQSEgoEdGlwbxgDIAEoCVIEdGlwbxIaCghjb250ZXVkbxgEIAEoCVII'
     'Y29udGV1ZG8SHAoJcmVtZXRlbnRlGAUgASgJUglyZW1ldGVudGUSHAoJdGltZXN0YW1wGAYgAS'
-    'gDUgl0aW1lc3RhbXASIQoMc3RhdHVzX2VudmlvGAcgASgJUgtzdGF0dXNFbnZpbw==');
+    'gDUgl0aW1lc3RhbXASIQoMc3RhdHVzX2VudmlvGAcgASgJUgtzdGF0dXNFbnZpbxIiCg1nZXJh'
+    'ZG9fcG9yX2lhGAggASgIUgtnZXJhZG9Qb3JJYRImCgxyZXN1bW9fbWlkaWEYCSABKAlIAFILcm'
+    'VzdW1vTWlkaWGIAQFCDwoNX3Jlc3Vtb19taWRpYQ==');
 
 @$core.Deprecated('Use getThreadRequestDescriptor instead')
 const GetThreadRequest$json = {
@@ -1331,15 +1370,27 @@ const MoveAtendimentoEtapaRequest$json = {
     {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
     {'1': 'etapa_destino_id', '3': 2, '4': 1, '5': 5, '10': 'etapaDestinoId'},
     {'1': 'motivo', '3': 3, '4': 1, '5': 9, '10': 'motivo'},
+    {
+      '1': 'action_id',
+      '3': 4,
+      '4': 1,
+      '5': 9,
+      '9': 0,
+      '10': 'actionId',
+      '17': true
+    },
+  ],
+  '8': [
+    {'1': '_action_id'},
   ],
 };
 
 /// Descriptor for `MoveAtendimentoEtapaRequest`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List moveAtendimentoEtapaRequestDescriptor =
-    $convert.base64Decode(
-        'ChtNb3ZlQXRlbmRpbWVudG9FdGFwYVJlcXVlc3QSJQoOYXRlbmRpbWVudG9faWQYASABKAVSDW'
-        'F0ZW5kaW1lbnRvSWQSKAoQZXRhcGFfZGVzdGlub19pZBgCIAEoBVIOZXRhcGFEZXN0aW5vSWQS'
-        'FgoGbW90aXZvGAMgASgJUgZtb3Rpdm8=');
+final $typed_data.Uint8List moveAtendimentoEtapaRequestDescriptor = $convert.base64Decode(
+    'ChtNb3ZlQXRlbmRpbWVudG9FdGFwYVJlcXVlc3QSJQoOYXRlbmRpbWVudG9faWQYASABKAVSDW'
+    'F0ZW5kaW1lbnRvSWQSKAoQZXRhcGFfZGVzdGlub19pZBgCIAEoBVIOZXRhcGFEZXN0aW5vSWQS'
+    'FgoGbW90aXZvGAMgASgJUgZtb3Rpdm8SIAoJYWN0aW9uX2lkGAQgASgJSABSCGFjdGlvbklkiA'
+    'EBQgwKCl9hY3Rpb25faWQ=');
 
 @$core.Deprecated('Use moveAtendimentoEtapaResponseDescriptor instead')
 const MoveAtendimentoEtapaResponse$json = {
@@ -1362,15 +1413,26 @@ const SendOutboundMessageRequest$json = {
     {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
     {'1': 'conteudo', '3': 2, '4': 1, '5': 9, '10': 'conteudo'},
     {'1': 'tipo', '3': 3, '4': 1, '5': 9, '10': 'tipo'},
+    {
+      '1': 'action_id',
+      '3': 4,
+      '4': 1,
+      '5': 9,
+      '9': 0,
+      '10': 'actionId',
+      '17': true
+    },
+  ],
+  '8': [
+    {'1': '_action_id'},
   ],
 };
 
 /// Descriptor for `SendOutboundMessageRequest`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List sendOutboundMessageRequestDescriptor =
-    $convert.base64Decode(
-        'ChpTZW5kT3V0Ym91bmRNZXNzYWdlUmVxdWVzdBIlCg5hdGVuZGltZW50b19pZBgBIAEoBVINYX'
-        'RlbmRpbWVudG9JZBIaCghjb250ZXVkbxgCIAEoCVIIY29udGV1ZG8SEgoEdGlwbxgDIAEoCVIE'
-        'dGlwbw==');
+final $typed_data.Uint8List sendOutboundMessageRequestDescriptor = $convert.base64Decode(
+    'ChpTZW5kT3V0Ym91bmRNZXNzYWdlUmVxdWVzdBIlCg5hdGVuZGltZW50b19pZBgBIAEoBVINYX'
+    'RlbmRpbWVudG9JZBIaCghjb250ZXVkbxgCIAEoCVIIY29udGV1ZG8SEgoEdGlwbxgDIAEoCVIE'
+    'dGlwbxIgCglhY3Rpb25faWQYBCABKAlIAFIIYWN0aW9uSWSIAQFCDAoKX2FjdGlvbl9pZA==');
 
 @$core.Deprecated('Use sendOutboundMessageResponseDescriptor instead')
 const SendOutboundMessageResponse$json = {

@@ -48,17 +48,31 @@ def test_provider_desconhecido_leva_a_provider_config_exception():
     assert "Supported" not in str(exc_info.value)
 
 
-@pytest.mark.parametrize("provider_slug", ["groq", "google_genai"])
-def test_provider_conhecido_mas_pacote_de_integracao_ausente(
-    provider_slug: str,
-):
-    """`groq`/`google_genai` são slugs válidos do LangChain, mas os pacotes
-    `langchain-groq`/`langchain-google-genai` não estão instalados (só
-    `langchain-openai` é dependência do projeto) — vira `ImportError`
-    interno, traduzido para o erro fechado da camada LLM."""
-    spec = LlmProviderSpec(provider=provider_slug, model="algum-modelo")
-    with pytest.raises(ProviderConfigException, match=provider_slug):
-        build_chat_model(spec)
+def test_build_chat_model_groq_resolve_provider_e_aplica_api_key():
+    """`groq` agora é dependência instalada (N6.4) — o slug resolve para
+    `ChatGroq` de verdade e a `api_key` do request é injetada."""
+    spec = LlmProviderSpec(
+        provider="groq",
+        model="llama-3.3-70b-versatile",
+        api_key="gsk-test",
+        temperature=0.1,
+    )
+    model = build_chat_model(spec)
+    assert type(model).__name__ == "ChatGroq"
+    assert model.groq_api_key.get_secret_value() == "gsk-test"  # type: ignore[union-attr]
+
+
+def test_build_chat_model_google_genai_resolve_provider():
+    """`google_genai` agora é dependência instalada (N6.4) — resolve para
+    `ChatGoogleGenerativeAI`."""
+    spec = LlmProviderSpec(
+        provider="google_genai",
+        model="gemini-2.5-flash",
+        api_key="gk-test",
+        temperature=0.1,
+    )
+    model = build_chat_model(spec)
+    assert type(model).__name__ == "ChatGoogleGenerativeAI"
 
 
 # ------------------------------------------------------------- sucesso

@@ -5,7 +5,7 @@ planSlug: n6-ia-fluxo-vivo
 description: "Primeira fase do port final (N6–N8): liga ao pipeline de mensagens real o que a N2 entregou pronto mas não cabeado — mídia no fluxo vivo (download via RPC no data_whatsapp, análise/transcrição, R2), campos gerado_por_ia/resumo_midia reais no chat, fluxos de transferência por tenant no Responder, transcrição via Groq (ogg nativo) com fallback OpenAI, e sentimento persistido."
 summary: "Fechamento funcional do porte da IA: nenhuma arquitetura nova, só cabear o que a N2 deixou pronto — com degradação graciosa preservada em todos os pontos."
 status: filled
-progress: 0
+progress: 40
 generated: "2026-07-18"
 scaffoldVersion: "2.0.0"
 agents:
@@ -45,7 +45,7 @@ phases:
     prevc: "C"
     agent: "documentation-writer"
     status: "pending"
-lastUpdated: "2026-07-18T12:15:30.057Z"
+lastUpdated: "2026-07-22T19:45:29.518Z"
 ---
 
 # Fase N6 — IA no fluxo vivo (mídia, campos de IA no chat, fluxos de transferência)
@@ -84,4 +84,12 @@ transcrição, dimensão 1536) no [plano completo](./n6-ia-fluxo-vivo/plano_comp
 
 ## Execution History
 
-> Last updated: 2026-07-18T12:15:30.057Z | Progress: 0%
+> Last updated: 2026-07-22T19:45:29.518Z | Progress: 40%
+
+### phase-p [DONE]
+- Started: 2026-07-21T10:15:04.401Z
+- Completed: 2026-07-21T10:15:04.401Z
+
+### phase-r [DONE]
+- Started: 2026-07-21T10:15:27.355Z
+- Completed: 2026-07-21T10:15:27.355Z

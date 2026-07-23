@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, tenant_id, contato_id, departamento_id, fluxo_atendimento_id,\n                      status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,\n                      assunto, prioridade, atendente_humano_id, contexto_conversa,\n                      historico_status, tags, avaliacao, feedback,\n                      data_primeira_resposta, bot_pode_atender\n               FROM oraculo_atendimento\n               WHERE tenant_id = $1 AND status = $2\n                 AND ($3::int IS NULL OR departamento_id = $3)\n               ORDER BY data_inicio DESC\n               LIMIT $4",
+  "query": "SELECT id, tenant_id, contato_id, departamento_id, fluxo_atendimento_id,\n                      status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,\n                      assunto, prioridade, atendente_humano_id, contexto_conversa,\n                      historico_status, tags, avaliacao, feedback,\n                      data_primeira_resposta, bot_pode_atender,\n                      sentimento_nota, sentimento_label\n               FROM oraculo_atendimento\n               WHERE tenant_id = $1 AND id = $2",
   "describe": {
     "columns": [
       {
@@ -222,14 +222,34 @@
             "name": "bot_pode_atender"
           }
         }
+      },
+      {
+        "ordinal": 20,
+        "name": "sentimento_nota",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "sentimento_nota"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
+        "name": "sentimento_label",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "sentimento_label"
+          }
+        }
       }
     ],
     "parameters": {
       "Left": [
         "Uuid",
-        "Text",
-        "Int4",
-        "Int8"
+        "Int4"
       ]
     },
     "nullable": [
@@ -252,8 +272,10 @@
       true,
       true,
       true,
-      false
+      false,
+      true,
+      true
     ]
   },
-  "hash": "7a990c2ed13c64f8ce1bfc58d86b54ac4bf1d663fd49234c28bc7b8e3d3e5607"
+  "hash": "cf3a038d1846b88ab34a460379ee6c6f877f3b3a13c6c0078fd39c40d01e1ded"
 }

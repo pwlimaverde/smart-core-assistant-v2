@@ -2,19 +2,17 @@
 
 Mesma lógica de `test_provider_factory.py`: `init_embeddings` do LangChain
 não faz chamada de rede na construção, então exercitamos o comportamento
-real (só `langchain-openai` está instalado nas dependências do projeto).
+real (`langchain-openai` e `langchain-google-genai` instalados).
 
 Nota sobre `output_dimensionality`: o schema pgvector do projeto é
 `vector(1536)` (ver `features/embed/domain/usecases.py::EMBEDDING_DIM`), e
 o modelo padrão do Google (`gemini-embedding-001`) retorna 3072 dimensões
 por padrão — só bate com o schema se `output_dimensionality=1536` for
-passado explicitamente ao construir o embedder. Hoje `build_embeddings`
-**não** repassa `extra_params`/`output_dimensionality` (só `api_key`) — a
-única rede de segurança contra dimensão errada é a validação no usecase
-(`EmbeddingDimensaoError`, já coberta em `test_usecases_rsoe.py`). Como
-`langchain-google-genai` não é dependência instalada do projeto, o
-provider `google_genai` falha hoje por `ImportError` (pacote ausente)
-antes mesmo de chegar a essa questão — comportamento coberto abaixo.
+passado explicitamente ao construir o embedder. A partir da N6.4,
+`build_embeddings` força `output_dimensionality=1536` para o provider
+`google_genai` (coberto abaixo); a validação no usecase
+(`EmbeddingDimensaoError`, em `test_usecases_rsoe.py`) segue como segunda
+rede de segurança.
 """
 
 from __future__ import annotations
@@ -46,16 +44,28 @@ def test_provider_desconhecido_leva_a_provider_config_exception():
     assert "Supported" not in str(exc_info.value)
 
 
-def test_provider_google_genai_sem_pacote_instalado_falha():
-    """`google_genai` é um provider válido do LangChain, mas o pacote
-    `langchain-google-genai` não está instalado (só `langchain-openai` é
-    dependência do projeto) — vira `ImportError` interno, traduzido para o
-    erro fechado da camada LLM."""
+def test_build_embeddings_google_genai_forca_dimensao_1536():
+    """`google_genai` agora é dependência instalada (N6.4). O default do
+    modelo é 3072/768; `build_embeddings` DEVE forçar 1536 (pgvector) — nunca
+    deixar implícito, senão o RAG quebraria silenciosamente na gravação."""
     spec = LlmProviderSpec(
-        provider="google_genai", model="models/gemini-embedding-001"
+        provider="google_genai",
+        model="models/gemini-embedding-001",
+        api_key="gk-test",
     )
-    with pytest.raises(ProviderConfigException, match="google_genai"):
-        build_embeddings(spec)
+    embeddings = build_embeddings(spec)
+    assert type(embeddings).__name__ == "GoogleGenerativeAIEmbeddings"
+    assert embeddings.output_dimensionality == 1536  # type: ignore[union-attr]
+
+
+def test_build_embeddings_openai_nao_recebe_output_dimensionality():
+    """A dimensão forçada é exclusiva do Google — OpenAI não deve recebê-la
+    (usaria `dimensions`, não `output_dimensionality`)."""
+    spec = LlmProviderSpec(
+        provider="openai", model="text-embedding-3-small", api_key="sk-test"
+    )
+    embeddings = build_embeddings(spec)
+    assert not hasattr(embeddings, "output_dimensionality")
 
 
 def test_build_embeddings_sucesso_aplica_api_key():

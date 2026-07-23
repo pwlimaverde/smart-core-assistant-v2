@@ -2683,6 +2683,16 @@ impl AdminService for AdminFacade {
                                 .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
                                 .map(|d| d.timestamp_millis())
                                 .unwrap_or_default(),
+                            // Passagem direta (N6.5): sentimento vem pronto do
+                            // data_postgres; ausência/null viram None.
+                            sentimento_nota: item
+                                .get("sentimento_nota")
+                                .and_then(|v| v.as_i64())
+                                .map(|n| n as i32),
+                            sentimento_label: item
+                                .get("sentimento_label")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string()),
                         });
                     }
                 }
@@ -2780,6 +2790,16 @@ impl AdminService for AdminFacade {
                                 .and_then(|v| v.as_str())
                                 .unwrap_or_default()
                                 .to_string(),
+                            // Passagem direta (N6.2): campos de IA vêm prontos do
+                            // data_postgres; ausência/null viram default (false/None).
+                            gerado_por_ia: item
+                                .get("gerado_por_ia")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false),
+                            resumo_midia: item
+                                .get("resumo_midia")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string()),
                         });
                     }
                 }
@@ -2810,6 +2830,8 @@ impl AdminService for AdminFacade {
             "atendimento_id": inner.atendimento_id,
             "etapa_destino_id": inner.etapa_destino_id,
             "motivo": if inner.motivo.is_empty() { None } else { Some(inner.motivo.clone()) },
+            // N7.2: aditivo/opcional — clientes antigos (sem action_id) seguem sem dedupe.
+            "action_id": inner.action_id.clone(),
         });
 
         // RBAC fino por fluxo (WS-5a): popula flow_permissions para que o exigir_fluxo
@@ -2942,6 +2964,8 @@ impl AdminService for AdminFacade {
             // NUNCA logar `conteudo` fora do payload RPC (é PII/mensagem do usuário).
             "conteudo": inner.conteudo,
             "tipo": if inner.tipo.is_empty() { "texto" } else { &inner.tipo },
+            // N7.2: aditivo/opcional — clientes antigos (sem action_id) seguem sem dedupe.
+            "action_id": inner.action_id.clone(),
         });
 
         let env_req = Envelope {

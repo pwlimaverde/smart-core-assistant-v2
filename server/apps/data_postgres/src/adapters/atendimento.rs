@@ -7,6 +7,10 @@ use sqlx::PgPool;
 use infrastructure_postgres::atendimentos::atendimentos::{
     Atendimento, AtendimentoRepository, PostgresAtendimentoRepository,
 };
+use infrastructure_postgres::atendimentos::campos::{
+    CampoPersonalizadoRepository, PostgresCampoPersonalizadoRepository,
+    PostgresValorCampoRepository, ValorCampoRepository,
+};
 use infrastructure_postgres::atendimentos::mensagens::{
     DestinoEnvioOutbound, Mensagem, MensagemRepository, PostgresMensagemRepository,
 };
@@ -14,13 +18,18 @@ use infrastructure_postgres::atendimentos::movimentos::{
     MovimentoFluxoRepository, PostgresMovimentoFluxoRepository,
 };
 use infrastructure_postgres::clientes::contatos::{ContatoRepository, PostgresContatoRepository};
+use infrastructure_postgres::idempotencia;
 use infrastructure_postgres::operacional::fluxos::{
-    EtapaFluxoRepository, FluxoAtendimentoRepository, PostgresEtapaFluxoRepository,
-    PostgresFluxoAtendimentoRepository,
+    EtapaFluxoRepository, FluxoAtendimentoRepository, FluxoDisponivel,
+    PostgresEtapaFluxoRepository, PostgresFluxoAtendimentoRepository,
 };
 use infrastructure_postgres::{run_in_tenant_transaction, DbError, RequestContext};
+use uuid::Uuid;
 
-use crate::ports::{AtendimentoStore, TicketKanbanOutcome};
+use crate::ports::{
+    AtendimentoStore, CampoColetadoDto, CampoPendenteDto, CamposAtendimentoDto,
+    TicketKanbanOutcome, TransferenciaFluxoOutcome,
+};
 
 /// Implementação Postgres da port Atendimento.
 /// `admin_pool` (BYPASSRLS) é usado apenas nas varreduras cross-tenant do
@@ -91,6 +100,7 @@ impl AtendimentoStore for PgAtendimentoStore {
         conteudo: &str,
         remetente: &str,
         traceparent: &str,
+        action_id: Option<Uuid>,
     ) -> Result<Mensagem, DbError> {
         let repo = PostgresMensagemRepository;
         let ctx = ctx.clone();
@@ -100,6 +110,22 @@ impl AtendimentoStore for PgAtendimentoStore {
         let remetente = remetente.to_string();
         let traceparent = traceparent.to_string();
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            // N7.2 — dedupe atômico: reenviar o mesmo action_id (ex.: mensagem
+            // outbound do atendente via sync offline) devolve a mensagem já
+            // persistida da primeira vez, sem duplicar nem republicar no outbox.
+            if let Some(action_id) = action_id {
+                if let Some(resultado) =
+                    idempotencia::buscar_acao_aplicada(&mut tx, tenant_id, action_id).await?
+                {
+                    let msg: Mensagem = serde_json::from_value(resultado).map_err(|e| {
+                        DbError::ConfigError(format!(
+                            "resultado idempotente corrompido para action_id {action_id}: {e}"
+                        ))
+                    })?;
+                    return Ok((msg, tx));
+                }
+            }
+
             let msg = repo
                 .criar(
                     &mut tx,
@@ -135,6 +161,14 @@ impl AtendimentoStore for PgAtendimentoStore {
             .bind(&traceparent)
             .execute(&mut *tx)
             .await?;
+
+            if let Some(action_id) = action_id {
+                let resultado = serde_json::to_value(&msg).map_err(|e| {
+                    DbError::ConfigError(format!("falha ao serializar mensagem: {e}"))
+                })?;
+                idempotencia::registrar_acao_aplicada(&mut tx, tenant_id, action_id, &resultado)
+                    .await?;
+            }
 
             Ok((msg, tx))
         })
@@ -326,6 +360,7 @@ impl AtendimentoStore for PgAtendimentoStore {
         atendimento_id: i32,
         etapa_destino_id: i32,
         motivo: &str,
+        action_id: Option<Uuid>,
     ) -> Result<(), DbError> {
         let repo_atendimento = PostgresAtendimentoRepository;
         let repo_movimento = PostgresMovimentoFluxoRepository;
@@ -333,6 +368,17 @@ impl AtendimentoStore for PgAtendimentoStore {
         let tenant_id = ctx.tenant_id;
         let motivo = (!motivo.is_empty()).then(|| motivo.to_string());
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            // N7.2 — dedupe atômico: reenviar a mesma ação (mesmo action_id) não
+            // reaplica o movimento, só confirma o já aplicado (mesma transação).
+            if let Some(action_id) = action_id {
+                if idempotencia::buscar_acao_aplicada(&mut tx, tenant_id, action_id)
+                    .await?
+                    .is_some()
+                {
+                    return Ok(((), tx));
+                }
+            }
+
             let atendimento = repo_atendimento
                 .buscar_por_id(&mut tx, &ctx, atendimento_id)
                 .await?
@@ -362,6 +408,16 @@ impl AtendimentoStore for PgAtendimentoStore {
                     false,
                 )
                 .await?;
+
+            if let Some(action_id) = action_id {
+                idempotencia::registrar_acao_aplicada(
+                    &mut tx,
+                    tenant_id,
+                    action_id,
+                    &serde_json::json!({ "status": "success" }),
+                )
+                .await?;
+            }
 
             Ok(((), tx))
         })
@@ -466,6 +522,26 @@ impl AtendimentoStore for PgAtendimentoStore {
         .await
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, dead_letter_id = dead_letter_id))]
+    async fn reprocessar_dead_letter(
+        &self,
+        ctx: &RequestContext,
+        dead_letter_id: i32,
+        traceparent: &str,
+    ) -> Result<String, DbError> {
+        let repo = PostgresMensagemRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let traceparent = traceparent.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let status = repo
+                .reprocessar_dead_letter(&mut tx, &ctx, dead_letter_id, &traceparent)
+                .await?;
+            Ok((status.to_string(), tx))
+        })
+        .await
+    }
+
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, mensagem_id = mensagem_id))]
     async fn marcar_mensagem_enviada(
         &self,
@@ -496,6 +572,227 @@ impl AtendimentoStore for PgAtendimentoStore {
         let tenant_id = ctx.tenant_id;
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
             repo.marcar_mensagem_falha_envio(&mut tx, &ctx, mensagem_id)
+                .await?;
+            Ok(((), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, mensagem_id = mensagem_id))]
+    async fn anexar_analise_midia(
+        &self,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+        arquivo_midia: &str,
+        analise_midia: &str,
+        resumo_midia: &str,
+    ) -> Result<(), DbError> {
+        let repo = PostgresMensagemRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        // String vazia = campo ausente; converte para `None` (não sobrescreve).
+        let arquivo = (!arquivo_midia.is_empty()).then(|| arquivo_midia.to_string());
+        let analise = (!analise_midia.is_empty()).then(|| analise_midia.to_string());
+        let resumo = (!resumo_midia.is_empty()).then(|| resumo_midia.to_string());
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            repo.anexar_analise_midia(
+                &mut tx,
+                &ctx,
+                mensagem_id,
+                arquivo.as_deref(),
+                analise.as_deref(),
+                resumo.as_deref(),
+            )
+            .await?;
+            Ok(((), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_fluxos_do_tenant(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<FluxoDisponivel>, DbError> {
+        let repo = PostgresFluxoAtendimentoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let fluxos = repo.listar_ativos_do_tenant(&mut tx, &ctx).await?;
+            Ok((fluxos, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, fluxo_id = fluxo_id))]
+    async fn transferir_atendimento_para_fluxo(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        fluxo_id: i32,
+    ) -> Result<TransferenciaFluxoOutcome, DbError> {
+        let repo_atendimento = PostgresAtendimentoRepository;
+        let repo_fluxo = PostgresFluxoAtendimentoRepository;
+        let repo_etapa = PostgresEtapaFluxoRepository;
+        let repo_movimento = PostgresMovimentoFluxoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            // Fluxo destino precisa existir e estar ativo.
+            let fluxo = match repo_fluxo.buscar_por_id(&mut tx, &ctx, fluxo_id).await? {
+                Some(f) if f.ativo => f,
+                _ => {
+                    let outcome = TransferenciaFluxoOutcome {
+                        reason: Some("fluxo_inexistente".to_string()),
+                        ..Default::default()
+                    };
+                    return Ok((outcome, tx));
+                }
+            };
+
+            // Etapa de entrada (tipo 'fila') do fluxo destino.
+            let etapa = match repo_etapa
+                .get_etapa_inicial(&mut tx, &ctx, fluxo.id)
+                .await?
+            {
+                Some(e) => e,
+                None => {
+                    let outcome = TransferenciaFluxoOutcome {
+                        fluxo_id: Some(fluxo.id),
+                        fluxo_nome: Some(fluxo.nome),
+                        reason: Some("sem_etapa_inicial".to_string()),
+                        ..Default::default()
+                    };
+                    return Ok((outcome, tx));
+                }
+            };
+
+            let etapa_origem = repo_atendimento
+                .buscar_por_id(&mut tx, &ctx, atendimento_id)
+                .await?
+                .and_then(|a| a.etapa_atual_id);
+
+            repo_atendimento
+                .transferir_fluxo_etapa(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    fluxo.id,
+                    fluxo.departamento_id,
+                    etapa.id,
+                )
+                .await?;
+            repo_movimento
+                .criar(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    etapa_origem,
+                    etapa.id,
+                    None,
+                    Some("transferência automática pela IA"),
+                    true,
+                )
+                .await?;
+
+            let outcome = TransferenciaFluxoOutcome {
+                transferido: true,
+                fluxo_id: Some(fluxo.id),
+                fluxo_nome: Some(fluxo.nome),
+                etapa_id: Some(etapa.id),
+                etapa_nome: Some(etapa.nome),
+                reason: None,
+            };
+            Ok((outcome, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn resolver_campos_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<CamposAtendimentoDto, DbError> {
+        let repo_atendimento = PostgresAtendimentoRepository;
+        let repo_campo = PostgresCampoPersonalizadoRepository;
+        let repo_valor = PostgresValorCampoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let fluxo_id = repo_atendimento
+                .buscar_por_id(&mut tx, &ctx, atendimento_id)
+                .await?
+                .and_then(|a| a.fluxo_atendimento_id);
+
+            // Catálogo aplicável: globais (sem filtro de fluxo) + os do fluxo atual
+            // do atendimento, quando houver.
+            let mut definicoes = repo_campo
+                .listar_por_escopo(&mut tx, &ctx, "GLOBAL", None)
+                .await?;
+            if let Some(fluxo_id) = fluxo_id {
+                definicoes.extend(
+                    repo_campo
+                        .listar_por_escopo(&mut tx, &ctx, "FLUXO", Some(fluxo_id))
+                        .await?,
+                );
+            }
+
+            let valores = repo_valor
+                .listar_por_atendimento(&mut tx, &ctx, atendimento_id)
+                .await?;
+
+            let mut coletados = Vec::new();
+            let mut pendentes = Vec::new();
+            for def in definicoes {
+                let valor_existente = valores.iter().find(|v| v.campo_id == def.id);
+                match valor_existente {
+                    Some(v) => coletados.push(CampoColetadoDto {
+                        slug: def.slug,
+                        nome: def.nome,
+                        // O valor é JSONB livre; string "crua" evita aspas duplas
+                        // indevidas quando já é uma string JSON.
+                        valor: v
+                            .valor
+                            .as_str()
+                            .map(str::to_string)
+                            .unwrap_or_else(|| v.valor.to_string()),
+                    }),
+                    None if def.obrigatorio => pendentes.push(CampoPendenteDto {
+                        slug: def.slug,
+                        nome: def.nome,
+                        descricao: def.descricao,
+                        hint: def.extrair_hint,
+                    }),
+                    None => {}
+                }
+            }
+
+            Ok((
+                CamposAtendimentoDto {
+                    coletados,
+                    pendentes,
+                },
+                tx,
+            ))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, nota = nota))]
+    async fn atualizar_sentimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        nota: i32,
+        label: &str,
+    ) -> Result<(), DbError> {
+        let repo = PostgresAtendimentoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let label = label.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            repo.atualizar_sentimento(&mut tx, &ctx, atendimento_id, nota, &label)
                 .await?;
             Ok(((), tx))
         })

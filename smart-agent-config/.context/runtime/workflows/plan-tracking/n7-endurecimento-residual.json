@@ -1,0 +1,36 @@
+{
+  "planSlug": "n7-endurecimento-residual",
+  "linkedAt": "2026-07-23T00:24:46.964Z",
+  "progress": 0,
+  "phases": {},
+  "approvalStatus": "approved",
+  "approvedAt": "2026-07-23T00:25:08.301Z",
+  "approvedBy": "architect",
+  "decisions": [
+    {
+      "title": "Plano N7 aprovado sem alterações de escopo",
+      "description": "Revisão confirma as 6 correções já documentadas no plano completo (RPC de rate-limit já existe; \"departamentos\" já é recurso reconhecido; action_id já viaja client-side; atomicidade é single-statement no SQLite; Lagged resolve com resubscribe; enforcement novo nasce log-only atrás de flag). Sequenciamento aprovado: N7.1 ‖ N7.3 → N7.2 → N7.4 → N7.5. Execução via subagentes por área: backend-specialist (N7.1-N7.3), mobile-specialist (N7.4), depois validação manual (N7.5).",
+      "phase": "R",
+      "alternatives": [
+        "Reescrever N7.3 construindo um novo RPC de rate-limit do zero — rejeitado: RPC já existe e está em uso pelo runtime_api",
+        "Lock distribuído para atomicidade do local_engine — rejeitado: SQLite já serializa escritas, single-statement basta"
+      ],
+      "status": "accepted",
+      "id": "dec-1784766306236",
+      "decidedAt": "2026-07-23T00:25:06.236Z"
+    },
+    {
+      "title": "Desvios aceitos durante a execução da N7",
+      "description": "(1) N7.1 storage: não havia tabela de uso de bytes persistida (info_aux presumia \"usage_metrics\" existente, mas era só contador Prometheus in-process); criada tenants_storage_usage + novo RPC RegisterStorageUsage (aditivo, chamado pelo data_storage após PutFile). (2) N7.1 departamentos: não existia NENHUM RPC de criação de departamento no data_postgres (só o repositório, usado em testes); criado CreateDepartamento com o guard de quota embutido, em vez de só \"adicionar o caller\" a uma rota pré-existente. (3) N7.2 dead-letter: status_envio ganhou o valor transitório \"dead_letter_novo\" (não persistido) para distinguir, no handler, o instante exato do registro (audita uma vez) de reentregas futuras (não reaudita) — mesmo efeito de no-op idempotente para o worker (que só checa != \"pending\"). (4) N7.2 dedupe: implementado via checagem dentro da MESMA transação da mutação (atômico) para mover_etapa_atendimento e persistir_mensagem; reprocessamento de dead-letter ganhou RPC próprio (ReprocessarDeadLetter) não previsto explicitamente no plano-base mas exigido pela frase \"reprocessável\" do DoD.",
+      "phase": "E",
+      "alternatives": [
+        "Storage: medir uso via ListObjects no R2 sob demanda — rejeitado: caro/lento no caminho de upload, sem persistência auditável",
+        "Departamentos: deixar sem RPC e aplicar quota só dentro do repositório (infra) — rejeitado: infra não pode depender de observability/audit (ciclo arquitetural), então o enforcement real+auditoria só pode viver no app layer"
+      ],
+      "status": "accepted",
+      "id": "dec-1784770126272",
+      "decidedAt": "2026-07-23T01:28:46.272Z"
+    }
+  ],
+  "lastUpdated": "2026-07-23T01:28:46.272Z"
+}

@@ -27,6 +27,10 @@ pub struct Atendimento {
     pub feedback: Option<String>,
     pub data_primeira_resposta: Option<DateTime<Utc>>,
     pub bot_pode_atender: bool,
+    /// Última leitura de sentimento da IA (N6.5); `None` enquanto não avaliado.
+    /// Não confundir com `avaliacao`/`feedback` (satisfação informada pelo cliente).
+    pub sentimento_nota: Option<i32>,
+    pub sentimento_label: Option<String>,
 }
 
 #[async_trait]
@@ -109,6 +113,31 @@ pub trait AtendimentoRepository: Send + Sync {
         etapa_id: i32,
     ) -> Result<(), DbError>;
 
+    /// Transfere o atendimento para outro fluxo (N6.3): SOBRESCREVE fluxo/departamento/
+    /// etapa (diferente de `atribuir_fluxo_etapa`, que preserva o fluxo já definido via
+    /// COALESCE). Usado pela transferência automática decidida pela IA.
+    async fn transferir_fluxo_etapa(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        fluxo_id: i32,
+        departamento_id: i32,
+        etapa_id: i32,
+    ) -> Result<(), DbError>;
+
+    /// Atualiza a última leitura de sentimento do atendimento (N6.5, best-effort —
+    /// não é `avaliacao`/`feedback` de satisfação do cliente, é a análise da IA
+    /// sobre o tom da conversa). Sobrescreve sempre com a leitura mais recente.
+    async fn atualizar_sentimento(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        nota: i32,
+        label: &str,
+    ) -> Result<(), DbError>;
+
     /// Varredura CROSS-TENANT (scheduler do worker, F4.3b): atendimentos resolvidos,
     /// sem feedback registrado e ainda não marcados como expirados, cuja `data_fim`
     /// ultrapassou o TTL. `ctx` é usado apenas para a checagem de escopo — a consulta
@@ -156,7 +185,8 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                          status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
                          assunto, prioridade, atendente_humano_id, contexto_conversa,
                          historico_status, tags, avaliacao, feedback,
-                         data_primeira_resposta, bot_pode_atender"#,
+                         data_primeira_resposta, bot_pode_atender,
+                         sentimento_nota, sentimento_label"#,
             ctx.tenant_id,
             contato_id,
             departamento_id,
@@ -181,7 +211,8 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                       status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
                       assunto, prioridade, atendente_humano_id, contexto_conversa,
                       historico_status, tags, avaliacao, feedback,
-                      data_primeira_resposta, bot_pode_atender
+                      data_primeira_resposta, bot_pode_atender,
+                      sentimento_nota, sentimento_label
                FROM oraculo_atendimento
                WHERE tenant_id = $1 AND id = $2"#,
             ctx.tenant_id,
@@ -208,7 +239,8 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                       status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
                       assunto, prioridade, atendente_humano_id, contexto_conversa,
                       historico_status, tags, avaliacao, feedback,
-                      data_primeira_resposta, bot_pode_atender
+                      data_primeira_resposta, bot_pode_atender,
+                      sentimento_nota, sentimento_label
                FROM oraculo_atendimento
                WHERE tenant_id = $1 AND status = $2
                  AND ($3::int IS NULL OR departamento_id = $3)
@@ -340,7 +372,8 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                       status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
                       assunto, prioridade, atendente_humano_id, contexto_conversa,
                       historico_status, tags, avaliacao, feedback,
-                      data_primeira_resposta, bot_pode_atender
+                      data_primeira_resposta, bot_pode_atender,
+                      sentimento_nota, sentimento_label
                FROM oraculo_atendimento
                WHERE tenant_id = $1 AND contato_id = $2 
                  AND status NOT IN ('resolvido', 'cancelado', 'arquivado')
@@ -384,6 +417,61 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         Ok(())
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, fluxo_id = fluxo_id, etapa_id = etapa_id))]
+    async fn transferir_fluxo_etapa(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        fluxo_id: i32,
+        departamento_id: i32,
+        etapa_id: i32,
+    ) -> Result<(), DbError> {
+        ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+        // Query em runtime (sem macro) para não exigir cache .sqlx no build offline.
+        // SOBRESCREVE (sem COALESCE): a transferência muda o fluxo de fato.
+        sqlx::query(
+            r#"UPDATE oraculo_atendimento
+               SET fluxo_atendimento_id = $1,
+                   departamento_id = $2,
+                   etapa_atual_id = $3,
+                   status = 'fila'
+               WHERE tenant_id = $4 AND id = $5"#,
+        )
+        .bind(fluxo_id)
+        .bind(departamento_id)
+        .bind(etapa_id)
+        .bind(ctx.tenant_id)
+        .bind(atendimento_id)
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, nota = nota))]
+    async fn atualizar_sentimento(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        nota: i32,
+        label: &str,
+    ) -> Result<(), DbError> {
+        // Query em runtime (sem macro) para não exigir cache .sqlx no build offline.
+        sqlx::query(
+            r#"UPDATE oraculo_atendimento
+               SET sentimento_nota = $1, sentimento_label = $2
+               WHERE tenant_id = $3 AND id = $4"#,
+        )
+        .bind(nota)
+        .bind(label)
+        .bind(ctx.tenant_id)
+        .bind(atendimento_id)
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
     #[tracing::instrument(skip_all, fields(limite = limite, ttl_horas = ttl_horas))]
     async fn listar_feedback_vencido(
         &self,
@@ -399,7 +487,8 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                       status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
                       assunto, prioridade, atendente_humano_id, contexto_conversa,
                       historico_status, tags, avaliacao, feedback,
-                      data_primeira_resposta, bot_pode_atender
+                      data_primeira_resposta, bot_pode_atender,
+                      sentimento_nota, sentimento_label
                FROM oraculo_atendimento
                WHERE status = 'resolvido'
                  AND feedback IS NULL

@@ -1,6 +1,6 @@
 // This is a generated file - do not edit.
 //
-// Generated from admin.proto.
+// Generated from queries/admin.proto.
 
 // @dart = 3.3
 
@@ -4848,6 +4848,8 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
     $core.int? atendenteHumanoId,
     $fixnum.Int64? dataInicio,
     $fixnum.Int64? dataUltimaMensagem,
+    $core.int? sentimentoNota,
+    $core.String? sentimentoLabel,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -4863,6 +4865,8 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
     if (dataInicio != null) result.dataInicio = dataInicio;
     if (dataUltimaMensagem != null)
       result.dataUltimaMensagem = dataUltimaMensagem;
+    if (sentimentoNota != null) result.sentimentoNota = sentimentoNota;
+    if (sentimentoLabel != null) result.sentimentoLabel = sentimentoLabel;
     return result;
   }
 
@@ -4891,6 +4895,8 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
     ..aI(9, _omitFieldNames ? '' : 'atendenteHumanoId')
     ..aInt64(10, _omitFieldNames ? '' : 'dataInicio')
     ..aInt64(11, _omitFieldNames ? '' : 'dataUltimaMensagem')
+    ..aI(12, _omitFieldNames ? '' : 'sentimentoNota')
+    ..aOS(13, _omitFieldNames ? '' : 'sentimentoLabel')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5010,6 +5016,24 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
   $core.bool hasDataUltimaMensagem() => $_has(10);
   @$pb.TagNumber(11)
   void clearDataUltimaMensagem() => $_clearField(11);
+
+  @$pb.TagNumber(12)
+  $core.int get sentimentoNota => $_getIZ(11);
+  @$pb.TagNumber(12)
+  set sentimentoNota($core.int value) => $_setSignedInt32(11, value);
+  @$pb.TagNumber(12)
+  $core.bool hasSentimentoNota() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearSentimentoNota() => $_clearField(12);
+
+  @$pb.TagNumber(13)
+  $core.String get sentimentoLabel => $_getSZ(12);
+  @$pb.TagNumber(13)
+  set sentimentoLabel($core.String value) => $_setString(12, value);
+  @$pb.TagNumber(13)
+  $core.bool hasSentimentoLabel() => $_has(12);
+  @$pb.TagNumber(13)
+  void clearSentimentoLabel() => $_clearField(13);
 }
 
 class ListAtendimentosRequest extends $pb.GeneratedMessage {
@@ -5152,6 +5176,8 @@ class MensagemThread extends $pb.GeneratedMessage {
     $core.String? remetente,
     $fixnum.Int64? timestamp,
     $core.String? statusEnvio,
+    $core.bool? geradoPorIa,
+    $core.String? resumoMidia,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -5161,6 +5187,8 @@ class MensagemThread extends $pb.GeneratedMessage {
     if (remetente != null) result.remetente = remetente;
     if (timestamp != null) result.timestamp = timestamp;
     if (statusEnvio != null) result.statusEnvio = statusEnvio;
+    if (geradoPorIa != null) result.geradoPorIa = geradoPorIa;
+    if (resumoMidia != null) result.resumoMidia = resumoMidia;
     return result;
   }
 
@@ -5185,6 +5213,8 @@ class MensagemThread extends $pb.GeneratedMessage {
     ..aOS(5, _omitFieldNames ? '' : 'remetente')
     ..aInt64(6, _omitFieldNames ? '' : 'timestamp')
     ..aOS(7, _omitFieldNames ? '' : 'statusEnvio')
+    ..aOB(8, _omitFieldNames ? '' : 'geradoPorIa')
+    ..aOS(9, _omitFieldNames ? '' : 'resumoMidia')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5268,6 +5298,24 @@ class MensagemThread extends $pb.GeneratedMessage {
   $core.bool hasStatusEnvio() => $_has(6);
   @$pb.TagNumber(7)
   void clearStatusEnvio() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.bool get geradoPorIa => $_getBF(7);
+  @$pb.TagNumber(8)
+  set geradoPorIa($core.bool value) => $_setBool(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasGeradoPorIa() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearGeradoPorIa() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $core.String get resumoMidia => $_getSZ(8);
+  @$pb.TagNumber(9)
+  set resumoMidia($core.String value) => $_setString(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasResumoMidia() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearResumoMidia() => $_clearField(9);
 }
 
 class GetThreadRequest extends $pb.GeneratedMessage {
@@ -5404,11 +5452,13 @@ class MoveAtendimentoEtapaRequest extends $pb.GeneratedMessage {
     $core.int? atendimentoId,
     $core.int? etapaDestinoId,
     $core.String? motivo,
+    $core.String? actionId,
   }) {
     final result = create();
     if (atendimentoId != null) result.atendimentoId = atendimentoId;
     if (etapaDestinoId != null) result.etapaDestinoId = etapaDestinoId;
     if (motivo != null) result.motivo = motivo;
+    if (actionId != null) result.actionId = actionId;
     return result;
   }
 
@@ -5429,6 +5479,7 @@ class MoveAtendimentoEtapaRequest extends $pb.GeneratedMessage {
     ..aI(1, _omitFieldNames ? '' : 'atendimentoId')
     ..aI(2, _omitFieldNames ? '' : 'etapaDestinoId')
     ..aOS(3, _omitFieldNames ? '' : 'motivo')
+    ..aOS(4, _omitFieldNames ? '' : 'actionId')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5479,6 +5530,17 @@ class MoveAtendimentoEtapaRequest extends $pb.GeneratedMessage {
   $core.bool hasMotivo() => $_has(2);
   @$pb.TagNumber(3)
   void clearMotivo() => $_clearField(3);
+
+  /// N7.2: idempotência do sync offline. Campo aditivo/opcional — clientes
+  /// antigos (sem action_id) seguem funcionando sem dedupe server-side.
+  @$pb.TagNumber(4)
+  $core.String get actionId => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set actionId($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasActionId() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearActionId() => $_clearField(4);
 }
 
 class MoveAtendimentoEtapaResponse extends $pb.GeneratedMessage {
@@ -5544,11 +5606,13 @@ class SendOutboundMessageRequest extends $pb.GeneratedMessage {
     $core.int? atendimentoId,
     $core.String? conteudo,
     $core.String? tipo,
+    $core.String? actionId,
   }) {
     final result = create();
     if (atendimentoId != null) result.atendimentoId = atendimentoId;
     if (conteudo != null) result.conteudo = conteudo;
     if (tipo != null) result.tipo = tipo;
+    if (actionId != null) result.actionId = actionId;
     return result;
   }
 
@@ -5569,6 +5633,7 @@ class SendOutboundMessageRequest extends $pb.GeneratedMessage {
     ..aI(1, _omitFieldNames ? '' : 'atendimentoId')
     ..aOS(2, _omitFieldNames ? '' : 'conteudo')
     ..aOS(3, _omitFieldNames ? '' : 'tipo')
+    ..aOS(4, _omitFieldNames ? '' : 'actionId')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5618,6 +5683,17 @@ class SendOutboundMessageRequest extends $pb.GeneratedMessage {
   $core.bool hasTipo() => $_has(2);
   @$pb.TagNumber(3)
   void clearTipo() => $_clearField(3);
+
+  /// N7.2: idempotência do sync offline. Campo aditivo/opcional — clientes
+  /// antigos (sem action_id) seguem funcionando sem dedupe server-side.
+  @$pb.TagNumber(4)
+  $core.String get actionId => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set actionId($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasActionId() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearActionId() => $_clearField(4);
 }
 
 class SendOutboundMessageResponse extends $pb.GeneratedMessage {

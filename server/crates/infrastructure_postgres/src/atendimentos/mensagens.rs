@@ -25,6 +25,7 @@ pub struct Mensagem {
     pub arquivo_midia: Option<String>,
     pub analise_midia: Option<String>,
     pub resumo_midia: Option<String>,
+    pub gerado_por_ia: bool,
     pub mensagem_citada_id: Option<i32>,
     pub quoted_preview: Option<serde_json::Value>,
     pub status_envio: String,
@@ -135,6 +136,31 @@ pub trait MensagemRepository: Send + Sync {
         ctx: &RequestContext,
         mensagem_id: i32,
     ) -> Result<(), DbError>;
+
+    /// Anexa a análise de mídia (ponteiro do arquivo no storage + resumo/análise
+    /// da IA) a uma mensagem já persistida (N6.1). Campos `None` não são sobrescritos.
+    async fn anexar_analise_midia(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+        arquivo_midia: Option<&str>,
+        analise_midia: Option<&str>,
+        resumo_midia: Option<&str>,
+    ) -> Result<(), DbError>;
+
+    /// Reprocessamento manual de um dead-letter (N7.2): se agora existe
+    /// `whatsapp_contact` ativo para o contato da mensagem, volta o
+    /// `status_envio` a `"pending"` e reinsere o evento `message.persisted` no
+    /// outbox (mesma transação ACID) para o worker tentar o envio de novo.
+    /// Retorna `"reprocessada"` | `"ainda_sem_destino"` | `"nao_encontrada"`.
+    async fn reprocessar_dead_letter(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        dead_letter_id: i32,
+        traceparent: &str,
+    ) -> Result<&'static str, DbError>;
 }
 
 pub struct PostgresMensagemRepository;
@@ -163,7 +189,7 @@ impl MensagemRepository for PostgresMensagemRepository {
                RETURNING id, tenant_id, atendimento_id, tipo, conteudo, remetente,
                          timestamp, message_id_whatsapp, metadados, respondida, lido,
                          resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
-                         arquivo_midia, analise_midia, resumo_midia, mensagem_citada_id,
+                         arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,
                          quoted_preview, status_envio, data_entregue, data_lida"#,
             ctx.tenant_id,
             atendimento_id,
@@ -193,7 +219,7 @@ impl MensagemRepository for PostgresMensagemRepository {
             r#"SELECT id, tenant_id, atendimento_id, tipo, conteudo, remetente,
                       timestamp, message_id_whatsapp, metadados, respondida, lido,
                       resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
-                      arquivo_midia, analise_midia, resumo_midia, mensagem_citada_id,
+                      arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,
                       quoted_preview, status_envio, data_entregue, data_lida
                FROM oraculo_mensagem
                WHERE tenant_id = $1 AND atendimento_id = $2
@@ -291,7 +317,7 @@ impl MensagemRepository for PostgresMensagemRepository {
             r#"SELECT m.id, m.tenant_id, m.atendimento_id, m.tipo, m.conteudo, m.remetente,
                       m.timestamp, m.message_id_whatsapp, m.metadados, m.respondida, m.lido,
                       m.resposta_bot, m.intent_detectado, m.entidades_extraidas, m.confianca_resposta,
-                      m.arquivo_midia, m.analise_midia, m.resumo_midia, m.mensagem_citada_id,
+                      m.arquivo_midia, m.analise_midia, m.resumo_midia, m.gerado_por_ia, m.mensagem_citada_id,
                       m.quoted_preview, m.status_envio, m.data_entregue, m.data_lida
                FROM oraculo_mensagem m
                LEFT JOIN tenants_subscription s ON s.tenant_id = m.tenant_id
@@ -353,7 +379,163 @@ impl MensagemRepository for PostgresMensagemRepository {
         .bind(mensagem_id)
         .fetch_optional(&mut **tx)
         .await?;
-        Ok(row)
+        if row.is_some() {
+            return Ok(row);
+        }
+
+        // N7.2 — sem destino resolvível (nenhum whatsapp_contact ativo para o
+        // contato): em vez de propagar erro/descartar, vira dead-letter auditável
+        // e reprocessável, e a mensagem sai de "pending" (evita reentrega infinita
+        // do consumer group). Qualquer `status_envio != "pending"` já é tratado
+        // como no-op idempotente pelo worker — reaproveita o mesmo contrato.
+        let existente = sqlx::query_as::<_, (i32, String)>(
+            "SELECT atendimento_id, status_envio FROM oraculo_mensagem \
+             WHERE tenant_id = $1 AND id = $2",
+        )
+        .bind(ctx.tenant_id)
+        .bind(mensagem_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        let Some((atendimento_id, status_envio)) = existente else {
+            return Ok(None);
+        };
+
+        if status_envio != "pending" {
+            // Já processada (sent/failed/dead_letter): no-op idempotente, mesmo
+            // contrato de reentrega do consumer group.
+            return Ok(Some(DestinoEnvioOutbound {
+                atendimento_id,
+                instance_id: 0,
+                to_number: String::new(),
+                status_envio,
+                conteudo: String::new(),
+            }));
+        }
+
+        sqlx::query(
+            "INSERT INTO mensagem_dead_letter (tenant_id, mensagem_id, atendimento_id, motivo) \
+             VALUES ($1, $2, $3, 'sem_whatsapp_contact_ativo')",
+        )
+        .bind(ctx.tenant_id)
+        .bind(mensagem_id)
+        .bind(atendimento_id)
+        .execute(&mut **tx)
+        .await?;
+
+        sqlx::query(
+            "UPDATE oraculo_mensagem SET status_envio = 'dead_letter' \
+             WHERE tenant_id = $1 AND id = $2 AND status_envio = 'pending'",
+        )
+        .bind(ctx.tenant_id)
+        .bind(mensagem_id)
+        .execute(&mut **tx)
+        .await?;
+
+        // Marcador distinto de "dead_letter" (valor persistido): sinaliza ao
+        // chamador (data_postgres/handler) que ESTA chamada é que acabou de
+        // registrar o dead-letter — só nesse instante a auditoria deve publicar
+        // o evento `mensagem.dead_letter` (reentregas futuras caem no ramo acima,
+        // com `status_envio == "dead_letter"` já persistido, e não reauditam).
+        Ok(Some(DestinoEnvioOutbound {
+            atendimento_id,
+            instance_id: 0,
+            to_number: String::new(),
+            status_envio: "dead_letter_novo".to_string(),
+            conteudo: String::new(),
+        }))
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, dead_letter_id = dead_letter_id))]
+    async fn reprocessar_dead_letter(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        dead_letter_id: i32,
+        traceparent: &str,
+    ) -> Result<&'static str, DbError> {
+        // Reprocessar remuta estado (reenfileira o envio outbound no outbox): é
+        // operação administrativa e exige escopo de admin, mesmo padrão de
+        // `criar_departamento`. Defesa em profundidade sobre a RLS por tenant.
+        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
+        let registro = sqlx::query_as::<_, (i32, bool)>(
+            "SELECT mensagem_id, reprocessado FROM mensagem_dead_letter \
+             WHERE tenant_id = $1 AND id = $2",
+        )
+        .bind(ctx.tenant_id)
+        .bind(dead_letter_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        let Some((mensagem_id, ja_reprocessado)) = registro else {
+            return Ok("nao_encontrada");
+        };
+        if ja_reprocessado {
+            return Ok("reprocessada");
+        }
+
+        // Mesma checagem de destino de `resolver_destino_envio_outbound`: só
+        // reprocessa se agora existe whatsapp_contact ativo para o contato.
+        let destino = sqlx::query_as::<_, (i32, String, String)>(
+            r#"SELECT om.atendimento_id, wc.instance_id::text, om.conteudo
+               FROM oraculo_mensagem om
+               JOIN oraculo_atendimento oa
+                 ON oa.id = om.atendimento_id AND oa.tenant_id = om.tenant_id
+               JOIN oraculo_contato oc
+                 ON oc.id = oa.contato_id AND oc.tenant_id = oa.tenant_id
+               JOIN whatsapp_contact wc
+                 ON wc.contact_id = oc.id AND wc.tenant_id = oc.tenant_id AND wc.active = true
+               WHERE om.tenant_id = $1 AND om.id = $2 AND oc.telefone IS NOT NULL
+               ORDER BY wc.updated_at DESC
+               LIMIT 1"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(mensagem_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+
+        let Some((_atendimento_id, _instance_id, conteudo)) = destino else {
+            return Ok("ainda_sem_destino");
+        };
+
+        sqlx::query(
+            "UPDATE oraculo_mensagem SET status_envio = 'pending' \
+             WHERE tenant_id = $1 AND id = $2 AND status_envio = 'dead_letter'",
+        )
+        .bind(ctx.tenant_id)
+        .bind(mensagem_id)
+        .execute(&mut **tx)
+        .await?;
+
+        sqlx::query(
+            "UPDATE mensagem_dead_letter SET reprocessado = true WHERE tenant_id = $1 AND id = $2",
+        )
+        .bind(ctx.tenant_id)
+        .bind(dead_letter_id)
+        .execute(&mut **tx)
+        .await?;
+
+        // Reinsere no outbox (mesmo formato de `persistir_mensagem`) para o
+        // worker retomar a tentativa de envio.
+        let event_payload = serde_json::json!({
+            "message_id": mensagem_id.to_string(),
+            "sender_id": "atendente",
+            "content": conteudo,
+            "timestamp": chrono::Utc::now().timestamp_millis(),
+        });
+        let event_payload_bytes =
+            serde_json::to_vec(&event_payload).map_err(|e| DbError::ConfigError(e.to_string()))?;
+        sqlx::query(
+            "INSERT INTO outbox (tenant_id, event_type, payload, traceparent) VALUES ($1, $2, $3, $4)",
+        )
+        .bind(ctx.tenant_id)
+        .bind("message.persisted")
+        .bind(event_payload_bytes)
+        .bind(traceparent)
+        .execute(&mut **tx)
+        .await?;
+
+        Ok("reprocessada")
     }
 
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, mensagem_id = mensagem_id))]
@@ -391,6 +573,37 @@ impl MensagemRepository for PostgresMensagemRepository {
         )
         .bind(ctx.tenant_id)
         .bind(mensagem_id)
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
+    // `analise_midia`/`resumo_midia` podem conter transcrição/interpretação: PII,
+    // por isso `skip_all` — nunca registrar o conteúdo no span.
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, mensagem_id = mensagem_id))]
+    async fn anexar_analise_midia(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+        arquivo_midia: Option<&str>,
+        analise_midia: Option<&str>,
+        resumo_midia: Option<&str>,
+    ) -> Result<(), DbError> {
+        // COALESCE preserva o valor atual quando o parâmetro chega `NULL`, para
+        // atualização parcial (ex.: áudio grava resumo/transcrição, sem análise de visão).
+        sqlx::query(
+            r#"UPDATE oraculo_mensagem
+               SET arquivo_midia = COALESCE($3, arquivo_midia),
+                   analise_midia = COALESCE($4, analise_midia),
+                   resumo_midia  = COALESCE($5, resumo_midia)
+               WHERE tenant_id = $1 AND id = $2"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(mensagem_id)
+        .bind(arquivo_midia)
+        .bind(analise_midia)
+        .bind(resumo_midia)
         .execute(&mut **tx)
         .await?;
         Ok(())

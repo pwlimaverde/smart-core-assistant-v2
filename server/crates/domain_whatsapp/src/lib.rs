@@ -28,6 +28,27 @@ pub struct NormalizedMessage {
     pub reply_to: Option<String>,
     pub is_from_me: bool,
     pub is_group: bool,
+    /// Sub-objeto bruto da mídia (`imageMessage`/`audioMessage`/`videoMessage`/
+    /// `documentMessage`) do webhook, quando a mensagem é de mídia. Presença deste
+    /// campo é o sinal para o pipeline de mídia do worker (download/análise); em
+    /// mensagens de texto é `None`. Mantém-se puro (sem I/O): é só o recorte do payload.
+    pub media_payload: Option<serde_json::Value>,
+    pub media_mime: Option<String>,
+    pub media_file_size: Option<i64>,
+}
+
+/// Extrai `mimetype` e `fileLength` do sub-objeto de mídia. O `fileLength` do
+/// WhatsApp costuma vir como string (mas às vezes número), então tratamos os dois.
+fn extrair_meta_midia(sub: &serde_json::Value) -> (Option<String>, Option<i64>) {
+    let mime = sub
+        .get("mimetype")
+        .and_then(|m| m.as_str())
+        .map(|s| s.to_string());
+    let size = sub.get("fileLength").and_then(|v| {
+        v.as_i64()
+            .or_else(|| v.as_str().and_then(|s| s.parse::<i64>().ok()))
+    });
+    (mime, size)
 }
 
 impl NormalizedMessage {
@@ -111,6 +132,9 @@ impl NormalizedMessage {
         // Determina o tipo de mídia e conteúdo
         let mut media_type = MediaType::Text;
         let mut content = String::new();
+        let mut media_payload: Option<serde_json::Value> = None;
+        let mut media_mime: Option<String> = None;
+        let mut media_file_size: Option<i64> = None;
 
         if let Some(msg_obj) = data.get("message").and_then(|m| m.as_object()) {
             if let Some(text) = msg_obj.get("conversation").and_then(|t| t.as_str()) {
@@ -137,6 +161,10 @@ impl NormalizedMessage {
                         .unwrap_or("")
                         .to_string();
                 }
+                let (mime, size) = extrair_meta_midia(img);
+                media_payload = Some(img.clone());
+                media_mime = mime;
+                media_file_size = size;
             } else if let Some(audio) = msg_obj.get("audioMessage") {
                 media_type = MediaType::Audio;
                 content = audio
@@ -144,6 +172,10 @@ impl NormalizedMessage {
                     .and_then(|u| u.as_str())
                     .unwrap_or("")
                     .to_string();
+                let (mime, size) = extrair_meta_midia(audio);
+                media_payload = Some(audio.clone());
+                media_mime = mime;
+                media_file_size = size;
             } else if let Some(video) = msg_obj.get("videoMessage") {
                 media_type = MediaType::Video;
                 content = video
@@ -158,6 +190,10 @@ impl NormalizedMessage {
                         .unwrap_or("")
                         .to_string();
                 }
+                let (mime, size) = extrair_meta_midia(video);
+                media_payload = Some(video.clone());
+                media_mime = mime;
+                media_file_size = size;
             } else if let Some(doc) = msg_obj.get("documentMessage") {
                 media_type = MediaType::Document;
                 content = doc
@@ -173,6 +209,10 @@ impl NormalizedMessage {
                         .unwrap_or("")
                         .to_string();
                 }
+                let (mime, size) = extrair_meta_midia(doc);
+                media_payload = Some(doc.clone());
+                media_mime = mime;
+                media_file_size = size;
             } else if let Some(loc) = msg_obj.get("locationMessage") {
                 media_type = MediaType::Location;
                 let lat = loc
@@ -228,6 +268,9 @@ impl NormalizedMessage {
             reply_to,
             is_from_me,
             is_group,
+            media_payload,
+            media_mime,
+            media_file_size,
         })
     }
 }
@@ -415,6 +458,55 @@ mod tests {
         let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
         assert_eq!(msg.media_type, MediaType::Audio);
         assert_eq!(msg.content, "http://example.com/audio.ogg");
+    }
+
+    #[test]
+    fn parse_audio_preenche_media_payload_mime_e_tamanho() {
+        let payload = payload_com_message(json!({
+            "audioMessage": {
+                "url": "http://example.com/audio.ogg",
+                "mimetype": "audio/ogg; codecs=opus",
+                "fileLength": "20480"
+            }
+        }));
+        let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
+        assert_eq!(msg.media_type, MediaType::Audio);
+        assert!(msg.media_payload.is_some());
+        assert_eq!(msg.media_mime.as_deref(), Some("audio/ogg; codecs=opus"));
+        assert_eq!(msg.media_file_size, Some(20480));
+    }
+
+    #[test]
+    fn parse_image_preenche_media_payload_com_file_length_numerico() {
+        let payload = payload_com_message(json!({
+            "imageMessage": {
+                "url": "http://example.com/img.jpg",
+                "caption": "foto",
+                "mimetype": "image/jpeg",
+                "fileLength": 51200
+            }
+        }));
+        let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
+        assert_eq!(msg.media_type, MediaType::Image);
+        assert_eq!(msg.media_mime.as_deref(), Some("image/jpeg"));
+        assert_eq!(msg.media_file_size, Some(51200));
+        // O sub-objeto bruto é preservado inteiro para o download posterior.
+        assert_eq!(
+            msg.media_payload
+                .as_ref()
+                .and_then(|p| p.get("caption"))
+                .and_then(|c| c.as_str()),
+            Some("foto")
+        );
+    }
+
+    #[test]
+    fn parse_texto_nao_preenche_media_payload() {
+        let payload = payload_com_message(json!({ "conversation": "só texto" }));
+        let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
+        assert!(msg.media_payload.is_none());
+        assert!(msg.media_mime.is_none());
+        assert!(msg.media_file_size.is_none());
     }
 
     #[test]

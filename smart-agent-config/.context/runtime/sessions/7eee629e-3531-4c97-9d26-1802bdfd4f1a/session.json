@@ -1,18 +1,82 @@
 {
   "id": "7eee629e-3531-4c97-9d26-1802bdfd4f1a",
   "name": "n6-ia-fluxo-vivo",
-  "status": "active",
+  "status": "completed",
   "repoPath": "C:\\PROJETOS\\FULL-STACK\\smart-core-assistant-v2\\smart-agent-config",
   "createdAt": "2026-07-18T12:15:24.311Z",
-  "updatedAt": "2026-07-20T17:56:51.133Z",
+  "updatedAt": "2026-07-23T00:24:36.836Z",
   "startedAt": "2026-07-18T12:15:24.311Z",
-  "traceCount": 26,
-  "artifactCount": 0,
-  "checkpointCount": 0,
-  "checkpoints": [],
+  "traceCount": 82,
+  "artifactCount": 7,
+  "checkpointCount": 4,
+  "checkpoints": [
+    {
+      "id": "c1df2855-f588-4fb5-9c7e-05da44aa9b2d",
+      "note": "Advanced workflow phase P -> R",
+      "data": {
+        "from": "P",
+        "to": "R",
+        "outputs": [
+          "smart-agent-config/.context/plans/n6-ia-fluxo-vivo/plano_completo_n6-ia-fluxo-vivo.md",
+          "smart-agent-config/.context/plans/n6-ia-fluxo-vivo/info_aux_n6-ia-fluxo-vivo.md"
+        ]
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-21T10:15:05.160Z"
+    },
+    {
+      "id": "4e38a0ce-c694-4d6c-b2d2-c6e762a15ab5",
+      "note": "Advanced workflow phase R -> E",
+      "data": {
+        "from": "R",
+        "to": "E",
+        "outputs": [
+          "decisions recorded in plan n6-ia-fluxo-vivo phase R",
+          "plan approved by architect"
+        ],
+        "nextTaskContractId": "421a6b47-93ab-47c0-bc82-0a618816945d"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-21T10:15:45.929Z"
+    },
+    {
+      "id": "892c4cea-1748-488d-8ec4-1f77aa9da288",
+      "note": "Advanced workflow phase E -> V",
+      "data": {
+        "from": "E",
+        "to": "V",
+        "outputs": [
+          "handoff-summary consolidado registrado como artefato do workflow",
+          "5 commits na branch feature/n6-ia-fluxo-vivo (N6.1-N6.5)"
+        ],
+        "nextTaskContractId": "464bb90c-360d-418e-8b81-9e2defa34731"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-22T19:42:43.558Z"
+    },
+    {
+      "id": "d2b0f651-5e2d-4992-987a-ed9a3581b955",
+      "note": "Advanced workflow phase V -> C",
+      "data": {
+        "from": "V",
+        "to": "C",
+        "outputs": [
+          "Rust: fmt/clippy/test/sqlx-prepare verdes",
+          "Flutter: 337 testes verdes",
+          "ia_engine: 150 testes, 99.82% cobertura",
+          "teste manual de mídia real documentado como pendência pós-merge"
+        ],
+        "nextTaskContractId": "44aacb26-dfd3-4945-b04f-5b8851ad4dd8"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-22T19:45:33.146Z"
+    }
+  ],
   "metadata": {
     "workflow": true,
     "description": "Fase N6 — IA no fluxo vivo: mídia no pipeline real (download via data_whatsapp + R2 + Transcribe/InterpretMedia), campos gerado_por_ia/resumo_midia reais no chat (proto aditivo), fluxos de transferência por tenant no Responder, transcrição via Groq com fallback OpenAI, sentimento persistido. Primeira fase do port final N6–N8."
   },
-  "lastTraceAt": "2026-07-20T17:56:51.133Z"
+  "lastTraceAt": "2026-07-23T00:24:36.836Z",
+  "lastCheckpointAt": "2026-07-22T19:45:33.146Z",
+  "completedAt": "2026-07-22T19:56:24.385Z"
 }

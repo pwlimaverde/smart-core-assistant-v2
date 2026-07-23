@@ -4,7 +4,7 @@
 //! cifragem (CipherManager), invalidação de cache e PING de Redis vivem no adapter.
 
 use async_trait::async_trait;
-use infrastructure_postgres::DbError;
+use infrastructure_postgres::{DbError, RequestContext};
 use uuid::Uuid;
 
 /// Configuração global do sistema; `value` já vem MASCARADO quando `encrypted`.
@@ -133,4 +133,16 @@ pub trait OperacionalStore: Send + Sync {
     /// cascata Tenant > CoreSettings já usada pelo painel admin, mas com a api_key
     /// descriptografada de verdade (uso interno do worker, nunca do painel).
     async fn resolver_config_ia(&self, tenant_id: Uuid) -> Result<ConfigIa, DbError>;
+
+    /// Cria um departamento do tenant (N7.1). Exige escopo `operacional:admin` ou
+    /// `tenant:admin` (checado pelo repositório via `RequestContext::exigir_qualquer`).
+    /// A checagem de quota do recurso `"departamentos"` é responsabilidade do
+    /// chamador (handler), executada ANTES desta chamada. `nome`/`descricao` são
+    /// owned para satisfazer o `automock` (lifetime aninhado em `Option<&str>`).
+    async fn criar_departamento(
+        &self,
+        ctx: &RequestContext,
+        nome: String,
+        descricao: Option<String>,
+    ) -> Result<serde_json::Value, DbError>;
 }

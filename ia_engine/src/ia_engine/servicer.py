@@ -64,11 +64,11 @@ from ia_engine.features.sentimento import (
 )
 from ia_engine.features.transcribe import (
     AudioTranscriber,
-    PendingTranscriber,
     TranscribeDataSource,
     TranscribeParameters,
     TranscribeRepository,
     TranscribeUsecase,
+    build_transcriber,
 )
 from ia_engine.llm.embeddings_factory import build_embeddings
 from ia_engine.llm.provider_factory import build_chat_model
@@ -79,12 +79,6 @@ EmbeddingsFactory = Callable[[LlmProviderSpec], Embeddings]
 TranscriberFactory = Callable[[LlmProviderSpec], AudioTranscriber]
 
 
-def _default_transcriber_factory(
-    _spec: LlmProviderSpec,
-) -> AudioTranscriber:
-    return PendingTranscriber()
-
-
 class IaEngineServicer(pbg.IaEngineServiceServicer):
     """Implementação do serviço gRPC IaEngineService."""
 
@@ -93,11 +87,13 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
         *,
         chat_model_factory: ChatModelFactory = build_chat_model,
         embeddings_factory: EmbeddingsFactory = build_embeddings,
-        transcriber_factory: TranscriberFactory = _default_transcriber_factory,
+        transcriber_factory: TranscriberFactory = build_transcriber,
+        transcription_enabled: bool = False,
     ) -> None:
         self._chat_model_factory = chat_model_factory
         self._embeddings_factory = embeddings_factory
         self._transcriber_factory = transcriber_factory
+        self._transcription_enabled = transcription_enabled
 
     # ---------------------------------------------------------------- RPCs
     async def Transcribe(
@@ -106,6 +102,10 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
         await self._require(
             context, request.media.url, "media.url", "Transcribe", request.tenant_id
         )
+        if not self._transcription_enabled:
+            # Kill-switch global off: transcrição desligada por custo/latência.
+            # Curto-circuita graciosamente (resposta vazia, sem erro).
+            return pb.TranscribeResponse(transcricao="", resumo="")
         usecase = TranscribeUsecase(
             TranscribeRepository(
                 TranscribeDataSource(

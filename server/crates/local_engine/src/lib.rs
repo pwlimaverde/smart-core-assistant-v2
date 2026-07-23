@@ -136,18 +136,16 @@ impl LocalEngine {
             .update_etapa(atendimento_id, etapa_destino_id)
             .await?;
 
-        let version = self.queue.next_version().await?;
-        let acao = OfflineAction {
-            id: Uuid::now_v7(),
-            version,
-            atendimento_id,
-            kind: OfflineActionKind::MoveEtapa {
-                etapa_destino_id,
-                motivo: motivo.to_string(),
-            },
-            created_at: agora_millis(),
+        let id = Uuid::now_v7();
+        let kind = OfflineActionKind::MoveEtapa {
+            etapa_destino_id,
+            motivo: motivo.to_string(),
         };
-        self.queue.enqueue(&acao).await?;
+        // N7.4: versão atribuída atomicamente dentro do próprio enqueue (single
+        // statement) — elimina a corrida entre `next_version` e `enqueue`.
+        self.queue
+            .enqueue(id, atendimento_id, &kind, agora_millis())
+            .await?;
 
         self.emitir_evento(
             "atendimento.etapa_movida",
@@ -175,19 +173,15 @@ impl LocalEngine {
             .insert_pending_mensagem(atendimento_id, conteudo, tipo, REMETENTE_ATENDENTE, ts)
             .await?;
 
-        let version = self.queue.next_version().await?;
-        let acao = OfflineAction {
-            id: Uuid::now_v7(),
-            version,
-            atendimento_id,
-            kind: OfflineActionKind::SendOutbound {
-                conteudo: conteudo.to_string(),
-                tipo: tipo.to_string(),
-                local_msg_id: id_local,
-            },
-            created_at: ts,
+        let id = Uuid::now_v7();
+        let kind = OfflineActionKind::SendOutbound {
+            conteudo: conteudo.to_string(),
+            tipo: tipo.to_string(),
+            local_msg_id: id_local,
         };
-        self.queue.enqueue(&acao).await?;
+        // N7.4: versão atribuída atomicamente dentro do próprio enqueue (single
+        // statement) — elimina a corrida entre `next_version` e `enqueue`.
+        self.queue.enqueue(id, atendimento_id, &kind, ts).await?;
 
         self.emitir_evento(
             "mensagem.enviada",

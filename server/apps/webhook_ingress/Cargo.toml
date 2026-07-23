@@ -13,7 +13,6 @@ transport                = { workspace = true }
 error_core               = { workspace = true }
 observability            = { workspace = true }
 infrastructure_messaging = { path = "../../crates/infrastructure_messaging" }
-infrastructure_redis     = { path = "../../crates/infrastructure_redis" }
 tokio      = { workspace = true }
 serde      = { workspace = true }
 serde_json = { workspace = true }

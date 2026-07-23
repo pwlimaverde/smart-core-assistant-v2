@@ -17,6 +17,9 @@ final class AtendimentoResumo {
   final int? atendenteHumanoId;
   final DateTime dataInicio;
   final DateTime? dataUltimaMensagem;
+  /// Última leitura de sentimento da IA (N6.5); `null` enquanto não avaliado.
+  final int? sentimentoNota;
+  final String? sentimentoLabel;
 
   const AtendimentoResumo({
     required this.id,
@@ -30,6 +33,8 @@ final class AtendimentoResumo {
     this.atendenteHumanoId,
     required this.dataInicio,
     this.dataUltimaMensagem,
+    this.sentimentoNota,
+    this.sentimentoLabel,
   });
 
   /// Cópia com a etapa (e opcionalmente o status) alterados — usada para
@@ -48,6 +53,8 @@ final class AtendimentoResumo {
         atendenteHumanoId: atendenteHumanoId,
         dataInicio: dataInicio,
         dataUltimaMensagem: dataUltimaMensagem,
+        sentimentoNota: sentimentoNota,
+        sentimentoLabel: sentimentoLabel,
       );
 
   @override
