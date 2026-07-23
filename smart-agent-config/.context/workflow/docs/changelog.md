@@ -2,6 +2,57 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-07-23] - Fase N7: Endurecimento residual + operação validada (pré-cutover)
+
+> Ciclo PREVC `n7-endurecimento-residual` fechado e arquivado via `prevc-final-review`.
+> Final-review: qualidade **CORRIGIDO** (auditoria vazando em log-only no guard de storage e
+> falta de guard de escopo no reprocessamento de dead-letter — ver Corrigido). Segunda fase do
+> port final (N6–N8): quita pendências técnicas de N1/N4/N5 e valida a operação com tráfego
+> real — pré-condição dura do cutover (N8). Nenhum enforcement novo ligado em produção
+> (`SMARTCORE_QUOTA_ENFORCE` continua `false` por padrão).
+
+### Adicionado
+
+- **N7.1 — Quotas restantes:** migration `0021` (`tenants_plan.max_storage_bytes` +
+  `tenants_storage_usage`); recurso `"storage"` em `verificar_quota`; RPC novo
+  `RegisterStorageUsage` (chamado pelo `data_storage` após `PutFile`) + guard log-only antes do
+  upload ao R2. RPC novo `CreateDepartamento` (não existia nenhum antes) com o caller de quota
+  de `"departamentos"` embutido.
+- **N7.2 — Idempotência do sync + dead-letter:** migration `0022` (`applied_actions`,
+  `mensagem_dead_letter`); `action_id` aditivo/opcional em `MoveAtendimentoEtapaRequest`/
+  `SendOutboundMessageRequest` (proto + stubs Rust/Dart regenerados), dedupe atômico (mesma
+  transação da mutação) em `mover_etapa_atendimento`/`persistir_mensagem`. Outbound sem
+  `whatsapp_contact` ativo vira dead-letter auditável (`mensagem.dead_letter`) em vez de erro
+  silencioso; RPC administrativo `ReprocessarDeadLetter` reenfileira no outbox.
+- **N7.3 — Rate-limit unificado:** `webhook_ingress` migrado do contador próprio (`redis-bus`)
+  para o RPC `RegisterRateLimitAttempt` do `data_redis` (mesma chave Redis do `runtime_api` —
+  upgrade transparente, sem descontinuidade de janela).
+- **N7.4 — Sync offline robusto:** atomicidade single-statement em `OfflineQueue::enqueue`
+  (versão) e `SqliteIndex::insert_pending_mensagem` (id negativo) — elimina a corrida entre
+  conexões do pool SQLite; `RecvError::Lagged` no stream FFI vira WARN + continua (nunca encerra
+  o stream); gatilho de sincronização por reconexão (`connectivity_plus`, debounce 3s) + timer
+  periódico (60s) no `operacional_module`.
+- **N7.5 — Validação operacional:** relatório arquivado documentando o que foi validado
+  automaticamente nesta sessão (Rust `fmt`/`clippy`/`test --workspace` via túnel real, incluindo
+  RLS; Flutter 337/337) e o checklist manual (rajada, dashboards/alertas, E2E, dedupe/dead-letter
+  com tráfego real) que fica pendente do dono do produto — pré-condição dura do N8.
+
+### Corrigido (final-review)
+
+- Guard de quota de storage no `data_storage` auditava `quota.excedida` mesmo em modo log-only
+  (`SMARTCORE_QUOTA_ENFORCE=false`); passou a auditar só quando o enforce real bloqueia.
+- RPC `ReprocessarDeadLetter` (mutação administrativa) ganhou checagem de escopo
+  (`operacional:admin`/`tenant:admin`), ausente na primeira versão.
+
+### Pendências remanescentes (trabalho futuro)
+
+- `CreateDepartamento` e `ReprocessarDeadLetter` ainda não têm chamador em `runtime_api`/cliente
+  — quando expostos via gRPC-Web, exigem registro explícito no `AdminService`.
+- As 4 validações manuais da N7.5 (rajada, dashboards/alertas, E2E, dedupe/dead-letter com
+  tráfego real) são pré-condição dura do N8 — dependem do ambiente do dono do produto.
+- `LocalEngineFfiDataSource` (gatilho de conectividade) ainda não está registrada no DI de
+  produção — classe preparatória para o F8 (desktop).
+
 ## [2026-07-22] - Fase N6: IA no fluxo vivo (mídia, campos de IA no chat, fluxos de transferência)
 
 > Ciclo PREVC `n6-ia-fluxo-vivo` fechado e arquivado via `prevc-final-review`.

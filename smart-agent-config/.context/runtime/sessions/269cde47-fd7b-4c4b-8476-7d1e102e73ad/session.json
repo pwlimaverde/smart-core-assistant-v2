@@ -1,0 +1,85 @@
+{
+  "id": "269cde47-fd7b-4c4b-8476-7d1e102e73ad",
+  "name": "n7-endurecimento-residual",
+  "status": "completed",
+  "repoPath": "C:\\PROJETOS\\FULL-STACK\\smart-core-assistant-v2\\smart-agent-config",
+  "createdAt": "2026-07-23T00:24:42.426Z",
+  "updatedAt": "2026-07-23T02:51:17.074Z",
+  "startedAt": "2026-07-23T00:24:42.426Z",
+  "traceCount": 28,
+  "artifactCount": 1,
+  "checkpointCount": 4,
+  "checkpoints": [
+    {
+      "id": "d9cc6b5a-d1bd-454e-82b1-2bdc3e438933",
+      "note": "Advanced workflow phase P -> R",
+      "data": {
+        "from": "P",
+        "to": "R",
+        "outputs": [
+          "smart-agent-config/.context/plans/n7-endurecimento-residual/plano_completo_n7-endurecimento-residual.md",
+          "smart-agent-config/.context/plans/n7-endurecimento-residual/info_aux_n7-endurecimento-residual.md"
+        ],
+        "nextTaskContractId": "2a7db4a4-1b59-4a0c-810a-04e0fe010b42"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-23T00:24:51.641Z"
+    },
+    {
+      "id": "7f490d2b-1072-40ac-b8d8-7169c989452e",
+      "note": "Advanced workflow phase R -> E",
+      "data": {
+        "from": "R",
+        "to": "E",
+        "outputs": [
+          "decisions recorded in plan n7-endurecimento-residual phase R",
+          "plan approved by architect"
+        ],
+        "nextTaskContractId": "8fe96b70-55ff-4059-8107-72ec271e0dcc"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-23T00:25:10.331Z"
+    },
+    {
+      "id": "5bff1874-f131-41ce-b987-c6206015fd41",
+      "note": "Advanced workflow phase E -> V",
+      "data": {
+        "from": "E",
+        "to": "V",
+        "outputs": [
+          "handoff-summary artifact registrado",
+          "cargo test --workspace (unit+integracao via tunel) verde",
+          "cargo fmt/clippy verde no workspace",
+          ".\\infra\\test-flutter.ps1 337/337 verde"
+        ],
+        "nextTaskContractId": "db6c6ab8-c5c9-411d-995f-0a7a5c741c58"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-23T01:45:44.259Z"
+    },
+    {
+      "id": "9e1af9ca-fe9c-4f75-a265-cb29ee18b0f9",
+      "note": "Advanced workflow phase V -> C",
+      "data": {
+        "from": "V",
+        "to": "C",
+        "outputs": [
+          "Rust: fmt/clippy/test --workspace verdes via .\\infra\\test-local.ps1 (unit + integracao real via tunel)",
+          "Flutter: .\\infra\\test-flutter.ps1 337/337 verdes, 17/17 pacotes analyze limpos",
+          "cargo sqlx prepare --workspace --check: ok",
+          "Relatorio de validacao operacional N7.5 arquivado"
+        ],
+        "nextTaskContractId": "fa2769be-747c-489d-9dfb-66439294a1a0"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-23T01:45:56.954Z"
+    }
+  ],
+  "metadata": {
+    "workflow": true,
+    "description": "Fase N7 — Endurecimento residual + operação validada (pré-cutover): quotas de storage/departamentos (guard log-only), idempotência do sync offline por action_id + dead-letter, rate-limit unificado via RegisterRateLimitAttempt do data_redis, sync offline robusto no desktop (reconexão + atomicidade SQLite + Lagged no stream FFI), validação operacional manual."
+  },
+  "lastTraceAt": "2026-07-23T02:51:17.074Z",
+  "lastCheckpointAt": "2026-07-23T01:45:56.954Z",
+  "completedAt": "2026-07-23T02:51:17.060Z"
+}

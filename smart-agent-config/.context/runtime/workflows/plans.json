@@ -1,24 +1,16 @@
 {
-  "active": [],
-  "completed": [
+  "active": [
     {
-      "slug": "n6-ia-fluxo-vivo",
-      "path": "plans/n6-ia-fluxo-vivo.md",
-      "title": "Fase N6 — IA no fluxo vivo (mídia, campos de IA no chat, fluxos de transferência)",
-      "summary": "Primeira fase do cronograma de **port final** (N6–N8). **Nenhuma arquitetura",
-      "linkedAt": "2026-07-18T12:15:30.057Z",
-      "status": "completed",
+      "slug": "n7-endurecimento-residual",
+      "path": "plans/n7-endurecimento-residual.md",
+      "title": "n7-endurecimento-residual",
+      "linkedAt": "2026-07-23T00:24:46.964Z",
+      "status": "active",
       "approval_status": "approved",
-      "approved_at": "2026-07-21T10:15:43.882Z",
+      "approved_at": "2026-07-23T00:25:08.301Z",
       "approved_by": "architect"
-    },
-    {
-      "slug": "cobertura-testes-100",
-      "path": "plans/cobertura-testes-100.md",
-      "title": "cobertura-testes-100",
-      "linkedAt": "2026-07-20T14:56:38.847Z",
-      "status": "completed"
     }
   ],
-  "primary": "n6-ia-fluxo-vivo"
+  "completed": [],
+  "primary": "n7-endurecimento-residual"
 }
