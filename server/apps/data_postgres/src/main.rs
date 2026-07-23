@@ -62,6 +62,24 @@ async fn rodar_subscriber_invalidacao_cache(
     Ok(())
 }
 
+/// N7.2 — extrai o `action_id` opcional (uuid v7, sync offline) do payload JSON.
+/// Ausente ou vazio: `None` (dedupe desligado, comportamento pré-N7.2 preservado
+/// para clientes antigos). Malformado: `None` com WARN — nunca falha a
+/// requisição por causa de um campo aditivo de otimização.
+fn extrair_action_id_opcional(payload_json: &serde_json::Value) -> Option<Uuid> {
+    let raw = payload_json.get("action_id").and_then(|v| v.as_str())?;
+    if raw.is_empty() {
+        return None;
+    }
+    match Uuid::parse_str(raw) {
+        Ok(id) => Some(id),
+        Err(e) => {
+            tracing::warn!(erro = %e, "action_id malformado; seguindo sem dedupe");
+            None
+        }
+    }
+}
+
 fn contexto_do_envelope(env: &Envelope) -> RequestContext {
     RequestContext {
         tenant_id: Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil()),
@@ -391,6 +409,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_generate_access_code = state_clone.clone();
     let state_for_list_plans = state_clone.clone();
     let state_for_check_quota = state_clone.clone();
+    let state_for_register_storage_usage = state_clone.clone();
+    let state_for_create_departamento = state_clone.clone();
     let state_for_create_plan = state_clone.clone();
     let state_for_update_plan = state_clone.clone();
     let state_for_list_subscriptions = state_clone.clone();
@@ -422,6 +442,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_listar_midias_expiradas = state_clone.clone();
     let state_for_marcar_midia_purgada = state_clone.clone();
     let state_for_resolver_destino_envio = state_clone.clone();
+    let state_for_reprocessar_dead_letter = state_clone.clone();
     let state_for_marcar_mensagem_enviada = state_clone.clone();
     let state_for_marcar_mensagem_falha_envio = state_clone.clone();
     let state_for_anexar_analise_midia = state_clone.clone();
@@ -499,7 +520,18 @@ async fn main() -> anyhow::Result<()> {
         .route("ResolverDestinoEnvioOutbound", move |env| {
             let state = state_for_resolver_destino_envio.clone();
             Box::pin(async move {
-                handler_resolver_destino_envio_outbound(state.atendimento.as_ref(), env).await
+                handler_resolver_destino_envio_outbound(
+                    state.atendimento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("ReprocessarDeadLetter", move |env| {
+            let state = state_for_reprocessar_dead_letter.clone();
+            Box::pin(async move {
+                handler_reprocessar_dead_letter(state.atendimento.as_ref(), env).await
             })
         })
         .route("AnexarAnaliseMidia", move |env| {
@@ -701,6 +733,22 @@ async fn main() -> anyhow::Result<()> {
             let state = state_for_check_quota.clone();
             Box::pin(async move {
                 handler_check_quota(state.quota.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("RegisterStorageUsage", move |env| {
+            let state = state_for_register_storage_usage.clone();
+            Box::pin(async move { handler_register_storage_usage(state.quota.as_ref(), env).await })
+        })
+        .route("CreateDepartamento", move |env| {
+            let state = state_for_create_departamento.clone();
+            Box::pin(async move {
+                handler_create_departamento(
+                    state.quota.as_ref(),
+                    state.operacional.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
             })
         })
         .route("CreatePlan", move |env| {
@@ -1700,7 +1748,8 @@ async fn handler_persist_message(store: &dyn ports::AtendimentoStore, env: Envel
         .unwrap_or("usuario");
 
     // O traceparent é persistido no outbox para manter o trace distribuído vivo
-    // até o relay republicar o evento no barramento.
+    // até o relay republicar o evento no barramento. Ingestão inbound/bot: sem
+    // action_id (dedupe é só para o envio outbound do atendente via sync offline).
     match store
         .persistir_mensagem(
             &ctx,
@@ -1709,6 +1758,7 @@ async fn handler_persist_message(store: &dyn ports::AtendimentoStore, env: Envel
             conteudo,
             remetente,
             &env.traceparent,
+            None,
         )
         .await
     {
@@ -1889,10 +1939,11 @@ async fn handler_move_atendimento_etapa(
         .get("motivo")
         .and_then(|v| v.as_str())
         .unwrap_or_default();
+    let action_id = extrair_action_id_opcional(&payload_json);
 
     let ctx = contexto_do_envelope(&env);
     match store
-        .mover_etapa_atendimento(&ctx, atendimento_id, etapa_destino_id, motivo)
+        .mover_etapa_atendimento(&ctx, atendimento_id, etapa_destino_id, motivo, action_id)
         .await
     {
         Ok(()) => ok_reply(
@@ -1944,6 +1995,7 @@ async fn handler_send_outbound_message(
         .and_then(|v| v.as_str())
         .filter(|t| !t.is_empty())
         .unwrap_or("texto");
+    let action_id = extrair_action_id_opcional(&payload_json);
 
     let ctx = contexto_do_envelope(&env);
     match store
@@ -1954,6 +2006,7 @@ async fn handler_send_outbound_message(
             conteudo,
             "atendente",
             &env.traceparent,
+            action_id,
         )
         .await
     {
@@ -2289,6 +2342,7 @@ async fn handler_resolver_campos_atendimento(
 /// atendente (elo outbox->outbound, N1.3).
 async fn handler_resolver_destino_envio_outbound(
     store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
     env: Envelope,
 ) -> Envelope {
     let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
@@ -2310,6 +2364,31 @@ async fn handler_resolver_destino_envio_outbound(
         .resolver_destino_envio_outbound(&ctx, mensagem_id)
         .await
     {
+        // N7.2: "dead_letter_novo" é o marcador interno de que ESTA chamada
+        // acabou de registrar o dead-letter (repo já persistiu "dead_letter" na
+        // mensagem) — só aqui publica o evento de auditoria (sem conteúdo/PII,
+        // só ids e motivo); reentregas futuras vêm com "dead_letter" já
+        // persistido e não reauditam. Normaliza o valor devolvido ao worker.
+        Ok(Some(mut destino)) if destino.status_envio == "dead_letter_novo" => {
+            destino.status_envio = "dead_letter".to_string();
+            audit
+                .publish(
+                    &env,
+                    "mensagem.dead_letter",
+                    "Mensagem outbound sem destino resolvível; movida para dead-letter".to_string(),
+                    serde_json::json!({
+                        "atendimento_id": destino.atendimento_id,
+                        "mensagem_id": mensagem_id,
+                        "motivo": "sem_whatsapp_contact_ativo",
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "ResolverDestinoEnvioOutboundReply",
+                serde_json::to_value(&destino).unwrap_or_default(),
+            )
+        }
         Ok(Some(destino)) => ok_reply(
             &env,
             "ResolverDestinoEnvioOutboundReply",
@@ -2318,6 +2397,40 @@ async fn handler_resolver_destino_envio_outbound(
         Ok(None) => erro(
             error_core::AppError::Database("não encontrado: destino de envio".into()),
             &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// Reprocessamento manual de um dead-letter de outbound (N7.2): RPC
+/// administrativo simples, sob demanda do operador — sem harness automatizado.
+async fn handler_reprocessar_dead_letter(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let dead_letter_id = match payload_json.get("dead_letter_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("dead_letter_id ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .reprocessar_dead_letter(&ctx, dead_letter_id, &env.traceparent)
+        .await
+    {
+        Ok(status) => ok_reply(
+            &env,
+            "ReprocessarDeadLetterReply",
+            serde_json::json!({ "status": status }),
         ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
@@ -3277,6 +3390,134 @@ async fn handler_check_quota(
             ok_reply(&env, "CheckQuotaReply", status)
         }
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+// --- N7.1: registro de uso de armazenamento (chamado pelo data_storage após um
+// PutFile bem-sucedido, para alimentar a checagem de quota "storage" acima) ---
+
+#[tracing::instrument(skip_all, fields(rpc = "RegisterStorageUsage", tenant_id = %env.tenant_id))]
+async fn handler_register_storage_usage(store: &dyn ports::QuotaStore, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let delta_bytes = payload_json.get("delta_bytes").and_then(|v| v.as_i64());
+
+    let tenant_id = match Uuid::parse_str(&env.tenant_id) {
+        Ok(u) => u,
+        Err(_) => {
+            return erro(
+                error_core::AppError::Validation("tenant_id inválido".to_string()),
+                &env,
+            )
+        }
+    };
+
+    let Some(delta_bytes) = delta_bytes.filter(|d| *d > 0) else {
+        return erro(
+            error_core::AppError::Validation(
+                "delta_bytes deve ser um inteiro positivo".to_string(),
+            ),
+            &env,
+        );
+    };
+
+    match store.registrar_uso_storage(tenant_id, delta_bytes).await {
+        Ok(total_bytes) => ok_reply(
+            &env,
+            "RegisterStorageUsageReply",
+            serde_json::json!({ "total_bytes": total_bytes }),
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+// --- N7.1: caller de quota no CRUD de criação de departamento (o recurso
+// "departamentos" já era reconhecido por `verificar_quota`; faltava só o ponto de
+// chamada antes do INSERT). Guard local (sem RPC intermediário — já estamos no
+// data_postgres): log-only por padrão, auditoria só quando o enforce real bloquear. ---
+
+#[tracing::instrument(skip_all, fields(rpc = "CreateDepartamento", tenant_id = %env.tenant_id))]
+async fn handler_create_departamento(
+    quota: &dyn ports::QuotaStore,
+    store: &dyn ports::OperacionalStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let nome = payload_json
+        .get("nome")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    let descricao = payload_json.get("descricao").and_then(|v| v.as_str());
+
+    if nome.is_empty() {
+        return erro(
+            error_core::AppError::Validation("nome do departamento não pode ser vazio".to_string()),
+            &env,
+        );
+    }
+
+    let tenant_id = match Uuid::parse_str(&env.tenant_id) {
+        Ok(u) => u,
+        Err(_) => {
+            return erro(
+                error_core::AppError::Validation("tenant_id inválido".to_string()),
+                &env,
+            )
+        }
+    };
+
+    match quota.verificar_quota(tenant_id, "departamentos").await {
+        Ok(status) => {
+            let excedido = status
+                .get("excedido")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            if excedido {
+                let enforce = std::env::var("SMARTCORE_QUOTA_ENFORCE")
+                    .map(|v| v.eq_ignore_ascii_case("true"))
+                    .unwrap_or(false);
+                if enforce {
+                    tracing::warn!(
+                        tenant_id = %env.tenant_id,
+                        "quota de departamentos excedida; bloqueando criação"
+                    );
+                    audit
+                        .publish(
+                            &env,
+                            "quota.excedida",
+                            "Quota de 'departamentos' excedida".to_string(),
+                            status,
+                        )
+                        .await;
+                    return erro(
+                        error_core::AppError::RateLimit(
+                            "quota de 'departamentos' excedida".to_string(),
+                        ),
+                        &env,
+                    );
+                }
+                tracing::warn!(
+                    tenant_id = %env.tenant_id,
+                    "quota de departamentos excedida (log-only; SMARTCORE_QUOTA_ENFORCE=false)"
+                );
+            }
+        }
+        Err(e) => {
+            tracing::warn!(
+                erro = %e,
+                "falha ao verificar quota de departamentos; prosseguindo (fail-open)"
+            );
+        }
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .criar_departamento(&ctx, nome.to_string(), descricao.map(str::to_string))
+        .await
+    {
+        Ok(departamento) => ok_reply(&env, "CreateDepartamentoReply", departamento),
+        Err(err) => erro(err.into(), &env),
     }
 }
 
@@ -4846,7 +5087,7 @@ mod tests_atendimento_cliente_unit {
         store
             .expect_persistir_mensagem()
             .times(1)
-            .returning(|_, _, _, _, _, _| Ok(mensagem_fake(7)));
+            .returning(|_, _, _, _, _, _, _| Ok(mensagem_fake(7)));
         let env = envelope_com_payload(
             "PersistMessage",
             serde_json::json!({ "atendimento_id": 1, "content": "oi" }),
@@ -5066,7 +5307,7 @@ mod tests_atendimento_cliente_unit {
         store
             .expect_persistir_mensagem()
             .times(1)
-            .returning(|_, _, _, _, _, _| {
+            .returning(|_, _, _, _, _, _, _| {
                 Err(infrastructure_postgres::DbError::ConfigError(
                     "falha simulada".to_string(),
                 ))
@@ -5123,6 +5364,97 @@ mod tests_atendimento_cliente_unit {
         assert_eq!(resp.kind, MessageKind::Reply as i32);
         let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
         assert_eq!(body["id"].as_i64().unwrap(), 3);
+    }
+
+    // --- N7.2: extrair_action_id_opcional + repasse ao store ---
+
+    #[test]
+    fn extrair_action_id_opcional_ausente_e_none() {
+        assert!(extrair_action_id_opcional(&serde_json::json!({})).is_none());
+    }
+
+    #[test]
+    fn extrair_action_id_opcional_vazio_e_none() {
+        assert!(extrair_action_id_opcional(&serde_json::json!({ "action_id": "" })).is_none());
+    }
+
+    #[test]
+    fn extrair_action_id_opcional_malformado_e_none_sem_falhar() {
+        assert!(
+            extrair_action_id_opcional(&serde_json::json!({ "action_id": "nao-e-um-uuid" }))
+                .is_none()
+        );
+    }
+
+    #[test]
+    fn extrair_action_id_opcional_valido_e_some() {
+        let id = uuid::Uuid::now_v7();
+        let extraido =
+            extrair_action_id_opcional(&serde_json::json!({ "action_id": id.to_string() }));
+        assert_eq!(extraido, Some(id));
+    }
+
+    /// `SendOutboundMessage` repassa o `action_id` do payload ao store, para o
+    /// dedupe atômico do adapter (N7.2).
+    #[tokio::test]
+    async fn send_outbound_message_repassa_action_id_ao_store() {
+        let id = uuid::Uuid::now_v7();
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_persistir_mensagem()
+            .withf(move |_, _, _, _, remetente, _, action_id| {
+                *remetente == *"atendente" && *action_id == Some(id)
+            })
+            .times(1)
+            .returning(|_, _, _, _, _, _, _| Ok(mensagem_fake(9)));
+        let env = envelope_com_payload(
+            "SendOutboundMessage",
+            serde_json::json!({ "atendimento_id": 1, "conteudo": "oi", "action_id": id.to_string() }),
+        );
+
+        let resp = handler_send_outbound_message(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    /// `SendOutboundMessage` sem `action_id` (cliente antigo) segue repassando
+    /// `None` ao store — comportamento pré-N7.2 preservado.
+    #[tokio::test]
+    async fn send_outbound_message_sem_action_id_repassa_none() {
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_persistir_mensagem()
+            .withf(|_, _, _, _, _, _, action_id| action_id.is_none())
+            .times(1)
+            .returning(|_, _, _, _, _, _, _| Ok(mensagem_fake(10)));
+        let env = envelope_com_payload(
+            "SendOutboundMessage",
+            serde_json::json!({ "atendimento_id": 1, "conteudo": "oi" }),
+        );
+
+        let resp = handler_send_outbound_message(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    /// `MoveAtendimentoEtapa` repassa o `action_id` do payload ao store.
+    #[tokio::test]
+    async fn move_atendimento_etapa_repassa_action_id_ao_store() {
+        let id = uuid::Uuid::now_v7();
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_mover_etapa_atendimento()
+            .withf(move |_, _, _, _, action_id| *action_id == Some(id))
+            .times(1)
+            .returning(|_, _, _, _, _| Ok(()));
+        let env = envelope_com_payload(
+            "MoveAtendimentoEtapa",
+            serde_json::json!({ "atendimento_id": 1, "etapa_destino_id": 2, "action_id": id.to_string() }),
+        );
+
+        let resp = handler_move_atendimento_etapa(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
     }
 }
 
@@ -5336,7 +5668,7 @@ mod tests_plans_unit {
 #[cfg(test)]
 mod tests_quota_unit {
     use super::*;
-    use crate::ports::{MockAuditPort, MockQuotaStore};
+    use crate::ports::{MockAuditPort, MockOperacionalStore, MockQuotaStore};
     use contracts::{Envelope, MessageKind};
 
     /// Helper: monta um Envelope mínimo com método e payload arbitrários, com um
@@ -5476,5 +5808,184 @@ mod tests_quota_unit {
 
         assert_eq!(resp.kind, MessageKind::Error as i32);
         assert!(resp.error.is_some());
+    }
+
+    // --- N7.1: RegisterStorageUsage ---
+
+    #[tokio::test]
+    async fn register_storage_usage_rejects_tenant_id_invalido_sem_tocar_a_store() {
+        let mut store = MockQuotaStore::new();
+        store.expect_registrar_uso_storage().never();
+        let env = Envelope {
+            tenant_id: "nao-e-um-uuid".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({ "delta_bytes": 100 })).unwrap(),
+            ..Default::default()
+        };
+
+        let resp = handler_register_storage_usage(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert_eq!(resp.error.unwrap().code, "VALIDATION_FAILED");
+    }
+
+    #[tokio::test]
+    async fn register_storage_usage_rejects_delta_ausente_ou_nao_positivo() {
+        let mut store = MockQuotaStore::new();
+        store.expect_registrar_uso_storage().never();
+
+        for payload in [
+            serde_json::json!({}),
+            serde_json::json!({ "delta_bytes": 0 }),
+            serde_json::json!({ "delta_bytes": -1 }),
+        ] {
+            let env = envelope_com_payload("RegisterStorageUsage", payload);
+            let resp = handler_register_storage_usage(&store, env).await;
+            assert_eq!(resp.kind, MessageKind::Error as i32);
+        }
+    }
+
+    #[tokio::test]
+    async fn register_storage_usage_sucesso_retorna_total_bytes() {
+        let mut store = MockQuotaStore::new();
+        store
+            .expect_registrar_uso_storage()
+            .times(1)
+            .returning(|_, delta| Ok(1_000 + delta));
+        let env = envelope_com_payload(
+            "RegisterStorageUsage",
+            serde_json::json!({ "delta_bytes": 500 }),
+        );
+
+        let resp = handler_register_storage_usage(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let payload: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(payload["total_bytes"], 1_500);
+    }
+
+    #[tokio::test]
+    async fn register_storage_usage_erro_da_store_retorna_database_error() {
+        let mut store = MockQuotaStore::new();
+        store
+            .expect_registrar_uso_storage()
+            .times(1)
+            .returning(|_, _| Err(infrastructure_postgres::DbError::NotFound));
+        let env = envelope_com_payload(
+            "RegisterStorageUsage",
+            serde_json::json!({ "delta_bytes": 10 }),
+        );
+
+        let resp = handler_register_storage_usage(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    // --- N7.1: CreateDepartamento (caller de quota antes do INSERT) ---
+
+    #[tokio::test]
+    async fn create_departamento_rejects_nome_vazio_sem_tocar_quota_ou_store() {
+        let mut quota = MockQuotaStore::new();
+        quota.expect_verificar_quota().never();
+        let mut operacional = MockOperacionalStore::new();
+        operacional.expect_criar_departamento().never();
+        let audit = MockAuditPort::new();
+        let env = envelope_com_payload("CreateDepartamento", serde_json::json!({ "nome": "   " }));
+
+        let resp = handler_create_departamento(&quota, &operacional, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    #[tokio::test]
+    async fn create_departamento_dentro_do_limite_cria_sem_auditar() {
+        let mut quota = MockQuotaStore::new();
+        quota
+            .expect_verificar_quota()
+            .times(1)
+            .returning(|_, _| Ok(serde_json::json!({ "excedido": false })));
+        let mut operacional = MockOperacionalStore::new();
+        operacional
+            .expect_criar_departamento()
+            .times(1)
+            .returning(|_, nome, _| Ok(serde_json::json!({ "nome": nome })));
+        let mut audit = MockAuditPort::new();
+        audit.expect_publish().never();
+        let env = envelope_com_payload(
+            "CreateDepartamento",
+            serde_json::json!({ "nome": "Financeiro" }),
+        );
+
+        let resp = handler_create_departamento(&quota, &operacional, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    /// Quota excedida em modo log-only (padrão, sem `SMARTCORE_QUOTA_ENFORCE=true`
+    /// no ambiente de teste): cria mesmo assim, sem auditar — mesma postura do
+    /// `CheckQuota` para o caminho de leitura (doc 08 §4.2).
+    #[tokio::test]
+    async fn create_departamento_excedido_log_only_cria_sem_auditar() {
+        std::env::remove_var("SMARTCORE_QUOTA_ENFORCE");
+        let mut quota = MockQuotaStore::new();
+        quota
+            .expect_verificar_quota()
+            .times(1)
+            .returning(|_, _| Ok(serde_json::json!({ "excedido": true })));
+        let mut operacional = MockOperacionalStore::new();
+        operacional
+            .expect_criar_departamento()
+            .times(1)
+            .returning(|_, nome, _| Ok(serde_json::json!({ "nome": nome })));
+        let mut audit = MockAuditPort::new();
+        audit.expect_publish().never();
+        let env = envelope_com_payload(
+            "CreateDepartamento",
+            serde_json::json!({ "nome": "Comercial" }),
+        );
+
+        let resp = handler_create_departamento(&quota, &operacional, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    /// Falha na própria checagem de quota é fail-open: segue para o INSERT.
+    #[tokio::test]
+    async fn create_departamento_falha_na_checagem_de_quota_e_fail_open() {
+        let mut quota = MockQuotaStore::new();
+        quota
+            .expect_verificar_quota()
+            .times(1)
+            .returning(|_, _| Err(infrastructure_postgres::DbError::NotFound));
+        let mut operacional = MockOperacionalStore::new();
+        operacional
+            .expect_criar_departamento()
+            .times(1)
+            .returning(|_, nome, _| Ok(serde_json::json!({ "nome": nome })));
+        let audit = MockAuditPort::new();
+        let env = envelope_com_payload("CreateDepartamento", serde_json::json!({ "nome": "TI" }));
+
+        let resp = handler_create_departamento(&quota, &operacional, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    #[tokio::test]
+    async fn create_departamento_erro_da_store_retorna_erro() {
+        let mut quota = MockQuotaStore::new();
+        quota
+            .expect_verificar_quota()
+            .times(1)
+            .returning(|_, _| Ok(serde_json::json!({ "excedido": false })));
+        let mut operacional = MockOperacionalStore::new();
+        operacional
+            .expect_criar_departamento()
+            .times(1)
+            .returning(|_, _, _| Err(infrastructure_postgres::DbError::PermissionDenied));
+        let audit = MockAuditPort::new();
+        let env = envelope_com_payload("CreateDepartamento", serde_json::json!({ "nome": "RH" }));
+
+        let resp = handler_create_departamento(&quota, &operacional, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
     }
 }

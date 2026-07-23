@@ -4976,7 +4976,6 @@ dependencies = [
  "contracts",
  "error_core",
  "infrastructure_messaging",
- "infrastructure_redis",
  "observability",
  "redis",
  "secrecy",

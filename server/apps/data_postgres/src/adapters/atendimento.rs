@@ -18,11 +18,13 @@ use infrastructure_postgres::atendimentos::movimentos::{
     MovimentoFluxoRepository, PostgresMovimentoFluxoRepository,
 };
 use infrastructure_postgres::clientes::contatos::{ContatoRepository, PostgresContatoRepository};
+use infrastructure_postgres::idempotencia;
 use infrastructure_postgres::operacional::fluxos::{
     EtapaFluxoRepository, FluxoAtendimentoRepository, FluxoDisponivel,
     PostgresEtapaFluxoRepository, PostgresFluxoAtendimentoRepository,
 };
 use infrastructure_postgres::{run_in_tenant_transaction, DbError, RequestContext};
+use uuid::Uuid;
 
 use crate::ports::{
     AtendimentoStore, CampoColetadoDto, CampoPendenteDto, CamposAtendimentoDto,
@@ -98,6 +100,7 @@ impl AtendimentoStore for PgAtendimentoStore {
         conteudo: &str,
         remetente: &str,
         traceparent: &str,
+        action_id: Option<Uuid>,
     ) -> Result<Mensagem, DbError> {
         let repo = PostgresMensagemRepository;
         let ctx = ctx.clone();
@@ -107,6 +110,22 @@ impl AtendimentoStore for PgAtendimentoStore {
         let remetente = remetente.to_string();
         let traceparent = traceparent.to_string();
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            // N7.2 — dedupe atômico: reenviar o mesmo action_id (ex.: mensagem
+            // outbound do atendente via sync offline) devolve a mensagem já
+            // persistida da primeira vez, sem duplicar nem republicar no outbox.
+            if let Some(action_id) = action_id {
+                if let Some(resultado) =
+                    idempotencia::buscar_acao_aplicada(&mut tx, tenant_id, action_id).await?
+                {
+                    let msg: Mensagem = serde_json::from_value(resultado).map_err(|e| {
+                        DbError::ConfigError(format!(
+                            "resultado idempotente corrompido para action_id {action_id}: {e}"
+                        ))
+                    })?;
+                    return Ok((msg, tx));
+                }
+            }
+
             let msg = repo
                 .criar(
                     &mut tx,
@@ -142,6 +161,14 @@ impl AtendimentoStore for PgAtendimentoStore {
             .bind(&traceparent)
             .execute(&mut *tx)
             .await?;
+
+            if let Some(action_id) = action_id {
+                let resultado = serde_json::to_value(&msg).map_err(|e| {
+                    DbError::ConfigError(format!("falha ao serializar mensagem: {e}"))
+                })?;
+                idempotencia::registrar_acao_aplicada(&mut tx, tenant_id, action_id, &resultado)
+                    .await?;
+            }
 
             Ok((msg, tx))
         })
@@ -333,6 +360,7 @@ impl AtendimentoStore for PgAtendimentoStore {
         atendimento_id: i32,
         etapa_destino_id: i32,
         motivo: &str,
+        action_id: Option<Uuid>,
     ) -> Result<(), DbError> {
         let repo_atendimento = PostgresAtendimentoRepository;
         let repo_movimento = PostgresMovimentoFluxoRepository;
@@ -340,6 +368,17 @@ impl AtendimentoStore for PgAtendimentoStore {
         let tenant_id = ctx.tenant_id;
         let motivo = (!motivo.is_empty()).then(|| motivo.to_string());
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            // N7.2 — dedupe atômico: reenviar a mesma ação (mesmo action_id) não
+            // reaplica o movimento, só confirma o já aplicado (mesma transação).
+            if let Some(action_id) = action_id {
+                if idempotencia::buscar_acao_aplicada(&mut tx, tenant_id, action_id)
+                    .await?
+                    .is_some()
+                {
+                    return Ok(((), tx));
+                }
+            }
+
             let atendimento = repo_atendimento
                 .buscar_por_id(&mut tx, &ctx, atendimento_id)
                 .await?
@@ -369,6 +408,16 @@ impl AtendimentoStore for PgAtendimentoStore {
                     false,
                 )
                 .await?;
+
+            if let Some(action_id) = action_id {
+                idempotencia::registrar_acao_aplicada(
+                    &mut tx,
+                    tenant_id,
+                    action_id,
+                    &serde_json::json!({ "status": "success" }),
+                )
+                .await?;
+            }
 
             Ok(((), tx))
         })
@@ -469,6 +518,26 @@ impl AtendimentoStore for PgAtendimentoStore {
                 .resolver_destino_envio_outbound(&mut tx, &ctx, mensagem_id)
                 .await?;
             Ok((destino, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, dead_letter_id = dead_letter_id))]
+    async fn reprocessar_dead_letter(
+        &self,
+        ctx: &RequestContext,
+        dead_letter_id: i32,
+        traceparent: &str,
+    ) -> Result<String, DbError> {
+        let repo = PostgresMensagemRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let traceparent = traceparent.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let status = repo
+                .reprocessar_dead_letter(&mut tx, &ctx, dead_letter_id, &traceparent)
+                .await?;
+            Ok((status.to_string(), tx))
         })
         .await
     }

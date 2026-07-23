@@ -2830,6 +2830,8 @@ impl AdminService for AdminFacade {
             "atendimento_id": inner.atendimento_id,
             "etapa_destino_id": inner.etapa_destino_id,
             "motivo": if inner.motivo.is_empty() { None } else { Some(inner.motivo.clone()) },
+            // N7.2: aditivo/opcional — clientes antigos (sem action_id) seguem sem dedupe.
+            "action_id": inner.action_id.clone(),
         });
 
         // RBAC fino por fluxo (WS-5a): popula flow_permissions para que o exigir_fluxo
@@ -2962,6 +2964,8 @@ impl AdminService for AdminFacade {
             // NUNCA logar `conteudo` fora do payload RPC (é PII/mensagem do usuário).
             "conteudo": inner.conteudo,
             "tipo": if inner.tipo.is_empty() { "texto" } else { &inner.tipo },
+            // N7.2: aditivo/opcional — clientes antigos (sem action_id) seguem sem dedupe.
+            "action_id": inner.action_id.clone(),
         });
 
         let env_req = Envelope {

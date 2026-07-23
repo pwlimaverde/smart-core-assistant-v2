@@ -7,6 +7,7 @@ use infrastructure_postgres::atendimentos::atendimentos::Atendimento;
 use infrastructure_postgres::atendimentos::mensagens::{DestinoEnvioOutbound, Mensagem};
 use infrastructure_postgres::operacional::fluxos::FluxoDisponivel;
 use infrastructure_postgres::{DbError, RequestContext};
+use uuid::Uuid;
 
 /// Campo já coletado de um atendimento (N6.3, input-only para o Responder).
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -87,6 +88,12 @@ pub trait AtendimentoStore: Send + Sync {
 
     /// Persiste uma mensagem e o evento de domínio na MESMA transação ACID
     /// (padrão Outbox): grava em `atendimentos_mensagem` e em `outbox`.
+    ///
+    /// `action_id` (N7.2, opcional): quando presente (envio outbound do
+    /// atendente via sync offline), dedupe atômico na MESMA transação —
+    /// reenviar a mesma ação devolve a mensagem já persistida, sem duplicar.
+    /// `None` (caminho de ingestão inbound/bot) preserva o comportamento atual.
+    #[allow(clippy::too_many_arguments)]
     async fn persistir_mensagem(
         &self,
         ctx: &RequestContext,
@@ -95,6 +102,7 @@ pub trait AtendimentoStore: Send + Sync {
         conteudo: &str,
         remetente: &str,
         traceparent: &str,
+        action_id: Option<Uuid>,
     ) -> Result<Mensagem, DbError>;
 
     /// Busca ou cria um contato pelo telefone, e busca ou cria um atendimento ativo para esse contato.
@@ -132,12 +140,17 @@ pub trait AtendimentoStore: Send + Sync {
     ///
     /// `motivo` vazio (`""`) equivale a ausente (convenção do trait, evita o lifetime
     /// explícito que `Option<&str>` exigiria sob `mockall::automock`).
+    ///
+    /// `action_id` (N7.2, opcional): dedupe atômico na MESMA transação — reenviar
+    /// a mesma ação (após retry/reconexão do sync offline) não reaplica o
+    /// movimento. `None` (clientes antigos) preserva o comportamento atual.
     async fn mover_etapa_atendimento(
         &self,
         ctx: &RequestContext,
         atendimento_id: i32,
         etapa_destino_id: i32,
         motivo: &str,
+        action_id: Option<Uuid>,
     ) -> Result<(), DbError>;
 
     /// Varredura CROSS-TENANT do scheduler do worker (F4.3b): atendimentos
@@ -179,6 +192,16 @@ pub trait AtendimentoStore: Send + Sync {
         ctx: &RequestContext,
         mensagem_id: i32,
     ) -> Result<Option<DestinoEnvioOutbound>, DbError>;
+
+    /// Reprocessamento manual de um dead-letter de outbound (N7.2): RPC
+    /// administrativo simples — sem harness automatizado, sob demanda do
+    /// operador. Retorna `"reprocessada"` | `"ainda_sem_destino"` | `"nao_encontrada"`.
+    async fn reprocessar_dead_letter(
+        &self,
+        ctx: &RequestContext,
+        dead_letter_id: i32,
+        traceparent: &str,
+    ) -> Result<String, DbError>;
 
     /// Marca a mensagem outbound como enviada com sucesso, gravando o stanzaId.
     async fn marcar_mensagem_enviada(

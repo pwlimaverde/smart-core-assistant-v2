@@ -43,6 +43,9 @@ struct AppState {
     #[allow(dead_code)]
     audit_logger: observability::AuditLogger,
     pg_client: Arc<transport::MuxClient>,
+    /// N7.3: cliente RPC do `data_redis`, para o rate-limit unificado (mesma fonte
+    /// usada pelo `runtime_api`, via `RegisterRateLimitAttempt`).
+    redis_client: Arc<transport::MuxClient>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -68,12 +71,14 @@ async fn main() -> anyhow::Result<()> {
     normalizers.insert(evo_norm.provider_name(), evo_norm);
 
     let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await?);
+    let redis_client = Arc::new(transport::conectar_cliente("data_redis").await?);
     let audit_logger = observability::AuditLogger::new_with_redis(redis.clone(), "webhook_ingress");
     let state = AppState {
         redis,
         normalizers,
         audit_logger,
         pg_client,
+        redis_client,
     };
 
     let app = Router::new()
@@ -167,6 +172,41 @@ async fn verificar_bloqueio_inadimplencia(
     body.get("inadimplente")
         .and_then(|v| v.as_bool())
         .unwrap_or(false)
+}
+
+/// N7.3 — contadores de rate-limit unificados: chama `RegisterRateLimitAttempt`
+/// no `data_redis` (mesma fonte usada pelo `runtime_api`), em vez de manter um
+/// contador próprio na conexão de bus do webhook (independente da política de
+/// eviction do bus). Mesma chave/namespace (`recurso`+`id`) do contador antigo —
+/// upgrade transparente, sem descontinuidade na janela em curso.
+async fn registrar_rate_limit_unificado(
+    redis_client: &transport::MuxClient,
+    recurso: &str,
+    id: &str,
+    window_s: u64,
+) -> Result<u64, error_core::AppError> {
+    let req_payload = serde_json::json!({ "recurso": recurso, "id": id, "window_s": window_s });
+    let req_envelope = contracts::Envelope {
+        kind: contracts::MessageKind::Request as i32,
+        method: "RegisterRateLimitAttempt".to_string(),
+        payload: serde_json::to_vec(&req_payload).unwrap_or_default(),
+        ..Default::default()
+    };
+    let resp = redis_client
+        .call(req_envelope, Duration::from_secs(3))
+        .await
+        .map_err(|e| error_core::AppError::Internal(format!("Falha ao chamar data_redis: {e}")))?;
+
+    if resp.kind == contracts::MessageKind::Error as i32 {
+        let msg = resp
+            .error
+            .map(|err| err.message)
+            .unwrap_or_else(|| "Erro desconhecido".to_string());
+        return Err(error_core::AppError::Internal(msg));
+    }
+
+    let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap_or_default();
+    Ok(body.get("attempts").and_then(|v| v.as_u64()).unwrap_or(0))
 }
 
 #[tracing::instrument(
@@ -281,8 +321,10 @@ async fn handle_webhook(
         return Err(StatusCode::UNAUTHORIZED);
     }
 
-    // 2c. Rate limiting amplo por instância/tenant (N4.4). Fail-open: erro no Redis
-    // não derruba a ingestão (mesmo espírito do QuotaGuard).
+    // 2c. Rate limiting amplo por instância/tenant (N4.4). N7.3: contador
+    // unificado via RPC no data_redis (mesma fonte do runtime_api), não mais um
+    // contador próprio na conexão de bus deste serviço. Fail-open: erro na
+    // checagem não derruba a ingestão (mesmo espírito do QuotaGuard).
     {
         let max = env::var("WEBHOOK_RATE_LIMIT_MAX")
             .ok()
@@ -293,14 +335,7 @@ async fn handle_webhook(
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(60);
         let id = format!("{}:{}", params.tenant_id, params.instance_id);
-        match infrastructure_redis::registrar_tentativa_recurso(
-            &mut state.redis,
-            "webhook",
-            &id,
-            window_s,
-        )
-        .await
-        {
+        match registrar_rate_limit_unificado(&state.redis_client, "webhook", &id, window_s).await {
             Ok(total) if total > max => {
                 state.audit_logger.warn(
                     params.tenant_id,
@@ -817,10 +852,31 @@ mod tests {
             let _ = pg_server.run().await;
         });
 
+        // N7.3: mock do data_redis para o rate-limit unificado (RegisterRateLimitAttempt).
+        let redis_rpc_addr = "tcp://127.0.0.1:29261";
+        std::env::set_var("SMARTCORE_DATA_REDIS_ENDPOINT", redis_rpc_addr);
+        let redis_rpc_endpoint = transport::runtime::Endpoint::parse(redis_rpc_addr).unwrap();
+        let redis_rpc_server = transport::runtime::Server::new(redis_rpc_endpoint, "flatbuffers")
+            .route("RegisterRateLimitAttempt", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({ "attempts": 1 });
+                    contracts::Envelope {
+                        kind: contracts::MessageKind::Reply as i32,
+                        method: "RegisterRateLimitAttemptReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            });
+        tokio::spawn(async move {
+            let _ = redis_rpc_server.run().await;
+        });
+
         // Espera um pouco para o servidor iniciar
         tokio::time::sleep(Duration::from_millis(150)).await;
 
         let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
+        let redis_client = Arc::new(transport::conectar_cliente("data_redis").await.unwrap());
 
         let redis = fake_bus(29257).await;
         let mut normalizers: HashMap<&'static str, Arc<dyn WebhookNormalizer>> = HashMap::new();
@@ -833,6 +889,7 @@ mod tests {
             normalizers,
             audit_logger,
             pg_client,
+            redis_client,
         };
 
         Router::new()

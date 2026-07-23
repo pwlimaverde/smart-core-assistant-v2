@@ -10,7 +10,12 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use infrastructure_postgres::crypto::CipherManager;
-use infrastructure_postgres::{DbError, TenantConfigCache};
+use infrastructure_postgres::operacional::departamentos::{
+    DepartamentoRepository, PostgresDepartamentoRepository,
+};
+use infrastructure_postgres::{
+    connection::run_in_tenant_transaction, DbError, RequestContext, TenantConfigCache,
+};
 
 use crate::ports::operacional::{ConfigIa, CoreSetting};
 use crate::ports::OperacionalStore;
@@ -696,5 +701,25 @@ impl OperacionalStore for PgOperacionalStore {
             api_key,
             embeddings_api_key,
         })
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn criar_departamento(
+        &self,
+        ctx: &RequestContext,
+        nome: String,
+        descricao: Option<String>,
+    ) -> Result<serde_json::Value, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let departamento = PostgresDepartamentoRepository
+                .criar(&mut tx, &ctx, &nome, descricao.as_deref())
+                .await?;
+            let json = serde_json::to_value(&departamento).map_err(|e| {
+                DbError::ConfigError(format!("falha ao serializar departamento: {e}"))
+            })?;
+            Ok((json, tx))
+        })
+        .await
     }
 }

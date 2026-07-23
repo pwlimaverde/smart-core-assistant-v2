@@ -8,7 +8,9 @@ use uuid::Uuid;
 
 use infrastructure_postgres::{
     connection::run_in_tenant_transaction,
-    tenants::quota::{verificar_inadimplencia, verificar_quota, RecursoQuota},
+    tenants::quota::{
+        registrar_uso_storage, verificar_inadimplencia, verificar_quota, RecursoQuota,
+    },
     DbError,
 };
 
@@ -53,6 +55,19 @@ impl QuotaStore for PgQuotaStore {
                 });
                 Ok((json, tx))
             }
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip(self), fields(tenant_id = %tenant_id, delta_bytes))]
+    async fn registrar_uso_storage(
+        &self,
+        tenant_id: Uuid,
+        delta_bytes: i64,
+    ) -> Result<i64, DbError> {
+        run_in_tenant_transaction(&self.pool, tenant_id, move |mut tx| async move {
+            let total = registrar_uso_storage(&mut tx, tenant_id, delta_bytes).await?;
+            Ok((total, tx))
         })
         .await
     }

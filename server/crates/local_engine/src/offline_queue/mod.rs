@@ -141,31 +141,35 @@ impl OfflineQueue {
         Self { pool }
     }
 
-    /// Próxima versão monotônica (maior existente + 1).
-    pub async fn next_version(&self) -> LocalResult<i64> {
-        let maior: Option<i64> = sqlx::query_scalar("SELECT MAX(version) FROM offline_actions")
-            .fetch_one(&self.pool)
-            .await?;
-        Ok(maior.unwrap_or(0) + 1)
-    }
-
-    /// Enfileira uma ação (grava o payload serializado em JSON).
-    pub async fn enqueue(&self, acao: &OfflineAction) -> LocalResult<()> {
-        let payload = serde_json::to_string(&acao.kind)
+    /// Enfileira uma ação, atribuindo a versão monotônica ATOMICAMENTE num único
+    /// statement (`INSERT ... SELECT COALESCE(MAX(version),0)+1 ...`), em vez de
+    /// um `SELECT MAX` seguido de `INSERT` separados (a corrida coberta por
+    /// `enqueue_concorrente_atribui_versoes_distintas`, abaixo — N7.4). O SQLite
+    /// serializa escritas — um único statement elimina a janela entre duas
+    /// conexões do pool lendo o mesmo `MAX` antes de qualquer uma commitar.
+    /// Retorna a versão atribuída.
+    pub async fn enqueue(
+        &self,
+        id: Uuid,
+        atendimento_id: i64,
+        kind: &OfflineActionKind,
+        created_at: i64,
+    ) -> LocalResult<i64> {
+        let payload = serde_json::to_string(kind)
             .map_err(|e| LocalEngineError::Storage(format!("serialização: {e}")))?;
-        sqlx::query(
-            "INSERT INTO offline_actions (id, version, atendimento_id, kind, payload, \
-             created_at, synced) VALUES (?, ?, ?, ?, ?, ?, 0)",
+        let version: i64 = sqlx::query_scalar(
+            "INSERT INTO offline_actions (id, version, atendimento_id, kind, payload, created_at, synced) \
+             SELECT ?, COALESCE(MAX(version), 0) + 1, ?, ?, ?, ?, 0 FROM offline_actions \
+             RETURNING version",
         )
-        .bind(acao.id.to_string())
-        .bind(acao.version)
-        .bind(acao.atendimento_id)
-        .bind(acao.kind.tag())
+        .bind(id.to_string())
+        .bind(atendimento_id)
+        .bind(kind.tag())
         .bind(&payload)
-        .bind(acao.created_at)
-        .execute(&self.pool)
+        .bind(created_at)
+        .fetch_one(&self.pool)
         .await?;
-        Ok(())
+        Ok(version)
     }
 
     /// Ações ainda não sincronizadas, em ordem de versão.
@@ -371,7 +375,10 @@ mod tests {
                 motivo: "teste".into(),
             },
         );
-        queue.enqueue(&a1).await.unwrap();
+        queue
+            .enqueue(a1.id, a1.atendimento_id, &a1.kind, a1.created_at)
+            .await
+            .unwrap();
 
         let pendentes = queue.pending().await.unwrap();
         assert_eq!(pendentes.len(), 1);
@@ -384,15 +391,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn next_version_comeca_em_um_e_incrementa_apos_enqueue() {
+    async fn enqueue_atribui_versao_comecando_em_um_e_incrementando() {
         let index = crate::index::SqliteIndex::open_in_memory().await.unwrap();
         let queue = OfflineQueue::new(index.pool().clone());
 
-        assert_eq!(queue.next_version().await.unwrap(), 1);
-
         let a1 = acao(
             1,
-            1,
+            0,
             100,
             OfflineActionKind::SendOutbound {
                 conteudo: "a".into(),
@@ -400,9 +405,27 @@ mod tests {
                 local_msg_id: -1,
             },
         );
-        queue.enqueue(&a1).await.unwrap();
+        let v1 = queue
+            .enqueue(a1.id, a1.atendimento_id, &a1.kind, a1.created_at)
+            .await
+            .unwrap();
+        assert_eq!(v1, 1);
 
-        assert_eq!(queue.next_version().await.unwrap(), 2);
+        let a2 = acao(
+            2,
+            0,
+            100,
+            OfflineActionKind::SendOutbound {
+                conteudo: "b".into(),
+                tipo: "texto".into(),
+                local_msg_id: -2,
+            },
+        );
+        let v2 = queue
+            .enqueue(a2.id, a2.atendimento_id, &a2.kind, a2.created_at)
+            .await
+            .unwrap();
+        assert_eq!(v2, 2);
     }
 
     #[tokio::test]
@@ -430,8 +453,14 @@ mod tests {
                 local_msg_id: -2,
             },
         );
-        queue.enqueue(&a1).await.unwrap();
-        queue.enqueue(&a2).await.unwrap();
+        queue
+            .enqueue(a1.id, a1.atendimento_id, &a1.kind, a1.created_at)
+            .await
+            .unwrap();
+        queue
+            .enqueue(a2.id, a2.atendimento_id, &a2.kind, a2.created_at)
+            .await
+            .unwrap();
         queue.mark_synced(a1.id).await.unwrap();
 
         let pendentes = queue.pending().await.unwrap();
@@ -439,29 +468,43 @@ mod tests {
         assert_eq!(pendentes[0].id, a2.id);
     }
 
-    // ACHADO (fora do escopo desta tarefa de testes — não corrigido aqui):
-    // `next_version()` faz `SELECT MAX(version)+1` numa consulta separada do
-    // `INSERT` subsequente em `enqueue()`, sem uma transação/lock que amarre as
-    // duas operações. Em uso concorrente (duas chamadas a `next_version` antes de
-    // qualquer `enqueue` completar) duas ações podem receber a mesma `version`,
-    // quebrando a garantia de unicidade que `resolve_lww` assume implicitamente
-    // (desempate por `HashMap::entry().and_modify` quando `version` empata não é
-    // determinístico). O teste abaixo comprova a corrida deliberadamente — ela
-    // não é regressão de código de produção, é a evidência do achado.
+    /// N7.4 — regressão do achado de N7 (antes: `next_version()` lia `MAX` numa
+    /// consulta separada do `INSERT`, permitindo duas ações concorrentes
+    /// receberem a mesma versão). Agora `enqueue` atribui a versão num único
+    /// statement; duas chamadas concorrentes devem sempre sair com versões
+    /// distintas, nunca empatadas.
     #[tokio::test]
-    async fn achado_next_version_nao_e_atomico_sob_concorrencia() {
+    async fn enqueue_concorrente_atribui_versoes_distintas() {
         let index = crate::index::SqliteIndex::open_in_memory().await.unwrap();
         let queue = OfflineQueue::new(index.pool().clone());
 
-        // Duas leituras de `next_version()` antes de qualquer `enqueue`: como a
-        // leitura e a escrita não estão na mesma transação, ambas veem a fila
-        // vazia e calculam a mesma próxima versão.
-        let v1 = queue.next_version().await.unwrap();
-        let v2 = queue.next_version().await.unwrap();
-        assert_eq!(
+        let q1 = queue.clone();
+        let q2 = queue.clone();
+        let kind1 = OfflineActionKind::SendOutbound {
+            conteudo: "a".into(),
+            tipo: "texto".into(),
+            local_msg_id: -1,
+        };
+        let kind2 = OfflineActionKind::SendOutbound {
+            conteudo: "b".into(),
+            tipo: "texto".into(),
+            local_msg_id: -2,
+        };
+        let (v1, v2) = tokio::join!(
+            q1.enqueue(Uuid::from_u128(1), 100, &kind1, 1),
+            q2.enqueue(Uuid::from_u128(2), 100, &kind2, 2),
+        );
+        let (v1, v2) = (v1.unwrap(), v2.unwrap());
+        assert_ne!(
             v1, v2,
-            "demonstra que duas leituras concorrentes obtêm a mesma versão \
-             candidata — não há atomicidade entre o SELECT MAX e o INSERT"
+            "duas ações concorrentes não podem receber a mesma versão"
+        );
+        assert_eq!(
+            [v1, v2]
+                .iter()
+                .collect::<std::collections::HashSet<_>>()
+                .len(),
+            2
         );
     }
 

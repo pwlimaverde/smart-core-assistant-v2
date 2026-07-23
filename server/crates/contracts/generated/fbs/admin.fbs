@@ -422,6 +422,7 @@ table MoveAtendimentoEtapaRequest {
   atendimento_id:int;
   etapa_destino_id:int;
   motivo:string;
+  action_id:string;
 }
 
 table MoveAtendimentoEtapaResponse {
@@ -432,6 +433,7 @@ table SendOutboundMessageRequest {
   atendimento_id:int;
   conteudo:string;
   tipo:string;
+  action_id:string;
 }
 
 table SendOutboundMessageResponse {
