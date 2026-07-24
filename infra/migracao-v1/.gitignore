@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+.pytest_cache/
+
+# Estado local entre execucoes (id_map "vivo") e relatorios gerados — nunca
+# comitar: podem conter PII mascarada mas tambem contagens/estrutura real de
+# dados de producao. O snapshot versionado por execucao tambem fica aqui por
+# padrao (MIGRACAO_REPORTS_DIR=./reports); mude a env var se quiser versionar
+# os relatorios em outro lugar deliberadamente.
+migracao_v1_state/
+reports/*
+!reports/.gitkeep

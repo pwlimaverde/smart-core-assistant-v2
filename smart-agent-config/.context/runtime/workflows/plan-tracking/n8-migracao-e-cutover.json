@@ -1,0 +1,88 @@
+{
+  "planSlug": "n8-migracao-e-cutover",
+  "linkedAt": "2026-07-23T18:02:45.454Z",
+  "progress": 40,
+  "phases": {
+    "phase-r": {
+      "phaseId": "phase-r",
+      "status": "completed",
+      "startedAt": "2026-07-23T18:24:10.068Z",
+      "steps": [],
+      "completedAt": "2026-07-23T18:24:10.068Z"
+    },
+    "phase-v": {
+      "phaseId": "phase-v",
+      "status": "completed",
+      "startedAt": "2026-07-23T19:53:59.925Z",
+      "steps": [],
+      "completedAt": "2026-07-23T19:53:59.925Z"
+    }
+  },
+  "approvalStatus": "approved",
+  "approvedAt": "2026-07-23T18:24:09.221Z",
+  "approvedBy": "architect",
+  "decisions": [
+    {
+      "title": "Escopo da execução: construir código/config, sem executar em produção real",
+      "description": "N8.1-N8.4 são implementados como código/config versionado (scripts ETL, Caddy prod, fix de cifra WhatsApp, tooling de enforce, runbook de cutover/rollback). Não decripta credenciais reais de tenant, não altera DNS real, não desliga/apaga old/. Execução real fica para o usuário rodar depois com os runbooks prontos.",
+      "phase": "P",
+      "alternatives": [
+        "Construir + executar em staging/dry-run",
+        "Executar tudo incluindo produção real"
+      ],
+      "status": "accepted",
+      "id": "dec-1784830908161",
+      "decidedAt": "2026-07-23T18:21:48.159Z"
+    },
+    {
+      "title": "Senha v1→v2: forçar reset, sem verificação dupla PBKDF2/Argon2id",
+      "description": "v1 usa PBKDF2-SHA256 (hasher padrão Django); v2 exige Argon2id (auth_user.password_hash). O ETL migra o usuário com password_hash marcado como inválido/não utilizável; v2 força fluxo de redefinição de senha no primeiro acesso pós-cutover. Não implementa verificação dupla no login.",
+      "phase": "P",
+      "alternatives": [
+        "Verificação dupla PBKDF2 -> upgrade Argon2id no primeiro login"
+      ],
+      "status": "accepted",
+      "id": "dec-1784830908907",
+      "decidedAt": "2026-07-23T18:21:48.906Z"
+    },
+    {
+      "title": "Fechar gap: whatsapp_instance.api_key passa a ser cifrado via CipherManager",
+      "description": "A migration 0008_whatsapp_sync.sql comenta \"encriptado em repouso\" mas o adapter Rust (infrastructure_postgres/src/integracoes/whatsapp.rs, apps/data_whatsapp) grava api_key em texto plano. N8 corrige o adapter para usar CipherManager (AES-256-GCM) e o ETL já grava o token da instância Evolution já cifrado no formato {ciphertext,nonce,tag}.",
+      "phase": "P",
+      "alternatives": [
+        "Manter plaintext e registrar débito técnico para depois do N8"
+      ],
+      "status": "accepted",
+      "id": "dec-1784830911497",
+      "decidedAt": "2026-07-23T18:21:51.497Z"
+    },
+    {
+      "title": "Mídia legada (fotos de contato, anexos de mensagem) entra no escopo do N8.1",
+      "description": "N8.1 ganha uma etapa 7: upload dos arquivos locais da v1 (MEDIA_ROOT, Contato.foto_perfil e Mensagem.arquivo_midia) para o R2 (mesmo bucket/lifecycle do N5.3) e reescrita dos paths/URLs nas linhas migradas de oraculo_contato/oraculo_mensagem.",
+      "phase": "P",
+      "alternatives": [
+        "Fora de escopo do N8, tratar em rodada separada"
+      ],
+      "status": "accepted",
+      "id": "dec-1784830914531",
+      "decidedAt": "2026-07-23T18:21:54.531Z"
+    },
+    {
+      "title": "Achado arquitetural: v1 é DB-per-tenant, v2 é single-DB+RLS — ETL precisa iterar TenantDatabase e injetar tenant_id",
+      "description": "v1 roteia TENANT_APPS para um banco físico por tenant (tenants/db_router.py, TenantDatabase), sem coluna tenant_id nas tabelas de origem. v2 usa um único banco com tenant_id + RLS em quase todas as tabelas. O ETL de contatos/atendimentos/mensagens/documentos/instâncias precisa: (1) ler TenantDatabase no banco default da v1 para descobrir a conexão de cada tenant, (2) conectar no banco físico do tenant, (3) extrair as tabelas TENANT_APPS, (4) injetar tenant_id (UUID do Tenant correspondente) em cada linha migrada para v2. Não é um pg_dump/COPY direto — não estava documentado no plano original.",
+      "phase": "P",
+      "status": "accepted",
+      "id": "dec-1784830919372",
+      "decidedAt": "2026-07-23T18:21:59.372Z"
+    },
+    {
+      "title": "Critérios go/no-go do cutover (N8.4) aprovados",
+      "description": "GO somente se: (1) dry-run do ETL conciliado por entidade (contagens v1×v2 batem, amostras de hash conferem, sem InvalidToken pendente de conciliação manual); (2) rollback ensaiado com sucesso (voltar rotas ao Django) antes da janela real; (3) smoke E2E na prod v2 passa (admin+tenant web, desktop, WhatsApp); (4) .\\infra\\test-local.ps1 e .\\infra\\test-flutter.ps1 verdes no estado final. NO-GO se qualquer um falhar — não se cutover às cegas (pré-condição dura do N7 já satisfeita). Rollback só é válido até o ponto de freeze de escrita na v1; depois disso os dados divergem e rollback vira reconciliação manual.",
+      "phase": "R",
+      "status": "accepted",
+      "id": "dec-1784831041991",
+      "decidedAt": "2026-07-23T18:24:01.991Z"
+    }
+  ],
+  "lastUpdated": "2026-07-23T19:53:59.925Z"
+}

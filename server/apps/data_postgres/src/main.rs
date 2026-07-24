@@ -197,7 +197,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let whatsapp_store: std::sync::Arc<dyn ports::WhatsappStore> = std::sync::Arc::new(
-        adapters::PgWhatsappStore::new(pool.clone(), admin_pool.clone()),
+        adapters::PgWhatsappStore::new(pool.clone(), admin_pool.clone(), cipher.clone()),
     );
     let audit_port: std::sync::Arc<dyn ports::AuditPort> =
         std::sync::Arc::new(adapters::RedisAuditPort::new(bus_conn.clone()));

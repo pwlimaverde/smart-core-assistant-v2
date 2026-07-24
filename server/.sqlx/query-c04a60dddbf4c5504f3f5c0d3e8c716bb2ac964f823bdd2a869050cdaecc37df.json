@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT api_key FROM whatsapp_instance WHERE id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "api_key",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "whatsapp_instance",
+            "name": "api_key"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c04a60dddbf4c5504f3f5c0d3e8c716bb2ac964f823bdd2a869050cdaecc37df"
+}

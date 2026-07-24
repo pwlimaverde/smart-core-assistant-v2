@@ -94,6 +94,23 @@ impl CipherManager {
             None | Some(serde_json::Value::Null) => return Ok(String::new()),
             Some(v) => v,
         };
+        self.decrypt_json_entry(entry)
+    }
+
+    /// Encripta `plaintext` e retorna a entrada isolada `{ciphertext,nonce,tag}`
+    /// (para colunas jsonb que guardam UM segredo, não um dicionário nomeado
+    /// como `tenants_tenantconfig.api_keys`).
+    #[tracing::instrument(level = "debug", skip(self, plaintext), err)]
+    pub fn encrypt_to_json(&self, plaintext: &[u8]) -> Result<serde_json::Value, DbError> {
+        let (ct, nonce, tag) = self.encrypt(plaintext)?;
+        Ok(serde_json::json!({ "ciphertext": ct, "nonce": nonce, "tag": tag }))
+    }
+
+    /// Descriptografa uma entrada `{ciphertext,nonce,tag}` isolada (contraparte de
+    /// `encrypt_to_json`; não aninhada sob um nome de chave).
+    /// Retorna String vazia se `ciphertext` estiver ausente/vazio.
+    #[tracing::instrument(level = "debug", skip(self, entry), err)]
+    pub fn decrypt_json_entry(&self, entry: &serde_json::Value) -> Result<String, DbError> {
         let ct = entry
             .get("ciphertext")
             .and_then(|v| v.as_str())
@@ -276,6 +293,51 @@ mod tests {
         // Assert
         assert!(result.is_err());
         assert!(matches!(result.err().unwrap(), DbError::CryptoError(_)));
+    }
+
+    #[test]
+    fn encrypt_to_json_roundtrips_with_decrypt_json_entry() {
+        // Arrange
+        let cipher = get_test_cipher();
+        let secret = "evolution-instance-token-xyz";
+
+        // Act
+        let entry = cipher.encrypt_to_json(secret.as_bytes()).unwrap();
+        let decrypted = cipher.decrypt_json_entry(&entry).unwrap();
+
+        // Assert
+        assert_eq!(decrypted, secret);
+        assert!(entry.get("ciphertext").is_some());
+        assert!(entry.get("nonce").is_some());
+        assert!(entry.get("tag").is_some());
+    }
+
+    #[test]
+    fn decrypt_json_entry_returns_empty_string_when_ciphertext_missing() {
+        // Arrange
+        let cipher = get_test_cipher();
+        let entry = json!({});
+
+        // Act
+        let decrypted = cipher.decrypt_json_entry(&entry).unwrap();
+
+        // Assert
+        assert!(decrypted.is_empty());
+    }
+
+    #[test]
+    fn decrypt_json_entry_fails_when_tag_is_tampered() {
+        // Arrange
+        let cipher = get_test_cipher();
+        let entry = cipher.encrypt_to_json(b"segredo-de-instancia").unwrap();
+        let mut tampered = entry.clone();
+        tampered["tag"] = json!("adulterado_base64==");
+
+        // Act
+        let result = cipher.decrypt_json_entry(&tampered);
+
+        // Assert
+        assert!(result.is_err());
     }
 
     #[test]

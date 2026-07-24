@@ -1,0 +1,89 @@
+{
+  "id": "1396db24-6199-476b-8c2d-bae973183899",
+  "name": "n8-migracao-e-cutover",
+  "status": "completed",
+  "repoPath": "C:\\PROJETOS\\FULL-STACK\\smart-core-assistant-v2\\smart-agent-config",
+  "createdAt": "2026-07-23T18:02:41.145Z",
+  "updatedAt": "2026-07-23T22:18:59.975Z",
+  "startedAt": "2026-07-23T18:02:41.145Z",
+  "traceCount": 34,
+  "artifactCount": 1,
+  "checkpointCount": 4,
+  "checkpoints": [
+    {
+      "id": "c2fe6220-2199-499b-82b9-23654608d801",
+      "note": "Advanced workflow phase P -> R",
+      "data": {
+        "from": "P",
+        "to": "R",
+        "outputs": [
+          "smart-agent-config/.context/plans/n8-migracao-e-cutover/plano_completo_n8-migracao-e-cutover.md",
+          "smart-agent-config/.context/plans/n8-migracao-e-cutover/info_aux_n8-migracao-e-cutover.md",
+          "5 decisões registradas na fase P (escopo de execução, reset de senha, cifra whatsapp, mídia legada, arquitetura DB-per-tenant)"
+        ],
+        "nextTaskContractId": "9664b41a-2068-43fa-b38b-d64d906c6631"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-23T18:23:50.547Z"
+    },
+    {
+      "id": "556a0231-92bb-41a4-b9a3-edb1ff1fad93",
+      "note": "Advanced workflow phase R -> E",
+      "data": {
+        "from": "R",
+        "to": "E",
+        "outputs": [
+          "plano aprovado (architect) - de-para de entidades + rollback/go-no-go registrados"
+        ],
+        "nextTaskContractId": "a9d1480b-d4f8-4575-a884-a2ebd93b52e5"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-23T18:24:14.090Z"
+    },
+    {
+      "id": "306ddff8-61f6-466c-b1a5-3c1da7ac192b",
+      "note": "Advanced workflow phase E -> V",
+      "data": {
+        "from": "E",
+        "to": "V",
+        "outputs": [
+          "infra/migracao-v1/ (ETL v1→v2 completo, 75/75 pytest)",
+          "docker/edge/Caddyfile (N8.2 - /v2/admin e /v2/tenant em prod)",
+          "infra/RUNBOOK_ENFORCE_ROLLOUT_N8.md + infra/migracao-v1/analise-enforce/ (N8.3)",
+          "infra/migracao-v1/RUNBOOK_CUTOVER_N8.md (N8.4)",
+          "fix whatsapp_instance.api_key cifrado (migration 0023 + crypto.rs + integracoes/whatsapp.rs)",
+          "cargo fmt/clippy/sqlx-prepare --check ok; testes de integracao whatsapp 4/4 ok contra banco real"
+        ],
+        "nextTaskContractId": "5ce9bff7-7910-4bdf-b9c3-4e99a4700c31"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-23T19:53:54.363Z"
+    },
+    {
+      "id": "e65c788b-ab8c-4208-abcf-f4a236e4a92d",
+      "note": "Advanced workflow phase V -> C",
+      "data": {
+        "from": "V",
+        "to": "C",
+        "outputs": [
+          "cargo fmt --check: ok",
+          "cargo clippy --all-targets --all-features -D warnings: ok",
+          "cargo sqlx prepare --workspace --check: ok (sem drift)",
+          "cargo test --workspace: verde exceto 1 teste jwt pre-existente/nao-relacionado",
+          "pytest infra/migracao-v1: 75/75 verde",
+          "testes de integracao whatsapp/integracoes: 4/4 ok contra banco real via tunel"
+        ],
+        "nextTaskContractId": "831bfc45-e588-4e80-8c2c-3cf1a9939ac8"
+      },
+      "artifactIds": [],
+      "createdAt": "2026-07-23T19:54:10.298Z"
+    }
+  ],
+  "metadata": {
+    "workflow": true,
+    "description": "Fase N8 — Migração de dados v1→v2 (ETL idempotente) + habilitação da produção web completa (Caddy) + rollout do enforce + runbook de cutover/rollback. Escopo desta execução: construir todo o código/config versionado (scripts ETL, blocos Caddy prod, flags de enforce, runbook), SEM executar contra infraestrutura de produção real, sem decriptar credenciais reais de tenant e sem apagar old/ — a execução real fica para o usuário rodar depois com os runbooks prontos."
+  },
+  "lastTraceAt": "2026-07-23T22:18:59.975Z",
+  "lastCheckpointAt": "2026-07-23T19:54:10.298Z",
+  "completedAt": "2026-07-23T22:18:59.961Z"
+}

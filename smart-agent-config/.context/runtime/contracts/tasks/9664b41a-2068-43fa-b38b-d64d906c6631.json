@@ -1,0 +1,36 @@
+{
+  "id": "9664b41a-2068-43fa-b38b-d64d906c6631",
+  "title": "Fase N8 — Migração de dados v1→v2 + cutover de produção (fim do port): Review",
+  "description": "Derived from linked plan \"n8-migracao-e-cutover\" for PREVC phase R (Review). Plan phases: Review. Expected outputs: architecture, adr, design-spec.",
+  "sessionId": "1396db24-6199-476b-8c2d-bae973183899",
+  "owner": "architect",
+  "status": "completed",
+  "inputs": [],
+  "expectedOutputs": [
+    "architecture",
+    "adr",
+    "design-spec"
+  ],
+  "acceptanceCriteria": [
+    "Complete Review"
+  ],
+  "requiredSensors": [],
+  "requiredArtifacts": [],
+  "createdAt": "2026-07-23T18:23:50.507Z",
+  "updatedAt": "2026-07-23T18:24:14.100Z",
+  "metadata": {
+    "requirementsSource": "none",
+    "source": "workflow.plan",
+    "planSlug": "n8-migracao-e-cutover",
+    "prevcPhase": "R",
+    "planPhaseIds": [
+      "phase-r"
+    ],
+    "planPhaseNames": [
+      "Review"
+    ],
+    "planPhaseSummaries": [],
+    "derivedFrom": "linked-plan",
+    "completionReason": "Workflow advanced from R to E"
+  }
+}

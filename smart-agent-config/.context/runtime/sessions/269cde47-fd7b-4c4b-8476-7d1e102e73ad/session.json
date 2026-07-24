@@ -4,9 +4,9 @@
   "status": "completed",
   "repoPath": "C:\\PROJETOS\\FULL-STACK\\smart-core-assistant-v2\\smart-agent-config",
   "createdAt": "2026-07-23T00:24:42.426Z",
-  "updatedAt": "2026-07-23T02:51:17.074Z",
+  "updatedAt": "2026-07-23T18:02:36.393Z",
   "startedAt": "2026-07-23T00:24:42.426Z",
-  "traceCount": 28,
+  "traceCount": 31,
   "artifactCount": 1,
   "checkpointCount": 4,
   "checkpoints": [
@@ -79,7 +79,7 @@
     "workflow": true,
     "description": "Fase N7 — Endurecimento residual + operação validada (pré-cutover): quotas de storage/departamentos (guard log-only), idempotência do sync offline por action_id + dead-letter, rate-limit unificado via RegisterRateLimitAttempt do data_redis, sync offline robusto no desktop (reconexão + atomicidade SQLite + Lagged no stream FFI), validação operacional manual."
   },
-  "lastTraceAt": "2026-07-23T02:51:17.074Z",
+  "lastTraceAt": "2026-07-23T18:02:36.393Z",
   "lastCheckpointAt": "2026-07-23T01:45:56.954Z",
   "completedAt": "2026-07-23T02:51:17.060Z"
 }

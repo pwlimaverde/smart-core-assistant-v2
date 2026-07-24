@@ -1,9 +1,12 @@
 //! Adapter concreto do domínio WhatsApp: reusa os repositórios de
 //! infrastructure_postgres e encapsula a transação (antes vivia no handler).
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 use sqlx::PgPool;
 
+use infrastructure_postgres::crypto::CipherManager;
 use infrastructure_postgres::integracoes::whatsapp::{
     PostgresWhatsappInstanceRepository, WhatsappInstance, WhatsappInstanceRepository,
 };
@@ -17,15 +20,21 @@ use crate::ports::WhatsappStore;
 /// Implementação Postgres da port WhatsApp.
 /// `admin_pool` (BYPASSRLS) é usado apenas nas consultas cross-tenant; quando
 /// ausente, recai no pool de aplicação (RLS ativa) com aviso observável.
+/// `cipher` decifra/encripta `api_key` (AES-256-GCM, jsonb em repouso — N8).
 #[derive(Clone)]
 pub struct PgWhatsappStore {
     pub pool: PgPool,
     pub admin_pool: Option<PgPool>,
+    pub cipher: Arc<CipherManager>,
 }
 
 impl PgWhatsappStore {
-    pub fn new(pool: PgPool, admin_pool: Option<PgPool>) -> Self {
-        Self { pool, admin_pool }
+    pub fn new(pool: PgPool, admin_pool: Option<PgPool>, cipher: Arc<CipherManager>) -> Self {
+        Self {
+            pool,
+            admin_pool,
+            cipher,
+        }
     }
 }
 
@@ -41,6 +50,7 @@ impl WhatsappStore for PgWhatsappStore {
     ) -> Result<WhatsappInstance, DbError> {
         let repo = PostgresWhatsappInstanceRepository;
         let ctx = ctx.clone();
+        let cipher = self.cipher.clone();
         let tenant_id = ctx.tenant_id;
         let name = name.to_string();
         let api_key = api_key.to_string();
@@ -48,7 +58,7 @@ impl WhatsappStore for PgWhatsappStore {
 
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
             let inst = repo
-                .criar(&mut tx, &ctx, &name, &api_key, &provider)
+                .criar(&mut tx, &ctx, &cipher, &name, &api_key, &provider)
                 .await?;
             Ok((inst, tx))
         })
@@ -63,9 +73,10 @@ impl WhatsappStore for PgWhatsappStore {
     ) -> Result<Option<WhatsappInstance>, DbError> {
         let repo = PostgresWhatsappInstanceRepository;
         let ctx = ctx.clone();
+        let cipher = self.cipher.clone();
         let tenant_id = ctx.tenant_id;
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
-            let inst = repo.buscar_por_id(&mut tx, &ctx, id).await?;
+            let inst = repo.buscar_por_id(&mut tx, &ctx, &cipher, id).await?;
             Ok((inst, tx))
         })
         .await
@@ -75,9 +86,10 @@ impl WhatsappStore for PgWhatsappStore {
     async fn listar_ativas(&self, ctx: &RequestContext) -> Result<Vec<WhatsappInstance>, DbError> {
         let repo = PostgresWhatsappInstanceRepository;
         let ctx = ctx.clone();
+        let cipher = self.cipher.clone();
         let tenant_id = ctx.tenant_id;
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
-            let list = repo.listar_ativas(&mut tx, &ctx).await?;
+            let list = repo.listar_ativas(&mut tx, &ctx, &cipher).await?;
             Ok((list, tx))
         })
         .await
@@ -98,7 +110,9 @@ impl WhatsappStore for PgWhatsappStore {
         let effective_pool = self.admin_pool.as_ref().unwrap_or(&self.pool);
         let repo = PostgresWhatsappInstanceRepository;
         let mut tx = effective_pool.begin().await?;
-        let list = repo.admin_listar_todas_conectadas(&mut tx, ctx).await?;
+        let list = repo
+            .admin_listar_todas_conectadas(&mut tx, ctx, &self.cipher)
+            .await?;
         tx.commit().await?;
         Ok(list)
     }
@@ -169,10 +183,11 @@ impl WhatsappStore for PgWhatsappStore {
     ) -> Result<Option<WhatsappInstance>, DbError> {
         let repo = PostgresWhatsappInstanceRepository;
         let ctx = ctx.clone();
+        let cipher = self.cipher.clone();
         let tenant_id = ctx.tenant_id;
         let token = token.to_string();
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
-            let inst_opt = repo.buscar_por_id(&mut tx, &ctx, id).await?;
+            let inst_opt = repo.buscar_por_id(&mut tx, &ctx, &cipher, id).await?;
             if let Some(ref inst) = inst_opt {
                 // Comparação em tempo constante para evitar timing attack na validação do token.
                 use subtle::ConstantTimeEq;

@@ -1,6 +1,15 @@
 # ============================================================================
 # Smart Core Tenant/Operacional (Flutter web) — roteamento Caddy
 # ============================================================================
+# ARQUIVO PROVAVELMENTE OBSOLETO (achado da fase N8, 2026-07-23): a topologia
+# full-docker usa `docker/edge/Caddyfile` (container que ocupa 80/443 e
+# "substitui o Caddy do host") — e ESSE arquivo que deploy-dev.yml/deploy-
+# prod.yml de fato publicam. infra/server-setup.sh nao instala nada em
+# /etc/caddy/conf.d/ atualmente. A habilitacao real de /v2/admin e /v2/tenant
+# em producao (N8.2) foi feita em docker/edge/Caddyfile, nao aqui. Mantido só
+# como referencia historica ate confirmacao/remocao humana — nao aplicar as
+# instrucoes abaixo sem antes confirmar que este arquivo ainda é usado.
+#
 # Snippet versionado da config do app operacional/tenant (fila/Kanban/chat +
 # painel do proprio tenant). Instalar no servidor como
 # /etc/caddy/conf.d/tenant.caddy e garantir no /etc/caddy/Caddyfile a linha:
@@ -48,23 +57,78 @@ dev.smartcoreassistant.com.br {
 	}
 }
 
-# ── PROD (pendente de decisao) ──────────────────────────────────────────────
-# Igual ao admin.caddy: o dominio prod smartcoreassistant.com.br HOJE serve o
-# painel Django legado. Servir o tenant em smartcoreassistant.com.br/v2/tenant/
-# exige inserir um handle /v2/tenant/* ANTES do reverse_proxy do painel naquele
-# site block — alterando a config de um sistema em producao. Definir com cuidado
-# antes de habilitar. Esboco:
+# ── PROD ─────────────────────────────────────────────────────────────────────
+# N8.2: habilita /v2/tenant/ no dominio prod, coexistindo com o Django (o
+# handle_path abaixo vem ANTES do reverse_proxy do painel no mesmo site block,
+# entao /v2/tenant/* tem precedencia e o resto do dominio continua 100% Django).
 #
-# smartcoreassistant.com.br {
-#     handle_path /v2/tenant/* {
-#         root * /srv/smart-core-tenant/prod/web
-#         try_files {path} /index.html
-#         file_server
-#     }
-#     handle /grpc.runtime/* {        # ajustar ao path real do gRPC-Web prod
-#         reverse_proxy localhost:<porta_grpc_web_prod>
-#     }
-#     handle {
-#         reverse_proxy 172.18.0.5:8000 { header_up X-Real-IP {remote_host}; header_up Host {host} }
-#     }
-# }
+# ATENCAO — 2 pontos onde este bloco DELIBERADAMENTE NAO copia o padrao do
+# bloco DEV acima, com evidencia de por que:
+#
+# 1) Estaticos via reverse_proxy, nao root+file_server: nenhum job do CI
+#    publica o build --wasm em /srv/*/prod/web (conferido em
+#    .github/workflows/deploy-prod.yml e docker/prod/compose.yml). O bundle
+#    de prod e empacotado na imagem smartcore-web-tenant (docker/web/Dockerfile)
+#    e servido por um CONTAINER publicado no host — porta WEB_TENANT_HOST_PORT,
+#    default 8084 (docker/prod/compose.yml; dev usa 8083 em docker/dev/compose.yml).
+#    Isso ja RESOLVE a decisao de portas host que o plano N8.2 listava como
+#    pendente (8083 dev / 8084 prod).
+#
+# 2) gRPC-Web casado por Content-Type, nao por path fixo: o esboco anterior
+#    chutava um path "/grpc.runtime/*", mas o runtime_api usa
+#    tonic_web::GrpcWebLayer sobre servicos gRPC gerados do .proto
+#    (server/apps/runtime_api/src/grpc_web.rs) — os paths reais sao por
+#    servico/metodo, nao um prefixo fixo previsivel. Um `handle` catch-all
+#    (como o bloco DEV faz) tambem NAO serve aqui: roubaria toda rota nao-/v2
+#    do Django. A saida robusta e casar pelo Content-Type que todo cliente
+#    gRPC-Web envia (application/grpc-web ou application/grpc-web-text).
+#
+# TODO antes de aplicar (nenhum destes eu confirmei/apliquei):
+#   - RUNTIME_API_PROD_GRPC_WEB_PORT default abaixo (50052) e o valor
+#     DOCUMENTADO em docker/prod/.env.example (RUNTIME_WEB_PORT) — confirmar
+#     que bate com o .env REAL do servidor (pode ter sido sobrescrito).
+#   - CONFLITO DE SITE ADDRESS: este arquivo e admin.caddy declaram, cada um,
+#     um site block PROPRIO para "smartcoreassistant.com.br". O Caddyfile NAO
+#     aceita dois site blocks com o mesmo endereco (mesmo vindo de arquivos
+#     import'ados diferentes) — isso falha em `caddy validate`. O bloco DEV
+#     acima ja tem o mesmo problema para dev.smartcoreassistant.com.br (nunca
+#     validado de verdade). ANTES de aplicar em prod, consolidar: ou (a)
+#     mesclar manualmente os dois handle_path num UNICO site block antes de
+#     instalar os dois arquivos, ou (b) mover a rota para
+#     docker/edge/Caddyfile (que ja roteia dev.smartcoreassistant.com.br
+#     corretamente num bloco unico e e o Caddy REALMENTE em producao hoje —
+#     ver README_PROD_N8.md).
+smartcoreassistant.com.br {
+	# Estaticos do tenant sob /v2/tenant/ (handle_path remove o prefixo) — ANTES
+	# do Django, para a v2 ter precedencia nessas rotas.
+	handle_path /v2/tenant/* {
+		reverse_proxy localhost:8084
+	}
+
+	# gRPC-Web da runtime_api PROD, casado por Content-Type (ver nota acima).
+	@grpcweb_tenant {
+		header Content-Type application/grpc-web*
+	}
+	handle @grpcweb_tenant {
+		reverse_proxy localhost:{$RUNTIME_API_PROD_GRPC_WEB_PORT:-50052}
+	}
+
+	# Tudo o mais = painel Django legado (inalterado).
+	handle {
+		reverse_proxy 172.18.0.5:8000 {
+			header_up X-Real-IP {remote_host}
+			header_up Host {host}
+		}
+	}
+
+	header {
+		Strict-Transport-Security max-age=31536000; includeSubDomains
+		X-Content-Type-Options nosniff
+	}
+	log {
+		output file /var/log/caddy/tenant-prod.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+	}
+}

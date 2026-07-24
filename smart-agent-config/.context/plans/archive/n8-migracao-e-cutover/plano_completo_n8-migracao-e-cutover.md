@@ -22,6 +22,87 @@
 
 ---
 
+## Achados adicionais da fase P (2026-07-23, grounding contra o código real de `old/`)
+
+> Levantamento factual contra `old/smart-core-assistant-painel` (models Django reais) e
+> `server/crates/infrastructure_postgres/migrations/*`. Corrige/detalha o escopo acima.
+
+### Escopo desta execução (decisão registrada)
+Esta rodada do N8 **constrói código/config versionado** (ETL, Caddy prod, fix de
+cifra, tooling de enforce, runbook de cutover) e **não executa contra produção
+real**: não decripta credenciais reais de tenant, não altera DNS real, não desliga
+nem apaga `old/`. A execução real fica para rodar depois, seguindo os runbooks.
+
+### 1. Arquitetura: v1 é DB-per-tenant, v2 é single-DB + RLS
+`old/.../tenants/db_router.py` roteia `TENANT_APPS` (clientes, atendimentos,
+operacional, evolution_sync, treinamento, atendimento_unificado) para um **banco
+Postgres físico por tenant** (`TenantDatabase`: host/port/database/user/senha
+Fernet), criado em runtime. Essas tabelas **não têm coluna `tenant_id`** — o
+isolamento é o banco físico. A v2 usa um único banco com `tenant_id` + RLS em quase
+toda tabela. **Implicação:** o ETL de contatos/atendimentos/mensagens/documentos/
+instâncias não é `pg_dump`/`COPY` direto — precisa (1) ler `TenantDatabase` no banco
+`default` v1, (2) conectar no banco físico de cada tenant, (3) extrair as tabelas de
+`TENANT_APPS`, (4) **injetar** `tenant_id` (UUID do `Tenant` correspondente) em cada
+linha. Hoje a topologia de produção sugere um único tenant ativo (Paulo Ecoprint),
+mas o ETL deve ser escrito genérico (múltiplos `TenantDatabase`).
+
+### 2. Senha: PBKDF2 (v1) → Argon2id (v2) — decisão: forçar reset
+`auth_user`/`django.contrib.auth` v1 usa o hasher padrão (PBKDF2-SHA256); a v2
+exige Argon2id (`0001_create_rls_function.sql`, comentário explícito). Copiar o
+hash literal quebra o login. **Decisão:** o ETL migra o usuário com
+`password_hash` marcado como não utilizável; a v2 força redefinição de senha no
+primeiro acesso pós-cutover. Não há verificação dupla no login (sem código novo na
+porta de autenticação).
+
+### 3. RBAC aninhado → escopos planos — tabela de-para a produzir
+`TenantUser.module_permissions` (v1) é `{modulo: {view: bool, edit: bool, delete:
+bool}}` (JSONField). `derivar_escopos` (`application/src/auth/login.rs:235-276`)
+espera **array de strings** (`["recurso:acao", ...]`) ou objeto flat
+`{escopo: bool}` — não o formato aninhado por módulo×ação. O ETL deve achatar:
+`{modulo: {view:true, edit:true}}` → `["modulo:view", "modulo:edit"]` (convenção
+`recurso:ação` já usada no fallback de `derivar_escopos`, ex. `atendimentos:read`).
+`flow_permissions` (lista de ids de `FluxoAtendimento`) tem o **mesmo formato** dos
+dois lados — só precisa de remapeamento de id se os fluxos forem recriados com novo
+PK na v2 (preservar id ou manter mapa de correspondência, igual às demais entidades
+do item 3 do escopo original).
+
+### 4. Gap fechado: `whatsapp_instance.api_key` passa a ser cifrado
+A migration `0008_whatsapp_sync.sql` comenta "encriptado em repouso", mas o adapter
+Rust atual (`infrastructure_postgres/src/integracoes/whatsapp.rs`,
+`apps/data_whatsapp`) grava `api_key` como `String` plana — sem `CipherManager`.
+**Decisão:** corrigir o adapter para usar `CipherManager` (mesmo padrão de
+`tenants_tenantconfig.api_keys`) **dentro do N8**, e o ETL já grava o token da
+instância Evolution cifrado no formato `{ciphertext,nonce,tag}`.
+
+### 5. Três fontes de credencial Evolution — preservar todas
+v1 tem `TenantEvolution.api_key` (cifrado Fernet, config "oficial" do tenant),
+`Departamento.api_key`/`telefone_instancia` (webhook) e `AppInstance.api_key`
+(transferência de atendimento) — call-sites diferentes dependem de cada uma. O ETL
+migra as três, sem tentar unificar.
+
+### 6. Mídia legada entra no escopo do N8.1 (etapa 7 nova)
+`Contato.foto_perfil` e `Mensagem.arquivo_midia` são `FileField` em disco
+(`MEDIA_ROOT`) na v1. **Decisão:** N8.1 ganha uma etapa 7 — upload desses arquivos
+para o R2 (mesmo bucket/lifecycle do N5.3) e reescrita dos paths/URLs nas linhas
+migradas de `oraculo_contato`/`oraculo_mensagem`.
+
+### 7. Campos novos em v2 sem fonte na v1 (aceitável, registrar na conciliação)
+`tenants_plan.retention_days`/`max_storage_bytes`, `tenants_storage_usage` (N7), e em
+`tenants_tenantconfig`: `llm_temperature`, `embeddings_class`, `embeddings_model`,
+`chunk_size`, `chunk_overlap`, `similarity_threshold`, `vector_distance_threshold`
+(na v1 eram só globais em `CoreSettings`, nunca por-tenant) — ficam `NULL`/default
+no ETL; explicitar no relatório de conciliação, não bloqueia o DoD.
+
+### 8. Embeddings — confirmado pgvector nativo dos dois lados
+v1 já usa `pgvector.django.VectorField(dimensions=1536)` (extensão `vector` do
+Postgres) em `Documento.embedding`/`QueryCompose.embedding`. v2 usa `VECTOR(1536)`
+com índice HNSW (`0007_treinamento_rag.sql`). Dimensão e extensão batem — o vetor
+pode ser copiado diretamente; reembeddar via `ia_engine` só se o **modelo** de
+embedding da v1 divergir do que a v2 vai consumir (isso é decisão de IA, não de
+schema).
+
+---
+
 ## N8.1 — ETL v1→v2 (scripts idempotentes, dry-run, conciliação)
 
 **Objetivo:** transferir os dados do Django legado para a v2 com fidelidade
@@ -47,6 +128,9 @@ amostragem de hash).
    credencial e vai para conciliação manual.
 6. **Instâncias Evolution** — re-registrar/migrar tokens e instâncias; verificação
    ativa de health por instância pós-migração (via `data_whatsapp`).
+7. **Mídia legada** — upload de `Contato.foto_perfil`/`Mensagem.arquivo_midia`
+   (disco `MEDIA_ROOT` na v1) para o R2 (bucket/lifecycle do N5.3), com reescrita
+   dos paths/URLs nas linhas migradas.
 
 **Estratégia de execução:** **duas passadas** — carga completa antecipada (fora da
 janela) + **delta incremental** na janela de cutover (reduz downtime de históricos

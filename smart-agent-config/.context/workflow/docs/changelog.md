@@ -2,6 +2,83 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-07-23] - Fase N8: Migração v1→v2 + habilitação de produção (código/config — execução real pendente)
+
+> Ciclo PREVC `n8-migracao-e-cutover` fechado e arquivado via `prevc-final-review`.
+> Final-review: qualidade **CORRIGIDO** (ver Corrigido). Terceira e última fase do port final
+> (N6–N8). **Escopo desta rodada, decidido na fase P:** construir todo o código/config
+> versionado (ETL, Caddy prod, fix de cifra, tooling de enforce, runbook de cutover) **sem
+> executar contra infraestrutura de produção real** — não decripta credencial real de tenant,
+> não altera DNS real, não desliga/apaga `old/`. A execução real (rodar o ETL contra produção,
+> aplicar o Caddy no servidor, ligar o enforce, virar o cutover) fica para o dono do produto
+> rodar depois, seguindo os runbooks entregues.
+
+### Adicionado
+
+- **N8.1 — ETL v1→v2 (`infra/migracao-v1/`):** pacote Python (asyncpg) idempotente com
+  `--dry-run`/`--since` (delta) e relatório de conciliação por entidade. Cobre: tenants/planos/
+  assinaturas/pagamentos; usuários+RBAC (transforma `module_permissions` aninhado por módulo em
+  escopos planos `recurso:ação`, shape aceito por `derivar_escopos`; senha marcada não-utilizável
+  — força redefinição pós-cutover, decisão aprovada); contatos/atendimentos/mensagens (a v1 é
+  DB-per-tenant — o ETL descobre `TenantDatabase`, conecta no banco físico de cada tenant e
+  injeta `tenant_id`, achado arquitetural não documentado no plano original); documentos +
+  embeddings (pgvector 1536 nativo dos dois lados, cópia direta via cast `::vector`); credenciais
+  (`CipherManagerPy` replica byte-a-byte o `CipherManager` Rust — Fernet(v1).decrypt →
+  AES-256-GCM, `InvalidToken` isola a credencial sem abortar o lote); instâncias Evolution + as
+  3 fontes de credencial da v1 preservadas sem unificar; etapa 7 nova (mídia legada →  R2).
+  75/75 testes pytest de lógica pura.
+- **N8.2 — Produção web:** `docker/admin/tenant` habilitados em produção no arquivo Caddy
+  **real** (`docker/edge/Caddyfile` — não `infra/caddy/*.caddy`, que ficou obsoleto desde a
+  migração full-docker e foi marcado como tal); `handle_path` com precedência sobre o fallback
+  Django, gRPC-Web roteado por `Content-Type` (não por path fixo). Role `smartcore_app_rt` e CORS
+  do R2 de produção já estavam prontos desde N4/N5.3 — só faltava aplicar (`infra/
+  PROD_ROLE_CORS_N8.md`); `.env.example` corrigido para incluir a origem de produção no
+  `S3_CORS_ALLOWED_ORIGINS`.
+- **N8.3 — Tooling do enforce:** consultas SQL/LogQL para derivar limites reais por plano a
+  partir da janela log-only da N7 (`infra/migracao-v1/analise-enforce/`) + runbook de rollout
+  (`infra/RUNBOOK_ENFORCE_ROLLOUT_N8.md`). Não liga a flag — depende de dados reais de produção.
+- **N8.4 — Runbook de cutover:** `infra/migracao-v1/RUNBOOK_CUTOVER_N8.md` — carga antecipada,
+  freeze, delta, validação, virada de rota, critérios go/no-go, rollback (válido só até o
+  freeze) e desligamento do legado.
+- **Fix de gap fora do plano original (achado na fase P, decisão aprovada):**
+  `whatsapp_instance.api_key` tinha o comentário "encriptado em repouso" desde a migration 0008
+  mas o adapter Rust gravava texto plano. Migration `0023` muda a coluna para `JSONB`;
+  `CipherManager` ganhou `encrypt_to_json`/`decrypt_json_entry`; todo o repositório
+  (`infrastructure_postgres::integracoes::whatsapp`) passa a cifrar/decifrar via
+  `CipherManager`, com `PgWhatsappStore` recebendo a instância compartilhada.
+
+### Corrigido (final-review)
+
+- ETL: nenhuma conexão asyncpg registrava codec `jsonb` — quebraria em runtime qualquer bind de
+  dict/list Python para coluna jsonb (`module_permissions`, `subscribed_events`, `metadados`,
+  `api_key`). Corrigido em `migracao_v1/db.py`.
+- ETL: o transform de `whatsapp_instance.api_key` serializava JSON manualmente como string
+  (suposição desatualizada de schema VARCHAR) em vez de usar o codec jsonb nativo — corrigido
+  após o fix do adapter Rust.
+- ETL: faltava emissão de `migracao.iniciada`/`migracao.concluida` no `audit_log` global,
+  exigida pelo plano — adicionada em `cli.py` (best-effort, pulada em `--dry-run`).
+- N8.2: a primeira tentativa de habilitar `/v2/admin`/`/v2/tenant` mirou `infra/caddy/*.caddy`
+  (arquivo legado, não publicado pelo deploy real) — corrigido para `docker/edge/Caddyfile`.
+- Achado operacional (não é código): os subagentes desta fase rodaram em worktrees isolados
+  criados a partir do branch `main` (muito atrasado vs. `dev`, faltando as fases N1–N7 inteiras)
+  em vez do HEAD atual — o fix de cifra do WhatsApp teve que ser refeito do zero contra o código
+  real; o ETL e o tooling de enforce foram auditados e corrigidos onde necessário.
+
+### Validação
+
+- `cargo fmt --check`, `cargo clippy --all-targets --all-features -D warnings`,
+  `cargo sqlx prepare --workspace --check`: verdes.
+- `cargo test --workspace` (via túnel SSH, banco dev real): verde, exceto 1 teste pré-existente
+  não relacionado (`jwt::validar_token_com_assinatura_adulterada`, confirmado como flaky/
+  dependente de ordem — passa isolado; `jwt.rs` não foi tocado neste ciclo).
+- Testes de integração `whatsapp`/`integracoes` (4/4, contra banco real): verdes, incluindo
+  asserção nova de que a coluna `api_key` nunca guarda o plaintext.
+- `pytest infra/migracao-v1` (75/75): verde.
+- Auditoria final rodada pelo agente principal (não pelo subagente Opus dedicado — interrompido
+  pelo limite mensal de gastos da API a meio da execução); ver
+  `final-review-n8-migracao-e-cutover.md` para o relatório completo e a recomendação de uma
+  segunda auditoria Opus antes da janela de cutover real.
+
 ## [2026-07-23] - Fase N7: Endurecimento residual + operação validada (pré-cutover)
 
 > Ciclo PREVC `n7-endurecimento-residual` fechado e arquivado via `prevc-final-review`.
