@@ -5,7 +5,7 @@ planSlug: n8-migracao-e-cutover
 description: "Terceira e última fase do port final (N6–N8): ETL idempotente v1→v2 (tenants/planos/assinaturas, usuários+RBAC aninhado→escopos planos, contatos/atendimentos/mensagens, documentos+embeddings pgvector 1536, credenciais Fernet→AES-256-GCM via CipherManager, instâncias Evolution), habilitação da produção web completa (/v2/admin + /v2/tenant nos blocos Caddy hoje comentados, role não-superuser em prod, CORS/lifecycle R2 de produção), rollout do enforce com dados da janela do N7 e cutover com rollback ensaiado, desligando o Django legado."
 summary: "Marco que encerra o port: produção 100% na v2, dados migrados e conciliados, enforce ativo com limites reais, legado desligado. Majoritariamente ops+ETL; pré-condição dura: N7 concluída (não se faz cutover às cegas)."
 status: filled
-progress: 0
+progress: 40
 generated: "2026-07-18"
 scaffoldVersion: "2.0.0"
 agents:
@@ -45,7 +45,7 @@ phases:
     prevc: "C"
     agent: "documentation-writer"
     status: "pending"
-lastUpdated: "2026-07-18"
+lastUpdated: "2026-07-23T19:53:59.925Z"
 ---
 
 # Fase N8 — Migração de dados v1→v2 + cutover de produção (fim do port)
@@ -84,4 +84,12 @@ Caddy é habilitação do bloco comentado; enforce informado pela janela do N7) 
 
 ## Execution History
 
-> Last updated: 2026-07-18 | Progress: 0%
+> Last updated: 2026-07-23T19:53:59.925Z | Progress: 40%
+
+### phase-r [DONE]
+- Started: 2026-07-23T18:24:10.068Z
+- Completed: 2026-07-23T18:24:10.068Z
+
+### phase-v [DONE]
+- Started: 2026-07-23T19:53:59.925Z
+- Completed: 2026-07-23T19:53:59.925Z

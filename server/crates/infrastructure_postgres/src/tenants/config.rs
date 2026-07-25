@@ -21,6 +21,7 @@ struct TenantConfigRow {
     llm_temperature: Option<rust_decimal::Decimal>,
     transcription_provider: Option<String>,
     transcription_model: Option<String>,
+    transcription_enabled: Option<bool>,
     vision_provider: Option<String>,
     vision_model: Option<String>,
     embeddings_class: Option<String>,
@@ -58,7 +59,7 @@ pub async fn resolve_runtime_config(
         r#"SELECT dados_empresa, persona_bot, bot_agent_name,
                   msg_fallback, msg_sem_info, msg_transferencia,
                   llm_class, model, llm_temperature,
-                  transcription_provider, transcription_model,
+                  transcription_provider, transcription_model, transcription_enabled,
                   vision_provider, vision_model,
                   embeddings_class, embeddings_model,
                   chunk_size, chunk_overlap,
@@ -96,6 +97,17 @@ pub async fn resolve_runtime_config(
         })
     };
 
+    // Kill-switch booleano: NULL no tenant cai no CoreSetting; CoreSetting ausente
+    // ou com valor não reconhecido = desligado (postura conservadora — a feature
+    // custa dinheiro/latência por áudio recebido).
+    let fallback_bool = |tenant_val: Option<bool>, core_key: &str| -> bool {
+        tenant_val.unwrap_or_else(|| {
+            core.get(core_key)
+                .map(|s| s.eq_ignore_ascii_case("true"))
+                .unwrap_or(false)
+        })
+    };
+
     // 3. Resolve chaves de API (local do tenant tem prioridade; fallback para global)
     let api_keys = tc
         .as_ref()
@@ -124,6 +136,7 @@ pub async fn resolve_runtime_config(
         llm_temperature: None,
         transcription_provider: None,
         transcription_model: None,
+        transcription_enabled: None,
         vision_provider: None,
         vision_model: None,
         embeddings_class: None,
@@ -148,6 +161,7 @@ pub async fn resolve_runtime_config(
         llm_temperature: fallback_dec(tc.llm_temperature, "LLM_TEMPERATURE"),
         transcription_provider: fallback(tc.transcription_provider, "TRANSCRIPTION_PROVIDER"),
         transcription_model: fallback(tc.transcription_model, "TRANSCRIPTION_MODEL"),
+        transcription_enabled: fallback_bool(tc.transcription_enabled, "TRANSCRIPTION_ENABLED"),
         vision_provider: fallback(tc.vision_provider, "VISION_PROVIDER"),
         vision_model: fallback(tc.vision_model, "VISION_MODEL"),
         embeddings_class: fallback(tc.embeddings_class, "EMBEDDINGS_CLASS"),

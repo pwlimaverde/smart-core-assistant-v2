@@ -1,0 +1,37 @@
+{
+  "id": "59ed0ce2-a2da-47a1-927b-182324cfa2b9",
+  "title": "Fase N8 — Migração de dados v1→v2 + cutover de produção (fim do port): Planning",
+  "description": "Derived from linked plan \"n8-migracao-e-cutover\" for PREVC phase P (Planning). Plan phases: Planning. Expected outputs: prd, tech-spec, requirements, wireframes.",
+  "sessionId": "1396db24-6199-476b-8c2d-bae973183899",
+  "owner": "planner",
+  "status": "completed",
+  "inputs": [],
+  "expectedOutputs": [
+    "prd",
+    "tech-spec",
+    "requirements",
+    "wireframes"
+  ],
+  "acceptanceCriteria": [
+    "Complete Planning"
+  ],
+  "requiredSensors": [],
+  "requiredArtifacts": [],
+  "createdAt": "2026-07-23T18:02:45.487Z",
+  "updatedAt": "2026-07-23T18:23:50.559Z",
+  "metadata": {
+    "requirementsSource": "none",
+    "source": "workflow.plan",
+    "planSlug": "n8-migracao-e-cutover",
+    "prevcPhase": "P",
+    "planPhaseIds": [
+      "phase-p"
+    ],
+    "planPhaseNames": [
+      "Planning"
+    ],
+    "planPhaseSummaries": [],
+    "derivedFrom": "linked-plan",
+    "completionReason": "Workflow advanced from P to R"
+  }
+}

@@ -1,16 +1,16 @@
 {
-  "active": [
+  "active": [],
+  "completed": [
     {
-      "slug": "n7-endurecimento-residual",
-      "path": "plans/n7-endurecimento-residual.md",
-      "title": "n7-endurecimento-residual",
-      "linkedAt": "2026-07-23T00:24:46.964Z",
-      "status": "active",
+      "slug": "n8-migracao-e-cutover",
+      "path": "plans/n8-migracao-e-cutover.md",
+      "title": "n8-migracao-e-cutover",
+      "linkedAt": "2026-07-23T18:02:45.454Z",
+      "status": "completed",
       "approval_status": "approved",
-      "approved_at": "2026-07-23T00:25:08.301Z",
+      "approved_at": "2026-07-23T18:24:09.221Z",
       "approved_by": "architect"
     }
   ],
-  "completed": [],
-  "primary": "n7-endurecimento-residual"
+  "primary": "n8-migracao-e-cutover"
 }

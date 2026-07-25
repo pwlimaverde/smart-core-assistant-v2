@@ -50,7 +50,7 @@
       {
         "ordinal": 4,
         "name": "api_key",
-        "type_info": "Varchar",
+        "type_info": "Jsonb",
         "origin": {
           "Table": {
             "table": "whatsapp_instance",

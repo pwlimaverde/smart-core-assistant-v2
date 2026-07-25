@@ -118,6 +118,28 @@ Doc central: `doc_dev/libs/python/cryptography.md` (criado 2026-07-18, via Conte
 
 ---
 
+## Achados adicionais da fase P (2026-07-23)
+
+- **v1 é DB-per-tenant** (`tenants/db_router.py`, `TenantDatabase`): tabelas de
+  `TENANT_APPS` não têm `tenant_id`, isolamento é por banco físico. v2 é single-DB
+  + RLS. O ETL precisa iterar `TenantDatabase` e injetar `tenant_id` — não é
+  cópia direta. Ver `plano_completo_n8-migracao-e-cutover.md` seção "Achados
+  adicionais da fase P" para o detalhamento completo por entidade.
+- **Senha:** PBKDF2 (v1) incompatível com Argon2id (v2) — decisão: reset forçado,
+  sem verificação dupla no login.
+- **RBAC:** `module_permissions` aninhado (v1) precisa achatar para o shape de
+  `derivar_escopos` (array `recurso:acao` ou objeto flat) — tabela de-para nova,
+  não existia em código.
+- **Gap fechado:** `whatsapp_instance.api_key` (v2) não é de fato cifrado hoje
+  apesar do comentário na migration 0008 — corrigir o adapter Rust para usar
+  `CipherManager` dentro do N8.
+- **Evolution tem 3 fontes de credencial** na v1 (`TenantEvolution.api_key`,
+  `Departamento.api_key`, `AppInstance.api_key`) — migrar as três, sem unificar.
+- **Mídia legada** (`Contato.foto_perfil`, `Mensagem.arquivo_midia`, disco
+  `MEDIA_ROOT`) entra no escopo do N8.1 como etapa 7 (upload para R2).
+- **Escopo desta execução:** construir código/config, sem executar contra
+  produção real (sem decriptar credencial real, sem DNS real, sem apagar `old/`).
+
 ## Notas gerais / gotchas
 - **ETL idempotente + dry-run:** scripts versionados em `infra/migracao-v1/`, com
   relatório de conciliação por entidade (contagem v1 × v2 + amostragem de hash).

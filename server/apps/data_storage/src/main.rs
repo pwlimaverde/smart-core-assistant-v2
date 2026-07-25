@@ -132,7 +132,32 @@ async fn processar_purga_midia(
             tenant_id = %tenant_id,
             "Purga assíncrona: iniciando deleção física do arquivo de mídia."
         );
+
+        // Tamanho ANTES de deletar: `tenants_storage_usage.total_bytes` é um
+        // medidor de uso corrente, não um acumulado — a retenção precisa devolver
+        // o espaço ao tenant, senão o enforce de quota (N8.3) bloquearia uploads
+        // legítimos de um bucket já esvaziado. Best-effort: falha no HEAD só
+        // significa "não soube quanto devolver", nunca aborta a purga.
+        let bytes_liberados = state
+            .client
+            .tamanho(tenant_id, file_name)
+            .await
+            .unwrap_or_else(|e| {
+                tracing::warn!(erro = %e, "falha ao consultar tamanho do objeto a purgar; uso de storage não será ajustado");
+                None
+            })
+            .unwrap_or(0);
+
         state.client.delete(tenant_id, file_name).await?;
+
+        if bytes_liberados > 0 {
+            let env_ajuste = Envelope {
+                tenant_id: tenant_id.to_string(),
+                traceparent: envelope.traceparent.clone(),
+                ..Default::default()
+            };
+            registrar_uso_storage(&env_ajuste, -bytes_liberados).await;
+        }
     }
 
     Ok(())
@@ -201,7 +226,15 @@ async fn chamar_data_postgres(
 /// padrão (`SMARTCORE_QUOTA_ENFORCE=false`) — só loga e segue; vira bloqueio real
 /// quando a flag é `true`. Falha na própria checagem é fail-open: não derruba o
 /// upload por causa do guard.
-async fn aplicar_quota_guard_storage(env: &Envelope) -> Result<(), error_core::AppError> {
+///
+/// `delta_bytes` é o quanto ESTE upload vai somar ao uso (já descontado o que a
+/// chave ocupava, ver `handler_put_file`). O guard barra tanto quem já estourou o
+/// limite quanto quem estouraria com este arquivo — sem isso, um único upload
+/// grande passa livre porque a checagem olhava apenas o uso já acumulado.
+async fn aplicar_quota_guard_storage(
+    env: &Envelope,
+    delta_bytes: i64,
+) -> Result<(), error_core::AppError> {
     // Auditoria só no ponto de enforce real (invariante N4/N7): em log-only puro
     // (enforce=false) a quota excedida é apenas medição, não deve gerar evento de
     // auditoria. Por isso `auditar` acompanha a flag — o CheckQuota só publica
@@ -213,7 +246,7 @@ async fn aplicar_quota_guard_storage(env: &Envelope) -> Result<(), error_core::A
     let status = match chamar_data_postgres(
         "CheckQuota",
         &env.tenant_id,
-        serde_json::json!({ "recurso": "storage", "auditar": enforce }),
+        serde_json::json!({ "recurso": "storage", "auditar": enforce, "delta": delta_bytes }),
         env,
     )
     .await
@@ -225,6 +258,8 @@ async fn aplicar_quota_guard_storage(env: &Envelope) -> Result<(), error_core::A
         }
     };
 
+    // `excedido` já cobre os dois casos (uso acumulado e projeção com `delta`);
+    // `excedido_projetado` só distingue qual deles disparou, para o log.
     let excedido = status
         .get("excedido")
         .and_then(|v| v.as_bool())
@@ -234,7 +269,13 @@ async fn aplicar_quota_guard_storage(env: &Envelope) -> Result<(), error_core::A
     }
 
     if !enforce {
-        tracing::warn!("quota de storage excedida (log-only; SMARTCORE_QUOTA_ENFORCE=false)");
+        tracing::warn!(
+            projetado = status
+                .get("excedido_projetado")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            "quota de storage excedida (log-only; SMARTCORE_QUOTA_ENFORCE=false)"
+        );
         return Ok(());
     }
 
@@ -243,9 +284,13 @@ async fn aplicar_quota_guard_storage(env: &Envelope) -> Result<(), error_core::A
     ))
 }
 
-/// N7.1 — registra o uso de armazenamento após um upload bem-sucedido. Best-effort
-/// (nunca falha o upload já concluído por causa disso): erro só gera WARN.
+/// N7.1 — ajusta o uso de armazenamento do tenant. Best-effort (nunca falha a
+/// operação já concluída por causa disso): erro só gera WARN. `delta_bytes`
+/// negativo devolve espaço (purga de mídia).
 async fn registrar_uso_storage(env: &Envelope, delta_bytes: i64) {
+    if delta_bytes == 0 {
+        return;
+    }
     if let Err(e) = chamar_data_postgres(
         "RegisterStorageUsage",
         &env.tenant_id,
@@ -307,8 +352,25 @@ async fn handler_put_file(client: StorageClient, env: Envelope) -> Envelope {
         }
     };
 
-    // N7.1: guard de quota de storage ANTES do upload (log-only por padrão).
-    if let Err(e) = aplicar_quota_guard_storage(&env).await {
+    // Tamanho já ocupado por esta chave (a mídia é content-addressable: o mesmo
+    // áudio reenviado sobrescreve a MESMA chave e não consome espaço novo).
+    // Só a diferença entra na contabilidade de quota — sem isto, cada reenvio
+    // inflaria `tenants_storage_usage` sem ocupar um byte a mais no R2. Vem ANTES
+    // do guard porque é a diferença (não o tamanho bruto) que o guard projeta.
+    // Fail-open: se o HEAD falhar, assume chave nova (contabiliza tudo).
+    let bytes_anteriores = client
+        .tamanho(tenant_id, &file_name)
+        .await
+        .unwrap_or_else(|e| {
+            tracing::warn!(erro = %e, "falha ao consultar tamanho anterior do objeto; contabilizando como chave nova");
+            None
+        })
+        .unwrap_or(0);
+    let delta_bytes = conteudo.len() as i64 - bytes_anteriores;
+
+    // N7.1: guard de quota de storage ANTES do upload (log-only por padrão),
+    // já considerando o custo deste arquivo.
+    if let Err(e) = aplicar_quota_guard_storage(&env, delta_bytes).await {
         return responder_erro(e, env, "PutFileReply");
     }
 
@@ -318,7 +380,7 @@ async fn handler_put_file(client: StorageClient, env: Envelope) -> Envelope {
             observability::usage_metrics::registrar_midia_armazenada(&env.tenant_id);
             // N7.1: uso em bytes persistido no data_postgres, para a próxima checagem
             // de quota de storage (best-effort — não falha o upload já concluído).
-            registrar_uso_storage(&env, conteudo.len() as i64).await;
+            registrar_uso_storage(&env, delta_bytes).await;
             let res = serde_json::json!({ "uri": uri });
             Envelope {
                 kind: MessageKind::Reply as i32,

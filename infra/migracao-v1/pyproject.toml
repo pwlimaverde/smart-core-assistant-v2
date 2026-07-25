@@ -1,0 +1,36 @@
+[project]
+name = "migracao-v1"
+version = "0.1.0"
+description = "ETL de migracao do legado Django (v1, DB-per-tenant) para o Smart Core Assistant v2 (Rust, single-DB + RLS)"
+requires-python = ">=3.11"
+readme = "README.md"
+dependencies = [
+    "asyncpg>=0.29",
+    "cryptography>=42.0",
+]
+
+[project.optional-dependencies]
+# Necessario apenas para o step 7 (media legada -> R2). Isolado porque o resto
+# do ETL nao precisa falar com S3 e nao queremos essa dependencia pesada
+# (aiobotocore/aioboto3) no caminho critico dos outros steps.
+storage = [
+    "aioboto3>=13.0",
+]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+]
+
+[project.scripts]
+migracao-v1 = "migracao_v1.cli:main"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["migracao_v1*"]

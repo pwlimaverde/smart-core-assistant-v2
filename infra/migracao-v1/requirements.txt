@@ -1,0 +1,13 @@
+# Instalacao rapida sem build do pacote (alternativa ao `pip install -e .`).
+# Fonte da verdade das dependencias e o pyproject.toml — mantenha os dois em sincronia.
+asyncpg>=0.29
+cryptography>=42.0
+
+# Opcional — apenas para o step 7 (media legada -> R2). Instale com:
+#   pip install -r requirements.txt -r requirements-storage.txt
+# ou `pip install -e ".[storage]"`.
+# aioboto3>=13.0
+
+# Dev/test
+pytest>=8.0
+pytest-asyncio>=0.24

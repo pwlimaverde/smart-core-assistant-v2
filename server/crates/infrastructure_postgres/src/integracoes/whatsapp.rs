@@ -3,14 +3,16 @@ use chrono::{DateTime, Utc};
 use sqlx::{Postgres, Transaction};
 use uuid::Uuid;
 
-use crate::{errors::DbError, security::RequestContext};
+use crate::{crypto::CipherManager, errors::DbError, security::RequestContext};
 
-#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct WhatsappInstance {
     pub id: i32,
     pub tenant_id: Uuid,
     pub name: String,
     pub instance_id: Option<String>,
+    /// Sempre o token em claro (decifrado na leitura) — a coluna no banco é
+    /// jsonb {ciphertext,nonce,tag}, ver `CipherManager`.
     pub api_key: String,
     pub phone_number: Option<String>,
     pub active: bool,
@@ -21,6 +23,47 @@ pub struct WhatsappInstance {
     pub subscribed_events: serde_json::Value,
     pub last_connection_state: Option<String>,
     pub created_at: DateTime<Utc>,
+}
+
+/// Linha bruta do banco — `api_key` ainda cifrada (jsonb {ciphertext,nonce,tag}).
+#[derive(Debug, Clone, sqlx::FromRow)]
+struct WhatsappInstanceRow {
+    id: i32,
+    tenant_id: Uuid,
+    name: String,
+    instance_id: Option<String>,
+    api_key: serde_json::Value,
+    phone_number: Option<String>,
+    active: bool,
+    connection_state: String,
+    last_state_check: Option<DateTime<Utc>>,
+    media_storage_backend: String,
+    provider: String,
+    subscribed_events: serde_json::Value,
+    last_connection_state: Option<String>,
+    created_at: DateTime<Utc>,
+}
+
+impl WhatsappInstanceRow {
+    /// Decifra `api_key` e monta o struct público.
+    fn decrypt(self, cipher: &CipherManager) -> Result<WhatsappInstance, DbError> {
+        Ok(WhatsappInstance {
+            id: self.id,
+            tenant_id: self.tenant_id,
+            name: self.name,
+            instance_id: self.instance_id,
+            api_key: cipher.decrypt_json_entry(&self.api_key)?,
+            phone_number: self.phone_number,
+            active: self.active,
+            connection_state: self.connection_state,
+            last_state_check: self.last_state_check,
+            media_storage_backend: self.media_storage_backend,
+            provider: self.provider,
+            subscribed_events: self.subscribed_events,
+            last_connection_state: self.last_connection_state,
+            created_at: self.created_at,
+        })
+    }
 }
 
 #[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
@@ -44,6 +87,7 @@ pub trait WhatsappInstanceRepository: Send + Sync {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
+        cipher: &CipherManager,
         name: &str,
         api_key: &str,
         provider: &str,
@@ -53,6 +97,7 @@ pub trait WhatsappInstanceRepository: Send + Sync {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
+        cipher: &CipherManager,
         name: &str,
     ) -> Result<Option<WhatsappInstance>, DbError>;
 
@@ -60,6 +105,7 @@ pub trait WhatsappInstanceRepository: Send + Sync {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
+        cipher: &CipherManager,
         id: i32,
     ) -> Result<Option<WhatsappInstance>, DbError>;
 
@@ -67,6 +113,7 @@ pub trait WhatsappInstanceRepository: Send + Sync {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
+        cipher: &CipherManager,
         instance_id_str: &str,
     ) -> Result<Option<WhatsappInstance>, DbError>;
 
@@ -91,12 +138,14 @@ pub trait WhatsappInstanceRepository: Send + Sync {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
+        cipher: &CipherManager,
     ) -> Result<Vec<WhatsappInstance>, DbError>;
 
     async fn admin_listar_todas_conectadas(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
+        cipher: &CipherManager,
     ) -> Result<Vec<WhatsappInstance>, DbError>;
 
     async fn admin_deletar_instancia(
@@ -136,13 +185,15 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
+        cipher: &CipherManager,
         name: &str,
         api_key: &str,
         provider: &str,
     ) -> Result<WhatsappInstance, DbError> {
         ctx.exigir_qualquer(&["operacional:admin", "tenant:admin", "integracoes:write"])?;
+        let api_key_json = cipher.encrypt_to_json(api_key.as_bytes())?;
         let row = sqlx::query_as!(
-            WhatsappInstance,
+            WhatsappInstanceRow,
             r#"INSERT INTO whatsapp_instance (tenant_id, name, api_key, provider)
                VALUES ($1, $2, $3, $4)
                RETURNING id, tenant_id, name, instance_id, api_key, phone_number, active,
@@ -150,13 +201,16 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
                          subscribed_events, last_connection_state, created_at"#,
             ctx.tenant_id,
             name,
-            api_key,
+            api_key_json,
             provider
         )
         .fetch_one(&mut **tx)
         .await
         .map_err(DbError::from_sqlx_unique)?;
-        Ok(row)
+        // Reaproveita o plaintext já em mãos em vez de decifrar de novo.
+        let mut inst = row.decrypt(cipher)?;
+        inst.api_key = api_key.to_string();
+        Ok(inst)
     }
 
     #[tracing::instrument(skip_all)]
@@ -164,10 +218,11 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
+        cipher: &CipherManager,
         name: &str,
     ) -> Result<Option<WhatsappInstance>, DbError> {
         let row = sqlx::query_as!(
-            WhatsappInstance,
+            WhatsappInstanceRow,
             r#"SELECT id, tenant_id, name, instance_id, api_key, phone_number, active,
                        connection_state, last_state_check, media_storage_backend, provider,
                        subscribed_events, last_connection_state, created_at
@@ -178,7 +233,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
         )
         .fetch_optional(&mut **tx)
         .await?;
-        Ok(row)
+        row.map(|r| r.decrypt(cipher)).transpose()
     }
 
     #[tracing::instrument(skip_all)]
@@ -186,10 +241,11 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
+        cipher: &CipherManager,
         id: i32,
     ) -> Result<Option<WhatsappInstance>, DbError> {
         let row = sqlx::query_as!(
-            WhatsappInstance,
+            WhatsappInstanceRow,
             r#"SELECT id, tenant_id, name, instance_id, api_key, phone_number, active,
                        connection_state, last_state_check, media_storage_backend, provider,
                        subscribed_events, last_connection_state, created_at
@@ -200,7 +256,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
         )
         .fetch_optional(&mut **tx)
         .await?;
-        Ok(row)
+        row.map(|r| r.decrypt(cipher)).transpose()
     }
 
     #[tracing::instrument(skip_all)]
@@ -208,10 +264,11 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
+        cipher: &CipherManager,
         instance_id_str: &str,
     ) -> Result<Option<WhatsappInstance>, DbError> {
         let row = sqlx::query_as!(
-            WhatsappInstance,
+            WhatsappInstanceRow,
             r#"SELECT id, tenant_id, name, instance_id, api_key, phone_number, active,
                        connection_state, last_state_check, media_storage_backend, provider,
                        subscribed_events, last_connection_state, created_at
@@ -222,7 +279,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
         )
         .fetch_optional(&mut **tx)
         .await?;
-        Ok(row)
+        row.map(|r| r.decrypt(cipher)).transpose()
     }
 
     #[tracing::instrument(skip_all, fields(id = id, connection_state = %connection_state))]
@@ -277,9 +334,10 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
+        cipher: &CipherManager,
     ) -> Result<Vec<WhatsappInstance>, DbError> {
         let rows = sqlx::query_as!(
-            WhatsappInstance,
+            WhatsappInstanceRow,
             r#"SELECT id, tenant_id, name, instance_id, api_key, phone_number, active,
                        connection_state, last_state_check, media_storage_backend, provider,
                        subscribed_events, last_connection_state, created_at
@@ -290,7 +348,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
         )
         .fetch_all(&mut **tx)
         .await?;
-        Ok(rows)
+        rows.into_iter().map(|r| r.decrypt(cipher)).collect()
     }
 
     #[tracing::instrument(skip_all, fields(operation = "admin_list_all_whatsapp_instances"))]
@@ -298,6 +356,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
+        cipher: &CipherManager,
     ) -> Result<Vec<WhatsappInstance>, DbError> {
         ctx.exigir_qualquer(&["operacional:admin"])?;
         // Requer pool com BYPASSRLS (admin pool, DATABASE_ADMIN_URL).
@@ -305,7 +364,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
         // USING (tenant_id = NULLIF(current_setting('app.current_tenant', true), '')::uuid)
         // avalia para FALSE quando app.current_tenant não está definido.
         let rows = sqlx::query_as!(
-            WhatsappInstance,
+            WhatsappInstanceRow,
             r#"SELECT id, tenant_id, name, instance_id, api_key, phone_number, active,
                        connection_state, last_state_check, media_storage_backend, provider,
                        subscribed_events, last_connection_state, created_at
@@ -314,7 +373,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
         )
         .fetch_all(&mut **tx)
         .await?;
-        Ok(rows)
+        rows.into_iter().map(|r| r.decrypt(cipher)).collect()
     }
 
     #[tracing::instrument(skip_all)]

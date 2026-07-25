@@ -197,7 +197,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let whatsapp_store: std::sync::Arc<dyn ports::WhatsappStore> = std::sync::Arc::new(
-        adapters::PgWhatsappStore::new(pool.clone(), admin_pool.clone()),
+        adapters::PgWhatsappStore::new(pool.clone(), admin_pool.clone(), cipher.clone()),
     );
     let audit_port: std::sync::Arc<dyn ports::AuditPort> =
         std::sync::Arc::new(adapters::RedisAuditPort::new(bus_conn.clone()));
@@ -3030,6 +3030,7 @@ async fn handler_resolver_config_ia(
                 "embeddings_model": cfg.embeddings_model,
                 "similarity_threshold": cfg.similarity_threshold,
                 "vector_distance_threshold": cfg.vector_distance_threshold,
+                "transcription_enabled": cfg.transcription_enabled,
                 "api_key": cfg.api_key,
                 "embeddings_api_key": cfg.embeddings_api_key,
             }),
@@ -3343,6 +3344,14 @@ async fn handler_check_quota(
         .get("auditar")
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    // `delta` (opcional) = quanto a operação em curso vai SOMAR ao uso, quando o
+    // chamador já sabe o custo antes de executar (ex.: bytes do `PutFile` no
+    // data_storage). Permite barrar quem estouraria o limite COM esta operação, e
+    // não só quem já o estourou — sem ele, um único upload grande passa livre.
+    let delta = payload_json
+        .get("delta")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
 
     let tenant_id = match Uuid::parse_str(&env.tenant_id) {
         Ok(u) => u,
@@ -3355,11 +3364,34 @@ async fn handler_check_quota(
     };
 
     match store.verificar_quota(tenant_id, recurso).await {
-        Ok(status) => {
-            let excedido = status
+        Ok(mut status) => {
+            let excedido_acumulado = status
                 .get("excedido")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false);
+
+            // Projeção com o custo da operação. `limite` ausente/nulo = sem
+            // assinatura ou plano sem limite: não bloqueia (mesma postura
+            // conservadora de `verificar_quota`).
+            let limite = status.get("limite").and_then(|v| v.as_i64());
+            let uso_atual = status
+                .get("uso_atual")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(0);
+            let excedido_projetado = delta != 0
+                && limite
+                    .map(|l| uso_atual.saturating_add(delta) > l)
+                    .unwrap_or(false);
+
+            // O guard do chamador barra os dois casos, então a auditoria também —
+            // e `excedido` no reply precisa refletir o veredito COMBINADO, senão o
+            // chamador (que decide olhando esse campo) deixaria passar a projeção.
+            let excedido = excedido_acumulado || excedido_projetado;
+            if let Some(obj) = status.as_object_mut() {
+                obj.insert("excedido".to_string(), excedido.into());
+                obj.insert("excedido_projetado".to_string(), excedido_projetado.into());
+                obj.insert("delta_avaliado".to_string(), delta.into());
+            }
             let inadimplente = status
                 .get("inadimplente")
                 .and_then(|v| v.as_bool())
@@ -3411,10 +3443,12 @@ async fn handler_register_storage_usage(store: &dyn ports::QuotaStore, env: Enve
         }
     };
 
-    let Some(delta_bytes) = delta_bytes.filter(|d| *d > 0) else {
+    // Delta negativo é legítimo: a purga de mídia (retenção) devolve espaço ao
+    // tenant. Zero é rejeitado por ser sempre chamada inútil (bug do caller).
+    let Some(delta_bytes) = delta_bytes.filter(|d| *d != 0) else {
         return erro(
             error_core::AppError::Validation(
-                "delta_bytes deve ser um inteiro positivo".to_string(),
+                "delta_bytes deve ser um inteiro diferente de zero".to_string(),
             ),
             &env,
         );
@@ -5727,6 +5761,97 @@ mod tests_quota_unit {
         assert_eq!(resp.kind, MessageKind::Reply as i32);
     }
 
+    /// `delta` projeta o custo da operação em curso: quem está DENTRO do limite mas
+    /// o estouraria com este arquivo é barrado (e auditado) igual a quem já estourou.
+    /// Sem isso um único upload grande passa livre, porque `verificar_quota` só olha
+    /// o uso já acumulado.
+    #[tokio::test]
+    async fn check_quota_com_delta_barra_quem_estouraria_o_limite() {
+        let mut store = MockQuotaStore::new();
+        store.expect_verificar_quota().times(1).returning(|_, _| {
+            Ok(serde_json::json!({
+                "recurso": "storage",
+                "uso_atual": 900,
+                "limite": 1_000,
+                "excedido": false,
+                "inadimplente": false,
+            }))
+        });
+        let mut audit = MockAuditPort::new();
+        audit
+            .expect_publish()
+            .withf(|_, event, _, _| event == "quota.excedida")
+            .times(1)
+            .returning(|_, _, _, _| ());
+        let env = envelope_com_payload(
+            "CheckQuota",
+            // 900 + 200 = 1100 > 1000
+            serde_json::json!({ "recurso": "storage", "auditar": true, "delta": 200 }),
+        );
+
+        let resp = handler_check_quota(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let payload: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(payload["excedido"], true);
+        assert_eq!(payload["excedido_projetado"], true);
+        assert_eq!(payload["delta_avaliado"], 200);
+    }
+
+    /// Delta que ainda cabe no limite não bloqueia nem audita.
+    #[tokio::test]
+    async fn check_quota_com_delta_que_cabe_no_limite_nao_bloqueia() {
+        let mut store = MockQuotaStore::new();
+        store.expect_verificar_quota().times(1).returning(|_, _| {
+            Ok(serde_json::json!({
+                "recurso": "storage",
+                "uso_atual": 900,
+                "limite": 1_000,
+                "excedido": false,
+                "inadimplente": false,
+            }))
+        });
+        let mut audit = MockAuditPort::new();
+        audit.expect_publish().never();
+        let env = envelope_com_payload(
+            "CheckQuota",
+            serde_json::json!({ "recurso": "storage", "auditar": true, "delta": 50 }),
+        );
+
+        let resp = handler_check_quota(&store, &audit, env).await;
+
+        let payload: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(payload["excedido"], false);
+        assert_eq!(payload["excedido_projetado"], false);
+    }
+
+    /// Plano sem limite configurado (`limite: null`) nunca bloqueia, mesmo com delta
+    /// grande — mesma postura conservadora de `verificar_quota`.
+    #[tokio::test]
+    async fn check_quota_com_delta_e_limite_nulo_nao_bloqueia() {
+        let mut store = MockQuotaStore::new();
+        store.expect_verificar_quota().times(1).returning(|_, _| {
+            Ok(serde_json::json!({
+                "recurso": "storage",
+                "uso_atual": 5_000,
+                "limite": serde_json::Value::Null,
+                "excedido": false,
+                "inadimplente": false,
+            }))
+        });
+        let mut audit = MockAuditPort::new();
+        audit.expect_publish().never();
+        let env = envelope_com_payload(
+            "CheckQuota",
+            serde_json::json!({ "recurso": "storage", "auditar": true, "delta": 10_000_000 }),
+        );
+
+        let resp = handler_check_quota(&store, &audit, env).await;
+
+        let payload: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(payload["excedido_projetado"], false);
+    }
+
     /// Quota excedida SEM `auditar` (default false) NÃO publica — regra que evita
     /// inundar a trilha de auditoria no caminho quente de ingestão (doc 08 §4.2).
     #[tokio::test]
@@ -5829,19 +5954,40 @@ mod tests_quota_unit {
     }
 
     #[tokio::test]
-    async fn register_storage_usage_rejects_delta_ausente_ou_nao_positivo() {
+    async fn register_storage_usage_rejects_delta_ausente_ou_zero() {
         let mut store = MockQuotaStore::new();
         store.expect_registrar_uso_storage().never();
 
         for payload in [
             serde_json::json!({}),
             serde_json::json!({ "delta_bytes": 0 }),
-            serde_json::json!({ "delta_bytes": -1 }),
         ] {
             let env = envelope_com_payload("RegisterStorageUsage", payload);
             let resp = handler_register_storage_usage(&store, env).await;
             assert_eq!(resp.kind, MessageKind::Error as i32);
         }
+    }
+
+    /// `total_bytes` é um medidor de uso CORRENTE, não um acumulado: a purga de
+    /// mídia (retenção) devolve espaço ao tenant com delta negativo. Sem isto o
+    /// enforce de quota bloquearia uploads legítimos de um bucket já esvaziado.
+    #[tokio::test]
+    async fn register_storage_usage_aceita_delta_negativo_da_purga() {
+        let mut store = MockQuotaStore::new();
+        store
+            .expect_registrar_uso_storage()
+            .times(1)
+            .returning(|_, delta| Ok((1_000 + delta).max(0)));
+        let env = envelope_com_payload(
+            "RegisterStorageUsage",
+            serde_json::json!({ "delta_bytes": -400 }),
+        );
+
+        let resp = handler_register_storage_usage(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let payload: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(payload["total_bytes"], 600);
     }
 
     #[tokio::test]

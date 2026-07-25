@@ -1,6 +1,9 @@
+use std::sync::Arc;
+
 use crate::common::{
     configurar_tenant_transacao, criar_contexto_teste, criar_tenant_para_teste, obter_pool_teste,
 };
+use infrastructure_postgres::crypto::CipherManager;
 use infrastructure_postgres::integracoes::{
     whatsapp::{
         PostgresWhatsappContactRepository, PostgresWhatsappInstanceRepository,
@@ -9,10 +12,18 @@ use infrastructure_postgres::integracoes::{
     whitelist::{PostgresWhiteListRepository, WhiteListRepository},
 };
 
+/// Chave de teste determinística (32 bytes válidos), mesmo padrão de tests/tenants/mod.rs.
+fn cipher_teste() -> Arc<CipherManager> {
+    let key_str = "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE=";
+    std::env::set_var("ENCRYPTION_KEY", key_str);
+    Arc::new(CipherManager::new_from_env().unwrap())
+}
+
 #[tokio::test]
 async fn test_evolution_sync_crud() {
     let pool = obter_pool_teste().await;
     let mut tx = pool.begin().await.unwrap();
+    let cipher = cipher_teste();
 
     let instance_repo = PostgresWhatsappInstanceRepository;
     let contact_repo = PostgresWhatsappContactRepository;
@@ -26,19 +37,46 @@ async fn test_evolution_sync_crud() {
     // 2. Criar EvolutionInstance
     let inst_name = "whatsapp-evolution-1";
     let inst = instance_repo
-        .criar(&mut tx, &ctx, inst_name, "api-key-test", "evolution")
+        .criar(
+            &mut tx,
+            &ctx,
+            &cipher,
+            inst_name,
+            "api-key-test",
+            "evolution",
+        )
         .await
         .expect("Falha ao criar instância Whatsapp");
     assert_eq!(inst.name, inst_name);
     assert_eq!(inst.connection_state, "unknown");
+    assert_eq!(inst.api_key, "api-key-test", "api_key deve vir decifrada");
+
+    // A coluna crua no banco nunca guarda o plaintext — só {ciphertext,nonce,tag}.
+    let raw_api_key: serde_json::Value = sqlx::query_scalar!(
+        "SELECT api_key FROM whatsapp_instance WHERE id = $1",
+        inst.id
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .unwrap();
+    assert!(raw_api_key.get("ciphertext").is_some());
+    assert_ne!(
+        raw_api_key
+            .get("ciphertext")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default(),
+        "api-key-test",
+        "api_key nunca deve ficar em texto plano na coluna"
+    );
 
     // Buscar por Name
     let inst_busca = instance_repo
-        .buscar_por_name(&mut tx, &ctx, inst_name)
+        .buscar_por_name(&mut tx, &ctx, &cipher, inst_name)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(inst_busca.id, inst.id);
+    assert_eq!(inst_busca.api_key, "api-key-test");
 
     // 3. Atualizar Estado
     sqlx::query!(
@@ -55,14 +93,17 @@ async fn test_evolution_sync_crud() {
         .expect("Falha ao atualizar estado");
 
     let inst_atualizada = instance_repo
-        .buscar_por_name(&mut tx, &ctx, inst_name)
+        .buscar_por_name(&mut tx, &ctx, &cipher, inst_name)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(inst_atualizada.connection_state, "connected");
 
     // Listar Ativas
-    let lista = instance_repo.listar_ativas(&mut tx, &ctx).await.unwrap();
+    let lista = instance_repo
+        .listar_ativas(&mut tx, &ctx, &cipher)
+        .await
+        .unwrap();
     assert_eq!(lista.len(), 1);
     assert_eq!(lista[0].id, inst.id);
 
@@ -141,6 +182,7 @@ async fn test_integracoes_rls_isolation() {
     let pool = obter_pool_teste().await;
     let mut tx = pool.begin().await.unwrap();
 
+    let cipher = cipher_teste();
     let instance_repo = PostgresWhatsappInstanceRepository;
     let whitelist_repo = PostgresWhiteListRepository;
 
@@ -151,7 +193,14 @@ async fn test_integracoes_rls_isolation() {
     let ctx_a = criar_contexto_teste(tenant_a.id);
 
     let _inst_a = instance_repo
-        .criar(&mut tx, &ctx_a, "instancia-a", "key-a", "evolution")
+        .criar(
+            &mut tx,
+            &ctx_a,
+            &cipher,
+            "instancia-a",
+            "key-a",
+            "evolution",
+        )
         .await
         .unwrap();
 
@@ -168,7 +217,7 @@ async fn test_integracoes_rls_isolation() {
     let ctx_b = criar_contexto_teste(tenant_b.id);
 
     let busca_inst = instance_repo
-        .buscar_por_name(&mut tx, &ctx_b, "instancia-a")
+        .buscar_por_name(&mut tx, &ctx_b, &cipher, "instancia-a")
         .await
         .unwrap();
     assert!(
@@ -193,6 +242,7 @@ async fn test_whatsapp_repo_extended() {
     let pool = obter_pool_teste().await;
     let mut tx = pool.begin().await.unwrap();
 
+    let cipher = cipher_teste();
     let instance_repo = PostgresWhatsappInstanceRepository;
 
     // Setup Tenant
@@ -202,17 +252,25 @@ async fn test_whatsapp_repo_extended() {
 
     // 1. Criar
     let inst = instance_repo
-        .criar(&mut tx, &ctx, "whatsapp-ext", "api-key-ext", "evolution")
+        .criar(
+            &mut tx,
+            &ctx,
+            &cipher,
+            "whatsapp-ext",
+            "api-key-ext",
+            "evolution",
+        )
         .await
         .unwrap();
 
     // 2. Buscar por ID
     let inst_id = instance_repo
-        .buscar_por_id(&mut tx, &ctx, inst.id)
+        .buscar_por_id(&mut tx, &ctx, &cipher, inst.id)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(inst_id.name, "whatsapp-ext");
+    assert_eq!(inst_id.api_key, "api-key-ext");
 
     // 3. Atualizar Provider ID
     instance_repo
@@ -228,7 +286,7 @@ async fn test_whatsapp_repo_extended() {
 
     // 4. Buscar por Instance ID
     let inst_prov = instance_repo
-        .buscar_por_instance_id(&mut tx, &ctx, "prov-id-xyz")
+        .buscar_por_instance_id(&mut tx, &ctx, &cipher, "prov-id-xyz")
         .await
         .unwrap()
         .unwrap();
@@ -237,7 +295,7 @@ async fn test_whatsapp_repo_extended() {
 
     // 5. Admin Listar Todas Conectadas (precisa de RLS bypass ou escopo admin)
     let err_admin = instance_repo
-        .admin_listar_todas_conectadas(&mut tx, &ctx)
+        .admin_listar_todas_conectadas(&mut tx, &ctx, &cipher)
         .await;
     assert!(
         err_admin.is_err(),
@@ -249,7 +307,7 @@ async fn test_whatsapp_repo_extended() {
     ctx_admin.user_scopes.push("operacional:admin".to_string());
 
     let conectadas = instance_repo
-        .admin_listar_todas_conectadas(&mut tx, &ctx_admin)
+        .admin_listar_todas_conectadas(&mut tx, &ctx_admin, &cipher)
         .await
         .unwrap();
     assert!(!conectadas.is_empty());
@@ -262,7 +320,7 @@ async fn test_whatsapp_repo_extended() {
 
     // Verificar que foi deletada
     let inst_del = instance_repo
-        .buscar_por_id(&mut tx, &ctx, inst.id)
+        .buscar_por_id(&mut tx, &ctx, &cipher, inst.id)
         .await
         .unwrap();
     assert!(inst_del.is_none());

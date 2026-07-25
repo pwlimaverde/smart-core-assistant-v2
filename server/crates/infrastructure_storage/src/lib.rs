@@ -124,6 +124,38 @@ impl StorageClient {
         Ok(bytes)
     }
 
+    /// Tamanho em bytes do objeto, ou `None` quando ele não existe (`HEAD`, sem
+    /// baixar o corpo). Sustenta a contabilidade de `tenants_storage_usage`
+    /// (N7.1): o `PutFile` só soma bytes quando a chave é nova (a mídia é
+    /// content-addressable — o mesmo áudio reenviado sobrescreve a mesma chave e
+    /// não deve ser contado duas vezes) e a purga só subtrai o que existia de fato.
+    #[tracing::instrument(skip(self), fields(tenant_id = %tenant_id, file_name = %file_name), err)]
+    pub async fn tamanho(
+        &self,
+        tenant_id: Uuid,
+        file_name: &str,
+    ) -> Result<Option<i64>, StorageError> {
+        let key = Self::chave(tenant_id, file_name);
+        match self
+            .client
+            .head_object()
+            .bucket(&self.bucket)
+            .key(&key)
+            .send()
+            .await
+        {
+            Ok(saida) => Ok(Some(saida.content_length().unwrap_or(0))),
+            Err(e) => {
+                let svc = e.into_service_error();
+                if svc.is_not_found() {
+                    Ok(None)
+                } else {
+                    Err(StorageError::S3(svc.to_string()))
+                }
+            }
+        }
+    }
+
     /// Gera uma URL pré-assinada (presigned GET) para download direto pelo cliente.
     #[tracing::instrument(skip(self), fields(tenant_id = %tenant_id, file_name = %file_name, ttl_segundos), err)]
     pub async fn presign(

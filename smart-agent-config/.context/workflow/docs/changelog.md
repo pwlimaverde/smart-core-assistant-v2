@@ -2,6 +2,173 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-07-24] - Auditoria N6–N8: 3 defeitos de bloqueio de cutover + 3 desvios de plano
+
+> Revisão detalhada, sob demanda, de tudo que N6/N7/N8 entregaram (plano vs. código real),
+> fora do ciclo PREVC. Dois dos três defeitos abaixo só se manifestariam **depois** do
+> cutover/enforce, ou seja, nenhum teste ou final-review anterior os pegaria.
+
+### Corrigido
+
+- **ETL não reposicionava as sequences das tabelas com `id_strategy="preserve"`
+  (`infra/migracao-v1/migracao_v1/tables/engine.py`).** Gravar a PK explicitamente
+  (`INSERT ... (id, ...) VALUES ($1, ...)`) não avança a sequence do `SERIAL`: depois da
+  carga, o primeiro INSERT normal do v2 em `auth_user`, `tenants_plan`,
+  `tenants_subscription`, `tenants_paymentrecord` ou `tenants_tenantuser` reusaria um id já
+  migrado e estouraria `duplicate key` — cadastrar usuário, criar plano/assinatura, registrar
+  pagamento e aceitar convite quebrariam **logo após o cutover**. `--dry-run` não exercita o
+  upsert, então a validação prévia do runbook não revelaria isso. Adicionado
+  `_ressincronizar_sequence` (`setval(seq, COALESCE(MAX(pk),0)+1, false)`, ignorado quando
+  `pg_get_serial_sequence` é NULL — PK UUID) no fim de cada spec `preserve`, + 3 testes.
+- **`tenants_storage_usage.total_bytes` era um contador monotônico usado como medidor de uso
+  corrente.** A purga de mídia por retenção (`media.purge` → `data_storage`) deleta o objeto
+  do R2 mas nunca devolvia os bytes ao tenant, e a mídia é content-addressable — o mesmo áudio
+  reenviado sobrescreve a MESMA chave e era contado de novo. Com `SMARTCORE_QUOTA_ENFORCE=true`
+  (exatamente o que a N8.3 vai ligar), todo tenant acabaria bloqueado permanentemente com um
+  bucket quase vazio. Corrigido: primitiva `StorageClient::tamanho` (HEAD, sem baixar corpo);
+  `PutFile` contabiliza só a diferença sobre o que a chave já ocupava; a purga subtrai o que
+  existia de fato; `RegisterStorageUsage` aceita delta negativo (rejeita só zero) e o upsert
+  clampa em `GREATEST(0, ...)`.
+- **A resposta do bot nunca era persistida no thread (N6.2/N6.3).** O worker enviava o texto
+  pelo WhatsApp e seguia adiante, então: o atendente não via no chat o que o bot respondeu; o
+  próprio bot não tinha memória das suas falas (o `historico` do `Responder` é montado a partir
+  do `GetThread`, que só devolvia turnos do contato — a cada rodada o modelo via uma sequência
+  de mensagens "human" sem nenhuma resposta sua); e `gerado_por_ia` ficava permanentemente
+  `false`, deixando o objetivo declarado da N6.2 ("o chat exibe o selo com dado real")
+  inalcançável. O final-review da N6 registrou o campo como gap aceito, mas tratado como
+  detalhe de selo na UI, não como perda de contexto conversacional. Corrigido: o worker chama
+  `PersistMessage` com `sender_id = "bot"` após o envio bem-sucedido (best-effort — a mensagem
+  já foi entregue ao contato), e `MensagemRepository::criar` deriva `gerado_por_ia` do
+  remetente no único ponto de escrita da tabela. Sem realimentar o envio outbound:
+  `processar_mensagem_persistida` só reage a `"atendente"`. Constantes `REMETENTE_BOT`/
+  `REMETENTE_ATENDENTE` substituem os literais espalhados.
+
+### Alterado (desvios de plano quitados na mesma rodada)
+
+- **Kill-switch de transcrição agora é por tenant (N6.4, passo 4).** Só existia a env var
+  global `TRANSCRIPTION_ENABLED` do `ia_engine`, que liga/desliga a feature para a instalação
+  inteira; o plano pedia a flag por tenant. Migration `0024` adiciona
+  `tenants_tenantconfig.transcription_enabled` (nullable) + CoreSetting global
+  `TRANSCRIPTION_ENABLED` como fallback, usando a cascata Tenant > CoreSettings que já existia
+  no `resolve_runtime_config`. `ResolverConfigIa` expõe o campo e o pipeline de mídia o respeita:
+  desligado, o áudio ainda vai ao R2 e o ponteiro é persistido (o atendente continua podendo
+  ouvir), mas a chamada à IA **e o presign que a alimentava** são dispensados — antes o pipeline
+  gastava as duas etapas para só então o engine recusar. Default segue desligado (custo/latência
+  por áudio). Extraído `anexar_analise_midia` para os dois desfechos compartilharem a persistência
+  do ponteiro + auditoria `midia.analisada`.
+- **Rate limit do webhook ganhou a política log-only ↔ enforce (N7.3).**
+  `WEBHOOK_RATE_LIMIT_ENFORCE`, com default **`true`** — diferente das quotas de propósito: o
+  bloqueio 429 já valia desde a N4.4 e um default `false` abriria a ingestão a rajadas. A flag
+  serve para calibrar `MAX` numa janela de observação (o excesso é medido e auditado, mas passa).
+  Documentada nos dois `.env.example` do docker.
+- **Guard de quota de storage passou a projetar o custo do upload.** Checava "já excedeu", então
+  um único arquivo grande passava livre. `CheckQuota` aceita `delta` opcional e devolve
+  `excedido` já combinado (acumulado ou projetado) + `excedido_projetado`/`delta_avaliado` para
+  diagnóstico; o `PutFile` envia a diferença que o arquivo realmente vai somar. A projeção ficou
+  no `data_postgres` — não no `data_storage` — para a auditoria `quota.excedida` continuar saindo
+  de um único ponto.
+
+### Validação
+
+- `.\infra\test-local.ps1`: **tudo verde** (fmt, clippy `-D warnings`, `cargo test --workspace`
+  com integração real via túnel, `cargo sqlx prepare --workspace --check`). Testes novos:
+  `test_resposta_do_bot_e_persistida_no_thread` e
+  `test_pipeline_midia_audio_sem_transcricao_persiste_so_o_ponteiro` (worker, este com
+  `expect_transcribe().never()` para falhar se o kill-switch vazar), 3 de projeção de quota
+  (`delta` que estoura, que cabe, e com limite nulo), o de delta negativo de storage, o da
+  cascata do default de `WEBHOOK_RATE_LIMIT_ENFORCE`, e a asserção de `gerado_por_ia` no teste
+  de integração de atendimentos.
+- pytest do ETL: 78/78 (75 anteriores + 3 novos de ressincronização de sequence).
+- Migration `0024` aplicada ao Postgres dev remoto; `.sqlx` regenerado
+  (`cargo sqlx prepare --workspace -- --tests --all-features`).
+
+### Observações (analisado, sem defeito)
+
+- As 4 constraints `UNIQUE` exigidas pelos `ON CONFLICT` das specs `natural` do ETL foram
+  conferidas uma a uma contra as migrations: todas existem.
+- O ETL depende de rodar com role admin/BYPASSRLS no v2 (todas as tabelas tenant-scoped têm
+  `FORCE ROW LEVEL SECURITY` e ele não define `app.current_tenant`). Já é o que o
+  `RUNBOOK_CUTOVER_N8.md` manda usar (`smartcore_app`, não `smartcore_app_rt`).
+- O dedupe por `action_id` (N7.2), a unificação do contador de rate-limit (N7.3) e a
+  atomicidade/`Lagged` da fila offline (N7.4) conferem com o plano, sem ressalvas.
+
+## [2026-07-23] - Fase N8: Migração v1→v2 + habilitação de produção (código/config — execução real pendente)
+
+> Ciclo PREVC `n8-migracao-e-cutover` fechado e arquivado via `prevc-final-review`.
+> Final-review: qualidade **CORRIGIDO** (ver Corrigido). Terceira e última fase do port final
+> (N6–N8). **Escopo desta rodada, decidido na fase P:** construir todo o código/config
+> versionado (ETL, Caddy prod, fix de cifra, tooling de enforce, runbook de cutover) **sem
+> executar contra infraestrutura de produção real** — não decripta credencial real de tenant,
+> não altera DNS real, não desliga/apaga `old/`. A execução real (rodar o ETL contra produção,
+> aplicar o Caddy no servidor, ligar o enforce, virar o cutover) fica para o dono do produto
+> rodar depois, seguindo os runbooks entregues.
+
+### Adicionado
+
+- **N8.1 — ETL v1→v2 (`infra/migracao-v1/`):** pacote Python (asyncpg) idempotente com
+  `--dry-run`/`--since` (delta) e relatório de conciliação por entidade. Cobre: tenants/planos/
+  assinaturas/pagamentos; usuários+RBAC (transforma `module_permissions` aninhado por módulo em
+  escopos planos `recurso:ação`, shape aceito por `derivar_escopos`; senha marcada não-utilizável
+  — força redefinição pós-cutover, decisão aprovada); contatos/atendimentos/mensagens (a v1 é
+  DB-per-tenant — o ETL descobre `TenantDatabase`, conecta no banco físico de cada tenant e
+  injeta `tenant_id`, achado arquitetural não documentado no plano original); documentos +
+  embeddings (pgvector 1536 nativo dos dois lados, cópia direta via cast `::vector`); credenciais
+  (`CipherManagerPy` replica byte-a-byte o `CipherManager` Rust — Fernet(v1).decrypt →
+  AES-256-GCM, `InvalidToken` isola a credencial sem abortar o lote); instâncias Evolution + as
+  3 fontes de credencial da v1 preservadas sem unificar; etapa 7 nova (mídia legada →  R2).
+  75/75 testes pytest de lógica pura.
+- **N8.2 — Produção web:** `docker/admin/tenant` habilitados em produção no arquivo Caddy
+  **real** (`docker/edge/Caddyfile` — não `infra/caddy/*.caddy`, que ficou obsoleto desde a
+  migração full-docker e foi marcado como tal); `handle_path` com precedência sobre o fallback
+  Django, gRPC-Web roteado por `Content-Type` (não por path fixo). Role `smartcore_app_rt` e CORS
+  do R2 de produção já estavam prontos desde N4/N5.3 — só faltava aplicar (`infra/
+  PROD_ROLE_CORS_N8.md`); `.env.example` corrigido para incluir a origem de produção no
+  `S3_CORS_ALLOWED_ORIGINS`.
+- **N8.3 — Tooling do enforce:** consultas SQL/LogQL para derivar limites reais por plano a
+  partir da janela log-only da N7 (`infra/migracao-v1/analise-enforce/`) + runbook de rollout
+  (`infra/RUNBOOK_ENFORCE_ROLLOUT_N8.md`). Não liga a flag — depende de dados reais de produção.
+- **N8.4 — Runbook de cutover:** `infra/migracao-v1/RUNBOOK_CUTOVER_N8.md` — carga antecipada,
+  freeze, delta, validação, virada de rota, critérios go/no-go, rollback (válido só até o
+  freeze) e desligamento do legado.
+- **Fix de gap fora do plano original (achado na fase P, decisão aprovada):**
+  `whatsapp_instance.api_key` tinha o comentário "encriptado em repouso" desde a migration 0008
+  mas o adapter Rust gravava texto plano. Migration `0023` muda a coluna para `JSONB`;
+  `CipherManager` ganhou `encrypt_to_json`/`decrypt_json_entry`; todo o repositório
+  (`infrastructure_postgres::integracoes::whatsapp`) passa a cifrar/decifrar via
+  `CipherManager`, com `PgWhatsappStore` recebendo a instância compartilhada.
+
+### Corrigido (final-review)
+
+- ETL: nenhuma conexão asyncpg registrava codec `jsonb` — quebraria em runtime qualquer bind de
+  dict/list Python para coluna jsonb (`module_permissions`, `subscribed_events`, `metadados`,
+  `api_key`). Corrigido em `migracao_v1/db.py`.
+- ETL: o transform de `whatsapp_instance.api_key` serializava JSON manualmente como string
+  (suposição desatualizada de schema VARCHAR) em vez de usar o codec jsonb nativo — corrigido
+  após o fix do adapter Rust.
+- ETL: faltava emissão de `migracao.iniciada`/`migracao.concluida` no `audit_log` global,
+  exigida pelo plano — adicionada em `cli.py` (best-effort, pulada em `--dry-run`).
+- N8.2: a primeira tentativa de habilitar `/v2/admin`/`/v2/tenant` mirou `infra/caddy/*.caddy`
+  (arquivo legado, não publicado pelo deploy real) — corrigido para `docker/edge/Caddyfile`.
+- Achado operacional (não é código): os subagentes desta fase rodaram em worktrees isolados
+  criados a partir do branch `main` (muito atrasado vs. `dev`, faltando as fases N1–N7 inteiras)
+  em vez do HEAD atual — o fix de cifra do WhatsApp teve que ser refeito do zero contra o código
+  real; o ETL e o tooling de enforce foram auditados e corrigidos onde necessário.
+
+### Validação
+
+- `cargo fmt --check`, `cargo clippy --all-targets --all-features -D warnings`,
+  `cargo sqlx prepare --workspace --check`: verdes.
+- `cargo test --workspace` (via túnel SSH, banco dev real): verde, exceto 1 teste pré-existente
+  não relacionado (`jwt::validar_token_com_assinatura_adulterada`, confirmado como flaky/
+  dependente de ordem — passa isolado; `jwt.rs` não foi tocado neste ciclo).
+- Testes de integração `whatsapp`/`integracoes` (4/4, contra banco real): verdes, incluindo
+  asserção nova de que a coluna `api_key` nunca guarda o plaintext.
+- `pytest infra/migracao-v1` (75/75): verde.
+- Auditoria final rodada pelo agente principal (não pelo subagente Opus dedicado — interrompido
+  pelo limite mensal de gastos da API a meio da execução); ver
+  `final-review-n8-migracao-e-cutover.md` para o relatório completo e a recomendação de uma
+  segunda auditoria Opus antes da janela de cutover real.
+
 ## [2026-07-23] - Fase N7: Endurecimento residual + operação validada (pré-cutover)
 
 > Ciclo PREVC `n7-endurecimento-residual` fechado e arquivado via `prevc-final-review`.

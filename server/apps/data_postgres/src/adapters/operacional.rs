@@ -698,6 +698,7 @@ impl OperacionalStore for PgOperacionalStore {
             embeddings_model: cfg.embeddings_model.clone(),
             similarity_threshold: cfg.similarity_threshold,
             vector_distance_threshold: cfg.vector_distance_threshold,
+            transcription_enabled: cfg.transcription_enabled,
             api_key,
             embeddings_api_key,
         })
