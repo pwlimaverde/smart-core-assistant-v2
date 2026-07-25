@@ -12,6 +12,7 @@ import pytest
 from migracao_v1.crypto import CipherManagerPy
 from migracao_v1.secret import Secret
 from migracao_v1.tables import core_specs, tenant_specs, whatsapp_specs
+from migracao_v1.tables.engine import _build_setval_sql
 from migracao_v1.tables.spec import ColumnSpec, TableSpec
 
 CHAVE_V2_B64 = "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE="
@@ -145,3 +146,51 @@ class TestConstrucaoDasSpecsReais:
         spec = whatsapp_specs.build_whatsapp_instance_spec(cipher)
         assert spec.v2_table == "whatsapp_instance"
         assert spec.scope == "tenant"
+
+
+class TestRessincronizacaoDeSequence:
+    """`id_strategy='preserve'` grava a PK explicitamente e por isso NAO avanca a
+    sequence do SERIAL — sem o `setval` de fechamento, o primeiro INSERT normal do
+    v2 pos-cutover reusaria um id ja migrado (`duplicate key`)."""
+
+    def test_setval_usa_max_mais_um_com_is_called_false(self):
+        sql = _build_setval_sql("public.auth_user_id_seq", core_specs.AUTH_USER)
+        assert "setval('public.auth_user_id_seq'" in sql
+        assert "COALESCE((SELECT MAX(id) FROM auth_user), 0) + 1" in sql
+        # is_called=false => o proximo nextval devolve exatamente esse valor
+        # (cobre tabela vazia -> 1 e tabela carregada -> MAX+1 com a mesma formula)
+        assert sql.rstrip(")").endswith("false")
+
+    def test_setval_respeita_pk_v2_customizada(self):
+        spec = TableSpec(
+            entidade="teste",
+            v1_table="t1",
+            v2_table="t2",
+            scope="core",
+            id_strategy="preserve",
+            pk_v2="codigo",
+            columns=[ColumnSpec("nome")],
+        )
+        sql = _build_setval_sql("t2_codigo_seq", spec)
+        assert "MAX(codigo) FROM t2" in sql
+
+    def test_todas_as_specs_preserve_de_core_tem_pk_int_ou_uuid_conhecida(self):
+        # A ressincronizacao e ignorada quando `pg_get_serial_sequence` devolve
+        # NULL (PK UUID). Este teste documenta quais specs dependem do setval.
+        preserve_int = [
+            s
+            for s in (
+                core_specs.AUTH_USER,
+                core_specs.TENANTS_PLAN,
+                core_specs.TENANTS_TENANT,
+                core_specs.TENANTS_SUBSCRIPTION,
+                core_specs.TENANTS_PAYMENTRECORD,
+            )
+            if s.id_strategy == "preserve" and s.pk_kind == "int"
+        ]
+        assert {s.v2_table for s in preserve_int} == {
+            "auth_user",
+            "tenants_plan",
+            "tenants_subscription",
+            "tenants_paymentrecord",
+        }

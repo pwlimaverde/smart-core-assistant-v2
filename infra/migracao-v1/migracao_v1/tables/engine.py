@@ -195,6 +195,37 @@ async def _upsert_map(
     stat.v2_written_insert += 1
 
 
+def _build_setval_sql(sequence: str, spec: TableSpec) -> str:
+    """SQL que reposiciona a sequence de `spec.pk_v2` acima do maior id gravado.
+
+    `setval(seq, COALESCE(MAX(pk), 0) + 1, false)` (is_called=false) faz o
+    PROXIMO `nextval` devolver exatamente esse valor — correto tanto para tabela
+    vazia (proximo = 1) quanto para tabela carregada (proximo = MAX+1).
+    """
+    return (
+        f"SELECT setval('{sequence}', "
+        f"COALESCE((SELECT MAX({spec.pk_v2}) FROM {spec.v2_table}), 0) + 1, false)"
+    )
+
+
+async def _ressincronizar_sequence(dst_conn: asyncpg.Connection, spec: TableSpec) -> None:
+    """Reposiciona a sequence da PK depois de um load com `id_strategy='preserve'`.
+
+    Gravar o id explicitamente (`INSERT ... (id, ...) VALUES ($1, ...)`) NAO
+    avanca a sequence do `SERIAL` — sem este passo, o primeiro INSERT normal do
+    v2 pos-cutover (novo usuario, novo plano, novo tenantuser...) tentaria reusar
+    um id ja migrado e estouraria `duplicate key`. Tabelas com PK UUID
+    (`tenants_tenant`, `tenants_tenantinvite`) nao tem sequence:
+    `pg_get_serial_sequence` devolve NULL e o passo e ignorado.
+    """
+    sequence = await dst_conn.fetchval(
+        "SELECT pg_get_serial_sequence($1, $2)", spec.v2_table, spec.pk_v2
+    )
+    if sequence is None:
+        return
+    await dst_conn.execute(_build_setval_sql(sequence, spec))
+
+
 async def migrate_table(
     spec: TableSpec,
     src_conn: asyncpg.Connection,
@@ -266,6 +297,11 @@ async def migrate_table(
     stat.duracao_s = time.monotonic() - inicio
 
     if dst_conn is not None and not dry_run:
+        # `preserve` grava a PK explicitamente e por isso deixa a sequence do
+        # SERIAL parada — reposiciona antes de qualquer escrita normal do v2.
+        if spec.id_strategy == "preserve":
+            await _ressincronizar_sequence(dst_conn, spec)
+
         if spec.scope == "tenant":
             stat.v2_count_after = await dst_conn.fetchval(
                 f"SELECT COUNT(*) FROM {spec.v2_table} WHERE tenant_id = $1", tenant_id_v2

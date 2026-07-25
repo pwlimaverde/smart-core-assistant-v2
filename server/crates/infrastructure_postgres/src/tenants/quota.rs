@@ -137,11 +137,20 @@ pub async fn verificar_quota(
     })
 }
 
-/// Incrementa o uso de armazenamento agregado do tenant em `delta_bytes` (N7.1),
-/// chamado pelo `data_storage` após um `PutFile` bem-sucedido no R2. Upsert
-/// atômico (`ON CONFLICT ... DO UPDATE SET total_bytes = total_bytes + EXCLUDED`)
-/// — sem corrida entre uploads concorrentes do mesmo tenant. Retorna o total após
-/// o incremento (não usado no caminho quente, mas útil para diagnóstico/teste).
+/// Ajusta o uso de armazenamento agregado do tenant em `delta_bytes` (N7.1),
+/// chamado pelo `data_storage` após um `PutFile` que criou objeto novo (delta
+/// positivo) e após a purga física de mídia (delta **negativo** — a coluna é um
+/// medidor de uso corrente, não um contador acumulado: sem a subtração, o
+/// scheduler de retenção esvaziaria o R2 mas o tenant seguiria "cheio" e o
+/// enforce bloquearia uploads legítimos para sempre).
+///
+/// Upsert atômico (`ON CONFLICT ... DO UPDATE SET total_bytes = total_bytes +
+/// EXCLUDED`) — sem corrida entre operações concorrentes do mesmo tenant.
+/// `GREATEST(0, ...)` mantém o total não-negativo mesmo se uma subtração chegar
+/// sem a soma correspondente (ex.: objeto criado antes da N7.1 existir). O
+/// `DO UPDATE` soma `$2` (delta cru) em vez de `EXCLUDED.total_bytes` — este já
+/// vem clampado pelo `VALUES` e zeraria qualquer delta negativo.
+/// Retorna o total após o ajuste.
 #[tracing::instrument(skip(tx), fields(tenant_id = %tenant_id, delta_bytes))]
 pub async fn registrar_uso_storage(
     tx: &mut Transaction<'_, Postgres>,
@@ -150,9 +159,9 @@ pub async fn registrar_uso_storage(
 ) -> Result<i64, DbError> {
     let total: i64 = sqlx::query_scalar(
         "INSERT INTO tenants_storage_usage (tenant_id, total_bytes, updated_at) \
-         VALUES ($1, $2, NOW()) \
+         VALUES ($1, GREATEST(0, $2), NOW()) \
          ON CONFLICT (tenant_id) DO UPDATE \
-         SET total_bytes = tenants_storage_usage.total_bytes + EXCLUDED.total_bytes, \
+         SET total_bytes = GREATEST(0, tenants_storage_usage.total_bytes + $2), \
              updated_at = NOW() \
          RETURNING total_bytes",
     )

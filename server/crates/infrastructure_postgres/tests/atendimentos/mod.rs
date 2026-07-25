@@ -113,6 +113,26 @@ async fn test_atendimento_workflow_and_messages() {
         .await
         .unwrap();
     assert_eq!(msg2.mensagem_citada_id, Some(msg1.id));
+    // Mensagem de humano NAO e marcada como gerada por IA.
+    assert!(!msg2.gerado_por_ia);
+
+    // N6.2: mensagem do assistente virtual e persistida no thread (para o atendente
+    // ver o que o bot respondeu e para o proprio bot ter memoria das suas falas) e
+    // o remetente "bot" deriva `gerado_por_ia = true` no INSERT.
+    let msg_bot = mensagem_repo
+        .criar(
+            &mut tx,
+            &ctx,
+            atendimento.id,
+            "texto",
+            "Ola! Sou o assistente virtual.",
+            infrastructure_postgres::atendimentos::mensagens::REMETENTE_BOT,
+            None,
+            None,
+        )
+        .await
+        .unwrap();
+    assert!(msg_bot.gerado_por_ia);
 
     // Registrar resposta de bot
     mensagem_repo
@@ -131,7 +151,7 @@ async fn test_atendimento_workflow_and_messages() {
         .listar_por_atendimento(&mut tx, &ctx, atendimento.id, 10, 0)
         .await
         .unwrap();
-    assert_eq!(msgs.len(), 2);
+    assert_eq!(msgs.len(), 3); // contato + atendente + bot
     assert_eq!(msgs[0].id, msg1.id);
     assert!(msgs[0].respondida);
     assert_eq!(

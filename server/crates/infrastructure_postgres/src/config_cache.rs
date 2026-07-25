@@ -27,6 +27,11 @@ pub struct RuntimeConfig {
     // Transcrição de áudio
     pub transcription_provider: String,
     pub transcription_model: String,
+    /// Kill-switch de transcrição por tenant (N6.4): quando `false`, o pipeline de
+    /// mídia grava o áudio no R2 e persiste o ponteiro, mas não pede transcrição à
+    /// IA. Resolvido pela cascata `tenants_tenantconfig` > CoreSetting
+    /// `TRANSCRIPTION_ENABLED` (default global `false` — custo/latência por áudio).
+    pub transcription_enabled: bool,
     // Visão computacional
     pub vision_provider: String,
     pub vision_model: String,

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT dados_empresa, persona_bot, bot_agent_name,\n                  msg_fallback, msg_sem_info, msg_transferencia,\n                  llm_class, model, llm_temperature,\n                  transcription_provider, transcription_model,\n                  vision_provider, vision_model,\n                  embeddings_class, embeddings_model,\n                  chunk_size, chunk_overlap,\n                  similarity_threshold, vector_distance_threshold,\n                  api_keys\n           FROM tenants_tenantconfig\n           WHERE tenant_id = $1",
+  "query": "SELECT dados_empresa, persona_bot, bot_agent_name,\n                  msg_fallback, msg_sem_info, msg_transferencia,\n                  llm_class, model, llm_temperature,\n                  transcription_provider, transcription_model, transcription_enabled,\n                  vision_provider, vision_model,\n                  embeddings_class, embeddings_model,\n                  chunk_size, chunk_overlap,\n                  similarity_threshold, vector_distance_threshold,\n                  api_keys\n           FROM tenants_tenantconfig\n           WHERE tenant_id = $1",
   "describe": {
     "columns": [
       {
@@ -126,6 +126,17 @@
       },
       {
         "ordinal": 11,
+        "name": "transcription_enabled",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "transcription_enabled"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
         "name": "vision_provider",
         "type_info": "Varchar",
         "origin": {
@@ -136,7 +147,7 @@
         }
       },
       {
-        "ordinal": 12,
+        "ordinal": 13,
         "name": "vision_model",
         "type_info": "Varchar",
         "origin": {
@@ -147,7 +158,7 @@
         }
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "embeddings_class",
         "type_info": "Varchar",
         "origin": {
@@ -158,7 +169,7 @@
         }
       },
       {
-        "ordinal": 14,
+        "ordinal": 15,
         "name": "embeddings_model",
         "type_info": "Varchar",
         "origin": {
@@ -169,7 +180,7 @@
         }
       },
       {
-        "ordinal": 15,
+        "ordinal": 16,
         "name": "chunk_size",
         "type_info": "Int4",
         "origin": {
@@ -180,7 +191,7 @@
         }
       },
       {
-        "ordinal": 16,
+        "ordinal": 17,
         "name": "chunk_overlap",
         "type_info": "Int4",
         "origin": {
@@ -191,7 +202,7 @@
         }
       },
       {
-        "ordinal": 17,
+        "ordinal": 18,
         "name": "similarity_threshold",
         "type_info": "Numeric",
         "origin": {
@@ -202,7 +213,7 @@
         }
       },
       {
-        "ordinal": 18,
+        "ordinal": 19,
         "name": "vector_distance_threshold",
         "type_info": "Numeric",
         "origin": {
@@ -213,7 +224,7 @@
         }
       },
       {
-        "ordinal": 19,
+        "ordinal": 20,
         "name": "api_keys",
         "type_info": "Jsonb",
         "origin": {
@@ -249,8 +260,9 @@
       true,
       true,
       true,
+      true,
       false
     ]
   },
-  "hash": "c5c92d762a317dbfe401eb0ae5190ebf85b3bab2933c1b508e2e29238843e0db"
+  "hash": "3d387e127e08556080ac3f0affb56bf13b5dc55c386bac6ce4074a0bb484b228"
 }

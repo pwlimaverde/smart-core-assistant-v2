@@ -2,6 +2,96 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-07-24] - Auditoria N6–N8: 3 defeitos de bloqueio de cutover + 3 desvios de plano
+
+> Revisão detalhada, sob demanda, de tudo que N6/N7/N8 entregaram (plano vs. código real),
+> fora do ciclo PREVC. Dois dos três defeitos abaixo só se manifestariam **depois** do
+> cutover/enforce, ou seja, nenhum teste ou final-review anterior os pegaria.
+
+### Corrigido
+
+- **ETL não reposicionava as sequences das tabelas com `id_strategy="preserve"`
+  (`infra/migracao-v1/migracao_v1/tables/engine.py`).** Gravar a PK explicitamente
+  (`INSERT ... (id, ...) VALUES ($1, ...)`) não avança a sequence do `SERIAL`: depois da
+  carga, o primeiro INSERT normal do v2 em `auth_user`, `tenants_plan`,
+  `tenants_subscription`, `tenants_paymentrecord` ou `tenants_tenantuser` reusaria um id já
+  migrado e estouraria `duplicate key` — cadastrar usuário, criar plano/assinatura, registrar
+  pagamento e aceitar convite quebrariam **logo após o cutover**. `--dry-run` não exercita o
+  upsert, então a validação prévia do runbook não revelaria isso. Adicionado
+  `_ressincronizar_sequence` (`setval(seq, COALESCE(MAX(pk),0)+1, false)`, ignorado quando
+  `pg_get_serial_sequence` é NULL — PK UUID) no fim de cada spec `preserve`, + 3 testes.
+- **`tenants_storage_usage.total_bytes` era um contador monotônico usado como medidor de uso
+  corrente.** A purga de mídia por retenção (`media.purge` → `data_storage`) deleta o objeto
+  do R2 mas nunca devolvia os bytes ao tenant, e a mídia é content-addressable — o mesmo áudio
+  reenviado sobrescreve a MESMA chave e era contado de novo. Com `SMARTCORE_QUOTA_ENFORCE=true`
+  (exatamente o que a N8.3 vai ligar), todo tenant acabaria bloqueado permanentemente com um
+  bucket quase vazio. Corrigido: primitiva `StorageClient::tamanho` (HEAD, sem baixar corpo);
+  `PutFile` contabiliza só a diferença sobre o que a chave já ocupava; a purga subtrai o que
+  existia de fato; `RegisterStorageUsage` aceita delta negativo (rejeita só zero) e o upsert
+  clampa em `GREATEST(0, ...)`.
+- **A resposta do bot nunca era persistida no thread (N6.2/N6.3).** O worker enviava o texto
+  pelo WhatsApp e seguia adiante, então: o atendente não via no chat o que o bot respondeu; o
+  próprio bot não tinha memória das suas falas (o `historico` do `Responder` é montado a partir
+  do `GetThread`, que só devolvia turnos do contato — a cada rodada o modelo via uma sequência
+  de mensagens "human" sem nenhuma resposta sua); e `gerado_por_ia` ficava permanentemente
+  `false`, deixando o objetivo declarado da N6.2 ("o chat exibe o selo com dado real")
+  inalcançável. O final-review da N6 registrou o campo como gap aceito, mas tratado como
+  detalhe de selo na UI, não como perda de contexto conversacional. Corrigido: o worker chama
+  `PersistMessage` com `sender_id = "bot"` após o envio bem-sucedido (best-effort — a mensagem
+  já foi entregue ao contato), e `MensagemRepository::criar` deriva `gerado_por_ia` do
+  remetente no único ponto de escrita da tabela. Sem realimentar o envio outbound:
+  `processar_mensagem_persistida` só reage a `"atendente"`. Constantes `REMETENTE_BOT`/
+  `REMETENTE_ATENDENTE` substituem os literais espalhados.
+
+### Alterado (desvios de plano quitados na mesma rodada)
+
+- **Kill-switch de transcrição agora é por tenant (N6.4, passo 4).** Só existia a env var
+  global `TRANSCRIPTION_ENABLED` do `ia_engine`, que liga/desliga a feature para a instalação
+  inteira; o plano pedia a flag por tenant. Migration `0024` adiciona
+  `tenants_tenantconfig.transcription_enabled` (nullable) + CoreSetting global
+  `TRANSCRIPTION_ENABLED` como fallback, usando a cascata Tenant > CoreSettings que já existia
+  no `resolve_runtime_config`. `ResolverConfigIa` expõe o campo e o pipeline de mídia o respeita:
+  desligado, o áudio ainda vai ao R2 e o ponteiro é persistido (o atendente continua podendo
+  ouvir), mas a chamada à IA **e o presign que a alimentava** são dispensados — antes o pipeline
+  gastava as duas etapas para só então o engine recusar. Default segue desligado (custo/latência
+  por áudio). Extraído `anexar_analise_midia` para os dois desfechos compartilharem a persistência
+  do ponteiro + auditoria `midia.analisada`.
+- **Rate limit do webhook ganhou a política log-only ↔ enforce (N7.3).**
+  `WEBHOOK_RATE_LIMIT_ENFORCE`, com default **`true`** — diferente das quotas de propósito: o
+  bloqueio 429 já valia desde a N4.4 e um default `false` abriria a ingestão a rajadas. A flag
+  serve para calibrar `MAX` numa janela de observação (o excesso é medido e auditado, mas passa).
+  Documentada nos dois `.env.example` do docker.
+- **Guard de quota de storage passou a projetar o custo do upload.** Checava "já excedeu", então
+  um único arquivo grande passava livre. `CheckQuota` aceita `delta` opcional e devolve
+  `excedido` já combinado (acumulado ou projetado) + `excedido_projetado`/`delta_avaliado` para
+  diagnóstico; o `PutFile` envia a diferença que o arquivo realmente vai somar. A projeção ficou
+  no `data_postgres` — não no `data_storage` — para a auditoria `quota.excedida` continuar saindo
+  de um único ponto.
+
+### Validação
+
+- `.\infra\test-local.ps1`: **tudo verde** (fmt, clippy `-D warnings`, `cargo test --workspace`
+  com integração real via túnel, `cargo sqlx prepare --workspace --check`). Testes novos:
+  `test_resposta_do_bot_e_persistida_no_thread` e
+  `test_pipeline_midia_audio_sem_transcricao_persiste_so_o_ponteiro` (worker, este com
+  `expect_transcribe().never()` para falhar se o kill-switch vazar), 3 de projeção de quota
+  (`delta` que estoura, que cabe, e com limite nulo), o de delta negativo de storage, o da
+  cascata do default de `WEBHOOK_RATE_LIMIT_ENFORCE`, e a asserção de `gerado_por_ia` no teste
+  de integração de atendimentos.
+- pytest do ETL: 78/78 (75 anteriores + 3 novos de ressincronização de sequence).
+- Migration `0024` aplicada ao Postgres dev remoto; `.sqlx` regenerado
+  (`cargo sqlx prepare --workspace -- --tests --all-features`).
+
+### Observações (analisado, sem defeito)
+
+- As 4 constraints `UNIQUE` exigidas pelos `ON CONFLICT` das specs `natural` do ETL foram
+  conferidas uma a uma contra as migrations: todas existem.
+- O ETL depende de rodar com role admin/BYPASSRLS no v2 (todas as tabelas tenant-scoped têm
+  `FORCE ROW LEVEL SECURITY` e ele não define `app.current_tenant`). Já é o que o
+  `RUNBOOK_CUTOVER_N8.md` manda usar (`smartcore_app`, não `smartcore_app_rt`).
+- O dedupe por `action_id` (N7.2), a unificação do contador de rate-limit (N7.3) e a
+  atomicidade/`Lagged` da fila offline (N7.4) conferem com o plano, sem ressalvas.
+
 ## [2026-07-23] - Fase N8: Migração v1→v2 + habilitação de produção (código/config — execução real pendente)
 
 > Ciclo PREVC `n8-migracao-e-cutover` fechado e arquivado via `prevc-final-review`.

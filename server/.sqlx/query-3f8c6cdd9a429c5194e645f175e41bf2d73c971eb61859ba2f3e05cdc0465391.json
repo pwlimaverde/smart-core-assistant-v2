@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO oraculo_mensagem\n                   (tenant_id, atendimento_id, tipo, conteudo, remetente,\n                    message_id_whatsapp, mensagem_citada_id)\n               VALUES ($1, $2, $3, $4, $5, $6, $7)\n               RETURNING id, tenant_id, atendimento_id, tipo, conteudo, remetente,\n                         timestamp, message_id_whatsapp, metadados, respondida, lido,\n                         resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,\n                         arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,\n                         quoted_preview, status_envio, data_entregue, data_lida",
+  "query": "INSERT INTO oraculo_mensagem\n                   (tenant_id, atendimento_id, tipo, conteudo, remetente,\n                    message_id_whatsapp, mensagem_citada_id, gerado_por_ia)\n               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)\n               RETURNING id, tenant_id, atendimento_id, tipo, conteudo, remetente,\n                         timestamp, message_id_whatsapp, metadados, respondida, lido,\n                         resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,\n                         arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,\n                         quoted_preview, status_envio, data_entregue, data_lida",
   "describe": {
     "columns": [
       {
@@ -276,7 +276,8 @@
         "Text",
         "Varchar",
         "Varchar",
-        "Int4"
+        "Int4",
+        "Bool"
       ]
     },
     "nullable": [
@@ -306,5 +307,5 @@
       true
     ]
   },
-  "hash": "829127593e4f7ef551be6f3cec08277f3778dc0c7e96868ee2a0636ee604e3e0"
+  "hash": "3f8c6cdd9a429c5194e645f175e41bf2d73c971eb61859ba2f3e05cdc0465391"
 }

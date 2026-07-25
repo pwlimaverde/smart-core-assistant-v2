@@ -9,6 +9,16 @@ use uuid::Uuid;
 
 use std::sync::Arc;
 
+/// Valor de `remetente`/`sender_id` das mensagens do assistente virtual. Espelha
+/// `infrastructure_postgres::atendimentos::mensagens::REMETENTE_BOT` (o worker
+/// fala com o banco só por RPC, então não importa a crate de infra): é o que faz
+/// o `data_postgres` derivar `gerado_por_ia = true` ao persistir, e o que mantém
+/// `processar_mensagem_persistida` ignorando a resposta do bot no fluxo outbound.
+const REMETENTE_BOT: &str = "bot";
+/// Valor de `remetente` das mensagens enviadas por um atendente humano — o único
+/// que `processar_mensagem_persistida` trata como envio outbound pendente.
+const REMETENTE_ATENDENTE: &str = "atendente";
+
 /// Um fluxo do tenant já formatado para o Responder: `chave` = "Setor - descrição"
 /// (convenção da v1, casada pelo ia_engine) e `fluxo_id` (para mapear a decisão de
 /// transferência de volta ao fluxo real).
@@ -453,7 +463,7 @@ async fn responder_via_ia(
                 if conteudo.is_empty() {
                     continue;
                 }
-                let role = if remetente == "atendente" || remetente == "bot" {
+                let role = if remetente == REMETENTE_ATENDENTE || remetente == REMETENTE_BOT {
                     "ai"
                 } else {
                     "human"
@@ -1105,6 +1115,39 @@ async fn processar_mensagem_recebida(
                     Some(envelope.event_id.to_string()),
                 );
             } else {
+                // Persiste a resposta do bot no thread (remetente "bot" ⇒
+                // `gerado_por_ia=true` no INSERT do data_postgres). Sem isto: o
+                // atendente não vê no chat o que o bot respondeu, e o próprio bot
+                // perde a memória das suas respostas — o `historico` do
+                // `Responder` é montado a partir do `GetThread`, então cada turno
+                // veria só as falas do contato. Best-effort: a mensagem já foi
+                // entregue ao contato, uma falha aqui não deve derrubar o
+                // processamento (só deixa o thread incompleto).
+                //
+                // Não realimenta o loop de envio: `processar_mensagem_persistida`
+                // só reage a `sender_id == "atendente"`.
+                if let Err(e) = chamar_rpc(
+                    &state.pg_client,
+                    &envelope.tenant_id.to_string(),
+                    "PersistMessage",
+                    serde_json::json!({
+                        "atendimento_id": atendimento_id,
+                        "content": bot_text,
+                        "sender_id": REMETENTE_BOT,
+                        "tipo": "texto",
+                    }),
+                    &envelope.event_id.to_string(),
+                    &envelope.traceparent,
+                )
+                .await
+                {
+                    tracing::warn!(
+                        atendimento_id = atendimento_id,
+                        erro = %e,
+                        "falha ao persistir a resposta do bot no thread (mensagem já entregue ao contato)"
+                    );
+                }
+
                 // Auditoria de barreira de bot (respondeu) e do envio outbound.
                 state.audit_logger.info(
                     tenant_uuid,
@@ -1285,7 +1328,45 @@ async fn processar_pipeline_midia(
         return;
     }
 
-    // 3. URL pré-assinada para o ia_engine (Python) conseguir buscar o binário.
+    // 3. Config de IA do tenant (mesmo provider/api_key do LLM é reusado para
+    // transcrição/visão neste ciclo — simplificação conhecida; providers dedicados
+    // de transcrição/visão ficam para uma continuação). Resolvida ANTES do presign
+    // porque o kill-switch de transcrição pode dispensar as duas etapas seguintes.
+    let cfg_midia = match resolver_provider_ia(state, tenant_str, causation_id, traceparent).await {
+        Ok(p) => p,
+        Err(e) => {
+            span.record("error_code", "config_falhou");
+            tracing::warn!(erro = %e, "falha ao resolver config de IA; análise ausente");
+            return;
+        }
+    };
+
+    // N6.4 (passo 4): kill-switch de transcrição por tenant. Desligado, o áudio
+    // ainda vai para o R2 e o ponteiro é persistido (o atendente continua podendo
+    // ouvir) — só a chamada à IA, o presign que a alimenta e o custo por minuto
+    // transcrito são dispensados.
+    let audio_sem_transcricao =
+        matches!(media_type, domain_whatsapp::MediaType::Audio) && !cfg_midia.transcription_enabled;
+    if audio_sem_transcricao {
+        tracing::debug!("transcrição desligada para o tenant; persistindo só o ponteiro do áudio");
+        anexar_analise_midia(
+            state,
+            tenant_uuid,
+            tenant_str,
+            mensagem_id,
+            &file_key,
+            "",
+            "",
+            tipo_str,
+            inicio,
+            causation_id,
+            traceparent,
+        )
+        .await;
+        return;
+    }
+
+    // 4. URL pré-assinada para o ia_engine (Python) conseguir buscar o binário.
     let media_url = match chamar_rpc(
         &state.storage_client,
         tenant_str,
@@ -1308,17 +1389,7 @@ async fn processar_pipeline_midia(
         }
     };
 
-    // 4. Config de IA do tenant (mesmo provider/api_key do LLM é reusado para
-    // transcrição/visão neste ciclo — simplificação conhecida; providers dedicados
-    // de transcrição/visão ficam para uma continuação).
-    let provider = match resolver_provider_ia(state, tenant_str, causation_id, traceparent).await {
-        Ok(p) => p,
-        Err(e) => {
-            span.record("error_code", "config_falhou");
-            tracing::warn!(erro = %e, "falha ao resolver config de IA; análise ausente");
-            return;
-        }
-    };
+    let provider = cfg_midia.provider;
 
     let media_ref = ia_engine::client::MediaRefInput {
         url: media_url,
@@ -1379,25 +1450,20 @@ async fn processar_pipeline_midia(
 
     // 6. Anexa análise/resumo + ponteiro à mensagem (data_postgres). Sempre grava ao
     // menos o ponteiro do arquivo, mesmo quando a IA falhou.
-    if let Err(e) = chamar_rpc(
-        &state.pg_client,
+    anexar_analise_midia(
+        state,
+        tenant_uuid,
         tenant_str,
-        "AnexarAnaliseMidia",
-        serde_json::json!({
-            "mensagem_id": mensagem_id,
-            "arquivo_midia": file_key,
-            "analise": analise,
-            "resumo": resumo,
-        }),
+        mensagem_id,
+        &file_key,
+        &analise,
+        &resumo,
+        tipo_str,
+        inicio,
         causation_id,
         traceparent,
     )
-    .await
-    {
-        span.record("error_code", "persist_falhou");
-        tracing::warn!(erro = %e, "falha ao anexar análise de mídia à mensagem");
-        return;
-    }
+    .await;
 
     // 6b. Sentimento (N6.5): áudio transcrito também avalia o tom da conversa,
     // best-effort, em background — não atrasa o retorno deste pipeline.
@@ -1420,10 +1486,52 @@ async fn processar_pipeline_midia(
             .await;
         });
     }
+}
+
+/// Anexa análise/resumo + ponteiro do arquivo à mensagem e audita `midia.analisada`.
+/// Chamado nos dois desfechos do pipeline: com análise da IA, e com análise vazia
+/// (IA falhou, tipo sem IA neste ciclo, ou transcrição desligada para o tenant) —
+/// em todos, o ponteiro do arquivo no R2 é o que não pode faltar.
+///
+/// `skip_all`: `analise`/`resumo` derivam de conteúdo do contato (PII) e nunca
+/// entram no span nem na auditoria — só ids, tipo e duração.
+#[allow(clippy::too_many_arguments)]
+#[tracing::instrument(skip_all, fields(mensagem_id = mensagem_id, tipo = tipo_str))]
+async fn anexar_analise_midia(
+    state: &AppState,
+    tenant_uuid: Uuid,
+    tenant_str: &str,
+    mensagem_id: i32,
+    file_key: &str,
+    analise: &str,
+    resumo: &str,
+    tipo_str: &str,
+    inicio: std::time::Instant,
+    causation_id: &str,
+    traceparent: &str,
+) {
+    if let Err(e) = chamar_rpc(
+        &state.pg_client,
+        tenant_str,
+        "AnexarAnaliseMidia",
+        serde_json::json!({
+            "mensagem_id": mensagem_id,
+            "arquivo_midia": file_key,
+            "analise": analise,
+            "resumo": resumo,
+        }),
+        causation_id,
+        traceparent,
+    )
+    .await
+    {
+        tracing::Span::current().record("error_code", "persist_falhou");
+        tracing::warn!(erro = %e, "falha ao anexar análise de mídia à mensagem");
+        return;
+    }
 
     // Auditoria: mídia analisada (nível INFO). SEM conteúdo/transcrição — só
     // metadados operacionais. O download em si não gera evento (o span já o rastreia).
-    let duracao_ms = inicio.elapsed().as_millis() as i64;
     state.audit_logger.info(
         tenant_uuid,
         "midia.analisada",
@@ -1431,7 +1539,7 @@ async fn processar_pipeline_midia(
         serde_json::json!({
             "mensagem_id": mensagem_id,
             "tipo": tipo_str,
-            "duracao_ms": duracao_ms,
+            "duracao_ms": inicio.elapsed().as_millis() as i64,
         }),
         None,
         None,
@@ -1446,7 +1554,7 @@ async fn resolver_provider_ia(
     tenant_str: &str,
     causation_id: &str,
     traceparent: &str,
-) -> anyhow::Result<ia_engine::LlmProviderConfigInput> {
+) -> anyhow::Result<ProviderMidia> {
     let cfg = chamar_rpc(
         &state.pg_client,
         tenant_str,
@@ -1456,24 +1564,40 @@ async fn resolver_provider_ia(
         traceparent,
     )
     .await?;
-    Ok(ia_engine::LlmProviderConfigInput {
-        provider: cfg
-            .get("llm_provider")
-            .and_then(|v| v.as_str())
-            .unwrap_or("openai")
-            .to_string(),
-        model: cfg
-            .get("llm_model")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .to_string(),
-        api_key: cfg
-            .get("api_key")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .to_string(),
-        temperature: 0.0,
+    Ok(ProviderMidia {
+        provider: ia_engine::LlmProviderConfigInput {
+            provider: cfg
+                .get("llm_provider")
+                .and_then(|v| v.as_str())
+                .unwrap_or("openai")
+                .to_string(),
+            model: cfg
+                .get("llm_model")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string(),
+            api_key: cfg
+                .get("api_key")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string(),
+            temperature: 0.0,
+        },
+        // Ausente na resposta = desligado (conservador): a transcrição custa
+        // dinheiro/latência por áudio recebido.
+        transcription_enabled: cfg
+            .get("transcription_enabled")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
     })
+}
+
+/// Config de IA usada pelo pipeline de mídia: o provider em si e o kill-switch de
+/// transcrição do tenant (N6.4). `Debug` NÃO derivado — o provider carrega a
+/// `api_key` em claro e não pode escapar num `{:?}` acidental.
+struct ProviderMidia {
+    provider: ia_engine::LlmProviderConfigInput,
+    transcription_enabled: bool,
 }
 
 /// Avalia o sentimento de uma mensagem inbound (texto ou transcrição de áudio) e
@@ -1495,8 +1619,10 @@ async fn avaliar_sentimento_best_effort(
     causation_id: &str,
     traceparent: &str,
 ) {
+    // Sentimento usa só o provider do LLM; o kill-switch de transcrição da mesma
+    // config não se aplica aqui (o texto já está em mãos, sem custo de áudio).
     let provider = match resolver_provider_ia(state, tenant_str, causation_id, traceparent).await {
-        Ok(p) => p,
+        Ok(p) => p.provider,
         Err(e) => {
             tracing::warn!(erro = %e, "config de IA indisponível; sentimento não avaliado");
             return;
@@ -1789,7 +1915,7 @@ async fn processar_mensagem_persistida(
         .get("sender_id")
         .and_then(|v| v.as_str())
         .unwrap_or_default();
-    if sender_id != "atendente" {
+    if sender_id != REMETENTE_ATENDENTE {
         return Ok(());
     }
 
@@ -2030,6 +2156,115 @@ mod tests {
             "Esperava sucesso, obteve: {:?}",
             resultado
         );
+
+        pg_handle.abort();
+    }
+
+    /// N6.2: a resposta do bot precisa ir para o thread, não só para o WhatsApp —
+    /// senão o atendente não vê o que o bot respondeu e o próprio bot perde a
+    /// memória das suas falas (o `historico` do Responder vem do `GetThread`).
+    /// Aqui a IA é deixada falhar de propósito (sem rota `ResolverConfigIa`): o
+    /// fallback textual é enviado e DEVE ser persistido com `sender_id = "bot"`.
+    #[tokio::test]
+    async fn test_resposta_do_bot_e_persistida_no_thread() {
+        let _guard = WORKER_TEST_MUTEX.lock().await;
+        let pg_addr = "tcp://127.0.0.1:29228";
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+
+        // Coleta os payloads de PersistMessage vistos pelo data_postgres falso.
+        let persistidas: Arc<std::sync::Mutex<Vec<serde_json::Value>>> =
+            Arc::new(std::sync::Mutex::new(Vec::new()));
+        let persistidas_rota = persistidas.clone();
+
+        let pg_endpoint = Endpoint::parse(pg_addr).unwrap();
+        let pg_server = Server::new(pg_endpoint, "flatbuffers")
+            .route("ResolveAtendimentoParaContato", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({
+                        "status": "success",
+                        "contato_id": 10,
+                        "atendimento_id": 42,
+                        // Barreira de bot liberada e nenhum humano no atendimento.
+                        "bot_pode_atender": true,
+                    });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "ResolveAtendimentoParaContatoReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("PersistMessage", move |env| {
+                let coletor = persistidas_rota.clone();
+                Box::pin(async move {
+                    if let Ok(p) = serde_json::from_slice::<serde_json::Value>(&env.payload) {
+                        coletor.lock().unwrap().push(p);
+                    }
+                    let reply = serde_json::json!({ "status": "success", "message_id": 100 });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "PersistMessageReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            // O mesmo endpoint faz o papel do data_whatsapp neste teste (o state
+            // aponta os dois clientes para ele): envio outbound bem-sucedido.
+            .route("SendWhatsappMessage", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({ "status": "success" });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "SendWhatsappMessageReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let pg_handle = tokio::spawn(async move {
+            pg_server.run().await.unwrap();
+        });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
+        let state = AppState {
+            redis_conn: None,
+            audit_logger: observability::AuditLogger::new_dummy("worker"),
+            storage_client: pg_client.clone(),
+            fluxos_cache: FluxosCache::novo(),
+            whatsapp_client: pg_client.clone(),
+            pg_client,
+            ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
+        };
+
+        let evt = evento_message_received(&Uuid::new_v4().to_string());
+        let resultado = processar_mensagem_recebida(&state, evt).await;
+        assert!(resultado.is_ok(), "obteve: {:?}", resultado);
+
+        let vistas = persistidas.lock().unwrap().clone();
+        let do_bot: Vec<_> = vistas
+            .iter()
+            .filter(|p| p.get("sender_id").and_then(|v| v.as_str()) == Some(REMETENTE_BOT))
+            .collect();
+        assert_eq!(
+            do_bot.len(),
+            1,
+            "esperava exatamente 1 PersistMessage do bot; vistas: {vistas:?}"
+        );
+        assert!(
+            !do_bot[0]
+                .get("content")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .is_empty(),
+            "a resposta persistida do bot não pode ser vazia"
+        );
+        // A mensagem inbound do contato segue persistida (não foi substituída).
+        assert!(vistas
+            .iter()
+            .any(|p| p.get("sender_id").and_then(|v| v.as_str()) != Some(REMETENTE_BOT)));
 
         pg_handle.abort();
     }
@@ -2398,6 +2633,8 @@ mod tests {
                         "llm_provider": "openai",
                         "llm_model": "gpt-4o-mini",
                         "api_key": "chave-teste",
+                        // Kill-switch de transcrição LIGADO para este tenant (N6.4).
+                        "transcription_enabled": true,
                     });
                     Envelope {
                         kind: MessageKind::Reply as i32,
@@ -2511,6 +2748,160 @@ mod tests {
         assert!(
             anexou.load(Ordering::SeqCst),
             "AnexarAnaliseMidia deveria ter sido chamado ao fim do pipeline"
+        );
+
+        pg_handle.abort();
+        wa_handle.abort();
+        st_handle.abort();
+    }
+
+    /// N6.4 (passo 4) — kill-switch de transcrição POR TENANT: com a flag desligada,
+    /// o áudio ainda vai para o R2 e o ponteiro é persistido (o atendente continua
+    /// podendo ouvir), mas nem a IA nem o presign que a alimenta são acionados —
+    /// nada de custo por minuto transcrito num tenant que não pediu a feature.
+    #[tokio::test]
+    async fn test_pipeline_midia_audio_sem_transcricao_persiste_so_o_ponteiro() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        let _guard = WORKER_TEST_MUTEX.lock().await;
+        let pg_addr = "tcp://127.0.0.1:29430";
+        let wa_addr = "tcp://127.0.0.1:29431";
+        let st_addr = "tcp://127.0.0.1:29432";
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+        std::env::set_var("SMARTCORE_DATA_WHATSAPP_ENDPOINT", wa_addr);
+        std::env::set_var("SMARTCORE_DATA_STORAGE_ENDPOINT", st_addr);
+
+        let anexou = Arc::new(AtomicBool::new(false));
+        let anexou_c = anexou.clone();
+        let presignou = Arc::new(AtomicBool::new(false));
+        let presignou_c = presignou.clone();
+
+        let pg_server = Server::new(Endpoint::parse(pg_addr).unwrap(), "flatbuffers")
+            .route("ResolverConfigIa", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({
+                        "llm_provider": "openai",
+                        "llm_model": "gpt-4o-mini",
+                        "api_key": "chave-teste",
+                        // Kill-switch DESLIGADO para este tenant.
+                        "transcription_enabled": false,
+                    });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("AnexarAnaliseMidia", move |env| {
+                let anexou = anexou_c.clone();
+                Box::pin(async move {
+                    let payload: serde_json::Value =
+                        serde_json::from_slice(&env.payload).unwrap_or_default();
+                    // O ponteiro do arquivo é o que não pode faltar; análise vazia.
+                    assert!(!payload["arquivo_midia"].as_str().unwrap_or("").is_empty());
+                    assert_eq!(payload["analise"].as_str(), Some(""));
+                    anexou.store(true, Ordering::SeqCst);
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&serde_json::json!({ "status": "ok" }))
+                            .unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let wa_server = Server::new(Endpoint::parse(wa_addr).unwrap(), "flatbuffers").route(
+            "DownloadWhatsappMedia",
+            |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({ "base64": "QUJD", "mime_type": "audio/ogg" });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            },
+        );
+        let st_server = Server::new(Endpoint::parse(st_addr).unwrap(), "flatbuffers")
+            .route("PutFile", |env| {
+                Box::pin(async move {
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(&serde_json::json!({ "uri": "r2://k" }))
+                            .unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("PresignFile", move |env| {
+                let presignou = presignou_c.clone();
+                Box::pin(async move {
+                    presignou.store(true, Ordering::SeqCst);
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        payload: serde_json::to_vec(
+                            &serde_json::json!({ "url": "https://r2/presigned" }),
+                        )
+                        .unwrap(),
+                        ..env
+                    }
+                })
+            });
+
+        let pg_handle = tokio::spawn(async move { pg_server.run().await.unwrap() });
+        let wa_handle = tokio::spawn(async move { wa_server.run().await.unwrap() });
+        let st_handle = tokio::spawn(async move { st_server.run().await.unwrap() });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        // A IA NÃO pode ser chamada: `never()` falha o teste se o kill-switch vazar.
+        let mut mock_ia = ia_engine::MockIaEngineClient::new();
+        mock_ia.expect_transcribe().never();
+
+        let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
+        let whatsapp_client = Arc::new(transport::conectar_cliente("data_whatsapp").await.unwrap());
+        let storage_client = Arc::new(transport::conectar_cliente("data_storage").await.unwrap());
+        let state = AppState {
+            redis_conn: None,
+            audit_logger: observability::AuditLogger::new_dummy("worker"),
+            pg_client,
+            whatsapp_client,
+            storage_client,
+            ia_client: Arc::new(mock_ia),
+            fluxos_cache: FluxosCache::novo(),
+        };
+
+        let tenant = Uuid::new_v4();
+        let raw_event = serde_json::json!({
+            "data": {
+                "key": { "remoteJid": "5511999998888@s.whatsapp.net", "id": "MSGB" },
+                "message": { "audioMessage": { "url": "http://x/b.ogg", "mimetype": "audio/ogg" } }
+            }
+        });
+
+        processar_pipeline_midia(
+            &state,
+            tenant,
+            &tenant.to_string(),
+            42,
+            99,
+            8,
+            domain_whatsapp::MediaType::Audio,
+            Some("audio/ogg".to_string()),
+            serde_json::json!({ "url": "http://x/b.ogg" }),
+            &raw_event,
+            "causation-2",
+            "00-trace-pipe-02-01",
+        )
+        .await;
+
+        assert!(
+            anexou.load(Ordering::SeqCst),
+            "o ponteiro do áudio deve ser persistido mesmo sem transcrição"
+        );
+        assert!(
+            !presignou.load(Ordering::SeqCst),
+            "sem transcrição não há por que pré-assinar URL para a IA"
         );
 
         pg_handle.abort();

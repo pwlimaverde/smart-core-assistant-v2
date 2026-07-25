@@ -31,6 +31,10 @@ pub struct ConfigIa {
     pub embeddings_model: String,
     pub similarity_threshold: f64,
     pub vector_distance_threshold: f64,
+    /// Kill-switch de transcrição de áudio deste tenant (N6.4), resolvido pela
+    /// cascata `tenants_tenantconfig` > CoreSetting `TRANSCRIPTION_ENABLED`. O
+    /// worker respeita antes de pedir transcrição à IA.
+    pub transcription_enabled: bool,
     /// api_key do provedor do LLM (família resolvida de `llm_class`).
     pub api_key: String,
     /// api_key do provedor de embeddings (família resolvida de `embeddings_class`).

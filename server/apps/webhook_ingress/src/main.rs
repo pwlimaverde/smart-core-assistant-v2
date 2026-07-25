@@ -209,6 +209,17 @@ async fn registrar_rate_limit_unificado(
     Ok(body.get("attempts").and_then(|v| v.as_u64()).unwrap_or(0))
 }
 
+/// Interpreta `WEBHOOK_RATE_LIMIT_ENFORCE` (N7.3). Default `true` — o bloqueio 429
+/// já era o comportamento vigente desde a N4.4 e desligá-lo por omissão abriria a
+/// ingestão a rajadas; a flag existe para calibrar `MAX` numa janela de observação.
+/// Só o literal `"false"` (case-insensitive) desliga o enforce.
+fn enforce_rate_limit_ligado(valor: Option<&str>) -> bool {
+    match valor {
+        Some(v) => !v.eq_ignore_ascii_case("false"),
+        None => true,
+    }
+}
+
 #[tracing::instrument(
     skip(state, headers, body),
     fields(
@@ -334,25 +345,36 @@ async fn handle_webhook(
             .ok()
             .and_then(|s| s.parse::<u64>().ok())
             .unwrap_or(60);
+        // Política log-only ↔ enforce por flag (N7.3), como no resto do
+        // endurecimento — ver `enforce_rate_limit_ligado` para o default.
+        let enforce =
+            enforce_rate_limit_ligado(env::var("WEBHOOK_RATE_LIMIT_ENFORCE").ok().as_deref());
         let id = format!("{}:{}", params.tenant_id, params.instance_id);
         match registrar_rate_limit_unificado(&state.redis_client, "webhook", &id, window_s).await {
             Ok(total) if total > max => {
                 state.audit_logger.warn(
                     params.tenant_id,
                     "webhook.rejected",
-                    "Rate limit do webhook excedido",
+                    if enforce {
+                        "Rate limit do webhook excedido"
+                    } else {
+                        "Rate limit do webhook excedido (log-only; ingestão seguiu)"
+                    },
                     serde_json::json!({
                         "provider": params.provider,
                         "instance_id": params.instance_id,
                         "reason": "rate_limited",
                         "attempts": total,
-                        "max": max
+                        "max": max,
+                        "enforce": enforce
                     }),
                     None,
                     None,
                     None,
                 );
-                return Err(StatusCode::TOO_MANY_REQUESTS);
+                if enforce {
+                    return Err(StatusCode::TOO_MANY_REQUESTS);
+                }
             }
             Ok(_) => {}
             Err(e) => {
@@ -898,6 +920,20 @@ mod tests {
                 post(handle_webhook),
             )
             .with_state(state)
+    }
+
+    /// N7.3 — a política log-only ↔ enforce é por flag, mas o default NÃO pode
+    /// abrir a proteção que já existia desde a N4.4: ausência da env var e qualquer
+    /// valor que não seja `"false"` mantêm o bloqueio 429.
+    #[test]
+    fn enforce_rate_limit_default_e_ligado_e_so_false_desliga() {
+        assert!(enforce_rate_limit_ligado(None));
+        assert!(enforce_rate_limit_ligado(Some("true")));
+        assert!(enforce_rate_limit_ligado(Some("")));
+        assert!(enforce_rate_limit_ligado(Some("qualquer-coisa")));
+        assert!(!enforce_rate_limit_ligado(Some("false")));
+        assert!(!enforce_rate_limit_ligado(Some("FALSE")));
+        assert!(!enforce_rate_limit_ligado(Some("False")));
     }
 
     #[tokio::test]

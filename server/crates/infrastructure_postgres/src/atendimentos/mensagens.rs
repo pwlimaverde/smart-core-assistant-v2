@@ -5,6 +5,12 @@ use uuid::Uuid;
 
 use crate::{errors::DbError, security::RequestContext};
 
+/// Valor de `oraculo_mensagem.remetente` para as mensagens do assistente virtual.
+/// É o discriminador de `gerado_por_ia` na escrita (ver [`MensagemRepository::criar`])
+/// e o que impede o worker de reprocessar a própria resposta do bot como outbound
+/// do atendente (`processar_mensagem_persistida` só reage a `"atendente"`).
+pub const REMETENTE_BOT: &str = "bot";
+
 #[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
 pub struct Mensagem {
     pub id: i32,
@@ -180,12 +186,18 @@ impl MensagemRepository for PostgresMensagemRepository {
         message_id_whatsapp: Option<&str>,
         mensagem_citada_id: Option<i32>,
     ) -> Result<Mensagem, DbError> {
+        // `gerado_por_ia` é derivado do remetente: uma mensagem cujo remetente é o
+        // assistente virtual É gerada por IA (N6.2 — a UI lê este campo para o selo
+        // "gerado por IA"). Derivar aqui, no único ponto de escrita da tabela, evita
+        // um parâmetro redundante no trait e garante que nenhum caminho de ingestão
+        // esqueça de marcar a mensagem do bot.
+        let gerado_por_ia = remetente == REMETENTE_BOT;
         let row = sqlx::query_as!(
             Mensagem,
             r#"INSERT INTO oraculo_mensagem
                    (tenant_id, atendimento_id, tipo, conteudo, remetente,
-                    message_id_whatsapp, mensagem_citada_id)
-               VALUES ($1, $2, $3, $4, $5, $6, $7)
+                    message_id_whatsapp, mensagem_citada_id, gerado_por_ia)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                RETURNING id, tenant_id, atendimento_id, tipo, conteudo, remetente,
                          timestamp, message_id_whatsapp, metadados, respondida, lido,
                          resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
@@ -197,7 +209,8 @@ impl MensagemRepository for PostgresMensagemRepository {
             conteudo,
             remetente,
             message_id_whatsapp,
-            mensagem_citada_id
+            mensagem_citada_id,
+            gerado_por_ia
         )
         .fetch_one(&mut **tx)
         .await?;
