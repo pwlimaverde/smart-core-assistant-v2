@@ -1,0 +1,180 @@
+import 'dart:developer' as developer;
+
+import 'package:return_success_or_error/return_success_or_error.dart';
+
+import '../errors/atendimento_errors.dart';
+import '../model/atendimento_resumo.dart';
+import '../model/mensagem_thread.dart';
+import '../parameters/get_thread_parameters.dart';
+import '../parameters/list_atendimentos_parameters.dart';
+import '../parameters/move_atendimento_etapa_parameters.dart';
+import '../parameters/send_outbound_message_parameters.dart';
+
+/// Os quatro casos de uso do atendimento.
+///
+/// O `process` do thread carrega a única regra de ordenação da feature (ordem
+/// cronológica), e ela está aqui — não na tela — porque vale para as duas fontes:
+/// no desktop, uma mensagem pendente de sync tem id negativo provisório, e a
+/// ordem que o índice local devolve não é necessariamente a que o chat espera.
+/// Os outros três são passthrough e existem pelo `onUnexpected`: é ele que
+/// garante que um bug de mapeamento chegue como erro previsto, e não como exceção
+/// escapando para o controller.
+
+void _logBug(String operacao, Object exception, StackTrace stackTrace) =>
+    developer.log(
+      'process de $operacao quebrou',
+      name: 'operacional_module.atendimento',
+      error: exception,
+      stackTrace: stackTrace,
+    );
+
+/// Lista a fila, com a ordenação que o Kanban espera.
+final class ListAtendimentosUsecase
+    extends
+        UsecaseBaseCallData<
+          List<AtendimentoResumo>,
+          List<AtendimentoResumo>,
+          ListAtendimentosParameters,
+          ListAtendimentosError
+        > {
+  const ListAtendimentosUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    List<AtendimentoResumo>,
+    List<AtendimentoResumo>,
+    ListAtendimentosParameters,
+    ListAtendimentosError
+  >
+  get process => _process;
+
+  @override
+  ListAtendimentosError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('listAtendimentos', exception, stackTrace);
+    return const ListAtendimentosInesperado();
+  }
+
+  /// Passthrough, com a lista protegida contra mutação acidental pelas telas.
+  ///
+  /// A ordenação **não** é imposta aqui de propósito: `prioridade` é texto livre
+  /// no contrato (`'alta'`, `'normal'`, …), sem ordem total definida no domínio,
+  /// e reordenar por ele exigiria inventar essa ordem. A ordem em que a fonte
+  /// entrega (servidor no Web, índice SQLite no desktop) é a que as telas já
+  /// consomem.
+  static ReturnSuccessOrError<List<AtendimentoResumo>, ListAtendimentosError>
+  _process(
+    List<AtendimentoResumo> data,
+    ListAtendimentosParameters parameters,
+  ) => Success(List.unmodifiable(data));
+}
+
+/// Carrega o thread do chat em ordem cronológica.
+final class GetThreadUsecase
+    extends
+        UsecaseBaseCallData<
+          List<MensagemThread>,
+          List<MensagemThread>,
+          GetThreadParameters,
+          GetThreadError
+        > {
+  const GetThreadUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    List<MensagemThread>,
+    List<MensagemThread>,
+    GetThreadParameters,
+    GetThreadError
+  >
+  get process => _process;
+
+  @override
+  GetThreadError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('getThread', exception, stackTrace);
+    return const GetThreadInesperado();
+  }
+
+  /// Ordem cronológica ascendente: a bolha mais antiga no topo. No desktop, uma
+  /// mensagem pendente de sync tem id negativo provisório, então ordenar por id
+  /// colocaria as mensagens não enviadas antes de tudo — o critério é o
+  /// timestamp.
+  static ReturnSuccessOrError<List<MensagemThread>, GetThreadError> _process(
+    List<MensagemThread> data,
+    GetThreadParameters parameters,
+  ) {
+    final ordenadas = [...data]
+      ..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+    return Success(List.unmodifiable(ordenadas));
+  }
+}
+
+/// Move um atendimento de etapa no Kanban.
+final class MoveAtendimentoEtapaUsecase
+    extends
+        UsecaseBaseCallData<
+          Unit,
+          Unit,
+          MoveAtendimentoEtapaParameters,
+          MoveAtendimentoEtapaError
+        > {
+  const MoveAtendimentoEtapaUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    Unit,
+    Unit,
+    MoveAtendimentoEtapaParameters,
+    MoveAtendimentoEtapaError
+  >
+  get process => _process;
+
+  @override
+  MoveAtendimentoEtapaError onUnexpected(
+    Object exception,
+    StackTrace stackTrace,
+  ) {
+    _logBug('moveAtendimentoEtapa', exception, stackTrace);
+    return const MoveEtapaInesperado();
+  }
+
+  static ReturnSuccessOrError<Unit, MoveAtendimentoEtapaError> _process(
+    Unit data,
+    MoveAtendimentoEtapaParameters parameters,
+  ) => const Success(unit);
+}
+
+/// Envia uma mensagem do atendente.
+final class SendOutboundMessageUsecase
+    extends
+        UsecaseBaseCallData<
+          int,
+          int,
+          SendOutboundMessageParameters,
+          SendOutboundMessageError
+        > {
+  const SendOutboundMessageUsecase({required super.repository});
+
+  @override
+  ProcessData<int, int, SendOutboundMessageParameters, SendOutboundMessageError>
+  get process => _process;
+
+  @override
+  SendOutboundMessageError onUnexpected(
+    Object exception,
+    StackTrace stackTrace,
+  ) {
+    _logBug('sendOutboundMessage', exception, stackTrace);
+    return const SendMessageInesperado();
+  }
+
+  /// Passthrough: o id persistido é o resultado.
+  ///
+  /// Validar conteúdo vazio **não** cabe aqui — o `process` roda depois do fetch,
+  /// quando a mensagem já foi enviada. Essa checagem é da apresentação, que
+  /// desabilita o botão, e do servidor, que responde `invalidArgument` e vira
+  /// [SendMessageConteudoInvalido] no `mapError`.
+  static ReturnSuccessOrError<int, SendOutboundMessageError> _process(
+    int data,
+    SendOutboundMessageParameters parameters,
+  ) => Success(data);
+}

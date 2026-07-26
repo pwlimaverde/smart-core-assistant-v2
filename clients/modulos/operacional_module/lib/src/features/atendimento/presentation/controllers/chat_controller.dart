@@ -5,11 +5,12 @@ import 'dart:math';
 import 'package:presentation_module/presentation_module.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
 
+import '../../domain/errors/atendimento_errors.dart';
 import '../../domain/model/atendimento_evento.dart';
-import '../../domain/model/mensagem_thread.dart';
-import '../../domain/services/atendimento_service.dart';
-import '../../domain/usecases/get_thread_usecase.dart';
-import '../../domain/usecases/send_outbound_message_usecase.dart';
+import '../../domain/parameters/get_thread_parameters.dart';
+import '../../domain/parameters/send_outbound_message_parameters.dart';
+import '../../domain/streams/atendimento_evento_stream.dart';
+import '../../domain/usecases/atendimento_usecases.dart';
 import 'chat_state.dart';
 
 /// Controller do chat lateral (WS-6.3): carrega o thread e consome o stream
@@ -23,15 +24,15 @@ import 'chat_state.dart';
 final class ChatController extends BaseController<ChatViewModel> {
   final GetThreadUsecase _getThreadUsecase;
   final SendOutboundMessageUsecase _sendUsecase;
-  final AtendimentoService _service;
+  final AtendimentoEventoStream _eventos;
 
+  /// Dependências como private named parameters (Dart 3.12): o chamador usa
+  /// `getThreadUsecase`/`sendUsecase`/`eventos`, os campos ficam privados.
   ChatController({
-    required GetThreadUsecase getThreadUsecase,
-    required SendOutboundMessageUsecase sendUsecase,
-    required AtendimentoService service,
-  }) : _getThreadUsecase = getThreadUsecase, // ignore: prefer_initializing_formals
-       _sendUsecase = sendUsecase, // ignore: prefer_initializing_formals
-       _service = service; // ignore: prefer_initializing_formals
+    required this._getThreadUsecase,
+    required this._sendUsecase,
+    required this._eventos,
+  });
 
   static const _backoffBase = Duration(seconds: 1);
   static const _backoffMax = Duration(seconds: 30);
@@ -48,16 +49,20 @@ final class ChatController extends BaseController<ChatViewModel> {
     _atendimentoId = atendimentoId;
     _tentativa = 0;
     await execute(() async {
-      final res = await _getThreadUsecase.call(atendimentoId: atendimentoId);
+      final res = await _getThreadUsecase(
+        GetThreadParameters(atendimentoId: atendimentoId),
+      );
       return switch (res) {
-        SuccessReturn(:final result) => SuccessReturn(
-          success: ChatViewModel(
+        Success(:final value) => Success<ChatViewModel, GetThreadError>(
+          ChatViewModel(
             atendimentoId: atendimentoId,
-            mensagens: result,
+            mensagens: value,
             connectionStatus: ChatConnectionStatus.conectando,
           ),
         ),
-        ErrorReturn(:final result) => ErrorReturn(error: result),
+        // O caso é reconstruído porque Failure<List<MensagemThread>, E> não é um
+        // ReturnSuccessOrError<ChatViewModel, E>.
+        Failure(:final error) => Failure<ChatViewModel, GetThreadError>(error),
       };
     });
     _conectarStream();
@@ -65,14 +70,16 @@ final class ChatController extends BaseController<ChatViewModel> {
 
   /// Envia uma mensagem outbound e recarrega o thread em caso de sucesso.
   /// [conteudo] é PII — nunca logado pelo controller.
-  Future<AppError?> enviar(String conteudo) async {
+  Future<SendOutboundMessageError?> enviar(String conteudo) async {
     final atendimentoId = _atendimentoId;
     if (atendimentoId == null) return null;
-    final res = await _sendUsecase.call(
-      atendimentoId: atendimentoId,
-      conteudo: conteudo,
+    final res = await _sendUsecase(
+      SendOutboundMessageParameters(
+        atendimentoId: atendimentoId,
+        conteudo: conteudo,
+      ),
     );
-    if (res case ErrorReturn<int>(:final result)) return result;
+    if (res case Failure(:final error)) return error;
     await _recarregarThread();
     return null;
   }
@@ -80,7 +87,7 @@ final class ChatController extends BaseController<ChatViewModel> {
   void _conectarStream() {
     _subscription?.cancel();
     _atualizarStatus(ChatConnectionStatus.conectando);
-    _subscription = _service.streamAtendimentos().listen(
+    _subscription = _eventos.abrir().listen(
       _aoReceberEvento,
       onError: _aoFalharStream,
       onDone: _aoEncerrarStream,
@@ -138,11 +145,13 @@ final class ChatController extends BaseController<ChatViewModel> {
   Future<void> _recarregarThread() async {
     final atendimentoId = _atendimentoId;
     if (atendimentoId == null) return;
-    final res = await _getThreadUsecase.call(atendimentoId: atendimentoId);
-    if (res case SuccessReturn<List<MensagemThread>>(:final result)) {
+    final res = await _getThreadUsecase(
+      GetThreadParameters(atendimentoId: atendimentoId),
+    );
+    if (res case Success(:final value)) {
       final atual = state;
       if (atual is SuccessState<ChatViewModel>) {
-        emit(SuccessState(atual.data.copyWith(mensagens: result)));
+        emit(SuccessState(atual.data.copyWith(mensagens: value)));
       }
     }
   }

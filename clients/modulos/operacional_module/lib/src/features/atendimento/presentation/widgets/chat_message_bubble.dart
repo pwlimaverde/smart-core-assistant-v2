@@ -55,9 +55,9 @@ class ChatMessageBubble extends StatelessWidget {
             const SizedBox(height: 2),
             Text(
               DateFormat('HH:mm').format(mensagem.timestamp),
-              style: Theme.of(
-                context,
-              ).textTheme.labelSmall?.copyWith(color: fg.withValues(alpha: 0.7)),
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: fg.withValues(alpha: 0.7),
+              ),
             ),
           ],
         ),
@@ -122,9 +122,7 @@ class _ResumoMidia extends StatelessWidget {
       decoration: BoxDecoration(
         color: fg.withValues(alpha: 0.06),
         borderRadius: AppRadius.sm,
-        border: Border(
-          left: BorderSide(color: colors.accent, width: 3),
-        ),
+        border: Border(left: BorderSide(color: colors.accent, width: 3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

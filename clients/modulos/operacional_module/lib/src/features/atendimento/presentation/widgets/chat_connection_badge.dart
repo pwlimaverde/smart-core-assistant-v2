@@ -55,7 +55,10 @@ class ChatConnectionBadge extends StatelessWidget {
         children: [
           Icon(icone, size: 16, color: cor),
           const SizedBox(width: AppSpacing.xs),
-          Text(texto, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: cor)),
+          Text(
+            texto,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: cor),
+          ),
         ],
       ),
     );

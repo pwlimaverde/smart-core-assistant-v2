@@ -4,10 +4,9 @@ import 'dart:io';
 
 import 'package:api_client/api_client.dart' as proto;
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:domain_models/domain_models.dart';
 import 'package:local_engine_ffi/local_engine_ffi.dart';
 
-import '../../domain/datasources/atendimento_data_source.dart';
+import '../../domain/gateways/atendimento_gateway.dart';
 import '../../domain/model/atendimento_evento.dart';
 import '../../domain/model/atendimento_resumo.dart';
 import '../../domain/model/mensagem_thread.dart';
@@ -22,10 +21,10 @@ const _debounceReconexao = Duration(seconds: 3);
 /// servidor ter voltado (ex.: reinício do backend sem queda de rede local).
 const _intervaloSyncPeriodico = Duration(seconds: 60);
 
-/// Implementação nativa (desktop/`dart:io`) do [AtendimentoDataSource] sobre o
-/// motor local Rust via FFI (`local_engine_ffi`) — F8.
+/// Adapter nativo (desktop/`dart:io`) do [AtendimentoGateway] sobre o motor local
+/// Rust via FFI (`local_engine_ffi`) — F8.
 ///
-/// Mesmo port que `AtendimentoRemoteDataSource`: telas/controllers não mudam ao
+/// Mesmo port que `AtendimentoRemoteGateway`: telas/controllers não mudam ao
 /// trocar Web↔desktop (DIP). Aqui as leituras vêm do índice SQLite local e as
 /// mutações são otimistas + enfileiradas offline; a reconciliação com o servidor
 /// (sync da fila) usa [sincronizarFilaOffline], disparada em best-effort ao
@@ -35,9 +34,14 @@ const _intervaloSyncPeriodico = Duration(seconds: 60);
 /// o refresh de token do lado Dart.
 ///
 /// A abertura do motor é **preguiçosa**: `RustLib.init()` carrega a lib nativa
-/// uma única vez e `LocalEngineApi.open` cria/migra o índice sob `%APPDATA%`. As
-/// falhas do Rust (`anyhow`) são mapeadas para [ErrorLocalEngine] na fronteira.
-final class LocalEngineFfiDataSource implements AtendimentoDataSource {
+/// uma única vez e `LocalEngineApi.open` cria/migra o índice sob `%APPDATA%`.
+///
+/// As falhas do Rust (`anyhow`, propagadas pelo FRB) são embrulhadas em
+/// [LocalEngineFalha] — uma exceção **técnica**, não um erro de domínio. O
+/// embrulho preserva a informação que o `mapError` de cada repositório usa para
+/// distinguir "o armazenamento local falhou" de "a rede falhou": desfechos com
+/// ações diferentes para o usuário (reiniciar o app vs. tentar de novo).
+final class LocalEngineGateway implements AtendimentoGateway {
   final String? Function() _tenantIdProvider;
   final proto.AdminServiceClient _admin;
   Future<LocalEngineApi>? _engineFuture;
@@ -48,12 +52,12 @@ final class LocalEngineFfiDataSource implements AtendimentoDataSource {
   Timer? _syncPeriodicoTimer;
   bool _gatilhosDeSyncIniciados = false;
 
-  LocalEngineFfiDataSource({
-    required String? Function() tenantIdProvider,
+  /// `adminClient` e `tenantIdProvider` como private named parameters (Dart
+  /// 3.12): nomes públicos no chamador, campos privados aqui.
+  LocalEngineGateway({
+    required this._tenantIdProvider,
     required proto.AdminServiceClient adminClient,
-  })  : _admin = adminClient,
-        // ignore: prefer_initializing_formals
-        _tenantIdProvider = tenantIdProvider;
+  }) : _admin = adminClient; // ignore: prefer_initializing_formals
 
   /// `RustLib.init()` é global (carrega a `.dll`): memoizado entre instâncias.
   static Future<void>? _rustInit;
@@ -101,7 +105,7 @@ final class LocalEngineFfiDataSource implements AtendimentoDataSource {
   }
 
   /// Encerra os gatilhos de sincronização (assinatura de conectividade + timer
-  /// periódico). Não faz parte do [AtendimentoDataSource] (a instância é
+  /// periódico). Não faz parte do [AtendimentoGateway] (a instância é
   /// tipicamente um singleton de vida igual à do app) — disponível para quem
   /// monta/desmonta a instância explicitamente (ex.: testes, hot-restart).
   void dispose() {
@@ -113,7 +117,8 @@ final class LocalEngineFfiDataSource implements AtendimentoDataSource {
 
   /// Diretório base do motor local (índice + cache) sob dados do usuário.
   static String _baseDir() {
-    final appData = Platform.environment['APPDATA'] ??
+    final appData =
+        Platform.environment['APPDATA'] ??
         Platform.environment['LOCALAPPDATA'] ??
         Directory.systemTemp.path;
     final sep = Platform.pathSeparator;
@@ -293,16 +298,16 @@ final class LocalEngineFfiDataSource implements AtendimentoDataSource {
       );
 
   static MensagemThread _paraMensagem(MensagemThreadFfi m) => MensagemThread(
-        id: m.id,
-        atendimentoId: m.atendimentoId,
-        tipo: m.tipo,
-        conteudo: m.conteudo,
-        remetente: m.remetente,
-        timestamp: DateTime.fromMillisecondsSinceEpoch(m.timestamp),
-        statusEnvio: m.statusEnvio,
-        geradoPorIa: m.geradoPorIa,
-        resumoMidia: m.resumoMidia,
-      );
+    id: m.id,
+    atendimentoId: m.atendimentoId,
+    tipo: m.tipo,
+    conteudo: m.conteudo,
+    remetente: m.remetente,
+    timestamp: DateTime.fromMillisecondsSinceEpoch(m.timestamp),
+    statusEnvio: m.statusEnvio,
+    geradoPorIa: m.geradoPorIa,
+    resumoMidia: m.resumoMidia,
+  );
 
   static AtendimentoEvento _paraEvento(AtendimentoEventoFfi e) {
     Map<String, Object?> payload;
@@ -319,11 +324,12 @@ final class LocalEngineFfiDataSource implements AtendimentoDataSource {
     );
   }
 
-  /// Mapeia falhas do Rust (`anyhow`, propagadas pelo FRB) para o erro de
-  /// domínio [ErrorLocalEngine]. A mensagem do motor local não carrega PII
-  /// (só descreve storage/sync/io/mídia), então é seguro anexá-la.
-  static ErrorLocalEngine _mapErro(Object e) {
-    if (e is ErrorLocalEngine) return e;
-    return ErrorLocalEngine(message: 'Falha no motor local: $e');
+  /// Embrulha a falha do Rust em [LocalEngineFalha], preservando a causa. A
+  /// mensagem do motor descreve storage/sync/io/mídia e não carrega PII, então é
+  /// seguro guardá-la — mas ela vai para log/diagnóstico, nunca para a tela: o
+  /// repositório traduz para um erro de domínio com texto próprio.
+  static LocalEngineFalha _mapErro(Object e) {
+    if (e is LocalEngineFalha) return e;
+    return LocalEngineFalha('falha no motor local: $e', e);
   }
 }

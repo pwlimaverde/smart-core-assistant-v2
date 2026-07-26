@@ -41,5 +41,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   bloc_test: ^10.0.0
   mocktail: ^1.0.5
+  # Int64 dos campos de timestamp do protobuf nos testes do gateway.
+  fixnum: ^1.1.0
 
 resolution: workspace

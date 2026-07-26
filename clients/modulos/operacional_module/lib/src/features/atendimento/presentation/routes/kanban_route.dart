@@ -1,8 +1,7 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
-import '../../domain/services/atendimento_service.dart';
-import '../../domain/usecases/list_atendimentos_usecase.dart';
-import '../../domain/usecases/move_atendimento_etapa_usecase.dart';
+import '../../domain/streams/atendimento_evento_stream.dart';
+import '../../domain/usecases/atendimento_usecases.dart';
 import '../controllers/kanban_controller.dart';
 import '../pages/kanban_page.dart';
 
@@ -20,7 +19,7 @@ final class KanbanRoute extends GetItModule {
       () => KanbanController(
         listUsecase: inject<ListAtendimentosUsecase>(),
         moveUsecase: inject<MoveAtendimentoEtapaUsecase>(),
-        service: inject<AtendimentoService>(),
+        eventos: inject<AtendimentoEventoStream>(),
       ),
     );
   }
