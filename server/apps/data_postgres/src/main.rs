@@ -253,10 +253,11 @@ async fn main() -> anyhow::Result<()> {
 
     // 5. Inicia o Consumidor de Auditoria (Consolidação) em background
     let pool_clone = pool.clone();
+    let consumidor_audit = transport::bus::nome_consumidor("data_postgres_audit_consumer");
     let audit_consumer = transport::bus::Consumer::new(
         transport::bus::STREAM_SEGURANCA,
         "data_postgres_audit_group",
-        "data_postgres_audit_consumer",
+        consumidor_audit.clone(),
         bus_client.clone(), // passa o Client para abrir conexão dedicada (C2)
     );
     let audit_handle = tokio::spawn(async move {
@@ -271,9 +272,15 @@ async fn main() -> anyhow::Result<()> {
         }
     });
 
-    // 5b. Reprocessamento periódico da PEL (a cada 60s) (C4)
+    // 5b. Reprocessamento periódico da PEL (a cada 60s) (C4).
+    //
+    // Piso de inatividade (`MIN_IDLE_REPROCESSAMENTO_MS`): este tick roda em
+    // paralelo ao `run_batch` acima e a PEL não distingue lote em voo de lote
+    // abandonado — sem o piso, o mesmo lote de auditoria seria consolidado duas
+    // vezes, duplicando linhas em `audit_log`.
     let pool_retry = pool.clone();
     let bus_client_retry = bus_client;
+    let consumidor_audit_retry = consumidor_audit.clone();
     tokio::spawn(async move {
         let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
         loop {
@@ -287,7 +294,8 @@ async fn main() -> anyhow::Result<()> {
                 &bus_client_retry,
                 transport::bus::STREAM_SEGURANCA,
                 "data_postgres_audit_group",
-                "data_postgres_audit_consumer",
+                &consumidor_audit_retry,
+                transport::bus::MIN_IDLE_REPROCESSAMENTO_MS,
                 handler,
             )
             .await
@@ -1722,34 +1730,70 @@ async fn handler_delete_superuser(
 async fn handler_persist_message(store: &dyn ports::AtendimentoStore, env: Envelope) -> Envelope {
     let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
         Ok(v) => v,
-        Err(_) => {
-            let s = String::from_utf8_lossy(&env.payload);
-            serde_json::json!({ "content": s })
-        }
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
     };
 
     let ctx = contexto_do_envelope(&env);
-    let atendimento_id = payload_json
-        .get("atendimento_id")
-        .and_then(|v| v.as_i64())
-        .map(|v| v as i32)
-        .unwrap_or(1);
+    // `atendimento_id` e `sender_id` são OBRIGATÓRIOS. Antes havia default
+    // silencioso (`atendimento_id = 1`, `sender_id = "usuario"`): um payload
+    // truncado gravava a mensagem de um contato dentro da conversa alheia de
+    // id 1 do tenant, sem erro nenhum. Falhar é o comportamento correto — o
+    // chamador é sempre um serviço interno, e a reentrega da PEL o traz de volta.
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let remetente = match payload_json
+        .get("sender_id")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        Some(r) => r,
+        None => {
+            return erro(
+                error_core::AppError::Validation("sender_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    // Conteúdo vazio é legítimo (mídia sem legenda: o texto útil vem depois, em
+    // `analise_midia`), então aqui o default é a string vazia da própria coluna.
     let conteudo = payload_json
         .get("content")
         .and_then(|v| v.as_str())
-        .unwrap_or("Mensagem padrão");
+        .unwrap_or_default();
     let tipo = payload_json
         .get("tipo")
         .and_then(|v| v.as_str())
+        .filter(|t| !t.is_empty())
         .unwrap_or("texto");
-    let remetente = payload_json
-        .get("sender_id")
-        .and_then(|v| v.as_str())
-        .unwrap_or("usuario");
+
+    let origem = ports::OrigemMensagem {
+        message_id_whatsapp: payload_json
+            .get("message_id_whatsapp")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string()),
+        citando_message_id_whatsapp: payload_json
+            .get("citando_message_id_whatsapp")
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string()),
+        ja_entregue: payload_json
+            .get("ja_entregue")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+    };
 
     // O traceparent é persistido no outbox para manter o trace distribuído vivo
     // até o relay republicar o evento no barramento. Ingestão inbound/bot: sem
-    // action_id (dedupe é só para o envio outbound do atendente via sync offline).
+    // action_id (dedupe é só para o envio outbound do atendente via sync offline);
+    // a idempotência aqui vem do stanzaId em `origem`, quando informado.
     match store
         .persistir_mensagem(
             &ctx,
@@ -1759,6 +1803,7 @@ async fn handler_persist_message(store: &dyn ports::AtendimentoStore, env: Envel
             remetente,
             &env.traceparent,
             None,
+            origem,
         )
         .await
     {
@@ -2007,6 +2052,9 @@ async fn handler_send_outbound_message(
             "atendente",
             &env.traceparent,
             action_id,
+            // Mensagem redigida no painel: ainda não passou pelo WhatsApp (o worker
+            // é que a envia, drenando o outbox), então nasce sem stanzaId e pendente.
+            ports::OrigemMensagem::default(),
         )
         .await
     {
@@ -5121,10 +5169,10 @@ mod tests_atendimento_cliente_unit {
         store
             .expect_persistir_mensagem()
             .times(1)
-            .returning(|_, _, _, _, _, _, _| Ok(mensagem_fake(7)));
+            .returning(|_, _, _, _, _, _, _, _| Ok(mensagem_fake(7)));
         let env = envelope_com_payload(
             "PersistMessage",
-            serde_json::json!({ "atendimento_id": 1, "content": "oi" }),
+            serde_json::json!({ "atendimento_id": 1, "content": "oi", "sender_id": "5511999998888" }),
         );
 
         // Act
@@ -5134,6 +5182,78 @@ mod tests_atendimento_cliente_unit {
         assert_eq!(resp.kind, MessageKind::Reply as i32);
         let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
         assert_eq!(body["message_id"].as_i64().unwrap(), 7);
+    }
+
+    /// FAIL-CLOSED: sem `atendimento_id` o handler rejeita, em vez de gravar a
+    /// mensagem no atendimento de id 1 do tenant (default silencioso removido).
+    #[tokio::test]
+    async fn persist_message_sem_atendimento_id_e_rejeitado() {
+        // Arrange: o store não pode nem ser chamado.
+        let mut store = MockAtendimentoStore::new();
+        store.expect_persistir_mensagem().never();
+        let env = envelope_com_payload(
+            "PersistMessage",
+            serde_json::json!({ "content": "oi", "sender_id": "5511999998888" }),
+        );
+
+        // Act
+        let resp = handler_persist_message(&store, env).await;
+
+        // Assert
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    /// FAIL-CLOSED: sem `sender_id` o handler rejeita — o remetente decide a
+    /// autoria da mensagem no chat e `gerado_por_ia`; não pode ter default.
+    #[tokio::test]
+    async fn persist_message_sem_sender_id_e_rejeitado() {
+        // Arrange
+        let mut store = MockAtendimentoStore::new();
+        store.expect_persistir_mensagem().never();
+        let env = envelope_com_payload(
+            "PersistMessage",
+            serde_json::json!({ "atendimento_id": 1, "content": "oi" }),
+        );
+
+        // Act
+        let resp = handler_persist_message(&store, env).await;
+
+        // Assert
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    /// O stanzaId e a citação do webhook chegam ao store em `OrigemMensagem` —
+    /// é o que sustenta a idempotência da reentrega e o "responder a" no chat.
+    #[tokio::test]
+    async fn persist_message_repassa_origem_do_provedor() {
+        // Arrange
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_persistir_mensagem()
+            .withf(|_, _, _, _, _, _, _, origem| {
+                origem.message_id_whatsapp.as_deref() == Some("3EB0ABC")
+                    && origem.citando_message_id_whatsapp.as_deref() == Some("3EB0PAI")
+                    && origem.ja_entregue
+            })
+            .times(1)
+            .returning(|_, _, _, _, _, _, _, _| Ok(mensagem_fake(11)));
+        let env = envelope_com_payload(
+            "PersistMessage",
+            serde_json::json!({
+                "atendimento_id": 1,
+                "content": "oi",
+                "sender_id": "atendente",
+                "message_id_whatsapp": "3EB0ABC",
+                "citando_message_id_whatsapp": "3EB0PAI",
+                "ja_entregue": true,
+            }),
+        );
+
+        // Act
+        let resp = handler_persist_message(&store, env).await;
+
+        // Assert
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
     }
 
     /// HAPPY PATH: anexar_analise_midia repassa os campos ao store e confirma ok.
@@ -5341,12 +5461,15 @@ mod tests_atendimento_cliente_unit {
         store
             .expect_persistir_mensagem()
             .times(1)
-            .returning(|_, _, _, _, _, _, _| {
+            .returning(|_, _, _, _, _, _, _, _| {
                 Err(infrastructure_postgres::DbError::ConfigError(
                     "falha simulada".to_string(),
                 ))
             });
-        let env = envelope_com_payload("PersistMessage", serde_json::json!({ "content": "x" }));
+        let env = envelope_com_payload(
+            "PersistMessage",
+            serde_json::json!({ "atendimento_id": 1, "content": "x", "sender_id": "contato" }),
+        );
 
         // Act
         let resp = handler_persist_message(&store, env).await;
@@ -5436,11 +5559,11 @@ mod tests_atendimento_cliente_unit {
         let mut store = MockAtendimentoStore::new();
         store
             .expect_persistir_mensagem()
-            .withf(move |_, _, _, _, remetente, _, action_id| {
+            .withf(move |_, _, _, _, remetente, _, action_id, _| {
                 *remetente == *"atendente" && *action_id == Some(id)
             })
             .times(1)
-            .returning(|_, _, _, _, _, _, _| Ok(mensagem_fake(9)));
+            .returning(|_, _, _, _, _, _, _, _| Ok(mensagem_fake(9)));
         let env = envelope_com_payload(
             "SendOutboundMessage",
             serde_json::json!({ "atendimento_id": 1, "conteudo": "oi", "action_id": id.to_string() }),
@@ -5458,9 +5581,9 @@ mod tests_atendimento_cliente_unit {
         let mut store = MockAtendimentoStore::new();
         store
             .expect_persistir_mensagem()
-            .withf(|_, _, _, _, _, _, action_id| action_id.is_none())
+            .withf(|_, _, _, _, _, _, action_id, _| action_id.is_none())
             .times(1)
-            .returning(|_, _, _, _, _, _, _| Ok(mensagem_fake(10)));
+            .returning(|_, _, _, _, _, _, _, _| Ok(mensagem_fake(10)));
         let env = envelope_com_payload(
             "SendOutboundMessage",
             serde_json::json!({ "atendimento_id": 1, "conteudo": "oi" }),

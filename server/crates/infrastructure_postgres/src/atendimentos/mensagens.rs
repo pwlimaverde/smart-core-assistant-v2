@@ -39,6 +39,46 @@ pub struct Mensagem {
     pub data_lida: Option<DateTime<Utc>>,
 }
 
+/// Dados de criação de uma mensagem no thread de um atendimento.
+///
+/// Existe como struct (e não como lista de parâmetros) porque a criação carrega
+/// campos opcionais de origem — stanzaId, citação e "já entregue" — que só alguns
+/// caminhos de ingestão preenchem; posicionalmente seriam 9 argumentos fáceis de
+/// trocar de lugar.
+#[derive(Debug, Clone)]
+pub struct NovaMensagem<'a> {
+    pub atendimento_id: i32,
+    pub tipo: &'a str,
+    pub conteudo: &'a str,
+    pub remetente: &'a str,
+    /// stanzaId do WhatsApp. No inbound é a chave natural de idempotência
+    /// (reentrega do consumer group não pode duplicar a mensagem no chat) e o que
+    /// permite correlacionar os webhooks de status (`messages.update`) depois.
+    pub message_id_whatsapp: Option<&'a str>,
+    /// Id interno da mensagem citada (reply), já resolvido pelo chamador.
+    pub mensagem_citada_id: Option<i32>,
+    /// `true` quando a mensagem já trafegou pelo WhatsApp antes de ser persistida
+    /// (mensagem que o atendente digitou no próprio celular, `fromMe`): nasce com
+    /// `status_envio='sent'` para o elo outbox->outbound do worker NÃO tentar
+    /// enviá-la de novo — o que devolveria a mesma mensagem ao contato.
+    pub ja_entregue: bool,
+}
+
+impl<'a> NovaMensagem<'a> {
+    /// Construtor mínimo: só os campos obrigatórios; os de origem ficam vazios.
+    pub fn nova(atendimento_id: i32, tipo: &'a str, conteudo: &'a str, remetente: &'a str) -> Self {
+        Self {
+            atendimento_id,
+            tipo,
+            conteudo,
+            remetente,
+            message_id_whatsapp: None,
+            mensagem_citada_id: None,
+            ja_entregue: false,
+        }
+    }
+}
+
 /// Destino resolvido para o envio outbound de uma mensagem do atendente (N1.3):
 /// instância WhatsApp (id no banco) + telefone do contato + status_envio atual
 /// (para o consumidor decidir se é reentrega idempotente do consumer group).
@@ -57,13 +97,18 @@ pub trait MensagemRepository: Send + Sync {
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
-        atendimento_id: i32,
-        tipo: &str,
-        conteudo: &str,
-        remetente: &str,
-        message_id_whatsapp: Option<&str>,
-        mensagem_citada_id: Option<i32>,
+        nova: NovaMensagem<'_>,
     ) -> Result<Mensagem, DbError>;
+
+    /// Busca a mensagem do tenant pelo `message_id_whatsapp` (stanzaId), quando existir.
+    /// Sustenta a idempotência da ingestão: o mesmo stanzaId reentregue pelo bus
+    /// devolve a mensagem já persistida em vez de criar uma duplicata no chat.
+    async fn buscar_por_whatsapp_id(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        message_id_whatsapp: &str,
+    ) -> Result<Option<Mensagem>, DbError>;
 
     async fn listar_por_atendimento(
         &self,
@@ -174,45 +219,83 @@ pub struct PostgresMensagemRepository;
 #[async_trait]
 impl MensagemRepository for PostgresMensagemRepository {
     // `conteudo` é mensagem do usuário (PII): `skip_all` evita registrá-lo.
-    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, tipo = %tipo))]
+    #[tracing::instrument(skip_all, fields(atendimento_id = nova.atendimento_id, tipo = %nova.tipo))]
     async fn criar(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
-        atendimento_id: i32,
-        tipo: &str,
-        conteudo: &str,
-        remetente: &str,
-        message_id_whatsapp: Option<&str>,
-        mensagem_citada_id: Option<i32>,
+        nova: NovaMensagem<'_>,
     ) -> Result<Mensagem, DbError> {
+        // Escrever no thread é operação de escrita, como criar/atualizar atendimento
+        // (mesmos escopos exigidos em `atendimentos.rs`). Faltava a checagem aqui: um
+        // usuário do tenant com `module_permissions` só de leitura conseguia, via
+        // `SendOutboundMessage`, inserir mensagem em qualquer atendimento — e ela
+        // seria de fato entregue ao WhatsApp do cliente pelo worker.
+        //
+        // Os serviços internos (worker/scheduler) usam o coringa `"*"`, que satisfaz
+        // qualquer escopo, então a ingestão inbound e a resposta do bot não mudam.
+        ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+
         // `gerado_por_ia` é derivado do remetente: uma mensagem cujo remetente é o
         // assistente virtual É gerada por IA (N6.2 — a UI lê este campo para o selo
         // "gerado por IA"). Derivar aqui, no único ponto de escrita da tabela, evita
         // um parâmetro redundante no trait e garante que nenhum caminho de ingestão
         // esqueça de marcar a mensagem do bot.
-        let gerado_por_ia = remetente == REMETENTE_BOT;
-        let row = sqlx::query_as!(
-            Mensagem,
+        let gerado_por_ia = nova.remetente == REMETENTE_BOT;
+        // `status_envio` explícito (em vez do DEFAULT do schema) porque a mensagem
+        // que o atendente digitou no celular nasce já entregue — ver `ja_entregue`.
+        let status_envio = if nova.ja_entregue { "sent" } else { "pending" };
+        // API de runtime (e não `query_as!`) por escolha: o INSERT do thread muda
+        // junto com os campos de origem da ingestão, e a macro obrigaria a
+        // regravar o cache `.sqlx` com o banco no ar a cada ajuste. Mesmo padrão
+        // já adotado em `listar_midias_expiradas`/`resolver_destino_envio_outbound`.
+        let row = sqlx::query_as::<_, Mensagem>(
             r#"INSERT INTO oraculo_mensagem
                    (tenant_id, atendimento_id, tipo, conteudo, remetente,
-                    message_id_whatsapp, mensagem_citada_id, gerado_por_ia)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    message_id_whatsapp, mensagem_citada_id, gerado_por_ia, status_envio)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
                RETURNING id, tenant_id, atendimento_id, tipo, conteudo, remetente,
                          timestamp, message_id_whatsapp, metadados, respondida, lido,
                          resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
                          arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,
                          quoted_preview, status_envio, data_entregue, data_lida"#,
-            ctx.tenant_id,
-            atendimento_id,
-            tipo,
-            conteudo,
-            remetente,
-            message_id_whatsapp,
-            mensagem_citada_id,
-            gerado_por_ia
         )
+        .bind(ctx.tenant_id)
+        .bind(nova.atendimento_id)
+        .bind(nova.tipo)
+        .bind(nova.conteudo)
+        .bind(nova.remetente)
+        .bind(nova.message_id_whatsapp)
+        .bind(nova.mensagem_citada_id)
+        .bind(gerado_por_ia)
+        .bind(status_envio)
         .fetch_one(&mut **tx)
+        .await
+        .map_err(DbError::from_sqlx_unique)?;
+        Ok(row)
+    }
+
+    #[tracing::instrument(skip_all, fields(message_id_whatsapp = %message_id_whatsapp))]
+    async fn buscar_por_whatsapp_id(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        message_id_whatsapp: &str,
+    ) -> Result<Option<Mensagem>, DbError> {
+        let row = sqlx::query_as::<_, Mensagem>(
+            r#"SELECT id, tenant_id, atendimento_id, tipo, conteudo, remetente,
+                      timestamp, message_id_whatsapp, metadados, respondida, lido,
+                      resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
+                      arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,
+                      quoted_preview, status_envio, data_entregue, data_lida
+               FROM oraculo_mensagem
+               WHERE tenant_id = $1 AND message_id_whatsapp = $2
+               ORDER BY id DESC
+               LIMIT 1"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(message_id_whatsapp)
+        .fetch_optional(&mut **tx)
         .await?;
         Ok(row)
     }

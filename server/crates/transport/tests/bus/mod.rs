@@ -1,7 +1,8 @@
 use contracts::TenantEnvelope;
 use redis::aio::ConnectionManager;
 use transport::bus::{
-    confirmar, consumir, garantir_consumer_group, publicar_evento, reprocessar_pendentes,
+    confirmar, consumir, garantir_consumer_group, publicar_evento, reclamar_pendentes_abandonados,
+    reprocessar_pendentes, MIN_IDLE_REPROCESSAMENTO_MS, STREAM_EVENTOS,
 };
 use uuid::Uuid;
 
@@ -145,4 +146,72 @@ async fn test_redis_bus_pending_entries_recovery() {
         pendentes_pos_ack.is_empty(),
         "PEL deveria estar vazia após ACK"
     );
+}
+
+/// O reprocessador periódico da PEL roda EM PARALELO ao loop de consumo ativo, e a
+/// PEL não distingue "handler morreu" de "handler está rodando agora": as duas
+/// situações são só "entregue e sem XACK". Este teste fixa o piso de inatividade que
+/// separa as duas — sem ele, o tick de reprocessamento pega a mensagem que o loop
+/// está processando neste instante e o worker responde duas vezes ao mesmo cliente.
+#[tokio::test]
+async fn reclamar_pendentes_respeita_o_piso_de_inatividade() {
+    let redis_url = carregar_redis_url();
+    let client = redis::Client::open(redis_url).unwrap();
+    let mut con = ConnectionManager::new(client).await.unwrap();
+
+    let tenant_id = Uuid::new_v4();
+    let envelope = TenantEnvelope::novo(tenant_id, "test.idle.event", serde_json::json!({}))
+        .com_traceparent("00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01");
+    let grupo = format!("grupo_idle_{}", Uuid::new_v4());
+    let consumidor_loop = "consumidor_loop";
+    let consumidor_tick = "consumidor_tick";
+
+    garantir_consumer_group(&mut con, &grupo).await.unwrap();
+
+    // Simula o loop ativo: consome sem confirmar (handler "em voo"), idle ~0ms.
+    let stream_id = publicar_evento(&mut con, &envelope).await.unwrap();
+    let eventos = consumir(&mut con, &grupo, consumidor_loop, 1, 1000)
+        .await
+        .unwrap();
+    assert_eq!(eventos.len(), 1);
+
+    // O tick com piso alto NÃO pode encostar no evento em voo.
+    let em_voo = reclamar_pendentes_abandonados(
+        &mut con,
+        STREAM_EVENTOS,
+        &grupo,
+        consumidor_tick,
+        MIN_IDLE_REPROCESSAMENTO_MS,
+        10,
+    )
+    .await
+    .unwrap();
+    assert!(
+        em_voo.is_empty(),
+        "evento em voo (idle ~0) foi reclamado indevidamente: {em_voo:?}"
+    );
+
+    // Com piso zero, o MESMO evento é reclamado — o que prova que o vazio acima veio
+    // do piso, e não de o evento simplesmente não estar na PEL. É também o caminho
+    // real de recuperação: um evento abandonado passa do piso e volta a ser tratado,
+    // inclusive quando a PEL pertencia a OUTRO consumidor do grupo (réplica morta).
+    let abandonado =
+        reclamar_pendentes_abandonados(&mut con, STREAM_EVENTOS, &grupo, consumidor_tick, 0, 10)
+            .await
+            .unwrap();
+    assert_eq!(
+        abandonado.len(),
+        1,
+        "evento abandonado deveria ter sido reclamado"
+    );
+    assert_eq!(abandonado[0].stream_id, stream_id);
+    // O conteúdo tem de sobreviver ao XCLAIM: o reprocessador desserializa o payload.
+    assert_eq!(abandonado[0].tenant_id, tenant_id.to_string());
+    assert_eq!(abandonado[0].event_type, "test.idle.event");
+    assert_eq!(
+        abandonado[0].traceparent,
+        "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+    );
+
+    confirmar(&mut con, &grupo, &stream_id).await.unwrap();
 }

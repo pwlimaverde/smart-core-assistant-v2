@@ -2,6 +2,238 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-07-26] - Consolidação para publicação: PEL concorrente, timeout do provedor e gates de CI/CD
+
+> Segunda passada do dia, agora com a suíte unitária EXECUTADA (395 testes verdes) e com
+> foco em prontidão para publicação: revisão do servidor, cobertura medida por app,
+> preenchimento das lacunas de teste de maior risco e revisão do CI/CD. Fora do ciclo PREVC.
+
+### Corrigido
+
+- **Reprocessamento periódico da PEL reprocessava evento EM VOO — bot respondia duas vezes
+  ao mesmo cliente.** O tick de retry introduzido na passada anterior (`worker`, 60s;
+  `data_storage`, 300s) roda em paralelo ao loop de consumo, e a PEL não distingue "handler
+  morreu" de "handler está rodando agora" — as duas situações são apenas "entregue e sem
+  `XACK`". `reprocessar_pendentes_stream` lia a PEL inteira (`XREADGROUP` com id `0`), sem
+  piso de inatividade, então um evento cujo handler estivesse no meio de uma chamada à IA
+  (até ~27s: 8s de timeout × 3 tentativas + backoff) era reprocessado em paralelo pelo tick.
+  A persistência é idempotente pelo stanzaId, mas **o envio ao WhatsApp não é**: o cliente
+  recebia a resposta duplicada. No `data_storage`, a mesma janela gerava deleção duplicada
+  no bucket; no consumidor de auditoria do `data_postgres` (que já tinha o tick desde a C4),
+  linha duplicada em `audit_log`. Corrigido com `bus::reclamar_pendentes_abandonados`:
+  `XPENDING ... IDLE <ms>` seguido de `XCLAIM` com o mesmo piso — o Redis descarta a entrada
+  se ela voltou a ser entregue entre as duas chamadas, então a proteção é atômica e não
+  janela de melhor esforço. Piso `MIN_IDLE_REPROCESSAMENTO_MS` = 120s, com teste que cobra
+  a folga sobre o pior caso conhecido de handler.
+- **`varrer_dlq_pendentes` roubava evento em voo e mandava para a dead-letter sem o
+  conteúdo.** O `XCLAIM` usava `min-idle-time = 0`: bastava `times_delivered > 5` para a
+  varredura tomar a entrada de quem estivesse processando e dar `XACK` nela. Passa a usar o
+  mesmo piso de inatividade. Além disso, a linha da DLQ guardava só `original_id` e
+  `times_delivered` — como o stream de origem é limitado por `MAXLEN` (~10k), o evento podia
+  já ter sido descartado na hora da perícia, e a DLQ apontava para um id inexistente. Agora
+  grava também tenant, tipo, timestamp, traceparent e payload (o `XCLAIM` já devolvia a
+  entrada; era só usá-la).
+- **Cliente HTTP do Evolution sem timeout algum.** `reqwest::Client::new()` não tem teto de
+  tempo: uma Evolution que aceita a conexão e não responde (processo travado, instância
+  pendurada) deixaria a chamada esperando indefinidamente, com o handler RPC do
+  `data_whatsapp` preso junto — e as tasks se acumulando, porque o `worker` desiste em 5s e
+  reenvia. Adicionados `timeout` (60s, dimensionado pelo pior caso: `download_media` devolve
+  o arquivo inteiro em base64, limite de 20 MB) e `connect_timeout` (5s), ambos
+  sobrescrevíveis por ambiente. Teste com provedor pendurado (wiremock + delay) fixa o corte.
+
+### Adicionado
+
+- **`bus::nome_consumidor`:** nome do processo dentro do consumer group, com default idêntico
+  ao histórico (`worker_consumer_1`) e sufixo próprio por réplica via `SMARTCORE_CONSUMER_NAME`.
+  Duas réplicas com o mesmo nome dividem uma única PEL, e a releitura no boot de uma pegaria
+  os eventos que a outra está processando; a reclamação agora varre o grupo inteiro, então a
+  PEL órfã de uma réplica morta também é recuperada.
+- **Barreira de autenticação da fachada gRPC-Web fixada em teste (`todo_metodo_admin_rejeita_chamada_sem_credencial`).**
+  `grpc_web.rs` é a única porta do browser para o sistema e é publicada na internet pelo
+  Caddy; cada um dos 37 métodos administrativos repete à mão a primeira linha de auth, e
+  nada no compilador obriga um método NOVO a fazer o mesmo — o esquecimento não quebrava
+  nenhum teste e abriria dados de tenant a um anônimo. O teste percorre método a método
+  exigindo `Unauthenticated`. Era a maior superfície sem teste do backend: 262 das 326
+  funções do arquivo nunca eram executadas (33,5% de linhas).
+- **Teste de integração do piso de inatividade da PEL** (`crates/transport/tests/bus`), com
+  Redis real: evento em voo (idle ~0) não pode ser reclamado; o mesmo evento com piso zero é.
+- Variáveis novas documentadas no `.env.example` (`SMARTCORE_CONSUMER_NAME`,
+  `SMARTCORE_EVOLUTION_HTTP_TIMEOUT_SECS`, `SMARTCORE_EVOLUTION_CONNECT_TIMEOUT_SECS`) junto
+  das duas da passada anterior, que não tinham sido registradas.
+
+### Alterado (CI/CD)
+
+- **A suíte de integração virou gate.** Rodava apenas dentro do passo de cobertura marcado
+  `continue-on-error`: RLS, transações por tenant, PEL do barramento e o fluxo ponta-a-ponta
+  do banco podiam quebrar sem deixar o CI vermelho — e o deploy seguia em cima disso. O
+  passo `cargo llvm-cov` passa a ser a execução única que serve de gate E de cobertura (uma
+  passada, não duas).
+- **Release exige CI verde no commit da tag** (`deploy-prod.yml`, job `verifica-ci`). Antes, a
+  tag disparava build e deploy sem nenhuma relação com o resultado dos testes daquele commit;
+  o `environment: production` pede aprovação humana, mas quem aprova não tinha essa
+  informação no próprio deploy.
+- **Smoke test pós-deploy em dev e prod.** `compose up -d` devolve sucesso assim que os
+  containers são criados: um serviço que sobe e morre em seguida deixava o deploy verde. Os
+  9 serviços da aplicação passam a ser verificados por estado do container e contagem de
+  restart, com `docker logs` do culpado no erro. (O PR de release ainda listava "smoke tests
+  em prod verificados" como item manual de checklist.)
+- **Backup de produção deixou de engolir a própria falha.** O `pg_dump` usava `|| echo` e o
+  deploy seguia; o redirecionamento cria o arquivo mesmo quando o comando falha, então
+  sobrava um dump truncado que só seria descoberto na hora de restaurar. Agora falha aborta o
+  deploy, e o arquivo é validado por tamanho e cabeçalho `PGDMP`.
+- **Novo job `auditoria_dependencias`** (`cargo audit`, RustSec), informativo até o backlog
+  inicial ser triado.
+- `cargo install sqlx-cli` deixou de rodar duas vezes no mesmo job.
+
+### Observações
+
+- Suíte unitária executada: **395 testes, 0 falhas**; `fmt` e `clippy` limpos. A suíte de
+  integração (banco/Redis) NÃO pôde rodar nesta máquina — o host do túnel SSH não resolve por
+  DNS — e roda no CI, contra os service containers.
+- Cobertura unitária medida por app (o número por si só não é meta): `data_redis` 83%,
+  `data_whatsapp` 70%, `worker` 71%, `runtime_api/main.rs` 63%, `data_postgres/main.rs` 47%,
+  `data_storage` 38%, `runtime_api/grpc_web.rs` 33,5% (o alvo desta passada). Adapters em 0%
+  são código ligado a banco, coberto pela suíte de integração.
+- **`SetPresence`, `MarkRead` e `SendReaction` estão implementados no `data_whatsapp` e não
+  têm nenhum chamador**: o bot nunca sinaliza "digitando…" enquanto a IA compõe, e a mensagem
+  do cliente nunca é marcada como lida. É capacidade pronta e desligada — mas ligá-la muda o
+  que o cliente vê no WhatsApp, então fica como decisão de produto.
+- Sem limite de vazão no envio outbound por instância: numa drenagem de backlog (worker fora
+  do ar por horas) as mensagens saem em rajada, que é o padrão de risco de banimento em
+  provedores baseados em Baileys. Também não há TTL de mensagem obsoleta — uma resposta
+  represada por horas é entregue ao cliente como se fosse atual.
+
+## [2026-07-26] - Revisão completa do servidor Rust: 4 defeitos de fluxo vivo + endurecimentos
+
+> Análise de todo o servidor (52k linhas, 8 apps + 13 crates) confrontando o código com o
+> modelo canônico de dados e com o protocolo de comunicação da v1, fora do ciclo PREVC.
+> Os dois primeiros defeitos abaixo impedem o sistema de funcionar em produção com dados
+> reais e **não seriam pegos por nenhum teste existente**: os mocks afirmavam justamente o
+> comportamento invertido.
+
+### Corrigido
+
+- **Whitelist com semântica INVERTIDA no `webhook_ingress` — bloqueava todos os clientes
+  reais.** O modelo canônico (`doc_dev/modelagem_dados/06_modulo_integracoes.md` §WhiteList,
+  herdado da v1) define a tabela como "números que devem ser **completamente ignorados** pelas
+  automações do Bot" — diretoria, supervisão, números de teste, para não abrir atendimento nem
+  gastar token. A implementação fazia o oposto (`if !whitelisted { return 403 FORBIDDEN }`),
+  tratando-a como lista de permissão. Consequência no cutover: com a `whatsapp_whitelist`
+  migrada da v1 (um punhado de números internos), **toda** mensagem de cliente seria rejeitada
+  com 403 e nada entraria no sistema — enquanto os números que deviam ser ignorados seriam os
+  únicos atendidos. O teste existente não pegava: o mock de `IsPhoneWhitelisted` devolvia
+  `whitelisted: true` fixo, e o assert era só `202`. Corrigido: estar na lista agora descarta
+  o evento (202, auditado como `webhook.ignored`/`remetente_ignorado`); não estar é o caminho
+  normal de ingestão. Decisão fixada em teste unitário (`remetente_deve_ser_ignorado`) e o
+  mock passou a devolver `false` (cliente comum), para os testes de HTTP exercitarem a
+  ingestão de verdade. Doc `02-fases-desenvolvimento.md` §3.4 corrigido — era a redação
+  ("rejeição auditada `not_whitelisted`") que induzia à inversão.
+- **`fromMe` era ignorado: o bot respondia ao eco da própria resposta, em laço.**
+  `NormalizedMessage.is_from_me` era extraído do webhook e nunca lido por ninguém. A Evolution
+  emite `messages.upsert` para **toda** mensagem do chat, inclusive as que saem do próprio
+  número — o que inclui o eco da resposta que o bot acabou de enviar. Como `key.remoteJid` é o
+  JID do contato, essa mensagem era persistida com `sender_id` = telefone do cliente (autoria
+  errada no chat) e caía na barreira de bot, que respondia; o eco dessa resposta voltava pelo
+  webhook e o ciclo se repetia. O debounce de 2s não contém isso (o eco chega depois da
+  janela). Além do laço, a mensagem que o atendente digita no celular/WhatsApp Web aparecia
+  como se fosse fala do cliente. Regra restaurada da v1
+  (`docs_dev/planejamento/regras_comunicacao/protocolo_comunicacao.md` §4.2): grava como
+  `atendente`, marca como já entregue e **não** aciona o bot (nem sentimento, nem pipeline de
+  mídia — é conteúdo que o próprio atendente enviou).
+- **Ingestão inbound sem chave de idempotência: reentrega duplicava a mensagem no chat.** O
+  `PersistMessage` do worker não enviava `message_id_whatsapp` (nem `reply_to`), embora
+  `NormalizedMessage` já os tivesse e a coluna existisse desde a `0006`. Com o bus
+  at-least-once, qualquer falha em passo posterior do handler (ex.: envio outbound) devolvia o
+  evento à PEL e o reprocessamento inseria a mensagem outra vez — e o bot respondia de novo.
+  Sem o stanzaId também não havia como correlacionar os webhooks de status (`messages.update`)
+  das mensagens do bot: o atendente nunca via "entregue/lido" do que o assistente respondeu, e
+  a citação (reply) nunca era resolvida, deixando `mensagem_citada_id` sempre nulo no inbound.
+  Corrigido: `OrigemMensagem` (stanzaId + stanzaId citado + `ja_entregue`) atravessa
+  `PersistMessage` → port → adapter; `persistir_mensagem` busca por stanzaId **dentro da mesma
+  transação do tenant** antes de inserir e devolve a mensagem existente; a citação é resolvida
+  para o id interno; a resposta do bot passa a gravar o stanzaId devolvido pelo provedor.
+  Migration `0025` adiciona o índice parcial `(tenant_id, message_id_whatsapp)` — as duas
+  consultas do fluxo vivo que filtram por essa coluna varriam a partição do tenant a cada
+  evento. Índice deliberadamente **não** UNIQUE: a base migrada da v1 pode ter stanzaIds
+  repetidos e uma unicidade retroativa faria a migration falhar no cutover, travando o boot.
+- **PEL do worker sem retry nem dead-letter: mensagem de cliente podia ficar sem resposta
+  indefinidamente.** `Consumer::run` relê a PEL uma única vez, no boot. Um evento cujo handler
+  falhasse durante o loop ativo ficava pendente até o próximo restart do processo, e nunca era
+  movido para a DLQ — as funções `reprocessar_pendentes_uma_vez`/`varrer_dlq_pendentes` existiam
+  em `transport::bus` mas só o `data_postgres` (stream de auditoria) as usava. Corrigido: tick
+  periódico de reprocessamento + varredura de DLQ no `worker` (60s,
+  `SMARTCORE_WORKER_PEL_RETRY_SECS`) e no consumidor de purga do `data_storage` (300s,
+  `SMARTCORE_PURGE_PEL_RETRY_SECS`; sem ele, uma deleção falhada deixava o objeto no bucket até
+  o lifecycle de 90 dias, retendo dado do cliente além da política). O roteamento de eventos foi
+  extraído para `despachar_evento`, para o loop ativo e o reprocessador nunca divergirem.
+
+### Alterado
+
+- **URL da CDN do WhatsApp não vai mais para a IA como se fosse a fala do cliente.** Em mídia
+  sem legenda, `NormalizedMessage.content` cai para a URL do arquivo (comportamento antigo e
+  intencional, preservado). O worker passava esse `content` direto ao `Responder` e ao
+  `Sentimento`: a IA recebia `https://mmg.whatsapp.net/...` como pergunta do cliente, gastava
+  token e devolvia resposta fora de contexto. Adicionado `NormalizedMessage.legenda` +
+  `texto_para_ia()`, que só existem quando há texto realmente escrito (corpo do texto ou
+  legenda de imagem/vídeo). Sem texto, o bot não é acionado e o silenciamento é auditado com
+  `sem_texto: true`. **Consequência de produto a decidir:** áudio/imagem sem legenda agora não
+  recebem resposta automática nenhuma (antes recebiam uma resposta de qualidade ruim). O
+  caminho natural — responder à transcrição, já disponível no fim do pipeline de mídia — NÃO
+  foi implementado: é decisão de produto (custo, ordem das mensagens, risco de resposta dupla).
+- **`PersistMessage` deixou de aceitar defaults silenciosos perigosos.** `atendimento_id` caía
+  em `1` e `sender_id` em `"usuario"` quando ausentes: um payload truncado gravava a mensagem de
+  um contato **dentro da conversa de id 1 do tenant**, sem erro nenhum. Ambos agora são
+  obrigatórios (o chamador é sempre serviço interno, e a reentrega da PEL o traz de volta). O
+  default `"Mensagem padrão"` do conteúdo virou string vazia — que é o correto para mídia sem
+  legenda, cujo texto útil chega depois em `analise_midia`.
+- **Escrever no thread agora exige escopo de escrita.** `MensagemRepository::criar` era o único
+  ponto de escrita de `atendimentos/` sem `ctx.exigir_qualquer`: um usuário do tenant com
+  `module_permissions` só de leitura conseguia, via `SendOutboundMessage`, inserir mensagem em
+  qualquer atendimento — e ela era de fato entregue ao WhatsApp do cliente pelo worker. Passa a
+  exigir `atendimentos:write` ou `tenant:admin`, como os repositórios irmãos. Serviços internos
+  usam o coringa `"*"`, então ingestão e resposta do bot não mudam.
+- **Outbox: linha com payload corrompido não bloqueia mais a fila.** Eram apenas puladas
+  (`continue`) e voltavam em toda drenagem; como `fetch_pending` ordena por `occurred_at` com
+  `LIMIT 100`, cem linhas corrompidas ocupariam o lote inteiro e travariam indefinidamente a
+  publicação dos eventos válidos posteriores (bloqueio de cabeça de fila). Passam a ser
+  marcadas como drenadas com ERROR no log; a linha fica na tabela para perícia.
+- **`MensagemRepository::criar` recebe `NovaMensagem`** em vez de 8 parâmetros posicionais
+  (eram 9 com `status_envio`, fáceis de trocar de lugar), e ganhou `buscar_por_whatsapp_id`.
+  O INSERT migrou de `query_as!` para a API de runtime — a macro obrigaria a regravar o cache
+  `.sqlx` com o banco no ar a cada ajuste nos campos de origem da ingestão; mesmo padrão já
+  usado em `listar_midias_expiradas`/`resolver_destino_envio_outbound` no mesmo arquivo.
+- `data_storage` não abre mais um `ConnectionManager` ocioso por réplica (só o `Client`, que é
+  o que o `Consumer` consome).
+
+### Validação
+
+- `cargo fmt --all` + `cargo clippy --workspace --all-targets -- -D warnings`: **limpos**.
+- `cargo check --workspace --all-targets` (SQLX_OFFLINE): **limpo**, código de teste incluído.
+- Testes **não executados** nesta rodada, a pedido do dono (a suíte sobe túnel SSH + vários
+  servidores RPC e derruba a máquina). Novos testes escritos, a rodar antes do merge:
+  `whitelist_lista_numeros_a_ignorar_e_nao_a_permitir`,
+  `test_mensagem_from_me_vira_atendente_e_nao_aciona_o_bot`,
+  `texto_para_ia_so_existe_quando_ha_texto_escrito`,
+  `texto_para_ia_ignora_conteudo_em_branco`,
+  `persist_message_sem_atendimento_id_e_rejeitado`,
+  `persist_message_sem_sender_id_e_rejeitado`,
+  `persist_message_repassa_origem_do_provedor`,
+  `drenar_descarta_payload_invalido_e_o_tira_da_fila`,
+  `drenar_publica_validos_mesmo_com_corrompido_no_lote`, mais as asserções novas em
+  `test_resposta_do_bot_e_persistida_no_thread` e no fluxo de `tests/atendimentos`.
+- Migration `0025` **não aplicada** a nenhum banco nesta rodada.
+
+### Observações
+
+- Nenhum dos quatro defeitos principais era regressão da N6–N8: os dois primeiros existiam
+  desde a F3 (`webhook_ingress`/normalização), o terceiro desde a F4 e o quarto desde a
+  introdução do `Consumer`. O que os manteve invisíveis foi o formato dos testes — mocks que
+  afirmavam o comportamento errado como se fosse o esperado, e nenhum teste de ponta a ponta
+  com um webhook real da Evolution (que é onde `fromMe` e o eco aparecem).
+- O `Consumer::run` continua sem `varrer_dlq_pendentes` no próprio loop; a varredura vive no
+  tick periódico. Unificar isso dentro do `Consumer` (em vez de cada app montar o seu tick) é
+  simplificação pendente, não defeito.
+
 ## [2026-07-24] - Auditoria N6–N8: 3 defeitos de bloqueio de cutover + 3 desvios de plano
 
 > Revisão detalhada, sob demanda, de tudo que N6/N7/N8 entregaram (plano vs. código real),

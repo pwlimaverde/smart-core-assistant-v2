@@ -22,9 +22,11 @@ async fn main() -> anyhow::Result<()> {
     // 2. Conecta ao Redis para o barramento de purga
     let redis_url =
         std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+    // Só o `Client` é necessário: o consumidor de purga abre a própria conexão
+    // dedicada (o `Consumer` recebe o Client). Antes abria-se também um
+    // `ConnectionManager` que ninguém usava, mantendo uma conexão ociosa por réplica.
     let redis_client = redis::Client::open(redis_url)?;
-    let _redis_conn = redis::aio::ConnectionManager::new(redis_client.clone()).await?;
-    tracing::info!("Conexão com Redis estabelecida.");
+    tracing::info!("Cliente Redis do barramento pronto.");
 
     // 3. Inicializa o cliente de storage S3-compatible (MinIO em dev / R2 em prod)
     //    a partir das variáveis S3_* e garante a existência do bucket.
@@ -57,10 +59,11 @@ async fn main() -> anyhow::Result<()> {
 
     // 4. Inicia o Consumidor de Purga de Mídia em background
     let state_clone = state.clone();
+    let consumidor_purga = transport::bus::nome_consumidor("data_storage_purge_consumer");
     let purge_consumer = transport::bus::Consumer::new(
         transport::bus::STREAM_EVENTOS,
         "data_storage_purge_group",
-        "data_storage_purge_consumer",
+        consumidor_purga.clone(),
         redis_client.clone(),
     );
     let purge_handle = tokio::spawn(async move {
@@ -79,6 +82,57 @@ async fn main() -> anyhow::Result<()> {
             tracing::error!("Consumidor de purga parou com erro crítico: {:?}", e);
         }
     });
+
+    // 4b. Reprocessamento periódico da PEL + varredura de DLQ do grupo de purga.
+    //
+    // `Consumer::run` relê a PEL só no boot. Uma deleção que falhe (R2 fora do ar,
+    // credencial expirada) ficava pendente para sempre: o scheduler já marcou
+    // `midia_purgada_em` e não republica, então o objeto permaneceria no bucket até
+    // o lifecycle de 90 dias — dado do cliente retido além da política de retenção.
+    //
+    // Só toca em eventos parados há mais de `MIN_IDLE_REPROCESSAMENTO_MS`: o tick
+    // roda em paralelo ao loop de consumo, e sem esse piso reprocessaria a purga que
+    // o loop está executando neste instante (deleção duplicada no bucket).
+    {
+        let state_retry = state.clone();
+        let bus_client_retry = redis_client.clone();
+        let consumidor_retry = consumidor_purga.clone();
+        let intervalo = std::env::var("SMARTCORE_PURGE_PEL_RETRY_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(300u64);
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(Duration::from_secs(intervalo));
+            loop {
+                tick.tick().await;
+                let state_tick = state_retry.clone();
+                let handler = move |evt: transport::bus::EventoBruto| {
+                    let state = state_tick.clone();
+                    async move {
+                        if evt.event_type == "media.purge" {
+                            processar_purga_midia(state, evt).await?;
+                        }
+                        Ok(())
+                    }
+                };
+                if let Err(e) = transport::bus::reprocessar_pendentes_uma_vez(
+                    &bus_client_retry,
+                    transport::bus::STREAM_EVENTOS,
+                    "data_storage_purge_group",
+                    &consumidor_retry,
+                    transport::bus::MIN_IDLE_REPROCESSAMENTO_MS,
+                    handler,
+                )
+                .await
+                {
+                    tracing::warn!(
+                        "Falha no reprocessamento periódico da PEL de purga: {:?}",
+                        e
+                    );
+                }
+            }
+        });
+    }
 
     // 5. Inicia o Servidor RPC síncrono nos 3 protocolos
     let state_clone2 = state.clone();

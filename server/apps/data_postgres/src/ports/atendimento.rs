@@ -64,6 +64,23 @@ pub struct TicketKanbanOutcome {
     pub reason: Option<String>,
 }
 
+/// Metadados de origem de uma mensagem que chega para ser persistida — o que o
+/// provedor de WhatsApp informou sobre ela. Todos opcionais: o caminho do bot e o
+/// do painel não têm nenhum deles.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct OrigemMensagem {
+    /// stanzaId da própria mensagem. Presente, é a chave natural de idempotência:
+    /// reentrega do mesmo evento pelo bus devolve a mensagem já persistida em vez
+    /// de duplicá-la no chat.
+    pub message_id_whatsapp: Option<String>,
+    /// stanzaId da mensagem citada (reply do WhatsApp), a resolver para o id interno.
+    pub citando_message_id_whatsapp: Option<String>,
+    /// `true` quando a mensagem já trafegou pelo WhatsApp antes de chegar aqui
+    /// (mensagem `fromMe`, digitada pelo atendente no próprio celular): nasce
+    /// `status_envio='sent'` para o worker não reenviá-la ao contato.
+    pub ja_entregue: bool,
+}
+
 /// Operações de persistência do domínio Atendimento expostas aos handlers RPC.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
@@ -93,6 +110,10 @@ pub trait AtendimentoStore: Send + Sync {
     /// atendente via sync offline), dedupe atômico na MESMA transação —
     /// reenviar a mesma ação devolve a mensagem já persistida, sem duplicar.
     /// `None` (caminho de ingestão inbound/bot) preserva o comportamento atual.
+    ///
+    /// `origem`: metadados do provedor (stanzaId, citação, já entregue). Com
+    /// `message_id_whatsapp` presente, a idempotência vale também para a
+    /// reentrega do evento pelo bus, sem depender de `action_id`.
     #[allow(clippy::too_many_arguments)]
     async fn persistir_mensagem(
         &self,
@@ -103,6 +124,7 @@ pub trait AtendimentoStore: Send + Sync {
         remetente: &str,
         traceparent: &str,
         action_id: Option<Uuid>,
+        origem: OrigemMensagem,
     ) -> Result<Mensagem, DbError>;
 
     /// Busca ou cria um contato pelo telefone, e busca ou cria um atendimento ativo para esse contato.

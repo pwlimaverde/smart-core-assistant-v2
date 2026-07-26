@@ -634,10 +634,13 @@ async fn main() -> anyhow::Result<()> {
     };
 
     // 3. Inicia o consumidor do barramento (events:stream)
+    // Nome do consumidor: default histórico (`worker_consumer_1`), sobrescrevível
+    // por réplica via `SMARTCORE_CONSUMER_NAME` — ver `bus::nome_consumidor`.
+    let consumidor = transport::bus::nome_consumidor("worker_consumer");
     let consumer = transport::bus::Consumer::new(
         transport::bus::STREAM_EVENTOS,
         "worker_group",
-        "worker_consumer_1",
+        consumidor.clone(),
         redis_client.clone(),
     );
 
@@ -647,23 +650,59 @@ async fn main() -> anyhow::Result<()> {
     // Roda em tokio::spawn paralelo ao loop de consumo do bus abaixo.
     scheduler::iniciar(state.clone());
 
+    // 3c. Reprocessamento periódico da PEL + varredura de DLQ.
+    //
+    // `Consumer::run` relê a PEL uma única vez, no boot: um evento cujo handler
+    // falhou durante o loop ativo ficava pendente até o próximo restart do worker
+    // — mensagem do cliente sem resposta por tempo indeterminado — e nunca era
+    // movido para a dead-letter. Este tick fecha as duas pontas (o data_postgres
+    // já fazia o mesmo com o stream de auditoria).
+    //
+    // O tick roda em paralelo ao loop de consumo, e a PEL não distingue "handler
+    // morreu" de "handler está rodando agora": por isso o reprocessamento só toca
+    // em eventos parados há mais de `MIN_IDLE_REPROCESSAMENTO_MS`. Sem esse piso, o
+    // tick pegaria a mensagem que o loop está processando neste instante e o bot
+    // responderia duas vezes ao cliente (a persistência é idempotente pelo
+    // stanzaId, mas o envio ao WhatsApp não é).
+    {
+        let state_retry = state.clone();
+        let bus_client_retry = redis_client.clone();
+        let consumidor_retry = consumidor.clone();
+        let intervalo = std::env::var("SMARTCORE_WORKER_PEL_RETRY_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(60u64);
+        tokio::spawn(async move {
+            let mut tick = tokio::time::interval(Duration::from_secs(intervalo));
+            loop {
+                tick.tick().await;
+                let state_tick = state_retry.clone();
+                let handler = move |evt| {
+                    let state = state_tick.clone();
+                    async move { despachar_evento(&state, evt).await }
+                };
+                if let Err(e) = transport::bus::reprocessar_pendentes_uma_vez(
+                    &bus_client_retry,
+                    transport::bus::STREAM_EVENTOS,
+                    "worker_group",
+                    &consumidor_retry,
+                    transport::bus::MIN_IDLE_REPROCESSAMENTO_MS,
+                    handler,
+                )
+                .await
+                {
+                    tracing::warn!("Falha no reprocessamento periódico da PEL: {:?}", e);
+                }
+            }
+        });
+    }
+
     // Loop de consumo
     let state_clone = state.clone();
     if let Err(e) = consumer
         .run(move |evt| {
             let state = state_clone.clone();
-            async move {
-                if evt.event_type == "whatsapp.message.received"
-                    || evt.event_type == "message.received"
-                {
-                    processar_mensagem_recebida(&state, evt).await?;
-                } else if evt.event_type == "whatsapp.message.status" {
-                    processar_status_mensagem(&state, evt).await?;
-                } else if evt.event_type == "message.persisted" {
-                    processar_mensagem_persistida(&state, evt).await?;
-                }
-                Ok(())
-            }
+            async move { despachar_evento(&state, evt).await }
         })
         .await
     {
@@ -671,6 +710,27 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Roteia um evento do barramento para o handler do seu tipo. Compartilhado pelo
+/// loop de consumo e pelo reprocessador periódico da PEL — os dois têm de tratar
+/// exatamente o mesmo conjunto de eventos, senão um evento reentregue seria
+/// silenciosamente descartado (ou reprocessado por um caminho diferente).
+async fn despachar_evento(
+    state: &AppState,
+    evt: transport::bus::EventoBruto,
+) -> anyhow::Result<()> {
+    match evt.event_type.as_str() {
+        "whatsapp.message.received" | "message.received" => {
+            processar_mensagem_recebida(state, evt).await
+        }
+        "whatsapp.message.status" => processar_status_mensagem(state, evt).await,
+        "message.persisted" => processar_mensagem_persistida(state, evt).await,
+        // Eventos de outros consumidores (ex.: `media.purge`, do data_storage)
+        // compartilham o stream: ignorar é o comportamento correto, e o XACK do
+        // Consumer evita que fiquem pendurados na PEL deste grupo.
+        _ => Ok(()),
+    }
 }
 
 /// Consome o evento "message.received", orquestra e delega persistência ao data_postgres via RPC síncrono.
@@ -746,7 +806,27 @@ async fn processar_mensagem_recebida(
         .ok_or_else(|| anyhow::anyhow!("atendimento_id ausente na resposta"))?
         as i32;
 
-    // 2. Persiste a mensagem no atendimento resolvido
+    // 2. Persiste a mensagem no atendimento resolvido.
+    //
+    // `fromMe` = a mensagem saiu do próprio WhatsApp da instância: o atendente
+    // escreveu pelo celular/WhatsApp Web, ou é o eco da resposta que o bot acabou
+    // de enviar. Registrar isso como se fosse fala do CONTATO faria o bot responder
+    // à sua própria mensagem — e o eco dessa resposta voltaria pelo webhook, em
+    // laço. Regra herdada da v1 (`protocolo_comunicacao.md` §4.2): grava como
+    // ATENDENTE e não aciona o bot.
+    //
+    // O eco da resposta do bot não chega a ser gravado como atendente: ele traz o
+    // MESMO stanzaId que o `SendWhatsappMessage` devolveu e que já foi persistido
+    // junto da resposta, então a idempotência por stanzaId do `data_postgres`
+    // reconhece a mensagem existente (remetente `bot`, autoria correta no chat) e
+    // devolve ela. Sobra como "atendente" só o que o humano digitou de fato no
+    // celular/WhatsApp Web — exatamente o caso que a regra da v1 descreve.
+    let de_mim = msg_normalized.is_from_me;
+    let remetente = if de_mim {
+        REMETENTE_ATENDENTE
+    } else {
+        msg_normalized.sender.as_str()
+    };
     let persist_payload = serde_json::json!({
         "atendimento_id": atendimento_id,
         "content": msg_normalized.content,
@@ -761,7 +841,16 @@ async fn processar_mensagem_recebida(
             domain_whatsapp::MediaType::Contact => "contato",
             domain_whatsapp::MediaType::Other(ref o) => o,
         },
-        "sender_id": msg_normalized.sender,
+        "sender_id": remetente,
+        // Chave natural de idempotência: o bus é at-least-once, e sem o stanzaId
+        // uma reentrega duplicaria a mensagem no chat.
+        "message_id_whatsapp": msg_normalized.message_id,
+        // Citação (reply) do WhatsApp: o data_postgres resolve o stanzaId citado
+        // para o id interno da mensagem.
+        "citando_message_id_whatsapp": msg_normalized.reply_to,
+        // Mensagem `fromMe` já trafegou pelo WhatsApp; nasce `status_envio='sent'`
+        // para o elo outbox->outbound NÃO reenviá-la ao contato.
+        "ja_entregue": de_mim,
     });
 
     let persist_envelope = Envelope {
@@ -870,8 +959,10 @@ async fn processar_mensagem_recebida(
     // download+análise em background (fire-and-forget controlado). A mensagem já
     // apareceu no chat na etapa de persistência acima — a análise é assíncrona e
     // NUNCA bloqueia nem falha o handler principal (degradação graciosa interna).
-    if let (Some(media_payload), Some(mensagem_id)) =
-        (msg_normalized.media_payload.clone(), mensagem_id)
+    // `de_mim` fica fora: é mídia que o próprio atendente enviou — não há o que
+    // transcrever/interpretar para ele, e transcrever custa por minuto de áudio.
+    if let (false, Some(media_payload), Some(mensagem_id)) =
+        (de_mim, msg_normalized.media_payload.clone(), mensagem_id)
     {
         let state_midia = state.clone();
         let raw_event = raw_event.clone();
@@ -903,9 +994,13 @@ async fn processar_mensagem_recebida(
     // background, best-effort (mensagens de mídia sem legenda ficam para quando a
     // transcrição terminar — ver `processar_pipeline_midia`). Nunca bloqueia nem
     // falha o handler principal.
-    if msg_normalized.media_payload.is_none() && !msg_normalized.content.trim().is_empty() {
+    //
+    // `texto_para_ia` (não `content`): sentimento se mede sobre o que o CONTATO
+    // escreveu. Mídia sem legenda tem `content` = URL da CDN, que não tem tom
+    // nenhum a medir; e `de_mim` é fala do atendente, não do cliente.
+    if let (false, Some(texto_contato)) = (de_mim, msg_normalized.texto_para_ia()) {
         let state_sentimento = state.clone();
-        let texto = msg_normalized.content.clone();
+        let texto = texto_contato.to_string();
         let tenant_str = envelope.tenant_id.to_string();
         let causation = envelope.event_id.to_string();
         let traceparent = envelope.traceparent.clone();
@@ -962,6 +1057,26 @@ async fn processar_mensagem_recebida(
         }
     }
 
+    // Mensagem do próprio número (atendente pelo celular, ou eco da resposta do
+    // bot): já está registrada no thread; daqui para baixo é só automação de
+    // resposta, que não se aplica. Encerrar aqui é o que quebra o laço
+    // bot → eco → bot descrito na etapa 2.
+    if de_mim {
+        state.audit_logger.info(
+            tenant_uuid,
+            "bot.silenciado",
+            "Mensagem enviada pelo próprio número da instância; bot não responde",
+            serde_json::json!({
+                "atendimento_id": atendimento_id,
+                "motivo": "from_me",
+            }),
+            None,
+            None,
+            Some(envelope.event_id.to_string()),
+        );
+        return Ok(());
+    }
+
     // 4. Aplica o debounce de 2 segundos para regras do Bot/Kanban
     let mut is_debounce_winner = true;
     if let Some(ref redis_conn) = state.redis_conn {
@@ -999,7 +1114,14 @@ async fn processar_mensagem_recebida(
             .get("atendente_humano_id")
             .and_then(|v| v.as_i64());
 
-        if bot_pode_atender && atendente_humano_id.is_none() {
+        // Sem texto do contato não há pergunta a responder: mídia sem legenda,
+        // sticker, localização. Antes o bot era acionado de todo jeito com
+        // `content`, que nesses casos é a URL da CDN — a IA recebia "https://..."
+        // como se fosse a fala do cliente. O conteúdo da mídia entra na conversa
+        // pelo pipeline de mídia (transcrição/análise), não por aqui.
+        let texto_do_contato = msg_normalized.texto_para_ia();
+
+        if bot_pode_atender && atendente_humano_id.is_none() && texto_do_contato.is_some() {
             tracing::info!(
                 atendimento_id = atendimento_id,
                 sender = %msg_normalized.sender,
@@ -1015,7 +1137,7 @@ async fn processar_mensagem_recebida(
                 state,
                 tenant_uuid,
                 atendimento_id,
-                &msg_normalized.content,
+                texto_do_contato.unwrap_or_default(),
                 &envelope.event_id.to_string(),
                 &envelope.traceparent,
             )
@@ -1126,6 +1248,21 @@ async fn processar_mensagem_recebida(
                 //
                 // Não realimenta o loop de envio: `processar_mensagem_persistida`
                 // só reage a `sender_id == "atendente"`.
+                //
+                // O stanzaId devolvido pelo provedor vai junto: é o que correlaciona
+                // os webhooks de status (`sent`/`delivered`/`read`) desta resposta
+                // com a linha no thread — sem ele, `UpdateMessageStatus` não acha a
+                // mensagem e o atendente nunca vê o "entregue/lido" do que o bot
+                // respondeu. Também torna a persistência idempotente se o evento
+                // for reentregue pela PEL.
+                let stanza_bot = serde_json::from_slice::<serde_json::Value>(&out_resp.payload)
+                    .ok()
+                    .and_then(|v| {
+                        v.get("message_id")
+                            .and_then(|m| m.as_str())
+                            .map(|s| s.to_string())
+                    })
+                    .unwrap_or_default();
                 if let Err(e) = chamar_rpc(
                     &state.pg_client,
                     &envelope.tenant_id.to_string(),
@@ -1135,6 +1272,9 @@ async fn processar_mensagem_recebida(
                         "content": bot_text,
                         "sender_id": REMETENTE_BOT,
                         "tipo": "texto",
+                        "message_id_whatsapp": stanza_bot,
+                        // Já entregue ao contato pelo envio acima.
+                        "ja_entregue": true,
                     }),
                     &envelope.event_id.to_string(),
                     &envelope.traceparent,
@@ -1175,7 +1315,8 @@ async fn processar_mensagem_recebida(
                 );
             }
         } else {
-            // Barreira de bot impediu a resposta automática (humano ativo ou flag desligada).
+            // Barreira de bot impediu a resposta automática (humano ativo, flag
+            // desligada ou mensagem sem texto a responder).
             state.audit_logger.info(
                 tenant_uuid,
                 "bot.silenciado",
@@ -1184,6 +1325,7 @@ async fn processar_mensagem_recebida(
                     "atendimento_id": atendimento_id,
                     "bot_pode_atender": bot_pode_atender,
                     "humano_ativo": atendente_humano_id.is_some(),
+                    "sem_texto": texto_do_contato.is_none(),
                 }),
                 None,
                 None,
@@ -2261,10 +2403,171 @@ mod tests {
                 .is_empty(),
             "a resposta persistida do bot não pode ser vazia"
         );
-        // A mensagem inbound do contato segue persistida (não foi substituída).
-        assert!(vistas
+        // Resposta do bot já saiu pelo WhatsApp: não pode nascer pendente de envio,
+        // senão o elo outbox->outbound a enviaria de novo.
+        assert_eq!(
+            do_bot[0].get("ja_entregue").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+        // A mensagem inbound do contato segue persistida (não foi substituída) e
+        // carrega o stanzaId, que é a chave de idempotência da reentrega.
+        let do_contato: Vec<_> = vistas
             .iter()
-            .any(|p| p.get("sender_id").and_then(|v| v.as_str()) != Some(REMETENTE_BOT)));
+            .filter(|p| p.get("sender_id").and_then(|v| v.as_str()) != Some(REMETENTE_BOT))
+            .collect();
+        assert_eq!(do_contato.len(), 1);
+        assert_eq!(
+            do_contato[0]
+                .get("message_id_whatsapp")
+                .and_then(|v| v.as_str()),
+            Some("MSG1234")
+        );
+
+        pg_handle.abort();
+    }
+
+    /// Evento `messages.upsert` com `fromMe: true` — o que a Evolution devolve
+    /// quando o atendente escreve pelo celular/WhatsApp Web e, principalmente,
+    /// quando ela ecoa a mensagem que o próprio bot acabou de enviar.
+    fn evento_message_received_from_me(tenant_id: &str) -> EventoBruto {
+        let raw_event = serde_json::json!({
+            "data": {
+                "key": {
+                    "remoteJid": "5511999998888@s.whatsapp.net",
+                    "fromMe": true,
+                    "id": "MSGFROMME"
+                },
+                "pushName": "Atendimento",
+                "messageTimestamp": chrono::Utc::now().timestamp(),
+                "message": { "conversation": "Bom dia, em que posso ajudar?" }
+            }
+        });
+        let payload = serde_json::json!({
+            "instance_id": 42,
+            "provider": "evolution",
+            "raw_event": raw_event
+        });
+        EventoBruto {
+            stream_id: "1234567890-1".to_string(),
+            tenant_id: tenant_id.to_string(),
+            event_id: Uuid::now_v7().to_string(),
+            event_type: "whatsapp.message.received".to_string(),
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            traceparent: "00-trace-worker-02-01".to_string(),
+            payload: serde_json::to_string(&payload).unwrap(),
+        }
+    }
+
+    /// Mensagem do próprio número: grava como ATENDENTE, já entregue, e NÃO aciona
+    /// o bot (regra da v1, `protocolo_comunicacao.md` §4.2). Sem isso, o eco da
+    /// resposta do bot voltava como se fosse fala do cliente e o bot respondia a si
+    /// mesmo — laço que se realimenta a cada volta do webhook.
+    #[tokio::test]
+    async fn test_mensagem_from_me_vira_atendente_e_nao_aciona_o_bot() {
+        let _guard = WORKER_TEST_MUTEX.lock().await;
+        let pg_addr = "tcp://127.0.0.1:29229";
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+
+        let persistidas: Arc<std::sync::Mutex<Vec<serde_json::Value>>> =
+            Arc::new(std::sync::Mutex::new(Vec::new()));
+        let persistidas_rota = persistidas.clone();
+        let envios = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let envios_rota = envios.clone();
+
+        let pg_endpoint = Endpoint::parse(pg_addr).unwrap();
+        let pg_server = Server::new(pg_endpoint, "flatbuffers")
+            .route("ResolveAtendimentoParaContato", |env| {
+                Box::pin(async move {
+                    // Barreira de bot LIBERADA de propósito: o que impede a resposta
+                    // aqui tem de ser o `fromMe`, não a configuração do tenant.
+                    let reply = serde_json::json!({
+                        "status": "success",
+                        "contato_id": 10,
+                        "atendimento_id": 42,
+                        "bot_pode_atender": true,
+                    });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "ResolveAtendimentoParaContatoReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("PersistMessage", move |env| {
+                let coletor = persistidas_rota.clone();
+                Box::pin(async move {
+                    if let Ok(p) = serde_json::from_slice::<serde_json::Value>(&env.payload) {
+                        coletor.lock().unwrap().push(p);
+                    }
+                    let reply = serde_json::json!({ "status": "success", "message_id": 101 });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "PersistMessageReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("SendWhatsappMessage", move |env| {
+                let contador = envios_rota.clone();
+                Box::pin(async move {
+                    contador.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    let reply = serde_json::json!({ "status": "success" });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "SendWhatsappMessageReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let pg_handle = tokio::spawn(async move {
+            pg_server.run().await.unwrap();
+        });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
+        let state = AppState {
+            redis_conn: None,
+            audit_logger: observability::AuditLogger::new_dummy("worker"),
+            storage_client: pg_client.clone(),
+            fluxos_cache: FluxosCache::novo(),
+            whatsapp_client: pg_client.clone(),
+            pg_client,
+            ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
+        };
+
+        let evt = evento_message_received_from_me(&Uuid::new_v4().to_string());
+        let resultado = processar_mensagem_recebida(&state, evt).await;
+        assert!(resultado.is_ok(), "obteve: {:?}", resultado);
+
+        let vistas = persistidas.lock().unwrap().clone();
+        assert_eq!(
+            vistas.len(),
+            1,
+            "fromMe deve gerar só a própria persistência; vistas: {vistas:?}"
+        );
+        assert_eq!(
+            vistas[0].get("sender_id").and_then(|v| v.as_str()),
+            Some(REMETENTE_ATENDENTE)
+        );
+        assert_eq!(
+            vistas[0].get("ja_entregue").and_then(|v| v.as_bool()),
+            Some(true),
+            "mensagem já entregue pelo celular do atendente não pode entrar na fila de envio"
+        );
+        assert_eq!(
+            vistas[0]
+                .get("message_id_whatsapp")
+                .and_then(|v| v.as_str()),
+            Some("MSGFROMME")
+        );
+        assert_eq!(
+            envios.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "o bot não pode responder ao eco da própria mensagem"
+        );
 
         pg_handle.abort();
     }

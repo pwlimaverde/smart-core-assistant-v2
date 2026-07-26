@@ -35,6 +35,16 @@ pub struct NormalizedMessage {
     pub media_payload: Option<serde_json::Value>,
     pub media_mime: Option<String>,
     pub media_file_size: Option<i64>,
+    /// Texto que a pessoa realmente escreveu: corpo da mensagem de texto ou legenda
+    /// de imagem/vídeo. `None` quando não há texto nenhum — caso em que `content`
+    /// carrega um substituto técnico (a URL da CDN do WhatsApp, o nome do arquivo,
+    /// coordenadas formatadas).
+    ///
+    /// Existe porque `content` não distingue os dois: um áudio sem legenda tem
+    /// `content` = URL da CDN, e mandar essa URL à IA como se fosse a pergunta do
+    /// cliente produz resposta sem sentido (e gasta token). Quem fala com a IA usa
+    /// [`Self::texto_para_ia`]; quem grava o histórico segue usando `content`.
+    pub legenda: Option<String>,
 }
 
 /// Extrai `mimetype` e `fileLength` do sub-objeto de mídia. O `fileLength` do
@@ -135,11 +145,15 @@ impl NormalizedMessage {
         let mut media_payload: Option<serde_json::Value> = None;
         let mut media_mime: Option<String> = None;
         let mut media_file_size: Option<i64> = None;
+        // Preenchido só nos ramos em que `content` vem de um campo textual escrito
+        // pela pessoa (corpo do texto ou legenda) — nunca de URL/nome de arquivo.
+        let mut legenda: Option<String> = None;
 
         if let Some(msg_obj) = data.get("message").and_then(|m| m.as_object()) {
             if let Some(text) = msg_obj.get("conversation").and_then(|t| t.as_str()) {
                 media_type = MediaType::Text;
                 content = text.to_string();
+                legenda = Some(content.clone());
             } else if let Some(ext_text) = msg_obj.get("extendedTextMessage") {
                 media_type = MediaType::Text;
                 content = ext_text
@@ -147,6 +161,7 @@ impl NormalizedMessage {
                     .and_then(|t| t.as_str())
                     .unwrap_or("")
                     .to_string();
+                legenda = Some(content.clone());
             } else if let Some(img) = msg_obj.get("imageMessage") {
                 media_type = MediaType::Image;
                 content = img
@@ -154,6 +169,9 @@ impl NormalizedMessage {
                     .and_then(|c| c.as_str())
                     .unwrap_or("")
                     .to_string();
+                if !content.is_empty() {
+                    legenda = Some(content.clone());
+                }
                 if content.is_empty() {
                     content = img
                         .get("url")
@@ -183,6 +201,9 @@ impl NormalizedMessage {
                     .and_then(|c| c.as_str())
                     .unwrap_or("")
                     .to_string();
+                if !content.is_empty() {
+                    legenda = Some(content.clone());
+                }
                 if content.is_empty() {
                     content = video
                         .get("url")
@@ -271,7 +292,20 @@ impl NormalizedMessage {
             media_payload,
             media_mime,
             media_file_size,
+            legenda,
         })
+    }
+
+    /// Texto a enviar para a IA (resposta do bot, análise de sentimento), ou `None`
+    /// quando a mensagem não tem texto algum — mídia sem legenda, sticker,
+    /// localização. Nesses casos não há pergunta a responder: chamar a IA com o
+    /// substituto técnico de `content` (URL da CDN) só gastaria token e produziria
+    /// resposta fora de contexto.
+    pub fn texto_para_ia(&self) -> Option<&str> {
+        self.legenda
+            .as_deref()
+            .map(str::trim)
+            .filter(|t| !t.is_empty())
     }
 }
 
@@ -637,6 +671,79 @@ mod tests {
         let msg = NormalizedMessage::parse(&payload, tenant_id, 99).unwrap();
         assert_eq!(msg.tenant_id, tenant_id);
         assert_eq!(msg.instance_id, 99);
+    }
+
+    /// `legenda`/`texto_para_ia` só existem quando a pessoa escreveu algo. É o que
+    /// impede a URL da CDN de virar "pergunta do cliente" na chamada à IA.
+    #[test]
+    fn texto_para_ia_so_existe_quando_ha_texto_escrito() {
+        let texto = NormalizedMessage::parse(
+            &payload_com_message(json!({ "conversation": "quanto custa?" })),
+            Uuid::new_v4(),
+            1,
+        )
+        .unwrap();
+        assert_eq!(texto.texto_para_ia(), Some("quanto custa?"));
+
+        let estendido = NormalizedMessage::parse(
+            &payload_com_message(json!({ "extendedTextMessage": { "text": "e o prazo?" } })),
+            Uuid::new_v4(),
+            1,
+        )
+        .unwrap();
+        assert_eq!(estendido.texto_para_ia(), Some("e o prazo?"));
+
+        let com_legenda = NormalizedMessage::parse(
+            &payload_com_message(json!({
+                "imageMessage": { "url": "http://x/i.jpg", "caption": "é esse o modelo?" }
+            })),
+            Uuid::new_v4(),
+            1,
+        )
+        .unwrap();
+        assert_eq!(com_legenda.texto_para_ia(), Some("é esse o modelo?"));
+
+        // Áudio sem legenda: `content` é a URL da CDN, mas não há texto do usuário.
+        let audio = NormalizedMessage::parse(
+            &payload_com_message(json!({ "audioMessage": { "url": "http://x/a.ogg" } })),
+            Uuid::new_v4(),
+            1,
+        )
+        .unwrap();
+        assert_eq!(audio.content, "http://x/a.ogg");
+        assert_eq!(audio.legenda, None);
+        assert_eq!(audio.texto_para_ia(), None);
+
+        // Imagem sem legenda: idem — `content` cai para a URL.
+        let imagem = NormalizedMessage::parse(
+            &payload_com_message(json!({ "imageMessage": { "url": "http://x/i.jpg" } })),
+            Uuid::new_v4(),
+            1,
+        )
+        .unwrap();
+        assert_eq!(imagem.texto_para_ia(), None);
+
+        // Documento: o nome do arquivo é metadado, não mensagem.
+        let doc = NormalizedMessage::parse(
+            &payload_com_message(json!({ "documentMessage": { "title": "Contrato.pdf" } })),
+            Uuid::new_v4(),
+            1,
+        )
+        .unwrap();
+        assert_eq!(doc.texto_para_ia(), None);
+    }
+
+    /// Texto só com espaços não é pergunta: `texto_para_ia` filtra o vazio útil,
+    /// senão o bot responderia a um turno em branco.
+    #[test]
+    fn texto_para_ia_ignora_conteudo_em_branco() {
+        let msg = NormalizedMessage::parse(
+            &payload_com_message(json!({ "conversation": "   " })),
+            Uuid::new_v4(),
+            1,
+        )
+        .unwrap();
+        assert_eq!(msg.texto_para_ia(), None);
     }
 
     #[test]

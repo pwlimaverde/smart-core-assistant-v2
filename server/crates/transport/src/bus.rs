@@ -6,7 +6,8 @@ use chrono::{DateTime, Utc};
 use contracts::TenantEnvelope;
 use redis::aio::ConnectionManager;
 use redis::streams::{
-    StreamClaimOptions, StreamMaxlen, StreamPendingCountReply, StreamReadOptions, StreamReadReply,
+    StreamClaimOptions, StreamClaimReply, StreamId, StreamMaxlen, StreamPendingCountReply,
+    StreamReadOptions, StreamReadReply,
 };
 use redis::AsyncCommands;
 use redis::{aio::Connection, Client};
@@ -272,6 +273,115 @@ where
     Ok(eventos)
 }
 
+/// Nome deste processo como consumidor de um grupo, a partir de `prefixo`.
+///
+/// O default preserva o nome histórico (`{prefixo}_1`) para não trocar a PEL de um
+/// deployment já em operação. `SMARTCORE_CONSUMER_NAME` existe para o dia em que
+/// houver mais de uma réplica do mesmo serviço: duas réplicas com o MESMO nome
+/// compartilham uma única PEL, e a releitura da PEL no boot de uma delas pegaria os
+/// eventos que a outra está processando naquele instante — resposta duplicada ao
+/// cliente. Com nome próprio por réplica, cada uma responde apenas pela sua
+/// pendência, e a PEL de uma réplica que morreu é recuperada pelo piso de
+/// inatividade de [`reclamar_pendentes_abandonados`], que varre o grupo inteiro.
+pub fn nome_consumidor(prefixo: &str) -> String {
+    std::env::var("SMARTCORE_CONSUMER_NAME")
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .map(|sufixo| format!("{prefixo}_{sufixo}"))
+        .unwrap_or_else(|| format!("{prefixo}_1"))
+}
+
+/// Tempo mínimo (ms) que um evento precisa estar parado na PEL para o
+/// reprocessador periódico considerá-lo ABANDONADO e reclamá-lo.
+///
+/// Existe porque a PEL não distingue "evento cujo handler morreu" de "evento que
+/// o loop de consumo está processando neste instante": os dois estão pendentes até
+/// o `XACK`. Sem um piso de inatividade, o tick de reprocessamento roda em paralelo
+/// ao loop ativo e reprocessa o que está em voo — no `worker`, isso significa
+/// responder duas vezes à mesma mensagem do cliente (a persistência é idempotente
+/// pelo stanzaId, mas o envio ao WhatsApp não é).
+///
+/// O piso tem de ser MAIOR que a duração máxima de um handler. O pior caso do
+/// `worker` é a resposta da IA (`SMARTCORE_IA_ENGINE_TIMEOUT_TEXT_MS` = 8s × 3
+/// tentativas + backoff 0/1/2 ≈ 27s) somada às RPCs de persistência e envio;
+/// 120s deixa margem confortável e ainda recupera um evento travado em ~2–3 min.
+pub const MIN_IDLE_REPROCESSAMENTO_MS: usize = 120_000;
+
+/// Reclama para `consumidor` os eventos da PEL do GRUPO que estão parados há pelo
+/// menos `min_idle_ms`, devolvendo-os já prontos para reprocessar.
+///
+/// Duas diferenças em relação a [`reprocessar_pendentes_stream`]:
+///
+/// * **Piso de inatividade** (ver [`MIN_IDLE_REPROCESSAMENTO_MS`]): o `XCLAIM`
+///   carrega o mesmo `min_idle_ms`, então o Redis descarta a entrada se ela tiver
+///   sido entregue de novo entre o `XPENDING` e o `XCLAIM` — a proteção contra
+///   reprocessar evento em voo é atômica, não uma janela de melhor esforço.
+/// * **Escopo do grupo, não do consumidor**: varre a pendência de TODOS os
+///   consumidores do grupo. É o que recupera a PEL órfã de uma réplica que morreu
+///   (ou que foi removida numa redução de escala) — com nome de consumidor próprio
+///   por réplica, ninguém mais releria aquela PEL.
+#[tracing::instrument(
+    level = "debug",
+    skip(con),
+    fields(stream = %stream, grupo = %grupo, consumidor = %consumidor, min_idle_ms, quantidade),
+    err
+)]
+pub async fn reclamar_pendentes_abandonados<C>(
+    con: &mut C,
+    stream: &str,
+    grupo: &str,
+    consumidor: &str,
+    min_idle_ms: usize,
+    quantidade: usize,
+) -> Result<Vec<EventoBruto>, TransportError>
+where
+    C: redis::aio::ConnectionLike + Send,
+{
+    // `XPENDING <stream> <grupo> IDLE <ms> - + <count>` (Redis >= 6.2): a forma
+    // estendida com IDLE não é exposta pelo helper `xpending_count` do crate, daí
+    // o comando cru. A resposta tem o mesmo formato, então o parse é o mesmo.
+    let pendentes: StreamPendingCountReply = redis::cmd("XPENDING")
+        .arg(stream)
+        .arg(grupo)
+        .arg("IDLE")
+        .arg(min_idle_ms)
+        .arg("-")
+        .arg("+")
+        .arg(quantidade)
+        .query_async(con)
+        .await
+        .map_err(|e| TransportError::Bus(e.to_string()))?;
+
+    let ids: Vec<String> = pendentes.ids.into_iter().map(|p| p.id).collect();
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let reclamados: StreamClaimReply = con
+        .xclaim_options(
+            stream,
+            grupo,
+            consumidor,
+            min_idle_ms,
+            &ids,
+            StreamClaimOptions::default(),
+        )
+        .await
+        .map_err(|e| TransportError::Bus(e.to_string()))?;
+
+    // O `XCLAIM` devolve só as entradas efetivamente reclamadas; as que voltaram a
+    // ser entregues (idle abaixo do piso) e as já removidas do stream saem de fora.
+    let eventos: Vec<EventoBruto> = reclamados.ids.iter().map(evento_de_entrada).collect();
+    if !eventos.is_empty() {
+        tracing::info!(
+            reclamados = eventos.len(),
+            min_idle_ms,
+            "eventos abandonados reclamados da PEL para reprocessamento"
+        );
+    }
+    Ok(eventos)
+}
+
 /// Confirma o processamento de um evento (`XACK`) no stream.
 #[tracing::instrument(
     level = "debug",
@@ -295,30 +405,35 @@ where
     Ok(())
 }
 
+/// Converte uma entrada do stream em [`EventoBruto`]. Compartilhado pelo
+/// `XREADGROUP` ([`extrair_eventos`]) e pelo `XCLAIM`
+/// ([`reclamar_pendentes_abandonados`]), que devolvem a mesma `StreamId`.
+fn evento_de_entrada(entrada: &StreamId) -> EventoBruto {
+    let campo = |nome: &str| -> String {
+        entrada
+            .map
+            .get(nome)
+            .and_then(|v| redis::from_redis_value::<String>(v).ok())
+            .unwrap_or_default()
+    };
+    EventoBruto {
+        stream_id: entrada.id.clone(),
+        tenant_id: campo("tenant_id"),
+        event_id: campo("event_id"),
+        event_type: campo("event_type"),
+        timestamp: campo("timestamp"),
+        traceparent: campo("traceparent"),
+        payload: campo("payload"),
+    }
+}
+
 /// Converte a resposta do `XREADGROUP` em uma lista de [`EventoBruto`].
 fn extrair_eventos(reply: StreamReadReply) -> Vec<EventoBruto> {
-    let mut eventos = Vec::new();
-    for chave in reply.keys {
-        for entrada in chave.ids {
-            let campo = |nome: &str| -> String {
-                entrada
-                    .map
-                    .get(nome)
-                    .and_then(|v| redis::from_redis_value::<String>(v).ok())
-                    .unwrap_or_default()
-            };
-            eventos.push(EventoBruto {
-                stream_id: entrada.id.clone(),
-                tenant_id: campo("tenant_id"),
-                event_id: campo("event_id"),
-                event_type: campo("event_type"),
-                timestamp: campo("timestamp"),
-                traceparent: campo("traceparent"),
-                payload: campo("payload"),
-            });
-        }
-    }
-    eventos
+    reply
+        .keys
+        .iter()
+        .flat_map(|chave| chave.ids.iter().map(evento_de_entrada))
+        .collect()
 }
 
 /// Consumidor de alto nível para o barramento de eventos do Redis Streams.
@@ -541,28 +656,47 @@ const MAX_ENTREGAS: usize = 5;
 pub const DLQ_STREAM: &str = "security:dlq";
 
 /// Move para a DLQ os eventos da PEL entregues mais de `MAX_ENTREGAS` vezes e os confirma.
+///
+/// `min_idle_ms` protege o evento em voo pelo mesmo motivo de
+/// [`reclamar_pendentes_abandonados`]: `times_delivered` alto não quer dizer
+/// "abandonado" — o loop ativo pode estar processando a entrada agora, na enésima
+/// tentativa. Reclamar com piso zero descartaria para a DLQ (e daria `XACK` em) um
+/// evento que ainda tinha chance de terminar.
 pub async fn varrer_dlq_pendentes(
     con: &mut Connection,
     stream: &str,
     grupo: &str,
     consumidor: &str,
+    min_idle_ms: usize,
 ) -> anyhow::Result<()> {
     let pend: StreamPendingCountReply = con.xpending_count(stream, grupo, "-", "+", 100).await?;
 
     for id in pend.ids {
         if id.times_delivered > MAX_ENTREGAS {
             let opts = StreamClaimOptions::default();
-            let _: redis::streams::StreamClaimReply = con
+            let reclamado: StreamClaimReply = con
                 .xclaim_options(
                     stream,
                     grupo,
                     consumidor,
-                    0,
+                    min_idle_ms,
                     std::slice::from_ref(&id.id),
                     opts,
                 )
                 .await?;
 
+            // Vazio = a entrada voltou a ser entregue (idle abaixo do piso) ou já
+            // saiu do stream: não é para mandar à DLQ nem dar XACK nela agora.
+            let Some(entrada) = reclamado.ids.first() else {
+                continue;
+            };
+
+            // O conteúdo vai junto. Antes a DLQ guardava só o `original_id`, e como
+            // o stream de origem é limitado por MAXLEN (~10k eventos), o evento
+            // podia já ter sido descartado quando alguém fosse investigar — a DLQ
+            // apontava para um id que não existia mais. Com o payload, a perícia
+            // (e um eventual reenvio manual) não depende do stream original.
+            let evento = evento_de_entrada(entrada);
             let _: String = con
                 .xadd(
                     DLQ_STREAM,
@@ -570,6 +704,14 @@ pub async fn varrer_dlq_pendentes(
                     &[
                         ("original_id", id.id.as_str()),
                         ("times_delivered", &id.times_delivered.to_string()),
+                        ("stream_origem", stream),
+                        ("grupo_origem", grupo),
+                        ("tenant_id", evento.tenant_id.as_str()),
+                        ("event_id", evento.event_id.as_str()),
+                        ("event_type", evento.event_type.as_str()),
+                        ("timestamp", evento.timestamp.as_str()),
+                        ("traceparent", evento.traceparent.as_str()),
+                        ("payload", evento.payload.as_str()),
                     ],
                 )
                 .await?;
@@ -577,18 +719,28 @@ pub async fn varrer_dlq_pendentes(
             let _: i64 = con
                 .xack(stream, grupo, std::slice::from_ref(&id.id))
                 .await?;
-            tracing::warn!(stream_id = %id.id, entregas = id.times_delivered, "evento movido para DLQ");
+            tracing::warn!(
+                stream_id = %id.id,
+                entregas = id.times_delivered,
+                event_type = %evento.event_type,
+                "evento movido para DLQ"
+            );
         }
     }
     Ok(())
 }
 
 /// Executa uma passada de reprocessamento da PEL no stream especificado.
+///
+/// Só toca em eventos parados há pelo menos `min_idle_ms` (use
+/// [`MIN_IDLE_REPROCESSAMENTO_MS`]), porque esta passada roda em paralelo ao loop
+/// de consumo ativo — sem o piso, reprocessaria o que está em voo.
 pub async fn reprocessar_pendentes_uma_vez<F, Fut>(
     client: &redis::Client,
     stream: &str,
     grupo: &str,
     consumidor: &str,
+    min_idle_ms: usize,
     handler: F,
 ) -> anyhow::Result<()>
 where
@@ -600,11 +752,13 @@ where
         .await
         .map_err(|e| TransportError::Bus(e.to_string()))?;
 
-    if let Err(e) = varrer_dlq_pendentes(&mut con, stream, grupo, consumidor).await {
+    if let Err(e) = varrer_dlq_pendentes(&mut con, stream, grupo, consumidor, min_idle_ms).await {
         tracing::warn!("Falha ao varrer DLQ de pendentes: {:?}", e);
     }
 
-    let pendentes = reprocessar_pendentes_stream(&mut con, stream, grupo, consumidor, 10).await?;
+    let pendentes =
+        reclamar_pendentes_abandonados(&mut con, stream, grupo, consumidor, min_idle_ms, 10)
+            .await?;
     for evento in pendentes {
         match handler(evento.clone()).await {
             Ok(()) => {
@@ -623,11 +777,13 @@ where
 }
 
 /// Executa uma passada de reprocessamento da PEL no stream especificado em lote.
+/// Mesmo piso de inatividade da versão unitária ([`MIN_IDLE_REPROCESSAMENTO_MS`]).
 pub async fn reprocessar_pendentes_uma_vez_batch<F, Fut>(
     client: &redis::Client,
     stream: &str,
     grupo: &str,
     consumidor: &str,
+    min_idle_ms: usize,
     handler: F,
 ) -> anyhow::Result<()>
 where
@@ -639,11 +795,13 @@ where
         .await
         .map_err(|e| TransportError::Bus(e.to_string()))?;
 
-    if let Err(e) = varrer_dlq_pendentes(&mut con, stream, grupo, consumidor).await {
+    if let Err(e) = varrer_dlq_pendentes(&mut con, stream, grupo, consumidor, min_idle_ms).await {
         tracing::warn!("Falha ao varrer DLQ de pendentes: {:?}", e);
     }
 
-    let pendentes = reprocessar_pendentes_stream(&mut con, stream, grupo, consumidor, 10).await?;
+    let pendentes =
+        reclamar_pendentes_abandonados(&mut con, stream, grupo, consumidor, min_idle_ms, 10)
+            .await?;
     if !pendentes.is_empty() {
         match handler(pendentes).await {
             Ok(sucessos) => {
@@ -853,6 +1011,46 @@ mod tests {
     fn extrair_eventos_reply_vazio_gera_lista_vazia() {
         let reply = StreamReadReply { keys: vec![] };
         assert!(extrair_eventos(reply).is_empty());
+    }
+
+    /// O default TEM de continuar sendo o nome histórico: trocá-lo num deployment
+    /// em operação abandonaria a PEL do nome antigo (eventos pendentes ficariam
+    /// esperando o piso de inatividade para serem reclamados).
+    #[test]
+    fn nome_consumidor_default_preserva_o_nome_historico() {
+        std::env::remove_var("SMARTCORE_CONSUMER_NAME");
+        assert_eq!(nome_consumidor("worker_consumer"), "worker_consumer_1");
+        assert_eq!(
+            nome_consumidor("data_storage_purge_consumer"),
+            "data_storage_purge_consumer_1"
+        );
+    }
+
+    /// Com a variável setada, cada réplica ganha nome próprio — condição para
+    /// escalar horizontalmente sem duas réplicas dividindo a mesma PEL.
+    #[test]
+    fn nome_consumidor_usa_sufixo_do_ambiente() {
+        std::env::set_var("SMARTCORE_CONSUMER_NAME", "b7");
+        assert_eq!(nome_consumidor("worker_consumer"), "worker_consumer_b7");
+
+        // Valor em branco não conta como nome: cai no default.
+        std::env::set_var("SMARTCORE_CONSUMER_NAME", "   ");
+        assert_eq!(nome_consumidor("worker_consumer"), "worker_consumer_1");
+        std::env::remove_var("SMARTCORE_CONSUMER_NAME");
+    }
+
+    /// O piso de inatividade precisa ser maior que a duração máxima de um handler,
+    /// senão o reprocessador periódico reclama evento em voo. O pior caso conhecido
+    /// é a resposta da IA no worker: 8s de timeout × 3 tentativas + backoff 0/1/2.
+    #[test]
+    fn min_idle_cobre_o_pior_caso_de_handler() {
+        let pior_caso_ia_ms = (8_000 * 3) + (1_000 + 2_000);
+        assert!(
+            MIN_IDLE_REPROCESSAMENTO_MS > pior_caso_ia_ms,
+            "piso {}ms não cobre o pior caso de {}ms",
+            MIN_IDLE_REPROCESSAMENTO_MS,
+            pior_caso_ia_ms
+        );
     }
 
     #[test]

@@ -2,7 +2,7 @@ use crate::common::{criar_contexto_teste, criar_tenant_para_teste, obter_pool_te
 use infrastructure_postgres::{
     atendimentos::{
         atendimentos::{AtendimentoRepository, PostgresAtendimentoRepository},
-        mensagens::{MensagemRepository, PostgresMensagemRepository},
+        mensagens::{MensagemRepository, NovaMensagem, PostgresMensagemRepository},
     },
     clientes::contatos::{ContatoRepository, PostgresContatoRepository},
     connection::run_in_tenant_transaction,
@@ -48,12 +48,12 @@ async fn test_crud_completo_persistente_e2e() {
                 .criar(
                     &mut tx,
                     &ctx,
-                    atendimento.id,
-                    "extendedTextMessage",
-                    "Olá, preciso de ajuda",
-                    "contato",
-                    None,
-                    None,
+                    NovaMensagem::nova(
+                        atendimento.id,
+                        "extendedTextMessage",
+                        "Olá, preciso de ajuda",
+                        "contato",
+                    ),
                 )
                 .await?;
             Ok(((contato.id, atendimento.id), tx))

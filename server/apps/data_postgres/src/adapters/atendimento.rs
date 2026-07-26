@@ -27,7 +27,7 @@ use infrastructure_postgres::{run_in_tenant_transaction, DbError, RequestContext
 use uuid::Uuid;
 
 use crate::ports::{
-    AtendimentoStore, CampoColetadoDto, CampoPendenteDto, CamposAtendimentoDto,
+    AtendimentoStore, CampoColetadoDto, CampoPendenteDto, CamposAtendimentoDto, OrigemMensagem,
     TicketKanbanOutcome, TransferenciaFluxoOutcome,
 };
 
@@ -101,6 +101,7 @@ impl AtendimentoStore for PgAtendimentoStore {
         remetente: &str,
         traceparent: &str,
         action_id: Option<Uuid>,
+        origem: OrigemMensagem,
     ) -> Result<Mensagem, DbError> {
         let repo = PostgresMensagemRepository;
         let ctx = ctx.clone();
@@ -126,16 +127,46 @@ impl AtendimentoStore for PgAtendimentoStore {
                 }
             }
 
+            // Dedupe pela chave natural do provedor: o barramento é at-least-once,
+            // então o MESMO evento do WhatsApp pode chegar duas vezes (reentrega da
+            // PEL após falha de um passo posterior do handler). Sem esta checagem a
+            // mensagem apareceria duplicada no chat do atendente — e o bot
+            // responderia duas vezes. Vale para todo caminho que informe o stanzaId,
+            // inclusive os que não têm `action_id`.
+            if let Some(ref wa_id) = origem.message_id_whatsapp {
+                if let Some(msg) = repo.buscar_por_whatsapp_id(&mut tx, &ctx, wa_id).await? {
+                    tracing::debug!(
+                        mensagem_id = msg.id,
+                        "mensagem já persistida para este stanzaId; reentrega ignorada"
+                    );
+                    return Ok((msg, tx));
+                }
+            }
+
+            // Citação (reply): o webhook informa o stanzaId da mensagem citada; o
+            // banco guarda o id interno. Não encontrar a citada é normal (mensagem
+            // anterior à integração, ou já purgada) — a mensagem entra sem citação.
+            let mensagem_citada_id = match origem.citando_message_id_whatsapp {
+                Some(ref citado) if !citado.is_empty() => repo
+                    .buscar_por_whatsapp_id(&mut tx, &ctx, citado)
+                    .await?
+                    .map(|m| m.id),
+                _ => None,
+            };
+
             let msg = repo
                 .criar(
                     &mut tx,
                     &ctx,
-                    atendimento_id,
-                    &tipo,
-                    &conteudo,
-                    &remetente,
-                    None,
-                    None,
+                    infrastructure_postgres::atendimentos::mensagens::NovaMensagem {
+                        atendimento_id,
+                        tipo: &tipo,
+                        conteudo: &conteudo,
+                        remetente: &remetente,
+                        message_id_whatsapp: origem.message_id_whatsapp.as_deref(),
+                        mensagem_citada_id,
+                        ja_entregue: origem.ja_entregue,
+                    },
                 )
                 .await?;
 

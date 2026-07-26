@@ -16,8 +16,41 @@ permissions:
 # existir mesmo sem mudanca de codigo). A borda (edge) e compartilhada e construida
 # no fluxo dev; aqui apenas a subimos.
 jobs:
+  # Portão: a tag só vira release se o CI daquele commit tiver passado. Antes, uma
+  # tag em cima de um commit com teste vermelho ia direto para produção — o
+  # `environment: production` pede aprovação humana, mas quem aprova não tem como
+  # saber, do próprio deploy, se a suíte passou. A tag é criada depois do push em
+  # `dev`, então o CI daquele SHA já terminou: aqui é só consulta, custa segundos.
+  verifica-ci:
+    name: Exige CI verde no commit da tag
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Consulta a conclusão do workflow CI para o SHA
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          conclusao=$(gh api "repos/$REPO/actions/runs?head_sha=$SHA&per_page=100" \
+            --jq '[.workflow_runs[] | select(.name == "CI")] | sort_by(.run_started_at) | last | .conclusion // "ausente"')
+          echo "CI para $SHA: $conclusao"
+          case "$conclusao" in
+            success) echo "CI verde — segue o deploy." ;;
+            ausente|null)
+              echo "::error::Nenhuma execução do workflow CI encontrada para $SHA. Rode o CI nesse commit antes de publicar a tag."
+              exit 1 ;;
+            *)
+              echo "::error::CI concluiu como '$conclusao' para $SHA. Corrija antes de publicar a release."
+              exit 1 ;;
+          esac
+
   build-server:
     name: Build Rust Server (PROD)
+    needs: verifica-ci
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -45,6 +78,7 @@ jobs:
 
   build-web:
     name: Build Web Admin (PROD)
+    needs: verifica-ci
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -99,6 +133,7 @@ jobs:
   # o container roda sem rota publica ate a decisao, exatamente como o admin prod.
   build-web-tenant:
     name: Build Web Tenant/Operacional (PROD)
+    needs: verifica-ci
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -153,6 +188,7 @@ jobs:
   # Contexto = raiz do repo (o Dockerfile gera os stubs do .proto do contracts).
   build-ia-engine:
     name: Build IA Engine (PROD)
+    needs: verifica-ci
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -197,21 +233,42 @@ jobs:
 
       - uses: actions/checkout@v5
 
+      # Este é o único ponto de retorno se a release corromper dados. Antes, a falha
+      # do `pg_dump` era engolida (`|| echo`) e o deploy seguia: o arquivo ficava
+      # truncado ou vazio (o redirecionamento cria o arquivo mesmo quando o comando
+      # falha) e ninguém percebia até precisar restaurar. Agora, com o container no
+      # ar, backup que falha ABORTA o deploy; a ausência do container segue sendo
+      # caso legítimo (primeiro deploy).
       - name: Backup banco de dados PROD (pg_dump)
         run: |
+          set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           BACKUP_FILE="/opt/smartcore/prod/backups/db-backup-${TAG}-$(date +%Y%m%d%H%M).dump"
           mkdir -p /opt/smartcore/prod/backups
           CONTAINER="smart-core-v2-prod-postgres-1"
-          if docker ps --format '{{.Names}}' | grep -q "$CONTAINER"; then
-            echo "Gerando backup do banco usando $CONTAINER..."
-            docker exec "$CONTAINER" pg_dump -U smartcore_app -F c smartcore_v2 > "$BACKUP_FILE" \
-              || echo "Falha no backup (pode ser o primeiro deploy)"
-            echo "Backup: $BACKUP_FILE"
-            ls -t /opt/smartcore/prod/backups/db-backup-*.dump 2>/dev/null | tail -n +6 | xargs rm -f || true
-          else
+          if ! docker ps --format '{{.Names}}' | grep -q "$CONTAINER"; then
             echo "Container $CONTAINER ausente (primeiro deploy) — sem backup."
+            exit 0
           fi
+          echo "Gerando backup do banco usando $CONTAINER..."
+          if ! docker exec "$CONTAINER" pg_dump -U smartcore_app -F c smartcore_v2 > "$BACKUP_FILE"; then
+            rm -f "$BACKUP_FILE"
+            echo "::error::pg_dump falhou — deploy abortado (produção ficaria sem ponto de retorno)."
+            exit 1
+          fi
+          # Um dump custom-format válido tem cabeçalho "PGDMP" e nunca é minúsculo:
+          # pega o caso do dump que "termina bem" mas sai vazio/truncado.
+          tamanho=$(stat -c%s "$BACKUP_FILE")
+          if [ "$tamanho" -lt 1024 ]; then
+            echo "::error::backup suspeito (${tamanho} bytes) — deploy abortado."
+            exit 1
+          fi
+          if ! head -c 5 "$BACKUP_FILE" | grep -q "PGDMP"; then
+            echo "::error::backup sem cabeçalho PGDMP — deploy abortado."
+            exit 1
+          fi
+          echo "Backup: $BACKUP_FILE (${tamanho} bytes)"
+          ls -t /opt/smartcore/prod/backups/db-backup-*.dump 2>/dev/null | tail -n +6 | xargs -r rm -f || true
 
       - name: Docker login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -234,3 +291,39 @@ jobs:
         run: |
           docker compose pull
           docker compose up -d
+
+      # Smoke test: `compose up -d` devolve sucesso assim que os containers são
+      # CRIADOS. Sem esta verificação, uma release que sobe serviços em crash-loop
+      # (env faltando, migration quebrada) era publicada como deploy bem-sucedido —
+      # e o PR de release ainda pedia "smoke tests em prod verificados" como item
+      # manual de checklist. Os serviços Rust não têm healthcheck no compose, então
+      # o critério é o estado do container: rodando, sem restart-loop.
+      - name: Smoke test dos serviços (PROD)
+        working-directory: docker/prod
+        run: |
+          set -u
+          sleep 25
+          servicos="data_postgres data_redis data_storage control_plane worker runtime_api webhook_ingress data_whatsapp ia_engine"
+          falhas=""
+          for svc in $servicos; do
+            cid=$(docker compose --env-file .env ps -q "$svc" || true)
+            if [ -z "$cid" ]; then
+              echo "::error::$svc: container inexistente"
+              falhas="$falhas $svc"
+              continue
+            fi
+            status=$(docker inspect -f '{{.State.Status}}' "$cid")
+            restarts=$(docker inspect -f '{{.RestartCount}}' "$cid")
+            if [ "$status" != "running" ] || [ "$restarts" -gt 2 ]; then
+              echo "::error::$svc: status=$status restarts=$restarts"
+              docker logs --tail 50 "$cid" || true
+              falhas="$falhas $svc"
+            else
+              echo "ok  $svc (status=$status restarts=$restarts)"
+            fi
+          done
+          if [ -n "$falhas" ]; then
+            echo "::error::serviços com falha:$falhas"
+            echo "Rollback: reimplante a tag anterior (as imagens versionadas seguem no GHCR)."
+            exit 1
+          fi

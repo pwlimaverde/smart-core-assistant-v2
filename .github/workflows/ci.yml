@@ -114,13 +114,16 @@ jobs:
       # testes viraram unitários (mock) ou de integração (tests/), então as migrations
       # precisam rodar AQUI explicitamente — o passo `sqlx prepare --check` abaixo
       # introspecta as queries contra este schema (e o mesmo container persiste).
+      # Instalado UMA vez; antes o mesmo `cargo install` aparecia em dois passos
+      # (migrations e prepare --check), pagando a resolução do crates.io duas vezes.
+      - name: Instala sqlx-cli
+        run: cargo install sqlx-cli --no-default-features --features postgres --locked
+
       - name: Roda migrations (cria schema)
         working-directory: server
         env:
           DATABASE_URL: postgres://postgres:postgres@localhost:5434/smartcore_v2
-        run: |
-          cargo install sqlx-cli --no-default-features --features postgres --locked || true
-          cargo sqlx migrate run --source crates/infrastructure_postgres/migrations
+        run: cargo sqlx migrate run --source crates/infrastructure_postgres/migrations
 
       - name: cargo test (unit + lib)
         working-directory: server
@@ -150,22 +153,24 @@ jobs:
           rustup component add llvm-tools-preview
           cargo install cargo-llvm-cov --locked || true
 
-      # Cobertura COMBINADA (unit + integração): roda a suíte inteira (sem o filtro
-      # --lib --bins) contra os MESMOS service containers efêmeros já provisionados
-      # acima — os testes de integração detectam a porta aberta (5434/6380) e não
-      # tentam abrir túnel SSH (ver comentário no topo do job). Ainda é recente a
-      # suíte de integração rodar no CI (antes só localmente, via test-local.ps1,
-      # contra o banco remoto da Hostinger) — por isso o passo continua INFORMATIVO
-      # (continue-on-error): não bloqueia o pipeline se aparecer alguma instabilidade.
-      # Testes opt-in de R2 (infrastructure_storage/tests/objetos) pulam sozinhos sem
-      # as env vars S3_* (sem secret novo necessário aqui). `--ignore-filename-regex`
-      # exclui código GERADO pelo build.rs de contracts (flatc/protoc, compilado em
-      # target/**/out/) — não é código nosso, não faz sentido cobrir. O ratchet
-      # numérico (--fail-under-lines) fica para quando a suíte provar mais estável em
-      # CI (poucas rodadas até agora); ver .context/docs/testing-strategy.md.
-      - name: cargo llvm-cov (cobertura combinada, informativo)
+      # Suíte COMBINADA (unit + integração) contra os MESMOS service containers
+      # efêmeros provisionados acima — os testes de integração detectam a porta
+      # aberta (5434/6380) e não tentam abrir túnel SSH (ver comentário no topo do
+      # job). Este passo é GATE: até aqui a integração só rodava sob
+      # `continue-on-error`, então RLS, transações por tenant, PEL do barramento e
+      # o fluxo ponta-a-ponta do banco podiam quebrar sem deixar o CI vermelho — e
+      # o deploy seguia em cima disso. Se a suíte se mostrar instável no runner
+      # hospedado, o caminho é estabilizar (ou marcar `#[ignore]` o teste culpado),
+      # não voltar a ignorar a falha da suíte inteira.
+      #
+      # A cobertura sai da mesma execução (é a razão de ser um `llvm-cov` em vez de
+      # um `cargo test`): uma passada, não duas. Testes opt-in de R2
+      # (infrastructure_storage/tests/objetos) pulam sozinhos sem as env vars S3_*.
+      # `--ignore-filename-regex` exclui código GERADO pelo build.rs de contracts
+      # (flatc/protoc, em target/**/out/) — não é código nosso. O ratchet numérico
+      # (--fail-under-lines) segue pendente; ver .context/docs/testing-strategy.md.
+      - name: cargo llvm-cov (suíte completa + cobertura)
         working-directory: server
-        continue-on-error: true
         env:
           SQLX_OFFLINE: "true"
           DATABASE_URL: postgres://smartcore_app_rt:smartcore_app_rt@localhost:5434/smartcore_v2
@@ -193,14 +198,37 @@ jobs:
       # release no deploy (que usa SQLX_OFFLINE). O --check falha se houver drift.
       - name: cargo sqlx prepare --check
         working-directory: server
-        run: |
-          cargo install sqlx-cli --no-default-features --features postgres --locked || true
-          cargo sqlx prepare --workspace --check
+        run: cargo sqlx prepare --workspace --check
         env:
           SQLX_OFFLINE: "true"
           # prepare --check conecta no banco para revalidar as queries; o schema já
           # foi criado pelas migrations no step de testes (mesmo container persiste).
           DATABASE_URL: postgres://postgres:postgres@localhost:5434/smartcore_v2
+
+  # Vulnerabilidades conhecidas nas dependências (RustSec). O workspace tem ~40
+  # dependências diretas e centenas de transitivas — sem esta consulta, um advisory
+  # publicado numa delas só apareceria em auditoria manual.
+  #
+  # INFORMATIVO por ora (`continue-on-error`) de propósito: o advisory chega pela
+  # base do RustSec, não por mudança nossa, e um CVE novo numa transitiva deixaria
+  # o pipeline vermelho sem nenhum commit envolvido. Depois de triado o backlog
+  # atual (a primeira execução é que vai mostrá-lo), remova o `continue-on-error`
+  # para virar gate — é o mesmo caminho que a cobertura do ia_engine seguiu.
+  auditoria_dependencias:
+    name: Dependências — advisories RustSec
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: server
+      - name: Instala cargo-audit
+        run: cargo install cargo-audit --locked
+      - name: cargo audit
+        working-directory: server
+        run: cargo audit
 
   # Fecha a lacuna histórica: os 44 testes do ia_engine nunca rodaram no CI (só
   # localmente). Job próprio, sem dependência do banco (o ia_engine não fala com

@@ -10,7 +10,7 @@ pub mod treinamento;
 pub mod whatsapp;
 
 pub use atendimento::{
-    AtendimentoStore, CampoColetadoDto, CampoPendenteDto, CamposAtendimentoDto,
+    AtendimentoStore, CampoColetadoDto, CampoPendenteDto, CamposAtendimentoDto, OrigemMensagem,
     TicketKanbanOutcome, TransferenciaFluxoOutcome,
 };
 pub use audit::AuditPort;

@@ -4196,4 +4196,186 @@ mod tests {
         assert_eq!(resp.chunk_overlap, 0);
         assert!(resp.api_keys.is_empty());
     }
+
+    // -----------------------------------------------------------------------
+    // Barreira de autenticação da fachada gRPC-Web
+    //
+    // Esta é a ÚNICA porta pela qual o browser (Flutter Web/WASM) entra no
+    // sistema, e ela é publicada na internet pelo Caddy. Cada método aqui repete
+    // à mão a primeira linha de autenticação (`exigir_*_do_metadata`); nada no
+    // compilador obriga um método NOVO a fazer isso, e o esquecimento não quebra
+    // nenhum teste — só abre leitura/escrita dos dados de tenant a quem não
+    // apresentou credencial. O teste abaixo cobra a barreira método a método.
+    //
+    // Nenhuma RPC de backend é envolvida: sem token a fachada devolve
+    // `Unauthenticated` ANTES de chamar o data_postgres/data_redis. Os endpoints
+    // dos stubs existem só porque `AuthDeps` guarda clientes já conectados.
+    // -----------------------------------------------------------------------
+
+    /// Sobe um stub RPC que não responde nada (nenhum teste daqui chega a chamá-lo)
+    /// e devolve um cliente conectado a ele.
+    async fn stub_rpc(addr: &str) -> transport::MuxClient {
+        use transport::runtime::{Endpoint, Server};
+        let servidor = Server::new(Endpoint::parse(addr).unwrap(), "flatbuffers");
+        tokio::spawn(async move {
+            let _ = servidor.run().await;
+        });
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+        transport::MuxClient::conectar(
+            Endpoint::parse(addr).unwrap(),
+            Box::new(transport::codec::FlatbuffersCodec),
+        )
+        .await
+        .unwrap()
+    }
+
+    /// `AdminFacade` pronta para exercitar apenas o caminho de rejeição por
+    /// credencial ausente.
+    async fn facade_para_teste_de_auth(porta_base: u16) -> AdminFacade {
+        let deps = Arc::new(AuthDeps {
+            pg: stub_rpc(&format!("tcp://127.0.0.1:{}", porta_base)).await,
+            redis: stub_rpc(&format!("tcp://127.0.0.1:{}", porta_base + 1)).await,
+            access_ttl_s: 900,
+            refresh_ttl_s: 604_800,
+            login_rate_max: 5,
+            login_rate_window_s: 300,
+        });
+        let control = stub_rpc(&format!("tcp://127.0.0.1:{}", porta_base + 2)).await;
+        // Bus e realtime só são tocados DEPOIS da autenticação — nenhum teste daqui
+        // chega neles. O `RealtimeManager` nem abre conexão no construtor.
+        AdminFacade::new(
+            deps,
+            bus_stub().await,
+            control,
+            crate::realtime::RealtimeManager::new("redis://127.0.0.1:63799").unwrap(),
+        )
+    }
+
+    /// `ConnectionManager` é exigido pela assinatura da fachada mesmo sem Redis: sem
+    /// ele não há como construir o `AdminFacade`. Este stub RESP mínimo
+    /// (só `+PONG`/`+OK`) satisfaz o handshake do cliente.
+    async fn bus_stub() -> redis::aio::ConnectionManager {
+        let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+            .await
+            .unwrap();
+        let porta = listener.local_addr().unwrap().port();
+        tokio::spawn(async move {
+            while let Ok((mut socket, _)) = listener.accept().await {
+                tokio::spawn(async move {
+                    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+                    let mut buf = [0u8; 4096];
+                    while let Ok(n) = socket.read(&mut buf).await {
+                        if n == 0 {
+                            break;
+                        }
+                        let req = String::from_utf8_lossy(&buf[..n]);
+                        for parte in req.split('*') {
+                            if parte.is_empty() {
+                                continue;
+                            }
+                            if parte.to_uppercase().contains("PING") {
+                                let _ = socket.write_all(b"+PONG\r\n").await;
+                            } else {
+                                let _ = socket.write_all(b"+OK\r\n").await;
+                            }
+                        }
+                    }
+                });
+            }
+        });
+        let client = redis::Client::open(format!("redis://127.0.0.1:{porta}")).unwrap();
+        redis::aio::ConnectionManager::new(client).await.unwrap()
+    }
+
+    /// Nenhum método administrativo pode responder a uma chamada SEM credencial.
+    /// Um `Unauthenticated` por método é o contrato; qualquer outro código significa
+    /// que a requisição passou da barreira (no melhor caso vira erro interno adiante,
+    /// no pior devolve dado de tenant a um anônimo).
+    #[tokio::test]
+    async fn todo_metodo_admin_rejeita_chamada_sem_credencial() {
+        let _ =
+            application::jwt::inicializar_chaves("segredo_de_teste_de_pelo_menos_32_bytes_longo");
+        let facade = facade_para_teste_de_auth(29301).await;
+
+        // Cada entrada exercita um método real da fachada. `accept_invite` fica de
+        // fora de propósito: o convite é aceito por quem AINDA não tem conta, e a
+        // credencial dele é o próprio token do convite (ver `create_invite`, que sim
+        // exige autenticação). `login`/`refresh` são públicos pela mesma natureza.
+        macro_rules! exigir_unauthenticated {
+            ($($rotulo:literal => $chamada:expr),+ $(,)?) => {
+                $(
+                    let resultado = $chamada;
+                    match resultado {
+                        Ok(_) => panic!(
+                            "{} respondeu SEM credencial: a barreira de autenticação está ausente",
+                            $rotulo
+                        ),
+                        Err(status) => assert_eq!(
+                            status.code(),
+                            tonic::Code::Unauthenticated,
+                            "{} rejeitou com {:?} (esperado Unauthenticated): a chamada passou da barreira de auth",
+                            $rotulo,
+                            status.code()
+                        ),
+                    }
+                )+
+            };
+        }
+
+        exigir_unauthenticated! {
+            "ListCoreSettings" => facade.list_core_settings(Request::new(ListCoreSettingsRequest::default())).await,
+            "UpsertCoreSetting" => facade.upsert_core_setting(Request::new(UpsertCoreSettingRequest::default())).await,
+            "DeleteCoreSetting" => facade.delete_core_setting(Request::new(DeleteCoreSettingRequest::default())).await,
+            "GetTenantConfig" => facade.get_tenant_config(Request::new(GetTenantConfigRequest::default())).await,
+            "UpdateTenantConfig" => facade.update_tenant_config(Request::new(UpdateTenantConfigRequest::default())).await,
+            "ListTenants" => facade.list_tenants(Request::new(ListTenantsRequest::default())).await,
+            "GetTenant" => facade.get_tenant(Request::new(GetTenantRequest::default())).await,
+            "CreateTenant" => facade.create_tenant(Request::new(CreateTenantRequest::default())).await,
+            "UpdateTenant" => facade.update_tenant(Request::new(UpdateTenantRequest::default())).await,
+            "SetTenantActive" => facade.set_tenant_active(Request::new(SetTenantActiveRequest::default())).await,
+            "GenerateAccessCode" => facade.generate_access_code(Request::new(GenerateAccessCodeRequest::default())).await,
+            "ListPlans" => facade.list_plans(Request::new(ListPlansRequest::default())).await,
+            "CreatePlan" => facade.create_plan(Request::new(CreatePlanRequest::default())).await,
+            "UpdatePlan" => facade.update_plan(Request::new(UpdatePlanRequest::default())).await,
+            "ListSubscriptions" => facade.list_subscriptions(Request::new(ListSubscriptionsRequest::default())).await,
+            "RegisterPayment" => facade.register_payment(Request::new(RegisterPaymentRequest::default())).await,
+            "ListPayments" => facade.list_payments(Request::new(ListPaymentsRequest::default())).await,
+            "TestEvolutionConnection" => facade.test_evolution_connection(Request::new(TestEvolutionConnectionRequest::default())).await,
+            "ListFeatureFlags" => facade.list_feature_flags(Request::new(ListFeatureFlagsRequest::default())).await,
+            "SetFeatureFlag" => facade.set_feature_flag(Request::new(SetFeatureFlagRequest::default())).await,
+            "SetFeatureFlagOverride" => facade.set_feature_flag_override(Request::new(SetFeatureFlagOverrideRequest::default())).await,
+            "QueryAuditLog" => facade.query_audit_log(Request::new(QueryAuditLogRequest::default())).await,
+            "GetServiceHealth" => facade.get_service_health(Request::new(GetServiceHealthRequest::default())).await,
+            "GetDashboardSummary" => facade.get_dashboard_summary(Request::new(GetDashboardSummaryRequest::default())).await,
+            "ExportTenantsCsv" => facade.export_tenants_csv(Request::new(ExportTenantsCsvRequest::default())).await,
+            "ListAtendimentos" => facade.list_atendimentos(Request::new(ListAtendimentosRequest::default())).await,
+            "GetThread" => facade.get_thread(Request::new(GetThreadRequest::default())).await,
+            "MoveAtendimentoEtapa" => facade.move_atendimento_etapa(Request::new(MoveAtendimentoEtapaRequest::default())).await,
+            "SendOutboundMessage" => facade.send_outbound_message(Request::new(SendOutboundMessageRequest::default())).await,
+            "StreamAtendimentos" => facade.stream_atendimentos(Request::new(StreamAtendimentosRequest::default())).await.map(|_| ()),
+            "CreateInvite" => facade.create_invite(Request::new(CreateInviteRequest::default())).await,
+            "ListInvites" => facade.list_invites(Request::new(ListInvitesRequest::default())).await,
+            "RevokeInvite" => facade.revoke_invite(Request::new(RevokeInviteRequest::default())).await,
+            "ListTenantUsers" => facade.list_tenant_users(Request::new(ListTenantUsersRequest::default())).await,
+            "UpdateTenantUser" => facade.update_tenant_user(Request::new(UpdateTenantUserRequest::default())).await,
+            "GetMyTenantConfig" => facade.get_my_tenant_config(Request::new(GetMyTenantConfigRequest::default())).await,
+            "UpdateMyTenantConfig" => facade.update_my_tenant_config(Request::new(UpdateMyTenantConfigRequest::default())).await,
+        }
+    }
+
+    /// Token sintaticamente presente mas com assinatura inválida também não passa:
+    /// a barreira valida a assinatura, não só a presença do cabeçalho.
+    #[tokio::test]
+    async fn metodo_admin_rejeita_token_com_assinatura_invalida() {
+        let _ =
+            application::jwt::inicializar_chaves("segredo_de_teste_de_pelo_menos_32_bytes_longo");
+        let facade = facade_para_teste_de_auth(29311).await;
+
+        let mut req = Request::new(ListTenantsRequest::default());
+        req.metadata_mut()
+            .insert("authorization", "Bearer aaaa.bbbb.cccc".parse().unwrap());
+
+        let status = facade.list_tenants(req).await.unwrap_err();
+        assert_eq!(status.code(), tonic::Code::Unauthenticated);
+    }
 }

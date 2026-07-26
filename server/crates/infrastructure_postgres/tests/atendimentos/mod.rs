@@ -11,7 +11,7 @@ use infrastructure_postgres::{
         etiquetas::{
             EtiquetaRepository, NotaRepository, PostgresEtiquetaRepository, PostgresNotaRepository,
         },
-        mensagens::{MensagemRepository, PostgresMensagemRepository},
+        mensagens::{MensagemRepository, NovaMensagem, PostgresMensagemRepository},
         movimentos::{MovimentoFluxoRepository, PostgresMovimentoFluxoRepository},
     },
     clientes::contatos::{ContatoRepository, PostgresContatoRepository},
@@ -87,34 +87,56 @@ async fn test_atendimento_workflow_and_messages() {
         .criar(
             &mut tx,
             &ctx,
-            atendimento.id,
-            "chat",
-            "Olá, preciso de suporte",
-            "contato",
-            Some("msg-id-1"),
-            None,
+            NovaMensagem {
+                message_id_whatsapp: Some("msg-id-1"),
+                ..NovaMensagem::nova(atendimento.id, "chat", "Olá, preciso de suporte", "contato")
+            },
         )
         .await
         .expect("Falha ao criar mensagem 1");
     assert_eq!(msg1.conteudo, "Olá, preciso de suporte");
+    // Sem `ja_entregue`, a mensagem nasce pendente (default do schema).
+    assert_eq!(msg1.status_envio, "pending");
+
+    // O stanzaId é a chave de idempotência da ingestão: a busca por ele tem de
+    // devolver exatamente a mensagem gravada.
+    let achada = mensagem_repo
+        .buscar_por_whatsapp_id(&mut tx, &ctx, "msg-id-1")
+        .await
+        .unwrap()
+        .expect("deveria achar a mensagem pelo stanzaId");
+    assert_eq!(achada.id, msg1.id);
+    assert!(mensagem_repo
+        .buscar_por_whatsapp_id(&mut tx, &ctx, "stanza-que-nao-existe")
+        .await
+        .unwrap()
+        .is_none());
 
     // Resposta citando a primeira mensagem
     let msg2 = mensagem_repo
         .criar(
             &mut tx,
             &ctx,
-            atendimento.id,
-            "chat",
-            "Pois não, em que posso ajudar?",
-            "atendente",
-            Some("msg-id-2"),
-            Some(msg1.id),
+            NovaMensagem {
+                message_id_whatsapp: Some("msg-id-2"),
+                mensagem_citada_id: Some(msg1.id),
+                // Mensagem que o atendente digitou no celular (fromMe): já saiu
+                // pelo WhatsApp, então NÃO pode nascer pendente de envio.
+                ja_entregue: true,
+                ..NovaMensagem::nova(
+                    atendimento.id,
+                    "chat",
+                    "Pois não, em que posso ajudar?",
+                    "atendente",
+                )
+            },
         )
         .await
         .unwrap();
     assert_eq!(msg2.mensagem_citada_id, Some(msg1.id));
     // Mensagem de humano NAO e marcada como gerada por IA.
     assert!(!msg2.gerado_por_ia);
+    assert_eq!(msg2.status_envio, "sent");
 
     // N6.2: mensagem do assistente virtual e persistida no thread (para o atendente
     // ver o que o bot respondeu e para o proprio bot ter memoria das suas falas) e
@@ -123,12 +145,12 @@ async fn test_atendimento_workflow_and_messages() {
         .criar(
             &mut tx,
             &ctx,
-            atendimento.id,
-            "texto",
-            "Ola! Sou o assistente virtual.",
-            infrastructure_postgres::atendimentos::mensagens::REMETENTE_BOT,
-            None,
-            None,
+            NovaMensagem::nova(
+                atendimento.id,
+                "texto",
+                "Ola! Sou o assistente virtual.",
+                infrastructure_postgres::atendimentos::mensagens::REMETENTE_BOT,
+            ),
         )
         .await
         .unwrap();

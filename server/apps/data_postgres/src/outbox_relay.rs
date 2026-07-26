@@ -101,15 +101,24 @@ async fn drenar(store: &dyn OutboxStore) -> anyhow::Result<()> {
     tracing::debug!("Drenando {} eventos do outbox.", rows.len());
 
     let mut publicados: Vec<Uuid> = Vec::with_capacity(rows.len());
+    // Linhas com payload corrompido são marcadas como drenadas junto com as
+    // publicadas. Antes eram apenas puladas (`continue`) e voltavam em toda
+    // drenagem: como `fetch_pending` ordena por `occurred_at` e limita o lote,
+    // 100 linhas corrompidas bastariam para ocupar o lote inteiro e travar
+    // indefinidamente a publicação dos eventos válidos que vieram depois
+    // (bloqueio de cabeça de fila). A linha permanece na tabela para perícia; o
+    // ERROR abaixo é o registro de que ela nunca chegou ao barramento.
+    let mut descartados: Vec<Uuid> = Vec::new();
     for row in rows {
         let payload_str = match String::from_utf8(row.payload) {
             Ok(s) => s,
             Err(e) => {
                 tracing::error!(
-                    "Payload do outbox id {} não é UTF-8 válido: {:?}",
+                    "Payload do outbox id {} não é UTF-8 válido, descartado: {:?}",
                     row.id,
                     e
                 );
+                descartados.push(row.id);
                 continue;
             }
         };
@@ -117,7 +126,12 @@ async fn drenar(store: &dyn OutboxStore) -> anyhow::Result<()> {
         let payload_json: serde_json::Value = match serde_json::from_str(&payload_str) {
             Ok(v) => v,
             Err(e) => {
-                tracing::error!("Payload do outbox id {} não é JSON válido: {:?}", row.id, e);
+                tracing::error!(
+                    "Payload do outbox id {} não é JSON válido, descartado: {:?}",
+                    row.id,
+                    e
+                );
+                descartados.push(row.id);
                 continue;
             }
         };
@@ -146,6 +160,8 @@ async fn drenar(store: &dyn OutboxStore) -> anyhow::Result<()> {
         }
     }
 
+    // Descartados vão no mesmo UPDATE: sair da fila é justamente o objetivo.
+    publicados.extend(descartados);
     if !publicados.is_empty() {
         store.mark_published(&publicados).await?;
     }
@@ -239,14 +255,17 @@ mod tests {
         assert!(res.is_ok(), "drenar falhou: {:?}", res.err());
     }
 
-    /// FAIL-CLOSED: payload não-JSON é descartado (continue) e NÃO marca publicado.
+    /// Payload corrompido não vai ao barramento, MAS sai da fila: se ficasse
+    /// pendente, voltaria em toda drenagem e — no limite do lote — impediria os
+    /// eventos válidos seguintes de serem publicados.
     #[tokio::test]
-    async fn drenar_skips_invalid_payload_without_marking() {
-        // Arrange: payload inválido (não-JSON) → nenhum publish, nenhum mark.
+    async fn drenar_descarta_payload_invalido_e_o_tira_da_fila() {
+        // Arrange: payload inválido (não-JSON) → nenhum publish, mas mark do id.
+        let id_corrompido = Uuid::now_v7();
         let mut store = MockOutboxStore::new();
-        store.expect_fetch_pending().times(1).returning(|_| {
+        store.expect_fetch_pending().times(1).returning(move |_| {
             Ok(vec![OutboxEvent {
-                id: Uuid::now_v7(),
+                id: id_corrompido,
                 tenant_id: Uuid::nil(),
                 event_type: "outbox.test".to_string(),
                 payload: b"\xff\xfe-nao-json".to_vec(),
@@ -255,7 +274,53 @@ mod tests {
             }])
         });
         store.expect_publish_event().never();
-        store.expect_mark_published().never();
+        store
+            .expect_mark_published()
+            .withf(move |ids| ids == [id_corrompido])
+            .times(1)
+            .returning(|_| Ok(()));
+
+        // Act
+        let res = drenar(&store).await;
+
+        // Assert
+        assert!(res.is_ok());
+    }
+
+    /// Um payload corrompido no meio do lote não impede a publicação dos válidos,
+    /// e os dois saem da fila na mesma marcação.
+    #[tokio::test]
+    async fn drenar_publica_validos_mesmo_com_corrompido_no_lote() {
+        // Arrange
+        let id_ruim = Uuid::now_v7();
+        let id_bom = Uuid::now_v7();
+        let mut store = MockOutboxStore::new();
+        store.expect_fetch_pending().times(1).returning(move |_| {
+            Ok(vec![
+                OutboxEvent {
+                    id: id_ruim,
+                    tenant_id: Uuid::nil(),
+                    event_type: "outbox.test".to_string(),
+                    payload: b"{nao-json".to_vec(),
+                    traceparent: "00-t-s-01".to_string(),
+                    occurred_at: Utc::now(),
+                },
+                OutboxEvent {
+                    id: id_bom,
+                    tenant_id: Uuid::nil(),
+                    event_type: "message.persisted".to_string(),
+                    payload: serde_json::to_vec(&serde_json::json!({ "ok": true })).unwrap(),
+                    traceparent: "00-t-s-01".to_string(),
+                    occurred_at: Utc::now(),
+                },
+            ])
+        });
+        store.expect_publish_event().times(1).returning(|_| Ok(()));
+        store
+            .expect_mark_published()
+            .withf(move |ids| ids.contains(&id_bom) && ids.contains(&id_ruim))
+            .times(1)
+            .returning(|_| Ok(()));
 
         // Act
         let res = drenar(&store).await;

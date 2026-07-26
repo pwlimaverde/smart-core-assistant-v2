@@ -209,6 +209,16 @@ async fn registrar_rate_limit_unificado(
     Ok(body.get("attempts").and_then(|v| v.as_u64()).unwrap_or(0))
 }
 
+/// Decide, a partir da resposta de `IsPhoneWhitelisted`, se o evento deve ser
+/// descartado. A whitelist é lista de números a IGNORAR (diretoria/supervisão/
+/// testes), não lista de permissão — ver o bloco 3 de `handle_webhook`.
+///
+/// `None` (resposta sem a flag) resolve para "não ignorar": o caminho normal é
+/// ingerir, e um payload inesperado não pode calar a ingestão do tenant inteiro.
+fn remetente_deve_ser_ignorado(resposta_whitelist: Option<bool>) -> bool {
+    resposta_whitelist.unwrap_or(false)
+}
+
 /// Interpreta `WEBHOOK_RATE_LIMIT_ENFORCE` (N7.3). Default `true` — o bloqueio 429
 /// já era o comportamento vigente desde a N4.4 e desligá-lo por omissão abriria a
 /// ingestão a rajadas; a flag existe para calibrar `MAX` numa janela de observação.
@@ -434,7 +444,19 @@ async fn handle_webhook(
             }
         }
 
-        // 3. Verificação de Whitelist para mensagens recebidas
+        // 3. Whitelist de remetentes IGNORADOS.
+        //
+        // Semântica (doc_dev/modelagem_dados/06_modulo_integracoes.md §WhiteList,
+        // herdada da v1): a lista cadastra "números que devem ser completamente
+        // ignorados pelas automações do Bot" — diretoria, supervisão, números de
+        // teste — para que interagir com a instância não abra atendimento nem gaste
+        // token de IA. Estar na lista é motivo para DESCARTAR o evento.
+        //
+        // A implementação anterior fazia o oposto (`if !whitelisted → 403`),
+        // tratando a tabela como lista de permissão: com a base migrada da v1, que
+        // contém só um punhado de números internos, TODO cliente real seria
+        // rejeitado com 403 e nenhuma mensagem entraria no sistema — e os números
+        // que deviam ser ignorados seriam os únicos atendidos.
         if is_msg_event {
             if let Some(phone) = extrair_sender(event_type, &raw) {
                 let wl_payload = serde_json::json!({
@@ -464,26 +486,28 @@ async fn handle_webhook(
                 let wl_body: serde_json::Value = serde_json::from_slice(&wl_resp.payload)
                     .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
 
-                let whitelisted = wl_body
-                    .get("whitelisted")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-                if !whitelisted {
-                    state.audit_logger.warn(
+                let na_lista_de_ignorados = remetente_deve_ser_ignorado(
+                    wl_body.get("whitelisted").and_then(|v| v.as_bool()),
+                );
+                if na_lista_de_ignorados {
+                    state.audit_logger.info(
                         params.tenant_id,
-                        "webhook.rejected",
-                        "Mensagem rejeitada: remetente não está na whitelist",
+                        "webhook.ignored",
+                        "Mensagem ignorada: remetente está na whitelist de números ignorados",
                         serde_json::json!({
                             "provider": params.provider,
                             "instance_id": params.instance_id,
                             "phone": mascarar_telefone(&phone),
-                            "reason": "not_whitelisted"
+                            "reason": "remetente_ignorado"
                         }),
                         None,
                         None,
                         None,
                     );
-                    return Err(StatusCode::FORBIDDEN);
+                    // 202: o webhook foi processado com sucesso — a decisão foi não
+                    // ingerir. Devolver erro faria a Evolution reentregar o evento
+                    // em retry, sem nunca ter sucesso.
+                    return Ok(StatusCode::ACCEPTED);
                 }
             }
         }
@@ -857,8 +881,10 @@ mod tests {
             })
             .route("IsPhoneWhitelisted", |env| {
                 Box::pin(async move {
+                    // Caso normal: cliente comum NÃO está na lista de ignorados —
+                    // é o que faz os testes abaixo exercitarem a ingestão de fato.
                     let reply = serde_json::json!({
-                        "whitelisted": true,
+                        "whitelisted": false,
                     });
                     contracts::Envelope {
                         kind: contracts::MessageKind::Reply as i32,
@@ -934,6 +960,19 @@ mod tests {
         assert!(!enforce_rate_limit_ligado(Some("false")));
         assert!(!enforce_rate_limit_ligado(Some("FALSE")));
         assert!(!enforce_rate_limit_ligado(Some("False")));
+    }
+
+    /// A whitelist cadastra números a IGNORAR (diretoria/supervisão/testes), e não
+    /// uma lista de permissão. A inversão desta direção derruba a ingestão de todos
+    /// os clientes reais de uma vez — por isso o sentido fica fixado em teste.
+    #[test]
+    fn whitelist_lista_numeros_a_ignorar_e_nao_a_permitir() {
+        // Está na lista → ignorar o evento.
+        assert!(remetente_deve_ser_ignorado(Some(true)));
+        // Não está na lista → é cliente comum, ingerir normalmente.
+        assert!(!remetente_deve_ser_ignorado(Some(false)));
+        // Resposta sem a flag → não pode calar a ingestão.
+        assert!(!remetente_deve_ser_ignorado(None));
     }
 
     #[tokio::test]

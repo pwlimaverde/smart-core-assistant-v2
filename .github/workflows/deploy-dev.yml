@@ -309,3 +309,39 @@ jobs:
         run: |
           docker compose pull
           docker compose up -d
+
+      # Smoke test: `compose up -d` devolve sucesso assim que os containers são
+      # CRIADOS — um serviço que sobe e morre em seguida (env faltando, migration
+      # quebrada, dependência fora do ar) deixava o deploy "verde" e só aparecia
+      # depois, no uso. Como os serviços Rust não têm healthcheck no compose, o
+      # critério é o estado do container: rodando, sem estar em restart-loop.
+      - name: Smoke test dos serviços (DEV)
+        working-directory: docker/dev
+        run: |
+          set -u
+          # Janela para um crash-loop se manifestar (restart: unless-stopped é
+          # imediato, então poucos segundos já expõem o RestartCount subindo).
+          sleep 25
+          servicos="data_postgres data_redis data_storage control_plane worker runtime_api webhook_ingress data_whatsapp ia_engine"
+          falhas=""
+          for svc in $servicos; do
+            cid=$(docker compose --env-file .env ps -q "$svc" || true)
+            if [ -z "$cid" ]; then
+              echo "::error::$svc: container inexistente"
+              falhas="$falhas $svc"
+              continue
+            fi
+            status=$(docker inspect -f '{{.State.Status}}' "$cid")
+            restarts=$(docker inspect -f '{{.RestartCount}}' "$cid")
+            if [ "$status" != "running" ] || [ "$restarts" -gt 2 ]; then
+              echo "::error::$svc: status=$status restarts=$restarts"
+              docker logs --tail 50 "$cid" || true
+              falhas="$falhas $svc"
+            else
+              echo "ok  $svc (status=$status restarts=$restarts)"
+            fi
+          done
+          if [ -n "$falhas" ]; then
+            echo "::error::serviços com falha:$falhas"
+            exit 1
+          fi

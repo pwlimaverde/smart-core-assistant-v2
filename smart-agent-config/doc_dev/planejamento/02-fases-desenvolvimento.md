@@ -534,8 +534,11 @@ permanece como CLI de bootstrap. Ver
   evento interno, reply/`stanzaId`, em `domain_whatsapp`/`infrastructure_messaging`).
 - **3.3 Barramento de eventos (`transport::bus`)** — ✅.
 - **3.4 `webhook_ingress`** — ✅ **endurecido**: valida `apikey`/token de
-  instância, aplica **whitelist** de remetentes (rejeição auditada
-  `not_whitelisted`), persiste bruto via RPC e publica no bus. Sem regra pesada.
+  instância, aplica a **whitelist** de remetentes a IGNORAR (números internos —
+  diretoria/supervisão/testes; descarte auditado `webhook.ignored`, motivo
+  `remetente_ignorado`), persiste bruto via RPC e publica no bus. Sem regra
+  pesada. **Atenção:** a whitelist NÃO é lista de permissão — ver
+  `modelagem_dados/06_modulo_integracoes.md` §WhiteList.
 
 ---
 

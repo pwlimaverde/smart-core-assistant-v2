@@ -870,6 +870,51 @@ async fn test_send_reaction_fallback_para_message_id() {
     assert_eq!(res.message_id, "msg-original");
 }
 
+/// Uma Evolution que aceita a conexão e NUNCA responde não pode pendurar o
+/// chamador para sempre: sem timeout no cliente HTTP, o handler RPC do
+/// `data_whatsapp` ficaria preso indefinidamente (e as tasks se acumulariam a cada
+/// reenvio do worker, que desiste em 5s). O teste cobra o teto de tempo.
+#[tokio::test]
+async fn envio_com_provedor_pendurado_falha_por_timeout() {
+    // Arrange: teto curto para o teste não esperar os 60s de produção.
+    std::env::set_var("SMARTCORE_EVOLUTION_HTTP_TIMEOUT_SECS", "1");
+    let server = MockServer::start().await;
+    let provider =
+        EvolutionProvider::new(server.uri(), SecretString::from("global-key".to_string()));
+    std::env::remove_var("SMARTCORE_EVOLUTION_HTTP_TIMEOUT_SECS");
+
+    // Provedor que demora MUITO mais que o teto configurado.
+    Mock::given(method("POST"))
+        .and(path("/send/text"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_delay(std::time::Duration::from_secs(30))
+                .set_body_json(serde_json::json!({})),
+        )
+        .mount(&server)
+        .await;
+
+    let token = SecretString::from("t".to_string());
+    let inicio = std::time::Instant::now();
+
+    // Act
+    let err = provider
+        .send_text("i", &token, "5511999998888", "oi")
+        .await
+        .unwrap_err();
+
+    // Assert: erro de rede (timeout) e não espera de 30s.
+    assert!(
+        matches!(err, MessagingProviderError::Network(_)),
+        "esperado Network(timeout), obteve: {err:?}"
+    );
+    assert!(
+        inicio.elapsed() < std::time::Duration::from_secs(15),
+        "a chamada deveria ter sido cortada pelo timeout, levou {:?}",
+        inicio.elapsed()
+    );
+}
+
 #[tokio::test]
 async fn test_delete_instance_erro_api() {
     let (server, provider) = setup().await;
