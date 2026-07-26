@@ -11,8 +11,7 @@ final class TokenLocalDatasource {
 
   const TokenLocalDatasource({required this._storage});
 
-  Future<void> writeRefresh(String token) =>
-      _storage.write(_refreshKey, token);
+  Future<void> writeRefresh(String token) => _storage.write(_refreshKey, token);
 
   /// Lê o refresh persistido (boot → auto-login silencioso). `null` quando ausente.
   Future<String?> readRefresh() async => _storage.read(_refreshKey);

@@ -1,14 +1,12 @@
-import 'package:meta/meta.dart';
-import 'package:domain_models/domain_models.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
 
-/// Parâmetros do logout. O [refreshToken] (opcional) revoga a família inteira.
-@immutable
-final class LogoutParameters implements ParametersReturnResult {
+/// Parâmetros do logout.
+///
+/// O [refreshToken] é opcional: quando presente, o servidor revoga a **família
+/// inteira** de tokens derivada dele; quando ausente (nada persistido), revoga
+/// apenas a sessão do access token que vai no metadata.
+final class LogoutParameters extends Parameters {
   final String? refreshToken;
 
   const LogoutParameters({this.refreshToken});
-
-  @override
-  AppError get error => const ErrorAuth(message: 'Falha ao encerrar a sessão.');
 }

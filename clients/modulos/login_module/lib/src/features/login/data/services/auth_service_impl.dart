@@ -1,8 +1,8 @@
 import 'package:core_module/core_module.dart' as core;
 import 'package:flutter/foundation.dart';
-import 'package:domain_models/domain_models.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
 
+import '../../domain/errors/auth_errors.dart';
 import '../../domain/model/session.dart';
 import '../../domain/parameters/login_parameters.dart';
 import '../../domain/parameters/logout_parameters.dart';
@@ -19,28 +19,32 @@ import '../datasources/token_local_datasource.dart';
 /// Orquestra: sessão em memória, persistência do refresh (secure storage),
 /// população do `SessionService` (access em memória, para o interceptor) e o
 /// **refresh single-flight** (chamadas concorrentes compartilham uma Future).
+///
+/// Os usecases são **injetados**, não construídos aqui: antes, cada chamada
+/// fazia `LoginUsecase(datasource: _loginDs)`, o que amarrava o serviço à
+/// construção da cadeia inteira e tornava impossível testá-lo contra um usecase
+/// falso sem também montar datasource e repositório.
 final class AuthServiceImpl implements AuthService, core.AuthService {
-  final Datasource<Session> _loginDs;
-  final Datasource<Session> _refreshDs;
-  final Datasource<Unit> _logoutDs;
+  final LoginUsecase _loginUsecase;
+  final RefreshTokenUsecase _refreshUsecase;
+  final LogoutUsecase _logoutUsecase;
   final TokenLocalDatasource _tokenStore;
   final core.SessionService _session;
 
   Session? _current;
-  Future<ReturnSuccessOrError<Session>>? _refreshInFlight;
+  Future<ReturnSuccessOrError<Session, RefreshError>>? _refreshInFlight;
   final ValueNotifier<int> _authChanges = ValueNotifier<int>(0);
 
+  /// Dependências recebidas como private named parameters (Dart 3.12): o
+  /// chamador usa os nomes públicos (`loginUsecase`, `tokenStore`, …) e os
+  /// campos permanecem privados.
   AuthServiceImpl({
-    required Datasource<Session> loginDatasource,
-    required Datasource<Session> refreshDatasource,
-    required Datasource<Unit> logoutDatasource,
-    required TokenLocalDatasource tokenStore,
-    required core.SessionService session,
-  })  : _loginDs = loginDatasource,
-        _refreshDs = refreshDatasource,
-        _logoutDs = logoutDatasource,
-        _tokenStore = tokenStore, // ignore: prefer_initializing_formals
-        _session = session; // ignore: prefer_initializing_formals
+    required this._loginUsecase,
+    required this._refreshUsecase,
+    required this._logoutUsecase,
+    required this._tokenStore,
+    required this._session,
+  });
 
   @override
   bool get isAuthenticated => _current != null && !_current!.isExpired;
@@ -52,65 +56,67 @@ final class AuthServiceImpl implements AuthService, core.AuthService {
   Listenable get authChanges => _authChanges;
 
   @override
-  Future<ReturnSuccessOrError<Session>> login({
+  Future<ReturnSuccessOrError<Session, LoginError>> login({
     required String email,
     required String password,
   }) async {
-    final result = await LoginUsecase(datasource: _loginDs)
-        .call(LoginParameters(email: email, password: password));
-    switch (result) {
-      case SuccessReturn<Session>():
-        await _aplicarSessao(result.result);
-      case ErrorReturn<Session>():
-        break;
-    }
+    final result = await _loginUsecase(
+      LoginParameters(email: email, password: password),
+    );
+    if (result case Success(:final value)) await _aplicarSessao(value);
     return result;
   }
 
-  /// Refresh com single-flight: chamadas concorrentes compartilham a MESMA Future.
+  /// Refresh com single-flight: chamadas concorrentes compartilham a MESMA
+  /// Future. Sem isso, várias telas percebendo o 401 ao mesmo tempo rotacionariam
+  /// o refresh em paralelo — e a detecção de reuso do servidor invalidaria a
+  /// família inteira, deslogando o usuário por causa da concorrência.
   @override
-  Future<ReturnSuccessOrError<Session>> refresh() {
-    return _refreshInFlight ??=
-        _doRefresh().whenComplete(() => _refreshInFlight = null);
+  Future<ReturnSuccessOrError<Session, RefreshError>> refresh() {
+    return _refreshInFlight ??= _doRefresh().whenComplete(
+      () => _refreshInFlight = null,
+    );
   }
 
-  Future<ReturnSuccessOrError<Session>> _doRefresh() async {
+  Future<ReturnSuccessOrError<Session, RefreshError>> _doRefresh() async {
     final stored = await _tokenStore.readRefresh();
     if (stored == null || stored.isEmpty) {
-      return const ErrorReturn(
-        error: ErrorUnauthorized(message: 'Sem sessão persistida.'),
-      );
+      // Estado normal do primeiro boot: não houve I/O, não há o que limpar.
+      return const Failure(SemSessaoPersistida());
     }
-    final result = await RefreshTokenUsecase(datasource: _refreshDs)
-        .call(RefreshParameters(refreshToken: stored));
+    final result = await _refreshUsecase(
+      RefreshParameters(refreshToken: stored),
+    );
     switch (result) {
-      case SuccessReturn<Session>():
-        await _aplicarSessao(result.result);
-      case ErrorReturn<Session>():
-        await _limparSessao(); // refresh inválido → logout local
+      case Success(:final value):
+        await _aplicarSessao(value);
+      case Failure(:final error):
+        // Só derruba a sessão quando o servidor REJEITOU o token. Indisponível
+        // ou inesperado pode ser instabilidade de rede, e o access em memória
+        // talvez ainda esteja válido — deslogar aí seria hostil.
+        if (error is RefreshRejeitado) await _limparSessao();
     }
     return result;
   }
 
-  /// Gancho de boot (auto-login silencioso): tenta refresh com o token persistido.
-  /// `ErrorReturn` é esperado quando não há sessão — não propaga, só fica deslogado.
+  /// Gancho de boot (auto-login silencioso): tenta refresh com o token
+  /// persistido. Falha é esperada quando não há sessão — não propaga, só fica
+  /// deslogado.
   @override
   Future<void> checkCurrentUser() async {
-    final r = await refresh();
-    if (r is ErrorReturn) await _limparSessao();
+    final result = await refresh();
+    if (result is Failure) await _limparSessao();
   }
 
   @override
-  Future<ReturnSuccessOrError<Unit>> logout() async {
-    final refresh = await _tokenStore.readRefresh();
-    final result = await LogoutUsecase(datasource: _logoutDs)
-        .call(LogoutParameters(refreshToken: refresh));
-    // Falha aberta: limpa o estado local mesmo se a revogação no servidor falhar.
+  Future<ReturnSuccessOrError<Unit, LogoutError>> logout() async {
+    final stored = await _tokenStore.readRefresh();
+    final result = await _logoutUsecase(LogoutParameters(refreshToken: stored));
+    // Falha aberta: limpa o estado local mesmo se a revogação no servidor
+    // falhar. O contrário deixaria o usuário preso numa sessão que ele pediu
+    // para encerrar.
     await _limparSessao();
-    return switch (result) {
-      SuccessReturn<Unit>() => const SuccessReturn(success: unit),
-      ErrorReturn<Unit>() => result,
-    };
+    return result;
   }
 
   Future<void> _aplicarSessao(Session s) async {
