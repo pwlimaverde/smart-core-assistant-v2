@@ -2,6 +2,116 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-07-27] - Fase C1: clients Flutter reconstruídos sobre a return_success_or_error 3.0.1
+
+> Migração *breaking* da lib de result type nos clients (v2.0.0 → v3.0.1), com a
+> reestruturação de features e a cobertura de testes que a migração viabilizou.
+> Branch `feature/clients-rsoe-v3`. Fora do ciclo PREVC.
+> Plano: `doc_dev/planejamento/25-fase-C1-clients-rsoe-v3.md`.
+
+### Achados que motivaram o escopo
+
+- **A métrica de cobertura escondia um terço do código.** O agregado publicado (95,1%)
+  excluía do denominador `data/datasources` e `presentation/{pages,routes}` — 351 linhas
+  cobertas em **5,7%**, entre elas as oito páginas do `admin_module` (~3.000 linhas que
+  nenhum teste carregava). A cobertura real do lcov era 74,9%, e 107 dos 235 arquivos de
+  produção não eram carregados por teste algum.
+- **A lib estava no `pubspec` mas quase não era usada onde deveria.**
+  `UsecaseBaseCallData` aparecia 3 vezes no monorepo inteiro (só no `login_module`); os
+  outros 36 usecases eram wrappers de uma linha sobre god-services.
+
+### Alterado (arquitetura)
+
+- **`admin_module`: uma feature `config` com 24 operações → oito features.** Deletados o
+  `AdminService` (interface de 24 métodos — ISP violado, todo controller dependia da
+  interface inteira), o `AdminServiceImpl` (433 linhas com o mesmo `try/catch` repetido 24
+  vezes) e o datasource gRPC de 746 linhas. No lugar, 25 cadeias
+  `Datasource → Repository → Usecase`.
+- **`tenant_module`: `src/{data,domain,presentation}` → três features** (convites,
+  usuarios, config), com as camadas dentro de cada uma — o feature-first que o próprio
+  `anatomia-modulo.md` já mandava. `TenantAdminService`/`Impl` e o datasource de 271 linhas
+  dissolvidos em 8 cadeias.
+- **`operacional_module`: gateway por plataforma + datasources por operação.** O que varia
+  ali é a *plataforma* (gRPC-Web no browser × motor local Rust no desktop), não a operação:
+  um `AtendimentoGateway` agregado mantém coerentes as quatro operações e o stream (no
+  desktop, todas compartilham o mesmo índice SQLite e a mesma fila offline), com os
+  `Datasource` da lib em cima dele. `AtendimentoService` deletado.
+- **Erro fechado por feature, com granularidade decidida caso a caso:** um conjunto
+  `sealed` por feature onde as operações compartilham o repertório (as 8 do admin, CRUD
+  sobre o mesmo recurso); um por operação onde ele divergia de verdade (login × refresh ×
+  logout; `acceptInvite`, que é rota pública e não tem "acesso negado").
+- **Marcadores transversais** (`NetworkFailure`, `UnauthorizedFailure`,
+  `ValidationFailure`, `UnexpectedFailure`) no `domain_models`, no lugar dos cinco erros
+  globais: devolvem a reação transversal da apresentação sem reabrir o conjunto de cada
+  feature.
+- **Classificação de falha gRPC centralizada** no `api_client` (`GrpcFailureKind` +
+  `classificarFalhaGrpc`), substituindo quatro cópias quase idênticas de `mapGrpcError`.
+  `alreadyExists`, `notFound` e `failedPrecondition` passaram a ser distinguíveis — as
+  cópias antigas jogavam os três no fallback.
+- **Streams saíram da lib:** o realtime do atendimento virou port de domínio próprio
+  (`AtendimentoEventoStream`). A lib é request/response; embrulhar um fluxo contínuo em
+  `Success`/`Failure` esconderia o momento da queda, que é o que dispara o backoff.
+
+### Corrigido
+
+- **Detalhe técnico não chega mais à tela.** O padrão anterior era
+  `ErrorNetwork(message: '$e')` e `parameters.error.copyWith(message: '$e')` — caminho de
+  arquivo do servidor e endereço de serviço interno viravam mensagem de erro para o
+  usuário. Agora o caso "inesperado" de cada feature tem texto fixo, a exceção vai para
+  `developer.log`, e o `ErrorMessageMapper` impõe mensagem genérica em erro marcado como
+  `UnexpectedFailure` (defesa em profundidade).
+- **Refresh de sessão não derruba mais o login por instabilidade de rede.** Só a rejeição
+  explícita do servidor (`RefreshRejeitado`) limpa a sessão; indisponibilidade preserva o
+  access token em memória, que pode continuar válido por minutos. No boot
+  (`checkCurrentUser`) qualquer falha continua limpando, porque ali não há sessão a
+  preservar.
+- **Splash não fica mais com o spinner girando para sempre.** O
+  `InitialLoadingController` não capturava a exceção de um estágio de boot: o estado parava
+  em `Loading` e a tela de erro com "Tentar novamente" — que existe no código — era
+  inalcançável. Agora emite `ErrorState`, como o próprio doc do controller já prometia.
+- **`AuthServiceImpl` recebe os usecases injetados** em vez de construí-los dentro de cada
+  método, o que amarrava o serviço à cadeia inteira e impedia testá-lo isoladamente.
+
+### Adicionado (testes)
+
+- **337 → 675 testes.** Nove pacotes em 100% de linhas; `tenant_module` 99,1%,
+  `operacional_module` 95,7%, `design_system_module` 100%, `login_module` 100%.
+- **Matriz de tradução de erro:** dez naturezas de falha × 25 operações do admin. Como as
+  operações de uma feature compartilham o `mapError`, compartilhar poderia esconder um caso
+  no braço errado do `switch` — a matriz é o que impede isso.
+- **Matriz de `onUnexpected`:** repositório fora do contrato em cada operação dos três
+  módulos. Curto-circuito **não chama o `process`**, então sem esses testes o `process` de
+  metade das operações nunca rodava.
+- **Widget tests das páginas do painel**, montadas com `GoRouter` real (o `AdminDrawer` lê
+  `matchedLocation` e três páginas leem o tenant do query param), incluindo abrir o diálogo
+  de novo tenant, preencher e submeter.
+- **Suporte a teste da borda gRPC** em `api_client/testing.dart` (`respostaGrpc`,
+  `falhaGrpc`, `streamGrpc`, `streamGrpcComFalha`): os stubs gerados devolvem
+  `ResponseFuture`/`ResponseStream`, que não se constroem sem um `ClientCall` real.
+- **Garantias de segurança cobertas por teste:** senha, refresh token, e-mail de convidado
+  e chave de API do tenant não aparecem em nenhuma mensagem de erro.
+
+### Alterado (CI/CD e docs)
+
+- **Denominador de cobertura honesto:** a exclusão de `datasources`/`pages`/`routes` saiu
+  do `infra/test-flutter.ps1` e do `ci.yml`; só sai do denominador o que não é código
+  escrito à mão (stubs protobuf, bindings frb, cargokit, example). Denominador de 1.204 →
+  3.631 linhas; total **79,6%**, com o ratchet do CI em 78%.
+- Docs de frontend reescritos para a v3: `construcao-feature-com-return-success-or-error.md`
+  (com as regras de granularidade de erro e as armadilhas de teste),
+  `anatomia-modulo.md` (Repository obrigatório, gateway de plataforma),
+  `libs/flutter/return_success_or_error.md`, `construcao-modulo-presentation.md`,
+  `construcao-apresentacao-erro-i18n.md` e `construcao-bootstrap-inicializacao.md`.
+
+### Observações
+
+- **Dívida conhecida e localizada:** 718 das 741 linhas ainda descobertas estão nos
+  diálogos e formulários das sete páginas do `admin_module`. Fechá-las exige teste de
+  interação campo a campo; o piso do ratchet deve subir junto com esse trabalho.
+- A `AuditPage` não entra em widget test: importa `dart:js_interop` para o download do CSV
+  e não carrega na VM do `flutter test` (mesmo limite já documentado para o
+  `GrpcApiClient`). O comportamento dela é coberto pelo `AuditController`.
+
 ## [2026-07-26] - Consolidação para publicação: PEL concorrente, timeout do provedor e gates de CI/CD
 
 > Segunda passada do dia, agora com a suíte unitária EXECUTADA (395 testes verdes) e com
