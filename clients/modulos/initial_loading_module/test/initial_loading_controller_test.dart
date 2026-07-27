@@ -49,15 +49,38 @@ void main() {
   );
 
   blocTest<InitialLoadingController, ViewState<void>>(
-    'bootstrap com bootTask que falha emite apenas [Loading], propaga o erro '
-    'e mantém BootState=false (rotas continuam barradas)',
-    build: () =>
-        InitialLoadingController(modules: [_FailingModule()], bootState: bootState),
+    'bootstrap com bootTask que falha emite [Loading, Error] e mantém '
+    'BootState=false (rotas continuam barradas)',
+    build: () => InitialLoadingController(
+      modules: [_FailingModule()],
+      bootState: bootState,
+    ),
     act: (c) => c.bootstrap(),
-    expect: () => [isA<LoadingState<void>>()],
-    errors: () => [isA<Exception>()],
+    // A exceção do estágio de boot é capturada e vira ErrorState. Antes ela
+    // escapava do controller: o estado parava em Loading e a splash ficava com
+    // o spinner girando para sempre, apesar de o próprio doc do controller
+    // prometer ErrorState. A tela de erro com "Tentar novamente" só funciona
+    // porque esse estado agora é emitido.
+    expect: () => [isA<LoadingState<void>>(), isA<ErrorState<void>>()],
     verify: (_) {
       expect(bootState.value, isFalse);
     },
+  );
+
+  blocTest<InitialLoadingController, ViewState<void>>(
+    'a mensagem exibida no erro de boot é genérica (sem detalhe da exceção)',
+    build: () => InitialLoadingController(
+      modules: [_FailingModule()],
+      bootState: bootState,
+    ),
+    act: (c) => c.bootstrap(),
+    expect: () => [
+      isA<LoadingState<void>>(),
+      isA<ErrorState<void>>().having(
+        (s) => ErrorMessageMapper.map(s.error),
+        'mensagem exibida',
+        ErrorMessageMapper.mensagemGenerica,
+      ),
+    ],
   );
 }

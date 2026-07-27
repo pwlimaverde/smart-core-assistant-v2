@@ -13,8 +13,11 @@ void main() {
       expect(module.routes().first.path, '/');
     });
 
-    test('bootTasks() retorna lista vazia (boot é responsabilidade do controller)', () {
-      expect(InitialLoadingModule().bootTasks(), isEmpty);
-    });
+    test(
+      'bootTasks() retorna lista vazia (boot é responsabilidade do controller)',
+      () {
+        expect(InitialLoadingModule().bootTasks(), isEmpty);
+      },
+    );
   });
 }
