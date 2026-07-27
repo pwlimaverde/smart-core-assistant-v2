@@ -28,16 +28,21 @@ abstract final class ErrorMessageMapper {
   static String toMessage(BuildContext context, AppError error) {
     final l10n = AppLocalizations.of(context)!;
     return switch (error) {
-      ErrorNetwork() => l10n.errorNetwork,        // "Sem conexão. Verifique sua internet."
-      ErrorUnauthorized() => l10n.errorSession,   // "Sua sessão expirou. Entre novamente."
-      ErrorValidation() => l10n.errorValidation,  // "Verifique os dados informados."
+      NetworkFailure() => l10n.errorNetwork,      // "Sem conexão. Verifique sua internet."
+      UnauthorizedFailure() => l10n.errorSession, // "Sua sessão expirou. Entre novamente."
+      ValidationFailure() => l10n.errorValidation,// "Verifique os dados informados."
       _ => l10n.errorGeneric,                      // fallback amigável
     };
   }
 }
 ```
 
-> Os tipos concretos (`ErrorNetwork`, `ErrorUnauthorized`…) são os subtipos de `AppError` do `return_success_or_error`. Se um tipo ainda não existir, o `default (_)` cai na mensagem genérica — nunca se expõe stack/`message` técnico ao usuário.
+> Desde a fase C1, o casamento é por **marcador** (`NetworkFailure`,
+> `UnauthorizedFailure`, `ValidationFailure`, `UnexpectedFailure` do
+> `domain_models`), não por tipo concreto: os erros são fechados por feature e um
+> mapper central não teria como conhecer os ~60 casos existentes. O caso marcado
+> como `UnexpectedFailure` recebe mensagem genérica **imposta** — é o que nasce de
+> exceção não modelada e o de maior risco de carregar detalhe técnico para a tela.
 
 ---
 
@@ -83,7 +88,7 @@ BlocListener<TenantController, ViewState<List<Tenant>>>(
 
 ```dart
 listener: (context, state) {
-  if (state is ErrorState && state.error is ErrorUnauthorized) {
+  if (state is ErrorState && state.error is UnauthorizedFailure) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(

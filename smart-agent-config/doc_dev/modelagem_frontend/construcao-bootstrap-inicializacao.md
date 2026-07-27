@@ -162,7 +162,7 @@ final class InitialLoadingController extends BaseController<void> {
         // installModules já rodou no main; aqui só as bootTasks por estágio.
         await runBootTasks(_modules);
         _bootState.complete();
-        return const SuccessReturn(success: null);
+        return const Success(null);
       });
 }
 ```

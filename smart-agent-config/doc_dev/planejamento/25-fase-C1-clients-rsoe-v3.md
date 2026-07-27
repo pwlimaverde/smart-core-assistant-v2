@@ -1,6 +1,6 @@
 # Fase C1 — Reconstrução dos clients Flutter sobre `return_success_or_error` 3.0.1
 
-> **Status:** planejamento — criado em **2026-07-26**.
+> **Status:** **CONCLUÍDA** em 2026-07-27 (planejada em 2026-07-26).
 > **Escopo:** `clients/` (5 packages, 10 módulos, 2 apps). Nada de `server/` ou `ia_engine/`.
 > **Branch:** `feature/clients-rsoe-v3` (a partir da `dev`), um commit por etapa.
 > **Idioma:** documentação e comentários em pt-br; identificadores em inglês (padrão do repo).
@@ -437,3 +437,45 @@ e o runner Linux do CI produz falso vermelho sem ganho real.
       exclusões antigas) e ≥ o alvo definido em §8.
 - [ ] Docs de frontend descrevendo a v3 (`Datasource → Repository → Usecase`).
 - [ ] `ci.yml` verde na branch antes do merge na `dev`.
+
+
+---
+
+## 12. Resultado (2026-07-27)
+
+Executada em 11 commits na branch `feature/clients-rsoe-v3`, um por etapa.
+
+| Métrica | Antes | Depois |
+|---|---|---|
+| Testes | 337 | **675** |
+| Cobertura publicada | 95,1% (denominador maquiado) | **79,6%** (denominador honesto) |
+| Denominador | 1.204 linhas | 3.631 linhas |
+| Arquivos de produção sem teste algum | 107 | 7 páginas parcialmente cobertas |
+| Features | 4 módulos, 1 delas com 24 operações | **16 features** |
+| God-objects | 3 (24, 8 e 5 métodos) | 0 |
+| Cópias de `mapGrpcError` | 4 | 1 classificador central |
+| Pacotes em 100% de linhas | — | 9 |
+
+### O que não foi fechado
+
+718 das 741 linhas ainda descobertas estão nos **diálogos e formulários das sete
+páginas do `admin_module`**. Cada diálogo tem 50–100 linhas de formulário, e
+fechá-los exige teste de interação campo a campo. A renderização, os estados
+(carregado/erro), a navegação por abas e um diálogo completo (novo tenant) já
+estão cobertos.
+
+O piso do ratchet no CI ficou em **78%** — o valor medido com margem pequena.
+Ao fechar os diálogos, suba o piso no mesmo commit.
+
+### Desvios em relação ao plano
+
+1. **`AuditPage` sem widget test** (§8 previa todas as páginas): importa
+   `dart:js_interop` para o download do CSV e não carrega na VM do `flutter test`.
+   Coberta pelo controller.
+2. **Arquivos agregados por camada** em vez de um arquivo por operação
+   (`<feature>_datasources.dart`, `_repositories.dart`, `_usecases.dart`): são a
+   mesma costura repetida N vezes, e 165 arquivos de 15 linhas atrapalhariam a
+   navegação mais do que ajudariam. A separação por camada e por feature — o que
+   importa para as dependências — está preservada.
+3. **Gateway agregado no `operacional_module`** (não previsto): o eixo de variação
+   ali é a plataforma, não a operação. Ver §8 do doc da lib.

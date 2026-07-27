@@ -320,17 +320,26 @@ jobs:
 
       # Agrega os coverage/lcov.info gerados pelo `flutter test --coverage` de cada
       # pacote (melos test já roda com --coverage) num único lcov combinado + resumo
-      # em %. Ratchet ativo (etapa C5 do plano de cobertura); piso com margem.
+      # em %. Ratchet ativo: falha se a cobertura CAIR abaixo do piso.
       #
       # EXCLUSÃO POR POLÍTICA (o `flutter test --coverage` não tem `omit` nativo, então
-      # a exclusão é aplicada AQUI, na agregação): não contam para o denominador os
-      # arquivos que a testing-strategy declara fora do alcance do teste de unidade —
-      # `data/datasources/*` (fronteira externa: gRPC/remoto/FFI, cobertos por
-      # integração/E2E) e `presentation/pages|routes/*` (layout/navegação de UI pura).
-      # Widgets continuam contando (o design_system os testa de verdade). Sem isso, um
-      # módulo UI-pesado como o admin_module (datasource gRPC de 331 linhas + páginas)
-      # afundaria o agregado sem refletir a cobertura significativa real.
-      - name: "Agrega cobertura Flutter (lcov, excl. datasources/pages/routes, ratchet: piso 85%)"
+      # a exclusão é aplicada AQUI, na agregação): só sai do denominador o que **não é
+      # código escrito à mão** — stubs protobuf/gRPC (`src/generated`), bindings
+      # flutter_rust_bridge (`lib/src/rust`), a ferramenta de build do FFI
+      # (`cargokit`) e o app de exemplo do plugin (`example`).
+      #
+      # A exclusão anterior de `data/datasources` e `presentation/{pages,routes}` foi
+      # REMOVIDA na fase C1: eram 351 linhas cobertas em 5,7% que não apareciam no
+      # número — incluindo as oito páginas do admin_module, ~3.000 linhas que nenhum
+      # teste carregava. Com a exclusão, o agregado publicado era 95,1% enquanto a
+      # cobertura real do lcov era 74,9%. Datasource se testa com o stub gRPC mockado
+      # (`api_client/testing.dart`) e página se testa com `testWidgets`; ambos agora
+      # têm cobertura de verdade.
+      #
+      # Piso em 78%: é o valor medido (79,6%) com uma margem pequena. A dívida
+      # conhecida está localizada — diálogos e formulários das páginas do
+      # admin_module. Ao fechá-la, suba o piso no mesmo commit.
+      - name: "Agrega cobertura Flutter (lcov, excl. código gerado, ratchet: piso 78%)"
         working-directory: clients
         run: |
           mkdir -p ../coverage
@@ -339,13 +348,13 @@ jobs:
           while IFS= read -r -d '' lcov; do
             cat "$lcov" >> "$dest"
           done < <(find . -path '*/coverage/lcov.info' -print0)
-          awk -v floor=85 '
-            /^SF:/ { excl = ($0 ~ /(data\/datasources|presentation\/(pages|routes))\//) ? 1 : 0 }
+          awk -v floor=78 '
+            /^SF:/ { excl = ($0 ~ /(generated|cargokit|example)\/|\/src\/rust\//) ? 1 : 0 }
             /^LF:/ { if (!excl) lf += substr($0,4)+0 }
             /^LH:/ { if (!excl) lh += substr($0,4)+0 }
             END {
               pct = (lf > 0) ? 100 * lh / lf : 0
-              printf "TOTAL Flutter (significativo): %d/%d = %.1f%% (piso %d%%)\n", lh, lf, pct, floor
+              printf "TOTAL Flutter: %d/%d = %.1f%% (piso %d%%)\n", lh, lf, pct, floor
               if (pct < floor) {
                 printf "FALHA: cobertura Flutter %.1f%% abaixo do piso %d%%\n", pct, floor
                 exit 1

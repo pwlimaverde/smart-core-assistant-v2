@@ -21,7 +21,7 @@ Os **controllers** continuam testáveis em Dart puro: `BaseController` estende `
 | Camada | Classe | Papel |
 | :--- | :--- | :--- |
 | **Estado** | `ViewState<T>` (selado) | Estados padronizados de qualquer tela: `Initial`, `Loading`, `Success<T>`, `Error(AppError)`. |
-| **Controller** | `BaseController<T>` | `Cubit<ViewState<T>>` com `execute()` que roda um usecase (`ReturnSuccessOrError<T>`) e mapeia para os estados. |
+| **Controller** | `BaseController<T>` | `Cubit<ViewState<T>>` com `execute<E>()` que roda um usecase (`ReturnSuccessOrError<T, E>`) e mapeia para os estados. |
 | **Página** | `ModulePage` / `ViewStateBuilder` | Renderização declarativa por estado; resolve o controller via `inject<C>()`. |
 
 **Estado sempre genérico:** toda tela usa `ViewState<T>`. Para telas com múltiplos pedaços de estado, `T` é um **view-model composto** (um `record` ou uma classe imutável que agrega os campos da tela). Não se cria sealed state por feature.
@@ -139,23 +139,27 @@ abstract class BaseController<T> extends Cubit<ViewState<T>> {
   BaseController() : super(InitialState<T>());
 
   /// Emite [LoadingState], executa [task] e mapeia o resultado:
-  ///  - [SuccessReturn] → [SuccessState];
-  ///  - [ErrorReturn]   → [ErrorState] (carregando o [AppError]).
+  ///  - [Success] → [SuccessState];
+  ///  - [Failure] → [ErrorState] (carregando o erro como [AppError]).
   ///
-  /// O mapeamento usa `switch` exaustivo sobre o tipo selado
-  /// [ReturnSuccessOrError]. A lib (v2.0.0) **não** expõe `fold`/`getOrElse`/
-  /// `isSuccess` — o pattern matching é a única forma de recuperar o valor, e o
-  /// compilador garante que ambos os casos sejam tratados.
-  Future<void> execute(
-    Future<ReturnSuccessOrError<T>> Function() task,
+  /// A lib **não** expõe `fold`/`getOrElse`/`isSuccess` — o pattern matching é a
+  /// única forma de recuperar o valor, e o compilador garante os dois casos.
+  ///
+  /// [E] é o conjunto fechado de erros da feature, parametrizado **por chamada**
+  /// e não por controller: o mesmo controller orquestra usecases de features
+  /// vizinhas, com conjuntos diferentes. Na fronteira da UI o erro é degradado
+  /// para [AppError] — que é tudo de que [ErrorState] precisa, uma mensagem —,
+  /// evitando um segundo parâmetro de tipo em `ViewState`, `ModulePage` e
+  /// `ViewStateBuilder`.
+  Future<void> execute<E extends AppError>(
+    Future<ReturnSuccessOrError<T, E>> Function() task,
   ) async {
     emit(LoadingState<T>());
-    final result = await task();
-    switch (result) {
-      case SuccessReturn<T>():
-        emit(SuccessState<T>(result.result));
-      case ErrorReturn<T>():
-        emit(ErrorState<T>(result.result));
+    switch (await task()) {
+      case Success(:final value):
+        emit(SuccessState<T>(value));
+      case Failure(:final error):
+        emit(ErrorState<T>(error));
     }
   }
 }
@@ -452,7 +456,7 @@ Para granularidade fina sem reconstruir a tela toda, combine com `BlocSelector` 
 
 ## 8. Teste do Controller (Dart puro, sem Flutter)
 
-`execute()` torna o teste trivial: basta mockar o usecase para devolver `SuccessReturn`/`ErrorReturn` e verificar a sequência de estados.
+`execute()` torna o teste trivial: basta mockar o usecase para devolver `Success`/`Failure` e verificar a sequência de estados.
 
 ```dart
 import 'package:bloc_test/bloc_test.dart';
@@ -474,10 +478,10 @@ void main() {
   tearDown(() => controller.close());
 
   blocTest<TenantController, ViewState<List<Tenant>>>(
-    'emite [Loading, Success] quando o usecase retorna SuccessReturn',
+    'emite [Loading, Success] quando o usecase retorna Success',
     build: () {
       when(() => usecase(any())).thenAnswer(
-        (_) async => SuccessReturn(success: [Tenant(id: '1', name: 'A')]),
+        (_) async => Success([Tenant(id: '1', name: 'A')]),
       );
       return controller;
     },
@@ -490,10 +494,10 @@ void main() {
   );
 
   blocTest<TenantController, ViewState<List<Tenant>>>(
-    'emite [Loading, Error] quando o usecase retorna ErrorReturn',
+    'emite [Loading, Error] quando o usecase retorna Failure',
     build: () {
       when(() => usecase(any())).thenAnswer(
-        (_) async => ErrorReturn(error: const ErrorGeneric(message: 'Falha')),
+        (_) async => const Failure(TenantsIndisponivel()),
       );
       return controller;
     },
