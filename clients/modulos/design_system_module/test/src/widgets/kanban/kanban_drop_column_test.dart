@@ -35,7 +35,10 @@ void main() {
             home: Scaffold(
               body: Column(
                 children: [
-                  KanbanCard<String>(data: 'atendimento-1', child: const Text('Card')),
+                  KanbanCard<String>(
+                    data: 'atendimento-1',
+                    child: const Text('Card'),
+                  ),
                   Expanded(
                     child: KanbanDropColumn<String>(
                       title: 'Fila',
@@ -51,7 +54,9 @@ void main() {
         );
 
         final cardCenter = tester.getCenter(find.text('Card'));
-        final columnCenter = tester.getCenter(find.byType(KanbanDropColumn<String>));
+        final columnCenter = tester.getCenter(
+          find.byType(KanbanDropColumn<String>),
+        );
 
         final gesture = await tester.startGesture(cardCenter);
         await tester.pump(const Duration(milliseconds: 50));
@@ -64,44 +69,48 @@ void main() {
       },
     );
 
-    testWidgets(
-      'onWillAccept=false rejeita o drop: onAccept não é chamado',
-      (tester) async {
-        var acceptChamado = false;
+    testWidgets('onWillAccept=false rejeita o drop: onAccept não é chamado', (
+      tester,
+    ) async {
+      var acceptChamado = false;
 
-        await tester.pumpWidget(
-          MaterialApp(
-            home: Scaffold(
-              body: Column(
-                children: [
-                  KanbanCard<String>(data: 'atendimento-1', child: const Text('Card')),
-                  Expanded(
-                    child: KanbanDropColumn<String>(
-                      title: 'Fila',
-                      itemCount: 0,
-                      onWillAccept: (_) => false,
-                      onAccept: (_) => acceptChamado = true,
-                      children: const [],
-                    ),
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Column(
+              children: [
+                KanbanCard<String>(
+                  data: 'atendimento-1',
+                  child: const Text('Card'),
+                ),
+                Expanded(
+                  child: KanbanDropColumn<String>(
+                    title: 'Fila',
+                    itemCount: 0,
+                    onWillAccept: (_) => false,
+                    onAccept: (_) => acceptChamado = true,
+                    children: const [],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
-        );
+        ),
+      );
 
-        final cardCenter = tester.getCenter(find.text('Card'));
-        final columnCenter = tester.getCenter(find.byType(KanbanDropColumn<String>));
+      final cardCenter = tester.getCenter(find.text('Card'));
+      final columnCenter = tester.getCenter(
+        find.byType(KanbanDropColumn<String>),
+      );
 
-        final gesture = await tester.startGesture(cardCenter);
-        await tester.pump(const Duration(milliseconds: 50));
-        await gesture.moveTo(columnCenter);
-        await tester.pump(const Duration(milliseconds: 50));
-        await gesture.up();
-        await tester.pumpAndSettle();
+      final gesture = await tester.startGesture(cardCenter);
+      await tester.pump(const Duration(milliseconds: 50));
+      await gesture.moveTo(columnCenter);
+      await tester.pump(const Duration(milliseconds: 50));
+      await gesture.up();
+      await tester.pumpAndSettle();
 
-        expect(acceptChamado, isFalse);
-      },
-    );
+      expect(acceptChamado, isFalse);
+    });
   });
 }

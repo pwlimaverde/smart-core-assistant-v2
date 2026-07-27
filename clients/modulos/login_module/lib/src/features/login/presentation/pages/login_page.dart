@@ -10,8 +10,6 @@ final class LoginPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppScaffold(
-      body: LoginForm(controller: inject<LoginController>()),
-    );
+    return AppScaffold(body: LoginForm(controller: inject<LoginController>()));
   }
 }

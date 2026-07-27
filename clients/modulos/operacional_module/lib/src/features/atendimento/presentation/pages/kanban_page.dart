@@ -43,9 +43,8 @@ class _KanbanPageState extends State<KanbanPage> {
         bloc: controller,
         builder: (context, state) {
           return switch (state) {
-            InitialState() || LoadingState() => const Center(
-              child: CircularProgressIndicator(),
-            ),
+            InitialState() ||
+            LoadingState() => const Center(child: CircularProgressIndicator()),
             ErrorState(:final error) => AppErrorView(
               message: error.message,
               onRetry: () => controller.carregarFila(),
@@ -106,23 +105,25 @@ class _KanbanBoard extends StatelessWidget {
                   );
                 },
                 children: [
-                  for (final atendimento in viewModel.porEtapa[etapaId] ?? const <AtendimentoResumo>[])
+                  for (final atendimento
+                      in viewModel.porEtapa[etapaId] ??
+                          const <AtendimentoResumo>[])
                     KanbanCard<_DragPayload>(
                       key: ValueKey(atendimento.id),
                       data: (
                         atendimentoId: atendimento.id,
                         etapaOrigemId: etapaId,
                       ),
-                      isDragging: viewModel.movendoAtendimentoId == atendimento.id,
+                      isDragging:
+                          viewModel.movendoAtendimentoId == atendimento.id,
                       child: InkWell(
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) => ChatPage(atendimentoId: atendimento.id),
+                            builder: (_) =>
+                                ChatPage(atendimentoId: atendimento.id),
                           ),
                         ),
-                        child: AtendimentoCardContent(
-                          atendimento: atendimento,
-                        ),
+                        child: AtendimentoCardContent(atendimento: atendimento),
                       ),
                     ),
                 ],

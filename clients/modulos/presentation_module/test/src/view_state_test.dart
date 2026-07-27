@@ -20,7 +20,7 @@ void main() {
     });
 
     test('ErrorState carrega o erro informado', () {
-      const error = ErrorGeneric(message: 'Falha');
+      const error = ErrorGeneric('Falha');
       const state = ErrorState<String>(error);
       expect(state.error, equals(error));
       expect(state.error.message, 'Falha');

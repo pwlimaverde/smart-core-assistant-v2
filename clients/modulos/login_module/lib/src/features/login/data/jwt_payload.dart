@@ -26,8 +26,9 @@ final class JwtPayload {
       final partes = accessToken.split('.');
       if (partes.length < 2) return JwtPayload._vazio();
       final normalizado = base64Url.normalize(partes[1]);
-      final json = jsonDecode(utf8.decode(base64Url.decode(normalizado)))
-          as Map<String, dynamic>;
+      final json =
+          jsonDecode(utf8.decode(base64Url.decode(normalizado)))
+              as Map<String, dynamic>;
 
       final exp = json['exp'];
       final expiresAt = exp is int
@@ -51,23 +52,22 @@ final class JwtPayload {
   }
 
   factory JwtPayload._vazio() => JwtPayload(
-        expiresAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
-        tenantId: '',
-        scopes: const [],
-        isSuperuser: false,
-      );
+    expiresAt: DateTime.fromMillisecondsSinceEpoch(0, isUtc: true),
+    tenantId: '',
+    scopes: const [],
+    isSuperuser: false,
+  );
 
   /// Monta a [Session] combinando as claims decodificadas com os tokens crus.
   Session paraSession({
     required String accessToken,
     required String refreshToken,
-  }) =>
-      Session(
-        accessToken: accessToken,
-        refreshToken: refreshToken,
-        expiresAt: expiresAt,
-        tenantId: tenantId,
-        scopes: scopes,
-        isSuperuser: isSuperuser,
-      );
+  }) => Session(
+    accessToken: accessToken,
+    refreshToken: refreshToken,
+    expiresAt: expiresAt,
+    tenantId: tenantId,
+    scopes: scopes,
+    isSuperuser: isSuperuser,
+  );
 }

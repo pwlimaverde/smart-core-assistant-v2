@@ -16,14 +16,17 @@ void main() {
       expect(copia.danger, original.danger);
     });
 
-    test('copyWith sem argumentos retorna valores equivalentes ao original', () {
-      const original = AppColors.dark;
-      final copia = original.copyWith();
+    test(
+      'copyWith sem argumentos retorna valores equivalentes ao original',
+      () {
+        const original = AppColors.dark;
+        final copia = original.copyWith();
 
-      expect(copia.bg, original.bg);
-      expect(copia.accent, original.accent);
-      expect(copia.infoSoft, original.infoSoft);
-    });
+        expect(copia.bg, original.bg);
+        expect(copia.accent, original.accent);
+        expect(copia.infoSoft, original.infoSoft);
+      },
+    );
 
     test('lerp com t=0 aproxima o início e t=1 aproxima o fim', () {
       const inicio = AppColors.light;
@@ -37,53 +40,61 @@ void main() {
       expect(noFim.accent, Color.lerp(inicio.accent, fim.accent, 1));
     });
 
-    test('lerp com um ThemeExtension de outro tipo retorna o próprio (this)', () {
-      const original = AppColors.light;
-      final resultado = original.lerp(null, 0.5);
+    test(
+      'lerp com um ThemeExtension de outro tipo retorna o próprio (this)',
+      () {
+        const original = AppColors.light;
+        final resultado = original.lerp(null, 0.5);
 
-      expect(identical(resultado, original), isTrue);
-    });
+        expect(identical(resultado, original), isTrue);
+      },
+    );
   });
 
   group('AppColorsX', () {
-    testWidgets('sem AppColors registrado no tema, cai no default (AppColors.light)', (
-      tester,
-    ) async {
-      late AppColors resolved;
+    testWidgets(
+      'sem AppColors registrado no tema, cai no default (AppColors.light)',
+      (tester) async {
+        late AppColors resolved;
 
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData(useMaterial3: true),
-          home: Builder(
-            builder: (context) {
-              resolved = context.colors;
-              return const SizedBox.shrink();
-            },
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(useMaterial3: true),
+            home: Builder(
+              builder: (context) {
+                resolved = context.colors;
+                return const SizedBox.shrink();
+              },
+            ),
           ),
-        ),
-      );
+        );
 
-      expect(resolved, equals(AppColors.light));
-    });
+        expect(resolved, equals(AppColors.light));
+      },
+    );
 
-    testWidgets('com AppColors.dark registrado, context.colors resolve a extensão', (
-      tester,
-    ) async {
-      late AppColors resolved;
+    testWidgets(
+      'com AppColors.dark registrado, context.colors resolve a extensão',
+      (tester) async {
+        late AppColors resolved;
 
-      await tester.pumpWidget(
-        MaterialApp(
-          theme: ThemeData(useMaterial3: true, extensions: const [AppColors.dark]),
-          home: Builder(
-            builder: (context) {
-              resolved = context.colors;
-              return const SizedBox.shrink();
-            },
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: ThemeData(
+              useMaterial3: true,
+              extensions: const [AppColors.dark],
+            ),
+            home: Builder(
+              builder: (context) {
+                resolved = context.colors;
+                return const SizedBox.shrink();
+              },
+            ),
           ),
-        ),
-      );
+        );
 
-      expect(resolved, equals(AppColors.dark));
-    });
+        expect(resolved, equals(AppColors.dark));
+      },
+    );
   });
 }

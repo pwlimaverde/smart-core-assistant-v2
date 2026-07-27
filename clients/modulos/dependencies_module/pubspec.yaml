@@ -37,7 +37,7 @@ dependencies:
   bloc: ^9.2.1
   intl: ^0.20.2
   uuid: ^4.5.3
-  return_success_or_error: ^2.0.0
+  return_success_or_error: ^3.0.1
 
 dev_dependencies:
   flutter_test:

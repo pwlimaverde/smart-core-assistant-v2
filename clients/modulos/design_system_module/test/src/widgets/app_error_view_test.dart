@@ -4,15 +4,15 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AppErrorView', () {
-    testWidgets('exibe mensagem e botão de retry condicionalmente', (tester) async {
+    testWidgets('exibe mensagem e botão de retry condicionalmente', (
+      tester,
+    ) async {
       var retried = false;
 
       // Sem retry
       await tester.pumpWidget(
         const MaterialApp(
-          home: Scaffold(
-            body: AppErrorView(message: 'Erro desconhecido'),
-          ),
+          home: Scaffold(body: AppErrorView(message: 'Erro desconhecido')),
         ),
       );
 

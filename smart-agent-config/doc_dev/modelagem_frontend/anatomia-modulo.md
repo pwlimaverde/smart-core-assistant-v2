@@ -40,17 +40,21 @@ clients/modulos/login_module/
 │       └── features/
 │           └── login/                          # FEATURE auto-contida
 │               ├── domain/                     # REGRA DE NEGÓCIO (contratos + usecases)
+│               │   ├── errors/
+│               │   │   └── auth_errors.dart          # sealed <Feature>Error + casos concretos
 │               │   ├── services/
 │               │   │   └── auth_service.dart         # interface PÚBLICA (feature de serviço)
 │               │   ├── parameters/
-│               │   │   └── login_parameters.dart     # implements ParametersReturnResult
+│               │   │   └── login_parameters.dart     # extends Parameters (só dados)
 │               │   ├── model/                        # objetos de domínio processados (sendable) — se houver
 │               │   └── usecases/
-│               │       └── login_usecase.dart        # extends UsecaseBaseCallData<T, D> + get process
+│               │       └── login_usecase.dart        # extends UsecaseBaseCallData<TValue, TData, TParams, TError>
 │               │
 │               ├── data/                       # FONTES EXTERNAS + implementações
 │               │   ├── datasources/
-│               │   │   └── auth_grpc_datasource.dart  # implements Datasource<D> (só I/O); usa api_client
+│               │   │   └── login_grpc_datasource.dart # implements Datasource<TData, TParams> (só I/O, sem try/catch)
+│               │   ├── repositories/
+│               │   │   └── login_repository.dart      # extends RepositoryBase + mapError (fronteira)
 │               │   └── services/
 │               │       └── auth_service_impl.dart     # implementação de AuthService
 │               │
@@ -75,7 +79,9 @@ Regras de organização:
 - **Feature-first (padrão do projeto inteiro):** todo código de negócio/UI vive em `src/features/<feature>/` com as três camadas. Módulos só de infra (ex.: `core_module`) podem não ter `features/`, mas todo módulo de domínio segue este layout.
 - O **export público** (`lib/login_module.dart`) expõe **só** as features: a classe do módulo e as **interfaces** de serviço. Tudo em `src/` é privado.
 - **Entidades/DTOs compartilhados** vivem no package `domain_models` (protobuf). A feature só cria tipos próprios (em `domain/model/`) quando exclusivos dela — sempre **imutáveis e sendable** (podem cruzar a fronteira de um isolate no `process`).
-- **Sem Repository por padrão**: o usecase consome o `Datasource` diretamente (padrão do `return_success_or_error`). Crie Repository só ao combinar múltiplos datasources.
+- **Repository é obrigatório** (v3 da lib): o usecase depende de `Repository`, não de `Datasource`. É a fronteira que traduz exceção técnica em erro de domínio (`mapError`) — sem ela, o `Datasource` voltaria a conhecer o erro de negócio.
+- **Um `Datasource`/`Repository`/`Usecase` por operação.** Quando o que varia é a **plataforma** (Web × desktop), acrescente um **gateway agregado** em `domain/gateways/` e ponha os datasources em cima dele — ver §8 do doc da lib.
+- **Erro fechado por feature**: `sealed class <Feature>Error extends AppError` em `domain/errors/`. Nada de erro global compartilhado (o `domain_models` só expõe os **marcadores** transversais).
 
 ---
 
@@ -136,31 +142,38 @@ abstract interface class AuthService {
 
 ```dart
 // domain/parameters/login_parameters.dart
-final class LoginParameters implements ParametersReturnResult {
+// Só dados: na v3 o parâmetro não carrega mais o erro. Atravessa as três
+// camadas e chega ao mapError como contexto — então nunca entra em log (aqui
+// carrega a senha).
+final class LoginParameters extends Parameters {
   final String email;
   final String password;
   const LoginParameters({required this.email, required this.password});
-
-  @override
-  AppError get error => const ErrorGeneric(message: 'Falha ao autenticar');
 }
 ```
 
 ```dart
 // features/login/domain/usecases/login_usecase.dart
-final class LoginUsecase extends UsecaseBaseCallData<Session, Session> {
-  LoginUsecase({required super.datasource, super.runInIsolate});
+final class LoginUsecase
+    extends UsecaseBaseCallData<Session, Session, LoginParameters, LoginError> {
+  const LoginUsecase({required super.repository});
 
-  // v2.0.0: implementa o getter `process` (função ESTÁTICA, síncrona). A base faz
-  // o fetch do datasource sozinha (no isolate principal) e chama `process` com o
-  // dado já carregado. Aqui D == T (Session), então o process só repassa.
+  // O getter `process` aponta para uma função ESTÁTICA (não captura `this`). A
+  // base faz o fetch no repositório, curto-circuita no erro e chama `process`
+  // com o dado já carregado e os parâmetros TIPADOS (sem cast).
   @override
-  ProcessData<Session, Session> get process => _process;
+  ProcessData<Session, Session, LoginParameters, LoginError> get process =>
+      _process;
 
-  static ReturnSuccessOrError<Session> _process(
+  // Obrigatório na v3: converte um bug do process num erro previsto da feature.
+  @override
+  LoginError onUnexpected(Object exception, StackTrace stackTrace) =>
+      const LoginInesperado();
+
+  static ReturnSuccessOrError<Session, LoginError> _process(
     Session session,
-    ParametersReturnResult parameters,
-  ) => SuccessReturn(success: session);
+    LoginParameters parameters,
+  ) => Success(session);
 }
 ```
 
@@ -169,8 +182,8 @@ final class LoginUsecase extends UsecaseBaseCallData<Session, Session> {
 ### 4.2 Data — datasource e a implementação do serviço exposto
 
 ```dart
-// data/datasources/auth_grpc_datasource.dart
-final class AuthGrpcDatasource implements Datasource<Session> {
+// data/datasources/login_grpc_datasource.dart
+final class LoginGrpcDatasource implements Datasource<Session, LoginParameters> {
   final ApiClient _api;
   AuthGrpcDatasource({required ApiClient api}) : _api = api;
 
@@ -202,7 +215,7 @@ final class AuthServiceImpl implements AuthService {
   }) async {
     final usecase = LoginUsecase(datasource: _datasource);
     final result = await usecase(LoginParameters(email: email, password: password));
-    if (result is SuccessReturn<Session>) _session = result.result;
+    if (result case Success(:final value)) _session = value;
     return result;
   }
 }
@@ -325,9 +338,12 @@ Pontos críticos:
 | Impl. do serviço | `auth_service_impl.dart` | `AuthServiceImpl` | `implements AuthService` |
 | Controller | `login_controller.dart` | `LoginController` | `extends BaseController<T>` |
 | Página | `login_page.dart` | `LoginPage` | `extends ModulePage<C, T>` |
-| Usecase | `login_usecase.dart` | `LoginUsecase` | `extends UsecaseBaseCallData<T, D>` |
-| Datasource | `auth_grpc_datasource.dart` | `AuthGrpcDatasource` | `implements Datasource<T>` |
-| Parâmetros | `login_parameters.dart` | `LoginParameters` | `implements ParametersReturnResult` |
+| Usecase | `login_usecase.dart` | `LoginUsecase` | `extends UsecaseBaseCallData<TValue, TData, TParams, TError>` |
+| Repositório | `login_repository.dart` | `LoginRepository` | `extends RepositoryBase<TData, TParams, TError>` |
+| Datasource | `login_grpc_datasource.dart` | `LoginGrpcDatasource` | `implements Datasource<TData, TParams>` |
+| Parâmetros | `login_parameters.dart` | `LoginParameters` | `extends Parameters` |
+| Erros da feature | `login_errors.dart` | `LoginError` + casos | `sealed class ... extends AppError` |
+| Gateway de plataforma (quando houver) | `atendimento_gateway.dart` | `AtendimentoGateway` | `abstract interface class` |
 
 Demais convenções:
 

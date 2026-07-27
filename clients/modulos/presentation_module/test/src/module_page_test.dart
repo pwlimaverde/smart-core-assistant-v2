@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:presentation_module/presentation_module.dart';
+import 'package:return_success_or_error/return_success_or_error.dart';
 
 class MockTestController extends MockCubit<ViewState<String>>
     implements BaseController<String> {}
@@ -54,6 +55,62 @@ void main() {
 
       expect(onInitChamado, isTrue);
       expect(find.text('Sucesso: ok'), findsOneWidget);
+    });
+
+    testWidgets('estado inicial renderiza vazio por padrão', (tester) async {
+      when(
+        () => mockController.state,
+      ).thenReturn(const InitialState<String>());
+
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: TestModulePage())),
+      );
+
+      expect(find.byType(SizedBox), findsOneWidget);
+      expect(find.byType(CircularProgressIndicator), findsNothing);
+    });
+
+    testWidgets('estado de carregamento renderiza spinner por padrão', (
+      tester,
+    ) async {
+      when(
+        () => mockController.state,
+      ).thenReturn(const LoadingState<String>());
+
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: TestModulePage())),
+      );
+
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    });
+
+    testWidgets('estado de erro renderiza a mensagem do AppError por padrão', (
+      tester,
+    ) async {
+      when(() => mockController.state).thenReturn(
+        const ErrorState<String>(ErrorGeneric('falhou de verdade')),
+      );
+
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: TestModulePage())),
+      );
+
+      expect(find.text('falhou de verdade'), findsOneWidget);
+    });
+
+    testWidgets('resolve o controller do escopo ativo via inject', (
+      tester,
+    ) async {
+      when(
+        () => mockController.state,
+      ).thenReturn(const SuccessState<String>('injetado'));
+
+      await tester.pumpWidget(
+        const MaterialApp(home: Scaffold(body: TestModulePage())),
+      );
+
+      expect(const TestModulePage().controller, same(mockController));
+      expect(find.text('Sucesso: injetado'), findsOneWidget);
     });
   });
 }

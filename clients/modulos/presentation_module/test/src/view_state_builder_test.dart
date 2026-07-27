@@ -52,7 +52,7 @@ void main() {
 
     testWidgets('renderiza onError', (tester) async {
       when(() => mockController.state).thenReturn(
-        const ErrorState<String>(ErrorGeneric(message: 'Erro inesperado')),
+        const ErrorState<String>(ErrorGeneric('Erro inesperado')),
       );
 
       await tester.pumpWidget(

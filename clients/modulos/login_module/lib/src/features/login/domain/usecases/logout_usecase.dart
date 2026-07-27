@@ -1,16 +1,33 @@
+import 'dart:developer' as developer;
+
 import 'package:return_success_or_error/return_success_or_error.dart';
 
-/// Usecase de logout. O datasource sinaliza sucesso via [Unit]; o `process`
-/// repassa (D == T == Unit).
-final class LogoutUsecase extends UsecaseBaseCallData<Unit, Unit> {
-  LogoutUsecase({required super.datasource});
+import '../errors/auth_errors.dart';
+import '../parameters/logout_parameters.dart';
+
+/// Usecase de logout: o datasource sinaliza sucesso com [Unit] e o `process`
+/// repassa.
+final class LogoutUsecase
+    extends UsecaseBaseCallData<Unit, Unit, LogoutParameters, LogoutError> {
+  const LogoutUsecase({required super.repository});
 
   @override
-  ProcessData<Unit, Unit> get process => _process;
+  ProcessData<Unit, Unit, LogoutParameters, LogoutError> get process =>
+      _process;
 
-  static ReturnSuccessOrError<Unit> _process(
+  @override
+  LogoutError onUnexpected(Object exception, StackTrace stackTrace) {
+    developer.log(
+      'process do logout quebrou',
+      name: 'login_module.logout',
+      error: exception,
+      stackTrace: stackTrace,
+    );
+    return const LogoutInesperado();
+  }
+
+  static ReturnSuccessOrError<Unit, LogoutError> _process(
     Unit data,
-    ParametersReturnResult parameters,
-  ) =>
-      const SuccessReturn(success: unit);
+    LogoutParameters parameters,
+  ) => const Success(unit);
 }

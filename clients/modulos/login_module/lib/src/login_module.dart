@@ -9,8 +9,14 @@ import 'features/login/data/datasources/logout_grpc_datasource.dart';
 import 'features/login/data/datasources/refresh_grpc_datasource.dart';
 import 'features/login/data/datasources/secure_local_storage_service.dart';
 import 'features/login/data/datasources/token_local_datasource.dart';
+import 'features/login/data/repositories/login_repository.dart';
+import 'features/login/data/repositories/logout_repository.dart';
+import 'features/login/data/repositories/refresh_repository.dart';
 import 'features/login/data/services/auth_service_impl.dart';
 import 'features/login/domain/services/auth_service.dart';
+import 'features/login/domain/usecases/login_usecase.dart';
+import 'features/login/domain/usecases/logout_usecase.dart';
+import 'features/login/domain/usecases/refresh_token_usecase.dart';
 import 'features/login/presentation/routes/login_route.dart';
 
 /// Módulo de login: registra as implementações reais de auth/storage no escopo
@@ -42,21 +48,49 @@ final class LoginModule extends AppModule {
       () => TokenLocalDatasource(storage: inject<core.LocalStorageService>()),
     );
 
+    // Usecases da feature: cada um recebe o repositório, que recebe o
+    // datasource — a cadeia Datasource -> Repository -> Usecase da v3, montada
+    // aqui em vez de dentro do serviço.
+    i.lazySingleton<LoginUsecase>(
+      () => LoginUsecase(
+        repository: LoginRepository(
+          datasource: LoginGrpcDatasource(client: _authClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<RefreshTokenUsecase>(
+      () => RefreshTokenUsecase(
+        repository: RefreshRepository(
+          datasource: RefreshGrpcDatasource(client: _authClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<LogoutUsecase>(
+      () => LogoutUsecase(
+        repository: LogoutRepository(
+          datasource: LogoutGrpcDatasource(client: _authClient()),
+        ),
+      ),
+    );
+
     // Serviço de auth real (instância única para os dois contratos).
-    i.lazySingleton<AuthServiceImpl>(() {
-      final authClient = (inject<ApiClient>() as GrpcTransport).auth;
-      return AuthServiceImpl(
-        loginDatasource: LoginGrpcDatasource(client: authClient),
-        refreshDatasource: RefreshGrpcDatasource(client: authClient),
-        logoutDatasource: LogoutGrpcDatasource(client: authClient),
+    i.lazySingleton<AuthServiceImpl>(
+      () => AuthServiceImpl(
+        loginUsecase: inject<LoginUsecase>(),
+        refreshUsecase: inject<RefreshTokenUsecase>(),
+        logoutUsecase: inject<LogoutUsecase>(),
         tokenStore: inject<TokenLocalDatasource>(),
         session: inject<core.SessionService>(),
-      );
-    });
+      ),
+    );
     i.lazySingleton<AuthService>(() => inject<AuthServiceImpl>());
     i.lazySingleton<core.AuthService>(() => inject<AuthServiceImpl>());
   }
 
   @override
   List<GetItModule> routes() => [LoginRoute()];
+
+  /// Stub gRPC de auth, extraído do `ApiClient` global da plataforma.
+  static AuthServiceClient _authClient() =>
+      (inject<ApiClient>() as GrpcTransport).auth;
 }

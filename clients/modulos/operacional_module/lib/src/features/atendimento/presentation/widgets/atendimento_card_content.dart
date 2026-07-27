@@ -71,15 +71,10 @@ class _PrioridadeChip extends StatelessWidget {
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-      decoration: BoxDecoration(
-        color: corSuave,
-        borderRadius: AppRadius.sm,
-      ),
+      decoration: BoxDecoration(color: corSuave, borderRadius: AppRadius.sm),
       child: Text(
         prioridade.isEmpty ? 'normal' : prioridade,
-        style: Theme.of(
-          context,
-        ).textTheme.labelSmall?.copyWith(color: cor),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(color: cor),
       ),
     );
   }

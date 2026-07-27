@@ -28,7 +28,7 @@ dependencies:
     path: ../../packages/get_it_module
   design_system_module:
     path: ../design_system_module
-  return_success_or_error: ^2.0.0
+  return_success_or_error: ^3.0.1
   meta: ^1.15.0
   web: ^1.1.0
 
@@ -37,6 +37,12 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   mocktail: ^1.0.5
+  # Int64 dos timestamps do protobuf nos testes.
+  fixnum: ^1.1.0
+  # As paginas leem GoRouterState: os widget tests precisam de um GoRouter real.
+  go_router: ^17.2.1
+  # Registro do controller nos widget tests das paginas.
+  get_it: ^9.2.1
   bloc_test: ^10.0.0
 
 resolution: workspace

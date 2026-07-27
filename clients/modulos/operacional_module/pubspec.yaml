@@ -28,7 +28,7 @@ dependencies:
     path: ../../packages/domain_models
   get_it_module:
     path: ../../packages/get_it_module
-  return_success_or_error: ^2.0.0
+  return_success_or_error: ^3.0.1
   meta: ^1.15.0
   flutter_bloc: ^9.1.1
   bloc: ^9.2.1
@@ -41,5 +41,7 @@ dev_dependencies:
   flutter_lints: ^6.0.0
   bloc_test: ^10.0.0
   mocktail: ^1.0.5
+  # Int64 dos campos de timestamp do protobuf nos testes do gateway.
+  fixnum: ^1.1.0
 
 resolution: workspace

@@ -38,7 +38,8 @@ void main() {
       );
 
       await tester.pumpWidget(const MaterialApp(home: InitialLoadingPage()));
-      await tester.pump(); // postFrameCallback -> onInit -> bootstrap() -> Loading
+      await tester
+          .pump(); // postFrameCallback -> onInit -> bootstrap() -> Loading
 
       expect(find.byType(CircularProgressIndicator), findsOneWidget);
       expect(bootState.value, isFalse);
@@ -51,7 +52,9 @@ void main() {
     },
   );
 
-  testWidgets('onLoading renderiza spinner centralizado num Scaffold', (tester) async {
+  testWidgets('onLoading renderiza spinner centralizado num Scaffold', (
+    tester,
+  ) async {
     const page = InitialLoadingPage();
     late BuildContext ctx;
 
@@ -71,7 +74,9 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
   });
 
-  testWidgets('onSuccess não renderiza nenhum conteúdo visível', (tester) async {
+  testWidgets('onSuccess não renderiza nenhum conteúdo visível', (
+    tester,
+  ) async {
     const page = InitialLoadingPage();
     late BuildContext ctx;
 
@@ -105,18 +110,18 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-        home: Builder(
-          builder: (context) {
-            ctx = context;
-            return const SizedBox.shrink();
-          },
+          home: Builder(
+            builder: (context) {
+              ctx = context;
+              return const SizedBox.shrink();
+            },
+          ),
         ),
-      ),
       );
 
       final errorWidget = page.onError(
         ctx,
-        const ErrorGeneric(message: 'falha no boot'),
+        const ErrorGeneric('falha no boot'),
       );
       await tester.pumpWidget(MaterialApp(home: errorWidget));
 

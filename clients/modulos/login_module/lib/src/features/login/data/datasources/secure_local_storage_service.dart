@@ -16,13 +16,14 @@ final class SecureLocalStorageService implements LocalStorageService {
   final Map<String, String> _cache = {};
 
   SecureLocalStorageService({FlutterSecureStorage? storage})
-      : _storage = storage ??
-            const FlutterSecureStorage(
-              webOptions: WebOptions(
-                dbName: 'smartcore_admin',
-                publicKey: 'smartcore_admin_auth',
-              ),
-            );
+    : _storage =
+          storage ??
+          const FlutterSecureStorage(
+            webOptions: WebOptions(
+              dbName: 'smartcore_admin',
+              publicKey: 'smartcore_admin_auth',
+            ),
+          );
 
   @override
   Future<void> init() async {

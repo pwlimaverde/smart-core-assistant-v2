@@ -159,21 +159,27 @@ foreach ($rel in $pacotes) {
 # Cobertura: agrega os lcov.info de cada pacote (quando -Coverage)
 #
 # EXCLUSAO POR POLITICA (igual ao CI): o `flutter test --coverage` nao tem `omit`,
-# entao a exclusao e' aplicada na agregacao. Nao contam para o denominador os
-# arquivos fora do alcance do teste de unidade (ver testing-strategy):
-#   data/datasources/*        -> fronteira externa (gRPC/remoto/FFI), cobertos por integracao
-#   presentation/pages|routes -> layout/navegacao de UI pura
-# Widgets continuam contando (o design_system os testa de verdade).
+# entao a exclusao e' aplicada na agregacao. So sai do denominador o que NAO E'
+# CODIGO ESCRITO A MAO:
+#   src/generated/*        -> stubs protobuf/gRPC (5.5k linhas geradas)
+#   lib/src/rust/*         -> bindings flutter_rust_bridge
+#   cargokit/*, example/*  -> ferramenta de build do FFI e app de exemplo
+#
+# A exclusao anterior de `data/datasources` e `presentation/{pages,routes}` foi
+# REMOVIDA na fase C1: eram 351 linhas cobertas em 5,7% que nao apareciam no
+# numero, incluindo as 8 paginas do admin_module. Datasource se testa com o stub
+# gRPC mockado (api_client/testing.dart) e pagina se testa com testWidgets --
+# ambos agora tem cobertura de verdade, e o denominador diz a verdade.
 # --------------------------------------------
 if ($Coverage) {
-    Write-Etapa "cobertura Flutter (agrega lcov por pacote, excl. datasources/pages/routes)"
+    Write-Etapa "cobertura Flutter (agrega lcov por pacote, excl. codigo gerado)"
     $totLF = 0; $totLH = 0
     $covDir = Join-Path $repoRoot "coverage"
     New-Item -ItemType Directory -Force -Path $covDir | Out-Null
     $destLcov = Join-Path $covDir "flutter-lcov.info"
     if (Test-Path $destLcov) { Remove-Item $destLcov -Force }
     # Casa tanto separador \ (Windows) quanto / (lcov gerado no CI Linux).
-    $regexExcluir = '[\\/](data[\\/]datasources|presentation[\\/](pages|routes))[\\/]'
+    $regexExcluir = '[\\/](generated|cargokit|example)[\\/]|[\\/]src[\\/]rust[\\/]'
     foreach ($rel in $pacotes) {
         $lcov = Join-Path $clientDir (Join-Path $rel "coverage\lcov.info")
         if (-not (Test-Path $lcov)) { continue }

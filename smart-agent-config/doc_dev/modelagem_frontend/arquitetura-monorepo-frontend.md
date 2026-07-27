@@ -397,7 +397,7 @@ class TenantListPage extends StatelessWidget {
 
 ### 7.3 Convenção de Escrita de Testes Unitários de Controller (`bloc_test`)
 
-O `execute()` torna o teste direto: mocka-se o usecase para devolver `SuccessReturn`/`ErrorReturn` e verifica-se a sequência de `ViewState`.
+O `execute()` torna o teste direto: mocka-se o usecase para devolver `Success`/`Failure` e verifica-se a sequência de `ViewState`. Melhor ainda: monte a cadeia real (`Datasource → Repository → Usecase`) trocando só o stub gRPC, e o mesmo teste cobre a conversão e o `mapError`.
 
 ```dart
 import 'package:bloc_test/bloc_test.dart';
@@ -420,10 +420,10 @@ void main() {
   tearDown(() => controller.close());
 
   blocTest<TenantController, ViewState<List<Tenant>>>(
-    'emite [Loading, Success] quando o usecase retorna SuccessReturn',
+    'emite [Loading, Success] quando o usecase retorna Success',
     build: () {
       when(() => usecase(any())).thenAnswer(
-        (_) async => SuccessReturn(success: [Tenant(id: '1', name: 'Tenant A')]),
+        (_) async => Success([Tenant(id: '1', name: 'Tenant A')]),
       );
       return controller;
     },
@@ -436,10 +436,10 @@ void main() {
   );
 
   blocTest<TenantController, ViewState<List<Tenant>>>(
-    'emite [Loading, Error] quando o usecase retorna ErrorReturn',
+    'emite [Loading, Error] quando o usecase retorna Failure',
     build: () {
       when(() => usecase(any())).thenAnswer(
-        (_) async => ErrorReturn(error: const ErrorGeneric(message: 'Erro de API')),
+        (_) async => const Failure(TenantsIndisponivel()),
       );
       return controller;
     },

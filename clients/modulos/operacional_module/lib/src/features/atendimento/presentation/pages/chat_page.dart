@@ -35,7 +35,7 @@ class _ChatPageState extends State<ChatPage> {
     _controller = ChatController(
       getThreadUsecase: inject(),
       sendUsecase: inject(),
-      service: inject(),
+      eventos: inject(),
     );
     _controller.abrir(widget.atendimentoId);
   }
@@ -55,9 +55,8 @@ class _ChatPageState extends State<ChatPage> {
         bloc: _controller,
         builder: (context, state) {
           return switch (state) {
-            InitialState() || LoadingState() => const Center(
-              child: CircularProgressIndicator(),
-            ),
+            InitialState() ||
+            LoadingState() => const Center(child: CircularProgressIndicator()),
             ErrorState(:final error) => AppErrorView(
               message: error.message,
               onRetry: () => _controller.abrir(widget.atendimentoId),
@@ -107,15 +106,16 @@ class _ChatBody extends StatelessWidget {
               ? const AppEmptyView(
                   icon: Icons.chat_bubble_outline,
                   title: 'Nenhuma mensagem ainda',
-                  subtitle: 'Envie a primeira mensagem para iniciar a conversa.',
+                  subtitle:
+                      'Envie a primeira mensagem para iniciar a conversa.',
                 )
               : ListView.builder(
                   reverse: true,
                   padding: const EdgeInsets.all(AppSpacing.md),
                   itemCount: viewModel.mensagens.length,
                   itemBuilder: (context, index) {
-                    final mensagem =
-                        viewModel.mensagens[viewModel.mensagens.length - 1 - index];
+                    final mensagem = viewModel
+                        .mensagens[viewModel.mensagens.length - 1 - index];
                     return ChatMessageBubble(mensagem: mensagem);
                   },
                 ),

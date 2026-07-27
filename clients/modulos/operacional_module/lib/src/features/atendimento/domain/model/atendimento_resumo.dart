@@ -17,6 +17,7 @@ final class AtendimentoResumo {
   final int? atendenteHumanoId;
   final DateTime dataInicio;
   final DateTime? dataUltimaMensagem;
+
   /// Última leitura de sentimento da IA (N6.5); `null` enquanto não avaliado.
   final int? sentimentoNota;
   final String? sentimentoLabel;

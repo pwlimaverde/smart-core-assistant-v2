@@ -16,6 +16,8 @@ dependencies:
   grpc: ^5.1.0
   protobuf: ^6.0.0
   fixnum: ^1.1.0
+  # DelegatingFuture, usado pelo FakeResponseFuture de `testing.dart`.
+  async: ^2.13.0
 
 resolution: workspace
 

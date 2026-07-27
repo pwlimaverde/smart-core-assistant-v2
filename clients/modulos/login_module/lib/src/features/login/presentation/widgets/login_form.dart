@@ -58,7 +58,9 @@ class _LoginFormState extends State<LoginForm> {
                     Text(
                       'Painel administrativo',
                       textAlign: TextAlign.center,
-                      style: textTheme.bodyMedium?.copyWith(color: colors.fgMuted),
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: colors.fgMuted,
+                      ),
                     ),
                     const SizedBox(height: AppSpacing.xl),
                     AppTextField(
@@ -124,10 +126,9 @@ class _ErrorBanner extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: colors.danger),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: colors.danger),
             ),
           ),
         ],

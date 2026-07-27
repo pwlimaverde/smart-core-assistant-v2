@@ -4,18 +4,19 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AppEmptyView', () {
-    testWidgets('renderiza título, ícone padrão e sem subtítulo quando omitido', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(body: AppEmptyView(title: 'Nada por aqui')),
-        ),
-      );
+    testWidgets(
+      'renderiza título, ícone padrão e sem subtítulo quando omitido',
+      (tester) async {
+        await tester.pumpWidget(
+          const MaterialApp(
+            home: Scaffold(body: AppEmptyView(title: 'Nada por aqui')),
+          ),
+        );
 
-      expect(find.text('Nada por aqui'), findsOneWidget);
-      expect(find.byIcon(Icons.inbox_outlined), findsOneWidget);
-    });
+        expect(find.text('Nada por aqui'), findsOneWidget);
+        expect(find.byIcon(Icons.inbox_outlined), findsOneWidget);
+      },
+    );
 
     testWidgets('renderiza subtítulo e ícone customizado quando informados', (
       tester,

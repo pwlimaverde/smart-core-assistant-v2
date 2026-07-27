@@ -7,11 +7,7 @@ void main() {
     testWidgets('exibe AppBar apenas se título for fornecido', (tester) async {
       // Sem título
       await tester.pumpWidget(
-        const MaterialApp(
-          home: AppScaffold(
-            body: Text('Corpo'),
-          ),
-        ),
+        const MaterialApp(home: AppScaffold(body: Text('Corpo'))),
       );
 
       expect(find.byType(AppBar), findsNothing);
@@ -20,10 +16,7 @@ void main() {
       // Com título
       await tester.pumpWidget(
         const MaterialApp(
-          home: AppScaffold(
-            title: 'Minha Tela',
-            body: Text('Corpo'),
-          ),
+          home: AppScaffold(title: 'Minha Tela', body: Text('Corpo')),
         ),
       );
 

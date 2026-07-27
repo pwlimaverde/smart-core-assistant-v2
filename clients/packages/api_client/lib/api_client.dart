@@ -5,6 +5,7 @@
 //
 // ignore_for_file: implementation_imports
 export 'src/api_client.dart';
+export 'src/errors/grpc_failure_kind.dart';
 export 'src/grpc_transport.dart';
 export 'src/interceptors/auth_token_interceptor.dart';
 

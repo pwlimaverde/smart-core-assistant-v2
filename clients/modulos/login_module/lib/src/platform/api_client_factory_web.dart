@@ -7,9 +7,8 @@ ApiClient createPlatformApiClient({
   required String endpoint,
   required Future<String?> Function() readAccessToken,
   required bool enableLogging,
-}) =>
-    GrpcApiClient(
-      endpoint: endpoint,
-      readAccessToken: readAccessToken,
-      enableLogging: enableLogging,
-    );
+}) => GrpcApiClient(
+  endpoint: endpoint,
+  readAccessToken: readAccessToken,
+  enableLogging: enableLogging,
+);
