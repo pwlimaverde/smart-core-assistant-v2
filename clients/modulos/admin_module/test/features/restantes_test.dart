@@ -17,7 +17,6 @@ import 'package:admin_module/src/features/dashboard/domain/usecases/dashboard_us
 import 'package:admin_module/src/features/dashboard/presentation/controllers/dashboard_controller.dart';
 import 'package:admin_module/src/features/evolution/data/datasources/evolution_datasources.dart';
 import 'package:admin_module/src/features/evolution/data/repositories/evolution_repositories.dart';
-import 'package:admin_module/src/features/evolution/domain/parameters/evolution_parameters.dart';
 import 'package:admin_module/src/features/evolution/domain/usecases/evolution_usecases.dart';
 import 'package:admin_module/src/features/evolution/presentation/controllers/evolution_controller.dart';
 import 'package:admin_module/src/features/feature_flags/data/datasources/feature_flags_datasources.dart';
@@ -35,7 +34,6 @@ import 'package:admin_module/src/features/tenant_config/presentation/controllers
 import 'package:admin_module/src/features/tenants/data/datasources/tenants_datasources.dart';
 import 'package:admin_module/src/features/tenants/data/repositories/tenants_repositories.dart';
 import 'package:admin_module/src/features/tenants/domain/model/tenant.dart';
-import 'package:admin_module/src/features/tenants/domain/parameters/tenants_parameters.dart';
 import 'package:admin_module/src/features/tenants/domain/usecases/tenants_usecases.dart';
 import 'package:api_client/api_client.dart' as proto;
 import 'package:fixnum/fixnum.dart';
