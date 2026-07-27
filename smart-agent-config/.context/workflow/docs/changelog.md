@@ -112,6 +112,42 @@ Histórico de alterações do projeto com base no ciclo PREVC.
   e não carrega na VM do `flutter test` (mesmo limite já documentado para o
   `GrpcApiClient`). O comportamento dela é coberto pelo `AuditController`.
 
+### Corrigido depois do push (CI vermelho)
+
+- **Seis arquivos de teste nunca chegaram ao CI: a regra `data/` do `.gitignore` os
+  engoliu.** O passo de cobertura Flutter reprovou com **77,8%** (piso 78%) enquanto aqui
+  media 79,6%. A causa não era o cálculo: a suíte da C1 passou a espelhar as camadas
+  (`test/features/<feature>/data/...`), e a regra genérica `data/` — que existe para
+  volumes de infra — casou esses caminhos. A exceção adicionada quando o mesmo problema
+  aconteceu em `lib/` cobria só `clients/**/lib/**/data/`. Os quatro testes de `data/` do
+  `login_module` e os dois do `operacional_module` existiam nesta máquina e não no
+  repositório: **185 linhas cobertas que o CI contava como código sem teste**, mais 15
+  linhas parciais em `auth_errors`, `session` e `atendimento_repositories`.
+  Este é o modo de falha pior do que o da primeira vez: com `lib/` ignorado o CI não
+  compilava e acusava na hora; com `test/` ignorado ele compila, fica **verde nos testes**
+  (os arquivos simplesmente não existem lá) e só a cobertura acusa.
+  Exceção estendida para `test/` e `integration_test/`, os 6 arquivos rastreados, e o
+  check do `infra/test-flutter.ps1` — que existe exatamente para pegar isto e olhava
+  apenas `lib/` — passou a olhar `lib/`, `test/` e `integration_test/`.
+- **A cobertura do CI fica em ~79,3%, não nos 79,6% medidos aqui.** Nove linhas de
+  `feature_flags_errors.dart` (construtores `const` dos casos de erro) contam como
+  executadas na VM local e não na do runner, que as resolve em tempo de compilação. A
+  diferença é de instrumentação, não de teste ausente, e é o único arquivo afetado — mas
+  reduz a margem sobre o piso de 78% para ~1,3 ponto.
+
+### Não corrigido (pré-existente, fora deste escopo)
+
+- **`cargo audit`: `rustls-webpki 0.101.7` com três advisories** (RUSTSEC-2026-0098/0099/0104).
+  Entra por `aws-smithy-http-client 1.1.13` → `rustls 0.21.12`, no caminho do
+  `aws-sdk-s3` usado pelo `infrastructure_storage` (R2). O job é `continue-on-error: true`
+  por decisão registrada no `ci.yml` e **já falhava no run verde de 2026-07-26** — o
+  `Cargo.lock` não mudou desde então. Não deixa o pipeline vermelho, mas precisa de triagem
+  própria (subir o `aws-sdk-s3` ou desligar o cliente HTTP legado por features).
+- **`Deploy → DEV` falhou no `docker/setup-buildx-action` do job da IA Engine** com
+  `Get "https://registry-1.docker.io/v2/": context deadline exceeded` — timeout de rede do
+  runner ao registry. Os outros quatro builds do mesmo run passaram. É intermitente e não
+  tem correção de código; o `Deploy DEV (compose)` ficou `skipped`.
+
 ## [2026-07-26] - Consolidação para publicação: PEL concorrente, timeout do provedor e gates de CI/CD
 
 > Segunda passada do dia, agora com a suíte unitária EXECUTADA (395 testes verdes) e com

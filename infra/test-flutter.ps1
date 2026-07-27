@@ -60,16 +60,21 @@ $totalTestes = 0
 
 # --------------------------------------------
 # 0. Codigo-fonte .dart ignorado pelo git
-#    Pega o caso "passa local, quebra no CI": um .dart de lib/ que casa o
-#    .gitignore existe na sua maquina (o analyze/test local passa) mas nunca
-#    foi commitado — o CI nao o tem e a compilacao quebra. Foi exatamente o que
-#    aconteceu com a pasta data/ da Clean Architecture (regra data/ generica).
+#    Pega o caso "passa local, quebra no CI": um .dart que casa o .gitignore
+#    existe na sua maquina (o analyze/test local passa) mas nunca foi commitado —
+#    o CI nao o tem. Foi exatamente o que aconteceu com a pasta data/ da Clean
+#    Architecture (regra data/ generica), duas vezes:
+#      1) em lib/ -> o CI nao compilava;
+#      2) em test/ -> PIOR, porque o CI compila e fica VERDE nos testes: os 6
+#         arquivos de teste simplesmente nao existiam la. So a cobertura acusou
+#         (77,8% no CI contra 79,6% aqui). Por isso este check olha test/ tambem
+#         e nao apenas lib/ como na primeira versao.
 # --------------------------------------------
 Write-Etapa "Codigo .dart ignorado pelo git (nao vai pro CI)"
 Push-Location $clientDir
 try {
     $ignorados = git ls-files --others --ignored --exclude-standard . |
-        Where-Object { $_ -match 'lib/.*\.dart$' }
+        Where-Object { $_ -match '(^|/)(lib|test|integration_test)/.*\.dart$' }
     if ($ignorados) {
         $falhas += "git-ignored"
         Write-Fail "ha .dart de codigo ignorado pelo git:"
@@ -132,6 +137,14 @@ foreach ($rel in $pacotes) {
 
     Push-Location $pkgPath
     try {
+        # Apaga o lcov.info do pacote ANTES de rodar. Sem isto, um pacote cujo
+        # `flutter test` falha (ou morre no meio) deixa o lcov da execucao ANTERIOR
+        # no lugar, e a agregacao la' embaixo soma numero velho como se fosse desta
+        # execucao — a cobertura sai identica a' do run bom e esconde a falha.
+        if ($Coverage) {
+            $lcovPkg = Join-Path $pkgPath "coverage\lcov.info"
+            if (Test-Path $lcovPkg) { Remove-Item $lcovPkg -Force }
+        }
         $covArg = if ($Coverage) { '--coverage' } else { $null }
         $out = flutter test --reporter compact $covArg 2>&1 | Out-String
 

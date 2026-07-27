@@ -467,6 +467,21 @@ estão cobertos.
 O piso do ratchet no CI ficou em **78%** — o valor medido com margem pequena.
 Ao fechar os diálogos, suba o piso no mesmo commit.
 
+### Correção pós-push (CI vermelho no 22897f4)
+
+O passo de cobertura Flutter reprovou com **77,8%**. Não era o cálculo: seis
+arquivos de teste (`test/features/.../data/...`, quatro do `login_module` e dois
+do `operacional_module`) casavam a regra genérica `data/` do `.gitignore` e nunca
+foram commitados — 185 linhas cobertas que o CI contava como descobertas. A
+exceção que já existia para o mesmo problema cobria só `clients/**/lib/**/data/`;
+foi estendida para `test/` e `integration_test/`, e o check do
+`infra/test-flutter.ps1` (que olhava apenas `lib/`) passou a cobrir os três.
+
+**A cobertura do CI é ~79,3%, não 79,6%:** nove linhas de construtores `const` em
+`feature_flags_errors.dart` contam como executadas na VM local e não na do runner.
+Diferença de instrumentação, único arquivo afetado — mas a margem real sobre o
+piso é ~1,3 ponto, não 1,6.
+
 ### Desvios em relação ao plano
 
 1. **`AuditPage` sem widget test** (§8 previa todas as páginas): importa
