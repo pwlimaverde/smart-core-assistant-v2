@@ -179,8 +179,18 @@ evolution-data/
 # (datasources, services, mappers) — não volume de infra. A regra data/ acima
 # a ignorava por engano, fazendo o build passar local e quebrar no CI (os
 # arquivos nunca eram commitados).
+#
+# A exceção precisa cobrir test/ também, não só lib/: na fase C1 a suíte passou
+# a espelhar as camadas (test/features/<feature>/data/...) e 6 arquivos de teste
+# caíram na regra data/ sem aviso — existiam aqui, nunca chegaram ao CI, e a
+# cobertura de lá ficou 1,8 ponto abaixo da local, reprovando o piso do ratchet.
+# Dentro de clients/ NÃO existe data/ de volume de infra; é sempre código-fonte.
 !clients/**/lib/**/data/
 !clients/**/lib/**/data/**
+!clients/**/test/**/data/
+!clients/**/test/**/data/**
+!clients/**/integration_test/**/data/
+!clients/**/integration_test/**/data/**
 .docker-data/
 
 # Logs
