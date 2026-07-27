@@ -17,8 +17,14 @@ void main() {
     test('AppRadius possui raios válidos', () {
       expect(AppRadius.sm, equals(const BorderRadius.all(Radius.circular(6))));
       expect(AppRadius.md, equals(const BorderRadius.all(Radius.circular(8))));
-      expect(AppRadius.card, equals(const BorderRadius.all(Radius.circular(10))));
-      expect(AppRadius.pill, equals(const BorderRadius.all(Radius.circular(9999))));
+      expect(
+        AppRadius.card,
+        equals(const BorderRadius.all(Radius.circular(10))),
+      );
+      expect(
+        AppRadius.pill,
+        equals(const BorderRadius.all(Radius.circular(9999))),
+      );
     });
 
     test('AppSpacing possui espaçamentos válidos', () {

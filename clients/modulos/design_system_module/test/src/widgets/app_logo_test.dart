@@ -13,15 +13,23 @@ void main() {
       tester,
     ) async {
       await tester.pumpWidget(
-        MaterialApp(theme: ThemeData(brightness: Brightness.light), home: const AppLogo()),
+        MaterialApp(
+          theme: ThemeData(brightness: Brightness.light),
+          home: const AppLogo(),
+        ),
       );
 
       expect(assetOf(tester).assetName, 'assets/brand/logo_full.png');
     });
 
-    testWidgets('variante full em tema escuro usa a arte branca', (tester) async {
+    testWidgets('variante full em tema escuro usa a arte branca', (
+      tester,
+    ) async {
       await tester.pumpWidget(
-        MaterialApp(theme: ThemeData(brightness: Brightness.dark), home: const AppLogo()),
+        MaterialApp(
+          theme: ThemeData(brightness: Brightness.dark),
+          home: const AppLogo(),
+        ),
       );
 
       expect(assetOf(tester).assetName, 'assets/brand/logo_full_white.png');

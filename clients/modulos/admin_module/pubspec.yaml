@@ -39,6 +39,8 @@ dev_dependencies:
   mocktail: ^1.0.5
   # Int64 dos timestamps do protobuf nos testes.
   fixnum: ^1.1.0
+  # As paginas leem GoRouterState: os widget tests precisam de um GoRouter real.
+  go_router: ^17.2.1
   bloc_test: ^10.0.0
 
 resolution: workspace

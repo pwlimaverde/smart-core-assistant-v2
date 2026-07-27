@@ -4,7 +4,9 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('AppTextField', () {
-    testWidgets('renderiza label, hint e errorText corretamente', (tester) async {
+    testWidgets('renderiza label, hint e errorText corretamente', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         const MaterialApp(
           home: Scaffold(
@@ -37,6 +39,41 @@ void main() {
 
       await tester.enterText(find.byType(TextField), 'novo valor');
       expect(alterou, 'novo valor');
+    });
+
+    testWidgets('campo de senha alterna a visibilidade pelo botão', (
+      tester,
+    ) async {
+      // O olho de mostrar/ocultar senha é o único estado interno do widget:
+      // sem exercitá-lo, o setState e o tooltip nunca rodam.
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: AppTextField(
+              label: 'Senha',
+              obscureText: true,
+              obscureToggle: true,
+              prefixIcon: Icons.lock,
+            ),
+          ),
+        ),
+      );
+
+      expect(find.byIcon(Icons.lock), findsOneWidget);
+      expect(find.byIcon(Icons.visibility_off), findsOneWidget);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).obscureText,
+        isTrue,
+      );
+
+      await tester.tap(find.byIcon(Icons.visibility_off));
+      await tester.pump();
+
+      expect(find.byIcon(Icons.visibility), findsOneWidget);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).obscureText,
+        isFalse,
+      );
     });
   });
 }
