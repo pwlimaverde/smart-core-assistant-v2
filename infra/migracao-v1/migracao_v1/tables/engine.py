@@ -136,7 +136,20 @@ def _build_upsert_sql(spec: TableSpec, colunas: list[str], *, incluir_pk: bool) 
         assert spec.natural_conflict_cols
         conflito = ", ".join(spec.natural_conflict_cols)
 
-    sets = ", ".join(f"{c} = EXCLUDED.{c}" for c in colunas)
+    # Colunas que o destino pode ter melhor que a origem mantem o valor atual
+    # quando a condicao da spec for verdadeira (ver `preservar_destino_quando`).
+    preservacao = spec.preservacao_por_coluna()
+    partes_set = []
+    for c in colunas:
+        condicao = preservacao.get(c)
+        if condicao:
+            cond = condicao.format(t=spec.v2_table)
+            partes_set.append(
+                f"{c} = CASE WHEN {cond} THEN {spec.v2_table}.{c} ELSE EXCLUDED.{c} END"
+            )
+        else:
+            partes_set.append(f"{c} = EXCLUDED.{c}")
+    sets = ", ".join(partes_set)
     return (
         f"INSERT INTO {spec.v2_table} ({campos}) VALUES ({placeholders}) "
         f"ON CONFLICT ({conflito}) DO UPDATE SET {sets} "

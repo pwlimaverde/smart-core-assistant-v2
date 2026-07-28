@@ -126,6 +126,13 @@ Sem o ETL, a v2 sobe apontando para **OpenAI com chave vazia**. As chaves da v1
 estão cifradas em Fernet no banco e o ETL as re-cifra para AES-GCM; nenhum
 tenant tem chave própria, então são 5 chaves globais.
 
+> **Ordem importa: crie o superusuário DEPOIS do ETL.** A v1 tem `auth_user`
+> id=1 e o primeiro superusuário criado no v2 também recebe id=1 — o upsert por
+> id colidiria. O ETL hoje **preserva** senha válida já existente no destino
+> (ver `preservar_destino_quando` em `core_specs.py`), mas os demais campos do
+> usuário (username, email, flags) passam a refletir a v1. Criar depois evita
+> a surpresa por completo.
+
 **Verificação:**
 ```sql
 -- as keys precisam estar em MAIÚSCULO (é como o Rust as lê)

@@ -12,7 +12,7 @@ import pytest
 from migracao_v1.crypto import CipherManagerPy
 from migracao_v1.secret import Secret
 from migracao_v1.tables import core_specs, tenant_specs, whatsapp_specs
-from migracao_v1.tables.engine import _build_setval_sql
+from migracao_v1.tables.engine import _build_setval_sql, _build_upsert_sql
 from migracao_v1.tables.spec import ColumnSpec, TableSpec
 
 CHAVE_V2_B64 = "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE="
@@ -215,3 +215,52 @@ class TestRessincronizacaoDeSequence:
             "tenants_subscription",
             "tenants_paymentrecord",
         }
+
+
+class TestPreservacaoDeSenhaNoUpsert:
+    """O ETL marca a senha como inutilizavel de proposito (forca reset apos o
+    cutover), mas nao pode DESTRUIR uma senha valida que ja exista no v2.
+
+    Cenario real: o superusuario do v2 e' criado antes da carga e recebe id=1;
+    a v1 tambem tem `auth_user` id=1. Com `ON CONFLICT (id) DO UPDATE` sem
+    protecao, o UPDATE trocava a senha valida pelo marcador e o ambiente ficava
+    sem acesso administrativo (aconteceu no dev em 2026-07-28)."""
+
+    def _sql_do_auth_user(self) -> str:
+        spec = core_specs.AUTH_USER
+        colunas = [c.nome_v2() for c in spec.columns]
+        return _build_upsert_sql(spec, colunas, incluir_pk=True)
+
+    def test_password_hash_usa_case_para_nao_sobrescrever_senha_valida(self):
+        sql = self._sql_do_auth_user()
+
+        assert "password_hash = CASE WHEN" in sql
+        # Preserva a do destino quando ela existe e nao e' o marcador...
+        assert "auth_user.password_hash NOT LIKE '!%'" in sql
+        assert "THEN auth_user.password_hash" in sql
+        # ...e escreve a da origem no resto dos casos.
+        assert "ELSE EXCLUDED.password_hash END" in sql
+
+    def test_demais_colunas_seguem_sobrescrevendo(self):
+        """A protecao vale so' para a senha: username/email etc. devem refletir
+        a v1, que e' a fonte da verdade da migracao."""
+        sql = self._sql_do_auth_user()
+
+        assert "username = EXCLUDED.username" in sql
+        assert "email = EXCLUDED.email" in sql
+        assert "is_superuser = EXCLUDED.is_superuser" in sql
+
+    def test_spec_sem_preservacao_gera_update_simples(self):
+        spec = TableSpec(
+            entidade="x.y",
+            v1_table="x",
+            v2_table="y",
+            scope="core",
+            id_strategy="preserve",
+            columns=[ColumnSpec("a"), ColumnSpec("b")],
+        )
+
+        sql = _build_upsert_sql(spec, ["a", "b"], incluir_pk=True)
+
+        assert "a = EXCLUDED.a, b = EXCLUDED.b" in sql
+        assert "CASE WHEN" not in sql

@@ -50,7 +50,22 @@ AUTH_USER = TableSpec(
         ColumnSpec("username"),
         ColumnSpec("email"),
         # NUNCA copiamos o hash PBKDF2 da v1 — decisao aprovada, ver PASSWORD_UNUSABLE_MARKER.
-        ColumnSpec("password", v2="password_hash", transform=_marcador_senha_inutilizavel),
+        #
+        # `preservar_destino_quando`: se o usuario JA existe no v2 com senha
+        # valida, mantem a dela. Sem isso, um superusuario criado no v2 antes da
+        # carga era sobrescrito por colisao de id (a v1 tem auth_user id=1, e o
+        # primeiro superusuario do v2 tambem) e o ambiente ficava SEM ACESSO
+        # ADMINISTRATIVO — aconteceu de verdade no dev em 2026-07-28.
+        # Senha vazia ou ja marcada como inutilizavel segue sendo sobrescrita.
+        ColumnSpec(
+            "password",
+            v2="password_hash",
+            transform=_marcador_senha_inutilizavel,
+            preservar_destino_quando=(
+                "{t}.password_hash IS NOT NULL AND {t}.password_hash <> '' "
+                "AND {t}.password_hash NOT LIKE '!%'"
+            ),
+        ),
         ColumnSpec("first_name"),
         ColumnSpec("last_name"),
         ColumnSpec("is_active"),

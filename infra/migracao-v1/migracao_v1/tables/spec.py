@@ -38,6 +38,16 @@ class ColumnSpec:
     pgvector — `asyncpg` nao tem codec nativo para o tipo `vector`)."""
     v2_cast: str | None = None
     """Cast SQL aplicado no placeholder de escrita (ex.: `"::vector"`)."""
+    preservar_destino_quando: str | None = None
+    """Expressao SQL que, quando VERDADEIRA para a linha ja existente no v2,
+    faz o UPDATE manter o valor do destino em vez de sobrescrever com o da v1.
+
+    Use `{t}` como placeholder da tabela de destino. Serve para colunas em que
+    o v2 pode ter um valor MELHOR que o da v1 — o caso real e' `auth_user.
+    password_hash`: o ETL escreve o marcador `!migrated-from-v1` de proposito,
+    mas se o superusuario do v2 ja tiver senha valida (criado antes da carga),
+    sobrescreve-la significa perder o acesso administrativo do ambiente.
+    """
 
     def nome_v2(self) -> str:
         return self.v2 or self.v1
@@ -96,3 +106,13 @@ class TableSpec:
         """Mapa `nome_v2 -> cast SQL` (ex.: `"::vector"`), usado pelo engine
         para montar os placeholders de INSERT/UPDATE corretamente."""
         return {c.nome_v2(): c.v2_cast for c in self.columns if c.v2_cast}
+
+    def preservacao_por_coluna(self) -> dict[str, str]:
+        """Mapa `nome_v2 -> condicao SQL` das colunas que nao devem ser
+        sobrescritas quando o destino ja tem valor melhor (ver
+        `ColumnSpec.preservar_destino_quando`)."""
+        return {
+            c.nome_v2(): c.preservar_destino_quando
+            for c in self.columns
+            if c.preservar_destino_quando
+        }
