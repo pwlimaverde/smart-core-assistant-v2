@@ -50,7 +50,6 @@ fn com_traceparent<T>(payload: T, traceparent: &str) -> Request<T> {
     req
 }
 
-
 fn media_para_proto(m: MediaRefInput) -> pb::MediaRef {
     pb::MediaRef {
         url: m.url,

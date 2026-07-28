@@ -1421,7 +1421,8 @@ async fn processar_pipeline_midia(
     // transcrição/visão neste ciclo — simplificação conhecida; providers dedicados
     // de transcrição/visão ficam para uma continuação). Resolvida ANTES do presign
     // porque o kill-switch de transcrição pode dispensar as duas etapas seguintes.
-    let cfg_midia = match transcricao_habilitada(state, tenant_str, causation_id, traceparent).await {
+    let cfg_midia = match transcricao_habilitada(state, tenant_str, causation_id, traceparent).await
+    {
         Ok(p) => p,
         Err(e) => {
             span.record("error_code", "config_falhou");
@@ -1661,7 +1662,6 @@ async fn transcricao_habilitada(
         .and_then(|v| v.as_bool())
         .unwrap_or(false))
 }
-
 
 /// Avalia o sentimento de uma mensagem inbound (texto ou transcrição de áudio) e
 /// persiste a leitura mais recente no atendimento (N6.5). Best-effort: qualquer
