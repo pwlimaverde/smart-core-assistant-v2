@@ -2,6 +2,67 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-07-28] - Auditoria do ia_engine: gates de CI e preparo de publicação
+
+> Auditoria do módulo Python (`ia_engine`) contra o padrão
+> `py-return-success-or-error`, SOLID e Clean Code, seguida do fechamento das
+> lacunas encontradas — nenhuma delas no desenho das features.
+> Branch `feature/ia-engine-gates-ci-e-deploy`. Fora do ciclo PREVC.
+
+### Resultado da auditoria (nada a refatorar)
+
+- **Aderência ao RSOE: completa nas 6 features** (`analyse`, `embed`,
+  `interpret_media`, `responder`, `sentimento`, `transcribe`). Todo datasource é
+  a porta "burra" que devolve o dado bruto ou lança; todo repositório fecha o
+  erro em `map_error`; todo usecase tem `process` síncrono e `on_unexpected`. O
+  `servicer` é o único ponto de composição e a única fronteira que conhece proto
+  e `grpc.StatusCode` — nenhuma camada interna importa `pb`.
+- **Cobertura já em 99,8%**, com **zero linhas descobertas** — as duas parciais
+  são o `...` de `Protocol`. Não havia teste a "implementar": a suíte usa fakes
+  de LLM/embeddings e sobe `grpc.aio.server` real, sem tocar rede.
+- **Lint e tipos limpos**: `ruff` (E,F,I,UP,B) e `mypy` sobre 76 arquivos.
+
+### Corrigido
+
+- **`Sentimento` aceitava histórico vazio.** Único RPC sem validação de entrada:
+  o prompt ia ao LLM com `chat_history` vazio e voltava uma nota inventada, à
+  custa de uma chamada paga. Agora aborta com `INVALID_ARGUMENT`, como `Embed`
+  já fazia com `textos` vazio.
+
+### Adicionado
+
+- **`ia_engine.healthcheck`**: sonda `grpc.health.v1` como entrypoint
+  (`python -m ia_engine.healthcheck`), ligada ao `healthcheck` do `ia_engine` no
+  compose de dev e de prod. O serviço já servia o protocolo de health desde o
+  início, mas nada o consultava.
+- **Gate de lint e tipos no CI.** O job `ia_engine` rodava só `pytest`; `ruff` e
+  `mypy` eram gate apenas na máquina do dev.
+- **Smoke test dos deploys passou a julgar o veredito da sonda.** O critério era
+  só o estado do container — um processo no ar com o servidor gRPC travado
+  aparece como `running` e passava. Serviços sem healthcheck seguem julgados
+  pelo critério antigo; `starting` é aguardado (até ~60s) em vez de aprovado.
+
+### Alterado
+
+- **Ratchet de cobertura do ia_engine: 90% → 95%.** Com 158 testes e nenhuma
+  linha descoberta, os 9 pontos de folga não pegavam regressão — daria para
+  apagar um arquivo de feature inteiro e o gate seguiria verde.
+
+### Documentado (ação pendente no servidor)
+
+- **`TRANSCRIPTION_ENABLED` e `SMARTCORE_ENV` nos `.env.example` de dev e prod.**
+  Nenhuma das duas estava documentada, e ambas mudam comportamento em produção:
+  - `TRANSCRIPTION_ENABLED` é o **kill-switch global** do processo, independente
+    da cascata por tenant do lado Rust (`tenants_tenantconfig` > CoreSetting).
+    Com ela ausente (default `false`), um tenant que ligue transcrição no painel
+    recebe **resposta vazia sem erro** — falha silenciosa por desenho.
+  - `SMARTCORE_ENV` ausente faz o `Settings` cair no default `dev`: os traces do
+    ia_engine em **produção** saem rotulados como `deployment.environment=dev`.
+  - O `.env` real não vem do repo (`/opt/smartcore/prod/env/prod.env` é copiado
+    no deploy), então **as duas precisam ser acrescentadas no servidor**. Sem
+    isso o comportamento é o de hoje — não há regressão, mas a falha silenciosa
+    da transcrição continua de pé.
+
 ## [2026-07-27] - Fase C1: clients Flutter reconstruídos sobre a return_success_or_error 3.0.1
 
 > Migração *breaking* da lib de result type nos clients (v2.0.0 → v3.0.1), com a

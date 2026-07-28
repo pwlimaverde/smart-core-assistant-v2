@@ -255,12 +255,28 @@ jobs:
         working-directory: ia_engine
         run: uv run python scripts/gen_proto.py
 
+      # Lint e tipos eram gate só na máquina do dev: o `pyproject` configura
+      # ruff e mypy (strict-ish, 75 arquivos) e ambos passam limpos, mas nada
+      # no CI garantia isso — um import morto ou um tipo quebrado entrava sem
+      # aviso, como os testes entravam antes deste job existir.
+      - name: ruff check
+        working-directory: ia_engine
+        run: uv run ruff check .
+
+      - name: mypy
+        working-directory: ia_engine
+        run: uv run mypy src/ia_engine
+
       # Ratchet ativo (etapa C5 do plano de cobertura): baseline medido em 99% do
       # código não-bootstrap (ver testing-strategy.md); piso com margem de segurança
       # para não travar o CI por flutuação pontual, mas pegar regressão real.
-      - name: "uv run pytest --cov (ratchet: falha abaixo de 90%)"
+      #
+      # Piso subido de 90 para 95 em 2026-07-28: com 157 testes e ZERO linhas
+      # descobertas, os 9 pontos de folga não pegavam regressão nenhuma — daria
+      # para apagar um arquivo inteiro de feature e o gate seguiria verde.
+      - name: "uv run pytest --cov (ratchet: falha abaixo de 95%)"
         working-directory: ia_engine
-        run: uv run pytest --cov=ia_engine --cov-report=xml --cov-report=term-missing --cov-fail-under=90
+        run: uv run pytest --cov=ia_engine --cov-report=xml --cov-report=term-missing --cov-fail-under=95
 
       - name: Publica cobertura ia_engine como artefato
         if: always()

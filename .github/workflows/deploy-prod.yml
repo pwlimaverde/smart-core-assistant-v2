@@ -297,7 +297,10 @@ jobs:
       # (env faltando, migration quebrada) era publicada como deploy bem-sucedido —
       # e o PR de release ainda pedia "smoke tests em prod verificados" como item
       # manual de checklist. Os serviços Rust não têm healthcheck no compose, então
-      # o critério é o estado do container: rodando, sem restart-loop.
+      # o critério para eles é o estado do container: rodando, sem restart-loop.
+      # Quem TEM healthcheck (ia_engine, via grpc.health.v1) é cobrado também pelo
+      # veredito da sonda — um processo no ar com o servidor gRPC travado aparece
+      # como `running` e passaria só pelo critério de estado.
       - name: Smoke test dos serviços (PROD)
         working-directory: docker/prod
         run: |
@@ -314,12 +317,25 @@ jobs:
             fi
             status=$(docker inspect -f '{{.State.Status}}' "$cid")
             restarts=$(docker inspect -f '{{.RestartCount}}' "$cid")
-            if [ "$status" != "running" ] || [ "$restarts" -gt 2 ]; then
-              echo "::error::$svc: status=$status restarts=$restarts"
+            # Containers sem healthcheck declarado não têm .State.Health; o
+            # template devolve "n/a" para eles e o veredito não os julga.
+            tpl='{{if .State.Health}}{{.State.Health.Status}}{{else}}n/a{{end}}'
+            health=$(docker inspect -f "$tpl" "$cid")
+            # `starting` não é veredito: espera a sonda concluir (até ~60s)
+            # antes de decidir, senão o gate aprovaria por sorte de timing.
+            espera=0
+            while [ "$health" = "starting" ] && [ "$espera" -lt 60 ]; do
+              sleep 5
+              espera=$((espera + 5))
+              health=$(docker inspect -f "$tpl" "$cid")
+            done
+            if [ "$status" != "running" ] || [ "$restarts" -gt 2 ] \
+               || [ "$health" = "unhealthy" ] || [ "$health" = "starting" ]; then
+              echo "::error::$svc: status=$status restarts=$restarts health=$health"
               docker logs --tail 50 "$cid" || true
               falhas="$falhas $svc"
             else
-              echo "ok  $svc (status=$status restarts=$restarts)"
+              echo "ok  $svc (status=$status restarts=$restarts health=$health)"
             fi
           done
           if [ -n "$falhas" ]; then

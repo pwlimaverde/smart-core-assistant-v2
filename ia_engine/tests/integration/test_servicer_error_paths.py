@@ -240,6 +240,22 @@ async def test_sentimento_llm_devolve_tipo_inesperado_aborta_com_internal():
     assert exc_info.value.code() == grpc.StatusCode.INTERNAL
 
 
+@pytest.mark.asyncio
+async def test_sentimento_sem_historico_aborta_com_invalid_argument(
+    fake_chat_factory,
+):
+    """Sem turnos não há resposta do cliente a avaliar: falha antes de gastar
+    uma chamada de LLM que devolveria nota inventada."""
+    servicer = IaEngineServicer(chat_model_factory=fake_chat_factory)
+    async with _stub_for(servicer) as stub:
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            await stub.Sentimento(
+                pb.SentimentoRequest(tenant_id="t1", llm=_spec())
+            )
+    assert exc_info.value.code() == grpc.StatusCode.INVALID_ARGUMENT
+    assert "histórico" in exc_info.value.details()
+
+
 # ------------------------------------------------------- degradação graciosa
 @pytest.mark.asyncio
 async def test_erro_tecnico_inesperado_nao_vaza_detalhe_ao_cliente():
