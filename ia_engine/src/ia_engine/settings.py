@@ -20,6 +20,11 @@ class Settings(BaseSettings):
 
     grpc_port: int = 50060
     grpc_host: str = "0.0.0.0"
+    # Fonte da config de tenant: o Rust publica `tenant:config:<uuid>` aqui e
+    # sinaliza mudanças pelo canal de invalidação. O `ia_engine` nunca fala com
+    # o Postgres (ver gerenciamento_configuracoes_ia.md). Mesma instância de
+    # cache dos serviços Rust (REDIS_URL), não a de barramento (REDIS_BUS_URL).
+    redis_url: str = "redis://redis:6379/0"
     otel_exporter_otlp_endpoint: str | None = None
     smartcore_env: str = "dev"
     grpc_max_workers: int = 16

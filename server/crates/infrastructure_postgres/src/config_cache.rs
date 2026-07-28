@@ -47,6 +47,13 @@ pub struct RuntimeConfig {
     pub openai_api_key: SecretString,
     pub groq_api_key: SecretString,
     pub google_api_key: SecretString,
+    /// Overrides de prompt de sistema resolvidos pela mesma cascata
+    /// (`tenants_tenantconfig.prompts` > CoreSetting `PROMPT_*`).
+    ///
+    /// Contém APENAS as chaves com override de verdade — valor vazio é omitido.
+    /// Chave ausente significa "use o default", que vive versionado no código do
+    /// `ia_engine`: assim uma chave não semeada nunca deixa a IA sem prompt.
+    pub prompts: std::collections::HashMap<String, String>,
 }
 
 /// Cache concorrente de RuntimeConfig por tenant (DashMap thread-safe).

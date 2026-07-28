@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT dados_empresa, persona_bot, bot_agent_name,\n                  msg_fallback, msg_sem_info, msg_transferencia,\n                  llm_class, model, llm_temperature,\n                  transcription_provider, transcription_model, transcription_enabled,\n                  vision_provider, vision_model,\n                  embeddings_class, embeddings_model,\n                  chunk_size, chunk_overlap,\n                  similarity_threshold, vector_distance_threshold,\n                  api_keys\n           FROM tenants_tenantconfig\n           WHERE tenant_id = $1",
+  "query": "SELECT dados_empresa, persona_bot, bot_agent_name,\n                  msg_fallback, msg_sem_info, msg_transferencia,\n                  llm_class, model, llm_temperature,\n                  transcription_provider, transcription_model, transcription_enabled,\n                  vision_provider, vision_model,\n                  embeddings_class, embeddings_model,\n                  chunk_size, chunk_overlap,\n                  similarity_threshold, vector_distance_threshold,\n                  api_keys, prompts\n           FROM tenants_tenantconfig\n           WHERE tenant_id = $1",
   "describe": {
     "columns": [
       {
@@ -233,6 +233,17 @@
             "name": "api_keys"
           }
         }
+      },
+      {
+        "ordinal": 21,
+        "name": "prompts",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "prompts"
+          }
+        }
       }
     ],
     "parameters": {
@@ -261,8 +272,9 @@
       true,
       true,
       true,
+      false,
       false
     ]
   },
-  "hash": "3d387e127e08556080ac3f0affb56bf13b5dc55c386bac6ce4074a0bb484b228"
+  "hash": "2d289d9b1fb4e19b64d968cb0a66b55f36d17cdcb2103801f0796cbdd9469a93"
 }

@@ -2,6 +2,60 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-07-28] - Config de IA vinda do servidor Rust (etapas 1, 2 e 6a)
+
+> Alinha a implementação ao `doc_dev/modelagem_dados/gerenciamento_configuracoes_ia.md`,
+> que define o Rust como único leitor do Postgres e o Redis como ponte até o
+> `ia_engine`. Esta entrega monta a infraestrutura; o `servicer` ainda consome a
+> config do request (etapas 3-5 pendentes).
+> Branch `feature/config-ia-via-rust`. Fora do ciclo PREVC.
+
+### Por que
+
+A implementação tinha divergido do documento em três pontos com efeito prático:
+
+- **A persona do bot era ignorada.** `persona_bot` e `bot_agent_name` existem no
+  `RuntimeConfig` do Rust e no painel, mas não no `ai_engine.proto` — o tenant
+  configurava e não surtia efeito nenhum.
+- **As mensagens do tenant eram ignoradas.** `msg_transferencia` está na config,
+  mas o `ia_engine` usa uma constante fixa.
+- **Chave de API e prompts trafegavam a cada mensagem de WhatsApp**, o oposto do
+  item 4.1 do documento.
+
+### Adicionado
+
+- **Publicação do `RuntimeConfig` no Redis** (`data_postgres/src/config_publisher.rs`):
+  DTO de serialização separado do `RuntimeConfig` — que guarda as chaves em
+  `SecretString` justamente para não serializar por acidente —, `SET` em
+  `tenant:config:<uuid>` com TTL de 24h e `PUBLISH` em `tenant:config:invalidate`.
+  Pendurado nos 3 ganchos de escrita de config que já existiam.
+- **Pre-warm no boot** do `data_postgres`: sem ele, depois de um deploy o Redis
+  fica vazio e a primeira mensagem de cada tenant falha.
+- **Prompts de sistema configuráveis** (migration `0026`): coluna `prompts JSONB`
+  em `tenants_tenantconfig` como override sobre chaves `PROMPT_*` do CoreSettings
+  — um JSONB em vez de 11 colunas, extensível sem migration. O default segue no
+  código do `ia_engine` e é o último elo da cascata: uma chave não semeada nunca
+  deixa a IA sem prompt.
+- **`ia_engine.config`**: `RuntimeConfig` pydantic espelhando o DTO,
+  `TenantConfigCache` (RAM + Redis) e listener de invalidação. Usa
+  `redis.asyncio`, não o cliente síncrono do esboço do documento — o servidor é
+  `grpc.aio` e um `GET` bloqueante travaria todos os RPCs em andamento.
+
+### Segurança
+
+- Documentado em `security.md` que o Redis passa a guardar as chaves de LLM
+  **decifradas** (seção 4.4 do documento de design). Antes elas só existiam em
+  trânsito. Os controles que sustentam a decisão e o procedimento em caso de
+  exposição do dump estão registrados lá.
+
+### Verificação
+
+- Rust: 7 testes novos (`chave_config_tenant` e a cascata de prompts, incluindo
+  valor vazio omitido, case normalizado e valor não-string ignorado); clippy
+  limpo com `-D warnings`.
+- Python: 16 testes novos com fake de Redis; **174 no total, 99,8% de cobertura**,
+  ruff e mypy limpos.
+
 ## [2026-07-28] - Auditoria do ia_engine: gates de CI e preparo de publicação
 
 > Auditoria do módulo Python (`ia_engine`) contra o padrão

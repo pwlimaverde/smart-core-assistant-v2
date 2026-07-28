@@ -6,6 +6,8 @@
 use infrastructure_postgres::{inserir_audit_log, NewAuditLogEntry};
 use uuid::Uuid;
 
+pub mod config_publisher;
+
 /// Consolida múltiplos eventos de auditoria vindos do barramento de segurança no banco
 /// de dados em lote. Agrupa os eventos por inquilino e os insere sob uma transação por
 /// inquilino (ou transação global). Retorna a lista de IDs de stream gravados com sucesso.
