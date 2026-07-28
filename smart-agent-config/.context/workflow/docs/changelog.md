@@ -129,11 +129,12 @@ Histórico de alterações do projeto com base no ciclo PREVC.
   Exceção estendida para `test/` e `integration_test/`, os 6 arquivos rastreados, e o
   check do `infra/test-flutter.ps1` — que existe exatamente para pegar isto e olhava
   apenas `lib/` — passou a olhar `lib/`, `test/` e `integration_test/`.
-- **A cobertura do CI fica em ~79,3%, não nos 79,6% medidos aqui.** Nove linhas de
-  `feature_flags_errors.dart` (construtores `const` dos casos de erro) contam como
-  executadas na VM local e não na do runner, que as resolve em tempo de compilação. A
-  diferença é de instrumentação, não de teste ausente, e é o único arquivo afetado — mas
-  reduz a margem sobre o piso de 78% para ~1,3 ponto.
+- **A cobertura do CI é 79,1%, não os 79,6% medidos aqui** (medido no run de `f5ebb26`:
+  2.873/3.631 contra 2.892/3.631). O denominador é idêntico; são ~19 linhas de
+  construtores `const` de casos de erro que contam como executadas na VM local e não na do
+  runner, que as resolve em tempo de compilação. Diferença de instrumentação, não de teste
+  ausente — mas **a margem sobre o piso de 78% é 1,1 ponto**. Quem for subir o piso deve
+  usar o número do CI, não o local.
 
 ### Não corrigido (pré-existente, fora deste escopo)
 
