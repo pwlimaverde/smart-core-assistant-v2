@@ -129,6 +129,27 @@ class TestConstrucaoDasSpecsReais:
         assert spec1.natural_conflict_cols == ("tenant_id",)
         assert spec2.natural_conflict_cols == ("key",)
 
+    def test_core_settings_normaliza_a_key_para_maiusculo(self):
+        """A v1 grava as chaves em minusculo e o consumidor Rust le em
+        MAIUSCULO (`core.get("OPENAI_API_KEY")`), que e o case semeado pela
+        migration 0009. Sem esta normalizacao o upsert por `key` nao casa com
+        as linhas semeadas: o ETL insere linhas minusculas que ninguem le e o
+        v2 segue com os defaults (`ChatOpenAI`/`gpt-4o-mini`, chave vazia) em
+        vez da config real da v1 — bot sem chave, sem erro de migracao."""
+        cipher = CipherManagerPy.from_base64(Secret(CHAVE_V2_B64))
+        spec = core_specs.build_core_settings_spec(Secret("chave-fernet-fake"), cipher)
+
+        coluna_key = next(c for c in spec.columns if c.v1 == "key")
+        assert coluna_key.transform is not None, "a coluna `key` precisa normalizar o case"
+
+        for v1_key, esperado in [
+            ("openai_api_key", "OPENAI_API_KEY"),
+            ("llm_class", "LLM_CLASS"),
+            ("vector_distance_threshold", "VECTOR_DISTANCE_THRESHOLD"),
+            ("MODEL", "MODEL"),  # ja maiusculo: idempotente
+        ]:
+            assert coluna_key.transform(v1_key, None) == esperado
+
     def test_tenant_app_specs_tem_a_ordem_de_dependencia_esperada(self):
         ordem = [s.entidade for s in tenant_specs.TENANT_APP_SPECS]
         # departamento antes de fluxo antes de etapa antes de atendente

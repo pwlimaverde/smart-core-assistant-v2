@@ -5,6 +5,11 @@ __pycache__/
 build/
 .pytest_cache/
 
+# Este pacote se instala com `pip install -e ".[dev]"` (ver README). Rodar os
+# testes com `uv run` funciona e e conveniente, mas gera um lock que nao e a
+# fonte de verdade das dependencias daqui — nao versionar.
+uv.lock
+
 # Estado local entre execucoes (id_map "vivo") e relatorios gerados — nunca
 # comitar: podem conter PII mascarada mas tambem contagens/estrutura real de
 # dados de producao. O snapshot versionado por execucao tambem fica aqui por

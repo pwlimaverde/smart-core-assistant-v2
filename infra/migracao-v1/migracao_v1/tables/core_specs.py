@@ -333,6 +333,26 @@ def _criar_transform_core_settings_value(v1_fernet_key, v2_cipher: CipherManager
     return _transform
 
 
+def _transform_core_settings_key(bruto: str, ctx: RowContext) -> str:
+    """Normaliza a chave para MAIUSCULO — a v1 grava em minusculo.
+
+    A v1 le as CoreSettings pela chave literal do banco (`config_loader.
+    _get_core_settings`: `settings_dict[obj.key]`) e gravou tudo em minusculo
+    (`openai_api_key`, `llm_class`, `model`). O consumidor v2 busca em
+    MAIUSCULO: `tenants::config::carregar` faz `core.get("OPENAI_API_KEY")`,
+    `core.get("LLM_CLASS")`, etc., e a migration 0009 semeia as linhas nesse
+    case.
+
+    Sem esta normalizacao o upsert por `key` nao casa com as linhas semeadas:
+    o ETL INSERE 30 linhas novas em minusculo, que nenhum codigo le, e o v2
+    segue rodando com os defaults da migration (`ChatOpenAI`/`gpt-4o-mini`,
+    `OPENAI_API_KEY` vazia) em vez da config real da v1
+    (`ChatGoogleGenerativeAI`/`gemini-2.5-flash-lite`). O sintoma seria um bot
+    silenciosamente sem chave de API — nao um erro de migracao.
+    """
+    return (bruto or "").upper()
+
+
 def build_core_settings_spec(v1_fernet_key, v2_cipher: CipherManagerPy) -> TableSpec:
     """`settings_manager_coresettings` — tabela global (sem tenant_id), upsert
     por `key` (a v2 ja semeia linhas default via migration `ON CONFLICT (key)
@@ -347,7 +367,7 @@ def build_core_settings_spec(v1_fernet_key, v2_cipher: CipherManagerPy) -> Table
         natural_conflict_cols=("key",),
         delta_column_v1="updated_at",
         columns=[
-            ColumnSpec("key"),
+            ColumnSpec("key", transform=_transform_core_settings_key),
             ColumnSpec("value", transform=_criar_transform_core_settings_value(v1_fernet_key, v2_cipher)),
             ColumnSpec("encrypted"),
             ColumnSpec("description"),
