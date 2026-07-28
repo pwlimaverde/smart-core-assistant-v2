@@ -58,6 +58,10 @@ pub struct PgOperacionalStore {
     pub config_cache: Arc<TenantConfigCache>,
     /// Conexão de bus usada para publicar invalidações de cache e PING de health.
     pub conn: ConnectionManager,
+    /// Conexão do Redis de CACHE (`REDIS_URL`) — instância distinta do bus.
+    /// É onde o `ia_engine` procura `tenant:config:<uuid>`; publicar no bus
+    /// deixaria a config íntegra e invisível para quem a consome.
+    pub cache_conn: ConnectionManager,
     /// Único pool com BYPASSRLS. Necessário para LISTAR tenants ao republicar a
     /// config de todos após uma mudança global: `tenants_tenant` tem RLS com
     /// `FORCE` e, no pool de runtime, a consulta cross-tenant devolve zero
@@ -71,6 +75,7 @@ impl PgOperacionalStore {
         cipher: Arc<CipherManager>,
         config_cache: Arc<TenantConfigCache>,
         conn: ConnectionManager,
+        cache_conn: ConnectionManager,
         admin_pool: Option<PgPool>,
     ) -> Self {
         Self {
@@ -78,6 +83,7 @@ impl PgOperacionalStore {
             cipher,
             config_cache,
             conn,
+            cache_conn,
             admin_pool,
         }
     }
@@ -110,7 +116,8 @@ impl PgOperacionalStore {
         match tenant_id {
             Some(id) => match self.config_cache.get_config(id).await {
                 Ok(cfg) => {
-                    data_postgres::config_publisher::publicar_config_tenant(&self.conn, &cfg).await;
+                    data_postgres::config_publisher::publicar_config_tenant(&self.cache_conn, &cfg)
+                        .await;
                 }
                 Err(e) => tracing::warn!(
                     tenant_id = %id,
@@ -128,7 +135,7 @@ impl PgOperacionalStore {
                     match data_postgres::config_publisher::prewarm_configs(
                         store.admin_pool.as_ref(),
                         &store.config_cache,
-                        &store.conn,
+                        &store.cache_conn,
                     )
                     .await
                     {

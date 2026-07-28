@@ -88,8 +88,12 @@ class EntidadeStats:
             "v2_written_insert": self.v2_written_insert,
             "v2_written_update": self.v2_written_update,
             "v2_count_after": self.v2_count_after,
-            "id_min_v1": self.id_min_v1,
-            "id_max_v1": self.id_max_v1,
+            # str(): a PK nem sempre e' int. `tenants_tenant` e `tenants_tenantinvite`
+            # tem PK UUID (ver TableSpec.pk_kind="uuid"), e `uuid.UUID` nao e'
+            # serializavel em JSON — o relatorio da execucao inteira falhava no
+            # fim, DEPOIS de a migracao ja ter escrito no banco.
+            "id_min_v1": None if self.id_min_v1 is None else str(self.id_min_v1),
+            "id_max_v1": None if self.id_max_v1 is None else str(self.id_max_v1),
             "duracao_s": round(self.duracao_s, 3),
             "error_code": self.error_code,
             "amostras_hash": self.amostras_hash,

@@ -310,6 +310,41 @@ jobs:
           docker compose pull
           docker compose up -d
 
+      # A config de tenant é publicada pelo data_postgres e lida pelo ia_engine
+      # em INSTÂNCIAS Redis diferentes se o wiring estiver errado (cache x bus).
+      # Nesse caso ela fica íntegra e invisível: nenhum serviço reclama, e só a
+      # primeira mensagem de WhatsApp revelaria — com FAILED_PRECONDITION. Este
+      # passo compara os dois lados. Nenhum teste unitário pega wiring.
+      - name: Smoke test da config no Redis (DEV)
+        working-directory: docker/dev
+        run: |
+          set -u
+          # As credenciais vivem no .env do compose, não no ambiente do runner.
+          PG_USER=$(grep -E '^POSTGRES_USER=' .env | cut -d= -f2-)
+          PG_DB=$(grep -E '^POSTGRES_DB=' .env | cut -d= -f2-)
+          RD_PASS=$(grep -E '^REDIS_PASSWORD=' .env | cut -d= -f2-)
+
+          ativos=$(docker compose --env-file .env exec -T postgres \
+            psql -U "$PG_USER" -d "$PG_DB" -t -A \
+            -c "SELECT count(*) FROM tenants_tenant WHERE active = TRUE" 2>/dev/null \
+            | tr -d '[:space:]')
+          if [ -z "${ativos:-}" ] || [ "$ativos" = "0" ]; then
+            echo "ok  sem tenants ativos — nada a publicar"
+            exit 0
+          fi
+
+          # O ia_engine se conecta por REDIS_URL: a chave TEM de estar nesse Redis.
+          publicadas=$(docker compose --env-file .env exec -T redis \
+            redis-cli -a "$RD_PASS" --scan --pattern 'tenant:config:*' 2>/dev/null \
+            | grep -c 'tenant:config:' || true)
+          if [ "${publicadas:-0}" = "0" ]; then
+            echo "::error::$ativos tenant(s) ativo(s) e nenhuma config em tenant:config:* no Redis de cache."
+            echo "::error::Verifique se o data_postgres publica em REDIS_URL (e não em REDIS_BUS_URL)."
+            docker compose --env-file .env logs --tail 30 data_postgres || true
+            exit 1
+          fi
+          echo "ok  config no Redis ($publicadas de $ativos tenant(s) ativo(s))"
+
       # A borda ocupa 80/443 e roteia TUDO — inclusive o painel v1 em produção.
       # Ela vive num compose próprio (docker/edge), fora da lista do smoke test
       # abaixo, então um Caddyfile inválido a deixava em crash-loop com o deploy
