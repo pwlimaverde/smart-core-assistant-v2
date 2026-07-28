@@ -301,6 +301,18 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
     async def Sentimento(
         self, request: pb.SentimentoRequest, context: grpc.aio.ServicerContext
     ) -> pb.SentimentoResponse:
+        # Sem histórico não há resposta do cliente para avaliar: o prompt iria
+        # ao LLM com `chat_history` vazio e voltaria uma nota inventada. Falha
+        # cedo, como `Embed` faz com `textos` vazio.
+        if not list(request.historico.turnos):
+            await self._abort(
+                context,
+                InvalidRequestError(
+                    message="histórico vazio: nada a avaliar"
+                ),
+                "Sentimento",
+                request.tenant_id,
+            )
         usecase = SentimentoUsecase(
             SentimentoRepository(
                 SentimentoDataSource(

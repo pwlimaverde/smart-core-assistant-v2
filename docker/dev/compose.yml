@@ -153,6 +153,15 @@ services:
       dockerfile: ia_engine/Dockerfile
     env_file: [.env]
     networks: [internal, observability]
+    # Único serviço da stack que serve `grpc.health.v1` — usa a própria sonda
+    # do pacote (sem binário extra na imagem). Sem isto, um processo no ar mas
+    # com o servidor gRPC travado aparece como `running` e passa no smoke test.
+    healthcheck:
+      test: ["CMD", "python", "-m", "ia_engine.healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
 
   worker:
