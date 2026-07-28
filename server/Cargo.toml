@@ -85,7 +85,16 @@ observability = { path = "crates/observability" }
 anyhow        = "1.0.86"
 bytes         = "1.6.0"
 futures-util  = "0.3.30"
-aws-sdk-s3    = "1"
+# Sem a feature default `rustls`: ela liga o cliente HTTP LEGADO
+# (aws-smithy-http-client/legacy-rustls-ring -> hyper 0.14 + rustls 0.21 +
+# rustls-webpki 0.101.7, com RUSTSEC-2026-0098/0099/0104). O cliente que o SDK
+# realmente usa aqui vem de `default-https-client` (hyper 1.x + rustls 0.23 +
+# webpki 0.103.x), porque `criar_cliente_com_config` nao chama `.http_client(..)`
+# e deixa o SDK escolher o default. As outras features default sao mantidas.
+aws-sdk-s3    = { version = "1", default-features = false, features = [
+    "sigv4a", "http-1x", "default-https-client", "rt-tokio",
+    "behavior-version-latest",
+] }
 jsonwebtoken  = "9.3.0"
 sha2          = "0.10.8"
 rand_core     = { version = "0.6", features = ["std"] }

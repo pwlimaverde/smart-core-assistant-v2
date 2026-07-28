@@ -477,10 +477,11 @@ exceção que já existia para o mesmo problema cobria só `clients/**/lib/**/da
 foi estendida para `test/` e `integration_test/`, e o check do
 `infra/test-flutter.ps1` (que olhava apenas `lib/`) passou a cobrir os três.
 
-**A cobertura do CI é ~79,3%, não 79,6%:** nove linhas de construtores `const` em
-`feature_flags_errors.dart` contam como executadas na VM local e não na do runner.
-Diferença de instrumentação, único arquivo afetado — mas a margem real sobre o
-piso é ~1,3 ponto, não 1,6.
+**A cobertura do CI é 79,1%, não 79,6%** (medido em `f5ebb26`: 2.873/3.631 contra
+2.892/3.631 aqui). Denominador idêntico; ~19 linhas de construtores `const` de
+casos de erro contam como executadas na VM local e não na do runner, que as
+resolve em tempo de compilação. **A margem real sobre o piso é 1,1 ponto** — ao
+subir o piso, use o número do CI.
 
 ### Desvios em relação ao plano
 
