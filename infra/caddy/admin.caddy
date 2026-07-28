@@ -100,7 +100,7 @@ smartcoreassistant.com.br {
 		header Content-Type application/grpc-web*
 	}
 	handle @grpcweb_admin {
-		reverse_proxy localhost:{$RUNTIME_API_PROD_GRPC_WEB_PORT:-50052}
+		reverse_proxy localhost:{$RUNTIME_API_PROD_GRPC_WEB_PORT:50052}
 	}
 
 	# Tudo o mais = painel Django legado (inalterado).

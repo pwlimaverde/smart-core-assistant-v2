@@ -310,6 +310,39 @@ jobs:
           docker compose pull
           docker compose up -d
 
+      # A borda ocupa 80/443 e roteia TUDO — inclusive o painel v1 em produção.
+      # Ela vive num compose próprio (docker/edge), fora da lista do smoke test
+      # abaixo, então um Caddyfile inválido a deixava em crash-loop com o deploy
+      # verde e o site fora do ar (2026-07-28: sintaxe `{$VAR:-default}`, que o
+      # Caddy lê como default literal `-8082`). Falha rápido e alto.
+      - name: Smoke test da borda (DEV)
+        working-directory: docker/edge
+        run: |
+          set -u
+          sleep 10
+          cid=$(docker compose ps -q caddy || true)
+          if [ -z "$cid" ]; then
+            echo "::error::edge/caddy: container inexistente"
+            exit 1
+          fi
+          status=$(docker inspect -f '{{.State.Status}}' "$cid")
+          restarts=$(docker inspect -f '{{.RestartCount}}' "$cid")
+          if [ "$status" != "running" ] || [ "$restarts" -gt 2 ]; then
+            echo "::error::edge/caddy: status=$status restarts=$restarts"
+            docker logs --tail 30 "$cid" || true
+            exit 1
+          fi
+          # Estar `running` não prova que o Caddy aceitou a config e abriu a
+          # porta: valida o handshake de verdade contra o domínio público.
+          codigo=$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 \
+            https://smartcoreassistant.com.br/ || echo 000)
+          if [ "$codigo" = "000" ]; then
+            echo "::error::edge/caddy: 80/443 não respondem (HTTP $codigo)"
+            docker logs --tail 30 "$cid" || true
+            exit 1
+          fi
+          echo "ok  edge/caddy (status=$status restarts=$restarts HTTP=$codigo)"
+
       # Smoke test: `compose up -d` devolve sucesso assim que os containers são
       # CRIADOS — um serviço que sobe e morre em seguida (env faltando, migration
       # quebrada, dependência fora do ar) deixava o deploy "verde" e só aparecia

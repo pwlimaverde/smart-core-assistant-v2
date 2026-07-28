@@ -18,7 +18,7 @@ smartcoreassistant.com.br {
 
 	# Bundle estatico do client admin (mesma imagem/porta do docker/prod/compose.yml).
 	handle_path /v2/admin/* {
-		reverse_proxy host.docker.internal:{$WEB_HOST_PORT:-8082}
+		reverse_proxy host.docker.internal:{$WEB_HOST_PORT:8082}
 		header {
 			Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 			Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -32,7 +32,7 @@ smartcoreassistant.com.br {
 	# Bundle estatico do app operacional/tenant. Midia via presign direto do R2
 	# (cross-site) — depende do CORS do bucket de producao (N8.2 / N5.3).
 	handle_path /v2/tenant/* {
-		reverse_proxy host.docker.internal:{$WEB_TENANT_HOST_PORT:-8084}
+		reverse_proxy host.docker.internal:{$WEB_TENANT_HOST_PORT:8084}
 		header {
 			Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' https:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 			Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -47,7 +47,7 @@ smartcoreassistant.com.br {
 	# (docker/prod/compose.yml: dev usa 50051, prod usa 50052).
 	@grpcweb_prod header Content-Type application/grpc-web*
 	handle @grpcweb_prod {
-		reverse_proxy host.docker.internal:{$RUNTIME_WEB_PORT:-50052}
+		reverse_proxy host.docker.internal:{$RUNTIME_WEB_PORT:50052}
 	}
 
 	# v1: painel Django (fallback — tudo que nao bateu acima; app/dados intactos,
