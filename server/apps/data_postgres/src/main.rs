@@ -211,12 +211,19 @@ async fn main() -> anyhow::Result<()> {
     // Em background: o serviço não deve atrasar o `listen` por causa de um
     // Redis lento, e o `ia_engine` degrada com erro explícito enquanto isso.
     {
-        let pool = pool.clone();
+        // admin_pool (BYPASSRLS): listar todos os tenants é consulta cross-tenant
+        // e `tenants_tenant` tem RLS com FORCE — no pool de runtime a política
+        // fail-closed devolveria zero linhas, sem erro nenhum.
+        let admin_pool = admin_pool.clone();
         let config_cache = config_cache.clone();
         let bus_conn = bus_conn.clone();
         tokio::spawn(async move {
-            match data_postgres::config_publisher::prewarm_configs(&pool, &config_cache, &bus_conn)
-                .await
+            match data_postgres::config_publisher::prewarm_configs(
+                admin_pool.as_ref(),
+                &config_cache,
+                &bus_conn,
+            )
+            .await
             {
                 Ok(n) => tracing::info!("Pre-warm de config publicou {n} tenant(s) no Redis"),
                 Err(e) => tracing::error!("Falha no pre-warm de config para o ia_engine: {e:?}"),
@@ -244,6 +251,7 @@ async fn main() -> anyhow::Result<()> {
             cipher.clone(),
             config_cache.clone(),
             bus_conn.clone(),
+            admin_pool.clone(),
         ));
     let plans_store: std::sync::Arc<dyn ports::PlansStore> = std::sync::Arc::new(
         adapters::PgPlansStore::new(pool.clone(), admin_pool.clone()),

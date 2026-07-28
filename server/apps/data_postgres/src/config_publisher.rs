@@ -146,11 +146,27 @@ pub async fn publicar_config_tenant(conn: &ConnectionManager, cfg: &RuntimeConfi
 /// Resolve e publica a config de todos os tenants ativos (pre-warm do boot,
 /// seção 3.4 do documento): sem isto, a primeira mensagem de cada tenant depois
 /// de um deploy encontra o Redis vazio e falha até alguém salvar config no painel.
+///
+/// **Exige o `admin_pool`.** Listar todos os tenants é uma consulta
+/// *cross-tenant*, e `tenants_tenant` tem RLS com `FORCE`: no pool de runtime
+/// (`NOBYPASSRLS`, sem `app.current_tenant` definido) a política fail-closed
+/// devolve ZERO linhas — sem erro. O pre-warm pareceria funcionar e nunca
+/// publicaria nada. Sem `DATABASE_ADMIN_URL` configurada, avisa alto em vez de
+/// reportar sucesso vazio.
 pub async fn prewarm_configs(
-    pool: &sqlx::PgPool,
+    admin_pool: Option<&sqlx::PgPool>,
     cache: &infrastructure_postgres::TenantConfigCache,
     conn: &ConnectionManager,
 ) -> anyhow::Result<usize> {
+    let Some(pool) = admin_pool else {
+        tracing::error!(
+            "Pre-warm de config ignorado: sem DATABASE_ADMIN_URL (o pool de runtime \
+             não enxerga a lista de tenants por causa do RLS). A config de cada tenant \
+             só será publicada quando alguém salvar algo no painel."
+        );
+        return Ok(0);
+    };
+
     let ids: Vec<Uuid> = sqlx::query_scalar!("SELECT id FROM tenants_tenant WHERE active = TRUE")
         .fetch_all(pool)
         .await?;
