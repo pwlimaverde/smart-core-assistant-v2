@@ -13,6 +13,14 @@ pub struct CoreSettingRow {
 
 /// Carrega todas as CoreSettings globais em um mapa key→value.
 /// Valores encrypted são descriptografados antes de retornar.
+///
+/// **Uma linha que não decifra não derruba as demais.** Antes, o `?` na
+/// decifragem abortava a função inteira: uma única CoreSetting gravada com
+/// outra chave (rotação de `ENCRYPTION_KEY` sem re-cifrar, importação parcial)
+/// fazia `resolve_runtime_config` falhar e, com ele, a config de **todos** os
+/// tenants — a IA parava por completo por causa de uma linha. Agora a chave
+/// problemática é omitida do mapa (o consumidor cai no fallback dela) e o
+/// incidente aparece no log, em WARN, com o nome da chave.
 #[tracing::instrument(skip(pool, cipher), err)]
 pub async fn load_all_settings(
     pool: &PgPool,
@@ -26,13 +34,21 @@ pub async fn load_all_settings(
     .await?;
 
     let mut map = HashMap::with_capacity(rows.len());
+    let mut ilegiveis: Vec<String> = Vec::new();
     for row in rows {
         let val = if row.encrypted {
             // Formato armazenado para coresettings criptografados: "ct_b64:nonce_b64:tag_b64"
             let parts: Vec<&str> = row.value.splitn(3, ':').collect();
             if parts.len() == 3 {
-                let bytes = cipher.decrypt(parts[0], parts[1], parts[2])?;
-                String::from_utf8(bytes).unwrap_or_default()
+                match cipher.decrypt(parts[0], parts[1], parts[2]) {
+                    Ok(bytes) => String::from_utf8(bytes).unwrap_or_default(),
+                    Err(_) => {
+                        // Sem o erro nem o valor no log: ambos podem carregar
+                        // fragmento do material cifrado. Só o nome da chave.
+                        ilegiveis.push(row.key);
+                        continue;
+                    }
+                }
             } else {
                 row.value
             }
@@ -40,6 +56,13 @@ pub async fn load_all_settings(
             row.value
         };
         map.insert(row.key, val);
+    }
+    if !ilegiveis.is_empty() {
+        tracing::warn!(
+            chaves = ?ilegiveis,
+            "CoreSettings que não decifram com a ENCRYPTION_KEY atual — omitidas do mapa; \
+             quem depender delas cai no fallback (provável rotação de chave sem re-cifrar)"
+        );
     }
     Ok(map)
 }

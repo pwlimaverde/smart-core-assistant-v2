@@ -271,8 +271,12 @@ async def migrate_table(
             _aplicar_fk_remaps(spec, valores, tenant_slug, id_map, stat)
 
             if len(stat.amostras_hash) < amostra_max:
+                # str(id_v1): a PK nem sempre e' int — `tenants_tenant` e
+                # `tenants_tenantinvite` usam UUID (TableSpec.pk_kind="uuid") e
+                # `uuid.UUID` nao e' serializavel em JSON. O relatorio estourava
+                # no fim da execucao, DEPOIS de ja ter escrito no banco.
                 stat.amostras_hash.append(
-                    {"id_v1": id_v1, "hash": hash_linha(list(valores.values()))}
+                    {"id_v1": str(id_v1), "hash": hash_linha(list(valores.values()))}
                 )
 
             if dry_run:

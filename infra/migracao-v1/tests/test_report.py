@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import uuid
+
 from migracao_v1.report import (
     EntidadeStats,
     hash_linha,
@@ -75,3 +78,33 @@ class TestEntidadeStats:
         assert d["v1_count"] == 3
         assert "amostras_hash" in d
         assert "conciliacao_manual" in d
+
+    def test_to_dict_serializa_pk_uuid(self):
+        """`tenants_tenant` tem PK UUID e `uuid.UUID` nao e' JSON-serializavel:
+        o relatorio da execucao inteira estourava no fim, DEPOIS de a migracao ja
+        ter escrito no banco."""
+        stat = EntidadeStats(entidade="tenants.tenant")
+        stat.registrar_id(uuid.UUID("f47ac10b-58cc-4372-a567-0e02b2c3d479"))
+
+        d = stat.to_dict()
+
+        assert d["id_min_v1"] == "f47ac10b-58cc-4372-a567-0e02b2c3d479"
+        json.dumps(d)  # nao deve levantar
+
+    def test_to_dict_mantem_pk_int_legivel(self):
+        stat = EntidadeStats(entidade="teste")
+        stat.registrar_id(5)
+        stat.registrar_id(20)
+
+        d = stat.to_dict()
+
+        assert d["id_min_v1"] == "5"
+        assert d["id_max_v1"] == "20"
+        json.dumps(d)
+
+    def test_to_dict_sem_ids_registrados_mantem_none(self):
+        d = EntidadeStats(entidade="vazia").to_dict()
+
+        assert d["id_min_v1"] is None
+        assert d["id_max_v1"] is None
+        json.dumps(d)

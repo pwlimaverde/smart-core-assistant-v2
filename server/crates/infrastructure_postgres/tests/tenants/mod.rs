@@ -245,10 +245,28 @@ async fn test_core_settings_and_config_cache() {
     // Valores sobrescritos pelo tenant
     assert_eq!(config.model, "gpt-4-turbo");
     assert_eq!(config.chunk_size, 500);
-    // Valores herdados dos defaults da migration (0009_settings_manager.sql)
-    assert_eq!(config.chunk_overlap, 200);
-    assert_eq!(config.llm_class, "ChatOpenAI");
-    assert!((config.llm_temperature - 0.7).abs() < 0.001);
+    // Valores herdados do GLOBAL. Lidos do banco em vez de hardcodados: as
+    // CoreSettings sao uma tabela global e mutavel (o painel edita, o ETL da v1
+    // sobrescreve), entao fixar "ChatOpenAI" aqui fazia o teste depender de o
+    // ambiente nunca ter sido configurado. O que importa provar e' a CASCATA:
+    // campo nulo no tenant recebe exatamente o valor global vigente.
+    let global_llm_class: String = sqlx::query_scalar(
+        "SELECT value FROM settings_manager_coresettings WHERE key = 'LLM_CLASS'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let global_chunk_overlap: String = sqlx::query_scalar(
+        "SELECT value FROM settings_manager_coresettings WHERE key = 'CHUNK_OVERLAP'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(config.llm_class, global_llm_class);
+    assert_eq!(
+        config.chunk_overlap,
+        global_chunk_overlap.parse::<i32>().unwrap()
+    );
     // Chave local sobrescreve o global vazio
     use secrecy::ExposeSecret;
     assert_eq!(config.openai_api_key.expose_secret(), "local-key-999");

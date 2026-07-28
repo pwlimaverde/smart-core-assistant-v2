@@ -170,6 +170,11 @@ async fn main() -> anyhow::Result<()> {
     // Conexão multiplexada para Publicação no Bus (REDIS_BUS_URL) com timeouts
     let bus_conn = infrastructure_redis::criar_conexao_com_timeouts(&redis_bus_url).await?;
     let bus_client = infrastructure_redis::criar_cliente(&redis_bus_url)?;
+    // Conexão de CACHE (REDIS_URL) — instância distinta do bus. É onde vive o
+    // `tenant:config:<uuid>` que o `ia_engine` lê: ele se conecta por `REDIS_URL`
+    // (ver ia_engine/settings.py). Publicar isso no bus faria a config existir
+    // no Redis errado — presente, íntegra e invisível para quem a consome.
+    let cache_conn = infrastructure_redis::criar_conexao_com_timeouts(&redis_url).await?;
     tracing::info!("Conexão com Redis Cache e Redis Bus estabelecidas.");
 
     let cipher =
@@ -216,12 +221,12 @@ async fn main() -> anyhow::Result<()> {
         // fail-closed devolveria zero linhas, sem erro nenhum.
         let admin_pool = admin_pool.clone();
         let config_cache = config_cache.clone();
-        let bus_conn = bus_conn.clone();
+        let cache_conn = cache_conn.clone();
         tokio::spawn(async move {
             match data_postgres::config_publisher::prewarm_configs(
                 admin_pool.as_ref(),
                 &config_cache,
-                &bus_conn,
+                &cache_conn,
             )
             .await
             {
@@ -251,6 +256,7 @@ async fn main() -> anyhow::Result<()> {
             cipher.clone(),
             config_cache.clone(),
             bus_conn.clone(),
+            cache_conn.clone(),
             admin_pool.clone(),
         ));
     let plans_store: std::sync::Arc<dyn ports::PlansStore> = std::sync::Arc::new(
