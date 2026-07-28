@@ -10,6 +10,22 @@
 # =============================================================================
 
 # ----- v1 (fallback) + v2 PROD: admin/tenant Flutter + fachada gRPC-Web (N8.2) -----
+# CSP e Flutter Web: `blob:` em script-src/worker-src NAO e' folga de seguranca,
+# e' requisito. O engine (skwasm e CanvasKit) cria Web Workers a partir de blob
+# URLs; sem isso o worker e' bloqueado e a pagina fica em BRANCO, sem erro de
+# rede — os assets carregam 200 e nada renderiza.
+#
+# O build usa `flutter build web --wasm`, que gera skwasm (preferencial) com
+# fallback CanvasKit. O CanvasKit local esta no bundle (/canvaskit/), mas o
+# bootstrap so o usa quando `useLocalCanvasKit` esta ligado; caso contrario
+# busca em https://www.gstatic.com/flutter-canvaskit — bloqueado por
+# script-src 'self'. Nao adicionamos gstatic ao CSP de proposito: o bundle ja
+# tem os arquivos, e depender de CDN externo custa privacidade e disponibilidade.
+#
+# COOP/COEP (SharedArrayBuffer, skwasm multi-thread) NAO foram adicionados: o
+# COEP `require-corp` exigiria CORP em todo recurso cross-origin e quebraria a
+# midia vinda do R2 no app do tenant. O skwasm single-thread (skwasm_st.wasm,
+# presente no bundle) roda sem eles.
 # Coexistencia: /v2/admin e /v2/tenant tem precedencia (handle_path); gRPC-Web e
 # roteado por Content-Type (nao por path, pois os metodos gerados nao tem prefixo
 # fixo — ver runtime_api/src/grpc_web.rs); tudo o mais cai no Django legado.
@@ -20,7 +36,7 @@ smartcoreassistant.com.br {
 	handle_path /v2/admin/* {
 		reverse_proxy host.docker.internal:{$WEB_HOST_PORT:8082}
 		header {
-			Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+			Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob: data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 			Strict-Transport-Security "max-age=31536000; includeSubDomains"
 			X-Content-Type-Options "nosniff"
 			X-Frame-Options "DENY"
@@ -34,7 +50,7 @@ smartcoreassistant.com.br {
 	handle_path /v2/tenant/* {
 		reverse_proxy host.docker.internal:{$WEB_TENANT_HOST_PORT:8084}
 		header {
-			Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' https:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+			Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' blob: data: https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 			Strict-Transport-Security "max-age=31536000; includeSubDomains"
 			X-Content-Type-Options "nosniff"
 			X-Frame-Options "DENY"
@@ -75,7 +91,7 @@ dev.smartcoreassistant.com.br {
 	handle_path /v2/admin/* {
 		reverse_proxy host.docker.internal:8081
 		header {
-			Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+			Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' blob: data:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 			Strict-Transport-Security "max-age=31536000; includeSubDomains"
 			X-Content-Type-Options "nosniff"
 			X-Frame-Options "DENY"
@@ -91,7 +107,7 @@ dev.smartcoreassistant.com.br {
 	handle_path /v2/tenant/* {
 		reverse_proxy host.docker.internal:8083
 		header {
-			Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' https:; connect-src 'self' https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+			Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob:; worker-src 'self' blob:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' blob: data: https:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
 			Strict-Transport-Security "max-age=31536000; includeSubDomains"
 			X-Content-Type-Options "nosniff"
 			X-Frame-Options "DENY"
