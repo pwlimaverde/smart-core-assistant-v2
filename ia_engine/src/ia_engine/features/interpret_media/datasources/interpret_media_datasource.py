@@ -31,6 +31,13 @@ _OUTPUT_INSTRUCTION = (
     "um atendente."
 )
 
+# Override por tipo de midia (migration 0026).
+CHAVE_POR_TIPO: dict[str, str] = {
+    "imageMessage": "PROMPT_INTERPRET_MEDIA_IMAGE",
+    "videoMessage": "PROMPT_INTERPRET_MEDIA_VIDEO",
+    "documentMessage": "PROMPT_INTERPRET_MEDIA_DOCUMENT",
+}
+
 _PROMPTS: dict[str, str] = {
     "imageMessage": (
         "Descreva detalhadamente o conteúdo desta imagem em português. Foque "
@@ -85,6 +92,8 @@ class InterpretMediaDataSource(
         )
 
         prompt = _PROMPTS.get(parameters.media_type, _PROMPTS["imageMessage"])
+        chave = CHAVE_POR_TIPO.get(parameters.media_type, "")
+        prompt = parameters.prompts.get(chave, "").strip() or prompt
         if parameters.media_type == "documentMessage" and parameters.file_name:
             prompt = f"{prompt}\n\nNome do arquivo: {parameters.file_name}"
         prompt = f"{prompt}{_OUTPUT_INSTRUCTION}"

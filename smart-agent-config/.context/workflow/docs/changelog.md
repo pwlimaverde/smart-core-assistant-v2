@@ -2,6 +2,55 @@
 
 Histórico de alterações do projeto com base no ciclo PREVC.
 
+## [2026-07-28] - Config de IA vinda do servidor Rust (etapas 3-5: fecha o ciclo)
+
+> Segunda metade da mudança: agora o `ia_engine` **consome** a config do Redis e
+> o payload gRPC deixa de carregá-la. É aqui que os bugs de comportamento se
+> fecham. Branch `feature/config-ia-via-rust`.
+
+### Corrigido (bugs que existiam desde que o ia_engine nasceu)
+
+- **A persona do bot passou a valer.** `persona_bot` e `bot_agent_name` não
+  tinham campo no `ai_engine.proto`: o tenant configurava no painel e o bot
+  seguia se apresentando com o texto genérico. Agora entram no prompt de
+  sistema (`_identidade` em `responder_datasource.py`).
+- **A mensagem de transferência do tenant passou a valer.** O aviso anexado
+  quando a IA decide transferir era uma constante no código
+  (`_MSG_TRANSFERENCIA_GENERICA`), qualquer que fosse a `msg_transferencia`
+  configurada. Agora a constante é só o fallback.
+
+### Alterado
+
+- **`ai_engine.proto` enxugado**: `LlmProviderConfig` sai dos 6 requests, junto
+  com `dados_empresa` e `similarity_threshold` do `ResponderRequest`. Os números
+  de campo liberados ficam `reserved` — reusá-los faria um cliente desatualizado
+  ler lixo com o tipo certo. Chave de API e prompt não trafegam mais a cada
+  mensagem de WhatsApp.
+- **O worker parou de resolver e empurrar config.** `resolver_provider_ia` virou
+  `transcricao_habilitada` e devolve só o kill-switch (decisão dele, não da IA).
+  **O RPC de config saiu do caminho do sentimento**: ele existia só para montar
+  o provedor que ia no request — um round-trip a menos por mensagem.
+- **Republicação global agora é assíncrona.** Alterar uma CoreSetting obriga a
+  reresolver a cascata de todos os tenants; fazer isso dentro do handler faria o
+  `UpsertCoreSetting` do painel esperar pela base inteira.
+
+### Corrigido (build)
+
+- `#![recursion_limit = "256"]` no `data_postgres`. O encadeamento de futures
+  (RPC → adapter → cache → sqlx) passou de 128 no cálculo de layout **só em
+  `release`** — em `debug` ainda cabia, então o CI ficava verde e apenas o build
+  da imagem quebrava, com `queries overflow the depth limit`.
+
+### Verificação
+
+- Rust: **189 testes** (154 nos crates de dados + 35 no worker), clippy limpo
+  com `-D warnings`, `sqlx prepare --check` ok.
+- Python: **186 testes**, 99,6% de cobertura, `servicer.py` e
+  `responder_datasource.py` a 100%. Os 9 testes novos de
+  `test_config_no_fluxo.py` vão pelo servidor gRPC real e inspecionam o prompt
+  que chegou ao LLM — foi assim que dois bugs da própria implementação
+  apareceram (persona e mensagem de transferência não estavam sendo aplicadas).
+
 ## [2026-07-28] - Config de IA vinda do servidor Rust (etapas 1, 2 e 6a)
 
 > Alinha a implementação ao `doc_dev/modelagem_dados/gerenciamento_configuracoes_ia.md`,

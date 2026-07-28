@@ -12,8 +12,18 @@ atendimento WhatsApp.
 - Serviço **stateless**: nunca abre conexão Postgres. O RAG (busca vetorial) é
   feito pelo `worker` (Rust) via `data_postgres.QueryCompose` **antes** de
   chamar `Responder`; o texto já resolvido chega em `dados_treinamento`.
-- A `api_key` do provedor LLM chega **sempre por request** (`LlmProviderConfig`),
-  nunca fica em env/config global e nunca é logada.
+- **A config do tenant vem do Redis, não do request.** O `data_postgres`
+  resolve a cascata `TenantConfig > CoreSettings` (chaves de API decifradas,
+  modelo, prompts, persona) e publica em `tenant:config:<tenant_id>`; este
+  serviço lê de lá, mantém cópia em RAM e escuta `tenant:config:invalidate`
+  para descartá-la quando algo muda no painel — sem reiniciar o contêiner.
+  Cada request gRPC carrega só `tenant_id` + os dados da mensagem. Ver
+  `doc_dev/modelagem_dados/gerenciamento_configuracoes_ia.md`.
+- Os **prompts de sistema** têm default no código e podem ser sobrescritos por
+  chave (`PROMPT_*` global ou `tenants_tenantconfig.prompts` por tenant). O
+  default é o último elo da cascata de propósito: uma chave não semeada não
+  pode deixar a IA sem prompt, e a suíte de testes roda sem Redis.
+- A `api_key` nunca fica em env/config global do processo e nunca é logada.
 - Mídia sempre por `MediaRef.url` (URL pré-assinada R2), baixada via `httpx` —
   nunca binário inline.
 - `traceparent` (W3C TraceContext) viaja só via metadata gRPC.

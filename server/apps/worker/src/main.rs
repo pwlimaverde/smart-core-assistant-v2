@@ -333,59 +333,11 @@ async fn responder_via_ia(
         traceparent,
     )
     .await?;
-    let api_key = config_resp
-        .get("api_key")
-        .and_then(|v| v.as_str())
-        .unwrap_or_default()
-        .to_string();
-    let llm = ia_engine::LlmProviderConfigInput {
-        provider: config_resp
-            .get("llm_provider")
-            .and_then(|v| v.as_str())
-            .unwrap_or("openai")
-            .to_string(),
-        model: config_resp
-            .get("llm_model")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .to_string(),
-        api_key,
-        temperature: config_resp
-            .get("llm_temperature")
-            .and_then(|v| v.as_f64())
-            .unwrap_or(0.7),
-    };
-    // Embeddings tem provider/api_key próprios: LLM e embeddings podem usar
-    // provedores distintos (ex.: LLM Groq + embeddings OpenAI), então a api_key do
-    // embeddings vem separada do data_postgres (nunca reaproveita a do LLM).
-    let embeddings_api_key = config_resp
-        .get("embeddings_api_key")
-        .and_then(|v| v.as_str())
-        .unwrap_or_default()
-        .to_string();
-    let embeddings_provider = ia_engine::LlmProviderConfigInput {
-        provider: config_resp
-            .get("embeddings_provider")
-            .and_then(|v| v.as_str())
-            .unwrap_or("openai")
-            .to_string(),
-        model: config_resp
-            .get("embeddings_model")
-            .and_then(|v| v.as_str())
-            .unwrap_or_default()
-            .to_string(),
-        api_key: embeddings_api_key,
-        temperature: 0.0,
-    };
-    let dados_empresa = config_resp
-        .get("dados_empresa")
-        .and_then(|v| v.as_str())
-        .unwrap_or_default()
-        .to_string();
-    let similarity_threshold = config_resp
-        .get("similarity_threshold")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.75);
+    // O que o ia_engine precisa (provedor, modelo, api_key, prompts, persona,
+    // thresholds) ele lê direto do Redis, publicado pelo data_postgres — não
+    // trafega mais no request (ver gerenciamento_configuracoes_ia.md). Aqui fica
+    // só o que é decisão DO WORKER: o limiar de distância do RAG, usado no
+    // QueryCompose logo abaixo.
     let vector_distance_threshold = config_resp
         .get("vector_distance_threshold")
         .and_then(|v| v.as_f64())
@@ -398,7 +350,6 @@ async fn responder_via_ia(
             ia_engine::EmbedInput {
                 tenant_id: tenant_id_str.clone(),
                 textos: vec![mensagem_texto.to_string()],
-                embeddings_provider: embeddings_provider.clone(),
             },
             traceparent,
         )
@@ -552,13 +503,9 @@ async fn responder_via_ia(
                 mensagem: mensagem_texto.to_string(),
                 historico,
                 fluxos_disponiveis: fluxos_kv,
-                dados_empresa,
                 dados_treinamento,
                 campos_coletados,
                 campos_pendentes,
-                llm,
-                embeddings_provider,
-                similarity_threshold,
             },
             traceparent,
         )
@@ -1474,7 +1421,7 @@ async fn processar_pipeline_midia(
     // transcrição/visão neste ciclo — simplificação conhecida; providers dedicados
     // de transcrição/visão ficam para uma continuação). Resolvida ANTES do presign
     // porque o kill-switch de transcrição pode dispensar as duas etapas seguintes.
-    let cfg_midia = match resolver_provider_ia(state, tenant_str, causation_id, traceparent).await {
+    let cfg_midia = match transcricao_habilitada(state, tenant_str, causation_id, traceparent).await {
         Ok(p) => p,
         Err(e) => {
             span.record("error_code", "config_falhou");
@@ -1488,7 +1435,7 @@ async fn processar_pipeline_midia(
     // ouvir) — só a chamada à IA, o presign que a alimenta e o custo por minuto
     // transcrito são dispensados.
     let audio_sem_transcricao =
-        matches!(media_type, domain_whatsapp::MediaType::Audio) && !cfg_midia.transcription_enabled;
+        matches!(media_type, domain_whatsapp::MediaType::Audio) && !cfg_midia;
     if audio_sem_transcricao {
         tracing::debug!("transcrição desligada para o tenant; persistindo só o ponteiro do áudio");
         anexar_analise_midia(
@@ -1531,8 +1478,6 @@ async fn processar_pipeline_midia(
         }
     };
 
-    let provider = cfg_midia.provider;
-
     let media_ref = ia_engine::client::MediaRefInput {
         url: media_url,
         mimetype: mime,
@@ -1551,7 +1496,6 @@ async fn processar_pipeline_midia(
                         tenant_id: tenant_str.to_string(),
                         media: media_ref,
                         language: String::new(),
-                        transcription_provider: provider,
                     },
                     traceparent,
                 )
@@ -1573,7 +1517,6 @@ async fn processar_pipeline_midia(
                         tenant_id: tenant_str.to_string(),
                         media: media_ref,
                         media_type: tipo_str.to_string(),
-                        vision_provider: provider,
                     },
                     traceparent,
                 )
@@ -1690,13 +1633,18 @@ async fn anexar_analise_midia(
 }
 
 /// Resolve a config de provider de IA do tenant (via `ResolverConfigIa` no
-/// data_postgres) e monta o `LlmProviderConfigInput` reusado para transcrição/visão.
-async fn resolver_provider_ia(
+/// Lê o kill-switch de transcrição do tenant (N6.4) via `ResolverConfigIa`.
+///
+/// Antes esta função também montava o provedor de LLM para transcrição/visão;
+/// isso saiu daqui quando o `ia_engine` passou a ler a config direto do Redis
+/// (ver `gerenciamento_configuracoes_ia.md`). O que resta é decisão do worker:
+/// gastar ou não uma transcrição paga antes de chamar a IA.
+async fn transcricao_habilitada(
     state: &AppState,
     tenant_str: &str,
     causation_id: &str,
     traceparent: &str,
-) -> anyhow::Result<ProviderMidia> {
+) -> anyhow::Result<bool> {
     let cfg = chamar_rpc(
         &state.pg_client,
         tenant_str,
@@ -1706,41 +1654,14 @@ async fn resolver_provider_ia(
         traceparent,
     )
     .await?;
-    Ok(ProviderMidia {
-        provider: ia_engine::LlmProviderConfigInput {
-            provider: cfg
-                .get("llm_provider")
-                .and_then(|v| v.as_str())
-                .unwrap_or("openai")
-                .to_string(),
-            model: cfg
-                .get("llm_model")
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .to_string(),
-            api_key: cfg
-                .get("api_key")
-                .and_then(|v| v.as_str())
-                .unwrap_or_default()
-                .to_string(),
-            temperature: 0.0,
-        },
-        // Ausente na resposta = desligado (conservador): a transcrição custa
-        // dinheiro/latência por áudio recebido.
-        transcription_enabled: cfg
-            .get("transcription_enabled")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false),
-    })
+    // Ausente na resposta = desligado (conservador): a transcrição custa
+    // dinheiro/latência por áudio recebido.
+    Ok(cfg
+        .get("transcription_enabled")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false))
 }
 
-/// Config de IA usada pelo pipeline de mídia: o provider em si e o kill-switch de
-/// transcrição do tenant (N6.4). `Debug` NÃO derivado — o provider carrega a
-/// `api_key` em claro e não pode escapar num `{:?}` acidental.
-struct ProviderMidia {
-    provider: ia_engine::LlmProviderConfigInput,
-    transcription_enabled: bool,
-}
 
 /// Avalia o sentimento de uma mensagem inbound (texto ou transcrição de áudio) e
 /// persiste a leitura mais recente no atendimento (N6.5). Best-effort: qualquer
@@ -1761,15 +1682,9 @@ async fn avaliar_sentimento_best_effort(
     causation_id: &str,
     traceparent: &str,
 ) {
-    // Sentimento usa só o provider do LLM; o kill-switch de transcrição da mesma
-    // config não se aplica aqui (o texto já está em mãos, sem custo de áudio).
-    let provider = match resolver_provider_ia(state, tenant_str, causation_id, traceparent).await {
-        Ok(p) => p.provider,
-        Err(e) => {
-            tracing::warn!(erro = %e, "config de IA indisponível; sentimento não avaliado");
-            return;
-        }
-    };
+    // Sem round-trip de config: o ia_engine resolve o provedor pelo tenant_id,
+    // lendo do Redis. Antes era preciso um RPC `ResolverConfigIa` aqui só para
+    // montar o `LlmProviderConfigInput` que ia no request.
 
     let saida = match state
         .ia_client
@@ -1780,7 +1695,6 @@ async fn avaliar_sentimento_best_effort(
                     role: "human".to_string(),
                     conteudo: texto.to_string(),
                 }],
-                llm: provider,
             },
             traceparent,
         )

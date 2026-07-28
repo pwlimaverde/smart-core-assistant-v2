@@ -22,6 +22,8 @@ from ia_engine.shared.history import history_to_text
 
 ChatModelFactory = Callable[[LlmProviderSpec], BaseChatModel]
 
+CHAVE_SYSTEM = "PROMPT_SENTIMENTO_SYSTEM"
+
 _SYSTEM_PROMPT = """Você é um especialista em análise de satisfação do cliente.
 Sua tarefa é analisar a resposta do usuário a uma solicitação de feedback e extrair:
 1. A nota numérica (1 a 5).
@@ -48,8 +50,11 @@ class SentimentoDataSource(DataSource[Any, SentimentoParameters]):
 
     async def __call__(self, parameters: SentimentoParameters) -> Any:
         llm = self._chat_model_factory(parameters.llm)
+        system = (
+            parameters.prompts.get(CHAVE_SYSTEM, "").strip() or _SYSTEM_PROMPT
+        )
         prompt = ChatPromptTemplate.from_messages(
-            [("system", _SYSTEM_PROMPT), ("human", _HUMAN_PROMPT)]
+            [("system", system), ("human", _HUMAN_PROMPT)]
         )
         chain = prompt | llm.with_structured_output(AnaliseAvaliacao)
         return await chain.ainvoke(

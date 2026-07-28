@@ -163,7 +163,6 @@ mod tests {
         EmbedInput {
             tenant_id: "t".to_string(),
             textos: vec!["oi".to_string()],
-            embeddings_provider: LlmProviderConfigInput::default(),
         }
     }
 

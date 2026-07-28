@@ -5,30 +5,6 @@
 
 use async_trait::async_trait;
 
-/// Config do provedor LLM resolvida pelo worker (via RPC `ResolverConfigIa` ao
-/// `data_postgres`) para uma chamada específica ao `ia_engine`. `api_key` nunca é
-/// logada: o `Debug` é redigido manualmente, então mesmo um `{:?}` acidental deste
-/// struct (ou de qualquer `*Input` que o contenha, ex.: `ResponderInput`) não vaza
-/// o segredo.
-#[derive(Clone, Default)]
-pub struct LlmProviderConfigInput {
-    pub provider: String,
-    pub model: String,
-    pub api_key: String,
-    pub temperature: f64,
-}
-
-impl std::fmt::Debug for LlmProviderConfigInput {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("LlmProviderConfigInput")
-            .field("provider", &self.provider)
-            .field("model", &self.model)
-            .field("api_key", &"[REDACTED]")
-            .field("temperature", &self.temperature)
-            .finish()
-    }
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct MediaRefInput {
     pub url: String,
@@ -47,7 +23,6 @@ pub struct TranscribeInput {
     pub tenant_id: String,
     pub media: MediaRefInput,
     pub language: String,
-    pub transcription_provider: LlmProviderConfigInput,
 }
 #[derive(Debug, Clone, Default)]
 pub struct TranscribeOutput {
@@ -60,7 +35,6 @@ pub struct InterpretMediaInput {
     pub tenant_id: String,
     pub media: MediaRefInput,
     pub media_type: String,
-    pub vision_provider: LlmProviderConfigInput,
 }
 #[derive(Debug, Clone, Default)]
 pub struct InterpretMediaOutput {
@@ -75,7 +49,6 @@ pub struct AnalyseInput {
     pub historico: Vec<ChatTurnInput>,
     pub valid_intent_types: String,
     pub valid_entity_types: Vec<String>,
-    pub llm: LlmProviderConfigInput,
 }
 #[derive(Debug, Clone, Default)]
 pub struct IntentOutput {
@@ -98,7 +71,6 @@ pub struct AnalyseOutput {
 pub struct EmbedInput {
     pub tenant_id: String,
     pub textos: Vec<String>,
-    pub embeddings_provider: LlmProviderConfigInput,
 }
 #[derive(Debug, Clone, Default)]
 pub struct EmbedOutput {
@@ -127,13 +99,9 @@ pub struct ResponderInput {
     pub historico: Vec<ChatTurnInput>,
     /// Chave = "Setor - descrição" (convenção herdada da v1).
     pub fluxos_disponiveis: Vec<(String, String)>,
-    pub dados_empresa: String,
     pub dados_treinamento: String,
     pub campos_coletados: Vec<CampoColetadoInput>,
     pub campos_pendentes: Vec<CampoPendenteInput>,
-    pub llm: LlmProviderConfigInput,
-    pub embeddings_provider: LlmProviderConfigInput,
-    pub similarity_threshold: f64,
 }
 #[derive(Debug, Clone, Default)]
 pub struct ResponderOutput {
@@ -147,7 +115,6 @@ pub struct ResponderOutput {
 pub struct SentimentoInput {
     pub tenant_id: String,
     pub historico: Vec<ChatTurnInput>,
-    pub llm: LlmProviderConfigInput,
 }
 #[derive(Debug, Clone, Default)]
 pub struct SentimentoOutput {

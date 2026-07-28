@@ -45,5 +45,14 @@ class ResponderParameters(Parameters):
     similarity_threshold: float
     llm: LlmProviderSpec
     embeddings_provider: LlmProviderSpec
+    # Persona e nome do agente configurados pelo tenant: até aqui existiam no
+    # banco e no painel, mas nunca chegavam à IA (não havia campo no proto).
+    persona_bot: str = ""
+    bot_agent_name: str = ""
+    # Mensagem de transferência do tenant; vazia cai no texto genérico.
+    msg_transferencia: str = ""
     campos_coletados: tuple[CampoColetado, ...] = field(default=())
     campos_pendentes: tuple[CampoPendente, ...] = field(default=())
+    # Overrides de prompt resolvidos pelo Rust (chave ausente => default do
+    # datasource). Dict em vez de tupla porque a busca aqui e' por chave.
+    prompts: dict[str, str] = field(default_factory=dict)

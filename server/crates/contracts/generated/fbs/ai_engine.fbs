@@ -7,14 +7,6 @@ table KeyValuePair {
   value:string;
 }
 
-table LlmProviderConfig {
-  provider:string;
-  model:string;
-  api_key:string;
-  temperature:double;
-  extra_params:[smartcore.contracts.ai.KeyValuePair];
-}
-
 table MediaRef {
   url:string;
   mimetype:string;
@@ -34,7 +26,6 @@ table TranscribeRequest {
   tenant_id:string;
   media:smartcore.contracts.ai.MediaRef;
   language:string;
-  transcription_provider:smartcore.contracts.ai.LlmProviderConfig;
 }
 
 table TranscribeResponse {
@@ -46,7 +37,6 @@ table InterpretMediaRequest {
   tenant_id:string;
   media:smartcore.contracts.ai.MediaRef;
   media_type:string;
-  vision_provider:smartcore.contracts.ai.LlmProviderConfig;
 }
 
 table InterpretMediaResponse {
@@ -60,7 +50,6 @@ table AnalyseRequest {
   historico:smartcore.contracts.ai.ChatHistory;
   valid_intent_types:string;
   valid_entity_types:[string];
-  llm:smartcore.contracts.ai.LlmProviderConfig;
 }
 
 table Intent {
@@ -82,7 +71,6 @@ table AnalyseResponse {
 table EmbedRequest {
   tenant_id:string;
   textos:[string];
-  embeddings_provider:smartcore.contracts.ai.LlmProviderConfig;
 }
 
 table Embedding {
@@ -112,13 +100,9 @@ table ResponderRequest {
   mensagem:string;
   historico:smartcore.contracts.ai.ChatHistory;
   fluxos_disponiveis:[smartcore.contracts.ai.KeyValuePair];
-  dados_empresa:string;
   dados_treinamento:string;
   campos_coletados:[smartcore.contracts.ai.CampoColetado];
   campos_pendentes:[smartcore.contracts.ai.CampoPendente];
-  llm:smartcore.contracts.ai.LlmProviderConfig;
-  embeddings_provider:smartcore.contracts.ai.LlmProviderConfig;
-  similarity_threshold:double;
 }
 
 table ResponderResponse {
@@ -131,7 +115,6 @@ table ResponderResponse {
 table SentimentoRequest {
   tenant_id:string;
   historico:smartcore.contracts.ai.ChatHistory;
-  llm:smartcore.contracts.ai.LlmProviderConfig;
 }
 
 table SentimentoResponse {

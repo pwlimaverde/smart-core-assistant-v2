@@ -18,6 +18,7 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.runnables import Runnable, RunnableLambda
 
+from ia_engine.config import ConfigIndisponivelError, RuntimeConfig
 from ia_engine.contracts import ai_engine_pb2 as pb
 from ia_engine.contracts import ai_engine_pb2_grpc as pbg
 from ia_engine.domain.models import (
@@ -110,6 +111,72 @@ def _fake_chat() -> FakeChatModel:
     )
 
 
+def runtime_config(**overrides: Any) -> RuntimeConfig:
+    """Config de tenant como o Rust a publica, com valores plausíveis.
+
+    Espelha a config real de produção (Gemini para chat/visão, OpenAI para
+    embeddings, Groq para transcrição) — provedores diferentes de propósito,
+    porque é aí que erra quem reaproveita a chave errada entre eles.
+    """
+    base: dict[str, Any] = {
+        "tenant_id": "t1",
+        "dados_empresa": "Acme LTDA — assistência técnica",
+        "persona_bot": "cordial, objetivo, sem emojis",
+        "bot_agent_name": "Ana",
+        "msg_fallback": "Não consegui processar, pode repetir?",
+        "msg_sem_info": "Não encontrei essa informação.",
+        "msg_transferencia": "Um momento, vou chamar um atendente.",
+        "llm_class": "ChatGoogleGenerativeAI",
+        "model": "gemini-2.5-flash-lite",
+        "llm_temperature": 0.0,
+        "transcription_provider": "groq",
+        "transcription_model": "whisper-large-v3-turbo",
+        "transcription_enabled": True,
+        "vision_provider": "google",
+        "vision_model": "gemini-2.5-flash-lite",
+        "embeddings_class": "OpenAIEmbeddings",
+        "embeddings_model": "text-embedding-3-small",
+        "chunk_size": 1000,
+        "chunk_overlap": 200,
+        "similarity_threshold": 0.4,
+        "vector_distance_threshold": 0.5,
+        "openai_api_key": "sk-openai-fake",
+        "groq_api_key": "gsk-groq-fake",
+        "google_api_key": "goog-fake",
+        "prompts": {},
+    }
+    base.update(overrides)
+    return RuntimeConfig(**base)
+
+
+class FakeConfigCache:
+    """Cache de config sem Redis: devolve a config injetada.
+
+    `ausente=True` simula tenant sem config publicada (data_postgres fora do ar
+    ou tenant recém-criado antes do pre-warm).
+    """
+
+    def __init__(
+        self, config: RuntimeConfig | None = None, *, ausente: bool = False
+    ) -> None:
+        self._config = config or runtime_config()
+        self._ausente = ausente
+        self.consultas: list[str] = []
+
+    async def get_config(self, tenant_id: str) -> RuntimeConfig:
+        self.consultas.append(tenant_id)
+        if self._ausente:
+            raise ConfigIndisponivelError(
+                f"config não publicada para o tenant {tenant_id}"
+            )
+        return self._config
+
+
+@pytest.fixture
+def fake_config_cache() -> FakeConfigCache:
+    return FakeConfigCache()
+
+
 @pytest.fixture
 def fake_chat_factory():
     def factory(_spec: LlmProviderSpec) -> FakeChatModel:
@@ -169,6 +236,7 @@ async def ia_stub(
         embeddings_factory=fake_embeddings_factory,
         transcriber_factory=fake_transcriber_factory,
         transcription_enabled=True,
+        config_cache=FakeConfigCache(),  # type: ignore[arg-type]
     )
     server = grpc.aio.server()
     pbg.add_IaEngineServiceServicer_to_server(servicer, server)

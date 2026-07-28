@@ -26,6 +26,9 @@ from ia_engine.features.responder.domain.parameters import (
 # transferência. Espelha o valor da v1 (`llm_confidence_threshold = 0.5`).
 _LLM_CONFIDENCE_THRESHOLD = 0.5
 
+# Usada quando o tenant nao configurou `msg_transferencia`. Ate a config passar
+# a vir do Redis, esta constante valia SEMPRE — a mensagem que o tenant definia
+# no painel era ignorada.
 _MSG_TRANSFERENCIA_GENERICA = (
     "Vou transferir seu atendimento para um de nossos atendentes, que poderá "
     "ajudá-lo melhor. Aguarde um momento, por favor."
@@ -132,6 +135,7 @@ def resolve_resposta(
     fluxos_disponiveis: dict[str, str],
     final_score: float,
     similarity_threshold: float,
+    msg_transferencia: str = "",
 ) -> RespostaFinal:
     """Decide transferência a partir do structured output + score triádico.
 
@@ -163,7 +167,8 @@ def resolve_resposta(
     )
     if should_force_transfer:
         transfer_attendance = True
-        response_text = f"{response_text}\n\n{_MSG_TRANSFERENCIA_GENERICA}"
+        aviso = (msg_transferencia or "").strip() or _MSG_TRANSFERENCIA_GENERICA
+        response_text = f"{response_text}\n\n{aviso}"
 
     if transfer_attendance and not fluxo_transferencia and fluxos_disponiveis:
         fluxo_transferencia = next(iter(fluxos_disponiveis))
@@ -204,6 +209,7 @@ class ResponderUsecase(
                 fluxos_disponiveis=dict(parameters.fluxos_disponiveis),
                 final_score=final_score,
                 similarity_threshold=parameters.similarity_threshold,
+                msg_transferencia=parameters.msg_transferencia,
             )
         )
 

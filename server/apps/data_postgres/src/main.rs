@@ -1,6 +1,13 @@
 //! Serviço data_postgres: provê RPC síncrono e pub/sub assíncrono sujeito a políticas RLS.
 //! Contém o Relay de Outbox e o Consumidor de Auditoria integrados.
 
+// Os handlers deste binário encadeiam muitos `async` (RPC -> adapter -> cache de
+// config -> sqlx), e o tipo de cada future embute o do future aninhado. Ao ligar
+// a republicação de config no Redis, o cálculo de layout passou de 128 no perfil
+// `release` — em `debug` ainda cabia, então o CI ficava verde e só o build da
+// imagem quebrava. Limite sugerido pelo próprio rustc na mensagem de erro.
+#![recursion_limit = "256"]
+
 use contracts::{Envelope, MessageKind};
 use data_postgres::processar_eventos_auditoria_lote;
 use infrastructure_postgres::RequestContext;

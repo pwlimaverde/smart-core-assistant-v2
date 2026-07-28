@@ -92,6 +92,24 @@ class ResponderDataSource(DataSource[ResponderData, ResponderParameters]):
         )
 
 
+# Chaves de override (migration 0026); o texto no código é o default.
+CHAVE_REGRAS_RESPOSTA = "PROMPT_REGRAS_RESPOSTA"
+CHAVE_REGRAS_TRANSFERENCIA = "PROMPT_REGRAS_TRANSFERENCIA"
+
+_REGRAS_PADRAO = (
+    "### Regras de Resposta (siga rigorosamente):\n"
+    "1. Analise o histórico para dar continuidade natural à conversa.\n"
+    "2. Baseie a resposta nos DADOS DO TREINAMENTO (RAG) e no fluxo da "
+    "conversa.\n"
+    "3. Se não houver informações relevantes, seja honesto e não invente.\n"
+    "4. Responda em português, de forma sóbria, organizada e educada.\n"
+    "5. Se faltarem informações essenciais, peça-as em UMA ÚNICA pergunta; "
+    "se o usuário não responder, transfira o atendimento.\n"
+    "6. Se for necessário transferir para um setor específico, preencha "
+    "'acao_transferencia' com o NOME EXATO do setor.\n"
+)
+
+
 def _build_system_prompt(parameters: ResponderParameters) -> str:
     data_atual = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
     fluxos_txt = _formatar_fluxos(dict(parameters.fluxos_disponiveis))
@@ -99,26 +117,41 @@ def _build_system_prompt(parameters: ResponderParameters) -> str:
         parameters.campos_coletados, parameters.campos_pendentes
     )
     regras = (
-        "### Regras de Resposta (siga rigorosamente):\n"
-        "1. Analise o histórico para dar continuidade natural à conversa.\n"
-        "2. Baseie a resposta nos DADOS DO TREINAMENTO (RAG) e no fluxo da "
-        "conversa.\n"
-        "3. Se não houver informações relevantes, seja honesto e não invente.\n"
-        "4. Responda em português, de forma sóbria, organizada e educada.\n"
-        "5. Se faltarem informações essenciais, peça-as em UMA ÚNICA pergunta; "
-        "se o usuário não responder, transfira o atendimento.\n"
-        "6. Se for necessário transferir para um setor específico, preencha "
-        "'acao_transferencia' com o NOME EXATO do setor.\n"
+        parameters.prompts.get(CHAVE_REGRAS_RESPOSTA, "").strip() or _REGRAS_PADRAO
     )
+    # Bloco separado na v1; sem override, as regras acima já cobrem transferência.
+    transferencia = parameters.prompts.get(CHAVE_REGRAS_TRANSFERENCIA, "").strip()
+    if transferencia:
+        regras = f"{regras}\n{transferencia}\n"
+
     return (
         f"Data e Hora Atual: {data_atual}\n\n"
-        "Você é um assistente de atendimento ao cliente.\n\n"
+        f"{_identidade(parameters)}\n\n"
         f"{regras}"
         f"{fluxos_txt}"
         f"{campos_txt}\n\n"
         f"### DADOS DA EMPRESA:\n{parameters.dados_empresa}\n\n"
         f"### DADOS DO TREINAMENTO (RAG):\n{parameters.dados_treinamento}"
     )
+
+
+def _identidade(parameters: ResponderParameters) -> str:
+    """Quem o bot diz ser — nome e persona configurados pelo tenant.
+
+    Até a config passar a vir do Redis, `persona_bot` e `bot_agent_name`
+    existiam no banco e no painel mas não chegavam aqui: o bot se apresentava
+    sempre com o texto genérico abaixo, qualquer que fosse a configuração.
+    """
+    nome = (parameters.bot_agent_name or "").strip()
+    persona = (parameters.persona_bot or "").strip()
+    linha = (
+        f"Você é {nome}, assistente de atendimento ao cliente."
+        if nome
+        else "Você é um assistente de atendimento ao cliente."
+    )
+    if persona:
+        linha = f"{linha}\n\n### PERSONA (siga o tom e o estilo):\n{persona}"
+    return linha
 
 
 def _formatar_fluxos(fluxos_disponiveis: dict[str, str]) -> str:

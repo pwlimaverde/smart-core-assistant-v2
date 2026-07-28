@@ -589,14 +589,6 @@ table KeyValuePair {
   value:string;
 }
 
-table LlmProviderConfig {
-  provider:string;
-  model:string;
-  api_key:string;
-  temperature:double;
-  extra_params:[KeyValuePair];
-}
-
 table MediaRef {
   url:string;
   mimetype:string;
@@ -616,7 +608,6 @@ table TranscribeRequest {
   tenant_id:string;
   media:MediaRef;
   language:string;
-  transcription_provider:LlmProviderConfig;
 }
 
 table TranscribeResponse {
@@ -628,7 +619,6 @@ table InterpretMediaRequest {
   tenant_id:string;
   media:MediaRef;
   media_type:string;
-  vision_provider:LlmProviderConfig;
 }
 
 table InterpretMediaResponse {
@@ -642,7 +632,6 @@ table AnalyseRequest {
   historico:ChatHistory;
   valid_intent_types:string;
   valid_entity_types:[string];
-  llm:LlmProviderConfig;
 }
 
 table Intent {
@@ -664,7 +653,6 @@ table AnalyseResponse {
 table EmbedRequest {
   tenant_id:string;
   textos:[string];
-  embeddings_provider:LlmProviderConfig;
 }
 
 table Embedding {
@@ -694,13 +682,9 @@ table ResponderRequest {
   mensagem:string;
   historico:ChatHistory;
   fluxos_disponiveis:[KeyValuePair];
-  dados_empresa:string;
   dados_treinamento:string;
   campos_coletados:[CampoColetado];
   campos_pendentes:[CampoPendente];
-  llm:LlmProviderConfig;
-  embeddings_provider:LlmProviderConfig;
-  similarity_threshold:double;
 }
 
 table ResponderResponse {
@@ -713,7 +697,6 @@ table ResponderResponse {
 table SentimentoRequest {
   tenant_id:string;
   historico:ChatHistory;
-  llm:LlmProviderConfig;
 }
 
 table SentimentoResponse {

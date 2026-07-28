@@ -50,15 +50,6 @@ fn com_traceparent<T>(payload: T, traceparent: &str) -> Request<T> {
     req
 }
 
-fn provider_para_proto(cfg: LlmProviderConfigInput) -> pb::LlmProviderConfig {
-    pb::LlmProviderConfig {
-        provider: cfg.provider,
-        model: cfg.model,
-        api_key: cfg.api_key,
-        temperature: cfg.temperature,
-        extra_params: vec![],
-    }
-}
 
 fn media_para_proto(m: MediaRefInput) -> pb::MediaRef {
     pb::MediaRef {
@@ -91,7 +82,6 @@ impl IaEngineClient for TonicIaEngineClient {
             tenant_id: req.tenant_id,
             media: Some(media_para_proto(req.media)),
             language: req.language,
-            transcription_provider: Some(provider_para_proto(req.transcription_provider)),
         };
         let mut client = self.client.clone();
         let resp = client
@@ -114,7 +104,6 @@ impl IaEngineClient for TonicIaEngineClient {
             tenant_id: req.tenant_id,
             media: Some(media_para_proto(req.media)),
             media_type: req.media_type,
-            vision_provider: Some(provider_para_proto(req.vision_provider)),
         };
         let mut client = self.client.clone();
         let resp = client
@@ -139,7 +128,6 @@ impl IaEngineClient for TonicIaEngineClient {
             historico: Some(historico_para_proto(req.historico)),
             valid_intent_types: req.valid_intent_types,
             valid_entity_types: req.valid_entity_types,
-            llm: Some(provider_para_proto(req.llm)),
         };
         let mut client = self.client.clone();
         let resp = client
@@ -176,7 +164,6 @@ impl IaEngineClient for TonicIaEngineClient {
         let payload = pb::EmbedRequest {
             tenant_id: req.tenant_id,
             textos: req.textos,
-            embeddings_provider: Some(provider_para_proto(req.embeddings_provider)),
         };
         let mut client = self.client.clone();
         let resp = client
@@ -204,7 +191,6 @@ impl IaEngineClient for TonicIaEngineClient {
                 .into_iter()
                 .map(|(key, value)| pb::KeyValuePair { key, value })
                 .collect(),
-            dados_empresa: req.dados_empresa,
             dados_treinamento: req.dados_treinamento,
             campos_coletados: req
                 .campos_coletados
@@ -225,9 +211,6 @@ impl IaEngineClient for TonicIaEngineClient {
                     hint: c.hint,
                 })
                 .collect(),
-            llm: Some(provider_para_proto(req.llm)),
-            embeddings_provider: Some(provider_para_proto(req.embeddings_provider)),
-            similarity_threshold: req.similarity_threshold,
         };
         let mut client = self.client.clone();
         let resp = client
@@ -251,7 +234,6 @@ impl IaEngineClient for TonicIaEngineClient {
         let payload = pb::SentimentoRequest {
             tenant_id: req.tenant_id,
             historico: Some(historico_para_proto(req.historico)),
-            llm: Some(provider_para_proto(req.llm)),
         };
         let mut client = self.client.clone();
         let resp = client
@@ -345,21 +327,10 @@ mod tests {
         assert!(req.metadata().get("traceparent").is_none());
     }
 
-    #[test]
-    fn provider_para_proto_mapeia_campos() {
-        let cfg = LlmProviderConfigInput {
-            provider: "openai".to_string(),
-            model: "gpt-4o".to_string(),
-            api_key: "segredo".to_string(),
-            temperature: 0.7,
-        };
-        let pb = provider_para_proto(cfg);
-        assert_eq!(pb.provider, "openai");
-        assert_eq!(pb.model, "gpt-4o");
-        assert_eq!(pb.api_key, "segredo");
-        assert_eq!(pb.temperature, 0.7);
-        assert!(pb.extra_params.is_empty());
-    }
+    // O teste `provider_para_proto_mapeia_campos` foi removido junto com a
+    // função: a config de provedor não trafega mais no request. Quem monta o
+    // `LlmProviderSpec` agora é o `ia_engine`, a partir do `RuntimeConfig` que
+    // lê do Redis — coberto por `tests/unit/test_config_cache.py` do lado de lá.
 
     #[test]
     fn media_para_proto_mapeia_campos() {

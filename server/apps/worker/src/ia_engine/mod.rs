@@ -13,7 +13,7 @@ pub mod tonic_client;
 // via caminho completo `ia_engine::client::*`. Analyse/Sentimento seguem
 // implementados no client/adapter, ainda sem chamador no pipeline deste ciclo.
 pub use client::{
-    ChatTurnInput, EmbedInput, IaEngineClient, LlmProviderConfigInput, ResponderInput,
+    ChatTurnInput, EmbedInput, IaEngineClient, ResponderInput,
 };
 pub use resilient::ResilientIaEngine;
 pub use tonic_client::TonicIaEngineClient;

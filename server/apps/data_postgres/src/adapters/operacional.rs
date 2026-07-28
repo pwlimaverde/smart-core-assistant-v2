@@ -95,10 +95,10 @@ impl PgOperacionalStore {
     /// `tenant:config:<uuid>`, então a config precisa ser **reescrita** aqui,
     /// não só invalidada — senão a IA seguiria com o valor antigo até o TTL.
     ///
-    /// `None` = mudança em CoreSettings, que alimenta todos os tenants; nesse
-    /// caso republica a base inteira. Chamar SEMPRE depois de
-    /// `config_cache.invalidate*`, para o `get_config` reresolver do banco em
-    /// vez de devolver a cópia velha que acabou de mudar.
+    /// `None` = mudança em CoreSettings, que alimenta TODOS os tenants; nesse
+    /// caso a republicação da base inteira vai para background (ver abaixo).
+    /// Chamar SEMPRE depois de `config_cache.invalidate*`, para o `get_config`
+    /// reresolver do banco em vez de devolver a cópia velha que acabou de mudar.
     async fn republicar_config_ia(&self, tenant_id: Option<Uuid>) {
         match tenant_id {
             Some(id) => match self.config_cache.get_config(id).await {
@@ -110,16 +110,29 @@ impl PgOperacionalStore {
                     "Config salva mas não republicada ao ia_engine: {e}"
                 ),
             },
+            // Uma linha de CoreSetting alterada obriga a reresolver a cascata de
+            // cada tenant (uma consulta ao banco por tenant). Fazer isso dentro
+            // do handler faria o `UpsertCoreSetting` do painel esperar por toda
+            // a base — segurando a resposta e arriscando timeout no cliente por
+            // um trabalho que já é best-effort. Vai para background.
             None => {
-                if let Err(e) = data_postgres::config_publisher::prewarm_configs(
-                    &self.pool,
-                    &self.config_cache,
-                    &self.conn,
-                )
-                .await
-                {
-                    tracing::warn!("Falha ao republicar configs após mudança global: {e}");
-                }
+                let store = self.clone();
+                tokio::spawn(async move {
+                    match data_postgres::config_publisher::prewarm_configs(
+                        &store.pool,
+                        &store.config_cache,
+                        &store.conn,
+                    )
+                    .await
+                    {
+                        Ok(n) => tracing::info!(
+                            "CoreSetting alterada: {n} config(s) republicada(s) ao ia_engine"
+                        ),
+                        Err(e) => {
+                            tracing::warn!("Falha ao republicar configs após mudança global: {e}")
+                        }
+                    }
+                });
             }
         }
     }

@@ -7,11 +7,14 @@ from __future__ import annotations
 
 import asyncio
 import signal
+from contextlib import suppress
 
 import grpc
 from grpc_health.v1 import health, health_pb2, health_pb2_grpc
 from loguru import logger
+from redis.asyncio import Redis
 
+from ia_engine.config import TenantConfigCache, escutar_invalidacoes
 from ia_engine.contracts import ai_engine_pb2 as pb
 from ia_engine.contracts import ai_engine_pb2_grpc as pbg
 from ia_engine.servicer import IaEngineServicer
@@ -23,13 +26,24 @@ _SERVICE_NAME = pb.DESCRIPTOR.services_by_name["IaEngineService"].full_name
 
 async def _build_server(
     settings: Settings,
-) -> tuple[grpc.aio.Server, health.aio.HealthServicer]:
+) -> tuple[grpc.aio.Server, health.aio.HealthServicer, asyncio.Task[None]]:
     interceptors = setup_telemetry(settings)
     server = grpc.aio.server(interceptors=interceptors)
 
+    # Duas conexões Redis de propósito: `subscribe` monopoliza a conexão em que
+    # roda, então o listener não pode dividi-la com as leituras de config.
+    redis_leitura = Redis.from_url(settings.redis_url)
+    redis_pubsub = Redis.from_url(settings.redis_url)
+    config_cache = TenantConfigCache(redis_leitura)
+    listener = asyncio.create_task(
+        escutar_invalidacoes(redis_pubsub, config_cache),
+        name="config-invalidation-listener",
+    )
+
     pbg.add_IaEngineServiceServicer_to_server(
         IaEngineServicer(
-            transcription_enabled=settings.transcription_enabled
+            transcription_enabled=settings.transcription_enabled,
+            config_cache=config_cache,
         ),
         server,
     )
@@ -39,12 +53,12 @@ async def _build_server(
 
     listen_addr = f"{settings.grpc_host}:{settings.grpc_port}"
     server.add_insecure_port(listen_addr)
-    return server, health_servicer
+    return server, health_servicer, listener
 
 
 async def serve() -> None:
     settings = get_settings()
-    server, health_servicer = await _build_server(settings)
+    server, health_servicer, listener = await _build_server(settings)
 
     await server.start()
     await health_servicer.set("", health_pb2.HealthCheckResponse.SERVING)
@@ -70,6 +84,10 @@ async def serve() -> None:
         await health_servicer.set(
             "", health_pb2.HealthCheckResponse.NOT_SERVING
         )
+        # O listener fica bloqueado em `listen()`; só o cancelamento o solta.
+        listener.cancel()
+        with suppress(asyncio.CancelledError):
+            await listener
         await server.stop(settings.grpc_grace_seconds)
 
 

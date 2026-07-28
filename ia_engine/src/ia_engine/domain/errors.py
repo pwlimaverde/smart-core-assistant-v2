@@ -43,3 +43,14 @@ class MediaDownloadError(AppError):
 @dataclass(frozen=True)
 class LlmRespostaInvalidaError(AppError):
     """LLM retornou tipo/conteúdo inesperado (INTERNAL)."""
+
+
+@final
+@dataclass(frozen=True)
+class ConfigTenantAusenteError(AppError):
+    """Sem config publicada para o tenant no Redis (FAILED_PRECONDITION).
+
+    Não é falha da IA: é pendência de provisionamento. O `data_postgres`
+    publica no boot (pre-warm) e a cada alteração de config — se caiu aqui, ou
+    ele não subiu, ou o tenant é novo e nada foi salvo ainda.
+    """

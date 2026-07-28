@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from py_return_success_or_error import Parameters
 
@@ -18,3 +18,6 @@ class InterpretMediaParameters(Parameters):
     media_type: str
     file_name: str
     vision_provider: LlmProviderSpec
+    # Overrides de prompt resolvidos pelo Rust (chave ausente => default do
+    # datasource). Dict em vez de tupla porque a busca aqui e' por chave.
+    prompts: dict[str, str] = field(default_factory=dict)

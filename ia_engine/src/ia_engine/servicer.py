@@ -22,9 +22,15 @@ from py_return_success_or_error import (
     Success,
 )
 
+from ia_engine.config import (
+    ConfigIndisponivelError,
+    RuntimeConfig,
+    TenantConfigCache,
+)
 from ia_engine.contracts import ai_engine_pb2 as pb
 from ia_engine.contracts import ai_engine_pb2_grpc as pbg
 from ia_engine.domain.errors import (
+    ConfigTenantAusenteError,
     InvalidRequestError,
     MediaDownloadError,
     ProviderConfigError,
@@ -89,11 +95,13 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
         embeddings_factory: EmbeddingsFactory = build_embeddings,
         transcriber_factory: TranscriberFactory = build_transcriber,
         transcription_enabled: bool = False,
+        config_cache: TenantConfigCache | None = None,
     ) -> None:
         self._chat_model_factory = chat_model_factory
         self._embeddings_factory = embeddings_factory
         self._transcriber_factory = transcriber_factory
         self._transcription_enabled = transcription_enabled
+        self._config_cache = config_cache
 
     # ---------------------------------------------------------------- RPCs
     async def Transcribe(
@@ -102,7 +110,11 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
         await self._require(
             context, request.media.url, "media.url", "Transcribe", request.tenant_id
         )
-        if not self._transcription_enabled:
+        config = await self._config(context, "Transcribe", request.tenant_id)
+        # Kill-switch por tenant (config) OU global do processo (env): qualquer
+        # um desligado curto-circuita. O do tenant é decidido pelo worker antes
+        # de chamar, mas repetir aqui evita gasto se alguém chamar direto.
+        if not self._transcription_enabled or not config.transcription_enabled:
             # Kill-switch global off: transcrição desligada por custo/latência.
             # Curto-circuita graciosamente (resposta vazia, sem erro).
             return pb.TranscribeResponse(transcricao="", resumo="")
@@ -119,7 +131,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                 url=request.media.url,
                 mimetype=request.media.mimetype,
                 language=request.language,
-                transcription_provider=_spec(request.transcription_provider),
+                transcription_provider=config.spec_transcription(),
             )
         )
         match result:
@@ -144,6 +156,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
             "InterpretMedia",
             request.tenant_id,
         )
+        config = await self._config(context, "InterpretMedia", request.tenant_id)
         usecase = InterpretMediaUsecase(
             InterpretMediaRepository(
                 InterpretMediaDataSource(
@@ -157,7 +170,8 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                 mimetype=request.media.mimetype,
                 media_type=request.media_type,
                 file_name=request.media.file_name,
-                vision_provider=_spec(request.vision_provider),
+                vision_provider=config.spec_vision(),
+                prompts=dict(config.prompts),
             )
         )
         match result:
@@ -178,6 +192,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
         await self._require(
             context, request.mensagem, "mensagem", "Analyse", request.tenant_id
         )
+        config = await self._config(context, "Analyse", request.tenant_id)
         usecase = AnalyseUsecase(
             AnalyseRepository(
                 AnalyseDataSource(chat_model_factory=self._chat_model_factory)
@@ -189,7 +204,8 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                 historico=_history(request.historico),
                 valid_intent_types=request.valid_intent_types,
                 valid_entity_types=tuple(request.valid_entity_types),
-                llm=_spec(request.llm),
+                llm=config.spec_llm(),
+                prompts=dict(config.prompts),
             )
         )
         match result:
@@ -223,6 +239,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                 "Embed",
                 request.tenant_id,
             )
+        config = await self._config(context, "Embed", request.tenant_id)
         usecase = EmbedUsecase(
             EmbedRepository(
                 EmbedDataSource(embeddings_factory=self._embeddings_factory)
@@ -231,7 +248,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
         result = await usecase(
             EmbedParameters(
                 textos=tuple(request.textos),
-                embeddings_provider=_spec(request.embeddings_provider),
+                embeddings_provider=config.spec_embeddings(),
             )
         )
         match result:
@@ -250,6 +267,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
         await self._require(
             context, request.mensagem, "mensagem", "Responder", request.tenant_id
         )
+        config = await self._config(context, "Responder", request.tenant_id)
         usecase = ResponderUsecase(
             ResponderRepository(
                 ResponderDataSource(
@@ -265,11 +283,15 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                 fluxos_disponiveis=tuple(
                     (kv.key, kv.value) for kv in request.fluxos_disponiveis
                 ),
-                dados_empresa=request.dados_empresa,
+                dados_empresa=config.dados_empresa,
+                persona_bot=config.persona_bot,
+                bot_agent_name=config.bot_agent_name,
+                msg_transferencia=config.msg_transferencia,
                 dados_treinamento=request.dados_treinamento,
-                similarity_threshold=request.similarity_threshold,
-                llm=_spec(request.llm),
-                embeddings_provider=_spec(request.embeddings_provider),
+                similarity_threshold=config.similarity_threshold,
+                llm=config.spec_llm(),
+                embeddings_provider=config.spec_embeddings(),
+                prompts=dict(config.prompts),
                 campos_coletados=tuple(
                     CampoColetado(slug=c.slug, nome=c.nome, valor=c.valor)
                     for c in request.campos_coletados
@@ -313,6 +335,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                 "Sentimento",
                 request.tenant_id,
             )
+        config = await self._config(context, "Sentimento", request.tenant_id)
         usecase = SentimentoUsecase(
             SentimentoRepository(
                 SentimentoDataSource(
@@ -323,7 +346,8 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
         result = await usecase(
             SentimentoParameters(
                 historico=_history(request.historico),
-                llm=_spec(request.llm),
+                llm=config.spec_llm(),
+                prompts=dict(config.prompts),
             )
         )
         match result:
@@ -339,6 +363,39 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                 assert_never(result)
 
     # ------------------------------------------------------------- helpers
+    async def _config(
+        self, context: grpc.aio.ServicerContext, rpc: str, tenant_id: str
+    ) -> RuntimeConfig:
+        """Config do tenant, publicada pelo Rust no Redis.
+
+        Aborta o RPC quando não há config: chamar o LLM sem chave gastaria uma
+        requisição para falhar com erro do provedor, mascarando o que é um
+        problema de provisionamento (`data_postgres` fora do ar, ou tenant novo
+        que ainda não passou pelo pre-warm).
+        """
+        if self._config_cache is None:
+            await self._abort(
+                context,
+                ProviderConfigError(
+                    message="ia_engine sem cache de config (Redis não configurado)"
+                ),
+                rpc,
+                tenant_id,
+            )
+        if not (tenant_id or "").strip():
+            await self._abort(
+                context,
+                InvalidRequestError(message="campo obrigatório ausente: tenant_id"),
+                rpc,
+                tenant_id,
+            )
+        try:
+            return await self._config_cache.get_config(tenant_id)
+        except ConfigIndisponivelError as exc:
+            await self._abort(
+                context, ConfigTenantAusenteError(message=str(exc)), rpc, tenant_id
+            )
+
     async def _require(
         self,
         context: grpc.aio.ServicerContext,
@@ -390,23 +447,10 @@ def _status_for(error: AppError) -> grpc.StatusCode:
     match error:
         case ProviderConfigError() | InvalidRequestError():
             return grpc.StatusCode.INVALID_ARGUMENT
-        case MediaDownloadError():
+        case MediaDownloadError() | ConfigTenantAusenteError():
             return grpc.StatusCode.FAILED_PRECONDITION
         case _:
             return grpc.StatusCode.INTERNAL
-
-
-def _spec(config: pb.LlmProviderConfig) -> LlmProviderSpec:
-    """Converte a config do proto para o valor de domínio (sem proto dentro)."""
-    return LlmProviderSpec(
-        provider=config.provider,
-        model=config.model,
-        api_key=config.api_key,
-        temperature=config.temperature,
-        extra_params=tuple(
-            (kv.key, kv.value) for kv in config.extra_params if kv.key
-        ),
-    )
 
 
 def _history(historico: pb.ChatHistory) -> tuple[ChatTurnTuple, ...]:

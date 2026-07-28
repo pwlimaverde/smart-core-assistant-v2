@@ -12,16 +12,16 @@ message KeyValuePair {
   string value = 2;
 }
 
-// Config do provedor LLM resolvida pelo worker por tenant (SecretString
-// descriptografada). Trafega só nesta mensagem, nunca em log. O `ia_engine`
-// nunca guarda config global de provedor — ela sempre chega por request.
-message LlmProviderConfig {
-  string provider = 1;    // "openai" | "anthropic" | "google_genai" | ...
-  string model = 2;
-  string api_key = 3;
-  double temperature = 4;
-  repeated KeyValuePair extra_params = 5;
-}
+// A config de provedor (modelo, api_key, temperatura) NÃO trafega mais aqui.
+// O `data_postgres` resolve a cascata `TenantConfig > CoreSettings`, publica o
+// `RuntimeConfig` em `tenant:config:<tenant_id>` no Redis e sinaliza mudanças
+// pelo canal `tenant:config:invalidate`; o `ia_engine` lê de lá, com cache em
+// RAM. Ver `doc_dev/modelagem_dados/gerenciamento_configuracoes_ia.md`.
+//
+// Por isso cada request carrega apenas `tenant_id` + os dados da mensagem:
+// chave de API e prompt de sistema não viajam a cada interação de WhatsApp.
+// Os números de campo liberados por essa mudança ficam `reserved` em cada
+// mensagem — reusá-los faria um cliente desatualizado ler lixo com o tipo certo.
 
 // Ponteiro de mídia (URL pré-assinada R2, curta duração) — nunca binário
 // inline nas mensagens gRPC.
@@ -45,7 +45,7 @@ message TranscribeRequest {
   string tenant_id = 1;
   MediaRef media = 2;
   string language = 3; // default "pt"
-  LlmProviderConfig transcription_provider = 4;
+  reserved 4; // era transcription_provider — vem do RuntimeConfig (Redis)
 }
 message TranscribeResponse {
   string transcricao = 1;
@@ -57,7 +57,7 @@ message InterpretMediaRequest {
   string tenant_id = 1;
   MediaRef media = 2;
   string media_type = 3; // "imageMessage" | "videoMessage" | "documentMessage"
-  LlmProviderConfig vision_provider = 4;
+  reserved 4; // era vision_provider — vem do RuntimeConfig (Redis)
 }
 message InterpretMediaResponse {
   string analise = 1;
@@ -71,7 +71,7 @@ message AnalyseRequest {
   ChatHistory historico = 3;
   string valid_intent_types = 4;
   repeated string valid_entity_types = 5;
-  LlmProviderConfig llm = 6;
+  reserved 6; // era llm — vem do RuntimeConfig (Redis)
 }
 message Intent {
   string tipo = 1;
@@ -91,7 +91,7 @@ message AnalyseResponse {
 message EmbedRequest {
   string tenant_id = 1;
   repeated string textos = 2; // batch
-  LlmProviderConfig embeddings_provider = 3;
+  reserved 3; // era embeddings_provider — vem do RuntimeConfig (Redis)
 }
 message Embedding {
   repeated float valores = 1;
@@ -120,13 +120,13 @@ message ResponderRequest {
   string mensagem = 3;
   ChatHistory historico = 4;
   repeated KeyValuePair fluxos_disponiveis = 5; // key = "Setor - descrição"
-  string dados_empresa = 6;
   string dados_treinamento = 7; // resolvido via data_postgres.QueryCompose
   repeated CampoColetado campos_coletados = 8;
   repeated CampoPendente campos_pendentes = 9;
-  LlmProviderConfig llm = 10;
-  LlmProviderConfig embeddings_provider = 11; // score triádico de confiabilidade
-  double similarity_threshold = 12;
+  // 6  era dados_empresa          | 10 era llm
+  // 12 era similarity_threshold   | 11 era embeddings_provider
+  // Todos vêm do RuntimeConfig (Redis).
+  reserved 6, 10, 11, 12;
 }
 message ResponderResponse {
   string resposta_texto = 1;
@@ -139,7 +139,7 @@ message ResponderResponse {
 message SentimentoRequest {
   string tenant_id = 1;
   ChatHistory historico = 2;
-  LlmProviderConfig llm = 3;
+  reserved 3; // era llm — vem do RuntimeConfig (Redis)
 }
 message SentimentoResponse {
   int32 nota = 1;

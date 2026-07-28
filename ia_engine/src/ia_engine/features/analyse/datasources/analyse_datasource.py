@@ -21,6 +21,12 @@ from ia_engine.shared.history import to_lc_messages
 
 ChatModelFactory = Callable[[LlmProviderSpec], BaseChatModel]
 
+# Chaves de override (ver migration 0026). O texto abaixo e' o DEFAULT: e' ele
+# que vale quando o tenant/global nao define nada, e e' o que os testes usam.
+CHAVE_SYSTEM = "PROMPT_SYSTEM_ANALISE_PREVIA_MENSAGEM"
+CHAVE_INTENT_SYSTEM = "PROMPT_INTENT_SYSTEM"
+CHAVE_INTENT_FOOTER = "PROMPT_INTENT_FOOTER"
+
 _SYSTEM_PROMPT = (
     "Você é um analisador de mensagens de atendimento. Extraia as INTENÇÕES e "
     "ENTIDADES presentes na última mensagem do usuário, considerando o "
@@ -89,9 +95,17 @@ class AnalyseDataSource(DataSource[Any, AnalyseParameters]):
         ]
         schema = build_dynamic_model(intent_types, entity_types)
 
+        # Blocos opcionais de intencao: so entram se configurados (na v1 eram
+        # concatenados ao prompt de sistema).
+        system = parameters.prompts.get(CHAVE_SYSTEM, "").strip() or _SYSTEM_PROMPT
+        for chave in (CHAVE_INTENT_SYSTEM, CHAVE_INTENT_FOOTER):
+            extra = parameters.prompts.get(chave, "").strip()
+            if extra:
+                system = f"{system}\n\n{extra}"
+
         prompt = ChatPromptTemplate.from_messages(
             [
-                ("system", _SYSTEM_PROMPT),
+                ("system", system),
                 MessagesPlaceholder(variable_name="chat_history"),
                 ("user", "{input}"),
             ]

@@ -23,7 +23,11 @@ from ia_engine.contracts import ai_engine_pb2 as pb
 from ia_engine.contracts import ai_engine_pb2_grpc as pbg
 from ia_engine.domain.errors import InvalidRequestError
 from ia_engine.servicer import IaEngineServicer
-from tests.conftest import FakeChatModel, FakeEmbeddings
+from tests.conftest import (
+    FakeChatModel,
+    FakeConfigCache,
+    FakeEmbeddings,
+)
 
 
 @asynccontextmanager
@@ -40,10 +44,6 @@ async def _stub_for(
             yield pbg.IaEngineServiceStub(channel)
     finally:
         await server.stop(None)
-
-
-def _spec() -> pb.LlmProviderConfig:
-    return pb.LlmProviderConfig(provider="openai", model="gpt-4o-mini")
 
 
 # ------------------------------------------------------------------ Transcribe
@@ -63,7 +63,6 @@ def _transcribe_request() -> pb.TranscribeRequest:
             url="https://r2.example/audio.ogg", mimetype="audio/ogg"
         ),
         language="pt",
-        transcription_provider=_spec(),
     )
 
 
@@ -76,7 +75,8 @@ async def test_transcribe_desligada_por_flag_curto_circuita_vazio(
     servicer = IaEngineServicer(
         chat_model_factory=fake_chat_factory,
         transcriber_factory=lambda _spec: _FakeTranscriberVazio(),
-        # transcription_enabled=False por padrão
+        # transcription_enabled=False por padrão (kill-switch do processo)
+        config_cache=FakeConfigCache(),
     )
     async with _stub_for(servicer) as stub:
         resp = await stub.Transcribe(_transcribe_request())
@@ -95,6 +95,7 @@ async def test_transcribe_provedores_falham_degrada_e_aborta_internal(
         chat_model_factory=fake_chat_factory,
         transcriber_factory=lambda _spec: _FakeTranscriberVazio(),
         transcription_enabled=True,
+        config_cache=FakeConfigCache(),
     )
     async with _stub_for(servicer) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
@@ -117,7 +118,9 @@ async def test_interpret_media_download_falho_aborta_com_failed_precondition(
         ".interpret_media_datasource.download_media",
         _fake_download_falho,
     )
-    servicer = IaEngineServicer(chat_model_factory=fake_chat_factory)
+    servicer = IaEngineServicer(
+        chat_model_factory=fake_chat_factory, config_cache=FakeConfigCache()
+    )
     async with _stub_for(servicer) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
             await stub.InterpretMedia(
@@ -127,7 +130,6 @@ async def test_interpret_media_download_falho_aborta_com_failed_precondition(
                         url="https://r2.example/img.jpg", mimetype="image/jpeg"
                     ),
                     media_type="imageMessage",
-                    vision_provider=_spec(),
                 )
             )
     assert exc_info.value.code() == grpc.StatusCode.FAILED_PRECONDITION
@@ -146,6 +148,7 @@ async def test_analyse_llm_devolve_tipo_inesperado_aborta_com_internal(
     servicer = IaEngineServicer(
         chat_model_factory=lambda _spec: chat,
         embeddings_factory=fake_embeddings_factory,
+        config_cache=FakeConfigCache(),
     )
     async with _stub_for(servicer) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
@@ -154,7 +157,6 @@ async def test_analyse_llm_devolve_tipo_inesperado_aborta_com_internal(
                     tenant_id="t1",
                     mensagem="oi",
                     valid_intent_types="saudacao",
-                    llm=_spec(),
                 )
             )
     assert exc_info.value.code() == grpc.StatusCode.INTERNAL
@@ -163,12 +165,15 @@ async def test_analyse_llm_devolve_tipo_inesperado_aborta_com_internal(
 # ---------------------------------------------------------------------- Embed
 @pytest.mark.asyncio
 async def test_embed_sem_textos_aborta_com_invalid_argument(fake_embeddings_factory):
-    servicer = IaEngineServicer(embeddings_factory=fake_embeddings_factory)
+    servicer = IaEngineServicer(
+        embeddings_factory=fake_embeddings_factory,
+        config_cache=FakeConfigCache(),
+    )
     async with _stub_for(servicer) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
             await stub.Embed(
                 pb.EmbedRequest(
-                    tenant_id="t1", textos=[], embeddings_provider=_spec()
+                    tenant_id="t1", textos=[]
                 )
             )
     assert exc_info.value.code() == grpc.StatusCode.INVALID_ARGUMENT
@@ -179,7 +184,8 @@ async def test_embed_dimensao_errada_aborta_com_internal():
     """Provedor devolve vetores fora do schema `vector(1536)` — o RPC não
     grava lixo no pgvector, aborta com INTERNAL."""
     servicer = IaEngineServicer(
-        embeddings_factory=lambda _spec: FakeEmbeddings(dim=8)
+        embeddings_factory=lambda _spec: FakeEmbeddings(dim=8),
+        config_cache=FakeConfigCache(),
     )
     async with _stub_for(servicer) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
@@ -187,7 +193,6 @@ async def test_embed_dimensao_errada_aborta_com_internal():
                 pb.EmbedRequest(
                     tenant_id="t1",
                     textos=["texto um"],
-                    embeddings_provider=_spec(),
                 )
             )
     assert exc_info.value.code() == grpc.StatusCode.INTERNAL
@@ -204,6 +209,7 @@ async def test_responder_llm_devolve_tipo_inesperado_aborta_com_internal(
     servicer = IaEngineServicer(
         chat_model_factory=lambda _spec: chat,
         embeddings_factory=fake_embeddings_factory,
+        config_cache=FakeConfigCache(),
     )
     async with _stub_for(servicer) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
@@ -211,9 +217,6 @@ async def test_responder_llm_devolve_tipo_inesperado_aborta_com_internal(
                 pb.ResponderRequest(
                     tenant_id="t1",
                     mensagem="Olá",
-                    llm=_spec(),
-                    embeddings_provider=_spec(),
-                    similarity_threshold=0.5,
                 )
             )
     assert exc_info.value.code() == grpc.StatusCode.INTERNAL
@@ -225,7 +228,9 @@ async def test_sentimento_llm_devolve_tipo_inesperado_aborta_com_internal():
     chat = FakeChatModel(
         messages=itertools.cycle([AIMessage(content="")]), avaliacao=None
     )
-    servicer = IaEngineServicer(chat_model_factory=lambda _spec: chat)
+    servicer = IaEngineServicer(
+        chat_model_factory=lambda _spec: chat, config_cache=FakeConfigCache()
+    )
     async with _stub_for(servicer) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
             await stub.Sentimento(
@@ -234,7 +239,6 @@ async def test_sentimento_llm_devolve_tipo_inesperado_aborta_com_internal():
                     historico=pb.ChatHistory(
                         turnos=[pb.ChatTurn(role="human", conteudo="oi")]
                     ),
-                    llm=_spec(),
                 )
             )
     assert exc_info.value.code() == grpc.StatusCode.INTERNAL
@@ -250,7 +254,7 @@ async def test_sentimento_sem_historico_aborta_com_invalid_argument(
     async with _stub_for(servicer) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
             await stub.Sentimento(
-                pb.SentimentoRequest(tenant_id="t1", llm=_spec())
+                pb.SentimentoRequest(tenant_id="t1")
             )
     assert exc_info.value.code() == grpc.StatusCode.INVALID_ARGUMENT
     assert "histórico" in exc_info.value.details()
@@ -266,7 +270,10 @@ async def test_erro_tecnico_inesperado_nao_vaza_detalhe_ao_cliente():
     def _chat_model_factory_com_bug(_spec: Any) -> Any:
         raise RuntimeError("token interno do provedor: xyz-123")
 
-    servicer = IaEngineServicer(chat_model_factory=_chat_model_factory_com_bug)
+    servicer = IaEngineServicer(
+        chat_model_factory=_chat_model_factory_com_bug,
+        config_cache=FakeConfigCache(),
+    )
     async with _stub_for(servicer) as stub:
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:
             await stub.Sentimento(
@@ -275,7 +282,6 @@ async def test_erro_tecnico_inesperado_nao_vaza_detalhe_ao_cliente():
                     historico=pb.ChatHistory(
                         turnos=[pb.ChatTurn(role="human", conteudo="oi")]
                     ),
-                    llm=_spec(),
                 )
             )
     assert exc_info.value.code() == grpc.StatusCode.INTERNAL
@@ -297,7 +303,7 @@ class _ContextQueNaoPropaga:
 
 @pytest.mark.asyncio
 async def test_abort_e_defensivo_quando_context_abort_nao_propaga():
-    servicer = IaEngineServicer()
+    servicer = IaEngineServicer(config_cache=FakeConfigCache())
     with pytest.raises(RuntimeError):
         await servicer._abort(  # type: ignore[arg-type]
             _ContextQueNaoPropaga(),
