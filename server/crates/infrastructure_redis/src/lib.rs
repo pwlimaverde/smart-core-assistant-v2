@@ -28,8 +28,8 @@ pub use connection::{
 pub use contracts::TenantEnvelope;
 pub use errors::RedisError;
 pub use keys::{
-    chave_blocklist, chave_flow_permissions, chave_rate_limit_login, chave_refresh,
-    chave_refresh_familia, chave_tenant,
+    chave_blocklist, chave_config_tenant, chave_flow_permissions, chave_rate_limit_login,
+    chave_refresh, chave_refresh_familia, chave_tenant, CANAL_CONFIG_INVALIDATE,
 };
 pub use transport::bus::{
     confirmar, consumir, garantir_consumer_group, publicar_evento, reprocessar_pendentes,

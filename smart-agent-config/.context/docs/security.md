@@ -36,7 +36,11 @@ O isolamento multi-tenant é a preocupação central. Dois mecanismos em profund
 - `.env.example` documenta variáveis necessárias sem valores reais.
 - Arquivos sensíveis no `.gitignore`: `.env*`, `*.pem`, `*.key`, `credentials.json`.
 - Tokens de LLM isolados no `ia_engine` via variáveis de ambiente; override por tenant via `tenant_config.api_keys` (cifradas em repouso).
-- O `ia_engine` é stateless quanto a tenant: recebe `tenant_id` + credenciais já resolvidas em cada request gRPC; não acessa o banco multi-tenant. Conteúdo do cliente é input não confiável (anti prompt injection).
+- O `ia_engine` é stateless quanto a tenant e **não acessa o banco multi-tenant**. Conteúdo do cliente é input não confiável (anti prompt injection).
+- **Config de tenant (incluindo chaves de LLM) trafega pelo Redis, decifrada.** O Rust resolve a cascata `TenantConfig > CoreSettings`, decifra as chaves com a `ENCRYPTION_KEY` e publica o `RuntimeConfig` em `tenant:config:<uuid>` (TTL 24h); o `ia_engine` lê de lá e mantém cópia em RAM (ver [gerenciamento_configuracoes_ia.md](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/modelagem_dados/gerenciamento_configuracoes_ia.md), seção 4.4).
+  - **Consequência aceita conscientemente**: o Redis passa a ser um armazenamento de segredos em claro, não só um cache. Antes as chaves só existiam em trânsito (payload gRPC por request).
+  - **Controles que sustentam a decisão**: `REDIS_PASSWORD` obrigatório, Redis sem porta publicada no host (rede interna do compose), TTL curto e nenhum log do payload — as mensagens de erro dos dois lados citam só o tipo da exceção, nunca o conteúdo.
+  - **Ao expor o Redis** (réplica gerenciada, monitoramento externo, dump de RDB para backup), tratar o dump como material de credencial: rotacionar as chaves de LLM se vazar.
 
 > Diretrizes completas de segurança: [seguranca.md](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/doc_dev/padroes_linguagens/seguranca.md).
 

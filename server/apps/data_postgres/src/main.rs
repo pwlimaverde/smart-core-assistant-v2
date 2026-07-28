@@ -196,6 +196,27 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
+    // Pre-warm das configs no Redis para o `ia_engine` (seção 3.4 do
+    // `gerenciamento_configuracoes_ia.md`). Sem isto, depois de um deploy o
+    // Redis está vazio e a PRIMEIRA mensagem de cada tenant falha — a config só
+    // apareceria quando alguém salvasse algo no painel.
+    //
+    // Em background: o serviço não deve atrasar o `listen` por causa de um
+    // Redis lento, e o `ia_engine` degrada com erro explícito enquanto isso.
+    {
+        let pool = pool.clone();
+        let config_cache = config_cache.clone();
+        let bus_conn = bus_conn.clone();
+        tokio::spawn(async move {
+            match data_postgres::config_publisher::prewarm_configs(&pool, &config_cache, &bus_conn)
+                .await
+            {
+                Ok(n) => tracing::info!("Pre-warm de config publicou {n} tenant(s) no Redis"),
+                Err(e) => tracing::error!("Falha no pre-warm de config para o ia_engine: {e:?}"),
+            }
+        });
+    }
+
     let whatsapp_store: std::sync::Arc<dyn ports::WhatsappStore> = std::sync::Arc::new(
         adapters::PgWhatsappStore::new(pool.clone(), admin_pool.clone(), cipher.clone()),
     );

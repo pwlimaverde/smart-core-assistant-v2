@@ -42,6 +42,26 @@ pub fn chave_rate_limit(recurso: &str, id: &str) -> String {
     format!("rate_limit:{recurso}:{id}")
 }
 
+/// `RuntimeConfig` consolidado do tenant (cascata `TenantConfig > CoreSettings`
+/// já resolvida), publicado pelo Rust e lido pelo `ia_engine`.
+///
+/// NÃO usa `chave_tenant` de propósito: o formato `tenant:config:<uuid>` é
+/// **contrato com o cliente Python** (ver
+/// `doc_dev/modelagem_dados/gerenciamento_configuracoes_ia.md`, seção 3.1), não
+/// uma convenção interna do Rust. Mudar aqui quebra o `ia_engine` em silêncio.
+pub fn chave_config_tenant(tenant_id: Uuid) -> String {
+    format!("tenant:config:{tenant_id}")
+}
+
+/// Canal Pub/Sub que avisa o `ia_engine` para descartar a cópia em RAM da
+/// config de um tenant. Payload: o `tenant_id` em texto puro (não JSON) —
+/// é o que o listener Python espera.
+///
+/// Distinto de `core:settings:invalidate`, que serve ao cache interno do Rust
+/// e carrega JSON. São dois consumidores com contratos diferentes; unificá-los
+/// acoplaria o Python ao formato interno do Rust.
+pub const CANAL_CONFIG_INVALIDATE: &str = "tenant:config:invalidate";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -64,5 +84,19 @@ mod tests {
         assert_eq!(chave_refresh_familia("fam1"), "auth:refresh_family:fam1");
         assert_eq!(chave_blocklist("jti1"), "auth:blocklist:jti1");
         assert_eq!(chave_rate_limit_login("h4sh"), "auth:rate_limit:login:h4sh");
+    }
+
+    #[test]
+    fn formats_tenant_config_key_as_the_python_client_expects() {
+        // O formato e' contrato com o `ia_engine` (Python), nao convencao
+        // interna: `tenant:config:<uuid>`, sem o segmento de recurso que
+        // `chave_tenant` insere.
+        let t = Uuid::parse_str("f47ac10b-58cc-4372-a567-0e02b2c3d479").unwrap();
+
+        assert_eq!(
+            chave_config_tenant(t),
+            "tenant:config:f47ac10b-58cc-4372-a567-0e02b2c3d479"
+        );
+        assert_eq!(CANAL_CONFIG_INVALIDATE, "tenant:config:invalidate");
     }
 }

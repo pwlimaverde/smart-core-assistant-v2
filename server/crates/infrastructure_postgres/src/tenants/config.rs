@@ -31,6 +31,43 @@ struct TenantConfigRow {
     similarity_threshold: Option<rust_decimal::Decimal>,
     vector_distance_threshold: Option<rust_decimal::Decimal>,
     api_keys: serde_json::Value,
+    prompts: serde_json::Value,
+}
+
+/// Prefixo das CoreSettings que carregam prompt de sistema. Só estas entram no
+/// `RuntimeConfig.prompts` — o resto das settings globais não tem por que
+/// trafegar até o `ia_engine`.
+const PREFIXO_PROMPT: &str = "PROMPT_";
+
+/// Resolve os prompts pela cascata: global (`PROMPT_*` do CoreSettings) por
+/// baixo, override do tenant (`tenants_tenantconfig.prompts`) por cima.
+///
+/// Valor vazio dos dois lados é OMITIDO em vez de virar string vazia: as linhas
+/// são semeadas vazias pela migration 0026 (o texto canônico dos prompts é o do
+/// código), e mandar `""` ao `ia_engine` apagaria o prompt em vez de deixá-lo
+/// cair no default.
+fn resolver_prompts(
+    core: &std::collections::HashMap<String, String>,
+    prompts_tenant: &serde_json::Value,
+) -> std::collections::HashMap<String, String> {
+    let mut resolvidos: std::collections::HashMap<String, String> = core
+        .iter()
+        .filter(|(k, v)| k.starts_with(PREFIXO_PROMPT) && !v.trim().is_empty())
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
+
+    if let Some(obj) = prompts_tenant.as_object() {
+        for (chave, valor) in obj {
+            // Só string: um JSON com número/objeto aqui é config malformada e
+            // não deve sobrescrever silenciosamente o global com lixo.
+            if let Some(texto) = valor.as_str() {
+                if !texto.trim().is_empty() {
+                    resolvidos.insert(chave.to_uppercase(), texto.to_string());
+                }
+            }
+        }
+    }
+    resolvidos
 }
 
 /// Resolve o RuntimeConfig aplicando a cascata Tenant > CoreSettings.
@@ -64,7 +101,7 @@ pub async fn resolve_runtime_config(
                   embeddings_class, embeddings_model,
                   chunk_size, chunk_overlap,
                   similarity_threshold, vector_distance_threshold,
-                  api_keys
+                  api_keys, prompts
            FROM tenants_tenantconfig
            WHERE tenant_id = $1"#,
         tenant_id
@@ -124,6 +161,13 @@ pub async fn resolve_runtime_config(
         ))
     };
 
+    let prompts = resolver_prompts(
+        &core,
+        &tc.as_ref()
+            .map(|r| r.prompts.clone())
+            .unwrap_or(serde_json::Value::Null),
+    );
+
     let tc = tc.unwrap_or_else(|| TenantConfigRow {
         dados_empresa: None,
         persona_bot: None,
@@ -146,6 +190,7 @@ pub async fn resolve_runtime_config(
         similarity_threshold: None,
         vector_distance_threshold: None,
         api_keys: serde_json::Value::Object(Default::default()),
+        prompts: serde_json::Value::Object(Default::default()),
     });
 
     Ok(RuntimeConfig {
@@ -176,5 +221,83 @@ pub async fn resolve_runtime_config(
         openai_api_key: resolve_api_key("openai_api_key", "OPENAI_API_KEY")?,
         groq_api_key: resolve_api_key("groq_api_key", "GROQ_API_KEY")?,
         google_api_key: resolve_api_key("google_api_key", "GOOGLE_API_KEY")?,
+        prompts,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn core_com(pares: &[(&str, &str)]) -> HashMap<String, String> {
+        pares
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn resolves_only_prompt_prefixed_settings_ignoring_other_globals() {
+        let core = core_com(&[
+            ("PROMPT_REGRAS_RESPOSTA", "regras globais"),
+            ("MODEL", "gemini-2.5-flash-lite"),
+            ("OPENAI_API_KEY", "nao-deve-vazar-para-prompts"),
+        ]);
+
+        let prompts = resolver_prompts(&core, &serde_json::Value::Null);
+
+        assert_eq!(prompts.len(), 1);
+        assert_eq!(prompts["PROMPT_REGRAS_RESPOSTA"], "regras globais");
+    }
+
+    #[test]
+    fn tenant_override_wins_over_global() {
+        let core = core_com(&[("PROMPT_REGRAS_RESPOSTA", "global")]);
+        let tenant = serde_json::json!({ "PROMPT_REGRAS_RESPOSTA": "do tenant" });
+
+        let prompts = resolver_prompts(&core, &tenant);
+
+        assert_eq!(prompts["PROMPT_REGRAS_RESPOSTA"], "do tenant");
+    }
+
+    #[test]
+    fn empty_values_are_omitted_so_the_engine_falls_back_to_its_default() {
+        // A migration 0026 semeia as chaves VAZIAS de proposito (o texto canonico
+        // e' o do codigo). Emitir "" apagaria o prompt no ia_engine em vez de
+        // deixa-lo cair no default.
+        let core = core_com(&[
+            ("PROMPT_REGRAS_RESPOSTA", ""),
+            ("PROMPT_INTENT_SYSTEM", "   "),
+        ]);
+        let tenant = serde_json::json!({ "PROMPT_SENTIMENTO_SYSTEM": "" });
+
+        let prompts = resolver_prompts(&core, &tenant);
+
+        assert!(
+            prompts.is_empty(),
+            "esperado nenhum override, veio {prompts:?}"
+        );
+    }
+
+    #[test]
+    fn tenant_key_is_normalized_to_uppercase() {
+        // O JSONB e' escrito pelo painel; aceitar so' o case exato faria um
+        // override valido ser ignorado sem aviso.
+        let tenant = serde_json::json!({ "prompt_regras_resposta": "minusculo" });
+
+        let prompts = resolver_prompts(&HashMap::new(), &tenant);
+
+        assert_eq!(prompts["PROMPT_REGRAS_RESPOSTA"], "minusculo");
+    }
+
+    #[test]
+    fn non_string_tenant_values_do_not_override_the_global() {
+        let core = core_com(&[("PROMPT_REGRAS_RESPOSTA", "global valido")]);
+        let tenant = serde_json::json!({ "PROMPT_REGRAS_RESPOSTA": { "texto": "objeto" } });
+
+        let prompts = resolver_prompts(&core, &tenant);
+
+        assert_eq!(prompts["PROMPT_REGRAS_RESPOSTA"], "global valido");
+    }
 }

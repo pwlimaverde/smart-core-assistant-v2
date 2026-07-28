@@ -86,6 +86,43 @@ impl PgOperacionalStore {
         let _: Result<(), redis::RedisError> =
             redis::AsyncCommands::publish(&mut conn, "core:settings:invalidate", payload_str).await;
     }
+
+    /// Reresolve e republica a config no Redis para o `ia_engine`.
+    ///
+    /// Complementa `publicar_invalidacao_cache`, que só avisa as réplicas do
+    /// próprio `data_postgres` a esvaziar o cache em memória. O `ia_engine` não
+    /// fala com o Postgres (ver `gerenciamento_configuracoes_ia.md`): ele lê
+    /// `tenant:config:<uuid>`, então a config precisa ser **reescrita** aqui,
+    /// não só invalidada — senão a IA seguiria com o valor antigo até o TTL.
+    ///
+    /// `None` = mudança em CoreSettings, que alimenta todos os tenants; nesse
+    /// caso republica a base inteira. Chamar SEMPRE depois de
+    /// `config_cache.invalidate*`, para o `get_config` reresolver do banco em
+    /// vez de devolver a cópia velha que acabou de mudar.
+    async fn republicar_config_ia(&self, tenant_id: Option<Uuid>) {
+        match tenant_id {
+            Some(id) => match self.config_cache.get_config(id).await {
+                Ok(cfg) => {
+                    data_postgres::config_publisher::publicar_config_tenant(&self.conn, &cfg).await;
+                }
+                Err(e) => tracing::warn!(
+                    tenant_id = %id,
+                    "Config salva mas não republicada ao ia_engine: {e}"
+                ),
+            },
+            None => {
+                if let Err(e) = data_postgres::config_publisher::prewarm_configs(
+                    &self.pool,
+                    &self.config_cache,
+                    &self.conn,
+                )
+                .await
+                {
+                    tracing::warn!("Falha ao republicar configs após mudança global: {e}");
+                }
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -145,6 +182,7 @@ impl OperacionalStore for PgOperacionalStore {
         // CoreSettings alimentam o RuntimeConfig de todos os tenants: invalida tudo.
         self.config_cache.invalidate_all();
         self.publicar_invalidacao_cache(None).await;
+        self.republicar_config_ia(None).await;
         Ok(())
     }
 
@@ -160,6 +198,7 @@ impl OperacionalStore for PgOperacionalStore {
         if deletado {
             self.config_cache.invalidate_all();
             self.publicar_invalidacao_cache(None).await;
+            self.republicar_config_ia(None).await;
         }
         Ok(deletado)
     }
@@ -411,6 +450,7 @@ impl OperacionalStore for PgOperacionalStore {
 
         self.config_cache.invalidate(&tenant_id);
         self.publicar_invalidacao_cache(Some(tenant_id)).await;
+        self.republicar_config_ia(Some(tenant_id)).await;
         Ok(chaves_alteradas)
     }
 
