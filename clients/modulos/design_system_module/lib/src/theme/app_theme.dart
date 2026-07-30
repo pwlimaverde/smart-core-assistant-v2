@@ -37,6 +37,12 @@ abstract final class AppTheme {
       brightness: brightness,
       colorScheme: scheme,
       scaffoldBackgroundColor: c.bg,
+      // `fontFamily` no tema alcança o que o `textTheme` não alcança: widget que
+      // constrói `TextStyle` do zero, ou tema de componente que não deriva do
+      // textTheme, cairia na fonte default do engine — que no Web significa
+      // buscar a Roboto em fonts.gstatic.com e ficar SEM TEXTO quando o CSP
+      // bloqueia. Com a família declarada aqui, todo texto usa a fonte do bundle.
+      fontFamily: AppTypography.fontFamily,
       textTheme: textTheme,
       extensions: [c],
       dividerColor: c.divider,

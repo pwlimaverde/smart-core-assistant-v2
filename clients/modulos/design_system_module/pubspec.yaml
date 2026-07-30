@@ -20,4 +20,18 @@ flutter:
   assets:
     - assets/brand/
 
+  # Fonte de marca empacotada, NAO servida por CDN. Sem uma fonte de texto no
+  # bundle, o engine do Flutter Web baixa a Roboto de fonts.gstatic.com — e o CSP
+  # da borda bloqueia, deixando a UI sem NENHUM texto (os icones aparecem, porque
+  # MaterialIcons e' asset local). Ver assets/fonts/OFL.txt para a licenca.
+  fonts:
+    - family: Outfit
+      fonts:
+        - asset: assets/fonts/Outfit-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Outfit-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Outfit-Bold.ttf
+          weight: 700
+
 resolution: workspace

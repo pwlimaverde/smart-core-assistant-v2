@@ -2,13 +2,22 @@ import 'package:flutter/material.dart';
 
 /// Escala tipográfica do design system.
 ///
-/// O design original usa a família **Outfit**. A fonte ainda não está empacotada
-/// no app; quando for adicionada (asset + `pubspec`), basta definir [fontFamily]
-/// que todos os estilos herdam — nenhuma tela precisa mudar. Enquanto isso, a
-/// fonte do sistema é usada como fallback.
+/// Usa a família **Outfit**, empacotada em
+/// `assets/fonts/` (declarada no `pubspec` deste módulo).
+///
+/// A fonte é empacotada, não vem de CDN: sem uma fonte de TEXTO no bundle, o
+/// engine do Flutter Web busca a Roboto em `fonts.gstatic.com`, e o CSP da borda
+/// bloqueia — a UI renderiza sem texto algum (só os ícones, que são asset
+/// local). Todos os estilos abaixo herdam [fontFamily]; nenhuma tela muda.
 abstract final class AppTypography {
-  /// Família de marca. `null` enquanto a fonte não está empacotada.
-  static const String? fontFamily = null;
+  /// Família de marca (empacotada em `assets/fonts/`).
+  ///
+  /// O prefixo `packages/<pacote>/` é obrigatório: fonte declarada no `pubspec`
+  /// de um PACOTE é registrada no `FontManifest.json` com esse namespace, e
+  /// `fontFamily: 'Outfit'` puro não a encontraria — cairia silenciosamente na
+  /// fonte default do engine, que é justamente o que se quer evitar. Equivale a
+  /// `TextStyle(fontFamily: 'Outfit', package: 'design_system_module')`.
+  static const String fontFamily = 'packages/design_system_module/Outfit';
 
   static const TextStyle displayLarge = TextStyle(
     fontFamily: fontFamily,
