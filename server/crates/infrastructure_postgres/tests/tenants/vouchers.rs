@@ -216,20 +216,25 @@ async fn voucher_expirado_e_esgotado_sao_recusados_com_motivos_distintos() {
     let pool = obter_pool_teste().await;
     let plan_id = plano_de_teste(&pool).await;
 
-    // Expirado: janela fechada ontem.
+    // Expirado. Não dá para NASCER expirado: a constraint
+    // `tenants_voucher_janela_coerente` exige `valido_ate > valido_de`, e
+    // `valido_de` é NOW() — uma janela invertida é dado inválido, não um estado
+    // de negócio. O jeito honesto de chegar em "expirado" é simular a passagem
+    // do tempo, empurrando a janela inteira para trás depois de criado.
     let expirado = codigo_unico("EXPIRADO");
-    criar(
-        &pool,
-        &expirado,
-        "",
-        plan_id,
-        30,
-        0,
-        Some(Utc::now() - Duration::days(1)),
-        None,
+    criar(&pool, &expirado, "", plan_id, 30, 0, None, None)
+        .await
+        .unwrap();
+    sqlx::query(
+        "UPDATE tenants_voucher \
+            SET valido_de = NOW() - INTERVAL '30 days', \
+                valido_ate = NOW() - INTERVAL '1 day' \
+          WHERE codigo_normalizado = $1",
     )
+    .bind(expirado.to_uppercase())
+    .execute(&pool)
     .await
-    .unwrap();
+    .expect("falha ao envelhecer o voucher");
 
     // Esgotado: uma vaga, já consumida.
     let esgotado = codigo_unico("ESGOTADO");
