@@ -2,6 +2,7 @@ import 'package:grpc/grpc.dart';
 
 import 'generated/queries/auth.pbgrpc.dart';
 import 'generated/queries/admin.pbgrpc.dart';
+import 'generated/queries/onboarding.pbgrpc.dart';
 import 'grpc_transport.dart';
 import 'interceptors/auth_token_interceptor.dart';
 
@@ -19,6 +20,7 @@ final class GrpcNativeApiClient implements GrpcTransport {
   late final ClientChannel _channel;
   late final AuthServiceClient _auth;
   late final AdminServiceClient _admin;
+  late final OnboardingServiceClient _onboarding;
 
   /// [endpoint] é o endereço da fachada (pode vir como `https://host`,
   /// `tcp://host:porta`, `http://host:porta` ou `host:porta`); [readAccessToken]
@@ -53,6 +55,8 @@ final class GrpcNativeApiClient implements GrpcTransport {
       _channel,
       interceptors: [AuthTokenInterceptor(readAccessToken)],
     );
+    // Sem interceptor: o cadastro roda sem sessão.
+    _onboarding = OnboardingServiceClient(_channel);
   }
 
   @override
@@ -60,6 +64,9 @@ final class GrpcNativeApiClient implements GrpcTransport {
 
   @override
   AdminServiceClient get admin => _admin;
+
+  @override
+  OnboardingServiceClient get onboarding => _onboarding;
 
   @override
   Future<void> connect() async {

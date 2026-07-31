@@ -1,0 +1,105 @@
+// Generated from onboarding.proto
+
+namespace smartcore.contracts.queries;
+
+enum ModoConfirmacao : int {
+  MODO_CONFIRMACAO_UNSPECIFIED = 0,
+  MODO_CONFIRMACAO_IMEDIATA = 1,
+  MODO_CONFIRMACAO_ASSINCRONA = 2,
+}
+
+table CheckSlugRequest {
+  slug:string;
+}
+
+table CheckSlugResponse {
+  disponivel:bool;
+  motivo:string;
+  mensagem:string;
+}
+
+table PublicPlan {
+  id:int;
+  name:string;
+  description:string;
+  price:string;
+  max_instances:int;
+  max_departments:int;
+  max_fluxos:int;
+}
+
+table ListPublicPlansRequest {
+}
+
+table ListPublicPlansResponse {
+  planos:[smartcore.contracts.queries.PublicPlan];
+}
+
+table StartSignupRequest {
+  name:string;
+  slug:string;
+  email:string;
+  username:string;
+  password:string;
+  phone:string;
+}
+
+table StartSignupResponse {
+  tenant_id:string;
+  signup_token:string;
+  proximo_passo:int;
+}
+
+table SelectPlanRequest {
+  tenant_id:string;
+  signup_token:string;
+  plan_id:int;
+}
+
+table SelectPlanResponse {
+  proximo_passo:int;
+}
+
+table PaymentProvider {
+  id:string;
+  rotulo:string;
+  instrucao:string;
+  requer_credencial:bool;
+  rotulo_credencial:string;
+  modo:smartcore.contracts.queries.ModoConfirmacao;
+}
+
+table ListPaymentProvidersRequest {
+}
+
+table ListPaymentProvidersResponse {
+  provedores:[smartcore.contracts.queries.PaymentProvider];
+}
+
+table ConfirmPaymentRequest {
+  tenant_id:string;
+  signup_token:string;
+  provedor:string;
+  credencial:string;
+}
+
+table ConfirmPaymentResponse {
+  confirmado:bool;
+  url_redirecionamento:string;
+  motivo:string;
+  mensagem:string;
+}
+
+table GetSignupStatusRequest {
+  tenant_id:string;
+  signup_token:string;
+}
+
+table GetSignupStatusResponse {
+  passo:int;
+  plan_id:int;
+  status_assinatura:string;
+  tenant_ativo:bool;
+  periodo_fim:long;
+}
+

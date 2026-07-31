@@ -8,6 +8,7 @@ import '../../domain/errors/billing_errors.dart';
 import '../../domain/model/payment_record.dart';
 import '../../domain/model/plan.dart';
 import '../../domain/model/subscription.dart';
+import '../../domain/model/voucher.dart';
 import '../../domain/parameters/billing_parameters.dart';
 
 /// Fronteiras da feature `billing`.
@@ -117,4 +118,59 @@ final class ListPaymentsRepository
     StackTrace stackTrace,
     ListPaymentsParameters parameters,
   ) => _mapBilling('listPayments', exception, stackTrace);
+}
+
+// --- Vouchers de ativação ---
+
+final class ListVouchersRepository
+    extends RepositoryBase<List<Voucher>, NoParams, BillingError> {
+  const ListVouchersRepository({required super.datasource});
+
+  @override
+  BillingError mapError(
+    Object exception,
+    StackTrace stackTrace,
+    NoParams parameters,
+  ) => _mapBilling('listVouchers', exception, stackTrace);
+}
+
+final class CreateVoucherRepository
+    extends RepositoryBase<Voucher, CreateVoucherParameters, BillingError> {
+  const CreateVoucherRepository({required super.datasource});
+
+  @override
+  BillingError mapError(
+    Object exception,
+    StackTrace stackTrace,
+    CreateVoucherParameters parameters,
+  ) => _mapBilling('createVoucher', exception, stackTrace);
+}
+
+final class RevokeVoucherRepository
+    extends RepositoryBase<bool, RevokeVoucherParameters, BillingError> {
+  const RevokeVoucherRepository({required super.datasource});
+
+  @override
+  BillingError mapError(
+    Object exception,
+    StackTrace stackTrace,
+    RevokeVoucherParameters parameters,
+  ) => _mapBilling('revokeVoucher', exception, stackTrace);
+}
+
+final class ListVoucherRedemptionsRepository
+    extends
+        RepositoryBase<
+          List<VoucherRedemption>,
+          VoucherRedemptionsParameters,
+          BillingError
+        > {
+  const ListVoucherRedemptionsRepository({required super.datasource});
+
+  @override
+  BillingError mapError(
+    Object exception,
+    StackTrace stackTrace,
+    VoucherRedemptionsParameters parameters,
+  ) => _mapBilling('listVoucherRedemptions', exception, stackTrace);
 }

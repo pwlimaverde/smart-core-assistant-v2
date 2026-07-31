@@ -31,6 +31,11 @@ void registrarFallbacksDoAdmin() {
   registerFallbackValue(proto.ListSubscriptionsRequest());
   registerFallbackValue(proto.RegisterPaymentRequest());
   registerFallbackValue(proto.ListPaymentsRequest());
+  // Vouchers de ativação (migration 0027).
+  registerFallbackValue(proto.ListVouchersRequest());
+  registerFallbackValue(proto.CreateVoucherRequest());
+  registerFallbackValue(proto.RevokeVoucherRequest());
+  registerFallbackValue(proto.ListVoucherRedemptionsRequest());
   registerFallbackValue(proto.ListFeatureFlagsRequest());
   registerFallbackValue(proto.SetFeatureFlagRequest());
   registerFallbackValue(proto.SetFeatureFlagOverrideRequest());

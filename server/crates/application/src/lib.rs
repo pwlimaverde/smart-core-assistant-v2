@@ -5,4 +5,5 @@
 
 pub mod auth;
 pub mod jwt;
+pub mod pagamento;
 pub mod tokens;

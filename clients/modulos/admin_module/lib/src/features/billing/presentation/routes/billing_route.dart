@@ -21,6 +21,10 @@ final class BillingRoute extends GetItModule {
         listSubscriptionsUsecase: inject<ListSubscriptionsUsecase>(),
         registerPaymentUsecase: inject<RegisterPaymentUsecase>(),
         listPaymentsUsecase: inject<ListPaymentsUsecase>(),
+        listVouchersUsecase: inject<ListVouchersUsecase>(),
+        createVoucherUsecase: inject<CreateVoucherUsecase>(),
+        revokeVoucherUsecase: inject<RevokeVoucherUsecase>(),
+        listVoucherRedemptionsUsecase: inject<ListVoucherRedemptionsUsecase>(),
       ),
     );
   }

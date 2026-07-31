@@ -4,6 +4,7 @@ import 'package:return_success_or_error/return_success_or_error.dart';
 import '../../domain/model/payment_record.dart';
 import '../../domain/model/plan.dart';
 import '../../domain/model/subscription.dart';
+import '../../domain/model/voucher.dart';
 import '../../domain/parameters/billing_parameters.dart';
 
 /// Datasources da feature `billing`: I/O gRPC e conversão protobuf →
@@ -188,6 +189,123 @@ final class ListPaymentsDatasource
             notes: p.notes,
             recordedById: p.recordedById,
             createdAt: DateTime.fromMillisecondsSinceEpoch(p.createdAt.toInt()),
+          ),
+        )
+        .toList();
+  }
+}
+
+// --- Vouchers de ativação ---
+
+/// Converte epoch-ms em `DateTime`; 0 significa "ausente" no contrato do proto
+/// (proto3 não distingue campo não preenchido de zero em escalares).
+DateTime? _dataOpcional(int epochMs) =>
+    epochMs == 0 ? null : DateTime.fromMillisecondsSinceEpoch(epochMs);
+
+Voucher _voucherDoProto(proto.Voucher v) => Voucher(
+  id: v.id,
+  codigo: v.codigo,
+  descricao: v.descricao,
+  planId: v.planId,
+  planName: v.planName,
+  duracaoDias: v.duracaoDias,
+  maxResgates: v.maxResgates,
+  resgatesUsados: v.resgatesUsados,
+  validoDe: DateTime.fromMillisecondsSinceEpoch(v.validoDe.toInt()),
+  validoAte: _dataOpcional(v.validoAte.toInt()),
+  revogadoEm: _dataOpcional(v.revogadoEm.toInt()),
+  motivoRevogacao: v.motivoRevogacao,
+  createdAt: DateTime.fromMillisecondsSinceEpoch(v.createdAt.toInt()),
+);
+
+/// Lista os vouchers.
+final class ListVouchersDatasource
+    implements Datasource<List<Voucher>, NoParams> {
+  final proto.AdminServiceClient _client;
+
+  const ListVouchersDatasource({required this._client});
+
+  @override
+  Future<List<Voucher>> call(NoParams parameters) async {
+    final resp = await _client.listVouchers(proto.ListVouchersRequest());
+    return resp.vouchers.map(_voucherDoProto).toList();
+  }
+}
+
+/// Cria um voucher.
+final class CreateVoucherDatasource
+    implements Datasource<Voucher, CreateVoucherParameters> {
+  final proto.AdminServiceClient _client;
+
+  const CreateVoucherDatasource({required this._client});
+
+  @override
+  Future<Voucher> call(CreateVoucherParameters parameters) async {
+    final resp = await _client.createVoucher(
+      proto.CreateVoucherRequest(
+        codigo: parameters.codigo,
+        descricao: parameters.descricao,
+        planId: parameters.planId,
+        duracaoDias: parameters.duracaoDias,
+        maxResgates: parameters.maxResgates,
+        validoAte: parameters.validoAte,
+      ),
+    );
+    return _voucherDoProto(resp.voucher);
+  }
+}
+
+/// Revoga um voucher. `false` = já estava revogado (não é erro).
+final class RevokeVoucherDatasource
+    implements Datasource<bool, RevokeVoucherParameters> {
+  final proto.AdminServiceClient _client;
+
+  const RevokeVoucherDatasource({required this._client});
+
+  @override
+  Future<bool> call(RevokeVoucherParameters parameters) async {
+    final resp = await _client.revokeVoucher(
+      proto.RevokeVoucherRequest(
+        voucherId: parameters.voucherId,
+        motivo: parameters.motivo,
+      ),
+    );
+    return resp.revogado;
+  }
+}
+
+/// Histórico de resgates de um voucher.
+final class ListVoucherRedemptionsDatasource
+    implements
+        Datasource<List<VoucherRedemption>, VoucherRedemptionsParameters> {
+  final proto.AdminServiceClient _client;
+
+  const ListVoucherRedemptionsDatasource({required this._client});
+
+  @override
+  Future<List<VoucherRedemption>> call(
+    VoucherRedemptionsParameters parameters,
+  ) async {
+    final resp = await _client.listVoucherRedemptions(
+      proto.ListVoucherRedemptionsRequest(voucherId: parameters.voucherId),
+    );
+    return resp.resgates
+        .map(
+          (r) => VoucherRedemption(
+            id: r.id,
+            voucherId: r.voucherId,
+            tenantId: r.tenantId,
+            planId: r.planId,
+            periodoInicio: DateTime.fromMillisecondsSinceEpoch(
+              r.periodoInicio.toInt(),
+            ),
+            periodoFim: DateTime.fromMillisecondsSinceEpoch(
+              r.periodoFim.toInt(),
+            ),
+            ip: r.ip,
+            redeemedAt: DateTime.fromMillisecondsSinceEpoch(
+              r.redeemedAt.toInt(),
+            ),
           ),
         )
         .toList();

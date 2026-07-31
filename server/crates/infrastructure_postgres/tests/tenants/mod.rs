@@ -1,3 +1,5 @@
+mod vouchers;
+
 use crate::common::{
     configurar_tenant_transacao, criar_contexto_teste, criar_tenant_para_teste, obter_pool_teste,
 };

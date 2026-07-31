@@ -5,8 +5,10 @@ pub mod cliente;
 pub mod operacional;
 pub mod plans;
 pub mod quota;
+pub mod signup;
 pub mod tenant;
 pub mod treinamento;
+pub mod vouchers;
 pub mod whatsapp;
 
 pub use atendimento::{
@@ -19,8 +21,10 @@ pub use cliente::ClienteStore;
 pub use operacional::OperacionalStore;
 pub use plans::PlansStore;
 pub use quota::QuotaStore;
+pub use signup::{SignupIniciado, SignupStore, SlugIndisponivel, StatusSignup};
 pub use tenant::TenantStore;
 pub use treinamento::{DocumentoTrecho, QueryComposeResultado, TreinamentoStore};
+pub use vouchers::{DesfechoResgate, VoucherStore};
 pub use whatsapp::WhatsappStore;
 
 #[cfg(test)]
@@ -46,10 +50,16 @@ pub use plans::MockPlansStore;
 pub use quota::MockQuotaStore;
 #[cfg(test)]
 #[allow(unused_imports)]
+pub use signup::MockSignupStore;
+#[cfg(test)]
+#[allow(unused_imports)]
 pub use tenant::MockTenantStore;
 #[cfg(test)]
 #[allow(unused_imports)]
 pub use treinamento::MockTreinamentoStore;
+#[cfg(test)]
+#[allow(unused_imports)]
+pub use vouchers::MockVoucherStore;
 #[cfg(test)]
 #[allow(unused_imports)]
 pub use whatsapp::MockWhatsappStore;

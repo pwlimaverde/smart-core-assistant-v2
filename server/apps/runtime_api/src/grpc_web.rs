@@ -29,6 +29,9 @@ use contracts::grpc::queries::{
     CreatePlanResponse,
     CreateTenantRequest,
     CreateTenantResponse,
+    // Vouchers de ativação
+    CreateVoucherRequest,
+    CreateVoucherResponse,
     DeleteCoreSettingRequest,
     DeleteCoreSettingResponse,
     ExportTenantsCsvRequest,
@@ -69,6 +72,10 @@ use contracts::grpc::queries::{
     // Fase 2 - Tenants
     ListTenantsRequest,
     ListTenantsResponse,
+    ListVoucherRedemptionsRequest,
+    ListVoucherRedemptionsResponse,
+    ListVouchersRequest,
+    ListVouchersResponse,
     LoginRequest,
     LogoutRequest,
     LogoutResponse,
@@ -85,6 +92,8 @@ use contracts::grpc::queries::{
     RegisterPaymentResponse,
     RevokeInviteRequest,
     RevokeInviteResponse,
+    RevokeVoucherRequest,
+    RevokeVoucherResponse,
     SendOutboundMessageRequest,
     SendOutboundMessageResponse,
     ServiceHealth as ProtoServiceHealth,
@@ -114,6 +123,8 @@ use contracts::grpc::queries::{
     UpdateTenantUserResponse,
     UpsertCoreSettingRequest,
     UpsertCoreSettingResponse,
+    Voucher as ProtoVoucher,
+    VoucherRedemption as ProtoVoucherRedemption,
 };
 use contracts::{Envelope, MessageKind};
 use tonic::{Request, Response, Status};
@@ -136,7 +147,7 @@ impl AuthFacade {
 
 /// Converte o `AppError` interno num `tonic::Status` sem vazar detalhe sensível.
 /// As mensagens são chaves de i18n estáveis resolvidas no cliente (`ErrorMessageMapper`).
-fn app_err_para_status(err: &error_core::AppError) -> Status {
+pub(crate) fn app_err_para_status(err: &error_core::AppError) -> Status {
     use error_core::AppError::*;
     match err {
         Auth(_) => Status::unauthenticated("errors.auth"),
@@ -160,7 +171,7 @@ fn bearer_do_metadata<T>(req: &Request<T>) -> String {
 
 /// Extrai o `traceparent` (W3C TraceContext) do metadata; gera um novo se ausente,
 /// para que a borda gRPC-Web sempre correlacione com os spans internos.
-fn traceparent_do_metadata<T>(req: &Request<T>) -> String {
+pub(crate) fn traceparent_do_metadata<T>(req: &Request<T>) -> String {
     req.metadata()
         .get("traceparent")
         .and_then(|v| v.to_str().ok())
@@ -171,7 +182,7 @@ fn traceparent_do_metadata<T>(req: &Request<T>) -> String {
 /// Extrai o IP do cliente repassado pelo proxy (`x-forwarded-for`, primeiro valor).
 /// Agora que existe uma borda HTTP de fato, podemos registrar o IP na auditoria
 /// (item pendente do doc 09 §6.4).
-fn ip_do_metadata<T>(req: &Request<T>) -> Option<String> {
+pub(crate) fn ip_do_metadata<T>(req: &Request<T>) -> Option<String> {
     req.metadata()
         .get("x-forwarded-for")
         .and_then(|v| v.to_str().ok())
@@ -666,6 +677,99 @@ impl AdminFacade {
             control,
             realtime,
         }
+    }
+
+    /// Exige superusuário, encaminha ao `data_postgres` e devolve o corpo JSON.
+    ///
+    /// Condensa o preâmbulo que os métodos admin repetem (claims, envelope,
+    /// chamada, checagem de erro, parse). Vale para rotas cross-tenant simples,
+    /// que não precisam de `tenant_id` no envelope nem de auditoria de borda.
+    async fn encaminhar_admin<T>(
+        &self,
+        req: &Request<T>,
+        metodo: &str,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, Status> {
+        let claims = exigir_superuser_do_metadata(&self.deps, &self.bus, req).await?;
+        let traceparent = traceparent_do_metadata(req);
+
+        let env_req = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent,
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: metodo.to_string(),
+            payload: serde_json::to_vec(&payload).unwrap_or_default(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: true,
+            ..Default::default()
+        };
+
+        let resp = self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço interno: {e}")))?;
+
+        if resp.kind == MessageKind::Error as i32 {
+            return Err(status_do_erro_interno(resp.error));
+        }
+
+        serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))
+    }
+}
+
+/// Converte o JSON de voucher do `data_postgres` na mensagem do proto.
+fn voucher_do_json(item: &serde_json::Value) -> ProtoVoucher {
+    let str_de = |k: &str| {
+        item.get(k)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    let i64_de = |k: &str| item.get(k).and_then(|v| v.as_i64()).unwrap_or_default();
+
+    ProtoVoucher {
+        id: str_de("id"),
+        codigo: str_de("codigo"),
+        descricao: str_de("descricao"),
+        plan_id: i64_de("plan_id") as i32,
+        plan_name: str_de("plan_name"),
+        duracao_dias: i64_de("duracao_dias") as i32,
+        max_resgates: i64_de("max_resgates") as i32,
+        resgates_usados: i64_de("resgates_usados") as i32,
+        valido_de: i64_de("valido_de"),
+        valido_ate: i64_de("valido_ate"),
+        revogado_em: i64_de("revogado_em"),
+        motivo_revogacao: str_de("motivo_revogacao"),
+        created_at: i64_de("created_at"),
+    }
+}
+
+/// Converte o JSON de resgate do `data_postgres` na mensagem do proto.
+fn resgate_do_json(item: &serde_json::Value) -> ProtoVoucherRedemption {
+    let str_de = |k: &str| {
+        item.get(k)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    let i64_de = |k: &str| item.get(k).and_then(|v| v.as_i64()).unwrap_or_default();
+
+    ProtoVoucherRedemption {
+        id: str_de("id"),
+        voucher_id: str_de("voucher_id"),
+        tenant_id: str_de("tenant_id"),
+        plan_id: i64_de("plan_id") as i32,
+        periodo_inicio: i64_de("periodo_inicio"),
+        periodo_fim: i64_de("periodo_fim"),
+        ip: str_de("ip"),
+        redeemed_at: i64_de("redeemed_at"),
     }
 }
 
@@ -1547,6 +1651,10 @@ impl AdminService for AdminFacade {
                                 .get("created_at")
                                 .and_then(|v| v.as_i64())
                                 .unwrap_or_default(),
+                            max_fluxos: item
+                                .get("max_fluxos")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or_default() as i32,
                         });
                     }
                 }
@@ -1572,7 +1680,8 @@ impl AdminService for AdminFacade {
             "description": inner.description,
             "price": inner.price,
             "max_instances": inner.max_instances,
-            "max_departments": inner.max_departments
+            "max_departments": inner.max_departments,
+            "max_fluxos": inner.max_fluxos
         });
         let env_req = Envelope {
             tenant_id: Uuid::nil().to_string(),
@@ -1636,6 +1745,10 @@ impl AdminService for AdminFacade {
                         .get("created_at")
                         .and_then(|v| v.as_i64())
                         .unwrap_or_default(),
+                    max_fluxos: item
+                        .get("max_fluxos")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or_default() as i32,
                 });
                 Ok(Response::new(CreatePlanResponse { plan: proto_plan }))
             }
@@ -1661,6 +1774,7 @@ impl AdminService for AdminFacade {
             "price": inner.price,
             "max_instances": inner.max_instances,
             "max_departments": inner.max_departments,
+            "max_fluxos": inner.max_fluxos,
             "active": inner.active
         });
         let env_req = Envelope {
@@ -1991,6 +2105,112 @@ impl AdminService for AdminFacade {
             }
             Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
         }
+    }
+
+    // --- Vouchers de ativação (superusuário) ---
+    //
+    // Métodos concretos, e não só rotas no roteador de envelope: sem a
+    // implementação aqui o Flutter Web não os alcança, ainda que o
+    // `data_postgres` responda.
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListVouchers", traceparent)
+    )]
+    async fn list_vouchers(
+        &self,
+        req: Request<ListVouchersRequest>,
+    ) -> Result<Response<ListVouchersResponse>, Status> {
+        let corpo = self
+            .encaminhar_admin(&req, "ListVouchers", serde_json::json!({}))
+            .await?;
+        Ok(Response::new(ListVouchersResponse {
+            vouchers: corpo
+                .get("vouchers")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().map(voucher_do_json).collect())
+                .unwrap_or_default(),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "CreateVoucher", traceparent)
+    )]
+    async fn create_voucher(
+        &self,
+        req: Request<CreateVoucherRequest>,
+    ) -> Result<Response<CreateVoucherResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let corpo = self
+            .encaminhar_admin(
+                &req,
+                "CreateVoucher",
+                serde_json::json!({
+                    "codigo": inner.codigo,
+                    "descricao": inner.descricao,
+                    "plan_id": inner.plan_id,
+                    "duracao_dias": inner.duracao_dias,
+                    "max_resgates": inner.max_resgates,
+                    "valido_ate": inner.valido_ate,
+                }),
+            )
+            .await?;
+        Ok(Response::new(CreateVoucherResponse {
+            voucher: corpo.get("voucher").map(voucher_do_json),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "RevokeVoucher", traceparent)
+    )]
+    async fn revoke_voucher(
+        &self,
+        req: Request<RevokeVoucherRequest>,
+    ) -> Result<Response<RevokeVoucherResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let corpo = self
+            .encaminhar_admin(
+                &req,
+                "RevokeVoucher",
+                serde_json::json!({
+                    "voucher_id": inner.voucher_id,
+                    "motivo": inner.motivo,
+                }),
+            )
+            .await?;
+        Ok(Response::new(RevokeVoucherResponse {
+            revogado: corpo
+                .get("revogado")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListVoucherRedemptions", traceparent)
+    )]
+    async fn list_voucher_redemptions(
+        &self,
+        req: Request<ListVoucherRedemptionsRequest>,
+    ) -> Result<Response<ListVoucherRedemptionsResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let corpo = self
+            .encaminhar_admin(
+                &req,
+                "ListVoucherRedemptions",
+                serde_json::json!({ "voucher_id": inner.voucher_id }),
+            )
+            .await?;
+        Ok(Response::new(ListVoucherRedemptionsResponse {
+            resgates: corpo
+                .get("resgates")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().map(resgate_do_json).collect())
+                .unwrap_or_default(),
+        }))
     }
 
     // --- Fase 3: Evolution Connection ---
@@ -3857,6 +4077,19 @@ pub async fn serve(deps: Arc<AuthDeps>, bus: redis::aio::ConnectionManager) -> a
 
     let facade_auth = AuthServiceServer::new(AuthFacade::new(deps.clone(), bus.clone()));
     let control = transport::conectar_cliente("control_plane").await?;
+
+    // Provedores de pagamento habilitados nesta instalação. Hoje só o voucher;
+    // um gateway entra aqui e aparece sozinho na tela de pagamento do cadastro.
+    // Cliente próprio para o `data_postgres` — `MuxClient` não é clonável.
+    let pg_pagamento = transport::conectar_cliente("data_postgres").await?;
+    let provedores = application::pagamento::RegistroProvedores::novo(vec![Arc::new(
+        application::pagamento::voucher::ProvedorVoucher::novo(pg_pagamento),
+    )]);
+    let facade_onboarding =
+        contracts::grpc::queries::onboarding_service_server::OnboardingServiceServer::new(
+            crate::onboarding_web::OnboardingFacade::new(deps.clone(), provedores),
+        );
+
     let facade_admin = AdminServiceServer::new(AdminFacade::new(deps, bus, control, realtime));
 
     // CORS restritivo (defesa em profundidade mesmo servindo na mesma origem que o WASM).
@@ -3883,6 +4116,7 @@ pub async fn serve(deps: Arc<AuthDeps>, bus: redis::aio::ConnectionManager) -> a
         .layer(cors) // CORS ANTES
         .layer(tonic_web::GrpcWebLayer::new()) // GrpcWebLayer DEPOIS
         .add_service(facade_auth)
+        .add_service(facade_onboarding)
         .add_service(facade_admin)
         .serve(addr)
         .await?;

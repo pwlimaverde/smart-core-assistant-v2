@@ -24,6 +24,7 @@ pub trait PlansStore: Send + Sync {
         price: Option<Decimal>,
         max_instances: i32,
         max_departments: i32,
+        max_fluxos: i32,
     ) -> Result<serde_json::Value, DbError>;
 
     /// Atualiza um plano; `true` se algum registro foi afetado.
@@ -36,6 +37,7 @@ pub trait PlansStore: Send + Sync {
         price: Option<Decimal>,
         max_instances: i32,
         max_departments: i32,
+        max_fluxos: i32,
         active: bool,
     ) -> Result<bool, DbError>;
 

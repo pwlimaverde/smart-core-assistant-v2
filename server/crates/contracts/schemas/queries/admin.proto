@@ -123,6 +123,7 @@ message Plan {
   int32 max_departments = 6;
   bool active = 7;
   int64 created_at = 8;
+  int32 max_fluxos = 9;
 }
 
 message Subscription {
@@ -223,6 +224,7 @@ message CreatePlanRequest {
   string price = 3;
   int32 max_instances = 4;
   int32 max_departments = 5;
+  int32 max_fluxos = 6;
 }
 
 message CreatePlanResponse {
@@ -237,10 +239,84 @@ message UpdatePlanRequest {
   int32 max_instances = 5;
   int32 max_departments = 6;
   bool active = 7;
+  int32 max_fluxos = 8;
 }
 
 message UpdatePlanResponse {
   bool success = 1;
+}
+
+// --- Vouchers de ativação (meio de pagamento, não cupom de desconto) ---
+
+message Voucher {
+  string id = 1;
+  string codigo = 2;
+  string descricao = 3;
+  int32 plan_id = 4;
+  string plan_name = 5;
+  int32 duracao_dias = 6;
+  // 0 = ilimitado.
+  int32 max_resgates = 7;
+  int32 resgates_usados = 8;
+  int64 valido_de = 9;
+  // 0 = não expira sozinho.
+  int64 valido_ate = 10;
+  // 0 = não revogado. Revogar bloqueia NOVOS resgates e preserva as
+  // assinaturas já concedidas.
+  int64 revogado_em = 11;
+  string motivo_revogacao = 12;
+  int64 created_at = 13;
+}
+
+message VoucherRedemption {
+  string id = 1;
+  string voucher_id = 2;
+  string tenant_id = 3;
+  int32 plan_id = 4;
+  int64 periodo_inicio = 5;
+  int64 periodo_fim = 6;
+  string ip = 7;
+  int64 redeemed_at = 8;
+}
+
+message ListVouchersRequest {}
+
+message ListVouchersResponse {
+  repeated Voucher vouchers = 1;
+}
+
+message CreateVoucherRequest {
+  string codigo = 1;
+  string descricao = 2;
+  int32 plan_id = 3;
+  int32 duracao_dias = 4;
+  // 0 = ilimitado (campanha aberta). O cliente sempre envia o valor escolhido
+  // na tela; o padrão da tela é 1, o mais conservador.
+  int32 max_resgates = 5;
+  // RFC 3339; vazio = sem expiração.
+  string valido_ate = 6;
+}
+
+message CreateVoucherResponse {
+  Voucher voucher = 1;
+}
+
+message RevokeVoucherRequest {
+  string voucher_id = 1;
+  string motivo = 2;
+}
+
+message RevokeVoucherResponse {
+  // false = já estava revogado (não é erro).
+  bool revogado = 1;
+}
+
+message ListVoucherRedemptionsRequest {
+  string voucher_id = 1;
+}
+
+message ListVoucherRedemptionsResponse {
+  repeated VoucherRedemption resgates = 1;
 }
 
 message ListSubscriptionsRequest {}
@@ -615,6 +691,12 @@ service AdminService {
   rpc ListSubscriptions(ListSubscriptionsRequest) returns (ListSubscriptionsResponse);
   rpc RegisterPayment(RegisterPaymentRequest) returns (RegisterPaymentResponse);
   rpc ListPayments(ListPaymentsRequest) returns (ListPaymentsResponse);
+
+  // Vouchers de ativação
+  rpc ListVouchers(ListVouchersRequest) returns (ListVouchersResponse);
+  rpc CreateVoucher(CreateVoucherRequest) returns (CreateVoucherResponse);
+  rpc RevokeVoucher(RevokeVoucherRequest) returns (RevokeVoucherResponse);
+  rpc ListVoucherRedemptions(ListVoucherRedemptionsRequest) returns (ListVoucherRedemptionsResponse);
 
   // Fase 3: Evolution Connection
   rpc TestEvolutionConnection(TestEvolutionConnectionRequest) returns (TestEvolutionConnectionResponse);

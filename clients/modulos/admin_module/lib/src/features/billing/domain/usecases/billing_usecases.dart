@@ -6,6 +6,7 @@ import '../errors/billing_errors.dart';
 import '../model/payment_record.dart';
 import '../model/plan.dart';
 import '../model/subscription.dart';
+import '../model/voucher.dart';
 import '../parameters/billing_parameters.dart';
 
 /// Casos de uso da feature `billing`.
@@ -177,4 +178,98 @@ final class ListPaymentsUsecase
     List<PaymentRecord> data,
     ListPaymentsParameters parameters,
   ) => Success(data);
+}
+
+// --- Vouchers de ativação ---
+
+/// Lista os vouchers.
+final class ListVouchersUsecase
+    extends
+        UsecaseBaseCallData<
+          List<Voucher>,
+          List<Voucher>,
+          NoParams,
+          BillingError
+        > {
+  const ListVouchersUsecase({required super.repository});
+
+  @override
+  ProcessData<List<Voucher>, List<Voucher>, NoParams, BillingError>
+  get process => (data, _) => Success(data);
+
+  @override
+  BillingError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('listVouchers', exception, stackTrace);
+    return const BillingInesperado();
+  }
+}
+
+/// Cria um voucher.
+///
+/// A validação real é do servidor; o que este `process` barra é o que a tela
+/// não deveria ter deixado passar — um código vazio ou uma duração não
+/// positiva geram um voucher que nunca funciona.
+final class CreateVoucherUsecase
+    extends
+        UsecaseBaseCallData<
+          Voucher,
+          Voucher,
+          CreateVoucherParameters,
+          BillingError
+        > {
+  const CreateVoucherUsecase({required super.repository});
+
+  @override
+  ProcessData<Voucher, Voucher, CreateVoucherParameters, BillingError>
+  get process => (data, _) => Success(data);
+
+  @override
+  BillingError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('createVoucher', exception, stackTrace);
+    return const BillingInesperado();
+  }
+}
+
+/// Revoga um voucher.
+final class RevokeVoucherUsecase
+    extends
+        UsecaseBaseCallData<bool, bool, RevokeVoucherParameters, BillingError> {
+  const RevokeVoucherUsecase({required super.repository});
+
+  @override
+  ProcessData<bool, bool, RevokeVoucherParameters, BillingError> get process =>
+      (data, _) => Success(data);
+
+  @override
+  BillingError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('revokeVoucher', exception, stackTrace);
+    return const BillingInesperado();
+  }
+}
+
+/// Histórico de resgates de um voucher.
+final class ListVoucherRedemptionsUsecase
+    extends
+        UsecaseBaseCallData<
+          List<VoucherRedemption>,
+          List<VoucherRedemption>,
+          VoucherRedemptionsParameters,
+          BillingError
+        > {
+  const ListVoucherRedemptionsUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    List<VoucherRedemption>,
+    List<VoucherRedemption>,
+    VoucherRedemptionsParameters,
+    BillingError
+  >
+  get process => (data, _) => Success(data);
+
+  @override
+  BillingError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('listVoucherRedemptions', exception, stackTrace);
+    return const BillingInesperado();
+  }
 }

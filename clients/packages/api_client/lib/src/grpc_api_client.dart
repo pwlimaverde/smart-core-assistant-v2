@@ -2,6 +2,7 @@ import 'package:grpc/grpc_web.dart';
 
 import 'generated/queries/auth.pbgrpc.dart';
 import 'generated/queries/admin.pbgrpc.dart';
+import 'generated/queries/onboarding.pbgrpc.dart';
 import 'grpc_transport.dart';
 import 'interceptors/auth_token_interceptor.dart';
 
@@ -17,6 +18,7 @@ final class GrpcApiClient implements GrpcTransport {
   late final GrpcWebClientChannel _channel;
   late final AuthServiceClient _auth;
   late final AdminServiceClient _admin;
+  late final OnboardingServiceClient _onboarding;
 
   /// [endpoint] é a URL HTTP(S) da fachada (mesma origem do WASM, via Caddy).
   /// [readAccessToken] devolve o access token atual (memória) para o interceptor.
@@ -38,6 +40,8 @@ final class GrpcApiClient implements GrpcTransport {
       _channel,
       interceptors: [AuthTokenInterceptor(readAccessToken)],
     );
+    // Sem interceptor: o cadastro roda sem sessão.
+    _onboarding = OnboardingServiceClient(_channel);
   }
 
   /// Stub do `AuthService` para os datasources do `login_module`.
@@ -47,6 +51,10 @@ final class GrpcApiClient implements GrpcTransport {
   /// Stub do `AdminService` para os datasources do `admin_module`.
   @override
   AdminServiceClient get admin => _admin;
+
+  /// Stub do `OnboardingService` para os datasources do `onboarding_module`.
+  @override
+  OnboardingServiceClient get onboarding => _onboarding;
 
   @override
   Future<void> connect() async {

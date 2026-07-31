@@ -1428,6 +1428,7 @@ class Plan extends $pb.GeneratedMessage {
     $core.int? maxDepartments,
     $core.bool? active,
     $fixnum.Int64? createdAt,
+    $core.int? maxFluxos,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -1438,6 +1439,7 @@ class Plan extends $pb.GeneratedMessage {
     if (maxDepartments != null) result.maxDepartments = maxDepartments;
     if (active != null) result.active = active;
     if (createdAt != null) result.createdAt = createdAt;
+    if (maxFluxos != null) result.maxFluxos = maxFluxos;
     return result;
   }
 
@@ -1463,6 +1465,7 @@ class Plan extends $pb.GeneratedMessage {
     ..aI(6, _omitFieldNames ? '' : 'maxDepartments')
     ..aOB(7, _omitFieldNames ? '' : 'active')
     ..aInt64(8, _omitFieldNames ? '' : 'createdAt')
+    ..aI(9, _omitFieldNames ? '' : 'maxFluxos')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1554,6 +1557,15 @@ class Plan extends $pb.GeneratedMessage {
   $core.bool hasCreatedAt() => $_has(7);
   @$pb.TagNumber(8)
   void clearCreatedAt() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $core.int get maxFluxos => $_getIZ(8);
+  @$pb.TagNumber(9)
+  set maxFluxos($core.int value) => $_setSignedInt32(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasMaxFluxos() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearMaxFluxos() => $_clearField(9);
 }
 
 class Subscription extends $pb.GeneratedMessage {
@@ -2748,6 +2760,7 @@ class CreatePlanRequest extends $pb.GeneratedMessage {
     $core.String? price,
     $core.int? maxInstances,
     $core.int? maxDepartments,
+    $core.int? maxFluxos,
   }) {
     final result = create();
     if (name != null) result.name = name;
@@ -2755,6 +2768,7 @@ class CreatePlanRequest extends $pb.GeneratedMessage {
     if (price != null) result.price = price;
     if (maxInstances != null) result.maxInstances = maxInstances;
     if (maxDepartments != null) result.maxDepartments = maxDepartments;
+    if (maxFluxos != null) result.maxFluxos = maxFluxos;
     return result;
   }
 
@@ -2777,6 +2791,7 @@ class CreatePlanRequest extends $pb.GeneratedMessage {
     ..aOS(3, _omitFieldNames ? '' : 'price')
     ..aI(4, _omitFieldNames ? '' : 'maxInstances')
     ..aI(5, _omitFieldNames ? '' : 'maxDepartments')
+    ..aI(6, _omitFieldNames ? '' : 'maxFluxos')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -2842,6 +2857,15 @@ class CreatePlanRequest extends $pb.GeneratedMessage {
   $core.bool hasMaxDepartments() => $_has(4);
   @$pb.TagNumber(5)
   void clearMaxDepartments() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.int get maxFluxos => $_getIZ(5);
+  @$pb.TagNumber(6)
+  set maxFluxos($core.int value) => $_setSignedInt32(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasMaxFluxos() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearMaxFluxos() => $_clearField(6);
 }
 
 class CreatePlanResponse extends $pb.GeneratedMessage {
@@ -2910,6 +2934,7 @@ class UpdatePlanRequest extends $pb.GeneratedMessage {
     $core.int? maxInstances,
     $core.int? maxDepartments,
     $core.bool? active,
+    $core.int? maxFluxos,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -2919,6 +2944,7 @@ class UpdatePlanRequest extends $pb.GeneratedMessage {
     if (maxInstances != null) result.maxInstances = maxInstances;
     if (maxDepartments != null) result.maxDepartments = maxDepartments;
     if (active != null) result.active = active;
+    if (maxFluxos != null) result.maxFluxos = maxFluxos;
     return result;
   }
 
@@ -2943,6 +2969,7 @@ class UpdatePlanRequest extends $pb.GeneratedMessage {
     ..aI(5, _omitFieldNames ? '' : 'maxInstances')
     ..aI(6, _omitFieldNames ? '' : 'maxDepartments')
     ..aOB(7, _omitFieldNames ? '' : 'active')
+    ..aI(8, _omitFieldNames ? '' : 'maxFluxos')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -3026,6 +3053,15 @@ class UpdatePlanRequest extends $pb.GeneratedMessage {
   $core.bool hasActive() => $_has(6);
   @$pb.TagNumber(7)
   void clearActive() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.int get maxFluxos => $_getIZ(7);
+  @$pb.TagNumber(8)
+  set maxFluxos($core.int value) => $_setSignedInt32(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasMaxFluxos() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearMaxFluxos() => $_clearField(8);
 }
 
 class UpdatePlanResponse extends $pb.GeneratedMessage {
@@ -3081,6 +3117,848 @@ class UpdatePlanResponse extends $pb.GeneratedMessage {
   $core.bool hasSuccess() => $_has(0);
   @$pb.TagNumber(1)
   void clearSuccess() => $_clearField(1);
+}
+
+class Voucher extends $pb.GeneratedMessage {
+  factory Voucher({
+    $core.String? id,
+    $core.String? codigo,
+    $core.String? descricao,
+    $core.int? planId,
+    $core.String? planName,
+    $core.int? duracaoDias,
+    $core.int? maxResgates,
+    $core.int? resgatesUsados,
+    $fixnum.Int64? validoDe,
+    $fixnum.Int64? validoAte,
+    $fixnum.Int64? revogadoEm,
+    $core.String? motivoRevogacao,
+    $fixnum.Int64? createdAt,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (codigo != null) result.codigo = codigo;
+    if (descricao != null) result.descricao = descricao;
+    if (planId != null) result.planId = planId;
+    if (planName != null) result.planName = planName;
+    if (duracaoDias != null) result.duracaoDias = duracaoDias;
+    if (maxResgates != null) result.maxResgates = maxResgates;
+    if (resgatesUsados != null) result.resgatesUsados = resgatesUsados;
+    if (validoDe != null) result.validoDe = validoDe;
+    if (validoAte != null) result.validoAte = validoAte;
+    if (revogadoEm != null) result.revogadoEm = revogadoEm;
+    if (motivoRevogacao != null) result.motivoRevogacao = motivoRevogacao;
+    if (createdAt != null) result.createdAt = createdAt;
+    return result;
+  }
+
+  Voucher._();
+
+  factory Voucher.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory Voucher.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'Voucher',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'codigo')
+    ..aOS(3, _omitFieldNames ? '' : 'descricao')
+    ..aI(4, _omitFieldNames ? '' : 'planId')
+    ..aOS(5, _omitFieldNames ? '' : 'planName')
+    ..aI(6, _omitFieldNames ? '' : 'duracaoDias')
+    ..aI(7, _omitFieldNames ? '' : 'maxResgates')
+    ..aI(8, _omitFieldNames ? '' : 'resgatesUsados')
+    ..aInt64(9, _omitFieldNames ? '' : 'validoDe')
+    ..aInt64(10, _omitFieldNames ? '' : 'validoAte')
+    ..aInt64(11, _omitFieldNames ? '' : 'revogadoEm')
+    ..aOS(12, _omitFieldNames ? '' : 'motivoRevogacao')
+    ..aInt64(13, _omitFieldNames ? '' : 'createdAt')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  Voucher clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  Voucher copyWith(void Function(Voucher) updates) =>
+      super.copyWith((message) => updates(message as Voucher)) as Voucher;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static Voucher create() => Voucher._();
+  @$core.override
+  Voucher createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static Voucher getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<Voucher>(create);
+  static Voucher? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get id => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set id($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get codigo => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set codigo($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasCodigo() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearCodigo() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get descricao => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set descricao($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDescricao() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDescricao() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.int get planId => $_getIZ(3);
+  @$pb.TagNumber(4)
+  set planId($core.int value) => $_setSignedInt32(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasPlanId() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearPlanId() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get planName => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set planName($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasPlanName() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearPlanName() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.int get duracaoDias => $_getIZ(5);
+  @$pb.TagNumber(6)
+  set duracaoDias($core.int value) => $_setSignedInt32(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasDuracaoDias() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearDuracaoDias() => $_clearField(6);
+
+  /// 0 = ilimitado.
+  @$pb.TagNumber(7)
+  $core.int get maxResgates => $_getIZ(6);
+  @$pb.TagNumber(7)
+  set maxResgates($core.int value) => $_setSignedInt32(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasMaxResgates() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearMaxResgates() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.int get resgatesUsados => $_getIZ(7);
+  @$pb.TagNumber(8)
+  set resgatesUsados($core.int value) => $_setSignedInt32(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasResgatesUsados() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearResgatesUsados() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $fixnum.Int64 get validoDe => $_getI64(8);
+  @$pb.TagNumber(9)
+  set validoDe($fixnum.Int64 value) => $_setInt64(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasValidoDe() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearValidoDe() => $_clearField(9);
+
+  /// 0 = não expira sozinho.
+  @$pb.TagNumber(10)
+  $fixnum.Int64 get validoAte => $_getI64(9);
+  @$pb.TagNumber(10)
+  set validoAte($fixnum.Int64 value) => $_setInt64(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasValidoAte() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearValidoAte() => $_clearField(10);
+
+  /// 0 = não revogado. Revogar bloqueia NOVOS resgates e preserva as
+  /// assinaturas já concedidas.
+  @$pb.TagNumber(11)
+  $fixnum.Int64 get revogadoEm => $_getI64(10);
+  @$pb.TagNumber(11)
+  set revogadoEm($fixnum.Int64 value) => $_setInt64(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasRevogadoEm() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearRevogadoEm() => $_clearField(11);
+
+  @$pb.TagNumber(12)
+  $core.String get motivoRevogacao => $_getSZ(11);
+  @$pb.TagNumber(12)
+  set motivoRevogacao($core.String value) => $_setString(11, value);
+  @$pb.TagNumber(12)
+  $core.bool hasMotivoRevogacao() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearMotivoRevogacao() => $_clearField(12);
+
+  @$pb.TagNumber(13)
+  $fixnum.Int64 get createdAt => $_getI64(12);
+  @$pb.TagNumber(13)
+  set createdAt($fixnum.Int64 value) => $_setInt64(12, value);
+  @$pb.TagNumber(13)
+  $core.bool hasCreatedAt() => $_has(12);
+  @$pb.TagNumber(13)
+  void clearCreatedAt() => $_clearField(13);
+}
+
+class VoucherRedemption extends $pb.GeneratedMessage {
+  factory VoucherRedemption({
+    $core.String? id,
+    $core.String? voucherId,
+    $core.String? tenantId,
+    $core.int? planId,
+    $fixnum.Int64? periodoInicio,
+    $fixnum.Int64? periodoFim,
+    $core.String? ip,
+    $fixnum.Int64? redeemedAt,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (voucherId != null) result.voucherId = voucherId;
+    if (tenantId != null) result.tenantId = tenantId;
+    if (planId != null) result.planId = planId;
+    if (periodoInicio != null) result.periodoInicio = periodoInicio;
+    if (periodoFim != null) result.periodoFim = periodoFim;
+    if (ip != null) result.ip = ip;
+    if (redeemedAt != null) result.redeemedAt = redeemedAt;
+    return result;
+  }
+
+  VoucherRedemption._();
+
+  factory VoucherRedemption.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory VoucherRedemption.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'VoucherRedemption',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'voucherId')
+    ..aOS(3, _omitFieldNames ? '' : 'tenantId')
+    ..aI(4, _omitFieldNames ? '' : 'planId')
+    ..aInt64(5, _omitFieldNames ? '' : 'periodoInicio')
+    ..aInt64(6, _omitFieldNames ? '' : 'periodoFim')
+    ..aOS(7, _omitFieldNames ? '' : 'ip')
+    ..aInt64(8, _omitFieldNames ? '' : 'redeemedAt')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  VoucherRedemption clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  VoucherRedemption copyWith(void Function(VoucherRedemption) updates) =>
+      super.copyWith((message) => updates(message as VoucherRedemption))
+          as VoucherRedemption;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static VoucherRedemption create() => VoucherRedemption._();
+  @$core.override
+  VoucherRedemption createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static VoucherRedemption getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<VoucherRedemption>(create);
+  static VoucherRedemption? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get id => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set id($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get voucherId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set voucherId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasVoucherId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearVoucherId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get tenantId => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set tenantId($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasTenantId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearTenantId() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.int get planId => $_getIZ(3);
+  @$pb.TagNumber(4)
+  set planId($core.int value) => $_setSignedInt32(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasPlanId() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearPlanId() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $fixnum.Int64 get periodoInicio => $_getI64(4);
+  @$pb.TagNumber(5)
+  set periodoInicio($fixnum.Int64 value) => $_setInt64(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasPeriodoInicio() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearPeriodoInicio() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $fixnum.Int64 get periodoFim => $_getI64(5);
+  @$pb.TagNumber(6)
+  set periodoFim($fixnum.Int64 value) => $_setInt64(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasPeriodoFim() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearPeriodoFim() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $core.String get ip => $_getSZ(6);
+  @$pb.TagNumber(7)
+  set ip($core.String value) => $_setString(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasIp() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearIp() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $fixnum.Int64 get redeemedAt => $_getI64(7);
+  @$pb.TagNumber(8)
+  set redeemedAt($fixnum.Int64 value) => $_setInt64(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasRedeemedAt() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearRedeemedAt() => $_clearField(8);
+}
+
+class ListVouchersRequest extends $pb.GeneratedMessage {
+  factory ListVouchersRequest() => create();
+
+  ListVouchersRequest._();
+
+  factory ListVouchersRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListVouchersRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListVouchersRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListVouchersRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListVouchersRequest copyWith(void Function(ListVouchersRequest) updates) =>
+      super.copyWith((message) => updates(message as ListVouchersRequest))
+          as ListVouchersRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListVouchersRequest create() => ListVouchersRequest._();
+  @$core.override
+  ListVouchersRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListVouchersRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListVouchersRequest>(create);
+  static ListVouchersRequest? _defaultInstance;
+}
+
+class ListVouchersResponse extends $pb.GeneratedMessage {
+  factory ListVouchersResponse({
+    $core.Iterable<Voucher>? vouchers,
+  }) {
+    final result = create();
+    if (vouchers != null) result.vouchers.addAll(vouchers);
+    return result;
+  }
+
+  ListVouchersResponse._();
+
+  factory ListVouchersResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListVouchersResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListVouchersResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<Voucher>(1, _omitFieldNames ? '' : 'vouchers',
+        subBuilder: Voucher.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListVouchersResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListVouchersResponse copyWith(void Function(ListVouchersResponse) updates) =>
+      super.copyWith((message) => updates(message as ListVouchersResponse))
+          as ListVouchersResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListVouchersResponse create() => ListVouchersResponse._();
+  @$core.override
+  ListVouchersResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListVouchersResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListVouchersResponse>(create);
+  static ListVouchersResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<Voucher> get vouchers => $_getList(0);
+}
+
+class CreateVoucherRequest extends $pb.GeneratedMessage {
+  factory CreateVoucherRequest({
+    $core.String? codigo,
+    $core.String? descricao,
+    $core.int? planId,
+    $core.int? duracaoDias,
+    $core.int? maxResgates,
+    $core.String? validoAte,
+  }) {
+    final result = create();
+    if (codigo != null) result.codigo = codigo;
+    if (descricao != null) result.descricao = descricao;
+    if (planId != null) result.planId = planId;
+    if (duracaoDias != null) result.duracaoDias = duracaoDias;
+    if (maxResgates != null) result.maxResgates = maxResgates;
+    if (validoAte != null) result.validoAte = validoAte;
+    return result;
+  }
+
+  CreateVoucherRequest._();
+
+  factory CreateVoucherRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CreateVoucherRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CreateVoucherRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'codigo')
+    ..aOS(2, _omitFieldNames ? '' : 'descricao')
+    ..aI(3, _omitFieldNames ? '' : 'planId')
+    ..aI(4, _omitFieldNames ? '' : 'duracaoDias')
+    ..aI(5, _omitFieldNames ? '' : 'maxResgates')
+    ..aOS(6, _omitFieldNames ? '' : 'validoAte')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateVoucherRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateVoucherRequest copyWith(void Function(CreateVoucherRequest) updates) =>
+      super.copyWith((message) => updates(message as CreateVoucherRequest))
+          as CreateVoucherRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CreateVoucherRequest create() => CreateVoucherRequest._();
+  @$core.override
+  CreateVoucherRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CreateVoucherRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CreateVoucherRequest>(create);
+  static CreateVoucherRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get codigo => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set codigo($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasCodigo() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearCodigo() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get descricao => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set descricao($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasDescricao() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearDescricao() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.int get planId => $_getIZ(2);
+  @$pb.TagNumber(3)
+  set planId($core.int value) => $_setSignedInt32(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasPlanId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearPlanId() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.int get duracaoDias => $_getIZ(3);
+  @$pb.TagNumber(4)
+  set duracaoDias($core.int value) => $_setSignedInt32(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasDuracaoDias() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearDuracaoDias() => $_clearField(4);
+
+  /// 0 = ilimitado (campanha aberta). O cliente sempre envia o valor escolhido
+  /// na tela; o padrão da tela é 1, o mais conservador.
+  @$pb.TagNumber(5)
+  $core.int get maxResgates => $_getIZ(4);
+  @$pb.TagNumber(5)
+  set maxResgates($core.int value) => $_setSignedInt32(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasMaxResgates() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearMaxResgates() => $_clearField(5);
+
+  /// RFC 3339; vazio = sem expiração.
+  @$pb.TagNumber(6)
+  $core.String get validoAte => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set validoAte($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasValidoAte() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearValidoAte() => $_clearField(6);
+}
+
+class CreateVoucherResponse extends $pb.GeneratedMessage {
+  factory CreateVoucherResponse({
+    Voucher? voucher,
+  }) {
+    final result = create();
+    if (voucher != null) result.voucher = voucher;
+    return result;
+  }
+
+  CreateVoucherResponse._();
+
+  factory CreateVoucherResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CreateVoucherResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CreateVoucherResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOM<Voucher>(1, _omitFieldNames ? '' : 'voucher',
+        subBuilder: Voucher.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateVoucherResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateVoucherResponse copyWith(
+          void Function(CreateVoucherResponse) updates) =>
+      super.copyWith((message) => updates(message as CreateVoucherResponse))
+          as CreateVoucherResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CreateVoucherResponse create() => CreateVoucherResponse._();
+  @$core.override
+  CreateVoucherResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CreateVoucherResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CreateVoucherResponse>(create);
+  static CreateVoucherResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  Voucher get voucher => $_getN(0);
+  @$pb.TagNumber(1)
+  set voucher(Voucher value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasVoucher() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearVoucher() => $_clearField(1);
+  @$pb.TagNumber(1)
+  Voucher ensureVoucher() => $_ensure(0);
+}
+
+class RevokeVoucherRequest extends $pb.GeneratedMessage {
+  factory RevokeVoucherRequest({
+    $core.String? voucherId,
+    $core.String? motivo,
+  }) {
+    final result = create();
+    if (voucherId != null) result.voucherId = voucherId;
+    if (motivo != null) result.motivo = motivo;
+    return result;
+  }
+
+  RevokeVoucherRequest._();
+
+  factory RevokeVoucherRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory RevokeVoucherRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'RevokeVoucherRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'voucherId')
+    ..aOS(2, _omitFieldNames ? '' : 'motivo')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RevokeVoucherRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RevokeVoucherRequest copyWith(void Function(RevokeVoucherRequest) updates) =>
+      super.copyWith((message) => updates(message as RevokeVoucherRequest))
+          as RevokeVoucherRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static RevokeVoucherRequest create() => RevokeVoucherRequest._();
+  @$core.override
+  RevokeVoucherRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static RevokeVoucherRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<RevokeVoucherRequest>(create);
+  static RevokeVoucherRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get voucherId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set voucherId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasVoucherId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearVoucherId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get motivo => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set motivo($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasMotivo() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearMotivo() => $_clearField(2);
+}
+
+class RevokeVoucherResponse extends $pb.GeneratedMessage {
+  factory RevokeVoucherResponse({
+    $core.bool? revogado,
+  }) {
+    final result = create();
+    if (revogado != null) result.revogado = revogado;
+    return result;
+  }
+
+  RevokeVoucherResponse._();
+
+  factory RevokeVoucherResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory RevokeVoucherResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'RevokeVoucherResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOB(1, _omitFieldNames ? '' : 'revogado')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RevokeVoucherResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RevokeVoucherResponse copyWith(
+          void Function(RevokeVoucherResponse) updates) =>
+      super.copyWith((message) => updates(message as RevokeVoucherResponse))
+          as RevokeVoucherResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static RevokeVoucherResponse create() => RevokeVoucherResponse._();
+  @$core.override
+  RevokeVoucherResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static RevokeVoucherResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<RevokeVoucherResponse>(create);
+  static RevokeVoucherResponse? _defaultInstance;
+
+  /// false = já estava revogado (não é erro).
+  @$pb.TagNumber(1)
+  $core.bool get revogado => $_getBF(0);
+  @$pb.TagNumber(1)
+  set revogado($core.bool value) => $_setBool(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasRevogado() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearRevogado() => $_clearField(1);
+}
+
+class ListVoucherRedemptionsRequest extends $pb.GeneratedMessage {
+  factory ListVoucherRedemptionsRequest({
+    $core.String? voucherId,
+  }) {
+    final result = create();
+    if (voucherId != null) result.voucherId = voucherId;
+    return result;
+  }
+
+  ListVoucherRedemptionsRequest._();
+
+  factory ListVoucherRedemptionsRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListVoucherRedemptionsRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListVoucherRedemptionsRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'voucherId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListVoucherRedemptionsRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListVoucherRedemptionsRequest copyWith(
+          void Function(ListVoucherRedemptionsRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListVoucherRedemptionsRequest))
+          as ListVoucherRedemptionsRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListVoucherRedemptionsRequest create() =>
+      ListVoucherRedemptionsRequest._();
+  @$core.override
+  ListVoucherRedemptionsRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListVoucherRedemptionsRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListVoucherRedemptionsRequest>(create);
+  static ListVoucherRedemptionsRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get voucherId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set voucherId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasVoucherId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearVoucherId() => $_clearField(1);
+}
+
+class ListVoucherRedemptionsResponse extends $pb.GeneratedMessage {
+  factory ListVoucherRedemptionsResponse({
+    $core.Iterable<VoucherRedemption>? resgates,
+  }) {
+    final result = create();
+    if (resgates != null) result.resgates.addAll(resgates);
+    return result;
+  }
+
+  ListVoucherRedemptionsResponse._();
+
+  factory ListVoucherRedemptionsResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListVoucherRedemptionsResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListVoucherRedemptionsResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<VoucherRedemption>(1, _omitFieldNames ? '' : 'resgates',
+        subBuilder: VoucherRedemption.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListVoucherRedemptionsResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListVoucherRedemptionsResponse copyWith(
+          void Function(ListVoucherRedemptionsResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListVoucherRedemptionsResponse))
+          as ListVoucherRedemptionsResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListVoucherRedemptionsResponse create() =>
+      ListVoucherRedemptionsResponse._();
+  @$core.override
+  ListVoucherRedemptionsResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListVoucherRedemptionsResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListVoucherRedemptionsResponse>(create);
+  static ListVoucherRedemptionsResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<VoucherRedemption> get resgates => $_getList(0);
 }
 
 class ListSubscriptionsRequest extends $pb.GeneratedMessage {

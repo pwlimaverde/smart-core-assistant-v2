@@ -52,6 +52,7 @@ fn plan_row_to_json(row: &sqlx::postgres::PgRow) -> serde_json::Value {
         "price": row.get::<Option<Decimal>, _>("price").map(|p| p.to_string()).unwrap_or_default(),
         "max_instances": row.get::<i32, _>("max_instances"),
         "max_departments": row.get::<i32, _>("max_departments"),
+        "max_fluxos": row.get::<i32, _>("max_fluxos"),
         "active": row.get::<bool, _>("active"),
         "created_at": row.get::<chrono::DateTime<chrono::Utc>, _>("created_at").timestamp_millis(),
     })
@@ -78,7 +79,7 @@ impl PlansStore for PgPlansStore {
     #[tracing::instrument(skip_all)]
     async fn listar_planos(&self) -> Result<Vec<serde_json::Value>, DbError> {
         let rows = sqlx::query(
-            "SELECT id, name, description, price, max_instances, max_departments, active, created_at FROM tenants_plan ORDER BY id",
+            "SELECT id, name, description, price, max_instances, max_departments, max_fluxos, active, created_at FROM tenants_plan ORDER BY id",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -93,17 +94,19 @@ impl PlansStore for PgPlansStore {
         price: Option<Decimal>,
         max_instances: i32,
         max_departments: i32,
+        max_fluxos: i32,
     ) -> Result<serde_json::Value, DbError> {
         let row = sqlx::query(
-            r#"INSERT INTO tenants_plan (name, description, price, max_instances, max_departments)
-               VALUES ($1, $2, $3, $4, $5)
-               RETURNING id, name, description, price, max_instances, max_departments, active, created_at"#,
+            r#"INSERT INTO tenants_plan (name, description, price, max_instances, max_departments, max_fluxos)
+               VALUES ($1, $2, $3, $4, $5, $6)
+               RETURNING id, name, description, price, max_instances, max_departments, max_fluxos, active, created_at"#,
         )
         .bind(name)
         .bind(description)
         .bind(price)
         .bind(max_instances)
         .bind(max_departments)
+        .bind(max_fluxos)
         .fetch_one(&self.pool)
         .await?;
         Ok(plan_row_to_json(&row))
@@ -118,18 +121,21 @@ impl PlansStore for PgPlansStore {
         price: Option<Decimal>,
         max_instances: i32,
         max_departments: i32,
+        max_fluxos: i32,
         active: bool,
     ) -> Result<bool, DbError> {
         let res = sqlx::query(
             r#"UPDATE tenants_plan
-               SET name = $1, description = $2, price = $3, max_instances = $4, max_departments = $5, active = $6
-               WHERE id = $7"#,
+               SET name = $1, description = $2, price = $3, max_instances = $4,
+                   max_departments = $5, max_fluxos = $6, active = $7
+               WHERE id = $8"#,
         )
         .bind(name)
         .bind(description)
         .bind(price)
         .bind(max_instances)
         .bind(max_departments)
+        .bind(max_fluxos)
         .bind(active)
         .bind(id)
         .execute(&self.pool)

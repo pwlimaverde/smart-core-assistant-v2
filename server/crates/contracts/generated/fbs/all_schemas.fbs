@@ -122,6 +122,7 @@ table Plan {
   max_departments:int;
   active:bool;
   created_at:long;
+  max_fluxos:int;
 }
 
 table Subscription {
@@ -220,6 +221,7 @@ table CreatePlanRequest {
   price:string;
   max_instances:int;
   max_departments:int;
+  max_fluxos:int;
 }
 
 table CreatePlanResponse {
@@ -234,10 +236,75 @@ table UpdatePlanRequest {
   max_instances:int;
   max_departments:int;
   active:bool;
+  max_fluxos:int;
 }
 
 table UpdatePlanResponse {
   success:bool;
+}
+
+table Voucher {
+  id:string;
+  codigo:string;
+  descricao:string;
+  plan_id:int;
+  plan_name:string;
+  duracao_dias:int;
+  max_resgates:int;
+  resgates_usados:int;
+  valido_de:long;
+  valido_ate:long;
+  revogado_em:long;
+  motivo_revogacao:string;
+  created_at:long;
+}
+
+table VoucherRedemption {
+  id:string;
+  voucher_id:string;
+  tenant_id:string;
+  plan_id:int;
+  periodo_inicio:long;
+  periodo_fim:long;
+  ip:string;
+  redeemed_at:long;
+}
+
+table ListVouchersRequest {
+}
+
+table ListVouchersResponse {
+  vouchers:[Voucher];
+}
+
+table CreateVoucherRequest {
+  codigo:string;
+  descricao:string;
+  plan_id:int;
+  duracao_dias:int;
+  max_resgates:int;
+  valido_ate:string;
+}
+
+table CreateVoucherResponse {
+  voucher:Voucher;
+}
+
+table RevokeVoucherRequest {
+  voucher_id:string;
+  motivo:string;
+}
+
+table RevokeVoucherResponse {
+  revogado:bool;
+}
+
+table ListVoucherRedemptionsRequest {
+  voucher_id:string;
+}
+
+table ListVoucherRedemptionsResponse {
+  resgates:[VoucherRedemption];
 }
 
 table ListSubscriptionsRequest {
@@ -839,6 +906,110 @@ table MessageReceived {
 table MessageUpdate {
   message_id:string;
   status:string;
+}
+
+
+
+
+enum ModoConfirmacao : int {
+  MODO_CONFIRMACAO_UNSPECIFIED = 0,
+  MODO_CONFIRMACAO_IMEDIATA = 1,
+  MODO_CONFIRMACAO_ASSINCRONA = 2,
+}
+
+table CheckSlugRequest {
+  slug:string;
+}
+
+table CheckSlugResponse {
+  disponivel:bool;
+  motivo:string;
+  mensagem:string;
+}
+
+table PublicPlan {
+  id:int;
+  name:string;
+  description:string;
+  price:string;
+  max_instances:int;
+  max_departments:int;
+  max_fluxos:int;
+}
+
+table ListPublicPlansRequest {
+}
+
+table ListPublicPlansResponse {
+  planos:[PublicPlan];
+}
+
+table StartSignupRequest {
+  name:string;
+  slug:string;
+  email:string;
+  username:string;
+  password:string;
+  phone:string;
+}
+
+table StartSignupResponse {
+  tenant_id:string;
+  signup_token:string;
+  proximo_passo:int;
+}
+
+table SelectPlanRequest {
+  tenant_id:string;
+  signup_token:string;
+  plan_id:int;
+}
+
+table SelectPlanResponse {
+  proximo_passo:int;
+}
+
+table PaymentProvider {
+  id:string;
+  rotulo:string;
+  instrucao:string;
+  requer_credencial:bool;
+  rotulo_credencial:string;
+  modo:ModoConfirmacao;
+}
+
+table ListPaymentProvidersRequest {
+}
+
+table ListPaymentProvidersResponse {
+  provedores:[PaymentProvider];
+}
+
+table ConfirmPaymentRequest {
+  tenant_id:string;
+  signup_token:string;
+  provedor:string;
+  credencial:string;
+}
+
+table ConfirmPaymentResponse {
+  confirmado:bool;
+  url_redirecionamento:string;
+  motivo:string;
+  mensagem:string;
+}
+
+table GetSignupStatusRequest {
+  tenant_id:string;
+  signup_token:string;
+}
+
+table GetSignupStatusResponse {
+  passo:int;
+  plan_id:int;
+  status_assinatura:string;
+  tenant_ativo:bool;
+  periodo_fim:long;
 }
 
 

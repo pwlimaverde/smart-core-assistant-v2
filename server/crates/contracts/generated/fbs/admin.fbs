@@ -120,6 +120,7 @@ table Plan {
   max_departments:int;
   active:bool;
   created_at:long;
+  max_fluxos:int;
 }
 
 table Subscription {
@@ -218,6 +219,7 @@ table CreatePlanRequest {
   price:string;
   max_instances:int;
   max_departments:int;
+  max_fluxos:int;
 }
 
 table CreatePlanResponse {
@@ -232,10 +234,75 @@ table UpdatePlanRequest {
   max_instances:int;
   max_departments:int;
   active:bool;
+  max_fluxos:int;
 }
 
 table UpdatePlanResponse {
   success:bool;
+}
+
+table Voucher {
+  id:string;
+  codigo:string;
+  descricao:string;
+  plan_id:int;
+  plan_name:string;
+  duracao_dias:int;
+  max_resgates:int;
+  resgates_usados:int;
+  valido_de:long;
+  valido_ate:long;
+  revogado_em:long;
+  motivo_revogacao:string;
+  created_at:long;
+}
+
+table VoucherRedemption {
+  id:string;
+  voucher_id:string;
+  tenant_id:string;
+  plan_id:int;
+  periodo_inicio:long;
+  periodo_fim:long;
+  ip:string;
+  redeemed_at:long;
+}
+
+table ListVouchersRequest {
+}
+
+table ListVouchersResponse {
+  vouchers:[smartcore.contracts.queries.Voucher];
+}
+
+table CreateVoucherRequest {
+  codigo:string;
+  descricao:string;
+  plan_id:int;
+  duracao_dias:int;
+  max_resgates:int;
+  valido_ate:string;
+}
+
+table CreateVoucherResponse {
+  voucher:smartcore.contracts.queries.Voucher;
+}
+
+table RevokeVoucherRequest {
+  voucher_id:string;
+  motivo:string;
+}
+
+table RevokeVoucherResponse {
+  revogado:bool;
+}
+
+table ListVoucherRedemptionsRequest {
+  voucher_id:string;
+}
+
+table ListVoucherRedemptionsResponse {
+  resgates:[smartcore.contracts.queries.VoucherRedemption];
 }
 
 table ListSubscriptionsRequest {

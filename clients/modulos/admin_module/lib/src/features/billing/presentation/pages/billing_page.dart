@@ -6,6 +6,7 @@ import '../../domain/model/subscription.dart';
 import '../../domain/model/payment_record.dart';
 import '../controllers/billing_controller.dart';
 import '../../../../shared/widgets/admin_drawer.dart';
+import '../widgets/vouchers_tab.dart';
 
 class BillingPage extends StatefulWidget {
   const BillingPage({super.key});
@@ -25,7 +26,7 @@ class _BillingPageState extends State<BillingPage>
   void initState() {
     super.initState();
     _controller = inject<BillingController>();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _controller.fetchBillingData();
     });
@@ -91,6 +92,10 @@ class _BillingPageState extends State<BillingPage>
                   icon: Icon(Icons.history_edu),
                   text: 'Histórico Financeiro',
                 ),
+                Tab(
+                  icon: Icon(Icons.confirmation_number_outlined),
+                  text: 'Vouchers',
+                ),
               ],
             ),
             const SizedBox(height: 24),
@@ -113,6 +118,11 @@ class _BillingPageState extends State<BillingPage>
                       _buildPlansTab(state.plans),
                       _buildSubscriptionsTab(state.subscriptions),
                       _buildPaymentsTab(payments),
+                      VouchersTab(
+                        vouchers: state.vouchers,
+                        planos: state.plans,
+                        controller: _controller,
+                      ),
                     ],
                   );
                 },

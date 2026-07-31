@@ -69,3 +69,47 @@ final class ListPaymentsParameters extends Parameters {
 
   const ListPaymentsParameters({this.tenantId});
 }
+
+// --- Vouchers de ativação ---
+
+/// Cria um voucher.
+final class CreateVoucherParameters extends Parameters {
+  final String codigo;
+  final String descricao;
+  final int planId;
+  final int duracaoDias;
+
+  /// 0 = ilimitado.
+  final int maxResgates;
+
+  /// RFC 3339; vazio = sem expiração.
+  final String validoAte;
+
+  const CreateVoucherParameters({
+    required this.codigo,
+    required this.descricao,
+    required this.planId,
+    required this.duracaoDias,
+    required this.maxResgates,
+    this.validoAte = '',
+  });
+}
+
+/// Revoga um voucher: bloqueia novos resgates e **preserva** as assinaturas já
+/// concedidas — revogar um código não rescinde contrato firmado.
+final class RevokeVoucherParameters extends Parameters {
+  final String voucherId;
+  final String motivo;
+
+  const RevokeVoucherParameters({
+    required this.voucherId,
+    required this.motivo,
+  });
+}
+
+/// Histórico de resgates de um voucher.
+final class VoucherRedemptionsParameters extends Parameters {
+  final String voucherId;
+
+  const VoucherRedemptionsParameters({required this.voucherId});
+}
