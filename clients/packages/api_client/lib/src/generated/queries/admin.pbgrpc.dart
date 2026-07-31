@@ -348,6 +348,46 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$updateMyTenantConfig, request, options: options);
   }
 
+  /// Configuração inicial guiada (passos 5 a 8)
+  $grpc.ResponseFuture<$0.CreateMyWhatsappInstanceResponse>
+      createMyWhatsappInstance(
+    $0.CreateMyWhatsappInstanceRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$createMyWhatsappInstance, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.GetMyWhatsappInstanceStatusResponse>
+      getMyWhatsappInstanceStatus(
+    $0.GetMyWhatsappInstanceStatusRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$getMyWhatsappInstanceStatus, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.CreateMyDepartamentoResponse> createMyDepartamento(
+    $0.CreateMyDepartamentoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$createMyDepartamento, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SetMyBotPersonaResponse> setMyBotPersona(
+    $0.SetMyBotPersonaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$setMyBotPersona, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SetOnboardingProgressResponse> setOnboardingProgress(
+    $0.SetOnboardingProgressRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$setOnboardingProgress, request, options: options);
+  }
+
   // method descriptors
 
   static final _$listCoreSettings = $grpc.ClientMethod<
@@ -561,6 +601,33 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/UpdateMyTenantConfig',
       ($0.UpdateMyTenantConfigRequest value) => value.writeToBuffer(),
       $0.UpdateTenantConfigResponse.fromBuffer);
+  static final _$createMyWhatsappInstance = $grpc.ClientMethod<
+          $0.CreateMyWhatsappInstanceRequest,
+          $0.CreateMyWhatsappInstanceResponse>(
+      '/smartcore.contracts.queries.AdminService/CreateMyWhatsappInstance',
+      ($0.CreateMyWhatsappInstanceRequest value) => value.writeToBuffer(),
+      $0.CreateMyWhatsappInstanceResponse.fromBuffer);
+  static final _$getMyWhatsappInstanceStatus = $grpc.ClientMethod<
+          $0.GetMyWhatsappInstanceStatusRequest,
+          $0.GetMyWhatsappInstanceStatusResponse>(
+      '/smartcore.contracts.queries.AdminService/GetMyWhatsappInstanceStatus',
+      ($0.GetMyWhatsappInstanceStatusRequest value) => value.writeToBuffer(),
+      $0.GetMyWhatsappInstanceStatusResponse.fromBuffer);
+  static final _$createMyDepartamento = $grpc.ClientMethod<
+          $0.CreateMyDepartamentoRequest, $0.CreateMyDepartamentoResponse>(
+      '/smartcore.contracts.queries.AdminService/CreateMyDepartamento',
+      ($0.CreateMyDepartamentoRequest value) => value.writeToBuffer(),
+      $0.CreateMyDepartamentoResponse.fromBuffer);
+  static final _$setMyBotPersona =
+      $grpc.ClientMethod<$0.SetMyBotPersonaRequest, $0.SetMyBotPersonaResponse>(
+          '/smartcore.contracts.queries.AdminService/SetMyBotPersona',
+          ($0.SetMyBotPersonaRequest value) => value.writeToBuffer(),
+          $0.SetMyBotPersonaResponse.fromBuffer);
+  static final _$setOnboardingProgress = $grpc.ClientMethod<
+          $0.SetOnboardingProgressRequest, $0.SetOnboardingProgressResponse>(
+      '/smartcore.contracts.queries.AdminService/SetOnboardingProgress',
+      ($0.SetOnboardingProgressRequest value) => value.writeToBuffer(),
+      $0.SetOnboardingProgressResponse.fromBuffer);
 }
 
 @$pb.GrpcServiceName('smartcore.contracts.queries.AdminService')
@@ -936,6 +1003,52 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.UpdateMyTenantConfigRequest.fromBuffer(value),
         ($0.UpdateTenantConfigResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.CreateMyWhatsappInstanceRequest,
+            $0.CreateMyWhatsappInstanceResponse>(
+        'CreateMyWhatsappInstance',
+        createMyWhatsappInstance_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.CreateMyWhatsappInstanceRequest.fromBuffer(value),
+        ($0.CreateMyWhatsappInstanceResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.GetMyWhatsappInstanceStatusRequest,
+            $0.GetMyWhatsappInstanceStatusResponse>(
+        'GetMyWhatsappInstanceStatus',
+        getMyWhatsappInstanceStatus_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.GetMyWhatsappInstanceStatusRequest.fromBuffer(value),
+        ($0.GetMyWhatsappInstanceStatusResponse value) =>
+            value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.CreateMyDepartamentoRequest,
+            $0.CreateMyDepartamentoResponse>(
+        'CreateMyDepartamento',
+        createMyDepartamento_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.CreateMyDepartamentoRequest.fromBuffer(value),
+        ($0.CreateMyDepartamentoResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.SetMyBotPersonaRequest,
+            $0.SetMyBotPersonaResponse>(
+        'SetMyBotPersona',
+        setMyBotPersona_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.SetMyBotPersonaRequest.fromBuffer(value),
+        ($0.SetMyBotPersonaResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.SetOnboardingProgressRequest,
+            $0.SetOnboardingProgressResponse>(
+        'SetOnboardingProgress',
+        setOnboardingProgress_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.SetOnboardingProgressRequest.fromBuffer(value),
+        ($0.SetOnboardingProgressResponse value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.ListCoreSettingsResponse> listCoreSettings_Pre(
@@ -1308,4 +1421,50 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.UpdateTenantConfigResponse> updateMyTenantConfig(
       $grpc.ServiceCall call, $0.UpdateMyTenantConfigRequest request);
+
+  $async.Future<$0.CreateMyWhatsappInstanceResponse>
+      createMyWhatsappInstance_Pre($grpc.ServiceCall $call,
+          $async.Future<$0.CreateMyWhatsappInstanceRequest> $request) async {
+    return createMyWhatsappInstance($call, await $request);
+  }
+
+  $async.Future<$0.CreateMyWhatsappInstanceResponse> createMyWhatsappInstance(
+      $grpc.ServiceCall call, $0.CreateMyWhatsappInstanceRequest request);
+
+  $async.Future<$0.GetMyWhatsappInstanceStatusResponse>
+      getMyWhatsappInstanceStatus_Pre($grpc.ServiceCall $call,
+          $async.Future<$0.GetMyWhatsappInstanceStatusRequest> $request) async {
+    return getMyWhatsappInstanceStatus($call, await $request);
+  }
+
+  $async.Future<$0.GetMyWhatsappInstanceStatusResponse>
+      getMyWhatsappInstanceStatus($grpc.ServiceCall call,
+          $0.GetMyWhatsappInstanceStatusRequest request);
+
+  $async.Future<$0.CreateMyDepartamentoResponse> createMyDepartamento_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.CreateMyDepartamentoRequest> $request) async {
+    return createMyDepartamento($call, await $request);
+  }
+
+  $async.Future<$0.CreateMyDepartamentoResponse> createMyDepartamento(
+      $grpc.ServiceCall call, $0.CreateMyDepartamentoRequest request);
+
+  $async.Future<$0.SetMyBotPersonaResponse> setMyBotPersona_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.SetMyBotPersonaRequest> $request) async {
+    return setMyBotPersona($call, await $request);
+  }
+
+  $async.Future<$0.SetMyBotPersonaResponse> setMyBotPersona(
+      $grpc.ServiceCall call, $0.SetMyBotPersonaRequest request);
+
+  $async.Future<$0.SetOnboardingProgressResponse> setOnboardingProgress_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.SetOnboardingProgressRequest> $request) async {
+    return setOnboardingProgress($call, await $request);
+  }
+
+  $async.Future<$0.SetOnboardingProgressResponse> setOnboardingProgress(
+      $grpc.ServiceCall call, $0.SetOnboardingProgressRequest request);
 }

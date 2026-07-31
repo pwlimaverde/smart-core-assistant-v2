@@ -1970,6 +1970,153 @@ final $typed_data.Uint8List updateTenantUserResponseDescriptor =
     $convert.base64Decode(
         'ChhVcGRhdGVUZW5hbnRVc2VyUmVzcG9uc2USGAoHc3VjY2VzcxgBIAEoCFIHc3VjY2Vzcw==');
 
+@$core.Deprecated('Use createMyWhatsappInstanceRequestDescriptor instead')
+const CreateMyWhatsappInstanceRequest$json = {
+  '1': 'CreateMyWhatsappInstanceRequest',
+  '2': [
+    {'1': 'instance_name', '3': 1, '4': 1, '5': 9, '10': 'instanceName'},
+  ],
+};
+
+/// Descriptor for `CreateMyWhatsappInstanceRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createMyWhatsappInstanceRequestDescriptor =
+    $convert.base64Decode(
+        'Ch9DcmVhdGVNeVdoYXRzYXBwSW5zdGFuY2VSZXF1ZXN0EiMKDWluc3RhbmNlX25hbWUYASABKA'
+        'lSDGluc3RhbmNlTmFtZQ==');
+
+@$core.Deprecated('Use createMyWhatsappInstanceResponseDescriptor instead')
+const CreateMyWhatsappInstanceResponse$json = {
+  '1': 'CreateMyWhatsappInstanceResponse',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'instance_name', '3': 2, '4': 1, '5': 9, '10': 'instanceName'},
+    {'1': 'provider', '3': 3, '4': 1, '5': 9, '10': 'provider'},
+  ],
+};
+
+/// Descriptor for `CreateMyWhatsappInstanceResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createMyWhatsappInstanceResponseDescriptor =
+    $convert.base64Decode(
+        'CiBDcmVhdGVNeVdoYXRzYXBwSW5zdGFuY2VSZXNwb25zZRIOCgJpZBgBIAEoBVICaWQSIwoNaW'
+        '5zdGFuY2VfbmFtZRgCIAEoCVIMaW5zdGFuY2VOYW1lEhoKCHByb3ZpZGVyGAMgASgJUghwcm92'
+        'aWRlcg==');
+
+@$core.Deprecated('Use getMyWhatsappInstanceStatusRequestDescriptor instead')
+const GetMyWhatsappInstanceStatusRequest$json = {
+  '1': 'GetMyWhatsappInstanceStatusRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+  ],
+};
+
+/// Descriptor for `GetMyWhatsappInstanceStatusRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getMyWhatsappInstanceStatusRequestDescriptor =
+    $convert.base64Decode(
+        'CiJHZXRNeVdoYXRzYXBwSW5zdGFuY2VTdGF0dXNSZXF1ZXN0Eg4KAmlkGAEgASgFUgJpZA==');
+
+@$core.Deprecated('Use getMyWhatsappInstanceStatusResponseDescriptor instead')
+const GetMyWhatsappInstanceStatusResponse$json = {
+  '1': 'GetMyWhatsappInstanceStatusResponse',
+  '2': [
+    {'1': 'connection_state', '3': 1, '4': 1, '5': 9, '10': 'connectionState'},
+    {'1': 'qr_code', '3': 2, '4': 1, '5': 9, '10': 'qrCode'},
+  ],
+};
+
+/// Descriptor for `GetMyWhatsappInstanceStatusResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getMyWhatsappInstanceStatusResponseDescriptor =
+    $convert.base64Decode(
+        'CiNHZXRNeVdoYXRzYXBwSW5zdGFuY2VTdGF0dXNSZXNwb25zZRIpChBjb25uZWN0aW9uX3N0YX'
+        'RlGAEgASgJUg9jb25uZWN0aW9uU3RhdGUSFwoHcXJfY29kZRgCIAEoCVIGcXJDb2Rl');
+
+@$core.Deprecated('Use createMyDepartamentoRequestDescriptor instead')
+const CreateMyDepartamentoRequest$json = {
+  '1': 'CreateMyDepartamentoRequest',
+  '2': [
+    {'1': 'nome', '3': 1, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'descricao', '3': 2, '4': 1, '5': 9, '10': 'descricao'},
+  ],
+};
+
+/// Descriptor for `CreateMyDepartamentoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createMyDepartamentoRequestDescriptor =
+    $convert.base64Decode(
+        'ChtDcmVhdGVNeURlcGFydGFtZW50b1JlcXVlc3QSEgoEbm9tZRgBIAEoCVIEbm9tZRIcCglkZX'
+        'NjcmljYW8YAiABKAlSCWRlc2NyaWNhbw==');
+
+@$core.Deprecated('Use createMyDepartamentoResponseDescriptor instead')
+const CreateMyDepartamentoResponse$json = {
+  '1': 'CreateMyDepartamentoResponse',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
+  ],
+};
+
+/// Descriptor for `CreateMyDepartamentoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createMyDepartamentoResponseDescriptor =
+    $convert.base64Decode(
+        'ChxDcmVhdGVNeURlcGFydGFtZW50b1Jlc3BvbnNlEg4KAmlkGAEgASgFUgJpZBISCgRub21lGA'
+        'IgASgJUgRub21l');
+
+@$core.Deprecated('Use setMyBotPersonaRequestDescriptor instead')
+const SetMyBotPersonaRequest$json = {
+  '1': 'SetMyBotPersonaRequest',
+  '2': [
+    {'1': 'persona_bot', '3': 1, '4': 1, '5': 9, '10': 'personaBot'},
+    {'1': 'bot_agent_name', '3': 2, '4': 1, '5': 9, '10': 'botAgentName'},
+  ],
+};
+
+/// Descriptor for `SetMyBotPersonaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List setMyBotPersonaRequestDescriptor =
+    $convert.base64Decode(
+        'ChZTZXRNeUJvdFBlcnNvbmFSZXF1ZXN0Eh8KC3BlcnNvbmFfYm90GAEgASgJUgpwZXJzb25hQm'
+        '90EiQKDmJvdF9hZ2VudF9uYW1lGAIgASgJUgxib3RBZ2VudE5hbWU=');
+
+@$core.Deprecated('Use setMyBotPersonaResponseDescriptor instead')
+const SetMyBotPersonaResponse$json = {
+  '1': 'SetMyBotPersonaResponse',
+  '2': [
+    {'1': 'success', '3': 1, '4': 1, '5': 8, '10': 'success'},
+  ],
+};
+
+/// Descriptor for `SetMyBotPersonaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List setMyBotPersonaResponseDescriptor =
+    $convert.base64Decode(
+        'ChdTZXRNeUJvdFBlcnNvbmFSZXNwb25zZRIYCgdzdWNjZXNzGAEgASgIUgdzdWNjZXNz');
+
+@$core.Deprecated('Use setOnboardingProgressRequestDescriptor instead')
+const SetOnboardingProgressRequest$json = {
+  '1': 'SetOnboardingProgressRequest',
+  '2': [
+    {'1': 'passo', '3': 1, '4': 1, '5': 5, '10': 'passo'},
+    {'1': 'concluido', '3': 2, '4': 1, '5': 8, '10': 'concluido'},
+  ],
+};
+
+/// Descriptor for `SetOnboardingProgressRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List setOnboardingProgressRequestDescriptor =
+    $convert.base64Decode(
+        'ChxTZXRPbmJvYXJkaW5nUHJvZ3Jlc3NSZXF1ZXN0EhQKBXBhc3NvGAEgASgFUgVwYXNzbxIcCg'
+        'ljb25jbHVpZG8YAiABKAhSCWNvbmNsdWlkbw==');
+
+@$core.Deprecated('Use setOnboardingProgressResponseDescriptor instead')
+const SetOnboardingProgressResponse$json = {
+  '1': 'SetOnboardingProgressResponse',
+  '2': [
+    {'1': 'passo', '3': 1, '4': 1, '5': 5, '10': 'passo'},
+    {'1': 'concluido', '3': 2, '4': 1, '5': 8, '10': 'concluido'},
+  ],
+};
+
+/// Descriptor for `SetOnboardingProgressResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List setOnboardingProgressResponseDescriptor =
+    $convert.base64Decode(
+        'Ch1TZXRPbmJvYXJkaW5nUHJvZ3Jlc3NSZXNwb25zZRIUCgVwYXNzbxgBIAEoBVIFcGFzc28SHA'
+        'oJY29uY2x1aWRvGAIgASgIUgljb25jbHVpZG8=');
+
 @$core.Deprecated('Use getMyTenantConfigRequestDescriptor instead')
 const GetMyTenantConfigRequest$json = {
   '1': 'GetMyTenantConfigRequest',

@@ -149,8 +149,8 @@ final class ConclusaoController extends BaseController<StatusCadastro> {
   /// Entra com as credenciais que o usuário acabou de definir e encerra a
   /// sessão do wizard (apagando a senha da memória).
   ///
-  /// A navegação não acontece aqui: o guard do app reage a `authChanges` e leva
-  /// para o workspace sozinho.
+  /// A navegação para a configuração inicial é da tela: o guard do app só sabe
+  /// que há sessão, não que o roteiro continua.
   Future<ReturnSuccessOrError<login.Session, login.LoginError>> entrar() async {
     final res = await _auth.login(email: _sessao.email, password: _sessao.senha);
     if (res is Success) _sessao.encerrar();

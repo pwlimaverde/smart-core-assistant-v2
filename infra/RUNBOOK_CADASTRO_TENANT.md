@@ -10,12 +10,43 @@ pagamento** confirma. Hoje o único provedor é o **voucher**, que confirma na
 hora; um gateway real entra como outro provedor da mesma porta, sem mexer no
 wizard nem na máquina de estados da assinatura.
 
+O alvo é o **app instalado no Windows**. A versão web do app do tenant existe,
+mas não é o caminho desta fase — e num programa instalado não há URL para
+digitar, então a tela de login oferece "Criar conta da minha empresa". Sem esse
+botão o cadastro seria inalcançável.
+
+### Trilha 1 — criar a conta (pública, sem sessão)
+
 ```
 /cadastro            → cria auth_user + tenant(inativo) + subscription(PENDING_PAYMENT)
 /cadastro/plano      → grava plan_id
 /cadastro/pagamento  → voucher confirma na hora │ gateway devolve URL e confirma depois
 /cadastro/pronto     → tenant.active = true, assinatura ACTIVE, login automático
 ```
+
+### Trilha 2 — colocar para operar (com sessão)
+
+Pagar cria a conta; quem coloca o sistema para funcionar é este roteiro. Emenda
+direto no fim da trilha 1.
+
+```
+/configuracao/whatsapp      → cria a instância e mostra o QR do Evolution
+/configuracao/departamento  → primeiro setor de atendimento
+/configuracao/assistente    → persona e nome do bot
+/configuracao/pronto        → marca setup_completed e vai para o workspace
+```
+
+**Todo passo pode ser adiado.** Parear o WhatsApp exige o celular em mãos, e
+quem instala o programa nem sempre é quem tem o telefone — bloquear ali deixaria
+o cliente preso. "Fazer isso depois" registra o progresso do mesmo jeito.
+
+**O progresso vive no servidor** (`tenants_tenant.onboarding_step`), não no app:
+fechar o programa e reabrir continua de onde parou, que num app instalado é o
+esperado.
+
+**`setup_completed` mudou de significado.** Antes era marcado quando o pagamento
+confirmava; agora é marcado no fim da trilha 2. Passou de "pagou" para "está
+operando".
 
 ## Antes do primeiro teste
 
@@ -46,26 +77,34 @@ O código não distingue maiúsculas de minúsculas: `devteste`, `DevTeste` e
 Não há script de seed de propósito: dado de teste em migration vaza para
 produção, e criar pelo painel exercita a tela nova.
 
-### 3. Ligar o enforce de quota (opcional, mas é o ponto do teste)
+### 3. Enforce de quota — já ligado em dev
 
-O limite de 3 instâncias só **bloqueia** com a variável ligada; o padrão é
-log-only. No `/opt/smartcore/dev/env/dev.env`:
+`SMARTCORE_QUOTA_ENFORCE=true` está no `/opt/smartcore/dev/env/dev.env` (backup
+do arquivo anterior ao lado, com data no nome).
 
-```
-SMARTCORE_QUOTA_ENFORCE=true
-```
+**O valor do limite nunca esteve no código.** `verificar_quota` faz
+`SELECT p.max_instances FROM tenants_subscription s JOIN tenants_plan p ...` —
+o teto é sempre o do plano do tenant. Esta variável só decide se exceder
+**recusa** ou apenas **registra no log**. Mudar o Básico de 3 para 5 instâncias
+no painel passa a valer na hora, sem deploy.
 
-Sem isso, o tenant do plano Básico consegue criar a 4ª instância e o limite
-aparece só no log. Ver `RUNBOOK_ENFORCE_ROLLOUT_N8.md` para o rollout em
-produção.
+Quem lê a variável: `data_postgres`, `data_storage`, `data_whatsapp` e
+`webhook_ingress`. Ela é injetada pelo `env_file` do compose, que o deploy copia
+do `dev.env` — mudar o arquivo exige **recriar** os contêineres (`docker compose
+up -d --force-recreate`), não apenas reiniciar: o ambiente é lido na criação.
+
+Para o rollout em produção, ver `RUNBOOK_ENFORCE_ROLLOUT_N8.md` — lá a
+recomendação é observar em modo aviso antes de bloquear.
 
 ## O roteiro de teste
 
-1. Abrir `/cadastro` no app (desktop ou web), preencher empresa, e-mail e senha.
-   O endereço da conta é sugerido a partir do nome e checado enquanto se digita.
+1. Abrir o app e clicar em **"Criar conta da minha empresa"** na tela de login.
+   Preencher empresa, e-mail e senha — o endereço da conta é sugerido a partir
+   do nome e checado no servidor enquanto se digita.
 2. Escolher o plano Básico.
 3. Informar `devteste` no campo de código.
-4. A conta é liberada e o login acontece sozinho.
+4. A conta é liberada, o login acontece sozinho e o roteiro segue para a
+   configuração: WhatsApp (QR), setor, assistente e conclusão.
 
 **Confirmar no banco** que a assinatura ficou como esperado:
 
@@ -78,7 +117,12 @@ SELECT t.slug, t.active, s.status, s.current_period_end, p.name
 ```
 
 Esperado: `active = true`, `status = ACTIVE`, `current_period_end` seis meses à
-frente.
+frente. E `setup_completed` **false** até o tenant terminar a trilha 2 —
+`onboarding_step` mostra em qual tela ele parou (5 = WhatsApp, 8 = concluído).
+
+**Testar o limite do plano:** com o Básico (3 instâncias), crie três conexões e
+tente a quarta. O `data_whatsapp` recusa antes de falar com o Evolution, e a
+tela diz que o limite do plano foi atingido — não "servidor indisponível".
 
 **Testar a revogação:** revogue o `devteste` no painel e tente cadastrar de novo
 — o código deve ser recusado. A conta criada antes continua funcionando: revogar

@@ -267,9 +267,15 @@ impl SignupStore for PgSignupStore {
         // O tenant só existe de verdade a partir daqui. `access_code` é zerado
         // junto: o token de cadastro cumpriu o papel e não deve sobreviver ao
         // fluxo que autorizava.
+        //
+        // `setup_completed` NÃO é marcado aqui. Pagar cria a conta; quem coloca
+        // o sistema para operar é a configuração guiada que vem depois
+        // (conectar o WhatsApp, primeiro departamento, persona). O campo passa a
+        // significar "está operando", e é marcado no fim daquele roteiro —
+        // `onboarding_step = 5` aponta para o primeiro passo dele.
         sqlx::query(
             "UPDATE tenants_tenant \
-                SET active = true, setup_completed = true, onboarding_step = 4, \
+                SET active = true, onboarding_step = 5, \
                     access_code = NULL, updated_at = NOW() \
               WHERE id = $1",
         )

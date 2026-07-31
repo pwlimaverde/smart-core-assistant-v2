@@ -25,6 +25,11 @@ use contracts::grpc::queries::{
     CoreSetting as ProtoCoreSetting,
     CreateInviteRequest,
     CreateInviteResponse,
+    CreateMyDepartamentoRequest,
+    CreateMyDepartamentoResponse,
+    // Configuração inicial guiada (passos 5 a 8)
+    CreateMyWhatsappInstanceRequest,
+    CreateMyWhatsappInstanceResponse,
     CreatePlanRequest,
     CreatePlanResponse,
     CreateTenantRequest,
@@ -43,6 +48,8 @@ use contracts::grpc::queries::{
     GetDashboardSummaryRequest,
     GetDashboardSummaryResponse,
     GetMyTenantConfigRequest,
+    GetMyWhatsappInstanceStatusRequest,
+    GetMyWhatsappInstanceStatusResponse,
     GetServiceHealthRequest,
     GetServiceHealthResponse,
     GetTenantConfigRequest,
@@ -101,6 +108,10 @@ use contracts::grpc::queries::{
     SetFeatureFlagOverrideResponse,
     SetFeatureFlagRequest,
     SetFeatureFlagResponse,
+    SetMyBotPersonaRequest,
+    SetMyBotPersonaResponse,
+    SetOnboardingProgressRequest,
+    SetOnboardingProgressResponse,
     SetTenantActiveRequest,
     SetTenantActiveResponse,
     StreamAtendimentosRequest,
@@ -662,6 +673,10 @@ pub struct AdminFacade {
     bus: redis::aio::ConnectionManager,
     control: transport::MuxClient,
     realtime: crate::realtime::RealtimeManager,
+    /// Cliente do `data_whatsapp`, para a configuração guiada do tenant
+    /// (criar instância e acompanhar o pareamento). O `AuthDeps` só carrega
+    /// `pg` e `redis`.
+    whatsapp: transport::MuxClient,
 }
 
 impl AdminFacade {
@@ -670,13 +685,71 @@ impl AdminFacade {
         bus: redis::aio::ConnectionManager,
         control: transport::MuxClient,
         realtime: crate::realtime::RealtimeManager,
+        whatsapp: transport::MuxClient,
     ) -> Self {
         Self {
             deps,
             bus,
             control,
             realtime,
+            whatsapp,
         }
+    }
+
+    /// Encaminha um RPC com escopo de **tenant**: exige sessão autenticada com
+    /// `tenant:admin` e injeta o `tenant_id` das claims no envelope.
+    ///
+    /// A diferença para [`Self::encaminhar_admin`] é onde o tenant vem: aqui das
+    /// claims, nunca do request. Um tenant não alcança o de outro nem mandando o
+    /// id na mensagem.
+    async fn encaminhar_tenant<T>(
+        &self,
+        req: &Request<T>,
+        destino: &transport::MuxClient,
+        metodo: &str,
+        mut payload: serde_json::Value,
+    ) -> Result<serde_json::Value, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, req).await?;
+        exigir_escopo_tenant_admin(&claims)?;
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("sessão sem tenant válido"))?;
+
+        // O `tenant_id` também entra no corpo: alguns handlers o leem de lá.
+        if let Some(obj) = payload.as_object_mut() {
+            obj.insert(
+                "tenant_id".to_string(),
+                serde_json::Value::String(tenant_uuid.to_string()),
+            );
+        }
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent_do_metadata(req),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: metodo.to_string(),
+            payload: serde_json::to_vec(&payload).unwrap_or_default(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        // Criar instância fala com o provedor externo (Evolution) antes de
+        // responder; 5s não bastam.
+        let resp = destino
+            .call(env_req, std::time::Duration::from_secs(30))
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço interno: {e}")))?;
+
+        if resp.kind == MessageKind::Error as i32 {
+            return Err(status_do_erro_interno(resp.error));
+        }
+
+        serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))
     }
 
     /// Exige superusuário, encaminha ao `data_postgres` e devolve o corpo JSON.
@@ -2105,6 +2178,198 @@ impl AdminService for AdminFacade {
             }
             Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
         }
+    }
+
+    // --- Configuração inicial guiada (passos 5 a 8) ---
+    //
+    // Escopo de TENANT: o `tenant_id` vem das claims. São os RPCs que o app
+    // instalado usa para sair da conta criada e chegar ao sistema operando.
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "CreateMyWhatsappInstance", traceparent)
+    )]
+    async fn create_my_whatsapp_instance(
+        &self,
+        req: Request<CreateMyWhatsappInstanceRequest>,
+    ) -> Result<Response<CreateMyWhatsappInstanceResponse>, Status> {
+        let nome = req.get_ref().instance_name.trim().to_string();
+        if nome.is_empty() {
+            return Err(Status::invalid_argument("informe o nome da conexão"));
+        }
+
+        // O `data_whatsapp` aplica o QuotaGuard de instâncias contra o
+        // `max_instances` do plano antes de criar no provedor — estourar o
+        // limite volta como RESOURCE_EXHAUSTED, e a tela mostra isso.
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.whatsapp,
+                "CreateWhatsappInstance",
+                serde_json::json!({ "instance_name": nome }),
+            )
+            .await?;
+
+        Ok(Response::new(CreateMyWhatsappInstanceResponse {
+            id: corpo.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+            instance_name: corpo
+                .get("instance_name")
+                .and_then(|v| v.as_str())
+                .unwrap_or(&nome)
+                .to_string(),
+            provider: corpo
+                .get("provider")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string(),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "GetMyWhatsappInstanceStatus",
+            traceparent
+        )
+    )]
+    async fn get_my_whatsapp_instance_status(
+        &self,
+        req: Request<GetMyWhatsappInstanceStatusRequest>,
+    ) -> Result<Response<GetMyWhatsappInstanceStatusResponse>, Status> {
+        let id = req.get_ref().id;
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.whatsapp,
+                "GetWhatsappInstanceStatus",
+                serde_json::json!({ "id": id }),
+            )
+            .await?;
+
+        Ok(Response::new(GetMyWhatsappInstanceStatusResponse {
+            connection_state: corpo
+                .get("connection_state")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown")
+                .to_string(),
+            // Ausente quando já conectou (ou quando o provedor ainda não gerou).
+            qr_code: corpo
+                .get("qr_code")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string(),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "CreateMyDepartamento", traceparent)
+    )]
+    async fn create_my_departamento(
+        &self,
+        req: Request<CreateMyDepartamentoRequest>,
+    ) -> Result<Response<CreateMyDepartamentoResponse>, Status> {
+        let inner = req.get_ref().clone();
+        if inner.nome.trim().is_empty() {
+            return Err(Status::invalid_argument("informe o nome do departamento"));
+        }
+
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "CreateDepartamento",
+                serde_json::json!({
+                    "nome": inner.nome.trim(),
+                    "descricao": inner.descricao,
+                }),
+            )
+            .await?;
+
+        // O handler devolve o departamento na raiz do payload; o `get` aqui é
+        // tolerância a um aninhamento futuro, não o caminho corrente.
+        let dep = corpo.get("departamento").unwrap_or(&corpo);
+        Ok(Response::new(CreateMyDepartamentoResponse {
+            id: dep.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+            nome: dep
+                .get("nome")
+                .and_then(|v| v.as_str())
+                .unwrap_or(inner.nome.trim())
+                .to_string(),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "SetMyBotPersona", traceparent)
+    )]
+    async fn set_my_bot_persona(
+        &self,
+        req: Request<SetMyBotPersonaRequest>,
+    ) -> Result<Response<SetMyBotPersonaResponse>, Status> {
+        let inner = req.get_ref().clone();
+
+        // Só os dois campos entram no payload. O UPSERT do `data_postgres` faz
+        // `COALESCE(EXCLUDED.campo, atual)`, e uma chave AUSENTE no JSON vira
+        // NULL — que preserva o valor atual. Mandar o objeto inteiro com
+        // strings vazias, ao contrário, apagaria a configuração de IA.
+        let mut payload = serde_json::Map::new();
+        if !inner.persona_bot.trim().is_empty() {
+            payload.insert(
+                "persona_bot".to_string(),
+                serde_json::Value::String(inner.persona_bot.trim().to_string()),
+            );
+        }
+        if !inner.bot_agent_name.trim().is_empty() {
+            payload.insert(
+                "bot_agent_name".to_string(),
+                serde_json::Value::String(inner.bot_agent_name.trim().to_string()),
+            );
+        }
+        if payload.is_empty() {
+            return Err(Status::invalid_argument("informe a persona ou o nome"));
+        }
+
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "UpdateTenantConfig",
+            serde_json::Value::Object(payload),
+        )
+        .await?;
+
+        Ok(Response::new(SetMyBotPersonaResponse { success: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "SetOnboardingProgress", traceparent)
+    )]
+    async fn set_onboarding_progress(
+        &self,
+        req: Request<SetOnboardingProgressRequest>,
+    ) -> Result<Response<SetOnboardingProgressResponse>, Status> {
+        let inner = *req.get_ref();
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "SetOnboardingProgress",
+                serde_json::json!({
+                    "passo": inner.passo,
+                    "concluido": inner.concluido,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(SetOnboardingProgressResponse {
+            passo: corpo.get("passo").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+            concluido: corpo
+                .get("concluido")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        }))
     }
 
     // --- Vouchers de ativação (superusuário) ---
@@ -4090,7 +4355,9 @@ pub async fn serve(deps: Arc<AuthDeps>, bus: redis::aio::ConnectionManager) -> a
             crate::onboarding_web::OnboardingFacade::new(deps.clone(), provedores),
         );
 
-    let facade_admin = AdminServiceServer::new(AdminFacade::new(deps, bus, control, realtime));
+    let whatsapp = transport::conectar_cliente("data_whatsapp").await?;
+    let facade_admin =
+        AdminServiceServer::new(AdminFacade::new(deps, bus, control, realtime, whatsapp));
 
     // CORS restritivo (defesa em profundidade mesmo servindo na mesma origem que o WASM).
     let cors = tower_http::cors::CorsLayer::new()
@@ -4475,13 +4742,16 @@ mod tests {
             login_rate_window_s: 300,
         });
         let control = stub_rpc(&format!("tcp://127.0.0.1:{}", porta_base + 2)).await;
-        // Bus e realtime só são tocados DEPOIS da autenticação — nenhum teste daqui
-        // chega neles. O `RealtimeManager` nem abre conexão no construtor.
+        let whatsapp = stub_rpc(&format!("tcp://127.0.0.1:{}", porta_base + 3)).await;
+        // Bus, realtime e whatsapp só são tocados DEPOIS da autenticação — nenhum
+        // teste daqui chega neles. O `RealtimeManager` nem abre conexão no
+        // construtor.
         AdminFacade::new(
             deps,
             bus_stub().await,
             control,
             crate::realtime::RealtimeManager::new("redis://127.0.0.1:63799").unwrap(),
+            whatsapp,
         )
     }
 

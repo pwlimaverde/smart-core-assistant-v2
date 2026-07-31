@@ -66,13 +66,18 @@ class _CadastroProntoPageState extends State<CadastroProntoPage> {
     });
     final res = await _controller.entrar();
     if (!mounted) return;
-    // Em sucesso não navegamos: o guard do app reage a `authChanges` e leva
-    // para o workspace sozinho.
-    if (res case Failure(:final error)) {
-      setState(() {
-        _entrando = false;
-        _erroLogin = ErrorMessageMapper.map(error);
-      });
+
+    switch (res) {
+      // A conta está criada, mas nada opera ainda: o roteiro continua na
+      // configuração inicial. Ir direto ao workspace deixaria o tenant diante
+      // de uma tela vazia, sem WhatsApp conectado.
+      case Success():
+        context.go('/configuracao/whatsapp');
+      case Failure(:final error):
+        setState(() {
+          _entrando = false;
+          _erroLogin = ErrorMessageMapper.map(error);
+        });
     }
   }
 
@@ -146,8 +151,8 @@ class _Liberada extends StatelessWidget {
         Icon(Icons.check_circle_outline, size: 56, color: colors.success),
         const SizedBox(height: AppSpacing.md),
         Text(
-          'Conta liberada. Você já pode configurar seus atendimentos e '
-          'conectar o WhatsApp.',
+          'Conta liberada. Vamos deixar seu atendimento funcionando — '
+          'são mais quatro passos rápidos.',
           textAlign: TextAlign.center,
           style: Theme.of(context)
               .textTheme
@@ -160,7 +165,7 @@ class _Liberada extends StatelessWidget {
         ],
         const SizedBox(height: AppSpacing.lg),
         PrimaryButton(
-          label: 'Entrar',
+          label: 'Continuar',
           isLoading: entrando,
           onPressed: entrando ? null : onEntrar,
         ),

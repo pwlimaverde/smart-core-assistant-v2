@@ -378,7 +378,9 @@ void main() {
       await montar(tester, const CadastroProntoPage());
       await tester.pumpAndSettle();
 
-      expect(find.text('Entrar'), findsOneWidget);
+      // "Continuar", e não "Entrar": o roteiro não acaba aqui — emenda na
+      // configuração inicial, que é o que põe o sistema para operar.
+      expect(find.text('Continuar'), findsOneWidget);
       expect(find.textContaining('Conta liberada'), findsOneWidget);
     });
 
@@ -400,7 +402,7 @@ void main() {
       await tester.pump();
 
       expect(find.textContaining('Aguardando a confirmação'), findsOneWidget);
-      expect(find.text('Entrar'), findsNothing);
+      expect(find.text('Continuar'), findsNothing);
     });
 
   });

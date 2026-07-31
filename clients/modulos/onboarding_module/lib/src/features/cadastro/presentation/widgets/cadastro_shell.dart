@@ -1,17 +1,30 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
-/// Moldura das quatro telas do wizard: logo, stepper e o cartão de conteúdo.
+/// Rótulos do stepper do CADASTRO (criar a conta).
+const rotulosCadastro = ['Empresa', 'Plano', 'Pagamento', 'Pronto'];
+
+/// Rótulos do stepper da CONFIGURAÇÃO inicial (colocar para operar).
+///
+/// Duas trilhas de quatro em vez de uma de oito: "passo 7 de 8" não diz nada a
+/// quem acabou de criar a conta, enquanto "Configuração — WhatsApp, Setor,
+/// Assistente, Pronto" mostra o que falta e que é pouco.
+const rotulosConfiguracao = ['WhatsApp', 'Setor', 'Assistente', 'Pronto'];
+
+/// Moldura das telas do wizard: logo, stepper e o cartão de conteúdo.
 ///
 /// Centralizar aqui garante que os passos não divirjam visualmente e que o
 /// indicador de progresso seja o mesmo objeto em todos.
 final class CadastroShell extends StatelessWidget {
-  /// 1..4
+  /// Posição na trilha, começando em 1.
   final int passo;
   final String titulo;
   final String subtitulo;
   final Widget child;
 
-  /// Ação de voltar; `null` esconde o botão (passo 1 e passo final).
+  /// Rótulos da trilha. Default: os do cadastro.
+  final List<String> rotulos;
+
+  /// Ação de voltar; `null` esconde o botão (primeiro e último passo).
   final VoidCallback? aoVoltar;
 
   const CadastroShell({
@@ -20,6 +33,7 @@ final class CadastroShell extends StatelessWidget {
     required this.titulo,
     required this.subtitulo,
     required this.child,
+    this.rotulos = rotulosCadastro,
     this.aoVoltar,
   });
 
@@ -42,7 +56,7 @@ final class CadastroShell extends StatelessWidget {
                 children: [
                   const Align(child: AppLogo(height: 72)),
                   const SizedBox(height: AppSpacing.lg),
-                  _Stepper(passoAtual: passo),
+                  _Stepper(passoAtual: passo, rotulos: rotulos),
                   const SizedBox(height: AppSpacing.lg),
                   Text(titulo, style: textTheme.headlineMedium),
                   const SizedBox(height: AppSpacing.xs),
@@ -74,19 +88,18 @@ final class CadastroShell extends StatelessWidget {
   }
 }
 
-/// Trilha de quatro pontos com o passo corrente destacado.
+/// Trilha de pontos com o passo corrente destacado.
 class _Stepper extends StatelessWidget {
-  static const _rotulos = ['Empresa', 'Plano', 'Pagamento', 'Pronto'];
-
   final int passoAtual;
+  final List<String> rotulos;
 
-  const _Stepper({required this.passoAtual});
+  const _Stepper({required this.passoAtual, required this.rotulos});
 
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
     return Row(
-      children: List.generate(_rotulos.length * 2 - 1, (i) {
+      children: List.generate(rotulos.length * 2 - 1, (i) {
         // Índices ímpares são as linhas entre os pontos.
         if (i.isOdd) {
           final anterior = i ~/ 2 + 1;
@@ -101,7 +114,7 @@ class _Stepper extends StatelessWidget {
         final concluido = numero < passoAtual;
         final atual = numero == passoAtual;
         return Semantics(
-          label: 'Passo $numero de 4: ${_rotulos[numero - 1]}',
+          label: 'Passo $numero de ${rotulos.length}: ${rotulos[numero - 1]}',
           selected: atual,
           child: Container(
             width: 28,

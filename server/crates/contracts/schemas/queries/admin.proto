@@ -640,6 +640,80 @@ message UpdateTenantUserResponse {
   bool success = 1;
 }
 
+// --- Configuração inicial guiada (passos 5 a 8 do onboarding) ---
+//
+// O tenant sai do pagamento com a conta criada, mas sem nada operando. Estes
+// RPCs são o que o roteiro guiado usa para deixá-lo funcionando: conectar o
+// WhatsApp, criar o primeiro departamento e registrar até onde ele chegou.
+//
+// Todos com escopo de TENANT (o `tenant_id` vem das claims, nunca do request) —
+// diferente dos RPCs de instância do superusuário, que operam cross-tenant.
+
+message CreateMyWhatsappInstanceRequest {
+  // Nome da instância no provedor. Precisa ser único entre todos os tenants.
+  string instance_name = 1;
+}
+
+message CreateMyWhatsappInstanceResponse {
+  int32 id = 1;
+  string instance_name = 2;
+  string provider = 3;
+}
+
+message GetMyWhatsappInstanceStatusRequest {
+  int32 id = 1;
+}
+
+message GetMyWhatsappInstanceStatusResponse {
+  // `connected`, `disconnected`, `connecting` ou `unknown`.
+  string connection_state = 1;
+  // QR em base64 para o pareamento; vazio quando já conectado (ou quando o
+  // provedor ainda não o gerou).
+  string qr_code = 2;
+}
+
+message CreateMyDepartamentoRequest {
+  string nome = 1;
+  string descricao = 2;
+}
+
+message CreateMyDepartamentoResponse {
+  int32 id = 1;
+  string nome = 2;
+}
+
+// Define a persona do bot no passo 7.
+//
+// RPC dedicado, e não `UpdateMyTenantConfig`: aquele carrega o objeto de
+// configuração inteiro, e em proto3 um campo não preenchido chega como string
+// vazia — o UPSERT do `data_postgres` faz `COALESCE(EXCLUDED.campo, atual)`, de
+// modo que "" SOBRESCREVE o valor existente. Mandar só a persona por ali
+// apagaria modelo de LLM, thresholds e o resto da configuração de IA.
+message SetMyBotPersonaRequest {
+  string persona_bot = 1;
+  string bot_agent_name = 2;
+}
+
+message SetMyBotPersonaResponse {
+  bool success = 1;
+}
+
+// Registra até onde o tenant chegou na configuração guiada.
+//
+// O progresso vive no servidor, e não no app, para que fechar o programa e
+// reabrir continue de onde parou — num app instalado isso é o esperado.
+message SetOnboardingProgressRequest {
+  // 5..8. O passo 8 conclui o roteiro e marca `setup_completed`.
+  int32 passo = 1;
+  // true = o tenant terminou (ou pulou o que faltava) e vai para o workspace.
+  bool concluido = 2;
+}
+
+message SetOnboardingProgressResponse {
+  int32 passo = 1;
+  bool concluido = 2;
+}
+
 // N3.3: config do PRÓPRIO tenant (tenant_id vem das claims, não do request).
 // Reaproveita GetTenantConfigResponse/UpdateTenantConfigResponse. As api_keys já
 // vêm mascaradas do data_postgres (`••••••••`), igual ao caminho do superusuário.
@@ -732,6 +806,13 @@ service AdminService {
   rpc UpdateTenantUser(UpdateTenantUserRequest) returns (UpdateTenantUserResponse);
   rpc GetMyTenantConfig(GetMyTenantConfigRequest) returns (GetTenantConfigResponse);
   rpc UpdateMyTenantConfig(UpdateMyTenantConfigRequest) returns (UpdateTenantConfigResponse);
+
+  // Configuração inicial guiada (passos 5 a 8)
+  rpc CreateMyWhatsappInstance(CreateMyWhatsappInstanceRequest) returns (CreateMyWhatsappInstanceResponse);
+  rpc GetMyWhatsappInstanceStatus(GetMyWhatsappInstanceStatusRequest) returns (GetMyWhatsappInstanceStatusResponse);
+  rpc CreateMyDepartamento(CreateMyDepartamentoRequest) returns (CreateMyDepartamentoResponse);
+  rpc SetMyBotPersona(SetMyBotPersonaRequest) returns (SetMyBotPersonaResponse);
+  rpc SetOnboardingProgress(SetOnboardingProgressRequest) returns (SetOnboardingProgressResponse);
 }
 
 message StreamAtendimentosRequest {}

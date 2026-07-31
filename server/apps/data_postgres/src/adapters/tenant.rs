@@ -129,6 +129,31 @@ impl TenantStore for PgTenantStore {
         Ok(res.rows_affected() > 0)
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %tenant_id, passo, concluido))]
+    async fn atualizar_progresso_onboarding(
+        &self,
+        tenant_id: Uuid,
+        passo: i32,
+        concluido: bool,
+    ) -> Result<bool, DbError> {
+        // `GREATEST` para o passo nunca andar para trás: o tenant pode voltar
+        // uma tela para revisar o que preencheu, e isso não pode fazer o
+        // progresso regredir na próxima abertura do app.
+        let res = sqlx::query(
+            "UPDATE tenants_tenant \
+                SET onboarding_step = GREATEST(onboarding_step, $1), \
+                    setup_completed = setup_completed OR $2, \
+                    updated_at = NOW() \
+              WHERE id = $3",
+        )
+        .bind(passo)
+        .bind(concluido)
+        .bind(tenant_id)
+        .execute(&self.pool)
+        .await?;
+        Ok(res.rows_affected() > 0)
+    }
+
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, email = %email))]
     async fn criar_convite(
         &self,

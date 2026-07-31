@@ -49,6 +49,18 @@ pub trait TenantStore: Send + Sync {
     /// Persiste um novo código de acesso; retorna `true` se algum registro foi afetado.
     async fn gerar_access_code(&self, id: Uuid, code: &str) -> Result<bool, DbError>;
 
+    /// Registra até onde o tenant chegou na configuração inicial guiada.
+    ///
+    /// O progresso vive no servidor para que fechar o app e reabrir continue de
+    /// onde parou. `setup_completed` marca o fim do roteiro — não o pagamento:
+    /// pagar cria a conta, mas quem coloca o sistema para operar é este roteiro.
+    async fn atualizar_progresso_onboarding(
+        &self,
+        tenant_id: Uuid,
+        passo: i32,
+        concluido: bool,
+    ) -> Result<bool, DbError>;
+
     /// Cria um convite para o tenant, já com as permissões (`module_permissions` =
     /// escopos; `flow_permissions` = ids de fluxo) que o convidado receberá no aceite.
     #[allow(clippy::too_many_arguments)]

@@ -454,6 +454,77 @@ pub async fn handler_get_signup_status(signup: &dyn ports::SignupStore, env: Env
 }
 
 // ---------------------------------------------------------------------------
+// Passos 5 a 8 — configuração inicial guiada
+// ---------------------------------------------------------------------------
+
+/// Registra até onde o tenant chegou na configuração guiada.
+///
+/// Diferente dos handlers acima, este roda **com sessão**: o `tenant_id` vem do
+/// envelope, que a borda preencheu a partir das claims. Não há `signup_token`
+/// aqui — o cadastro já terminou.
+#[tracing::instrument(skip_all, fields(rpc = "SetOnboardingProgress", tenant_id = %env.tenant_id))]
+pub async fn handler_set_onboarding_progress(
+    store: &dyn ports::TenantStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload = payload_de(&env);
+    let Ok(tenant_id) = Uuid::parse_str(&env.tenant_id) else {
+        return erro(
+            error_core::AppError::Validation("tenant_id inválido".into()),
+            &env,
+        );
+    };
+
+    let passo = payload
+        .get("passo")
+        .and_then(serde_json::Value::as_i64)
+        .unwrap_or(0) as i32;
+    let concluido = payload
+        .get("concluido")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+
+    // O roteiro guiado vai do 5 ao 8; 1..4 é o cadastro, que já passou.
+    if !(5..=8).contains(&passo) {
+        return erro(
+            error_core::AppError::Validation("passo fora do roteiro".into()),
+            &env,
+        );
+    }
+
+    match store
+        .atualizar_progresso_onboarding(tenant_id, passo, concluido)
+        .await
+    {
+        Ok(true) => {
+            // Só a conclusão é auditada: o avanço de tela é ruído, mas "o tenant
+            // terminou a configuração" é um marco do ciclo de vida da conta.
+            if concluido {
+                audit
+                    .publish(
+                        &env,
+                        "tenant_setup_completed",
+                        "Configuração inicial concluída".to_string(),
+                        serde_json::json!({ "tenant_id": tenant_id.to_string() }),
+                    )
+                    .await;
+            }
+            ok_reply(
+                &env,
+                "SetOnboardingProgressReply",
+                serde_json::json!({ "passo": passo, "concluido": concluido }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Validation("tenant não encontrado".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Gestão de vouchers (superusuário)
 // ---------------------------------------------------------------------------
 

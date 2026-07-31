@@ -611,6 +611,54 @@ table UpdateTenantUserResponse {
   success:bool;
 }
 
+table CreateMyWhatsappInstanceRequest {
+  instance_name:string;
+}
+
+table CreateMyWhatsappInstanceResponse {
+  id:int;
+  instance_name:string;
+  provider:string;
+}
+
+table GetMyWhatsappInstanceStatusRequest {
+  id:int;
+}
+
+table GetMyWhatsappInstanceStatusResponse {
+  connection_state:string;
+  qr_code:string;
+}
+
+table CreateMyDepartamentoRequest {
+  nome:string;
+  descricao:string;
+}
+
+table CreateMyDepartamentoResponse {
+  id:int;
+  nome:string;
+}
+
+table SetMyBotPersonaRequest {
+  persona_bot:string;
+  bot_agent_name:string;
+}
+
+table SetMyBotPersonaResponse {
+  success:bool;
+}
+
+table SetOnboardingProgressRequest {
+  passo:int;
+  concluido:bool;
+}
+
+table SetOnboardingProgressResponse {
+  passo:int;
+  concluido:bool;
+}
+
 table GetMyTenantConfigRequest {
 }
 

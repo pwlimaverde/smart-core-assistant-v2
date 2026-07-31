@@ -7942,6 +7942,702 @@ class UpdateTenantUserResponse extends $pb.GeneratedMessage {
   void clearSuccess() => $_clearField(1);
 }
 
+class CreateMyWhatsappInstanceRequest extends $pb.GeneratedMessage {
+  factory CreateMyWhatsappInstanceRequest({
+    $core.String? instanceName,
+  }) {
+    final result = create();
+    if (instanceName != null) result.instanceName = instanceName;
+    return result;
+  }
+
+  CreateMyWhatsappInstanceRequest._();
+
+  factory CreateMyWhatsappInstanceRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CreateMyWhatsappInstanceRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CreateMyWhatsappInstanceRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'instanceName')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyWhatsappInstanceRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyWhatsappInstanceRequest copyWith(
+          void Function(CreateMyWhatsappInstanceRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as CreateMyWhatsappInstanceRequest))
+          as CreateMyWhatsappInstanceRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CreateMyWhatsappInstanceRequest create() =>
+      CreateMyWhatsappInstanceRequest._();
+  @$core.override
+  CreateMyWhatsappInstanceRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CreateMyWhatsappInstanceRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CreateMyWhatsappInstanceRequest>(
+          create);
+  static CreateMyWhatsappInstanceRequest? _defaultInstance;
+
+  /// Nome da instância no provedor. Precisa ser único entre todos os tenants.
+  @$pb.TagNumber(1)
+  $core.String get instanceName => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set instanceName($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasInstanceName() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearInstanceName() => $_clearField(1);
+}
+
+class CreateMyWhatsappInstanceResponse extends $pb.GeneratedMessage {
+  factory CreateMyWhatsappInstanceResponse({
+    $core.int? id,
+    $core.String? instanceName,
+    $core.String? provider,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (instanceName != null) result.instanceName = instanceName;
+    if (provider != null) result.provider = provider;
+    return result;
+  }
+
+  CreateMyWhatsappInstanceResponse._();
+
+  factory CreateMyWhatsappInstanceResponse.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CreateMyWhatsappInstanceResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CreateMyWhatsappInstanceResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'instanceName')
+    ..aOS(3, _omitFieldNames ? '' : 'provider')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyWhatsappInstanceResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyWhatsappInstanceResponse copyWith(
+          void Function(CreateMyWhatsappInstanceResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as CreateMyWhatsappInstanceResponse))
+          as CreateMyWhatsappInstanceResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CreateMyWhatsappInstanceResponse create() =>
+      CreateMyWhatsappInstanceResponse._();
+  @$core.override
+  CreateMyWhatsappInstanceResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CreateMyWhatsappInstanceResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CreateMyWhatsappInstanceResponse>(
+          create);
+  static CreateMyWhatsappInstanceResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get instanceName => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set instanceName($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasInstanceName() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearInstanceName() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get provider => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set provider($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasProvider() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearProvider() => $_clearField(3);
+}
+
+class GetMyWhatsappInstanceStatusRequest extends $pb.GeneratedMessage {
+  factory GetMyWhatsappInstanceStatusRequest({
+    $core.int? id,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    return result;
+  }
+
+  GetMyWhatsappInstanceStatusRequest._();
+
+  factory GetMyWhatsappInstanceStatusRequest.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GetMyWhatsappInstanceStatusRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetMyWhatsappInstanceStatusRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyWhatsappInstanceStatusRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyWhatsappInstanceStatusRequest copyWith(
+          void Function(GetMyWhatsappInstanceStatusRequest) updates) =>
+      super.copyWith((message) =>
+              updates(message as GetMyWhatsappInstanceStatusRequest))
+          as GetMyWhatsappInstanceStatusRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GetMyWhatsappInstanceStatusRequest create() =>
+      GetMyWhatsappInstanceStatusRequest._();
+  @$core.override
+  GetMyWhatsappInstanceStatusRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GetMyWhatsappInstanceStatusRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetMyWhatsappInstanceStatusRequest>(
+          create);
+  static GetMyWhatsappInstanceStatusRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+}
+
+class GetMyWhatsappInstanceStatusResponse extends $pb.GeneratedMessage {
+  factory GetMyWhatsappInstanceStatusResponse({
+    $core.String? connectionState,
+    $core.String? qrCode,
+  }) {
+    final result = create();
+    if (connectionState != null) result.connectionState = connectionState;
+    if (qrCode != null) result.qrCode = qrCode;
+    return result;
+  }
+
+  GetMyWhatsappInstanceStatusResponse._();
+
+  factory GetMyWhatsappInstanceStatusResponse.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GetMyWhatsappInstanceStatusResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetMyWhatsappInstanceStatusResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'connectionState')
+    ..aOS(2, _omitFieldNames ? '' : 'qrCode')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyWhatsappInstanceStatusResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyWhatsappInstanceStatusResponse copyWith(
+          void Function(GetMyWhatsappInstanceStatusResponse) updates) =>
+      super.copyWith((message) =>
+              updates(message as GetMyWhatsappInstanceStatusResponse))
+          as GetMyWhatsappInstanceStatusResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GetMyWhatsappInstanceStatusResponse create() =>
+      GetMyWhatsappInstanceStatusResponse._();
+  @$core.override
+  GetMyWhatsappInstanceStatusResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GetMyWhatsappInstanceStatusResponse getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<
+          GetMyWhatsappInstanceStatusResponse>(create);
+  static GetMyWhatsappInstanceStatusResponse? _defaultInstance;
+
+  /// `connected`, `disconnected`, `connecting` ou `unknown`.
+  @$pb.TagNumber(1)
+  $core.String get connectionState => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set connectionState($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasConnectionState() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearConnectionState() => $_clearField(1);
+
+  /// QR em base64 para o pareamento; vazio quando já conectado (ou quando o
+  /// provedor ainda não o gerou).
+  @$pb.TagNumber(2)
+  $core.String get qrCode => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set qrCode($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasQrCode() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearQrCode() => $_clearField(2);
+}
+
+class CreateMyDepartamentoRequest extends $pb.GeneratedMessage {
+  factory CreateMyDepartamentoRequest({
+    $core.String? nome,
+    $core.String? descricao,
+  }) {
+    final result = create();
+    if (nome != null) result.nome = nome;
+    if (descricao != null) result.descricao = descricao;
+    return result;
+  }
+
+  CreateMyDepartamentoRequest._();
+
+  factory CreateMyDepartamentoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CreateMyDepartamentoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CreateMyDepartamentoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'nome')
+    ..aOS(2, _omitFieldNames ? '' : 'descricao')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyDepartamentoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyDepartamentoRequest copyWith(
+          void Function(CreateMyDepartamentoRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as CreateMyDepartamentoRequest))
+          as CreateMyDepartamentoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CreateMyDepartamentoRequest create() =>
+      CreateMyDepartamentoRequest._();
+  @$core.override
+  CreateMyDepartamentoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CreateMyDepartamentoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CreateMyDepartamentoRequest>(create);
+  static CreateMyDepartamentoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get nome => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set nome($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasNome() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearNome() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get descricao => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set descricao($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasDescricao() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearDescricao() => $_clearField(2);
+}
+
+class CreateMyDepartamentoResponse extends $pb.GeneratedMessage {
+  factory CreateMyDepartamentoResponse({
+    $core.int? id,
+    $core.String? nome,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (nome != null) result.nome = nome;
+    return result;
+  }
+
+  CreateMyDepartamentoResponse._();
+
+  factory CreateMyDepartamentoResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CreateMyDepartamentoResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CreateMyDepartamentoResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'nome')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyDepartamentoResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyDepartamentoResponse copyWith(
+          void Function(CreateMyDepartamentoResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as CreateMyDepartamentoResponse))
+          as CreateMyDepartamentoResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CreateMyDepartamentoResponse create() =>
+      CreateMyDepartamentoResponse._();
+  @$core.override
+  CreateMyDepartamentoResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CreateMyDepartamentoResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CreateMyDepartamentoResponse>(create);
+  static CreateMyDepartamentoResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nome => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nome($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNome() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNome() => $_clearField(2);
+}
+
+/// Define a persona do bot no passo 7.
+///
+/// RPC dedicado, e não `UpdateMyTenantConfig`: aquele carrega o objeto de
+/// configuração inteiro, e em proto3 um campo não preenchido chega como string
+/// vazia — o UPSERT do `data_postgres` faz `COALESCE(EXCLUDED.campo, atual)`, de
+/// modo que "" SOBRESCREVE o valor existente. Mandar só a persona por ali
+/// apagaria modelo de LLM, thresholds e o resto da configuração de IA.
+class SetMyBotPersonaRequest extends $pb.GeneratedMessage {
+  factory SetMyBotPersonaRequest({
+    $core.String? personaBot,
+    $core.String? botAgentName,
+  }) {
+    final result = create();
+    if (personaBot != null) result.personaBot = personaBot;
+    if (botAgentName != null) result.botAgentName = botAgentName;
+    return result;
+  }
+
+  SetMyBotPersonaRequest._();
+
+  factory SetMyBotPersonaRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SetMyBotPersonaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SetMyBotPersonaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'personaBot')
+    ..aOS(2, _omitFieldNames ? '' : 'botAgentName')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetMyBotPersonaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetMyBotPersonaRequest copyWith(
+          void Function(SetMyBotPersonaRequest) updates) =>
+      super.copyWith((message) => updates(message as SetMyBotPersonaRequest))
+          as SetMyBotPersonaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SetMyBotPersonaRequest create() => SetMyBotPersonaRequest._();
+  @$core.override
+  SetMyBotPersonaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SetMyBotPersonaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SetMyBotPersonaRequest>(create);
+  static SetMyBotPersonaRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get personaBot => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set personaBot($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasPersonaBot() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearPersonaBot() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get botAgentName => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set botAgentName($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasBotAgentName() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearBotAgentName() => $_clearField(2);
+}
+
+class SetMyBotPersonaResponse extends $pb.GeneratedMessage {
+  factory SetMyBotPersonaResponse({
+    $core.bool? success,
+  }) {
+    final result = create();
+    if (success != null) result.success = success;
+    return result;
+  }
+
+  SetMyBotPersonaResponse._();
+
+  factory SetMyBotPersonaResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SetMyBotPersonaResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SetMyBotPersonaResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOB(1, _omitFieldNames ? '' : 'success')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetMyBotPersonaResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetMyBotPersonaResponse copyWith(
+          void Function(SetMyBotPersonaResponse) updates) =>
+      super.copyWith((message) => updates(message as SetMyBotPersonaResponse))
+          as SetMyBotPersonaResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SetMyBotPersonaResponse create() => SetMyBotPersonaResponse._();
+  @$core.override
+  SetMyBotPersonaResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SetMyBotPersonaResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SetMyBotPersonaResponse>(create);
+  static SetMyBotPersonaResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.bool get success => $_getBF(0);
+  @$pb.TagNumber(1)
+  set success($core.bool value) => $_setBool(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSuccess() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSuccess() => $_clearField(1);
+}
+
+/// Registra até onde o tenant chegou na configuração guiada.
+///
+/// O progresso vive no servidor, e não no app, para que fechar o programa e
+/// reabrir continue de onde parou — num app instalado isso é o esperado.
+class SetOnboardingProgressRequest extends $pb.GeneratedMessage {
+  factory SetOnboardingProgressRequest({
+    $core.int? passo,
+    $core.bool? concluido,
+  }) {
+    final result = create();
+    if (passo != null) result.passo = passo;
+    if (concluido != null) result.concluido = concluido;
+    return result;
+  }
+
+  SetOnboardingProgressRequest._();
+
+  factory SetOnboardingProgressRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SetOnboardingProgressRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SetOnboardingProgressRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'passo')
+    ..aOB(2, _omitFieldNames ? '' : 'concluido')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetOnboardingProgressRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetOnboardingProgressRequest copyWith(
+          void Function(SetOnboardingProgressRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as SetOnboardingProgressRequest))
+          as SetOnboardingProgressRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SetOnboardingProgressRequest create() =>
+      SetOnboardingProgressRequest._();
+  @$core.override
+  SetOnboardingProgressRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SetOnboardingProgressRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SetOnboardingProgressRequest>(create);
+  static SetOnboardingProgressRequest? _defaultInstance;
+
+  /// 5..8. O passo 8 conclui o roteiro e marca `setup_completed`.
+  @$pb.TagNumber(1)
+  $core.int get passo => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set passo($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasPasso() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearPasso() => $_clearField(1);
+
+  /// true = o tenant terminou (ou pulou o que faltava) e vai para o workspace.
+  @$pb.TagNumber(2)
+  $core.bool get concluido => $_getBF(1);
+  @$pb.TagNumber(2)
+  set concluido($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasConcluido() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearConcluido() => $_clearField(2);
+}
+
+class SetOnboardingProgressResponse extends $pb.GeneratedMessage {
+  factory SetOnboardingProgressResponse({
+    $core.int? passo,
+    $core.bool? concluido,
+  }) {
+    final result = create();
+    if (passo != null) result.passo = passo;
+    if (concluido != null) result.concluido = concluido;
+    return result;
+  }
+
+  SetOnboardingProgressResponse._();
+
+  factory SetOnboardingProgressResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SetOnboardingProgressResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SetOnboardingProgressResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'passo')
+    ..aOB(2, _omitFieldNames ? '' : 'concluido')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetOnboardingProgressResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetOnboardingProgressResponse copyWith(
+          void Function(SetOnboardingProgressResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as SetOnboardingProgressResponse))
+          as SetOnboardingProgressResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SetOnboardingProgressResponse create() =>
+      SetOnboardingProgressResponse._();
+  @$core.override
+  SetOnboardingProgressResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SetOnboardingProgressResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SetOnboardingProgressResponse>(create);
+  static SetOnboardingProgressResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get passo => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set passo($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasPasso() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearPasso() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.bool get concluido => $_getBF(1);
+  @$pb.TagNumber(2)
+  set concluido($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasConcluido() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearConcluido() => $_clearField(2);
+}
+
 /// N3.3: config do PRÓPRIO tenant (tenant_id vem das claims, não do request).
 /// Reaproveita GetTenantConfigResponse/UpdateTenantConfigResponse. As api_keys já
 /// vêm mascaradas do data_postgres (`••••••••`), igual ao caminho do superusuário.
