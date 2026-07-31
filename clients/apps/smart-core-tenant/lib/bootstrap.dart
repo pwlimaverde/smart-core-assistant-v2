@@ -30,7 +30,11 @@ Future<void> bootstrap(AppConfig config) async {
   // LoginModule depois (registra AuthService/LocalStorageService reais).
   final modules = <AppModule>[
     InfraModule(config),
-    LoginModule(),
+    // `rotaDeCadastro`: este app é instalado no computador do tenant, e quem
+    // acabou de instalá-lo não tem conta. Sem um caminho visível na tela de
+    // login, o cadastro seria inalcançável — num app de desktop não há URL
+    // para digitar.
+    LoginModule(rotaDeCadastro: '/cadastro'),
     // Depois do LoginModule: o passo final do wizard entra na conta pelo
     // `AuthService` que aquele módulo registra.
     OnboardingModule(),

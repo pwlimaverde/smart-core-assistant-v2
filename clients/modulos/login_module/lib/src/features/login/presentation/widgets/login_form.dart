@@ -9,7 +9,20 @@ import '../controllers/login_controller.dart';
 final class LoginForm extends StatefulWidget {
   final LoginController controller;
 
-  const LoginForm({super.key, required this.controller});
+  /// Rota do autocadastro. Quando presente, a tela oferece "criar conta".
+  ///
+  /// Existe porque este módulo serve os **dois** apps: no do tenant, quem
+  /// acabou de instalar o programa não tem conta e precisa de um caminho
+  /// visível para criá-la — não há URL para digitar num app de desktop. No
+  /// painel do superusuário não há autocadastro, e o link seria um beco sem
+  /// saída.
+  final String? rotaDeCadastro;
+
+  const LoginForm({
+    super.key,
+    required this.controller,
+    this.rotaDeCadastro,
+  });
 
   @override
   State<LoginForm> createState() => _LoginFormState();
@@ -90,6 +103,28 @@ class _LoginFormState extends State<LoginForm> {
                       isLoading: loading,
                       onPressed: loading ? null : _submit,
                     ),
+                    if (widget.rotaDeCadastro case final rota?) ...[
+                      const SizedBox(height: AppSpacing.lg),
+                      Divider(color: colors.divider),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        'Primeira vez por aqui?',
+                        textAlign: TextAlign.center,
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colors.fgMuted,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      OutlinedButton(
+                        onPressed: loading ? null : () => context.go(rota),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size.fromHeight(48),
+                          side: BorderSide(color: colors.accent),
+                          foregroundColor: colors.accent,
+                        ),
+                        child: const Text('Criar conta da minha empresa'),
+                      ),
+                    ],
                   ],
                 ),
               ),

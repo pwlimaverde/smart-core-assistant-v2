@@ -8,11 +8,16 @@ import '../pages/login_page.dart';
 
 /// Rota '/login' — registra o controller no escopo da rota e expõe a página.
 final class LoginRoute extends GetItModule {
+  /// Rota do autocadastro, quando o app tem uma. Ver [LoginModule].
+  final String? rotaDeCadastro;
+
+  LoginRoute({this.rotaDeCadastro});
+
   @override
   String get path => '/login';
 
   @override
-  Widget get page => const LoginPage();
+  Widget get page => LoginPage(rotaDeCadastro: rotaDeCadastro);
 
   @override
   void binds(Injector i) {

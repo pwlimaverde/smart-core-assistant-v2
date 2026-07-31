@@ -27,6 +27,16 @@ import 'features/login/presentation/routes/login_route.dart';
 /// o rico ([AuthService] deste módulo) e o fino (`core.AuthService`, gancho de
 /// boot `checkCurrentUser`).
 final class LoginModule extends AppModule {
+  /// Rota do autocadastro, quando o app a tem.
+  ///
+  /// O app do tenant passa `/cadastro`: quem instalou o programa no próprio
+  /// computador precisa de um caminho visível para criar a conta, já que num
+  /// app de desktop não há URL para digitar. O painel do superusuário não passa
+  /// nada — lá não existe autocadastro.
+  final String? rotaDeCadastro;
+
+  LoginModule({this.rotaDeCadastro});
+
   @override
   void globalBinds(Injector i) {
     // Cliente gRPC real da plataforma (gRPC-Web no browser, sockets HTTP/2 no
@@ -88,7 +98,9 @@ final class LoginModule extends AppModule {
   }
 
   @override
-  List<GetItModule> routes() => [LoginRoute()];
+  List<GetItModule> routes() => [
+    LoginRoute(rotaDeCadastro: rotaDeCadastro),
+  ];
 
   /// Stub gRPC de auth, extraído do `ApiClient` global da plataforma.
   static AuthServiceClient _authClient() =>
