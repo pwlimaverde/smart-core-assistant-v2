@@ -73,6 +73,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "schemas/queries/conversation.proto",
         "schemas/queries/auth.proto",
         "schemas/queries/admin.proto",
+        "schemas/queries/onboarding.proto",
         "schemas/ai/ai_engine.proto",
     ];
 

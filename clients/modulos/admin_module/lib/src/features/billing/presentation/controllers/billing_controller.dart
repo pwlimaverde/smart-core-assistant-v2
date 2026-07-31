@@ -7,27 +7,32 @@ import '../../domain/parameters/billing_parameters.dart';
 import '../../domain/model/plan.dart';
 import '../../domain/model/subscription.dart';
 import '../../domain/model/payment_record.dart';
+import '../../domain/model/voucher.dart';
 
 class BillingState {
   final List<Plan> plans;
   final List<Subscription> subscriptions;
   final List<PaymentRecord> payments;
+  final List<Voucher> vouchers;
 
   BillingState({
     required this.plans,
     required this.subscriptions,
     required this.payments,
+    this.vouchers = const [],
   });
 
   BillingState copyWith({
     List<Plan>? plans,
     List<Subscription>? subscriptions,
     List<PaymentRecord>? payments,
+    List<Voucher>? vouchers,
   }) {
     return BillingState(
       plans: plans ?? this.plans,
       subscriptions: subscriptions ?? this.subscriptions,
       payments: payments ?? this.payments,
+      vouchers: vouchers ?? this.vouchers,
     );
   }
 }
@@ -39,6 +44,10 @@ final class BillingController extends BaseController<BillingState> {
   final ListSubscriptionsUsecase _listSubscriptionsUsecase;
   final RegisterPaymentUsecase _registerPaymentUsecase;
   final ListPaymentsUsecase _listPaymentsUsecase;
+  final ListVouchersUsecase _listVouchersUsecase;
+  final CreateVoucherUsecase _createVoucherUsecase;
+  final RevokeVoucherUsecase _revokeVoucherUsecase;
+  final ListVoucherRedemptionsUsecase _listVoucherRedemptionsUsecase;
 
   BillingController({
     required this._listPlansUsecase,
@@ -47,6 +56,10 @@ final class BillingController extends BaseController<BillingState> {
     required this._listSubscriptionsUsecase,
     required this._registerPaymentUsecase,
     required this._listPaymentsUsecase,
+    required this._listVouchersUsecase,
+    required this._createVoucherUsecase,
+    required this._revokeVoucherUsecase,
+    required this._listVoucherRedemptionsUsecase,
   });
 
   /// Carrega planos, assinaturas e pagamentos numa única passada.
@@ -73,6 +86,11 @@ final class BillingController extends BaseController<BillingState> {
         return Failure<BillingState, BillingError>(error);
       }
 
+      final vouchersRes = await _listVouchersUsecase(noParams);
+      if (vouchersRes case Failure(:final error)) {
+        return Failure<BillingState, BillingError>(error);
+      }
+
       return Success<BillingState, BillingError>(
         BillingState(
           plans: (plansRes as Success<List<Plan>, BillingError>).value,
@@ -80,6 +98,8 @@ final class BillingController extends BaseController<BillingState> {
               (subsRes as Success<List<Subscription>, BillingError>).value,
           payments:
               (paymentsRes as Success<List<PaymentRecord>, BillingError>).value,
+          vouchers:
+              (vouchersRes as Success<List<Voucher>, BillingError>).value,
         ),
       );
     });
@@ -158,4 +178,53 @@ final class BillingController extends BaseController<BillingState> {
     }
     return res;
   }
+
+  // --- Vouchers de ativação ---
+
+  Future<ReturnSuccessOrError<Voucher, BillingError>> createVoucher({
+    required String codigo,
+    required String descricao,
+    required int planId,
+    required int duracaoDias,
+    required int maxResgates,
+    String validoAte = '',
+  }) async {
+    final res = await _createVoucherUsecase(
+      CreateVoucherParameters(
+        codigo: codigo,
+        descricao: descricao,
+        planId: planId,
+        duracaoDias: duracaoDias,
+        maxResgates: maxResgates,
+        validoAte: validoAte,
+      ),
+    );
+    if (res is Success) {
+      await fetchBillingData();
+    }
+    return res;
+  }
+
+  /// Revoga um voucher. Bloqueia novos resgates e **preserva** as assinaturas
+  /// já concedidas — para encerrar uma conta específica existe `SetTenantActive`
+  /// na tela de tenants.
+  Future<ReturnSuccessOrError<bool, BillingError>> revokeVoucher({
+    required String voucherId,
+    required String motivo,
+  }) async {
+    final res = await _revokeVoucherUsecase(
+      RevokeVoucherParameters(voucherId: voucherId, motivo: motivo),
+    );
+    if (res is Success) {
+      await fetchBillingData();
+    }
+    return res;
+  }
+
+  /// Histórico de resgates — carregado sob demanda, ao abrir o detalhe de um
+  /// voucher, e por isso fora do `BillingState`.
+  Future<ReturnSuccessOrError<List<VoucherRedemption>, BillingError>>
+  listRedemptions(String voucherId) => _listVoucherRedemptionsUsecase(
+    VoucherRedemptionsParameters(voucherId: voucherId),
+  );
 }

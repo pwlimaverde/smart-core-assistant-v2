@@ -2,6 +2,7 @@
 import 'api_client.dart';
 import 'generated/queries/auth.pbgrpc.dart';
 import 'generated/queries/admin.pbgrpc.dart';
+import 'generated/queries/onboarding.pbgrpc.dart';
 
 /// Contrato neutro do transporte gRPC, independente de plataforma.
 ///
@@ -16,4 +17,10 @@ abstract interface class GrpcTransport implements ApiClient {
 
   /// Stub do `AdminService` (usado por `admin_module`/`operacional_module`/`tenant_module`).
   AdminServiceClient get admin;
+
+  /// Stub do `OnboardingService` (usado pelo `onboarding_module`).
+  ///
+  /// Único stub SEM interceptor de token: o cadastro acontece antes de existir
+  /// sessão, e mandar um `authorization` vazio só confundiria a borda.
+  OnboardingServiceClient get onboarding;
 }

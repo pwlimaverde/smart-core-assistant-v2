@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 mod audit;
 mod grpc_web;
+mod onboarding_web;
 mod realtime;
 
 use audit::{publicar_auditoria_borda, publicar_reuso_detectado};
@@ -309,6 +310,11 @@ fn registrar_rotas_admin(
         "ListSubscriptions",
         "RegisterPayment",
         "ListPayments",
+        // Vouchers de ativação
+        "ListVouchers",
+        "CreateVoucher",
+        "RevokeVoucher",
+        "ListVoucherRedemptions",
         // Observabilidade administrativa
         "QueryAuditLog",
         "GetServiceHealth",

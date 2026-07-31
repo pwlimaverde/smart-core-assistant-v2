@@ -14,6 +14,9 @@ export 'src/interceptors/auth_token_interceptor.dart';
 export 'src/generated/queries/auth.pbgrpc.dart';
 export 'src/generated/queries/admin.pbgrpc.dart';
 export 'src/generated/queries/admin.pb.dart';
+// Cadastro público de tenant (wizard): serviço sem autenticação.
+export 'src/generated/queries/onboarding.pbgrpc.dart';
+export 'src/generated/queries/onboarding.pb.dart';
 
 // Tipos usados pelos datasources/mapper. `CallOptions` vem do service_api;
 // `GrpcError`/`StatusCode` de `status.dart` (puro: dart:convert/protobuf) —

@@ -366,6 +366,7 @@ const Plan$json = {
     {'1': 'max_departments', '3': 6, '4': 1, '5': 5, '10': 'maxDepartments'},
     {'1': 'active', '3': 7, '4': 1, '5': 8, '10': 'active'},
     {'1': 'created_at', '3': 8, '4': 1, '5': 3, '10': 'createdAt'},
+    {'1': 'max_fluxos', '3': 9, '4': 1, '5': 5, '10': 'maxFluxos'},
   ],
 };
 
@@ -375,7 +376,7 @@ final $typed_data.Uint8List planDescriptor = $convert.base64Decode(
     '9uGAMgASgJUgtkZXNjcmlwdGlvbhIUCgVwcmljZRgEIAEoCVIFcHJpY2USIwoNbWF4X2luc3Rh'
     'bmNlcxgFIAEoBVIMbWF4SW5zdGFuY2VzEicKD21heF9kZXBhcnRtZW50cxgGIAEoBVIObWF4RG'
     'VwYXJ0bWVudHMSFgoGYWN0aXZlGAcgASgIUgZhY3RpdmUSHQoKY3JlYXRlZF9hdBgIIAEoA1IJ'
-    'Y3JlYXRlZEF0');
+    'Y3JlYXRlZEF0Eh0KCm1heF9mbHV4b3MYCSABKAVSCW1heEZsdXhvcw==');
 
 @$core.Deprecated('Use subscriptionDescriptor instead')
 const Subscription$json = {
@@ -678,6 +679,7 @@ const CreatePlanRequest$json = {
     {'1': 'price', '3': 3, '4': 1, '5': 9, '10': 'price'},
     {'1': 'max_instances', '3': 4, '4': 1, '5': 5, '10': 'maxInstances'},
     {'1': 'max_departments', '3': 5, '4': 1, '5': 5, '10': 'maxDepartments'},
+    {'1': 'max_fluxos', '3': 6, '4': 1, '5': 5, '10': 'maxFluxos'},
   ],
 };
 
@@ -686,7 +688,7 @@ final $typed_data.Uint8List createPlanRequestDescriptor = $convert.base64Decode(
     'ChFDcmVhdGVQbGFuUmVxdWVzdBISCgRuYW1lGAEgASgJUgRuYW1lEiAKC2Rlc2NyaXB0aW9uGA'
     'IgASgJUgtkZXNjcmlwdGlvbhIUCgVwcmljZRgDIAEoCVIFcHJpY2USIwoNbWF4X2luc3RhbmNl'
     'cxgEIAEoBVIMbWF4SW5zdGFuY2VzEicKD21heF9kZXBhcnRtZW50cxgFIAEoBVIObWF4RGVwYX'
-    'J0bWVudHM=');
+    'J0bWVudHMSHQoKbWF4X2ZsdXhvcxgGIAEoBVIJbWF4Rmx1eG9z');
 
 @$core.Deprecated('Use createPlanResponseDescriptor instead')
 const CreatePlanResponse$json = {
@@ -719,6 +721,7 @@ const UpdatePlanRequest$json = {
     {'1': 'max_instances', '3': 5, '4': 1, '5': 5, '10': 'maxInstances'},
     {'1': 'max_departments', '3': 6, '4': 1, '5': 5, '10': 'maxDepartments'},
     {'1': 'active', '3': 7, '4': 1, '5': 8, '10': 'active'},
+    {'1': 'max_fluxos', '3': 8, '4': 1, '5': 5, '10': 'maxFluxos'},
   ],
 };
 
@@ -727,7 +730,8 @@ final $typed_data.Uint8List updatePlanRequestDescriptor = $convert.base64Decode(
     'ChFVcGRhdGVQbGFuUmVxdWVzdBIOCgJpZBgBIAEoBVICaWQSEgoEbmFtZRgCIAEoCVIEbmFtZR'
     'IgCgtkZXNjcmlwdGlvbhgDIAEoCVILZGVzY3JpcHRpb24SFAoFcHJpY2UYBCABKAlSBXByaWNl'
     'EiMKDW1heF9pbnN0YW5jZXMYBSABKAVSDG1heEluc3RhbmNlcxInCg9tYXhfZGVwYXJ0bWVudH'
-    'MYBiABKAVSDm1heERlcGFydG1lbnRzEhYKBmFjdGl2ZRgHIAEoCFIGYWN0aXZl');
+    'MYBiABKAVSDm1heERlcGFydG1lbnRzEhYKBmFjdGl2ZRgHIAEoCFIGYWN0aXZlEh0KCm1heF9m'
+    'bHV4b3MYCCABKAVSCW1heEZsdXhvcw==');
 
 @$core.Deprecated('Use updatePlanResponseDescriptor instead')
 const UpdatePlanResponse$json = {
@@ -741,6 +745,191 @@ const UpdatePlanResponse$json = {
 final $typed_data.Uint8List updatePlanResponseDescriptor =
     $convert.base64Decode(
         'ChJVcGRhdGVQbGFuUmVzcG9uc2USGAoHc3VjY2VzcxgBIAEoCFIHc3VjY2Vzcw==');
+
+@$core.Deprecated('Use voucherDescriptor instead')
+const Voucher$json = {
+  '1': 'Voucher',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 9, '10': 'id'},
+    {'1': 'codigo', '3': 2, '4': 1, '5': 9, '10': 'codigo'},
+    {'1': 'descricao', '3': 3, '4': 1, '5': 9, '10': 'descricao'},
+    {'1': 'plan_id', '3': 4, '4': 1, '5': 5, '10': 'planId'},
+    {'1': 'plan_name', '3': 5, '4': 1, '5': 9, '10': 'planName'},
+    {'1': 'duracao_dias', '3': 6, '4': 1, '5': 5, '10': 'duracaoDias'},
+    {'1': 'max_resgates', '3': 7, '4': 1, '5': 5, '10': 'maxResgates'},
+    {'1': 'resgates_usados', '3': 8, '4': 1, '5': 5, '10': 'resgatesUsados'},
+    {'1': 'valido_de', '3': 9, '4': 1, '5': 3, '10': 'validoDe'},
+    {'1': 'valido_ate', '3': 10, '4': 1, '5': 3, '10': 'validoAte'},
+    {'1': 'revogado_em', '3': 11, '4': 1, '5': 3, '10': 'revogadoEm'},
+    {'1': 'motivo_revogacao', '3': 12, '4': 1, '5': 9, '10': 'motivoRevogacao'},
+    {'1': 'created_at', '3': 13, '4': 1, '5': 3, '10': 'createdAt'},
+  ],
+};
+
+/// Descriptor for `Voucher`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List voucherDescriptor = $convert.base64Decode(
+    'CgdWb3VjaGVyEg4KAmlkGAEgASgJUgJpZBIWCgZjb2RpZ28YAiABKAlSBmNvZGlnbxIcCglkZX'
+    'NjcmljYW8YAyABKAlSCWRlc2NyaWNhbxIXCgdwbGFuX2lkGAQgASgFUgZwbGFuSWQSGwoJcGxh'
+    'bl9uYW1lGAUgASgJUghwbGFuTmFtZRIhCgxkdXJhY2FvX2RpYXMYBiABKAVSC2R1cmFjYW9EaW'
+    'FzEiEKDG1heF9yZXNnYXRlcxgHIAEoBVILbWF4UmVzZ2F0ZXMSJwoPcmVzZ2F0ZXNfdXNhZG9z'
+    'GAggASgFUg5yZXNnYXRlc1VzYWRvcxIbCgl2YWxpZG9fZGUYCSABKANSCHZhbGlkb0RlEh0KCn'
+    'ZhbGlkb19hdGUYCiABKANSCXZhbGlkb0F0ZRIfCgtyZXZvZ2Fkb19lbRgLIAEoA1IKcmV2b2dh'
+    'ZG9FbRIpChBtb3Rpdm9fcmV2b2dhY2FvGAwgASgJUg9tb3Rpdm9SZXZvZ2FjYW8SHQoKY3JlYX'
+    'RlZF9hdBgNIAEoA1IJY3JlYXRlZEF0');
+
+@$core.Deprecated('Use voucherRedemptionDescriptor instead')
+const VoucherRedemption$json = {
+  '1': 'VoucherRedemption',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 9, '10': 'id'},
+    {'1': 'voucher_id', '3': 2, '4': 1, '5': 9, '10': 'voucherId'},
+    {'1': 'tenant_id', '3': 3, '4': 1, '5': 9, '10': 'tenantId'},
+    {'1': 'plan_id', '3': 4, '4': 1, '5': 5, '10': 'planId'},
+    {'1': 'periodo_inicio', '3': 5, '4': 1, '5': 3, '10': 'periodoInicio'},
+    {'1': 'periodo_fim', '3': 6, '4': 1, '5': 3, '10': 'periodoFim'},
+    {'1': 'ip', '3': 7, '4': 1, '5': 9, '10': 'ip'},
+    {'1': 'redeemed_at', '3': 8, '4': 1, '5': 3, '10': 'redeemedAt'},
+  ],
+};
+
+/// Descriptor for `VoucherRedemption`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List voucherRedemptionDescriptor = $convert.base64Decode(
+    'ChFWb3VjaGVyUmVkZW1wdGlvbhIOCgJpZBgBIAEoCVICaWQSHQoKdm91Y2hlcl9pZBgCIAEoCV'
+    'IJdm91Y2hlcklkEhsKCXRlbmFudF9pZBgDIAEoCVIIdGVuYW50SWQSFwoHcGxhbl9pZBgEIAEo'
+    'BVIGcGxhbklkEiUKDnBlcmlvZG9faW5pY2lvGAUgASgDUg1wZXJpb2RvSW5pY2lvEh8KC3Blcm'
+    'lvZG9fZmltGAYgASgDUgpwZXJpb2RvRmltEg4KAmlwGAcgASgJUgJpcBIfCgtyZWRlZW1lZF9h'
+    'dBgIIAEoA1IKcmVkZWVtZWRBdA==');
+
+@$core.Deprecated('Use listVouchersRequestDescriptor instead')
+const ListVouchersRequest$json = {
+  '1': 'ListVouchersRequest',
+};
+
+/// Descriptor for `ListVouchersRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listVouchersRequestDescriptor =
+    $convert.base64Decode('ChNMaXN0Vm91Y2hlcnNSZXF1ZXN0');
+
+@$core.Deprecated('Use listVouchersResponseDescriptor instead')
+const ListVouchersResponse$json = {
+  '1': 'ListVouchersResponse',
+  '2': [
+    {
+      '1': 'vouchers',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.Voucher',
+      '10': 'vouchers'
+    },
+  ],
+};
+
+/// Descriptor for `ListVouchersResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listVouchersResponseDescriptor = $convert.base64Decode(
+    'ChRMaXN0Vm91Y2hlcnNSZXNwb25zZRJACgh2b3VjaGVycxgBIAMoCzIkLnNtYXJ0Y29yZS5jb2'
+    '50cmFjdHMucXVlcmllcy5Wb3VjaGVyUgh2b3VjaGVycw==');
+
+@$core.Deprecated('Use createVoucherRequestDescriptor instead')
+const CreateVoucherRequest$json = {
+  '1': 'CreateVoucherRequest',
+  '2': [
+    {'1': 'codigo', '3': 1, '4': 1, '5': 9, '10': 'codigo'},
+    {'1': 'descricao', '3': 2, '4': 1, '5': 9, '10': 'descricao'},
+    {'1': 'plan_id', '3': 3, '4': 1, '5': 5, '10': 'planId'},
+    {'1': 'duracao_dias', '3': 4, '4': 1, '5': 5, '10': 'duracaoDias'},
+    {'1': 'max_resgates', '3': 5, '4': 1, '5': 5, '10': 'maxResgates'},
+    {'1': 'valido_ate', '3': 6, '4': 1, '5': 9, '10': 'validoAte'},
+  ],
+};
+
+/// Descriptor for `CreateVoucherRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createVoucherRequestDescriptor = $convert.base64Decode(
+    'ChRDcmVhdGVWb3VjaGVyUmVxdWVzdBIWCgZjb2RpZ28YASABKAlSBmNvZGlnbxIcCglkZXNjcm'
+    'ljYW8YAiABKAlSCWRlc2NyaWNhbxIXCgdwbGFuX2lkGAMgASgFUgZwbGFuSWQSIQoMZHVyYWNh'
+    'b19kaWFzGAQgASgFUgtkdXJhY2FvRGlhcxIhCgxtYXhfcmVzZ2F0ZXMYBSABKAVSC21heFJlc2'
+    'dhdGVzEh0KCnZhbGlkb19hdGUYBiABKAlSCXZhbGlkb0F0ZQ==');
+
+@$core.Deprecated('Use createVoucherResponseDescriptor instead')
+const CreateVoucherResponse$json = {
+  '1': 'CreateVoucherResponse',
+  '2': [
+    {
+      '1': 'voucher',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.Voucher',
+      '10': 'voucher'
+    },
+  ],
+};
+
+/// Descriptor for `CreateVoucherResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createVoucherResponseDescriptor = $convert.base64Decode(
+    'ChVDcmVhdGVWb3VjaGVyUmVzcG9uc2USPgoHdm91Y2hlchgBIAEoCzIkLnNtYXJ0Y29yZS5jb2'
+    '50cmFjdHMucXVlcmllcy5Wb3VjaGVyUgd2b3VjaGVy');
+
+@$core.Deprecated('Use revokeVoucherRequestDescriptor instead')
+const RevokeVoucherRequest$json = {
+  '1': 'RevokeVoucherRequest',
+  '2': [
+    {'1': 'voucher_id', '3': 1, '4': 1, '5': 9, '10': 'voucherId'},
+    {'1': 'motivo', '3': 2, '4': 1, '5': 9, '10': 'motivo'},
+  ],
+};
+
+/// Descriptor for `RevokeVoucherRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List revokeVoucherRequestDescriptor = $convert.base64Decode(
+    'ChRSZXZva2VWb3VjaGVyUmVxdWVzdBIdCgp2b3VjaGVyX2lkGAEgASgJUgl2b3VjaGVySWQSFg'
+    'oGbW90aXZvGAIgASgJUgZtb3Rpdm8=');
+
+@$core.Deprecated('Use revokeVoucherResponseDescriptor instead')
+const RevokeVoucherResponse$json = {
+  '1': 'RevokeVoucherResponse',
+  '2': [
+    {'1': 'revogado', '3': 1, '4': 1, '5': 8, '10': 'revogado'},
+  ],
+};
+
+/// Descriptor for `RevokeVoucherResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List revokeVoucherResponseDescriptor =
+    $convert.base64Decode(
+        'ChVSZXZva2VWb3VjaGVyUmVzcG9uc2USGgoIcmV2b2dhZG8YASABKAhSCHJldm9nYWRv');
+
+@$core.Deprecated('Use listVoucherRedemptionsRequestDescriptor instead')
+const ListVoucherRedemptionsRequest$json = {
+  '1': 'ListVoucherRedemptionsRequest',
+  '2': [
+    {'1': 'voucher_id', '3': 1, '4': 1, '5': 9, '10': 'voucherId'},
+  ],
+};
+
+/// Descriptor for `ListVoucherRedemptionsRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listVoucherRedemptionsRequestDescriptor =
+    $convert.base64Decode(
+        'Ch1MaXN0Vm91Y2hlclJlZGVtcHRpb25zUmVxdWVzdBIdCgp2b3VjaGVyX2lkGAEgASgJUgl2b3'
+        'VjaGVySWQ=');
+
+@$core.Deprecated('Use listVoucherRedemptionsResponseDescriptor instead')
+const ListVoucherRedemptionsResponse$json = {
+  '1': 'ListVoucherRedemptionsResponse',
+  '2': [
+    {
+      '1': 'resgates',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.VoucherRedemption',
+      '10': 'resgates'
+    },
+  ],
+};
+
+/// Descriptor for `ListVoucherRedemptionsResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listVoucherRedemptionsResponseDescriptor =
+    $convert.base64Decode(
+        'Ch5MaXN0Vm91Y2hlclJlZGVtcHRpb25zUmVzcG9uc2USSgoIcmVzZ2F0ZXMYASADKAsyLi5zbW'
+        'FydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuVm91Y2hlclJlZGVtcHRpb25SCHJlc2dhdGVz');
 
 @$core.Deprecated('Use listSubscriptionsRequestDescriptor instead')
 const ListSubscriptionsRequest$json = {

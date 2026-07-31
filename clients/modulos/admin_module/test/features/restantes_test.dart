@@ -205,6 +205,26 @@ void main() {
           datasource: ListPaymentsDatasource(client: client),
         ),
       ),
+      listVouchersUsecase: ListVouchersUsecase(
+        repository: ListVouchersRepository(
+          datasource: ListVouchersDatasource(client: client),
+        ),
+      ),
+      createVoucherUsecase: CreateVoucherUsecase(
+        repository: CreateVoucherRepository(
+          datasource: CreateVoucherDatasource(client: client),
+        ),
+      ),
+      revokeVoucherUsecase: RevokeVoucherUsecase(
+        repository: RevokeVoucherRepository(
+          datasource: RevokeVoucherDatasource(client: client),
+        ),
+      ),
+      listVoucherRedemptionsUsecase: ListVoucherRedemptionsUsecase(
+        repository: ListVoucherRedemptionsRepository(
+          datasource: ListVoucherRedemptionsDatasource(client: client),
+        ),
+      ),
     );
 
     proto.Plan planoProto({int id = 1, bool active = true}) => proto.Plan(
@@ -259,6 +279,10 @@ void main() {
             ],
           ),
         ),
+      );
+      // A carga única do painel também busca vouchers desde a migration 0027.
+      when(() => client.listVouchers(any())).thenAnswer(
+        (_) => respostaGrpc(proto.ListVouchersResponse()),
       );
     }
 

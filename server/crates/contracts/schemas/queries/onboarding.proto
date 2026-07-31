@@ -1,0 +1,161 @@
+syntax = "proto3";
+package smartcore.contracts.queries;
+
+// Cadastro público de tenant — o wizard que o app apresenta a quem acabou de
+// instalar o sistema e ainda não tem conta.
+//
+// É o ÚNICO serviço da borda sem autenticação, e o desenho leva isso em conta:
+//  - o tenant nasce inativo e só o pagamento confirmado o liga;
+//  - do passo 2 em diante tudo exige o `signup_token` devolvido pelo passo 1;
+//  - a borda aplica rate limit por IP em StartSignup e ConfirmPayment.
+//
+// O passo de pagamento fala com PROVEDORES, não com um gateway específico. Hoje
+// só existe o `voucher` (confirma na hora); um gateway real entra como outro
+// provedor, com `modo = ASSINCRONA` e uma URL de redirecionamento — e o cliente
+// já sabe tratar as duas formas.
+
+// ---------------------------------------------------------------------------
+// Passo 0 — consultas públicas
+// ---------------------------------------------------------------------------
+
+message CheckSlugRequest {
+  string slug = 1;
+}
+
+message CheckSlugResponse {
+  bool disponivel = 1;
+  // `em_uso`, `reservado` ou `invalido` — estável, para o cliente decidir o
+  // realce do campo sem casar strings de mensagem.
+  string motivo = 2;
+  string mensagem = 3;
+}
+
+message PublicPlan {
+  int32 id = 1;
+  string name = 2;
+  string description = 3;
+  // Vazio = preço ainda não definido (diferente de "gratuito").
+  string price = 4;
+  int32 max_instances = 5;
+  int32 max_departments = 6;
+  int32 max_fluxos = 7;
+}
+
+message ListPublicPlansRequest {}
+
+message ListPublicPlansResponse {
+  repeated PublicPlan planos = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Passo 1 — dados da empresa e do responsável
+// ---------------------------------------------------------------------------
+
+message StartSignupRequest {
+  string name = 1;
+  string slug = 2;
+  string email = 3;
+  // Vazio = usa o e-mail como nome de usuário.
+  string username = 4;
+  string password = 5;
+  string phone = 6;
+}
+
+message StartSignupResponse {
+  string tenant_id = 1;
+  // Autoriza os passos seguintes. Guardado pelo cliente até o fim do cadastro.
+  string signup_token = 2;
+  int32 proximo_passo = 3;
+}
+
+// ---------------------------------------------------------------------------
+// Passo 2 — plano
+// ---------------------------------------------------------------------------
+
+message SelectPlanRequest {
+  string tenant_id = 1;
+  string signup_token = 2;
+  int32 plan_id = 3;
+}
+
+message SelectPlanResponse {
+  int32 proximo_passo = 1;
+}
+
+// ---------------------------------------------------------------------------
+// Passo 3 — pagamento
+// ---------------------------------------------------------------------------
+
+// Como a confirmação chega para um provedor.
+enum ModoConfirmacao {
+  MODO_CONFIRMACAO_UNSPECIFIED = 0;
+  // O provedor decide na própria chamada (voucher).
+  MODO_CONFIRMACAO_IMEDIATA = 1;
+  // O usuário sai para pagar e a confirmação chega depois (gateway/webhook);
+  // o cliente acompanha por GetSignupStatus.
+  MODO_CONFIRMACAO_ASSINCRONA = 2;
+}
+
+// Tudo que o cliente precisa para desenhar a opção — sem conhecer provedor
+// algum por nome. É isto que faz a tela sobreviver à entrada de um gateway.
+message PaymentProvider {
+  string id = 1;
+  string rotulo = 2;
+  string instrucao = 3;
+  bool requer_credencial = 4;
+  string rotulo_credencial = 5;
+  ModoConfirmacao modo = 6;
+}
+
+message ListPaymentProvidersRequest {}
+
+message ListPaymentProvidersResponse {
+  repeated PaymentProvider provedores = 1;
+}
+
+message ConfirmPaymentRequest {
+  string tenant_id = 1;
+  string signup_token = 2;
+  // `id` de um PaymentProvider (ex.: `voucher`).
+  string provedor = 3;
+  // O que o usuário digitou, quando o provedor pede algo (o código do voucher).
+  string credencial = 4;
+}
+
+message ConfirmPaymentResponse {
+  // true = assinatura ativa; o cliente pode seguir para o login.
+  bool confirmado = 1;
+  // Preenchida quando o provedor exige concluir o pagamento fora do app.
+  string url_redirecionamento = 2;
+  // false + mensagem = recusa de negócio (código inválido, expirado...).
+  string motivo = 3;
+  string mensagem = 4;
+}
+
+// ---------------------------------------------------------------------------
+// Passo 4 — acompanhamento
+// ---------------------------------------------------------------------------
+
+message GetSignupStatusRequest {
+  string tenant_id = 1;
+  string signup_token = 2;
+}
+
+message GetSignupStatusResponse {
+  int32 passo = 1;
+  int32 plan_id = 2;
+  // Mesmo vocabulário de tenants_subscription.status: PENDING_PAYMENT, ACTIVE...
+  string status_assinatura = 3;
+  bool tenant_ativo = 4;
+  int64 periodo_fim = 5;
+}
+
+service OnboardingService {
+  rpc CheckSlug(CheckSlugRequest) returns (CheckSlugResponse);
+  rpc ListPublicPlans(ListPublicPlansRequest) returns (ListPublicPlansResponse);
+  rpc ListPaymentProviders(ListPaymentProvidersRequest) returns (ListPaymentProvidersResponse);
+  rpc StartSignup(StartSignupRequest) returns (StartSignupResponse);
+  rpc SelectPlan(SelectPlanRequest) returns (SelectPlanResponse);
+  rpc ConfirmPayment(ConfirmPaymentRequest) returns (ConfirmPaymentResponse);
+  rpc GetSignupStatus(GetSignupStatusRequest) returns (GetSignupStatusResponse);
+}

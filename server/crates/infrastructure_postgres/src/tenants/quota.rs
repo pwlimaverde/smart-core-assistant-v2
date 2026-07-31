@@ -18,6 +18,7 @@ use crate::errors::DbError;
 pub enum RecursoQuota {
     Instancias,
     Departamentos,
+    Fluxos,
     Storage,
 }
 
@@ -26,6 +27,7 @@ impl RecursoQuota {
         match self {
             RecursoQuota::Instancias => "instancias",
             RecursoQuota::Departamentos => "departamentos",
+            RecursoQuota::Fluxos => "fluxos",
             RecursoQuota::Storage => "storage",
         }
     }
@@ -34,6 +36,7 @@ impl RecursoQuota {
         match valor {
             "instancias" => Some(RecursoQuota::Instancias),
             "departamentos" => Some(RecursoQuota::Departamentos),
+            "fluxos" => Some(RecursoQuota::Fluxos),
             "storage" => Some(RecursoQuota::Storage),
             _ => None,
         }
@@ -93,6 +96,32 @@ pub async fn verificar_quota(
 
             let uso = sqlx::query_scalar::<_, i64>(
                 "SELECT COUNT(*) FROM oraculo_departamento WHERE tenant_id = $1 AND ativo = true",
+            )
+            .bind(tenant_id)
+            .fetch_one(&mut **tx)
+            .await?;
+
+            (limite.map(i64::from), uso)
+        }
+        RecursoQuota::Fluxos => {
+            // Limite do plano Básico em diante (`max_fluxos`, migration 0027).
+            // NOTA: hoje isto MEDE, mas não bloqueia nada — não existe RPC de
+            // criação de fluxo para chamar o enforce (o repositório
+            // `FluxoAtendimentoRepository::criar` não é exposto). Quando o CRUD
+            // existir, o ponto de chamada é o mesmo padrão do
+            // `handler_create_departamento`.
+            let limite = sqlx::query_scalar::<_, i32>(
+                "SELECT p.max_fluxos \
+                 FROM tenants_subscription s \
+                 JOIN tenants_plan p ON p.id = s.plan_id \
+                 WHERE s.tenant_id = $1",
+            )
+            .bind(tenant_id)
+            .fetch_optional(&mut **tx)
+            .await?;
+
+            let uso = sqlx::query_scalar::<_, i64>(
+                "SELECT COUNT(*) FROM oraculo_fluxo_atendimento WHERE tenant_id = $1 AND ativo = true",
             )
             .bind(tenant_id)
             .fetch_one(&mut **tx)

@@ -100,6 +100,7 @@ mod outbox_relay;
 use outbox_relay::OutboxRelay;
 
 mod adapters;
+mod onboarding;
 mod ports;
 
 #[derive(Clone)]
@@ -124,6 +125,8 @@ struct AppState {
     quota: std::sync::Arc<dyn ports::QuotaStore>,
     audit: std::sync::Arc<dyn ports::AuditPort>,
     treinamento: std::sync::Arc<dyn ports::TreinamentoStore>,
+    signup: std::sync::Arc<dyn ports::SignupStore>,
+    vouchers: std::sync::Arc<dyn ports::VoucherStore>,
 }
 
 #[tokio::main]
@@ -266,6 +269,12 @@ async fn main() -> anyhow::Result<()> {
         std::sync::Arc::new(adapters::PgQuotaStore::new(pool.clone()));
     let treinamento_store: std::sync::Arc<dyn ports::TreinamentoStore> =
         std::sync::Arc::new(adapters::PgTreinamentoStore::new(pool.clone()));
+    // O cadastro público opera sem contexto de tenant: precisa do pool sem RLS.
+    let signup_store: std::sync::Arc<dyn ports::SignupStore> = std::sync::Arc::new(
+        adapters::PgSignupStore::new(pool.clone(), admin_pool.clone()),
+    );
+    let voucher_store: std::sync::Arc<dyn ports::VoucherStore> =
+        std::sync::Arc::new(adapters::PgVoucherStore::new(pool.clone()));
 
     let state = AppState {
         pool: pool.clone(),
@@ -283,6 +292,8 @@ async fn main() -> anyhow::Result<()> {
         quota: quota_store,
         audit: audit_port,
         treinamento: treinamento_store,
+        signup: signup_store,
+        vouchers: voucher_store,
     };
 
     // 4. Inicia o Relay de Outbox em background
@@ -948,6 +959,10 @@ async fn main() -> anyhow::Result<()> {
             )
         });
 
+    // Cadastro público de tenant e gestão de vouchers: registradas à parte para
+    // não alongar ainda mais a cadeia acima (ver `registrar_rotas_onboarding`).
+    let server = registrar_rotas_onboarding(server, state.clone());
+
     tracing::info!("Servidor RPC configurado e pronto.");
 
     // Aguarda execução
@@ -962,6 +977,114 @@ async fn main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+/// Registra as rotas do cadastro público e da gestão de vouchers.
+///
+/// As sete primeiras são a espinha do wizard e chegam aqui **sem sessão** — quem
+/// as filtra é a borda (`runtime_api`), com rate limit por IP. As quatro últimas
+/// são de superusuário e entram no catálogo `ROTAS_ADMIN` de lá.
+fn registrar_rotas_onboarding(server: Server, state: AppState) -> Server {
+    let s_check = state.clone();
+    let s_planos = state.clone();
+    let s_start = state.clone();
+    let s_plano = state.clone();
+    let s_redeem = state.clone();
+    let s_ativar = state.clone();
+    let s_status = state.clone();
+    let s_criar_v = state.clone();
+    let s_listar_v = state.clone();
+    let s_revogar_v = state.clone();
+    let s_resgates_v = state;
+
+    server
+        .route("CheckTenantSlug", move |env| {
+            let state = s_check.clone();
+            Box::pin(
+                async move { onboarding::handler_check_slug(state.signup.as_ref(), env).await },
+            )
+        })
+        .route("ListPublicPlans", move |env| {
+            let state = s_planos.clone();
+            Box::pin(async move {
+                onboarding::handler_list_public_plans(state.signup.as_ref(), env).await
+            })
+        })
+        .route("StartSignup", move |env| {
+            let state = s_start.clone();
+            Box::pin(async move {
+                onboarding::handler_start_signup(state.signup.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
+        })
+        .route("SelectSignupPlan", move |env| {
+            let state = s_plano.clone();
+            Box::pin(async move {
+                onboarding::handler_select_signup_plan(state.signup.as_ref(), env).await
+            })
+        })
+        .route("RedeemVoucher", move |env| {
+            let state = s_redeem.clone();
+            Box::pin(async move {
+                onboarding::handler_redeem_voucher(
+                    state.vouchers.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("ActivateSignup", move |env| {
+            let state = s_ativar.clone();
+            Box::pin(async move {
+                onboarding::handler_activate_signup(
+                    state.signup.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("GetSignupStatus", move |env| {
+            let state = s_status.clone();
+            Box::pin(async move {
+                onboarding::handler_get_signup_status(state.signup.as_ref(), env).await
+            })
+        })
+        .route("CreateVoucher", move |env| {
+            let state = s_criar_v.clone();
+            Box::pin(async move {
+                onboarding::handler_create_voucher(
+                    state.vouchers.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("ListVouchers", move |env| {
+            let state = s_listar_v.clone();
+            Box::pin(async move {
+                onboarding::handler_list_vouchers(state.vouchers.as_ref(), env).await
+            })
+        })
+        .route("RevokeVoucher", move |env| {
+            let state = s_revogar_v.clone();
+            Box::pin(async move {
+                onboarding::handler_revoke_voucher(
+                    state.vouchers.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("ListVoucherRedemptions", move |env| {
+            let state = s_resgates_v.clone();
+            Box::pin(async move {
+                onboarding::handler_list_voucher_redemptions(state.vouchers.as_ref(), env).await
+            })
+        })
 }
 
 /// Carrega a thread (mensagens) de um atendimento, respeitando o RLS do tenant.
@@ -3672,6 +3795,10 @@ async fn handler_create_plan(
         .get("max_departments")
         .and_then(|v| v.as_i64())
         .unwrap_or(1) as i32;
+    let max_fluxos = payload_json
+        .get("max_fluxos")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(1) as i32;
 
     if name.is_empty() {
         return erro(
@@ -3695,7 +3822,14 @@ async fn handler_create_plan(
     };
 
     match store
-        .criar_plano(name, description, price_dec, max_instances, max_departments)
+        .criar_plano(
+            name,
+            description,
+            price_dec,
+            max_instances,
+            max_departments,
+            max_fluxos,
+        )
         .await
     {
         Ok(plan) => {
@@ -3741,6 +3875,10 @@ async fn handler_update_plan(
         .get("max_departments")
         .and_then(|v| v.as_i64())
         .unwrap_or(1) as i32;
+    let max_fluxos = payload_json
+        .get("max_fluxos")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(1) as i32;
     let active = payload_json
         .get("active")
         .and_then(|v| v.as_bool())
@@ -3775,6 +3913,7 @@ async fn handler_update_plan(
             price_dec,
             max_instances,
             max_departments,
+            max_fluxos,
             active,
         )
         .await
@@ -5828,7 +5967,7 @@ mod tests_plans_unit {
         store
             .expect_atualizar_plano()
             .times(1)
-            .returning(|_, _, _, _, _, _, _| Ok(false));
+            .returning(|_, _, _, _, _, _, _, _| Ok(false));
         let mut audit = MockAuditPort::new();
         audit.expect_publish().never();
         let env = envelope_com_payload("UpdatePlan", serde_json::json!({ "id": 99, "name": "X" }));

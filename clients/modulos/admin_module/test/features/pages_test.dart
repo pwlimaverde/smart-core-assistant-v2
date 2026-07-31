@@ -345,6 +345,26 @@ void main() {
               datasource: ListPaymentsDatasource(client: client),
             ),
           ),
+          listVouchersUsecase: ListVouchersUsecase(
+            repository: ListVouchersRepository(
+              datasource: ListVouchersDatasource(client: client),
+            ),
+          ),
+          createVoucherUsecase: CreateVoucherUsecase(
+            repository: CreateVoucherRepository(
+              datasource: CreateVoucherDatasource(client: client),
+            ),
+          ),
+          revokeVoucherUsecase: RevokeVoucherUsecase(
+            repository: RevokeVoucherRepository(
+              datasource: RevokeVoucherDatasource(client: client),
+            ),
+          ),
+          listVoucherRedemptionsUsecase: ListVoucherRedemptionsUsecase(
+            repository: ListVoucherRedemptionsRepository(
+              datasource: ListVoucherRedemptionsDatasource(client: client),
+            ),
+          ),
         ),
       );
     }
@@ -374,6 +394,9 @@ void main() {
       when(
         () => client.listPayments(any()),
       ).thenAnswer((_) => respostaGrpc(proto.ListPaymentsResponse()));
+      when(
+        () => client.listVouchers(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.ListVouchersResponse()));
       registrar();
 
       await montar(tester, const BillingPage());
@@ -393,6 +416,50 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Registrar Pagamento Manual'), findsWidgets);
+    });
+
+    testWidgets('a aba de vouchers lista os códigos com a situação', (
+      tester,
+    ) async {
+      when(() => client.listPlans(any())).thenAnswer(
+        (_) => respostaGrpc(proto.ListPlansResponse()),
+      );
+      when(
+        () => client.listSubscriptions(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.ListSubscriptionsResponse()));
+      when(
+        () => client.listPayments(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.ListPaymentsResponse()));
+      when(() => client.listVouchers(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.ListVouchersResponse(
+            vouchers: [
+              proto.Voucher(
+                id: 'v-1',
+                codigo: 'DEVTESTE',
+                descricao: 'campanha de testes',
+                planId: 1,
+                planName: 'Básico',
+                duracaoDias: 180,
+                maxResgates: 0,
+                resgatesUsados: 2,
+                validoDe: ms(DateTime(2026, 1, 1)),
+                createdAt: ms(DateTime(2026, 1, 1)),
+              ),
+            ],
+          ),
+        ),
+      );
+      registrar();
+
+      await montar(tester, const BillingPage());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Vouchers'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('DEVTESTE'), findsOneWidget);
+      // `max_resgates = 0` é ilimitado — a tela precisa dizer isso, e não "0".
+      expect(find.textContaining('ilimitado'), findsOneWidget);
     });
   });
 

@@ -57,6 +57,28 @@ void main() {
       );
     });
 
+    test('pós-boot deslogado: o wizard de cadastro é público', () {
+      // Quem vai criar uma conta ainda não tem sessão; sem isto o guard
+      // devolveria todo mundo para /login e o cadastro seria inalcançável.
+      for (final rota in [
+        '/cadastro',
+        '/cadastro/plano',
+        '/cadastro/pagamento',
+        '/cadastro/pronto',
+      ]) {
+        expect(
+          tenantAuthRedirectTarget(
+              booted: true,
+              isAuthenticated: false,
+              isSuperuser: false,
+              scopes: const [],
+              location: rota),
+          isNull,
+          reason: '$rota deveria ser pública',
+        );
+      }
+    });
+
     test('pós-boot superusuário puro: é barrado e vai para /login', () {
       expect(
         tenantAuthRedirectTarget(

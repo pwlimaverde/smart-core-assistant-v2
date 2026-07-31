@@ -154,6 +154,37 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$listPayments, request, options: options);
   }
 
+  /// Vouchers de ativação
+  $grpc.ResponseFuture<$0.ListVouchersResponse> listVouchers(
+    $0.ListVouchersRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listVouchers, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.CreateVoucherResponse> createVoucher(
+    $0.CreateVoucherRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$createVoucher, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.RevokeVoucherResponse> revokeVoucher(
+    $0.RevokeVoucherRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$revokeVoucher, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ListVoucherRedemptionsResponse>
+      listVoucherRedemptions(
+    $0.ListVoucherRedemptionsRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listVoucherRedemptions, request,
+        options: options);
+  }
+
   /// Fase 3: Evolution Connection
   $grpc.ResponseFuture<$0.TestEvolutionConnectionResponse>
       testEvolutionConnection(
@@ -404,6 +435,26 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/ListPayments',
           ($0.ListPaymentsRequest value) => value.writeToBuffer(),
           $0.ListPaymentsResponse.fromBuffer);
+  static final _$listVouchers =
+      $grpc.ClientMethod<$0.ListVouchersRequest, $0.ListVouchersResponse>(
+          '/smartcore.contracts.queries.AdminService/ListVouchers',
+          ($0.ListVouchersRequest value) => value.writeToBuffer(),
+          $0.ListVouchersResponse.fromBuffer);
+  static final _$createVoucher =
+      $grpc.ClientMethod<$0.CreateVoucherRequest, $0.CreateVoucherResponse>(
+          '/smartcore.contracts.queries.AdminService/CreateVoucher',
+          ($0.CreateVoucherRequest value) => value.writeToBuffer(),
+          $0.CreateVoucherResponse.fromBuffer);
+  static final _$revokeVoucher =
+      $grpc.ClientMethod<$0.RevokeVoucherRequest, $0.RevokeVoucherResponse>(
+          '/smartcore.contracts.queries.AdminService/RevokeVoucher',
+          ($0.RevokeVoucherRequest value) => value.writeToBuffer(),
+          $0.RevokeVoucherResponse.fromBuffer);
+  static final _$listVoucherRedemptions = $grpc.ClientMethod<
+          $0.ListVoucherRedemptionsRequest, $0.ListVoucherRedemptionsResponse>(
+      '/smartcore.contracts.queries.AdminService/ListVoucherRedemptions',
+      ($0.ListVoucherRedemptionsRequest value) => value.writeToBuffer(),
+      $0.ListVoucherRedemptionsResponse.fromBuffer);
   static final _$testEvolutionConnection = $grpc.ClientMethod<
           $0.TestEvolutionConnectionRequest,
           $0.TestEvolutionConnectionResponse>(
@@ -662,6 +713,42 @@ abstract class AdminServiceBase extends $grpc.Service {
             ($core.List<$core.int> value) =>
                 $0.ListPaymentsRequest.fromBuffer(value),
             ($0.ListPaymentsResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.ListVouchersRequest, $0.ListVouchersResponse>(
+            'ListVouchers',
+            listVouchers_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.ListVouchersRequest.fromBuffer(value),
+            ($0.ListVouchersResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.CreateVoucherRequest, $0.CreateVoucherResponse>(
+            'CreateVoucher',
+            createVoucher_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.CreateVoucherRequest.fromBuffer(value),
+            ($0.CreateVoucherResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.RevokeVoucherRequest, $0.RevokeVoucherResponse>(
+            'RevokeVoucher',
+            revokeVoucher_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.RevokeVoucherRequest.fromBuffer(value),
+            ($0.RevokeVoucherResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListVoucherRedemptionsRequest,
+            $0.ListVoucherRedemptionsResponse>(
+        'ListVoucherRedemptions',
+        listVoucherRedemptions_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListVoucherRedemptionsRequest.fromBuffer(value),
+        ($0.ListVoucherRedemptionsResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.TestEvolutionConnectionRequest,
             $0.TestEvolutionConnectionResponse>(
         'TestEvolutionConnection',
@@ -998,6 +1085,42 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.ListPaymentsResponse> listPayments(
       $grpc.ServiceCall call, $0.ListPaymentsRequest request);
+
+  $async.Future<$0.ListVouchersResponse> listVouchers_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListVouchersRequest> $request) async {
+    return listVouchers($call, await $request);
+  }
+
+  $async.Future<$0.ListVouchersResponse> listVouchers(
+      $grpc.ServiceCall call, $0.ListVouchersRequest request);
+
+  $async.Future<$0.CreateVoucherResponse> createVoucher_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.CreateVoucherRequest> $request) async {
+    return createVoucher($call, await $request);
+  }
+
+  $async.Future<$0.CreateVoucherResponse> createVoucher(
+      $grpc.ServiceCall call, $0.CreateVoucherRequest request);
+
+  $async.Future<$0.RevokeVoucherResponse> revokeVoucher_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.RevokeVoucherRequest> $request) async {
+    return revokeVoucher($call, await $request);
+  }
+
+  $async.Future<$0.RevokeVoucherResponse> revokeVoucher(
+      $grpc.ServiceCall call, $0.RevokeVoucherRequest request);
+
+  $async.Future<$0.ListVoucherRedemptionsResponse> listVoucherRedemptions_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListVoucherRedemptionsRequest> $request) async {
+    return listVoucherRedemptions($call, await $request);
+  }
+
+  $async.Future<$0.ListVoucherRedemptionsResponse> listVoucherRedemptions(
+      $grpc.ServiceCall call, $0.ListVoucherRedemptionsRequest request);
 
   $async.Future<$0.TestEvolutionConnectionResponse> testEvolutionConnection_Pre(
       $grpc.ServiceCall $call,

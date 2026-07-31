@@ -22,6 +22,8 @@ dependencies:
     path: ../../modulos/initial_loading_module
   login_module:
     path: ../../modulos/login_module
+  onboarding_module:
+    path: ../../modulos/onboarding_module
   operacional_module:
     path: ../../modulos/operacional_module
   tenant_module:

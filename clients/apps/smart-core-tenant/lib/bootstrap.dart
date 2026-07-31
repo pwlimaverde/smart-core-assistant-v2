@@ -1,6 +1,7 @@
 import 'package:dependencies_module/dependencies_module.dart';
 import 'package:initial_loading_module/initial_loading_module.dart';
 import 'package:login_module/login_module.dart';
+import 'package:onboarding_module/onboarding_module.dart';
 import 'package:operacional_module/operacional_module.dart';
 import 'package:tenant_module/tenant_module.dart';
 
@@ -30,6 +31,9 @@ Future<void> bootstrap(AppConfig config) async {
   final modules = <AppModule>[
     InfraModule(config),
     LoginModule(),
+    // Depois do LoginModule: o passo final do wizard entra na conta pelo
+    // `AuthService` que aquele módulo registra.
+    OnboardingModule(),
     OperacionalModule(),
     TenantModule(),
     InitialLoadingModule(),

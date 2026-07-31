@@ -178,6 +178,34 @@ final class AdminModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<ListVouchersUsecase>(
+      () => ListVouchersUsecase(
+        repository: ListVouchersRepository(
+          datasource: ListVouchersDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<CreateVoucherUsecase>(
+      () => CreateVoucherUsecase(
+        repository: CreateVoucherRepository(
+          datasource: CreateVoucherDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<RevokeVoucherUsecase>(
+      () => RevokeVoucherUsecase(
+        repository: RevokeVoucherRepository(
+          datasource: RevokeVoucherDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<ListVoucherRedemptionsUsecase>(
+      () => ListVoucherRedemptionsUsecase(
+        repository: ListVoucherRedemptionsRepository(
+          datasource: ListVoucherRedemptionsDatasource(client: _adminClient()),
+        ),
+      ),
+    );
 
     // ── feature_flags ─────────────────────────────────────────────────
     i.lazySingleton<ListFeatureFlagsUsecase>(
