@@ -317,6 +317,7 @@ mod tests {
         let pg_client = StdArc::new(transport::conectar_cliente("data_postgres").await.unwrap());
         AppState {
             redis_conn: None,
+            bus_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             whatsapp_client: pg_client.clone(),
             storage_client: pg_client.clone(),

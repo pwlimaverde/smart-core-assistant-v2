@@ -136,8 +136,17 @@ pub(crate) async fn chamar_rpc(
 
 #[derive(Clone)]
 struct AppState {
+    /// Redis de CACHE (`REDIS_URL`). Só para estado efêmero do próprio worker —
+    /// hoje, o lock de debounce. **Não** serve para publicar nada: quem escuta
+    /// as publicações do worker (runtime_api, data_postgres) está no barramento.
     #[allow(dead_code)]
     redis_conn: Option<ConnectionManager>,
+    /// Redis de BARRAMENTO (`REDIS_BUS_URL`). É por onde saem os eventos de
+    /// realtime (`tenant:<id>:events`), que o `RealtimeManager` do runtime_api
+    /// assina — ele conecta em `REDIS_BUS_URL` (grpc_web.rs, `serve`). Publicar
+    /// no Redis de cache entregava a mensagem a um canal sem nenhum ouvinte.
+    #[allow(dead_code)]
+    bus_conn: Option<ConnectionManager>,
     audit_logger: observability::AuditLogger,
     pg_client: Arc<transport::MuxClient>,
     whatsapp_client: Arc<transport::MuxClient>,
@@ -272,7 +281,7 @@ async fn aplicar_transferencia_ia(
 
     // Realtime: notifica o tenant sobre a movimentação no Kanban (mesmo padrão da
     // política automática de ticket/Kanban).
-    if let Some(ref redis_conn) = state.redis_conn {
+    if let Some(ref bus_conn) = state.bus_conn {
         let channel = format!("tenant:{tenant_uuid}:events");
         let event_payload = serde_json::json!({
             "event_type": "kanban.movido",
@@ -284,7 +293,7 @@ async fn aplicar_transferencia_ia(
                 "etapa_nome": resp.get("etapa_nome"),
             }
         });
-        let mut conn = redis_conn.clone();
+        let mut conn = bus_conn.clone();
         let payload_str = event_payload.to_string();
         let _: Result<u32, _> = redis::cmd("PUBLISH")
             .arg(&channel)
@@ -535,14 +544,32 @@ async fn main() -> anyhow::Result<()> {
     // 1. Inicializa observabilidade
     observability::init_telemetry("worker", "production")
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    // Panic em task de background mata so a task: o processo segue vivo e a
+    // funcionalidade some sem deixar rastro. O hook garante o registro estruturado.
+    observability::instalar_hook_de_panic("worker");
     tracing::info!("Iniciando serviço worker...");
 
-    // 2. Conecta ao Redis para escutar eventos
+    // 2. Conecta às DUAS instâncias de Redis, que têm papéis distintos.
+    //
+    // O worker era o único serviço da stack que fazia tudo por `REDIS_URL` —
+    // control_plane, data_whatsapp, webhook_ingress, runtime_api e data_postgres
+    // já usavam `REDIS_BUS_URL` para o barramento. Como dev e prod sobem duas
+    // instâncias separadas (`redis` e `redis-bus`), o worker consumia
+    // `events:stream` de um Redis onde ninguém publica, e publicava auditoria e
+    // realtime num Redis que ninguém lê. O fallback para `REDIS_URL` mantém
+    // funcionando quem só tem uma instância (ambientes de teste).
     let redis_url =
         std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
+    let bus_url = std::env::var("REDIS_BUS_URL").unwrap_or_else(|_| redis_url.clone());
+
+    // Cache: estado efêmero do próprio worker (lock de debounce).
     let redis_client = redis::Client::open(redis_url)?;
     let redis_conn = ConnectionManager::new(redis_client.clone()).await?;
-    tracing::info!("Conexão com Redis estabelecida.");
+
+    // Barramento: consumo de `events:stream`, auditoria e realtime.
+    let bus_client = redis::Client::open(bus_url)?;
+    let bus_conn = ConnectionManager::new(bus_client.clone()).await?;
+    tracing::info!("Conexões com Redis (cache e barramento) estabelecidas.");
 
     // Conecta ao microserviço data_postgres (cliente gRPC persistente)
     let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await?);
@@ -569,9 +596,12 @@ async fn main() -> anyhow::Result<()> {
         ));
     tracing::info!(endpoint = %ia_engine_endpoint, "Cliente gRPC ia_engine estabelecido (lazy).");
 
-    let audit_logger = observability::AuditLogger::new_with_redis(redis_conn.clone(), "worker");
+    // A auditoria vai para o barramento: é de lá que o consumidor do
+    // `data_postgres` lê o `security:stream` para consolidar em `audit_log`.
+    let audit_logger = observability::AuditLogger::new_with_redis(bus_conn.clone(), "worker");
     let state = AppState {
         redis_conn: Some(redis_conn),
+        bus_conn: Some(bus_conn),
         audit_logger,
         pg_client,
         whatsapp_client,
@@ -588,7 +618,7 @@ async fn main() -> anyhow::Result<()> {
         transport::bus::STREAM_EVENTOS,
         "worker_group",
         consumidor.clone(),
-        redis_client.clone(),
+        bus_client.clone(),
     );
 
     tracing::info!("Consumidor do worker ativado e escutando eventos.");
@@ -613,7 +643,7 @@ async fn main() -> anyhow::Result<()> {
     // stanzaId, mas o envio ao WhatsApp não é).
     {
         let state_retry = state.clone();
-        let bus_client_retry = redis_client.clone();
+        let bus_client_retry = bus_client.clone();
         let consumidor_retry = consumidor.clone();
         let intervalo = std::env::var("SMARTCORE_WORKER_PEL_RETRY_SECS")
             .ok()
@@ -646,16 +676,24 @@ async fn main() -> anyhow::Result<()> {
 
     // Loop de consumo
     let state_clone = state.clone();
-    if let Err(e) = consumer
-        .run(move |evt| {
+    tokio::select! {
+        res = consumer.run(move |evt| {
             let state = state_clone.clone();
             async move { despachar_evento(&state, evt).await }
-        })
-        .await
-    {
-        tracing::error!("Consumidor do worker parou com erro crítico: {:?}", e);
+        }) => {
+            if let Err(e) = res {
+                tracing::error!("Consumidor do worker parou com erro crítico: {:?}", e);
+            }
+        }
+        // Ver a nota em `data_redis`: sem tratar SIGTERM, o deploy interrompe o
+        // processamento de uma mensagem no meio, e o evento volta para a PEL sem
+        // que ninguém registre por quê.
+        _ = observability::aguardar_sinal_de_parada() => {
+            tracing::info!("Encerrando o consumidor do worker a pedido do supervisor.");
+        }
     }
 
+    observability::shutdown_telemetry();
     Ok(())
 }
 
@@ -878,7 +916,7 @@ async fn processar_mensagem_recebida(
         "Mensagem persistida com sucesso via RPC síncrono do data_postgres."
     );
 
-    if let Some(ref redis_conn) = state.redis_conn {
+    if let Some(ref bus_conn) = state.bus_conn {
         let channel = format!("tenant:{}:events", tenant_uuid);
         let event_payload = serde_json::json!({
             "event_type": "mensagem.recebida",
@@ -889,7 +927,7 @@ async fn processar_mensagem_recebida(
             }
         });
 
-        let mut conn = redis_conn.clone();
+        let mut conn = bus_conn.clone();
         let payload_str = event_payload.to_string();
         let publish_res: Result<u32, _> = redis::cmd("PUBLISH")
             .arg(&channel)
@@ -1816,14 +1854,14 @@ async fn aplicar_politica_ticket_kanban(
     );
 
     // Realtime: notifica o tenant sobre a movimentação no Kanban.
-    if let Some(ref redis_conn) = state.redis_conn {
+    if let Some(ref bus_conn) = state.bus_conn {
         let channel = format!("tenant:{}:events", tenant_uuid);
         let event_payload = serde_json::json!({
             "event_type": "kanban.movido",
             "tenant_id": tenant_uuid.to_string(),
             "payload": contexto,
         });
-        let mut conn = redis_conn.clone();
+        let mut conn = bus_conn.clone();
         let payload_str = event_payload.to_string();
         let publish_res: Result<u32, _> = redis::cmd("PUBLISH")
             .arg(&channel)
@@ -1927,7 +1965,7 @@ async fn processar_status_mensagem(
         Some(envelope.event_id.to_string()),
     );
 
-    if let Some(ref redis_conn) = state.redis_conn {
+    if let Some(ref bus_conn) = state.bus_conn {
         let channel = format!("tenant:{}:events", envelope.tenant_id);
         let event_payload = serde_json::json!({
             "event_type": "mensagem.status_atualizado",
@@ -1938,7 +1976,7 @@ async fn processar_status_mensagem(
             }
         });
 
-        let mut conn = redis_conn.clone();
+        let mut conn = bus_conn.clone();
         let payload_str = event_payload.to_string();
         let publish_res: Result<u32, _> = redis::cmd("PUBLISH")
             .arg(&channel)
@@ -2197,6 +2235,7 @@ mod tests {
         let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
         let state = AppState {
             redis_conn: None,
+            bus_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
@@ -2287,6 +2326,7 @@ mod tests {
         let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
         let state = AppState {
             redis_conn: None,
+            bus_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
@@ -2444,6 +2484,7 @@ mod tests {
         let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
         let state = AppState {
             redis_conn: None,
+            bus_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
@@ -2517,6 +2558,7 @@ mod tests {
         let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
         let state = AppState {
             redis_conn: None,
+            bus_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
@@ -2545,6 +2587,7 @@ mod tests {
         let pg_client = Arc::new(pg_client_res.unwrap());
         let state = AppState {
             redis_conn: None,
+            bus_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
@@ -2577,6 +2620,7 @@ mod tests {
         let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
         let state = AppState {
             redis_conn: None,
+            bus_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
@@ -2636,6 +2680,7 @@ mod tests {
         let whatsapp_client = Arc::new(transport::conectar_cliente("data_whatsapp").await.unwrap());
         let state = AppState {
             redis_conn: None,
+            bus_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
@@ -2715,6 +2760,7 @@ mod tests {
         let whatsapp_client = Arc::new(transport::conectar_cliente("data_whatsapp").await.unwrap());
         let state = AppState {
             redis_conn: None,
+            bus_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
@@ -2772,6 +2818,7 @@ mod tests {
         let whatsapp_client = Arc::new(transport::conectar_cliente("data_whatsapp").await.unwrap());
         let state = AppState {
             redis_conn: None,
+            bus_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             storage_client: pg_client.clone(),
             fluxos_cache: FluxosCache::novo(),
@@ -2930,6 +2977,7 @@ mod tests {
         let storage_client = Arc::new(transport::conectar_cliente("data_storage").await.unwrap());
         let state = AppState {
             redis_conn: None,
+            bus_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             pg_client,
             whatsapp_client,
@@ -3080,6 +3128,7 @@ mod tests {
         let storage_client = Arc::new(transport::conectar_cliente("data_storage").await.unwrap());
         let state = AppState {
             redis_conn: None,
+            bus_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             pg_client,
             whatsapp_client,
@@ -3185,6 +3234,7 @@ mod tests {
         let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
         let state = AppState {
             redis_conn: None,
+            bus_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             whatsapp_client: pg_client.clone(),
             storage_client: pg_client.clone(),
@@ -3289,6 +3339,7 @@ mod tests {
         let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
         let state = AppState {
             redis_conn: None,
+            bus_conn: None,
             audit_logger: observability::AuditLogger::new_dummy("worker"),
             whatsapp_client: pg_client.clone(),
             storage_client: pg_client.clone(),
