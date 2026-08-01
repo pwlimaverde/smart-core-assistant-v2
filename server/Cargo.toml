@@ -21,6 +21,8 @@ members = [
     "crates/infrastructure_evolution",
     "apps/webhook_ingress",
     "apps/data_whatsapp",
+    "apps/healthcheck",
+    "apps/watchdog",
     "crates/local_engine",
 ]
 

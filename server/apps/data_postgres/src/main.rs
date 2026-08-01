@@ -134,6 +134,9 @@ async fn main() -> anyhow::Result<()> {
     // 1. Inicializa observabilidade
     observability::init_telemetry("data_postgres", "production")
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    // Panic em task de background mata so a task: o processo segue vivo e a
+    // funcionalidade some sem deixar rastro. O hook garante o registro estruturado.
+    observability::instalar_hook_de_panic("data_postgres");
     tracing::info!("Iniciando serviço data_postgres...");
 
     // 2. Conecta ao banco de dados e roda migrations.
@@ -296,11 +299,24 @@ async fn main() -> anyhow::Result<()> {
         vouchers: voucher_store,
     };
 
+    // Logger dedicado à supervisão das tasks de background. O `AuditPort` acima
+    // serve aos handlers (que sempre têm um Envelope em mãos); aqui não há
+    // requisição nenhuma por trás do evento — é o próprio serviço relatando que
+    // perdeu uma engrenagem.
+    let audit_supervisao =
+        observability::AuditLogger::new_with_redis(bus_conn.clone(), "data_postgres");
+
     // 4. Inicia o Relay de Outbox em background
+    //
+    // Supervisionado: sem isso, um panic aqui matava só a task. O processo
+    // continuava `running`, o Docker via tudo bem, e os eventos paravam de sair
+    // do outbox — a stack de pé sem publicar nada.
     let relay = OutboxRelay::new(pool.clone(), bus_conn.clone());
-    let relay_handle = tokio::spawn(async move {
-        if let Err(e) = relay.run().await {
-            tracing::error!("Outbox Relay parou com erro crítico: {:?}", e);
+    observability::supervisionar("outbox_relay", "data_postgres", audit_supervisao.clone(), {
+        async move {
+            if let Err(e) = relay.run().await {
+                tracing::error!("Outbox Relay parou com erro crítico: {:?}", e);
+            }
         }
     });
 
@@ -313,17 +329,22 @@ async fn main() -> anyhow::Result<()> {
         consumidor_audit.clone(),
         bus_client.clone(), // passa o Client para abrir conexão dedicada (C2)
     );
-    let audit_handle = tokio::spawn(async move {
-        if let Err(e) = audit_consumer
-            .run_batch(move |evts| {
-                let pool = pool_clone.clone();
-                async move { processar_eventos_auditoria_lote(pool, evts).await }
-            })
-            .await
-        {
-            tracing::error!("Consumidor de auditoria parou com erro crítico: {:?}", e);
-        }
-    });
+    observability::supervisionar(
+        "consumidor_auditoria",
+        "data_postgres",
+        audit_supervisao.clone(),
+        async move {
+            if let Err(e) = audit_consumer
+                .run_batch(move |evts| {
+                    let pool = pool_clone.clone();
+                    async move { processar_eventos_auditoria_lote(pool, evts).await }
+                })
+                .await
+            {
+                tracing::error!("Consumidor de auditoria parou com erro crítico: {:?}", e);
+            }
+        },
+    );
 
     // 5b. Reprocessamento periódico da PEL (a cada 60s) (C4).
     //
@@ -334,29 +355,38 @@ async fn main() -> anyhow::Result<()> {
     let pool_retry = pool.clone();
     let bus_client_retry = bus_client;
     let consumidor_audit_retry = consumidor_audit.clone();
-    tokio::spawn(async move {
-        let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
-        loop {
-            tick.tick().await;
-            let pool_c = pool_retry.clone();
-            let handler = move |evts| {
-                let pool = pool_c.clone();
-                async move { processar_eventos_auditoria_lote(pool, evts).await }
-            };
-            if let Err(e) = transport::bus::reprocessar_pendentes_uma_vez_batch(
-                &bus_client_retry,
-                transport::bus::STREAM_SEGURANCA,
-                "data_postgres_audit_group",
-                &consumidor_audit_retry,
-                transport::bus::MIN_IDLE_REPROCESSAMENTO_MS,
-                handler,
-            )
-            .await
-            {
-                tracing::warn!("Falha no reprocessamento periódico da PEL: {:?}", e);
+    // Supervisionado pelo mesmo motivo do relay: este loop é quem resgata o lote
+    // de auditoria abandonado. Se ele morresse em silêncio — e morria, num
+    // `tokio::spawn` que ninguém observava — os eventos ficariam presos na PEL
+    // sem nunca chegar ao `audit_log`, e nada acusaria.
+    observability::supervisionar(
+        "reprocessamento_pel",
+        "data_postgres",
+        audit_supervisao.clone(),
+        async move {
+            let mut tick = tokio::time::interval(std::time::Duration::from_secs(60));
+            loop {
+                tick.tick().await;
+                let pool_c = pool_retry.clone();
+                let handler = move |evts| {
+                    let pool = pool_c.clone();
+                    async move { processar_eventos_auditoria_lote(pool, evts).await }
+                };
+                if let Err(e) = transport::bus::reprocessar_pendentes_uma_vez_batch(
+                    &bus_client_retry,
+                    transport::bus::STREAM_SEGURANCA,
+                    "data_postgres_audit_group",
+                    &consumidor_audit_retry,
+                    transport::bus::MIN_IDLE_REPROCESSAMENTO_MS,
+                    handler,
+                )
+                .await
+                {
+                    tracing::warn!("Falha no reprocessamento periódico da PEL: {:?}", e);
+                }
             }
-        }
-    });
+        },
+    );
 
     // 5c. Task periódica de amostragem de lag das filas (M4)
     let pool_lag = pool.clone();
@@ -592,7 +622,12 @@ async fn main() -> anyhow::Result<()> {
         .route("ReprocessarDeadLetter", move |env| {
             let state = state_for_reprocessar_dead_letter.clone();
             Box::pin(async move {
-                handler_reprocessar_dead_letter(state.atendimento.as_ref(), env).await
+                handler_reprocessar_dead_letter(
+                    state.atendimento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
             })
         })
         .route("AnexarAnaliseMidia", move |env| {
@@ -649,7 +684,9 @@ async fn main() -> anyhow::Result<()> {
         })
         .route("UpsertContact", move |env| {
             let state = state_for_upsert.clone();
-            Box::pin(async move { handler_upsert_contact(state.cliente.as_ref(), env).await })
+            Box::pin(async move {
+                handler_upsert_contact(state.cliente.as_ref(), state.audit.as_ref(), env).await
+            })
         })
         .route("ListAtendimentos", move |env| {
             let state = state_for_list.clone();
@@ -870,7 +907,9 @@ async fn main() -> anyhow::Result<()> {
         })
         .route("QueryAuditLog", move |env| {
             let state = state_for_query_audit_log.clone();
-            Box::pin(async move { handler_query_audit_log(state.operacional.as_ref(), env).await })
+            Box::pin(async move {
+                handler_query_audit_log(state.operacional.as_ref(), state.audit.as_ref(), env).await
+            })
         })
         .route("GetServiceHealth", move |env| {
             let state = state_for_get_service_health.clone();
@@ -965,17 +1004,23 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Servidor RPC configurado e pronto.");
 
-    // Aguarda execução
+    // Aguarda execução.
+    //
+    // O relay e o consumidor de auditoria não aparecem mais aqui: eles passaram
+    // para `observability::supervisionar`, que derruba o processo com código 1 se
+    // qualquer um deles cair. Antes, o término de um deles fazia este `select`
+    // sair e o `main` retornar `Ok(())` — saída com código **0**, indistinguível
+    // de parada limpa, e o motivo da queda se perdia.
     tokio::select! {
         res = server.run() => {
             if let Err(e) = res {
                 tracing::error!("Servidor RPC parou com erro crítico: {:?}", e);
             }
         }
-        _ = relay_handle => {}
-        _ = audit_handle => {}
+        _ = observability::aguardar_sinal_de_parada() => {}
     }
 
+    observability::shutdown_telemetry();
     Ok(())
 }
 
@@ -1021,7 +1066,12 @@ fn registrar_rotas_onboarding(server: Server, state: AppState) -> Server {
         .route("SelectSignupPlan", move |env| {
             let state = s_plano.clone();
             Box::pin(async move {
-                onboarding::handler_select_signup_plan(state.signup.as_ref(), env).await
+                onboarding::handler_select_signup_plan(
+                    state.signup.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
             })
         })
         .route("RedeemVoucher", move |env| {
@@ -1077,7 +1127,12 @@ fn registrar_rotas_onboarding(server: Server, state: AppState) -> Server {
         .route("ListVouchers", move |env| {
             let state = s_listar_v.clone();
             Box::pin(async move {
-                onboarding::handler_list_vouchers(state.vouchers.as_ref(), env).await
+                onboarding::handler_list_vouchers(
+                    state.vouchers.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
             })
         })
         .route("RevokeVoucher", move |env| {
@@ -1094,7 +1149,12 @@ fn registrar_rotas_onboarding(server: Server, state: AppState) -> Server {
         .route("ListVoucherRedemptions", move |env| {
             let state = s_resgates_v.clone();
             Box::pin(async move {
-                onboarding::handler_list_voucher_redemptions(state.vouchers.as_ref(), env).await
+                onboarding::handler_list_voucher_redemptions(
+                    state.vouchers.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
             })
         })
 }
@@ -2631,6 +2691,7 @@ async fn handler_resolver_destino_envio_outbound(
 /// administrativo simples, sob demanda do operador — sem harness automatizado.
 async fn handler_reprocessar_dead_letter(
     store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
     env: Envelope,
 ) -> Envelope {
     let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
@@ -2652,11 +2713,27 @@ async fn handler_reprocessar_dead_letter(
         .reprocessar_dead_letter(&ctx, dead_letter_id, &env.traceparent)
         .await
     {
-        Ok(status) => ok_reply(
-            &env,
-            "ReprocessarDeadLetterReply",
-            serde_json::json!({ "status": status }),
-        ),
+        Ok(status) => {
+            // Reinjeta no fluxo uma mensagem que já falhou: pode gerar envio ao
+            // cliente. Operação manual e de efeito visível externamente, então
+            // precisa dizer quem mandou reprocessar o quê.
+            audit
+                .publish(
+                    &env,
+                    "dead_letter_reprocessada",
+                    format!("Dead-letter {dead_letter_id} reenviada para processamento"),
+                    serde_json::json!({
+                        "dead_letter_id": dead_letter_id,
+                        "status": status,
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "ReprocessarDeadLetterReply",
+                serde_json::json!({ "status": status }),
+            )
+        }
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }
@@ -2728,7 +2805,11 @@ async fn handler_marcar_mensagem_falha_envio(
     }
 }
 
-async fn handler_upsert_contact(store: &dyn ports::ClienteStore, env: Envelope) -> Envelope {
+async fn handler_upsert_contact(
+    store: &dyn ports::ClienteStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
     let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
         Ok(v) => v,
         Err(_) => serde_json::json!({}),
@@ -2745,13 +2826,36 @@ async fn handler_upsert_contact(store: &dyn ports::ClienteStore, env: Envelope) 
         .map(|s| s.to_string());
 
     match store.salvar_contato(&ctx, telefone, nome).await {
-        Ok(contato) => ok_reply(
-            &env,
-            "UpsertContactReply",
-            serde_json::to_value(&contato).unwrap_or_default(),
-        ),
+        Ok(contato) => {
+            // Cria ou altera dado pessoal de terceiro (nome e telefone de quem
+            // conversa com o tenant). Era a única escrita desse tipo sem rastro.
+            // O telefone NÃO vai no contexto: o evento registra que houve
+            // gravação, não republica o dado que a LGPD quer proteger.
+            audit
+                .publish(
+                    &env,
+                    "contato_gravado",
+                    "Contato criado ou atualizado".to_string(),
+                    serde_json::json!({ "nome_informado": nome_foi_informado(&payload_json) }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "UpsertContactReply",
+                serde_json::to_value(&contato).unwrap_or_default(),
+            )
+        }
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }
+}
+
+/// Se o chamador mandou um nome junto. Basta saber que veio: o valor em si é
+/// dado pessoal e não precisa ser repetido no log de auditoria.
+fn nome_foi_informado(payload: &serde_json::Value) -> bool {
+    payload
+        .get("name")
+        .and_then(|v| v.as_str())
+        .is_some_and(|s| !s.trim().is_empty())
 }
 
 async fn handler_verify_credentials(
@@ -4309,7 +4413,11 @@ async fn handler_set_feature_flag_override(
     }
 }
 
-async fn handler_query_audit_log(store: &dyn ports::OperacionalStore, env: Envelope) -> Envelope {
+async fn handler_query_audit_log(
+    store: &dyn ports::OperacionalStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
     let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
         Ok(v) => v,
         Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
@@ -4330,16 +4438,49 @@ async fn handler_query_audit_log(store: &dyn ports::OperacionalStore, env: Envel
         .query_audit_log(tenant_id, event_type, limit, offset)
         .await
     {
-        Ok((list, total_count)) => ok_reply(
-            &env,
-            "QueryAuditLogReply",
-            serde_json::json!({
-                "entries": list,
-                "total_count": total_count as i32
-            }),
-        ),
+        Ok((list, total_count)) => {
+            // Ler o log de auditoria é, em qualquer modelo de auditoria, evento
+            // auditável de primeira ordem: é o que denuncia alguém vasculhando
+            // dados de tenant. Era a lacuna mais séria da cobertura — o registro
+            // de acesso não registrava o próprio acesso.
+            //
+            // Cuidado deliberado com recursão: este evento nasce de uma LEITURA,
+            // então não realimenta consultas; a escrita gera uma linha só.
+            audit
+                .publish(
+                    &env,
+                    "audit_log_consultado",
+                    "Log de auditoria consultado".to_string(),
+                    serde_json::json!({
+                        "tenant_filtrado": tenant_id.map(|t| t.to_string()),
+                        "evento_filtrado": event_type_para_log(&payload),
+                        "limit": limit,
+                        "offset": offset,
+                        "retornadas": list.len(),
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "QueryAuditLogReply",
+                serde_json::json!({
+                    "entries": list,
+                    "total_count": total_count as i32
+                }),
+            )
+        }
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
+}
+
+/// Filtro de tipo de evento usado na consulta, para o registro do acesso.
+/// Relido do payload porque o valor original é movido para o store.
+fn event_type_para_log(payload: &serde_json::Value) -> Option<String> {
+    payload
+        .get("event_type")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
 }
 
 async fn handler_get_service_health(
@@ -5707,8 +5848,19 @@ mod tests_atendimento_cliente_unit {
             serde_json::json!({ "phone": "5511", "name": "n" }),
         );
 
+        // Gravação de dado pessoal de terceiro tem de deixar rastro — e o rastro
+        // não pode reproduzir o telefone, que é justamente o dado protegido.
+        let mut audit = crate::ports::MockAuditPort::new();
+        audit
+            .expect_publish()
+            .withf(|_, event, _, contexto| {
+                event == "contato_gravado" && contexto.get("telefone").is_none()
+            })
+            .times(1)
+            .returning(|_, _, _, _| ());
+
         // Act
-        let resp = handler_upsert_contact(&store, env).await;
+        let resp = handler_upsert_contact(&store, &audit, env).await;
 
         // Assert
         assert_eq!(resp.kind, MessageKind::Reply as i32);

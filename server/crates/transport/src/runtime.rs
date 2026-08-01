@@ -627,6 +627,85 @@ where
     Ok(())
 }
 
+/// Sonda de liveness: disca o endpoint UMA vez, troca PING→PONG e desliga.
+///
+/// Deliberadamente não reaproveita o [`MuxClient`]: ele tenta reconectar seis
+/// vezes com backoff, o que é o comportamento certo para uma chamada de negócio
+/// e o errado para uma sonda — um healthcheck que insiste por 20 segundos
+/// esconde exatamente a indisponibilidade que deveria denunciar.
+///
+/// Sonda o **caminho completo** (aceitar conexão, ler frame, responder), não só
+/// a porta aberta: um processo com o loop de accept travado ainda deixa o
+/// listener do SO aceitando conexões, e um teste de TCP puro passaria.
+pub async fn sondar_endpoint(endpoint: &Endpoint, prazo: Duration) -> anyhow::Result<()> {
+    let corr_id = uuid::Uuid::now_v7().as_u128();
+    let ping = Frame {
+        flags: crate::framing::flags::PING,
+        corr_id,
+        body: Vec::new(),
+    };
+
+    let troca = async {
+        match endpoint {
+            Endpoint::Uds(path) => {
+                #[cfg(unix)]
+                {
+                    let mut stream = UnixStream::connect(path).await?;
+                    trocar_ping(&mut stream, ping, corr_id).await
+                }
+                #[cfg(not(unix))]
+                {
+                    anyhow::bail!(
+                        "Unix Domain Sockets nao sao suportados em Windows. Endpoint: {:?}",
+                        path
+                    );
+                }
+            }
+            Endpoint::Tcp(addr) => {
+                let mut stream = tokio::net::TcpStream::connect(addr.as_str()).await?;
+                trocar_ping(&mut stream, ping, corr_id).await
+            }
+        }
+    };
+
+    match timeout(prazo, troca).await {
+        Ok(resultado) => resultado,
+        Err(_) => anyhow::bail!("sonda excedeu o prazo de {} ms", prazo.as_millis()),
+    }
+}
+
+async fn trocar_ping<S>(stream: &mut S, ping: Frame, corr_id: u128) -> anyhow::Result<()>
+where
+    S: AsyncRead + AsyncWrite + Unpin,
+{
+    write_frame(stream, &ping).await?;
+    let resposta = read_frame(stream).await?;
+
+    if resposta.flags & crate::framing::flags::PONG == 0 {
+        anyhow::bail!(
+            "resposta da sonda nao e um PONG (flags={:#010b})",
+            resposta.flags
+        );
+    }
+    // O corr_id casado descarta lixo de uma conexão reaproveitada ou resposta
+    // fora de ordem — sem isso, qualquer frame recebido passaria por PONG.
+    if resposta.corr_id != corr_id {
+        anyhow::bail!("PONG com corr_id divergente do PING enviado");
+    }
+    Ok(())
+}
+
+/// Sonda um serviço pelo nome, lendo o endpoint das mesmas variáveis que o
+/// próprio serviço usa para servir — assim a sonda nunca aponta para lugar
+/// diferente do que o serviço abriu.
+pub async fn sondar_servico(svc_name: &str, prazo: Duration) -> anyhow::Result<()> {
+    let env_key = format!("SMARTCORE_{}_ENDPOINT", svc_name.to_uppercase());
+    let endpoint_str = std::env::var(&env_key)
+        .unwrap_or_else(|_| format!("unix:///var/run/smartcore/{}.sock", svc_name));
+    let endpoint = Endpoint::parse(&endpoint_str)?;
+    sondar_endpoint(&endpoint, prazo).await
+}
+
 /// Conecta a um microsserviço com base em suas variáveis de ambiente de endpoint e codec.
 pub async fn conectar_cliente(svc_name: &str) -> anyhow::Result<MuxClient> {
     let env_key = format!("SMARTCORE_{}_ENDPOINT", svc_name.to_uppercase());
@@ -714,5 +793,87 @@ mod tests {
 
         // Assert
         assert!(parsed.is_err());
+    }
+
+    /// Sobe um servidor sem rota nenhuma numa porta livre. A sonda não chama
+    /// método algum — ela vive na camada de frame —, então servidor vazio basta.
+    async fn subir_servidor_de_teste(porta: u16) {
+        let endpoint = Endpoint::parse(&format!("tcp://127.0.0.1:{porta}")).unwrap();
+        let server = Server::new(endpoint, "flatbuffers");
+        tokio::spawn(async move {
+            let _ = server.run().await;
+        });
+        // Espaço para o listener ligar antes de a sonda discar.
+        sleep(Duration::from_millis(150)).await;
+    }
+
+    #[tokio::test]
+    async fn sonda_aprova_servidor_que_responde_pong() {
+        let porta = 29401;
+        subir_servidor_de_teste(porta).await;
+        let endpoint = Endpoint::parse(&format!("tcp://127.0.0.1:{porta}")).unwrap();
+
+        let resultado = sondar_endpoint(&endpoint, Duration::from_secs(2)).await;
+
+        assert!(resultado.is_ok(), "erro: {:?}", resultado.err());
+    }
+
+    #[tokio::test]
+    async fn sonda_reprova_porta_sem_ninguem_ouvindo() {
+        // O caso base do healthcheck: serviço caiu, ninguém aceita a conexão.
+        let endpoint = Endpoint::parse("tcp://127.0.0.1:29402").unwrap();
+
+        let resultado = sondar_endpoint(&endpoint, Duration::from_secs(2)).await;
+
+        assert!(resultado.is_err());
+    }
+
+    #[tokio::test]
+    async fn sonda_reprova_porta_aberta_que_nao_responde() {
+        // Este é o caso que motiva a sonda existir. Um listener do SO aceita a
+        // conexão mesmo com a aplicação travada — um teste de TCP puro passaria
+        // e o serviço continuaria marcado como saudável. Aqui o listener aceita
+        // e nunca responde ao PING, e a sonda tem de reprovar pelo prazo.
+        let listener = TcpListener::bind("127.0.0.1:29403").await.unwrap();
+        tokio::spawn(async move {
+            // Os sockets aceitos precisam ficar VIVOS: descartá-los fecharia a
+            // conexão, e aí a sonda falharia por conexão perdida em vez de por
+            // prazo — que é justamente o cenário que este teste distingue.
+            let mut abertos = Vec::new();
+            loop {
+                if let Ok((stream, _)) = listener.accept().await {
+                    abertos.push(stream);
+                }
+            }
+        });
+        sleep(Duration::from_millis(150)).await;
+        let endpoint = Endpoint::parse("tcp://127.0.0.1:29403").unwrap();
+
+        let resultado = sondar_endpoint(&endpoint, Duration::from_millis(400)).await;
+
+        let erro = resultado
+            .expect_err("porta muda deveria reprovar")
+            .to_string();
+        assert!(
+            erro.contains("prazo"),
+            "esperava erro de prazo, veio: {erro}"
+        );
+    }
+
+    #[tokio::test]
+    async fn sonda_por_nome_le_o_endpoint_do_mesmo_lugar_que_o_servico() {
+        // A sonda tem de resolver o endereço pela MESMA variável que o serviço
+        // usa para servir; apontar para outro lugar daria falso negativo.
+        let porta = 29404;
+        subir_servidor_de_teste(porta).await;
+        std::env::set_var(
+            "SMARTCORE_SERVICO_DE_TESTE_ENDPOINT",
+            format!("tcp://127.0.0.1:{porta}"),
+        );
+
+        let resultado = sondar_servico("servico_de_teste", Duration::from_secs(2)).await;
+
+        assert!(resultado.is_ok(), "erro: {:?}", resultado.err());
+        std::env::remove_var("SMARTCORE_SERVICO_DE_TESTE_ENDPOINT");
     }
 }

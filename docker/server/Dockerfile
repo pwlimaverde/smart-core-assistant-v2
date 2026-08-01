@@ -21,7 +21,7 @@ FROM chef AS planner
 COPY server/ .
 RUN cargo chef prepare --recipe-path recipe.json
 
-# 2) builder — cozinha as dependências (cache) e compila os 9 binários
+# 2) builder — cozinha as dependências (cache) e compila os binários do workspace
 FROM chef AS builder
 ENV SQLX_OFFLINE=true
 COPY --from=planner /app/recipe.json recipe.json
@@ -46,6 +46,8 @@ COPY --from=builder \
      /app/target/release/worker \
      /app/target/release/data_whatsapp \
      /app/target/release/webhook_ingress \
+     /app/target/release/watchdog \
+     /app/target/release/healthcheck \
      /usr/local/bin/
 
 USER smartcore

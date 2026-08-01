@@ -59,6 +59,9 @@ struct WebhookPath {
 async fn main() -> anyhow::Result<()> {
     observability::init_telemetry("webhook_ingress", "production")
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    // Panic em task de background mata so a task: o processo segue vivo e a
+    // funcionalidade some sem deixar rastro. O hook garante o registro estruturado.
+    observability::instalar_hook_de_panic("webhook_ingress");
 
     let redis_url =
         env::var("REDIS_BUS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
@@ -87,11 +90,25 @@ async fn main() -> anyhow::Result<()> {
             "/webhook/{provider}/{tenant_id}/{instance_id}",
             post(handle_webhook),
         )
+        // Sonda do container. Este serviço não atende no `transport::Server`
+        // (é HTTP puro), então o `healthcheck rpc` não o alcança — e sem
+        // nenhuma sonda ele era o único ponto de entrada do WhatsApp que podia
+        // travar sem que nada acusasse. Responder aqui exercita o roteador do
+        // axum, não só a porta aberta.
+        .route("/health", axum::routing::get(|| async { "ok" }))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:9200").await?;
     tracing::info!("webhook_ingress ouvindo em 0.0.0.0:9200");
-    axum::serve(listener, app).await?;
+
+    // `with_graceful_shutdown` deixa as requisições em voo terminarem antes de
+    // fechar o listener: um webhook do WhatsApp cortado no meio do deploy é
+    // mensagem de cliente perdida — a Evolution só reentrega em alguns casos.
+    axum::serve(listener, app)
+        .with_graceful_shutdown(observability::aguardar_sinal_de_parada())
+        .await?;
+
+    observability::shutdown_telemetry();
     Ok(())
 }
 

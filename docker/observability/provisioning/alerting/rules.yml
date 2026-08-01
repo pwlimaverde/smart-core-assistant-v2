@@ -83,6 +83,85 @@ groups:
                     type: gt
                     params: [500]
 
+      - uid: servico-fora-do-ar
+        title: Servico fora do ar ou nao saudavel
+        condition: C
+        for: 2m
+        # As métricas chegam por push (OTLP): quando um serviço morre, a série
+        # dele SOME em vez de ir a zero, e um alerta comum nunca dispararia. Duas
+        # defesas: o `smartcore_service_up` é publicado pelo watchdog (que está
+        # vivo e publica o zero de verdade) e, se o próprio watchdog cair,
+        # `noDataState: Alerting` transforma o silêncio em alarme.
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severidade: critica
+        annotations:
+          resumo: "Um ou mais servicos da stack estao parados ou com healthcheck falhando. Se nao houver dado nenhum, o proprio watchdog pode ter caido."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              expr: "min(smartcore_service_up)"
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+
+      - uid: backup-do-banco-atrasado
+        title: Backup do banco atrasado
+        condition: C
+        for: 10m
+        noDataState: Alerting
+        execErrState: Alerting
+        labels:
+          severidade: critica
+        annotations:
+          resumo: "O servico pg_backup nao concluiu backup dentro da janela. Backup que falha em silencio so e descoberto na hora de restaurar."
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 900, to: 0 }
+            model:
+              # O healthcheck do container do backup verifica a idade do último
+              # sucesso; o watchdog traduz isso para `smartcore_service_up`.
+              expr: "min(smartcore_service_up{servico=\"pg_backup\"})"
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: lt
+                    params: [1]
+
       - uid: taxa-erro-grpc-alta
         title: Taxa de erro gRPC/RPC interna alta
         condition: C

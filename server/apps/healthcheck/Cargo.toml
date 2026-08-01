@@ -1,0 +1,13 @@
+[package]
+name = "healthcheck"
+version = "0.1.0"
+edition.workspace = true
+
+[[bin]]
+name = "healthcheck"
+path = "src/main.rs"
+
+[dependencies]
+transport = { workspace = true }
+tokio     = { workspace = true }
+anyhow    = { workspace = true }

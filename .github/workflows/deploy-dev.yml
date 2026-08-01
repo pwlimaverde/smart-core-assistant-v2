@@ -381,11 +381,15 @@ jobs:
       # Smoke test: `compose up -d` devolve sucesso assim que os containers são
       # CRIADOS — um serviço que sobe e morre em seguida (env faltando, migration
       # quebrada, dependência fora do ar) deixava o deploy "verde" e só aparecia
-      # depois, no uso. Os serviços Rust não têm healthcheck no compose, então o
-      # critério para eles é o estado do container: rodando, sem restart-loop.
-      # Quem TEM healthcheck (ia_engine, via grpc.health.v1) é cobrado também
-      # pelo veredito da sonda — um processo no ar com o servidor gRPC travado
-      # aparece como `running` e passaria só pelo critério de estado.
+      # depois, no uso.
+      #
+      # Agora TODOS os serviços têm sonda: os RPC pelo PING do transport, o worker
+      # pelo batimento do loop de consumo, o webhook_ingress pelo /health e o
+      # pg_backup pela idade do último backup bem-sucedido. O gate deixou de ser
+      # "o processo está de pé" e passou a ser "o serviço responde" — um processo
+      # no ar com o servidor travado aparece como `running` e passava antes.
+      # O watchdog não declara sonda (é ele quem sonda os outros) e continua
+      # julgado pelo estado do container.
       - name: Smoke test dos serviços (DEV)
         working-directory: docker/dev
         run: |
@@ -393,7 +397,7 @@ jobs:
           # Janela para um crash-loop se manifestar (restart: unless-stopped é
           # imediato, então poucos segundos já expõem o RestartCount subindo).
           sleep 25
-          servicos="data_postgres data_redis data_storage control_plane worker runtime_api webhook_ingress data_whatsapp ia_engine"
+          servicos="data_postgres data_redis data_storage control_plane worker runtime_api webhook_ingress data_whatsapp ia_engine watchdog pg_backup"
           falhas=""
           for svc in $servicos; do
             cid=$(docker compose --env-file .env ps -q "$svc" || true)
@@ -408,10 +412,12 @@ jobs:
             # template devolve "n/a" para eles e o veredito não os julga.
             tpl='{{if .State.Health}}{{.State.Health.Status}}{{else}}n/a{{end}}'
             health=$(docker inspect -f "$tpl" "$cid")
-            # `starting` não é veredito: espera a sonda concluir (até ~60s)
-            # antes de decidir, senão o gate aprovaria por sorte de timing.
+            # `starting` não é veredito: espera a sonda concluir antes de
+            # decidir, senão o gate aprovaria por sorte de timing. A janela é de
+            # 180s por causa do pg_backup, cujo `start_period` cobre o tempo do
+            # primeiro dump — os demais resolvem em segundos.
             espera=0
-            while [ "$health" = "starting" ] && [ "$espera" -lt 60 ]; do
+            while [ "$health" = "starting" ] && [ "$espera" -lt 180 ]; do
               sleep 5
               espera=$((espera + 5))
               health=$(docker inspect -f "$tpl" "$cid")

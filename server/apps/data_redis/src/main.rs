@@ -46,6 +46,9 @@ async fn main() -> anyhow::Result<()> {
     // 1. Inicializa observabilidade
     observability::init_telemetry("data_redis", "production")
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    // Panic em task de background mata so a task: o processo segue vivo e a
+    // funcionalidade some sem deixar rastro. O hook garante o registro estruturado.
+    observability::instalar_hook_de_panic("data_redis");
     tracing::info!("Iniciando serviço data_redis...");
 
     // 2. Conecta ao Redis
@@ -135,10 +138,19 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Servidor RPC do data_redis configurado e pronto.");
 
-    if let Err(e) = server.run().await {
-        tracing::error!("Servidor RPC parou com erro crítico: {:?}", e);
+    // O `docker stop` manda SIGTERM e espera; sem escutá-lo, o processo era morto
+    // no braço ao fim do prazo de graça — junto com os spans e logs ainda não
+    // exportados, que são justamente os do encerramento.
+    tokio::select! {
+        res = server.run() => {
+            if let Err(e) = res {
+                tracing::error!("Servidor RPC parou com erro crítico: {:?}", e);
+            }
+        }
+        _ = observability::aguardar_sinal_de_parada() => {}
     }
 
+    observability::shutdown_telemetry();
     Ok(())
 }
 

@@ -6,6 +6,7 @@
 //! de logs de auditoria de negócio e segurança no banco de dados com RLS.
 
 pub mod audit;
+pub mod ciclo_de_vida;
 pub mod propagation;
 pub mod span_helpers;
 pub mod telemetry;
@@ -16,6 +17,7 @@ pub mod pool_metrics;
 
 // Re-exports de conveniência
 pub use audit::{AuditLogPayload, AuditLogger};
+pub use ciclo_de_vida::{aguardar_sinal_de_parada, instalar_hook_de_panic, supervisionar};
 #[cfg(feature = "pool-metrics")]
 pub use pool_metrics::monitorar_pool;
 pub use propagation::{extrair_contexto, injetar_contexto_atual, HashMapCarrier, HashMapExtractor};

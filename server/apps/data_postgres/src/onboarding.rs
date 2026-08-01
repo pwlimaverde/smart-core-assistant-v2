@@ -219,6 +219,7 @@ pub async fn handler_start_signup(
 #[tracing::instrument(skip_all, fields(rpc = "SelectSignupPlan"))]
 pub async fn handler_select_signup_plan(
     signup: &dyn ports::SignupStore,
+    audit: &dyn ports::AuditPort,
     env: Envelope,
 ) -> Envelope {
     let payload = payload_de(&env);
@@ -246,11 +247,27 @@ pub async fn handler_select_signup_plan(
     }
 
     match signup.selecionar_plano(tenant_id, plan_id).await {
-        Ok(()) => ok_reply(
-            &env,
-            "SelectSignupPlanReply",
-            serde_json::json!({ "proximo_passo": 3 }),
-        ),
+        Ok(()) => {
+            // `StartSignup` e `ActivateSignup` já auditavam; o passo do meio não,
+            // e sem ele a trilha do cadastro tinha um buraco justamente onde se
+            // decide o que o cliente vai pagar.
+            audit
+                .publish(
+                    &env,
+                    "signup_plan_selected",
+                    format!("Plano {plan_id} escolhido no cadastro"),
+                    serde_json::json!({
+                        "tenant_id": tenant_id.to_string(),
+                        "plan_id": plan_id,
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "SelectSignupPlanReply",
+                serde_json::json!({ "proximo_passo": 3 }),
+            )
+        }
         Err(infrastructure_postgres::DbError::NotFound) => erro(
             error_core::AppError::Validation("este cadastro não está aguardando pagamento".into()),
             &env,
@@ -619,13 +636,32 @@ pub async fn handler_create_voucher(
 }
 
 #[tracing::instrument(skip_all, fields(rpc = "ListVouchers"))]
-pub async fn handler_list_vouchers(vouchers: &dyn ports::VoucherStore, env: Envelope) -> Envelope {
+pub async fn handler_list_vouchers(
+    vouchers: &dyn ports::VoucherStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
     match vouchers.listar().await {
-        Ok(lista) => ok_reply(
-            &env,
-            "ListVouchersReply",
-            serde_json::json!({ "vouchers": lista }),
-        ),
+        Ok(lista) => {
+            // Leitura auditada, ao contrário das demais listagens do painel: o
+            // código do voucher é guardado em claro (é código de campanha, o
+            // superusuário precisa relê-lo para distribuir). A defesa combinada
+            // é rate limit, revogação e rastro de quem leu — sem este evento, a
+            // terceira perna faltava.
+            audit
+                .publish(
+                    &env,
+                    "vouchers_listed",
+                    "Lista de vouchers consultada".to_string(),
+                    serde_json::json!({ "total": lista.len() }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "ListVouchersReply",
+                serde_json::json!({ "vouchers": lista }),
+            )
+        }
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }
@@ -678,6 +714,7 @@ pub async fn handler_revoke_voucher(
 #[tracing::instrument(skip_all, fields(rpc = "ListVoucherRedemptions"))]
 pub async fn handler_list_voucher_redemptions(
     vouchers: &dyn ports::VoucherStore,
+    audit: &dyn ports::AuditPort,
     env: Envelope,
 ) -> Envelope {
     let payload = payload_de(&env);
@@ -689,11 +726,26 @@ pub async fn handler_list_voucher_redemptions(
     };
 
     match vouchers.listar_resgates(voucher_id).await {
-        Ok(lista) => ok_reply(
-            &env,
-            "ListVoucherRedemptionsReply",
-            serde_json::json!({ "resgates": lista }),
-        ),
+        Ok(lista) => {
+            // Mesma razão de `ListVouchers`: a consulta expõe quem resgatou o
+            // quê, e quem olhou precisa ficar registrado.
+            audit
+                .publish(
+                    &env,
+                    "voucher_redemptions_listed",
+                    "Resgates de um voucher consultados".to_string(),
+                    serde_json::json!({
+                        "voucher_id": voucher_id.to_string(),
+                        "total": lista.len(),
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "ListVoucherRedemptionsReply",
+                serde_json::json!({ "resgates": lista }),
+            )
+        }
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }
@@ -885,9 +937,15 @@ mod tests {
             .times(1)
             .returning(|_, _| Ok(false));
         store.expect_selecionar_plano().never();
+        // Token inválido não muda nada, então também não pode gerar evento de
+        // escolha de plano — auditoria de algo que não aconteceu é ruído que
+        // atrapalha a investigação depois.
+        let mut audit = MockAuditPort::new();
+        audit.expect_publish().never();
 
         let resp = handler_select_signup_plan(
             &store,
+            &audit,
             envelope(
                 "SelectSignupPlan",
                 serde_json::json!({

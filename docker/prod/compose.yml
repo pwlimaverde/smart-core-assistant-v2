@@ -15,6 +15,21 @@ name: smart-core-v2-prod
 
 x-server-image: &server-image ${SERVER_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-server:latest}
 
+# Ver a nota no compose de dev: o default do Docker (json-file sem limite) enche
+# o disco, e disco cheio derruba a stack inteira.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "${LOG_MAX_SIZE:-10m}"
+    max-file: "${LOG_MAX_FILE:-5}"
+
+# Sonda padrão dos serviços que atendem no `transport::Server` (PING→PONG).
+x-healthcheck-rpc: &healthcheck-rpc
+  interval: 20s
+  timeout: 5s
+  retries: 3
+  start_period: 30s
+
 networks:
   internal:
     driver: bridge
@@ -44,6 +59,8 @@ services:
       retries: 5
       start_period: 20s
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_POSTGRES:-1g}
 
   redis:
     image: redis:7-alpine
@@ -58,6 +75,8 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_REDIS:-256m}
 
   redis-bus:
     image: redis:7-alpine
@@ -66,7 +85,50 @@ services:
       --maxmemory 150mb --maxmemory-policy noeviction --bind 0.0.0.0 --protected-mode yes
     volumes: [redis_bus_data:/data]
     networks: [internal]
+    # É por onde passa toda mensagem e todo evento de auditoria; sem sonda, era o
+    # ponto mais crítico da stack sem verificação nenhuma.
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_REDIS:-256m}
+
+  # Backup lógico do Postgres — ver a nota no compose de dev. Em produção este é
+  # o serviço mais importante desta lista: sem ele, uma falha de disco na VPS
+  # apaga todos os tenants sem volta.
+  pg_backup:
+    image: pgvector/pgvector:pg16
+    entrypoint: ["/bin/sh", "/opt/backup/backup.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      BACKUP_DIR: /backups
+      BACKUP_INTERVALO_SEGUNDOS: ${BACKUP_INTERVALO_SEGUNDOS:-43200}
+      BACKUP_RETENCAO_DIAS: ${BACKUP_RETENCAO_DIAS:-30}
+      BACKUP_RETENCAO_MAX_ARQUIVOS: ${BACKUP_RETENCAO_MAX_ARQUIVOS:-90}
+    volumes:
+      - ../backup:/opt/backup:ro
+      - pg_backups:/backups
+    networks: [internal]
+    depends_on:
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "/bin/sh", "/opt/backup/healthcheck.sh"]
+      # Ver a nota no compose de dev: com `interval` longo, a primeira sonda só
+      # rodaria depois de um intervalo inteiro e o container ficaria `starting`
+      # todo esse tempo.
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 180s
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_BACKUP:-256m}
 
   # ---------- SERVICOS RUST (imagem unica, command por servico) ----------
   data_postgres:
@@ -76,7 +138,12 @@ services:
     networks: [internal, observability]
     depends_on:
       postgres: { condition: service_healthy }
+    healthcheck:
+      <<: *healthcheck-rpc
+      test: ["CMD", "healthcheck", "rpc", "DATA_POSTGRES"]
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_DATA_POSTGRES:-512m}
 
   data_redis:
     image: *server-image
@@ -86,14 +153,24 @@ services:
     depends_on:
       redis: { condition: service_healthy }
       redis-bus: { condition: service_started }
+    healthcheck:
+      <<: *healthcheck-rpc
+      test: ["CMD", "healthcheck", "rpc", "DATA_REDIS"]
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_DATA_REDIS:-384m}
 
   data_storage:
     image: *server-image
     command: ["data_storage"]
     env_file: [.env]
     networks: [internal, observability]
+    healthcheck:
+      <<: *healthcheck-rpc
+      test: ["CMD", "healthcheck", "rpc", "DATA_STORAGE"]
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_DATA_STORAGE:-512m}
 
   control_plane:
     image: *server-image
@@ -102,7 +179,12 @@ services:
     networks: [internal, observability]
     depends_on:
       data_postgres: { condition: service_started }
+    healthcheck:
+      <<: *healthcheck-rpc
+      test: ["CMD", "healthcheck", "rpc", "CONTROL_PLANE"]
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_CONTROL_PLANE:-384m}
 
   # ---------- MOTOR DE IA (Python, gRPC — imagem própria) ----------
   ia_engine:
@@ -114,9 +196,8 @@ services:
       dockerfile: ia_engine/Dockerfile
     env_file: [.env]
     networks: [internal, observability]
-    # Único serviço da stack que serve `grpc.health.v1` — usa a própria sonda
-    # do pacote (sem binário extra na imagem). Sem isto, um processo no ar mas
-    # com o servidor gRPC travado aparece como `running` e passa no smoke test.
+    # Serve `grpc.health.v1` — usa a própria sonda do pacote. Foi o primeiro
+    # serviço da stack a ter healthcheck, e o modelo para os demais.
     healthcheck:
       test: ["CMD", "python", "-m", "ia_engine.healthcheck"]
       interval: 15s
@@ -124,17 +205,31 @@ services:
       retries: 3
       start_period: 20s
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_IA_ENGINE:-2g}
 
   worker:
     image: *server-image
     command: ["worker"]
     env_file: [.env]
+    environment:
+      # Ver a nota no compose de dev: o worker não atende ninguém, então a sonda
+      # mede a idade do batimento que o loop de consumo registra.
+      SMARTCORE_LIVENESS_FILE: /tmp/worker_batimento
     networks: [internal, observability]
     depends_on:
       data_postgres: { condition: service_started }
       data_redis: { condition: service_started }
       ia_engine: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "healthcheck", "batimento", "/tmp/worker_batimento", "90"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_WORKER:-768m}
 
   runtime_api:
     image: *server-image
@@ -146,7 +241,12 @@ services:
       - "${RUNTIME_WEB_PORT:-50052}:50051"
     depends_on:
       control_plane: { condition: service_started }
+    healthcheck:
+      <<: *healthcheck-rpc
+      test: ["CMD", "healthcheck", "rpc", "RUNTIME_API"]
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_RUNTIME_API:-512m}
 
   # Client admin (Flutter Web) — bundle embutido na imagem. Publicado no host; o
   # edge faz reverse_proxy p/ host.docker.internal:${WEB_HOST_PORT} no /v2/admin/*.
@@ -156,6 +256,8 @@ services:
       - "${WEB_HOST_PORT:-8082}:80"
     networks: [internal]
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_WEB:-128m}
 
   # Client operacional/tenant (Flutter Web) — mesma imagem generica do docker/web.
   # Publicado no host; o edge faz reverse_proxy p/ host.docker.internal:
@@ -168,6 +270,8 @@ services:
       - "${WEB_TENANT_HOST_PORT:-8084}:80"
     networks: [internal]
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_WEB:-128m}
 
   # ---------- MENSAGERIA / WHATSAPP ----------
   data_whatsapp:
@@ -177,7 +281,12 @@ services:
     networks: [internal, observability, evolution_net]
     depends_on:
       redis: { condition: service_healthy }
+    healthcheck:
+      <<: *healthcheck-rpc
+      test: ["CMD", "healthcheck", "rpc", "DATA_WHATSAPP"]
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_DATA_WHATSAPP:-512m}
 
   webhook_ingress:
     image: *server-image
@@ -186,9 +295,45 @@ services:
     networks: [internal, observability, evolution_net]
     ports:
       - "${WEBHOOK_INGRESS_PORT:-9200}:9200"
+    # HTTP puro (axum): a sonda é a rota /health, que exercita o roteador e não
+    # apenas a porta aberta. `curl` já vem na imagem.
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "--max-time", "4", "http://127.0.0.1:9200/health"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_WEBHOOK_INGRESS:-384m}
+
+  # ---------- VIGIA ----------
+  # Ver a nota no compose de dev: o compose marca `unhealthy` mas não reinicia
+  # nada por conta própria. O watchdog fecha esse laço, audita cada intervenção e
+  # publica `smartcore_service_up`.
+  watchdog:
+    image: *server-image
+    command: ["watchdog"]
+    # Ver a nota no compose de dev: `smartcore` não tem acesso ao socket do
+    # Docker, e sem root o watchdog falha em toda rodada.
+    user: root
+    env_file: [.env]
+    environment:
+      SMARTCORE_WATCHDOG_PROJETO: smart-core-v2-prod
+      SMARTCORE_WATCHDOG_INTERVALO_SEGUNDOS: ${WATCHDOG_INTERVALO_SEGUNDOS:-30}
+      SMARTCORE_WATCHDOG_MAX_TENTATIVAS: ${WATCHDOG_MAX_TENTATIVAS:-3}
+      SMARTCORE_WATCHDOG_JANELA_SEGUNDOS: ${WATCHDOG_JANELA_SEGUNDOS:-900}
+    volumes:
+      # Acesso privilegiado ao daemon: `:ro` impede escrita no arquivo, não as
+      # operações da API — por isso o watchdog é escopado ao projeto do compose.
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [internal, observability]
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_WATCHDOG:-128m}
 
 volumes:
   postgres_data:
   redis_data:
   redis_bus_data:
+  pg_backups:

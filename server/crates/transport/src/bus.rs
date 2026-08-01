@@ -529,6 +529,10 @@ impl Consumer {
             .await
             {
                 Ok(eventos) => {
+                    // Batimento no ponto exato em que o loop provou estar vivo: o
+                    // read do Redis voltou. Registrar antes disso (ou num timer
+                    // paralelo) manteria o arquivo fresco com o consumo travado.
+                    crate::liveness::bater();
                     for evento in eventos {
                         match handler(evento.clone()).await {
                             Ok(()) => {
@@ -622,6 +626,9 @@ impl Consumer {
             .await
             {
                 Ok(eventos) => {
+                    // Ver a nota em `run`: o batimento vale a volta do loop, não o
+                    // recebimento de evento — stream vazio também é sinal de vida.
+                    crate::liveness::bater();
                     if !eventos.is_empty() {
                         match handler(eventos).await {
                             Ok(sucessos) => {

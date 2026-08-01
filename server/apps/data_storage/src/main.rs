@@ -17,6 +17,9 @@ async fn main() -> anyhow::Result<()> {
     // 1. Inicializa observabilidade
     observability::init_telemetry("data_storage", "production")
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    // Panic em task de background mata so a task: o processo segue vivo e a
+    // funcionalidade some sem deixar rastro. O hook garante o registro estruturado.
+    observability::instalar_hook_de_panic("data_storage");
     tracing::info!("Iniciando serviço data_storage...");
 
     // 2. Conecta ao Redis para o barramento de purga
@@ -163,8 +166,12 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         _ = purge_handle => {}
+        // Ver a nota em `data_redis`: sem tratar SIGTERM, o deploy mata o
+        // processo no braço e perde o que estava em voo.
+        _ = observability::aguardar_sinal_de_parada() => {}
     }
 
+    observability::shutdown_telemetry();
     Ok(())
 }
 

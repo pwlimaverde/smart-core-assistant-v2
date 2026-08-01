@@ -24,6 +24,9 @@ struct AppState {
 async fn main() -> anyhow::Result<()> {
     observability::init_telemetry("data_whatsapp", "production")
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    // Panic em task de background mata so a task: o processo segue vivo e a
+    // funcionalidade some sem deixar rastro. O hook garante o registro estruturado.
+    observability::instalar_hook_de_panic("data_whatsapp");
     tracing::info!("Iniciando serviço data_whatsapp...");
 
     let api_url =
@@ -114,7 +117,19 @@ async fn main() -> anyhow::Result<()> {
         });
 
     tracing::info!("Servidor RPC do data_whatsapp configurado e pronto.");
-    server.run().await?;
+
+    // Ver a nota em `data_redis`: SIGTERM precisa ser tratado, senão todo deploy
+    // mata o processo no meio do que estava em voo.
+    tokio::select! {
+        res = server.run() => {
+            if let Err(e) = res {
+                tracing::error!("Servidor RPC parou com erro crítico: {:?}", e);
+            }
+        }
+        _ = observability::aguardar_sinal_de_parada() => {}
+    }
+
+    observability::shutdown_telemetry();
     Ok(())
 }
 

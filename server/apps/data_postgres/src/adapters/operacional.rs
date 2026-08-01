@@ -709,6 +709,45 @@ impl OperacionalStore for PgOperacionalStore {
             serde_json::json!({ "service_name": "Redis", "status": "unhealthy", "message": redis_res.err().unwrap().to_string(), "response_time_ms": duration_redis })
         });
 
+        // Os demais serviços da stack, sondados pelo PING do transport.
+        //
+        // Antes, esta tela reportava só Postgres e Redis — vistos de dentro do
+        // data_postgres. Um painel que diz "tudo saudável" com o worker morto e o
+        // data_whatsapp travado é pior do que não ter painel: ele encerra a
+        // investigação no lugar errado.
+        //
+        // O `worker` não aparece aqui de propósito: ele não atende ninguém (só
+        // consome do barramento), então não há o que sondar. Quem cuida dele é o
+        // healthcheck de batimento do container, e o estado chega ao alerting
+        // pelo `smartcore_service_up` do watchdog.
+        for (rotulo, servico) in [
+            ("data_redis", "DATA_REDIS"),
+            ("data_storage", "DATA_STORAGE"),
+            ("data_whatsapp", "DATA_WHATSAPP"),
+            ("control_plane", "CONTROL_PLANE"),
+            ("runtime_api", "RUNTIME_API"),
+        ] {
+            let inicio = std::time::Instant::now();
+            let resultado =
+                transport::sondar_servico(servico, std::time::Duration::from_secs(2)).await;
+            let duracao = inicio.elapsed().as_millis() as i64;
+
+            services.push(match resultado {
+                Ok(()) => serde_json::json!({
+                    "service_name": rotulo,
+                    "status": "healthy",
+                    "message": "Respondeu ao ping",
+                    "response_time_ms": duracao,
+                }),
+                Err(e) => serde_json::json!({
+                    "service_name": rotulo,
+                    "status": "unhealthy",
+                    "message": e.to_string(),
+                    "response_time_ms": duracao,
+                }),
+            });
+        }
+
         services
     }
 

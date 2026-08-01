@@ -54,6 +54,20 @@ services:
     image: grafana/grafana:latest
     ports:
       - "3000:3000"
+    environment:
+      # Destino dos alertas. O provisionamento (`provisioning/alerting/
+      # contact-points.yml`) lê estas variáveis; elas precisam SEMPRE existir,
+      # senão o Grafana falha ao provisionar. Os defaults abaixo não entregam
+      # nada — são só para a stack subir. Aponte o webhook para um canal real
+      # (Discord/Slack/n8n) ou configure o SMTP; sem isso as regras disparam e
+      # ninguém fica sabendo.
+      SMARTCORE_ALERTA_WEBHOOK_URL: ${SMARTCORE_ALERTA_WEBHOOK_URL:-http://localhost:9/alerta-nao-configurado}
+      SMARTCORE_ALERTA_EMAIL: ${SMARTCORE_ALERTA_EMAIL:-ops@smartcore.local}
+      GF_SMTP_ENABLED: ${GF_SMTP_ENABLED:-false}
+      GF_SMTP_HOST: ${GF_SMTP_HOST:-}
+      GF_SMTP_USER: ${GF_SMTP_USER:-}
+      GF_SMTP_PASSWORD: ${GF_SMTP_PASSWORD:-}
+      GF_SMTP_FROM_ADDRESS: ${GF_SMTP_FROM_ADDRESS:-}
     volumes:
       - ./provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana

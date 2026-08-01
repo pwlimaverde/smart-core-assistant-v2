@@ -20,6 +20,9 @@ async fn main() -> anyhow::Result<()> {
     // 1. Inicializa observabilidade
     observability::init_telemetry("runtime_api", "production")
         .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+    // Panic em task de background mata so a task: o processo segue vivo e a
+    // funcionalidade some sem deixar rastro. O hook garante o registro estruturado.
+    observability::instalar_hook_de_panic("runtime_api");
     tracing::info!("Iniciando serviço runtime_api...");
 
     // 2. Inicializa chaves JWT — JWT_SECRET é obrigatória (doc 09 §4): sem fallback,
@@ -277,13 +280,21 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    if let Err(e) = server.run().await {
-        tracing::error!(
-            "Servidor RPC da runtime_api parou com erro crítico: {:?}",
-            e
-        );
+    // Ver a nota em `data_redis`: SIGTERM precisa ser tratado, senão todo deploy
+    // mata o processo no meio do que estava em voo.
+    tokio::select! {
+        res = server.run() => {
+            if let Err(e) = res {
+                tracing::error!(
+                    "Servidor RPC da runtime_api parou com erro crítico: {:?}",
+                    e
+                );
+            }
+        }
+        _ = observability::aguardar_sinal_de_parada() => {}
     }
 
+    observability::shutdown_telemetry();
     Ok(())
 }
 

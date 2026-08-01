@@ -1,16 +1,38 @@
 apiVersion: 1
 
-# Contact point básico (N1.4). Placeholder: troque o endereço por um canal real
-# (e-mail de plantão, webhook do Slack/PagerDuty, etc.) antes de depender deste
-# alerta em produção — o objetivo aqui é ter o roteamento provisionado como
-# código, não configurar o canal definitivo de notificação.
+# Para onde os alertas realmente vão.
+#
+# Este arquivo era um placeholder apontando para `ops@smartcore.local` — endereço
+# inexistente e sem SMTP configurado no Grafana. Ou seja: as regras disparavam e
+# a notificação morria ali. Agora os dois canais são parametrizados por variável
+# de ambiente (ver `docker/observability/compose.yml`), então dá para plugar um
+# canal de verdade sem editar YAML.
+#
+# O Grafana expande `$VARIAVEL` nos arquivos de provisionamento. As duas
+# variáveis SEMPRE existem (o compose define defaults), senão o provisionamento
+# falharia na subida.
+#
+# ATENÇÃO: enquanto o webhook apontar para o valor de exemplo e o SMTP não
+# estiver configurado, **nenhum alerta é entregue**. Configurar um dos dois é o
+# que transforma as regras em aviso de verdade.
 contactPoints:
   - orgId: 1
     name: smartcore-default
     receivers:
+      # Webhook é o caminho de menor atrito: Discord, Slack, n8n e afins aceitam
+      # POST com JSON sem depender de servidor de e-mail — que o projeto não tem.
+      - uid: smartcore-default-webhook
+        type: webhook
+        settings:
+          url: $SMARTCORE_ALERTA_WEBHOOK_URL
+          httpMethod: POST
+        disableResolveMessage: false
+
+      # E-mail só entrega se GF_SMTP_ENABLED=true e as credenciais estiverem
+      # preenchidas no compose da observabilidade.
       - uid: smartcore-default-email
         type: email
         settings:
-          addresses: ops@smartcore.local
+          addresses: $SMARTCORE_ALERTA_EMAIL
           singleEmail: true
         disableResolveMessage: false
