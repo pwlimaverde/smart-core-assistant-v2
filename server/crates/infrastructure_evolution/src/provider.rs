@@ -120,6 +120,49 @@ fn parece_uuid(s: &str) -> bool {
 }
 
 impl EvolutionProvider {
+    /// Busca o registro da instância na listagem do provedor.
+    ///
+    /// Best-effort: devolve `None` quando a consulta falha ou o nome não
+    /// aparece. Quem chama trata a ausência como "não sei", nunca como erro.
+    async fn buscar_instancia(&self, instance_name: &str) -> Option<serde_json::Value> {
+        let resp = self
+            .http
+            .get(format!("{}/instance/all", self.base_url))
+            .header("apikey", self.global_api_key.expose_secret())
+            .send()
+            .await
+            .ok()?;
+        if !resp.status().is_success() {
+            return None;
+        }
+        let corpo = Self::json_do_provedor(resp).await.ok()?;
+        corpo
+            .as_array()?
+            .iter()
+            .find(|i| {
+                i.get("name").and_then(|v| v.as_str()) == Some(instance_name)
+                    || i.get("instanceName").and_then(|v| v.as_str()) == Some(instance_name)
+            })
+            .cloned()
+    }
+
+    /// `true` quando existe aparelho vinculado à instância.
+    ///
+    /// O `jid` é o identificador do dispositivo pareado. Ele é o sinal confiável
+    /// de "já conectou": a evolution-go mantém `LoggedIn: false` no
+    /// `/instance/status` mesmo depois de registrar
+    /// "Client successfully validated - Connected: true" no próprio log.
+    async fn tem_aparelho_vinculado(&self, instance_name: &str) -> bool {
+        self.buscar_instancia(instance_name)
+            .await
+            .and_then(|i| {
+                i.get("jid")
+                    .and_then(|v| v.as_str())
+                    .map(|s| !s.trim().is_empty())
+            })
+            .unwrap_or(false)
+    }
+
     /// Traduz o nome da instância no UUID que as rotas com `{instanceId}` na
     /// URL exigem (remoção, configurações avançadas, proxy, forcereconnect).
     ///
@@ -131,30 +174,9 @@ impl EvolutionProvider {
         if parece_uuid(instance_name) {
             return instance_name.to_string();
         }
-
-        let resp = self
-            .http
-            .get(format!("{}/instance/all", self.base_url))
-            .header("apikey", self.global_api_key.expose_secret())
-            .send()
-            .await;
-
-        let corpo = match resp {
-            Ok(r) if r.status().is_success() => Self::json_do_provedor(r).await.ok(),
-            _ => None,
-        };
-
-        corpo
-            .as_ref()
-            .and_then(|c| c.as_array())
-            .and_then(|itens| {
-                itens.iter().find(|i| {
-                    i.get("name").and_then(|v| v.as_str()) == Some(instance_name)
-                        || i.get("instanceName").and_then(|v| v.as_str()) == Some(instance_name)
-                })
-            })
-            .and_then(|i| i.get("id").and_then(|v| v.as_str()))
-            .map(str::to_string)
+        self.buscar_instancia(instance_name)
+            .await
+            .and_then(|i| i.get("id").and_then(|v| v.as_str()).map(str::to_string))
             .unwrap_or_else(|| instance_name.to_string())
     }
 }
@@ -326,8 +348,25 @@ impl InstanceManager for EvolutionProvider {
 
         let resp = Self::ok_or_api(resp).await?;
         let corpo = Self::json_do_provedor(resp).await?;
+        let estado = estado_do_corpo(&corpo);
+        if estado == ConnectionState::Connected {
+            return Ok(estado);
+        }
 
-        Ok(estado_do_corpo(&corpo))
+        // A evolution-go mantém `LoggedIn: false` no `/instance/status` mesmo
+        // depois de anotar "Client successfully validated - Connected: true" no
+        // próprio log. Quem sabe a verdade é o `jid` — o aparelho vinculado.
+        //
+        // Isso não é purismo: enquanto o estado não for `Connected` seguimos
+        // pedindo o QR, e **pedir o QR reinicia o cliente**. Ao fim de cinco
+        // códigos a Evolution força logout ("Maximum QR code count reached (5),
+        // forcing logout") e derruba a sessão recém-pareada — o usuário lia o
+        // código, conectava, e via o QR reaparecer.
+        if self.tem_aparelho_vinculado(instance_name).await {
+            return Ok(ConnectionState::Connected);
+        }
+
+        Ok(estado)
     }
 
     #[tracing::instrument(err, skip(self), fields(provider = "evolution"))]

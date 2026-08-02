@@ -158,6 +158,78 @@ async fn test_delete_instance_sem_listagem_usa_o_nome() {
     assert!(provider.delete_instance("instancia-1").await.is_ok());
 }
 
+/// Depois do pareamento a evolution-go continua dizendo `LoggedIn: false` no
+/// `/instance/status` — mesmo tendo anotado "Client successfully validated" no
+/// proprio log. Quem sabe a verdade e o `jid`.
+///
+/// Nao e detalhe: enquanto o estado nao for `Connected` o handler segue pedindo
+/// o QR, e pedir o QR reinicia o cliente. Ao fim de cinco codigos a Evolution
+/// forca logout e derruba a sessao recem-pareada — o usuario conectava e via o
+/// QR reaparecer.
+#[tokio::test]
+async fn test_status_com_jid_e_tratado_como_conectado() {
+    let (server, provider) = setup().await;
+
+    Mock::given(method("GET"))
+        .and(path("/instance/status"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": { "Connected": true, "LoggedIn": false, "Name": "" },
+            "message": "success"
+        })))
+        .mount(&server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/instance/all"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": [{
+                "id": "47b63c55-ed20-402d-99d4-67a88ef36378",
+                "name": "atendimento",
+                "jid": "558881061874:75@s.whatsapp.net"
+            }],
+            "message": "success"
+        })))
+        .mount(&server)
+        .await;
+
+    let estado = provider
+        .get_connection_state("atendimento", &SecretString::from("tok".to_string()))
+        .await
+        .unwrap();
+    assert_eq!(estado, ConnectionState::Connected);
+}
+
+/// Sem aparelho vinculado, `jid` vazio: segue `Connecting` e o QR continua
+/// sendo pedido — que e o caso de quem ainda nao leu o codigo.
+#[tokio::test]
+async fn test_status_sem_jid_continua_conectando() {
+    let (server, provider) = setup().await;
+
+    Mock::given(method("GET"))
+        .and(path("/instance/status"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": { "Connected": true, "LoggedIn": false },
+            "message": "success"
+        })))
+        .mount(&server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/instance/all"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": [{ "id": "abc", "name": "atendimento", "jid": "" }],
+            "message": "success"
+        })))
+        .mount(&server)
+        .await;
+
+    let estado = provider
+        .get_connection_state("atendimento", &SecretString::from("tok".to_string()))
+        .await
+        .unwrap();
+    assert_eq!(estado, ConnectionState::Connecting);
+}
+
 #[tokio::test]
 async fn test_connect_instance() {
     let (server, provider) = setup().await;
