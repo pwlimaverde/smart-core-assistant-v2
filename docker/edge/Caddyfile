@@ -66,6 +66,20 @@ smartcoreassistant.com.br {
 		reverse_proxy host.docker.internal:{$RUNTIME_WEB_PORT:50052}
 	}
 
+	# gRPC NATIVO (app desktop: Windows/macOS/Linux usam `ClientChannel`, HTTP/2 com
+	# Content-Type `application/grpc`). Precisa de h2c ate o upstream: o Caddy fala
+	# HTTP/1.1 com o backend por padrao, e o `tonic-web` responde HTTP 400 a toda
+	# requisicao HTTP/1.1 que nao seja grpc-web (RequestKind::Other(_) => BAD_REQUEST).
+	# Sem esta rota, o app instalado recebe "HTTP connection completed with 400
+	# instead of 200" em QUALQUER chamada — login, cadastro, tudo.
+	@grpcnativo_prod {
+		header Content-Type application/grpc*
+		not header Content-Type application/grpc-web*
+	}
+	handle @grpcnativo_prod {
+		reverse_proxy h2c://host.docker.internal:{$RUNTIME_WEB_PORT:50052}
+	}
+
 	# v1: painel Django (fallback — tudo que nao bateu acima; app/dados intactos,
 	# so o ingress passou pro Docker).
 	handle {
@@ -114,6 +128,16 @@ dev.smartcoreassistant.com.br {
 			Referrer-Policy "strict-origin-when-cross-origin"
 			-Server
 		}
+	}
+
+	# gRPC NATIVO (app desktop) -> mesmo listener, mas por h2c. Ver comentario no
+	# bloco de producao: sem h2c o `tonic-web` devolve 400 para HTTP/1.1 nao-grpc-web.
+	@grpcnativo_dev {
+		header Content-Type application/grpc*
+		not header Content-Type application/grpc-web*
+	}
+	handle @grpcnativo_dev {
+		reverse_proxy h2c://host.docker.internal:50051
 	}
 
 	# gRPC-Web (HTTP/1.1 plano; SEM h2c) -> runtime_api do v2 dev (admin + tenant).
