@@ -264,9 +264,18 @@ impl SignupStore for PgSignupStore {
             return Ok(());
         }
 
-        // O tenant só existe de verdade a partir daqui. `access_code` é zerado
-        // junto: o token de cadastro cumpriu o papel e não deve sobreviver ao
-        // fluxo que autorizava.
+        // O tenant só existe de verdade a partir daqui.
+        //
+        // O `access_code` NÃO é zerado aqui, e isso é deliberado: ele é o
+        // `signup_token`, e o passo 4 do wizard — o que dá a notícia ao cliente —
+        // acontece DEPOIS da ativação. Zerá-lo junto tornava impossível observar
+        // o próprio sucesso: a consulta de status que veria `active = true` já
+        // chegava sem autorização válida, e a tela ficava em "aguardando a
+        // confirmação do pagamento" para sempre, com a conta ativa. Vale para o
+        // voucher (imediato) e para o gateway (webhook), porque ativação e
+        // anulação estavam na mesma transação. O token morre no fim da
+        // configuração guiada, quando o cliente já entrou com as credenciais
+        // dele — ver `atualizar_progresso_onboarding`.
         //
         // `setup_completed` NÃO é marcado aqui. Pagar cria a conta; quem coloca
         // o sistema para operar é a configuração guiada que vem depois
@@ -275,8 +284,7 @@ impl SignupStore for PgSignupStore {
         // `onboarding_step = 5` aponta para o primeiro passo dele.
         sqlx::query(
             "UPDATE tenants_tenant \
-                SET active = true, onboarding_step = 5, \
-                    access_code = NULL, updated_at = NOW() \
+                SET active = true, onboarding_step = 5, updated_at = NOW() \
               WHERE id = $1",
         )
         .bind(tenant_id)

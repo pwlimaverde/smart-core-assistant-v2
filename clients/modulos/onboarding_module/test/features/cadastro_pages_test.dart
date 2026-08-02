@@ -405,6 +405,61 @@ void main() {
       expect(find.text('Continuar'), findsNothing);
     });
 
+    testWidgets('consulta que so falha para de girar e oferece as saidas', (
+      tester,
+    ) async {
+      // Regressão: a tela repetia a consulta para sempre e tratava erro como
+      // "ainda não confirmou". Quando o `signup_token` deixou de valer logo na
+      // ativação, isso virou uma espera eterna — com a conta já ativa e o
+      // voucher consumido, e sem nada na tela dizendo o que houve.
+      sessao
+        ..registrarInicio(tenantId: 't-1', signupToken: 'TOK')
+        ..registrarCredenciais(email: 'a@b.com', senha: 'senhaforte8');
+      when(() => client.getSignupStatus(any())).thenAnswer(
+        (_) => falhaGrpc(
+          proto.GrpcError.permissionDenied('cadastro não encontrado ou já concluído'),
+        ),
+      );
+      registrar();
+      await montar(tester, const CadastroProntoPage());
+      await tester.pump();
+
+      // Enquanto há tentativas pela frente, segue esperando: com gateway, a
+      // confirmação chega por webhook e uma falha isolada não é notícia.
+      expect(find.textContaining('Aguardando a confirmação'), findsOneWidget);
+
+      // Passado o limite, a tela precisa se explicar e dar caminho.
+      await tester.pump(const Duration(minutes: 3));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Não conseguimos confirmar'), findsOneWidget);
+      expect(find.text('Continuar de onde parei'), findsOneWidget);
+      expect(find.text('Cancelar e sair'), findsOneWidget);
+      expect(find.text('Verificar de novo'), findsOneWidget);
+    });
+
+    testWidgets('"continuar de onde parei" entra mesmo com a consulta quebrada', (
+      tester,
+    ) async {
+      // O status é só um informante: as credenciais existem e a conta pode
+      // estar pronta. Esta é a saída que tira o cliente do limbo.
+      sessao
+        ..registrarInicio(tenantId: 't-1', signupToken: 'TOK')
+        ..registrarCredenciais(email: 'a@b.com', senha: 'senhaforte8');
+      when(() => client.getSignupStatus(any())).thenAnswer(
+        (_) => falhaGrpc(proto.GrpcError.permissionDenied('token morto')),
+      );
+      registrar();
+      await montar(tester, const CadastroProntoPage());
+      await tester.pump(const Duration(minutes: 3));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Continuar de onde parei'));
+      await tester.pumpAndSettle();
+
+      // Entrou: saiu do wizard para a configuração guiada.
+      expect(find.textContaining('Não conseguimos confirmar'), findsNothing);
+    });
   });
 
   group('slugSugerido', () {

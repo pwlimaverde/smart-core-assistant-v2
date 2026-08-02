@@ -139,10 +139,17 @@ impl TenantStore for PgTenantStore {
         // `GREATEST` para o passo nunca andar para trás: o tenant pode voltar
         // uma tela para revisar o que preencheu, e isso não pode fazer o
         // progresso regredir na próxima abertura do app.
+        //
+        // A conclusão zera o `access_code` — o `signup_token` do wizard. Este é
+        // o ponto certo para aposentá-lo: aqui o cliente já entrou com as
+        // credenciais próprias, então o token de cadastro não autoriza mais
+        // nada que a sessão não autorize melhor. Fazê-lo antes (na ativação da
+        // assinatura) travava o passo 4 do cadastro.
         let res = sqlx::query(
             "UPDATE tenants_tenant \
                 SET onboarding_step = GREATEST(onboarding_step, $1), \
                     setup_completed = setup_completed OR $2, \
+                    access_code = CASE WHEN $2 THEN NULL ELSE access_code END, \
                     updated_at = NOW() \
               WHERE id = $3",
         )
