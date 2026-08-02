@@ -461,6 +461,77 @@ void main() {
       // `max_resgates = 0` é ilimitado — a tela precisa dizer isso, e não "0".
       expect(find.textContaining('ilimitado'), findsOneWidget);
     });
+
+    testWidgets('editar e salvar um plano fecha a janela', (tester) async {
+      // Regressão: o diálogo de edição era aberto com o `BuildContext` do item
+      // do ListView. Salvar recarrega a lista e desmonta esse item, então o
+      // `context.mounted` de depois do await era falso e o `Navigator.pop`
+      // nunca rodava — o plano era gravado e a janela ficava aberta, sem erro
+      // visível.
+      // Com atraso, e não `respostaGrpc`: uma resposta que resolve na microtask
+      // seguinte faz `LoadingState` e `SuccessState` caírem no mesmo frame, e a
+      // lista nunca chega a ser desmontada — o teste passaria mesmo com o bug.
+      // O que reproduz a condição real é a latência da rede.
+      when(() => client.listPlans(any())).thenAnswer(
+        (_) => FakeResponseFuture(
+          Future.delayed(
+            const Duration(milliseconds: 50),
+            () => proto.ListPlansResponse(
+              plans: [
+                proto.Plan(
+                  id: 1,
+                  name: 'Plano Pro',
+                  description: 'd',
+                  price: '199.90',
+                  maxInstances: 3,
+                  maxDepartments: 5,
+                  maxFluxos: 7,
+                  active: true,
+                  createdAt: ms(DateTime(2026, 1, 1)),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      when(
+        () => client.listSubscriptions(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.ListSubscriptionsResponse()));
+      when(
+        () => client.listPayments(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.ListPaymentsResponse()));
+      when(
+        () => client.listVouchers(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.ListVouchersResponse()));
+      when(() => client.updatePlan(any())).thenAnswer(
+        (_) => respostaGrpc(proto.UpdatePlanResponse(success: true)),
+      );
+      registrar();
+
+      await montar(tester, const BillingPage());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.edit));
+      await tester.pumpAndSettle();
+      expect(find.text('Editar Plano'), findsOneWidget);
+
+      await tester.tap(find.text('Salvar'));
+      await tester.pump();
+      await tester.pump();
+
+      // A recarga troca a lista por um indicador de carregamento: é aqui que o
+      // item do ListView — e o context que abriu o diálogo — deixa de existir.
+      // Esta asserção fixa o mecanismo do bug, não só o sintoma.
+      expect(find.byIcon(Icons.edit), findsNothing);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Editar Plano'), findsNothing);
+      // O limite de fluxos precisa ir junto: o servidor grava o que recebe.
+      final enviado =
+          verify(() => client.updatePlan(captureAny())).captured.single
+              as proto.UpdatePlanRequest;
+      expect(enviado.maxFluxos, 7);
+    });
   });
 
   group('FeatureFlagsPage', () {

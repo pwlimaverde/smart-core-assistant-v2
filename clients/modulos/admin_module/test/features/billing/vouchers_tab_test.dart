@@ -122,6 +122,7 @@ void main() {
     price: '',
     maxInstances: 3,
     maxDepartments: 3,
+    maxFluxos: 5,
     active: true,
     createdAt: DateTime(2026, 1, 1),
   );

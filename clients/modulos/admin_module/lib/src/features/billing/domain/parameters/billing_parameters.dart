@@ -11,6 +11,7 @@ final class CreatePlanParameters extends Parameters {
   final String price;
   final int maxInstances;
   final int maxDepartments;
+  final int maxFluxos;
 
   const CreatePlanParameters({
     required this.name,
@@ -18,6 +19,7 @@ final class CreatePlanParameters extends Parameters {
     required this.price,
     required this.maxInstances,
     required this.maxDepartments,
+    required this.maxFluxos,
   });
 }
 
@@ -29,6 +31,7 @@ final class UpdatePlanParameters extends Parameters {
   final String price;
   final int maxInstances;
   final int maxDepartments;
+  final int maxFluxos;
   final bool active;
 
   const UpdatePlanParameters({
@@ -38,6 +41,7 @@ final class UpdatePlanParameters extends Parameters {
     required this.price,
     required this.maxInstances,
     required this.maxDepartments,
+    required this.maxFluxos,
     required this.active,
   });
 }

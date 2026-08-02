@@ -341,6 +341,7 @@ void main() {
           price: '199.90',
           maxInstances: 3,
           maxDepartments: 5,
+          maxFluxos: 7,
         ),
       );
 
@@ -447,6 +448,7 @@ void main() {
         price: '1',
         maxInstances: 1,
         maxDepartments: 1,
+        maxFluxos: 1,
       );
 
       expect(r, isA<Success>());
@@ -468,6 +470,7 @@ void main() {
         price: '1',
         maxInstances: 1,
         maxDepartments: 1,
+        maxFluxos: 1,
         active: false,
       );
 

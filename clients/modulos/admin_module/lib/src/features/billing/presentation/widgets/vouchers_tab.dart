@@ -237,6 +237,12 @@ Future<void> _abrirCriacao(
 
   if (criar != true || !context.mounted) return;
 
+  // O messenger é resolvido ANTES do await: criar um voucher recarrega a lista,
+  // e este `context` é o da linha do `ListView` — desmontado na recarga. Ler o
+  // `ScaffoldMessenger` depois do await deixaria o superusuário sem retorno
+  // nenhum, nem de sucesso nem de erro.
+  final messenger = ScaffoldMessenger.of(context);
+
   final res = await controller.createVoucher(
     codigo: codigo.text.trim(),
     descricao: descricao.text.trim(),
@@ -244,9 +250,8 @@ Future<void> _abrirCriacao(
     duracaoDias: int.tryParse(duracao.text.trim()) ?? 0,
     maxResgates: int.tryParse(maxResgates.text.trim()) ?? 1,
   );
-  if (!context.mounted) return;
 
-  ScaffoldMessenger.of(context).showSnackBar(
+  messenger.showSnackBar(
     SnackBar(
       content: Text(
         switch (res) {
@@ -311,13 +316,16 @@ Future<void> _abrirRevogacao(
 
   if (confirmar != true || !context.mounted) return;
 
+  // Mesmo motivo de `_abrirCriacao`: a revogação recarrega a lista e desmonta
+  // a linha que abriu o diálogo.
+  final messenger = ScaffoldMessenger.of(context);
+
   final res = await controller.revokeVoucher(
     voucherId: voucher.id,
     motivo: motivo.text.trim(),
   );
-  if (!context.mounted) return;
 
-  ScaffoldMessenger.of(context).showSnackBar(
+  messenger.showSnackBar(
     SnackBar(
       content: Text(
         switch (res) {

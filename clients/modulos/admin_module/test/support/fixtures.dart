@@ -67,6 +67,7 @@ Plan planFixture({int id = 1, bool active = true}) => Plan(
   price: '199.90',
   maxInstances: 5,
   maxDepartments: 10,
+  maxFluxos: 5,
   active: active,
   createdAt: DateTime(2026, 1, 1),
 );

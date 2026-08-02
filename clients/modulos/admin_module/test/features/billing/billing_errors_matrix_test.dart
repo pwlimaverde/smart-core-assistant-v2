@@ -261,6 +261,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
         ),
       );
 
@@ -291,6 +292,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
         ),
       );
 
@@ -321,6 +323,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
         ),
       );
 
@@ -350,6 +353,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
         ),
       );
 
@@ -379,6 +383,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
         ),
       );
 
@@ -409,6 +414,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
         ),
       );
 
@@ -439,6 +445,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
         ),
       );
 
@@ -469,6 +476,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
         ),
       );
 
@@ -499,6 +507,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
         ),
       );
 
@@ -529,6 +538,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
         ),
       );
 
@@ -562,6 +572,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
           active: true,
         ),
       );
@@ -594,6 +605,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
           active: true,
         ),
       );
@@ -626,6 +638,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
           active: true,
         ),
       );
@@ -657,6 +670,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
           active: true,
         ),
       );
@@ -688,6 +702,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
           active: true,
         ),
       );
@@ -720,6 +735,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
           active: true,
         ),
       );
@@ -752,6 +768,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
           active: true,
         ),
       );
@@ -784,6 +801,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
           active: true,
         ),
       );
@@ -816,6 +834,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
           active: true,
         ),
       );
@@ -848,6 +867,7 @@ void main() {
           price: '10',
           maxInstances: 1,
           maxDepartments: 2,
+          maxFluxos: 3,
           active: true,
         ),
       );

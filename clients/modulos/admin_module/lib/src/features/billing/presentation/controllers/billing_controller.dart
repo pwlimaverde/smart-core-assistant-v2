@@ -111,6 +111,7 @@ final class BillingController extends BaseController<BillingState> {
     required String price,
     required int maxInstances,
     required int maxDepartments,
+    required int maxFluxos,
   }) async {
     final res = await _createPlanUsecase(
       CreatePlanParameters(
@@ -119,6 +120,7 @@ final class BillingController extends BaseController<BillingState> {
         price: price,
         maxInstances: maxInstances,
         maxDepartments: maxDepartments,
+        maxFluxos: maxFluxos,
       ),
     );
     if (res is Success) {
@@ -134,6 +136,7 @@ final class BillingController extends BaseController<BillingState> {
     required String price,
     required int maxInstances,
     required int maxDepartments,
+    required int maxFluxos,
     required bool active,
   }) async {
     final res = await _updatePlanUsecase(
@@ -144,6 +147,7 @@ final class BillingController extends BaseController<BillingState> {
         price: price,
         maxInstances: maxInstances,
         maxDepartments: maxDepartments,
+        maxFluxos: maxFluxos,
         active: active,
       ),
     );

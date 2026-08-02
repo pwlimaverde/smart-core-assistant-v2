@@ -193,6 +193,7 @@ void main() {
             price: '299.00',
             maxInstances: 5,
             maxDepartments: 10,
+            maxFluxos: 5,
             active: false,
           ),
         );
@@ -204,6 +205,9 @@ void main() {
     expect(enviado.id, 7);
     expect(enviado.active, isFalse);
     expect(enviado.maxDepartments, 10);
+    // Regressão: o `UpdatePlan` grava o valor recebido, e a ausência deste
+    // campo no cliente zerava `max_fluxos` a cada edição feita pelo painel.
+    expect(enviado.maxFluxos, 5);
   });
 
   test('setFeatureFlag conclui em Unit', () async {

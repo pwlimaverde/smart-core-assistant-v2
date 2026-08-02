@@ -49,6 +49,7 @@ void main() {
             price: '1',
             maxInstances: 1,
             maxDepartments: 1,
+            maxFluxos: 1,
           ),
         );
 
@@ -71,6 +72,7 @@ void main() {
             price: '1',
             maxInstances: 1,
             maxDepartments: 1,
+            maxFluxos: 1,
             active: true,
           ),
         );

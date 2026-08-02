@@ -162,7 +162,10 @@ class _BillingPageState extends State<BillingPage>
               : ListView.separated(
                   itemCount: plans.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  itemBuilder: (context, index) {
+                  // O context do item NÃO é usado para abrir diálogos: ele é
+                  // desmontado quando a lista recarrega, e um `context.mounted`
+                  // falso depois do await engoliria o fechamento da janela.
+                  itemBuilder: (itemContext, index) {
                     final plan = plans[index];
                     return AppCard(
                       padding: const EdgeInsets.all(16),
@@ -244,6 +247,11 @@ class _BillingPageState extends State<BillingPage>
                                     _buildFeatureBadge(
                                       'Departamentos Max: ${plan.maxDepartments}',
                                       Icons.business,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    _buildFeatureBadge(
+                                      'Fluxos Max: ${plan.maxFluxos}',
+                                      Icons.account_tree_outlined,
                                     ),
                                   ],
                                 ),
@@ -537,6 +545,16 @@ class _BillingPageState extends State<BillingPage>
     return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
   }
 
+  /// Diálogo de criação/edição de plano.
+  ///
+  /// Duas decisões vieram de um bug real (a janela de edição não fechava):
+  ///
+  ///  - o fechamento usa o `Navigator` do **próprio diálogo**, não um
+  ///    `context.mounted` da árvore de fora — salvar recarrega a lista, e o
+  ///    context que abriu a janela pode já ter sido desmontado quando o `await`
+  ///    retorna;
+  ///  - o erro é renderizado **dentro** do diálogo. Um `SnackBar` fica atrás do
+  ///    barrier modal: o usuário via a janela travada e nenhuma explicação.
   void _showPlanDialog(BuildContext context, [Plan? plan]) {
     final nameController = TextEditingController(text: plan?.name);
     final descController = TextEditingController(text: plan?.description);
@@ -547,8 +565,13 @@ class _BillingPageState extends State<BillingPage>
     final departmentsController = TextEditingController(
       text: plan != null ? '${plan.maxDepartments}' : '',
     );
+    final fluxosController = TextEditingController(
+      text: plan != null ? '${plan.maxFluxos}' : '',
+    );
     bool active = plan?.active ?? true;
     final isNew = plan == null;
+    String? erro;
+    bool salvando = false;
 
     showDialog(
       context: context,
@@ -596,12 +619,41 @@ class _BillingPageState extends State<BillingPage>
                         keyboardType: TextInputType.number,
                       ),
                       const SizedBox(height: 16),
+                      AppTextField(
+                        label: 'Fluxos de Atendimento Máximos',
+                        hint: 'ex: 5',
+                        controller: fluxosController,
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 16),
                       CheckboxListTile(
                         title: const Text('Plano Ativo para Novas Assinaturas'),
                         value: active,
                         onChanged: (val) =>
                             setStateDialog(() => active = val ?? false),
                       ),
+                      if (erro != null) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              size: 18,
+                              color: Theme.of(stateCtx).colorScheme.error,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                erro!,
+                                style: TextStyle(
+                                  color: Theme.of(stateCtx).colorScheme.error,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -612,78 +664,90 @@ class _BillingPageState extends State<BillingPage>
                   child: const Text('Cancelar'),
                 ),
                 PrimaryButton(
-                  label: 'Salvar',
+                  label: salvando ? 'Salvando...' : 'Salvar',
                   expand: false,
-                  onPressed: () async {
-                    final name = nameController.text.trim();
-                    final desc = descController.text.trim();
-                    final price = priceController.text.trim();
-                    final instStr = instancesController.text.trim();
-                    final deptStr = departmentsController.text.trim();
+                  onPressed: salvando
+                      ? null
+                      : () async {
+                          final name = nameController.text.trim();
+                          final desc = descController.text.trim();
+                          final price = priceController.text.trim();
+                          final instStr = instancesController.text.trim();
+                          final deptStr = departmentsController.text.trim();
+                          final fluxStr = fluxosController.text.trim();
 
-                    if (name.isEmpty ||
-                        desc.isEmpty ||
-                        price.isEmpty ||
-                        instStr.isEmpty ||
-                        deptStr.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Por favor, preencha todos os campos.'),
-                        ),
-                      );
-                      return;
-                    }
+                          if (name.isEmpty ||
+                              desc.isEmpty ||
+                              price.isEmpty ||
+                              instStr.isEmpty ||
+                              deptStr.isEmpty ||
+                              fluxStr.isEmpty) {
+                            setStateDialog(
+                              () => erro = 'Preencha todos os campos.',
+                            );
+                            return;
+                          }
 
-                    final instances = int.tryParse(instStr);
-                    final departments = int.tryParse(deptStr);
+                          final instances = int.tryParse(instStr);
+                          final departments = int.tryParse(deptStr);
+                          final fluxos = int.tryParse(fluxStr);
 
-                    if (instances == null || departments == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text(
-                            'Instâncias e Departamentos devem ser inteiros.',
-                          ),
-                        ),
-                      );
-                      return;
-                    }
+                          if (instances == null ||
+                              departments == null ||
+                              fluxos == null) {
+                            setStateDialog(
+                              () => erro =
+                                  'Instâncias, departamentos e fluxos devem '
+                                  'ser números inteiros.',
+                            );
+                            return;
+                          }
 
-                    final ReturnSuccessOrError res;
-                    if (isNew) {
-                      res = await _controller.createPlan(
-                        name: name,
-                        description: desc,
-                        price: price,
-                        maxInstances: instances,
-                        maxDepartments: departments,
-                      );
-                    } else {
-                      res = await _controller.updatePlan(
-                        id: plan.id,
-                        name: name,
-                        description: desc,
-                        price: price,
-                        maxInstances: instances,
-                        maxDepartments: departments,
-                        active: active,
-                      );
-                    }
+                          // O Navigator é resolvido ANTES do await: depois dele
+                          // a lista já recarregou e o context de origem pode
+                          // não existir mais.
+                          final navigator = Navigator.of(dialogContext);
+                          setStateDialog(() {
+                            salvando = true;
+                            erro = null;
+                          });
 
-                    if (context.mounted) {
-                      if (res case Failure(:final error)) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Erro ao salvar: '
-                              '${ErrorMessageMapper.map(error)}',
-                            ),
-                          ),
-                        );
-                      } else {
-                        Navigator.pop(dialogContext);
-                      }
-                    }
-                  },
+                          final ReturnSuccessOrError res;
+                          if (isNew) {
+                            res = await _controller.createPlan(
+                              name: name,
+                              description: desc,
+                              price: price,
+                              maxInstances: instances,
+                              maxDepartments: departments,
+                              maxFluxos: fluxos,
+                            );
+                          } else {
+                            res = await _controller.updatePlan(
+                              id: plan.id,
+                              name: name,
+                              description: desc,
+                              price: price,
+                              maxInstances: instances,
+                              maxDepartments: departments,
+                              maxFluxos: fluxos,
+                              active: active,
+                            );
+                          }
+
+                          if (res case Failure(:final error)) {
+                            if (stateCtx.mounted) {
+                              setStateDialog(() {
+                                salvando = false;
+                                erro =
+                                    'Erro ao salvar: '
+                                    '${ErrorMessageMapper.map(error)}';
+                              });
+                            }
+                            return;
+                          }
+                          navigator.pop();
+                        },
                 ),
               ],
             );

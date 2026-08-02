@@ -29,6 +29,7 @@ final class ListPlansDatasource implements Datasource<List<Plan>, NoParams> {
             price: p.price,
             maxInstances: p.maxInstances,
             maxDepartments: p.maxDepartments,
+            maxFluxos: p.maxFluxos,
             active: p.active,
             createdAt: DateTime.fromMillisecondsSinceEpoch(p.createdAt.toInt()),
           ),
@@ -53,6 +54,7 @@ final class CreatePlanDatasource
         price: parameters.price,
         maxInstances: parameters.maxInstances,
         maxDepartments: parameters.maxDepartments,
+        maxFluxos: parameters.maxFluxos,
       ),
     );
     final p = resp.plan;
@@ -63,6 +65,7 @@ final class CreatePlanDatasource
       price: p.price,
       maxInstances: p.maxInstances,
       maxDepartments: p.maxDepartments,
+      maxFluxos: p.maxFluxos,
       active: p.active,
       createdAt: DateTime.fromMillisecondsSinceEpoch(p.createdAt.toInt()),
     );
@@ -86,6 +89,7 @@ final class UpdatePlanDatasource
         price: parameters.price,
         maxInstances: parameters.maxInstances,
         maxDepartments: parameters.maxDepartments,
+        maxFluxos: parameters.maxFluxos,
         active: parameters.active,
       ),
     );
