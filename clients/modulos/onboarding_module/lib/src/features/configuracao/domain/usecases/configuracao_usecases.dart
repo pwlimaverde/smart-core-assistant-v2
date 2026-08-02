@@ -87,3 +87,16 @@ final class ProgressoUsecase extends UsecaseBaseCallData<ProgressoOnboarding,
   ConfiguracaoError onUnexpected(Object e, StackTrace s) =>
       _inesperado('registrar progresso', e, s);
 }
+
+final class ConsultarProgressoUsecase extends UsecaseBaseCallData<
+    ProgressoOnboarding, ProgressoOnboarding, NoParams, ConfiguracaoError> {
+  const ConsultarProgressoUsecase({required super.repository});
+
+  @override
+  ProcessData<ProgressoOnboarding, ProgressoOnboarding, NoParams,
+      ConfiguracaoError> get process => (data, _) => Success(data);
+
+  @override
+  ConfiguracaoError onUnexpected(Object e, StackTrace s) =>
+      _inesperado('consultar progresso', e, s);
+}

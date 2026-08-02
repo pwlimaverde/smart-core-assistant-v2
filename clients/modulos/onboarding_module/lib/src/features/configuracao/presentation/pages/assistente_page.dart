@@ -2,6 +2,7 @@ import 'package:dependencies_module/dependencies_module.dart';
 
 import '../../../cadastro/presentation/widgets/cadastro_shell.dart';
 import '../controllers/configuracao_controllers.dart';
+import '../widgets/sair_do_roteiro.dart';
 
 /// Passo 7 — como o assistente se apresenta.
 ///
@@ -79,6 +80,7 @@ class _AssistentePageState extends State<AssistentePage> {
       titulo: 'Seu assistente',
       subtitulo: 'Como ele se apresenta e responde aos seus clientes.',
       aoVoltar: () => context.go('/configuracao/departamento'),
+      aoSair: () => sairDoRoteiro(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

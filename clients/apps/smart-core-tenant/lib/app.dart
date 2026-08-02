@@ -1,5 +1,9 @@
+import 'dart:async';
+
 import 'package:dependencies_module/dependencies_module.dart';
 import 'package:login_module/login_module.dart' as login;
+import 'package:onboarding_module/onboarding_module.dart'
+    show PortaoConfiguracao;
 
 import 'auth_redirect.dart';
 
@@ -22,9 +26,12 @@ class SmartCoreTenantApp extends StatelessWidget {
       initialLocation: '/',
       routes: collectRoutes(modules),
       // Reavalia o guard quando o boot conclui OU a autenticação muda.
+      // O portão entra aqui porque o guard depende dele: quando a consulta do
+      // progresso responde, a rota precisa ser reavaliada.
       refreshListenable: Listenable.merge([
         inject<BootState>(),
         inject<login.AuthService>().authChanges,
+        inject<PortaoConfiguracao>(),
       ]),
       redirect: _authRedirect,
     ).build();
@@ -46,12 +53,28 @@ class SmartCoreTenantApp extends StatelessWidget {
   /// estado injetado).
   static String? _authRedirect(BuildContext context, GoRouterState state) {
     final auth = inject<login.AuthService>();
+    final portao = inject<PortaoConfiguracao>();
+    final ehTenant = auth.isAuthenticated &&
+        !(auth.currentSession?.isSuperuser ?? false);
+
+    // Dispara a consulta do progresso na primeira navegação com sessão de
+    // tenant; o `PortaoConfiguracao` ignora chamadas repetidas e notifica o
+    // router quando a resposta chega. Sem sessão, esquece o que sabia — a
+    // próxima pode ser de outro tenant.
+    if (ehTenant) {
+      unawaited(portao.avaliar());
+    } else if (portao.pendente != null) {
+      portao.limpar();
+    }
+
     return tenantAuthRedirectTarget(
       booted: inject<BootState>().value,
       isAuthenticated: auth.isAuthenticated,
       isSuperuser: auth.currentSession?.isSuperuser ?? false,
       scopes: auth.currentSession?.scopes ?? const [],
       location: state.matchedLocation,
+      onboardingPendente: portao.pendente,
+      onboardingPasso: portao.passo,
     );
   }
 }

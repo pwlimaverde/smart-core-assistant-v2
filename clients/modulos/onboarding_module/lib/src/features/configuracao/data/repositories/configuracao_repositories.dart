@@ -90,3 +90,12 @@ final class ProgressoRepository extends RepositoryBase<ProgressoOnboarding,
   ConfiguracaoError mapError(Object e, StackTrace s, ProgressoParameters p) =>
       _traduzir(e, 'registrar progresso');
 }
+
+final class ConsultarProgressoRepository
+    extends RepositoryBase<ProgressoOnboarding, NoParams, ConfiguracaoError> {
+  const ConsultarProgressoRepository({required super.datasource});
+
+  @override
+  ConfiguracaoError mapError(Object e, StackTrace s, NoParams p) =>
+      _traduzir(e, 'consultar progresso');
+}

@@ -98,7 +98,8 @@ void main() {
             isAuthenticated: true,
             isSuperuser: false,
             scopes: const ['atendimentos:read'],
-            location: '/login'),
+            location: '/login',
+            onboardingPendente: false),
         '/atendimentos',
       );
       expect(
@@ -107,7 +108,8 @@ void main() {
             isAuthenticated: true,
             isSuperuser: false,
             scopes: const ['atendimentos:read'],
-            location: '/'),
+            location: '/',
+            onboardingPendente: false),
         '/atendimentos',
       );
     });
@@ -119,7 +121,8 @@ void main() {
             isAuthenticated: true,
             isSuperuser: false,
             scopes: const ['atendimentos:read'],
-            location: '/tenant/usuarios'),
+            location: '/tenant/usuarios',
+            onboardingPendente: false),
         '/atendimentos',
       );
     });
@@ -131,7 +134,8 @@ void main() {
             isAuthenticated: true,
             isSuperuser: false,
             scopes: const ['tenant:admin'],
-            location: '/tenant/usuarios'),
+            location: '/tenant/usuarios',
+            onboardingPendente: false),
         isNull,
       );
     });
@@ -143,9 +147,88 @@ void main() {
             isAuthenticated: true,
             isSuperuser: false,
             scopes: const ['atendimentos:read'],
-            location: '/atendimentos'),
+            location: '/atendimentos',
+            onboardingPendente: false),
         isNull,
       );
+    });
+
+    group('configuração inicial pendente', () {
+      // Regressão: quem fechava o app no meio do roteiro reabria em
+      // '/atendimentos' — tela vazia, sem WhatsApp e sem caminho de volta.
+      // A conta ficava paga e inutilizável.
+      test('leva para o passo gravado em vez do workspace', () {
+        expect(
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: true,
+            isSuperuser: false,
+            scopes: const ['tenant:admin'],
+            location: '/atendimentos',
+            onboardingPendente: true,
+            onboardingPasso: 6,
+          ),
+          '/configuracao/departamento',
+        );
+      });
+
+      test('não interfere quando já se está no roteiro', () {
+        expect(
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: true,
+            isSuperuser: false,
+            scopes: const ['tenant:admin'],
+            location: '/configuracao/whatsapp',
+            onboardingPendente: true,
+            onboardingPasso: 5,
+          ),
+          isNull,
+        );
+      });
+
+      test('enquanto a consulta não responde, segura na splash', () {
+        // Mandar para o workspace e corrigir depois faria a tela piscar.
+        expect(
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: true,
+            isSuperuser: false,
+            scopes: const ['tenant:admin'],
+            location: '/atendimentos',
+            onboardingPendente: null,
+          ),
+          '/',
+        );
+      });
+
+      test('roteiro concluído segue para o workspace', () {
+        expect(
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: true,
+            isSuperuser: false,
+            scopes: const ['tenant:admin'],
+            location: '/login',
+            onboardingPendente: false,
+          ),
+          '/atendimentos',
+        );
+      });
+
+      test('deslogado no roteiro volta ao login (a saída do roteiro)', () {
+        expect(
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: false,
+            isSuperuser: false,
+            scopes: const [],
+            location: '/configuracao/whatsapp',
+            onboardingPendente: true,
+          ),
+          '/login',
+        );
+      });
     });
   });
 }

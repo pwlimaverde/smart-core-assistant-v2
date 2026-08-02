@@ -7,6 +7,7 @@ import 'package:dependencies_module/dependencies_module.dart';
 import '../../../cadastro/presentation/widgets/cadastro_shell.dart';
 import '../../domain/model/configuracao_models.dart';
 import '../controllers/configuracao_controllers.dart';
+import '../widgets/sair_do_roteiro.dart';
 
 /// Passo 5 — conectar o WhatsApp.
 ///
@@ -90,6 +91,7 @@ class _ConexaoWhatsappPageState extends State<ConexaoWhatsappPage> {
       rotulos: rotulosConfiguracao,
       titulo: 'Conectar o WhatsApp',
       subtitulo: 'É por aqui que as mensagens dos seus clientes chegam.',
+      aoSair: () => sairDoRoteiro(context),
       child: BlocBuilder<ConexaoController, ViewState<EstadoConexao>>(
         bloc: _controller,
         builder: (context, state) {

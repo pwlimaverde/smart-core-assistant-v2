@@ -5,4 +5,7 @@
 library;
 
 export 'src/onboarding_module.dart' show OnboardingModule;
-export 'src/rota_publica.dart' show ehRotaDeCadastro;
+export 'src/rota_publica.dart'
+    show ehRotaDeCadastro, ehRotaDeConfiguracao, rotaDeConfiguracaoDoPasso;
+export 'src/features/configuracao/domain/services/portao_configuracao.dart'
+    show PortaoConfiguracao;

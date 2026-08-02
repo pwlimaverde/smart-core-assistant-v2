@@ -1038,6 +1038,7 @@ fn registrar_rotas_onboarding(server: Server, state: AppState) -> Server {
     let s_ativar = state.clone();
     let s_status = state.clone();
     let s_progresso = state.clone();
+    let s_progresso_get = state.clone();
     let s_criar_v = state.clone();
     let s_listar_v = state.clone();
     let s_revogar_v = state.clone();
@@ -1111,6 +1112,12 @@ fn registrar_rotas_onboarding(server: Server, state: AppState) -> Server {
                     env,
                 )
                 .await
+            })
+        })
+        .route("GetOnboardingProgress", move |env| {
+            let state = s_progresso_get.clone();
+            Box::pin(async move {
+                onboarding::handler_get_onboarding_progress(state.tenant.as_ref(), env).await
             })
         })
         .route("CreateVoucher", move |env| {

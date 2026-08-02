@@ -161,6 +161,26 @@ impl TenantStore for PgTenantStore {
         Ok(res.rows_affected() > 0)
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %tenant_id))]
+    async fn obter_progresso_onboarding(
+        &self,
+        tenant_id: Uuid,
+    ) -> Result<Option<(i32, bool)>, DbError> {
+        let row = sqlx::query(
+            "SELECT onboarding_step, setup_completed FROM tenants_tenant WHERE id = $1",
+        )
+        .bind(tenant_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(|r| {
+            (
+                r.get::<i32, _>("onboarding_step"),
+                r.get::<bool, _>("setup_completed"),
+            )
+        }))
+    }
+
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, email = %email))]
     async fn criar_convite(
         &self,

@@ -714,6 +714,20 @@ message SetOnboardingProgressResponse {
   bool concluido = 2;
 }
 
+// Lê o progresso gravado — a contraparte que faltava do `SetOnboardingProgress`.
+//
+// Sem ela o progresso era gravado e nunca lido: quem fechava o app no meio da
+// configuração reabria direto no workspace vazio, sem caminho de volta ao
+// roteiro, com a conta paga e inutilizável.
+message GetMyOnboardingProgressRequest {}
+
+message GetMyOnboardingProgressResponse {
+  // 5..8 enquanto o roteiro corre. 0 = nunca registrou nada.
+  int32 passo = 1;
+  // true = terminou (ou pulou o que faltava); o app vai para o workspace.
+  bool concluido = 2;
+}
+
 // N3.3: config do PRÓPRIO tenant (tenant_id vem das claims, não do request).
 // Reaproveita GetTenantConfigResponse/UpdateTenantConfigResponse. As api_keys já
 // vêm mascaradas do data_postgres (`••••••••`), igual ao caminho do superusuário.
@@ -813,6 +827,7 @@ service AdminService {
   rpc CreateMyDepartamento(CreateMyDepartamentoRequest) returns (CreateMyDepartamentoResponse);
   rpc SetMyBotPersona(SetMyBotPersonaRequest) returns (SetMyBotPersonaResponse);
   rpc SetOnboardingProgress(SetOnboardingProgressRequest) returns (SetOnboardingProgressResponse);
+  rpc GetMyOnboardingProgress(GetMyOnboardingProgressRequest) returns (GetMyOnboardingProgressResponse);
 }
 
 message StreamAtendimentosRequest {}

@@ -61,6 +61,15 @@ pub trait TenantStore: Send + Sync {
         concluido: bool,
     ) -> Result<bool, DbError>;
 
+    /// Lê o progresso gravado: `(passo, concluido)`.
+    ///
+    /// A contraparte de leitura existe para que reabrir o app volte ao roteiro
+    /// de onde parou — sem ela o progresso era gravado e nunca consultado.
+    async fn obter_progresso_onboarding(
+        &self,
+        tenant_id: Uuid,
+    ) -> Result<Option<(i32, bool)>, DbError>;
+
     /// Cria um convite para o tenant, já com as permissões (`module_permissions` =
     /// escopos; `flow_permissions` = ids de fluxo) que o convidado receberá no aceite.
     #[allow(clippy::too_many_arguments)]

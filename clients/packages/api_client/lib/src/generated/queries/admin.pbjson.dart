@@ -2117,6 +2117,30 @@ final $typed_data.Uint8List setOnboardingProgressResponseDescriptor =
         'Ch1TZXRPbmJvYXJkaW5nUHJvZ3Jlc3NSZXNwb25zZRIUCgVwYXNzbxgBIAEoBVIFcGFzc28SHA'
         'oJY29uY2x1aWRvGAIgASgIUgljb25jbHVpZG8=');
 
+@$core.Deprecated('Use getMyOnboardingProgressRequestDescriptor instead')
+const GetMyOnboardingProgressRequest$json = {
+  '1': 'GetMyOnboardingProgressRequest',
+};
+
+/// Descriptor for `GetMyOnboardingProgressRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getMyOnboardingProgressRequestDescriptor =
+    $convert.base64Decode('Ch5HZXRNeU9uYm9hcmRpbmdQcm9ncmVzc1JlcXVlc3Q=');
+
+@$core.Deprecated('Use getMyOnboardingProgressResponseDescriptor instead')
+const GetMyOnboardingProgressResponse$json = {
+  '1': 'GetMyOnboardingProgressResponse',
+  '2': [
+    {'1': 'passo', '3': 1, '4': 1, '5': 5, '10': 'passo'},
+    {'1': 'concluido', '3': 2, '4': 1, '5': 8, '10': 'concluido'},
+  ],
+};
+
+/// Descriptor for `GetMyOnboardingProgressResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getMyOnboardingProgressResponseDescriptor =
+    $convert.base64Decode(
+        'Ch9HZXRNeU9uYm9hcmRpbmdQcm9ncmVzc1Jlc3BvbnNlEhQKBXBhc3NvGAEgASgFUgVwYXNzbx'
+        'IcCgljb25jbHVpZG8YAiABKAhSCWNvbmNsdWlkbw==');
+
 @$core.Deprecated('Use getMyTenantConfigRequestDescriptor instead')
 const GetMyTenantConfigRequest$json = {
   '1': 'GetMyTenantConfigRequest',

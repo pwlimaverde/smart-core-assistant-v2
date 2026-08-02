@@ -541,6 +541,40 @@ pub async fn handler_set_onboarding_progress(
     }
 }
 
+/// Devolve até onde o tenant chegou na configuração guiada.
+///
+/// Roda **com sessão**, como o `SetOnboardingProgress`: o `tenant_id` vem do
+/// envelope, preenchido pela borda a partir das claims.
+///
+/// É a leitura que faltava. O progresso era gravado e nunca consultado, então
+/// quem fechava o app no meio do roteiro reabria no workspace vazio — conta
+/// paga, nada configurado e nenhum caminho de volta.
+#[tracing::instrument(skip_all, fields(rpc = "GetOnboardingProgress", tenant_id = %env.tenant_id))]
+pub async fn handler_get_onboarding_progress(
+    store: &dyn ports::TenantStore,
+    env: Envelope,
+) -> Envelope {
+    let Ok(tenant_id) = Uuid::parse_str(&env.tenant_id) else {
+        return erro(
+            error_core::AppError::Validation("tenant_id inválido".into()),
+            &env,
+        );
+    };
+
+    match store.obter_progresso_onboarding(tenant_id).await {
+        Ok(Some((passo, concluido))) => ok_reply(
+            &env,
+            "GetOnboardingProgressReply",
+            serde_json::json!({ "passo": passo, "concluido": concluido }),
+        ),
+        Ok(None) => erro(
+            error_core::AppError::Validation("tenant não encontrado".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Gestão de vouchers (superusuário)
 // ---------------------------------------------------------------------------

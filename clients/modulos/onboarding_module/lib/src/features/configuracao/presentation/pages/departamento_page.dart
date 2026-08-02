@@ -2,6 +2,7 @@ import 'package:dependencies_module/dependencies_module.dart';
 
 import '../../../cadastro/presentation/widgets/cadastro_shell.dart';
 import '../controllers/configuracao_controllers.dart';
+import '../widgets/sair_do_roteiro.dart';
 
 /// Passo 6 — o primeiro setor de atendimento.
 ///
@@ -67,6 +68,7 @@ class _DepartamentoPageState extends State<DepartamentoPage> {
       titulo: 'Primeiro setor',
       subtitulo: 'Para onde as conversas vão quando chegam.',
       aoVoltar: () => context.go('/configuracao/whatsapp'),
+      aoSair: () => sairDoRoteiro(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [

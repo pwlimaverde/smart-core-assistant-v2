@@ -80,6 +80,25 @@ final class DefinirPersonaDatasource
   }
 }
 
+/// Lê o progresso gravado no servidor.
+///
+/// É o que permite reabrir o app e voltar ao roteiro de onde parou: o progresso
+/// vive no servidor justamente para sobreviver ao fechamento do programa.
+final class ConsultarProgressoDatasource
+    implements Datasource<ProgressoOnboarding, NoParams> {
+  final AdminServiceClient _client;
+
+  const ConsultarProgressoDatasource({required this._client});
+
+  @override
+  Future<ProgressoOnboarding> call(NoParams parameters) async {
+    final resp = await _client.getMyOnboardingProgress(
+      GetMyOnboardingProgressRequest(),
+    );
+    return ProgressoOnboarding(passo: resp.passo, concluido: resp.concluido);
+  }
+}
+
 final class ProgressoDatasource
     implements Datasource<ProgressoOnboarding, ProgressoParameters> {
   final AdminServiceClient _client;

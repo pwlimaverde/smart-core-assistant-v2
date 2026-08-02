@@ -9,6 +9,7 @@ import 'features/cadastro/presentation/routes/cadastro_routes.dart';
 import 'features/configuracao/data/datasources/configuracao_datasources.dart';
 import 'features/configuracao/data/repositories/configuracao_repositories.dart';
 import 'features/configuracao/domain/usecases/configuracao_usecases.dart';
+import 'features/configuracao/domain/services/portao_configuracao.dart';
 import 'features/configuracao/presentation/routes/configuracao_routes.dart';
 
 /// Wizard de entrada do tenant: criar a conta e deixar o sistema operando.
@@ -114,6 +115,18 @@ final class OnboardingModule extends AppModule {
           datasource: ProgressoDatasource(client: _admin()),
         ),
       ),
+    );
+    i.lazySingleton<ConsultarProgressoUsecase>(
+      () => ConsultarProgressoUsecase(
+        repository: ConsultarProgressoRepository(
+          datasource: ConsultarProgressoDatasource(client: _admin()),
+        ),
+      ),
+    );
+    // Singleton de verdade (não lazy): o guard de rota o consulta a cada
+    // navegação e precisa da MESMA instância que respondeu à consulta.
+    i.lazySingleton<PortaoConfiguracao>(
+      () => PortaoConfiguracao(consultar: inject<ConsultarProgressoUsecase>()),
     );
   }
 

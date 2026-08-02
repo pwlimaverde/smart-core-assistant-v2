@@ -1,4 +1,5 @@
-import 'package:onboarding_module/onboarding_module.dart' show ehRotaDeCadastro;
+import 'package:onboarding_module/onboarding_module.dart'
+    show ehRotaDeCadastro, ehRotaDeConfiguracao, rotaDeConfiguracaoDoPasso;
 
 /// Decisão pura do guard de rota (boot + autenticação + persona de tenant),
 /// isolada de qualquer dependência de UI/DI/transporte para ser testável na VM:
@@ -23,6 +24,10 @@ String? tenantAuthRedirectTarget({
   required bool isSuperuser,
   required List<String> scopes,
   required String location,
+  // `null` = ainda não se sabe se a configuração inicial terminou. Ver
+  // `PortaoConfiguracao`: o guard é síncrono e a verdade está no servidor.
+  bool? onboardingPendente,
+  int onboardingPasso = 5,
 }) {
   if (!booted) return location == '/' ? null : '/';
 
@@ -33,6 +38,20 @@ String? tenantAuthRedirectTarget({
   if (!isAuthenticated || isSuperuser) {
     return rotaPublica ? null : '/login';
   }
+
+  // Configuração inicial inacabada tem precedência sobre o workspace.
+  //
+  // Sem isto, quem fechava o app no meio do roteiro reabria em '/atendimentos'
+  // — tela vazia, sem WhatsApp conectado e sem caminho de volta: a conta ficava
+  // paga e inutilizável. O progresso vive no servidor exatamente para
+  // sobreviver ao fechamento do programa.
+  if (!ehRotaDeConfiguracao(location)) {
+    // Enquanto a consulta não responde, segura na splash: mandar para o
+    // workspace e corrigir depois faria a tela piscar.
+    if (onboardingPendente == null) return location == '/' ? null : '/';
+    if (onboardingPendente) return rotaDeConfiguracaoDoPasso(onboardingPasso);
+  }
+
   if (location == '/login' || location == '/' || location == '/home') {
     return '/atendimentos';
   }

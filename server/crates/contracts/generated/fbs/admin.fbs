@@ -659,6 +659,14 @@ table SetOnboardingProgressResponse {
   concluido:bool;
 }
 
+table GetMyOnboardingProgressRequest {
+}
+
+table GetMyOnboardingProgressResponse {
+  passo:int;
+  concluido:bool;
+}
+
 table GetMyTenantConfigRequest {
 }
 

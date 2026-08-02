@@ -27,6 +27,14 @@ final class CadastroShell extends StatelessWidget {
   /// Ação de voltar; `null` esconde o botão (primeiro e último passo).
   final VoidCallback? aoVoltar;
 
+  /// Saída do roteiro; `null` esconde o botão.
+  ///
+  /// Existe para que ninguém fique preso numa etapa que não consegue concluir
+  /// — um provedor fora do ar, um código que não chega. Sair não desfaz o que
+  /// já foi feito: o progresso está gravado no servidor e o roteiro recomeça de
+  /// onde parou no próximo login.
+  final VoidCallback? aoSair;
+
   const CadastroShell({
     super.key,
     required this.passo,
@@ -35,6 +43,7 @@ final class CadastroShell extends StatelessWidget {
     required this.child,
     this.rotulos = rotulosCadastro,
     this.aoVoltar,
+    this.aoSair,
   });
 
   @override
@@ -75,6 +84,16 @@ final class CadastroShell extends StatelessWidget {
                         onPressed: aoVoltar,
                         icon: const Icon(Icons.arrow_back, size: 16),
                         label: const Text('Voltar'),
+                      ),
+                    ),
+                  ],
+                  if (aoSair != null) ...[
+                    SizedBox(height: aoVoltar == null ? AppSpacing.md : 0),
+                    Align(
+                      child: TextButton.icon(
+                        onPressed: aoSair,
+                        icon: const Icon(Icons.logout, size: 16),
+                        label: const Text('Sair e continuar depois'),
                       ),
                     ),
                   ],

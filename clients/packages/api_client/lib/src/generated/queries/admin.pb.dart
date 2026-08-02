@@ -8638,6 +8638,126 @@ class SetOnboardingProgressResponse extends $pb.GeneratedMessage {
   void clearConcluido() => $_clearField(2);
 }
 
+/// Lê o progresso gravado — a contraparte que faltava do `SetOnboardingProgress`.
+///
+/// Sem ela o progresso era gravado e nunca lido: quem fechava o app no meio da
+/// configuração reabria direto no workspace vazio, sem caminho de volta ao
+/// roteiro, com a conta paga e inutilizável.
+class GetMyOnboardingProgressRequest extends $pb.GeneratedMessage {
+  factory GetMyOnboardingProgressRequest() => create();
+
+  GetMyOnboardingProgressRequest._();
+
+  factory GetMyOnboardingProgressRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GetMyOnboardingProgressRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetMyOnboardingProgressRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyOnboardingProgressRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyOnboardingProgressRequest copyWith(
+          void Function(GetMyOnboardingProgressRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as GetMyOnboardingProgressRequest))
+          as GetMyOnboardingProgressRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GetMyOnboardingProgressRequest create() =>
+      GetMyOnboardingProgressRequest._();
+  @$core.override
+  GetMyOnboardingProgressRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GetMyOnboardingProgressRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetMyOnboardingProgressRequest>(create);
+  static GetMyOnboardingProgressRequest? _defaultInstance;
+}
+
+class GetMyOnboardingProgressResponse extends $pb.GeneratedMessage {
+  factory GetMyOnboardingProgressResponse({
+    $core.int? passo,
+    $core.bool? concluido,
+  }) {
+    final result = create();
+    if (passo != null) result.passo = passo;
+    if (concluido != null) result.concluido = concluido;
+    return result;
+  }
+
+  GetMyOnboardingProgressResponse._();
+
+  factory GetMyOnboardingProgressResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GetMyOnboardingProgressResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetMyOnboardingProgressResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'passo')
+    ..aOB(2, _omitFieldNames ? '' : 'concluido')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyOnboardingProgressResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyOnboardingProgressResponse copyWith(
+          void Function(GetMyOnboardingProgressResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as GetMyOnboardingProgressResponse))
+          as GetMyOnboardingProgressResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GetMyOnboardingProgressResponse create() =>
+      GetMyOnboardingProgressResponse._();
+  @$core.override
+  GetMyOnboardingProgressResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GetMyOnboardingProgressResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetMyOnboardingProgressResponse>(
+          create);
+  static GetMyOnboardingProgressResponse? _defaultInstance;
+
+  /// 5..8 enquanto o roteiro corre. 0 = nunca registrou nada.
+  @$pb.TagNumber(1)
+  $core.int get passo => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set passo($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasPasso() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearPasso() => $_clearField(1);
+
+  /// true = terminou (ou pulou o que faltava); o app vai para o workspace.
+  @$pb.TagNumber(2)
+  $core.bool get concluido => $_getBF(1);
+  @$pb.TagNumber(2)
+  set concluido($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasConcluido() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearConcluido() => $_clearField(2);
+}
+
 /// N3.3: config do PRÓPRIO tenant (tenant_id vem das claims, não do request).
 /// Reaproveita GetTenantConfigResponse/UpdateTenantConfigResponse. As api_keys já
 /// vêm mascaradas do data_postgres (`••••••••`), igual ao caminho do superusuário.

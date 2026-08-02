@@ -388,6 +388,15 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$setOnboardingProgress, request, options: options);
   }
 
+  $grpc.ResponseFuture<$0.GetMyOnboardingProgressResponse>
+      getMyOnboardingProgress(
+    $0.GetMyOnboardingProgressRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$getMyOnboardingProgress, request,
+        options: options);
+  }
+
   // method descriptors
 
   static final _$listCoreSettings = $grpc.ClientMethod<
@@ -628,6 +637,12 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/SetOnboardingProgress',
       ($0.SetOnboardingProgressRequest value) => value.writeToBuffer(),
       $0.SetOnboardingProgressResponse.fromBuffer);
+  static final _$getMyOnboardingProgress = $grpc.ClientMethod<
+          $0.GetMyOnboardingProgressRequest,
+          $0.GetMyOnboardingProgressResponse>(
+      '/smartcore.contracts.queries.AdminService/GetMyOnboardingProgress',
+      ($0.GetMyOnboardingProgressRequest value) => value.writeToBuffer(),
+      $0.GetMyOnboardingProgressResponse.fromBuffer);
 }
 
 @$pb.GrpcServiceName('smartcore.contracts.queries.AdminService')
@@ -1049,6 +1064,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.SetOnboardingProgressRequest.fromBuffer(value),
         ($0.SetOnboardingProgressResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.GetMyOnboardingProgressRequest,
+            $0.GetMyOnboardingProgressResponse>(
+        'GetMyOnboardingProgress',
+        getMyOnboardingProgress_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.GetMyOnboardingProgressRequest.fromBuffer(value),
+        ($0.GetMyOnboardingProgressResponse value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.ListCoreSettingsResponse> listCoreSettings_Pre(
@@ -1467,4 +1491,13 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.SetOnboardingProgressResponse> setOnboardingProgress(
       $grpc.ServiceCall call, $0.SetOnboardingProgressRequest request);
+
+  $async.Future<$0.GetMyOnboardingProgressResponse> getMyOnboardingProgress_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.GetMyOnboardingProgressRequest> $request) async {
+    return getMyOnboardingProgress($call, await $request);
+  }
+
+  $async.Future<$0.GetMyOnboardingProgressResponse> getMyOnboardingProgress(
+      $grpc.ServiceCall call, $0.GetMyOnboardingProgressRequest request);
 }

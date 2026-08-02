@@ -47,6 +47,8 @@ use contracts::grpc::queries::{
     GenerateAccessCodeResponse,
     GetDashboardSummaryRequest,
     GetDashboardSummaryResponse,
+    GetMyOnboardingProgressRequest,
+    GetMyOnboardingProgressResponse,
     GetMyTenantConfigRequest,
     GetMyWhatsappInstanceStatusRequest,
     GetMyWhatsappInstanceStatusResponse,
@@ -2364,6 +2366,35 @@ impl AdminService for AdminFacade {
             .await?;
 
         Ok(Response::new(SetOnboardingProgressResponse {
+            passo: corpo.get("passo").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+            concluido: corpo
+                .get("concluido")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        }))
+    }
+
+    /// Lê o progresso da configuração guiada do próprio tenant.
+    ///
+    /// É o que permite reabrir o app e voltar ao roteiro de onde parou.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "GetMyOnboardingProgress", traceparent)
+    )]
+    async fn get_my_onboarding_progress(
+        &self,
+        req: Request<GetMyOnboardingProgressRequest>,
+    ) -> Result<Response<GetMyOnboardingProgressResponse>, Status> {
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "GetOnboardingProgress",
+                serde_json::json!({}),
+            )
+            .await?;
+
+        Ok(Response::new(GetMyOnboardingProgressResponse {
             passo: corpo.get("passo").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
             concluido: corpo
                 .get("concluido")
