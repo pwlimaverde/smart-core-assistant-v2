@@ -93,7 +93,10 @@ class _CoreSettingsPageState extends State<CoreSettingsPage> {
     return ListView.separated(
       itemCount: settings.length,
       separatorBuilder: (_, _) => const SizedBox(height: 12),
-      itemBuilder: (context, index) {
+      // O context do item NÃO abre diálogos: ele é desmontado quando a lista
+      // recarrega, e o `context.mounted` de depois do await engoliria tanto o
+      // fechamento da janela quanto a mensagem de erro.
+      itemBuilder: (itemContext, index) {
         final setting = settings[index];
         return AppCard(
           padding: const EdgeInsets.all(16),
@@ -282,6 +285,12 @@ class _CoreSettingsPageState extends State<CoreSettingsPage> {
                       return;
                     }
 
+                    // Resolvidos ANTES do await: salvar recarrega a lista, e o
+                    // context que abriu o diálogo pode já ter sido desmontado
+                    // quando a resposta chega.
+                    final navigator = Navigator.of(dialogContext);
+                    final messenger = ScaffoldMessenger.of(context);
+
                     final res = await _controller.upsertSetting(
                       key: key,
                       value: value,
@@ -289,24 +298,18 @@ class _CoreSettingsPageState extends State<CoreSettingsPage> {
                       description: description,
                     );
 
-                    if (context.mounted) {
-                      Navigator.pop(dialogContext);
-                      if (res case Failure(:final error)) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
+                    navigator.pop();
+                    messenger.showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          switch (res) {
+                            Failure(:final error) =>
                               'Erro ao salvar: ${ErrorMessageMapper.map(error)}',
-                            ),
-                          ),
-                        );
-                      } else {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Configuração salva com sucesso.'),
-                          ),
-                        );
-                      }
-                    }
+                            _ => 'Configuração salva com sucesso.',
+                          },
+                        ),
+                      ),
+                    );
                   },
                 ),
               ],
@@ -331,25 +334,24 @@ class _CoreSettingsPageState extends State<CoreSettingsPage> {
             ),
             ElevatedButton(
               onPressed: () async {
+                // Mesmo motivo do diálogo de edição: excluir recarrega a
+                // lista e desmonta a linha que abriu esta janela.
+                final navigator = Navigator.of(dialogContext);
+                final messenger = ScaffoldMessenger.of(context);
+
                 final res = await _controller.deleteSetting(key);
-                if (context.mounted) {
-                  Navigator.pop(dialogContext);
-                  if (res case Failure(:final error)) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
+                navigator.pop();
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      switch (res) {
+                        Failure(:final error) =>
                           'Erro ao excluir: ${ErrorMessageMapper.map(error)}',
-                        ),
-                      ),
-                    );
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Configuração excluída com sucesso.'),
-                      ),
-                    );
-                  }
-                }
+                        _ => 'Configuração excluída com sucesso.',
+                      },
+                    ),
+                  ),
+                );
               },
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
               child: const Text(
