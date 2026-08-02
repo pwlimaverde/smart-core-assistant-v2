@@ -668,9 +668,15 @@ async fn handler_get_whatsapp_instance_status(state: AppState, env: Envelope) ->
     )
     .await;
 
-    // 2. Se desconectado ou unknown, tenta obter o QR code
+    // 2. Enquanto não estiver pareado, busca o QR.
+    //
+    // A condição era `Disconnected || Unknown`, o que deixava justamente
+    // `Connecting` de fora — e `Connecting` é O estado da espera pelo
+    // pareamento: socket de pé no provedor, sessão ainda não autenticada,
+    // QR na tela aguardando leitura. A tela de conexão ficava girando sem
+    // nunca receber o código.
     let mut qr_code = None;
-    if prov_state == ConnectionState::Disconnected || prov_state == ConnectionState::Unknown {
+    if prov_state != ConnectionState::Connected {
         if let Ok(qr) = p.get_qr_code(name, &api_key_sec).await {
             qr_code = Some(qr);
         }
@@ -680,7 +686,13 @@ async fn handler_get_whatsapp_instance_status(state: AppState, env: Envelope) ->
         &env,
         "GetWhatsappInstanceStatusReply",
         serde_json::json!({
+            // Duas chaves para o mesmo valor, de propósito: o `control_plane`
+            // lê `status` e a fachada gRPC-Web lê `connection_state`. Só
+            // `status` existia, então a borda caía no default e o cliente
+            // recebia "unknown" para sempre — a tela nunca via `connected` e
+            // não avançava nem depois do pareamento.
             "status": state_str,
+            "connection_state": state_str,
             "qr_code": qr_code,
         }),
     )
@@ -1992,6 +2004,61 @@ mod tests {
             res_payload.get("status").unwrap().as_str().unwrap(),
             "connected"
         );
+
+        pg_handle.abort();
+    }
+
+    /// Regressao dupla da tela de conexao do WhatsApp.
+    ///
+    /// A evolution-go responde o pareamento pendente como
+    /// `{"Connected": true, "LoggedIn": false}` — socket de pe, sessao ainda
+    /// nao autenticada, ou seja `Connecting`. A condicao do QR era
+    /// `Disconnected || Unknown` e deixava justamente esse estado de fora: a
+    /// tela ficava girando sem nunca receber o codigo. E o reply so trazia
+    /// `status`, enquanto a fachada gRPC-Web le `connection_state` — o cliente
+    /// recebia "unknown" para sempre e nao avancava nem depois de parear.
+    #[tokio::test]
+    async fn test_status_pendente_devolve_qr_e_as_duas_chaves() {
+        let (server, state, pg_handle) = setup_test_env().await;
+
+        Mock::given(method("GET"))
+            .and(path("/instance/status"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": { "Connected": true, "LoggedIn": false, "Name": "" },
+                "message": "success"
+            })))
+            .mount(&server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/instance/qr"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {
+                    "qrcode": "data:image/png;base64,iVBORw0KG",
+                    "code": "https://wa.me/settings/linked_devices#2@abc"
+                },
+                "message": "success"
+            })))
+            .mount(&server)
+            .await;
+
+        let env = Envelope {
+            kind: MessageKind::Request as i32,
+            method: "GetWhatsappInstanceStatus".to_string(),
+            tenant_id: "00000000-0000-0000-0000-000000000001".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({ "id": 42 })).unwrap(),
+            ..Default::default()
+        };
+
+        let res = handler_get_whatsapp_instance_status(state, env).await;
+        assert_eq!(res.kind, MessageKind::Reply as i32);
+        let corpo: serde_json::Value = serde_json::from_slice(&res.payload).unwrap();
+
+        assert_eq!(corpo["status"], "connecting");
+        // A fachada gRPC-Web le esta chave; sem ela o cliente via "unknown".
+        assert_eq!(corpo["connection_state"], "connecting");
+        // E a IMAGEM, nao o link: a tela desenha com `Image.memory`.
+        assert_eq!(corpo["qr_code"], "data:image/png;base64,iVBORw0KG");
 
         pg_handle.abort();
     }

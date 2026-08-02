@@ -120,14 +120,14 @@ fn parece_uuid(s: &str) -> bool {
 }
 
 impl EvolutionProvider {
-    /// Traduz o nome da instância no identificador que a remoção aceita.
+    /// Traduz o nome da instância no UUID que as rotas com `{instanceId}` na
+    /// URL exigem (remoção, configurações avançadas, proxy, forcereconnect).
     ///
     /// Best-effort de propósito: se a consulta falhar ou o nome não aparecer na
-    /// lista, devolve o que recebeu. Quem chama já está num caminho de erro
-    /// (rollback do create, ou remoção explícita) e uma falha aqui não deve
-    /// virar uma segunda falha — no pior caso a remoção não acontece, que é
-    /// exatamente o comportamento anterior.
-    async fn identificador_para_remocao(&self, instance_name: &str) -> String {
+    /// lista, devolve o que recebeu — que é o identificador aceito pela
+    /// Evolution v2. Uma falha aqui não deve virar uma segunda falha; no pior
+    /// caso a operação não acontece, exatamente como antes.
+    async fn resolver_id_da_instancia(&self, instance_name: &str) -> String {
         if parece_uuid(instance_name) {
             return instance_name.to_string();
         }
@@ -209,7 +209,7 @@ impl InstanceManager for EvolutionProvider {
         // o rollback do `create_instance` falhar em silêncio e deixar a
         // instância órfã no provedor — com o nome ocupado para a próxima
         // tentativa de quem está conectando o WhatsApp.
-        let alvo = self.identificador_para_remocao(instance_name).await;
+        let alvo = self.resolver_id_da_instancia(instance_name).await;
 
         let resp = self
             .http
@@ -741,11 +741,17 @@ impl AdvancedSettingsControl for EvolutionProvider {
             "ignoreStatus": settings.ignore_status,
         });
 
+        // Mesma armadilha do `delete_instance`: a rota traz `{instanceId}` e a
+        // evolution-go quer o UUID ali, não o nome — com o nome responde 500
+        // ("invalid UUID format"). O erro era engolido como aviso, então as
+        // configurações simplesmente não eram aplicadas, em silêncio.
+        let alvo = self.resolver_id_da_instancia(instance_id).await;
+
         let resp = self
             .http
             .put(format!(
                 "{}/instance/{}/advanced-settings",
-                self.base_url, instance_id
+                self.base_url, alvo
             ))
             .header("apikey", token.expose_secret())
             .json(&body)
