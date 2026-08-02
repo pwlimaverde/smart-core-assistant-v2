@@ -112,19 +112,6 @@ pub(crate) fn desembrulhar(v: serde_json::Value) -> serde_json::Value {
 }
 
 #[derive(Deserialize, Debug)]
-pub(crate) struct QrCodeInner {
-    pub(crate) code: Option<String>,
-    pub(crate) base64: Option<String>,
-}
-
-#[derive(Deserialize, Debug)]
-pub(crate) struct QrCodeResp {
-    pub(crate) code: Option<String>,
-    pub(crate) base64: Option<String>,
-    pub(crate) qrcode: Option<QrCodeInner>,
-}
-
-#[derive(Deserialize, Debug)]
 pub(crate) struct MessageKey {
     pub(crate) id: String,
 }

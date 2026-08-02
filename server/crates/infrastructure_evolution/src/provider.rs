@@ -1,6 +1,4 @@
-use crate::client::{
-    AvatarResp, DownloadMediaResp, EvolutionProvider, QrCodeResp, SendMessageResp,
-};
+use crate::client::{AvatarResp, DownloadMediaResp, EvolutionProvider, SendMessageResp};
 use async_trait::async_trait;
 use infrastructure_messaging::{
     AdvancedSettings, AdvancedSettingsControl, ConnectionState, CreateInstanceResult,
@@ -84,6 +82,35 @@ fn estado_do_corpo(corpo: &serde_json::Value) -> ConnectionState {
         (false, true) => ConnectionState::Connecting,
         (false, false) => ConnectionState::Disconnected,
     }
+}
+
+/// Extrai o QR da resposta, **preferindo a imagem** ao texto.
+///
+/// A tela de conexão exibe a imagem (`Image.memory` sobre o base64); ela não
+/// desenha um QR a partir do texto. Por isso a ordem importa: a evolution-go
+/// 0.7.2 devolve os dois — `qrcode` com a imagem pronta
+/// (`data:image/png;base64,…`) e `code` com o link `wa.me/settings/…` do
+/// pareamento. Devolver o `code` primeiro, como antes, entregaria à tela um
+/// texto que ela tentaria decodificar como imagem.
+///
+/// Formatos aceitos:
+///   evolution-go: `{"qrcode": "data:image/png;base64,…", "code": "https://wa.me/…"}`
+///   Evolution v2: `{"base64": "…"}` ou `{"qrcode": {"base64": "…", "code": "…"}}`
+fn qr_do_corpo(corpo: &serde_json::Value) -> Option<String> {
+    let texto = |v: Option<&serde_json::Value>| {
+        v.and_then(|x| x.as_str())
+            .filter(|s| !s.is_empty())
+            .map(str::to_string)
+    };
+
+    let qrcode = corpo.get("qrcode");
+    // 1. imagem, onde quer que ela esteja
+    texto(qrcode.filter(|v| v.is_string()))
+        .or_else(|| texto(corpo.get("base64")))
+        .or_else(|| texto(qrcode.and_then(|q| q.get("base64"))))
+        // 2. só então o texto do pareamento
+        .or_else(|| texto(corpo.get("code")))
+        .or_else(|| texto(qrcode.and_then(|q| q.get("code"))))
 }
 
 /// `true` quando o texto tem cara de UUID — o suficiente para decidir se ainda
@@ -275,27 +302,12 @@ impl InstanceManager for EvolutionProvider {
 
         let resp = Self::ok_or_api(resp).await?;
         let corpo = Self::json_do_provedor(resp).await?;
-        let parsed: QrCodeResp = serde_json::from_value(corpo)
-            .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
 
-        if let Some(code) = parsed.code {
-            return Ok(code);
-        }
-        if let Some(base64) = parsed.base64 {
-            return Ok(base64);
-        }
-        if let Some(qr) = parsed.qrcode {
-            if let Some(code) = qr.code {
-                return Ok(code);
-            }
-            if let Some(base64) = qr.base64 {
-                return Ok(base64);
-            }
-        }
-
-        Err(MessagingProviderError::Deserialization(
-            "Não foi possível extrair o QR code da resposta".into(),
-        ))
+        qr_do_corpo(&corpo).ok_or_else(|| {
+            MessagingProviderError::Deserialization(
+                "Não foi possível extrair o QR code da resposta".into(),
+            )
+        })
     }
 
     #[tracing::instrument(err, skip(self, instance_token), fields(provider = "evolution", instance_name = %instance_name))]
@@ -891,5 +903,44 @@ mod tests {
             v,
             serde_json::json!({ "data": "base64...", "mimetype": "image/png" })
         );
+    }
+
+    #[test]
+    fn qr_da_evolution_go_devolve_a_imagem_nao_o_link() {
+        // Capturado da 0.7.2: os dois campos vem juntos, e a tela so sabe exibir
+        // a imagem. Devolver o `code` daria a ela um link para decodificar como
+        // PNG.
+        let corpo = serde_json::json!({
+            "qrcode": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg",
+            "code": "https://wa.me/settings/linked_devices#2@ZKKW4qIwIwBvaGPh9gIq"
+        });
+        assert_eq!(
+            qr_do_corpo(&corpo).unwrap(),
+            "data:image/png;base64,iVBORw0KGgoAAAANSUhEUg"
+        );
+    }
+
+    #[test]
+    fn qr_da_evolution_v2_nos_dois_formatos() {
+        let raiz = serde_json::json!({ "base64": "iVBORw0KG" });
+        assert_eq!(qr_do_corpo(&raiz).unwrap(), "iVBORw0KG");
+
+        let aninhado = serde_json::json!({
+            "qrcode": { "base64": "iVBORw0KG", "code": "2@abc" }
+        });
+        assert_eq!(qr_do_corpo(&aninhado).unwrap(), "iVBORw0KG");
+    }
+
+    #[test]
+    fn qr_cai_para_o_texto_so_quando_nao_ha_imagem() {
+        let so_texto = serde_json::json!({ "code": "2@abc" });
+        assert_eq!(qr_do_corpo(&so_texto).unwrap(), "2@abc");
+    }
+
+    #[test]
+    fn qr_ausente_ou_vazio_nao_vira_string_vazia() {
+        // String vazia chegaria a tela como imagem invalida, sem dizer por que.
+        assert!(qr_do_corpo(&serde_json::json!({ "qrcode": "", "code": "" })).is_none());
+        assert!(qr_do_corpo(&serde_json::json!({})).is_none());
     }
 }
