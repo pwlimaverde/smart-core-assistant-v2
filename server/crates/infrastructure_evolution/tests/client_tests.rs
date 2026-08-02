@@ -89,6 +89,75 @@ async fn test_delete_instance() {
     assert!(res.is_ok());
 }
 
+/// A `evolution-go` remove por UUID e responde 500 ("invalid UUID format")
+/// quando recebe o nome. Sem traduzir, o rollback do `create_instance` falhava
+/// em silencio e deixava a instancia orfa no provedor — com o nome ocupado para
+/// a proxima tentativa de quem estava conectando o WhatsApp.
+#[tokio::test]
+async fn test_delete_instance_traduz_nome_para_uuid() {
+    let (server, provider) = setup().await;
+    let uuid = "47b63c55-ed20-402d-99d4-67a88ef36378";
+
+    Mock::given(method("GET"))
+        .and(path("/instance/all"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": [
+                { "id": "outra-id", "name": "outra" },
+                { "id": uuid, "name": "atendimento" }
+            ],
+            "message": "success"
+        })))
+        .mount(&server)
+        .await;
+
+    Mock::given(method("DELETE"))
+        .and(path(format!("/instance/delete/{uuid}")))
+        .and(header("apikey", "global-key"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+
+    // So passa se a remocao tiver ido pela URL com UUID: o mock do DELETE por
+    // nome nao existe.
+    assert!(provider.delete_instance("atendimento").await.is_ok());
+}
+
+/// Ja recebendo UUID, nada a traduzir — e nenhuma consulta a mais.
+#[tokio::test]
+async fn test_delete_instance_com_uuid_nao_consulta_a_lista() {
+    let (server, provider) = setup().await;
+    let uuid = "47b63c55-ed20-402d-99d4-67a88ef36378";
+
+    Mock::given(method("DELETE"))
+        .and(path(format!("/instance/delete/{uuid}")))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+
+    assert!(provider.delete_instance(uuid).await.is_ok());
+}
+
+/// Provedor que nao responde a listagem nao pode transformar um caminho de erro
+/// em dois: cai para o nome, que e o comportamento da Evolution v2.
+#[tokio::test]
+async fn test_delete_instance_sem_listagem_usa_o_nome() {
+    let (server, provider) = setup().await;
+
+    Mock::given(method("GET"))
+        .and(path("/instance/all"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&server)
+        .await;
+
+    Mock::given(method("DELETE"))
+        .and(path("/instance/delete/instancia-1"))
+        .respond_with(ResponseTemplate::new(200))
+        .mount(&server)
+        .await;
+
+    assert!(provider.delete_instance("instancia-1").await.is_ok());
+}
+
 #[tokio::test]
 async fn test_connect_instance() {
     let (server, provider) = setup().await;

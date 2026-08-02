@@ -1,6 +1,5 @@
 use crate::client::{
-    AvatarResp, ConnStateResp, CreateInstanceResp, DownloadMediaResp, EvolutionProvider,
-    QrCodeResp, SendMessageResp,
+    AvatarResp, DownloadMediaResp, EvolutionProvider, QrCodeResp, SendMessageResp,
 };
 use async_trait::async_trait;
 use infrastructure_messaging::{
@@ -18,6 +17,118 @@ fn map_state(s: &str) -> ConnectionState {
         "close" | "disconnected" | "loggedOut" => ConnectionState::Disconnected,
         "connecting" => ConnectionState::Connecting,
         _ => ConnectionState::Unknown,
+    }
+}
+
+/// Nome e token da instância recém-criada, nas duas formas que o provedor usa.
+///
+/// Quando esta função roda a instância JÁ existe do lado do provedor — por isso
+/// ela não falha: um formato inesperado deixaria uma instância órfã lá e um
+/// "erro inesperado" na tela de quem está conectando o WhatsApp.
+///
+///   evolution-go: `{"id":…, "name":…, "token":…}` (já desembrulhado de `data`)
+///   Evolution v2: `{"instance":{"instanceName":…}, "hash":{"apikey":…}}`
+fn identidade_da_instancia(
+    corpo: &serde_json::Value,
+    nome_pedido: &str,
+    token_gerado: String,
+) -> (String, String) {
+    let interno = corpo.get("instance").unwrap_or(corpo);
+    let nome = interno
+        .get("instanceName")
+        .or_else(|| interno.get("name"))
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+        // O nome que pedimos é a última defesa: é com ele que o provedor acabou
+        // de criar a instância, e por ele que as chamadas seguintes a encontram.
+        .unwrap_or_else(|| nome_pedido.to_string());
+
+    let token = corpo
+        .get("token")
+        .or_else(|| interno.get("token"))
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+        .or_else(|| {
+            corpo.get("hash").and_then(|h| {
+                h.as_str()
+                    .map(str::to_string)
+                    .or_else(|| h.get("apikey").and_then(|v| v.as_str()).map(str::to_string))
+            })
+        })
+        .unwrap_or(token_gerado);
+
+    (nome, token)
+}
+
+/// Estado da conexão nas duas formas que o provedor usa.
+///
+/// Evolution v2 diz numa palavra (`{"state":"open"}`); a evolution-go diz em
+/// dois booleanos: `Connected` é o socket de pé, `LoggedIn` é a sessão pareada.
+/// Para quem está no onboarding só o segundo significa "conectado" — com o
+/// primeiro sozinho o QR ainda está por ler.
+fn estado_do_corpo(corpo: &serde_json::Value) -> ConnectionState {
+    if let Some(estado) = corpo.get("state").and_then(|v| v.as_str()) {
+        return map_state(estado);
+    }
+    let bool_de = |chaves: [&str; 2]| {
+        chaves
+            .iter()
+            .find_map(|c| corpo.get(*c).and_then(|v| v.as_bool()))
+            .unwrap_or(false)
+    };
+    match (
+        bool_de(["LoggedIn", "loggedIn"]),
+        bool_de(["Connected", "connected"]),
+    ) {
+        (true, _) => ConnectionState::Connected,
+        (false, true) => ConnectionState::Connecting,
+        (false, false) => ConnectionState::Disconnected,
+    }
+}
+
+/// `true` quando o texto tem cara de UUID — o suficiente para decidir se ainda
+/// precisamos traduzir nome → id antes de remover.
+fn parece_uuid(s: &str) -> bool {
+    s.len() == 36 && s.split('-').map(str::len).eq([8, 4, 4, 4, 12])
+}
+
+impl EvolutionProvider {
+    /// Traduz o nome da instância no identificador que a remoção aceita.
+    ///
+    /// Best-effort de propósito: se a consulta falhar ou o nome não aparecer na
+    /// lista, devolve o que recebeu. Quem chama já está num caminho de erro
+    /// (rollback do create, ou remoção explícita) e uma falha aqui não deve
+    /// virar uma segunda falha — no pior caso a remoção não acontece, que é
+    /// exatamente o comportamento anterior.
+    async fn identificador_para_remocao(&self, instance_name: &str) -> String {
+        if parece_uuid(instance_name) {
+            return instance_name.to_string();
+        }
+
+        let resp = self
+            .http
+            .get(format!("{}/instance/all", self.base_url))
+            .header("apikey", self.global_api_key.expose_secret())
+            .send()
+            .await;
+
+        let corpo = match resp {
+            Ok(r) if r.status().is_success() => Self::json_do_provedor(r).await.ok(),
+            _ => None,
+        };
+
+        corpo
+            .as_ref()
+            .and_then(|c| c.as_array())
+            .and_then(|itens| {
+                itens.iter().find(|i| {
+                    i.get("name").and_then(|v| v.as_str()) == Some(instance_name)
+                        || i.get("instanceName").and_then(|v| v.as_str()) == Some(instance_name)
+                })
+            })
+            .and_then(|i| i.get("id").and_then(|v| v.as_str()))
+            .map(str::to_string)
+            .unwrap_or_else(|| instance_name.to_string())
     }
 }
 
@@ -53,43 +164,29 @@ impl InstanceManager for EvolutionProvider {
             .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
 
         let resp = Self::ok_or_api(resp).await?;
-        let parsed: CreateInstanceResp = resp
-            .json()
-            .await
-            .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
+        let corpo = Self::json_do_provedor(resp).await?;
 
-        let resolved_token = parsed
-            .token
-            .or_else(|| parsed.instance.token.clone())
-            .or_else(|| {
-                parsed.hash.as_ref().and_then(|h| {
-                    if let Some(s) = h.as_str() {
-                        Some(s.to_string())
-                    } else if let Some(obj) = h.as_object() {
-                        obj.get("apikey")
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.to_string())
-                    } else {
-                        None
-                    }
-                })
-            })
-            .unwrap_or(token);
+        let (nome, instance_token) = identidade_da_instancia(&corpo, instance_name, token);
 
         Ok(CreateInstanceResult {
-            provider_instance_id: parsed.instance.instance_name,
-            instance_token: resolved_token,
+            provider_instance_id: nome,
+            instance_token,
         })
     }
 
     #[tracing::instrument(err, skip(self), fields(provider = "evolution", instance_name = %instance_name))]
     async fn delete_instance(&self, instance_name: &str) -> Result<(), MessagingProviderError> {
+        // A evolution-go identifica a instância na URL por **UUID** e responde
+        // 500 ("invalid UUID format") quando recebe o nome; a Evolution v2
+        // aceita o nome. Resolver antes custa uma chamada e evita o pior caso:
+        // o rollback do `create_instance` falhar em silêncio e deixar a
+        // instância órfã no provedor — com o nome ocupado para a próxima
+        // tentativa de quem está conectando o WhatsApp.
+        let alvo = self.identificador_para_remocao(instance_name).await;
+
         let resp = self
             .http
-            .delete(format!(
-                "{}/instance/delete/{}",
-                self.base_url, instance_name
-            ))
+            .delete(format!("{}/instance/delete/{}", self.base_url, alvo))
             .header("apikey", self.global_api_key.expose_secret())
             .send()
             .await
@@ -177,9 +274,8 @@ impl InstanceManager for EvolutionProvider {
             .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
 
         let resp = Self::ok_or_api(resp).await?;
-        let parsed: QrCodeResp = resp
-            .json()
-            .await
+        let corpo = Self::json_do_provedor(resp).await?;
+        let parsed: QrCodeResp = serde_json::from_value(corpo)
             .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
 
         if let Some(code) = parsed.code {
@@ -217,12 +313,9 @@ impl InstanceManager for EvolutionProvider {
             .map_err(|e| MessagingProviderError::Network(e.to_string()))?;
 
         let resp = Self::ok_or_api(resp).await?;
-        let parsed: ConnStateResp = resp
-            .json()
-            .await
-            .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
+        let corpo = Self::json_do_provedor(resp).await?;
 
-        Ok(map_state(&parsed.state))
+        Ok(estado_do_corpo(&corpo))
     }
 
     #[tracing::instrument(err, skip(self), fields(provider = "evolution"))]
@@ -706,5 +799,97 @@ mod tests {
         assert_eq!(map_state(""), ConnectionState::Unknown);
         // Sensível a maiúsculas: "OPEN" não é "open".
         assert_eq!(map_state("OPEN"), ConnectionState::Unknown);
+    }
+
+    // --- Formato de resposta do provedor -----------------------------------
+    //
+    // Os JSONs abaixo foram capturados da `evolution-go:0.7.1` em execucao, nao
+    // escritos de memoria: foi justamente a divergencia entre o formato real e o
+    // esperado que fez a criacao de instancia falhar com "erro inesperado",
+    // deixando a instancia criada do lado do provedor e nada do nosso.
+
+    #[test]
+    fn create_da_evolution_go_entrega_nome_e_token() {
+        // Ja desembrulhado de {"data": ..., "message": "success"}.
+        let corpo = serde_json::json!({
+            "id": "73a4873b-2fe6-40e6-a1b0-bb9b488ba98a",
+            "name": "atendimento",
+            "token": "25a8cecd6ffd4b36b7cdb0e077bdf139",
+            "connected": false,
+            "client_name": "smartcore"
+        });
+        let (nome, token) = identidade_da_instancia(&corpo, "atendimento", "gerado".into());
+        assert_eq!(nome, "atendimento");
+        assert_eq!(token, "25a8cecd6ffd4b36b7cdb0e077bdf139");
+    }
+
+    #[test]
+    fn create_da_evolution_v2_continua_funcionando() {
+        let corpo = serde_json::json!({
+            "instance": { "instanceName": "atendimento", "instanceId": "abc" },
+            "hash": { "apikey": "chave-v2" }
+        });
+        let (nome, token) = identidade_da_instancia(&corpo, "atendimento", "gerado".into());
+        assert_eq!(nome, "atendimento");
+        assert_eq!(token, "chave-v2");
+    }
+
+    #[test]
+    fn create_com_formato_desconhecido_cai_no_que_pedimos() {
+        // A instancia ja existe no provedor quando chegamos aqui: melhor seguir
+        // com o nome que pedimos e o token que geramos do que falhar e deixar
+        // uma instancia orfa.
+        let corpo = serde_json::json!({ "algo": "inesperado" });
+        let (nome, token) = identidade_da_instancia(&corpo, "atendimento", "gerado".into());
+        assert_eq!(nome, "atendimento");
+        assert_eq!(token, "gerado");
+    }
+
+    #[test]
+    fn status_da_evolution_go_distingue_socket_de_sessao() {
+        // Socket de pe, QR ainda por ler: nao e "conectado" para quem esta no
+        // onboarding esperando a leitura do codigo.
+        let subindo = serde_json::json!({ "Connected": true, "LoggedIn": false, "Name": "" });
+        assert_eq!(estado_do_corpo(&subindo), ConnectionState::Connecting);
+
+        let pareado = serde_json::json!({ "Connected": true, "LoggedIn": true, "Name": "5511..." });
+        assert_eq!(estado_do_corpo(&pareado), ConnectionState::Connected);
+
+        let fora = serde_json::json!({ "Connected": false, "LoggedIn": false });
+        assert_eq!(estado_do_corpo(&fora), ConnectionState::Disconnected);
+    }
+
+    #[test]
+    fn status_da_evolution_v2_continua_pela_palavra() {
+        assert_eq!(
+            estado_do_corpo(&serde_json::json!({ "state": "open" })),
+            ConnectionState::Connected
+        );
+        assert_eq!(
+            estado_do_corpo(&serde_json::json!({ "state": "connecting" })),
+            ConnectionState::Connecting
+        );
+    }
+
+    #[test]
+    fn envelope_data_e_desembrulhado_so_quando_e_envelope() {
+        use crate::client::desembrulhar;
+        // Envelope da evolution-go.
+        let v = desembrulhar(serde_json::json!({
+            "data": { "name": "x" }, "message": "success"
+        }));
+        assert_eq!(v, serde_json::json!({ "name": "x" }));
+
+        // Sem envelope (Evolution v2): passa direto.
+        let v = desembrulhar(serde_json::json!({ "state": "open" }));
+        assert_eq!(v, serde_json::json!({ "state": "open" }));
+
+        // `data` escalar e conteudo, nao envelope — desembrulhar aqui perderia
+        // o resto do objeto.
+        let v = desembrulhar(serde_json::json!({ "data": "base64...", "mimetype": "image/png" }));
+        assert_eq!(
+            v,
+            serde_json::json!({ "data": "base64...", "mimetype": "image/png" })
+        );
     }
 }

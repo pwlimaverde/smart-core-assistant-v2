@@ -80,29 +80,35 @@ impl EvolutionProvider {
             Err(MessagingProviderError::ProviderApi { status, body })
         }
     }
+
+    /// Lê o corpo como JSON e **desembrulha o envelope do provedor**.
+    ///
+    /// A `evolution-go` responde `{"data": <conteúdo>, "message": "success"}` em
+    /// todas as rotas; a Evolution API v2 (Node) devolve o conteúdo na raiz.
+    /// Aceitar as duas formas custa uma indireção e evita o modo de falha que
+    /// derrubou o onboarding: a instância era criada no provedor, a resposta não
+    /// casava com a struct esperada, e o cliente recebia "erro inesperado" com
+    /// uma instância órfã do outro lado.
+    pub(crate) async fn json_do_provedor(
+        resp: reqwest::Response,
+    ) -> Result<serde_json::Value, MessagingProviderError> {
+        let bruto: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| MessagingProviderError::Deserialization(e.to_string()))?;
+        Ok(desembrulhar(bruto))
+    }
 }
 
-#[derive(Deserialize, Debug)]
-#[allow(dead_code)]
-pub(crate) struct CreateInstanceInner {
-    #[serde(rename = "instanceName")]
-    pub(crate) instance_name: String,
-    #[serde(rename = "instanceId")]
-    pub(crate) instance_id: Option<String>,
-    pub(crate) id: Option<String>,
-    pub(crate) token: Option<String>,
-}
-
-#[derive(Deserialize, Debug)]
-pub(crate) struct CreateInstanceResp {
-    pub(crate) instance: CreateInstanceInner,
-    pub(crate) token: Option<String>,
-    pub(crate) hash: Option<serde_json::Value>, // pode ser string ou objeto {"apikey": "..."}
-}
-
-#[derive(Deserialize, Debug)]
-pub(crate) struct ConnStateResp {
-    pub(crate) state: String,
+/// Tira o conteúdo de dentro de `{"data": ...}` quando o envelope está presente.
+///
+/// Só desembrulha se `data` for objeto ou array: uma rota que devolva um campo
+/// `data` escalar na raiz (string, número) é conteúdo, não envelope.
+pub(crate) fn desembrulhar(v: serde_json::Value) -> serde_json::Value {
+    match v.get("data") {
+        Some(d) if d.is_object() || d.is_array() => d.clone(),
+        _ => v,
+    }
 }
 
 #[derive(Deserialize, Debug)]

@@ -113,10 +113,21 @@ mod tests {
     fn validar_token_com_assinatura_adulterada_retorna_erro_auth() {
         let _ = inicializar_chaves(SEGREDO);
         let claims = claims_validas(3600);
-        let mut token = gerar_access_token(&claims).unwrap();
-        // Adultera o último caractere da assinatura para invalidar o HMAC.
-        token.pop();
-        token.push(if token.ends_with('A') { 'B' } else { 'A' });
+        let token = gerar_access_token(&claims).unwrap();
+
+        // Adultera o PRIMEIRO caractere da assinatura, não o último.
+        //
+        // O último não serve: a assinatura HMAC-SHA256 são 32 bytes em 43
+        // caracteres base64url, e os 2 bits finais são padding — trocar ali
+        // pode decodificar para os mesmos bytes e o token continuar válido. O
+        // teste falhava esporadicamente por isso (e a comparação `ends_with`
+        // depois do `pop` ainda olhava o penúltimo caractere, podendo recompor
+        // o token original). O primeiro caractere carrega 6 bits significativos:
+        // trocá-lo sempre muda a assinatura.
+        let (inicio, assinatura) = token.rsplit_once('.').unwrap();
+        let primeiro = assinatura.chars().next().unwrap();
+        let trocado = if primeiro == 'A' { 'B' } else { 'A' };
+        let token = format!("{inicio}.{trocado}{}", &assinatura[1..]);
 
         let err = validar_access_token(&token).unwrap_err();
         assert!(matches!(err, AppError::Auth(msg) if msg.contains("token inválido ou expirado")));
