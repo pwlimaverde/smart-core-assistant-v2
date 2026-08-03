@@ -1,6 +1,7 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
 import '../../../cadastro/presentation/widgets/cadastro_shell.dart';
+import '../../domain/services/portao_configuracao.dart';
 import '../controllers/configuracao_controllers.dart';
 
 /// Passo 8 — fim do roteiro.
@@ -38,6 +39,10 @@ class _ConfiguracaoProntaPageState extends State<ConfiguracaoProntaPage> {
 
     switch (res) {
       case Success():
+        // O portão precisa saber ANTES da navegação: ele é quem o guard
+        // consulta, e sem isto o guard veria "configuração pendente" e
+        // devolveria a tela para o roteiro — um laço de onde não se sai.
+        inject<PortaoConfiguracao>().concluir();
         context.go('/atendimentos');
       case Failure(:final error):
         // Falhar aqui não pode prender o tenant na tela: a conta está ativa e o
