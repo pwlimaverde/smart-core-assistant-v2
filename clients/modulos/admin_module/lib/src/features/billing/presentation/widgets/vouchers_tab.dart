@@ -165,7 +165,10 @@ Future<void> _abrirCriacao(
 
   final criar = await showDialog<bool>(
     context: context,
-    builder: (dialogContext) => StatefulBuilder(
+    // O diálogo é dono dos controllers; ver `DialogoComCampos`.
+    builder: (dialogContext) => DialogoComCampos(
+      campos: [codigo, descricao, duracao, maxResgates],
+      builder: (dialogContext) => StatefulBuilder(
       builder: (dialogContext, setState) => AlertDialog(
         title: const Text('Novo voucher'),
         content: SizedBox(
@@ -233,6 +236,7 @@ Future<void> _abrirCriacao(
         ],
       ),
     ),
+    ),
   );
 
   if (criar != true || !context.mounted) return;
@@ -274,7 +278,9 @@ Future<void> _abrirRevogacao(
 
   final confirmar = await showDialog<bool>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
+    builder: (dialogContext) => DialogoComCampos(
+      campos: [motivo],
+      builder: (dialogContext) => AlertDialog(
       title: Text('Revogar ${voucher.codigo}?'),
       content: SizedBox(
         width: 420,
@@ -311,6 +317,7 @@ Future<void> _abrirRevogacao(
           child: const Text('Revogar'),
         ),
       ],
+    ),
     ),
   );
 

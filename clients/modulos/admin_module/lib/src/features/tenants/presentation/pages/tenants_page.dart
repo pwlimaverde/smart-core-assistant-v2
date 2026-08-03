@@ -344,7 +344,16 @@ class _TenantsPageState extends State<TenantsPage> {
 
     showDialog(
       context: context,
-      builder: (dialogContext) {
+      // O diálogo é dono dos controllers; ver `DialogoComCampos`.
+      builder: (dialogContext) => DialogoComCampos(
+        campos: [
+          nameController,
+          slugController,
+          ownerController,
+          emailController,
+          phoneController,
+        ],
+        builder: (dialogContext) {
         return AlertDialog(
           title: Text(isNew ? 'Novo Tenant' : 'Editar Tenant'),
           content: SizedBox(
@@ -468,6 +477,7 @@ class _TenantsPageState extends State<TenantsPage> {
           ],
         );
       },
+      ),
     );
   }
 }

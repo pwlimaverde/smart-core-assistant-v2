@@ -29,20 +29,18 @@ Verificados e **sem** o defeito: `tenants_page` e `billing/_showPaymentDialog`
 - **`accept_invite_page`** — 3 controllers como campos do State, nenhum
   `dispose`. Era o caso grave (vazava a cada abertura da tela). **FEITO.**
 - Diálogos locais (`tenants_page` 5, `vouchers_tab` 5, `core_settings_page` 3,
-  `invites_page` 3, `tenant_users_page` 1, `billing_page` 11 dos 13): vazam por
-  abertura de janela. **PENDENTE, e não é trivial.**
+  `invites_page` 3, `tenant_users_page` 1, `billing_page` 13): **FEITO.**
 
-  Tentativa descartada: `showDialog(...).whenComplete(dispose)` **quebra**. O
-  `whenComplete` dispara quando a rota é removida, mas a animação de saída ainda
-  está em curso e os `TextField` continuam usando o controller — resultado:
-  `A TextEditingController was used after being disposed`, 15 testes vermelhos
-  no `admin_module`. Revertida.
+  Tentativa descartada no caminho: `showDialog(...).whenComplete(dispose)`
+  **quebra**. O `whenComplete` dispara quando a rota é removida, mas a animação
+  de saída ainda está em curso e os `TextField` continuam usando o controller —
+  `A TextEditingController was used after being disposed`, 15 testes vermelhos.
 
-  O caminho correto é extrair o conteúdo de cada diálogo para um
-  `StatefulWidget` próprio, com os controllers como campos e `dispose` no
-  ciclo de vida dele — que é quem sabe quando a árvore realmente saiu. São seis
-  arquivos e uma refatoração de porte médio; merece rodada própria, com os
-  testes de widget existentes como rede.
+  A solução foi um widget do design system, `DialogoComCampos`, que **possui**
+  os controllers e os descarta no próprio `dispose` — dentro da rota do
+  diálogo, que é quem sabe quando a árvore saiu de vez. Uma linha por diálogo
+  em vez de seis refatorações, e dois testes fixam o comportamento, inclusive o
+  caso que quebrava (descarte durante a animação) e o fechamento pelo barrier.
 
 ### 3. Feedback de erro invisível atrás do modal
 

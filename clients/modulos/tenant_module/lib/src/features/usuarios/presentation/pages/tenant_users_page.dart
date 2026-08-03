@@ -145,7 +145,11 @@ class _TenantUsersPageState extends State<TenantUsersPage> {
 
     showDialog(
       context: context,
-      builder: (dialogContext) {
+      // O diálogo passa a ser dono do controller: descartá-lo pelo
+      // `whenComplete` do showDialog quebraria durante a animação de saída.
+      builder: (dialogContext) => DialogoComCampos(
+        campos: [flowsController],
+        builder: (dialogContext) {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
             return AlertDialog(
@@ -242,6 +246,7 @@ class _TenantUsersPageState extends State<TenantUsersPage> {
           },
         );
       },
+      ),
     );
   }
 }

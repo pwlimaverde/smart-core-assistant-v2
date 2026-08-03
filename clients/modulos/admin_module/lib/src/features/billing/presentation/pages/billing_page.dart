@@ -575,7 +575,17 @@ class _BillingPageState extends State<BillingPage>
 
     showDialog(
       context: context,
-      builder: (dialogContext) {
+      // O diálogo é dono dos controllers; ver `DialogoComCampos`.
+      builder: (dialogContext) => DialogoComCampos(
+        campos: [
+          nameController,
+          descController,
+          priceController,
+          instancesController,
+          departmentsController,
+          fluxosController,
+        ],
+        builder: (dialogContext) {
         return StatefulBuilder(
           builder: (stateCtx, setStateDialog) {
             return AlertDialog(
@@ -754,6 +764,7 @@ class _BillingPageState extends State<BillingPage>
           },
         );
       },
+      ),
     );
   }
 
@@ -777,7 +788,17 @@ class _BillingPageState extends State<BillingPage>
 
     showDialog(
       context: context,
-      builder: (dialogContext) {
+      builder: (dialogContext) => DialogoComCampos(
+        campos: [
+          tenantController,
+          amountController,
+          methodController,
+          dateController,
+          startController,
+          endController,
+          notesController,
+        ],
+        builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Registrar Pagamento Manual'),
           content: SizedBox(
@@ -936,6 +957,7 @@ class _BillingPageState extends State<BillingPage>
           ],
         );
       },
+      ),
     );
   }
 }

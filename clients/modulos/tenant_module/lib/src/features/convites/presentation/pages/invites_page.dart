@@ -203,7 +203,10 @@ class _InvitesPageState extends State<InvitesPage> {
 
     showDialog(
       context: context,
-      builder: (dialogContext) {
+      // O diálogo é dono dos controllers; ver `DialogoComCampos`.
+      builder: (dialogContext) => DialogoComCampos(
+        campos: [emailController, nameController, flowsController],
+        builder: (dialogContext) {
         return StatefulBuilder(
           builder: (dialogContext, setDialogState) {
             return AlertDialog(
@@ -365,6 +368,7 @@ class _InvitesPageState extends State<InvitesPage> {
           },
         );
       },
+      ),
     );
   }
 }

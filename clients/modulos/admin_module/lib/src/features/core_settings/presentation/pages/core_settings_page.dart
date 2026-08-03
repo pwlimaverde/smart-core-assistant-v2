@@ -213,7 +213,9 @@ class _CoreSettingsPageState extends State<CoreSettingsPage> {
 
     showDialog(
       context: context,
-      builder: (dialogContext) {
+      builder: (dialogContext) => DialogoComCampos(
+        campos: [keyController, valController, descController],
+        builder: (dialogContext) {
         return StatefulBuilder(
           builder: (stateContext, setStateDialog) {
             return AlertDialog(
@@ -317,6 +319,7 @@ class _CoreSettingsPageState extends State<CoreSettingsPage> {
           },
         );
       },
+      ),
     );
   }
 
