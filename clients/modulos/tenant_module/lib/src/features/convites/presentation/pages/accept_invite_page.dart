@@ -28,6 +28,16 @@ class _AcceptInvitePageState extends State<AcceptInvitePage> {
   }
 
   @override
+  void dispose() {
+    // `TextEditingController` é `ChangeNotifier`: sem isto os listeners ficam
+    // vivos a cada abertura da tela.
+    _usernameController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final token = GoRouterState.of(context).uri.queryParameters['token'] ?? '';
 
