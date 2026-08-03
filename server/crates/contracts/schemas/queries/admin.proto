@@ -828,6 +828,67 @@ service AdminService {
   rpc SetMyBotPersona(SetMyBotPersonaRequest) returns (SetMyBotPersonaResponse);
   rpc SetOnboardingProgress(SetOnboardingProgressRequest) returns (SetOnboardingProgressResponse);
   rpc GetMyOnboardingProgress(GetMyOnboardingProgressRequest) returns (GetMyOnboardingProgressResponse);
+
+  // Treinamento da IA (o tenant treina o próprio assistente)
+  rpc CreateMyTreinamento(CreateMyTreinamentoRequest) returns (MyTreinamentoResponse);
+  rpc ListMyTreinamentos(ListMyTreinamentosRequest) returns (ListMyTreinamentosResponse);
+  rpc GetMyTreinamento(GetMyTreinamentoRequest) returns (MyTreinamentoResponse);
+  rpc FinalizarMyTreinamento(FinalizarMyTreinamentoRequest) returns (SimpleOkResponse);
+  rpc RemoverMyTreinamento(RemoverMyTreinamentoRequest) returns (SimpleOkResponse);
+}
+
+// --- Treinamento da IA ---
+//
+// O material que o assistente usa para responder. O fluxo tem três estados, e
+// a tela precisa dos três: rascunho (criado, texto ainda em revisão),
+// finalizado (aceito, na fila do worker) e vetorizado (já responde).
+
+message MyTreinamento {
+  int32 id = 1;
+  // Assunto e agrupamento — a dupla identifica o treinamento no tenant.
+  string tag = 2;
+  string grupo = 3;
+  string conteudo = 4;
+  // Aceito pelo usuário e enviado para vetorização.
+  bool finalizado = 5;
+  // Já virou vetor: a partir daqui o assistente usa este material.
+  bool vetorizado = 6;
+  int64 criado_em = 7;
+  int64 atualizado_em = 8;
+}
+
+message CreateMyTreinamentoRequest {
+  string tag = 1;
+  string grupo = 2;
+  string conteudo = 3;
+}
+
+message MyTreinamentoResponse {
+  MyTreinamento treinamento = 1;
+}
+
+message ListMyTreinamentosRequest {}
+
+message ListMyTreinamentosResponse {
+  repeated MyTreinamento treinamentos = 1;
+}
+
+message GetMyTreinamentoRequest {
+  int32 id = 1;
+}
+
+message FinalizarMyTreinamentoRequest {
+  int32 id = 1;
+  // O texto como ficou depois da revisão — é ele que vira vetor.
+  string conteudo = 2;
+}
+
+message RemoverMyTreinamentoRequest {
+  int32 id = 1;
+}
+
+message SimpleOkResponse {
+  bool sucesso = 1;
 }
 
 message StreamAtendimentosRequest {}

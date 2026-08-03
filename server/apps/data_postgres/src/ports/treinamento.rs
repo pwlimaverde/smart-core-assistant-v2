@@ -25,7 +25,21 @@ pub struct QueryComposeResultado {
     pub documentos: Vec<DocumentoTrecho>,
 }
 
-/// Operações de RAG (busca vetorial pgvector) expostas ao handler RPC `QueryCompose`.
+/// Um treinamento, na forma em que a tela de acompanhamento precisa dele.
+#[derive(Debug, Clone, Default, serde::Serialize, serde::Deserialize)]
+pub struct TreinamentoResumo {
+    pub id: i32,
+    pub tag: String,
+    pub grupo: String,
+    pub conteudo: String,
+    pub finalizado: bool,
+    pub vetorizado: bool,
+    pub criado_em: i64,
+    pub atualizado_em: i64,
+}
+
+/// Operações de RAG (busca vetorial pgvector) expostas ao handler RPC `QueryCompose`,
+/// mais o CRUD que a tela de treinamento consome.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait TreinamentoStore: Send + Sync {
@@ -39,4 +53,40 @@ pub trait TreinamentoStore: Send + Sync {
         distance_threshold: f64,
         chunk_top_k: i64,
     ) -> Result<QueryComposeResultado, DbError>;
+
+    /// Cria (ou reaproveita) o treinamento da dupla tag+grupo e devolve o id.
+    ///
+    /// Reaproveitar é intencional e vem da v1: retreinar o mesmo assunto
+    /// acumula conteúdo no mesmo registro em vez de espalhar duplicatas.
+    async fn criar_treinamento(
+        &self,
+        ctx: &RequestContext,
+        tag: &str,
+        grupo: &str,
+        conteudo: &str,
+    ) -> Result<TreinamentoResumo, DbError>;
+
+    async fn listar_treinamentos(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<TreinamentoResumo>, DbError>;
+
+    async fn obter_treinamento(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<Option<TreinamentoResumo>, DbError>;
+
+    /// Aceita a revisão: grava o conteúdo (possivelmente editado) e finaliza.
+    ///
+    /// É o passo que a v1 chamava de pré-processamento — o texto revisado é o
+    /// que vai virar vetor, e finalizar é o que o coloca na fila do worker.
+    async fn finalizar_treinamento(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        conteudo: &str,
+    ) -> Result<bool, DbError>;
+
+    async fn remover_treinamento(&self, ctx: &RequestContext, id: i32) -> Result<bool, DbError>;
 }

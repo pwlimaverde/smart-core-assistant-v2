@@ -56,6 +56,44 @@ pub trait TreinamentoRepository: Send + Sync {
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
     ) -> Result<Vec<Treinamento>, DbError>;
+
+    /// Lista tudo do tenant, do mais recente para o mais antigo.
+    ///
+    /// É o que a tela de acompanhamento mostra: os três estados (rascunho,
+    /// aguardando vetorização e vetorizado) convivem na mesma lista, porque
+    /// quem treinou precisa ver o que ficou pelo caminho.
+    async fn listar_por_tenant(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+    ) -> Result<Vec<Treinamento>, DbError>;
+
+    async fn buscar_por_id(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        treinamento_id: i32,
+    ) -> Result<Option<Treinamento>, DbError>;
+
+    /// Substitui o conteúdo — o aceite da revisão, quando o texto foi editado.
+    ///
+    /// Zera `treinamento_vetorizado`: o conteúdo mudou, e os vetores antigos
+    /// já não representam o texto. A revetorização é do worker.
+    async fn atualizar_conteudo(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        treinamento_id: i32,
+        conteudo: &str,
+    ) -> Result<bool, DbError>;
+
+    /// Remove o treinamento e, por cascata, seus documentos.
+    async fn remover(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        treinamento_id: i32,
+    ) -> Result<bool, DbError>;
 }
 
 pub struct PostgresTreinamentoRepository;
@@ -174,5 +212,92 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
         .fetch_all(&mut **tx)
         .await?;
         Ok(rows)
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn listar_por_tenant(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+    ) -> Result<Vec<Treinamento>, DbError> {
+        ctx.exigir_qualquer(&["treinamento:read", "tenant:admin"])?;
+        let rows = sqlx::query_as!(
+            Treinamento,
+            r#"SELECT id, tenant_id, tag, grupo, conteudo,
+                      treinamento_finalizado, treinamento_vetorizado,
+                      data_criacao, data_atualizacao
+               FROM oraculo_treinamento
+               WHERE tenant_id = $1
+               ORDER BY data_criacao DESC"#,
+            ctx.tenant_id
+        )
+        .fetch_all(&mut **tx)
+        .await?;
+        Ok(rows)
+    }
+
+    #[tracing::instrument(skip_all, fields(treinamento_id))]
+    async fn buscar_por_id(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        treinamento_id: i32,
+    ) -> Result<Option<Treinamento>, DbError> {
+        ctx.exigir_qualquer(&["treinamento:read", "tenant:admin"])?;
+        let row = sqlx::query_as!(
+            Treinamento,
+            r#"SELECT id, tenant_id, tag, grupo, conteudo,
+                      treinamento_finalizado, treinamento_vetorizado,
+                      data_criacao, data_atualizacao
+               FROM oraculo_treinamento
+               WHERE id = $1 AND tenant_id = $2"#,
+            treinamento_id,
+            ctx.tenant_id
+        )
+        .fetch_optional(&mut **tx)
+        .await?;
+        Ok(row)
+    }
+
+    #[tracing::instrument(skip_all, fields(treinamento_id))]
+    async fn atualizar_conteudo(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        treinamento_id: i32,
+        conteudo: &str,
+    ) -> Result<bool, DbError> {
+        ctx.exigir_qualquer(&["treinamento:write", "tenant:admin"])?;
+        let res = sqlx::query!(
+            r#"UPDATE oraculo_treinamento
+                  SET conteudo = $1,
+                      treinamento_vetorizado = false,
+                      data_atualizacao = NOW()
+                WHERE id = $2 AND tenant_id = $3"#,
+            conteudo,
+            treinamento_id,
+            ctx.tenant_id
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(res.rows_affected() > 0)
+    }
+
+    #[tracing::instrument(skip_all, fields(treinamento_id))]
+    async fn remover(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        treinamento_id: i32,
+    ) -> Result<bool, DbError> {
+        ctx.exigir_qualquer(&["treinamento:write", "tenant:admin"])?;
+        let res = sqlx::query!(
+            "DELETE FROM oraculo_treinamento WHERE id = $1 AND tenant_id = $2",
+            treinamento_id,
+            ctx.tenant_id
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(res.rows_affected() > 0)
     }
 }

@@ -695,6 +695,51 @@ table UpdateMyTenantConfigRequest {
   api_keys:[ApiKeyEntry];
 }
 
+table MyTreinamento {
+  id:int;
+  tag:string;
+  grupo:string;
+  conteudo:string;
+  finalizado:bool;
+  vetorizado:bool;
+  criado_em:long;
+  atualizado_em:long;
+}
+
+table CreateMyTreinamentoRequest {
+  tag:string;
+  grupo:string;
+  conteudo:string;
+}
+
+table MyTreinamentoResponse {
+  treinamento:MyTreinamento;
+}
+
+table ListMyTreinamentosRequest {
+}
+
+table ListMyTreinamentosResponse {
+  treinamentos:[MyTreinamento];
+}
+
+table GetMyTreinamentoRequest {
+  id:int;
+}
+
+table FinalizarMyTreinamentoRequest {
+  id:int;
+  conteudo:string;
+}
+
+table RemoverMyTreinamentoRequest {
+  id:int;
+}
+
+table SimpleOkResponse {
+  sucesso:bool;
+}
+
 table StreamAtendimentosRequest {
 }
 

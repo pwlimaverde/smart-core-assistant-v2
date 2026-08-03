@@ -12,7 +12,29 @@ use infrastructure_postgres::treinamento::query_compose::{
 };
 use infrastructure_postgres::{run_in_tenant_transaction, DbError, RequestContext};
 
-use crate::ports::{DocumentoTrecho, QueryComposeResultado, TreinamentoStore};
+use infrastructure_postgres::treinamento::treinamentos::{
+    PostgresTreinamentoRepository, Treinamento, TreinamentoRepository,
+};
+
+use crate::ports::{DocumentoTrecho, QueryComposeResultado, TreinamentoResumo, TreinamentoStore};
+
+/// Converte a linha do repositório na forma que atravessa o RPC.
+///
+/// `conteudo` vira string vazia quando nulo: do lado do cliente "sem conteúdo"
+/// e "conteúdo vazio" são a mesma coisa, e um opcional a mais no contrato só
+/// daria trabalho a quem consome.
+fn resumo(t: Treinamento) -> TreinamentoResumo {
+    TreinamentoResumo {
+        id: t.id,
+        tag: t.tag,
+        grupo: t.grupo,
+        conteudo: t.conteudo.unwrap_or_default(),
+        finalizado: t.treinamento_finalizado,
+        vetorizado: t.treinamento_vetorizado,
+        criado_em: t.data_criacao.timestamp_millis(),
+        atualizado_em: t.data_atualizacao.timestamp_millis(),
+    }
+}
 
 /// Implementação Postgres da port Treinamento/RAG. Tenant-scoped (RLS ativa via
 /// `run_in_tenant_transaction`) — ao contrário das varreduras cross-tenant do
@@ -72,6 +94,96 @@ impl TreinamentoStore for PgTreinamentoStore {
                 documentos,
             };
             Ok((resultado, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, tag = %tag))]
+    async fn criar_treinamento(
+        &self,
+        ctx: &RequestContext,
+        tag: &str,
+        grupo: &str,
+        conteudo: &str,
+    ) -> Result<TreinamentoResumo, DbError> {
+        let repo = PostgresTreinamentoRepository;
+        let ctx = ctx.clone();
+        let (tag, grupo, conteudo) = (tag.to_string(), grupo.to_string(), conteudo.to_string());
+
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let t = repo
+                .criar(&mut tx, &ctx, &tag, &grupo, Some(&conteudo))
+                .await?;
+            Ok((resumo(t), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_treinamentos(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<TreinamentoResumo>, DbError> {
+        let repo = PostgresTreinamentoRepository;
+        let ctx = ctx.clone();
+
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let linhas = repo.listar_por_tenant(&mut tx, &ctx).await?;
+            Ok((linhas.into_iter().map(resumo).collect(), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn obter_treinamento(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<Option<TreinamentoResumo>, DbError> {
+        let repo = PostgresTreinamentoRepository;
+        let ctx = ctx.clone();
+
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let achado = repo.buscar_por_id(&mut tx, &ctx, id).await?;
+            Ok((achado.map(resumo), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn finalizar_treinamento(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        conteudo: &str,
+    ) -> Result<bool, DbError> {
+        let repo = PostgresTreinamentoRepository;
+        let ctx = ctx.clone();
+        let conteudo = conteudo.to_string();
+
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            // Gravar o texto revisado e finalizar são um ato só: finalizar é o
+            // que põe o treinamento na fila de vetorização, e vetorizar o texto
+            // antigo seria pior do que não vetorizar.
+            let atualizou = repo
+                .atualizar_conteudo(&mut tx, &ctx, id, &conteudo)
+                .await?;
+            if atualizou {
+                repo.marcar_finalizado(&mut tx, &ctx, id).await?;
+            }
+            Ok((atualizou, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn remover_treinamento(&self, ctx: &RequestContext, id: i32) -> Result<bool, DbError> {
+        let repo = PostgresTreinamentoRepository;
+        let ctx = ctx.clone();
+
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let removeu = repo.remover(&mut tx, &ctx, id).await?;
+            Ok((removeu, tx))
         })
         .await
     }

@@ -9086,6 +9086,620 @@ class UpdateMyTenantConfigRequest extends $pb.GeneratedMessage {
   $pb.PbList<ApiKeyEntry> get apiKeys => $_getList(19);
 }
 
+class MyTreinamento extends $pb.GeneratedMessage {
+  factory MyTreinamento({
+    $core.int? id,
+    $core.String? tag,
+    $core.String? grupo,
+    $core.String? conteudo,
+    $core.bool? finalizado,
+    $core.bool? vetorizado,
+    $fixnum.Int64? criadoEm,
+    $fixnum.Int64? atualizadoEm,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (tag != null) result.tag = tag;
+    if (grupo != null) result.grupo = grupo;
+    if (conteudo != null) result.conteudo = conteudo;
+    if (finalizado != null) result.finalizado = finalizado;
+    if (vetorizado != null) result.vetorizado = vetorizado;
+    if (criadoEm != null) result.criadoEm = criadoEm;
+    if (atualizadoEm != null) result.atualizadoEm = atualizadoEm;
+    return result;
+  }
+
+  MyTreinamento._();
+
+  factory MyTreinamento.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyTreinamento.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyTreinamento',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'tag')
+    ..aOS(3, _omitFieldNames ? '' : 'grupo')
+    ..aOS(4, _omitFieldNames ? '' : 'conteudo')
+    ..aOB(5, _omitFieldNames ? '' : 'finalizado')
+    ..aOB(6, _omitFieldNames ? '' : 'vetorizado')
+    ..aInt64(7, _omitFieldNames ? '' : 'criadoEm')
+    ..aInt64(8, _omitFieldNames ? '' : 'atualizadoEm')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyTreinamento clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyTreinamento copyWith(void Function(MyTreinamento) updates) =>
+      super.copyWith((message) => updates(message as MyTreinamento))
+          as MyTreinamento;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyTreinamento create() => MyTreinamento._();
+  @$core.override
+  MyTreinamento createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyTreinamento getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyTreinamento>(create);
+  static MyTreinamento? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  /// Assunto e agrupamento — a dupla identifica o treinamento no tenant.
+  @$pb.TagNumber(2)
+  $core.String get tag => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set tag($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasTag() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearTag() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get grupo => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set grupo($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasGrupo() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearGrupo() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get conteudo => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set conteudo($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasConteudo() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearConteudo() => $_clearField(4);
+
+  /// Aceito pelo usuário e enviado para vetorização.
+  @$pb.TagNumber(5)
+  $core.bool get finalizado => $_getBF(4);
+  @$pb.TagNumber(5)
+  set finalizado($core.bool value) => $_setBool(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasFinalizado() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearFinalizado() => $_clearField(5);
+
+  /// Já virou vetor: a partir daqui o assistente usa este material.
+  @$pb.TagNumber(6)
+  $core.bool get vetorizado => $_getBF(5);
+  @$pb.TagNumber(6)
+  set vetorizado($core.bool value) => $_setBool(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasVetorizado() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearVetorizado() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $fixnum.Int64 get criadoEm => $_getI64(6);
+  @$pb.TagNumber(7)
+  set criadoEm($fixnum.Int64 value) => $_setInt64(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasCriadoEm() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearCriadoEm() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $fixnum.Int64 get atualizadoEm => $_getI64(7);
+  @$pb.TagNumber(8)
+  set atualizadoEm($fixnum.Int64 value) => $_setInt64(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasAtualizadoEm() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearAtualizadoEm() => $_clearField(8);
+}
+
+class CreateMyTreinamentoRequest extends $pb.GeneratedMessage {
+  factory CreateMyTreinamentoRequest({
+    $core.String? tag,
+    $core.String? grupo,
+    $core.String? conteudo,
+  }) {
+    final result = create();
+    if (tag != null) result.tag = tag;
+    if (grupo != null) result.grupo = grupo;
+    if (conteudo != null) result.conteudo = conteudo;
+    return result;
+  }
+
+  CreateMyTreinamentoRequest._();
+
+  factory CreateMyTreinamentoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CreateMyTreinamentoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CreateMyTreinamentoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'tag')
+    ..aOS(2, _omitFieldNames ? '' : 'grupo')
+    ..aOS(3, _omitFieldNames ? '' : 'conteudo')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyTreinamentoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyTreinamentoRequest copyWith(
+          void Function(CreateMyTreinamentoRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as CreateMyTreinamentoRequest))
+          as CreateMyTreinamentoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CreateMyTreinamentoRequest create() => CreateMyTreinamentoRequest._();
+  @$core.override
+  CreateMyTreinamentoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CreateMyTreinamentoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CreateMyTreinamentoRequest>(create);
+  static CreateMyTreinamentoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get tag => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set tag($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTag() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTag() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get grupo => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set grupo($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasGrupo() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearGrupo() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get conteudo => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set conteudo($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasConteudo() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearConteudo() => $_clearField(3);
+}
+
+class MyTreinamentoResponse extends $pb.GeneratedMessage {
+  factory MyTreinamentoResponse({
+    MyTreinamento? treinamento,
+  }) {
+    final result = create();
+    if (treinamento != null) result.treinamento = treinamento;
+    return result;
+  }
+
+  MyTreinamentoResponse._();
+
+  factory MyTreinamentoResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyTreinamentoResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyTreinamentoResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOM<MyTreinamento>(1, _omitFieldNames ? '' : 'treinamento',
+        subBuilder: MyTreinamento.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyTreinamentoResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyTreinamentoResponse copyWith(
+          void Function(MyTreinamentoResponse) updates) =>
+      super.copyWith((message) => updates(message as MyTreinamentoResponse))
+          as MyTreinamentoResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyTreinamentoResponse create() => MyTreinamentoResponse._();
+  @$core.override
+  MyTreinamentoResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyTreinamentoResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyTreinamentoResponse>(create);
+  static MyTreinamentoResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  MyTreinamento get treinamento => $_getN(0);
+  @$pb.TagNumber(1)
+  set treinamento(MyTreinamento value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTreinamento() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTreinamento() => $_clearField(1);
+  @$pb.TagNumber(1)
+  MyTreinamento ensureTreinamento() => $_ensure(0);
+}
+
+class ListMyTreinamentosRequest extends $pb.GeneratedMessage {
+  factory ListMyTreinamentosRequest() => create();
+
+  ListMyTreinamentosRequest._();
+
+  factory ListMyTreinamentosRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyTreinamentosRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyTreinamentosRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyTreinamentosRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyTreinamentosRequest copyWith(
+          void Function(ListMyTreinamentosRequest) updates) =>
+      super.copyWith((message) => updates(message as ListMyTreinamentosRequest))
+          as ListMyTreinamentosRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyTreinamentosRequest create() => ListMyTreinamentosRequest._();
+  @$core.override
+  ListMyTreinamentosRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyTreinamentosRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyTreinamentosRequest>(create);
+  static ListMyTreinamentosRequest? _defaultInstance;
+}
+
+class ListMyTreinamentosResponse extends $pb.GeneratedMessage {
+  factory ListMyTreinamentosResponse({
+    $core.Iterable<MyTreinamento>? treinamentos,
+  }) {
+    final result = create();
+    if (treinamentos != null) result.treinamentos.addAll(treinamentos);
+    return result;
+  }
+
+  ListMyTreinamentosResponse._();
+
+  factory ListMyTreinamentosResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyTreinamentosResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyTreinamentosResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<MyTreinamento>(1, _omitFieldNames ? '' : 'treinamentos',
+        subBuilder: MyTreinamento.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyTreinamentosResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyTreinamentosResponse copyWith(
+          void Function(ListMyTreinamentosResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListMyTreinamentosResponse))
+          as ListMyTreinamentosResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyTreinamentosResponse create() => ListMyTreinamentosResponse._();
+  @$core.override
+  ListMyTreinamentosResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyTreinamentosResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyTreinamentosResponse>(create);
+  static ListMyTreinamentosResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<MyTreinamento> get treinamentos => $_getList(0);
+}
+
+class GetMyTreinamentoRequest extends $pb.GeneratedMessage {
+  factory GetMyTreinamentoRequest({
+    $core.int? id,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    return result;
+  }
+
+  GetMyTreinamentoRequest._();
+
+  factory GetMyTreinamentoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GetMyTreinamentoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetMyTreinamentoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyTreinamentoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyTreinamentoRequest copyWith(
+          void Function(GetMyTreinamentoRequest) updates) =>
+      super.copyWith((message) => updates(message as GetMyTreinamentoRequest))
+          as GetMyTreinamentoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GetMyTreinamentoRequest create() => GetMyTreinamentoRequest._();
+  @$core.override
+  GetMyTreinamentoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GetMyTreinamentoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetMyTreinamentoRequest>(create);
+  static GetMyTreinamentoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+}
+
+class FinalizarMyTreinamentoRequest extends $pb.GeneratedMessage {
+  factory FinalizarMyTreinamentoRequest({
+    $core.int? id,
+    $core.String? conteudo,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (conteudo != null) result.conteudo = conteudo;
+    return result;
+  }
+
+  FinalizarMyTreinamentoRequest._();
+
+  factory FinalizarMyTreinamentoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory FinalizarMyTreinamentoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'FinalizarMyTreinamentoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'conteudo')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  FinalizarMyTreinamentoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  FinalizarMyTreinamentoRequest copyWith(
+          void Function(FinalizarMyTreinamentoRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as FinalizarMyTreinamentoRequest))
+          as FinalizarMyTreinamentoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static FinalizarMyTreinamentoRequest create() =>
+      FinalizarMyTreinamentoRequest._();
+  @$core.override
+  FinalizarMyTreinamentoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static FinalizarMyTreinamentoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<FinalizarMyTreinamentoRequest>(create);
+  static FinalizarMyTreinamentoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  /// O texto como ficou depois da revisão — é ele que vira vetor.
+  @$pb.TagNumber(2)
+  $core.String get conteudo => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set conteudo($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasConteudo() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearConteudo() => $_clearField(2);
+}
+
+class RemoverMyTreinamentoRequest extends $pb.GeneratedMessage {
+  factory RemoverMyTreinamentoRequest({
+    $core.int? id,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    return result;
+  }
+
+  RemoverMyTreinamentoRequest._();
+
+  factory RemoverMyTreinamentoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory RemoverMyTreinamentoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'RemoverMyTreinamentoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RemoverMyTreinamentoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RemoverMyTreinamentoRequest copyWith(
+          void Function(RemoverMyTreinamentoRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as RemoverMyTreinamentoRequest))
+          as RemoverMyTreinamentoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static RemoverMyTreinamentoRequest create() =>
+      RemoverMyTreinamentoRequest._();
+  @$core.override
+  RemoverMyTreinamentoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static RemoverMyTreinamentoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<RemoverMyTreinamentoRequest>(create);
+  static RemoverMyTreinamentoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+}
+
+class SimpleOkResponse extends $pb.GeneratedMessage {
+  factory SimpleOkResponse({
+    $core.bool? sucesso,
+  }) {
+    final result = create();
+    if (sucesso != null) result.sucesso = sucesso;
+    return result;
+  }
+
+  SimpleOkResponse._();
+
+  factory SimpleOkResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SimpleOkResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SimpleOkResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOB(1, _omitFieldNames ? '' : 'sucesso')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SimpleOkResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SimpleOkResponse copyWith(void Function(SimpleOkResponse) updates) =>
+      super.copyWith((message) => updates(message as SimpleOkResponse))
+          as SimpleOkResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SimpleOkResponse create() => SimpleOkResponse._();
+  @$core.override
+  SimpleOkResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SimpleOkResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SimpleOkResponse>(create);
+  static SimpleOkResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.bool get sucesso => $_getBF(0);
+  @$pb.TagNumber(1)
+  set sucesso($core.bool value) => $_setBool(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSucesso() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSucesso() => $_clearField(1);
+}
+
 class StreamAtendimentosRequest extends $pb.GeneratedMessage {
   factory StreamAtendimentosRequest() => create();
 

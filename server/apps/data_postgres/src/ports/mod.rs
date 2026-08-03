@@ -23,7 +23,9 @@ pub use plans::PlansStore;
 pub use quota::QuotaStore;
 pub use signup::{SignupIniciado, SignupStore, SlugIndisponivel, StatusSignup};
 pub use tenant::TenantStore;
-pub use treinamento::{DocumentoTrecho, QueryComposeResultado, TreinamentoStore};
+pub use treinamento::{
+    DocumentoTrecho, QueryComposeResultado, TreinamentoResumo, TreinamentoStore,
+};
 pub use vouchers::{DesfechoResgate, VoucherStore};
 pub use whatsapp::WhatsappStore;
 

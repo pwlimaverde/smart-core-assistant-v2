@@ -61,6 +61,15 @@ class TenantDrawer extends StatelessWidget {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.school_outlined),
+              title: const Text('Treinamento da IA'),
+              selected: location == '/tenant/treinamento',
+              onTap: () {
+                Navigator.pop(context);
+                context.go('/tenant/treinamento');
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.settings_outlined),
               title: const Text('Configuração do Tenant'),
               selected: location == '/tenant/config',

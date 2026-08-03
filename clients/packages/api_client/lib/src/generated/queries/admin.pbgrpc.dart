@@ -397,6 +397,43 @@ class AdminServiceClient extends $grpc.Client {
         options: options);
   }
 
+  /// Treinamento da IA (o tenant treina o próprio assistente)
+  $grpc.ResponseFuture<$0.MyTreinamentoResponse> createMyTreinamento(
+    $0.CreateMyTreinamentoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$createMyTreinamento, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ListMyTreinamentosResponse> listMyTreinamentos(
+    $0.ListMyTreinamentosRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyTreinamentos, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.MyTreinamentoResponse> getMyTreinamento(
+    $0.GetMyTreinamentoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$getMyTreinamento, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> finalizarMyTreinamento(
+    $0.FinalizarMyTreinamentoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$finalizarMyTreinamento, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> removerMyTreinamento(
+    $0.RemoverMyTreinamentoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$removerMyTreinamento, request, options: options);
+  }
+
   // method descriptors
 
   static final _$listCoreSettings = $grpc.ClientMethod<
@@ -643,6 +680,31 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/GetMyOnboardingProgress',
       ($0.GetMyOnboardingProgressRequest value) => value.writeToBuffer(),
       $0.GetMyOnboardingProgressResponse.fromBuffer);
+  static final _$createMyTreinamento = $grpc.ClientMethod<
+          $0.CreateMyTreinamentoRequest, $0.MyTreinamentoResponse>(
+      '/smartcore.contracts.queries.AdminService/CreateMyTreinamento',
+      ($0.CreateMyTreinamentoRequest value) => value.writeToBuffer(),
+      $0.MyTreinamentoResponse.fromBuffer);
+  static final _$listMyTreinamentos = $grpc.ClientMethod<
+          $0.ListMyTreinamentosRequest, $0.ListMyTreinamentosResponse>(
+      '/smartcore.contracts.queries.AdminService/ListMyTreinamentos',
+      ($0.ListMyTreinamentosRequest value) => value.writeToBuffer(),
+      $0.ListMyTreinamentosResponse.fromBuffer);
+  static final _$getMyTreinamento =
+      $grpc.ClientMethod<$0.GetMyTreinamentoRequest, $0.MyTreinamentoResponse>(
+          '/smartcore.contracts.queries.AdminService/GetMyTreinamento',
+          ($0.GetMyTreinamentoRequest value) => value.writeToBuffer(),
+          $0.MyTreinamentoResponse.fromBuffer);
+  static final _$finalizarMyTreinamento =
+      $grpc.ClientMethod<$0.FinalizarMyTreinamentoRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/FinalizarMyTreinamento',
+          ($0.FinalizarMyTreinamentoRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$removerMyTreinamento =
+      $grpc.ClientMethod<$0.RemoverMyTreinamentoRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/RemoverMyTreinamento',
+          ($0.RemoverMyTreinamentoRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
 }
 
 @$pb.GrpcServiceName('smartcore.contracts.queries.AdminService')
@@ -1073,6 +1135,51 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.GetMyOnboardingProgressRequest.fromBuffer(value),
         ($0.GetMyOnboardingProgressResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.CreateMyTreinamentoRequest,
+            $0.MyTreinamentoResponse>(
+        'CreateMyTreinamento',
+        createMyTreinamento_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.CreateMyTreinamentoRequest.fromBuffer(value),
+        ($0.MyTreinamentoResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListMyTreinamentosRequest,
+            $0.ListMyTreinamentosResponse>(
+        'ListMyTreinamentos',
+        listMyTreinamentos_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListMyTreinamentosRequest.fromBuffer(value),
+        ($0.ListMyTreinamentosResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.GetMyTreinamentoRequest,
+            $0.MyTreinamentoResponse>(
+        'GetMyTreinamento',
+        getMyTreinamento_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.GetMyTreinamentoRequest.fromBuffer(value),
+        ($0.MyTreinamentoResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.FinalizarMyTreinamentoRequest,
+            $0.SimpleOkResponse>(
+        'FinalizarMyTreinamento',
+        finalizarMyTreinamento_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.FinalizarMyTreinamentoRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.RemoverMyTreinamentoRequest,
+            $0.SimpleOkResponse>(
+        'RemoverMyTreinamento',
+        removerMyTreinamento_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.RemoverMyTreinamentoRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.ListCoreSettingsResponse> listCoreSettings_Pre(
@@ -1500,4 +1607,49 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.GetMyOnboardingProgressResponse> getMyOnboardingProgress(
       $grpc.ServiceCall call, $0.GetMyOnboardingProgressRequest request);
+
+  $async.Future<$0.MyTreinamentoResponse> createMyTreinamento_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.CreateMyTreinamentoRequest> $request) async {
+    return createMyTreinamento($call, await $request);
+  }
+
+  $async.Future<$0.MyTreinamentoResponse> createMyTreinamento(
+      $grpc.ServiceCall call, $0.CreateMyTreinamentoRequest request);
+
+  $async.Future<$0.ListMyTreinamentosResponse> listMyTreinamentos_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListMyTreinamentosRequest> $request) async {
+    return listMyTreinamentos($call, await $request);
+  }
+
+  $async.Future<$0.ListMyTreinamentosResponse> listMyTreinamentos(
+      $grpc.ServiceCall call, $0.ListMyTreinamentosRequest request);
+
+  $async.Future<$0.MyTreinamentoResponse> getMyTreinamento_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.GetMyTreinamentoRequest> $request) async {
+    return getMyTreinamento($call, await $request);
+  }
+
+  $async.Future<$0.MyTreinamentoResponse> getMyTreinamento(
+      $grpc.ServiceCall call, $0.GetMyTreinamentoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> finalizarMyTreinamento_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.FinalizarMyTreinamentoRequest> $request) async {
+    return finalizarMyTreinamento($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> finalizarMyTreinamento(
+      $grpc.ServiceCall call, $0.FinalizarMyTreinamentoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> removerMyTreinamento_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.RemoverMyTreinamentoRequest> $request) async {
+    return removerMyTreinamento($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> removerMyTreinamento(
+      $grpc.ServiceCall call, $0.RemoverMyTreinamentoRequest request);
 }

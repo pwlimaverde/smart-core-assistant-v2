@@ -4,6 +4,7 @@ import 'package:login_module/login_module.dart';
 import 'package:onboarding_module/onboarding_module.dart';
 import 'package:operacional_module/operacional_module.dart';
 import 'package:tenant_module/tenant_module.dart';
+import 'package:treinamento_module/treinamento_module.dart';
 
 import 'app.dart';
 import 'platform/url_strategy.dart';
@@ -40,6 +41,7 @@ Future<void> bootstrap(AppConfig config) async {
     OnboardingModule(),
     OperacionalModule(),
     TenantModule(),
+    TreinamentoModule(),
     InitialLoadingModule(),
   ];
 

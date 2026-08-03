@@ -27,6 +27,7 @@ use contracts::grpc::queries::{
     CreateInviteResponse,
     CreateMyDepartamentoRequest,
     CreateMyDepartamentoResponse,
+    CreateMyTreinamentoRequest,
     // Configuração inicial guiada (passos 5 a 8)
     CreateMyWhatsappInstanceRequest,
     CreateMyWhatsappInstanceResponse,
@@ -43,6 +44,7 @@ use contracts::grpc::queries::{
     ExportTenantsCsvResponse,
     FeatureFlag as ProtoFeatureFlag,
     FeatureFlagOverride as ProtoFeatureFlagOverride,
+    FinalizarMyTreinamentoRequest,
     GenerateAccessCodeRequest,
     GenerateAccessCodeResponse,
     GetDashboardSummaryRequest,
@@ -50,6 +52,7 @@ use contracts::grpc::queries::{
     GetMyOnboardingProgressRequest,
     GetMyOnboardingProgressResponse,
     GetMyTenantConfigRequest,
+    GetMyTreinamentoRequest,
     GetMyWhatsappInstanceStatusRequest,
     GetMyWhatsappInstanceStatusResponse,
     GetServiceHealthRequest,
@@ -69,6 +72,8 @@ use contracts::grpc::queries::{
     ListFeatureFlagsResponse,
     ListInvitesRequest,
     ListInvitesResponse,
+    ListMyTreinamentosRequest,
+    ListMyTreinamentosResponse,
     ListPaymentsRequest,
     ListPaymentsResponse,
     // Fase 2 - Billing
@@ -91,6 +96,8 @@ use contracts::grpc::queries::{
     MensagemThread as ProtoMensagemThread,
     MoveAtendimentoEtapaRequest,
     MoveAtendimentoEtapaResponse,
+    MyTreinamento,
+    MyTreinamentoResponse,
     PaymentRecord as ProtoPaymentRecord,
     Plan as ProtoPlan,
     // Fase 5 - Auditoria & Saúde
@@ -99,6 +106,7 @@ use contracts::grpc::queries::{
     RefreshRequest,
     RegisterPaymentRequest,
     RegisterPaymentResponse,
+    RemoverMyTreinamentoRequest,
     RevokeInviteRequest,
     RevokeInviteResponse,
     RevokeVoucherRequest,
@@ -116,6 +124,7 @@ use contracts::grpc::queries::{
     SetOnboardingProgressResponse,
     SetTenantActiveRequest,
     SetTenantActiveResponse,
+    SimpleOkResponse,
     StreamAtendimentosRequest,
     Subscription as ProtoSubscription,
     Tenant as ProtoTenant,
@@ -2403,6 +2412,145 @@ impl AdminService for AdminFacade {
         }))
     }
 
+    // --- Treinamento da IA ---
+    //
+    // Métodos concretos, não só rotas no roteador de envelope: sem eles o
+    // Flutter não alcança nada, ainda que o `data_postgres` responda.
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "CreateMyTreinamento", traceparent)
+    )]
+    async fn create_my_treinamento(
+        &self,
+        req: Request<CreateMyTreinamentoRequest>,
+    ) -> Result<Response<MyTreinamentoResponse>, Status> {
+        let inner = req.get_ref().clone();
+        if inner.tag.trim().is_empty() || inner.grupo.trim().is_empty() {
+            return Err(Status::invalid_argument("informe a tag e o grupo"));
+        }
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "CreateTreinamento",
+                serde_json::json!({
+                    "tag": inner.tag.trim(),
+                    "grupo": inner.grupo.trim(),
+                    "conteudo": inner.conteudo,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(MyTreinamentoResponse {
+            treinamento: Some(treinamento_do_json(&corpo)),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyTreinamentos", traceparent)
+    )]
+    async fn list_my_treinamentos(
+        &self,
+        req: Request<ListMyTreinamentosRequest>,
+    ) -> Result<Response<ListMyTreinamentosResponse>, Status> {
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "ListTreinamentos",
+                serde_json::json!({}),
+            )
+            .await?;
+
+        let treinamentos = corpo
+            .get("treinamentos")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().map(treinamento_do_json).collect())
+            .unwrap_or_default();
+
+        Ok(Response::new(ListMyTreinamentosResponse { treinamentos }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "GetMyTreinamento", traceparent)
+    )]
+    async fn get_my_treinamento(
+        &self,
+        req: Request<GetMyTreinamentoRequest>,
+    ) -> Result<Response<MyTreinamentoResponse>, Status> {
+        let id = req.get_ref().id;
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "GetTreinamento",
+                serde_json::json!({ "id": id }),
+            )
+            .await?;
+
+        Ok(Response::new(MyTreinamentoResponse {
+            treinamento: Some(treinamento_do_json(&corpo)),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "FinalizarMyTreinamento", traceparent)
+    )]
+    async fn finalizar_my_treinamento(
+        &self,
+        req: Request<FinalizarMyTreinamentoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = req.get_ref().clone();
+        if inner.conteudo.trim().is_empty() {
+            return Err(Status::invalid_argument("o conteúdo revisado está vazio"));
+        }
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "FinalizarTreinamento",
+                serde_json::json!({ "id": inner.id, "conteudo": inner.conteudo }),
+            )
+            .await?;
+
+        Ok(Response::new(SimpleOkResponse {
+            sucesso: corpo
+                .get("sucesso")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "RemoverMyTreinamento", traceparent)
+    )]
+    async fn remover_my_treinamento(
+        &self,
+        req: Request<RemoverMyTreinamentoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let id = req.get_ref().id;
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "RemoverTreinamento",
+                serde_json::json!({ "id": id }),
+            )
+            .await?;
+
+        Ok(Response::new(SimpleOkResponse {
+            sucesso: corpo
+                .get("sucesso")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        }))
+    }
+
     // --- Vouchers de ativação (superusuário) ---
     //
     // Métodos concretos, e não só rotas no roteador de envelope: sem a
@@ -4356,6 +4504,32 @@ impl AdminService for AdminFacade {
             }
             Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
         }
+    }
+}
+
+/// Converte o JSON do `data_postgres` no tipo do contrato.
+///
+/// Campo ausente vira o default do proto3 — o cliente não distingue "ausente"
+/// de "vazio", e um opcional a mais aqui só daria trabalho a quem consome.
+fn treinamento_do_json(v: &serde_json::Value) -> MyTreinamento {
+    let texto = |chave: &str| {
+        v.get(chave)
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    let inteiro = |chave: &str| v.get(chave).and_then(|x| x.as_i64()).unwrap_or(0);
+    let logico = |chave: &str| v.get(chave).and_then(|x| x.as_bool()).unwrap_or(false);
+
+    MyTreinamento {
+        id: inteiro("id") as i32,
+        tag: texto("tag"),
+        grupo: texto("grupo"),
+        conteudo: texto("conteudo"),
+        finalizado: logico("finalizado"),
+        vetorizado: logico("vetorizado"),
+        criado_em: inteiro("criado_em"),
+        atualizado_em: inteiro("atualizado_em"),
     }
 }
 

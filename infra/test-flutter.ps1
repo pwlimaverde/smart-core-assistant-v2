@@ -44,6 +44,7 @@ $pacotes = @(
     "modulos\admin_module",
     "modulos\operacional_module",
     "modulos\tenant_module",
+    "modulos\treinamento_module",
     "apps\smart-core-admin",
     "apps\smart-core-tenant"
 )

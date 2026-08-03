@@ -28,6 +28,8 @@ dependencies:
     path: ../../modulos/operacional_module
   tenant_module:
     path: ../../modulos/tenant_module
+  treinamento_module:
+    path: ../../modulos/treinamento_module
   cupertino_icons: ^1.0.8
 
 dev_dependencies:

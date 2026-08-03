@@ -2233,6 +2233,147 @@ final $typed_data.Uint8List updateMyTenantConfigRequestDescriptor = $convert.bas
     'Y2VUaHJlc2hvbGQSQwoIYXBpX2tleXMYFCADKAsyKC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZX'
     'JpZXMuQXBpS2V5RW50cnlSB2FwaUtleXM=');
 
+@$core.Deprecated('Use myTreinamentoDescriptor instead')
+const MyTreinamento$json = {
+  '1': 'MyTreinamento',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'tag', '3': 2, '4': 1, '5': 9, '10': 'tag'},
+    {'1': 'grupo', '3': 3, '4': 1, '5': 9, '10': 'grupo'},
+    {'1': 'conteudo', '3': 4, '4': 1, '5': 9, '10': 'conteudo'},
+    {'1': 'finalizado', '3': 5, '4': 1, '5': 8, '10': 'finalizado'},
+    {'1': 'vetorizado', '3': 6, '4': 1, '5': 8, '10': 'vetorizado'},
+    {'1': 'criado_em', '3': 7, '4': 1, '5': 3, '10': 'criadoEm'},
+    {'1': 'atualizado_em', '3': 8, '4': 1, '5': 3, '10': 'atualizadoEm'},
+  ],
+};
+
+/// Descriptor for `MyTreinamento`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myTreinamentoDescriptor = $convert.base64Decode(
+    'Cg1NeVRyZWluYW1lbnRvEg4KAmlkGAEgASgFUgJpZBIQCgN0YWcYAiABKAlSA3RhZxIUCgVncn'
+    'VwbxgDIAEoCVIFZ3J1cG8SGgoIY29udGV1ZG8YBCABKAlSCGNvbnRldWRvEh4KCmZpbmFsaXph'
+    'ZG8YBSABKAhSCmZpbmFsaXphZG8SHgoKdmV0b3JpemFkbxgGIAEoCFIKdmV0b3JpemFkbxIbCg'
+    'ljcmlhZG9fZW0YByABKANSCGNyaWFkb0VtEiMKDWF0dWFsaXphZG9fZW0YCCABKANSDGF0dWFs'
+    'aXphZG9FbQ==');
+
+@$core.Deprecated('Use createMyTreinamentoRequestDescriptor instead')
+const CreateMyTreinamentoRequest$json = {
+  '1': 'CreateMyTreinamentoRequest',
+  '2': [
+    {'1': 'tag', '3': 1, '4': 1, '5': 9, '10': 'tag'},
+    {'1': 'grupo', '3': 2, '4': 1, '5': 9, '10': 'grupo'},
+    {'1': 'conteudo', '3': 3, '4': 1, '5': 9, '10': 'conteudo'},
+  ],
+};
+
+/// Descriptor for `CreateMyTreinamentoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createMyTreinamentoRequestDescriptor =
+    $convert.base64Decode(
+        'ChpDcmVhdGVNeVRyZWluYW1lbnRvUmVxdWVzdBIQCgN0YWcYASABKAlSA3RhZxIUCgVncnVwbx'
+        'gCIAEoCVIFZ3J1cG8SGgoIY29udGV1ZG8YAyABKAlSCGNvbnRldWRv');
+
+@$core.Deprecated('Use myTreinamentoResponseDescriptor instead')
+const MyTreinamentoResponse$json = {
+  '1': 'MyTreinamentoResponse',
+  '2': [
+    {
+      '1': 'treinamento',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyTreinamento',
+      '10': 'treinamento'
+    },
+  ],
+};
+
+/// Descriptor for `MyTreinamentoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myTreinamentoResponseDescriptor = $convert.base64Decode(
+    'ChVNeVRyZWluYW1lbnRvUmVzcG9uc2USTAoLdHJlaW5hbWVudG8YASABKAsyKi5zbWFydGNvcm'
+    'UuY29udHJhY3RzLnF1ZXJpZXMuTXlUcmVpbmFtZW50b1ILdHJlaW5hbWVudG8=');
+
+@$core.Deprecated('Use listMyTreinamentosRequestDescriptor instead')
+const ListMyTreinamentosRequest$json = {
+  '1': 'ListMyTreinamentosRequest',
+};
+
+/// Descriptor for `ListMyTreinamentosRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyTreinamentosRequestDescriptor =
+    $convert.base64Decode('ChlMaXN0TXlUcmVpbmFtZW50b3NSZXF1ZXN0');
+
+@$core.Deprecated('Use listMyTreinamentosResponseDescriptor instead')
+const ListMyTreinamentosResponse$json = {
+  '1': 'ListMyTreinamentosResponse',
+  '2': [
+    {
+      '1': 'treinamentos',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyTreinamento',
+      '10': 'treinamentos'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyTreinamentosResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyTreinamentosResponseDescriptor =
+    $convert.base64Decode(
+        'ChpMaXN0TXlUcmVpbmFtZW50b3NSZXNwb25zZRJOCgx0cmVpbmFtZW50b3MYASADKAsyKi5zbW'
+        'FydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTXlUcmVpbmFtZW50b1IMdHJlaW5hbWVudG9z');
+
+@$core.Deprecated('Use getMyTreinamentoRequestDescriptor instead')
+const GetMyTreinamentoRequest$json = {
+  '1': 'GetMyTreinamentoRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+  ],
+};
+
+/// Descriptor for `GetMyTreinamentoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getMyTreinamentoRequestDescriptor = $convert
+    .base64Decode('ChdHZXRNeVRyZWluYW1lbnRvUmVxdWVzdBIOCgJpZBgBIAEoBVICaWQ=');
+
+@$core.Deprecated('Use finalizarMyTreinamentoRequestDescriptor instead')
+const FinalizarMyTreinamentoRequest$json = {
+  '1': 'FinalizarMyTreinamentoRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'conteudo', '3': 2, '4': 1, '5': 9, '10': 'conteudo'},
+  ],
+};
+
+/// Descriptor for `FinalizarMyTreinamentoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List finalizarMyTreinamentoRequestDescriptor =
+    $convert.base64Decode(
+        'Ch1GaW5hbGl6YXJNeVRyZWluYW1lbnRvUmVxdWVzdBIOCgJpZBgBIAEoBVICaWQSGgoIY29udG'
+        'V1ZG8YAiABKAlSCGNvbnRldWRv');
+
+@$core.Deprecated('Use removerMyTreinamentoRequestDescriptor instead')
+const RemoverMyTreinamentoRequest$json = {
+  '1': 'RemoverMyTreinamentoRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+  ],
+};
+
+/// Descriptor for `RemoverMyTreinamentoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List removerMyTreinamentoRequestDescriptor =
+    $convert.base64Decode(
+        'ChtSZW1vdmVyTXlUcmVpbmFtZW50b1JlcXVlc3QSDgoCaWQYASABKAVSAmlk');
+
+@$core.Deprecated('Use simpleOkResponseDescriptor instead')
+const SimpleOkResponse$json = {
+  '1': 'SimpleOkResponse',
+  '2': [
+    {'1': 'sucesso', '3': 1, '4': 1, '5': 8, '10': 'sucesso'},
+  ],
+};
+
+/// Descriptor for `SimpleOkResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List simpleOkResponseDescriptor = $convert.base64Decode(
+    'ChBTaW1wbGVPa1Jlc3BvbnNlEhgKB3N1Y2Vzc28YASABKAhSB3N1Y2Vzc28=');
+
 @$core.Deprecated('Use streamAtendimentosRequestDescriptor instead')
 const StreamAtendimentosRequest$json = {
   '1': 'StreamAtendimentosRequest',

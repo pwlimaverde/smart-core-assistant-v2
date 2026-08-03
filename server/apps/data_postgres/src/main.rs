@@ -542,6 +542,11 @@ async fn main() -> anyhow::Result<()> {
     let state_for_resolver_campos_atendimento = state_clone.clone();
     let state_for_atualizar_sentimento = state_clone.clone();
     let state_for_query_compose = state_clone.clone();
+    let s_trn_criar = state_clone.clone();
+    let s_trn_listar = state_clone.clone();
+    let s_trn_obter = state_clone.clone();
+    let s_trn_finalizar = state_clone.clone();
+    let s_trn_remover = state_clone.clone();
     let state_for_resolver_config_ia = state_clone.clone();
     let state_for_update_status = state_clone;
 
@@ -675,6 +680,37 @@ async fn main() -> anyhow::Result<()> {
         .route("QueryCompose", move |env| {
             let state = state_for_query_compose.clone();
             Box::pin(async move { handler_query_compose(state.treinamento.as_ref(), env).await })
+        })
+        .route("CreateTreinamento", move |env| {
+            let state = s_trn_criar.clone();
+            Box::pin(async move {
+                handler_create_treinamento(state.treinamento.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
+        })
+        .route("ListTreinamentos", move |env| {
+            let state = s_trn_listar.clone();
+            Box::pin(
+                async move { handler_list_treinamentos(state.treinamento.as_ref(), env).await },
+            )
+        })
+        .route("GetTreinamento", move |env| {
+            let state = s_trn_obter.clone();
+            Box::pin(async move { handler_get_treinamento(state.treinamento.as_ref(), env).await })
+        })
+        .route("FinalizarTreinamento", move |env| {
+            let state = s_trn_finalizar.clone();
+            Box::pin(async move {
+                handler_finalizar_treinamento(state.treinamento.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
+        })
+        .route("RemoverTreinamento", move |env| {
+            let state = s_trn_remover.clone();
+            Box::pin(async move {
+                handler_remover_treinamento(state.treinamento.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
         })
         .route("VerifyCredentials", move |env| {
             let state = state_for_verify.clone();
@@ -3038,6 +3074,181 @@ async fn handler_query_compose(store: &dyn ports::TreinamentoStore, env: Envelop
                 "comportamento": resultado.comportamento,
                 "documentos": resultado.documentos,
             }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+// --- Treinamento da IA (CRUD do tenant) ---
+//
+// A v1 tinha seis telas para isto; o v2 tinha a camada de banco pronta e
+// nenhum caminho até ela — nem RPC, nem tela. Estes handlers abrem o caminho.
+
+/// Cria (ou reaproveita) o treinamento de uma dupla tag+grupo.
+#[tracing::instrument(skip_all, fields(rpc = "CreateTreinamento", tenant_id = %env.tenant_id))]
+async fn handler_create_treinamento(
+    store: &dyn ports::TreinamentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let tag = payload
+        .get("tag")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim();
+    let grupo = payload
+        .get("grupo")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim();
+    let conteudo = payload
+        .get("conteudo")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+
+    if tag.is_empty() || grupo.is_empty() {
+        return erro(
+            error_core::AppError::Validation("informe a tag e o grupo".into()),
+            &env,
+        );
+    }
+    if conteudo.trim().is_empty() {
+        return erro(
+            error_core::AppError::Validation("o conteúdo do treinamento está vazio".into()),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store.criar_treinamento(&ctx, tag, grupo, conteudo).await {
+        Ok(t) => {
+            audit
+                .publish(
+                    &env,
+                    "treinamento_criado",
+                    format!("Treinamento '{}/{}' registrado", t.grupo, t.tag),
+                    // O conteúdo NÃO entra na auditoria: é material do cliente e
+                    // pode ser volumoso; o que importa aqui é o rastro do ato.
+                    serde_json::json!({ "id": t.id, "tag": t.tag, "grupo": t.grupo }),
+                )
+                .await;
+            ok_reply(&env, "CreateTreinamentoReply", serde_json::json!(t))
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "ListTreinamentos", tenant_id = %env.tenant_id))]
+async fn handler_list_treinamentos(store: &dyn ports::TreinamentoStore, env: Envelope) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_treinamentos(&ctx).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListTreinamentosReply",
+            serde_json::json!({ "treinamentos": itens }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "GetTreinamento", tenant_id = %env.tenant_id))]
+async fn handler_get_treinamento(store: &dyn ports::TreinamentoStore, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+    let ctx = contexto_do_envelope(&env);
+    match store.obter_treinamento(&ctx, id).await {
+        Ok(Some(t)) => ok_reply(&env, "GetTreinamentoReply", serde_json::json!(t)),
+        Ok(None) => erro(
+            error_core::AppError::Validation("treinamento não encontrado".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// Aceita a revisão: grava o texto e põe o treinamento na fila de vetorização.
+#[tracing::instrument(skip_all, fields(rpc = "FinalizarTreinamento", tenant_id = %env.tenant_id))]
+async fn handler_finalizar_treinamento(
+    store: &dyn ports::TreinamentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let conteudo = payload
+        .get("conteudo")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+
+    if conteudo.trim().is_empty() {
+        return erro(
+            error_core::AppError::Validation("o conteúdo revisado está vazio".into()),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store.finalizar_treinamento(&ctx, id, conteudo).await {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "treinamento_finalizado",
+                    format!("Treinamento {id} aceito e enviado para vetorização"),
+                    serde_json::json!({ "id": id }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "FinalizarTreinamentoReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Validation("treinamento não encontrado".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "RemoverTreinamento", tenant_id = %env.tenant_id))]
+async fn handler_remover_treinamento(
+    store: &dyn ports::TreinamentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+    let ctx = contexto_do_envelope(&env);
+    match store.remover_treinamento(&ctx, id).await {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "treinamento_removido",
+                    format!("Treinamento {id} removido"),
+                    serde_json::json!({ "id": id }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "RemoverTreinamentoReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Validation("treinamento não encontrado".into()),
+            &env,
         ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }

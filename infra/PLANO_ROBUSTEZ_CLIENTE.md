@@ -56,7 +56,7 @@ janela, junto do formulário que o causou.
 `invites_page` não tinha o defeito: ali o SnackBar só é usado depois do
 `Navigator.pop`, com a janela já fechada.
 
-### 4. Módulo de treinamento — LACUNA FUNCIONAL, não bug
+### 4. Módulo de treinamento — FEITO
 
 A v1 tem seis telas (`treinar_ia`, `verificar_treinamentos`,
 `cadastrar_query_compose`, `verificar_query_compose`, `testar_query`,
@@ -69,15 +69,24 @@ A v1 tem seis telas (`treinar_ia`, `verificar_treinamentos`,
 - **contrato: nenhum RPC**;
 - **cliente: nenhuma tela**.
 
-Há fundação e não há caminho: **não existe forma de treinar o assistente pelo
-sistema**. Num produto que vende um assistente, é a feature central.
+Havia fundação e não havia caminho. Construído de ponta a ponta:
 
-Escopo real: RPCs no `admin.proto` (listar/criar/remover treinamento, upload de
-documento, CRUD de query compose, testar query), handlers no `data_postgres`,
-métodos concretos na fachada gRPC-Web, regeneração dos stubs Dart e um
-`treinamento_module` com as telas. **Trabalho de dias, não de uma sessão** —
-merece planejamento próprio, com decisão de produto sobre quais das seis telas
-da v1 valem no v2.
+- repositório: `listar_por_tenant`, `buscar_por_id`, `atualizar_conteudo`,
+  `remover` (as cinco queries validadas contra o banco real, cache `.sqlx`
+  regenerado com `-- --all-targets` para não perder entradas de outros targets);
+- port/adapter no `data_postgres` + 5 handlers com auditoria;
+- 5 RPCs no `admin.proto` e **métodos concretos** na fachada gRPC-Web;
+- `treinamento_module` no padrão RSOE, com tela, diálogos e 10 testes.
+
+**Uma tela, não as seis da v1.** Lá o fluxo estava espalhado entre cadastrar,
+pré-processar e verificar; aqui a lista é o centro e mostra os três estados do
+ciclo (rascunho, processando, ativo), com criação e revisão como diálogos sobre
+ela. Quem treina quer ver o que a IA já sabe, não navegar entre telas.
+
+Fora desta entrega, e é decisão de produto: **query compose** (as intents da v1)
+e **testar query com feedback**. O RAG do v2 já usa `treinamento_querycompose`
+na composição de contexto, mas a curadoria manual de intents pode ter sido
+absorvida pelo `ia_engine` — vale decidir antes de construir.
 
 ## Fora do escopo desta varredura
 
