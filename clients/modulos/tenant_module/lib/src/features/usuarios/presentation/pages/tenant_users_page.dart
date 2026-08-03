@@ -142,6 +142,10 @@ class _TenantUsersPageState extends State<TenantUsersPage> {
     final flowsController = TextEditingController(
       text: user.flowPermissions.join(', '),
     );
+    // O erro é mostrado DENTRO da janela: um SnackBar renderiza no Scaffold
+    // abaixo do barrier modal e o usuário não o vê — clicar em salvar e não ver
+    // nada acontecer era o sintoma.
+    String? erroSalvar;
 
     showDialog(
       context: context,
@@ -202,6 +206,29 @@ class _TenantUsersPageState extends State<TenantUsersPage> {
                             'IDs dos fluxos permitidos (separados por vírgula)',
                         controller: flowsController,
                       ),
+                      if (erroSalvar case final msg?) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              size: 18,
+                              color: Theme.of(dialogContext).colorScheme.error,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                msg,
+                                style: TextStyle(
+                                  color:
+                                      Theme.of(dialogContext).colorScheme.error,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -230,13 +257,10 @@ class _TenantUsersPageState extends State<TenantUsersPage> {
                       if (res case Success()) {
                         Navigator.pop(dialogContext);
                       } else if (res case Failure(:final error)) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Erro ao salvar: ${ErrorMessageMapper.map(error)}',
-                            ),
-                          ),
-                        );
+                        setDialogState(() {
+                          erroSalvar =
+                              'Erro ao salvar: ${ErrorMessageMapper.map(error)}';
+                        });
                       }
                     }
                   },

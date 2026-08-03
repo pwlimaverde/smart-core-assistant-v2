@@ -42,12 +42,19 @@ Verificados e **sem** o defeito: `tenants_page` e `billing/_showPaymentDialog`
   em vez de seis refatorações, e dois testes fixam o comportamento, inclusive o
   caso que quebrava (descarte durante a animação) e o fechamento pelo barrier.
 
-### 3. Feedback de erro invisível atrás do modal
+### 3. Feedback de erro invisível atrás do modal — FEITO
 
 `ScaffoldMessenger` chamado de dentro de um diálogo renderiza o SnackBar no
-Scaffold **abaixo** do barrier — o usuário não vê. Já corrigido em
-`billing_page` (erro dentro da janela); o mesmo padrão existe em
-`tenants_page`, `invites_page` e `tenant_users_page`.
+Scaffold **abaixo** do barrier — o usuário não vê. Pior: nesses casos a janela
+**fica aberta** quando dá erro, então o efeito para quem usa é clicar em salvar
+e não ver nada acontecer.
+
+Corrigidos: `billing_page`, `tenants_page` (que precisou virar `StatefulBuilder`
+para poder redesenhar) e `tenant_users_page` — o erro agora aparece dentro da
+janela, junto do formulário que o causou.
+
+`invites_page` não tinha o defeito: ali o SnackBar só é usado depois do
+`Navigator.pop`, com a janela já fechada.
 
 ### 4. Módulo de treinamento — LACUNA FUNCIONAL, não bug
 

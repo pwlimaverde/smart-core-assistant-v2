@@ -340,6 +340,9 @@ class _TenantsPageState extends State<TenantsPage> {
     );
     final emailController = TextEditingController(text: tenant?.email);
     final phoneController = TextEditingController(text: tenant?.phone);
+    // Mostrado DENTRO da janela: um SnackBar renderiza no Scaffold abaixo do
+    // barrier modal, e o usuário clicava em salvar sem ver nada acontecer.
+    String? erroSalvar;
     final isNew = tenant == null;
 
     showDialog(
@@ -354,7 +357,8 @@ class _TenantsPageState extends State<TenantsPage> {
           phoneController,
         ],
         builder: (dialogContext) {
-        return AlertDialog(
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) => AlertDialog(
           title: Text(isNew ? 'Novo Tenant' : 'Editar Tenant'),
           content: SizedBox(
             width: 500,
@@ -394,6 +398,28 @@ class _TenantsPageState extends State<TenantsPage> {
                     controller: phoneController,
                     keyboardType: TextInputType.phone,
                   ),
+                  if (erroSalvar case final msg?) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.error_outline,
+                          size: 18,
+                          color: Theme.of(dialogContext).colorScheme.error,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            msg,
+                            style: TextStyle(
+                              color: Theme.of(dialogContext).colorScheme.error,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -407,6 +433,8 @@ class _TenantsPageState extends State<TenantsPage> {
               label: 'Salvar',
               expand: false,
               onPressed: () async {
+                // Resolvido antes do await: salvar recarrega a lista.
+                final navigator = Navigator.of(dialogContext);
                 final name = nameController.text.trim();
                 final slug = slugController.text.trim();
                 final ownerStr = ownerController.text.trim();
@@ -417,16 +445,11 @@ class _TenantsPageState extends State<TenantsPage> {
                     slug.isEmpty ||
                     ownerStr.isEmpty ||
                     email.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Por favor, preencha os campos obrigatórios.',
-                      ),
-                    ),
+                  setDialogState(
+                    () => erroSalvar = 'Preencha todos os campos obrigatórios.',
                   );
                   return;
                 }
-
                 final ownerId = int.tryParse(ownerStr);
                 if (ownerId == null) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -459,22 +482,18 @@ class _TenantsPageState extends State<TenantsPage> {
                   );
                 }
 
-                if (context.mounted) {
-                  if (res is Success) {
-                    Navigator.pop(dialogContext);
-                  } else if (res case Failure(:final error)) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Erro ao salvar: ${ErrorMessageMapper.map(error)}',
-                        ),
-                      ),
-                    );
-                  }
+                if (res is Success) {
+                  navigator.pop();
+                } else if (res case Failure(:final error)) {
+                  setDialogState(() {
+                    erroSalvar =
+                        'Erro ao salvar: ${ErrorMessageMapper.map(error)}';
+                  });
                 }
               },
             ),
           ],
+        ),
         );
       },
       ),
