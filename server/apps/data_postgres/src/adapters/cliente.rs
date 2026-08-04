@@ -44,4 +44,27 @@ impl ClienteStore for PgClienteStore {
         })
         .await
     }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_contatos(
+        &self,
+        ctx: &RequestContext,
+        busca: Option<String>,
+        limite: i64,
+    ) -> Result<Vec<Contato>, DbError> {
+        let repo = PostgresContatoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        // Teto defensivo: a lista cresce sem limite com o uso, e um cliente que
+        // peça 100 mil linhas derrubaria a tela dele e pesaria no banco.
+        let limite = limite.clamp(1, 200);
+
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let itens = repo
+                .listar_por_tenant(&mut tx, &ctx, busca.as_deref(), limite)
+                .await?;
+            Ok((itens, tx))
+        })
+        .await
+    }
 }

@@ -4,6 +4,10 @@ import 'features/conexoes/data/datasources/conexoes_datasources.dart';
 import 'features/conexoes/data/repositories/conexoes_repositories.dart';
 import 'features/conexoes/domain/usecases/conexoes_usecases.dart';
 import 'features/conexoes/presentation/routes/conexoes_routes.dart';
+import 'features/contatos/data/datasources/contatos_datasources.dart';
+import 'features/contatos/data/repositories/contatos_repositories.dart';
+import 'features/contatos/domain/usecases/contatos_usecases.dart';
+import 'features/contatos/presentation/routes/contatos_routes.dart';
 import 'features/painel/data/datasources/painel_datasources.dart';
 import 'features/painel/data/repositories/painel_repositories.dart';
 import 'features/painel/domain/usecases/painel_usecases.dart';
@@ -103,6 +107,15 @@ final class TenantModule extends AppModule {
       ),
     );
 
+    // ── contatos ──────────────────────────────────────────────────────────
+    i.lazySingleton<ListarContatosUsecase>(
+      () => ListarContatosUsecase(
+        repository: ListarContatosRepository(
+          datasource: ListarContatosDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+
     // ── convites ──────────────────────────────────────────────────────────
     i.lazySingleton<CreateInviteUsecase>(
       () => CreateInviteUsecase(
@@ -173,6 +186,7 @@ final class TenantModule extends AppModule {
     TenantUsersRoute(),
     TenantOwnConfigRoute(),
     ConexoesRoute(),
+    ContatosRoute(),
     EquipeRoute(),
     PainelRoute(),
   ];

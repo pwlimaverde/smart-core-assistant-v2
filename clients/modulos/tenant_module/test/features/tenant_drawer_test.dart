@@ -57,6 +57,11 @@ void main() {
           builder: (_, _) => comDrawer('conexoes'),
         ),
         GoRoute(
+          path: '/tenant/contatos',
+          builder: (_, _) => comDrawer('contatos'),
+        ),
+        GoRoute(path: '/tenant/painel', builder: (_, _) => comDrawer('painel')),
+        GoRoute(
           path: '/tenant/treinamento',
           builder: (_, _) => comDrawer('treinamento'),
         ),
@@ -86,10 +91,14 @@ void main() {
     await montar(tester);
 
     expect(find.text('Atendimento (Kanban)'), findsOneWidget);
+    expect(find.text('Painel'), findsOneWidget);
+    expect(find.text('Contatos'), findsOneWidget);
     expect(find.text('Equipe'), findsOneWidget);
     expect(find.text('Conexões de WhatsApp'), findsOneWidget);
     expect(find.text('Treinamento da IA'), findsOneWidget);
     expect(find.text('Convites'), findsOneWidget);
+    expect(find.text('Usuários'), findsOneWidget);
+    expect(find.text('Configuração do Tenant'), findsOneWidget);
   });
 
   testWidgets('sem tenant:admin, só o workspace aparece', (tester) async {
@@ -97,9 +106,42 @@ void main() {
     await montar(tester);
 
     expect(find.text('Atendimento (Kanban)'), findsOneWidget);
+    expect(find.text('Contatos'), findsNothing);
     expect(find.text('Equipe'), findsNothing);
     expect(find.text('Conexões de WhatsApp'), findsNothing);
     expect(find.text('Treinamento da IA'), findsNothing);
+  });
+
+  testWidgets('o menu rola quando a janela é baixa', (tester) async {
+    // O menu passou de oito itens: numa janela baixa a Column rígida estourava
+    // e escondia o fim da lista sem sinalizar que havia mais.
+    registrarSessao(admin: true);
+    tester.view.physicalSize = const Size(1200, 600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+
+    final router = GoRouter(
+      initialLocation: '/',
+      routes: [
+        GoRoute(
+          path: '/',
+          builder: (_, _) => Scaffold(
+            appBar: AppBar(title: const Text('raiz')),
+            drawer: const TenantDrawer(),
+          ),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    await tester.pumpWidget(MaterialApp.router(routerConfig: router));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Open navigation menu'));
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
+    expect(find.byType(ListView), findsOneWidget);
+    // Sair fica fora da rolagem: é o item que não pode sumir.
+    expect(find.text('Sair'), findsOneWidget);
   });
 
   testWidgets('navega para a equipe e fecha o menu', (tester) async {
@@ -128,6 +170,19 @@ void main() {
     expect(
       router.routerDelegate.currentConfiguration.matches.last.matchedLocation,
       '/tenant/conexoes',
+    );
+  });
+
+  testWidgets('navega para os contatos', (tester) async {
+    registrarSessao(admin: true);
+    final router = await montar(tester);
+
+    await tester.tap(find.text('Contatos'));
+    await tester.pumpAndSettle();
+
+    expect(
+      router.routerDelegate.currentConfiguration.matches.last.matchedLocation,
+      '/tenant/contatos',
     );
   });
 

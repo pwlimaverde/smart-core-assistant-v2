@@ -695,6 +695,26 @@ table UpdateMyTenantConfigRequest {
   api_keys:[ApiKeyEntry];
 }
 
+table MyContato {
+  id:int;
+  telefone:string;
+  nome_contato:string;
+  nome_perfil_whatsapp:string;
+  email:string;
+  ativo:bool;
+  ultima_interacao:long;
+  cadastrado_em:long;
+}
+
+table ListMyContatosRequest {
+  busca:string;
+  limite:int;
+}
+
+table ListMyContatosResponse {
+  contatos:[MyContato];
+}
+
 table GetMyPainelRequest {
 }
 

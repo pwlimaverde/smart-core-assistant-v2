@@ -850,6 +850,34 @@ service AdminService {
   rpc DesativarMyDepartamento(MyDepartamentoIdRequest) returns (SimpleOkResponse);
   rpc ListMyAtendentes(ListMyAtendentesRequest) returns (ListMyAtendentesResponse);
   rpc GetMyPainel(GetMyPainelRequest) returns (GetMyPainelResponse);
+  rpc ListMyContatos(ListMyContatosRequest) returns (ListMyContatosResponse);
+}
+
+// --- Contatos (quem fala com o tenant pelo WhatsApp) ---
+
+message MyContato {
+  int32 id = 1;
+  string telefone = 2;
+  // Nome cadastrado. Vazio quando o contato só existe pelo WhatsApp.
+  string nome_contato = 3;
+  // Como a pessoa se identifica no WhatsApp — muitas vezes é o único nome
+  // que se tem.
+  string nome_perfil_whatsapp = 4;
+  string email = 5;
+  bool ativo = 6;
+  int64 ultima_interacao = 7;
+  int64 cadastrado_em = 8;
+}
+
+message ListMyContatosRequest {
+  // Casa contra nome, telefone e nome do perfil. Vazio = sem filtro.
+  string busca = 1;
+  // 0 = padrão do servidor (50). Teto de 200.
+  int32 limite = 2;
+}
+
+message ListMyContatosResponse {
+  repeated MyContato contatos = 1;
 }
 
 // --- Painel do tenant ---

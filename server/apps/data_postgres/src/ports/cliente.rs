@@ -17,4 +17,13 @@ pub trait ClienteStore: Send + Sync {
         telefone: &str,
         nome: Option<String>,
     ) -> Result<Contato, DbError>;
+
+    /// Lista os contatos do tenant, mais recentes primeiro. `busca` é owned
+    /// pelo mesmo motivo de `nome` acima.
+    async fn listar_contatos(
+        &self,
+        ctx: &RequestContext,
+        busca: Option<String>,
+        limite: i64,
+    ) -> Result<Vec<Contato>, DbError>;
 }

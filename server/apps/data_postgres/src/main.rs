@@ -506,6 +506,7 @@ async fn main() -> anyhow::Result<()> {
     let s_dep_desativar = state_clone.clone();
     let s_atendentes = state_clone.clone();
     let s_painel = state_clone.clone();
+    let s_contatos = state_clone.clone();
     let state_for_create_departamento = state_clone.clone();
     let state_for_create_plan = state_clone.clone();
     let state_for_update_plan = state_clone.clone();
@@ -901,6 +902,10 @@ async fn main() -> anyhow::Result<()> {
                 )
                 .await
             })
+        })
+        .route("ListContatos", move |env| {
+            let state = s_contatos.clone();
+            Box::pin(async move { handler_list_contatos(state.cliente.as_ref(), env).await })
         })
         .route("GetPainelTenant", move |env| {
             let state = s_painel.clone();
@@ -3224,6 +3229,30 @@ async fn handler_desativar_departamento(
         Ok(false) => erro(
             error_core::AppError::Validation("departamento não encontrado".into()),
             &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "ListContatos", tenant_id = %env.tenant_id))]
+async fn handler_list_contatos(store: &dyn ports::ClienteStore, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let busca = payload
+        .get("busca")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        // Busca vazia é "sem filtro", não "procure por string vazia" — que
+        // casaria com tudo de qualquer forma, mas por acidente.
+        .filter(|s| !s.is_empty())
+        .map(str::to_string);
+    let limite = payload.get("limite").and_then(|v| v.as_i64()).unwrap_or(50);
+
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_contatos(&ctx, busca, limite).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListContatosReply",
+            serde_json::json!({ "contatos": itens }),
         ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }

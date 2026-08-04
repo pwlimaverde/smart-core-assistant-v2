@@ -76,6 +76,8 @@ use contracts::grpc::queries::{
     ListInvitesResponse,
     ListMyAtendentesRequest,
     ListMyAtendentesResponse,
+    ListMyContatosRequest,
+    ListMyContatosResponse,
     ListMyDepartamentosRequest,
     ListMyDepartamentosResponse,
     ListMyTreinamentosRequest,
@@ -105,6 +107,7 @@ use contracts::grpc::queries::{
     MoveAtendimentoEtapaRequest,
     MoveAtendimentoEtapaResponse,
     MyAtendente,
+    MyContato,
     MyDepartamento,
     MyDepartamentoIdRequest,
     MyTreinamento,
@@ -2666,6 +2669,37 @@ impl AdminService for AdminFacade {
         }))
     }
 
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyContatos", traceparent)
+    )]
+    async fn list_my_contatos(
+        &self,
+        req: Request<ListMyContatosRequest>,
+    ) -> Result<Response<ListMyContatosResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "ListContatos",
+                serde_json::json!({
+                    "busca": inner.busca,
+                    // 0 no proto3 significa "não informado": o servidor decide.
+                    "limite": if inner.limite > 0 { inner.limite } else { 50 },
+                }),
+            )
+            .await?;
+
+        let contatos = corpo
+            .get("contatos")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().map(contato_do_json).collect())
+            .unwrap_or_default();
+
+        Ok(Response::new(ListMyContatosResponse { contatos }))
+    }
+
     // --- Conexões de WhatsApp do tenant ---
     //
     // O onboarding cria a primeira. Sem estas, uma conexão que cai deixa o
@@ -4722,6 +4756,33 @@ impl AdminService for AdminFacade {
             }
             Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
         }
+    }
+}
+
+/// Converte o contato do JSON interno no tipo do contrato.
+fn contato_do_json(v: &serde_json::Value) -> MyContato {
+    let texto = |chave: &str| {
+        v.get(chave)
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    let data = |chave: &str| {
+        v.get(chave)
+            .and_then(|x| x.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.timestamp_millis())
+            .unwrap_or(0)
+    };
+    MyContato {
+        id: v.get("id").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+        telefone: texto("telefone"),
+        nome_contato: texto("nome_contato"),
+        nome_perfil_whatsapp: texto("nome_perfil_whatsapp"),
+        email: texto("email"),
+        ativo: v.get("ativo").and_then(|x| x.as_bool()).unwrap_or(false),
+        ultima_interacao: data("ultima_interacao"),
+        cadastrado_em: data("data_cadastro"),
     }
 }
 

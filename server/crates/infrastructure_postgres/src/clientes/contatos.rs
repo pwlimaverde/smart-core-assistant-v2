@@ -39,6 +39,21 @@ pub trait ContatoRepository: Send + Sync {
         telefone: &str,
     ) -> Result<Option<Contato>, DbError>;
 
+    /// Lista os contatos do tenant, mais recentes primeiro pela última
+    /// interação — quem falou agora é quem se procura.
+    ///
+    /// `busca` casa contra nome, telefone e nome do perfil do WhatsApp: são as
+    /// três formas de lembrar de alguém, e obrigar a escolher qual campo
+    /// pesquisar seria pedir que a pessoa adivinhe como o contato foi salvo.
+    /// `limite` existe porque a lista cresce sem teto com o uso.
+    async fn listar_por_tenant(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        busca: Option<&str>,
+        limite: i64,
+    ) -> Result<Vec<Contato>, DbError>;
+
     async fn buscar_por_id(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -181,5 +196,38 @@ impl ContatoRepository for PostgresContatoRepository {
         .execute(&mut **tx)
         .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn listar_por_tenant(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        busca: Option<&str>,
+        limite: i64,
+    ) -> Result<Vec<Contato>, DbError> {
+        ctx.exigir_qualquer(&["clientes:read", "atendimentos:read", "tenant:admin"])?;
+        // `$2 IS NULL` no mesmo statement em vez de dois SQLs: a diferença é um
+        // filtro, não uma consulta diferente.
+        let rows = sqlx::query_as!(
+            Contato,
+            r#"SELECT id, tenant_id, telefone, nome_contato, slug, email,
+                      nome_perfil_whatsapp, data_cadastro, ultima_interacao,
+                      ativo, metadados, foto_perfil, foto_perfil_url_origem
+               FROM oraculo_contato
+               WHERE tenant_id = $1
+                 AND ($2::text IS NULL
+                      OR nome_contato ILIKE '%' || $2 || '%'
+                      OR telefone ILIKE '%' || $2 || '%'
+                      OR nome_perfil_whatsapp ILIKE '%' || $2 || '%')
+               ORDER BY ultima_interacao DESC
+               LIMIT $3"#,
+            ctx.tenant_id,
+            busca,
+            limite
+        )
+        .fetch_all(&mut **tx)
+        .await?;
+        Ok(rows)
     }
 }
