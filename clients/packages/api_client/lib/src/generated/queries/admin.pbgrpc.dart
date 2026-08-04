@@ -493,6 +493,13 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$listMyAtendentes, request, options: options);
   }
 
+  $grpc.ResponseFuture<$0.GetMyPainelResponse> getMyPainel(
+    $0.GetMyPainelRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$getMyPainel, request, options: options);
+  }
+
   // method descriptors
 
   static final _$listCoreSettings = $grpc.ClientMethod<
@@ -800,6 +807,11 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/ListMyAtendentes',
       ($0.ListMyAtendentesRequest value) => value.writeToBuffer(),
       $0.ListMyAtendentesResponse.fromBuffer);
+  static final _$getMyPainel =
+      $grpc.ClientMethod<$0.GetMyPainelRequest, $0.GetMyPainelResponse>(
+          '/smartcore.contracts.queries.AdminService/GetMyPainel',
+          ($0.GetMyPainelRequest value) => value.writeToBuffer(),
+          $0.GetMyPainelResponse.fromBuffer);
 }
 
 @$pb.GrpcServiceName('smartcore.contracts.queries.AdminService')
@@ -1338,6 +1350,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.ListMyAtendentesRequest.fromBuffer(value),
         ($0.ListMyAtendentesResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.GetMyPainelRequest, $0.GetMyPainelResponse>(
+            'GetMyPainel',
+            getMyPainel_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.GetMyPainelRequest.fromBuffer(value),
+            ($0.GetMyPainelResponse value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.ListCoreSettingsResponse> listCoreSettings_Pre(
@@ -1873,4 +1894,12 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.ListMyAtendentesResponse> listMyAtendentes(
       $grpc.ServiceCall call, $0.ListMyAtendentesRequest request);
+
+  $async.Future<$0.GetMyPainelResponse> getMyPainel_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.GetMyPainelRequest> $request) async {
+    return getMyPainel($call, await $request);
+  }
+
+  $async.Future<$0.GetMyPainelResponse> getMyPainel(
+      $grpc.ServiceCall call, $0.GetMyPainelRequest request);
 }

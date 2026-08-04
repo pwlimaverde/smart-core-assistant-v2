@@ -174,4 +174,11 @@ pub trait OperacionalStore: Send + Sync {
         &self,
         ctx: &RequestContext,
     ) -> Result<Vec<serde_json::Value>, DbError>;
+
+    /// Números do painel do tenant.
+    ///
+    /// Uma consulta só, e não uma por número: são cinco contagens pequenas
+    /// sobre o mesmo tenant, e cinco idas ao banco para montar uma tela seria
+    /// desperdício — além de poder mostrar números de instantes diferentes.
+    async fn painel_do_tenant(&self, ctx: &RequestContext) -> Result<serde_json::Value, DbError>;
 }

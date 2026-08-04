@@ -51,6 +51,8 @@ use contracts::grpc::queries::{
     GetDashboardSummaryResponse,
     GetMyOnboardingProgressRequest,
     GetMyOnboardingProgressResponse,
+    GetMyPainelRequest,
+    GetMyPainelResponse,
     GetMyTenantConfigRequest,
     GetMyTreinamentoRequest,
     GetMyWhatsappInstanceStatusRequest,
@@ -2632,6 +2634,36 @@ impl AdminService for AdminFacade {
             .unwrap_or_default();
 
         Ok(Response::new(ListMyAtendentesResponse { atendentes }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "GetMyPainel", traceparent)
+    )]
+    async fn get_my_painel(
+        &self,
+        req: Request<GetMyPainelRequest>,
+    ) -> Result<Response<GetMyPainelResponse>, Status> {
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "GetPainelTenant",
+                serde_json::json!({}),
+            )
+            .await?;
+
+        let n = |chave: &str| corpo.get(chave).and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+        Ok(Response::new(GetMyPainelResponse {
+            em_andamento: n("em_andamento"),
+            aguardando: n("aguardando"),
+            mensagens_24h: n("mensagens_24h"),
+            conexoes_ativas: n("conexoes_ativas"),
+            conexoes_total: n("conexoes_total"),
+            departamentos: n("departamentos"),
+            treinamentos_ativos: n("treinamentos_ativos"),
+        }))
     }
 
     // --- Conexões de WhatsApp do tenant ---

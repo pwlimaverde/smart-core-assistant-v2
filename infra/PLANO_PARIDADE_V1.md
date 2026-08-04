@@ -140,10 +140,25 @@ que uma fila parou.
 atendente antes disso exigiria inventar um fluxo padrão, o que é decisão de
 produto, não detalhe de implementação.
 
-### Etapa 3 — Dashboard do tenant
+### Etapa 3 — Painel do tenant — FEITO
 
-Volume por período, filas por departamento, estado das conexões. A v1 tem;
-é a primeira tela depois do login e hoje o tenant cai numa lista vazia.
+Rota `/tenant/painel`. Números do que exige ação agora (fila, em atendimento,
+mensagens em 24h) e da estrutura (conexões ativas/total, departamentos,
+material treinado).
+
+Uma consulta só, com `FILTER`: cinco contagens do mesmo instante. Cinco
+SELECTs mostrariam uma soma que nunca existiu.
+
+Os avisos **levam à tela que resolve** — dizer o problema sem oferecer o
+caminho deixaria a pessoa procurando no menu. E distinguem os dois casos que
+parecem iguais nos números: `0 de 0` conexões é conta nova (convite a
+conectar), `1 de 2` é queda (alerta vermelho).
+
+Os status vieram do banco, não de palpite: o `oraculo_atendimento` usa o
+vocabulário da v1 (`fila`, `em_atendimento`, `pendencia`, `resolvido`,
+`cancelado`, `arquivado`) e a coluna de data da mensagem é `timestamp`. Escrevi
+`data_envio` de memória e o `sqlx` recusou na compilação — é para isso que a
+validação contra o banco real serve.
 
 ### Etapa 4 — Clientes e contatos
 

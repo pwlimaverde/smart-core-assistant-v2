@@ -9086,6 +9086,173 @@ class UpdateMyTenantConfigRequest extends $pb.GeneratedMessage {
   $pb.PbList<ApiKeyEntry> get apiKeys => $_getList(19);
 }
 
+class GetMyPainelRequest extends $pb.GeneratedMessage {
+  factory GetMyPainelRequest() => create();
+
+  GetMyPainelRequest._();
+
+  factory GetMyPainelRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GetMyPainelRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetMyPainelRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyPainelRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyPainelRequest copyWith(void Function(GetMyPainelRequest) updates) =>
+      super.copyWith((message) => updates(message as GetMyPainelRequest))
+          as GetMyPainelRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GetMyPainelRequest create() => GetMyPainelRequest._();
+  @$core.override
+  GetMyPainelRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GetMyPainelRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetMyPainelRequest>(create);
+  static GetMyPainelRequest? _defaultInstance;
+}
+
+class GetMyPainelResponse extends $pb.GeneratedMessage {
+  factory GetMyPainelResponse({
+    $core.int? emAndamento,
+    $core.int? aguardando,
+    $core.int? mensagens24h,
+    $core.int? conexoesAtivas,
+    $core.int? conexoesTotal,
+    $core.int? departamentos,
+    $core.int? treinamentosAtivos,
+  }) {
+    final result = create();
+    if (emAndamento != null) result.emAndamento = emAndamento;
+    if (aguardando != null) result.aguardando = aguardando;
+    if (mensagens24h != null) result.mensagens24h = mensagens24h;
+    if (conexoesAtivas != null) result.conexoesAtivas = conexoesAtivas;
+    if (conexoesTotal != null) result.conexoesTotal = conexoesTotal;
+    if (departamentos != null) result.departamentos = departamentos;
+    if (treinamentosAtivos != null)
+      result.treinamentosAtivos = treinamentosAtivos;
+    return result;
+  }
+
+  GetMyPainelResponse._();
+
+  factory GetMyPainelResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GetMyPainelResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetMyPainelResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'emAndamento')
+    ..aI(2, _omitFieldNames ? '' : 'aguardando')
+    ..aI(3, _omitFieldNames ? '' : 'mensagens24h', protoName: 'mensagens_24h')
+    ..aI(4, _omitFieldNames ? '' : 'conexoesAtivas')
+    ..aI(5, _omitFieldNames ? '' : 'conexoesTotal')
+    ..aI(6, _omitFieldNames ? '' : 'departamentos')
+    ..aI(7, _omitFieldNames ? '' : 'treinamentosAtivos')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyPainelResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetMyPainelResponse copyWith(void Function(GetMyPainelResponse) updates) =>
+      super.copyWith((message) => updates(message as GetMyPainelResponse))
+          as GetMyPainelResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GetMyPainelResponse create() => GetMyPainelResponse._();
+  @$core.override
+  GetMyPainelResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GetMyPainelResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetMyPainelResponse>(create);
+  static GetMyPainelResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get emAndamento => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set emAndamento($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasEmAndamento() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearEmAndamento() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get aguardando => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set aguardando($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasAguardando() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearAguardando() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.int get mensagens24h => $_getIZ(2);
+  @$pb.TagNumber(3)
+  set mensagens24h($core.int value) => $_setSignedInt32(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasMensagens24h() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearMensagens24h() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.int get conexoesAtivas => $_getIZ(3);
+  @$pb.TagNumber(4)
+  set conexoesAtivas($core.int value) => $_setSignedInt32(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasConexoesAtivas() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearConexoesAtivas() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.int get conexoesTotal => $_getIZ(4);
+  @$pb.TagNumber(5)
+  set conexoesTotal($core.int value) => $_setSignedInt32(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasConexoesTotal() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearConexoesTotal() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.int get departamentos => $_getIZ(5);
+  @$pb.TagNumber(6)
+  set departamentos($core.int value) => $_setSignedInt32(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasDepartamentos() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearDepartamentos() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $core.int get treinamentosAtivos => $_getIZ(6);
+  @$pb.TagNumber(7)
+  set treinamentosAtivos($core.int value) => $_setSignedInt32(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasTreinamentosAtivos() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearTreinamentosAtivos() => $_clearField(7);
+}
+
 class MyDepartamento extends $pb.GeneratedMessage {
   factory MyDepartamento({
     $core.int? id,

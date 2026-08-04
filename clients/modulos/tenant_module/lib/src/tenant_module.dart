@@ -4,6 +4,10 @@ import 'features/conexoes/data/datasources/conexoes_datasources.dart';
 import 'features/conexoes/data/repositories/conexoes_repositories.dart';
 import 'features/conexoes/domain/usecases/conexoes_usecases.dart';
 import 'features/conexoes/presentation/routes/conexoes_routes.dart';
+import 'features/painel/data/datasources/painel_datasources.dart';
+import 'features/painel/data/repositories/painel_repositories.dart';
+import 'features/painel/domain/usecases/painel_usecases.dart';
+import 'features/painel/presentation/routes/painel_routes.dart';
 import 'features/equipe/data/datasources/equipe_datasources.dart';
 import 'features/equipe/data/repositories/equipe_repositories.dart';
 import 'features/equipe/domain/usecases/equipe_usecases.dart';
@@ -37,6 +41,15 @@ import 'features/usuarios/presentation/routes/tenant_users_route.dart';
 final class TenantModule extends AppModule {
   @override
   void globalBinds(Injector i) {
+    // ── painel ────────────────────────────────────────────────────────────
+    i.lazySingleton<CarregarPainelUsecase>(
+      () => CarregarPainelUsecase(
+        repository: CarregarPainelRepository(
+          datasource: CarregarPainelDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+
     // ── equipe (departamentos e atendentes) ───────────────────────────────
     i.lazySingleton<CarregarEquipeUsecase>(
       () => CarregarEquipeUsecase(
@@ -161,6 +174,7 @@ final class TenantModule extends AppModule {
     TenantOwnConfigRoute(),
     ConexoesRoute(),
     EquipeRoute(),
+    PainelRoute(),
   ];
 
   /// Stub gRPC do admin, extraído do `ApiClient` global da plataforma.

@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n                     -- Vocabulário de `StatusAtendimento` (herdado da v1):\n                     -- fila, em_atendimento, pendencia, resolvido, cancelado,\n                     -- arquivado. O painel mostra os dois que pedem ação.\n                     (SELECT COUNT(*) FROM oraculo_atendimento\n                       WHERE tenant_id = $1 AND status = 'em_atendimento')\n                       AS \"em_andamento!\",\n                     (SELECT COUNT(*) FROM oraculo_atendimento\n                       WHERE tenant_id = $1 AND status = 'fila')\n                       AS \"aguardando!\",\n                     (SELECT COUNT(*) FROM oraculo_mensagem\n                       WHERE tenant_id = $1\n                         AND timestamp >= NOW() - INTERVAL '24 hours')\n                       AS \"mensagens_24h!\",\n                     (SELECT COUNT(*) FROM whatsapp_instance\n                       WHERE tenant_id = $1 AND connection_state = 'connected')\n                       AS \"conexoes_ativas!\",\n                     (SELECT COUNT(*) FROM whatsapp_instance WHERE tenant_id = $1)\n                       AS \"conexoes_total!\",\n                     (SELECT COUNT(*) FROM oraculo_departamento\n                       WHERE tenant_id = $1 AND ativo = true)\n                       AS \"departamentos!\",\n                     (SELECT COUNT(*) FROM oraculo_treinamento\n                       WHERE tenant_id = $1 AND treinamento_vetorizado = true)\n                       AS \"treinamentos_ativos!\"\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "em_andamento!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "aguardando!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "mensagens_24h!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "conexoes_ativas!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "conexoes_total!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "departamentos!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "treinamentos_ativos!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "bab8258d86895092744cad7cc4a6222b9fb9d7c8a3364ffb9ddee7586893fe5c"
+}

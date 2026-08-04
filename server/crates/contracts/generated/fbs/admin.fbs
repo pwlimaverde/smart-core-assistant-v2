@@ -693,6 +693,19 @@ table UpdateMyTenantConfigRequest {
   api_keys:[smartcore.contracts.queries.ApiKeyEntry];
 }
 
+table GetMyPainelRequest {
+}
+
+table GetMyPainelResponse {
+  em_andamento:int;
+  aguardando:int;
+  mensagens_24h:int;
+  conexoes_ativas:int;
+  conexoes_total:int;
+  departamentos:int;
+  treinamentos_ativos:int;
+}
+
 table MyDepartamento {
   id:int;
   nome:string;

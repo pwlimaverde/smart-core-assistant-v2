@@ -849,6 +849,24 @@ service AdminService {
   rpc UpdateMyDepartamento(UpdateMyDepartamentoRequest) returns (SimpleOkResponse);
   rpc DesativarMyDepartamento(MyDepartamentoIdRequest) returns (SimpleOkResponse);
   rpc ListMyAtendentes(ListMyAtendentesRequest) returns (ListMyAtendentesResponse);
+  rpc GetMyPainel(GetMyPainelRequest) returns (GetMyPainelResponse);
+}
+
+// --- Painel do tenant ---
+//
+// A primeira tela depois do login. Os números vêm de uma consulta só: cinco
+// contagens do mesmo instante, e não cinco fotos de momentos diferentes.
+
+message GetMyPainelRequest {}
+
+message GetMyPainelResponse {
+  int32 em_andamento = 1;
+  int32 aguardando = 2;
+  int32 mensagens_24h = 3;
+  int32 conexoes_ativas = 4;
+  int32 conexoes_total = 5;
+  int32 departamentos = 6;
+  int32 treinamentos_ativos = 7;
 }
 
 // --- Departamentos e atendentes ---

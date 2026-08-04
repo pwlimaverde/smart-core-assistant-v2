@@ -61,6 +61,15 @@ class TenantDrawer extends StatelessWidget {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.insights_outlined),
+              title: const Text('Painel'),
+              selected: location == '/tenant/painel',
+              onTap: () {
+                Navigator.pop(context);
+                context.go('/tenant/painel');
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.groups_outlined),
               title: const Text('Equipe'),
               selected: location == '/tenant/equipe',

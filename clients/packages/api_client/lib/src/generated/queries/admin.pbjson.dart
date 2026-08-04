@@ -2233,6 +2233,44 @@ final $typed_data.Uint8List updateMyTenantConfigRequestDescriptor = $convert.bas
     'Y2VUaHJlc2hvbGQSQwoIYXBpX2tleXMYFCADKAsyKC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZX'
     'JpZXMuQXBpS2V5RW50cnlSB2FwaUtleXM=');
 
+@$core.Deprecated('Use getMyPainelRequestDescriptor instead')
+const GetMyPainelRequest$json = {
+  '1': 'GetMyPainelRequest',
+};
+
+/// Descriptor for `GetMyPainelRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getMyPainelRequestDescriptor =
+    $convert.base64Decode('ChJHZXRNeVBhaW5lbFJlcXVlc3Q=');
+
+@$core.Deprecated('Use getMyPainelResponseDescriptor instead')
+const GetMyPainelResponse$json = {
+  '1': 'GetMyPainelResponse',
+  '2': [
+    {'1': 'em_andamento', '3': 1, '4': 1, '5': 5, '10': 'emAndamento'},
+    {'1': 'aguardando', '3': 2, '4': 1, '5': 5, '10': 'aguardando'},
+    {'1': 'mensagens_24h', '3': 3, '4': 1, '5': 5, '10': 'mensagens24h'},
+    {'1': 'conexoes_ativas', '3': 4, '4': 1, '5': 5, '10': 'conexoesAtivas'},
+    {'1': 'conexoes_total', '3': 5, '4': 1, '5': 5, '10': 'conexoesTotal'},
+    {'1': 'departamentos', '3': 6, '4': 1, '5': 5, '10': 'departamentos'},
+    {
+      '1': 'treinamentos_ativos',
+      '3': 7,
+      '4': 1,
+      '5': 5,
+      '10': 'treinamentosAtivos'
+    },
+  ],
+};
+
+/// Descriptor for `GetMyPainelResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getMyPainelResponseDescriptor = $convert.base64Decode(
+    'ChNHZXRNeVBhaW5lbFJlc3BvbnNlEiEKDGVtX2FuZGFtZW50bxgBIAEoBVILZW1BbmRhbWVudG'
+    '8SHgoKYWd1YXJkYW5kbxgCIAEoBVIKYWd1YXJkYW5kbxIjCg1tZW5zYWdlbnNfMjRoGAMgASgF'
+    'UgxtZW5zYWdlbnMyNGgSJwoPY29uZXhvZXNfYXRpdmFzGAQgASgFUg5jb25leG9lc0F0aXZhcx'
+    'IlCg5jb25leG9lc190b3RhbBgFIAEoBVINY29uZXhvZXNUb3RhbBIkCg1kZXBhcnRhbWVudG9z'
+    'GAYgASgFUg1kZXBhcnRhbWVudG9zEi8KE3RyZWluYW1lbnRvc19hdGl2b3MYByABKAVSEnRyZW'
+    'luYW1lbnRvc0F0aXZvcw==');
+
 @$core.Deprecated('Use myDepartamentoDescriptor instead')
 const MyDepartamento$json = {
   '1': 'MyDepartamento',

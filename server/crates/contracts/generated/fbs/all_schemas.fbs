@@ -695,6 +695,19 @@ table UpdateMyTenantConfigRequest {
   api_keys:[ApiKeyEntry];
 }
 
+table GetMyPainelRequest {
+}
+
+table GetMyPainelResponse {
+  em_andamento:int;
+  aguardando:int;
+  mensagens_24h:int;
+  conexoes_ativas:int;
+  conexoes_total:int;
+  departamentos:int;
+  treinamentos_ativos:int;
+}
+
 table MyDepartamento {
   id:int;
   nome:string;

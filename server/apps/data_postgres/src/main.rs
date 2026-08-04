@@ -505,6 +505,7 @@ async fn main() -> anyhow::Result<()> {
     let s_dep_update = state_clone.clone();
     let s_dep_desativar = state_clone.clone();
     let s_atendentes = state_clone.clone();
+    let s_painel = state_clone.clone();
     let state_for_create_departamento = state_clone.clone();
     let state_for_create_plan = state_clone.clone();
     let state_for_update_plan = state_clone.clone();
@@ -900,6 +901,10 @@ async fn main() -> anyhow::Result<()> {
                 )
                 .await
             })
+        })
+        .route("GetPainelTenant", move |env| {
+            let state = s_painel.clone();
+            Box::pin(async move { handler_painel_tenant(state.operacional.as_ref(), env).await })
         })
         .route("ListAtendentes", move |env| {
             let state = s_atendentes.clone();
@@ -3220,6 +3225,15 @@ async fn handler_desativar_departamento(
             error_core::AppError::Validation("departamento não encontrado".into()),
             &env,
         ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "GetPainelTenant", tenant_id = %env.tenant_id))]
+async fn handler_painel_tenant(store: &dyn ports::OperacionalStore, env: Envelope) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    match store.painel_do_tenant(&ctx).await {
+        Ok(painel) => ok_reply(&env, "GetPainelTenantReply", painel),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }

@@ -887,6 +887,60 @@ impl OperacionalStore for PgOperacionalStore {
     }
 
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn painel_do_tenant(&self, ctx: &RequestContext) -> Result<serde_json::Value, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+
+        run_in_tenant_transaction(&self.pool, tenant_id, move |mut tx| async move {
+            // `FILTER` em vez de cinco SELECTs: os números precisam ser do
+            // mesmo instante, senão a tela mostra uma soma que nunca existiu.
+            let linha = sqlx::query!(
+                r#"SELECT
+                     -- Vocabulário de `StatusAtendimento` (herdado da v1):
+                     -- fila, em_atendimento, pendencia, resolvido, cancelado,
+                     -- arquivado. O painel mostra os dois que pedem ação.
+                     (SELECT COUNT(*) FROM oraculo_atendimento
+                       WHERE tenant_id = $1 AND status = 'em_atendimento')
+                       AS "em_andamento!",
+                     (SELECT COUNT(*) FROM oraculo_atendimento
+                       WHERE tenant_id = $1 AND status = 'fila')
+                       AS "aguardando!",
+                     (SELECT COUNT(*) FROM oraculo_mensagem
+                       WHERE tenant_id = $1
+                         AND timestamp >= NOW() - INTERVAL '24 hours')
+                       AS "mensagens_24h!",
+                     (SELECT COUNT(*) FROM whatsapp_instance
+                       WHERE tenant_id = $1 AND connection_state = 'connected')
+                       AS "conexoes_ativas!",
+                     (SELECT COUNT(*) FROM whatsapp_instance WHERE tenant_id = $1)
+                       AS "conexoes_total!",
+                     (SELECT COUNT(*) FROM oraculo_departamento
+                       WHERE tenant_id = $1 AND ativo = true)
+                       AS "departamentos!",
+                     (SELECT COUNT(*) FROM oraculo_treinamento
+                       WHERE tenant_id = $1 AND treinamento_vetorizado = true)
+                       AS "treinamentos_ativos!"
+                "#,
+                tenant_id
+            )
+            .fetch_one(&mut *tx)
+            .await?;
+
+            let json = serde_json::json!({
+                "em_andamento": linha.em_andamento,
+                "aguardando": linha.aguardando,
+                "mensagens_24h": linha.mensagens_24h,
+                "conexoes_ativas": linha.conexoes_ativas,
+                "conexoes_total": linha.conexoes_total,
+                "departamentos": linha.departamentos,
+                "treinamentos_ativos": linha.treinamentos_ativos,
+            });
+            Ok((json, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
     async fn listar_atendentes(
         &self,
         ctx: &RequestContext,
