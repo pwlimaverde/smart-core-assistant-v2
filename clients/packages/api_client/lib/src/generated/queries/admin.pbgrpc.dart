@@ -434,6 +434,35 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$removerMyTreinamento, request, options: options);
   }
 
+  /// Gestão das conexões de WhatsApp DEPOIS de conectadas.
+  ///
+  /// O onboarding cria a primeira; sem estas, uma conexão que cai deixa o tenant
+  /// sem saída — não há como ver o estado, reconectar nem trocar de aparelho.
+  $grpc.ResponseFuture<$0.ListMyWhatsappInstancesResponse>
+      listMyWhatsappInstances(
+    $0.ListMyWhatsappInstancesRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyWhatsappInstances, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> reconnectMyWhatsappInstance(
+    $0.MyWhatsappInstanceIdRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$reconnectMyWhatsappInstance, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> deleteMyWhatsappInstance(
+    $0.MyWhatsappInstanceIdRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$deleteMyWhatsappInstance, request,
+        options: options);
+  }
+
   // method descriptors
 
   static final _$listCoreSettings = $grpc.ClientMethod<
@@ -704,6 +733,22 @@ class AdminServiceClient extends $grpc.Client {
       $grpc.ClientMethod<$0.RemoverMyTreinamentoRequest, $0.SimpleOkResponse>(
           '/smartcore.contracts.queries.AdminService/RemoverMyTreinamento',
           ($0.RemoverMyTreinamentoRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$listMyWhatsappInstances = $grpc.ClientMethod<
+          $0.ListMyWhatsappInstancesRequest,
+          $0.ListMyWhatsappInstancesResponse>(
+      '/smartcore.contracts.queries.AdminService/ListMyWhatsappInstances',
+      ($0.ListMyWhatsappInstancesRequest value) => value.writeToBuffer(),
+      $0.ListMyWhatsappInstancesResponse.fromBuffer);
+  static final _$reconnectMyWhatsappInstance = $grpc.ClientMethod<
+          $0.MyWhatsappInstanceIdRequest, $0.SimpleOkResponse>(
+      '/smartcore.contracts.queries.AdminService/ReconnectMyWhatsappInstance',
+      ($0.MyWhatsappInstanceIdRequest value) => value.writeToBuffer(),
+      $0.SimpleOkResponse.fromBuffer);
+  static final _$deleteMyWhatsappInstance =
+      $grpc.ClientMethod<$0.MyWhatsappInstanceIdRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/DeleteMyWhatsappInstance',
+          ($0.MyWhatsappInstanceIdRequest value) => value.writeToBuffer(),
           $0.SimpleOkResponse.fromBuffer);
 }
 
@@ -1180,6 +1225,33 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.RemoverMyTreinamentoRequest.fromBuffer(value),
         ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListMyWhatsappInstancesRequest,
+            $0.ListMyWhatsappInstancesResponse>(
+        'ListMyWhatsappInstances',
+        listMyWhatsappInstances_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListMyWhatsappInstancesRequest.fromBuffer(value),
+        ($0.ListMyWhatsappInstancesResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.MyWhatsappInstanceIdRequest,
+            $0.SimpleOkResponse>(
+        'ReconnectMyWhatsappInstance',
+        reconnectMyWhatsappInstance_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.MyWhatsappInstanceIdRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.MyWhatsappInstanceIdRequest,
+            $0.SimpleOkResponse>(
+        'DeleteMyWhatsappInstance',
+        deleteMyWhatsappInstance_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.MyWhatsappInstanceIdRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.ListCoreSettingsResponse> listCoreSettings_Pre(
@@ -1652,4 +1724,31 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.SimpleOkResponse> removerMyTreinamento(
       $grpc.ServiceCall call, $0.RemoverMyTreinamentoRequest request);
+
+  $async.Future<$0.ListMyWhatsappInstancesResponse> listMyWhatsappInstances_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListMyWhatsappInstancesRequest> $request) async {
+    return listMyWhatsappInstances($call, await $request);
+  }
+
+  $async.Future<$0.ListMyWhatsappInstancesResponse> listMyWhatsappInstances(
+      $grpc.ServiceCall call, $0.ListMyWhatsappInstancesRequest request);
+
+  $async.Future<$0.SimpleOkResponse> reconnectMyWhatsappInstance_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MyWhatsappInstanceIdRequest> $request) async {
+    return reconnectMyWhatsappInstance($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> reconnectMyWhatsappInstance(
+      $grpc.ServiceCall call, $0.MyWhatsappInstanceIdRequest request);
+
+  $async.Future<$0.SimpleOkResponse> deleteMyWhatsappInstance_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MyWhatsappInstanceIdRequest> $request) async {
+    return deleteMyWhatsappInstance($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> deleteMyWhatsappInstance(
+      $grpc.ServiceCall call, $0.MyWhatsappInstanceIdRequest request);
 }

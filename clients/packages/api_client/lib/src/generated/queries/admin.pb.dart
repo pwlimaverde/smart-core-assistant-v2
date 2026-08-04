@@ -9086,6 +9086,290 @@ class UpdateMyTenantConfigRequest extends $pb.GeneratedMessage {
   $pb.PbList<ApiKeyEntry> get apiKeys => $_getList(19);
 }
 
+class MyWhatsappInstance extends $pb.GeneratedMessage {
+  factory MyWhatsappInstance({
+    $core.int? id,
+    $core.String? name,
+    $core.String? phoneNumber,
+    $core.String? connectionState,
+    $core.bool? active,
+    $core.String? provider,
+    $fixnum.Int64? createdAt,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (name != null) result.name = name;
+    if (phoneNumber != null) result.phoneNumber = phoneNumber;
+    if (connectionState != null) result.connectionState = connectionState;
+    if (active != null) result.active = active;
+    if (provider != null) result.provider = provider;
+    if (createdAt != null) result.createdAt = createdAt;
+    return result;
+  }
+
+  MyWhatsappInstance._();
+
+  factory MyWhatsappInstance.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyWhatsappInstance.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyWhatsappInstance',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'name')
+    ..aOS(3, _omitFieldNames ? '' : 'phoneNumber')
+    ..aOS(4, _omitFieldNames ? '' : 'connectionState')
+    ..aOB(5, _omitFieldNames ? '' : 'active')
+    ..aOS(6, _omitFieldNames ? '' : 'provider')
+    ..aInt64(7, _omitFieldNames ? '' : 'createdAt')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyWhatsappInstance clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyWhatsappInstance copyWith(void Function(MyWhatsappInstance) updates) =>
+      super.copyWith((message) => updates(message as MyWhatsappInstance))
+          as MyWhatsappInstance;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyWhatsappInstance create() => MyWhatsappInstance._();
+  @$core.override
+  MyWhatsappInstance createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyWhatsappInstance getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyWhatsappInstance>(create);
+  static MyWhatsappInstance? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get name => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set name($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasName() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearName() => $_clearField(2);
+
+  /// Número pareado; vazio enquanto o QR não foi lido.
+  @$pb.TagNumber(3)
+  $core.String get phoneNumber => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set phoneNumber($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasPhoneNumber() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearPhoneNumber() => $_clearField(3);
+
+  /// Vocabulário de `whatsapp_instance.connection_state`: connected,
+  /// connecting, disconnected, unknown.
+  @$pb.TagNumber(4)
+  $core.String get connectionState => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set connectionState($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasConnectionState() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearConnectionState() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.bool get active => $_getBF(4);
+  @$pb.TagNumber(5)
+  set active($core.bool value) => $_setBool(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasActive() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearActive() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.String get provider => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set provider($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasProvider() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearProvider() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $fixnum.Int64 get createdAt => $_getI64(6);
+  @$pb.TagNumber(7)
+  set createdAt($fixnum.Int64 value) => $_setInt64(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasCreatedAt() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearCreatedAt() => $_clearField(7);
+}
+
+class ListMyWhatsappInstancesRequest extends $pb.GeneratedMessage {
+  factory ListMyWhatsappInstancesRequest() => create();
+
+  ListMyWhatsappInstancesRequest._();
+
+  factory ListMyWhatsappInstancesRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyWhatsappInstancesRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyWhatsappInstancesRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyWhatsappInstancesRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyWhatsappInstancesRequest copyWith(
+          void Function(ListMyWhatsappInstancesRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListMyWhatsappInstancesRequest))
+          as ListMyWhatsappInstancesRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyWhatsappInstancesRequest create() =>
+      ListMyWhatsappInstancesRequest._();
+  @$core.override
+  ListMyWhatsappInstancesRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyWhatsappInstancesRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyWhatsappInstancesRequest>(create);
+  static ListMyWhatsappInstancesRequest? _defaultInstance;
+}
+
+class ListMyWhatsappInstancesResponse extends $pb.GeneratedMessage {
+  factory ListMyWhatsappInstancesResponse({
+    $core.Iterable<MyWhatsappInstance>? instancias,
+  }) {
+    final result = create();
+    if (instancias != null) result.instancias.addAll(instancias);
+    return result;
+  }
+
+  ListMyWhatsappInstancesResponse._();
+
+  factory ListMyWhatsappInstancesResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyWhatsappInstancesResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyWhatsappInstancesResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<MyWhatsappInstance>(1, _omitFieldNames ? '' : 'instancias',
+        subBuilder: MyWhatsappInstance.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyWhatsappInstancesResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyWhatsappInstancesResponse copyWith(
+          void Function(ListMyWhatsappInstancesResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListMyWhatsappInstancesResponse))
+          as ListMyWhatsappInstancesResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyWhatsappInstancesResponse create() =>
+      ListMyWhatsappInstancesResponse._();
+  @$core.override
+  ListMyWhatsappInstancesResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyWhatsappInstancesResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyWhatsappInstancesResponse>(
+          create);
+  static ListMyWhatsappInstancesResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<MyWhatsappInstance> get instancias => $_getList(0);
+}
+
+class MyWhatsappInstanceIdRequest extends $pb.GeneratedMessage {
+  factory MyWhatsappInstanceIdRequest({
+    $core.int? id,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    return result;
+  }
+
+  MyWhatsappInstanceIdRequest._();
+
+  factory MyWhatsappInstanceIdRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyWhatsappInstanceIdRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyWhatsappInstanceIdRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyWhatsappInstanceIdRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyWhatsappInstanceIdRequest copyWith(
+          void Function(MyWhatsappInstanceIdRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as MyWhatsappInstanceIdRequest))
+          as MyWhatsappInstanceIdRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyWhatsappInstanceIdRequest create() =>
+      MyWhatsappInstanceIdRequest._();
+  @$core.override
+  MyWhatsappInstanceIdRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyWhatsappInstanceIdRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyWhatsappInstanceIdRequest>(create);
+  static MyWhatsappInstanceIdRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+}
+
 class MyTreinamento extends $pb.GeneratedMessage {
   factory MyTreinamento({
     $core.int? id,

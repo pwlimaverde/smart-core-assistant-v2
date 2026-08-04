@@ -835,6 +835,39 @@ service AdminService {
   rpc GetMyTreinamento(GetMyTreinamentoRequest) returns (MyTreinamentoResponse);
   rpc FinalizarMyTreinamento(FinalizarMyTreinamentoRequest) returns (SimpleOkResponse);
   rpc RemoverMyTreinamento(RemoverMyTreinamentoRequest) returns (SimpleOkResponse);
+
+  // Gestão das conexões de WhatsApp DEPOIS de conectadas.
+  //
+  // O onboarding cria a primeira; sem estas, uma conexão que cai deixa o tenant
+  // sem saída — não há como ver o estado, reconectar nem trocar de aparelho.
+  rpc ListMyWhatsappInstances(ListMyWhatsappInstancesRequest) returns (ListMyWhatsappInstancesResponse);
+  rpc ReconnectMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
+  rpc DeleteMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
+}
+
+// --- Conexões de WhatsApp do tenant ---
+
+message MyWhatsappInstance {
+  int32 id = 1;
+  string name = 2;
+  // Número pareado; vazio enquanto o QR não foi lido.
+  string phone_number = 3;
+  // Vocabulário de `whatsapp_instance.connection_state`: connected,
+  // connecting, disconnected, unknown.
+  string connection_state = 4;
+  bool active = 5;
+  string provider = 6;
+  int64 created_at = 7;
+}
+
+message ListMyWhatsappInstancesRequest {}
+
+message ListMyWhatsappInstancesResponse {
+  repeated MyWhatsappInstance instancias = 1;
+}
+
+message MyWhatsappInstanceIdRequest {
+  int32 id = 1;
 }
 
 // --- Treinamento da IA ---

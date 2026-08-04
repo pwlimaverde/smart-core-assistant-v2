@@ -100,15 +100,23 @@ quadro. O v2 já tem `kanban_page`; falta o modelo por trás.
 Ordem por dependência e por dano ao usuário. Cada etapa é entregável sozinha:
 contrato → servidor → cliente → testes, e fecha com as duas suítes verdes.
 
-### Etapa 1 — Operar o WhatsApp depois de conectado ⚠️
+### Etapa 1 — Operar o WhatsApp depois de conectado — FEITO (parcial)
 
-Sem isto, uma instância que cai deixa o tenant sem saída.
+Entregue: **lista de conexões com estado, reconectar e remover** — o essencial
+para uma conexão que cai não deixar o tenant sem saída. Rota
+`/tenant/conexoes`, no menu.
 
-Telas: lista de conexões, detalhe com QR/status, reconectar, desconectar,
-ligar/desligar o bot, trocar o webhook.
+3 RPCs novos na fachada (`ListMyWhatsappInstances`,
+`ReconnectMyWhatsappInstance`, `DeleteMyWhatsappInstance`); os handlers já
+existiam no `data_whatsapp`, faltava só expor. 7 testes.
 
-RPCs: reaproveitar `data_whatsapp` (já tem `create/connect/disconnect/reconnect/
-qr/status/delete`); expor os que faltam na fachada gRPC-Web.
+`unknown` é tratado como situação própria ("sem resposta"), não como
+desconectada: não saber pede espera, estar fora pede ação — confundir os dois
+mandaria o tenant reconectar uma conexão que talvez esteja boa.
+
+**Falta desta etapa**, para uma segunda passada: ver o QR de uma conexão já
+existente (hoje só no onboarding), ligar/desligar o bot por conexão, editar o
+webhook, e renomear.
 
 ### Etapa 2 — Departamentos e atendentes ⚠️
 

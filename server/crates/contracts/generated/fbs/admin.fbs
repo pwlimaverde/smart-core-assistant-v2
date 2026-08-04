@@ -693,6 +693,27 @@ table UpdateMyTenantConfigRequest {
   api_keys:[smartcore.contracts.queries.ApiKeyEntry];
 }
 
+table MyWhatsappInstance {
+  id:int;
+  name:string;
+  phone_number:string;
+  connection_state:string;
+  active:bool;
+  provider:string;
+  created_at:long;
+}
+
+table ListMyWhatsappInstancesRequest {
+}
+
+table ListMyWhatsappInstancesResponse {
+  instancias:[smartcore.contracts.queries.MyWhatsappInstance];
+}
+
+table MyWhatsappInstanceIdRequest {
+  id:int;
+}
+
 table MyTreinamento {
   id:int;
   tag:string;

@@ -2233,6 +2233,71 @@ final $typed_data.Uint8List updateMyTenantConfigRequestDescriptor = $convert.bas
     'Y2VUaHJlc2hvbGQSQwoIYXBpX2tleXMYFCADKAsyKC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZX'
     'JpZXMuQXBpS2V5RW50cnlSB2FwaUtleXM=');
 
+@$core.Deprecated('Use myWhatsappInstanceDescriptor instead')
+const MyWhatsappInstance$json = {
+  '1': 'MyWhatsappInstance',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'name', '3': 2, '4': 1, '5': 9, '10': 'name'},
+    {'1': 'phone_number', '3': 3, '4': 1, '5': 9, '10': 'phoneNumber'},
+    {'1': 'connection_state', '3': 4, '4': 1, '5': 9, '10': 'connectionState'},
+    {'1': 'active', '3': 5, '4': 1, '5': 8, '10': 'active'},
+    {'1': 'provider', '3': 6, '4': 1, '5': 9, '10': 'provider'},
+    {'1': 'created_at', '3': 7, '4': 1, '5': 3, '10': 'createdAt'},
+  ],
+};
+
+/// Descriptor for `MyWhatsappInstance`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myWhatsappInstanceDescriptor = $convert.base64Decode(
+    'ChJNeVdoYXRzYXBwSW5zdGFuY2USDgoCaWQYASABKAVSAmlkEhIKBG5hbWUYAiABKAlSBG5hbW'
+    'USIQoMcGhvbmVfbnVtYmVyGAMgASgJUgtwaG9uZU51bWJlchIpChBjb25uZWN0aW9uX3N0YXRl'
+    'GAQgASgJUg9jb25uZWN0aW9uU3RhdGUSFgoGYWN0aXZlGAUgASgIUgZhY3RpdmUSGgoIcHJvdm'
+    'lkZXIYBiABKAlSCHByb3ZpZGVyEh0KCmNyZWF0ZWRfYXQYByABKANSCWNyZWF0ZWRBdA==');
+
+@$core.Deprecated('Use listMyWhatsappInstancesRequestDescriptor instead')
+const ListMyWhatsappInstancesRequest$json = {
+  '1': 'ListMyWhatsappInstancesRequest',
+};
+
+/// Descriptor for `ListMyWhatsappInstancesRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyWhatsappInstancesRequestDescriptor =
+    $convert.base64Decode('Ch5MaXN0TXlXaGF0c2FwcEluc3RhbmNlc1JlcXVlc3Q=');
+
+@$core.Deprecated('Use listMyWhatsappInstancesResponseDescriptor instead')
+const ListMyWhatsappInstancesResponse$json = {
+  '1': 'ListMyWhatsappInstancesResponse',
+  '2': [
+    {
+      '1': 'instancias',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyWhatsappInstance',
+      '10': 'instancias'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyWhatsappInstancesResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyWhatsappInstancesResponseDescriptor =
+    $convert.base64Decode(
+        'Ch9MaXN0TXlXaGF0c2FwcEluc3RhbmNlc1Jlc3BvbnNlEk8KCmluc3RhbmNpYXMYASADKAsyLy'
+        '5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTXlXaGF0c2FwcEluc3RhbmNlUgppbnN0YW5j'
+        'aWFz');
+
+@$core.Deprecated('Use myWhatsappInstanceIdRequestDescriptor instead')
+const MyWhatsappInstanceIdRequest$json = {
+  '1': 'MyWhatsappInstanceIdRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+  ],
+};
+
+/// Descriptor for `MyWhatsappInstanceIdRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myWhatsappInstanceIdRequestDescriptor =
+    $convert.base64Decode(
+        'ChtNeVdoYXRzYXBwSW5zdGFuY2VJZFJlcXVlc3QSDgoCaWQYASABKAVSAmlk');
+
 @$core.Deprecated('Use myTreinamentoDescriptor instead')
 const MyTreinamento$json = {
   '1': 'MyTreinamento',

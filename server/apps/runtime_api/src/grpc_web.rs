@@ -74,6 +74,8 @@ use contracts::grpc::queries::{
     ListInvitesResponse,
     ListMyTreinamentosRequest,
     ListMyTreinamentosResponse,
+    ListMyWhatsappInstancesRequest,
+    ListMyWhatsappInstancesResponse,
     ListPaymentsRequest,
     ListPaymentsResponse,
     // Fase 2 - Billing
@@ -98,6 +100,8 @@ use contracts::grpc::queries::{
     MoveAtendimentoEtapaResponse,
     MyTreinamento,
     MyTreinamentoResponse,
+    MyWhatsappInstance,
+    MyWhatsappInstanceIdRequest,
     PaymentRecord as ProtoPaymentRecord,
     Plan as ProtoPlan,
     // Fase 5 - Auditoria & Saúde
@@ -2525,6 +2529,83 @@ impl AdminService for AdminFacade {
         }))
     }
 
+    // --- Conexões de WhatsApp do tenant ---
+    //
+    // O onboarding cria a primeira. Sem estas, uma conexão que cai deixa o
+    // tenant sem saída: não há como ver o estado, reconectar nem trocar.
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyWhatsappInstances", traceparent)
+    )]
+    async fn list_my_whatsapp_instances(
+        &self,
+        req: Request<ListMyWhatsappInstancesRequest>,
+    ) -> Result<Response<ListMyWhatsappInstancesResponse>, Status> {
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.whatsapp,
+                "ListWhatsappInstances",
+                serde_json::json!({}),
+            )
+            .await?;
+
+        let instancias = corpo
+            .get("instances")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().map(instancia_do_json).collect())
+            .unwrap_or_default();
+
+        Ok(Response::new(ListMyWhatsappInstancesResponse {
+            instancias,
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "ReconnectMyWhatsappInstance",
+            traceparent
+        )
+    )]
+    async fn reconnect_my_whatsapp_instance(
+        &self,
+        req: Request<MyWhatsappInstanceIdRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let id = req.get_ref().id;
+        self.encaminhar_tenant(
+            &req,
+            &self.whatsapp,
+            "ReconnectWhatsappInstance",
+            serde_json::json!({ "id": id }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DeleteMyWhatsappInstance", traceparent)
+    )]
+    async fn delete_my_whatsapp_instance(
+        &self,
+        req: Request<MyWhatsappInstanceIdRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let id = req.get_ref().id;
+        self.encaminhar_tenant(
+            &req,
+            &self.whatsapp,
+            "DeleteWhatsappInstance",
+            serde_json::json!({ "id": id }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
     #[tracing::instrument(
         skip_all,
         fields(service = "runtime_api", rpc = "RemoverMyTreinamento", traceparent)
@@ -4504,6 +4585,30 @@ impl AdminService for AdminFacade {
             }
             Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
         }
+    }
+}
+
+/// Converte a instância de WhatsApp do JSON interno no tipo do contrato.
+fn instancia_do_json(v: &serde_json::Value) -> MyWhatsappInstance {
+    let texto = |chave: &str| {
+        v.get(chave)
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    MyWhatsappInstance {
+        id: v.get("id").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+        name: texto("name"),
+        phone_number: texto("phone_number"),
+        connection_state: texto("connection_state"),
+        active: v.get("active").and_then(|x| x.as_bool()).unwrap_or(false),
+        provider: texto("provider"),
+        created_at: v
+            .get("created_at")
+            .and_then(|x| x.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.timestamp_millis())
+            .unwrap_or(0),
     }
 }
 

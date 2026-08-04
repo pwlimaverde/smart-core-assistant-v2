@@ -1,5 +1,9 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
+import 'features/conexoes/data/datasources/conexoes_datasources.dart';
+import 'features/conexoes/data/repositories/conexoes_repositories.dart';
+import 'features/conexoes/domain/usecases/conexoes_usecases.dart';
+import 'features/conexoes/presentation/routes/conexoes_routes.dart';
 import 'features/config/data/datasources/config_datasources.dart';
 import 'features/config/data/repositories/config_repositories.dart';
 import 'features/config/domain/usecases/config_usecases.dart';
@@ -29,6 +33,29 @@ import 'features/usuarios/presentation/routes/tenant_users_route.dart';
 final class TenantModule extends AppModule {
   @override
   void globalBinds(Injector i) {
+    // ── conexões de WhatsApp ──────────────────────────────────────────────
+    i.lazySingleton<ListarConexoesUsecase>(
+      () => ListarConexoesUsecase(
+        repository: ListarConexoesRepository(
+          datasource: ListarConexoesDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<ReconectarConexaoUsecase>(
+      () => ReconectarConexaoUsecase(
+        repository: ReconectarConexaoRepository(
+          datasource: ReconectarConexaoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<RemoverConexaoUsecase>(
+      () => RemoverConexaoUsecase(
+        repository: RemoverConexaoRepository(
+          datasource: RemoverConexaoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+
     // ── convites ──────────────────────────────────────────────────────────
     i.lazySingleton<CreateInviteUsecase>(
       () => CreateInviteUsecase(
@@ -98,6 +125,7 @@ final class TenantModule extends AppModule {
     InvitesRoute(),
     TenantUsersRoute(),
     TenantOwnConfigRoute(),
+    ConexoesRoute(),
   ];
 
   /// Stub gRPC do admin, extraído do `ApiClient` global da plataforma.

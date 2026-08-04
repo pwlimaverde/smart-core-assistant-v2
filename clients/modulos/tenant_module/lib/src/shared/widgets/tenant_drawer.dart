@@ -61,6 +61,15 @@ class TenantDrawer extends StatelessWidget {
               },
             ),
             ListTile(
+              leading: const Icon(Icons.qr_code_2_outlined),
+              title: const Text('Conexões de WhatsApp'),
+              selected: location == '/tenant/conexoes',
+              onTap: () {
+                Navigator.pop(context);
+                context.go('/tenant/conexoes');
+              },
+            ),
+            ListTile(
               leading: const Icon(Icons.school_outlined),
               title: const Text('Treinamento da IA'),
               selected: location == '/tenant/treinamento',
