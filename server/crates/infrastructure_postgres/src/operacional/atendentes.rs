@@ -49,6 +49,16 @@ pub trait AtendenteRepository: Send + Sync {
         id: i32,
     ) -> Result<Option<Atendente>, DbError>;
 
+    /// Lista os atendentes do tenant, ativos primeiro.
+    ///
+    /// Inclui os inativos: quem administra a equipe precisa ver quem saiu para
+    /// reativar ou entender uma fila parada.
+    async fn listar_por_tenant(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+    ) -> Result<Vec<Atendente>, DbError>;
+
     /// Seleciona o próximo atendente disponível pelo algoritmo Round-Robin (menor carga, mais antigo na fila).
     async fn buscar_disponivel_round_robin(
         &self,
@@ -212,5 +222,29 @@ impl AtendenteRepository for PostgresAtendenteRepository {
         .execute(&mut **tx)
         .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn listar_por_tenant(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+    ) -> Result<Vec<Atendente>, DbError> {
+        ctx.exigir_qualquer(&["operacional:read", "operacional:admin", "tenant:admin"])?;
+        let rows = sqlx::query_as!(
+            Atendente,
+            r#"SELECT id, tenant_id, nome, slug, telefone, cargo, email,
+                      departamento_id, fluxo_id, usuario_id, usuario_sistema,
+                      ativo, disponivel, max_atendimentos_simultaneos,
+                      data_ultima_atribuicao, horario_trabalho, especialidades,
+                      metadados, data_cadastro, ultima_atividade
+               FROM oraculo_atendente
+               WHERE tenant_id = $1
+               ORDER BY ativo DESC, nome"#,
+            ctx.tenant_id
+        )
+        .fetch_all(&mut **tx)
+        .await?;
+        Ok(rows)
     }
 }

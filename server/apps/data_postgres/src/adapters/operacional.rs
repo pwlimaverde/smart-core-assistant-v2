@@ -10,6 +10,9 @@ use std::sync::Arc;
 use uuid::Uuid;
 
 use infrastructure_postgres::crypto::CipherManager;
+use infrastructure_postgres::operacional::atendentes::{
+    AtendenteRepository, PostgresAtendenteRepository,
+};
 use infrastructure_postgres::operacional::departamentos::{
     DepartamentoRepository, PostgresDepartamentoRepository,
 };
@@ -825,6 +828,81 @@ impl OperacionalStore for PgOperacionalStore {
             let json = serde_json::to_value(&departamento).map_err(|e| {
                 DbError::ConfigError(format!("falha ao serializar departamento: {e}"))
             })?;
+            Ok((json, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_departamentos(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<serde_json::Value>, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let itens = PostgresDepartamentoRepository
+                .listar_ativos(&mut tx, &ctx)
+                .await?;
+            let json = itens
+                .iter()
+                .map(serde_json::to_value)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| {
+                    DbError::ConfigError(format!("falha ao serializar departamentos: {e}"))
+                })?;
+            Ok((json, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn atualizar_departamento(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        nome: String,
+        descricao: Option<String>,
+        ativo: bool,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let ok = PostgresDepartamentoRepository
+                .atualizar(&mut tx, &ctx, id, &nome, descricao.as_deref(), ativo)
+                .await?;
+            Ok((ok, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn desativar_departamento(&self, ctx: &RequestContext, id: i32) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let ok = PostgresDepartamentoRepository
+                .desativar(&mut tx, &ctx, id)
+                .await?;
+            Ok((ok, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_atendentes(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<serde_json::Value>, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let itens = PostgresAtendenteRepository
+                .listar_por_tenant(&mut tx, &ctx)
+                .await?;
+            let json = itens
+                .iter()
+                .map(serde_json::to_value)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| {
+                    DbError::ConfigError(format!("falha ao serializar atendentes: {e}"))
+                })?;
             Ok((json, tx))
         })
         .await

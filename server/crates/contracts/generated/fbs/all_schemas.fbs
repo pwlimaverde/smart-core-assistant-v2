@@ -695,6 +695,51 @@ table UpdateMyTenantConfigRequest {
   api_keys:[ApiKeyEntry];
 }
 
+table MyDepartamento {
+  id:int;
+  nome:string;
+  slug:string;
+  descricao:string;
+  ativo:bool;
+  criado_em:long;
+}
+
+table ListMyDepartamentosRequest {
+}
+
+table ListMyDepartamentosResponse {
+  departamentos:[MyDepartamento];
+}
+
+table UpdateMyDepartamentoRequest {
+  id:int;
+  nome:string;
+  descricao:string;
+  ativo:bool;
+}
+
+table MyDepartamentoIdRequest {
+  id:int;
+}
+
+table MyAtendente {
+  id:int;
+  nome:string;
+  email:string;
+  cargo:string;
+  departamento_id:int;
+  ativo:bool;
+  disponivel:bool;
+  max_atendimentos_simultaneos:int;
+}
+
+table ListMyAtendentesRequest {
+}
+
+table ListMyAtendentesResponse {
+  atendentes:[MyAtendente];
+}
+
 table MyWhatsappInstance {
   id:int;
   name:string;

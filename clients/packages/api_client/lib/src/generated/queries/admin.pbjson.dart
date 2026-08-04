@@ -2233,6 +2233,145 @@ final $typed_data.Uint8List updateMyTenantConfigRequestDescriptor = $convert.bas
     'Y2VUaHJlc2hvbGQSQwoIYXBpX2tleXMYFCADKAsyKC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZX'
     'JpZXMuQXBpS2V5RW50cnlSB2FwaUtleXM=');
 
+@$core.Deprecated('Use myDepartamentoDescriptor instead')
+const MyDepartamento$json = {
+  '1': 'MyDepartamento',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'slug', '3': 3, '4': 1, '5': 9, '10': 'slug'},
+    {'1': 'descricao', '3': 4, '4': 1, '5': 9, '10': 'descricao'},
+    {'1': 'ativo', '3': 5, '4': 1, '5': 8, '10': 'ativo'},
+    {'1': 'criado_em', '3': 6, '4': 1, '5': 3, '10': 'criadoEm'},
+  ],
+};
+
+/// Descriptor for `MyDepartamento`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myDepartamentoDescriptor = $convert.base64Decode(
+    'Cg5NeURlcGFydGFtZW50bxIOCgJpZBgBIAEoBVICaWQSEgoEbm9tZRgCIAEoCVIEbm9tZRISCg'
+    'RzbHVnGAMgASgJUgRzbHVnEhwKCWRlc2NyaWNhbxgEIAEoCVIJZGVzY3JpY2FvEhQKBWF0aXZv'
+    'GAUgASgIUgVhdGl2bxIbCgljcmlhZG9fZW0YBiABKANSCGNyaWFkb0Vt');
+
+@$core.Deprecated('Use listMyDepartamentosRequestDescriptor instead')
+const ListMyDepartamentosRequest$json = {
+  '1': 'ListMyDepartamentosRequest',
+};
+
+/// Descriptor for `ListMyDepartamentosRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyDepartamentosRequestDescriptor =
+    $convert.base64Decode('ChpMaXN0TXlEZXBhcnRhbWVudG9zUmVxdWVzdA==');
+
+@$core.Deprecated('Use listMyDepartamentosResponseDescriptor instead')
+const ListMyDepartamentosResponse$json = {
+  '1': 'ListMyDepartamentosResponse',
+  '2': [
+    {
+      '1': 'departamentos',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyDepartamento',
+      '10': 'departamentos'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyDepartamentosResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyDepartamentosResponseDescriptor =
+    $convert.base64Decode(
+        'ChtMaXN0TXlEZXBhcnRhbWVudG9zUmVzcG9uc2USUQoNZGVwYXJ0YW1lbnRvcxgBIAMoCzIrLn'
+        'NtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5NeURlcGFydGFtZW50b1INZGVwYXJ0YW1lbnRv'
+        'cw==');
+
+@$core.Deprecated('Use updateMyDepartamentoRequestDescriptor instead')
+const UpdateMyDepartamentoRequest$json = {
+  '1': 'UpdateMyDepartamentoRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'descricao', '3': 3, '4': 1, '5': 9, '10': 'descricao'},
+    {'1': 'ativo', '3': 4, '4': 1, '5': 8, '10': 'ativo'},
+  ],
+};
+
+/// Descriptor for `UpdateMyDepartamentoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List updateMyDepartamentoRequestDescriptor =
+    $convert.base64Decode(
+        'ChtVcGRhdGVNeURlcGFydGFtZW50b1JlcXVlc3QSDgoCaWQYASABKAVSAmlkEhIKBG5vbWUYAi'
+        'ABKAlSBG5vbWUSHAoJZGVzY3JpY2FvGAMgASgJUglkZXNjcmljYW8SFAoFYXRpdm8YBCABKAhS'
+        'BWF0aXZv');
+
+@$core.Deprecated('Use myDepartamentoIdRequestDescriptor instead')
+const MyDepartamentoIdRequest$json = {
+  '1': 'MyDepartamentoIdRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+  ],
+};
+
+/// Descriptor for `MyDepartamentoIdRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myDepartamentoIdRequestDescriptor = $convert
+    .base64Decode('ChdNeURlcGFydGFtZW50b0lkUmVxdWVzdBIOCgJpZBgBIAEoBVICaWQ=');
+
+@$core.Deprecated('Use myAtendenteDescriptor instead')
+const MyAtendente$json = {
+  '1': 'MyAtendente',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'email', '3': 3, '4': 1, '5': 9, '10': 'email'},
+    {'1': 'cargo', '3': 4, '4': 1, '5': 9, '10': 'cargo'},
+    {'1': 'departamento_id', '3': 5, '4': 1, '5': 5, '10': 'departamentoId'},
+    {'1': 'ativo', '3': 6, '4': 1, '5': 8, '10': 'ativo'},
+    {'1': 'disponivel', '3': 7, '4': 1, '5': 8, '10': 'disponivel'},
+    {
+      '1': 'max_atendimentos_simultaneos',
+      '3': 8,
+      '4': 1,
+      '5': 5,
+      '10': 'maxAtendimentosSimultaneos'
+    },
+  ],
+};
+
+/// Descriptor for `MyAtendente`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myAtendenteDescriptor = $convert.base64Decode(
+    'CgtNeUF0ZW5kZW50ZRIOCgJpZBgBIAEoBVICaWQSEgoEbm9tZRgCIAEoCVIEbm9tZRIUCgVlbW'
+    'FpbBgDIAEoCVIFZW1haWwSFAoFY2FyZ28YBCABKAlSBWNhcmdvEicKD2RlcGFydGFtZW50b19p'
+    'ZBgFIAEoBVIOZGVwYXJ0YW1lbnRvSWQSFAoFYXRpdm8YBiABKAhSBWF0aXZvEh4KCmRpc3Bvbm'
+    'l2ZWwYByABKAhSCmRpc3Bvbml2ZWwSQAocbWF4X2F0ZW5kaW1lbnRvc19zaW11bHRhbmVvcxgI'
+    'IAEoBVIabWF4QXRlbmRpbWVudG9zU2ltdWx0YW5lb3M=');
+
+@$core.Deprecated('Use listMyAtendentesRequestDescriptor instead')
+const ListMyAtendentesRequest$json = {
+  '1': 'ListMyAtendentesRequest',
+};
+
+/// Descriptor for `ListMyAtendentesRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyAtendentesRequestDescriptor =
+    $convert.base64Decode('ChdMaXN0TXlBdGVuZGVudGVzUmVxdWVzdA==');
+
+@$core.Deprecated('Use listMyAtendentesResponseDescriptor instead')
+const ListMyAtendentesResponse$json = {
+  '1': 'ListMyAtendentesResponse',
+  '2': [
+    {
+      '1': 'atendentes',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyAtendente',
+      '10': 'atendentes'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyAtendentesResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyAtendentesResponseDescriptor =
+    $convert.base64Decode(
+        'ChhMaXN0TXlBdGVuZGVudGVzUmVzcG9uc2USSAoKYXRlbmRlbnRlcxgBIAMoCzIoLnNtYXJ0Y2'
+        '9yZS5jb250cmFjdHMucXVlcmllcy5NeUF0ZW5kZW50ZVIKYXRlbmRlbnRlcw==');
+
 @$core.Deprecated('Use myWhatsappInstanceDescriptor instead')
 const MyWhatsappInstance$json = {
   '1': 'MyWhatsappInstance',

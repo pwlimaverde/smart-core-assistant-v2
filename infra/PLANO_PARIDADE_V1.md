@@ -118,10 +118,27 @@ mandaria o tenant reconectar uma conexão que talvez esteja boa.
 existente (hoje só no onboarding), ligar/desligar o bot por conexão, editar o
 webhook, e renomear.
 
-### Etapa 2 — Departamentos e atendentes ⚠️
+### Etapa 2 — Departamentos e atendentes — FEITO (parcial)
 
-CRUD de departamento e vínculo de atendente. É o que faz a fila ter para onde
-mandar conversa — hoje o workspace abre vazio porque não há estrutura.
+Rota `/tenant/equipe`, duas abas. Departamentos: listar, criar, editar e
+desativar. Atendentes: listar, com o departamento de cada um.
+
+As duas listas na mesma tela de propósito — departamento sem atendente e
+atendente sem departamento são os dois problemas que travam a fila, e separá-los
+esconderia a relação.
+
+**Desativar, não apagar**: atendimentos e atendentes apontam para o
+departamento, e remover a linha levaria histórico junto. O `slug` também não
+muda ao renomear: é referência estável.
+
+`ativo` e `disponivel` são estados distintos do atendente e ambos aparecem —
+quem está de férias fica ativo e indisponível, e confundir os dois esconde por
+que uma fila parou.
+
+**Falta desta etapa**: criar/editar atendente e vincular a departamento. O
+`oraculo_atendente` exige `fluxo_id` NOT NULL, e fluxos são a Etapa 5 — criar
+atendente antes disso exigiria inventar um fluxo padrão, o que é decisão de
+produto, não detalhe de implementação.
 
 ### Etapa 3 — Dashboard do tenant
 

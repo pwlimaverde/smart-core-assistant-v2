@@ -463,6 +463,36 @@ class AdminServiceClient extends $grpc.Client {
         options: options);
   }
 
+  /// Departamentos e atendentes — a estrutura para onde a fila manda conversa.
+  $grpc.ResponseFuture<$0.ListMyDepartamentosResponse> listMyDepartamentos(
+    $0.ListMyDepartamentosRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyDepartamentos, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> updateMyDepartamento(
+    $0.UpdateMyDepartamentoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$updateMyDepartamento, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> desativarMyDepartamento(
+    $0.MyDepartamentoIdRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$desativarMyDepartamento, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ListMyAtendentesResponse> listMyAtendentes(
+    $0.ListMyAtendentesRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyAtendentes, request, options: options);
+  }
+
   // method descriptors
 
   static final _$listCoreSettings = $grpc.ClientMethod<
@@ -750,6 +780,26 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/DeleteMyWhatsappInstance',
           ($0.MyWhatsappInstanceIdRequest value) => value.writeToBuffer(),
           $0.SimpleOkResponse.fromBuffer);
+  static final _$listMyDepartamentos = $grpc.ClientMethod<
+          $0.ListMyDepartamentosRequest, $0.ListMyDepartamentosResponse>(
+      '/smartcore.contracts.queries.AdminService/ListMyDepartamentos',
+      ($0.ListMyDepartamentosRequest value) => value.writeToBuffer(),
+      $0.ListMyDepartamentosResponse.fromBuffer);
+  static final _$updateMyDepartamento =
+      $grpc.ClientMethod<$0.UpdateMyDepartamentoRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/UpdateMyDepartamento',
+          ($0.UpdateMyDepartamentoRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$desativarMyDepartamento =
+      $grpc.ClientMethod<$0.MyDepartamentoIdRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/DesativarMyDepartamento',
+          ($0.MyDepartamentoIdRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$listMyAtendentes = $grpc.ClientMethod<
+          $0.ListMyAtendentesRequest, $0.ListMyAtendentesResponse>(
+      '/smartcore.contracts.queries.AdminService/ListMyAtendentes',
+      ($0.ListMyAtendentesRequest value) => value.writeToBuffer(),
+      $0.ListMyAtendentesResponse.fromBuffer);
 }
 
 @$pb.GrpcServiceName('smartcore.contracts.queries.AdminService')
@@ -1252,6 +1302,42 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.MyWhatsappInstanceIdRequest.fromBuffer(value),
         ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListMyDepartamentosRequest,
+            $0.ListMyDepartamentosResponse>(
+        'ListMyDepartamentos',
+        listMyDepartamentos_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListMyDepartamentosRequest.fromBuffer(value),
+        ($0.ListMyDepartamentosResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.UpdateMyDepartamentoRequest,
+            $0.SimpleOkResponse>(
+        'UpdateMyDepartamento',
+        updateMyDepartamento_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.UpdateMyDepartamentoRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.MyDepartamentoIdRequest, $0.SimpleOkResponse>(
+            'DesativarMyDepartamento',
+            desativarMyDepartamento_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.MyDepartamentoIdRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListMyAtendentesRequest,
+            $0.ListMyAtendentesResponse>(
+        'ListMyAtendentes',
+        listMyAtendentes_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListMyAtendentesRequest.fromBuffer(value),
+        ($0.ListMyAtendentesResponse value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.ListCoreSettingsResponse> listCoreSettings_Pre(
@@ -1751,4 +1837,40 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.SimpleOkResponse> deleteMyWhatsappInstance(
       $grpc.ServiceCall call, $0.MyWhatsappInstanceIdRequest request);
+
+  $async.Future<$0.ListMyDepartamentosResponse> listMyDepartamentos_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListMyDepartamentosRequest> $request) async {
+    return listMyDepartamentos($call, await $request);
+  }
+
+  $async.Future<$0.ListMyDepartamentosResponse> listMyDepartamentos(
+      $grpc.ServiceCall call, $0.ListMyDepartamentosRequest request);
+
+  $async.Future<$0.SimpleOkResponse> updateMyDepartamento_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.UpdateMyDepartamentoRequest> $request) async {
+    return updateMyDepartamento($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> updateMyDepartamento(
+      $grpc.ServiceCall call, $0.UpdateMyDepartamentoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> desativarMyDepartamento_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MyDepartamentoIdRequest> $request) async {
+    return desativarMyDepartamento($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> desativarMyDepartamento(
+      $grpc.ServiceCall call, $0.MyDepartamentoIdRequest request);
+
+  $async.Future<$0.ListMyAtendentesResponse> listMyAtendentes_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListMyAtendentesRequest> $request) async {
+    return listMyAtendentes($call, await $request);
+  }
+
+  $async.Future<$0.ListMyAtendentesResponse> listMyAtendentes(
+      $grpc.ServiceCall call, $0.ListMyAtendentesRequest request);
 }

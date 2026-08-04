@@ -501,6 +501,10 @@ async fn main() -> anyhow::Result<()> {
     let state_for_list_plans = state_clone.clone();
     let state_for_check_quota = state_clone.clone();
     let state_for_register_storage_usage = state_clone.clone();
+    let s_dep_listar = state_clone.clone();
+    let s_dep_update = state_clone.clone();
+    let s_dep_desativar = state_clone.clone();
+    let s_atendentes = state_clone.clone();
     let state_for_create_departamento = state_clone.clone();
     let state_for_create_plan = state_clone.clone();
     let state_for_update_plan = state_clone.clone();
@@ -872,6 +876,34 @@ async fn main() -> anyhow::Result<()> {
         .route("RegisterStorageUsage", move |env| {
             let state = state_for_register_storage_usage.clone();
             Box::pin(async move { handler_register_storage_usage(state.quota.as_ref(), env).await })
+        })
+        .route("ListDepartamentos", move |env| {
+            let state = s_dep_listar.clone();
+            Box::pin(
+                async move { handler_list_departamentos(state.operacional.as_ref(), env).await },
+            )
+        })
+        .route("UpdateDepartamento", move |env| {
+            let state = s_dep_update.clone();
+            Box::pin(async move {
+                handler_update_departamento(state.operacional.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
+        })
+        .route("DesativarDepartamento", move |env| {
+            let state = s_dep_desativar.clone();
+            Box::pin(async move {
+                handler_desativar_departamento(
+                    state.operacional.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("ListAtendentes", move |env| {
+            let state = s_atendentes.clone();
+            Box::pin(async move { handler_list_atendentes(state.operacional.as_ref(), env).await })
         })
         .route("CreateDepartamento", move |env| {
             let state = state_for_create_departamento.clone();
@@ -3074,6 +3106,132 @@ async fn handler_query_compose(store: &dyn ports::TreinamentoStore, env: Envelop
                 "comportamento": resultado.comportamento,
                 "documentos": resultado.documentos,
             }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+// --- Departamentos e atendentes (estrutura do atendimento) ---
+//
+// Sem departamento a fila não tem para onde mandar conversa: o onboarding cria
+// o primeiro e, até aqui, não havia como criar outro nem corrigir aquele.
+
+#[tracing::instrument(skip_all, fields(rpc = "ListDepartamentos", tenant_id = %env.tenant_id))]
+async fn handler_list_departamentos(
+    store: &dyn ports::OperacionalStore,
+    env: Envelope,
+) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_departamentos(&ctx).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListDepartamentosReply",
+            serde_json::json!({ "departamentos": itens }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "UpdateDepartamento", tenant_id = %env.tenant_id))]
+async fn handler_update_departamento(
+    store: &dyn ports::OperacionalStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let nome = payload
+        .get("nome")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let descricao = payload
+        .get("descricao")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    let ativo = payload
+        .get("ativo")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    if nome.is_empty() {
+        return erro(
+            error_core::AppError::Validation("informe o nome do departamento".into()),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .atualizar_departamento(&ctx, id, nome.clone(), descricao, ativo)
+        .await
+    {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "departamento_atualizado",
+                    format!("Departamento '{nome}' atualizado"),
+                    serde_json::json!({ "id": id, "ativo": ativo }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "UpdateDepartamentoReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Validation("departamento não encontrado".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "DesativarDepartamento", tenant_id = %env.tenant_id))]
+async fn handler_desativar_departamento(
+    store: &dyn ports::OperacionalStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+    let ctx = contexto_do_envelope(&env);
+    match store.desativar_departamento(&ctx, id).await {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "departamento_desativado",
+                    format!("Departamento {id} desativado"),
+                    serde_json::json!({ "id": id }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "DesativarDepartamentoReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Validation("departamento não encontrado".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "ListAtendentes", tenant_id = %env.tenant_id))]
+async fn handler_list_atendentes(store: &dyn ports::OperacionalStore, env: Envelope) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_atendentes(&ctx).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListAtendentesReply",
+            serde_json::json!({ "atendentes": itens }),
         ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }

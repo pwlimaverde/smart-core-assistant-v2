@@ -43,6 +43,32 @@ pub trait DepartamentoRepository: Send + Sync {
         ctx: &RequestContext,
     ) -> Result<Vec<Departamento>, DbError>;
 
+    /// Renomeia e reescreve a descrição.
+    ///
+    /// O `slug` NÃO muda: ele é referência estável, e há registros que apontam
+    /// para o departamento por ele.
+    async fn atualizar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+        nome: &str,
+        descricao: Option<&str>,
+        ativo: bool,
+    ) -> Result<bool, DbError>;
+
+    /// Desativa em vez de apagar.
+    ///
+    /// Atendimentos e atendentes apontam para o departamento; remover a linha
+    /// levaria histórico junto. Inativo some das listas de trabalho e continua
+    /// respondendo pelo que já passou por ele.
+    async fn desativar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<bool, DbError>;
+
     /// Valida as credenciais recebidas do webhook da Evolution API.
     async fn buscar_por_api_key(
         &self,
@@ -125,6 +151,50 @@ impl DepartamentoRepository for PostgresDepartamentoRepository {
 
     // `api_key` é credencial: `skip_all`.
     #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, fields(id = id))]
+    async fn atualizar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+        nome: &str,
+        descricao: Option<&str>,
+        ativo: bool,
+    ) -> Result<bool, DbError> {
+        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
+        let res = sqlx::query!(
+            r#"UPDATE oraculo_departamento
+                  SET nome = $1, descricao = $2, ativo = $3
+                WHERE id = $4 AND tenant_id = $5"#,
+            nome,
+            descricao,
+            ativo,
+            id,
+            ctx.tenant_id
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(res.rows_affected() > 0)
+    }
+
+    #[tracing::instrument(skip_all, fields(id = id))]
+    async fn desativar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<bool, DbError> {
+        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
+        let res = sqlx::query!(
+            "UPDATE oraculo_departamento SET ativo = false WHERE id = $1 AND tenant_id = $2",
+            id,
+            ctx.tenant_id
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(res.rows_affected() > 0)
+    }
+
     async fn buscar_por_api_key(
         &self,
         tx: &mut Transaction<'_, Postgres>,

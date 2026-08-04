@@ -4,6 +4,10 @@ import 'features/conexoes/data/datasources/conexoes_datasources.dart';
 import 'features/conexoes/data/repositories/conexoes_repositories.dart';
 import 'features/conexoes/domain/usecases/conexoes_usecases.dart';
 import 'features/conexoes/presentation/routes/conexoes_routes.dart';
+import 'features/equipe/data/datasources/equipe_datasources.dart';
+import 'features/equipe/data/repositories/equipe_repositories.dart';
+import 'features/equipe/domain/usecases/equipe_usecases.dart';
+import 'features/equipe/presentation/routes/equipe_routes.dart';
 import 'features/config/data/datasources/config_datasources.dart';
 import 'features/config/data/repositories/config_repositories.dart';
 import 'features/config/domain/usecases/config_usecases.dart';
@@ -33,6 +37,36 @@ import 'features/usuarios/presentation/routes/tenant_users_route.dart';
 final class TenantModule extends AppModule {
   @override
   void globalBinds(Injector i) {
+    // ── equipe (departamentos e atendentes) ───────────────────────────────
+    i.lazySingleton<CarregarEquipeUsecase>(
+      () => CarregarEquipeUsecase(
+        repository: CarregarEquipeRepository(
+          datasource: CarregarEquipeDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<CriarDepartamentoUsecase>(
+      () => CriarDepartamentoUsecase(
+        repository: CriarDepartamentoRepository(
+          datasource: CriarDepartamentoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<AtualizarDepartamentoUsecase>(
+      () => AtualizarDepartamentoUsecase(
+        repository: AtualizarDepartamentoRepository(
+          datasource: AtualizarDepartamentoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<DesativarDepartamentoUsecase>(
+      () => DesativarDepartamentoUsecase(
+        repository: DesativarDepartamentoRepository(
+          datasource: DesativarDepartamentoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+
     // ── conexões de WhatsApp ──────────────────────────────────────────────
     i.lazySingleton<ListarConexoesUsecase>(
       () => ListarConexoesUsecase(
@@ -126,6 +160,7 @@ final class TenantModule extends AppModule {
     TenantUsersRoute(),
     TenantOwnConfigRoute(),
     ConexoesRoute(),
+    EquipeRoute(),
   ];
 
   /// Stub gRPC do admin, extraído do `ApiClient` global da plataforma.

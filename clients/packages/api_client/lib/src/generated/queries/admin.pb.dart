@@ -9086,6 +9086,600 @@ class UpdateMyTenantConfigRequest extends $pb.GeneratedMessage {
   $pb.PbList<ApiKeyEntry> get apiKeys => $_getList(19);
 }
 
+class MyDepartamento extends $pb.GeneratedMessage {
+  factory MyDepartamento({
+    $core.int? id,
+    $core.String? nome,
+    $core.String? slug,
+    $core.String? descricao,
+    $core.bool? ativo,
+    $fixnum.Int64? criadoEm,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (nome != null) result.nome = nome;
+    if (slug != null) result.slug = slug;
+    if (descricao != null) result.descricao = descricao;
+    if (ativo != null) result.ativo = ativo;
+    if (criadoEm != null) result.criadoEm = criadoEm;
+    return result;
+  }
+
+  MyDepartamento._();
+
+  factory MyDepartamento.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyDepartamento.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyDepartamento',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'nome')
+    ..aOS(3, _omitFieldNames ? '' : 'slug')
+    ..aOS(4, _omitFieldNames ? '' : 'descricao')
+    ..aOB(5, _omitFieldNames ? '' : 'ativo')
+    ..aInt64(6, _omitFieldNames ? '' : 'criadoEm')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyDepartamento clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyDepartamento copyWith(void Function(MyDepartamento) updates) =>
+      super.copyWith((message) => updates(message as MyDepartamento))
+          as MyDepartamento;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyDepartamento create() => MyDepartamento._();
+  @$core.override
+  MyDepartamento createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyDepartamento getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyDepartamento>(create);
+  static MyDepartamento? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nome => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nome($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNome() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNome() => $_clearField(2);
+
+  /// Referência estável: NÃO muda ao renomear, porque há registros que apontam
+  /// para o departamento por ele.
+  @$pb.TagNumber(3)
+  $core.String get slug => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set slug($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasSlug() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearSlug() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get descricao => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set descricao($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasDescricao() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearDescricao() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.bool get ativo => $_getBF(4);
+  @$pb.TagNumber(5)
+  set ativo($core.bool value) => $_setBool(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasAtivo() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearAtivo() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $fixnum.Int64 get criadoEm => $_getI64(5);
+  @$pb.TagNumber(6)
+  set criadoEm($fixnum.Int64 value) => $_setInt64(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasCriadoEm() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearCriadoEm() => $_clearField(6);
+}
+
+class ListMyDepartamentosRequest extends $pb.GeneratedMessage {
+  factory ListMyDepartamentosRequest() => create();
+
+  ListMyDepartamentosRequest._();
+
+  factory ListMyDepartamentosRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyDepartamentosRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyDepartamentosRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyDepartamentosRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyDepartamentosRequest copyWith(
+          void Function(ListMyDepartamentosRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListMyDepartamentosRequest))
+          as ListMyDepartamentosRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyDepartamentosRequest create() => ListMyDepartamentosRequest._();
+  @$core.override
+  ListMyDepartamentosRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyDepartamentosRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyDepartamentosRequest>(create);
+  static ListMyDepartamentosRequest? _defaultInstance;
+}
+
+class ListMyDepartamentosResponse extends $pb.GeneratedMessage {
+  factory ListMyDepartamentosResponse({
+    $core.Iterable<MyDepartamento>? departamentos,
+  }) {
+    final result = create();
+    if (departamentos != null) result.departamentos.addAll(departamentos);
+    return result;
+  }
+
+  ListMyDepartamentosResponse._();
+
+  factory ListMyDepartamentosResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyDepartamentosResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyDepartamentosResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<MyDepartamento>(1, _omitFieldNames ? '' : 'departamentos',
+        subBuilder: MyDepartamento.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyDepartamentosResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyDepartamentosResponse copyWith(
+          void Function(ListMyDepartamentosResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListMyDepartamentosResponse))
+          as ListMyDepartamentosResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyDepartamentosResponse create() =>
+      ListMyDepartamentosResponse._();
+  @$core.override
+  ListMyDepartamentosResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyDepartamentosResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyDepartamentosResponse>(create);
+  static ListMyDepartamentosResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<MyDepartamento> get departamentos => $_getList(0);
+}
+
+class UpdateMyDepartamentoRequest extends $pb.GeneratedMessage {
+  factory UpdateMyDepartamentoRequest({
+    $core.int? id,
+    $core.String? nome,
+    $core.String? descricao,
+    $core.bool? ativo,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (nome != null) result.nome = nome;
+    if (descricao != null) result.descricao = descricao;
+    if (ativo != null) result.ativo = ativo;
+    return result;
+  }
+
+  UpdateMyDepartamentoRequest._();
+
+  factory UpdateMyDepartamentoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory UpdateMyDepartamentoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'UpdateMyDepartamentoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'nome')
+    ..aOS(3, _omitFieldNames ? '' : 'descricao')
+    ..aOB(4, _omitFieldNames ? '' : 'ativo')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateMyDepartamentoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateMyDepartamentoRequest copyWith(
+          void Function(UpdateMyDepartamentoRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as UpdateMyDepartamentoRequest))
+          as UpdateMyDepartamentoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static UpdateMyDepartamentoRequest create() =>
+      UpdateMyDepartamentoRequest._();
+  @$core.override
+  UpdateMyDepartamentoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static UpdateMyDepartamentoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<UpdateMyDepartamentoRequest>(create);
+  static UpdateMyDepartamentoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nome => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nome($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNome() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNome() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get descricao => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set descricao($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDescricao() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDescricao() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.bool get ativo => $_getBF(3);
+  @$pb.TagNumber(4)
+  set ativo($core.bool value) => $_setBool(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasAtivo() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearAtivo() => $_clearField(4);
+}
+
+class MyDepartamentoIdRequest extends $pb.GeneratedMessage {
+  factory MyDepartamentoIdRequest({
+    $core.int? id,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    return result;
+  }
+
+  MyDepartamentoIdRequest._();
+
+  factory MyDepartamentoIdRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyDepartamentoIdRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyDepartamentoIdRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyDepartamentoIdRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyDepartamentoIdRequest copyWith(
+          void Function(MyDepartamentoIdRequest) updates) =>
+      super.copyWith((message) => updates(message as MyDepartamentoIdRequest))
+          as MyDepartamentoIdRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyDepartamentoIdRequest create() => MyDepartamentoIdRequest._();
+  @$core.override
+  MyDepartamentoIdRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyDepartamentoIdRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyDepartamentoIdRequest>(create);
+  static MyDepartamentoIdRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+}
+
+class MyAtendente extends $pb.GeneratedMessage {
+  factory MyAtendente({
+    $core.int? id,
+    $core.String? nome,
+    $core.String? email,
+    $core.String? cargo,
+    $core.int? departamentoId,
+    $core.bool? ativo,
+    $core.bool? disponivel,
+    $core.int? maxAtendimentosSimultaneos,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (nome != null) result.nome = nome;
+    if (email != null) result.email = email;
+    if (cargo != null) result.cargo = cargo;
+    if (departamentoId != null) result.departamentoId = departamentoId;
+    if (ativo != null) result.ativo = ativo;
+    if (disponivel != null) result.disponivel = disponivel;
+    if (maxAtendimentosSimultaneos != null)
+      result.maxAtendimentosSimultaneos = maxAtendimentosSimultaneos;
+    return result;
+  }
+
+  MyAtendente._();
+
+  factory MyAtendente.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyAtendente.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyAtendente',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'nome')
+    ..aOS(3, _omitFieldNames ? '' : 'email')
+    ..aOS(4, _omitFieldNames ? '' : 'cargo')
+    ..aI(5, _omitFieldNames ? '' : 'departamentoId')
+    ..aOB(6, _omitFieldNames ? '' : 'ativo')
+    ..aOB(7, _omitFieldNames ? '' : 'disponivel')
+    ..aI(8, _omitFieldNames ? '' : 'maxAtendimentosSimultaneos')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyAtendente clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyAtendente copyWith(void Function(MyAtendente) updates) =>
+      super.copyWith((message) => updates(message as MyAtendente))
+          as MyAtendente;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyAtendente create() => MyAtendente._();
+  @$core.override
+  MyAtendente createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyAtendente getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyAtendente>(create);
+  static MyAtendente? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nome => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nome($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNome() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNome() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get email => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set email($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasEmail() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearEmail() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get cargo => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set cargo($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasCargo() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearCargo() => $_clearField(4);
+
+  /// 0 = sem departamento.
+  @$pb.TagNumber(5)
+  $core.int get departamentoId => $_getIZ(4);
+  @$pb.TagNumber(5)
+  set departamentoId($core.int value) => $_setSignedInt32(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasDepartamentoId() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearDepartamentoId() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.bool get ativo => $_getBF(5);
+  @$pb.TagNumber(6)
+  set ativo($core.bool value) => $_setBool(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasAtivo() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearAtivo() => $_clearField(6);
+
+  /// Aceitando conversa agora — diferente de `ativo`, que é o cadastro.
+  @$pb.TagNumber(7)
+  $core.bool get disponivel => $_getBF(6);
+  @$pb.TagNumber(7)
+  set disponivel($core.bool value) => $_setBool(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasDisponivel() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearDisponivel() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.int get maxAtendimentosSimultaneos => $_getIZ(7);
+  @$pb.TagNumber(8)
+  set maxAtendimentosSimultaneos($core.int value) => $_setSignedInt32(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasMaxAtendimentosSimultaneos() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearMaxAtendimentosSimultaneos() => $_clearField(8);
+}
+
+class ListMyAtendentesRequest extends $pb.GeneratedMessage {
+  factory ListMyAtendentesRequest() => create();
+
+  ListMyAtendentesRequest._();
+
+  factory ListMyAtendentesRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyAtendentesRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyAtendentesRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyAtendentesRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyAtendentesRequest copyWith(
+          void Function(ListMyAtendentesRequest) updates) =>
+      super.copyWith((message) => updates(message as ListMyAtendentesRequest))
+          as ListMyAtendentesRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyAtendentesRequest create() => ListMyAtendentesRequest._();
+  @$core.override
+  ListMyAtendentesRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyAtendentesRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyAtendentesRequest>(create);
+  static ListMyAtendentesRequest? _defaultInstance;
+}
+
+class ListMyAtendentesResponse extends $pb.GeneratedMessage {
+  factory ListMyAtendentesResponse({
+    $core.Iterable<MyAtendente>? atendentes,
+  }) {
+    final result = create();
+    if (atendentes != null) result.atendentes.addAll(atendentes);
+    return result;
+  }
+
+  ListMyAtendentesResponse._();
+
+  factory ListMyAtendentesResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyAtendentesResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyAtendentesResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<MyAtendente>(1, _omitFieldNames ? '' : 'atendentes',
+        subBuilder: MyAtendente.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyAtendentesResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyAtendentesResponse copyWith(
+          void Function(ListMyAtendentesResponse) updates) =>
+      super.copyWith((message) => updates(message as ListMyAtendentesResponse))
+          as ListMyAtendentesResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyAtendentesResponse create() => ListMyAtendentesResponse._();
+  @$core.override
+  ListMyAtendentesResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyAtendentesResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyAtendentesResponse>(create);
+  static ListMyAtendentesResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<MyAtendente> get atendentes => $_getList(0);
+}
+
 class MyWhatsappInstance extends $pb.GeneratedMessage {
   factory MyWhatsappInstance({
     $core.int? id,

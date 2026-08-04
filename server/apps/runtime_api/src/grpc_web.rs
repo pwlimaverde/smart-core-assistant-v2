@@ -72,6 +72,10 @@ use contracts::grpc::queries::{
     ListFeatureFlagsResponse,
     ListInvitesRequest,
     ListInvitesResponse,
+    ListMyAtendentesRequest,
+    ListMyAtendentesResponse,
+    ListMyDepartamentosRequest,
+    ListMyDepartamentosResponse,
     ListMyTreinamentosRequest,
     ListMyTreinamentosResponse,
     ListMyWhatsappInstancesRequest,
@@ -98,6 +102,9 @@ use contracts::grpc::queries::{
     MensagemThread as ProtoMensagemThread,
     MoveAtendimentoEtapaRequest,
     MoveAtendimentoEtapaResponse,
+    MyAtendente,
+    MyDepartamento,
+    MyDepartamentoIdRequest,
     MyTreinamento,
     MyTreinamentoResponse,
     MyWhatsappInstance,
@@ -138,6 +145,7 @@ use contracts::grpc::queries::{
     // Fase 3 - Evolution Connection
     TestEvolutionConnectionRequest,
     TestEvolutionConnectionResponse,
+    UpdateMyDepartamentoRequest,
     UpdateMyTenantConfigRequest,
     UpdatePlanRequest,
     UpdatePlanResponse,
@@ -2529,6 +2537,103 @@ impl AdminService for AdminFacade {
         }))
     }
 
+    // --- Departamentos e atendentes ---
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyDepartamentos", traceparent)
+    )]
+    async fn list_my_departamentos(
+        &self,
+        req: Request<ListMyDepartamentosRequest>,
+    ) -> Result<Response<ListMyDepartamentosResponse>, Status> {
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "ListDepartamentos",
+                serde_json::json!({}),
+            )
+            .await?;
+
+        let departamentos = corpo
+            .get("departamentos")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().map(departamento_do_json).collect())
+            .unwrap_or_default();
+
+        Ok(Response::new(ListMyDepartamentosResponse { departamentos }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "UpdateMyDepartamento", traceparent)
+    )]
+    async fn update_my_departamento(
+        &self,
+        req: Request<UpdateMyDepartamentoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = req.get_ref().clone();
+        if inner.nome.trim().is_empty() {
+            return Err(Status::invalid_argument("informe o nome do departamento"));
+        }
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "UpdateDepartamento",
+            serde_json::json!({
+                "id": inner.id,
+                "nome": inner.nome.trim(),
+                "descricao": inner.descricao,
+                "ativo": inner.ativo,
+            }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DesativarMyDepartamento", traceparent)
+    )]
+    async fn desativar_my_departamento(
+        &self,
+        req: Request<MyDepartamentoIdRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let id = req.get_ref().id;
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "DesativarDepartamento",
+            serde_json::json!({ "id": id }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyAtendentes", traceparent)
+    )]
+    async fn list_my_atendentes(
+        &self,
+        req: Request<ListMyAtendentesRequest>,
+    ) -> Result<Response<ListMyAtendentesResponse>, Status> {
+        let corpo = self
+            .encaminhar_tenant(&req, &self.deps.pg, "ListAtendentes", serde_json::json!({}))
+            .await?;
+
+        let atendentes = corpo
+            .get("atendentes")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().map(atendente_do_json).collect())
+            .unwrap_or_default();
+
+        Ok(Response::new(ListMyAtendentesResponse { atendentes }))
+    }
+
     // --- Conexões de WhatsApp do tenant ---
     //
     // O onboarding cria a primeira. Sem estas, uma conexão que cai deixa o
@@ -4585,6 +4690,59 @@ impl AdminService for AdminFacade {
             }
             Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
         }
+    }
+}
+
+/// Converte o departamento do JSON interno no tipo do contrato.
+fn departamento_do_json(v: &serde_json::Value) -> MyDepartamento {
+    let texto = |chave: &str| {
+        v.get(chave)
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    MyDepartamento {
+        id: v.get("id").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+        nome: texto("nome"),
+        slug: texto("slug"),
+        descricao: texto("descricao"),
+        ativo: v.get("ativo").and_then(|x| x.as_bool()).unwrap_or(false),
+        criado_em: v
+            .get("data_criacao")
+            .and_then(|x| x.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.timestamp_millis())
+            .unwrap_or(0),
+    }
+}
+
+/// Converte o atendente do JSON interno no tipo do contrato.
+fn atendente_do_json(v: &serde_json::Value) -> MyAtendente {
+    let texto = |chave: &str| {
+        v.get(chave)
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    MyAtendente {
+        id: v.get("id").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+        nome: texto("nome"),
+        email: texto("email"),
+        cargo: texto("cargo"),
+        // Ausente = sem departamento; 0 é o "nenhum" do contrato.
+        departamento_id: v
+            .get("departamento_id")
+            .and_then(|x| x.as_i64())
+            .unwrap_or(0) as i32,
+        ativo: v.get("ativo").and_then(|x| x.as_bool()).unwrap_or(false),
+        disponivel: v
+            .get("disponivel")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false),
+        max_atendimentos_simultaneos: v
+            .get("max_atendimentos_simultaneos")
+            .and_then(|x| x.as_i64())
+            .unwrap_or(0) as i32,
     }
 }
 

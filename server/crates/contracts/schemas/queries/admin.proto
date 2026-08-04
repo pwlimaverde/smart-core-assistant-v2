@@ -843,6 +843,61 @@ service AdminService {
   rpc ListMyWhatsappInstances(ListMyWhatsappInstancesRequest) returns (ListMyWhatsappInstancesResponse);
   rpc ReconnectMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
   rpc DeleteMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
+
+  // Departamentos e atendentes — a estrutura para onde a fila manda conversa.
+  rpc ListMyDepartamentos(ListMyDepartamentosRequest) returns (ListMyDepartamentosResponse);
+  rpc UpdateMyDepartamento(UpdateMyDepartamentoRequest) returns (SimpleOkResponse);
+  rpc DesativarMyDepartamento(MyDepartamentoIdRequest) returns (SimpleOkResponse);
+  rpc ListMyAtendentes(ListMyAtendentesRequest) returns (ListMyAtendentesResponse);
+}
+
+// --- Departamentos e atendentes ---
+
+message MyDepartamento {
+  int32 id = 1;
+  string nome = 2;
+  // Referência estável: NÃO muda ao renomear, porque há registros que apontam
+  // para o departamento por ele.
+  string slug = 3;
+  string descricao = 4;
+  bool ativo = 5;
+  int64 criado_em = 6;
+}
+
+message ListMyDepartamentosRequest {}
+
+message ListMyDepartamentosResponse {
+  repeated MyDepartamento departamentos = 1;
+}
+
+message UpdateMyDepartamentoRequest {
+  int32 id = 1;
+  string nome = 2;
+  string descricao = 3;
+  bool ativo = 4;
+}
+
+message MyDepartamentoIdRequest {
+  int32 id = 1;
+}
+
+message MyAtendente {
+  int32 id = 1;
+  string nome = 2;
+  string email = 3;
+  string cargo = 4;
+  // 0 = sem departamento.
+  int32 departamento_id = 5;
+  bool ativo = 6;
+  // Aceitando conversa agora — diferente de `ativo`, que é o cadastro.
+  bool disponivel = 7;
+  int32 max_atendimentos_simultaneos = 8;
+}
+
+message ListMyAtendentesRequest {}
+
+message ListMyAtendentesResponse {
+  repeated MyAtendente atendentes = 1;
 }
 
 // --- Conexões de WhatsApp do tenant ---

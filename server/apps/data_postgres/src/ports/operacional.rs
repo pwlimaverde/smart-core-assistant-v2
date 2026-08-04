@@ -149,4 +149,29 @@ pub trait OperacionalStore: Send + Sync {
         nome: String,
         descricao: Option<String>,
     ) -> Result<serde_json::Value, DbError>;
+
+    /// Lista os departamentos do tenant.
+    async fn listar_departamentos(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<serde_json::Value>, DbError>;
+
+    async fn atualizar_departamento(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        nome: String,
+        descricao: Option<String>,
+        ativo: bool,
+    ) -> Result<bool, DbError>;
+
+    /// Desativa — não apaga. Atendimentos e atendentes apontam para o
+    /// departamento, e remover a linha levaria histórico junto.
+    async fn desativar_departamento(&self, ctx: &RequestContext, id: i32) -> Result<bool, DbError>;
+
+    /// Lista os atendentes do tenant, ativos primeiro.
+    async fn listar_atendentes(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<serde_json::Value>, DbError>;
 }
