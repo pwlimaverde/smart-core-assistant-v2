@@ -193,4 +193,166 @@ void main() {
 
     expect(find.text('Escreva o que a IA precisa saber.'), findsOneWidget);
   });
+
+  testWidgets('criar material fecha a janela e recarrega a lista', (
+    tester,
+  ) async {
+    when(() => client.listMyTreinamentos(any())).thenAnswer(
+      (_) => respostaGrpc(proto.ListMyTreinamentosResponse()),
+    );
+    when(() => client.createMyTreinamento(any())).thenAnswer(
+      (_) => respostaGrpc(
+        proto.MyTreinamentoResponse(
+          treinamento: proto.MyTreinamento(id: 1, tag: 'horario'),
+        ),
+      ),
+    );
+    registrar();
+
+    await montar(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Ensinar algo novo'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'ex: horario-de-funcionamento'),
+      'horario',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'ex: atendimento'),
+      'atendimento',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'O que a IA precisa saber'),
+      'Abrimos de segunda a sexta.',
+    );
+    await tester.tap(find.text('Salvar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ensinar algo novo'), findsOneWidget); // só o botão
+    verify(() => client.createMyTreinamento(any())).called(1);
+    // Recarrega para o material novo aparecer: uma na montagem, outra depois.
+    verify(() => client.listMyTreinamentos(any())).called(2);
+  });
+
+  testWidgets('erro ao criar fica dentro da janela, que não fecha', (
+    tester,
+  ) async {
+    when(() => client.listMyTreinamentos(any())).thenAnswer(
+      (_) => respostaGrpc(proto.ListMyTreinamentosResponse()),
+    );
+    when(() => client.createMyTreinamento(any())).thenAnswer(
+      (_) => falhaGrpc(proto.GrpcError.invalidArgument('tag já existe')),
+    );
+    registrar();
+
+    await montar(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Ensinar algo novo'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'ex: horario-de-funcionamento'),
+      'horario',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'ex: atendimento'),
+      'atendimento',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'O que a IA precisa saber'),
+      'texto',
+    );
+    await tester.tap(find.text('Salvar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('tag já existe'), findsOneWidget);
+  });
+
+  testWidgets('revisar leva o texto EDITADO, não o original', (tester) async {
+    // O ponto do passo de revisão: é o texto da tela que vira vetor. Enviar o
+    // original faria a revisão não valer nada.
+    respondeCom();
+    when(() => client.finalizarMyTreinamento(any())).thenAnswer(
+      (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
+    );
+    registrar();
+
+    await montar(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Revisar e enviar para a IA'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Abrimos de segunda a sexta.'),
+      'Abrimos de segunda a sábado.',
+    );
+    await tester.tap(find.text('Aceitar e treinar'));
+    await tester.pumpAndSettle();
+
+    final enviado = verify(() => client.finalizarMyTreinamento(captureAny()))
+        .captured
+        .single as proto.FinalizarMyTreinamentoRequest;
+    expect(enviado.conteudo, 'Abrimos de segunda a sábado.');
+  });
+
+  testWidgets('revisão com texto vazio é barrada', (tester) async {
+    respondeCom();
+    registrar();
+
+    await montar(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Revisar e enviar para a IA'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Abrimos de segunda a sexta.'),
+      '   ',
+    );
+    await tester.tap(find.text('Aceitar e treinar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('O conteúdo não pode ficar vazio.'), findsOneWidget);
+    verifyNever(() => client.finalizarMyTreinamento(any()));
+  });
+
+  testWidgets('remover pede confirmação e avisa o efeito', (tester) async {
+    respondeCom();
+    when(() => client.removerMyTreinamento(any())).thenAnswer(
+      (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
+    );
+    registrar();
+
+    await montar(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Remover'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('deixa de usar'), findsOneWidget);
+
+    await tester.tap(find.widgetWithText(FilledButton, 'Remover'));
+    await tester.pumpAndSettle();
+
+    verify(() => client.removerMyTreinamento(any())).called(1);
+    expect(find.text('Material removido.'), findsOneWidget);
+  });
+
+  testWidgets('cancelar a remoção não chama o servidor', (tester) async {
+    respondeCom();
+    registrar();
+
+    await montar(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Remover'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+
+    verifyNever(() => client.removerMyTreinamento(any()));
+  });
 }
