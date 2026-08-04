@@ -127,6 +127,81 @@ void main() {
       expect(find.byTooltip('Reconectar'), findsOneWidget);
     });
 
+    testWidgets('reconectar avisa para ler o QR', (tester) async {
+      respondeCom('disconnected');
+      when(() => client.reconnectMyWhatsappInstance(any())).thenAnswer(
+        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
+      );
+      registrar();
+
+      await montar(tester, const ConexoesPage());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Reconectar'));
+      await tester.pumpAndSettle();
+
+      verify(() => client.reconnectMyWhatsappInstance(any())).called(1);
+      expect(find.textContaining('Leia o QR code'), findsOneWidget);
+    });
+
+    testWidgets('falha ao reconectar mostra a mensagem do provedor', (
+      tester,
+    ) async {
+      respondeCom('disconnected');
+      when(() => client.reconnectMyWhatsappInstance(any())).thenAnswer(
+        (_) => falhaGrpc(
+          proto.GrpcError.failedPrecondition('instância já está conectada'),
+        ),
+      );
+      registrar();
+
+      await montar(tester, const ConexoesPage());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Reconectar'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('já está conectada'), findsOneWidget);
+    });
+
+    testWidgets('remover pede confirmação e avisa sobre o histórico', (
+      tester,
+    ) async {
+      respondeCom('connected');
+      when(() => client.deleteMyWhatsappInstance(any())).thenAnswer(
+        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
+      );
+      registrar();
+
+      await montar(tester, const ConexoesPage());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Remover conexão'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('continuam no histórico'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Remover'));
+      await tester.pumpAndSettle();
+
+      verify(() => client.deleteMyWhatsappInstance(any())).called(1);
+    });
+
+    testWidgets('cancelar a remoção não chama o servidor', (tester) async {
+      respondeCom('connected');
+      registrar();
+
+      await montar(tester, const ConexoesPage());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Remover conexão'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+
+      verifyNever(() => client.deleteMyWhatsappInstance(any()));
+    });
+
     testWidgets('sem conexões, explica o que fazer', (tester) async {
       when(() => client.listMyWhatsappInstances(any())).thenAnswer(
         (_) => respostaGrpc(proto.ListMyWhatsappInstancesResponse()),
@@ -301,6 +376,99 @@ void main() {
 
       expect(find.text('Indisponível'), findsOneWidget);
       expect(find.textContaining('sem departamento'), findsOneWidget);
+    });
+
+    testWidgets('editar abre o formulário preenchido e salva', (tester) async {
+      respondeListas(departamentos: [depto()]);
+      when(() => client.updateMyDepartamento(any())).thenAnswer(
+        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
+      );
+      registrar();
+
+      await montar(tester, const EquipePage());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Editar'));
+      await tester.pumpAndSettle();
+
+      // O formulário chega com o que já existe — editar não é recomeçar.
+      expect(find.widgetWithText(TextField, 'Suporte'), findsOneWidget);
+      expect(find.text('Ativo'), findsOneWidget);
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Suporte'),
+        'Suporte N1',
+      );
+      await tester.tap(find.text('Salvar'));
+      await tester.pumpAndSettle();
+
+      final enviado = verify(() => client.updateMyDepartamento(captureAny()))
+          .captured
+          .single as proto.UpdateMyDepartamentoRequest;
+      expect(enviado.nome, 'Suporte N1');
+      expect(enviado.id, 1);
+    });
+
+    testWidgets('erro ao salvar fica DENTRO da janela, que não fecha', (
+      tester,
+    ) async {
+      // Um SnackBar renderiza atrás do barrier modal: o usuário clicaria em
+      // salvar e não veria nada acontecer.
+      respondeListas(departamentos: [depto()]);
+      when(() => client.updateMyDepartamento(any())).thenAnswer(
+        (_) => falhaGrpc(proto.GrpcError.invalidArgument('nome já usado')),
+      );
+      registrar();
+
+      await montar(tester, const EquipePage());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Editar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Salvar'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('nome já usado'), findsOneWidget);
+      expect(find.text('Editar departamento'), findsOneWidget);
+    });
+
+    testWidgets('desativar pede confirmação e explica o efeito', (
+      tester,
+    ) async {
+      respondeListas(departamentos: [depto()]);
+      when(() => client.desativarMyDepartamento(any())).thenAnswer(
+        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
+      );
+      registrar();
+
+      await montar(tester, const EquipePage());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Desativar'));
+      await tester.pumpAndSettle();
+
+      // Desativar não apaga: o histórico fica, e dá para reativar.
+      expect(find.textContaining('continuam no histórico'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(FilledButton, 'Desativar'));
+      await tester.pumpAndSettle();
+
+      verify(() => client.desativarMyDepartamento(any())).called(1);
+    });
+
+    testWidgets('cancelar a desativação não chama o servidor', (tester) async {
+      respondeListas(departamentos: [depto()]);
+      registrar();
+
+      await montar(tester, const EquipePage());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Desativar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+
+      verifyNever(() => client.desativarMyDepartamento(any()));
     });
 
     testWidgets('o diálogo de novo departamento valida o nome', (tester) async {
