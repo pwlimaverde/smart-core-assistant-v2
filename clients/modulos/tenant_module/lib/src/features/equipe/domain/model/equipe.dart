@@ -34,6 +34,10 @@ class Atendente {
   /// 0 = sem departamento.
   final int departamentoId;
 
+  /// O quadro em que trabalha. Obrigatório no banco: um atendente sem fluxo
+  /// não teria coluna nenhuma para receber conversa.
+  final int fluxoId;
+
   /// Cadastro ativo — diferente de [disponivel], que é "aceitando conversa
   /// agora". Quem saiu de férias fica ativo e indisponível.
   final bool ativo;
@@ -46,6 +50,7 @@ class Atendente {
     required this.email,
     required this.cargo,
     required this.departamentoId,
+    required this.fluxoId,
     required this.ativo,
     required this.disponivel,
     required this.maxSimultaneos,

@@ -87,6 +87,27 @@ final class TenantModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<CriarAtendenteUsecase>(
+      () => CriarAtendenteUsecase(
+        repository: CriarAtendenteRepository(
+          datasource: CriarAtendenteDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<AtualizarAtendenteUsecase>(
+      () => AtualizarAtendenteUsecase(
+        repository: AtualizarAtendenteRepository(
+          datasource: AtualizarAtendenteDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<DesativarAtendenteUsecase>(
+      () => DesativarAtendenteUsecase(
+        repository: DesativarAtendenteRepository(
+          datasource: DesativarAtendenteDatasource(client: _adminClient()),
+        ),
+      ),
+    );
 
     // ── fluxos de atendimento e etapas ────────────────────────────────────
     i.lazySingleton<ListarFluxosUsecase>(

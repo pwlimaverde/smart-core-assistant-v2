@@ -12,6 +12,9 @@ import 'package:tenant_module/src/features/conexoes/domain/usecases/conexoes_use
 import 'package:tenant_module/src/features/conexoes/presentation/controllers/conexoes_controllers.dart';
 import 'package:tenant_module/src/features/conexoes/presentation/pages/conexoes_page.dart';
 import 'package:tenant_module/src/features/equipe/data/datasources/equipe_datasources.dart';
+import 'package:tenant_module/src/features/fluxos/data/datasources/fluxos_datasources.dart';
+import 'package:tenant_module/src/features/fluxos/data/repositories/fluxos_repositories.dart';
+import 'package:tenant_module/src/features/fluxos/domain/usecases/fluxos_usecases.dart';
 import 'package:tenant_module/src/features/equipe/data/repositories/equipe_repositories.dart';
 import 'package:tenant_module/src/features/equipe/domain/usecases/equipe_usecases.dart';
 import 'package:tenant_module/src/features/equipe/presentation/controllers/equipe_controllers.dart';
@@ -31,6 +34,10 @@ void main() {
     registerFallbackValue(proto.CreateMyDepartamentoRequest());
     registerFallbackValue(proto.UpdateMyDepartamentoRequest());
     registerFallbackValue(proto.MyDepartamentoIdRequest());
+    registerFallbackValue(proto.ListMyFluxosRequest());
+    registerFallbackValue(proto.CreateMyAtendenteRequest());
+    registerFallbackValue(proto.UpdateMyAtendenteRequest());
+    registerFallbackValue(proto.MyAtendenteIdRequest());
   });
 
   setUp(() => client = _MockAdminClient());
@@ -253,6 +260,26 @@ void main() {
               datasource: DesativarDepartamentoDatasource(client: client),
             ),
           ),
+          criarAtendente: CriarAtendenteUsecase(
+            repository: CriarAtendenteRepository(
+              datasource: CriarAtendenteDatasource(client: client),
+            ),
+          ),
+          atualizarAtendente: AtualizarAtendenteUsecase(
+            repository: AtualizarAtendenteRepository(
+              datasource: AtualizarAtendenteDatasource(client: client),
+            ),
+          ),
+          desativarAtendente: DesativarAtendenteUsecase(
+            repository: DesativarAtendenteRepository(
+              datasource: DesativarAtendenteDatasource(client: client),
+            ),
+          ),
+          fluxos: ListarFluxosUsecase(
+            repository: ListarFluxosRepository(
+              datasource: ListarFluxosDatasource(client: client),
+            ),
+          ),
         ),
       );
     }
@@ -269,6 +296,22 @@ void main() {
       when(() => client.listMyAtendentes(any())).thenAnswer(
         (_) => respostaGrpc(
           proto.ListMyAtendentesResponse(atendentes: atendentes),
+        ),
+      );
+      when(() => client.listMyFluxos(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.ListMyFluxosResponse(
+            fluxos: [
+              proto.MyFluxo(
+                id: 7,
+                departamentoId: 1,
+                departamentoNome: 'Suporte',
+                nome: 'Padrao',
+                ativo: true,
+                etapas: 4,
+              ),
+            ],
+          ),
         ),
       );
     }
@@ -348,6 +391,212 @@ void main() {
 
       expect(find.text('Ana'), findsOneWidget);
       expect(find.textContaining('Suporte'), findsWidgets);
+    });
+
+
+    testWidgets('criar atendente exige o fluxo, que o banco torna obrigatorio', (
+      tester,
+    ) async {
+      // `oraculo_atendente.fluxo_id` e NOT NULL: sem fluxo o INSERT falharia
+      // com erro de constraint, que nao diz nada a quem cadastra.
+      respondeListas(departamentos: [depto()]);
+      when(() => client.createMyAtendente(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.MyAtendenteResponse(
+            atendente: proto.MyAtendente(id: 9, nome: 'Ana'),
+          ),
+        ),
+      );
+      registrar();
+
+      await montar(tester, const EquipePage());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Atendentes'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Novo atendente'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'ex: Ana Souza'),
+        'Ana Souza',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextField, 'ex: ana@empresa.com.br'),
+        'ana@empresa.com.br',
+      );
+      await tester.tap(find.text('Salvar'));
+      await tester.pumpAndSettle();
+
+      final enviado = verify(() => client.createMyAtendente(captureAny()))
+          .captured
+          .single as proto.CreateMyAtendenteRequest;
+      expect(enviado.nome, 'Ana Souza');
+      expect(enviado.fluxoId, 7);
+      // Sem departamento escolhido, vai 0 -- a coluna aceita NULL.
+      expect(enviado.departamentoId, 0);
+    });
+
+    testWidgets('sem e-mail, a criacao e barrada dentro da janela', (
+      tester,
+    ) async {
+      respondeListas(departamentos: [depto()]);
+      registrar();
+
+      await montar(tester, const EquipePage());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Atendentes'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Novo atendente'));
+      await tester.pumpAndSettle();
+
+      await tester.enterText(
+        find.widgetWithText(TextField, 'ex: Ana Souza'),
+        'Ana Souza',
+      );
+      await tester.tap(find.text('Salvar'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Informe o e-mail do atendente.'), findsOneWidget);
+      verifyNever(() => client.createMyAtendente(any()));
+    });
+
+    testWidgets('sem fluxo ativo, a janela diz o que fazer antes', (
+      tester,
+    ) async {
+      respondeListas(departamentos: [depto()]);
+      when(() => client.listMyFluxos(any())).thenAnswer(
+        (_) => respostaGrpc(proto.ListMyFluxosResponse()),
+      );
+      registrar();
+
+      await montar(tester, const EquipePage());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Atendentes'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Novo atendente'));
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('Nenhum fluxo ativo'), findsOneWidget);
+    });
+
+    testWidgets('editar atendente nao deixa mexer no e-mail', (tester) async {
+      // O e-mail e a chave unica da pessoa dentro do tenant.
+      respondeListas(
+        atendentes: [
+          proto.MyAtendente(
+            id: 9,
+            nome: 'Ana',
+            email: 'ana@x.com',
+            departamentoId: 0,
+            fluxoId: 7,
+            ativo: true,
+            disponivel: true,
+            maxAtendimentosSimultaneos: 5,
+          ),
+        ],
+      );
+      when(() => client.updateMyAtendente(any())).thenAnswer(
+        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
+      );
+      registrar();
+
+      await montar(tester, const EquipePage());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Atendentes'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Editar'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.widgetWithText(TextField, 'ex: ana@empresa.com.br'),
+        findsNothing,
+      );
+
+      await tester.tap(find.byTooltip('Mais'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Salvar'));
+      await tester.pumpAndSettle();
+
+      final enviado = verify(() => client.updateMyAtendente(captureAny()))
+          .captured
+          .single as proto.UpdateMyAtendenteRequest;
+      expect(enviado.maxAtendimentosSimultaneos, 6);
+      expect(enviado.fluxoId, 7);
+    });
+
+    testWidgets('desmarcar ativo nunca deixa a pessoa disponivel', (
+      tester,
+    ) async {
+      // Inativo e disponivel seguiria elegivel no rodizio de atribuicao sem
+      // estar trabalhando.
+      respondeListas(
+        atendentes: [
+          proto.MyAtendente(
+            id: 9,
+            nome: 'Ana',
+            departamentoId: 0,
+            fluxoId: 7,
+            ativo: true,
+            disponivel: true,
+            maxAtendimentosSimultaneos: 5,
+          ),
+        ],
+      );
+      when(() => client.updateMyAtendente(any())).thenAnswer(
+        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
+      );
+      registrar();
+
+      await montar(tester, const EquipePage());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Atendentes'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Editar'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.widgetWithText(CheckboxListTile, 'Ativo'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Salvar'));
+      await tester.pumpAndSettle();
+
+      final enviado = verify(() => client.updateMyAtendente(captureAny()))
+          .captured
+          .single as proto.UpdateMyAtendenteRequest;
+      expect(enviado.ativo, isFalse);
+      expect(enviado.disponivel, isFalse);
+    });
+
+    testWidgets('a recusa por conversa em andamento chega inteira', (
+      tester,
+    ) async {
+      respondeListas(
+        atendentes: [
+          proto.MyAtendente(id: 9, nome: 'Ana', ativo: true, fluxoId: 7),
+        ],
+      );
+      when(() => client.desativarMyAtendente(any())).thenAnswer(
+        (_) => falhaGrpc(
+          proto.GrpcError.invalidArgument(
+            'Esta pessoa esta com 3 conversa(s) em andamento.',
+          ),
+        ),
+      );
+      registrar();
+
+      await montar(tester, const EquipePage());
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Atendentes'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Desativar'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(FilledButton, 'Desativar'));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Esta pessoa esta com 3 conversa(s) em andamento.'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('atendente ativo e indisponível é marcado como tal', (

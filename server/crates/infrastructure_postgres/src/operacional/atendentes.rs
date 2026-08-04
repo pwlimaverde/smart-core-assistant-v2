@@ -49,6 +49,43 @@ pub trait AtendenteRepository: Send + Sync {
         id: i32,
     ) -> Result<Option<Atendente>, DbError>;
 
+    /// Atualiza o cadastro do atendente.
+    ///
+    /// `ativo` e `disponivel` são estados distintos e ambos passam por aqui:
+    /// quem está de férias fica ativo e indisponível, e confundir os dois
+    /// esconde por que uma fila parou.
+    #[allow(clippy::too_many_arguments)]
+    async fn atualizar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+        nome: &str,
+        cargo: &str,
+        departamento_id: Option<i32>,
+        fluxo_id: i32,
+        ativo: bool,
+        disponivel: bool,
+        max_simultaneos: i32,
+    ) -> Result<bool, DbError>;
+
+    /// Desativa — não apaga. Atendimentos apontam para o atendente, e remover a
+    /// linha levaria o histórico de quem atendeu junto.
+    async fn desativar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<bool, DbError>;
+
+    /// Conversas que este atendente ainda está tocando.
+    async fn contar_atendimentos_em_andamento(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<i64, DbError>;
+
     /// Lista os atendentes do tenant, ativos primeiro.
     ///
     /// Inclui os inativos: quem administra a equipe precisa ver quem saiu para
@@ -145,6 +182,86 @@ impl AtendenteRepository for PostgresAtendenteRepository {
         .fetch_optional(&mut **tx)
         .await?;
         Ok(row)
+    }
+
+    // `nome` é PII: `skip_all`.
+    #[tracing::instrument(skip_all, fields(id = id, fluxo_id = fluxo_id))]
+    async fn atualizar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+        nome: &str,
+        cargo: &str,
+        departamento_id: Option<i32>,
+        fluxo_id: i32,
+        ativo: bool,
+        disponivel: bool,
+        max_simultaneos: i32,
+    ) -> Result<bool, DbError> {
+        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
+        let res = sqlx::query!(
+            r#"UPDATE oraculo_atendente
+                  SET nome = $3, cargo = $4, departamento_id = $5, fluxo_id = $6,
+                      ativo = $7, disponivel = $8, max_atendimentos_simultaneos = $9,
+                      ultima_atividade = NOW()
+                WHERE tenant_id = $1 AND id = $2"#,
+            ctx.tenant_id,
+            id,
+            nome,
+            cargo,
+            departamento_id,
+            fluxo_id,
+            ativo,
+            disponivel,
+            max_simultaneos
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(DbError::from_sqlx_unique)?;
+        Ok(res.rows_affected() > 0)
+    }
+
+    #[tracing::instrument(skip_all, fields(id = id))]
+    async fn desativar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<bool, DbError> {
+        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
+        // Sai de disponível junto: um atendente inativo que continuasse
+        // "disponível" seguiria elegível no round-robin.
+        let res = sqlx::query!(
+            r#"UPDATE oraculo_atendente
+                  SET ativo = false, disponivel = false, ultima_atividade = NOW()
+                WHERE tenant_id = $1 AND id = $2 AND ativo = true"#,
+            ctx.tenant_id,
+            id
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(res.rows_affected() > 0)
+    }
+
+    #[tracing::instrument(skip_all, fields(id = id))]
+    async fn contar_atendimentos_em_andamento(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<i64, DbError> {
+        let total = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) AS "total!"
+                 FROM oraculo_atendimento
+                WHERE tenant_id = $1 AND atendente_humano_id = $2
+                  AND status NOT IN ('resolvido', 'cancelado', 'arquivado')"#,
+            ctx.tenant_id,
+            id
+        )
+        .fetch_one(&mut **tx)
+        .await?;
+        Ok(total)
     }
 
     #[tracing::instrument(skip_all)]

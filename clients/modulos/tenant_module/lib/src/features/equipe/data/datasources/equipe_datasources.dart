@@ -19,6 +19,7 @@ Atendente _at(proto.MyAtendente a) => Atendente(
       email: a.email,
       cargo: a.cargo,
       departamentoId: a.departamentoId,
+      fluxoId: a.fluxoId,
       ativo: a.ativo,
       disponivel: a.disponivel,
       maxSimultaneos: a.maxAtendimentosSimultaneos,
@@ -104,6 +105,74 @@ final class DesativarDepartamentoDatasource
   Future<Unit> call(DepartamentoIdParameters parameters) async {
     await _client.desativarMyDepartamento(
       proto.MyDepartamentoIdRequest(id: parameters.id),
+    );
+    return unit;
+  }
+}
+
+final class CriarAtendenteDatasource
+    implements Datasource<Unit, CriarAtendenteParameters> {
+  final proto.AdminServiceClient _client;
+
+  const CriarAtendenteDatasource({required proto.AdminServiceClient client})
+      // ignore: prefer_initializing_formals
+      : _client = client;
+
+  @override
+  Future<Unit> call(CriarAtendenteParameters parameters) async {
+    await _client.createMyAtendente(
+      proto.CreateMyAtendenteRequest(
+        nome: parameters.nome,
+        email: parameters.email,
+        cargo: parameters.cargo,
+        fluxoId: parameters.fluxoId,
+        departamentoId: parameters.departamentoId,
+      ),
+    );
+    return unit;
+  }
+}
+
+final class AtualizarAtendenteDatasource
+    implements Datasource<Unit, AtualizarAtendenteParameters> {
+  final proto.AdminServiceClient _client;
+
+  const AtualizarAtendenteDatasource({
+    required proto.AdminServiceClient client,
+    // ignore: prefer_initializing_formals
+  }) : _client = client;
+
+  @override
+  Future<Unit> call(AtualizarAtendenteParameters parameters) async {
+    await _client.updateMyAtendente(
+      proto.UpdateMyAtendenteRequest(
+        id: parameters.id,
+        nome: parameters.nome,
+        cargo: parameters.cargo,
+        departamentoId: parameters.departamentoId,
+        fluxoId: parameters.fluxoId,
+        ativo: parameters.ativo,
+        disponivel: parameters.disponivel,
+        maxAtendimentosSimultaneos: parameters.maxSimultaneos,
+      ),
+    );
+    return unit;
+  }
+}
+
+final class DesativarAtendenteDatasource
+    implements Datasource<Unit, AtendenteIdParameters> {
+  final proto.AdminServiceClient _client;
+
+  const DesativarAtendenteDatasource({
+    required proto.AdminServiceClient client,
+    // ignore: prefer_initializing_formals
+  }) : _client = client;
+
+  @override
+  Future<Unit> call(AtendenteIdParameters parameters) async {
+    await _client.desativarMyAtendente(
+      proto.MyAtendenteIdRequest(id: parameters.id),
     );
     return unit;
   }

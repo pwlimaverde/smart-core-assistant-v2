@@ -849,6 +849,9 @@ service AdminService {
   rpc UpdateMyDepartamento(UpdateMyDepartamentoRequest) returns (SimpleOkResponse);
   rpc DesativarMyDepartamento(MyDepartamentoIdRequest) returns (SimpleOkResponse);
   rpc ListMyAtendentes(ListMyAtendentesRequest) returns (ListMyAtendentesResponse);
+  rpc CreateMyAtendente(CreateMyAtendenteRequest) returns (MyAtendenteResponse);
+  rpc UpdateMyAtendente(UpdateMyAtendenteRequest) returns (SimpleOkResponse);
+  rpc DesativarMyAtendente(MyAtendenteIdRequest) returns (SimpleOkResponse);
   rpc GetMyPainel(GetMyPainelRequest) returns (GetMyPainelResponse);
   rpc ListMyContatos(ListMyContatosRequest) returns (ListMyContatosResponse);
 
@@ -1043,12 +1046,44 @@ message MyAtendente {
   // Aceitando conversa agora — diferente de `ativo`, que é o cadastro.
   bool disponivel = 7;
   int32 max_atendimentos_simultaneos = 8;
+  // O quadro em que trabalha. Sem ele a edição não teria o que preencher no
+  // seletor de fluxo, e salvar reatribuiria a pessoa por acidente.
+  int32 fluxo_id = 9;
 }
 
 message ListMyAtendentesRequest {}
 
 message ListMyAtendentesResponse {
   repeated MyAtendente atendentes = 1;
+}
+
+message CreateMyAtendenteRequest {
+  string nome = 1;
+  string email = 2;
+  string cargo = 3;
+  // Obrigatório: é o quadro em que a pessoa trabalha, e a coluna é NOT NULL.
+  int32 fluxo_id = 4;
+  // 0 = sem departamento.
+  int32 departamento_id = 5;
+}
+
+message MyAtendenteResponse {
+  MyAtendente atendente = 1;
+}
+
+message UpdateMyAtendenteRequest {
+  int32 id = 1;
+  string nome = 2;
+  string cargo = 3;
+  int32 departamento_id = 4;
+  int32 fluxo_id = 5;
+  bool ativo = 6;
+  bool disponivel = 7;
+  int32 max_atendimentos_simultaneos = 8;
+}
+
+message MyAtendenteIdRequest {
+  int32 id = 1;
 }
 
 // --- Conexões de WhatsApp do tenant ---

@@ -2688,6 +2688,7 @@ const MyAtendente$json = {
       '5': 5,
       '10': 'maxAtendimentosSimultaneos'
     },
+    {'1': 'fluxo_id', '3': 9, '4': 1, '5': 5, '10': 'fluxoId'},
   ],
 };
 
@@ -2697,7 +2698,8 @@ final $typed_data.Uint8List myAtendenteDescriptor = $convert.base64Decode(
     'FpbBgDIAEoCVIFZW1haWwSFAoFY2FyZ28YBCABKAlSBWNhcmdvEicKD2RlcGFydGFtZW50b19p'
     'ZBgFIAEoBVIOZGVwYXJ0YW1lbnRvSWQSFAoFYXRpdm8YBiABKAhSBWF0aXZvEh4KCmRpc3Bvbm'
     'l2ZWwYByABKAhSCmRpc3Bvbml2ZWwSQAocbWF4X2F0ZW5kaW1lbnRvc19zaW11bHRhbmVvcxgI'
-    'IAEoBVIabWF4QXRlbmRpbWVudG9zU2ltdWx0YW5lb3M=');
+    'IAEoBVIabWF4QXRlbmRpbWVudG9zU2ltdWx0YW5lb3MSGQoIZmx1eG9faWQYCSABKAVSB2ZsdX'
+    'hvSWQ=');
 
 @$core.Deprecated('Use listMyAtendentesRequestDescriptor instead')
 const ListMyAtendentesRequest$json = {
@@ -2728,6 +2730,85 @@ final $typed_data.Uint8List listMyAtendentesResponseDescriptor =
     $convert.base64Decode(
         'ChhMaXN0TXlBdGVuZGVudGVzUmVzcG9uc2USSAoKYXRlbmRlbnRlcxgBIAMoCzIoLnNtYXJ0Y2'
         '9yZS5jb250cmFjdHMucXVlcmllcy5NeUF0ZW5kZW50ZVIKYXRlbmRlbnRlcw==');
+
+@$core.Deprecated('Use createMyAtendenteRequestDescriptor instead')
+const CreateMyAtendenteRequest$json = {
+  '1': 'CreateMyAtendenteRequest',
+  '2': [
+    {'1': 'nome', '3': 1, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'email', '3': 2, '4': 1, '5': 9, '10': 'email'},
+    {'1': 'cargo', '3': 3, '4': 1, '5': 9, '10': 'cargo'},
+    {'1': 'fluxo_id', '3': 4, '4': 1, '5': 5, '10': 'fluxoId'},
+    {'1': 'departamento_id', '3': 5, '4': 1, '5': 5, '10': 'departamentoId'},
+  ],
+};
+
+/// Descriptor for `CreateMyAtendenteRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createMyAtendenteRequestDescriptor = $convert.base64Decode(
+    'ChhDcmVhdGVNeUF0ZW5kZW50ZVJlcXVlc3QSEgoEbm9tZRgBIAEoCVIEbm9tZRIUCgVlbWFpbB'
+    'gCIAEoCVIFZW1haWwSFAoFY2FyZ28YAyABKAlSBWNhcmdvEhkKCGZsdXhvX2lkGAQgASgFUgdm'
+    'bHV4b0lkEicKD2RlcGFydGFtZW50b19pZBgFIAEoBVIOZGVwYXJ0YW1lbnRvSWQ=');
+
+@$core.Deprecated('Use myAtendenteResponseDescriptor instead')
+const MyAtendenteResponse$json = {
+  '1': 'MyAtendenteResponse',
+  '2': [
+    {
+      '1': 'atendente',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyAtendente',
+      '10': 'atendente'
+    },
+  ],
+};
+
+/// Descriptor for `MyAtendenteResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myAtendenteResponseDescriptor = $convert.base64Decode(
+    'ChNNeUF0ZW5kZW50ZVJlc3BvbnNlEkYKCWF0ZW5kZW50ZRgBIAEoCzIoLnNtYXJ0Y29yZS5jb2'
+    '50cmFjdHMucXVlcmllcy5NeUF0ZW5kZW50ZVIJYXRlbmRlbnRl');
+
+@$core.Deprecated('Use updateMyAtendenteRequestDescriptor instead')
+const UpdateMyAtendenteRequest$json = {
+  '1': 'UpdateMyAtendenteRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'cargo', '3': 3, '4': 1, '5': 9, '10': 'cargo'},
+    {'1': 'departamento_id', '3': 4, '4': 1, '5': 5, '10': 'departamentoId'},
+    {'1': 'fluxo_id', '3': 5, '4': 1, '5': 5, '10': 'fluxoId'},
+    {'1': 'ativo', '3': 6, '4': 1, '5': 8, '10': 'ativo'},
+    {'1': 'disponivel', '3': 7, '4': 1, '5': 8, '10': 'disponivel'},
+    {
+      '1': 'max_atendimentos_simultaneos',
+      '3': 8,
+      '4': 1,
+      '5': 5,
+      '10': 'maxAtendimentosSimultaneos'
+    },
+  ],
+};
+
+/// Descriptor for `UpdateMyAtendenteRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List updateMyAtendenteRequestDescriptor = $convert.base64Decode(
+    'ChhVcGRhdGVNeUF0ZW5kZW50ZVJlcXVlc3QSDgoCaWQYASABKAVSAmlkEhIKBG5vbWUYAiABKA'
+    'lSBG5vbWUSFAoFY2FyZ28YAyABKAlSBWNhcmdvEicKD2RlcGFydGFtZW50b19pZBgEIAEoBVIO'
+    'ZGVwYXJ0YW1lbnRvSWQSGQoIZmx1eG9faWQYBSABKAVSB2ZsdXhvSWQSFAoFYXRpdm8YBiABKA'
+    'hSBWF0aXZvEh4KCmRpc3Bvbml2ZWwYByABKAhSCmRpc3Bvbml2ZWwSQAocbWF4X2F0ZW5kaW1l'
+    'bnRvc19zaW11bHRhbmVvcxgIIAEoBVIabWF4QXRlbmRpbWVudG9zU2ltdWx0YW5lb3M=');
+
+@$core.Deprecated('Use myAtendenteIdRequestDescriptor instead')
+const MyAtendenteIdRequest$json = {
+  '1': 'MyAtendenteIdRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+  ],
+};
+
+/// Descriptor for `MyAtendenteIdRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myAtendenteIdRequestDescriptor = $convert
+    .base64Decode('ChRNeUF0ZW5kZW50ZUlkUmVxdWVzdBIOCgJpZBgBIAEoBVICaWQ=');
 
 @$core.Deprecated('Use myWhatsappInstanceDescriptor instead')
 const MyWhatsappInstance$json = {

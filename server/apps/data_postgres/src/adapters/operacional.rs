@@ -1256,4 +1256,114 @@ impl OperacionalStore for PgOperacionalStore {
         })
         .await
     }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, fluxo_id = fluxo_id))]
+    async fn criar_atendente(
+        &self,
+        ctx: &RequestContext,
+        nome: String,
+        email: String,
+        cargo: String,
+        fluxo_id: i32,
+        departamento_id: Option<i32>,
+    ) -> Result<serde_json::Value, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let atendente = PostgresAtendenteRepository
+                .criar(
+                    &mut tx,
+                    &ctx,
+                    &nome,
+                    &email,
+                    &cargo,
+                    fluxo_id,
+                    departamento_id,
+                )
+                .await?;
+            let json = serde_json::to_value(&atendente)
+                .map_err(|e| DbError::ConfigError(format!("falha ao serializar atendente: {e}")))?;
+            Ok((json, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn atualizar_atendente(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        nome: String,
+        cargo: String,
+        departamento_id: Option<i32>,
+        fluxo_id: i32,
+        ativo: bool,
+        disponivel: bool,
+        max_simultaneos: i32,
+    ) -> Result<serde_json::Value, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let repo = PostgresAtendenteRepository;
+
+            // A contagem e a escrita na mesma transação: entre uma consulta
+            // solta e o UPDATE cabe uma conversa nova sendo atribuída.
+            if !ativo {
+                let abertos = repo
+                    .contar_atendimentos_em_andamento(&mut tx, &ctx, id)
+                    .await?;
+                if abertos > 0 {
+                    return Ok((
+                        recusa(format!(
+                            "Esta pessoa está com {abertos} conversa(s) em andamento. \
+                             Transfira ou conclua antes de desativá-la."
+                        )),
+                        tx,
+                    ));
+                }
+            }
+
+            let ok = repo
+                .atualizar(
+                    &mut tx,
+                    &ctx,
+                    id,
+                    &nome,
+                    &cargo,
+                    departamento_id,
+                    fluxo_id,
+                    ativo,
+                    disponivel,
+                    max_simultaneos,
+                )
+                .await?;
+            Ok((resultado(ok, "Atendente não encontrado."), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn desativar_atendente(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<serde_json::Value, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let repo = PostgresAtendenteRepository;
+            let abertos = repo
+                .contar_atendimentos_em_andamento(&mut tx, &ctx, id)
+                .await?;
+            if abertos > 0 {
+                return Ok((
+                    recusa(format!(
+                        "Esta pessoa está com {abertos} conversa(s) em andamento. \
+                         Transfira ou conclua antes de desativá-la."
+                    )),
+                    tx,
+                ));
+            }
+            let ok = repo.desativar(&mut tx, &ctx, id).await?;
+            Ok((resultado(ok, "Atendente não encontrado ou já inativo."), tx))
+        })
+        .await
+    }
 }

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oraculo_atendente\n                  SET ativo = false, disponivel = false, ultima_atividade = NOW()\n                WHERE tenant_id = $1 AND id = $2 AND ativo = true",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a34f1c66ccd87ed7451eead768e2cea705e7b38c2225928a18535eb08503e914"
+}

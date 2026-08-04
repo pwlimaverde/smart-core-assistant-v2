@@ -67,3 +67,42 @@ final class DesativarDepartamentoUsecase extends UsecaseBaseCallData<Unit, Unit,
   EquipeError onUnexpected(Object e, StackTrace s) =>
       _inesperado('desativar departamento', e, s);
 }
+
+final class CriarAtendenteUsecase extends UsecaseBaseCallData<Unit, Unit,
+    CriarAtendenteParameters, EquipeError> {
+  const CriarAtendenteUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, CriarAtendenteParameters, EquipeError> get process =>
+      (data, _) => Success(data);
+
+  @override
+  EquipeError onUnexpected(Object e, StackTrace s) =>
+      _inesperado('criar atendente', e, s);
+}
+
+final class AtualizarAtendenteUsecase extends UsecaseBaseCallData<Unit, Unit,
+    AtualizarAtendenteParameters, EquipeError> {
+  const AtualizarAtendenteUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, AtualizarAtendenteParameters, EquipeError>
+      get process => (data, _) => Success(data);
+
+  @override
+  EquipeError onUnexpected(Object e, StackTrace s) =>
+      _inesperado('atualizar atendente', e, s);
+}
+
+final class DesativarAtendenteUsecase extends UsecaseBaseCallData<Unit, Unit,
+    AtendenteIdParameters, EquipeError> {
+  const DesativarAtendenteUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, AtendenteIdParameters, EquipeError> get process =>
+      (data, _) => Success(data);
+
+  @override
+  EquipeError onUnexpected(Object e, StackTrace s) =>
+      _inesperado('desativar atendente', e, s);
+}

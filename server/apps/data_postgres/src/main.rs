@@ -516,6 +516,9 @@ async fn main() -> anyhow::Result<()> {
     let s_etapa_update = state_clone.clone();
     let s_etapa_desativar = state_clone.clone();
     let s_etapa_mover = state_clone.clone();
+    let s_atendente_criar = state_clone.clone();
+    let s_atendente_update = state_clone.clone();
+    let s_atendente_desativar = state_clone.clone();
     let state_for_create_departamento = state_clone.clone();
     let state_for_create_plan = state_clone.clone();
     let state_for_update_plan = state_clone.clone();
@@ -919,6 +922,27 @@ async fn main() -> anyhow::Result<()> {
         .route("GetPainelTenant", move |env| {
             let state = s_painel.clone();
             Box::pin(async move { handler_painel_tenant(state.operacional.as_ref(), env).await })
+        })
+        .route("CreateAtendente", move |env| {
+            let state = s_atendente_criar.clone();
+            Box::pin(async move {
+                handler_create_atendente(state.operacional.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
+        })
+        .route("UpdateAtendente", move |env| {
+            let state = s_atendente_update.clone();
+            Box::pin(async move {
+                handler_update_atendente(state.operacional.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
+        })
+        .route("DesativarAtendente", move |env| {
+            let state = s_atendente_desativar.clone();
+            Box::pin(async move {
+                handler_desativar_atendente(state.operacional.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
         })
         .route("ListFluxos", move |env| {
             let state = s_fluxo_listar.clone();
@@ -3781,6 +3805,211 @@ async fn handler_list_atendentes(store: &dyn ports::OperacionalStore, env: Envel
             "ListAtendentesReply",
             serde_json::json!({ "atendentes": itens }),
         ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// `0` no proto3 significa "não informado" — para `departamento_id`, isso é
+/// "sem departamento" (a coluna aceita NULL), não o departamento de id zero.
+fn opcional_positivo(payload: &serde_json::Value, chave: &str) -> Option<i32> {
+    payload
+        .get(chave)
+        .and_then(|v| v.as_i64())
+        .filter(|n| *n > 0)
+        .map(|n| n as i32)
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "CreateAtendente", tenant_id = %env.tenant_id))]
+async fn handler_create_atendente(
+    store: &dyn ports::OperacionalStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let texto = |chave: &str| {
+        payload
+            .get(chave)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    let nome = texto("nome");
+    let email = texto("email");
+    let cargo = texto("cargo");
+    let fluxo_id = payload
+        .get("fluxo_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+
+    if nome.is_empty() {
+        return erro(
+            error_core::AppError::Validation("informe o nome do atendente".into()),
+            &env,
+        );
+    }
+    if email.is_empty() {
+        return erro(
+            error_core::AppError::Validation("informe o e-mail do atendente".into()),
+            &env,
+        );
+    }
+    if fluxo_id <= 0 {
+        // `fluxo_id` é NOT NULL: sem fluxo o INSERT falharia com erro de
+        // constraint, que não diz nada a quem está cadastrando.
+        return erro(
+            error_core::AppError::Validation(
+                "escolha o fluxo em que este atendente trabalha".into(),
+            ),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .criar_atendente(
+            &ctx,
+            nome.clone(),
+            email,
+            cargo,
+            fluxo_id,
+            opcional_positivo(&payload, "departamento_id"),
+        )
+        .await
+    {
+        Ok(atendente) => {
+            audit
+                .publish(
+                    &env,
+                    "atendente_criado",
+                    format!("Atendente '{nome}' criado"),
+                    serde_json::json!({
+                        "id": atendente.get("id").and_then(|v| v.as_i64()).unwrap_or(0),
+                        "fluxo_id": fluxo_id,
+                    }),
+                )
+                .await;
+            ok_reply(&env, "CreateAtendenteReply", atendente)
+        }
+        Err(err) => erro(err.into(), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "UpdateAtendente", tenant_id = %env.tenant_id))]
+async fn handler_update_atendente(
+    store: &dyn ports::OperacionalStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let nome = payload
+        .get("nome")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let cargo = payload
+        .get("cargo")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let fluxo_id = payload
+        .get("fluxo_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let ativo = payload
+        .get("ativo")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let disponivel = payload
+        .get("disponivel")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    // Teto de zero deixaria o atendente cadastrado e nunca elegível no
+    // round-robin — inativo por acidente, sem parecer inativo.
+    let max_simultaneos = payload
+        .get("max_atendimentos_simultaneos")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(5)
+        .clamp(1, 100) as i32;
+
+    if nome.is_empty() {
+        return erro(
+            error_core::AppError::Validation("informe o nome do atendente".into()),
+            &env,
+        );
+    }
+    if fluxo_id <= 0 {
+        return erro(
+            error_core::AppError::Validation(
+                "escolha o fluxo em que este atendente trabalha".into(),
+            ),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .atualizar_atendente(
+            &ctx,
+            id,
+            nome.clone(),
+            cargo,
+            opcional_positivo(&payload, "departamento_id"),
+            fluxo_id,
+            ativo,
+            disponivel,
+            max_simultaneos,
+        )
+        .await
+    {
+        Ok(res) => match responder_resultado(&env, "UpdateAtendenteReply", res) {
+            Ok(resp) => {
+                audit
+                    .publish(
+                        &env,
+                        "atendente_atualizado",
+                        format!("Atendente '{nome}' atualizado"),
+                        serde_json::json!({
+                            "id": id, "ativo": ativo, "disponivel": disponivel,
+                        }),
+                    )
+                    .await;
+                resp
+            }
+            Err(recusa) => recusa,
+        },
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "DesativarAtendente", tenant_id = %env.tenant_id))]
+async fn handler_desativar_atendente(
+    store: &dyn ports::OperacionalStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+    let ctx = contexto_do_envelope(&env);
+    match store.desativar_atendente(&ctx, id).await {
+        Ok(res) => match responder_resultado(&env, "DesativarAtendenteReply", res) {
+            Ok(resp) => {
+                audit
+                    .publish(
+                        &env,
+                        "atendente_desativado",
+                        format!("Atendente {id} desativado"),
+                        serde_json::json!({ "id": id }),
+                    )
+                    .await;
+                resp
+            }
+            Err(recusa) => recusa,
+        },
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }

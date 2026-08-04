@@ -493,6 +493,27 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$listMyAtendentes, request, options: options);
   }
 
+  $grpc.ResponseFuture<$0.MyAtendenteResponse> createMyAtendente(
+    $0.CreateMyAtendenteRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$createMyAtendente, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> updateMyAtendente(
+    $0.UpdateMyAtendenteRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$updateMyAtendente, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> desativarMyAtendente(
+    $0.MyAtendenteIdRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$desativarMyAtendente, request, options: options);
+  }
+
   $grpc.ResponseFuture<$0.GetMyPainelResponse> getMyPainel(
     $0.GetMyPainelRequest request, {
     $grpc.CallOptions? options,
@@ -878,6 +899,21 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/ListMyAtendentes',
       ($0.ListMyAtendentesRequest value) => value.writeToBuffer(),
       $0.ListMyAtendentesResponse.fromBuffer);
+  static final _$createMyAtendente =
+      $grpc.ClientMethod<$0.CreateMyAtendenteRequest, $0.MyAtendenteResponse>(
+          '/smartcore.contracts.queries.AdminService/CreateMyAtendente',
+          ($0.CreateMyAtendenteRequest value) => value.writeToBuffer(),
+          $0.MyAtendenteResponse.fromBuffer);
+  static final _$updateMyAtendente =
+      $grpc.ClientMethod<$0.UpdateMyAtendenteRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/UpdateMyAtendente',
+          ($0.UpdateMyAtendenteRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$desativarMyAtendente =
+      $grpc.ClientMethod<$0.MyAtendenteIdRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/DesativarMyAtendente',
+          ($0.MyAtendenteIdRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
   static final _$getMyPainel =
       $grpc.ClientMethod<$0.GetMyPainelRequest, $0.GetMyPainelResponse>(
           '/smartcore.contracts.queries.AdminService/GetMyPainel',
@@ -1471,6 +1507,33 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.ListMyAtendentesRequest.fromBuffer(value),
         ($0.ListMyAtendentesResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.CreateMyAtendenteRequest,
+            $0.MyAtendenteResponse>(
+        'CreateMyAtendente',
+        createMyAtendente_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.CreateMyAtendenteRequest.fromBuffer(value),
+        ($0.MyAtendenteResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.UpdateMyAtendenteRequest, $0.SimpleOkResponse>(
+            'UpdateMyAtendente',
+            updateMyAtendente_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.UpdateMyAtendenteRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.MyAtendenteIdRequest, $0.SimpleOkResponse>(
+            'DesativarMyAtendente',
+            desativarMyAtendente_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.MyAtendenteIdRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
     $addMethod(
         $grpc.ServiceMethod<$0.GetMyPainelRequest, $0.GetMyPainelResponse>(
             'GetMyPainel',
@@ -2102,6 +2165,33 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.ListMyAtendentesResponse> listMyAtendentes(
       $grpc.ServiceCall call, $0.ListMyAtendentesRequest request);
+
+  $async.Future<$0.MyAtendenteResponse> createMyAtendente_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.CreateMyAtendenteRequest> $request) async {
+    return createMyAtendente($call, await $request);
+  }
+
+  $async.Future<$0.MyAtendenteResponse> createMyAtendente(
+      $grpc.ServiceCall call, $0.CreateMyAtendenteRequest request);
+
+  $async.Future<$0.SimpleOkResponse> updateMyAtendente_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.UpdateMyAtendenteRequest> $request) async {
+    return updateMyAtendente($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> updateMyAtendente(
+      $grpc.ServiceCall call, $0.UpdateMyAtendenteRequest request);
+
+  $async.Future<$0.SimpleOkResponse> desativarMyAtendente_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MyAtendenteIdRequest> $request) async {
+    return desativarMyAtendente($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> desativarMyAtendente(
+      $grpc.ServiceCall call, $0.MyAtendenteIdRequest request);
 
   $async.Future<$0.GetMyPainelResponse> getMyPainel_Pre($grpc.ServiceCall $call,
       $async.Future<$0.GetMyPainelRequest> $request) async {

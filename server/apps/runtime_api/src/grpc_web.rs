@@ -25,6 +25,7 @@ use contracts::grpc::queries::{
     CoreSetting as ProtoCoreSetting,
     CreateInviteRequest,
     CreateInviteResponse,
+    CreateMyAtendenteRequest,
     CreateMyDepartamentoRequest,
     CreateMyDepartamentoResponse,
     CreateMyEtapaFluxoRequest,
@@ -113,6 +114,8 @@ use contracts::grpc::queries::{
     MoveAtendimentoEtapaResponse,
     MoverMyEtapaFluxoRequest,
     MyAtendente,
+    MyAtendenteIdRequest,
+    MyAtendenteResponse,
     MyContato,
     MyDepartamento,
     MyDepartamentoIdRequest,
@@ -162,6 +165,7 @@ use contracts::grpc::queries::{
     // Fase 3 - Evolution Connection
     TestEvolutionConnectionRequest,
     TestEvolutionConnectionResponse,
+    UpdateMyAtendenteRequest,
     UpdateMyDepartamentoRequest,
     UpdateMyEtapaFluxoRequest,
     UpdateMyFluxoRequest,
@@ -2714,6 +2718,104 @@ impl AdminService for AdminFacade {
         Ok(Response::new(ListMyContatosResponse { contatos }))
     }
 
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "CreateMyAtendente", traceparent)
+    )]
+    async fn create_my_atendente(
+        &self,
+        req: Request<CreateMyAtendenteRequest>,
+    ) -> Result<Response<MyAtendenteResponse>, Status> {
+        let inner = req.get_ref().clone();
+        if inner.nome.trim().is_empty() {
+            return Err(Status::invalid_argument("informe o nome do atendente"));
+        }
+        if inner.email.trim().is_empty() {
+            return Err(Status::invalid_argument("informe o e-mail do atendente"));
+        }
+        if inner.fluxo_id <= 0 {
+            return Err(Status::invalid_argument(
+                "escolha o fluxo em que este atendente trabalha",
+            ));
+        }
+
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "CreateAtendente",
+                serde_json::json!({
+                    "nome": inner.nome.trim(),
+                    "email": inner.email.trim(),
+                    "cargo": inner.cargo.trim(),
+                    "fluxo_id": inner.fluxo_id,
+                    "departamento_id": inner.departamento_id,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(MyAtendenteResponse {
+            atendente: Some(atendente_do_json(&corpo)),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "UpdateMyAtendente", traceparent)
+    )]
+    async fn update_my_atendente(
+        &self,
+        req: Request<UpdateMyAtendenteRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = req.get_ref().clone();
+        if inner.nome.trim().is_empty() {
+            return Err(Status::invalid_argument("informe o nome do atendente"));
+        }
+        if inner.fluxo_id <= 0 {
+            return Err(Status::invalid_argument(
+                "escolha o fluxo em que este atendente trabalha",
+            ));
+        }
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "UpdateAtendente",
+            serde_json::json!({
+                "id": inner.id,
+                "nome": inner.nome.trim(),
+                "cargo": inner.cargo.trim(),
+                "departamento_id": inner.departamento_id,
+                "fluxo_id": inner.fluxo_id,
+                "ativo": inner.ativo,
+                "disponivel": inner.disponivel,
+                "max_atendimentos_simultaneos": inner.max_atendimentos_simultaneos,
+            }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DesativarMyAtendente", traceparent)
+    )]
+    async fn desativar_my_atendente(
+        &self,
+        req: Request<MyAtendenteIdRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let id = req.get_ref().id;
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "DesativarAtendente",
+            serde_json::json!({ "id": id }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
     // --- Fluxos de atendimento e etapas ---
 
     #[tracing::instrument(
@@ -5143,6 +5245,7 @@ fn atendente_do_json(v: &serde_json::Value) -> MyAtendente {
             .get("max_atendimentos_simultaneos")
             .and_then(|x| x.as_i64())
             .unwrap_or(0) as i32,
+        fluxo_id: v.get("fluxo_id").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
     }
 }
 

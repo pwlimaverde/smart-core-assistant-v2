@@ -845,6 +845,7 @@ table MyAtendente {
   ativo:bool;
   disponivel:bool;
   max_atendimentos_simultaneos:int;
+  fluxo_id:int;
 }
 
 table ListMyAtendentesRequest {
@@ -852,6 +853,33 @@ table ListMyAtendentesRequest {
 
 table ListMyAtendentesResponse {
   atendentes:[smartcore.contracts.queries.MyAtendente];
+}
+
+table CreateMyAtendenteRequest {
+  nome:string;
+  email:string;
+  cargo:string;
+  fluxo_id:int;
+  departamento_id:int;
+}
+
+table MyAtendenteResponse {
+  atendente:smartcore.contracts.queries.MyAtendente;
+}
+
+table UpdateMyAtendenteRequest {
+  id:int;
+  nome:string;
+  cargo:string;
+  departamento_id:int;
+  fluxo_id:int;
+  ativo:bool;
+  disponivel:bool;
+  max_atendimentos_simultaneos:int;
+}
+
+table MyAtendenteIdRequest {
+  id:int;
 }
 
 table MyWhatsappInstance {

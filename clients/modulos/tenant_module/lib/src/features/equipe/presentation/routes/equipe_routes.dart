@@ -1,5 +1,6 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
+import '../../../fluxos/domain/usecases/fluxos_usecases.dart';
 import '../../domain/usecases/equipe_usecases.dart';
 import '../controllers/equipe_controllers.dart';
 import '../pages/equipe_page.dart';
@@ -20,6 +21,10 @@ final class EquipeRoute extends GetItModule {
         criar: inject<CriarDepartamentoUsecase>(),
         atualizar: inject<AtualizarDepartamentoUsecase>(),
         desativar: inject<DesativarDepartamentoUsecase>(),
+        criarAtendente: inject<CriarAtendenteUsecase>(),
+        atualizarAtendente: inject<AtualizarAtendenteUsecase>(),
+        desativarAtendente: inject<DesativarAtendenteUsecase>(),
+        fluxos: inject<ListarFluxosUsecase>(),
       ),
     );
   }

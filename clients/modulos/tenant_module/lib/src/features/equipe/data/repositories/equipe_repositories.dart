@@ -71,3 +71,30 @@ final class DesativarDepartamentoRepository
   EquipeError mapError(Object e, StackTrace s, DepartamentoIdParameters p) =>
       _traduzir(e, 'desativar departamento');
 }
+
+final class CriarAtendenteRepository
+    extends RepositoryBase<Unit, CriarAtendenteParameters, EquipeError> {
+  const CriarAtendenteRepository({required super.datasource});
+
+  @override
+  EquipeError mapError(Object e, StackTrace s, CriarAtendenteParameters p) =>
+      _traduzir(e, 'criar atendente');
+}
+
+final class AtualizarAtendenteRepository
+    extends RepositoryBase<Unit, AtualizarAtendenteParameters, EquipeError> {
+  const AtualizarAtendenteRepository({required super.datasource});
+
+  @override
+  EquipeError mapError(Object e, StackTrace s, AtualizarAtendenteParameters p) =>
+      _traduzir(e, 'atualizar atendente');
+}
+
+final class DesativarAtendenteRepository
+    extends RepositoryBase<Unit, AtendenteIdParameters, EquipeError> {
+  const DesativarAtendenteRepository({required super.datasource});
+
+  @override
+  EquipeError mapError(Object e, StackTrace s, AtendenteIdParameters p) =>
+      _traduzir(e, 'desativar atendente');
+}

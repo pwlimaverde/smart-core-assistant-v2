@@ -3,6 +3,7 @@ import 'package:dependencies_module/dependencies_module.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/equipe.dart';
 import '../controllers/equipe_controllers.dart';
+import '../widgets/dialogo_atendente.dart';
 import '../widgets/dialogo_departamento.dart';
 
 /// Departamentos e atendentes.
@@ -81,6 +82,7 @@ class _EquipePageState extends State<EquipePage>
                     _AbaAtendentes(
                       itens: equipe.atendentes,
                       departamentos: equipe.departamentos,
+                      controller: _controller,
                     ),
                   ],
                 ),
@@ -208,30 +210,85 @@ class _LinhaDepartamento extends StatelessWidget {
 class _AbaAtendentes extends StatelessWidget {
   final List<Atendente> itens;
   final List<Departamento> departamentos;
+  final EquipeController controller;
 
-  const _AbaAtendentes({required this.itens, required this.departamentos});
+  const _AbaAtendentes({
+    required this.itens,
+    required this.departamentos,
+    required this.controller,
+  });
 
   @override
   Widget build(BuildContext context) {
-    if (itens.isEmpty) {
-      return const AppEmptyView(
-        title: 'Nenhum atendente',
-        subtitle: 'Convide pessoas em "Usuários" — elas aparecem aqui quando '
-            'forem vinculadas a um departamento.',
-      );
-    }
-
     // Nome do departamento por id, para não repetir a busca linha a linha.
     final nomePorId = {for (final d in departamentos) d.id: d.nome};
 
-    return ListView.separated(
-      itemCount: itens.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 8),
-      itemBuilder: (_, i) {
-        final a = itens[i];
-        final depto = nomePorId[a.departamentoId];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Text(
+                'Quem atende, em qual fluxo e com quanta conversa por vez.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: context.colors.fgMuted),
+              ),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.add),
+              label: const Text('Novo atendente'),
+              onPressed: () =>
+                  abrirCriacaoAtendente(context, controller, departamentos),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        Expanded(
+          child: itens.isEmpty
+              ? const AppEmptyView(
+                  title: 'Nenhum atendente',
+                  subtitle: 'Sem alguém cadastrado, a fila não tem para quem '
+                      'distribuir as conversas.',
+                )
+              : ListView.separated(
+                  itemCount: itens.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (_, i) => _LinhaAtendente(
+                    item: itens[i],
+                    departamento: nomePorId[itens[i].departamentoId],
+                    departamentos: departamentos,
+                    controller: controller,
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+}
 
-        return AppCard(
+class _LinhaAtendente extends StatelessWidget {
+  final Atendente item;
+  final String? departamento;
+  final List<Departamento> departamentos;
+  final EquipeController controller;
+
+  const _LinhaAtendente({
+    required this.item,
+    required this.departamento,
+    required this.departamentos,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final a = item;
+    final depto = departamento;
+
+    return AppCard(
           padding: const EdgeInsets.all(AppSpacing.md),
           child: Row(
             children: [
@@ -276,10 +333,25 @@ class _AbaAtendentes extends StatelessWidget {
                   ],
                 ),
               ),
+              IconButton(
+                icon: const Icon(Icons.edit_outlined),
+                tooltip: 'Editar',
+                onPressed: () => abrirEdicaoAtendente(
+                  context,
+                  a,
+                  controller,
+                  departamentos,
+                ),
+              ),
+              if (a.ativo)
+                IconButton(
+                  icon: const Icon(Icons.block),
+                  tooltip: 'Desativar',
+                  onPressed: () =>
+                      abrirDesativacaoAtendente(context, a, controller),
+                ),
             ],
           ),
-        );
-      },
     );
   }
 }

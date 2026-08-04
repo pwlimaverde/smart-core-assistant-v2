@@ -257,6 +257,41 @@ pub trait OperacionalStore: Send + Sync {
         ctx: &RequestContext,
     ) -> Result<Vec<serde_json::Value>, DbError>;
 
+    /// Cria um atendente. `fluxo_id` é obrigatório no banco — é o quadro em que
+    /// ele trabalha, e sem fluxo criado não há atendente a criar.
+    async fn criar_atendente(
+        &self,
+        ctx: &RequestContext,
+        nome: String,
+        email: String,
+        cargo: String,
+        fluxo_id: i32,
+        departamento_id: Option<i32>,
+    ) -> Result<serde_json::Value, DbError>;
+
+    /// Atualiza o atendente. Devolve `{sucesso, motivo}`: desativar alguém com
+    /// conversa em andamento é recusado, e o motivo precisa chegar à tela.
+    #[allow(clippy::too_many_arguments)]
+    async fn atualizar_atendente(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        nome: String,
+        cargo: String,
+        departamento_id: Option<i32>,
+        fluxo_id: i32,
+        ativo: bool,
+        disponivel: bool,
+        max_simultaneos: i32,
+    ) -> Result<serde_json::Value, DbError>;
+
+    /// Desativa o atendente. Mesmo contrato `{sucesso, motivo}`.
+    async fn desativar_atendente(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<serde_json::Value, DbError>;
+
     /// Números do painel do tenant.
     ///
     /// Uma consulta só, e não uma por número: são cinco contagens pequenas
