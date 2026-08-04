@@ -695,6 +695,89 @@ table UpdateMyTenantConfigRequest {
   api_keys:[ApiKeyEntry];
 }
 
+table MyFluxo {
+  id:int;
+  departamento_id:int;
+  departamento_nome:string;
+  nome:string;
+  descricao:string;
+  ativo:bool;
+  etapas:int;
+  atendimentos_abertos:int;
+  criado_em:long;
+}
+
+table ListMyFluxosRequest {
+}
+
+table ListMyFluxosResponse {
+  fluxos:[MyFluxo];
+}
+
+table CreateMyFluxoRequest {
+  departamento_id:int;
+  nome:string;
+  descricao:string;
+}
+
+table MyFluxoResponse {
+  fluxo:MyFluxo;
+}
+
+table UpdateMyFluxoRequest {
+  id:int;
+  nome:string;
+  descricao:string;
+  ativo:bool;
+}
+
+table MyFluxoIdRequest {
+  id:int;
+}
+
+table MyEtapaFluxo {
+  id:int;
+  fluxo_id:int;
+  nome:string;
+  descricao:string;
+  ordem:int;
+  cor:string;
+  tipo_etapa:string;
+  ativo:bool;
+}
+
+table ListMyEtapasFluxoResponse {
+  etapas:[MyEtapaFluxo];
+}
+
+table CreateMyEtapaFluxoRequest {
+  fluxo_id:int;
+  nome:string;
+  tipo_etapa:string;
+  cor:string;
+}
+
+table MyEtapaFluxoResponse {
+  etapa:MyEtapaFluxo;
+}
+
+table UpdateMyEtapaFluxoRequest {
+  id:int;
+  nome:string;
+  descricao:string;
+  cor:string;
+  tipo_etapa:string;
+}
+
+table MyEtapaFluxoIdRequest {
+  id:int;
+}
+
+table MoverMyEtapaFluxoRequest {
+  id:int;
+  para_cima:bool;
+}
+
 table MyContato {
   id:int;
   telefone:string;

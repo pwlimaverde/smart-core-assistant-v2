@@ -105,11 +105,9 @@ pub async fn verificar_quota(
         }
         RecursoQuota::Fluxos => {
             // Limite do plano Básico em diante (`max_fluxos`, migration 0027).
-            // NOTA: hoje isto MEDE, mas não bloqueia nada — não existe RPC de
-            // criação de fluxo para chamar o enforce (o repositório
-            // `FluxoAtendimentoRepository::criar` não é exposto). Quando o CRUD
-            // existir, o ponto de chamada é o mesmo padrão do
-            // `handler_create_departamento`.
+            // Aplicado em `handler_create_fluxo`, no mesmo desenho do
+            // `handler_create_departamento`: mede sempre, bloqueia só com
+            // `SMARTCORE_QUOTA_ENFORCE=true`.
             let limite = sqlx::query_scalar::<_, i32>(
                 "SELECT p.max_fluxos \
                  FROM tenants_subscription s \

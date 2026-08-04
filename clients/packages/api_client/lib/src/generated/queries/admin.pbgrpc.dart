@@ -507,6 +507,70 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$listMyContatos, request, options: options);
   }
 
+  /// Fluxos de atendimento e suas etapas — o quadro por onde a conversa anda.
+  $grpc.ResponseFuture<$0.ListMyFluxosResponse> listMyFluxos(
+    $0.ListMyFluxosRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyFluxos, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.MyFluxoResponse> createMyFluxo(
+    $0.CreateMyFluxoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$createMyFluxo, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> updateMyFluxo(
+    $0.UpdateMyFluxoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$updateMyFluxo, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> desativarMyFluxo(
+    $0.MyFluxoIdRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$desativarMyFluxo, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ListMyEtapasFluxoResponse> listMyEtapasFluxo(
+    $0.MyFluxoIdRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyEtapasFluxo, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.MyEtapaFluxoResponse> createMyEtapaFluxo(
+    $0.CreateMyEtapaFluxoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$createMyEtapaFluxo, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> updateMyEtapaFluxo(
+    $0.UpdateMyEtapaFluxoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$updateMyEtapaFluxo, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> desativarMyEtapaFluxo(
+    $0.MyEtapaFluxoIdRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$desativarMyEtapaFluxo, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> moverMyEtapaFluxo(
+    $0.MoverMyEtapaFluxoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$moverMyEtapaFluxo, request, options: options);
+  }
+
   // method descriptors
 
   static final _$listCoreSettings = $grpc.ClientMethod<
@@ -824,6 +888,51 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/ListMyContatos',
           ($0.ListMyContatosRequest value) => value.writeToBuffer(),
           $0.ListMyContatosResponse.fromBuffer);
+  static final _$listMyFluxos =
+      $grpc.ClientMethod<$0.ListMyFluxosRequest, $0.ListMyFluxosResponse>(
+          '/smartcore.contracts.queries.AdminService/ListMyFluxos',
+          ($0.ListMyFluxosRequest value) => value.writeToBuffer(),
+          $0.ListMyFluxosResponse.fromBuffer);
+  static final _$createMyFluxo =
+      $grpc.ClientMethod<$0.CreateMyFluxoRequest, $0.MyFluxoResponse>(
+          '/smartcore.contracts.queries.AdminService/CreateMyFluxo',
+          ($0.CreateMyFluxoRequest value) => value.writeToBuffer(),
+          $0.MyFluxoResponse.fromBuffer);
+  static final _$updateMyFluxo =
+      $grpc.ClientMethod<$0.UpdateMyFluxoRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/UpdateMyFluxo',
+          ($0.UpdateMyFluxoRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$desativarMyFluxo =
+      $grpc.ClientMethod<$0.MyFluxoIdRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/DesativarMyFluxo',
+          ($0.MyFluxoIdRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$listMyEtapasFluxo =
+      $grpc.ClientMethod<$0.MyFluxoIdRequest, $0.ListMyEtapasFluxoResponse>(
+          '/smartcore.contracts.queries.AdminService/ListMyEtapasFluxo',
+          ($0.MyFluxoIdRequest value) => value.writeToBuffer(),
+          $0.ListMyEtapasFluxoResponse.fromBuffer);
+  static final _$createMyEtapaFluxo =
+      $grpc.ClientMethod<$0.CreateMyEtapaFluxoRequest, $0.MyEtapaFluxoResponse>(
+          '/smartcore.contracts.queries.AdminService/CreateMyEtapaFluxo',
+          ($0.CreateMyEtapaFluxoRequest value) => value.writeToBuffer(),
+          $0.MyEtapaFluxoResponse.fromBuffer);
+  static final _$updateMyEtapaFluxo =
+      $grpc.ClientMethod<$0.UpdateMyEtapaFluxoRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/UpdateMyEtapaFluxo',
+          ($0.UpdateMyEtapaFluxoRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$desativarMyEtapaFluxo =
+      $grpc.ClientMethod<$0.MyEtapaFluxoIdRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/DesativarMyEtapaFluxo',
+          ($0.MyEtapaFluxoIdRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$moverMyEtapaFluxo =
+      $grpc.ClientMethod<$0.MoverMyEtapaFluxoRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/MoverMyEtapaFluxo',
+          ($0.MoverMyEtapaFluxoRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
 }
 
 @$pb.GrpcServiceName('smartcore.contracts.queries.AdminService')
@@ -1380,6 +1489,84 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.ListMyContatosRequest.fromBuffer(value),
         ($0.ListMyContatosResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.ListMyFluxosRequest, $0.ListMyFluxosResponse>(
+            'ListMyFluxos',
+            listMyFluxos_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.ListMyFluxosRequest.fromBuffer(value),
+            ($0.ListMyFluxosResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.CreateMyFluxoRequest, $0.MyFluxoResponse>(
+        'CreateMyFluxo',
+        createMyFluxo_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.CreateMyFluxoRequest.fromBuffer(value),
+        ($0.MyFluxoResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.UpdateMyFluxoRequest, $0.SimpleOkResponse>(
+            'UpdateMyFluxo',
+            updateMyFluxo_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.UpdateMyFluxoRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.MyFluxoIdRequest, $0.SimpleOkResponse>(
+        'DesativarMyFluxo',
+        desativarMyFluxo_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.MyFluxoIdRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.MyFluxoIdRequest, $0.ListMyEtapasFluxoResponse>(
+            'ListMyEtapasFluxo',
+            listMyEtapasFluxo_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.MyFluxoIdRequest.fromBuffer(value),
+            ($0.ListMyEtapasFluxoResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.CreateMyEtapaFluxoRequest,
+            $0.MyEtapaFluxoResponse>(
+        'CreateMyEtapaFluxo',
+        createMyEtapaFluxo_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.CreateMyEtapaFluxoRequest.fromBuffer(value),
+        ($0.MyEtapaFluxoResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.UpdateMyEtapaFluxoRequest, $0.SimpleOkResponse>(
+            'UpdateMyEtapaFluxo',
+            updateMyEtapaFluxo_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.UpdateMyEtapaFluxoRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.MyEtapaFluxoIdRequest, $0.SimpleOkResponse>(
+            'DesativarMyEtapaFluxo',
+            desativarMyEtapaFluxo_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.MyEtapaFluxoIdRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.MoverMyEtapaFluxoRequest, $0.SimpleOkResponse>(
+            'MoverMyEtapaFluxo',
+            moverMyEtapaFluxo_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.MoverMyEtapaFluxoRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.ListCoreSettingsResponse> listCoreSettings_Pre(
@@ -1932,4 +2119,83 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.ListMyContatosResponse> listMyContatos(
       $grpc.ServiceCall call, $0.ListMyContatosRequest request);
+
+  $async.Future<$0.ListMyFluxosResponse> listMyFluxos_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListMyFluxosRequest> $request) async {
+    return listMyFluxos($call, await $request);
+  }
+
+  $async.Future<$0.ListMyFluxosResponse> listMyFluxos(
+      $grpc.ServiceCall call, $0.ListMyFluxosRequest request);
+
+  $async.Future<$0.MyFluxoResponse> createMyFluxo_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.CreateMyFluxoRequest> $request) async {
+    return createMyFluxo($call, await $request);
+  }
+
+  $async.Future<$0.MyFluxoResponse> createMyFluxo(
+      $grpc.ServiceCall call, $0.CreateMyFluxoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> updateMyFluxo_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.UpdateMyFluxoRequest> $request) async {
+    return updateMyFluxo($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> updateMyFluxo(
+      $grpc.ServiceCall call, $0.UpdateMyFluxoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> desativarMyFluxo_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MyFluxoIdRequest> $request) async {
+    return desativarMyFluxo($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> desativarMyFluxo(
+      $grpc.ServiceCall call, $0.MyFluxoIdRequest request);
+
+  $async.Future<$0.ListMyEtapasFluxoResponse> listMyEtapasFluxo_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MyFluxoIdRequest> $request) async {
+    return listMyEtapasFluxo($call, await $request);
+  }
+
+  $async.Future<$0.ListMyEtapasFluxoResponse> listMyEtapasFluxo(
+      $grpc.ServiceCall call, $0.MyFluxoIdRequest request);
+
+  $async.Future<$0.MyEtapaFluxoResponse> createMyEtapaFluxo_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.CreateMyEtapaFluxoRequest> $request) async {
+    return createMyEtapaFluxo($call, await $request);
+  }
+
+  $async.Future<$0.MyEtapaFluxoResponse> createMyEtapaFluxo(
+      $grpc.ServiceCall call, $0.CreateMyEtapaFluxoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> updateMyEtapaFluxo_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.UpdateMyEtapaFluxoRequest> $request) async {
+    return updateMyEtapaFluxo($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> updateMyEtapaFluxo(
+      $grpc.ServiceCall call, $0.UpdateMyEtapaFluxoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> desativarMyEtapaFluxo_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MyEtapaFluxoIdRequest> $request) async {
+    return desativarMyEtapaFluxo($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> desativarMyEtapaFluxo(
+      $grpc.ServiceCall call, $0.MyEtapaFluxoIdRequest request);
+
+  $async.Future<$0.SimpleOkResponse> moverMyEtapaFluxo_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MoverMyEtapaFluxoRequest> $request) async {
+    return moverMyEtapaFluxo($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> moverMyEtapaFluxo(
+      $grpc.ServiceCall call, $0.MoverMyEtapaFluxoRequest request);
 }

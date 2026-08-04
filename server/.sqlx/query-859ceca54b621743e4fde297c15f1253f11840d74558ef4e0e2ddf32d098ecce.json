@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO oraculo_fluxo_atendimento (tenant_id, departamento_id, nome)\n               VALUES ($1, $2, $3)\n               RETURNING id, tenant_id, departamento_id, nome, descricao, ativo,\n                         data_criacao, data_atualizacao",
+  "query": "SELECT f.id, f.departamento_id, d.nome AS \"departamento_nome!\",\n                      f.nome, f.descricao, f.ativo, f.data_criacao,\n                      (SELECT COUNT(*) FROM oraculo_etapa_fluxo e\n                        WHERE e.fluxo_id = f.id AND e.ativo = true) AS \"etapas!\",\n                      -- Vocabulário de status da v1: resolvido/cancelado/arquivado\n                      -- são os fins de linha; o resto ainda está vivo.\n                      (SELECT COUNT(*) FROM oraculo_atendimento a\n                        WHERE a.fluxo_atendimento_id = f.id\n                          AND a.status NOT IN ('resolvido', 'cancelado', 'arquivado'))\n                        AS \"atendimentos_abertos!\"\n               FROM oraculo_fluxo_atendimento f\n               JOIN oraculo_departamento d\n                 ON d.id = f.departamento_id AND d.tenant_id = f.tenant_id\n               WHERE f.tenant_id = $1\n               ORDER BY d.nome, f.nome",
   "describe": {
     "columns": [
       {
@@ -16,23 +16,23 @@
       },
       {
         "ordinal": 1,
-        "name": "tenant_id",
-        "type_info": "Uuid",
-        "origin": {
-          "Table": {
-            "table": "oraculo_fluxo_atendimento",
-            "name": "tenant_id"
-          }
-        }
-      },
-      {
-        "ordinal": 2,
         "name": "departamento_id",
         "type_info": "Int4",
         "origin": {
           "Table": {
             "table": "oraculo_fluxo_atendimento",
             "name": "departamento_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "departamento_nome!",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_departamento",
+            "name": "nome"
           }
         }
       },
@@ -82,21 +82,20 @@
       },
       {
         "ordinal": 7,
-        "name": "data_atualizacao",
-        "type_info": "Timestamptz",
-        "origin": {
-          "Table": {
-            "table": "oraculo_fluxo_atendimento",
-            "name": "data_atualizacao"
-          }
-        }
+        "name": "etapas!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "atendimentos_abertos!",
+        "type_info": "Int8",
+        "origin": "Expression"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Int4",
-        "Varchar"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -107,8 +106,9 @@
       true,
       false,
       false,
-      false
+      null,
+      null
     ]
   },
-  "hash": "2dbd00fee444b251ad6553af3289370901feb84ecc3cd7852ae5b2276b1e590e"
+  "hash": "859ceca54b621743e4fde297c15f1253f11840d74558ef4e0e2ddf32d098ecce"
 }

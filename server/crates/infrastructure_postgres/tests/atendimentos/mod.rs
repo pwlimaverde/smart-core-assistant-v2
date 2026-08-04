@@ -49,7 +49,7 @@ async fn test_atendimento_workflow_and_messages() {
         .await
         .unwrap();
     let fluxo = fluxo_repo
-        .criar(&mut tx, &ctx, depto.id, "Fluxo A")
+        .criar(&mut tx, &ctx, depto.id, "Fluxo A", None)
         .await
         .unwrap();
     let etapa_fila = etapa_repo
@@ -428,11 +428,11 @@ async fn test_listar_por_status_filtra_por_flow_permission() {
         .await
         .unwrap();
     let fluxo_permitido = fluxo_repo
-        .criar(&mut tx, &ctx_admin, depto.id, "Fluxo Permitido")
+        .criar(&mut tx, &ctx_admin, depto.id, "Fluxo Permitido", None)
         .await
         .unwrap();
     let fluxo_barrado = fluxo_repo
-        .criar(&mut tx, &ctx_admin, depto.id, "Fluxo Barrado")
+        .criar(&mut tx, &ctx_admin, depto.id, "Fluxo Barrado", None)
         .await
         .unwrap();
 

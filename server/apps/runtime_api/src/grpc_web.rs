@@ -27,6 +27,8 @@ use contracts::grpc::queries::{
     CreateInviteResponse,
     CreateMyDepartamentoRequest,
     CreateMyDepartamentoResponse,
+    CreateMyEtapaFluxoRequest,
+    CreateMyFluxoRequest,
     CreateMyTreinamentoRequest,
     // Configuração inicial guiada (passos 5 a 8)
     CreateMyWhatsappInstanceRequest,
@@ -80,6 +82,9 @@ use contracts::grpc::queries::{
     ListMyContatosResponse,
     ListMyDepartamentosRequest,
     ListMyDepartamentosResponse,
+    ListMyEtapasFluxoResponse,
+    ListMyFluxosRequest,
+    ListMyFluxosResponse,
     ListMyTreinamentosRequest,
     ListMyTreinamentosResponse,
     ListMyWhatsappInstancesRequest,
@@ -106,10 +111,17 @@ use contracts::grpc::queries::{
     MensagemThread as ProtoMensagemThread,
     MoveAtendimentoEtapaRequest,
     MoveAtendimentoEtapaResponse,
+    MoverMyEtapaFluxoRequest,
     MyAtendente,
     MyContato,
     MyDepartamento,
     MyDepartamentoIdRequest,
+    MyEtapaFluxo,
+    MyEtapaFluxoIdRequest,
+    MyEtapaFluxoResponse,
+    MyFluxo,
+    MyFluxoIdRequest,
+    MyFluxoResponse,
     MyTreinamento,
     MyTreinamentoResponse,
     MyWhatsappInstance,
@@ -151,6 +163,8 @@ use contracts::grpc::queries::{
     TestEvolutionConnectionRequest,
     TestEvolutionConnectionResponse,
     UpdateMyDepartamentoRequest,
+    UpdateMyEtapaFluxoRequest,
+    UpdateMyFluxoRequest,
     UpdateMyTenantConfigRequest,
     UpdatePlanRequest,
     UpdatePlanResponse,
@@ -2700,6 +2714,247 @@ impl AdminService for AdminFacade {
         Ok(Response::new(ListMyContatosResponse { contatos }))
     }
 
+    // --- Fluxos de atendimento e etapas ---
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyFluxos", traceparent)
+    )]
+    async fn list_my_fluxos(
+        &self,
+        req: Request<ListMyFluxosRequest>,
+    ) -> Result<Response<ListMyFluxosResponse>, Status> {
+        let corpo = self
+            .encaminhar_tenant(&req, &self.deps.pg, "ListFluxos", serde_json::json!({}))
+            .await?;
+
+        let fluxos = corpo
+            .get("fluxos")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().map(fluxo_do_json).collect())
+            .unwrap_or_default();
+
+        Ok(Response::new(ListMyFluxosResponse { fluxos }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "CreateMyFluxo", traceparent)
+    )]
+    async fn create_my_fluxo(
+        &self,
+        req: Request<CreateMyFluxoRequest>,
+    ) -> Result<Response<MyFluxoResponse>, Status> {
+        let inner = req.get_ref().clone();
+        if inner.nome.trim().is_empty() {
+            return Err(Status::invalid_argument("informe o nome do fluxo"));
+        }
+        if inner.departamento_id <= 0 {
+            return Err(Status::invalid_argument("escolha o departamento do fluxo"));
+        }
+
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "CreateFluxo",
+                serde_json::json!({
+                    "departamento_id": inner.departamento_id,
+                    "nome": inner.nome.trim(),
+                    "descricao": inner.descricao,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(MyFluxoResponse {
+            fluxo: Some(fluxo_do_json(&corpo)),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "UpdateMyFluxo", traceparent)
+    )]
+    async fn update_my_fluxo(
+        &self,
+        req: Request<UpdateMyFluxoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = req.get_ref().clone();
+        if inner.nome.trim().is_empty() {
+            return Err(Status::invalid_argument("informe o nome do fluxo"));
+        }
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "UpdateFluxo",
+            serde_json::json!({
+                "id": inner.id,
+                "nome": inner.nome.trim(),
+                "descricao": inner.descricao,
+                "ativo": inner.ativo,
+            }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DesativarMyFluxo", traceparent)
+    )]
+    async fn desativar_my_fluxo(
+        &self,
+        req: Request<MyFluxoIdRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let id = req.get_ref().id;
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "DesativarFluxo",
+            serde_json::json!({ "id": id }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyEtapasFluxo", traceparent)
+    )]
+    async fn list_my_etapas_fluxo(
+        &self,
+        req: Request<MyFluxoIdRequest>,
+    ) -> Result<Response<ListMyEtapasFluxoResponse>, Status> {
+        let fluxo_id = req.get_ref().id;
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "ListEtapasFluxo",
+                serde_json::json!({ "fluxo_id": fluxo_id }),
+            )
+            .await?;
+
+        let etapas = corpo
+            .get("etapas")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().map(etapa_do_json).collect())
+            .unwrap_or_default();
+
+        Ok(Response::new(ListMyEtapasFluxoResponse { etapas }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "CreateMyEtapaFluxo", traceparent)
+    )]
+    async fn create_my_etapa_fluxo(
+        &self,
+        req: Request<CreateMyEtapaFluxoRequest>,
+    ) -> Result<Response<MyEtapaFluxoResponse>, Status> {
+        let inner = req.get_ref().clone();
+        if inner.nome.trim().is_empty() {
+            return Err(Status::invalid_argument("informe o nome da etapa"));
+        }
+
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "CreateEtapaFluxo",
+                serde_json::json!({
+                    "fluxo_id": inner.fluxo_id,
+                    "nome": inner.nome.trim(),
+                    "tipo_etapa": inner.tipo_etapa,
+                    "cor": inner.cor,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(MyEtapaFluxoResponse {
+            etapa: Some(etapa_do_json(&corpo)),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "UpdateMyEtapaFluxo", traceparent)
+    )]
+    async fn update_my_etapa_fluxo(
+        &self,
+        req: Request<UpdateMyEtapaFluxoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = req.get_ref().clone();
+        if inner.nome.trim().is_empty() {
+            return Err(Status::invalid_argument("informe o nome da etapa"));
+        }
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "UpdateEtapaFluxo",
+            serde_json::json!({
+                "id": inner.id,
+                "nome": inner.nome.trim(),
+                "descricao": inner.descricao,
+                "cor": inner.cor,
+                "tipo_etapa": inner.tipo_etapa,
+            }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DesativarMyEtapaFluxo", traceparent)
+    )]
+    async fn desativar_my_etapa_fluxo(
+        &self,
+        req: Request<MyEtapaFluxoIdRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let id = req.get_ref().id;
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "DesativarEtapaFluxo",
+            serde_json::json!({ "id": id }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "MoverMyEtapaFluxo", traceparent)
+    )]
+    async fn mover_my_etapa_fluxo(
+        &self,
+        req: Request<MoverMyEtapaFluxoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "MoverEtapaFluxo",
+                serde_json::json!({ "id": inner.id, "para_cima": inner.para_cima }),
+            )
+            .await?;
+
+        // `sucesso: false` aqui é "já está na ponta", não falha: a tela só não
+        // muda, e transformar isso em erro faria a última coluna parecer quebrada.
+        Ok(Response::new(SimpleOkResponse {
+            sucesso: corpo
+                .get("sucesso")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        }))
+    }
+
     // --- Conexões de WhatsApp do tenant ---
     //
     // O onboarding cria a primeira. Sem estas, uma conexão que cai deixa o
@@ -4783,6 +5038,58 @@ fn contato_do_json(v: &serde_json::Value) -> MyContato {
         ativo: v.get("ativo").and_then(|x| x.as_bool()).unwrap_or(false),
         ultima_interacao: data("ultima_interacao"),
         cadastrado_em: data("data_cadastro"),
+    }
+}
+
+/// Converte o fluxo do JSON interno no tipo do contrato.
+///
+/// Serve tanto para a lista (que traz as contagens) quanto para o retorno da
+/// criação (que não traz): os campos ausentes viram 0, e a tela recarrega a
+/// lista logo em seguida de qualquer forma.
+fn fluxo_do_json(v: &serde_json::Value) -> MyFluxo {
+    let texto = |chave: &str| {
+        v.get(chave)
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    let numero = |chave: &str| v.get(chave).and_then(|x| x.as_i64()).unwrap_or(0) as i32;
+    MyFluxo {
+        id: numero("id"),
+        departamento_id: numero("departamento_id"),
+        departamento_nome: texto("departamento_nome"),
+        nome: texto("nome"),
+        descricao: texto("descricao"),
+        ativo: v.get("ativo").and_then(|x| x.as_bool()).unwrap_or(false),
+        etapas: numero("etapas"),
+        atendimentos_abertos: numero("atendimentos_abertos"),
+        criado_em: v
+            .get("data_criacao")
+            .and_then(|x| x.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.timestamp_millis())
+            .unwrap_or(0),
+    }
+}
+
+/// Converte a etapa do JSON interno no tipo do contrato.
+fn etapa_do_json(v: &serde_json::Value) -> MyEtapaFluxo {
+    let texto = |chave: &str| {
+        v.get(chave)
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    let numero = |chave: &str| v.get(chave).and_then(|x| x.as_i64()).unwrap_or(0) as i32;
+    MyEtapaFluxo {
+        id: numero("id"),
+        fluxo_id: numero("fluxo_id"),
+        nome: texto("nome"),
+        descricao: texto("descricao"),
+        ordem: numero("ordem"),
+        cor: texto("cor"),
+        tipo_etapa: texto("tipo_etapa"),
+        ativo: v.get("ativo").and_then(|x| x.as_bool()).unwrap_or(false),
     }
 }
 

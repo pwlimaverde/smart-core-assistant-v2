@@ -160,15 +160,64 @@ vocabulário da v1 (`fila`, `em_atendimento`, `pendencia`, `resolvido`,
 `data_envio` de memória e o `sqlx` recusou na compilação — é para isso que a
 validação contra o banco real serve.
 
-### Etapa 4 — Clientes e contatos
+### Etapa 4 — Clientes e contatos — FEITO (parcial)
 
-CRUD + histórico de atendimentos do contato. Alimenta o painel de detalhe do
-atendimento.
+Rota `/tenant/contatos`. Lista com busca do servidor (ILIKE em nome, telefone e
+nome de perfil do WhatsApp), ordenada pela última interação.
 
-### Etapa 5 — Fluxos de atendimento
+A busca é do servidor, não da lista carregada: há teto de linhas (limite travado
+em 1..200 no adapter, para que um cliente pedindo 10 mil não varra a tabela), e
+filtrar no cliente esconderia quem ficou além dele.
 
-`FluxoAtendimento` + `EtapaFluxo`. Depende de departamentos (etapa 2). Fecha o
-enforce de `max_fluxos`, hoje medido e não aplicado.
+O nome exibido cai em cascata — cadastro → perfil do WhatsApp → telefone — e
+nunca fica vazio. Quem só tem número é marcado como "sem cadastro": é
+exatamente esse contato que o operador precisa completar, e sem a marca ele se
+perde na lista.
+
+De passagem, o menu do tenant virou rolável: passou de oito itens e a `Column`
+rígida estourava em janela baixa, escondendo o fim da lista sem sinalizar que
+havia mais.
+
+**Falta desta etapa**: editar contato (nome, e-mail, tags) e o histórico de
+atendimentos de cada um — o histórico depende do detalhe do atendimento
+(etapa 8).
+
+### Etapa 5 — Fluxos de atendimento — FEITO
+
+Rotas `/tenant/fluxos` e `/tenant/fluxos/:id/etapas`. CRUD de fluxo e de etapa,
+com reordenação. **Fecha o enforce de `max_fluxos`**, que até aqui era medido e
+não aplicado por não existir RPC de criação para chamá-lo.
+
+**O fluxo nasce com as quatro etapas padrão** (fila, trabalho, espera,
+finalização), na mesma transação da criação. Um fluxo sem etapa de entrada não
+recebe conversa nenhuma — o roteamento procura a coluna `fila` e não acha —, e o
+tenant só descobriria isso quando a primeira conversa sumisse.
+
+Três regras que o servidor aplica e explica, em vez de deixar o banco recusar
+com mensagem de constraint:
+
+- etapa com atendimento parado nela não sai (os cartões ficariam órfãos);
+- a **última** etapa do tipo `fila` não sai (conversa nova não teria onde cair);
+- fluxo com atendimento em aberto não é desativado.
+
+Cada recusa volta como `{sucesso, motivo}` e vira `Validation` com o texto
+inteiro: o motivo é para ser lido por quem opera, não virar "algo deu errado".
+Na lista, o botão de desativar já vem desabilitado quando há conversa em aberto
+— o motivo é conhecido no cliente, e deixar clicar para o servidor recusar seria
+pedir um erro que se sabe de antemão.
+
+**Reordenar passa por uma posição negativa temporária**: a `UNIQUE (fluxo_id,
+ordem)` recusa o instante em que as duas etapas ocupariam a mesma posição. E a
+vizinha é a etapa ativa mais próxima, não `ordem ± 1`: desativar deixa buracos
+na numeração, e mover para um buraco não moveria nada aos olhos de quem vê.
+
+`tipo_etapa` é vocabulário fechado validado no handler. A coluna é `VARCHAR(20)`
+e aceitaria qualquer coisa — um tipo inventado passaria e sumiria da lógica de
+roteamento sem erro nenhum. No cliente, o inverso: tipo desconhecido cai em
+`trabalho` em vez de estourar a tela.
+
+**Falta desta etapa**: criar e editar atendente vinculando a fluxo — agora
+possível, já que `oraculo_atendente.fluxo_id` tem para onde apontar.
 
 ### Etapa 6 — Kanban próprio integrado ao WhatsApp
 

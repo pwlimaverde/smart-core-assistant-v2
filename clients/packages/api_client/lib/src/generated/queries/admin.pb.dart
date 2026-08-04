@@ -9086,6 +9086,1103 @@ class UpdateMyTenantConfigRequest extends $pb.GeneratedMessage {
   $pb.PbList<ApiKeyEntry> get apiKeys => $_getList(19);
 }
 
+class MyFluxo extends $pb.GeneratedMessage {
+  factory MyFluxo({
+    $core.int? id,
+    $core.int? departamentoId,
+    $core.String? departamentoNome,
+    $core.String? nome,
+    $core.String? descricao,
+    $core.bool? ativo,
+    $core.int? etapas,
+    $core.int? atendimentosAbertos,
+    $fixnum.Int64? criadoEm,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (departamentoId != null) result.departamentoId = departamentoId;
+    if (departamentoNome != null) result.departamentoNome = departamentoNome;
+    if (nome != null) result.nome = nome;
+    if (descricao != null) result.descricao = descricao;
+    if (ativo != null) result.ativo = ativo;
+    if (etapas != null) result.etapas = etapas;
+    if (atendimentosAbertos != null)
+      result.atendimentosAbertos = atendimentosAbertos;
+    if (criadoEm != null) result.criadoEm = criadoEm;
+    return result;
+  }
+
+  MyFluxo._();
+
+  factory MyFluxo.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyFluxo.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyFluxo',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aI(2, _omitFieldNames ? '' : 'departamentoId')
+    ..aOS(3, _omitFieldNames ? '' : 'departamentoNome')
+    ..aOS(4, _omitFieldNames ? '' : 'nome')
+    ..aOS(5, _omitFieldNames ? '' : 'descricao')
+    ..aOB(6, _omitFieldNames ? '' : 'ativo')
+    ..aI(7, _omitFieldNames ? '' : 'etapas')
+    ..aI(8, _omitFieldNames ? '' : 'atendimentosAbertos')
+    ..aInt64(9, _omitFieldNames ? '' : 'criadoEm')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyFluxo clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyFluxo copyWith(void Function(MyFluxo) updates) =>
+      super.copyWith((message) => updates(message as MyFluxo)) as MyFluxo;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyFluxo create() => MyFluxo._();
+  @$core.override
+  MyFluxo createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyFluxo getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<MyFluxo>(create);
+  static MyFluxo? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get departamentoId => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set departamentoId($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasDepartamentoId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearDepartamentoId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get departamentoNome => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set departamentoNome($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDepartamentoNome() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDepartamentoNome() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get nome => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set nome($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasNome() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearNome() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get descricao => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set descricao($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasDescricao() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearDescricao() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.bool get ativo => $_getBF(5);
+  @$pb.TagNumber(6)
+  set ativo($core.bool value) => $_setBool(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasAtivo() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearAtivo() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $core.int get etapas => $_getIZ(6);
+  @$pb.TagNumber(7)
+  set etapas($core.int value) => $_setSignedInt32(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasEtapas() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearEtapas() => $_clearField(7);
+
+  /// Conversas que ainda não terminaram neste fluxo. É o número que diz se
+  /// desativá-lo deixaria gente no meio do caminho.
+  @$pb.TagNumber(8)
+  $core.int get atendimentosAbertos => $_getIZ(7);
+  @$pb.TagNumber(8)
+  set atendimentosAbertos($core.int value) => $_setSignedInt32(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasAtendimentosAbertos() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearAtendimentosAbertos() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $fixnum.Int64 get criadoEm => $_getI64(8);
+  @$pb.TagNumber(9)
+  set criadoEm($fixnum.Int64 value) => $_setInt64(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasCriadoEm() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearCriadoEm() => $_clearField(9);
+}
+
+class ListMyFluxosRequest extends $pb.GeneratedMessage {
+  factory ListMyFluxosRequest() => create();
+
+  ListMyFluxosRequest._();
+
+  factory ListMyFluxosRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyFluxosRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyFluxosRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyFluxosRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyFluxosRequest copyWith(void Function(ListMyFluxosRequest) updates) =>
+      super.copyWith((message) => updates(message as ListMyFluxosRequest))
+          as ListMyFluxosRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyFluxosRequest create() => ListMyFluxosRequest._();
+  @$core.override
+  ListMyFluxosRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyFluxosRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyFluxosRequest>(create);
+  static ListMyFluxosRequest? _defaultInstance;
+}
+
+class ListMyFluxosResponse extends $pb.GeneratedMessage {
+  factory ListMyFluxosResponse({
+    $core.Iterable<MyFluxo>? fluxos,
+  }) {
+    final result = create();
+    if (fluxos != null) result.fluxos.addAll(fluxos);
+    return result;
+  }
+
+  ListMyFluxosResponse._();
+
+  factory ListMyFluxosResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyFluxosResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyFluxosResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<MyFluxo>(1, _omitFieldNames ? '' : 'fluxos',
+        subBuilder: MyFluxo.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyFluxosResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyFluxosResponse copyWith(void Function(ListMyFluxosResponse) updates) =>
+      super.copyWith((message) => updates(message as ListMyFluxosResponse))
+          as ListMyFluxosResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyFluxosResponse create() => ListMyFluxosResponse._();
+  @$core.override
+  ListMyFluxosResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyFluxosResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyFluxosResponse>(create);
+  static ListMyFluxosResponse? _defaultInstance;
+
+  /// Inativos vêm junto: escondê-los deixaria o tenant sem como reativar o que
+  /// desativou por engano.
+  @$pb.TagNumber(1)
+  $pb.PbList<MyFluxo> get fluxos => $_getList(0);
+}
+
+class CreateMyFluxoRequest extends $pb.GeneratedMessage {
+  factory CreateMyFluxoRequest({
+    $core.int? departamentoId,
+    $core.String? nome,
+    $core.String? descricao,
+  }) {
+    final result = create();
+    if (departamentoId != null) result.departamentoId = departamentoId;
+    if (nome != null) result.nome = nome;
+    if (descricao != null) result.descricao = descricao;
+    return result;
+  }
+
+  CreateMyFluxoRequest._();
+
+  factory CreateMyFluxoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CreateMyFluxoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CreateMyFluxoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'departamentoId')
+    ..aOS(2, _omitFieldNames ? '' : 'nome')
+    ..aOS(3, _omitFieldNames ? '' : 'descricao')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyFluxoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyFluxoRequest copyWith(void Function(CreateMyFluxoRequest) updates) =>
+      super.copyWith((message) => updates(message as CreateMyFluxoRequest))
+          as CreateMyFluxoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CreateMyFluxoRequest create() => CreateMyFluxoRequest._();
+  @$core.override
+  CreateMyFluxoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CreateMyFluxoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CreateMyFluxoRequest>(create);
+  static CreateMyFluxoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get departamentoId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set departamentoId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasDepartamentoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearDepartamentoId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nome => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nome($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNome() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNome() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get descricao => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set descricao($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDescricao() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDescricao() => $_clearField(3);
+}
+
+class MyFluxoResponse extends $pb.GeneratedMessage {
+  factory MyFluxoResponse({
+    MyFluxo? fluxo,
+  }) {
+    final result = create();
+    if (fluxo != null) result.fluxo = fluxo;
+    return result;
+  }
+
+  MyFluxoResponse._();
+
+  factory MyFluxoResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyFluxoResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyFluxoResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOM<MyFluxo>(1, _omitFieldNames ? '' : 'fluxo',
+        subBuilder: MyFluxo.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyFluxoResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyFluxoResponse copyWith(void Function(MyFluxoResponse) updates) =>
+      super.copyWith((message) => updates(message as MyFluxoResponse))
+          as MyFluxoResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyFluxoResponse create() => MyFluxoResponse._();
+  @$core.override
+  MyFluxoResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyFluxoResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyFluxoResponse>(create);
+  static MyFluxoResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  MyFluxo get fluxo => $_getN(0);
+  @$pb.TagNumber(1)
+  set fluxo(MyFluxo value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasFluxo() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearFluxo() => $_clearField(1);
+  @$pb.TagNumber(1)
+  MyFluxo ensureFluxo() => $_ensure(0);
+}
+
+class UpdateMyFluxoRequest extends $pb.GeneratedMessage {
+  factory UpdateMyFluxoRequest({
+    $core.int? id,
+    $core.String? nome,
+    $core.String? descricao,
+    $core.bool? ativo,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (nome != null) result.nome = nome;
+    if (descricao != null) result.descricao = descricao;
+    if (ativo != null) result.ativo = ativo;
+    return result;
+  }
+
+  UpdateMyFluxoRequest._();
+
+  factory UpdateMyFluxoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory UpdateMyFluxoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'UpdateMyFluxoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'nome')
+    ..aOS(3, _omitFieldNames ? '' : 'descricao')
+    ..aOB(4, _omitFieldNames ? '' : 'ativo')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateMyFluxoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateMyFluxoRequest copyWith(void Function(UpdateMyFluxoRequest) updates) =>
+      super.copyWith((message) => updates(message as UpdateMyFluxoRequest))
+          as UpdateMyFluxoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static UpdateMyFluxoRequest create() => UpdateMyFluxoRequest._();
+  @$core.override
+  UpdateMyFluxoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static UpdateMyFluxoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<UpdateMyFluxoRequest>(create);
+  static UpdateMyFluxoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nome => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nome($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNome() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNome() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get descricao => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set descricao($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDescricao() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDescricao() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.bool get ativo => $_getBF(3);
+  @$pb.TagNumber(4)
+  set ativo($core.bool value) => $_setBool(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasAtivo() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearAtivo() => $_clearField(4);
+}
+
+class MyFluxoIdRequest extends $pb.GeneratedMessage {
+  factory MyFluxoIdRequest({
+    $core.int? id,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    return result;
+  }
+
+  MyFluxoIdRequest._();
+
+  factory MyFluxoIdRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyFluxoIdRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyFluxoIdRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyFluxoIdRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyFluxoIdRequest copyWith(void Function(MyFluxoIdRequest) updates) =>
+      super.copyWith((message) => updates(message as MyFluxoIdRequest))
+          as MyFluxoIdRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyFluxoIdRequest create() => MyFluxoIdRequest._();
+  @$core.override
+  MyFluxoIdRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyFluxoIdRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyFluxoIdRequest>(create);
+  static MyFluxoIdRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+}
+
+class MyEtapaFluxo extends $pb.GeneratedMessage {
+  factory MyEtapaFluxo({
+    $core.int? id,
+    $core.int? fluxoId,
+    $core.String? nome,
+    $core.String? descricao,
+    $core.int? ordem,
+    $core.String? cor,
+    $core.String? tipoEtapa,
+    $core.bool? ativo,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (fluxoId != null) result.fluxoId = fluxoId;
+    if (nome != null) result.nome = nome;
+    if (descricao != null) result.descricao = descricao;
+    if (ordem != null) result.ordem = ordem;
+    if (cor != null) result.cor = cor;
+    if (tipoEtapa != null) result.tipoEtapa = tipoEtapa;
+    if (ativo != null) result.ativo = ativo;
+    return result;
+  }
+
+  MyEtapaFluxo._();
+
+  factory MyEtapaFluxo.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyEtapaFluxo.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyEtapaFluxo',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aI(2, _omitFieldNames ? '' : 'fluxoId')
+    ..aOS(3, _omitFieldNames ? '' : 'nome')
+    ..aOS(4, _omitFieldNames ? '' : 'descricao')
+    ..aI(5, _omitFieldNames ? '' : 'ordem')
+    ..aOS(6, _omitFieldNames ? '' : 'cor')
+    ..aOS(7, _omitFieldNames ? '' : 'tipoEtapa')
+    ..aOB(8, _omitFieldNames ? '' : 'ativo')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyEtapaFluxo clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyEtapaFluxo copyWith(void Function(MyEtapaFluxo) updates) =>
+      super.copyWith((message) => updates(message as MyEtapaFluxo))
+          as MyEtapaFluxo;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyEtapaFluxo create() => MyEtapaFluxo._();
+  @$core.override
+  MyEtapaFluxo createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyEtapaFluxo getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyEtapaFluxo>(create);
+  static MyEtapaFluxo? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get fluxoId => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set fluxoId($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasFluxoId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearFluxoId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get nome => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set nome($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasNome() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearNome() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get descricao => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set descricao($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasDescricao() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearDescricao() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.int get ordem => $_getIZ(4);
+  @$pb.TagNumber(5)
+  set ordem($core.int value) => $_setSignedInt32(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasOrdem() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearOrdem() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.String get cor => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set cor($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasCor() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearCor() => $_clearField(6);
+
+  /// Vocabulário fechado: fila, trabalho, espera, finalizacao. Não é enfeite —
+  /// o roteamento procura `fila` para saber onde a conversa entra.
+  @$pb.TagNumber(7)
+  $core.String get tipoEtapa => $_getSZ(6);
+  @$pb.TagNumber(7)
+  set tipoEtapa($core.String value) => $_setString(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasTipoEtapa() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearTipoEtapa() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.bool get ativo => $_getBF(7);
+  @$pb.TagNumber(8)
+  set ativo($core.bool value) => $_setBool(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasAtivo() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearAtivo() => $_clearField(8);
+}
+
+class ListMyEtapasFluxoResponse extends $pb.GeneratedMessage {
+  factory ListMyEtapasFluxoResponse({
+    $core.Iterable<MyEtapaFluxo>? etapas,
+  }) {
+    final result = create();
+    if (etapas != null) result.etapas.addAll(etapas);
+    return result;
+  }
+
+  ListMyEtapasFluxoResponse._();
+
+  factory ListMyEtapasFluxoResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyEtapasFluxoResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyEtapasFluxoResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<MyEtapaFluxo>(1, _omitFieldNames ? '' : 'etapas',
+        subBuilder: MyEtapaFluxo.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyEtapasFluxoResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyEtapasFluxoResponse copyWith(
+          void Function(ListMyEtapasFluxoResponse) updates) =>
+      super.copyWith((message) => updates(message as ListMyEtapasFluxoResponse))
+          as ListMyEtapasFluxoResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyEtapasFluxoResponse create() => ListMyEtapasFluxoResponse._();
+  @$core.override
+  ListMyEtapasFluxoResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyEtapasFluxoResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyEtapasFluxoResponse>(create);
+  static ListMyEtapasFluxoResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<MyEtapaFluxo> get etapas => $_getList(0);
+}
+
+class CreateMyEtapaFluxoRequest extends $pb.GeneratedMessage {
+  factory CreateMyEtapaFluxoRequest({
+    $core.int? fluxoId,
+    $core.String? nome,
+    $core.String? tipoEtapa,
+    $core.String? cor,
+  }) {
+    final result = create();
+    if (fluxoId != null) result.fluxoId = fluxoId;
+    if (nome != null) result.nome = nome;
+    if (tipoEtapa != null) result.tipoEtapa = tipoEtapa;
+    if (cor != null) result.cor = cor;
+    return result;
+  }
+
+  CreateMyEtapaFluxoRequest._();
+
+  factory CreateMyEtapaFluxoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CreateMyEtapaFluxoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CreateMyEtapaFluxoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'fluxoId')
+    ..aOS(2, _omitFieldNames ? '' : 'nome')
+    ..aOS(3, _omitFieldNames ? '' : 'tipoEtapa')
+    ..aOS(4, _omitFieldNames ? '' : 'cor')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyEtapaFluxoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyEtapaFluxoRequest copyWith(
+          void Function(CreateMyEtapaFluxoRequest) updates) =>
+      super.copyWith((message) => updates(message as CreateMyEtapaFluxoRequest))
+          as CreateMyEtapaFluxoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CreateMyEtapaFluxoRequest create() => CreateMyEtapaFluxoRequest._();
+  @$core.override
+  CreateMyEtapaFluxoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CreateMyEtapaFluxoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CreateMyEtapaFluxoRequest>(create);
+  static CreateMyEtapaFluxoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get fluxoId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set fluxoId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasFluxoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearFluxoId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nome => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nome($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNome() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNome() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get tipoEtapa => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set tipoEtapa($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasTipoEtapa() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearTipoEtapa() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get cor => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set cor($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasCor() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearCor() => $_clearField(4);
+}
+
+class MyEtapaFluxoResponse extends $pb.GeneratedMessage {
+  factory MyEtapaFluxoResponse({
+    MyEtapaFluxo? etapa,
+  }) {
+    final result = create();
+    if (etapa != null) result.etapa = etapa;
+    return result;
+  }
+
+  MyEtapaFluxoResponse._();
+
+  factory MyEtapaFluxoResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyEtapaFluxoResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyEtapaFluxoResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOM<MyEtapaFluxo>(1, _omitFieldNames ? '' : 'etapa',
+        subBuilder: MyEtapaFluxo.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyEtapaFluxoResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyEtapaFluxoResponse copyWith(void Function(MyEtapaFluxoResponse) updates) =>
+      super.copyWith((message) => updates(message as MyEtapaFluxoResponse))
+          as MyEtapaFluxoResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyEtapaFluxoResponse create() => MyEtapaFluxoResponse._();
+  @$core.override
+  MyEtapaFluxoResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyEtapaFluxoResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyEtapaFluxoResponse>(create);
+  static MyEtapaFluxoResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  MyEtapaFluxo get etapa => $_getN(0);
+  @$pb.TagNumber(1)
+  set etapa(MyEtapaFluxo value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasEtapa() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearEtapa() => $_clearField(1);
+  @$pb.TagNumber(1)
+  MyEtapaFluxo ensureEtapa() => $_ensure(0);
+}
+
+class UpdateMyEtapaFluxoRequest extends $pb.GeneratedMessage {
+  factory UpdateMyEtapaFluxoRequest({
+    $core.int? id,
+    $core.String? nome,
+    $core.String? descricao,
+    $core.String? cor,
+    $core.String? tipoEtapa,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (nome != null) result.nome = nome;
+    if (descricao != null) result.descricao = descricao;
+    if (cor != null) result.cor = cor;
+    if (tipoEtapa != null) result.tipoEtapa = tipoEtapa;
+    return result;
+  }
+
+  UpdateMyEtapaFluxoRequest._();
+
+  factory UpdateMyEtapaFluxoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory UpdateMyEtapaFluxoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'UpdateMyEtapaFluxoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'nome')
+    ..aOS(3, _omitFieldNames ? '' : 'descricao')
+    ..aOS(4, _omitFieldNames ? '' : 'cor')
+    ..aOS(5, _omitFieldNames ? '' : 'tipoEtapa')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateMyEtapaFluxoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateMyEtapaFluxoRequest copyWith(
+          void Function(UpdateMyEtapaFluxoRequest) updates) =>
+      super.copyWith((message) => updates(message as UpdateMyEtapaFluxoRequest))
+          as UpdateMyEtapaFluxoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static UpdateMyEtapaFluxoRequest create() => UpdateMyEtapaFluxoRequest._();
+  @$core.override
+  UpdateMyEtapaFluxoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static UpdateMyEtapaFluxoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<UpdateMyEtapaFluxoRequest>(create);
+  static UpdateMyEtapaFluxoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nome => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nome($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNome() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNome() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get descricao => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set descricao($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDescricao() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDescricao() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get cor => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set cor($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasCor() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearCor() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get tipoEtapa => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set tipoEtapa($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasTipoEtapa() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearTipoEtapa() => $_clearField(5);
+}
+
+class MyEtapaFluxoIdRequest extends $pb.GeneratedMessage {
+  factory MyEtapaFluxoIdRequest({
+    $core.int? id,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    return result;
+  }
+
+  MyEtapaFluxoIdRequest._();
+
+  factory MyEtapaFluxoIdRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyEtapaFluxoIdRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyEtapaFluxoIdRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyEtapaFluxoIdRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyEtapaFluxoIdRequest copyWith(
+          void Function(MyEtapaFluxoIdRequest) updates) =>
+      super.copyWith((message) => updates(message as MyEtapaFluxoIdRequest))
+          as MyEtapaFluxoIdRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyEtapaFluxoIdRequest create() => MyEtapaFluxoIdRequest._();
+  @$core.override
+  MyEtapaFluxoIdRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyEtapaFluxoIdRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyEtapaFluxoIdRequest>(create);
+  static MyEtapaFluxoIdRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+}
+
+class MoverMyEtapaFluxoRequest extends $pb.GeneratedMessage {
+  factory MoverMyEtapaFluxoRequest({
+    $core.int? id,
+    $core.bool? paraCima,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (paraCima != null) result.paraCima = paraCima;
+    return result;
+  }
+
+  MoverMyEtapaFluxoRequest._();
+
+  factory MoverMyEtapaFluxoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MoverMyEtapaFluxoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MoverMyEtapaFluxoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOB(2, _omitFieldNames ? '' : 'paraCima')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MoverMyEtapaFluxoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MoverMyEtapaFluxoRequest copyWith(
+          void Function(MoverMyEtapaFluxoRequest) updates) =>
+      super.copyWith((message) => updates(message as MoverMyEtapaFluxoRequest))
+          as MoverMyEtapaFluxoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MoverMyEtapaFluxoRequest create() => MoverMyEtapaFluxoRequest._();
+  @$core.override
+  MoverMyEtapaFluxoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MoverMyEtapaFluxoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MoverMyEtapaFluxoRequest>(create);
+  static MoverMyEtapaFluxoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.bool get paraCima => $_getBF(1);
+  @$pb.TagNumber(2)
+  set paraCima($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasParaCima() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearParaCima() => $_clearField(2);
+}
+
 class MyContato extends $pb.GeneratedMessage {
   factory MyContato({
     $core.int? id,

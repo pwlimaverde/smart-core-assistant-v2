@@ -60,6 +60,11 @@ void main() {
           path: '/tenant/contatos',
           builder: (_, _) => comDrawer('contatos'),
         ),
+        GoRoute(path: '/tenant/fluxos', builder: (_, _) => comDrawer('fluxos')),
+        GoRoute(
+          path: '/tenant/fluxos/:id/etapas',
+          builder: (_, _) => comDrawer('etapas'),
+        ),
         GoRoute(path: '/tenant/painel', builder: (_, _) => comDrawer('painel')),
         GoRoute(
           path: '/tenant/treinamento',
@@ -94,6 +99,7 @@ void main() {
     expect(find.text('Painel'), findsOneWidget);
     expect(find.text('Contatos'), findsOneWidget);
     expect(find.text('Equipe'), findsOneWidget);
+    expect(find.text('Fluxos de atendimento'), findsOneWidget);
     expect(find.text('Conexões de WhatsApp'), findsOneWidget);
     expect(find.text('Treinamento da IA'), findsOneWidget);
     expect(find.text('Convites'), findsOneWidget);
@@ -108,6 +114,7 @@ void main() {
     expect(find.text('Atendimento (Kanban)'), findsOneWidget);
     expect(find.text('Contatos'), findsNothing);
     expect(find.text('Equipe'), findsNothing);
+    expect(find.text('Fluxos de atendimento'), findsNothing);
     expect(find.text('Conexões de WhatsApp'), findsNothing);
     expect(find.text('Treinamento da IA'), findsNothing);
   });
@@ -197,6 +204,20 @@ void main() {
       router.routerDelegate.currentConfiguration.matches.last.matchedLocation,
       '/tenant/treinamento',
     );
+  });
+
+  testWidgets('a subtela mantém a seção marcada no menu', (tester) async {
+    // Em `/tenant/fluxos/3/etapas` a pessoa ainda está em Fluxos; deixar o
+    // menu sem marca nenhuma faria parecer que ela saiu da seção.
+    registrarSessao(admin: true);
+    await montar(tester, rota: '/tenant/fluxos/3/etapas');
+
+    final marcado = tester
+        .widgetList<ListTile>(find.byType(ListTile))
+        .where((t) => t.selected)
+        .toList();
+    expect(marcado, hasLength(1));
+    expect((marcado.single.title! as Text).data, 'Fluxos de atendimento');
   });
 
   testWidgets('o item da rota atual fica marcado', (tester) async {

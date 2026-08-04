@@ -16,12 +16,46 @@ use infrastructure_postgres::operacional::atendentes::{
 use infrastructure_postgres::operacional::departamentos::{
     DepartamentoRepository, PostgresDepartamentoRepository,
 };
+use infrastructure_postgres::operacional::fluxos::{
+    EtapaFluxoRepository, FluxoAtendimentoRepository, PostgresEtapaFluxoRepository,
+    PostgresFluxoAtendimentoRepository,
+};
 use infrastructure_postgres::{
     connection::run_in_tenant_transaction, DbError, RequestContext, TenantConfigCache,
 };
 
 use crate::ports::operacional::{ConfigIa, CoreSetting};
 use crate::ports::OperacionalStore;
+
+/// Esqueleto de um fluxo novo: `(nome, tipo_etapa, cor)`.
+///
+/// Os quatro tipos vêm da v1 (`TipoEtapa`) e cada um significa uma coisa para o
+/// roteamento: `fila` é onde a conversa entra, `trabalho` é o que está sendo
+/// atendido, `espera` é o que depende de terceiro, `finalizacao` é o fim de
+/// linha. O tenant renomeia e acrescenta o que quiser; o que ele não deve
+/// precisar fazer é adivinhar que um fluxo vazio não funciona.
+const ETAPAS_PADRAO: [(&str, &str, &str); 4] = [
+    ("Fila de entrada", "fila", "#6B7280"),
+    ("Em atendimento", "trabalho", "#3B82F6"),
+    ("Aguardando retorno", "espera", "#F59E0B"),
+    ("Concluído", "finalizacao", "#10B981"),
+];
+
+/// Resposta de operação que pode ser recusada por regra de negócio.
+///
+/// A recusa não é erro de banco nem falha do sistema: é uma decisão explicável,
+/// e o motivo precisa chegar à tela em vez de virar "algo deu errado".
+fn recusa(motivo: String) -> serde_json::Value {
+    serde_json::json!({ "sucesso": false, "motivo": motivo })
+}
+
+fn resultado(ok: bool, motivo_se_falhou: &str) -> serde_json::Value {
+    if ok {
+        serde_json::json!({ "sucesso": true, "motivo": "" })
+    } else {
+        recusa(motivo_se_falhou.to_string())
+    }
+}
 
 /// Heurística de nome de provedor a partir do nome da classe LangChain configurada
 /// pelo tenant (convenção herdada da v1). Serve tanto para o LLM
@@ -936,6 +970,267 @@ impl OperacionalStore for PgOperacionalStore {
                 "treinamentos_ativos": linha.treinamentos_ativos,
             });
             Ok((json, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_fluxos(&self, ctx: &RequestContext) -> Result<Vec<serde_json::Value>, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let itens = PostgresFluxoAtendimentoRepository
+                .listar_por_tenant(&mut tx, &ctx)
+                .await?;
+            let json = itens
+                .iter()
+                .map(serde_json::to_value)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| DbError::ConfigError(format!("falha ao serializar fluxos: {e}")))?;
+            Ok((json, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, departamento_id = departamento_id))]
+    async fn criar_fluxo(
+        &self,
+        ctx: &RequestContext,
+        departamento_id: i32,
+        nome: String,
+        descricao: Option<String>,
+    ) -> Result<serde_json::Value, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let fluxo = PostgresFluxoAtendimentoRepository
+                .criar(&mut tx, &ctx, departamento_id, &nome, descricao.as_deref())
+                .await?;
+
+            // O esqueleto padrão, na mesma transação: fluxo sem etapa de
+            // entrada não recebe atendimento, e o tenant só descobriria isso
+            // quando a primeira conversa sumisse.
+            for (ordem, (etapa, tipo, cor)) in ETAPAS_PADRAO.iter().enumerate() {
+                PostgresEtapaFluxoRepository
+                    .criar(
+                        &mut tx,
+                        &ctx,
+                        fluxo.id,
+                        etapa,
+                        ordem as i32 + 1,
+                        tipo,
+                        Some(cor),
+                    )
+                    .await?;
+            }
+
+            let json = serde_json::to_value(&fluxo)
+                .map_err(|e| DbError::ConfigError(format!("falha ao serializar fluxo: {e}")))?;
+            Ok((json, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn atualizar_fluxo(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        nome: String,
+        descricao: Option<String>,
+        ativo: bool,
+    ) -> Result<serde_json::Value, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let repo = PostgresFluxoAtendimentoRepository;
+
+            // A contagem e a escrita na mesma transação: entre uma consulta
+            // solta e o UPDATE cabe um atendimento novo entrando no fluxo.
+            if !ativo {
+                let abertos = repo.contar_atendimentos_abertos(&mut tx, &ctx, id).await?;
+                if abertos > 0 {
+                    return Ok((
+                        recusa(format!(
+                            "Este fluxo tem {abertos} atendimento(s) em aberto. \
+                         Conclua ou mova essas conversas antes de desativá-lo."
+                        )),
+                        tx,
+                    ));
+                }
+            }
+
+            let ok = repo
+                .atualizar(&mut tx, &ctx, id, &nome, descricao.as_deref(), ativo)
+                .await?;
+            Ok((resultado(ok, "Fluxo não encontrado."), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn desativar_fluxo(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<serde_json::Value, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let repo = PostgresFluxoAtendimentoRepository;
+            let abertos = repo.contar_atendimentos_abertos(&mut tx, &ctx, id).await?;
+            if abertos > 0 {
+                return Ok((
+                    recusa(format!(
+                        "Este fluxo tem {abertos} atendimento(s) em aberto. \
+                     Conclua ou mova essas conversas antes de desativá-lo."
+                    )),
+                    tx,
+                ));
+            }
+            let ok = repo.desativar(&mut tx, &ctx, id).await?;
+            Ok((resultado(ok, "Fluxo não encontrado ou já inativo."), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, fluxo_id = fluxo_id))]
+    async fn listar_etapas(
+        &self,
+        ctx: &RequestContext,
+        fluxo_id: i32,
+    ) -> Result<Vec<serde_json::Value>, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let itens = PostgresEtapaFluxoRepository
+                .listar_por_fluxo(&mut tx, &ctx, fluxo_id)
+                .await?;
+            let json = itens
+                .iter()
+                .map(serde_json::to_value)
+                .collect::<Result<Vec<_>, _>>()
+                .map_err(|e| DbError::ConfigError(format!("falha ao serializar etapas: {e}")))?;
+            Ok((json, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, fluxo_id = fluxo_id))]
+    async fn criar_etapa(
+        &self,
+        ctx: &RequestContext,
+        fluxo_id: i32,
+        nome: String,
+        tipo_etapa: String,
+        cor: String,
+    ) -> Result<serde_json::Value, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let repo = PostgresEtapaFluxoRepository;
+            let ordem = repo.proxima_ordem(&mut tx, &ctx, fluxo_id).await?;
+            let etapa = repo
+                .criar(
+                    &mut tx,
+                    &ctx,
+                    fluxo_id,
+                    &nome,
+                    ordem,
+                    &tipo_etapa,
+                    Some(&cor),
+                )
+                .await?;
+            let json = serde_json::to_value(&etapa)
+                .map_err(|e| DbError::ConfigError(format!("falha ao serializar etapa: {e}")))?;
+            Ok((json, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn atualizar_etapa(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        nome: String,
+        descricao: Option<String>,
+        cor: String,
+        tipo_etapa: String,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let ok = PostgresEtapaFluxoRepository
+                .atualizar(
+                    &mut tx,
+                    &ctx,
+                    id,
+                    &nome,
+                    descricao.as_deref(),
+                    &cor,
+                    &tipo_etapa,
+                )
+                .await?;
+            Ok((ok, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn desativar_etapa(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<serde_json::Value, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let repo = PostgresEtapaFluxoRepository;
+            let Some(etapa) = repo.buscar_por_id(&mut tx, &ctx, id).await? else {
+                return Ok((recusa("Etapa não encontrada.".to_string()), tx));
+            };
+
+            let parados = repo.contar_atendimentos(&mut tx, &ctx, id).await?;
+            if parados > 0 {
+                return Ok((
+                    recusa(format!(
+                        "Há {parados} atendimento(s) nesta etapa. \
+                     Mova-os para outra coluna antes de removê-la."
+                    )),
+                    tx,
+                ));
+            }
+
+            // Sem etapa de entrada, conversa nova não tem onde cair — e o
+            // roteamento falharia calado, que é o pior jeito de falhar.
+            if etapa.tipo_etapa == "fila" {
+                let entradas = repo
+                    .contar_ativas_do_tipo(&mut tx, &ctx, etapa.fluxo_id, "fila")
+                    .await?;
+                if entradas <= 1 {
+                    return Ok((
+                        recusa(
+                            "Esta é a única fila de entrada do fluxo. Sem ela, conversas \
+                         novas não teriam onde entrar."
+                                .to_string(),
+                        ),
+                        tx,
+                    ));
+                }
+            }
+
+            let ok = repo.desativar(&mut tx, &ctx, id).await?;
+            Ok((resultado(ok, "Etapa não encontrada ou já removida."), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id, para_cima = para_cima))]
+    async fn mover_etapa(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        para_cima: bool,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let ok = PostgresEtapaFluxoRepository
+                .trocar_ordem(&mut tx, &ctx, id, para_cima)
+                .await?;
+            Ok((ok, tx))
         })
         .await
     }

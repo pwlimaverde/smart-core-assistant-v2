@@ -1,0 +1,185 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, tenant_id, fluxo_id, nome, descricao, ordem, cor, tipo_etapa,\n                      permite_atribuicao, automatico, regras_transicao, campos_obrigatorios,\n                      ativo, data_criacao\n               FROM oraculo_etapa_fluxo\n               WHERE tenant_id = $1 AND id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_etapa_fluxo",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "oraculo_etapa_fluxo",
+            "name": "tenant_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "fluxo_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_etapa_fluxo",
+            "name": "fluxo_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "nome",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_etapa_fluxo",
+            "name": "nome"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "descricao",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_etapa_fluxo",
+            "name": "descricao"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "ordem",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_etapa_fluxo",
+            "name": "ordem"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "cor",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_etapa_fluxo",
+            "name": "cor"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "tipo_etapa",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_etapa_fluxo",
+            "name": "tipo_etapa"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "permite_atribuicao",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "oraculo_etapa_fluxo",
+            "name": "permite_atribuicao"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "automatico",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "oraculo_etapa_fluxo",
+            "name": "automatico"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "regras_transicao",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "oraculo_etapa_fluxo",
+            "name": "regras_transicao"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "campos_obrigatorios",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "oraculo_etapa_fluxo",
+            "name": "campos_obrigatorios"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "ativo",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "oraculo_etapa_fluxo",
+            "name": "ativo"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "data_criacao",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_etapa_fluxo",
+            "name": "data_criacao"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6f5acd485a71c47a6a8293bd65e0deab4a83c45a4247c503dee61711c83c081f"
+}

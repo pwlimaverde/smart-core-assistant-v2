@@ -169,6 +169,88 @@ pub trait OperacionalStore: Send + Sync {
     /// departamento, e remover a linha levaria histórico junto.
     async fn desativar_departamento(&self, ctx: &RequestContext, id: i32) -> Result<bool, DbError>;
 
+    /// Lista os fluxos do tenant (ativos e inativos), com departamento e
+    /// contagens de etapas e de atendimentos abertos.
+    async fn listar_fluxos(&self, ctx: &RequestContext) -> Result<Vec<serde_json::Value>, DbError>;
+
+    /// Cria um fluxo **já com as quatro etapas padrão** (fila, trabalho, espera,
+    /// finalização).
+    ///
+    /// Um fluxo sem etapas não recebe atendimento nenhum — a etapa de entrada é
+    /// o que o roteamento procura. Entregar o esqueleto pronto evita que o
+    /// tenant crie um fluxo que parece existir e não funciona.
+    ///
+    /// A quota do recurso `"fluxos"` é responsabilidade do handler, ANTES desta
+    /// chamada. `nome`/`descricao` são owned por causa do `automock`.
+    async fn criar_fluxo(
+        &self,
+        ctx: &RequestContext,
+        departamento_id: i32,
+        nome: String,
+        descricao: Option<String>,
+    ) -> Result<serde_json::Value, DbError>;
+
+    /// Atualiza o fluxo. Devolve `{sucesso, motivo}`: desativar um fluxo com
+    /// atendimento aberto é recusado, e o motivo precisa chegar à tela.
+    async fn atualizar_fluxo(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        nome: String,
+        descricao: Option<String>,
+        ativo: bool,
+    ) -> Result<serde_json::Value, DbError>;
+
+    /// Desativa o fluxo. Mesmo contrato `{sucesso, motivo}` de `atualizar_fluxo`.
+    async fn desativar_fluxo(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<serde_json::Value, DbError>;
+
+    /// Etapas ativas de um fluxo, na ordem em que aparecem no quadro.
+    async fn listar_etapas(
+        &self,
+        ctx: &RequestContext,
+        fluxo_id: i32,
+    ) -> Result<Vec<serde_json::Value>, DbError>;
+
+    /// Acrescenta uma etapa no fim do fluxo.
+    async fn criar_etapa(
+        &self,
+        ctx: &RequestContext,
+        fluxo_id: i32,
+        nome: String,
+        tipo_etapa: String,
+        cor: String,
+    ) -> Result<serde_json::Value, DbError>;
+
+    async fn atualizar_etapa(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        nome: String,
+        descricao: Option<String>,
+        cor: String,
+        tipo_etapa: String,
+    ) -> Result<bool, DbError>;
+
+    /// Desativa a etapa. Devolve `{sucesso, motivo}`: uma etapa com atendimento
+    /// parado nela, ou a última porta de entrada do fluxo, não pode sair.
+    async fn desativar_etapa(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<serde_json::Value, DbError>;
+
+    /// Troca a etapa de lugar com a vizinha. `false` quando já está na ponta.
+    async fn mover_etapa(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        para_cima: bool,
+    ) -> Result<bool, DbError>;
+
     /// Lista os atendentes do tenant, ativos primeiro.
     async fn listar_atendentes(
         &self,

@@ -65,6 +65,12 @@ class TenantDrawer extends StatelessWidget {
                     atual: location,
                   ),
                   _Item(
+                    icone: Icons.account_tree_outlined,
+                    titulo: 'Fluxos de atendimento',
+                    rota: '/tenant/fluxos',
+                    atual: location,
+                  ),
+                  _Item(
                     icone: Icons.qr_code_2_outlined,
                     titulo: 'Conexões de WhatsApp',
                     rota: '/tenant/conexoes',
@@ -135,7 +141,9 @@ class _Item extends StatelessWidget {
     return ListTile(
       leading: Icon(icone),
       title: Text(titulo),
-      selected: atual == rota,
+      // As subtelas contam como a mesma seção: em `/tenant/fluxos/3/etapas` o
+      // menu ainda deve mostrar onde a pessoa está.
+      selected: atual == rota || atual.startsWith('$rota/'),
       onTap: () {
         Navigator.pop(context);
         context.go(rota);

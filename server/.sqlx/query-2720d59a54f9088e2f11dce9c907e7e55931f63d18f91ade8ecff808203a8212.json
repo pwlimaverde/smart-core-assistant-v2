@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oraculo_etapa_fluxo\n                  SET ativo = false\n                WHERE tenant_id = $1 AND id = $2 AND ativo = true",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2720d59a54f9088e2f11dce9c907e7e55931f63d18f91ade8ecff808203a8212"
+}

@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COALESCE(MAX(ordem), 0) + 1 AS \"proxima!\"\n                 FROM oraculo_etapa_fluxo\n                WHERE tenant_id = $1 AND fluxo_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "proxima!",
+        "type_info": "Int4",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ac8b73d0c2b850a8845fcc22b3500aff48a5bcb4f857c3fbe2cc1ac118e99422"
+}

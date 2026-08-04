@@ -1,0 +1,115 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO oraculo_fluxo_atendimento (tenant_id, departamento_id, nome, descricao)\n               VALUES ($1, $2, $3, $4)\n               RETURNING id, tenant_id, departamento_id, nome, descricao, ativo,\n                         data_criacao, data_atualizacao",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_fluxo_atendimento",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "oraculo_fluxo_atendimento",
+            "name": "tenant_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "departamento_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_fluxo_atendimento",
+            "name": "departamento_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "nome",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_fluxo_atendimento",
+            "name": "nome"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "descricao",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oraculo_fluxo_atendimento",
+            "name": "descricao"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "ativo",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "oraculo_fluxo_atendimento",
+            "name": "ativo"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "data_criacao",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_fluxo_atendimento",
+            "name": "data_criacao"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "data_atualizacao",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_fluxo_atendimento",
+            "name": "data_atualizacao"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Varchar",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "bdc72e3d3939f85d02f75112bdf57de3fd6625084f5e5c78be12a450f1b1ac18"
+}

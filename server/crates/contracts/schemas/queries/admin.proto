@@ -851,6 +851,111 @@ service AdminService {
   rpc ListMyAtendentes(ListMyAtendentesRequest) returns (ListMyAtendentesResponse);
   rpc GetMyPainel(GetMyPainelRequest) returns (GetMyPainelResponse);
   rpc ListMyContatos(ListMyContatosRequest) returns (ListMyContatosResponse);
+
+  // Fluxos de atendimento e suas etapas — o quadro por onde a conversa anda.
+  rpc ListMyFluxos(ListMyFluxosRequest) returns (ListMyFluxosResponse);
+  rpc CreateMyFluxo(CreateMyFluxoRequest) returns (MyFluxoResponse);
+  rpc UpdateMyFluxo(UpdateMyFluxoRequest) returns (SimpleOkResponse);
+  rpc DesativarMyFluxo(MyFluxoIdRequest) returns (SimpleOkResponse);
+  rpc ListMyEtapasFluxo(MyFluxoIdRequest) returns (ListMyEtapasFluxoResponse);
+  rpc CreateMyEtapaFluxo(CreateMyEtapaFluxoRequest) returns (MyEtapaFluxoResponse);
+  rpc UpdateMyEtapaFluxo(UpdateMyEtapaFluxoRequest) returns (SimpleOkResponse);
+  rpc DesativarMyEtapaFluxo(MyEtapaFluxoIdRequest) returns (SimpleOkResponse);
+  rpc MoverMyEtapaFluxo(MoverMyEtapaFluxoRequest) returns (SimpleOkResponse);
+}
+
+// --- Fluxos de atendimento ---
+//
+// O fluxo é o quadro; a etapa é a coluna. Cada atendimento mora numa etapa, e
+// é a etapa do tipo `fila` que recebe conversa nova — por isso um fluxo nasce
+// já com as quatro etapas padrão.
+
+message MyFluxo {
+  int32 id = 1;
+  int32 departamento_id = 2;
+  string departamento_nome = 3;
+  string nome = 4;
+  string descricao = 5;
+  bool ativo = 6;
+  int32 etapas = 7;
+  // Conversas que ainda não terminaram neste fluxo. É o número que diz se
+  // desativá-lo deixaria gente no meio do caminho.
+  int32 atendimentos_abertos = 8;
+  int64 criado_em = 9;
+}
+
+message ListMyFluxosRequest {}
+
+message ListMyFluxosResponse {
+  // Inativos vêm junto: escondê-los deixaria o tenant sem como reativar o que
+  // desativou por engano.
+  repeated MyFluxo fluxos = 1;
+}
+
+message CreateMyFluxoRequest {
+  int32 departamento_id = 1;
+  string nome = 2;
+  string descricao = 3;
+}
+
+message MyFluxoResponse {
+  MyFluxo fluxo = 1;
+}
+
+message UpdateMyFluxoRequest {
+  int32 id = 1;
+  string nome = 2;
+  string descricao = 3;
+  bool ativo = 4;
+}
+
+message MyFluxoIdRequest {
+  int32 id = 1;
+}
+
+message MyEtapaFluxo {
+  int32 id = 1;
+  int32 fluxo_id = 2;
+  string nome = 3;
+  string descricao = 4;
+  int32 ordem = 5;
+  string cor = 6;
+  // Vocabulário fechado: fila, trabalho, espera, finalizacao. Não é enfeite —
+  // o roteamento procura `fila` para saber onde a conversa entra.
+  string tipo_etapa = 7;
+  bool ativo = 8;
+}
+
+message ListMyEtapasFluxoResponse {
+  repeated MyEtapaFluxo etapas = 1;
+}
+
+message CreateMyEtapaFluxoRequest {
+  int32 fluxo_id = 1;
+  string nome = 2;
+  string tipo_etapa = 3;
+  string cor = 4;
+}
+
+message MyEtapaFluxoResponse {
+  MyEtapaFluxo etapa = 1;
+}
+
+message UpdateMyEtapaFluxoRequest {
+  int32 id = 1;
+  string nome = 2;
+  string descricao = 3;
+  string cor = 4;
+  string tipo_etapa = 5;
+}
+
+message MyEtapaFluxoIdRequest {
+  int32 id = 1;
+}
+
+message MoverMyEtapaFluxoRequest {
+  int32 id = 1;
+  bool para_cima = 2;
 }
 
 // --- Contatos (quem fala com o tenant pelo WhatsApp) ---

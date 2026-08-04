@@ -507,6 +507,15 @@ async fn main() -> anyhow::Result<()> {
     let s_atendentes = state_clone.clone();
     let s_painel = state_clone.clone();
     let s_contatos = state_clone.clone();
+    let s_fluxo_listar = state_clone.clone();
+    let s_fluxo_criar = state_clone.clone();
+    let s_fluxo_update = state_clone.clone();
+    let s_fluxo_desativar = state_clone.clone();
+    let s_etapa_listar = state_clone.clone();
+    let s_etapa_criar = state_clone.clone();
+    let s_etapa_update = state_clone.clone();
+    let s_etapa_desativar = state_clone.clone();
+    let s_etapa_mover = state_clone.clone();
     let state_for_create_departamento = state_clone.clone();
     let state_for_create_plan = state_clone.clone();
     let state_for_update_plan = state_clone.clone();
@@ -910,6 +919,60 @@ async fn main() -> anyhow::Result<()> {
         .route("GetPainelTenant", move |env| {
             let state = s_painel.clone();
             Box::pin(async move { handler_painel_tenant(state.operacional.as_ref(), env).await })
+        })
+        .route("ListFluxos", move |env| {
+            let state = s_fluxo_listar.clone();
+            Box::pin(async move { handler_list_fluxos(state.operacional.as_ref(), env).await })
+        })
+        .route("CreateFluxo", move |env| {
+            let state = s_fluxo_criar.clone();
+            Box::pin(async move {
+                handler_create_fluxo(
+                    state.quota.as_ref(),
+                    state.operacional.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("UpdateFluxo", move |env| {
+            let state = s_fluxo_update.clone();
+            Box::pin(async move {
+                handler_update_fluxo(state.operacional.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("DesativarFluxo", move |env| {
+            let state = s_fluxo_desativar.clone();
+            Box::pin(async move {
+                handler_desativar_fluxo(state.operacional.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("ListEtapasFluxo", move |env| {
+            let state = s_etapa_listar.clone();
+            Box::pin(async move { handler_list_etapas(state.operacional.as_ref(), env).await })
+        })
+        .route("CreateEtapaFluxo", move |env| {
+            let state = s_etapa_criar.clone();
+            Box::pin(async move {
+                handler_create_etapa(state.operacional.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("UpdateEtapaFluxo", move |env| {
+            let state = s_etapa_update.clone();
+            Box::pin(async move {
+                handler_update_etapa(state.operacional.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("DesativarEtapaFluxo", move |env| {
+            let state = s_etapa_desativar.clone();
+            Box::pin(async move {
+                handler_desativar_etapa(state.operacional.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("MoverEtapaFluxo", move |env| {
+            let state = s_etapa_mover.clone();
+            Box::pin(async move { handler_mover_etapa(state.operacional.as_ref(), env).await })
         })
         .route("ListAtendentes", move |env| {
             let state = s_atendentes.clone();
@@ -3253,6 +3316,448 @@ async fn handler_list_contatos(store: &dyn ports::ClienteStore, env: Envelope) -
             &env,
             "ListContatosReply",
             serde_json::json!({ "contatos": itens }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+// --- Fluxos de atendimento e suas etapas ---
+//
+// O fluxo é o quadro por onde a conversa anda; a etapa é a coluna. A camada de
+// banco existia desde o começo (o roteamento já procura a etapa de entrada),
+// mas nenhum RPC criava nada: todo tenant dependia de fluxo semeado à mão.
+
+/// Vocabulário de `tipo_etapa`, herdado da v1 (`TipoEtapa`).
+///
+/// Não é enfeite: o roteamento procura `fila` para saber onde a conversa entra,
+/// e a finalização fecha o atendimento. Um tipo inventado passaria pelo
+/// `VARCHAR(20)` e sumiria da lógica sem erro nenhum.
+const TIPOS_DE_ETAPA: [&str; 4] = ["fila", "trabalho", "espera", "finalizacao"];
+
+#[tracing::instrument(skip_all, fields(rpc = "ListFluxos", tenant_id = %env.tenant_id))]
+async fn handler_list_fluxos(store: &dyn ports::OperacionalStore, env: Envelope) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_fluxos(&ctx).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListFluxosReply",
+            serde_json::json!({"fluxos": itens}),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "CreateFluxo", tenant_id = %env.tenant_id))]
+async fn handler_create_fluxo(
+    quota: &dyn ports::QuotaStore,
+    store: &dyn ports::OperacionalStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let departamento_id = payload
+        .get("departamento_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let nome = payload
+        .get("nome")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let descricao = payload
+        .get("descricao")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+
+    if nome.is_empty() {
+        return erro(
+            error_core::AppError::Validation("informe o nome do fluxo".into()),
+            &env,
+        );
+    }
+    if departamento_id <= 0 {
+        return erro(
+            error_core::AppError::Validation("escolha o departamento do fluxo".into()),
+            &env,
+        );
+    }
+
+    let tenant_id = match Uuid::parse_str(&env.tenant_id) {
+        Ok(u) => u,
+        Err(_) => {
+            return erro(
+                error_core::AppError::Validation("tenant_id inválido".to_string()),
+                &env,
+            )
+        }
+    };
+
+    // Mesmo desenho do `handler_create_departamento`: a quota é medida sempre e
+    // só bloqueia com `SMARTCORE_QUOTA_ENFORCE=true`; falha de medição não
+    // impede a criação (fail-open), porque quebrar o tenant por causa do
+    // medidor seria pior que deixar passar um fluxo.
+    match quota.verificar_quota(tenant_id, "fluxos").await {
+        Ok(status) => {
+            let excedido = status
+                .get("excedido")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            if excedido {
+                let enforce = std::env::var("SMARTCORE_QUOTA_ENFORCE")
+                    .map(|v| v.eq_ignore_ascii_case("true"))
+                    .unwrap_or(false);
+                if enforce {
+                    tracing::warn!(
+                        tenant_id = %env.tenant_id,
+                        "quota de fluxos excedida; bloqueando criação"
+                    );
+                    audit
+                        .publish(
+                            &env,
+                            "quota.excedida",
+                            "Quota de 'fluxos' excedida".to_string(),
+                            status,
+                        )
+                        .await;
+                    return erro(
+                        error_core::AppError::RateLimit("quota de 'fluxos' excedida".to_string()),
+                        &env,
+                    );
+                }
+                tracing::warn!(
+                    tenant_id = %env.tenant_id,
+                    "quota de fluxos excedida (log-only; SMARTCORE_QUOTA_ENFORCE=false)"
+                );
+            }
+        }
+        Err(e) => {
+            tracing::warn!(erro = %e, "falha ao verificar quota de fluxos; prosseguindo (fail-open)");
+        }
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .criar_fluxo(&ctx, departamento_id, nome.clone(), descricao)
+        .await
+    {
+        Ok(fluxo) => {
+            audit
+                .publish(
+                    &env,
+                    "fluxo_criado",
+                    format!("Fluxo '{nome}' criado"),
+                    fluxo.clone(),
+                )
+                .await;
+            ok_reply(&env, "CreateFluxoReply", fluxo)
+        }
+        Err(err) => erro(err.into(), &env),
+    }
+}
+
+/// Traduz o `{sucesso, motivo}` do adapter em resposta ou recusa.
+///
+/// A recusa por regra de negócio vira `Validation`, não `Database`: ela é
+/// explicável e o texto é para ser lido por quem opera.
+fn responder_resultado(
+    env: &Envelope,
+    reply: &str,
+    resultado: serde_json::Value,
+) -> Result<Envelope, Envelope> {
+    let sucesso = resultado
+        .get("sucesso")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if sucesso {
+        Ok(ok_reply(env, reply, resultado))
+    } else {
+        let motivo = resultado
+            .get("motivo")
+            .and_then(|v| v.as_str())
+            .unwrap_or("operação recusada")
+            .to_string();
+        Err(erro(error_core::AppError::Validation(motivo), env))
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "UpdateFluxo", tenant_id = %env.tenant_id))]
+async fn handler_update_fluxo(
+    store: &dyn ports::OperacionalStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let nome = payload
+        .get("nome")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let descricao = payload
+        .get("descricao")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    let ativo = payload
+        .get("ativo")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    if nome.is_empty() {
+        return erro(
+            error_core::AppError::Validation("informe o nome do fluxo".into()),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .atualizar_fluxo(&ctx, id, nome.clone(), descricao, ativo)
+        .await
+    {
+        Ok(res) => match responder_resultado(&env, "UpdateFluxoReply", res) {
+            Ok(resp) => {
+                audit
+                    .publish(
+                        &env,
+                        "fluxo_atualizado",
+                        format!("Fluxo '{nome}' atualizado"),
+                        serde_json::json!({ "id": id, "ativo": ativo }),
+                    )
+                    .await;
+                resp
+            }
+            Err(recusa) => recusa,
+        },
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "DesativarFluxo", tenant_id = %env.tenant_id))]
+async fn handler_desativar_fluxo(
+    store: &dyn ports::OperacionalStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+    let ctx = contexto_do_envelope(&env);
+    match store.desativar_fluxo(&ctx, id).await {
+        Ok(res) => match responder_resultado(&env, "DesativarFluxoReply", res) {
+            Ok(resp) => {
+                audit
+                    .publish(
+                        &env,
+                        "fluxo_desativado",
+                        format!("Fluxo {id} desativado"),
+                        serde_json::json!({ "id": id }),
+                    )
+                    .await;
+                resp
+            }
+            Err(recusa) => recusa,
+        },
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "ListEtapasFluxo", tenant_id = %env.tenant_id))]
+async fn handler_list_etapas(store: &dyn ports::OperacionalStore, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let fluxo_id = payload
+        .get("fluxo_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_etapas(&ctx, fluxo_id).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListEtapasFluxoReply",
+            serde_json::json!({ "etapas": itens }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "CreateEtapaFluxo", tenant_id = %env.tenant_id))]
+async fn handler_create_etapa(
+    store: &dyn ports::OperacionalStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let fluxo_id = payload
+        .get("fluxo_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let nome = payload
+        .get("nome")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let tipo_etapa = payload
+        .get("tipo_etapa")
+        .and_then(|v| v.as_str())
+        .unwrap_or("trabalho")
+        .to_string();
+    let cor = payload
+        .get("cor")
+        .and_then(|v| v.as_str())
+        .unwrap_or("#6B7280")
+        .to_string();
+
+    if nome.is_empty() {
+        return erro(
+            error_core::AppError::Validation("informe o nome da etapa".into()),
+            &env,
+        );
+    }
+    if !TIPOS_DE_ETAPA.contains(&tipo_etapa.as_str()) {
+        return erro(
+            error_core::AppError::Validation(format!("tipo de etapa desconhecido: '{tipo_etapa}'")),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .criar_etapa(&ctx, fluxo_id, nome.clone(), tipo_etapa, cor)
+        .await
+    {
+        Ok(etapa) => {
+            audit
+                .publish(
+                    &env,
+                    "etapa_fluxo_criada",
+                    format!("Etapa '{nome}' criada"),
+                    etapa.clone(),
+                )
+                .await;
+            ok_reply(&env, "CreateEtapaFluxoReply", etapa)
+        }
+        Err(err) => erro(err.into(), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "UpdateEtapaFluxo", tenant_id = %env.tenant_id))]
+async fn handler_update_etapa(
+    store: &dyn ports::OperacionalStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let nome = payload
+        .get("nome")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let descricao = payload
+        .get("descricao")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
+    let cor = payload
+        .get("cor")
+        .and_then(|v| v.as_str())
+        .unwrap_or("#6B7280")
+        .to_string();
+    let tipo_etapa = payload
+        .get("tipo_etapa")
+        .and_then(|v| v.as_str())
+        .unwrap_or("trabalho")
+        .to_string();
+
+    if nome.is_empty() {
+        return erro(
+            error_core::AppError::Validation("informe o nome da etapa".into()),
+            &env,
+        );
+    }
+    if !TIPOS_DE_ETAPA.contains(&tipo_etapa.as_str()) {
+        return erro(
+            error_core::AppError::Validation(format!("tipo de etapa desconhecido: '{tipo_etapa}'")),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .atualizar_etapa(&ctx, id, nome.clone(), descricao, cor, tipo_etapa)
+        .await
+    {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "etapa_fluxo_atualizada",
+                    format!("Etapa '{nome}' atualizada"),
+                    serde_json::json!({ "id": id }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "UpdateEtapaFluxoReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Validation("etapa não encontrada".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "DesativarEtapaFluxo", tenant_id = %env.tenant_id))]
+async fn handler_desativar_etapa(
+    store: &dyn ports::OperacionalStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+    let ctx = contexto_do_envelope(&env);
+    match store.desativar_etapa(&ctx, id).await {
+        Ok(res) => match responder_resultado(&env, "DesativarEtapaFluxoReply", res) {
+            Ok(resp) => {
+                audit
+                    .publish(
+                        &env,
+                        "etapa_fluxo_removida",
+                        format!("Etapa {id} removida"),
+                        serde_json::json!({ "id": id }),
+                    )
+                    .await;
+                resp
+            }
+            Err(recusa) => recusa,
+        },
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "MoverEtapaFluxo", tenant_id = %env.tenant_id))]
+async fn handler_mover_etapa(store: &dyn ports::OperacionalStore, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let para_cima = payload
+        .get("para_cima")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    let ctx = contexto_do_envelope(&env);
+    match store.mover_etapa(&ctx, id, para_cima).await {
+        // `false` é "já está na ponta", não erro: a tela só não muda.
+        Ok(movida) => ok_reply(
+            &env,
+            "MoverEtapaFluxoReply",
+            serde_json::json!({ "sucesso": movida }),
         ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }

@@ -48,7 +48,7 @@ async fn test_departamento_and_fluxo_crud() {
 
     // 3. Criar Fluxo de Atendimento
     let fluxo = fluxo_repo
-        .criar(&mut tx, &ctx, depto.id, "Fluxo Nivel 1")
+        .criar(&mut tx, &ctx, depto.id, "Fluxo Nivel 1", None)
         .await
         .expect("Falha ao criar fluxo");
     assert_eq!(fluxo.nome, "Fluxo Nivel 1");
@@ -121,7 +121,7 @@ async fn test_atendente_and_round_robin() {
         .await
         .unwrap();
     let fluxo = fluxo_repo
-        .criar(&mut tx, &ctx, depto.id, "Fluxo 1")
+        .criar(&mut tx, &ctx, depto.id, "Fluxo 1", None)
         .await
         .unwrap();
 

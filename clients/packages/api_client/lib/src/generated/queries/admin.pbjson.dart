@@ -2233,6 +2233,261 @@ final $typed_data.Uint8List updateMyTenantConfigRequestDescriptor = $convert.bas
     'Y2VUaHJlc2hvbGQSQwoIYXBpX2tleXMYFCADKAsyKC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZX'
     'JpZXMuQXBpS2V5RW50cnlSB2FwaUtleXM=');
 
+@$core.Deprecated('Use myFluxoDescriptor instead')
+const MyFluxo$json = {
+  '1': 'MyFluxo',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'departamento_id', '3': 2, '4': 1, '5': 5, '10': 'departamentoId'},
+    {
+      '1': 'departamento_nome',
+      '3': 3,
+      '4': 1,
+      '5': 9,
+      '10': 'departamentoNome'
+    },
+    {'1': 'nome', '3': 4, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'descricao', '3': 5, '4': 1, '5': 9, '10': 'descricao'},
+    {'1': 'ativo', '3': 6, '4': 1, '5': 8, '10': 'ativo'},
+    {'1': 'etapas', '3': 7, '4': 1, '5': 5, '10': 'etapas'},
+    {
+      '1': 'atendimentos_abertos',
+      '3': 8,
+      '4': 1,
+      '5': 5,
+      '10': 'atendimentosAbertos'
+    },
+    {'1': 'criado_em', '3': 9, '4': 1, '5': 3, '10': 'criadoEm'},
+  ],
+};
+
+/// Descriptor for `MyFluxo`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myFluxoDescriptor = $convert.base64Decode(
+    'CgdNeUZsdXhvEg4KAmlkGAEgASgFUgJpZBInCg9kZXBhcnRhbWVudG9faWQYAiABKAVSDmRlcG'
+    'FydGFtZW50b0lkEisKEWRlcGFydGFtZW50b19ub21lGAMgASgJUhBkZXBhcnRhbWVudG9Ob21l'
+    'EhIKBG5vbWUYBCABKAlSBG5vbWUSHAoJZGVzY3JpY2FvGAUgASgJUglkZXNjcmljYW8SFAoFYX'
+    'Rpdm8YBiABKAhSBWF0aXZvEhYKBmV0YXBhcxgHIAEoBVIGZXRhcGFzEjEKFGF0ZW5kaW1lbnRv'
+    'c19hYmVydG9zGAggASgFUhNhdGVuZGltZW50b3NBYmVydG9zEhsKCWNyaWFkb19lbRgJIAEoA1'
+    'IIY3JpYWRvRW0=');
+
+@$core.Deprecated('Use listMyFluxosRequestDescriptor instead')
+const ListMyFluxosRequest$json = {
+  '1': 'ListMyFluxosRequest',
+};
+
+/// Descriptor for `ListMyFluxosRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyFluxosRequestDescriptor =
+    $convert.base64Decode('ChNMaXN0TXlGbHV4b3NSZXF1ZXN0');
+
+@$core.Deprecated('Use listMyFluxosResponseDescriptor instead')
+const ListMyFluxosResponse$json = {
+  '1': 'ListMyFluxosResponse',
+  '2': [
+    {
+      '1': 'fluxos',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyFluxo',
+      '10': 'fluxos'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyFluxosResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyFluxosResponseDescriptor = $convert.base64Decode(
+    'ChRMaXN0TXlGbHV4b3NSZXNwb25zZRI8CgZmbHV4b3MYASADKAsyJC5zbWFydGNvcmUuY29udH'
+    'JhY3RzLnF1ZXJpZXMuTXlGbHV4b1IGZmx1eG9z');
+
+@$core.Deprecated('Use createMyFluxoRequestDescriptor instead')
+const CreateMyFluxoRequest$json = {
+  '1': 'CreateMyFluxoRequest',
+  '2': [
+    {'1': 'departamento_id', '3': 1, '4': 1, '5': 5, '10': 'departamentoId'},
+    {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'descricao', '3': 3, '4': 1, '5': 9, '10': 'descricao'},
+  ],
+};
+
+/// Descriptor for `CreateMyFluxoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createMyFluxoRequestDescriptor = $convert.base64Decode(
+    'ChRDcmVhdGVNeUZsdXhvUmVxdWVzdBInCg9kZXBhcnRhbWVudG9faWQYASABKAVSDmRlcGFydG'
+    'FtZW50b0lkEhIKBG5vbWUYAiABKAlSBG5vbWUSHAoJZGVzY3JpY2FvGAMgASgJUglkZXNjcmlj'
+    'YW8=');
+
+@$core.Deprecated('Use myFluxoResponseDescriptor instead')
+const MyFluxoResponse$json = {
+  '1': 'MyFluxoResponse',
+  '2': [
+    {
+      '1': 'fluxo',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyFluxo',
+      '10': 'fluxo'
+    },
+  ],
+};
+
+/// Descriptor for `MyFluxoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myFluxoResponseDescriptor = $convert.base64Decode(
+    'Cg9NeUZsdXhvUmVzcG9uc2USOgoFZmx1eG8YASABKAsyJC5zbWFydGNvcmUuY29udHJhY3RzLn'
+    'F1ZXJpZXMuTXlGbHV4b1IFZmx1eG8=');
+
+@$core.Deprecated('Use updateMyFluxoRequestDescriptor instead')
+const UpdateMyFluxoRequest$json = {
+  '1': 'UpdateMyFluxoRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'descricao', '3': 3, '4': 1, '5': 9, '10': 'descricao'},
+    {'1': 'ativo', '3': 4, '4': 1, '5': 8, '10': 'ativo'},
+  ],
+};
+
+/// Descriptor for `UpdateMyFluxoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List updateMyFluxoRequestDescriptor = $convert.base64Decode(
+    'ChRVcGRhdGVNeUZsdXhvUmVxdWVzdBIOCgJpZBgBIAEoBVICaWQSEgoEbm9tZRgCIAEoCVIEbm'
+    '9tZRIcCglkZXNjcmljYW8YAyABKAlSCWRlc2NyaWNhbxIUCgVhdGl2bxgEIAEoCFIFYXRpdm8=');
+
+@$core.Deprecated('Use myFluxoIdRequestDescriptor instead')
+const MyFluxoIdRequest$json = {
+  '1': 'MyFluxoIdRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+  ],
+};
+
+/// Descriptor for `MyFluxoIdRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myFluxoIdRequestDescriptor =
+    $convert.base64Decode('ChBNeUZsdXhvSWRSZXF1ZXN0Eg4KAmlkGAEgASgFUgJpZA==');
+
+@$core.Deprecated('Use myEtapaFluxoDescriptor instead')
+const MyEtapaFluxo$json = {
+  '1': 'MyEtapaFluxo',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'fluxo_id', '3': 2, '4': 1, '5': 5, '10': 'fluxoId'},
+    {'1': 'nome', '3': 3, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'descricao', '3': 4, '4': 1, '5': 9, '10': 'descricao'},
+    {'1': 'ordem', '3': 5, '4': 1, '5': 5, '10': 'ordem'},
+    {'1': 'cor', '3': 6, '4': 1, '5': 9, '10': 'cor'},
+    {'1': 'tipo_etapa', '3': 7, '4': 1, '5': 9, '10': 'tipoEtapa'},
+    {'1': 'ativo', '3': 8, '4': 1, '5': 8, '10': 'ativo'},
+  ],
+};
+
+/// Descriptor for `MyEtapaFluxo`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myEtapaFluxoDescriptor = $convert.base64Decode(
+    'CgxNeUV0YXBhRmx1eG8SDgoCaWQYASABKAVSAmlkEhkKCGZsdXhvX2lkGAIgASgFUgdmbHV4b0'
+    'lkEhIKBG5vbWUYAyABKAlSBG5vbWUSHAoJZGVzY3JpY2FvGAQgASgJUglkZXNjcmljYW8SFAoF'
+    'b3JkZW0YBSABKAVSBW9yZGVtEhAKA2NvchgGIAEoCVIDY29yEh0KCnRpcG9fZXRhcGEYByABKA'
+    'lSCXRpcG9FdGFwYRIUCgVhdGl2bxgIIAEoCFIFYXRpdm8=');
+
+@$core.Deprecated('Use listMyEtapasFluxoResponseDescriptor instead')
+const ListMyEtapasFluxoResponse$json = {
+  '1': 'ListMyEtapasFluxoResponse',
+  '2': [
+    {
+      '1': 'etapas',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyEtapaFluxo',
+      '10': 'etapas'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyEtapasFluxoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyEtapasFluxoResponseDescriptor =
+    $convert.base64Decode(
+        'ChlMaXN0TXlFdGFwYXNGbHV4b1Jlc3BvbnNlEkEKBmV0YXBhcxgBIAMoCzIpLnNtYXJ0Y29yZS'
+        '5jb250cmFjdHMucXVlcmllcy5NeUV0YXBhRmx1eG9SBmV0YXBhcw==');
+
+@$core.Deprecated('Use createMyEtapaFluxoRequestDescriptor instead')
+const CreateMyEtapaFluxoRequest$json = {
+  '1': 'CreateMyEtapaFluxoRequest',
+  '2': [
+    {'1': 'fluxo_id', '3': 1, '4': 1, '5': 5, '10': 'fluxoId'},
+    {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'tipo_etapa', '3': 3, '4': 1, '5': 9, '10': 'tipoEtapa'},
+    {'1': 'cor', '3': 4, '4': 1, '5': 9, '10': 'cor'},
+  ],
+};
+
+/// Descriptor for `CreateMyEtapaFluxoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createMyEtapaFluxoRequestDescriptor = $convert.base64Decode(
+    'ChlDcmVhdGVNeUV0YXBhRmx1eG9SZXF1ZXN0EhkKCGZsdXhvX2lkGAEgASgFUgdmbHV4b0lkEh'
+    'IKBG5vbWUYAiABKAlSBG5vbWUSHQoKdGlwb19ldGFwYRgDIAEoCVIJdGlwb0V0YXBhEhAKA2Nv'
+    'chgEIAEoCVIDY29y');
+
+@$core.Deprecated('Use myEtapaFluxoResponseDescriptor instead')
+const MyEtapaFluxoResponse$json = {
+  '1': 'MyEtapaFluxoResponse',
+  '2': [
+    {
+      '1': 'etapa',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyEtapaFluxo',
+      '10': 'etapa'
+    },
+  ],
+};
+
+/// Descriptor for `MyEtapaFluxoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myEtapaFluxoResponseDescriptor = $convert.base64Decode(
+    'ChRNeUV0YXBhRmx1eG9SZXNwb25zZRI/CgVldGFwYRgBIAEoCzIpLnNtYXJ0Y29yZS5jb250cm'
+    'FjdHMucXVlcmllcy5NeUV0YXBhRmx1eG9SBWV0YXBh');
+
+@$core.Deprecated('Use updateMyEtapaFluxoRequestDescriptor instead')
+const UpdateMyEtapaFluxoRequest$json = {
+  '1': 'UpdateMyEtapaFluxoRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'descricao', '3': 3, '4': 1, '5': 9, '10': 'descricao'},
+    {'1': 'cor', '3': 4, '4': 1, '5': 9, '10': 'cor'},
+    {'1': 'tipo_etapa', '3': 5, '4': 1, '5': 9, '10': 'tipoEtapa'},
+  ],
+};
+
+/// Descriptor for `UpdateMyEtapaFluxoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List updateMyEtapaFluxoRequestDescriptor = $convert.base64Decode(
+    'ChlVcGRhdGVNeUV0YXBhRmx1eG9SZXF1ZXN0Eg4KAmlkGAEgASgFUgJpZBISCgRub21lGAIgAS'
+    'gJUgRub21lEhwKCWRlc2NyaWNhbxgDIAEoCVIJZGVzY3JpY2FvEhAKA2NvchgEIAEoCVIDY29y'
+    'Eh0KCnRpcG9fZXRhcGEYBSABKAlSCXRpcG9FdGFwYQ==');
+
+@$core.Deprecated('Use myEtapaFluxoIdRequestDescriptor instead')
+const MyEtapaFluxoIdRequest$json = {
+  '1': 'MyEtapaFluxoIdRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+  ],
+};
+
+/// Descriptor for `MyEtapaFluxoIdRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myEtapaFluxoIdRequestDescriptor = $convert
+    .base64Decode('ChVNeUV0YXBhRmx1eG9JZFJlcXVlc3QSDgoCaWQYASABKAVSAmlk');
+
+@$core.Deprecated('Use moverMyEtapaFluxoRequestDescriptor instead')
+const MoverMyEtapaFluxoRequest$json = {
+  '1': 'MoverMyEtapaFluxoRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'para_cima', '3': 2, '4': 1, '5': 8, '10': 'paraCima'},
+  ],
+};
+
+/// Descriptor for `MoverMyEtapaFluxoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List moverMyEtapaFluxoRequestDescriptor =
+    $convert.base64Decode(
+        'ChhNb3Zlck15RXRhcGFGbHV4b1JlcXVlc3QSDgoCaWQYASABKAVSAmlkEhsKCXBhcmFfY2ltYR'
+        'gCIAEoCFIIcGFyYUNpbWE=');
+
 @$core.Deprecated('Use myContatoDescriptor instead')
 const MyContato$json = {
   '1': 'MyContato',

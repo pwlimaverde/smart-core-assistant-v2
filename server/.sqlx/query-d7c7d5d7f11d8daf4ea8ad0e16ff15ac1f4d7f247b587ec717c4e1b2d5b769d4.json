@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, ordem FROM oraculo_etapa_fluxo\n                    WHERE tenant_id = $1 AND fluxo_id = $2 AND ativo = true\n                      AND ordem > $3\n                    ORDER BY ordem ASC LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_etapa_fluxo",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "ordem",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_etapa_fluxo",
+            "name": "ordem"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "d7c7d5d7f11d8daf4ea8ad0e16ff15ac1f4d7f247b587ec717c4e1b2d5b769d4"
+}

@@ -8,6 +8,10 @@ import 'features/contatos/data/datasources/contatos_datasources.dart';
 import 'features/contatos/data/repositories/contatos_repositories.dart';
 import 'features/contatos/domain/usecases/contatos_usecases.dart';
 import 'features/contatos/presentation/routes/contatos_routes.dart';
+import 'features/fluxos/data/datasources/fluxos_datasources.dart';
+import 'features/fluxos/data/repositories/fluxos_repositories.dart';
+import 'features/fluxos/domain/usecases/fluxos_usecases.dart';
+import 'features/fluxos/presentation/routes/fluxos_routes.dart';
 import 'features/painel/data/datasources/painel_datasources.dart';
 import 'features/painel/data/repositories/painel_repositories.dart';
 import 'features/painel/domain/usecases/painel_usecases.dart';
@@ -80,6 +84,71 @@ final class TenantModule extends AppModule {
       () => DesativarDepartamentoUsecase(
         repository: DesativarDepartamentoRepository(
           datasource: DesativarDepartamentoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+
+    // ── fluxos de atendimento e etapas ────────────────────────────────────
+    i.lazySingleton<ListarFluxosUsecase>(
+      () => ListarFluxosUsecase(
+        repository: ListarFluxosRepository(
+          datasource: ListarFluxosDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<CriarFluxoUsecase>(
+      () => CriarFluxoUsecase(
+        repository: CriarFluxoRepository(
+          datasource: CriarFluxoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<AtualizarFluxoUsecase>(
+      () => AtualizarFluxoUsecase(
+        repository: AtualizarFluxoRepository(
+          datasource: AtualizarFluxoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<DesativarFluxoUsecase>(
+      () => DesativarFluxoUsecase(
+        repository: DesativarFluxoRepository(
+          datasource: DesativarFluxoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<ListarEtapasUsecase>(
+      () => ListarEtapasUsecase(
+        repository: ListarEtapasRepository(
+          datasource: ListarEtapasDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<CriarEtapaUsecase>(
+      () => CriarEtapaUsecase(
+        repository: CriarEtapaRepository(
+          datasource: CriarEtapaDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<AtualizarEtapaUsecase>(
+      () => AtualizarEtapaUsecase(
+        repository: AtualizarEtapaRepository(
+          datasource: AtualizarEtapaDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<DesativarEtapaUsecase>(
+      () => DesativarEtapaUsecase(
+        repository: DesativarEtapaRepository(
+          datasource: DesativarEtapaDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<MoverEtapaUsecase>(
+      () => MoverEtapaUsecase(
+        repository: MoverEtapaRepository(
+          datasource: MoverEtapaDatasource(client: _adminClient()),
         ),
       ),
     );
@@ -188,6 +257,8 @@ final class TenantModule extends AppModule {
     ConexoesRoute(),
     ContatosRoute(),
     EquipeRoute(),
+    FluxosRoute(),
+    EtapasFluxoRoute(),
     PainelRoute(),
   ];
 
