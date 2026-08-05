@@ -3,7 +3,7 @@ import 'dart:developer' as developer;
 // `show` explícito: o api_client exporta tipos proto com os mesmos nomes dos
 // modelos de domínio (AtendimentoResumo, MensagemThread).
 import 'package:api_client/api_client.dart'
-    show GrpcFailureKind, classificarFalhaGrpc;
+    show GrpcError, GrpcFailureKind, classificarFalhaGrpc;
 import 'package:return_success_or_error/return_success_or_error.dart';
 
 import '../../domain/errors/atendimento_errors.dart';
@@ -13,7 +13,9 @@ import '../../domain/model/mensagem_thread.dart';
 import '../../domain/parameters/get_thread_parameters.dart';
 import '../../domain/parameters/list_atendimentos_parameters.dart';
 import '../../domain/parameters/move_atendimento_etapa_parameters.dart';
+import '../../domain/model/ficha.dart';
 import '../../domain/model/quadro.dart';
+import '../../domain/parameters/ficha_parameters.dart';
 import '../../domain/parameters/quadro_parameters.dart';
 import '../../domain/parameters/send_outbound_message_parameters.dart';
 
@@ -242,4 +244,60 @@ final class SetAtendimentoStatusRepository
       _ => const SetStatusInesperado(),
     };
   }
+}
+
+FichaError _erroDeFicha(Object exception, StackTrace stackTrace, int? id) {
+  _log('ficha', exception, stackTrace, atendimentoId: id);
+  return switch (_kindDeTransporte(exception)) {
+    null => const FichaFalhaLocal(),
+    GrpcFailureKind.unauthenticated ||
+    GrpcFailureKind.permissionDenied => const FichaAcessoNegado(),
+    // `alreadyExists` é a UNIQUE (tenant, nome) da etiqueta: a mensagem do
+    // servidor diz qual nome colidiu.
+    GrpcFailureKind.invalidArgument ||
+    GrpcFailureKind.alreadyExists ||
+    GrpcFailureKind.failedPrecondition => FichaRecusado(
+      exception is GrpcError ? exception.message : null,
+    ),
+    GrpcFailureKind.unavailable ||
+    GrpcFailureKind.rateLimited => const FichaIndisponivel(),
+    _ => const FichaInesperado(),
+  };
+}
+
+final class GetFichaRepository
+    extends
+        RepositoryBase<FichaAtendimento, AtendimentoIdParameters, FichaError> {
+  const GetFichaRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, AtendimentoIdParameters p) =>
+      _erroDeFicha(e, s, p.atendimentoId);
+}
+
+final class CriarEtiquetaRepository
+    extends RepositoryBase<Unit, CriarEtiquetaParameters, FichaError> {
+  const CriarEtiquetaRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, CriarEtiquetaParameters p) =>
+      _erroDeFicha(e, s, null);
+}
+
+final class AlternarEtiquetaRepository
+    extends RepositoryBase<Unit, AlternarEtiquetaParameters, FichaError> {
+  const AlternarEtiquetaRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, AlternarEtiquetaParameters p) =>
+      _erroDeFicha(e, s, p.atendimentoId);
+}
+
+final class CriarNotaRepository
+    extends RepositoryBase<Unit, CriarNotaParameters, FichaError> {
+  const CriarNotaRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, CriarNotaParameters p) =>
+      _erroDeFicha(e, s, p.atendimentoId);
 }

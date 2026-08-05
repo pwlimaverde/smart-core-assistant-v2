@@ -57,6 +57,17 @@ pub trait EtiquetaRepository: Send + Sync {
         atendimento_id: i32,
         etiqueta_id: i64,
     ) -> Result<(), DbError>;
+
+    /// As etiquetas aplicadas a um atendimento.
+    ///
+    /// Diferente de `listar_ativas`, que é o catálogo do tenant: uma é o que
+    /// existe para escolher, a outra é o que está colado nesta conversa.
+    async fn listar_do_atendimento(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<Vec<Etiqueta>, DbError>;
 }
 
 #[async_trait]
@@ -165,6 +176,34 @@ impl EtiquetaRepository for PostgresEtiquetaRepository {
         .execute(&mut **tx)
         .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
+    async fn listar_do_atendimento(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<Vec<Etiqueta>, DbError> {
+        ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+        // Inclui as desativadas do catálogo: uma etiqueta aplicada e depois
+        // desativada continua contando a história desta conversa, e sumir com
+        // ela reescreveria o passado.
+        let rows = sqlx::query_as!(
+            Etiqueta,
+            r#"SELECT e.id, e.tenant_id, e.nome, e.cor, e.descricao, e.ativo,
+                      e.data_criacao
+                 FROM atu_etiqueta e
+                 JOIN atu_etiqueta_atendimento ea
+                   ON ea.etiqueta_id = e.id AND ea.tenant_id = e.tenant_id
+                WHERE e.tenant_id = $1 AND ea.atendimento_id = $2
+                ORDER BY ea.aplicada_em"#,
+            ctx.tenant_id,
+            atendimento_id
+        )
+        .fetch_all(&mut **tx)
+        .await?;
+        Ok(rows)
     }
 }
 

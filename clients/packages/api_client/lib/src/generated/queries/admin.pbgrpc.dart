@@ -290,6 +290,36 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$setAtendimentoStatus, request, options: options);
   }
 
+  /// Ficha do atendimento: etiquetas e anotacoes internas. As tabelas
+  /// existiam desde o comeco e nenhum app as alcancava.
+  $grpc.ResponseFuture<$0.DetalheAtendimentoResponse> getDetalheAtendimento(
+    $0.AtendimentoIdRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$getDetalheAtendimento, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.EtiquetaResponse> createEtiqueta(
+    $0.CreateEtiquetaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$createEtiqueta, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> alternarEtiqueta(
+    $0.AlternarEtiquetaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$alternarEtiqueta, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.NotaResponse> createNota(
+    $0.CreateNotaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$createNota, request, options: options);
+  }
+
   $grpc.ResponseFuture<$0.SendOutboundMessageResponse> sendOutboundMessage(
     $0.SendOutboundMessageRequest request, {
     $grpc.CallOptions? options,
@@ -812,6 +842,26 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/SetAtendimentoStatus',
       ($0.SetAtendimentoStatusRequest value) => value.writeToBuffer(),
       $0.SetAtendimentoStatusResponse.fromBuffer);
+  static final _$getDetalheAtendimento = $grpc.ClientMethod<
+          $0.AtendimentoIdRequest, $0.DetalheAtendimentoResponse>(
+      '/smartcore.contracts.queries.AdminService/GetDetalheAtendimento',
+      ($0.AtendimentoIdRequest value) => value.writeToBuffer(),
+      $0.DetalheAtendimentoResponse.fromBuffer);
+  static final _$createEtiqueta =
+      $grpc.ClientMethod<$0.CreateEtiquetaRequest, $0.EtiquetaResponse>(
+          '/smartcore.contracts.queries.AdminService/CreateEtiqueta',
+          ($0.CreateEtiquetaRequest value) => value.writeToBuffer(),
+          $0.EtiquetaResponse.fromBuffer);
+  static final _$alternarEtiqueta =
+      $grpc.ClientMethod<$0.AlternarEtiquetaRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/AlternarEtiqueta',
+          ($0.AlternarEtiquetaRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$createNota =
+      $grpc.ClientMethod<$0.CreateNotaRequest, $0.NotaResponse>(
+          '/smartcore.contracts.queries.AdminService/CreateNota',
+          ($0.CreateNotaRequest value) => value.writeToBuffer(),
+          $0.NotaResponse.fromBuffer);
   static final _$sendOutboundMessage = $grpc.ClientMethod<
           $0.SendOutboundMessageRequest, $0.SendOutboundMessageResponse>(
       '/smartcore.contracts.queries.AdminService/SendOutboundMessage',
@@ -1349,6 +1399,40 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.SetAtendimentoStatusRequest.fromBuffer(value),
         ($0.SetAtendimentoStatusResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.AtendimentoIdRequest,
+            $0.DetalheAtendimentoResponse>(
+        'GetDetalheAtendimento',
+        getDetalheAtendimento_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.AtendimentoIdRequest.fromBuffer(value),
+        ($0.DetalheAtendimentoResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.CreateEtiquetaRequest, $0.EtiquetaResponse>(
+            'CreateEtiqueta',
+            createEtiqueta_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.CreateEtiquetaRequest.fromBuffer(value),
+            ($0.EtiquetaResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.AlternarEtiquetaRequest, $0.SimpleOkResponse>(
+            'AlternarEtiqueta',
+            alternarEtiqueta_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.AlternarEtiquetaRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.CreateNotaRequest, $0.NotaResponse>(
+        'CreateNota',
+        createNota_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.CreateNotaRequest.fromBuffer(value),
+        ($0.NotaResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.SendOutboundMessageRequest,
             $0.SendOutboundMessageResponse>(
         'SendOutboundMessage',
@@ -2058,6 +2142,40 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.SetAtendimentoStatusResponse> setAtendimentoStatus(
       $grpc.ServiceCall call, $0.SetAtendimentoStatusRequest request);
+
+  $async.Future<$0.DetalheAtendimentoResponse> getDetalheAtendimento_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.AtendimentoIdRequest> $request) async {
+    return getDetalheAtendimento($call, await $request);
+  }
+
+  $async.Future<$0.DetalheAtendimentoResponse> getDetalheAtendimento(
+      $grpc.ServiceCall call, $0.AtendimentoIdRequest request);
+
+  $async.Future<$0.EtiquetaResponse> createEtiqueta_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.CreateEtiquetaRequest> $request) async {
+    return createEtiqueta($call, await $request);
+  }
+
+  $async.Future<$0.EtiquetaResponse> createEtiqueta(
+      $grpc.ServiceCall call, $0.CreateEtiquetaRequest request);
+
+  $async.Future<$0.SimpleOkResponse> alternarEtiqueta_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.AlternarEtiquetaRequest> $request) async {
+    return alternarEtiqueta($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> alternarEtiqueta(
+      $grpc.ServiceCall call, $0.AlternarEtiquetaRequest request);
+
+  $async.Future<$0.NotaResponse> createNota_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.CreateNotaRequest> $request) async {
+    return createNota($call, await $request);
+  }
+
+  $async.Future<$0.NotaResponse> createNota(
+      $grpc.ServiceCall call, $0.CreateNotaRequest request);
 
   $async.Future<$0.SendOutboundMessageResponse> sendOutboundMessage_Pre(
       $grpc.ServiceCall $call,

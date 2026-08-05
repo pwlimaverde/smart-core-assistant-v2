@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart' as proto;
+import 'package:fixnum/fixnum.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:local_engine_ffi/local_engine_ffi.dart';
 
@@ -10,6 +11,7 @@ import '../../domain/gateways/atendimento_gateway.dart';
 import '../../domain/model/atendimento_evento.dart';
 import '../../domain/model/atendimento_resumo.dart';
 import '../../domain/model/mensagem_thread.dart';
+import '../../domain/model/ficha.dart';
 import '../../domain/model/quadro.dart';
 
 /// Debounce do gatilho de reconexão (N7.4): `connectivity_plus` reporta o tipo
@@ -381,4 +383,69 @@ final class LocalEngineGateway implements AtendimentoGateway {
         )
         .toList();
   }
+
+  @override
+  Future<FichaAtendimento> getFicha(int atendimentoId) async {
+    final resp = await _admin.getDetalheAtendimento(
+      proto.AtendimentoIdRequest(atendimentoId: atendimentoId),
+    );
+    return FichaAtendimento(
+      catalogo: resp.catalogo.map(_etiquetaDoProto).toList(),
+      aplicadas: resp.etiquetas.map(_etiquetaDoProto).toList(),
+      notas: resp.notas
+          .map(
+            (n) => Nota(
+              id: n.id.toInt(),
+              texto: n.texto,
+              criadoEm: DateTime.fromMillisecondsSinceEpoch(n.criadoEm.toInt()),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  @override
+  Future<void> criarEtiqueta({
+    required String nome,
+    required String cor,
+  }) async {
+    await _admin.createEtiqueta(
+      proto.CreateEtiquetaRequest(nome: nome, cor: cor),
+    );
+  }
+
+  @override
+  Future<void> alternarEtiqueta({
+    required int atendimentoId,
+    required int etiquetaId,
+    required bool aplicar,
+  }) async {
+    await _admin.alternarEtiqueta(
+      proto.AlternarEtiquetaRequest(
+        atendimentoId: atendimentoId,
+        etiquetaId: Int64(etiquetaId),
+        aplicar: aplicar,
+      ),
+    );
+  }
+
+  @override
+  Future<void> criarNota({
+    required int atendimentoId,
+    required String texto,
+  }) async {
+    // NUNCA logar `texto` (PII) — só trafega no corpo da chamada.
+    await _admin.createNota(
+      proto.CreateNotaRequest(atendimentoId: atendimentoId, texto: texto),
+    );
+  }
 }
+
+/// Converte a etiqueta do contrato no modelo de domínio.
+Etiqueta _etiquetaDoProto(proto.Etiqueta e) => Etiqueta(
+      id: e.id.toInt(),
+      nome: e.nome,
+      cor: e.cor,
+      descricao: e.descricao,
+      ativo: e.ativo,
+    );

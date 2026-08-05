@@ -3265,3 +3265,171 @@ final $typed_data.Uint8List testarPerguntaResponseDescriptor = $convert.base64De
     'IHdHJlY2hvcxImCg5jb25maWFiaWxpZGFkZRgEIAEoAVIOY29uZmlhYmlsaWRhZGUSIgoMdHJh'
     'bnNmZXJpcmlhGAUgASgIUgx0cmFuc2ZlcmlyaWESLwoTZmx1eG9fdHJhbnNmZXJlbmNpYRgGIA'
     'EoCVISZmx1eG9UcmFuc2ZlcmVuY2lh');
+
+@$core.Deprecated('Use atendimentoIdRequestDescriptor instead')
+const AtendimentoIdRequest$json = {
+  '1': 'AtendimentoIdRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+  ],
+};
+
+/// Descriptor for `AtendimentoIdRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List atendimentoIdRequestDescriptor = $convert.base64Decode(
+    'ChRBdGVuZGltZW50b0lkUmVxdWVzdBIlCg5hdGVuZGltZW50b19pZBgBIAEoBVINYXRlbmRpbW'
+    'VudG9JZA==');
+
+@$core.Deprecated('Use etiquetaDescriptor instead')
+const Etiqueta$json = {
+  '1': 'Etiqueta',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 3, '10': 'id'},
+    {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'cor', '3': 3, '4': 1, '5': 9, '10': 'cor'},
+    {'1': 'descricao', '3': 4, '4': 1, '5': 9, '10': 'descricao'},
+    {'1': 'ativo', '3': 5, '4': 1, '5': 8, '10': 'ativo'},
+  ],
+};
+
+/// Descriptor for `Etiqueta`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List etiquetaDescriptor = $convert.base64Decode(
+    'CghFdGlxdWV0YRIOCgJpZBgBIAEoA1ICaWQSEgoEbm9tZRgCIAEoCVIEbm9tZRIQCgNjb3IYAy'
+    'ABKAlSA2NvchIcCglkZXNjcmljYW8YBCABKAlSCWRlc2NyaWNhbxIUCgVhdGl2bxgFIAEoCFIF'
+    'YXRpdm8=');
+
+@$core.Deprecated('Use notaDescriptor instead')
+const Nota$json = {
+  '1': 'Nota',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 3, '10': 'id'},
+    {'1': 'texto', '3': 2, '4': 1, '5': 9, '10': 'texto'},
+    {'1': 'criado_em', '3': 3, '4': 1, '5': 3, '10': 'criadoEm'},
+  ],
+};
+
+/// Descriptor for `Nota`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List notaDescriptor = $convert.base64Decode(
+    'CgROb3RhEg4KAmlkGAEgASgDUgJpZBIUCgV0ZXh0bxgCIAEoCVIFdGV4dG8SGwoJY3JpYWRvX2'
+    'VtGAMgASgDUghjcmlhZG9FbQ==');
+
+@$core.Deprecated('Use detalheAtendimentoResponseDescriptor instead')
+const DetalheAtendimentoResponse$json = {
+  '1': 'DetalheAtendimentoResponse',
+  '2': [
+    {
+      '1': 'catalogo',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.Etiqueta',
+      '10': 'catalogo'
+    },
+    {
+      '1': 'etiquetas',
+      '3': 2,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.Etiqueta',
+      '10': 'etiquetas'
+    },
+    {
+      '1': 'notas',
+      '3': 3,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.Nota',
+      '10': 'notas'
+    },
+  ],
+};
+
+/// Descriptor for `DetalheAtendimentoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List detalheAtendimentoResponseDescriptor = $convert.base64Decode(
+    'ChpEZXRhbGhlQXRlbmRpbWVudG9SZXNwb25zZRJBCghjYXRhbG9nbxgBIAMoCzIlLnNtYXJ0Y2'
+    '9yZS5jb250cmFjdHMucXVlcmllcy5FdGlxdWV0YVIIY2F0YWxvZ28SQwoJZXRpcXVldGFzGAIg'
+    'AygLMiUuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkV0aXF1ZXRhUglldGlxdWV0YXMSNw'
+    'oFbm90YXMYAyADKAsyIS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTm90YVIFbm90YXM=');
+
+@$core.Deprecated('Use createEtiquetaRequestDescriptor instead')
+const CreateEtiquetaRequest$json = {
+  '1': 'CreateEtiquetaRequest',
+  '2': [
+    {'1': 'nome', '3': 1, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'cor', '3': 2, '4': 1, '5': 9, '10': 'cor'},
+  ],
+};
+
+/// Descriptor for `CreateEtiquetaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createEtiquetaRequestDescriptor = $convert.base64Decode(
+    'ChVDcmVhdGVFdGlxdWV0YVJlcXVlc3QSEgoEbm9tZRgBIAEoCVIEbm9tZRIQCgNjb3IYAiABKA'
+    'lSA2Nvcg==');
+
+@$core.Deprecated('Use etiquetaResponseDescriptor instead')
+const EtiquetaResponse$json = {
+  '1': 'EtiquetaResponse',
+  '2': [
+    {
+      '1': 'etiqueta',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.Etiqueta',
+      '10': 'etiqueta'
+    },
+  ],
+};
+
+/// Descriptor for `EtiquetaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List etiquetaResponseDescriptor = $convert.base64Decode(
+    'ChBFdGlxdWV0YVJlc3BvbnNlEkEKCGV0aXF1ZXRhGAEgASgLMiUuc21hcnRjb3JlLmNvbnRyYW'
+    'N0cy5xdWVyaWVzLkV0aXF1ZXRhUghldGlxdWV0YQ==');
+
+@$core.Deprecated('Use alternarEtiquetaRequestDescriptor instead')
+const AlternarEtiquetaRequest$json = {
+  '1': 'AlternarEtiquetaRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'etiqueta_id', '3': 2, '4': 1, '5': 3, '10': 'etiquetaId'},
+    {'1': 'aplicar', '3': 3, '4': 1, '5': 8, '10': 'aplicar'},
+  ],
+};
+
+/// Descriptor for `AlternarEtiquetaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List alternarEtiquetaRequestDescriptor = $convert.base64Decode(
+    'ChdBbHRlcm5hckV0aXF1ZXRhUmVxdWVzdBIlCg5hdGVuZGltZW50b19pZBgBIAEoBVINYXRlbm'
+    'RpbWVudG9JZBIfCgtldGlxdWV0YV9pZBgCIAEoA1IKZXRpcXVldGFJZBIYCgdhcGxpY2FyGAMg'
+    'ASgIUgdhcGxpY2Fy');
+
+@$core.Deprecated('Use createNotaRequestDescriptor instead')
+const CreateNotaRequest$json = {
+  '1': 'CreateNotaRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'texto', '3': 2, '4': 1, '5': 9, '10': 'texto'},
+  ],
+};
+
+/// Descriptor for `CreateNotaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createNotaRequestDescriptor = $convert.base64Decode(
+    'ChFDcmVhdGVOb3RhUmVxdWVzdBIlCg5hdGVuZGltZW50b19pZBgBIAEoBVINYXRlbmRpbWVudG'
+    '9JZBIUCgV0ZXh0bxgCIAEoCVIFdGV4dG8=');
+
+@$core.Deprecated('Use notaResponseDescriptor instead')
+const NotaResponse$json = {
+  '1': 'NotaResponse',
+  '2': [
+    {
+      '1': 'nota',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.Nota',
+      '10': 'nota'
+    },
+  ],
+};
+
+/// Descriptor for `NotaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List notaResponseDescriptor = $convert.base64Decode(
+    'CgxOb3RhUmVzcG9uc2USNQoEbm90YRgBIAEoCzIhLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcm'
+    'llcy5Ob3RhUgRub3Rh');

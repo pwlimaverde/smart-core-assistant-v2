@@ -1,11 +1,13 @@
 import 'dart:convert';
 
 import 'package:api_client/api_client.dart' as proto;
+import 'package:fixnum/fixnum.dart';
 
 import '../../domain/gateways/atendimento_gateway.dart';
 import '../../domain/model/atendimento_evento.dart';
 import '../../domain/model/atendimento_resumo.dart';
 import '../../domain/model/mensagem_thread.dart';
+import '../../domain/model/ficha.dart';
 import '../../domain/model/quadro.dart';
 
 /// Adapter Web do [AtendimentoGateway] via gRPC-Web (`AdminServiceClient`).
@@ -192,4 +194,69 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
         )
         .toList();
   }
+
+  @override
+  Future<FichaAtendimento> getFicha(int atendimentoId) async {
+    final resp = await _client.getDetalheAtendimento(
+      proto.AtendimentoIdRequest(atendimentoId: atendimentoId),
+    );
+    return FichaAtendimento(
+      catalogo: resp.catalogo.map(_etiquetaDoProto).toList(),
+      aplicadas: resp.etiquetas.map(_etiquetaDoProto).toList(),
+      notas: resp.notas
+          .map(
+            (n) => Nota(
+              id: n.id.toInt(),
+              texto: n.texto,
+              criadoEm: DateTime.fromMillisecondsSinceEpoch(n.criadoEm.toInt()),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  @override
+  Future<void> criarEtiqueta({
+    required String nome,
+    required String cor,
+  }) async {
+    await _client.createEtiqueta(
+      proto.CreateEtiquetaRequest(nome: nome, cor: cor),
+    );
+  }
+
+  @override
+  Future<void> alternarEtiqueta({
+    required int atendimentoId,
+    required int etiquetaId,
+    required bool aplicar,
+  }) async {
+    await _client.alternarEtiqueta(
+      proto.AlternarEtiquetaRequest(
+        atendimentoId: atendimentoId,
+        etiquetaId: Int64(etiquetaId),
+        aplicar: aplicar,
+      ),
+    );
+  }
+
+  @override
+  Future<void> criarNota({
+    required int atendimentoId,
+    required String texto,
+  }) async {
+    // NUNCA logar `texto` (PII) — só trafega no corpo da chamada.
+    await _client.createNota(
+      proto.CreateNotaRequest(atendimentoId: atendimentoId, texto: texto),
+    );
+  }
 }
+
+/// Converte a etiqueta do contrato no modelo de domínio.
+Etiqueta _etiquetaDoProto(proto.Etiqueta e) => Etiqueta(
+      id: e.id.toInt(),
+      nome: e.nome,
+      cor: e.cor,
+      descricao: e.descricao,
+      ativo: e.ativo,
+    );

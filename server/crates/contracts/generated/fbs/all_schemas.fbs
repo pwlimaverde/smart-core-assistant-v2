@@ -1029,6 +1029,54 @@ table TestarPerguntaResponse {
   fluxo_transferencia:string;
 }
 
+table AtendimentoIdRequest {
+  atendimento_id:int;
+}
+
+table Etiqueta {
+  id:long;
+  nome:string;
+  cor:string;
+  descricao:string;
+  ativo:bool;
+}
+
+table Nota {
+  id:long;
+  texto:string;
+  criado_em:long;
+}
+
+table DetalheAtendimentoResponse {
+  catalogo:[Etiqueta];
+  etiquetas:[Etiqueta];
+  notas:[Nota];
+}
+
+table CreateEtiquetaRequest {
+  nome:string;
+  cor:string;
+}
+
+table EtiquetaResponse {
+  etiqueta:Etiqueta;
+}
+
+table AlternarEtiquetaRequest {
+  atendimento_id:int;
+  etiqueta_id:long;
+  aplicar:bool;
+}
+
+table CreateNotaRequest {
+  atendimento_id:int;
+  texto:string;
+}
+
+table NotaResponse {
+  nota:Nota;
+}
+
 
 
 

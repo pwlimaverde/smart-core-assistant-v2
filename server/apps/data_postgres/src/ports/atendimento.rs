@@ -192,6 +192,48 @@ pub trait AtendimentoStore: Send + Sync {
         motivo: String,
     ) -> Result<serde_json::Value, DbError>;
 
+    // ── detalhe do atendimento: etiquetas e notas ─────────────────────
+    //
+    // As tabelas existiam desde o começo e nenhum app as alcançava. São o que
+    // transforma o cartão numa ficha: por que a conversa está parada, o que já
+    // foi tentado, e o que ela tem em comum com outras.
+
+    /// O painel lateral inteiro numa chamada: catálogo do tenant, etiquetas
+    /// desta conversa e notas.
+    ///
+    /// Três consultas pequenas sobre o mesmo atendimento — três RPCs para
+    /// montar um painel seriam três idas ao servidor a cada cartão aberto.
+    async fn detalhe_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<serde_json::Value, DbError>;
+
+    /// Cria uma etiqueta no catálogo do tenant.
+    async fn criar_etiqueta(
+        &self,
+        ctx: &RequestContext,
+        nome: String,
+        cor: String,
+    ) -> Result<serde_json::Value, DbError>;
+
+    /// Aplica ou tira uma etiqueta desta conversa.
+    async fn alternar_etiqueta(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        etiqueta_id: i64,
+        aplicar: bool,
+    ) -> Result<bool, DbError>;
+
+    /// Anota algo na conversa. A nota é interna: o contato nunca a vê.
+    async fn criar_nota(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        texto: String,
+    ) -> Result<serde_json::Value, DbError>;
+
     /// Varredura CROSS-TENANT do scheduler do worker (F4.3b): atendimentos
     /// resolvidos aguardando feedback além do TTL. Exige `admin_pool` (BYPASSRLS).
     async fn listar_feedback_vencido(

@@ -240,3 +240,41 @@ final class SetStatusInesperado extends SetStatusError with UnexpectedFailure {
   const SetStatusInesperado()
     : super('Não foi possível concluir. Tente novamente.');
 }
+
+// ─── ficha do atendimento (etiquetas e notas) ─────────────────────────────────
+
+/// Erros da ficha.
+///
+/// Conjunto próprio, separado do chat: a ficha pode falhar com o histórico
+/// carregado, e nesse caso a conversa continua utilizável — a mensagem tem de
+/// dizer que o que falhou foi o painel, não o atendimento.
+sealed class FichaError extends AppError {
+  const FichaError(super.message);
+}
+
+final class FichaAcessoNegado extends FichaError with UnauthorizedFailure {
+  const FichaAcessoNegado()
+    : super('Você não tem acesso à ficha deste atendimento.');
+}
+
+/// Recusa do servidor — a mensagem vem dele. É por aqui que chega a etiqueta
+/// com nome repetido, que tem `UNIQUE` no banco.
+final class FichaRecusado extends FichaError with ValidationFailure {
+  const FichaRecusado([String? mensagem])
+    : super(mensagem ?? 'Verifique os dados informados.');
+}
+
+final class FichaIndisponivel extends FichaError with NetworkFailure {
+  const FichaIndisponivel()
+    : super('Não foi possível carregar a ficha. Tente novamente.');
+}
+
+final class FichaFalhaLocal extends FichaError {
+  const FichaFalhaLocal()
+    : super('Falha no armazenamento local. Reinicie o aplicativo.');
+}
+
+final class FichaInesperado extends FichaError with UnexpectedFailure {
+  const FichaInesperado()
+    : super('Não foi possível carregar a ficha. Tente novamente.');
+}

@@ -338,10 +338,34 @@ pergunta. O RAG consulta `treinamento_querycompose` na composição de contexto,
 a curadoria manual continua sendo o jeito de corrigir uma resposta errada sem
 esperar retreinamento.
 
-### Etapa 8 — Detalhe do atendimento
+### Etapa 8 — Detalhe do atendimento — FEITO (parcial)
 
-Painéis de campos personalizados, etiquetas e notas (a v1 tem os três em
-`gestao_kanban/partials/`). Depende das etapas 4 e 6.
+Ficha ao lado da conversa, na tela de chat: etiquetas e anotações internas. As
+tabelas (`atu_etiqueta`, `atu_etiqueta_atendimento`, `atu_nota`) existiam desde
+o começo e nenhum app as alcançava.
+
+O histórico diz o que foi dito; a ficha diz o que se **sabe**. Por que a conversa
+está parada, o que já foi tentado, o que ela tem em comum com outras — nada
+disso cabe numa mensagem, e sem lugar acaba na cabeça de quem atendeu.
+
+**Controller próprio, separado do chat**: a ficha pode falhar com o histórico
+carregado, e nesse caso a conversa continua utilizável. Um estado só derrubaria
+as mensagens junto com o painel.
+
+Uma chamada só (`GetDetalheAtendimento`) traz catálogo, etiquetas aplicadas e
+notas — três RPCs para montar um painel seriam três esperas a cada cartão aberto.
+
+Uma etiqueta **desativada no catálogo continua aparecendo** nas conversas em que
+já estava: sumir com ela reescreveria o passado. Só deixa de ser oferecida para
+colar em conversa nova.
+
+Em janela abaixo de 900px a ficha some em vez de espremer a conversa — ler e
+responder é o que não pode ficar sem espaço.
+
+**Falta desta etapa**: campos personalizados (`atu_campo_personalizado`,
+`atu_valor_campo`). A camada de banco existe e o `Responder` já os consome como
+contexto; falta a tela de definir os campos do fluxo e preenchê-los no
+atendimento.
 
 ---
 

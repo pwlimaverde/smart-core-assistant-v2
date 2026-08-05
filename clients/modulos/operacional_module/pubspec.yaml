@@ -34,14 +34,16 @@ dependencies:
   bloc: ^9.2.1
   intl: ^0.20.2
   connectivity_plus: ^7.3.0
+  # Int64 dos campos BIGSERIAL do contrato (etiqueta e nota).
+  fixnum: ^1.1.0
 
 dev_dependencies:
+  # Registro do controller nos testes de widget.
+  get_it: ^9.2.1
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
   bloc_test: ^10.0.0
   mocktail: ^1.0.5
-  # Int64 dos campos de timestamp do protobuf nos testes do gateway.
-  fixnum: ^1.1.0
 
 resolution: workspace

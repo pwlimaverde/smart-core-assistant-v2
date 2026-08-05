@@ -104,6 +104,40 @@ final class OperacionalModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<GetFichaUsecase>(
+      () => GetFichaUsecase(
+        repository: GetFichaRepository(
+          datasource: GetFichaDatasource(gateway: inject<AtendimentoGateway>()),
+        ),
+      ),
+    );
+    i.lazySingleton<CriarEtiquetaUsecase>(
+      () => CriarEtiquetaUsecase(
+        repository: CriarEtiquetaRepository(
+          datasource: CriarEtiquetaDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<AlternarEtiquetaUsecase>(
+      () => AlternarEtiquetaUsecase(
+        repository: AlternarEtiquetaRepository(
+          datasource: AlternarEtiquetaDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<CriarNotaUsecase>(
+      () => CriarNotaUsecase(
+        repository: CriarNotaRepository(
+          datasource: CriarNotaDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
     i.lazySingleton<SendOutboundMessageUsecase>(
       () => SendOutboundMessageUsecase(
         repository: SendOutboundMessageRepository(

@@ -8,7 +8,9 @@ import '../model/mensagem_thread.dart';
 import '../parameters/get_thread_parameters.dart';
 import '../parameters/list_atendimentos_parameters.dart';
 import '../parameters/move_atendimento_etapa_parameters.dart';
+import '../model/ficha.dart';
 import '../model/quadro.dart';
+import '../parameters/ficha_parameters.dart';
 import '../parameters/quadro_parameters.dart';
 import '../parameters/send_outbound_message_parameters.dart';
 
@@ -249,5 +251,90 @@ final class SetAtendimentoStatusUsecase
   SetStatusError onUnexpected(Object exception, StackTrace stackTrace) {
     _logBug('setAtendimentoStatus', exception, stackTrace);
     return const SetStatusInesperado();
+  }
+}
+
+final class GetFichaUsecase
+    extends
+        UsecaseBaseCallData<
+          FichaAtendimento,
+          FichaAtendimento,
+          AtendimentoIdParameters,
+          FichaError
+        > {
+  const GetFichaUsecase({required super.repository});
+
+  /// Ordena as notas da mais recente para a mais antiga.
+  ///
+  /// O servidor já devolve assim, mas é a apresentação que decide: quem abre a
+  /// ficha quer ver o que aconteceu por último, não o começo da história.
+  @override
+  ProcessData<
+    FichaAtendimento,
+    FichaAtendimento,
+    AtendimentoIdParameters,
+    FichaError
+  >
+  get process =>
+      (data, _) => Success(
+        FichaAtendimento(
+          catalogo: data.catalogo,
+          aplicadas: data.aplicadas,
+          notas: List.of(data.notas)
+            ..sort((a, b) => b.criadoEm.compareTo(a.criadoEm)),
+        ),
+      );
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('getFicha', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
+final class CriarEtiquetaUsecase
+    extends
+        UsecaseBaseCallData<Unit, Unit, CriarEtiquetaParameters, FichaError> {
+  const CriarEtiquetaUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, CriarEtiquetaParameters, FichaError> get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('criarEtiqueta', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
+final class AlternarEtiquetaUsecase
+    extends
+        UsecaseBaseCallData<Unit, Unit, AlternarEtiquetaParameters, FichaError> {
+  const AlternarEtiquetaUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, AlternarEtiquetaParameters, FichaError> get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('alternarEtiqueta', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
+final class CriarNotaUsecase
+    extends UsecaseBaseCallData<Unit, Unit, CriarNotaParameters, FichaError> {
+  const CriarNotaUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, CriarNotaParameters, FichaError> get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('criarNota', exception, stackTrace);
+    return const FichaInesperado();
   }
 }

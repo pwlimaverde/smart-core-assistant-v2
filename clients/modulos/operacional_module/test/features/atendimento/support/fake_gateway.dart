@@ -7,6 +7,7 @@ import 'package:operacional_module/src/features/atendimento/domain/gateways/aten
 import 'package:operacional_module/src/features/atendimento/domain/model/atendimento_evento.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/atendimento_resumo.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/mensagem_thread.dart';
+import 'package:operacional_module/src/features/atendimento/domain/model/ficha.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/quadro.dart';
 import 'package:operacional_module/src/features/atendimento/domain/streams/atendimento_evento_stream.dart';
 import 'package:operacional_module/src/features/atendimento/domain/usecases/atendimento_usecases.dart';
@@ -40,6 +41,20 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
 
   /// Último status pedido — para verificar o repasse.
   String? statusRecebido;
+
+  /// Ficha devolvida por [getFicha].
+  FichaAtendimento ficha = const FichaAtendimento(
+    catalogo: [],
+    aplicadas: [],
+    notas: [],
+  );
+  Object? erroFicha;
+  int chamadasFicha = 0;
+
+  /// Últimos valores recebidos pelas escritas da ficha.
+  String? notaRecebida;
+  (int, bool)? etiquetaAlternada;
+  String? etiquetaCriada;
 
   /// Último `motivo` recebido pelo move — para verificar o repasse.
   String? motivoRecebido;
@@ -118,6 +133,41 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   }
 
   @override
+  Future<FichaAtendimento> getFicha(int atendimentoId) async {
+    chamadasFicha++;
+    if (erroFicha != null) throw erroFicha!;
+    return ficha;
+  }
+
+  @override
+  Future<void> criarEtiqueta({
+    required String nome,
+    required String cor,
+  }) async {
+    etiquetaCriada = nome;
+    if (erroFicha != null) throw erroFicha!;
+  }
+
+  @override
+  Future<void> alternarEtiqueta({
+    required int atendimentoId,
+    required int etiquetaId,
+    required bool aplicar,
+  }) async {
+    etiquetaAlternada = (etiquetaId, aplicar);
+    if (erroFicha != null) throw erroFicha!;
+  }
+
+  @override
+  Future<void> criarNota({
+    required int atendimentoId,
+    required String texto,
+  }) async {
+    notaRecebida = texto;
+    if (erroFicha != null) throw erroFicha!;
+  }
+
+  @override
   Stream<AtendimentoEvento> streamAtendimentos() => eventos.stream;
 }
 
@@ -130,6 +180,10 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   ListFluxosUsecase fluxos,
   ListColunasUsecase colunas,
   SetAtendimentoStatusUsecase status,
+  GetFichaUsecase ficha,
+  CriarEtiquetaUsecase criarEtiqueta,
+  AlternarEtiquetaUsecase alternarEtiqueta,
+  CriarNotaUsecase criarNota,
   AtendimentoEventoStream eventos,
 })
 usecasesSobre(FakeAtendimentoGateway gateway) => (
@@ -166,6 +220,26 @@ usecasesSobre(FakeAtendimentoGateway gateway) => (
   status: SetAtendimentoStatusUsecase(
     repository: SetAtendimentoStatusRepository(
       datasource: SetAtendimentoStatusDatasource(gateway: gateway),
+    ),
+  ),
+  ficha: GetFichaUsecase(
+    repository: GetFichaRepository(
+      datasource: GetFichaDatasource(gateway: gateway),
+    ),
+  ),
+  criarEtiqueta: CriarEtiquetaUsecase(
+    repository: CriarEtiquetaRepository(
+      datasource: CriarEtiquetaDatasource(gateway: gateway),
+    ),
+  ),
+  alternarEtiqueta: AlternarEtiquetaUsecase(
+    repository: AlternarEtiquetaRepository(
+      datasource: AlternarEtiquetaDatasource(gateway: gateway),
+    ),
+  ),
+  criarNota: CriarNotaUsecase(
+    repository: CriarNotaRepository(
+      datasource: CriarNotaDatasource(gateway: gateway),
     ),
   ),
   eventos: AtendimentoEventoStreamImpl(gateway: gateway),

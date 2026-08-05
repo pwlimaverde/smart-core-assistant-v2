@@ -828,6 +828,13 @@ service AdminService {
   rpc GetThread(GetThreadRequest) returns (GetThreadResponse);
   rpc MoveAtendimentoEtapa(MoveAtendimentoEtapaRequest) returns (MoveAtendimentoEtapaResponse);
   rpc SetAtendimentoStatus(SetAtendimentoStatusRequest) returns (SetAtendimentoStatusResponse);
+
+  // Ficha do atendimento: etiquetas e anotacoes internas. As tabelas
+  // existiam desde o comeco e nenhum app as alcancava.
+  rpc GetDetalheAtendimento(AtendimentoIdRequest) returns (DetalheAtendimentoResponse);
+  rpc CreateEtiqueta(CreateEtiquetaRequest) returns (EtiquetaResponse);
+  rpc AlternarEtiqueta(AlternarEtiquetaRequest) returns (SimpleOkResponse);
+  rpc CreateNota(CreateNotaRequest) returns (NotaResponse);
   rpc SendOutboundMessage(SendOutboundMessageRequest) returns (SendOutboundMessageResponse);
 
   // Fase N3: Painel do Tenant. Exigem só autenticação (não superuser); o RBAC fino
@@ -1277,4 +1284,60 @@ message TestarPerguntaResponse {
   // `true` quando a IA decidiu transferir em vez de responder.
   bool transferiria = 5;
   string fluxo_transferencia = 6;
+}
+
+// --- Ficha do atendimento ---
+
+message AtendimentoIdRequest {
+  int32 atendimento_id = 1;
+}
+
+message Etiqueta {
+  int64 id = 1;
+  string nome = 2;
+  string cor = 3;
+  string descricao = 4;
+  // Do CATALOGO. Uma etiqueta desativada continua aparecendo nas conversas em
+  // que ja estava -- sumir com ela reescreveria o passado.
+  bool ativo = 5;
+}
+
+message Nota {
+  int64 id = 1;
+  // Texto livre do operador, interno: o contato nunca ve.
+  string texto = 2;
+  int64 criado_em = 3;
+}
+
+message DetalheAtendimentoResponse {
+  // O que existe para escolher.
+  repeated Etiqueta catalogo = 1;
+  // O que esta colado nesta conversa.
+  repeated Etiqueta etiquetas = 2;
+  repeated Nota notas = 3;
+}
+
+message CreateEtiquetaRequest {
+  string nome = 1;
+  string cor = 2;
+}
+
+message EtiquetaResponse {
+  Etiqueta etiqueta = 1;
+}
+
+message AlternarEtiquetaRequest {
+  int32 atendimento_id = 1;
+  int64 etiqueta_id = 2;
+  // `false` tira a etiqueta da conversa.
+  bool aplicar = 3;
+}
+
+message CreateNotaRequest {
+  int32 atendimento_id = 1;
+  string texto = 2;
+}
+
+message NotaResponse {
+  Nota nota = 1;
 }

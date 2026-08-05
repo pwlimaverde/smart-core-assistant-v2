@@ -6,8 +6,10 @@ import 'package:presentation_module/presentation_module.dart';
 
 import '../controllers/chat_controller.dart';
 import '../controllers/chat_state.dart';
+import '../controllers/ficha_controller.dart';
 import '../widgets/chat_connection_badge.dart';
 import '../widgets/chat_message_bubble.dart';
+import '../widgets/painel_ficha.dart';
 
 /// Chat lateral de um atendimento (WS-6.3): histórico + stream realtime +
 /// envio outbound. Consome `AtendimentoDataSource.streamAtendimentos` (via
@@ -27,6 +29,7 @@ class ChatPage extends StatefulWidget {
 
 class _ChatPageState extends State<ChatPage> {
   late final ChatController _controller;
+  late final FichaController _ficha;
   final _inputController = TextEditingController();
 
   @override
@@ -37,12 +40,22 @@ class _ChatPageState extends State<ChatPage> {
       sendUsecase: inject(),
       eventos: inject(),
     );
+    // Controller próprio: a ficha pode falhar sem derrubar a conversa, e um
+    // estado só levaria as mensagens junto com o painel.
+    _ficha = FichaController(
+      carregar: inject(),
+      criarEtiqueta: inject(),
+      alternar: inject(),
+      criarNota: inject(),
+    );
     _controller.abrir(widget.atendimentoId);
+    _ficha.abrir(widget.atendimentoId);
   }
 
   @override
   void dispose() {
     _controller.close();
+    _ficha.close();
     _inputController.dispose();
     super.dispose();
   }
@@ -51,22 +64,39 @@ class _ChatPageState extends State<ChatPage> {
   Widget build(BuildContext context) {
     return AppScaffold(
       title: 'Atendimento #${widget.atendimentoId}',
-      body: BlocBuilder<ChatController, ViewState<ChatViewModel>>(
-        bloc: _controller,
-        builder: (context, state) {
-          return switch (state) {
-            InitialState() ||
-            LoadingState() => const Center(child: CircularProgressIndicator()),
-            ErrorState(:final error) => AppErrorView(
-              message: error.message,
-              onRetry: () => _controller.abrir(widget.atendimentoId),
-            ),
-            SuccessState(:final data) => _ChatBody(
-              viewModel: data,
-              inputController: _inputController,
-              onEnviar: _enviar,
-            ),
-          };
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          final conversa = BlocBuilder<ChatController, ViewState<ChatViewModel>>(
+            bloc: _controller,
+            builder: (context, state) {
+              return switch (state) {
+                InitialState() || LoadingState() => const Center(
+                  child: CircularProgressIndicator(),
+                ),
+                ErrorState(:final error) => AppErrorView(
+                  message: error.message,
+                  onRetry: () => _controller.abrir(widget.atendimentoId),
+                ),
+                SuccessState(:final data) => _ChatBody(
+                  viewModel: data,
+                  inputController: _inputController,
+                  onEnviar: _enviar,
+                ),
+              };
+            },
+          );
+
+          // Em janela estreita a ficha some em vez de espremer a conversa: ler
+          // e responder é o que não pode ficar sem espaço. As etiquetas
+          // continuam visíveis no cartão do quadro.
+          if (constraints.maxWidth < 900) return conversa;
+
+          return Row(
+            children: [
+              Expanded(child: conversa),
+              PainelFicha(controller: _ficha),
+            ],
+          );
         },
       ),
     );

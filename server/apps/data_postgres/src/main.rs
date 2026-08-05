@@ -521,6 +521,10 @@ async fn main() -> anyhow::Result<()> {
     let s_atendente_update = state_clone.clone();
     let s_atendente_desativar = state_clone.clone();
     let s_status_atendimento = state_clone.clone();
+    let s_detalhe = state_clone.clone();
+    let s_etiqueta_criar = state_clone.clone();
+    let s_etiqueta_alternar = state_clone.clone();
+    let s_nota_criar = state_clone.clone();
     let s_vetor_pendentes = state_clone.clone();
     let s_vetor_salvar = state_clone.clone();
     let s_intent_pendentes = state_clone.clone();
@@ -610,6 +614,28 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(async move {
                 handler_move_atendimento_etapa(state.atendimento.as_ref(), env).await
             })
+        })
+        .route("GetDetalheAtendimento", move |env| {
+            let state = s_detalhe.clone();
+            Box::pin(
+                async move { handler_detalhe_atendimento(state.atendimento.as_ref(), env).await },
+            )
+        })
+        .route("CreateEtiqueta", move |env| {
+            let state = s_etiqueta_criar.clone();
+            Box::pin(async move {
+                handler_create_etiqueta(state.atendimento.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("AlternarEtiqueta", move |env| {
+            let state = s_etiqueta_alternar.clone();
+            Box::pin(
+                async move { handler_alternar_etiqueta(state.atendimento.as_ref(), env).await },
+            )
+        })
+        .route("CreateNota", move |env| {
+            let state = s_nota_criar.clone();
+            Box::pin(async move { handler_create_nota(state.atendimento.as_ref(), env).await })
         })
         .route("SetAtendimentoStatus", move |env| {
             let state = s_status_atendimento.clone();
@@ -2490,6 +2516,132 @@ const STATUS_DE_ATENDIMENTO: [&str; 6] = [
     "cancelado",
     "arquivado",
 ];
+
+// --- Detalhe do atendimento: etiquetas e notas ---
+//
+// As tabelas existiam desde o começo e nenhum app as alcançava. São o que
+// transforma o cartão numa ficha: por que a conversa está parada, o que já foi
+// tentado, e o que ela tem em comum com outras.
+
+#[tracing::instrument(skip_all, fields(rpc = "GetDetalheAtendimento", tenant_id = %env.tenant_id))]
+async fn handler_detalhe_atendimento(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let atendimento_id = payload
+        .get("atendimento_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+
+    let ctx = contexto_do_envelope(&env);
+    match store.detalhe_atendimento(&ctx, atendimento_id).await {
+        Ok(detalhe) => ok_reply(&env, "GetDetalheAtendimentoReply", detalhe),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "CreateEtiqueta", tenant_id = %env.tenant_id))]
+async fn handler_create_etiqueta(
+    store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let nome = payload
+        .get("nome")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let cor = payload
+        .get("cor")
+        .and_then(|v| v.as_str())
+        .unwrap_or("#a98f71")
+        .to_string();
+
+    if nome.is_empty() {
+        return erro(
+            error_core::AppError::Validation("informe o nome da etiqueta".into()),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store.criar_etiqueta(&ctx, nome.clone(), cor).await {
+        Ok(etiqueta) => {
+            audit
+                .publish(
+                    &env,
+                    "etiqueta_criada",
+                    format!("Etiqueta '{nome}' criada"),
+                    etiqueta.clone(),
+                )
+                .await;
+            ok_reply(&env, "CreateEtiquetaReply", etiqueta)
+        }
+        Err(err) => erro(err.into(), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "AlternarEtiqueta", tenant_id = %env.tenant_id))]
+async fn handler_alternar_etiqueta(store: &dyn ports::AtendimentoStore, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let atendimento_id = payload
+        .get("atendimento_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let etiqueta_id = payload
+        .get("etiqueta_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    let aplicar = payload
+        .get("aplicar")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .alternar_etiqueta(&ctx, atendimento_id, etiqueta_id, aplicar)
+        .await
+    {
+        Ok(ok) => ok_reply(
+            &env,
+            "AlternarEtiquetaReply",
+            serde_json::json!({ "sucesso": ok }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "CreateNota", tenant_id = %env.tenant_id))]
+async fn handler_create_nota(store: &dyn ports::AtendimentoStore, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let atendimento_id = payload
+        .get("atendimento_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    // A nota é texto livre do operador: PII. Não entra em log nem em auditoria.
+    let texto = payload
+        .get("texto")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+
+    if texto.is_empty() {
+        return erro(
+            error_core::AppError::Validation("escreva a anotação".into()),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store.criar_nota(&ctx, atendimento_id, texto).await {
+        Ok(nota) => ok_reply(&env, "CreateNotaReply", nota),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
 
 #[tracing::instrument(skip_all, fields(rpc = "SetAtendimentoStatus", tenant_id = %env.tenant_id))]
 async fn handler_set_atendimento_status(

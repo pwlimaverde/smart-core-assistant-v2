@@ -16,13 +16,16 @@ use contracts::grpc::queries::{
     AcceptInviteRequest,
     AcceptInviteResponse,
     AcceptedTenantUser,
+    AlternarEtiquetaRequest,
     ApiKeyEntry as ProtoApiKeyEntry,
     AtendimentoEvent,
+    AtendimentoIdRequest,
     // Fase 6 - Operacional (fila/Kanban/chat)
     AtendimentoResumo as ProtoAtendimentoResumo,
     AuditLogEntry as ProtoAuditLogEntry,
     AuthResponse,
     CoreSetting as ProtoCoreSetting,
+    CreateEtiquetaRequest,
     CreateInviteRequest,
     CreateInviteResponse,
     CreateMyAtendenteRequest,
@@ -34,6 +37,7 @@ use contracts::grpc::queries::{
     // Configuração inicial guiada (passos 5 a 8)
     CreateMyWhatsappInstanceRequest,
     CreateMyWhatsappInstanceResponse,
+    CreateNotaRequest,
     CreatePlanRequest,
     CreatePlanResponse,
     CreateTenantRequest,
@@ -43,6 +47,9 @@ use contracts::grpc::queries::{
     CreateVoucherResponse,
     DeleteCoreSettingRequest,
     DeleteCoreSettingResponse,
+    DetalheAtendimentoResponse,
+    Etiqueta as ProtoEtiqueta,
+    EtiquetaResponse,
     ExportTenantsCsvRequest,
     ExportTenantsCsvResponse,
     FeatureFlag as ProtoFeatureFlag,
@@ -135,6 +142,8 @@ use contracts::grpc::queries::{
     MyTreinamentoResponse,
     MyWhatsappInstance,
     MyWhatsappInstanceIdRequest,
+    Nota as ProtoNota,
+    NotaResponse,
     PaymentRecord as ProtoPaymentRecord,
     Plan as ProtoPlan,
     // Fase 5 - Auditoria & Saúde
@@ -4442,6 +4451,131 @@ impl AdminService for AdminFacade {
         }
     }
 
+    // --- Ficha do atendimento: etiquetas e notas ---
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "GetDetalheAtendimento", traceparent)
+    )]
+    async fn get_detalhe_atendimento(
+        &self,
+        req: Request<AtendimentoIdRequest>,
+    ) -> Result<Response<DetalheAtendimentoResponse>, Status> {
+        let id = req.get_ref().atendimento_id;
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "GetDetalheAtendimento",
+                serde_json::json!({ "atendimento_id": id }),
+            )
+            .await?;
+
+        let lista = |chave: &str| -> Vec<ProtoEtiqueta> {
+            corpo
+                .get(chave)
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().map(etiqueta_do_json).collect())
+                .unwrap_or_default()
+        };
+
+        Ok(Response::new(DetalheAtendimentoResponse {
+            catalogo: lista("catalogo"),
+            etiquetas: lista("etiquetas"),
+            notas: corpo
+                .get("notas")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().map(nota_do_json).collect())
+                .unwrap_or_default(),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "CreateEtiqueta", traceparent)
+    )]
+    async fn create_etiqueta(
+        &self,
+        req: Request<CreateEtiquetaRequest>,
+    ) -> Result<Response<EtiquetaResponse>, Status> {
+        let inner = req.get_ref().clone();
+        if inner.nome.trim().is_empty() {
+            return Err(Status::invalid_argument("informe o nome da etiqueta"));
+        }
+
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "CreateEtiqueta",
+                serde_json::json!({
+                    "nome": inner.nome.trim(),
+                    "cor": inner.cor,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(EtiquetaResponse {
+            etiqueta: Some(etiqueta_do_json(&corpo)),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "AlternarEtiqueta", traceparent)
+    )]
+    async fn alternar_etiqueta(
+        &self,
+        req: Request<AlternarEtiquetaRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = req.get_ref().clone();
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "AlternarEtiqueta",
+            serde_json::json!({
+                "atendimento_id": inner.atendimento_id,
+                "etiqueta_id": inner.etiqueta_id,
+                "aplicar": inner.aplicar,
+            }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "CreateNota", traceparent)
+    )]
+    async fn create_nota(
+        &self,
+        req: Request<CreateNotaRequest>,
+    ) -> Result<Response<NotaResponse>, Status> {
+        let inner = req.get_ref().clone();
+        if inner.texto.trim().is_empty() {
+            return Err(Status::invalid_argument("escreva a anotação"));
+        }
+
+        // O texto da nota não entra em `fields` do instrument nem em log: é
+        // conteúdo livre do operador sobre um cliente.
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "CreateNota",
+                serde_json::json!({
+                    "atendimento_id": inner.atendimento_id,
+                    "texto": inner.texto.trim(),
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(NotaResponse {
+            nota: Some(nota_do_json(&corpo)),
+        }))
+    }
+
     /// Muda o status do atendimento; o cartão acompanha.
     ///
     /// Mesmo RBAC fino por fluxo do arrasto: quem não pode mover o cartão
@@ -5454,6 +5588,41 @@ impl AdminService for AdminFacade {
             }
             Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
         }
+    }
+}
+
+/// Converte a etiqueta do JSON interno no tipo do contrato.
+fn etiqueta_do_json(v: &serde_json::Value) -> ProtoEtiqueta {
+    let texto = |chave: &str| {
+        v.get(chave)
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    ProtoEtiqueta {
+        id: v.get("id").and_then(|x| x.as_i64()).unwrap_or(0),
+        nome: texto("nome"),
+        cor: texto("cor"),
+        descricao: texto("descricao"),
+        ativo: v.get("ativo").and_then(|x| x.as_bool()).unwrap_or(true),
+    }
+}
+
+/// Converte a nota do JSON interno no tipo do contrato.
+fn nota_do_json(v: &serde_json::Value) -> ProtoNota {
+    ProtoNota {
+        id: v.get("id").and_then(|x| x.as_i64()).unwrap_or(0),
+        texto: v
+            .get("texto")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        criado_em: v
+            .get("criado_em")
+            .and_then(|x| x.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.timestamp_millis())
+            .unwrap_or(0),
     }
 }
 

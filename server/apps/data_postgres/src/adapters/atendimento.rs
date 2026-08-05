@@ -12,6 +12,9 @@ use infrastructure_postgres::atendimentos::campos::{
     CampoPersonalizadoRepository, PostgresCampoPersonalizadoRepository,
     PostgresValorCampoRepository, ValorCampoRepository,
 };
+use infrastructure_postgres::atendimentos::etiquetas::{
+    EtiquetaRepository, NotaRepository, PostgresEtiquetaRepository, PostgresNotaRepository,
+};
 use infrastructure_postgres::atendimentos::mensagens::{
     DestinoEnvioOutbound, Mensagem, MensagemRepository, PostgresMensagemRepository,
 };
@@ -930,6 +933,97 @@ impl AtendimentoStore for PgAtendimentoStore {
             repo.atualizar_sentimento(&mut tx, &ctx, atendimento_id, nota, &label)
                 .await?;
             Ok(((), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn detalhe_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<serde_json::Value, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let repo_etiqueta = PostgresEtiquetaRepository;
+            let catalogo = repo_etiqueta.listar_ativas(&mut tx, &ctx).await?;
+            let aplicadas = repo_etiqueta
+                .listar_do_atendimento(&mut tx, &ctx, atendimento_id)
+                .await?;
+            let notas = PostgresNotaRepository
+                .listar_por_atendimento(&mut tx, &ctx, atendimento_id)
+                .await?;
+
+            let json = serde_json::json!({
+                "catalogo": catalogo,
+                "etiquetas": aplicadas,
+                "notas": notas,
+            });
+            Ok((json, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, nome = %nome))]
+    async fn criar_etiqueta(
+        &self,
+        ctx: &RequestContext,
+        nome: String,
+        cor: String,
+    ) -> Result<serde_json::Value, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let etiqueta = PostgresEtiquetaRepository
+                .criar(&mut tx, &ctx, &nome, Some(&cor))
+                .await?;
+            let json = serde_json::to_value(&etiqueta)
+                .map_err(|e| DbError::ConfigError(format!("falha ao serializar: {e}")))?;
+            Ok((json, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, aplicar = aplicar))]
+    async fn alternar_etiqueta(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        etiqueta_id: i64,
+        aplicar: bool,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            let repo = PostgresEtiquetaRepository;
+            if aplicar {
+                repo.aplicar(&mut tx, &ctx, atendimento_id, etiqueta_id)
+                    .await?;
+            } else {
+                repo.remover(&mut tx, &ctx, atendimento_id, etiqueta_id)
+                    .await?;
+            }
+            Ok((true, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn criar_nota(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        texto: String,
+    ) -> Result<serde_json::Value, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
+            // `criado_por_id` fica nulo: o autor é um `auth_user`, e nem todo
+            // usuário do tenant tem linha em `oraculo_atendente`. Gravar o id
+            // errado seria pior que não gravar autor nenhum.
+            let nota = PostgresNotaRepository
+                .criar(&mut tx, &ctx, atendimento_id, &texto, None)
+                .await?;
+            let json = serde_json::to_value(&nota)
+                .map_err(|e| DbError::ConfigError(format!("falha ao serializar: {e}")))?;
+            Ok((json, tx))
         })
         .await
     }

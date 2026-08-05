@@ -1,6 +1,7 @@
 import '../model/atendimento_evento.dart';
 import '../model/atendimento_resumo.dart';
 import '../model/mensagem_thread.dart';
+import '../model/ficha.dart';
 import '../model/quadro.dart';
 
 /// Fronteira de infraestrutura do atendimento, **escolhida por plataforma**:
@@ -65,6 +66,26 @@ abstract interface class AtendimentoGateway {
 
   /// Colunas de um quadro, na ordem em que aparecem.
   Future<List<ColunaDoQuadro>> listColunas(int fluxoId);
+
+  /// A ficha do atendimento: catálogo de etiquetas, as aplicadas e as notas.
+  ///
+  /// Uma chamada só para os três: são consultas pequenas sobre o mesmo
+  /// atendimento, e três idas ao servidor a cada cartão aberto seriam três
+  /// esperas para montar um painel.
+  Future<FichaAtendimento> getFicha(int atendimentoId);
+
+  /// Cria uma etiqueta no catálogo do tenant.
+  Future<void> criarEtiqueta({required String nome, required String cor});
+
+  /// Cola ou tira uma etiqueta desta conversa.
+  Future<void> alternarEtiqueta({
+    required int atendimentoId,
+    required int etiquetaId,
+    required bool aplicar,
+  });
+
+  /// Anota algo na conversa. A nota é interna: o contato nunca a vê.
+  Future<void> criarNota({required int atendimentoId, required String texto});
 
   /// Persiste uma mensagem outbound do atendente; devolve o id da mensagem.
   Future<int> sendOutboundMessage({

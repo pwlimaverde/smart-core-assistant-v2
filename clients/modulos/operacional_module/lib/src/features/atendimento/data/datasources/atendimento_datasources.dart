@@ -6,7 +6,9 @@ import '../../domain/model/mensagem_thread.dart';
 import '../../domain/parameters/get_thread_parameters.dart';
 import '../../domain/parameters/list_atendimentos_parameters.dart';
 import '../../domain/parameters/move_atendimento_etapa_parameters.dart';
+import '../../domain/model/ficha.dart';
 import '../../domain/model/quadro.dart';
+import '../../domain/parameters/ficha_parameters.dart';
 import '../../domain/parameters/quadro_parameters.dart';
 import '../../domain/parameters/send_outbound_message_parameters.dart';
 
@@ -124,6 +126,63 @@ final class SetAtendimentoStatusDatasource
       atendimentoId: parameters.atendimentoId,
       status: parameters.status,
       motivo: parameters.motivo,
+    );
+    return unit;
+  }
+}
+
+/// A ficha do atendimento (etiquetas e notas).
+final class GetFichaDatasource
+    implements Datasource<FichaAtendimento, AtendimentoIdParameters> {
+  final AtendimentoGateway _gateway;
+
+  const GetFichaDatasource({required this._gateway});
+
+  @override
+  Future<FichaAtendimento> call(AtendimentoIdParameters parameters) =>
+      _gateway.getFicha(parameters.atendimentoId);
+}
+
+final class CriarEtiquetaDatasource
+    implements Datasource<Unit, CriarEtiquetaParameters> {
+  final AtendimentoGateway _gateway;
+
+  const CriarEtiquetaDatasource({required this._gateway});
+
+  @override
+  Future<Unit> call(CriarEtiquetaParameters parameters) async {
+    await _gateway.criarEtiqueta(nome: parameters.nome, cor: parameters.cor);
+    return unit;
+  }
+}
+
+final class AlternarEtiquetaDatasource
+    implements Datasource<Unit, AlternarEtiquetaParameters> {
+  final AtendimentoGateway _gateway;
+
+  const AlternarEtiquetaDatasource({required this._gateway});
+
+  @override
+  Future<Unit> call(AlternarEtiquetaParameters parameters) async {
+    await _gateway.alternarEtiqueta(
+      atendimentoId: parameters.atendimentoId,
+      etiquetaId: parameters.etiquetaId,
+      aplicar: parameters.aplicar,
+    );
+    return unit;
+  }
+}
+
+final class CriarNotaDatasource implements Datasource<Unit, CriarNotaParameters> {
+  final AtendimentoGateway _gateway;
+
+  const CriarNotaDatasource({required this._gateway});
+
+  @override
+  Future<Unit> call(CriarNotaParameters parameters) async {
+    await _gateway.criarNota(
+      atendimentoId: parameters.atendimentoId,
+      texto: parameters.texto,
     );
     return unit;
   }
