@@ -57,6 +57,18 @@ pub trait TreinamentoRepository: Send + Sync {
         ctx: &RequestContext,
     ) -> Result<Vec<Treinamento>, DbError>;
 
+    /// Varredura CROSS-TENANT do scheduler: o que foi finalizado e ainda não
+    /// virou vetor, de toda a base.
+    ///
+    /// Exige pool com BYPASSRLS (`admin_pool`) — no pool de aplicação a RLS
+    /// devolve zero linhas em silêncio, e a fila pareceria sempre vazia.
+    async fn listar_pendentes_global(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        limite: i64,
+    ) -> Result<Vec<Treinamento>, DbError>;
+
     /// Lista tudo do tenant, do mais recente para o mais antigo.
     ///
     /// É o que a tela de acompanhamento mostra: os três estados (rascunho,
@@ -209,6 +221,31 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
                ORDER BY data_criacao"#,
             ctx.tenant_id
         )
+        .fetch_all(&mut **tx)
+        .await?;
+        Ok(rows)
+    }
+
+    #[tracing::instrument(skip_all, fields(limite = limite))]
+    async fn listar_pendentes_global(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        limite: i64,
+    ) -> Result<Vec<Treinamento>, DbError> {
+        ctx.exigir_qualquer(&["treinamento:read", "tenant:admin"])?;
+        // Cross-tenant por desenho (scheduler): sem `WHERE tenant_id`, e por
+        // isso exige o pool com BYPASSRLS.
+        let rows = sqlx::query_as::<_, Treinamento>(
+            r#"SELECT id, tenant_id, tag, grupo, conteudo,
+                      treinamento_finalizado, treinamento_vetorizado,
+                      data_criacao, data_atualizacao
+               FROM oraculo_treinamento
+               WHERE treinamento_finalizado = true AND treinamento_vetorizado = false
+               ORDER BY data_criacao ASC
+               LIMIT $1"#,
+        )
+        .bind(limite)
         .fetch_all(&mut **tx)
         .await?;
         Ok(rows)

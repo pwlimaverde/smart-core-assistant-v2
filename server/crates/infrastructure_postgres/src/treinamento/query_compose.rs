@@ -54,6 +54,51 @@ pub trait QueryComposeRepository: Send + Sync {
         query_embedding: Vec<f32>,
         distance_threshold: f64,
     ) -> Result<Option<String>, DbError>;
+
+    /// Atualiza a intenção. **Zera o embedding**: tag, descrição e exemplo são
+    /// o texto que gerou o vetor, e manter o antigo faria a busca semântica
+    /// casar pelo que a intenção era, não pelo que é.
+    #[allow(clippy::too_many_arguments)]
+    async fn atualizar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+        tag: &str,
+        grupo: &str,
+        descricao: &str,
+        exemplo: &str,
+        comportamento: &str,
+    ) -> Result<bool, DbError>;
+
+    /// Remove — aqui apagar é correto: uma intenção não tem histórico apontando
+    /// para ela, e mantê-la inativa só sujaria a busca vetorial.
+    async fn remover(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<bool, DbError>;
+
+    /// Varredura CROSS-TENANT do scheduler: intenções sem vetor.
+    ///
+    /// Uma intenção sem embedding não é encontrada por
+    /// `buscar_comportamento_similar` — existe no cadastro e não existe para a
+    /// IA. Exige pool com BYPASSRLS.
+    async fn listar_sem_embedding_global(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        limite: i64,
+    ) -> Result<Vec<QueryCompose>, DbError>;
+
+    async fn definir_embedding(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+        embedding: Vec<f32>,
+    ) -> Result<bool, DbError>;
 }
 
 pub struct PostgresQueryComposeRepository;
@@ -165,5 +210,130 @@ impl QueryComposeRepository for PostgresQueryComposeRepository {
         .await?;
 
         Ok(row.map(|r| r.comportamento))
+    }
+
+    #[tracing::instrument(skip_all, fields(id = id, tag = %tag))]
+    async fn atualizar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+        tag: &str,
+        grupo: &str,
+        descricao: &str,
+        exemplo: &str,
+        comportamento: &str,
+    ) -> Result<bool, DbError> {
+        ctx.exigir_qualquer(&["treinamento:write", "tenant:admin"])?;
+        // `embedding = NULL` devolve a intenção à fila de vetorização: o vetor
+        // foi gerado do texto antigo, e mantê-lo faria a busca semântica casar
+        // pelo que a intenção era, não pelo que é.
+        let res = sqlx::query!(
+            r#"UPDATE treinamento_querycompose
+                  SET tag = $3, grupo = $4, descricao = $5, exemplo = $6,
+                      comportamento = $7, embedding = NULL, updated_at = NOW()
+                WHERE tenant_id = $1 AND id = $2"#,
+            ctx.tenant_id,
+            id,
+            tag,
+            grupo,
+            descricao,
+            exemplo,
+            comportamento
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(DbError::from_sqlx_unique)?;
+        Ok(res.rows_affected() > 0)
+    }
+
+    #[tracing::instrument(skip_all, fields(id = id))]
+    async fn remover(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<bool, DbError> {
+        ctx.exigir_qualquer(&["treinamento:write", "tenant:admin"])?;
+        let res = sqlx::query!(
+            "DELETE FROM treinamento_querycompose WHERE tenant_id = $1 AND id = $2",
+            ctx.tenant_id,
+            id
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(res.rows_affected() > 0)
+    }
+
+    #[tracing::instrument(skip_all, fields(limite = limite))]
+    async fn listar_sem_embedding_global(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        limite: i64,
+    ) -> Result<Vec<QueryCompose>, DbError> {
+        ctx.exigir_qualquer(&["treinamento:read", "tenant:admin"])?;
+        // Cross-tenant por desenho (scheduler): exige pool com BYPASSRLS.
+        let rows = sqlx::query_as::<
+            _,
+            (
+                i32,
+                Uuid,
+                String,
+                String,
+                String,
+                String,
+                String,
+                DateTime<Utc>,
+                DateTime<Utc>,
+            ),
+        >(
+            r#"SELECT id, tenant_id, tag, grupo, descricao, exemplo, comportamento,
+                      created_at, updated_at
+               FROM treinamento_querycompose
+               WHERE embedding IS NULL
+               ORDER BY created_at ASC
+               LIMIT $1"#,
+        )
+        .bind(limite)
+        .fetch_all(&mut **tx)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|r| QueryCompose {
+                id: r.0,
+                tenant_id: r.1,
+                tag: r.2,
+                grupo: r.3,
+                descricao: r.4,
+                exemplo: r.5,
+                comportamento: r.6,
+                created_at: r.7,
+                updated_at: r.8,
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(skip_all, fields(id = id))]
+    async fn definir_embedding(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+        embedding: Vec<f32>,
+    ) -> Result<bool, DbError> {
+        ctx.exigir_qualquer(&["treinamento:write", "tenant:admin"])?;
+        let vec = Vector::from(embedding);
+        // `updated_at` fica como está: vetorizar não é edição do conteúdo, e
+        // mexer nele faria a lista parecer alterada sem ninguém ter alterado.
+        let res = sqlx::query!(
+            "UPDATE treinamento_querycompose SET embedding = $3 WHERE tenant_id = $1 AND id = $2",
+            ctx.tenant_id,
+            id,
+            vec as _
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(res.rows_affected() > 0)
     }
 }

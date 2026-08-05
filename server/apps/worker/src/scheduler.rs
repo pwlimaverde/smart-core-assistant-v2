@@ -11,7 +11,7 @@ use chrono::{DateTime, Utc};
 use redis::aio::ConnectionManager;
 use std::time::Duration;
 
-use crate::{chamar_rpc, AppState};
+use crate::{chamar_rpc, ia_engine, AppState};
 
 /// Fonte de tempo injetável (port `SchedulerClock`). Greenfield: não havia
 /// abstração de tempo no backend antes da N1 — todo o código usa `Utc::now()`
@@ -81,6 +81,27 @@ async fn executar_tick(state: &AppState, clock: &dyn Clock) {
                 }
                 Ok(_) => {}
                 Err(e) => tracing::error!("scheduler: falha ao processar mídia expirada: {:?}", e),
+            }
+        }
+
+        // TTL maior que o das outras duas: vetorizar um lote significa uma
+        // chamada ao provedor de embeddings por treinamento, e 30s não bastam.
+        let mut conn = redis_conn.clone();
+        if tentar_lock(&mut conn, "scheduler:lock:vetorizacao", 120_000).await {
+            match processar_vetorizacao_pendente(state).await {
+                Ok(n) if n > 0 => {
+                    tracing::info!(vetorizados = n, "scheduler: material treinado vetorizado")
+                }
+                Ok(_) => {}
+                Err(e) => tracing::error!("scheduler: falha ao vetorizar treinamentos: {:?}", e),
+            }
+
+            match processar_intents_sem_embedding(state).await {
+                Ok(n) if n > 0 => {
+                    tracing::info!(vetorizadas = n, "scheduler: intenções vetorizadas")
+                }
+                Ok(_) => {}
+                Err(e) => tracing::error!("scheduler: falha ao vetorizar intenções: {:?}", e),
             }
         }
     } else {
@@ -299,6 +320,222 @@ async fn publicar_media_purge(
 /// consulta em si — só os escopos (`escopos_sistema()`, coringa `"*"`) importam
 /// para a checagem de permissão. Mantido como UUID nulo por clareza (nunca usado
 /// para filtrar dados).
+/// Divide o conteúdo em trechos para vetorizar.
+///
+/// Corta em parágrafos, não em número de caracteres: um vetor é a média
+/// semântica do que está dentro dele, e um corte no meio de uma frase produz um
+/// trecho que não responde a pergunta nenhuma. Parágrafos vizinhos são juntados
+/// enquanto couberem no teto — trechos de uma linha só diluem a busca.
+///
+/// Um parágrafo maior que o teto sozinho **não** é partido: preferir um trecho
+/// grande e íntegro a dois pedaços que perderam o sentido.
+fn dividir_em_trechos(conteudo: &str, teto: usize) -> Vec<String> {
+    let mut trechos: Vec<String> = Vec::new();
+    let mut atual = String::new();
+
+    for paragrafo in conteudo.split("\n\n") {
+        let paragrafo = paragrafo.trim();
+        if paragrafo.is_empty() {
+            continue;
+        }
+        if !atual.is_empty() && atual.chars().count() + paragrafo.chars().count() > teto {
+            trechos.push(std::mem::take(&mut atual));
+        }
+        if !atual.is_empty() {
+            atual.push_str("\n\n");
+        }
+        atual.push_str(paragrafo);
+    }
+    if !atual.is_empty() {
+        trechos.push(atual);
+    }
+    trechos
+}
+
+/// Vetoriza o material treinado que está esperando na fila.
+///
+/// Sem isto o RAG consulta uma tabela vazia: o tenant treina a IA, o texto fica
+/// gravado, e a IA nunca o lê.
+///
+/// Cada treinamento é um lote independente — uma falha do provedor de
+/// embeddings num deles não derruba os outros, e o que falhou continua na fila
+/// para o próximo tick.
+async fn processar_vetorizacao_pendente(state: &AppState) -> anyhow::Result<usize> {
+    let limite = env_u64("SMARTCORE_VETORIZACAO_LOTE", 20);
+    let teto_trecho = env_u64("SMARTCORE_VETORIZACAO_TAMANHO_TRECHO", 1500) as usize;
+
+    let resp = chamar_rpc(
+        &state.pg_client,
+        SISTEMA_TENANT_PLACEHOLDER,
+        "ListarTreinamentosPendentes",
+        serde_json::json!({ "limite": limite }),
+        "scheduler.tick",
+        "",
+    )
+    .await?;
+
+    let pendentes = resp
+        .get("pendentes")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let mut processados = 0usize;
+    for item in pendentes {
+        let (Some(id), Some(tenant_id), Some(conteudo)) = (
+            item.get("id").and_then(|v| v.as_i64()),
+            item.get("tenant_id").and_then(|v| v.as_str()),
+            item.get("conteudo").and_then(|v| v.as_str()),
+        ) else {
+            continue;
+        };
+
+        let trechos = dividir_em_trechos(conteudo, teto_trecho);
+        if trechos.is_empty() {
+            continue;
+        }
+
+        let embed_out = match state
+            .ia_client
+            .embed(
+                ia_engine::EmbedInput {
+                    tenant_id: tenant_id.to_string(),
+                    textos: trechos.clone(),
+                },
+                "",
+            )
+            .await
+        {
+            Ok(out) => out,
+            Err(e) => {
+                // Fica na fila: o próximo tick tenta de novo. Marcar como
+                // vetorizado aqui perderia o material para sempre.
+                tracing::warn!(
+                    treinamento_id = id,
+                    "ia_engine.Embed falhou; treinamento segue na fila: {e}"
+                );
+                continue;
+            }
+        };
+
+        // O provedor pode devolver menos vetores que textos; parear pelo índice
+        // e descartar o excedente evita gravar trecho com o vetor do vizinho.
+        let chunks: Vec<serde_json::Value> = trechos
+            .into_iter()
+            .zip(embed_out.embeddings)
+            .enumerate()
+            .filter(|(_, (_, emb))| !emb.is_empty())
+            .map(|(ordem, (conteudo, embedding))| {
+                serde_json::json!({
+                    "conteudo": conteudo,
+                    "embedding": embedding,
+                    "ordem": ordem as i32,
+                })
+            })
+            .collect();
+
+        if chunks.is_empty() {
+            tracing::warn!(treinamento_id = id, "embeddings vazios; segue na fila");
+            continue;
+        }
+
+        match chamar_rpc(
+            &state.pg_client,
+            tenant_id,
+            "SalvarChunksVetorizados",
+            serde_json::json!({ "treinamento_id": id, "chunks": chunks }),
+            "scheduler.tick",
+            "",
+        )
+        .await
+        {
+            Ok(_) => processados += 1,
+            Err(e) => tracing::error!(treinamento_id = id, "falha ao gravar trechos: {e}"),
+        }
+    }
+
+    Ok(processados)
+}
+
+/// Gera o vetor das intenções cadastradas à mão na tela de curadoria.
+///
+/// Uma intenção sem embedding existe no cadastro e não existe para a IA:
+/// `buscar_comportamento_similar` filtra por `embedding IS NOT NULL`.
+async fn processar_intents_sem_embedding(state: &AppState) -> anyhow::Result<usize> {
+    let limite = env_u64("SMARTCORE_VETORIZACAO_LOTE", 20);
+
+    let resp = chamar_rpc(
+        &state.pg_client,
+        SISTEMA_TENANT_PLACEHOLDER,
+        "ListarIntentsSemEmbedding",
+        serde_json::json!({ "limite": limite }),
+        "scheduler.tick",
+        "",
+    )
+    .await?;
+
+    let pendentes = resp
+        .get("pendentes")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let mut processadas = 0usize;
+    for item in pendentes {
+        let (Some(id), Some(tenant_id), Some(texto)) = (
+            item.get("id").and_then(|v| v.as_i64()),
+            item.get("tenant_id").and_then(|v| v.as_str()),
+            item.get("texto").and_then(|v| v.as_str()),
+        ) else {
+            continue;
+        };
+
+        let embed_out = match state
+            .ia_client
+            .embed(
+                ia_engine::EmbedInput {
+                    tenant_id: tenant_id.to_string(),
+                    textos: vec![texto.to_string()],
+                },
+                "",
+            )
+            .await
+        {
+            Ok(out) => out,
+            Err(e) => {
+                tracing::warn!(intent_id = id, "ia_engine.Embed falhou; segue na fila: {e}");
+                continue;
+            }
+        };
+
+        let Some(embedding) = embed_out
+            .embeddings
+            .into_iter()
+            .next()
+            .filter(|e| !e.is_empty())
+        else {
+            tracing::warn!(intent_id = id, "embedding vazio; segue na fila");
+            continue;
+        };
+
+        match chamar_rpc(
+            &state.pg_client,
+            tenant_id,
+            "DefinirEmbeddingIntent",
+            serde_json::json!({ "id": id, "embedding": embedding }),
+            "scheduler.tick",
+            "",
+        )
+        .await
+        {
+            Ok(_) => processadas += 1,
+            Err(e) => tracing::error!(intent_id = id, "falha ao gravar embedding: {e}"),
+        }
+    }
+
+    Ok(processadas)
+}
+
 const SISTEMA_TENANT_PLACEHOLDER: &str = "00000000-0000-0000-0000-000000000000";
 
 #[cfg(test)]
@@ -311,6 +548,85 @@ mod tests {
     use uuid::Uuid;
 
     static SCHEDULER_TEST_MUTEX: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+
+    #[test]
+    fn dividir_corta_em_paragrafos_e_junta_ate_o_teto() {
+        // Cortar por numero de caracteres partiria frases no meio, e um vetor
+        // de meia frase nao responde pergunta nenhuma.
+        let conteudo = "Primeiro paragrafo.
+
+Segundo paragrafo.
+
+Terceiro.";
+
+        let trechos = dividir_em_trechos(conteudo, 1000);
+
+        assert_eq!(trechos.len(), 1, "cabem juntos no teto");
+        assert!(trechos[0].contains("Primeiro"));
+        assert!(trechos[0].contains("Terceiro"));
+    }
+
+    #[test]
+    fn dividir_abre_trecho_novo_ao_estourar_o_teto() {
+        let conteudo = "aaaaaaaaaa
+
+bbbbbbbbbb
+
+cccccccccc";
+
+        let trechos = dividir_em_trechos(conteudo, 15);
+
+        assert_eq!(trechos.len(), 3);
+    }
+
+    #[test]
+    fn paragrafo_maior_que_o_teto_nao_e_partido() {
+        // Preferir um trecho grande e integro a dois pedacos que perderam o
+        // sentido.
+        let gigante = "x".repeat(5000);
+
+        let trechos = dividir_em_trechos(&gigante, 100);
+
+        assert_eq!(trechos.len(), 1);
+        assert_eq!(trechos[0].chars().count(), 5000);
+    }
+
+    #[test]
+    fn conteudo_vazio_nao_gera_trecho() {
+        // Um embedding de string vazia casaria com qualquer pergunta.
+        assert!(dividir_em_trechos("", 100).is_empty());
+        assert!(dividir_em_trechos(
+            "   
+
+  
+
+ ",
+            100
+        )
+        .is_empty());
+    }
+
+    #[test]
+    fn linhas_em_branco_extras_nao_viram_trechos_vazios() {
+        // Tres quebras seguidas produzem um pedaco vazio no split; vetorizar
+        // esse pedaco criaria um trecho que casa com qualquer pergunta.
+        let trechos = dividir_em_trechos(
+            "Um.
+
+
+
+Dois.",
+            1000,
+        );
+
+        assert_eq!(trechos.len(), 1);
+        assert_eq!(
+            trechos[0],
+            "Um.
+
+Dois."
+        );
+    }
 
     async fn estado_sem_redis(pg_addr: &str) -> AppState {
         std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);

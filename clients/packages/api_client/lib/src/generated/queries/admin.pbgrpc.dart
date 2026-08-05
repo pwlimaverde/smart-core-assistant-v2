@@ -419,6 +419,36 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$listMyTreinamentos, request, options: options);
   }
 
+  /// Curadoria de intencoes: o que a IA deve FAZER quando a pergunta se parecer
+  /// com um exemplo. Complementa o material treinado, que diz o que ela SABE.
+  $grpc.ResponseFuture<$0.ListMyIntentsResponse> listMyIntents(
+    $0.ListMyIntentsRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyIntents, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.MyIntentResponse> createMyIntent(
+    $0.MyIntentDados request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$createMyIntent, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> updateMyIntent(
+    $0.UpdateMyIntentRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$updateMyIntent, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> removeMyIntent(
+    $0.MyIntentIdRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$removeMyIntent, request, options: options);
+  }
+
   $grpc.ResponseFuture<$0.MyTreinamentoResponse> getMyTreinamento(
     $0.GetMyTreinamentoRequest request, {
     $grpc.CallOptions? options,
@@ -860,6 +890,26 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/ListMyTreinamentos',
       ($0.ListMyTreinamentosRequest value) => value.writeToBuffer(),
       $0.ListMyTreinamentosResponse.fromBuffer);
+  static final _$listMyIntents =
+      $grpc.ClientMethod<$0.ListMyIntentsRequest, $0.ListMyIntentsResponse>(
+          '/smartcore.contracts.queries.AdminService/ListMyIntents',
+          ($0.ListMyIntentsRequest value) => value.writeToBuffer(),
+          $0.ListMyIntentsResponse.fromBuffer);
+  static final _$createMyIntent =
+      $grpc.ClientMethod<$0.MyIntentDados, $0.MyIntentResponse>(
+          '/smartcore.contracts.queries.AdminService/CreateMyIntent',
+          ($0.MyIntentDados value) => value.writeToBuffer(),
+          $0.MyIntentResponse.fromBuffer);
+  static final _$updateMyIntent =
+      $grpc.ClientMethod<$0.UpdateMyIntentRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/UpdateMyIntent',
+          ($0.UpdateMyIntentRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$removeMyIntent =
+      $grpc.ClientMethod<$0.MyIntentIdRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/RemoveMyIntent',
+          ($0.MyIntentIdRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
   static final _$getMyTreinamento =
       $grpc.ClientMethod<$0.GetMyTreinamentoRequest, $0.MyTreinamentoResponse>(
           '/smartcore.contracts.queries.AdminService/GetMyTreinamento',
@@ -1438,6 +1488,38 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.ListMyTreinamentosRequest.fromBuffer(value),
         ($0.ListMyTreinamentosResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.ListMyIntentsRequest, $0.ListMyIntentsResponse>(
+            'ListMyIntents',
+            listMyIntents_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.ListMyIntentsRequest.fromBuffer(value),
+            ($0.ListMyIntentsResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.MyIntentDados, $0.MyIntentResponse>(
+        'CreateMyIntent',
+        createMyIntent_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.MyIntentDados.fromBuffer(value),
+        ($0.MyIntentResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.UpdateMyIntentRequest, $0.SimpleOkResponse>(
+            'UpdateMyIntent',
+            updateMyIntent_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.UpdateMyIntentRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.MyIntentIdRequest, $0.SimpleOkResponse>(
+        'RemoveMyIntent',
+        removeMyIntent_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.MyIntentIdRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.GetMyTreinamentoRequest,
             $0.MyTreinamentoResponse>(
         'GetMyTreinamento',
@@ -2105,6 +2187,39 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.ListMyTreinamentosResponse> listMyTreinamentos(
       $grpc.ServiceCall call, $0.ListMyTreinamentosRequest request);
+
+  $async.Future<$0.ListMyIntentsResponse> listMyIntents_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListMyIntentsRequest> $request) async {
+    return listMyIntents($call, await $request);
+  }
+
+  $async.Future<$0.ListMyIntentsResponse> listMyIntents(
+      $grpc.ServiceCall call, $0.ListMyIntentsRequest request);
+
+  $async.Future<$0.MyIntentResponse> createMyIntent_Pre(
+      $grpc.ServiceCall $call, $async.Future<$0.MyIntentDados> $request) async {
+    return createMyIntent($call, await $request);
+  }
+
+  $async.Future<$0.MyIntentResponse> createMyIntent(
+      $grpc.ServiceCall call, $0.MyIntentDados request);
+
+  $async.Future<$0.SimpleOkResponse> updateMyIntent_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.UpdateMyIntentRequest> $request) async {
+    return updateMyIntent($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> updateMyIntent(
+      $grpc.ServiceCall call, $0.UpdateMyIntentRequest request);
+
+  $async.Future<$0.SimpleOkResponse> removeMyIntent_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.MyIntentIdRequest> $request) async {
+    return removeMyIntent($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> removeMyIntent(
+      $grpc.ServiceCall call, $0.MyIntentIdRequest request);
 
   $async.Future<$0.MyTreinamentoResponse> getMyTreinamento_Pre(
       $grpc.ServiceCall $call,

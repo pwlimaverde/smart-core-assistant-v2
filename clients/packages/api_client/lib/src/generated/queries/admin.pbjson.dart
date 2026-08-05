@@ -3073,3 +3073,127 @@ const AtendimentoEvent$json = {
 final $typed_data.Uint8List atendimentoEventDescriptor = $convert.base64Decode(
     'ChBBdGVuZGltZW50b0V2ZW50Eh0KCmV2ZW50X3R5cGUYASABKAlSCWV2ZW50VHlwZRIbCgl0ZW'
     '5hbnRfaWQYAiABKAlSCHRlbmFudElkEhgKB3BheWxvYWQYAyABKAlSB3BheWxvYWQ=');
+
+@$core.Deprecated('Use myIntentDescriptor instead')
+const MyIntent$json = {
+  '1': 'MyIntent',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'tag', '3': 2, '4': 1, '5': 9, '10': 'tag'},
+    {'1': 'grupo', '3': 3, '4': 1, '5': 9, '10': 'grupo'},
+    {'1': 'descricao', '3': 4, '4': 1, '5': 9, '10': 'descricao'},
+    {'1': 'exemplo', '3': 5, '4': 1, '5': 9, '10': 'exemplo'},
+    {'1': 'comportamento', '3': 6, '4': 1, '5': 9, '10': 'comportamento'},
+    {'1': 'vetorizada', '3': 7, '4': 1, '5': 8, '10': 'vetorizada'},
+    {'1': 'criado_em', '3': 8, '4': 1, '5': 3, '10': 'criadoEm'},
+    {'1': 'atualizado_em', '3': 9, '4': 1, '5': 3, '10': 'atualizadoEm'},
+  ],
+};
+
+/// Descriptor for `MyIntent`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myIntentDescriptor = $convert.base64Decode(
+    'CghNeUludGVudBIOCgJpZBgBIAEoBVICaWQSEAoDdGFnGAIgASgJUgN0YWcSFAoFZ3J1cG8YAy'
+    'ABKAlSBWdydXBvEhwKCWRlc2NyaWNhbxgEIAEoCVIJZGVzY3JpY2FvEhgKB2V4ZW1wbG8YBSAB'
+    'KAlSB2V4ZW1wbG8SJAoNY29tcG9ydGFtZW50bxgGIAEoCVINY29tcG9ydGFtZW50bxIeCgp2ZX'
+    'Rvcml6YWRhGAcgASgIUgp2ZXRvcml6YWRhEhsKCWNyaWFkb19lbRgIIAEoA1IIY3JpYWRvRW0S'
+    'IwoNYXR1YWxpemFkb19lbRgJIAEoA1IMYXR1YWxpemFkb0Vt');
+
+@$core.Deprecated('Use listMyIntentsRequestDescriptor instead')
+const ListMyIntentsRequest$json = {
+  '1': 'ListMyIntentsRequest',
+};
+
+/// Descriptor for `ListMyIntentsRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyIntentsRequestDescriptor =
+    $convert.base64Decode('ChRMaXN0TXlJbnRlbnRzUmVxdWVzdA==');
+
+@$core.Deprecated('Use listMyIntentsResponseDescriptor instead')
+const ListMyIntentsResponse$json = {
+  '1': 'ListMyIntentsResponse',
+  '2': [
+    {
+      '1': 'intents',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyIntent',
+      '10': 'intents'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyIntentsResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyIntentsResponseDescriptor = $convert.base64Decode(
+    'ChVMaXN0TXlJbnRlbnRzUmVzcG9uc2USPwoHaW50ZW50cxgBIAMoCzIlLnNtYXJ0Y29yZS5jb2'
+    '50cmFjdHMucXVlcmllcy5NeUludGVudFIHaW50ZW50cw==');
+
+@$core.Deprecated('Use myIntentDadosDescriptor instead')
+const MyIntentDados$json = {
+  '1': 'MyIntentDados',
+  '2': [
+    {'1': 'tag', '3': 1, '4': 1, '5': 9, '10': 'tag'},
+    {'1': 'grupo', '3': 2, '4': 1, '5': 9, '10': 'grupo'},
+    {'1': 'descricao', '3': 3, '4': 1, '5': 9, '10': 'descricao'},
+    {'1': 'exemplo', '3': 4, '4': 1, '5': 9, '10': 'exemplo'},
+    {'1': 'comportamento', '3': 5, '4': 1, '5': 9, '10': 'comportamento'},
+  ],
+};
+
+/// Descriptor for `MyIntentDados`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myIntentDadosDescriptor = $convert.base64Decode(
+    'Cg1NeUludGVudERhZG9zEhAKA3RhZxgBIAEoCVIDdGFnEhQKBWdydXBvGAIgASgJUgVncnVwbx'
+    'IcCglkZXNjcmljYW8YAyABKAlSCWRlc2NyaWNhbxIYCgdleGVtcGxvGAQgASgJUgdleGVtcGxv'
+    'EiQKDWNvbXBvcnRhbWVudG8YBSABKAlSDWNvbXBvcnRhbWVudG8=');
+
+@$core.Deprecated('Use myIntentResponseDescriptor instead')
+const MyIntentResponse$json = {
+  '1': 'MyIntentResponse',
+  '2': [
+    {
+      '1': 'intent',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyIntent',
+      '10': 'intent'
+    },
+  ],
+};
+
+/// Descriptor for `MyIntentResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myIntentResponseDescriptor = $convert.base64Decode(
+    'ChBNeUludGVudFJlc3BvbnNlEj0KBmludGVudBgBIAEoCzIlLnNtYXJ0Y29yZS5jb250cmFjdH'
+    'MucXVlcmllcy5NeUludGVudFIGaW50ZW50');
+
+@$core.Deprecated('Use updateMyIntentRequestDescriptor instead')
+const UpdateMyIntentRequest$json = {
+  '1': 'UpdateMyIntentRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {
+      '1': 'dados',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyIntentDados',
+      '10': 'dados'
+    },
+  ],
+};
+
+/// Descriptor for `UpdateMyIntentRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List updateMyIntentRequestDescriptor = $convert.base64Decode(
+    'ChVVcGRhdGVNeUludGVudFJlcXVlc3QSDgoCaWQYASABKAVSAmlkEkAKBWRhZG9zGAIgASgLMi'
+    'ouc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLk15SW50ZW50RGFkb3NSBWRhZG9z');
+
+@$core.Deprecated('Use myIntentIdRequestDescriptor instead')
+const MyIntentIdRequest$json = {
+  '1': 'MyIntentIdRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+  ],
+};
+
+/// Descriptor for `MyIntentIdRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myIntentIdRequestDescriptor =
+    $convert.base64Decode('ChFNeUludGVudElkUmVxdWVzdBIOCgJpZBgBIAEoBVICaWQ=');

@@ -971,6 +971,46 @@ table AtendimentoEvent {
   payload:string;
 }
 
+table MyIntent {
+  id:int;
+  tag:string;
+  grupo:string;
+  descricao:string;
+  exemplo:string;
+  comportamento:string;
+  vetorizada:bool;
+  criado_em:long;
+  atualizado_em:long;
+}
+
+table ListMyIntentsRequest {
+}
+
+table ListMyIntentsResponse {
+  intents:[MyIntent];
+}
+
+table MyIntentDados {
+  tag:string;
+  grupo:string;
+  descricao:string;
+  exemplo:string;
+  comportamento:string;
+}
+
+table MyIntentResponse {
+  intent:MyIntent;
+}
+
+table UpdateMyIntentRequest {
+  id:int;
+  dados:MyIntentDados;
+}
+
+table MyIntentIdRequest {
+  id:int;
+}
+
 
 
 

@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE treinamento_querycompose\n                  SET tag = $3, grupo = $4, descricao = $5, exemplo = $6,\n                      comportamento = $7, embedding = NULL, updated_at = NOW()\n                WHERE tenant_id = $1 AND id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Varchar",
+        "Varchar",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "414aa514d9d20c9d8a5bb26b0b0439fdd0bfe17c8839f2afeb586c24491d209d"
+}

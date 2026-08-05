@@ -852,6 +852,13 @@ service AdminService {
   // Treinamento da IA (o tenant treina o próprio assistente)
   rpc CreateMyTreinamento(CreateMyTreinamentoRequest) returns (MyTreinamentoResponse);
   rpc ListMyTreinamentos(ListMyTreinamentosRequest) returns (ListMyTreinamentosResponse);
+
+  // Curadoria de intencoes: o que a IA deve FAZER quando a pergunta se parecer
+  // com um exemplo. Complementa o material treinado, que diz o que ela SABE.
+  rpc ListMyIntents(ListMyIntentsRequest) returns (ListMyIntentsResponse);
+  rpc CreateMyIntent(MyIntentDados) returns (MyIntentResponse);
+  rpc UpdateMyIntent(UpdateMyIntentRequest) returns (SimpleOkResponse);
+  rpc RemoveMyIntent(MyIntentIdRequest) returns (SimpleOkResponse);
   rpc GetMyTreinamento(GetMyTreinamentoRequest) returns (MyTreinamentoResponse);
   rpc FinalizarMyTreinamento(FinalizarMyTreinamentoRequest) returns (SimpleOkResponse);
   rpc RemoverMyTreinamento(RemoverMyTreinamentoRequest) returns (SimpleOkResponse);
@@ -1195,3 +1202,49 @@ message AtendimentoEvent {
 
 
 
+
+// --- Intencoes (curadoria manual do RAG) ---
+
+message MyIntent {
+  int32 id = 1;
+  string tag = 2;
+  string grupo = 3;
+  // Quando esta intencao se aplica. Entra no texto que vira vetor.
+  string descricao = 4;
+  // Uma pergunta tipica do cliente. Tambem entra no vetor.
+  string exemplo = 5;
+  // O que a IA passa a fazer quando a intencao casa.
+  string comportamento = 6;
+  // `false` enquanto o worker nao gerou o vetor. Ate la a intencao existe no
+  // cadastro e NAO existe para a IA -- a busca semantica filtra por embedding.
+  bool vetorizada = 7;
+  int64 criado_em = 8;
+  int64 atualizado_em = 9;
+}
+
+message ListMyIntentsRequest {}
+
+message ListMyIntentsResponse {
+  repeated MyIntent intents = 1;
+}
+
+message MyIntentDados {
+  string tag = 1;
+  string grupo = 2;
+  string descricao = 3;
+  string exemplo = 4;
+  string comportamento = 5;
+}
+
+message MyIntentResponse {
+  MyIntent intent = 1;
+}
+
+message UpdateMyIntentRequest {
+  int32 id = 1;
+  MyIntentDados dados = 2;
+}
+
+message MyIntentIdRequest {
+  int32 id = 1;
+}

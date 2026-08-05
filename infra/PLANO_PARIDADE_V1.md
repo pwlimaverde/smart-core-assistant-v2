@@ -276,10 +276,48 @@ sumir atendimento de verdade.
 - Etiquetas, notas e campos personalizados no cartão (tabelas existem) — é a
   Etapa 8.
 
-### Etapa 7 — Treinamento: intents e teste de resposta
+### Etapa 7 — Treinamento: intents e teste de resposta — FEITO (parcial)
 
-`query_compose` (CRUD de intents) e `testar_query` com feedback. Fecha a
-paridade do módulo que já entreguei pela metade.
+**A lacuna que apareceu ao começar esta etapa: nada vetorizava o material
+treinado.** O `finalizar` marcava o treinamento como pendente e nenhum app
+consumia a fila — `listar_pendentes_vetorizacao` não era chamado em lugar
+nenhum, e `DocumentoRepository` só aparecia em leitura. Na prática o RAG
+consultava uma tabela sempre vazia: a tela de treinamento gravava texto que a IA
+nunca lia. Sem fechar isso, a curadoria de intenções seria outra tela sem
+efeito, porque `buscar_comportamento_similar` filtra por `embedding IS NOT NULL`.
+
+**Vetorização** — um job no scheduler do worker, no mesmo padrão dos dois que já
+existiam (lock no Redis, lote configurável, varredura cross-tenant com
+`admin_pool`). Consome treinamentos finalizados e intenções sem vetor, chama
+`ia_engine.Embed` e grava.
+
+O corte em trechos é por parágrafo, não por número de caracteres: um vetor é a
+média semântica do que está dentro dele, e um corte no meio da frase produz um
+trecho que não responde a pergunta nenhuma. Parágrafo maior que o teto não é
+partido — melhor um trecho grande e íntegro que dois pedaços sem sentido.
+
+Falha do provedor **deixa o item na fila** em vez de marcá-lo processado: marcar
+sem gravar perderia o material para sempre. E gravar os trechos e marcar como
+vetorizado acontecem na mesma transação — gravar sem marcar reprocessaria a cada
+tick, duplicando os trechos.
+
+**Curadoria de intenções** — aba "Intenções" na tela de treinamento, ao lado do
+material. As duas juntas de propósito: o material diz o que a IA **sabe**, a
+intenção diz o que ela **faz**, e uma resposta ruim pode vir de qualquer uma —
+separá-las em telas esconderia isso de quem está tentando corrigir.
+
+Editar uma intenção **zera o embedding**: o vetor foi gerado do texto antigo, e
+mantê-lo faria a busca casar pelo que a intenção era. A tela avisa que ela sai
+do ar até reprocessar, e a lista marca "Processando" — sem isso, alguém cadastra,
+testa e conclui que o sistema não funciona.
+
+De passagem, esta tela também não tinha menu (mesmo defeito do quadro).
+
+**Falta desta etapa: a tela de "testar pergunta".** Ela precisa embedar a
+pergunta, buscar o contexto e chamar o LLM — e isso é `ia_engine.Responder`, que
+hoje só o worker alcança: o `runtime_api` não tem cliente de IA. Fechar isso é
+decidir por onde o teste passa (cliente de IA na borda, ou ida e volta pelo bus
+até o worker), e é a próxima coisa desta etapa.
 
 **Decisão tomada:** paridade completa — CRUD de intents **e** a tela de testar
 pergunta. O RAG consulta `treinamento_querycompose` na composição de contexto, e

@@ -43,7 +43,7 @@ Future<void> bootstrap(AppConfig config) async {
     // e sem ele não havia caminho para nenhuma configuração.
     OperacionalModule(drawerBuilder: TenantDrawer.new),
     TenantModule(),
-    TreinamentoModule(),
+    TreinamentoModule(drawerBuilder: TenantDrawer.new),
     InitialLoadingModule(),
   ];
 

@@ -12769,6 +12769,538 @@ class AtendimentoEvent extends $pb.GeneratedMessage {
   void clearPayload() => $_clearField(3);
 }
 
+class MyIntent extends $pb.GeneratedMessage {
+  factory MyIntent({
+    $core.int? id,
+    $core.String? tag,
+    $core.String? grupo,
+    $core.String? descricao,
+    $core.String? exemplo,
+    $core.String? comportamento,
+    $core.bool? vetorizada,
+    $fixnum.Int64? criadoEm,
+    $fixnum.Int64? atualizadoEm,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (tag != null) result.tag = tag;
+    if (grupo != null) result.grupo = grupo;
+    if (descricao != null) result.descricao = descricao;
+    if (exemplo != null) result.exemplo = exemplo;
+    if (comportamento != null) result.comportamento = comportamento;
+    if (vetorizada != null) result.vetorizada = vetorizada;
+    if (criadoEm != null) result.criadoEm = criadoEm;
+    if (atualizadoEm != null) result.atualizadoEm = atualizadoEm;
+    return result;
+  }
+
+  MyIntent._();
+
+  factory MyIntent.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyIntent.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyIntent',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'tag')
+    ..aOS(3, _omitFieldNames ? '' : 'grupo')
+    ..aOS(4, _omitFieldNames ? '' : 'descricao')
+    ..aOS(5, _omitFieldNames ? '' : 'exemplo')
+    ..aOS(6, _omitFieldNames ? '' : 'comportamento')
+    ..aOB(7, _omitFieldNames ? '' : 'vetorizada')
+    ..aInt64(8, _omitFieldNames ? '' : 'criadoEm')
+    ..aInt64(9, _omitFieldNames ? '' : 'atualizadoEm')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyIntent clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyIntent copyWith(void Function(MyIntent) updates) =>
+      super.copyWith((message) => updates(message as MyIntent)) as MyIntent;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyIntent create() => MyIntent._();
+  @$core.override
+  MyIntent createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyIntent getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<MyIntent>(create);
+  static MyIntent? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get tag => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set tag($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasTag() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearTag() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get grupo => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set grupo($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasGrupo() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearGrupo() => $_clearField(3);
+
+  /// Quando esta intencao se aplica. Entra no texto que vira vetor.
+  @$pb.TagNumber(4)
+  $core.String get descricao => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set descricao($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasDescricao() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearDescricao() => $_clearField(4);
+
+  /// Uma pergunta tipica do cliente. Tambem entra no vetor.
+  @$pb.TagNumber(5)
+  $core.String get exemplo => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set exemplo($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasExemplo() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearExemplo() => $_clearField(5);
+
+  /// O que a IA passa a fazer quando a intencao casa.
+  @$pb.TagNumber(6)
+  $core.String get comportamento => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set comportamento($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasComportamento() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearComportamento() => $_clearField(6);
+
+  /// `false` enquanto o worker nao gerou o vetor. Ate la a intencao existe no
+  /// cadastro e NAO existe para a IA -- a busca semantica filtra por embedding.
+  @$pb.TagNumber(7)
+  $core.bool get vetorizada => $_getBF(6);
+  @$pb.TagNumber(7)
+  set vetorizada($core.bool value) => $_setBool(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasVetorizada() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearVetorizada() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $fixnum.Int64 get criadoEm => $_getI64(7);
+  @$pb.TagNumber(8)
+  set criadoEm($fixnum.Int64 value) => $_setInt64(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasCriadoEm() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearCriadoEm() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $fixnum.Int64 get atualizadoEm => $_getI64(8);
+  @$pb.TagNumber(9)
+  set atualizadoEm($fixnum.Int64 value) => $_setInt64(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasAtualizadoEm() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearAtualizadoEm() => $_clearField(9);
+}
+
+class ListMyIntentsRequest extends $pb.GeneratedMessage {
+  factory ListMyIntentsRequest() => create();
+
+  ListMyIntentsRequest._();
+
+  factory ListMyIntentsRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyIntentsRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyIntentsRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyIntentsRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyIntentsRequest copyWith(void Function(ListMyIntentsRequest) updates) =>
+      super.copyWith((message) => updates(message as ListMyIntentsRequest))
+          as ListMyIntentsRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyIntentsRequest create() => ListMyIntentsRequest._();
+  @$core.override
+  ListMyIntentsRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyIntentsRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyIntentsRequest>(create);
+  static ListMyIntentsRequest? _defaultInstance;
+}
+
+class ListMyIntentsResponse extends $pb.GeneratedMessage {
+  factory ListMyIntentsResponse({
+    $core.Iterable<MyIntent>? intents,
+  }) {
+    final result = create();
+    if (intents != null) result.intents.addAll(intents);
+    return result;
+  }
+
+  ListMyIntentsResponse._();
+
+  factory ListMyIntentsResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyIntentsResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyIntentsResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<MyIntent>(1, _omitFieldNames ? '' : 'intents',
+        subBuilder: MyIntent.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyIntentsResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyIntentsResponse copyWith(
+          void Function(ListMyIntentsResponse) updates) =>
+      super.copyWith((message) => updates(message as ListMyIntentsResponse))
+          as ListMyIntentsResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyIntentsResponse create() => ListMyIntentsResponse._();
+  @$core.override
+  ListMyIntentsResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyIntentsResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyIntentsResponse>(create);
+  static ListMyIntentsResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<MyIntent> get intents => $_getList(0);
+}
+
+class MyIntentDados extends $pb.GeneratedMessage {
+  factory MyIntentDados({
+    $core.String? tag,
+    $core.String? grupo,
+    $core.String? descricao,
+    $core.String? exemplo,
+    $core.String? comportamento,
+  }) {
+    final result = create();
+    if (tag != null) result.tag = tag;
+    if (grupo != null) result.grupo = grupo;
+    if (descricao != null) result.descricao = descricao;
+    if (exemplo != null) result.exemplo = exemplo;
+    if (comportamento != null) result.comportamento = comportamento;
+    return result;
+  }
+
+  MyIntentDados._();
+
+  factory MyIntentDados.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyIntentDados.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyIntentDados',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'tag')
+    ..aOS(2, _omitFieldNames ? '' : 'grupo')
+    ..aOS(3, _omitFieldNames ? '' : 'descricao')
+    ..aOS(4, _omitFieldNames ? '' : 'exemplo')
+    ..aOS(5, _omitFieldNames ? '' : 'comportamento')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyIntentDados clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyIntentDados copyWith(void Function(MyIntentDados) updates) =>
+      super.copyWith((message) => updates(message as MyIntentDados))
+          as MyIntentDados;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyIntentDados create() => MyIntentDados._();
+  @$core.override
+  MyIntentDados createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyIntentDados getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyIntentDados>(create);
+  static MyIntentDados? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get tag => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set tag($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTag() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTag() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get grupo => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set grupo($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasGrupo() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearGrupo() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get descricao => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set descricao($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDescricao() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDescricao() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get exemplo => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set exemplo($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasExemplo() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearExemplo() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get comportamento => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set comportamento($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasComportamento() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearComportamento() => $_clearField(5);
+}
+
+class MyIntentResponse extends $pb.GeneratedMessage {
+  factory MyIntentResponse({
+    MyIntent? intent,
+  }) {
+    final result = create();
+    if (intent != null) result.intent = intent;
+    return result;
+  }
+
+  MyIntentResponse._();
+
+  factory MyIntentResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyIntentResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyIntentResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOM<MyIntent>(1, _omitFieldNames ? '' : 'intent',
+        subBuilder: MyIntent.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyIntentResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyIntentResponse copyWith(void Function(MyIntentResponse) updates) =>
+      super.copyWith((message) => updates(message as MyIntentResponse))
+          as MyIntentResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyIntentResponse create() => MyIntentResponse._();
+  @$core.override
+  MyIntentResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyIntentResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyIntentResponse>(create);
+  static MyIntentResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  MyIntent get intent => $_getN(0);
+  @$pb.TagNumber(1)
+  set intent(MyIntent value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasIntent() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearIntent() => $_clearField(1);
+  @$pb.TagNumber(1)
+  MyIntent ensureIntent() => $_ensure(0);
+}
+
+class UpdateMyIntentRequest extends $pb.GeneratedMessage {
+  factory UpdateMyIntentRequest({
+    $core.int? id,
+    MyIntentDados? dados,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (dados != null) result.dados = dados;
+    return result;
+  }
+
+  UpdateMyIntentRequest._();
+
+  factory UpdateMyIntentRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory UpdateMyIntentRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'UpdateMyIntentRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOM<MyIntentDados>(2, _omitFieldNames ? '' : 'dados',
+        subBuilder: MyIntentDados.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateMyIntentRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateMyIntentRequest copyWith(
+          void Function(UpdateMyIntentRequest) updates) =>
+      super.copyWith((message) => updates(message as UpdateMyIntentRequest))
+          as UpdateMyIntentRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static UpdateMyIntentRequest create() => UpdateMyIntentRequest._();
+  @$core.override
+  UpdateMyIntentRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static UpdateMyIntentRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<UpdateMyIntentRequest>(create);
+  static UpdateMyIntentRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  MyIntentDados get dados => $_getN(1);
+  @$pb.TagNumber(2)
+  set dados(MyIntentDados value) => $_setField(2, value);
+  @$pb.TagNumber(2)
+  $core.bool hasDados() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearDados() => $_clearField(2);
+  @$pb.TagNumber(2)
+  MyIntentDados ensureDados() => $_ensure(1);
+}
+
+class MyIntentIdRequest extends $pb.GeneratedMessage {
+  factory MyIntentIdRequest({
+    $core.int? id,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    return result;
+  }
+
+  MyIntentIdRequest._();
+
+  factory MyIntentIdRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyIntentIdRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyIntentIdRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyIntentIdRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyIntentIdRequest copyWith(void Function(MyIntentIdRequest) updates) =>
+      super.copyWith((message) => updates(message as MyIntentIdRequest))
+          as MyIntentIdRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyIntentIdRequest create() => MyIntentIdRequest._();
+  @$core.override
+  MyIntentIdRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyIntentIdRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyIntentIdRequest>(create);
+  static MyIntentIdRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+}
+
 const $core.bool _omitFieldNames =
     $core.bool.fromEnvironment('protobuf.omit_field_names');
 const $core.bool _omitMessageNames =

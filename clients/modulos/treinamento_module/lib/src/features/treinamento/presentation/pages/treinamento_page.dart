@@ -1,5 +1,6 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
+import '../../../intents/presentation/widgets/aba_intents.dart';
 import '../../domain/model/treinamento.dart';
 import '../controllers/treinamento_controllers.dart';
 import '../widgets/dialogo_treinamento.dart';
@@ -11,26 +12,40 @@ import '../widgets/dialogo_treinamento.dart';
 /// do ciclo (rascunho, processando, ativo) — e cadastrar e revisar são diálogos
 /// sobre ela. Quem treina quer ver o que a IA já sabe, não navegar entre telas.
 final class TreinamentoPage extends StatefulWidget {
-  const TreinamentoPage({super.key});
+  /// Menu lateral do app hospedeiro. Sem ele esta tela também era um beco sem
+  /// saída — o mesmo defeito do quadro de atendimento.
+  final Widget? drawer;
+
+  const TreinamentoPage({this.drawer, super.key});
 
   @override
   State<TreinamentoPage> createState() => _TreinamentoPageState();
 }
 
-class _TreinamentoPageState extends State<TreinamentoPage> {
+class _TreinamentoPageState extends State<TreinamentoPage>
+    with SingleTickerProviderStateMixin {
   late final TreinamentoController _controller;
+  late final TabController _abas;
 
   @override
   void initState() {
     super.initState();
     _controller = inject<TreinamentoController>();
+    _abas = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _controller.carregar());
+  }
+
+  @override
+  void dispose() {
+    _abas.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
       title: 'Treinamento da IA',
+      drawer: widget.drawer,
       actions: [
         IconButton(
           icon: const Icon(Icons.refresh),
@@ -43,6 +58,46 @@ class _TreinamentoPageState extends State<TreinamentoPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Duas faces do mesmo trabalho: o material diz o que a IA SABE, a
+            // intenção diz o que ela FAZ. Separá-las em telas esconderia que
+            // uma resposta ruim pode vir de qualquer uma das duas.
+            TabBar(
+              controller: _abas,
+              labelColor: Theme.of(context).colorScheme.primary,
+              unselectedLabelColor: Theme.of(context).hintColor,
+              indicatorColor: Theme.of(context).colorScheme.primary,
+              tabs: const [
+                Tab(icon: Icon(Icons.menu_book_outlined), text: 'Material'),
+                Tab(icon: Icon(Icons.alt_route), text: 'Intenções'),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.lg),
+            Expanded(
+              child: TabBarView(
+                controller: _abas,
+                children: [
+                  _AbaMaterial(controller: _controller),
+                  const AbaIntents(),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AbaMaterial extends StatelessWidget {
+  final TreinamentoController controller;
+
+  const _AbaMaterial({required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -55,7 +110,7 @@ class _TreinamentoPageState extends State<TreinamentoPage> {
                 ElevatedButton.icon(
                   icon: const Icon(Icons.add),
                   label: const Text('Ensinar algo novo'),
-                  onPressed: () => abrirCriacao(context, _controller),
+                  onPressed: () => abrirCriacao(context, controller),
                 ),
               ],
             ),
@@ -71,10 +126,10 @@ class _TreinamentoPageState extends State<TreinamentoPage> {
             const SizedBox(height: AppSpacing.lg),
             Expanded(
               child: ViewStateBuilder<TreinamentoController, List<Treinamento>>(
-                controller: _controller,
+                controller: controller,
                 onError: (context, error) => AppErrorView(
                   message: error.message,
-                  onRetry: _controller.carregar,
+                  onRetry: controller.carregar,
                 ),
                 onSuccess: (context, itens) => itens.isEmpty
                     ? const AppEmptyView(
@@ -82,12 +137,10 @@ class _TreinamentoPageState extends State<TreinamentoPage> {
                         subtitle: 'Comece ensinando algo que seus clientes '
                             'perguntam com frequência.',
                       )
-                    : _Lista(itens: itens, controller: _controller),
+                    : _Lista(itens: itens, controller: controller),
               ),
             ),
-          ],
-        ),
-      ),
+      ],
     );
   }
 }

@@ -270,8 +270,9 @@ async fn main() -> anyhow::Result<()> {
     );
     let quota_store: std::sync::Arc<dyn ports::QuotaStore> =
         std::sync::Arc::new(adapters::PgQuotaStore::new(pool.clone()));
-    let treinamento_store: std::sync::Arc<dyn ports::TreinamentoStore> =
-        std::sync::Arc::new(adapters::PgTreinamentoStore::new(pool.clone()));
+    let treinamento_store: std::sync::Arc<dyn ports::TreinamentoStore> = std::sync::Arc::new(
+        adapters::PgTreinamentoStore::new(pool.clone(), admin_pool.clone()),
+    );
     // O cadastro público opera sem contexto de tenant: precisa do pool sem RLS.
     let signup_store: std::sync::Arc<dyn ports::SignupStore> = std::sync::Arc::new(
         adapters::PgSignupStore::new(pool.clone(), admin_pool.clone()),
@@ -520,6 +521,14 @@ async fn main() -> anyhow::Result<()> {
     let s_atendente_update = state_clone.clone();
     let s_atendente_desativar = state_clone.clone();
     let s_status_atendimento = state_clone.clone();
+    let s_vetor_pendentes = state_clone.clone();
+    let s_vetor_salvar = state_clone.clone();
+    let s_intent_pendentes = state_clone.clone();
+    let s_intent_embedding = state_clone.clone();
+    let s_intent_listar = state_clone.clone();
+    let s_intent_criar = state_clone.clone();
+    let s_intent_atualizar = state_clone.clone();
+    let s_intent_remover = state_clone.clone();
     let state_for_create_departamento = state_clone.clone();
     let state_for_create_plan = state_clone.clone();
     let state_for_update_plan = state_clone.clone();
@@ -716,6 +725,52 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(async move {
                 handler_create_treinamento(state.treinamento.as_ref(), state.audit.as_ref(), env)
                     .await
+            })
+        })
+        .route("ListarTreinamentosPendentes", move |env| {
+            let state = s_vetor_pendentes.clone();
+            Box::pin(async move {
+                handler_listar_pendentes_vetorizacao(state.treinamento.as_ref(), env).await
+            })
+        })
+        .route("SalvarChunksVetorizados", move |env| {
+            let state = s_vetor_salvar.clone();
+            Box::pin(async move {
+                handler_salvar_chunks_vetorizados(state.treinamento.as_ref(), env).await
+            })
+        })
+        .route("ListarIntentsSemEmbedding", move |env| {
+            let state = s_intent_pendentes.clone();
+            Box::pin(async move {
+                handler_listar_intents_sem_embedding(state.treinamento.as_ref(), env).await
+            })
+        })
+        .route("DefinirEmbeddingIntent", move |env| {
+            let state = s_intent_embedding.clone();
+            Box::pin(async move {
+                handler_definir_embedding_intent(state.treinamento.as_ref(), env).await
+            })
+        })
+        .route("ListIntents", move |env| {
+            let state = s_intent_listar.clone();
+            Box::pin(async move { handler_list_intents(state.treinamento.as_ref(), env).await })
+        })
+        .route("CreateIntent", move |env| {
+            let state = s_intent_criar.clone();
+            Box::pin(async move {
+                handler_create_intent(state.treinamento.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("UpdateIntent", move |env| {
+            let state = s_intent_atualizar.clone();
+            Box::pin(async move {
+                handler_update_intent(state.treinamento.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("RemoveIntent", move |env| {
+            let state = s_intent_remover.clone();
+            Box::pin(async move {
+                handler_remove_intent(state.treinamento.as_ref(), state.audit.as_ref(), env).await
             })
         })
         .route("ListTreinamentos", move |env| {
@@ -4149,6 +4204,287 @@ async fn handler_create_treinamento(
                 .await;
             ok_reply(&env, "CreateTreinamentoReply", serde_json::json!(t))
         }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+// --- Vetorização (scheduler do worker) e curadoria de intenções ---
+//
+// Sem a fila de vetorização, o material treinado nunca vira vetor e o RAG
+// consulta uma tabela vazia: a tela de treinamento gravava texto que a IA
+// nunca lia.
+
+#[tracing::instrument(skip_all, fields(rpc = "ListarTreinamentosPendentes"))]
+async fn handler_listar_pendentes_vetorizacao(
+    store: &dyn ports::TreinamentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    // Teto de 500: o lote vira uma rajada de chamadas ao ia_engine, e um número
+    // solto no payload poderia derrubar o provedor de embeddings.
+    let limite = payload
+        .get("limite")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(50)
+        .clamp(1, 500);
+
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_pendentes_vetorizacao(&ctx, limite).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListarTreinamentosPendentesReply",
+            serde_json::json!({ "pendentes": itens }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "SalvarChunksVetorizados", tenant_id = %env.tenant_id))]
+async fn handler_salvar_chunks_vetorizados(
+    store: &dyn ports::TreinamentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let treinamento_id = payload
+        .get("treinamento_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let chunks: Vec<ports::treinamento::ChunkVetorizado> = payload
+        .get("chunks")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    if chunks.is_empty() {
+        // Marcar como vetorizado sem trecho nenhum tiraria o treinamento da
+        // fila para sempre, deixando material que a IA nunca leria.
+        return erro(
+            error_core::AppError::Validation("nenhum trecho para gravar".into()),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .salvar_chunks_vetorizados(&ctx, treinamento_id, chunks)
+        .await
+    {
+        Ok(ok) => ok_reply(
+            &env,
+            "SalvarChunksVetorizadosReply",
+            serde_json::json!({ "sucesso": ok }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "ListarIntentsSemEmbedding"))]
+async fn handler_listar_intents_sem_embedding(
+    store: &dyn ports::TreinamentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let limite = payload
+        .get("limite")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(50)
+        .clamp(1, 500);
+
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_intents_sem_embedding(&ctx, limite).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListarIntentsSemEmbeddingReply",
+            serde_json::json!({ "pendentes": itens }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "DefinirEmbeddingIntent", tenant_id = %env.tenant_id))]
+async fn handler_definir_embedding_intent(
+    store: &dyn ports::TreinamentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let embedding: Vec<f32> = payload
+        .get("embedding")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
+    if embedding.is_empty() {
+        return erro(
+            error_core::AppError::Validation("embedding vazio".into()),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store.definir_embedding_intent(&ctx, id, embedding).await {
+        Ok(ok) => ok_reply(
+            &env,
+            "DefinirEmbeddingIntentReply",
+            serde_json::json!({ "sucesso": ok }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "ListIntents", tenant_id = %env.tenant_id))]
+async fn handler_list_intents(store: &dyn ports::TreinamentoStore, env: Envelope) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_intents(&ctx).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListIntentsReply",
+            serde_json::json!({ "intents": itens }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// Lê os cinco campos de uma intenção do payload, já aparados.
+fn dados_da_intent(payload: &serde_json::Value) -> ports::treinamento::DadosIntent {
+    let texto = |chave: &str| {
+        payload
+            .get(chave)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    ports::treinamento::DadosIntent {
+        tag: texto("tag"),
+        grupo: texto("grupo"),
+        descricao: texto("descricao"),
+        exemplo: texto("exemplo"),
+        comportamento: texto("comportamento"),
+    }
+}
+
+/// Os três campos sem os quais a intenção não serve para nada.
+///
+/// `tag`+`descricao`+`exemplo` são o texto que vira vetor, e `comportamento` é
+/// o que a IA passa a fazer quando ele casa. Sem comportamento, casar não muda
+/// nada; sem descrição, nunca casa.
+fn validar_intent(dados: &ports::treinamento::DadosIntent) -> Option<&'static str> {
+    if dados.tag.is_empty() {
+        return Some("informe a tag da intenção");
+    }
+    if dados.descricao.is_empty() {
+        return Some("descreva quando esta intenção se aplica");
+    }
+    if dados.comportamento.is_empty() {
+        return Some("informe o que a IA deve fazer nesta intenção");
+    }
+    None
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "CreateIntent", tenant_id = %env.tenant_id))]
+async fn handler_create_intent(
+    store: &dyn ports::TreinamentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let dados = dados_da_intent(&payload);
+    if let Some(motivo) = validar_intent(&dados) {
+        return erro(error_core::AppError::Validation(motivo.into()), &env);
+    }
+    let tag = dados.tag.clone();
+
+    let ctx = contexto_do_envelope(&env);
+    match store.criar_intent(&ctx, dados).await {
+        Ok(intent) => {
+            audit
+                .publish(
+                    &env,
+                    "intent_criada",
+                    format!("Intenção '{tag}' criada"),
+                    serde_json::json!({ "id": intent.id }),
+                )
+                .await;
+            match serde_json::to_value(&intent) {
+                Ok(json) => ok_reply(&env, "CreateIntentReply", json),
+                Err(e) => erro(
+                    error_core::AppError::Internal(format!("falha ao serializar: {e}")),
+                    &env,
+                ),
+            }
+        }
+        Err(err) => erro(err.into(), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "UpdateIntent", tenant_id = %env.tenant_id))]
+async fn handler_update_intent(
+    store: &dyn ports::TreinamentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let dados = dados_da_intent(&payload);
+    if let Some(motivo) = validar_intent(&dados) {
+        return erro(error_core::AppError::Validation(motivo.into()), &env);
+    }
+    let tag = dados.tag.clone();
+
+    let ctx = contexto_do_envelope(&env);
+    match store.atualizar_intent(&ctx, id, dados).await {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "intent_atualizada",
+                    format!("Intenção '{tag}' atualizada"),
+                    serde_json::json!({ "id": id }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "UpdateIntentReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Validation("intenção não encontrada".into()),
+            &env,
+        ),
+        Err(err) => erro(err.into(), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "RemoveIntent", tenant_id = %env.tenant_id))]
+async fn handler_remove_intent(
+    store: &dyn ports::TreinamentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+    let ctx = contexto_do_envelope(&env);
+    match store.remover_intent(&ctx, id).await {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "intent_removida",
+                    format!("Intenção {id} removida"),
+                    serde_json::json!({ "id": id }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "RemoveIntentReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Validation("intenção não encontrada".into()),
+            &env,
+        ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }

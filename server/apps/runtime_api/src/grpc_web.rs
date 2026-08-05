@@ -86,6 +86,8 @@ use contracts::grpc::queries::{
     ListMyEtapasFluxoResponse,
     ListMyFluxosRequest,
     ListMyFluxosResponse,
+    ListMyIntentsRequest,
+    ListMyIntentsResponse,
     ListMyTreinamentosRequest,
     ListMyTreinamentosResponse,
     ListMyWhatsappInstancesRequest,
@@ -125,6 +127,10 @@ use contracts::grpc::queries::{
     MyFluxo,
     MyFluxoIdRequest,
     MyFluxoResponse,
+    MyIntent,
+    MyIntentDados,
+    MyIntentIdRequest,
+    MyIntentResponse,
     MyTreinamento,
     MyTreinamentoResponse,
     MyWhatsappInstance,
@@ -171,6 +177,7 @@ use contracts::grpc::queries::{
     UpdateMyDepartamentoRequest,
     UpdateMyEtapaFluxoRequest,
     UpdateMyFluxoRequest,
+    UpdateMyIntentRequest,
     UpdateMyTenantConfigRequest,
     UpdatePlanRequest,
     UpdatePlanResponse,
@@ -2508,6 +2515,92 @@ impl AdminService for AdminFacade {
             .unwrap_or_default();
 
         Ok(Response::new(ListMyTreinamentosResponse { treinamentos }))
+    }
+
+    // --- Curadoria de intenções ---
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyIntents", traceparent)
+    )]
+    async fn list_my_intents(
+        &self,
+        req: Request<ListMyIntentsRequest>,
+    ) -> Result<Response<ListMyIntentsResponse>, Status> {
+        let corpo = self
+            .encaminhar_tenant(&req, &self.deps.pg, "ListIntents", serde_json::json!({}))
+            .await?;
+
+        let intents = corpo
+            .get("intents")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().map(intent_do_json).collect())
+            .unwrap_or_default();
+
+        Ok(Response::new(ListMyIntentsResponse { intents }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "CreateMyIntent", traceparent)
+    )]
+    async fn create_my_intent(
+        &self,
+        req: Request<MyIntentDados>,
+    ) -> Result<Response<MyIntentResponse>, Status> {
+        let inner = req.get_ref().clone();
+        validar_dados_intent(&inner)?;
+
+        let corpo = self
+            .encaminhar_tenant(&req, &self.deps.pg, "CreateIntent", payload_intent(&inner))
+            .await?;
+
+        Ok(Response::new(MyIntentResponse {
+            intent: Some(intent_do_json(&corpo)),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "UpdateMyIntent", traceparent)
+    )]
+    async fn update_my_intent(
+        &self,
+        req: Request<UpdateMyIntentRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let dados = inner
+            .dados
+            .clone()
+            .ok_or_else(|| Status::invalid_argument("informe os dados da intenção"))?;
+        validar_dados_intent(&dados)?;
+
+        let mut payload = payload_intent(&dados);
+        payload["id"] = serde_json::json!(inner.id);
+        self.encaminhar_tenant(&req, &self.deps.pg, "UpdateIntent", payload)
+            .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "RemoveMyIntent", traceparent)
+    )]
+    async fn remove_my_intent(
+        &self,
+        req: Request<MyIntentIdRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let id = req.get_ref().id;
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "RemoveIntent",
+            serde_json::json!({ "id": id }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
     }
 
     #[tracing::instrument(
@@ -5227,6 +5320,62 @@ impl AdminService for AdminFacade {
             Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
         }
     }
+}
+
+/// Converte a intenção do JSON interno no tipo do contrato.
+fn intent_do_json(v: &serde_json::Value) -> MyIntent {
+    let texto = |chave: &str| {
+        v.get(chave)
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    MyIntent {
+        id: v.get("id").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+        tag: texto("tag"),
+        grupo: texto("grupo"),
+        descricao: texto("descricao"),
+        exemplo: texto("exemplo"),
+        comportamento: texto("comportamento"),
+        vetorizada: v
+            .get("vetorizada")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false),
+        criado_em: v.get("criado_em").and_then(|x| x.as_i64()).unwrap_or(0),
+        atualizado_em: v.get("atualizado_em").and_then(|x| x.as_i64()).unwrap_or(0),
+    }
+}
+
+/// Os três campos sem os quais a intenção não serve para nada.
+///
+/// `tag` + `descricao` + `exemplo` viram o vetor; `comportamento` é o que a IA
+/// passa a fazer quando ele casa. Sem comportamento, casar não muda nada; sem
+/// descrição, nunca casa.
+fn validar_dados_intent(dados: &MyIntentDados) -> Result<(), Status> {
+    if dados.tag.trim().is_empty() {
+        return Err(Status::invalid_argument("informe a tag da intenção"));
+    }
+    if dados.descricao.trim().is_empty() {
+        return Err(Status::invalid_argument(
+            "descreva quando esta intenção se aplica",
+        ));
+    }
+    if dados.comportamento.trim().is_empty() {
+        return Err(Status::invalid_argument(
+            "informe o que a IA deve fazer nesta intenção",
+        ));
+    }
+    Ok(())
+}
+
+fn payload_intent(dados: &MyIntentDados) -> serde_json::Value {
+    serde_json::json!({
+        "tag": dados.tag.trim(),
+        "grupo": dados.grupo.trim(),
+        "descricao": dados.descricao.trim(),
+        "exemplo": dados.exemplo.trim(),
+        "comportamento": dados.comportamento.trim(),
+    })
 }
 
 /// Converte o contato do JSON interno no tipo do contrato.
