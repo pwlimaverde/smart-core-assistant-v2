@@ -1,5 +1,6 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
+import '../../../ensaio/presentation/widgets/aba_ensaio.dart';
 import '../../../intents/presentation/widgets/aba_intents.dart';
 import '../../domain/model/treinamento.dart';
 import '../controllers/treinamento_controllers.dart';
@@ -31,7 +32,7 @@ class _TreinamentoPageState extends State<TreinamentoPage>
   void initState() {
     super.initState();
     _controller = inject<TreinamentoController>();
-    _abas = TabController(length: 2, vsync: this);
+    _abas = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _controller.carregar());
   }
 
@@ -69,6 +70,9 @@ class _TreinamentoPageState extends State<TreinamentoPage>
               tabs: const [
                 Tab(icon: Icon(Icons.menu_book_outlined), text: 'Material'),
                 Tab(icon: Icon(Icons.alt_route), text: 'Intenções'),
+                // A terceira responde a pergunta que as duas primeiras deixam
+                // no ar: "isso que eu cadastrei funcionou?".
+                Tab(icon: Icon(Icons.science_outlined), text: 'Testar'),
               ],
             ),
             const SizedBox(height: AppSpacing.lg),
@@ -78,6 +82,7 @@ class _TreinamentoPageState extends State<TreinamentoPage>
                 children: [
                   _AbaMaterial(controller: _controller),
                   const AbaIntents(),
+                  const AbaEnsaio(),
                 ],
               ),
             ),

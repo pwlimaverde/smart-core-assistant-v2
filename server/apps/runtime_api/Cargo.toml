@@ -19,6 +19,7 @@ transport = { workspace = true }
 error_core = { workspace = true }
 observability = { workspace = true }
 application = { workspace = true }
+ia_client = { workspace = true }
 infrastructure_redis = { path = "../../crates/infrastructure_redis" }
 redis = { workspace = true }
 tracing = { workspace = true }
@@ -30,3 +31,8 @@ tonic-web = { workspace = true }
 tower = { workspace = true }
 tower-http = { workspace = true }
 http = { workspace = true }
+
+[dev-dependencies]
+# A feature `mock` só entra na compilação de teste: o binário de produção não
+# carrega mockall.
+ia_client = { workspace = true, features = ["mock"] }

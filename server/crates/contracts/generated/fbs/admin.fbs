@@ -1009,3 +1009,22 @@ table MyIntentIdRequest {
   id:int;
 }
 
+table TestarPerguntaRequest {
+  pergunta:string;
+}
+
+/// Um trecho de material que a IA usou para responder.
+table TrechoUsado {
+  conteudo:string;
+  distancia:double;
+}
+
+table TestarPerguntaResponse {
+  resposta:string;
+  comportamento_aplicado:string;
+  trechos:[smartcore.contracts.queries.TrechoUsado];
+  confiabilidade:double;
+  transferiria:bool;
+  fluxo_transferencia:string;
+}
+

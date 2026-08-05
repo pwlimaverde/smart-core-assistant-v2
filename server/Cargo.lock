@@ -2060,6 +2060,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ia_client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "contracts",
+ "mockall",
+ "tokio",
+ "tonic 0.14.6",
+ "tracing",
+]
+
+[[package]]
 name = "iana-time-zone"
 version = "0.1.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3446,6 +3459,7 @@ dependencies = [
  "error_core",
  "futures-util",
  "http 1.4.1",
+ "ia_client",
  "infrastructure_redis",
  "observability",
  "redis",
@@ -5327,6 +5341,7 @@ dependencies = [
  "contracts",
  "domain_whatsapp",
  "error_core",
+ "ia_client",
  "mockall",
  "observability",
  "redis",

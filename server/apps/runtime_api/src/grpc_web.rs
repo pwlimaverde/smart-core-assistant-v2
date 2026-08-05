@@ -173,6 +173,9 @@ use contracts::grpc::queries::{
     // Fase 3 - Evolution Connection
     TestEvolutionConnectionRequest,
     TestEvolutionConnectionResponse,
+    TestarPerguntaRequest,
+    TestarPerguntaResponse,
+    TrechoUsado,
     UpdateMyAtendenteRequest,
     UpdateMyDepartamentoRequest,
     UpdateMyEtapaFluxoRequest,
@@ -732,6 +735,14 @@ pub struct AdminFacade {
     /// (criar instância e acompanhar o pareamento). O `AuthDeps` só carrega
     /// `pg` e `redis`.
     whatsapp: transport::MuxClient,
+    /// Cliente do `ia_engine`, só para o ensaio de pergunta.
+    ///
+    /// O worker continua sendo quem responde de verdade; aqui a chamada é
+    /// síncrona e a pedido de uma pessoa que está olhando a tela — passá-la
+    /// pelo barramento assíncrono seria usar a ferramenta errada. Os dois usam
+    /// a mesma crate, então timeout, retry e degradação são configurados num
+    /// lugar só.
+    ia: Arc<dyn ia_client::IaEngineClient>,
 }
 
 impl AdminFacade {
@@ -741,6 +752,7 @@ impl AdminFacade {
         control: transport::MuxClient,
         realtime: crate::realtime::RealtimeManager,
         whatsapp: transport::MuxClient,
+        ia: Arc<dyn ia_client::IaEngineClient>,
     ) -> Self {
         Self {
             deps,
@@ -748,6 +760,7 @@ impl AdminFacade {
             control,
             realtime,
             whatsapp,
+            ia,
         }
     }
 
@@ -2515,6 +2528,128 @@ impl AdminService for AdminFacade {
             .unwrap_or_default();
 
         Ok(Response::new(ListMyTreinamentosResponse { treinamentos }))
+    }
+
+    /// Ensaia uma pergunta pelo mesmo caminho de uma mensagem real.
+    ///
+    /// Embed → RAG (`QueryCompose`) → LLM, exatamente a sequência que o worker
+    /// executa quando chega uma mensagem de WhatsApp. Reimplementar um caminho
+    /// mais curto aqui faria o ensaio responder diferente do que o cliente
+    /// receberia — e um ensaio que mente é pior que não ter ensaio.
+    ///
+    /// Nada é gravado: não há atendimento, contato nem mensagem. É por isso que
+    /// `atendimento_id` vai vazio.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "TestarPergunta", traceparent)
+    )]
+    async fn testar_pergunta(
+        &self,
+        req: Request<TestarPerguntaRequest>,
+    ) -> Result<Response<TestarPerguntaResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo_tenant_admin(&claims)?;
+        let traceparent = traceparent_do_metadata(&req);
+        let pergunta = req.get_ref().pergunta.trim().to_string();
+
+        if pergunta.is_empty() {
+            return Err(Status::invalid_argument("escreva a pergunta a testar"));
+        }
+
+        // 1. Embedding da pergunta — sem ele não há o que comparar.
+        let embed = self
+            .ia
+            .embed(
+                ia_client::EmbedInput {
+                    tenant_id: claims.tenant_id.clone(),
+                    textos: vec![pergunta.clone()],
+                },
+                &traceparent,
+            )
+            .await
+            .map_err(|e| Status::unavailable(format!("a IA não respondeu: {e}")))?;
+        let vetor = embed.embeddings.into_iter().next().unwrap_or_default();
+        if vetor.is_empty() {
+            return Err(Status::unavailable(
+                "a IA não gerou o vetor da pergunta; tente de novo",
+            ));
+        }
+
+        // 2. RAG pelo mesmo RPC que o worker usa.
+        let contexto = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "QueryCompose",
+                serde_json::json!({
+                    "query_embedding": vetor,
+                    // O mesmo padrão do worker quando a config não diz outra
+                    // coisa; um limiar diferente aqui faria o ensaio ver mais
+                    // (ou menos) material que a conversa real.
+                    "distance_threshold": 0.3,
+                    "chunk_top_k": 3,
+                }),
+            )
+            .await?;
+
+        let comportamento = contexto
+            .get("comportamento")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+        let trechos: Vec<TrechoUsado> = contexto
+            .get("documentos")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .map(|d| TrechoUsado {
+                        conteudo: d
+                            .get("conteudo")
+                            .and_then(|c| c.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        distancia: d.get("distancia").and_then(|c| c.as_f64()).unwrap_or(0.0),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        let mut partes: Vec<String> = Vec::new();
+        if !comportamento.is_empty() {
+            partes.push(comportamento.clone());
+        }
+        for trecho in &trechos {
+            if !trecho.conteudo.is_empty() {
+                partes.push(trecho.conteudo.clone());
+            }
+        }
+
+        // 3. Resposta. Sem histórico e sem fluxos: o ensaio é de uma pergunta
+        // isolada, e inventar uma conversa anterior mudaria o que a IA
+        // responderia.
+        let saida = self
+            .ia
+            .responder(
+                ia_client::ResponderInput {
+                    tenant_id: claims.tenant_id.clone(),
+                    atendimento_id: String::new(),
+                    mensagem: pergunta,
+                    dados_treinamento: partes.join("\n\n"),
+                    ..Default::default()
+                },
+                &traceparent,
+            )
+            .await
+            .map_err(|e| Status::unavailable(format!("a IA não respondeu: {e}")))?;
+
+        Ok(Response::new(TestarPerguntaResponse {
+            resposta: saida.resposta_texto,
+            comportamento_aplicado: comportamento,
+            trechos,
+            confiabilidade: saida.confiabilidade,
+            transferiria: saida.transferir_atendimento,
+            fluxo_transferencia: saida.fluxo_transferencia,
+        }))
     }
 
     // --- Curadoria de intenções ---
@@ -5589,8 +5724,19 @@ pub async fn serve(deps: Arc<AuthDeps>, bus: redis::aio::ConnectionManager) -> a
         );
 
     let whatsapp = transport::conectar_cliente("data_whatsapp").await?;
+
+    // Mesmo endpoint e mesma resiliência do worker — a crate `ia_client` é
+    // compartilhada. `connect_lazy` não bloqueia o boot: uma falha de
+    // conectividade só aparece na primeira chamada real, e a única coisa que
+    // depende disto aqui é o ensaio de pergunta.
+    let ia_endpoint = std::env::var("SMARTCORE_IA_ENGINE_ENDPOINT")
+        .unwrap_or_else(|_| "http://127.0.0.1:50060".to_string());
+    let ia: Arc<dyn ia_client::IaEngineClient> = Arc::new(ia_client::ResilientIaEngine::new(
+        ia_client::TonicIaEngineClient::connect_lazy(&ia_endpoint)?,
+    ));
+
     let facade_admin =
-        AdminServiceServer::new(AdminFacade::new(deps, bus, control, realtime, whatsapp));
+        AdminServiceServer::new(AdminFacade::new(deps, bus, control, realtime, whatsapp, ia));
 
     // CORS restritivo (defesa em profundidade mesmo servindo na mesma origem que o WASM).
     let cors = tower_http::cors::CorsLayer::new()
@@ -5985,6 +6131,9 @@ mod tests {
             control,
             crate::realtime::RealtimeManager::new("redis://127.0.0.1:63799").unwrap(),
             whatsapp,
+            // A IA só é tocada pelo ensaio de pergunta, que nenhum teste daqui
+            // exercita; o mock sem expectativa basta para construir a fachada.
+            Arc::new(ia_client::MockIaEngineClient::new()),
         )
     }
 

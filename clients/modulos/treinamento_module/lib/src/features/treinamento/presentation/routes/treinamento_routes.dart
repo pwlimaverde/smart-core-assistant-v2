@@ -1,5 +1,7 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
+import '../../../ensaio/domain/usecases/ensaio_usecases.dart';
+import '../../../ensaio/presentation/controllers/ensaio_controllers.dart';
 import '../../../intents/domain/usecases/intents_usecases.dart';
 import '../../../intents/presentation/controllers/intents_controllers.dart';
 import '../../domain/usecases/treinamento_usecases.dart';
@@ -41,6 +43,9 @@ final class TreinamentoRoute extends GetItModule {
         atualizar: inject<AtualizarIntentUsecase>(),
         remover: inject<RemoverIntentUsecase>(),
       ),
+    );
+    i.controller<EnsaioController>(
+      () => EnsaioController(testar: inject<TestarPerguntaUsecase>()),
     );
   }
 }

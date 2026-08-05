@@ -68,8 +68,10 @@ impl FluxosCache {
     }
 }
 
-#[allow(dead_code)]
-mod ia_engine;
+// O cliente de IA virou crate quando ganhou um segundo consumidor (a tela
+// de testar pergunta, no runtime_api). O apelido preserva os caminhos
+// `ia_engine::...` que o pipeline inteiro já usa.
+use ia_client as ia_engine;
 mod scheduler;
 
 /// Escopos de um ator de SISTEMA (worker). O worker é um serviço interno confiável

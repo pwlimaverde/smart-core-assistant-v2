@@ -7,7 +7,7 @@
 use async_trait::async_trait;
 use std::time::Duration;
 
-use crate::ia_engine::client::*;
+use crate::client::*;
 
 fn env_ms(key: &str, default: u64) -> u64 {
     std::env::var(key)

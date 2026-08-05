@@ -23,6 +23,7 @@ error_core = { workspace = true }
 observability = { workspace = true }
 tracing = { workspace = true }
 domain_whatsapp = { path = "../../crates/domain_whatsapp" }
+ia_client = { workspace = true }
 
 [dev-dependencies]
 mockall = { workspace = true }

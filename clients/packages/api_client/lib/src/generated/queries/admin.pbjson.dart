@@ -3197,3 +3197,71 @@ const MyIntentIdRequest$json = {
 /// Descriptor for `MyIntentIdRequest`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List myIntentIdRequestDescriptor =
     $convert.base64Decode('ChFNeUludGVudElkUmVxdWVzdBIOCgJpZBgBIAEoBVICaWQ=');
+
+@$core.Deprecated('Use testarPerguntaRequestDescriptor instead')
+const TestarPerguntaRequest$json = {
+  '1': 'TestarPerguntaRequest',
+  '2': [
+    {'1': 'pergunta', '3': 1, '4': 1, '5': 9, '10': 'pergunta'},
+  ],
+};
+
+/// Descriptor for `TestarPerguntaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List testarPerguntaRequestDescriptor =
+    $convert.base64Decode(
+        'ChVUZXN0YXJQZXJndW50YVJlcXVlc3QSGgoIcGVyZ3VudGEYASABKAlSCHBlcmd1bnRh');
+
+@$core.Deprecated('Use trechoUsadoDescriptor instead')
+const TrechoUsado$json = {
+  '1': 'TrechoUsado',
+  '2': [
+    {'1': 'conteudo', '3': 1, '4': 1, '5': 9, '10': 'conteudo'},
+    {'1': 'distancia', '3': 2, '4': 1, '5': 1, '10': 'distancia'},
+  ],
+};
+
+/// Descriptor for `TrechoUsado`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List trechoUsadoDescriptor = $convert.base64Decode(
+    'CgtUcmVjaG9Vc2FkbxIaCghjb250ZXVkbxgBIAEoCVIIY29udGV1ZG8SHAoJZGlzdGFuY2lhGA'
+    'IgASgBUglkaXN0YW5jaWE=');
+
+@$core.Deprecated('Use testarPerguntaResponseDescriptor instead')
+const TestarPerguntaResponse$json = {
+  '1': 'TestarPerguntaResponse',
+  '2': [
+    {'1': 'resposta', '3': 1, '4': 1, '5': 9, '10': 'resposta'},
+    {
+      '1': 'comportamento_aplicado',
+      '3': 2,
+      '4': 1,
+      '5': 9,
+      '10': 'comportamentoAplicado'
+    },
+    {
+      '1': 'trechos',
+      '3': 3,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.TrechoUsado',
+      '10': 'trechos'
+    },
+    {'1': 'confiabilidade', '3': 4, '4': 1, '5': 1, '10': 'confiabilidade'},
+    {'1': 'transferiria', '3': 5, '4': 1, '5': 8, '10': 'transferiria'},
+    {
+      '1': 'fluxo_transferencia',
+      '3': 6,
+      '4': 1,
+      '5': 9,
+      '10': 'fluxoTransferencia'
+    },
+  ],
+};
+
+/// Descriptor for `TestarPerguntaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List testarPerguntaResponseDescriptor = $convert.base64Decode(
+    'ChZUZXN0YXJQZXJndW50YVJlc3BvbnNlEhoKCHJlc3Bvc3RhGAEgASgJUghyZXNwb3N0YRI1Ch'
+    'Zjb21wb3J0YW1lbnRvX2FwbGljYWRvGAIgASgJUhVjb21wb3J0YW1lbnRvQXBsaWNhZG8SQgoH'
+    'dHJlY2hvcxgDIAMoCzIoLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5UcmVjaG9Vc2Fkb1'
+    'IHdHJlY2hvcxImCg5jb25maWFiaWxpZGFkZRgEIAEoAVIOY29uZmlhYmlsaWRhZGUSIgoMdHJh'
+    'bnNmZXJpcmlhGAUgASgIUgx0cmFuc2ZlcmlyaWESLwoTZmx1eG9fdHJhbnNmZXJlbmNpYRgGIA'
+    'EoCVISZmx1eG9UcmFuc2ZlcmVuY2lh');

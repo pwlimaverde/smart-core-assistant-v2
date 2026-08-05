@@ -13301,6 +13301,247 @@ class MyIntentIdRequest extends $pb.GeneratedMessage {
   void clearId() => $_clearField(1);
 }
 
+class TestarPerguntaRequest extends $pb.GeneratedMessage {
+  factory TestarPerguntaRequest({
+    $core.String? pergunta,
+  }) {
+    final result = create();
+    if (pergunta != null) result.pergunta = pergunta;
+    return result;
+  }
+
+  TestarPerguntaRequest._();
+
+  factory TestarPerguntaRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory TestarPerguntaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'TestarPerguntaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'pergunta')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestarPerguntaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestarPerguntaRequest copyWith(
+          void Function(TestarPerguntaRequest) updates) =>
+      super.copyWith((message) => updates(message as TestarPerguntaRequest))
+          as TestarPerguntaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static TestarPerguntaRequest create() => TestarPerguntaRequest._();
+  @$core.override
+  TestarPerguntaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static TestarPerguntaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<TestarPerguntaRequest>(create);
+  static TestarPerguntaRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get pergunta => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set pergunta($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasPergunta() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearPergunta() => $_clearField(1);
+}
+
+/// / Um trecho de material que a IA usou para responder.
+class TrechoUsado extends $pb.GeneratedMessage {
+  factory TrechoUsado({
+    $core.String? conteudo,
+    $core.double? distancia,
+  }) {
+    final result = create();
+    if (conteudo != null) result.conteudo = conteudo;
+    if (distancia != null) result.distancia = distancia;
+    return result;
+  }
+
+  TrechoUsado._();
+
+  factory TrechoUsado.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory TrechoUsado.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'TrechoUsado',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'conteudo')
+    ..aD(2, _omitFieldNames ? '' : 'distancia')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TrechoUsado clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TrechoUsado copyWith(void Function(TrechoUsado) updates) =>
+      super.copyWith((message) => updates(message as TrechoUsado))
+          as TrechoUsado;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static TrechoUsado create() => TrechoUsado._();
+  @$core.override
+  TrechoUsado createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static TrechoUsado getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<TrechoUsado>(create);
+  static TrechoUsado? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get conteudo => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set conteudo($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasConteudo() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearConteudo() => $_clearField(1);
+
+  /// Distancia de cosseno: quanto MENOR, mais parecido. Aparece na tela porque
+  /// e o que explica por que um trecho entrou e outro nao.
+  @$pb.TagNumber(2)
+  $core.double get distancia => $_getN(1);
+  @$pb.TagNumber(2)
+  set distancia($core.double value) => $_setDouble(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasDistancia() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearDistancia() => $_clearField(2);
+}
+
+class TestarPerguntaResponse extends $pb.GeneratedMessage {
+  factory TestarPerguntaResponse({
+    $core.String? resposta,
+    $core.String? comportamentoAplicado,
+    $core.Iterable<TrechoUsado>? trechos,
+    $core.double? confiabilidade,
+    $core.bool? transferiria,
+    $core.String? fluxoTransferencia,
+  }) {
+    final result = create();
+    if (resposta != null) result.resposta = resposta;
+    if (comportamentoAplicado != null)
+      result.comportamentoAplicado = comportamentoAplicado;
+    if (trechos != null) result.trechos.addAll(trechos);
+    if (confiabilidade != null) result.confiabilidade = confiabilidade;
+    if (transferiria != null) result.transferiria = transferiria;
+    if (fluxoTransferencia != null)
+      result.fluxoTransferencia = fluxoTransferencia;
+    return result;
+  }
+
+  TestarPerguntaResponse._();
+
+  factory TestarPerguntaResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory TestarPerguntaResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'TestarPerguntaResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'resposta')
+    ..aOS(2, _omitFieldNames ? '' : 'comportamentoAplicado')
+    ..pPM<TrechoUsado>(3, _omitFieldNames ? '' : 'trechos',
+        subBuilder: TrechoUsado.create)
+    ..aD(4, _omitFieldNames ? '' : 'confiabilidade')
+    ..aOB(5, _omitFieldNames ? '' : 'transferiria')
+    ..aOS(6, _omitFieldNames ? '' : 'fluxoTransferencia')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestarPerguntaResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestarPerguntaResponse copyWith(
+          void Function(TestarPerguntaResponse) updates) =>
+      super.copyWith((message) => updates(message as TestarPerguntaResponse))
+          as TestarPerguntaResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static TestarPerguntaResponse create() => TestarPerguntaResponse._();
+  @$core.override
+  TestarPerguntaResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static TestarPerguntaResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<TestarPerguntaResponse>(create);
+  static TestarPerguntaResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get resposta => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set resposta($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasResposta() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearResposta() => $_clearField(1);
+
+  /// Intencao que casou, se alguma. Vazio = nenhuma dentro do limiar.
+  @$pb.TagNumber(2)
+  $core.String get comportamentoAplicado => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set comportamentoAplicado($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasComportamentoAplicado() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearComportamentoAplicado() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $pb.PbList<TrechoUsado> get trechos => $_getList(2);
+
+  @$pb.TagNumber(4)
+  $core.double get confiabilidade => $_getN(3);
+  @$pb.TagNumber(4)
+  set confiabilidade($core.double value) => $_setDouble(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasConfiabilidade() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearConfiabilidade() => $_clearField(4);
+
+  /// `true` quando a IA decidiu transferir em vez de responder.
+  @$pb.TagNumber(5)
+  $core.bool get transferiria => $_getBF(4);
+  @$pb.TagNumber(5)
+  set transferiria($core.bool value) => $_setBool(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasTransferiria() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearTransferiria() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.String get fluxoTransferencia => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set fluxoTransferencia($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasFluxoTransferencia() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearFluxoTransferencia() => $_clearField(6);
+}
+
 const $core.bool _omitFieldNames =
     $core.bool.fromEnvironment('protobuf.omit_field_names');
 const $core.bool _omitMessageNames =

@@ -859,6 +859,11 @@ service AdminService {
   rpc CreateMyIntent(MyIntentDados) returns (MyIntentResponse);
   rpc UpdateMyIntent(UpdateMyIntentRequest) returns (SimpleOkResponse);
   rpc RemoveMyIntent(MyIntentIdRequest) returns (SimpleOkResponse);
+
+  // Ensaio: a pergunta percorre o MESMO caminho de uma mensagem real (embed ->
+  // RAG -> LLM), sem gravar atendimento nenhum. Validar o treinamento pelo
+  // WhatsApp de verdade obrigaria a usar um numero real e sujar o historico.
+  rpc TestarPergunta(TestarPerguntaRequest) returns (TestarPerguntaResponse);
   rpc GetMyTreinamento(GetMyTreinamentoRequest) returns (MyTreinamentoResponse);
   rpc FinalizarMyTreinamento(FinalizarMyTreinamentoRequest) returns (SimpleOkResponse);
   rpc RemoverMyTreinamento(RemoverMyTreinamentoRequest) returns (SimpleOkResponse);
@@ -1247,4 +1252,29 @@ message UpdateMyIntentRequest {
 
 message MyIntentIdRequest {
   int32 id = 1;
+}
+
+// --- Testar pergunta (ensaio do treinamento) ---
+
+message TestarPerguntaRequest {
+  string pergunta = 1;
+}
+
+/// Um trecho de material que a IA usou para responder.
+message TrechoUsado {
+  string conteudo = 1;
+  // Distancia de cosseno: quanto MENOR, mais parecido. Aparece na tela porque
+  // e o que explica por que um trecho entrou e outro nao.
+  double distancia = 2;
+}
+
+message TestarPerguntaResponse {
+  string resposta = 1;
+  // Intencao que casou, se alguma. Vazio = nenhuma dentro do limiar.
+  string comportamento_aplicado = 2;
+  repeated TrechoUsado trechos = 3;
+  double confiabilidade = 4;
+  // `true` quando a IA decidiu transferir em vez de responder.
+  bool transferiria = 5;
+  string fluxo_transferencia = 6;
 }

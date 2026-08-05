@@ -276,7 +276,7 @@ sumir atendimento de verdade.
 - Etiquetas, notas e campos personalizados no cartão (tabelas existem) — é a
   Etapa 8.
 
-### Etapa 7 — Treinamento: intents e teste de resposta — FEITO (parcial)
+### Etapa 7 — Treinamento: intents e teste de resposta — FEITO
 
 **A lacuna que apareceu ao começar esta etapa: nada vetorizava o material
 treinado.** O `finalizar` marcava o treinamento como pendente e nenhum app
@@ -313,11 +313,25 @@ testa e conclui que o sistema não funciona.
 
 De passagem, esta tela também não tinha menu (mesmo defeito do quadro).
 
-**Falta desta etapa: a tela de "testar pergunta".** Ela precisa embedar a
-pergunta, buscar o contexto e chamar o LLM — e isso é `ia_engine.Responder`, que
-hoje só o worker alcança: o `runtime_api` não tem cliente de IA. Fechar isso é
-decidir por onde o teste passa (cliente de IA na borda, ou ida e volta pelo bus
-até o worker), e é a próxima coisa desta etapa.
+**Testar pergunta** — terceira aba. A pergunta percorre o **mesmo caminho** de
+uma mensagem real (embed → `QueryCompose` → `Responder`), e nada é gravado: não
+cria atendimento, contato nem mensagem. Reimplementar um caminho mais curto
+faria o ensaio responder diferente do que o cliente receberia, e um ensaio que
+mente é pior que não ter ensaio.
+
+A tela mostra o material consultado com a **semelhança em porcentagem** — é o
+que explica por que um trecho entrou e outro não; sem isso, "respondeu errado"
+não tem por onde ser investigado. E avisa quando **nada casou**: a resposta pode
+parecer boa (o modelo inventa), e é justamente aí que quem treina precisa saber
+que o que veio não saiu do treinamento.
+
+O cliente de IA saiu de `apps/worker/src/ia_engine/` para `crates/ia_client`.
+O worker foi o primeiro consumidor, não o único: duplicar o adapter criaria dois
+lugares para configurar timeout, retry e degradação — que é o que o
+`resilient.rs` existe para centralizar. O `runtime_api` já carregava o mesmo
+`.env` e está na mesma rede do `ia_engine`, então **nada muda no deploy**. O
+dublê do cliente virou feature `mock` da crate, para os consumidores não
+reescreverem seis métodos que envelhecem em silêncio.
 
 **Decisão tomada:** paridade completa — CRUD de intents **e** a tela de testar
 pergunta. O RAG consulta `treinamento_querycompose` na composição de contexto, e

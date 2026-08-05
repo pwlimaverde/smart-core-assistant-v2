@@ -2,6 +2,9 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/widgets.dart';
 import 'package:get_it_module/get_it_module.dart';
 
+import 'features/ensaio/data/datasources/ensaio_datasources.dart';
+import 'features/ensaio/data/repositories/ensaio_repositories.dart';
+import 'features/ensaio/domain/usecases/ensaio_usecases.dart';
 import 'features/intents/data/datasources/intents_datasources.dart';
 import 'features/intents/data/repositories/intents_repositories.dart';
 import 'features/intents/domain/usecases/intents_usecases.dart';
@@ -88,6 +91,15 @@ final class TreinamentoModule extends AppModule {
       () => RemoverIntentUsecase(
         repository: RemoverIntentRepository(
           datasource: RemoverIntentDatasource(client: _admin()),
+        ),
+      ),
+    );
+
+    // ── ensaio de pergunta ────────────────────────────────────────────────
+    i.lazySingleton<TestarPerguntaUsecase>(
+      () => TestarPerguntaUsecase(
+        repository: TestarPerguntaRepository(
+          datasource: TestarPerguntaDatasource(client: _admin()),
         ),
       ),
     );

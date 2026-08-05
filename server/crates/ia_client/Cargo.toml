@@ -1,0 +1,22 @@
+[package]
+name = "ia_client"
+version = "0.1.0"
+edition = { workspace = true }
+
+[features]
+# Expõe `MockIaEngineClient` a quem depende da crate (dev-dependencies dos
+# consumidores). Fora dela, mockall não entra no binário.
+mock = ["dep:mockall"]
+
+[dependencies]
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+tonic = { workspace = true }
+tracing = { workspace = true }
+contracts = { workspace = true }
+mockall = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+mockall = { workspace = true }

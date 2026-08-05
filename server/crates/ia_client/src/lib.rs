@@ -1,6 +1,12 @@
-//! Cliente gRPC do serviço `ia_engine` (fase N2): port + adapter real (`tonic`) +
+//! Cliente gRPC do serviço `ia_engine`: port + adapter real (`tonic`) +
 //! decorator de resiliência. Ver `client.rs` para o contrato, `tonic_client.rs`
 //! para a implementação real e `resilient.rs` para timeout/retry/degradação.
+//!
+//! **Por que uma crate e não um módulo do worker:** o worker foi o primeiro
+//! consumidor, mas não é o único — a tela de "testar pergunta" precisa do
+//! mesmo caminho a partir do `runtime_api`. Duplicar o adapter criaria dois
+//! lugares para configurar timeout, retry e degradação, que é justamente o que
+//! o `resilient.rs` existe para centralizar.
 
 pub mod client;
 pub mod resilient;
@@ -16,5 +22,5 @@ pub use client::{ChatTurnInput, EmbedInput, IaEngineClient, ResponderInput};
 pub use resilient::ResilientIaEngine;
 pub use tonic_client::TonicIaEngineClient;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "mock"))]
 pub use client::MockIaEngineClient;

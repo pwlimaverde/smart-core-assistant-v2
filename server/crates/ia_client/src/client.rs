@@ -156,7 +156,10 @@ impl IaEngineError {
 
 /// Port do cliente gRPC do `ia_engine`. Cada método corresponde a um RPC de
 /// `IaEngineService` (`server/crates/contracts/schemas/ai/ai_engine.proto`).
-#[cfg_attr(test, mockall::automock)]
+// A feature `mock` expõe o dublê a quem depende da crate. Sem ela, cada
+// consumidor escreveria o seu — seis métodos repetidos, que envelhecem em
+// silêncio quando a trait muda.
+#[cfg_attr(any(test, feature = "mock"), mockall::automock)]
 #[async_trait]
 pub trait IaEngineClient: Send + Sync {
     async fn transcribe(

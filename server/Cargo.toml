@@ -11,6 +11,7 @@ members = [
     "crates/infrastructure_storage",
     "crates/application",
     "crates/domain_whatsapp",
+    "crates/ia_client",
     "apps/data_postgres",
     "apps/data_redis",
     "apps/data_storage",
@@ -83,6 +84,7 @@ flatc-rust    = "0.2.0"
 contracts     = { path = "crates/contracts" }
 transport     = { path = "crates/transport" }
 application   = { path = "crates/application" }
+ia_client     = { path = "crates/ia_client" }
 observability = { path = "crates/observability" }
 anyhow        = "1.0.86"
 bytes         = "1.6.0"

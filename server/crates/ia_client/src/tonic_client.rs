@@ -9,7 +9,7 @@ use contracts::grpc::ai as pb;
 use tonic::transport::Channel;
 use tonic::Request;
 
-use crate::ia_engine::client::*;
+use crate::client::*;
 
 #[derive(Clone)]
 pub struct TonicIaEngineClient {

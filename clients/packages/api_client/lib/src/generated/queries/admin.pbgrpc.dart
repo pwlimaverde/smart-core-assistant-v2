@@ -449,6 +449,16 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$removeMyIntent, request, options: options);
   }
 
+  /// Ensaio: a pergunta percorre o MESMO caminho de uma mensagem real (embed ->
+  /// RAG -> LLM), sem gravar atendimento nenhum. Validar o treinamento pelo
+  /// WhatsApp de verdade obrigaria a usar um numero real e sujar o historico.
+  $grpc.ResponseFuture<$0.TestarPerguntaResponse> testarPergunta(
+    $0.TestarPerguntaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$testarPergunta, request, options: options);
+  }
+
   $grpc.ResponseFuture<$0.MyTreinamentoResponse> getMyTreinamento(
     $0.GetMyTreinamentoRequest request, {
     $grpc.CallOptions? options,
@@ -910,6 +920,11 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/RemoveMyIntent',
           ($0.MyIntentIdRequest value) => value.writeToBuffer(),
           $0.SimpleOkResponse.fromBuffer);
+  static final _$testarPergunta =
+      $grpc.ClientMethod<$0.TestarPerguntaRequest, $0.TestarPerguntaResponse>(
+          '/smartcore.contracts.queries.AdminService/TestarPergunta',
+          ($0.TestarPerguntaRequest value) => value.writeToBuffer(),
+          $0.TestarPerguntaResponse.fromBuffer);
   static final _$getMyTreinamento =
       $grpc.ClientMethod<$0.GetMyTreinamentoRequest, $0.MyTreinamentoResponse>(
           '/smartcore.contracts.queries.AdminService/GetMyTreinamento',
@@ -1520,6 +1535,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         false,
         ($core.List<$core.int> value) => $0.MyIntentIdRequest.fromBuffer(value),
         ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.TestarPerguntaRequest,
+            $0.TestarPerguntaResponse>(
+        'TestarPergunta',
+        testarPergunta_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.TestarPerguntaRequest.fromBuffer(value),
+        ($0.TestarPerguntaResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.GetMyTreinamentoRequest,
             $0.MyTreinamentoResponse>(
         'GetMyTreinamento',
@@ -2220,6 +2244,15 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.SimpleOkResponse> removeMyIntent(
       $grpc.ServiceCall call, $0.MyIntentIdRequest request);
+
+  $async.Future<$0.TestarPerguntaResponse> testarPergunta_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.TestarPerguntaRequest> $request) async {
+    return testarPergunta($call, await $request);
+  }
+
+  $async.Future<$0.TestarPerguntaResponse> testarPergunta(
+      $grpc.ServiceCall call, $0.TestarPerguntaRequest request);
 
   $async.Future<$0.MyTreinamentoResponse> getMyTreinamento_Pre(
       $grpc.ServiceCall $call,
