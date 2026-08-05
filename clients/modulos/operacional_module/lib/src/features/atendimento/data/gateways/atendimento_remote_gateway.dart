@@ -6,6 +6,7 @@ import '../../domain/gateways/atendimento_gateway.dart';
 import '../../domain/model/atendimento_evento.dart';
 import '../../domain/model/atendimento_resumo.dart';
 import '../../domain/model/mensagem_thread.dart';
+import '../../domain/model/quadro.dart';
 
 /// Adapter Web do [AtendimentoGateway] via gRPC-Web (`AdminServiceClient`).
 ///
@@ -142,5 +143,53 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
       tenantId: e.tenantId,
       payload: payload,
     );
+  }
+
+  @override
+  Future<void> setAtendimentoStatus({
+    required int atendimentoId,
+    required String status,
+    String motivo = '',
+  }) async {
+    await _client.setAtendimentoStatus(
+      proto.SetAtendimentoStatusRequest(
+        atendimentoId: atendimentoId,
+        status: status,
+        motivo: motivo,
+      ),
+    );
+  }
+
+  @override
+  Future<List<FluxoDoQuadro>> listFluxos() async {
+    final resp = await _client.listMyFluxos(proto.ListMyFluxosRequest());
+    return resp.fluxos
+        .where((f) => f.ativo)
+        .map(
+          (f) => FluxoDoQuadro(
+            id: f.id,
+            nome: f.nome,
+            departamentoNome: f.departamentoNome,
+          ),
+        )
+        .toList();
+  }
+
+  @override
+  Future<List<ColunaDoQuadro>> listColunas(int fluxoId) async {
+    final resp = await _client.listMyEtapasFluxo(
+      proto.MyFluxoIdRequest(id: fluxoId),
+    );
+    return resp.etapas
+        .map(
+          (e) => ColunaDoQuadro(
+            id: e.id,
+            nome: e.nome,
+            cor: e.cor,
+            ordem: e.ordem,
+            tipo: e.tipoEtapa,
+          ),
+        )
+        .toList();
   }
 }

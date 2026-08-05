@@ -10,6 +10,7 @@ import '../../domain/gateways/atendimento_gateway.dart';
 import '../../domain/model/atendimento_evento.dart';
 import '../../domain/model/atendimento_resumo.dart';
 import '../../domain/model/mensagem_thread.dart';
+import '../../domain/model/quadro.dart';
 
 /// Debounce do gatilho de reconexão (N7.4): `connectivity_plus` reporta o tipo
 /// de interface (não garante alcance real à internet) e pode disparar eventos
@@ -331,5 +332,53 @@ final class LocalEngineGateway implements AtendimentoGateway {
   static LocalEngineFalha _mapErro(Object e) {
     if (e is LocalEngineFalha) return e;
     return LocalEngineFalha('falha no motor local: $e', e);
+  }
+
+  @override
+  Future<void> setAtendimentoStatus({
+    required int atendimentoId,
+    required String status,
+    String motivo = '',
+  }) async {
+    await _admin.setAtendimentoStatus(
+      proto.SetAtendimentoStatusRequest(
+        atendimentoId: atendimentoId,
+        status: status,
+        motivo: motivo,
+      ),
+    );
+  }
+
+  @override
+  Future<List<FluxoDoQuadro>> listFluxos() async {
+    final resp = await _admin.listMyFluxos(proto.ListMyFluxosRequest());
+    return resp.fluxos
+        .where((f) => f.ativo)
+        .map(
+          (f) => FluxoDoQuadro(
+            id: f.id,
+            nome: f.nome,
+            departamentoNome: f.departamentoNome,
+          ),
+        )
+        .toList();
+  }
+
+  @override
+  Future<List<ColunaDoQuadro>> listColunas(int fluxoId) async {
+    final resp = await _admin.listMyEtapasFluxo(
+      proto.MyFluxoIdRequest(id: fluxoId),
+    );
+    return resp.etapas
+        .map(
+          (e) => ColunaDoQuadro(
+            id: e.id,
+            nome: e.nome,
+            cor: e.cor,
+            ordem: e.ordem,
+            tipo: e.tipoEtapa,
+          ),
+        )
+        .toList();
   }
 }

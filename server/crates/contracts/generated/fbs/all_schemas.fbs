@@ -498,6 +498,18 @@ table MoveAtendimentoEtapaResponse {
   success:bool;
 }
 
+table SetAtendimentoStatusRequest {
+  atendimento_id:int;
+  status:string;
+  motivo:string;
+}
+
+table SetAtendimentoStatusResponse {
+  success:bool;
+  status:string;
+  etapa_atual_id:int;
+}
+
 table SendOutboundMessageRequest {
   atendimento_id:int;
   conteudo:string;

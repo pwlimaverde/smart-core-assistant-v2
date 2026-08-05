@@ -5,6 +5,7 @@ import 'package:get_it_module/get_it_module.dart';
 import 'package:presentation_module/presentation_module.dart';
 
 import '../../domain/model/atendimento_resumo.dart';
+import '../../domain/model/quadro.dart';
 import '../controllers/kanban_controller.dart';
 import '../controllers/kanban_state.dart';
 import '../widgets/atendimento_card_content.dart';
@@ -14,13 +15,25 @@ import 'chat_page.dart';
 /// de origem (a coluna de onde saiu), consumido pela coluna de destino.
 typedef _DragPayload = ({int atendimentoId, int etapaOrigemId});
 
-/// Tela de fila/Kanban por departamento (WS-6.2): colunas dinâmicas agrupadas
-/// pela etapa atual dos atendimentos retornados pelo backend. Mover um card
-/// entre colunas despacha [KanbanController.moverCard] — o filtro de fluxo
-/// (`flow_permissions`, WS-5a) é 100% server-side; esta tela só renderiza o
-/// que o backend devolve e reage ao erro se o movimento for negado.
+/// Quadro de atendimento.
+///
+/// As colunas vêm do **fluxo cadastrado**, não dos atendimentos existentes.
+/// Derivá-las dos dados fazia uma coluna vazia sumir — não havia para onde
+/// arrastar — e um quadro sem conversa nenhuma abria em branco, como se
+/// estivesse quebrado; era o que uma conta nova via.
+///
+/// O filtro de fluxo (`flow_permissions`) é 100% server-side: esta tela só
+/// renderiza o que o backend devolve e reage ao erro se o movimento for negado.
 class KanbanPage extends StatefulWidget {
-  const KanbanPage({super.key});
+  /// Menu lateral, injetado pelo app que monta a rota.
+  ///
+  /// O quadro é a primeira tela depois do login, e sem o menu não havia como
+  /// chegar a nenhuma configuração — a pessoa ficava presa numa fila vazia. O
+  /// menu mora no app do tenant; este módulo não o conhece, então ele entra por
+  /// aqui em vez de virar uma dependência ao contrário.
+  final Widget? drawer;
+
+  const KanbanPage({this.drawer, super.key});
 
   @override
   State<KanbanPage> createState() => _KanbanPageState();
@@ -30,7 +43,7 @@ class _KanbanPageState extends State<KanbanPage> {
   @override
   void initState() {
     super.initState();
-    inject<KanbanController>().carregarFila();
+    inject<KanbanController>().carregar();
   }
 
   @override
@@ -38,7 +51,15 @@ class _KanbanPageState extends State<KanbanPage> {
     final controller = inject<KanbanController>();
 
     return AppScaffold(
-      title: 'Fila de atendimento',
+      title: 'Atendimento',
+      drawer: widget.drawer,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh),
+          tooltip: 'Recarregar',
+          onPressed: () => controller.carregar(),
+        ),
+      ],
       body: BlocBuilder<KanbanController, ViewState<KanbanViewModel>>(
         bloc: controller,
         builder: (context, state) {
@@ -47,9 +68,9 @@ class _KanbanPageState extends State<KanbanPage> {
             LoadingState() => const Center(child: CircularProgressIndicator()),
             ErrorState(:final error) => AppErrorView(
               message: error.message,
-              onRetry: () => controller.carregarFila(),
+              onRetry: () => controller.carregar(),
             ),
-            SuccessState(:final data) => _KanbanBoard(
+            SuccessState(:final data) => _Quadro(
               viewModel: data,
               controller: controller,
             ),
@@ -60,77 +81,156 @@ class _KanbanPageState extends State<KanbanPage> {
   }
 }
 
-class _KanbanBoard extends StatelessWidget {
+class _Quadro extends StatelessWidget {
   final KanbanViewModel viewModel;
   final KanbanController controller;
 
-  const _KanbanBoard({required this.viewModel, required this.controller});
-
-  /// Convenção de etapas fixas para o MVP (fila → em atendimento → resolvido).
-  /// Etapas adicionais retornadas pelo backend aparecem automaticamente ao
-  /// final — nenhuma tela precisa ser alterada quando um novo fluxo/etapa
-  /// for cadastrado (o agrupamento vem 100% dos dados).
-  static const _colunaFila = KanbanViewModel.semEtapa;
+  const _Quadro({required this.viewModel, required this.controller});
 
   @override
   Widget build(BuildContext context) {
-    final etapas = viewModel.porEtapa.keys.toList()..sort();
-
-    if (etapas.isEmpty) {
+    // Conta sem fluxo nenhum: o convite é configurar, não "aguarde chegar
+    // conversa" — sem quadro, nada chega a lugar nenhum.
+    if (!viewModel.temQuadro) {
       return const AppEmptyView(
-        icon: Icons.inbox_outlined,
-        title: 'Nenhum atendimento na fila',
-        subtitle: 'Novos atendimentos aparecem aqui automaticamente.',
+        icon: Icons.account_tree_outlined,
+        title: 'Nenhum quadro configurado',
+        subtitle: 'Crie um fluxo de atendimento em "Fluxos de atendimento" '
+            'para que as conversas tenham por onde andar.',
       );
     }
 
-    return Padding(
-      padding: const EdgeInsets.all(AppSpacing.md),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final etapaId in etapas)
-              KanbanDropColumn<_DragPayload>(
-                title: etapaId == _colunaFila ? 'Fila' : 'Etapa $etapaId',
-                itemCount: viewModel.porEtapa[etapaId]?.length ?? 0,
-                onAccept: (payload) {
-                  if (payload.etapaOrigemId == etapaId) return;
-                  _moverComFeedback(
-                    context,
-                    atendimentoId: payload.atendimentoId,
-                    etapaOrigemId: payload.etapaOrigemId,
-                    etapaDestinoId: etapaId,
-                  );
-                },
+    final soltas = viewModel.semColuna;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (viewModel.fluxos.length > 1)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.md,
+              AppSpacing.md,
+              AppSpacing.md,
+              0,
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.account_tree_outlined, size: 18),
+                const SizedBox(width: AppSpacing.sm),
+                DropdownButton<int>(
+                  value: viewModel.fluxoId,
+                  underline: const SizedBox.shrink(),
+                  items: [
+                    for (final f in viewModel.fluxos)
+                      DropdownMenuItem(value: f.id, child: Text(f.rotulo)),
+                  ],
+                  onChanged: (v) {
+                    if (v != null) controller.abrirQuadro(v);
+                  },
+                ),
+              ],
+            ),
+          ),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  for (final atendimento
-                      in viewModel.porEtapa[etapaId] ??
-                          const <AtendimentoResumo>[])
-                    KanbanCard<_DragPayload>(
-                      key: ValueKey(atendimento.id),
-                      data: (
-                        atendimentoId: atendimento.id,
-                        etapaOrigemId: etapaId,
+                  for (final coluna in viewModel.colunas)
+                    _Coluna(
+                      coluna: coluna,
+                      itens:
+                          viewModel.porEtapa[coluna.id] ??
+                          const <AtendimentoResumo>[],
+                      viewModel: viewModel,
+                      controller: controller,
+                    ),
+                  // Conversas fora de qualquer coluna do quadro: chegaram antes
+                  // do fluxo existir, ou apontam para uma coluna já removida.
+                  // Escondê-las faria sumir atendimento de verdade.
+                  if (soltas.isNotEmpty)
+                    _Coluna(
+                      coluna: const ColunaDoQuadro(
+                        id: KanbanViewModel.semEtapa,
+                        nome: 'Sem coluna',
+                        cor: '#F59E0B',
+                        ordem: 9999,
+                        tipo: 'fila',
                       ),
-                      isDragging:
-                          viewModel.movendoAtendimentoId == atendimento.id,
-                      child: InkWell(
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                ChatPage(atendimentoId: atendimento.id),
-                          ),
-                        ),
-                        child: AtendimentoCardContent(atendimento: atendimento),
-                      ),
+                      itens: soltas,
+                      viewModel: viewModel,
+                      controller: controller,
                     ),
                 ],
               ),
-          ],
+            ),
+          ),
         ),
-      ),
+      ],
+    );
+  }
+}
+
+class _Coluna extends StatelessWidget {
+  final ColunaDoQuadro coluna;
+  final List<AtendimentoResumo> itens;
+  final KanbanViewModel viewModel;
+  final KanbanController controller;
+
+  const _Coluna({
+    required this.coluna,
+    required this.itens,
+    required this.viewModel,
+    required this.controller,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return KanbanDropColumn<_DragPayload>(
+      title: coluna.nome,
+      itemCount: itens.length,
+      onAccept: (payload) {
+        if (payload.etapaOrigemId == coluna.id) return;
+        _moverComFeedback(
+          context,
+          atendimentoId: payload.atendimentoId,
+          etapaOrigemId: payload.etapaOrigemId,
+          etapaDestinoId: coluna.id,
+        );
+      },
+      children: [
+        for (final atendimento in itens)
+          KanbanCard<_DragPayload>(
+            key: ValueKey(atendimento.id),
+            data: (atendimentoId: atendimento.id, etapaOrigemId: coluna.id),
+            isDragging: viewModel.movendoAtendimentoId == atendimento.id,
+            child: Row(
+              children: [
+                Expanded(
+                  child: InkWell(
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ChatPage(atendimentoId: atendimento.id),
+                      ),
+                    ),
+                    child: AtendimentoCardContent(atendimento: atendimento),
+                  ),
+                ),
+                // O arrasto continua sendo o caminho principal; este menu
+                // existe para o quadro que não tem coluna daquele tipo — sem
+                // ele, não haveria como marcar uma conversa como pendente num
+                // quadro de três colunas.
+                _MenuDeEstado(
+                  atendimento: atendimento,
+                  controller: controller,
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 
@@ -149,5 +249,47 @@ class _KanbanBoard extends StatelessWidget {
     if (erro != null) {
       messenger.showSnackBar(SnackBar(content: Text(erro.message)));
     }
+  }
+}
+
+/// Os estados que uma conversa pode assumir pela mão do atendente.
+///
+/// `arquivado` fica de fora: é decisão de curadoria do histórico, não do
+/// atendimento em si, e oferecê-la aqui convidaria a sumir com conversa viva.
+const _estadosOferecidos = <(String, String)>[
+  ('em_atendimento', 'Assumir'),
+  ('pendencia', 'Marcar como pendente'),
+  ('fila', 'Devolver à fila'),
+  ('resolvido', 'Resolver'),
+  ('cancelado', 'Cancelar atendimento'),
+];
+
+class _MenuDeEstado extends StatelessWidget {
+  final AtendimentoResumo atendimento;
+  final KanbanController controller;
+
+  const _MenuDeEstado({required this.atendimento, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<String>(
+      icon: const Icon(Icons.more_vert, size: 18),
+      tooltip: 'Mudar o estado',
+      itemBuilder: (_) => [
+        for (final (status, rotulo) in _estadosOferecidos)
+          if (status != atendimento.status)
+            PopupMenuItem(value: status, child: Text(rotulo)),
+      ],
+      onSelected: (status) async {
+        final messenger = ScaffoldMessenger.of(context);
+        final erro = await controller.definirStatus(
+          atendimentoId: atendimento.id,
+          status: status,
+        );
+        if (erro != null) {
+          messenger.showSnackBar(SnackBar(content: Text(erro.message)));
+        }
+      },
+    );
   }
 }

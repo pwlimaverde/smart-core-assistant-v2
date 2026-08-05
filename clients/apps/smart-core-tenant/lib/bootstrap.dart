@@ -39,7 +39,9 @@ Future<void> bootstrap(AppConfig config) async {
     // Depois do LoginModule: o passo final do wizard entra na conta pelo
     // `AuthService` que aquele módulo registra.
     OnboardingModule(),
-    OperacionalModule(),
+    // O menu do tenant vai junto: o quadro é a primeira tela depois do login,
+    // e sem ele não havia caminho para nenhuma configuração.
+    OperacionalModule(drawerBuilder: TenantDrawer.new),
     TenantModule(),
     TreinamentoModule(),
     InitialLoadingModule(),

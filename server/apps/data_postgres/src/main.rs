@@ -519,6 +519,7 @@ async fn main() -> anyhow::Result<()> {
     let s_atendente_criar = state_clone.clone();
     let s_atendente_update = state_clone.clone();
     let s_atendente_desativar = state_clone.clone();
+    let s_status_atendimento = state_clone.clone();
     let state_for_create_departamento = state_clone.clone();
     let state_for_create_plan = state_clone.clone();
     let state_for_update_plan = state_clone.clone();
@@ -599,6 +600,17 @@ async fn main() -> anyhow::Result<()> {
             let state = state_for_move_atendimento_etapa.clone();
             Box::pin(async move {
                 handler_move_atendimento_etapa(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("SetAtendimentoStatus", move |env| {
+            let state = s_status_atendimento.clone();
+            Box::pin(async move {
+                handler_set_atendimento_status(
+                    state.atendimento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
             })
         })
         .route("SendOutboundMessage", move |env| {
@@ -2407,6 +2419,70 @@ async fn handler_move_atendimento_etapa(
         ),
         // `.into()` preserva o ErrorCode (ex.: PermissionDenied → AuthInsufficientScope),
         // permitindo à borda gRPC-Web diferenciar RBAC negado de erro de banco genérico.
+        Err(err) => erro(err.into(), &env),
+    }
+}
+
+/// Vocabulário de `oraculo_atendimento.status`, herdado da v1.
+///
+/// A coluna é `VARCHAR(20)`: um status inventado passaria e sumiria de toda a
+/// lógica que filtra por ele (painel, quadro, relatórios) sem erro nenhum.
+const STATUS_DE_ATENDIMENTO: [&str; 6] = [
+    "fila",
+    "em_atendimento",
+    "pendencia",
+    "resolvido",
+    "cancelado",
+    "arquivado",
+];
+
+#[tracing::instrument(skip_all, fields(rpc = "SetAtendimentoStatus", tenant_id = %env.tenant_id))]
+async fn handler_set_atendimento_status(
+    store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let atendimento_id = payload
+        .get("atendimento_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let novo_status = payload
+        .get("status")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let motivo = payload
+        .get("motivo")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    if !STATUS_DE_ATENDIMENTO.contains(&novo_status.as_str()) {
+        return erro(
+            error_core::AppError::Validation(format!("status desconhecido: '{novo_status}'")),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .definir_status_atendimento(&ctx, atendimento_id, novo_status.clone(), motivo)
+        .await
+    {
+        Ok(resultado) => {
+            audit
+                .publish(
+                    &env,
+                    "atendimento_status_alterado",
+                    format!("Atendimento {atendimento_id} → {novo_status}"),
+                    resultado.clone(),
+                )
+                .await;
+            ok_reply(&env, "SetAtendimentoStatusReply", resultado)
+        }
+        // `.into()` preserva o ErrorCode: RBAC de fluxo negado não pode virar
+        // erro de banco genérico na borda.
         Err(err) => erro(err.into(), &env),
     }
 }

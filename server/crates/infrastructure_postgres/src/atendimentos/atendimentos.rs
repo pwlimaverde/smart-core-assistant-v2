@@ -33,6 +33,47 @@ pub struct Atendimento {
     pub sentimento_label: Option<String>,
 }
 
+/// A tradução entre a coluna do quadro e o estado do atendimento.
+///
+/// O quadro e o status são duas leituras da mesma coisa: um cartão parado na
+/// coluna de finalização com status `fila` é uma contradição que quem opera vê
+/// como sistema quebrado. Estas duas funções são o único lugar onde a
+/// correspondência mora — cada movimento, em qualquer direção, passa por aqui.
+///
+/// O vocabulário dos dois lados vem da v1: `TipoEtapa` (fila/trabalho/espera/
+/// finalizacao) e `StatusAtendimento` (fila/em_atendimento/pendencia/resolvido/
+/// cancelado/arquivado).
+pub fn status_do_tipo_etapa(tipo_etapa: &str) -> Option<&'static str> {
+    match tipo_etapa {
+        "fila" => Some("fila"),
+        "trabalho" => Some("em_atendimento"),
+        "espera" => Some("pendencia"),
+        "finalizacao" => Some("resolvido"),
+        _ => None,
+    }
+}
+
+/// O caminho inverso. `cancelado` e `arquivado` também caem na finalização: são
+/// fins de linha, e deixá-los sem coluna esconderia o cartão do quadro.
+pub fn tipo_etapa_do_status(status: &str) -> Option<&'static str> {
+    match status {
+        "fila" => Some("fila"),
+        "em_atendimento" => Some("trabalho"),
+        "pendencia" => Some("espera"),
+        "resolvido" | "cancelado" | "arquivado" => Some("finalizacao"),
+        _ => None,
+    }
+}
+
+/// `true` para os status que encerram o atendimento.
+///
+/// Serve para não reescrever um `cancelado` como `resolvido` só porque o cartão
+/// foi arrastado dentro da mesma coluna de finalização — os dois terminam a
+/// conversa, mas por motivos diferentes, e o relatório distingue.
+pub fn status_e_fim_de_linha(status: &str) -> bool {
+    matches!(status, "resolvido" | "cancelado" | "arquivado")
+}
+
 #[async_trait]
 pub trait AtendimentoRepository: Send + Sync {
     async fn criar(
@@ -84,6 +125,17 @@ pub trait AtendimentoRepository: Send + Sync {
         ctx: &RequestContext,
         atendimento_id: i32,
         atendente_id: i32,
+    ) -> Result<(), DbError>;
+
+    /// Solta a conversa de quem a estava atendendo, devolvendo-a ao rodízio.
+    ///
+    /// Também religa o bot: um atendimento sem dono e sem bot ficaria mudo até
+    /// alguém reparar nele.
+    async fn desatribuir(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
     ) -> Result<(), DbError>;
 
     async fn touch_last_message(
@@ -333,6 +385,27 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                    status = 'em_atendimento'
                WHERE tenant_id = $2 AND id = $3"#,
             atendente_id,
+            ctx.tenant_id,
+            atendimento_id
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
+    async fn desatribuir(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<(), DbError> {
+        ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+        sqlx::query!(
+            r#"UPDATE oraculo_atendimento
+               SET atendente_humano_id = NULL,
+                   bot_pode_atender = true
+               WHERE tenant_id = $1 AND id = $2"#,
             ctx.tenant_id,
             atendimento_id
         )

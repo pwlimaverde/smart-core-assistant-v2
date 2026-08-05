@@ -1595,6 +1595,40 @@ final $typed_data.Uint8List moveAtendimentoEtapaResponseDescriptor =
         'ChxNb3ZlQXRlbmRpbWVudG9FdGFwYVJlc3BvbnNlEhgKB3N1Y2Nlc3MYASABKAhSB3N1Y2Nlc3'
         'M=');
 
+@$core.Deprecated('Use setAtendimentoStatusRequestDescriptor instead')
+const SetAtendimentoStatusRequest$json = {
+  '1': 'SetAtendimentoStatusRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'status', '3': 2, '4': 1, '5': 9, '10': 'status'},
+    {'1': 'motivo', '3': 3, '4': 1, '5': 9, '10': 'motivo'},
+  ],
+};
+
+/// Descriptor for `SetAtendimentoStatusRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List setAtendimentoStatusRequestDescriptor =
+    $convert.base64Decode(
+        'ChtTZXRBdGVuZGltZW50b1N0YXR1c1JlcXVlc3QSJQoOYXRlbmRpbWVudG9faWQYASABKAVSDW'
+        'F0ZW5kaW1lbnRvSWQSFgoGc3RhdHVzGAIgASgJUgZzdGF0dXMSFgoGbW90aXZvGAMgASgJUgZt'
+        'b3Rpdm8=');
+
+@$core.Deprecated('Use setAtendimentoStatusResponseDescriptor instead')
+const SetAtendimentoStatusResponse$json = {
+  '1': 'SetAtendimentoStatusResponse',
+  '2': [
+    {'1': 'success', '3': 1, '4': 1, '5': 8, '10': 'success'},
+    {'1': 'status', '3': 2, '4': 1, '5': 9, '10': 'status'},
+    {'1': 'etapa_atual_id', '3': 3, '4': 1, '5': 5, '10': 'etapaAtualId'},
+  ],
+};
+
+/// Descriptor for `SetAtendimentoStatusResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List setAtendimentoStatusResponseDescriptor =
+    $convert.base64Decode(
+        'ChxTZXRBdGVuZGltZW50b1N0YXR1c1Jlc3BvbnNlEhgKB3N1Y2Nlc3MYASABKAhSB3N1Y2Nlc3'
+        'MSFgoGc3RhdHVzGAIgASgJUgZzdGF0dXMSJAoOZXRhcGFfYXR1YWxfaWQYAyABKAVSDGV0YXBh'
+        'QXR1YWxJZA==');
+
 @$core.Deprecated('Use sendOutboundMessageRequestDescriptor instead')
 const SendOutboundMessageRequest$json = {
   '1': 'SendOutboundMessageRequest',

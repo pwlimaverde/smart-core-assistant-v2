@@ -175,6 +175,23 @@ pub trait AtendimentoStore: Send + Sync {
         action_id: Option<Uuid>,
     ) -> Result<(), DbError>;
 
+    /// Define o status do atendimento e **move o cartão junto**.
+    ///
+    /// O par simétrico de `mover_etapa_atendimento`: lá a coluna manda no
+    /// status, aqui o status manda na coluna. Sem isto, encerrar uma conversa
+    /// pelo chat deixaria o cartão parado na coluna de trabalho, e o quadro
+    /// passaria a mentir sobre o que está aberto.
+    ///
+    /// O movimento resultante é registrado como **automático**, para o
+    /// histórico distinguir o que uma pessoa arrastou do que o sistema mexeu.
+    async fn definir_status_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        novo_status: String,
+        motivo: String,
+    ) -> Result<serde_json::Value, DbError>;
+
     /// Varredura CROSS-TENANT do scheduler do worker (F4.3b): atendimentos
     /// resolvidos aguardando feedback além do TTL. Exige `admin_pool` (BYPASSRLS).
     async fn listar_feedback_vencido(

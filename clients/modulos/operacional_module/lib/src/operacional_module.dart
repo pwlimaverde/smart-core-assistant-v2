@@ -20,6 +20,16 @@ import 'features/atendimento/presentation/routes/kanban_route.dart';
 /// cima dele. Telas e controllers não conhecem nenhum dos dois — dependem só dos
 /// usecases e do port de eventos.
 final class OperacionalModule extends AppModule {
+  /// Menu lateral do app hospedeiro, repassado ao quadro.
+  ///
+  /// O quadro é a primeira tela depois do login; sem menu, a pessoa ficava
+  /// presa nele sem caminho para nenhuma configuração. O menu mora no app do
+  /// tenant, e este módulo não o conhece — por isso ele entra por parâmetro em
+  /// vez de virar uma dependência ao contrário.
+  final Widget Function()? drawerBuilder;
+
+  OperacionalModule({this.drawerBuilder});
+
   @override
   void globalBinds(Injector i) {
     // Fronteira de infraestrutura, uma por plataforma. O `AdminServiceClient`
@@ -67,6 +77,33 @@ final class OperacionalModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<ListFluxosUsecase>(
+      () => ListFluxosUsecase(
+        repository: ListFluxosRepository(
+          datasource: ListFluxosDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<ListColunasUsecase>(
+      () => ListColunasUsecase(
+        repository: ListColunasRepository(
+          datasource: ListColunasDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<SetAtendimentoStatusUsecase>(
+      () => SetAtendimentoStatusUsecase(
+        repository: SetAtendimentoStatusRepository(
+          datasource: SetAtendimentoStatusDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
     i.lazySingleton<SendOutboundMessageUsecase>(
       () => SendOutboundMessageUsecase(
         repository: SendOutboundMessageRepository(
@@ -79,5 +116,5 @@ final class OperacionalModule extends AppModule {
   }
 
   @override
-  List<GetItModule> routes() => [KanbanRoute()];
+  List<GetItModule> routes() => [KanbanRoute(drawerBuilder: drawerBuilder)];
 }

@@ -6,26 +6,32 @@ import 'package:return_success_or_error/return_success_or_error.dart';
 import '../../domain/errors/atendimento_errors.dart';
 import '../../domain/model/atendimento_evento.dart';
 import '../../domain/model/atendimento_resumo.dart';
+import '../../domain/model/quadro.dart';
 import '../../domain/parameters/list_atendimentos_parameters.dart';
 import '../../domain/parameters/move_atendimento_etapa_parameters.dart';
+import '../../domain/parameters/quadro_parameters.dart';
 import '../../domain/streams/atendimento_evento_stream.dart';
 import '../../domain/usecases/atendimento_usecases.dart';
 import 'kanban_state.dart';
 
-/// Controller do Kanban (fila por departamento — WS-6.2).
+/// Controller do Kanban.
 ///
 /// Orquestra estado; nenhum I/O direto (fala só com os usecases). Mover um
 /// card aplica a mudança OTIMISTA na etapa local e confirma com o servidor —
-/// se o RPC falhar (ex.: RBAC fino de fluxo barrando, WS-5a), reverte para o
-/// snapshot anterior e devolve o erro da operação para a UI exibir (snackbar).
+/// se o RPC falhar (ex.: RBAC fino de fluxo barrando), reverte para o snapshot
+/// anterior e devolve o erro da operação para a UI exibir.
 ///
-/// Também assina o stream realtime (`streamAtendimentos`, WS-6.3) para
-/// refletir movimentos feitos por outros atendentes/abas: cada evento
-/// `kanban.movido`/`atendimento.aberto` recarrega a fila (debounced, para não
-/// disparar uma rajada de RPCs quando vários eventos chegam juntos).
+/// Também assina o stream realtime para refletir movimentos feitos por outros
+/// atendentes/abas: cada evento recarrega a fila (debounced, para não disparar
+/// uma rajada de RPCs quando vários eventos chegam juntos).
+// ignore_for_file: prefer_initializing_formals
+
 final class KanbanController extends BaseController<KanbanViewModel> {
   final ListAtendimentosUsecase _listUsecase;
   final MoveAtendimentoEtapaUsecase _moveUsecase;
+  final ListFluxosUsecase _fluxosUsecase;
+  final ListColunasUsecase _colunasUsecase;
+  final SetAtendimentoStatusUsecase _statusUsecase;
 
   /// Fonte de eventos realtime (opcional — testes de unidade do controller não
   /// precisam abrir stream).
@@ -33,14 +39,23 @@ final class KanbanController extends BaseController<KanbanViewModel> {
 
   KanbanController({
     this.eventos,
-    required this._listUsecase,
-    required this._moveUsecase,
-  }) {
+    required ListAtendimentosUsecase listUsecase,
+    required MoveAtendimentoEtapaUsecase moveUsecase,
+    required ListFluxosUsecase fluxosUsecase,
+    required ListColunasUsecase colunasUsecase,
+    required SetAtendimentoStatusUsecase statusUsecase,
+  }) : _listUsecase = listUsecase,
+       _moveUsecase = moveUsecase,
+       _fluxosUsecase = fluxosUsecase,
+       _colunasUsecase = colunasUsecase,
+       _statusUsecase = statusUsecase {
     final fonte = eventos;
     if (fonte != null) _assinarStream(fonte);
   }
 
-  int? _departamentoAtual;
+  int? _fluxoAtual;
+  List<FluxoDoQuadro> _fluxos = const [];
+  List<ColunaDoQuadro> _colunas = const [];
   StreamSubscription<AtendimentoEvento>? _streamSubscription;
   Timer? _debounce;
 
@@ -70,21 +85,47 @@ final class KanbanController extends BaseController<KanbanViewModel> {
     return super.close();
   }
 
-  /// Carrega (ou recarrega) a fila do departamento informado (`null` = todos).
-  Future<void> carregarFila({int? departamentoId}) async {
-    _departamentoAtual = departamentoId;
-    await execute(() => _fetchViewModel(departamentoId));
+  /// Monta o quadro: descobre os fluxos, abre um deles e carrega as conversas.
+  ///
+  /// A lista de fluxos só é buscada uma vez — é configuração, muda raramente, e
+  /// rebuscá-la a cada recarga da fila triplicaria as idas ao servidor durante
+  /// uma rajada de mensagens.
+  Future<void> carregar({int? fluxoId}) async {
+    if (_fluxos.isEmpty) {
+      final res = await _fluxosUsecase(noParams);
+      if (res case Success(:final value)) _fluxos = value;
+    }
+
+    final escolhido =
+        fluxoId ?? _fluxoAtual ?? (_fluxos.isNotEmpty ? _fluxos.first.id : null);
+    if (escolhido != _fluxoAtual) {
+      _fluxoAtual = escolhido;
+      _colunas = const [];
+    }
+
+    if (escolhido != null && _colunas.isEmpty) {
+      final res = await _colunasUsecase(ListColunasParameters(fluxoId: escolhido));
+      if (res case Success(:final value)) _colunas = value;
+    }
+
+    await execute(() => _montar(escolhido));
   }
 
-  Future<ReturnSuccessOrError<KanbanViewModel, ListAtendimentosError>>
-  _fetchViewModel(int? departamentoId) async {
-    final res = await _listUsecase(
-      ListAtendimentosParameters(departamentoId: departamentoId),
-    );
+  /// Troca o quadro aberto.
+  Future<void> abrirQuadro(int fluxoId) => carregar(fluxoId: fluxoId);
+
+  Future<ReturnSuccessOrError<KanbanViewModel, ListAtendimentosError>> _montar(
+    int? fluxoId,
+  ) async {
+    // Sem filtro de status: o quadro mostra a conversa em qualquer coluna, e
+    // filtrar por "fila" deixaria as colunas de trabalho e finalização vazias.
+    final res = await _listUsecase(const ListAtendimentosParameters(status: ''));
     return switch (res) {
       Success(:final value) => Success(
         KanbanViewModel(
-          departamentoId: departamentoId,
+          fluxoId: fluxoId,
+          fluxos: _fluxos,
+          colunas: _colunas,
           porEtapa: KanbanViewModel.agruparPorEtapa(value),
         ),
       ),
@@ -92,11 +133,10 @@ final class KanbanController extends BaseController<KanbanViewModel> {
     };
   }
 
-  /// Aplica um evento realtime recebido no chat/stream (WS-6.3) recarregando
-  /// a fila — reaproveita [carregarFila] em vez de reconciliar localmente,
-  /// mantendo o Kanban simples e sempre consistente com o servidor.
-  Future<void> recarregarAposEvento() =>
-      carregarFila(departamentoId: _departamentoAtual);
+  /// Aplica um evento realtime recarregando a fila — reaproveita [carregar] em
+  /// vez de reconciliar localmente, mantendo o quadro sempre consistente com o
+  /// servidor.
+  Future<void> recarregarAposEvento() => carregar();
 
   /// Move [atendimentoId] para [etapaDestinoId] (drop de um card numa coluna).
   ///
@@ -120,9 +160,18 @@ final class KanbanController extends BaseController<KanbanViewModel> {
     if (index == -1) return null;
     final atendimento = origemLista.removeAt(index);
 
+    // O status acompanha a coluna, aqui e no servidor. Aplicar já no otimismo
+    // evita uma ida extra só para reler o que se sabe -- e evita o cartão
+    // aparecer na coluna de finalização ainda marcado como "na fila".
+    final destino = vm.colunas.where((c) => c.id == etapaDestinoId).firstOrNull;
     final destinoLista = List<AtendimentoResumo>.of(
       vm.porEtapa[etapaDestinoId] ?? const <AtendimentoResumo>[],
-    )..add(atendimento.copyWith(etapaAtualId: etapaDestinoId));
+    )..add(
+        atendimento.copyWith(
+          etapaAtualId: etapaDestinoId,
+          status: destino?.statusResultante,
+        ),
+      );
 
     final novoMapa = Map<int, List<AtendimentoResumo>>.of(vm.porEtapa)
       ..[etapaOrigemId] = origemLista
@@ -162,6 +211,25 @@ final class KanbanController extends BaseController<KanbanViewModel> {
     if (atualPosMove is SuccessState<KanbanViewModel>) {
       emit(SuccessState(atualPosMove.data.copyWith(limparMovendo: true)));
     }
+    return null;
+  }
+
+  /// Muda o estado do atendimento. O servidor move o cartão junto; aqui só se
+  /// recarrega para ver onde ele parou.
+  Future<SetStatusError?> definirStatus({
+    required int atendimentoId,
+    required String status,
+    String motivo = '',
+  }) async {
+    final res = await _statusUsecase(
+      SetAtendimentoStatusParameters(
+        atendimentoId: atendimentoId,
+        status: status,
+        motivo: motivo,
+      ),
+    );
+    if (res case Failure(:final error)) return error;
+    await recarregarAposEvento();
     return null;
   }
 }

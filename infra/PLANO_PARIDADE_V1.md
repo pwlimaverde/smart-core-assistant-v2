@@ -135,10 +135,15 @@ muda ao renomear: é referência estável.
 quem está de férias fica ativo e indisponível, e confundir os dois esconde por
 que uma fila parou.
 
-**Falta desta etapa**: criar/editar atendente e vincular a departamento. O
-`oraculo_atendente` exige `fluxo_id` NOT NULL, e fluxos são a Etapa 5 — criar
-atendente antes disso exigiria inventar um fluxo padrão, o que é decisão de
-produto, não detalhe de implementação.
+**Fechado depois da Etapa 5**: criar, editar e desativar atendente, com fluxo e
+departamento. O `oraculo_atendente` exige `fluxo_id` NOT NULL — o que travava
+isto era não haver fluxo para apontar.
+
+O e-mail não aparece na edição: é a chave única da pessoa dentro do tenant, e
+oferecer o campo seria oferecer um caminho que só termina em erro de unicidade.
+Inativo nunca sai como disponível (seguiria elegível no rodízio sem ninguém
+trabalhando), e o teto de conversas simultâneas fica em 1..100 — zero deixaria
+a pessoa cadastrada e nunca elegível, inativa por acidente sem parecer inativa.
 
 ### Etapa 3 — Painel do tenant — FEITO
 
@@ -219,28 +224,67 @@ roteamento sem erro nenhum. No cliente, o inverso: tipo desconhecido cai em
 **Falta desta etapa**: criar e editar atendente vinculando a fluxo — agora
 possível, já que `oraculo_atendente.fluxo_id` tem para onde apontar.
 
-### Etapa 6 — Kanban próprio integrado ao WhatsApp
+### Etapa 6 — Kanban próprio integrado ao WhatsApp — FEITO (parcial)
 
-O maior item, e o que difere do old por decisão de produto.
+**Decisão tomada:** o cartão se move pela mão do atendente **e** pelo estado do
+atendimento — e o gatilho do bot fica pronto para quando existir (ver abaixo).
 
-Modelo novo: quadro, coluna, cartão — o cartão referencia `oraculo_atendimento`,
-que é o elo com o WhatsApp. Mover cartão é evento de negócio (auditado), e a
-coluna pode disparar ação no fluxo.
+Não precisou de modelo novo: `oraculo_atendimento.etapa_atual_id` já era o
+cartão, e `oraculo_movimento_fluxo` já era o histórico. O que faltava era a
+coerência entre as duas leituras.
 
-Aproveita: `kanban_page` (existe), `atu_etiqueta`, `atu_nota`,
-`CampoPersonalizado` (tabelas existem).
+**O defeito que motivava tudo:** as colunas vinham dos atendimentos existentes,
+não do fluxo. Coluna sem conversa sumia (não havia para onde arrastar), e uma
+conta nova abria o quadro em branco — foi o "fila de atendimento vazia" do
+teste. Agora as colunas vêm de `ListMyEtapasFluxo`, com nome e ordem do
+cadastro, e um seletor troca de quadro quando há mais de um.
 
-Precisa de decisão sua antes de começar: **o que move um cartão de coluna** —
-só a mão do atendente, ou também o estado do atendimento/fluxo?
+**A tela também não tinha menu.** O quadro é a primeira coisa depois do login, e
+sem menu a pessoa ficava presa nele. O `TenantDrawer` mora no `tenant_module`, e
+o `operacional_module` não pode depender dele — então entra por parâmetro
+(`OperacionalModule(drawerBuilder: TenantDrawer.new)`), decidido no `bootstrap`.
+
+**Sincronia nos dois sentidos**, com uma única tabela de correspondência
+(`status_do_tipo_etapa` / `tipo_etapa_do_status`, em `atendimentos.rs`):
+
+- arrastar → o status segue o tipo da coluna destino;
+- mudar o status (`SetAtendimentoStatus`) → o cartão vai para a coluna daquele
+  tipo, e o movimento é registrado como **automático**, para o histórico
+  distinguir o que uma pessoa arrastou do que o sistema mexeu.
+
+Dois cuidados que a leitura ingênua erraria: um `cancelado` **não** vira
+`resolvido` só porque o cartão andou dentro da finalização (os dois encerram,
+por motivos diferentes, e o relatório distingue); e voltar para a fila
+**desatribui** o atendente e religa o bot — mantê-lo preso a quem o largou faria
+o rodízio pular quem está livre.
+
+O cliente aplica a mesma tabela no movimento otimista, para o cartão não
+aparecer na coluna de finalização ainda marcado como "na fila". Não é
+divergência de regra: é o que evita uma ida ao servidor só para reler o que já
+se sabe.
+
+Conversa fora de qualquer coluna conhecida (chegou antes do fluxo existir, ou
+aponta para coluna removida) ganha uma coluna "Sem coluna". Escondê-la faria
+sumir atendimento de verdade.
+
+**Falta desta etapa:**
+
+- **O gatilho do bot não existe ainda.** A infraestrutura está pronta — qualquer
+  caminho que passe por `definir_status_atendimento` move o cartão —, mas o
+  worker nunca encerra um atendimento hoje. *Quando* a IA deve considerar a
+  conversa encerrada é decisão de produto, não detalhe de implementação.
+- Etiquetas, notas e campos personalizados no cartão (tabelas existem) — é a
+  Etapa 8.
 
 ### Etapa 7 — Treinamento: intents e teste de resposta
 
 `query_compose` (CRUD de intents) e `testar_query` com feedback. Fecha a
 paridade do módulo que já entreguei pela metade.
 
-Também precisa de decisão: o RAG do v2 já consulta `treinamento_querycompose`
-na composição de contexto, mas a **curadoria manual** de intents pode ter sido
-absorvida pelo `ia_engine`.
+**Decisão tomada:** paridade completa — CRUD de intents **e** a tela de testar
+pergunta. O RAG consulta `treinamento_querycompose` na composição de contexto, e
+a curadoria manual continua sendo o jeito de corrigir uma resposta errada sem
+esperar retreinamento.
 
 ### Etapa 8 — Detalhe do atendimento
 

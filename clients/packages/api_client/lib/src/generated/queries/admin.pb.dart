@@ -6479,6 +6479,177 @@ class MoveAtendimentoEtapaResponse extends $pb.GeneratedMessage {
   void clearSuccess() => $_clearField(1);
 }
 
+/// O par simetrico de MoveAtendimentoEtapa: la a coluna manda no status, aqui o
+/// status manda na coluna. Encerrar pelo chat sem isto deixaria o cartao parado
+/// na coluna de trabalho, e o quadro passaria a mentir sobre o que esta aberto.
+class SetAtendimentoStatusRequest extends $pb.GeneratedMessage {
+  factory SetAtendimentoStatusRequest({
+    $core.int? atendimentoId,
+    $core.String? status,
+    $core.String? motivo,
+  }) {
+    final result = create();
+    if (atendimentoId != null) result.atendimentoId = atendimentoId;
+    if (status != null) result.status = status;
+    if (motivo != null) result.motivo = motivo;
+    return result;
+  }
+
+  SetAtendimentoStatusRequest._();
+
+  factory SetAtendimentoStatusRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SetAtendimentoStatusRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SetAtendimentoStatusRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'atendimentoId')
+    ..aOS(2, _omitFieldNames ? '' : 'status')
+    ..aOS(3, _omitFieldNames ? '' : 'motivo')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetAtendimentoStatusRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetAtendimentoStatusRequest copyWith(
+          void Function(SetAtendimentoStatusRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as SetAtendimentoStatusRequest))
+          as SetAtendimentoStatusRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SetAtendimentoStatusRequest create() =>
+      SetAtendimentoStatusRequest._();
+  @$core.override
+  SetAtendimentoStatusRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SetAtendimentoStatusRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SetAtendimentoStatusRequest>(create);
+  static SetAtendimentoStatusRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get atendimentoId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set atendimentoId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAtendimentoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAtendimentoId() => $_clearField(1);
+
+  /// Vocabulario fechado: fila, em_atendimento, pendencia, resolvido,
+  /// cancelado, arquivado.
+  @$pb.TagNumber(2)
+  $core.String get status => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set status($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasStatus() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearStatus() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get motivo => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set motivo($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasMotivo() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearMotivo() => $_clearField(3);
+}
+
+class SetAtendimentoStatusResponse extends $pb.GeneratedMessage {
+  factory SetAtendimentoStatusResponse({
+    $core.bool? success,
+    $core.String? status,
+    $core.int? etapaAtualId,
+  }) {
+    final result = create();
+    if (success != null) result.success = success;
+    if (status != null) result.status = status;
+    if (etapaAtualId != null) result.etapaAtualId = etapaAtualId;
+    return result;
+  }
+
+  SetAtendimentoStatusResponse._();
+
+  factory SetAtendimentoStatusResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SetAtendimentoStatusResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SetAtendimentoStatusResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOB(1, _omitFieldNames ? '' : 'success')
+    ..aOS(2, _omitFieldNames ? '' : 'status')
+    ..aI(3, _omitFieldNames ? '' : 'etapaAtualId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetAtendimentoStatusResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetAtendimentoStatusResponse copyWith(
+          void Function(SetAtendimentoStatusResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as SetAtendimentoStatusResponse))
+          as SetAtendimentoStatusResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SetAtendimentoStatusResponse create() =>
+      SetAtendimentoStatusResponse._();
+  @$core.override
+  SetAtendimentoStatusResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SetAtendimentoStatusResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SetAtendimentoStatusResponse>(create);
+  static SetAtendimentoStatusResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.bool get success => $_getBF(0);
+  @$pb.TagNumber(1)
+  set success($core.bool value) => $_setBool(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSuccess() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSuccess() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get status => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set status($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasStatus() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearStatus() => $_clearField(2);
+
+  /// Onde o cartao ficou. 0 quando o fluxo nao tem coluna daquele tipo -- o
+  /// cartao fica onde estava, que e melhor que sumir do quadro.
+  @$pb.TagNumber(3)
+  $core.int get etapaAtualId => $_getIZ(2);
+  @$pb.TagNumber(3)
+  set etapaAtualId($core.int value) => $_setSignedInt32(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasEtapaAtualId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearEtapaAtualId() => $_clearField(3);
+}
+
 class SendOutboundMessageRequest extends $pb.GeneratedMessage {
   factory SendOutboundMessageRequest({
     $core.int? atendimentoId,

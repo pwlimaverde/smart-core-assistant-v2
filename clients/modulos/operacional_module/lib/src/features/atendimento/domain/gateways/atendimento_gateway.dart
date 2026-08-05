@@ -1,6 +1,7 @@
 import '../model/atendimento_evento.dart';
 import '../model/atendimento_resumo.dart';
 import '../model/mensagem_thread.dart';
+import '../model/quadro.dart';
 
 /// Fronteira de infraestrutura do atendimento, **escolhida por plataforma**:
 /// gRPC-Web no browser, motor local Rust (SQLite + fila offline) no desktop.
@@ -43,6 +44,27 @@ abstract interface class AtendimentoGateway {
     required int etapaDestinoId,
     String motivo,
   });
+
+  /// Muda o status do atendimento; o servidor move o cartão junto.
+  ///
+  /// O par simétrico do arrasto: lá a coluna manda no status, aqui o status
+  /// manda na coluna. Encerrar pelo chat sem isto deixaria o cartão parado na
+  /// coluna de trabalho, e o quadro passaria a mentir sobre o que está aberto.
+  Future<void> setAtendimentoStatus({
+    required int atendimentoId,
+    required String status,
+    String motivo,
+  });
+
+  /// Quadros que o atendente pode abrir.
+  ///
+  /// Configuração, não dado operacional: vai direto ao servidor mesmo no
+  /// desktop. Guardá-la no índice offline arriscaria montar o quadro com
+  /// colunas que já não existem.
+  Future<List<FluxoDoQuadro>> listFluxos();
+
+  /// Colunas de um quadro, na ordem em que aparecem.
+  Future<List<ColunaDoQuadro>> listColunas(int fluxoId);
 
   /// Persiste uma mensagem outbound do atendente; devolve o id da mensagem.
   Future<int> sendOutboundMessage({

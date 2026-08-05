@@ -15,16 +15,23 @@ KanbanController _controller(
   FakeAtendimentoGateway gateway, {
   bool comStream = false,
 }) {
+  // Todo controller de teste comeca com um quadro montado: e o estado normal
+  // de quem opera, e sem colunas o arrasto nao teria destino.
+  gateway.colunas = gateway.colunas.isEmpty ? colunasDeTeste() : gateway.colunas;
+  gateway.fluxos = gateway.fluxos.isEmpty ? fluxosDeTeste() : gateway.fluxos;
   final u = usecasesSobre(gateway);
   return KanbanController(
     listUsecase: u.list,
     moveUsecase: u.move,
+    fluxosUsecase: u.fluxos,
+    colunasUsecase: u.colunas,
+    statusUsecase: u.status,
     eventos: comStream ? u.eventos : null,
   );
 }
 
 void main() {
-  group('carregarFila', () {
+  group('carregar', () {
     blocTest<KanbanController, ViewState<KanbanViewModel>>(
       'sucesso: emite [Loading, Success] agrupando por etapa',
       build: () => _controller(
@@ -35,7 +42,7 @@ void main() {
           ],
         ),
       ),
-      act: (c) => c.carregarFila(),
+      act: (c) => c.carregar(),
       expect: () => [
         isA<LoadingState<KanbanViewModel>>(),
         isA<SuccessState<KanbanViewModel>>().having(
@@ -51,7 +58,7 @@ void main() {
       build: () => _controller(
         FakeAtendimentoGateway()..erroList = GrpcError.unavailable('offline'),
       ),
-      act: (c) => c.carregarFila(),
+      act: (c) => c.carregar(),
       expect: () => [
         isA<LoadingState<KanbanViewModel>>(),
         isA<ErrorState<KanbanViewModel>>().having(
@@ -65,7 +72,7 @@ void main() {
     blocTest<KanbanController, ViewState<KanbanViewModel>>(
       'fila vazia é sucesso, não erro',
       build: () => _controller(FakeAtendimentoGateway()),
-      act: (c) => c.carregarFila(),
+      act: (c) => c.carregar(),
       expect: () => [
         isA<LoadingState<KanbanViewModel>>(),
         isA<SuccessState<KanbanViewModel>>(),
@@ -79,7 +86,7 @@ void main() {
         fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
       );
       final controller = _controller(gateway);
-      await controller.carregarFila();
+      await controller.carregar();
 
       final erro = await controller.moverCard(
         atendimentoId: 1,
@@ -99,7 +106,7 @@ void main() {
         fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
       )..erroMove = GrpcError.permissionDenied('flow_permissions');
       final controller = _controller(gateway);
-      await controller.carregarFila();
+      await controller.carregar();
 
       final erro = await controller.moverCard(
         atendimentoId: 1,
@@ -119,7 +126,7 @@ void main() {
         fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
       )..erroMove = GrpcError.failedPrecondition('etapa nao sucessora');
       final controller = _controller(gateway);
-      await controller.carregarFila();
+      await controller.carregar();
 
       final erro = await controller.moverCard(
         atendimentoId: 1,
@@ -152,7 +159,7 @@ void main() {
         fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
       );
       final controller = _controller(gateway);
-      await controller.carregarFila();
+      await controller.carregar();
 
       final erro = await controller.moverCard(
         atendimentoId: 999,
@@ -172,7 +179,7 @@ void main() {
         fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
       );
       final controller = _controller(gateway, comStream: true);
-      await controller.carregarFila();
+      await controller.carregar();
       final antes = gateway.chamadasList;
 
       gateway.eventos.add(
@@ -195,7 +202,7 @@ void main() {
         fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
       );
       final controller = _controller(gateway, comStream: true);
-      await controller.carregarFila();
+      await controller.carregar();
       final antes = gateway.chamadasList;
 
       for (var i = 0; i < 5; i++) {
@@ -218,7 +225,7 @@ void main() {
         fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
       );
       final controller = _controller(gateway, comStream: true);
-      await controller.carregarFila();
+      await controller.carregar();
       final estadoAntes = controller.state;
 
       gateway.eventos.addError(GrpcError.unavailable('stream caiu'));
@@ -234,25 +241,154 @@ void main() {
       );
       final controller = _controller(gateway);
 
-      await controller.carregarFila();
+      await controller.carregar();
 
       expect(controller.state, isA<SuccessState<KanbanViewModel>>());
       await controller.close();
     });
   });
 
-  group('recarregarAposEvento', () {
-    test('preserva o departamento filtrado', () async {
+  group('colunas do quadro', () {
+    test('as colunas vem do fluxo, nao dos atendimentos', () async {
+      // O defeito que isto cobre: derivar as colunas dos dados fazia uma coluna
+      // vazia sumir (nao havia para onde arrastar) e um quadro sem conversa
+      // nenhuma abrir em branco, como se estivesse quebrado.
+      final gateway = FakeAtendimentoGateway();
+      final controller = _controller(gateway);
+
+      await controller.carregar();
+
+      final estado = controller.state as SuccessState<KanbanViewModel>;
+      expect(estado.data.colunas, hasLength(3));
+      expect(estado.data.temQuadro, isTrue);
+      await controller.close();
+    });
+
+    test('sem fluxo cadastrado, o quadro se declara vazio', () async {
+      final gateway = FakeAtendimentoGateway()
+        ..colunas = const []
+        ..fluxos = const [];
+      final u = usecasesSobre(gateway);
+      final controller = KanbanController(
+        listUsecase: u.list,
+        moveUsecase: u.move,
+        fluxosUsecase: u.fluxos,
+        colunasUsecase: u.colunas,
+        statusUsecase: u.status,
+      );
+
+      await controller.carregar();
+
+      final estado = controller.state as SuccessState<KanbanViewModel>;
+      expect(estado.data.temQuadro, isFalse);
+      await controller.close();
+    });
+
+    test('conversa fora das colunas conhecidas nao desaparece', () async {
+      // Chegou antes do fluxo existir, ou aponta para coluna ja removida.
+      // Esconde-la faria sumir atendimento de verdade.
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 1, etapaAtualId: 999)],
+      );
+      final controller = _controller(gateway);
+
+      await controller.carregar();
+
+      final estado = controller.state as SuccessState<KanbanViewModel>;
+      expect(estado.data.semColuna.single.id, 1);
+      await controller.close();
+    });
+
+    test('a lista de fluxos e buscada uma vez so', () async {
+      // Configuracao muda raramente; rebusca-la a cada recarga triplicaria as
+      // idas ao servidor durante uma rajada de mensagens.
+      final gateway = FakeAtendimentoGateway();
+      final controller = _controller(gateway);
+
+      await controller.carregar();
+      await controller.carregar();
+      await controller.recarregarAposEvento();
+
+      expect(gateway.chamadasList, 3, reason: 'a fila sim, a cada vez');
+      await controller.close();
+    });
+  });
+
+  group('status segue a coluna', () {
+    test('mover para finalizacao ja marca o cartao como resolvido', () async {
+      // Sem isto, o cartao apareceria na coluna de finalizacao ainda marcado
+      // como "na fila" ate a proxima recarga.
       final gateway = FakeAtendimentoGateway(
         fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
       );
       final controller = _controller(gateway);
-      await controller.carregarFila(departamentoId: 7);
+      await controller.carregar();
 
-      await controller.recarregarAposEvento();
+      await controller.moverCard(
+        atendimentoId: 1,
+        etapaOrigemId: 10,
+        etapaDestinoId: 30,
+      );
 
       final estado = controller.state as SuccessState<KanbanViewModel>;
-      expect(estado.data.departamentoId, 7);
+      expect(estado.data.porEtapa[30]?.single.status, 'resolvido');
+      await controller.close();
+    });
+
+    test('coluna desconhecida nao inventa estado', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
+      );
+      final controller = _controller(gateway);
+      await controller.carregar();
+
+      await controller.moverCard(
+        atendimentoId: 1,
+        etapaOrigemId: 10,
+        etapaDestinoId: 777,
+      );
+
+      final estado = controller.state as SuccessState<KanbanViewModel>;
+      expect(estado.data.porEtapa[777]?.single.status, 'fila');
+      await controller.close();
+    });
+  });
+
+  group('definirStatus', () {
+    test('repassa o status e recarrega o quadro', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
+      );
+      final controller = _controller(gateway);
+      await controller.carregar();
+      final antes = gateway.chamadasList;
+
+      final erro = await controller.definirStatus(
+        atendimentoId: 1,
+        status: 'resolvido',
+      );
+
+      expect(erro, isNull);
+      expect(gateway.statusRecebido, 'resolvido');
+      expect(gateway.chamadasList, greaterThan(antes));
+      await controller.close();
+    });
+
+    test('recusa do servidor volta como erro, sem recarregar', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
+      )..erroStatus = GrpcError.permissionDenied('flow_permissions');
+      final controller = _controller(gateway);
+      await controller.carregar();
+      final antes = gateway.chamadasList;
+
+      final erro = await controller.definirStatus(
+        atendimentoId: 1,
+        status: 'resolvido',
+      );
+
+      expect(erro, isA<SetStatusAcessoNegado>());
+      expect(gateway.chamadasList, antes);
       await controller.close();
     });
   });

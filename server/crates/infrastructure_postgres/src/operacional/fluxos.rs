@@ -173,6 +173,19 @@ pub trait EtapaFluxoRepository: Send + Sync {
         fluxo_id: i32,
     ) -> Result<Option<EtapaFluxo>, DbError>;
 
+    /// Primeira etapa ativa de um tipo no fluxo, na ordem do quadro.
+    ///
+    /// É por aqui que uma mudança de status encontra a coluna correspondente.
+    /// "Primeira" e não "a" porque nada impede o tenant de ter duas colunas de
+    /// espera — a da esquerda é a que recebe.
+    async fn buscar_por_tipo(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        fluxo_id: i32,
+        tipo_etapa: &str,
+    ) -> Result<Option<EtapaFluxo>, DbError>;
+
     /// Próxima posição livre no fim do fluxo.
     ///
     /// Conta pelo `MAX(ordem)`, não pelo número de etapas ativas: a `UNIQUE
@@ -535,6 +548,33 @@ impl EtapaFluxoRepository for PostgresEtapaFluxoRepository {
                LIMIT 1"#,
             ctx.tenant_id,
             fluxo_id
+        )
+        .fetch_optional(&mut **tx)
+        .await?;
+        Ok(row)
+    }
+
+    #[tracing::instrument(skip_all, fields(fluxo_id = fluxo_id, tipo_etapa = %tipo_etapa))]
+    async fn buscar_por_tipo(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        fluxo_id: i32,
+        tipo_etapa: &str,
+    ) -> Result<Option<EtapaFluxo>, DbError> {
+        let row = sqlx::query_as!(
+            EtapaFluxo,
+            r#"SELECT id, tenant_id, fluxo_id, nome, descricao, ordem, cor, tipo_etapa,
+                      permite_atribuicao, automatico, regras_transicao, campos_obrigatorios,
+                      ativo, data_criacao
+               FROM oraculo_etapa_fluxo
+               WHERE tenant_id = $1 AND fluxo_id = $2
+                 AND tipo_etapa = $3 AND ativo = true
+               ORDER BY ordem ASC
+               LIMIT 1"#,
+            ctx.tenant_id,
+            fluxo_id,
+            tipo_etapa
         )
         .fetch_optional(&mut **tx)
         .await?;

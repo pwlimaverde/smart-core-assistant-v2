@@ -169,3 +169,74 @@ final class SendMessageInesperado extends SendOutboundMessageError
   const SendMessageInesperado()
     : super('Não foi possível enviar a mensagem. Tente novamente.');
 }
+
+// ─── quadro (fluxos e colunas) ────────────────────────────────────────────────
+
+/// Erros ao montar o quadro.
+///
+/// Separado de `listAtendimentos` de propósito: as conversas podem carregar e a
+/// configuração do quadro falhar, ou o contrário, e as duas falhas pedem
+/// mensagens diferentes — "a fila não carregou" e "o quadro não carregou" levam
+/// a lugares distintos.
+sealed class QuadroError extends AppError {
+  const QuadroError(super.message);
+}
+
+final class QuadroAcessoNegado extends QuadroError with UnauthorizedFailure {
+  const QuadroAcessoNegado()
+    : super('Você não tem acesso à configuração deste quadro.');
+}
+
+final class QuadroIndisponivel extends QuadroError with NetworkFailure {
+  const QuadroIndisponivel()
+    : super('Não foi possível carregar o quadro. Tente novamente.');
+}
+
+final class QuadroFalhaLocal extends QuadroError {
+  const QuadroFalhaLocal()
+    : super('Falha no armazenamento local. Reinicie o aplicativo.');
+}
+
+final class QuadroInesperado extends QuadroError with UnexpectedFailure {
+  const QuadroInesperado()
+    : super('Não foi possível carregar o quadro. Tente novamente.');
+}
+
+// ─── setAtendimentoStatus ─────────────────────────────────────────────────────
+
+/// Erros ao mudar o status do atendimento.
+sealed class SetStatusError extends AppError {
+  const SetStatusError(super.message);
+}
+
+/// Mesmo RBAC fino por fluxo do arrasto: quem não pode mover o cartão também
+/// não pode encerrar a conversa por outro botão.
+final class SetStatusAcessoNegado extends SetStatusError
+    with UnauthorizedFailure {
+  const SetStatusAcessoNegado()
+    : super('Você não tem permissão para mudar o estado deste atendimento.');
+}
+
+final class SetStatusNaoEncontrado extends SetStatusError {
+  const SetStatusNaoEncontrado() : super('Atendimento não encontrado.');
+}
+
+final class SetStatusRecusado extends SetStatusError with ValidationFailure {
+  const SetStatusRecusado()
+    : super('Esta mudança não é permitida para este atendimento.');
+}
+
+final class SetStatusIndisponivel extends SetStatusError with NetworkFailure {
+  const SetStatusIndisponivel()
+    : super('Não foi possível concluir. Tente novamente.');
+}
+
+final class SetStatusFalhaLocal extends SetStatusError {
+  const SetStatusFalhaLocal()
+    : super('Falha no armazenamento local. Reinicie o aplicativo.');
+}
+
+final class SetStatusInesperado extends SetStatusError with UnexpectedFailure {
+  const SetStatusInesperado()
+    : super('Não foi possível concluir. Tente novamente.');
+}

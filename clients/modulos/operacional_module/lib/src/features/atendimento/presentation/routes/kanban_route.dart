@@ -5,13 +5,22 @@ import '../../domain/usecases/atendimento_usecases.dart';
 import '../controllers/kanban_controller.dart';
 import '../pages/kanban_page.dart';
 
-/// Rota '/atendimentos' — fila/Kanban por departamento (WS-6.2/6.4).
+/// Rota '/atendimentos' — o quadro de atendimento.
 final class KanbanRoute extends GetItModule {
+  /// Menu lateral do app que monta esta rota.
+  ///
+  /// Um builder, e não um widget pronto: o menu lê a rota atual do
+  /// `GoRouterState` para marcar onde a pessoa está, e um widget construído no
+  /// boot não teria esse contexto.
+  final Widget Function()? drawerBuilder;
+
+  KanbanRoute({this.drawerBuilder});
+
   @override
   String get path => '/atendimentos';
 
   @override
-  Widget get page => const KanbanPage();
+  Widget get page => KanbanPage(drawer: drawerBuilder?.call());
 
   @override
   void binds(Injector i) {
@@ -19,6 +28,9 @@ final class KanbanRoute extends GetItModule {
       () => KanbanController(
         listUsecase: inject<ListAtendimentosUsecase>(),
         moveUsecase: inject<MoveAtendimentoEtapaUsecase>(),
+        fluxosUsecase: inject<ListFluxosUsecase>(),
+        colunasUsecase: inject<ListColunasUsecase>(),
+        statusUsecase: inject<SetAtendimentoStatusUsecase>(),
         eventos: inject<AtendimentoEventoStream>(),
       ),
     );

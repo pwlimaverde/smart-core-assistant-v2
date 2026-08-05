@@ -145,6 +145,8 @@ use contracts::grpc::queries::{
     SendOutboundMessageRequest,
     SendOutboundMessageResponse,
     ServiceHealth as ProtoServiceHealth,
+    SetAtendimentoStatusRequest,
+    SetAtendimentoStatusResponse,
     SetFeatureFlagOverrideRequest,
     SetFeatureFlagOverrideResponse,
     SetFeatureFlagRequest,
@@ -4206,6 +4208,117 @@ impl AdminService for AdminFacade {
 
                 Ok(Response::new(MoveAtendimentoEtapaResponse {
                     success: true,
+                }))
+            }
+            Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
+        }
+    }
+
+    /// Muda o status do atendimento; o cartão acompanha.
+    ///
+    /// Mesmo RBAC fino por fluxo do arrasto: quem não pode mover o cartão
+    /// também não pode encerrar a conversa por outro botão. E publica
+    /// `kanban.movido` no mesmo canal, para que as outras telas vejam o cartão
+    /// mudar de coluna sem polling — exatamente como se alguém o tivesse
+    /// arrastado.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "SetAtendimentoStatus", traceparent)
+    )]
+    async fn set_atendimento_status(
+        &self,
+        req: Request<SetAtendimentoStatusRequest>,
+    ) -> Result<Response<SetAtendimentoStatusResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+
+        if inner.status.trim().is_empty() {
+            return Err(Status::invalid_argument("informe o status"));
+        }
+
+        let auth_user_id = claims.sub.parse::<i32>().unwrap_or(0);
+        let flow_permissions = if claims.is_superuser {
+            Vec::new()
+        } else {
+            resolver_flow_permissions_web(&self.deps, &claims.tenant_id, auth_user_id, &traceparent)
+                .await
+        };
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "SetAtendimentoStatus".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({
+                "atendimento_id": inner.atendimento_id,
+                "status": inner.status,
+                "motivo": inner.motivo,
+            }))
+            .unwrap(),
+            auth_user_id,
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            flow_permissions,
+            ..Default::default()
+        };
+
+        match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(resp) => {
+                if resp.kind == MessageKind::Error as i32 {
+                    let err = resp.error.unwrap_or_default();
+                    if err.code == "AUTH_INSUFFICIENT_SCOPE" {
+                        return Err(Status::permission_denied("errors.auth.forbidden"));
+                    }
+                    if err.code.starts_with("VALIDATION") {
+                        return Err(Status::invalid_argument(err.message));
+                    }
+                    return Err(Status::internal(format!("Erro no banco: {}", err.message)));
+                }
+
+                let corpo: serde_json::Value =
+                    serde_json::from_slice(&resp.payload).unwrap_or_default();
+                let etapa_atual_id = corpo
+                    .get("etapa_atual_id")
+                    .and_then(|v| v.as_i64())
+                    .unwrap_or(0) as i32;
+
+                // Mesmo canal do arrasto: para quem está olhando o quadro, o
+                // cartão mudou de coluna — a origem da mudança é irrelevante.
+                let mut bus_evento = self.bus.clone();
+                let event_payload = serde_json::json!({
+                    "event_type": "kanban.movido",
+                    "tenant_id": tenant_uuid.to_string(),
+                    "payload": {
+                        "atendimento_id": inner.atendimento_id,
+                        "etapa_destino_id": etapa_atual_id,
+                    }
+                });
+                let channel = format!("tenant:{}:events", tenant_uuid);
+                let publish_res: Result<u32, _> = redis::cmd("PUBLISH")
+                    .arg(&channel)
+                    .arg(event_payload.to_string())
+                    .query_async(&mut bus_evento)
+                    .await;
+                if let Err(e) = publish_res {
+                    tracing::error!("Erro ao publicar kanban.movido no Redis Pub/Sub: {:?}", e);
+                }
+
+                Ok(Response::new(SetAtendimentoStatusResponse {
+                    success: true,
+                    status: inner.status,
+                    etapa_atual_id,
                 }))
             }
             Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),

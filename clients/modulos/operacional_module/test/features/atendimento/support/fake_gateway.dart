@@ -7,6 +7,7 @@ import 'package:operacional_module/src/features/atendimento/domain/gateways/aten
 import 'package:operacional_module/src/features/atendimento/domain/model/atendimento_evento.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/atendimento_resumo.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/mensagem_thread.dart';
+import 'package:operacional_module/src/features/atendimento/domain/model/quadro.dart';
 import 'package:operacional_module/src/features/atendimento/domain/streams/atendimento_evento_stream.dart';
 import 'package:operacional_module/src/features/atendimento/domain/usecases/atendimento_usecases.dart';
 
@@ -24,11 +25,21 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   Object? erroThread;
   Object? erroMove;
   Object? erroSend;
+  Object? erroStatus;
+  Object? erroColunas;
 
   int chamadasList = 0;
   int chamadasThread = 0;
   int chamadasMove = 0;
   int chamadasSend = 0;
+  int chamadasStatus = 0;
+
+  /// Colunas do quadro devolvidas por [listColunas].
+  List<ColunaDoQuadro> colunas = const [];
+  List<FluxoDoQuadro> fluxos = const [];
+
+  /// Último status pedido — para verificar o repasse.
+  String? statusRecebido;
 
   /// Último `motivo` recebido pelo move — para verificar o repasse.
   String? motivoRecebido;
@@ -87,6 +98,26 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   }
 
   @override
+  Future<void> setAtendimentoStatus({
+    required int atendimentoId,
+    required String status,
+    String motivo = '',
+  }) async {
+    chamadasStatus++;
+    statusRecebido = status;
+    if (erroStatus != null) throw erroStatus!;
+  }
+
+  @override
+  Future<List<FluxoDoQuadro>> listFluxos() async => fluxos;
+
+  @override
+  Future<List<ColunaDoQuadro>> listColunas(int fluxoId) async {
+    if (erroColunas != null) throw erroColunas!;
+    return colunas;
+  }
+
+  @override
   Stream<AtendimentoEvento> streamAtendimentos() => eventos.stream;
 }
 
@@ -96,6 +127,9 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   GetThreadUsecase thread,
   MoveAtendimentoEtapaUsecase move,
   SendOutboundMessageUsecase send,
+  ListFluxosUsecase fluxos,
+  ListColunasUsecase colunas,
+  SetAtendimentoStatusUsecase status,
   AtendimentoEventoStream eventos,
 })
 usecasesSobre(FakeAtendimentoGateway gateway) => (
@@ -119,8 +153,46 @@ usecasesSobre(FakeAtendimentoGateway gateway) => (
       datasource: SendOutboundMessageDatasource(gateway: gateway),
     ),
   ),
+  fluxos: ListFluxosUsecase(
+    repository: ListFluxosRepository(
+      datasource: ListFluxosDatasource(gateway: gateway),
+    ),
+  ),
+  colunas: ListColunasUsecase(
+    repository: ListColunasRepository(
+      datasource: ListColunasDatasource(gateway: gateway),
+    ),
+  ),
+  status: SetAtendimentoStatusUsecase(
+    repository: SetAtendimentoStatusRepository(
+      datasource: SetAtendimentoStatusDatasource(gateway: gateway),
+    ),
+  ),
   eventos: AtendimentoEventoStreamImpl(gateway: gateway),
 );
+
+/// Colunas de um quadro padrao (fila -> trabalho -> finalizacao).
+List<ColunaDoQuadro> colunasDeTeste() => const [
+  ColunaDoQuadro(id: 10, nome: 'Entrada', cor: '#6B7280', ordem: 1, tipo: 'fila'),
+  ColunaDoQuadro(
+    id: 20,
+    nome: 'Trabalhando',
+    cor: '#3B82F6',
+    ordem: 2,
+    tipo: 'trabalho',
+  ),
+  ColunaDoQuadro(
+    id: 30,
+    nome: 'Fechado',
+    cor: '#10B981',
+    ordem: 3,
+    tipo: 'finalizacao',
+  ),
+];
+
+List<FluxoDoQuadro> fluxosDeTeste() => const [
+  FluxoDoQuadro(id: 1, nome: 'Padrao', departamentoNome: 'Suporte'),
+];
 
 AtendimentoResumo atendimentoDeTeste({
   required int id,
@@ -153,3 +225,17 @@ MensagemThread mensagemDeTeste({
   statusEnvio: 'enviado',
   geradoPorIa: false,
 );
+
+/// Dois quadros nomeados, para o teste do seletor.
+abstract final class FluxoDoQuadroDeTeste {
+  static const suporte = FluxoDoQuadro(
+    id: 1,
+    nome: 'Padrão',
+    departamentoNome: 'Suporte',
+  );
+  static const comercial = FluxoDoQuadro(
+    id: 2,
+    nome: 'Vendas',
+    departamentoNome: 'Comercial',
+  );
+}

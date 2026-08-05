@@ -13,6 +13,8 @@ import '../../domain/model/mensagem_thread.dart';
 import '../../domain/parameters/get_thread_parameters.dart';
 import '../../domain/parameters/list_atendimentos_parameters.dart';
 import '../../domain/parameters/move_atendimento_etapa_parameters.dart';
+import '../../domain/model/quadro.dart';
+import '../../domain/parameters/quadro_parameters.dart';
 import '../../domain/parameters/send_outbound_message_parameters.dart';
 
 /// As quatro fronteiras da feature. Cada `mapError` traduz a natureza da falha
@@ -172,6 +174,72 @@ final class SendOutboundMessageRepository
       GrpcFailureKind.unavailable ||
       GrpcFailureKind.rateLimited => const SendMessageIndisponivel(),
       _ => const SendMessageInesperado(),
+    };
+  }
+}
+
+QuadroError _erroDeQuadro(Object exception, StackTrace stackTrace) {
+  _log('quadro', exception, stackTrace);
+  return switch (_kindDeTransporte(exception)) {
+    null => const QuadroFalhaLocal(),
+    GrpcFailureKind.unauthenticated ||
+    GrpcFailureKind.permissionDenied => const QuadroAcessoNegado(),
+    GrpcFailureKind.unavailable ||
+    GrpcFailureKind.rateLimited => const QuadroIndisponivel(),
+    _ => const QuadroInesperado(),
+  };
+}
+
+final class ListFluxosRepository
+    extends RepositoryBase<List<FluxoDoQuadro>, NoParams, QuadroError> {
+  const ListFluxosRepository({required super.datasource});
+
+  @override
+  QuadroError mapError(Object e, StackTrace s, NoParams p) =>
+      _erroDeQuadro(e, s);
+}
+
+final class ListColunasRepository
+    extends
+        RepositoryBase<
+          List<ColunaDoQuadro>,
+          ListColunasParameters,
+          QuadroError
+        > {
+  const ListColunasRepository({required super.datasource});
+
+  @override
+  QuadroError mapError(Object e, StackTrace s, ListColunasParameters p) =>
+      _erroDeQuadro(e, s);
+}
+
+final class SetAtendimentoStatusRepository
+    extends
+        RepositoryBase<Unit, SetAtendimentoStatusParameters, SetStatusError> {
+  const SetAtendimentoStatusRepository({required super.datasource});
+
+  @override
+  SetStatusError mapError(
+    Object exception,
+    StackTrace stackTrace,
+    SetAtendimentoStatusParameters parameters,
+  ) {
+    _log(
+      'setAtendimentoStatus',
+      exception,
+      stackTrace,
+      atendimentoId: parameters.atendimentoId,
+    );
+    return switch (_kindDeTransporte(exception)) {
+      null => const SetStatusFalhaLocal(),
+      GrpcFailureKind.unauthenticated ||
+      GrpcFailureKind.permissionDenied => const SetStatusAcessoNegado(),
+      GrpcFailureKind.notFound => const SetStatusNaoEncontrado(),
+      GrpcFailureKind.invalidArgument ||
+      GrpcFailureKind.failedPrecondition => const SetStatusRecusado(),
+      GrpcFailureKind.unavailable ||
+      GrpcFailureKind.rateLimited => const SetStatusIndisponivel(),
+      _ => const SetStatusInesperado(),
     };
   }
 }

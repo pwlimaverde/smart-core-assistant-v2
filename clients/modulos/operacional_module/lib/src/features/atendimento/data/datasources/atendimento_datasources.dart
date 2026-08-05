@@ -6,6 +6,8 @@ import '../../domain/model/mensagem_thread.dart';
 import '../../domain/parameters/get_thread_parameters.dart';
 import '../../domain/parameters/list_atendimentos_parameters.dart';
 import '../../domain/parameters/move_atendimento_etapa_parameters.dart';
+import '../../domain/model/quadro.dart';
+import '../../domain/parameters/quadro_parameters.dart';
 import '../../domain/parameters/send_outbound_message_parameters.dart';
 
 /// Os quatro `Datasource` da feature: adaptadores finos entre o `Parameters` de
@@ -83,4 +85,46 @@ final class SendOutboundMessageDatasource
         conteudo: parameters.conteudo,
         tipo: parameters.tipo,
       );
+}
+
+/// Quadros que o atendente pode abrir.
+final class ListFluxosDatasource
+    implements Datasource<List<FluxoDoQuadro>, NoParams> {
+  final AtendimentoGateway _gateway;
+
+  const ListFluxosDatasource({required this._gateway});
+
+  @override
+  Future<List<FluxoDoQuadro>> call(NoParams parameters) =>
+      _gateway.listFluxos();
+}
+
+/// Colunas de um quadro.
+final class ListColunasDatasource
+    implements Datasource<List<ColunaDoQuadro>, ListColunasParameters> {
+  final AtendimentoGateway _gateway;
+
+  const ListColunasDatasource({required this._gateway});
+
+  @override
+  Future<List<ColunaDoQuadro>> call(ListColunasParameters parameters) =>
+      _gateway.listColunas(parameters.fluxoId);
+}
+
+/// Estado do atendimento; o cartão acompanha, do lado do servidor.
+final class SetAtendimentoStatusDatasource
+    implements Datasource<Unit, SetAtendimentoStatusParameters> {
+  final AtendimentoGateway _gateway;
+
+  const SetAtendimentoStatusDatasource({required this._gateway});
+
+  @override
+  Future<Unit> call(SetAtendimentoStatusParameters parameters) async {
+    await _gateway.setAtendimentoStatus(
+      atendimentoId: parameters.atendimentoId,
+      status: parameters.status,
+      motivo: parameters.motivo,
+    );
+    return unit;
+  }
 }

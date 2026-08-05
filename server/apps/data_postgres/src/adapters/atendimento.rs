@@ -5,7 +5,8 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 
 use infrastructure_postgres::atendimentos::atendimentos::{
-    Atendimento, AtendimentoRepository, PostgresAtendimentoRepository,
+    status_do_tipo_etapa, status_e_fim_de_linha, tipo_etapa_do_status, Atendimento,
+    AtendimentoRepository, PostgresAtendimentoRepository,
 };
 use infrastructure_postgres::atendimentos::campos::{
     CampoPersonalizadoRepository, PostgresCampoPersonalizadoRepository,
@@ -427,6 +428,35 @@ impl AtendimentoStore for PgAtendimentoStore {
                 .atualizar_etapa(&mut tx, &ctx, atendimento_id, etapa_destino_id, None)
                 .await?;
 
+            // A coluna manda no status. Um cartão parado na finalização com
+            // status `fila` é uma contradição que quem opera lê como sistema
+            // quebrado — e é o próprio quadro que a pessoa acabou de mexer.
+            if let Some(etapa) = PostgresEtapaFluxoRepository
+                .buscar_por_id(&mut tx, &ctx, etapa_destino_id)
+                .await?
+            {
+                if let Some(novo_status) = status_do_tipo_etapa(&etapa.tipo_etapa) {
+                    // Um `cancelado` não vira `resolvido` só porque o cartão
+                    // andou dentro da finalização: os dois encerram, por
+                    // motivos diferentes, e o relatório distingue.
+                    let manter = status_e_fim_de_linha(&atendimento.status)
+                        && status_e_fim_de_linha(novo_status);
+                    if !manter && atendimento.status != novo_status {
+                        repo_atendimento
+                            .atualizar_status(&mut tx, &ctx, atendimento_id, novo_status)
+                            .await?;
+                    }
+                }
+
+                // Voltar para a fila é devolver a conversa: mantê-la atribuída
+                // a quem a largou faria o rodízio pular quem está livre.
+                if etapa.tipo_etapa == "fila" && atendimento.atendente_humano_id.is_some() {
+                    repo_atendimento
+                        .desatribuir(&mut tx, &ctx, atendimento_id)
+                        .await?;
+                }
+            }
+
             repo_movimento
                 .criar(
                     &mut tx,
@@ -451,6 +481,80 @@ impl AtendimentoStore for PgAtendimentoStore {
             }
 
             Ok(((), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, novo_status = %novo_status))]
+    async fn definir_status_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        novo_status: String,
+        motivo: String,
+    ) -> Result<serde_json::Value, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, move |mut tx| async move {
+            let repo = PostgresAtendimentoRepository;
+            let atendimento = repo
+                .buscar_por_id(&mut tx, &ctx, atendimento_id)
+                .await?
+                .ok_or(DbError::NotFound)?;
+
+            // Mesmo RBAC fino do arrasto: quem não pode mover o cartão também
+            // não pode encerrar a conversa por outro botão.
+            if let Some(fluxo_id) = atendimento.fluxo_atendimento_id {
+                ctx.exigir_fluxo(fluxo_id)?;
+            }
+
+            repo.atualizar_status(&mut tx, &ctx, atendimento_id, &novo_status)
+                .await?;
+
+            if novo_status == "fila" && atendimento.atendente_humano_id.is_some() {
+                repo.desatribuir(&mut tx, &ctx, atendimento_id).await?;
+            }
+
+            // A coluna acompanha. Quando o fluxo não tem etapa daquele tipo, o
+            // cartão fica onde está — mover para lugar nenhum seria pior que
+            // deixá-lo visível na coluna antiga.
+            let mut etapa_destino = None;
+            if let (Some(fluxo_id), Some(tipo)) = (
+                atendimento.fluxo_atendimento_id,
+                tipo_etapa_do_status(&novo_status),
+            ) {
+                if let Some(etapa) = PostgresEtapaFluxoRepository
+                    .buscar_por_tipo(&mut tx, &ctx, fluxo_id, tipo)
+                    .await?
+                {
+                    if Some(etapa.id) != atendimento.etapa_atual_id {
+                        repo.atualizar_etapa(&mut tx, &ctx, atendimento_id, etapa.id, None)
+                            .await?;
+                        PostgresMovimentoFluxoRepository
+                            .criar(
+                                &mut tx,
+                                &ctx,
+                                atendimento_id,
+                                atendimento.etapa_atual_id,
+                                etapa.id,
+                                None,
+                                (!motivo.is_empty()).then_some(motivo.as_str()),
+                                // Automático: o histórico distingue o que uma
+                                // pessoa arrastou do que o sistema mexeu.
+                                true,
+                            )
+                            .await?;
+                        etapa_destino = Some(etapa.id);
+                    }
+                }
+            }
+
+            let json = serde_json::json!({
+                "sucesso": true,
+                "status": novo_status,
+                "etapa_atual_id": etapa_destino.or(atendimento.etapa_atual_id),
+            });
+            Ok((json, tx))
         })
         .await
     }

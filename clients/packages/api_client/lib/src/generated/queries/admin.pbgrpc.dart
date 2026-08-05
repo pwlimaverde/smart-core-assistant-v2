@@ -283,6 +283,13 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$moveAtendimentoEtapa, request, options: options);
   }
 
+  $grpc.ResponseFuture<$0.SetAtendimentoStatusResponse> setAtendimentoStatus(
+    $0.SetAtendimentoStatusRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$setAtendimentoStatus, request, options: options);
+  }
+
   $grpc.ResponseFuture<$0.SendOutboundMessageResponse> sendOutboundMessage(
     $0.SendOutboundMessageRequest request, {
     $grpc.CallOptions? options,
@@ -760,6 +767,11 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/MoveAtendimentoEtapa',
       ($0.MoveAtendimentoEtapaRequest value) => value.writeToBuffer(),
       $0.MoveAtendimentoEtapaResponse.fromBuffer);
+  static final _$setAtendimentoStatus = $grpc.ClientMethod<
+          $0.SetAtendimentoStatusRequest, $0.SetAtendimentoStatusResponse>(
+      '/smartcore.contracts.queries.AdminService/SetAtendimentoStatus',
+      ($0.SetAtendimentoStatusRequest value) => value.writeToBuffer(),
+      $0.SetAtendimentoStatusResponse.fromBuffer);
   static final _$sendOutboundMessage = $grpc.ClientMethod<
           $0.SendOutboundMessageRequest, $0.SendOutboundMessageResponse>(
       '/smartcore.contracts.queries.AdminService/SendOutboundMessage',
@@ -1263,6 +1275,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.MoveAtendimentoEtapaRequest.fromBuffer(value),
         ($0.MoveAtendimentoEtapaResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.SetAtendimentoStatusRequest,
+            $0.SetAtendimentoStatusResponse>(
+        'SetAtendimentoStatus',
+        setAtendimentoStatus_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.SetAtendimentoStatusRequest.fromBuffer(value),
+        ($0.SetAtendimentoStatusResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.SendOutboundMessageRequest,
             $0.SendOutboundMessageResponse>(
         'SendOutboundMessage',
@@ -1922,6 +1943,15 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.MoveAtendimentoEtapaResponse> moveAtendimentoEtapa(
       $grpc.ServiceCall call, $0.MoveAtendimentoEtapaRequest request);
+
+  $async.Future<$0.SetAtendimentoStatusResponse> setAtendimentoStatus_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.SetAtendimentoStatusRequest> $request) async {
+    return setAtendimentoStatus($call, await $request);
+  }
+
+  $async.Future<$0.SetAtendimentoStatusResponse> setAtendimentoStatus(
+      $grpc.ServiceCall call, $0.SetAtendimentoStatusRequest request);
 
   $async.Future<$0.SendOutboundMessageResponse> sendOutboundMessage_Pre(
       $grpc.ServiceCall $call,

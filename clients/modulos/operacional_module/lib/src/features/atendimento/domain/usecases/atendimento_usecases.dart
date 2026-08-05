@@ -8,6 +8,8 @@ import '../model/mensagem_thread.dart';
 import '../parameters/get_thread_parameters.dart';
 import '../parameters/list_atendimentos_parameters.dart';
 import '../parameters/move_atendimento_etapa_parameters.dart';
+import '../model/quadro.dart';
+import '../parameters/quadro_parameters.dart';
 import '../parameters/send_outbound_message_parameters.dart';
 
 /// Os quatro casos de uso do atendimento.
@@ -177,4 +179,75 @@ final class SendOutboundMessageUsecase
     int data,
     SendOutboundMessageParameters parameters,
   ) => Success(data);
+}
+
+final class ListFluxosUsecase
+    extends
+        UsecaseBaseCallData<
+          List<FluxoDoQuadro>,
+          List<FluxoDoQuadro>,
+          NoParams,
+          QuadroError
+        > {
+  const ListFluxosUsecase({required super.repository});
+
+  @override
+  ProcessData<List<FluxoDoQuadro>, List<FluxoDoQuadro>, NoParams, QuadroError>
+  get process => (data, _) => Success(data);
+
+  @override
+  QuadroError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('listFluxos', exception, stackTrace);
+    return const QuadroInesperado();
+  }
+}
+
+final class ListColunasUsecase
+    extends
+        UsecaseBaseCallData<
+          List<ColunaDoQuadro>,
+          List<ColunaDoQuadro>,
+          ListColunasParameters,
+          QuadroError
+        > {
+  const ListColunasUsecase({required super.repository});
+
+  /// Ordena aqui, e não na tela: a ordem das colunas é regra do quadro, e uma
+  /// tela que reordena por conta própria mostraria um fluxo que não existe.
+  @override
+  ProcessData<
+    List<ColunaDoQuadro>,
+    List<ColunaDoQuadro>,
+    ListColunasParameters,
+    QuadroError
+  >
+  get process =>
+      (data, _) => Success(List.of(data)..sort((a, b) => a.ordem - b.ordem));
+
+  @override
+  QuadroError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('listColunas', exception, stackTrace);
+    return const QuadroInesperado();
+  }
+}
+
+final class SetAtendimentoStatusUsecase
+    extends
+        UsecaseBaseCallData<
+          Unit,
+          Unit,
+          SetAtendimentoStatusParameters,
+          SetStatusError
+        > {
+  const SetAtendimentoStatusUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, SetAtendimentoStatusParameters, SetStatusError>
+  get process => (data, _) => Success(data);
+
+  @override
+  SetStatusError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('setAtendimentoStatus', exception, stackTrace);
+    return const SetStatusInesperado();
+  }
 }
