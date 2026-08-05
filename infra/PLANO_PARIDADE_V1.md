@@ -227,7 +227,10 @@ possível, já que `oraculo_atendente.fluxo_id` tem para onde apontar.
 ### Etapa 6 — Kanban próprio integrado ao WhatsApp — FEITO (parcial)
 
 **Decisão tomada:** o cartão se move pela mão do atendente **e** pelo estado do
-atendimento — e o gatilho do bot fica pronto para quando existir (ver abaixo).
+atendimento. **O bot nunca encerra** — decisão confirmada pela leitura da v1:
+`finalizar_atendimento` só é chamado pelo `board_service` (arrasto no Workspace)
+e pelo `ticket_sync_service` (espelho de um arrasto no Trello). Não existe, nem
+existia, caminho automático.
 
 Não precisou de modelo novo: `oraculo_atendimento.etapa_atual_id` já era o
 cartão, e `oraculo_movimento_fluxo` já era o histórico. O que faltava era a
@@ -267,14 +270,44 @@ Conversa fora de qualquer coluna conhecida (chegou antes do fluxo existir, ou
 aponta para coluna removida) ganha uma coluna "Sem coluna". Escondê-la faria
 sumir atendimento de verdade.
 
+### Regras de transição: paridade conferida contra a v1
+
+Revisão feita lendo `board_service._aplicar_regras_tipo_etapa`,
+`atendimentos/models.py` e `operacional/signals.py`. Quatro divergências
+encontradas e corrigidas:
+
+**1. O fluxo nascia com quatro colunas; a v1 cria cinco.** Faltava "Cancelado" —
+e sem ela não havia como cancelar pelo quadro. Nomes e cores agora são os
+mesmos do signal da v1.
+
+**2. O nome da coluna de finalização decide o desfecho.** Um fluxo tem mais de
+uma coluna desse tipo; o tipo diz que terminou, o **nome** diz como
+(`cancel*` → cancelado, `arquiv*` → arquivado, resto → resolvido). Tratá-las
+igual apagaria a diferença entre concluído e desistido, que é o que o relatório
+precisa distinguir.
+
+**3. Arrastar para "em atendimento" agora ASSUME a conversa**: atribui quem
+arrastou e **desliga o bot**. Era a regra-chave da v1
+(`transferir_para_humano`), e sem ela o robô seguia respondendo por cima de
+quem acabou de assumir. Quem arrasta é resolvido de `auth_user` →
+`oraculo_atendente.usuario_id`; um admin sem cadastro de atendente move o
+cartão sem virar dono da conversa.
+
+**4. Voltar para a fila NÃO religa o bot.** Eu havia feito religar. A v1 é
+explícita no contrário: quem desligou o bot foi uma pessoa, ao assumir; religá-lo
+sozinho faria o robô voltar a responder um cliente que pediu para falar com
+gente.
+
+Além disso, `historico_status` passou a ser alimentado a cada transição — mesmo
+formato da v1 (`{status, timestamp, observacao}`). É o que responde "quem mudou
+isto, e quando" quando o cliente reclama; o `status` sozinho só conta o presente.
+
 **Falta desta etapa:**
 
-- **O gatilho do bot não existe ainda.** A infraestrutura está pronta — qualquer
-  caminho que passe por `definir_status_atendimento` move o cartão —, mas o
-  worker nunca encerra um atendimento hoje. *Quando* a IA deve considerar a
-  conversa encerrada é decisão de produto, não detalhe de implementação.
-- Etiquetas, notas e campos personalizados no cartão (tabelas existem) — é a
-  Etapa 8.
+- **Saudação automática ao assumir.** A v1 envia "Olá, meu nome é X, irei
+  continuar seu atendimento" pela instância do atendente. Depende de compor uma
+  mensagem outbound dentro da transação do movimento.
+- Etiquetas, notas e campos personalizados no cartão — Etapa 8.
 
 ### Etapa 7 — Treinamento: intents e teste de resposta — FEITO
 

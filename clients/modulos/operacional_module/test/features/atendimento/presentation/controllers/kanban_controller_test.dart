@@ -3,6 +3,7 @@ import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:operacional_module/src/features/atendimento/domain/errors/atendimento_errors.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/atendimento_evento.dart';
+import 'package:operacional_module/src/features/atendimento/domain/model/quadro.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/controllers/kanban_controller.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/controllers/kanban_state.dart';
 import 'package:presentation_module/presentation_module.dart';
@@ -389,6 +390,89 @@ void main() {
 
       expect(erro, isA<SetStatusAcessoNegado>());
       expect(gateway.chamadasList, antes);
+      await controller.close();
+    });
+  });
+  group('desfecho da finalizacao', () {
+    test('o nome da coluna decide entre resolver e cancelar', () {
+      // Um fluxo nasce com "Resolvido" e "Cancelado", ambas de finalizacao.
+      // Trata-las igual faria o cartao aparecer como resolvido no instante em
+      // que alguem o cancelou.
+      const resolvido = ColunaDoQuadro(
+        id: 1,
+        nome: 'Resolvido',
+        cor: '#66CDAA',
+        ordem: 4,
+        tipo: 'finalizacao',
+      );
+      const cancelado = ColunaDoQuadro(
+        id: 2,
+        nome: 'Cancelado',
+        cor: '#FA8072',
+        ordem: 5,
+        tipo: 'finalizacao',
+      );
+
+      expect(resolvido.statusResultante, 'resolvido');
+      expect(cancelado.statusResultante, 'cancelado');
+    });
+
+    test('aceita as variacoes que o tenant escreve', () {
+      for (final nome in ['Cancelamento', 'cancelados', 'CANCELADO']) {
+        final coluna = ColunaDoQuadro(
+          id: 1,
+          nome: nome,
+          cor: '#000000',
+          ordem: 1,
+          tipo: 'finalizacao',
+        );
+        expect(coluna.statusResultante, 'cancelado', reason: nome);
+      }
+    });
+
+    test('arquivar tambem tem desfecho proprio', () {
+      const coluna = ColunaDoQuadro(
+        id: 1,
+        nome: 'Arquivado',
+        cor: '#000000',
+        ordem: 1,
+        tipo: 'finalizacao',
+      );
+      expect(coluna.statusResultante, 'arquivado');
+    });
+
+    testWidgets('arrastar para "Cancelado" marca o cartao como cancelado', (
+      tester,
+    ) async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
+      )..colunas = const [
+          ColunaDoQuadro(
+            id: 10,
+            nome: 'Fila de Atendimento',
+            cor: '#B0C4DE',
+            ordem: 1,
+            tipo: 'fila',
+          ),
+          ColunaDoQuadro(
+            id: 40,
+            nome: 'Cancelado',
+            cor: '#FA8072',
+            ordem: 5,
+            tipo: 'finalizacao',
+          ),
+        ];
+      final controller = _controller(gateway);
+      await controller.carregar();
+
+      await controller.moverCard(
+        atendimentoId: 1,
+        etapaOrigemId: 10,
+        etapaDestinoId: 40,
+      );
+
+      final estado = controller.state as SuccessState<KanbanViewModel>;
+      expect(estado.data.porEtapa[40]?.single.status, 'cancelado');
       await controller.close();
     });
   });

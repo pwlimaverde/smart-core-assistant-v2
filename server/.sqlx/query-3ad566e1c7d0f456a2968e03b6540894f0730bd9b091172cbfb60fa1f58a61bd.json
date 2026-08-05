@@ -1,0 +1,257 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, tenant_id, nome, slug, telefone, cargo, email,\n                      departamento_id, fluxo_id, usuario_id, usuario_sistema,\n                      ativo, disponivel, max_atendimentos_simultaneos,\n                      data_ultima_atribuicao, horario_trabalho, especialidades,\n                      metadados, data_cadastro, ultima_atividade\n               FROM oraculo_atendente\n               WHERE tenant_id = $1 AND usuario_id = $2 AND ativo = true\n               LIMIT 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "tenant_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "nome",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "nome"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "slug",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "slug"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "telefone",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "telefone"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "cargo",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "cargo"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "email",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "email"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "departamento_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "departamento_id"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "fluxo_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "fluxo_id"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "usuario_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "usuario_id"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "usuario_sistema",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "usuario_sistema"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "ativo",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "ativo"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "disponivel",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "disponivel"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "max_atendimentos_simultaneos",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "max_atendimentos_simultaneos"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "data_ultima_atribuicao",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "data_ultima_atribuicao"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "horario_trabalho",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "horario_trabalho"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "especialidades",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "especialidades"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "metadados",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "metadados"
+          }
+        }
+      },
+      {
+        "ordinal": 18,
+        "name": "data_cadastro",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "data_cadastro"
+          }
+        }
+      },
+      {
+        "ordinal": 19,
+        "name": "ultima_atividade",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendente",
+            "name": "ultima_atividade"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3ad566e1c7d0f456a2968e03b6540894f0730bd9b091172cbfb60fa1f58a61bd"
+}

@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oraculo_atendimento\n                  SET historico_status = COALESCE(historico_status, '[]'::jsonb) || $3::jsonb\n                WHERE tenant_id = $1 AND id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3de8728033921991f12ccf062611dfe178e7757c5bfd62a10958f19ec0282d22"
+}

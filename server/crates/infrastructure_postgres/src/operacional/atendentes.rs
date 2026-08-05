@@ -49,6 +49,19 @@ pub trait AtendenteRepository: Send + Sync {
         id: i32,
     ) -> Result<Option<Atendente>, DbError>;
 
+    /// O atendente vinculado a um usuário do sistema.
+    ///
+    /// É como o quadro descobre QUEM está arrastando o cartão: a sessão traz
+    /// o `auth_user`, e quem atende é a linha de `oraculo_atendente` que aponta
+    /// para ele. Nem todo usuário do tenant é atendente — um admin que arrasta
+    /// um cartão não vira dono da conversa por isso.
+    async fn buscar_por_usuario(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        usuario_id: i32,
+    ) -> Result<Option<Atendente>, DbError>;
+
     /// Atualiza o cadastro do atendente.
     ///
     /// `ativo` e `disponivel` são estados distintos e ambos passam por aqui:
@@ -178,6 +191,33 @@ impl AtendenteRepository for PostgresAtendenteRepository {
                WHERE tenant_id = $1 AND id = $2"#,
             ctx.tenant_id,
             id
+        )
+        .fetch_optional(&mut **tx)
+        .await?;
+        Ok(row)
+    }
+
+    #[tracing::instrument(skip_all, fields(usuario_id = usuario_id))]
+    async fn buscar_por_usuario(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        usuario_id: i32,
+    ) -> Result<Option<Atendente>, DbError> {
+        // Só atendente ATIVO: quem saiu da equipe não volta a receber conversa
+        // por ter arrastado um cartão.
+        let row = sqlx::query_as!(
+            Atendente,
+            r#"SELECT id, tenant_id, nome, slug, telefone, cargo, email,
+                      departamento_id, fluxo_id, usuario_id, usuario_sistema,
+                      ativo, disponivel, max_atendimentos_simultaneos,
+                      data_ultima_atribuicao, horario_trabalho, especialidades,
+                      metadados, data_cadastro, ultima_atividade
+               FROM oraculo_atendente
+               WHERE tenant_id = $1 AND usuario_id = $2 AND ativo = true
+               LIMIT 1"#,
+            ctx.tenant_id,
+            usuario_id
         )
         .fetch_optional(&mut **tx)
         .await?;

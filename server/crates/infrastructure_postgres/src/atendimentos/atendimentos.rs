@@ -43,12 +43,28 @@ pub struct Atendimento {
 /// O vocabulário dos dois lados vem da v1: `TipoEtapa` (fila/trabalho/espera/
 /// finalizacao) e `StatusAtendimento` (fila/em_atendimento/pendencia/resolvido/
 /// cancelado/arquivado).
-pub fn status_do_tipo_etapa(tipo_etapa: &str) -> Option<&'static str> {
+pub fn status_do_tipo_etapa(tipo_etapa: &str, nome_etapa: &str) -> Option<&'static str> {
     match tipo_etapa {
         "fila" => Some("fila"),
         "trabalho" => Some("em_atendimento"),
         "espera" => Some("pendencia"),
-        "finalizacao" => Some("resolvido"),
+        // Um fluxo tem mais de uma coluna de finalização — "Resolvido" e
+        // "Cancelado" nascem juntas. O tipo diz que a conversa terminou; é o
+        // NOME que diz como, e o relatório depende dessa diferença.
+        //
+        // Regra herdada da v1 (`board_service._aplicar_regras_tipo_etapa`):
+        // casa por prefixo para aceitar as variações que o tenant escreve
+        // ("Cancelado", "Cancelamento", "Cancelada").
+        "finalizacao" => {
+            let nome = nome_etapa.to_lowercase();
+            if nome.contains("cancel") {
+                Some("cancelado")
+            } else if nome.contains("arquiv") || nome.contains("archiv") {
+                Some("arquivado")
+            } else {
+                Some("resolvido")
+            }
+        }
         _ => None,
     }
 }
@@ -129,13 +145,31 @@ pub trait AtendimentoRepository: Send + Sync {
 
     /// Solta a conversa de quem a estava atendendo, devolvendo-a ao rodízio.
     ///
-    /// Também religa o bot: um atendimento sem dono e sem bot ficaria mudo até
-    /// alguém reparar nele.
+    /// **Não mexe em `bot_pode_atender`** — regra herdada da v1
+    /// (`board_service`, ramo `TipoEtapa.FILA`). Quem desligou o bot foi uma
+    /// pessoa, ao assumir a conversa; religá-lo por conta própria ao devolver o
+    /// cartão faria o robô voltar a responder um cliente que pediu para falar
+    /// com gente.
     async fn desatribuir(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
         atendimento_id: i32,
+    ) -> Result<(), DbError>;
+
+    /// Acrescenta uma linha à trilha de status do atendimento.
+    ///
+    /// Mesmo formato da v1 (`adicionar_historico_status`): lista de
+    /// `{status, timestamp, observacao}` em `historico_status`. É o que
+    /// responde "quem mudou isso, e quando" quando o cliente reclama — o
+    /// `status` sozinho só conta o presente.
+    async fn registrar_historico_status(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        status: &str,
+        observacao: &str,
     ) -> Result<(), DbError>;
 
     async fn touch_last_message(
@@ -401,13 +435,45 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         atendimento_id: i32,
     ) -> Result<(), DbError> {
         ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+        // `bot_pode_atender` fica como está, de propósito: ver a doc do trait.
         sqlx::query!(
             r#"UPDATE oraculo_atendimento
-               SET atendente_humano_id = NULL,
-                   bot_pode_atender = true
+               SET atendente_humano_id = NULL
                WHERE tenant_id = $1 AND id = $2"#,
             ctx.tenant_id,
             atendimento_id
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(())
+    }
+
+    // `observacao` pode citar o nome de quem agiu: `skip_all`.
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, status = %status))]
+    async fn registrar_historico_status(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        status: &str,
+        observacao: &str,
+    ) -> Result<(), DbError> {
+        ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+        let entrada = serde_json::json!({
+            "status": status,
+            "timestamp": chrono::Utc::now().to_rfc3339(),
+            "observacao": observacao,
+        });
+        // `||` no próprio UPDATE em vez de ler-modificar-gravar: duas
+        // transições simultâneas sobre o mesmo atendimento perderiam uma
+        // linha da trilha se a lista fosse remontada em Rust.
+        sqlx::query!(
+            r#"UPDATE oraculo_atendimento
+                  SET historico_status = COALESCE(historico_status, '[]'::jsonb) || $3::jsonb
+                WHERE tenant_id = $1 AND id = $2"#,
+            ctx.tenant_id,
+            atendimento_id,
+            serde_json::Value::Array(vec![entrada])
         )
         .execute(&mut **tx)
         .await?;
@@ -596,5 +662,104 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         .execute(&mut **tx)
         .await?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A regra que decide o desfecho de um atendimento encerrado.
+    ///
+    /// Vale a pena travar: um fluxo nasce com duas colunas de finalização
+    /// ("Resolvido" e "Cancelado"), e tratá-las igual apagaria a diferença
+    /// entre um atendimento concluído e um desistido — que é exatamente o que
+    /// o relatório de operação precisa distinguir.
+    #[test]
+    fn nome_da_coluna_decide_o_desfecho_da_finalizacao() {
+        assert_eq!(
+            status_do_tipo_etapa("finalizacao", "Resolvido"),
+            Some("resolvido")
+        );
+        assert_eq!(
+            status_do_tipo_etapa("finalizacao", "Cancelado"),
+            Some("cancelado")
+        );
+        assert_eq!(
+            status_do_tipo_etapa("finalizacao", "Arquivado"),
+            Some("arquivado")
+        );
+    }
+
+    #[test]
+    fn a_regra_do_nome_aceita_as_variacoes_que_o_tenant_escreve() {
+        // Casa por trecho, não por igualdade: quem renomeia a coluna escreve
+        // "Cancelamento", "Cancelados", "CANCELADO".
+        for nome in [
+            "Cancelamento",
+            "cancelados",
+            "CANCELADO",
+            "Pedido cancelado",
+        ] {
+            assert_eq!(
+                status_do_tipo_etapa("finalizacao", nome),
+                Some("cancelado"),
+                "nome: {nome}"
+            );
+        }
+    }
+
+    #[test]
+    fn finalizacao_com_nome_qualquer_resolve() {
+        // O padrão é resolver: encerrar sem dizer o contrário é conclusão.
+        assert_eq!(
+            status_do_tipo_etapa("finalizacao", "Entregue"),
+            Some("resolvido")
+        );
+        assert_eq!(status_do_tipo_etapa("finalizacao", ""), Some("resolvido"));
+    }
+
+    #[test]
+    fn os_demais_tipos_ignoram_o_nome() {
+        // Só a finalização tem mais de um desfecho; renomear a fila não muda
+        // o que ela significa.
+        assert_eq!(status_do_tipo_etapa("fila", "Cancelado"), Some("fila"));
+        assert_eq!(
+            status_do_tipo_etapa("trabalho", "Cancelado"),
+            Some("em_atendimento")
+        );
+        assert_eq!(
+            status_do_tipo_etapa("espera", "Arquivado"),
+            Some("pendencia")
+        );
+    }
+
+    #[test]
+    fn tipo_desconhecido_nao_muda_status() {
+        // A coluna é VARCHAR(20): uma linha antiga com valor fora do
+        // vocabulário não deve mexer no estado do atendimento.
+        assert_eq!(status_do_tipo_etapa("inventado", "x"), None);
+    }
+
+    #[test]
+    fn o_caminho_de_volta_leva_todo_fim_de_linha_a_finalizacao() {
+        // Cancelado e arquivado precisam de coluna: sem ela o cartão sumiria
+        // do quadro.
+        for status in ["resolvido", "cancelado", "arquivado"] {
+            assert_eq!(tipo_etapa_do_status(status), Some("finalizacao"));
+        }
+        assert_eq!(tipo_etapa_do_status("fila"), Some("fila"));
+        assert_eq!(tipo_etapa_do_status("em_atendimento"), Some("trabalho"));
+        assert_eq!(tipo_etapa_do_status("pendencia"), Some("espera"));
+    }
+
+    #[test]
+    fn fim_de_linha_cobre_os_tres_desfechos() {
+        assert!(status_e_fim_de_linha("resolvido"));
+        assert!(status_e_fim_de_linha("cancelado"));
+        assert!(status_e_fim_de_linha("arquivado"));
+        assert!(!status_e_fim_de_linha("em_atendimento"));
+        assert!(!status_e_fim_de_linha("pendencia"));
+        assert!(!status_e_fim_de_linha("fila"));
     }
 }

@@ -23,6 +23,9 @@ use infrastructure_postgres::atendimentos::movimentos::{
 };
 use infrastructure_postgres::clientes::contatos::{ContatoRepository, PostgresContatoRepository};
 use infrastructure_postgres::idempotencia;
+use infrastructure_postgres::operacional::atendentes::{
+    AtendenteRepository, PostgresAtendenteRepository,
+};
 use infrastructure_postgres::operacional::fluxos::{
     EtapaFluxoRepository, FluxoAtendimentoRepository, FluxoDisponivel,
     PostgresEtapaFluxoRepository, PostgresFluxoAtendimentoRepository,
@@ -434,11 +437,17 @@ impl AtendimentoStore for PgAtendimentoStore {
             // A coluna manda no status. Um cartão parado na finalização com
             // status `fila` é uma contradição que quem opera lê como sistema
             // quebrado — e é o próprio quadro que a pessoa acabou de mexer.
+            //
+            // As regras por tipo de etapa são as da v1
+            // (`board_service._aplicar_regras_tipo_etapa`), incluindo o que
+            // NÃO se faz: voltar para a fila não religa o bot.
             if let Some(etapa) = PostgresEtapaFluxoRepository
                 .buscar_por_id(&mut tx, &ctx, etapa_destino_id)
                 .await?
             {
-                if let Some(novo_status) = status_do_tipo_etapa(&etapa.tipo_etapa) {
+                // O nome da coluna de finalização decide entre resolvido,
+                // cancelado e arquivado — um fluxo tem mais de uma.
+                if let Some(novo_status) = status_do_tipo_etapa(&etapa.tipo_etapa, &etapa.nome) {
                     // Um `cancelado` não vira `resolvido` só porque o cartão
                     // andou dentro da finalização: os dois encerram, por
                     // motivos diferentes, e o relatório distingue.
@@ -448,15 +457,55 @@ impl AtendimentoStore for PgAtendimentoStore {
                         repo_atendimento
                             .atualizar_status(&mut tx, &ctx, atendimento_id, novo_status)
                             .await?;
+                        repo_atendimento
+                            .registrar_historico_status(
+                                &mut tx,
+                                &ctx,
+                                atendimento_id,
+                                novo_status,
+                                &format!("Movido para \"{}\" no quadro", etapa.nome),
+                            )
+                            .await?;
                     }
                 }
 
-                // Voltar para a fila é devolver a conversa: mantê-la atribuída
-                // a quem a largou faria o rodízio pular quem está livre.
-                if etapa.tipo_etapa == "fila" && atendimento.atendente_humano_id.is_some() {
-                    repo_atendimento
-                        .desatribuir(&mut tx, &ctx, atendimento_id)
-                        .await?;
+                match etapa.tipo_etapa.as_str() {
+                    // Assumir: quem arrasta para "em atendimento" vira dono da
+                    // conversa e DESLIGA o bot. Sem isso, o robô seguiria
+                    // respondendo por cima de quem acabou de assumir — é a
+                    // regra-chave da v1 (`transferir_para_humano`).
+                    "trabalho" if atendimento.atendente_humano_id.is_none() => {
+                        // Nem todo usuário do tenant é atendente: um admin que
+                        // arrasta um cartão não vira dono da conversa. Sem
+                        // atendente correspondente, o cartão anda e o bot fica
+                        // como está.
+                        if let Some(atendente) = PostgresAtendenteRepository
+                            .buscar_por_usuario(&mut tx, &ctx, ctx.user_id)
+                            .await?
+                        {
+                            repo_atendimento
+                                .assumir_atendimento(&mut tx, &ctx, atendimento_id, atendente.id)
+                                .await?;
+                            repo_atendimento
+                                .registrar_historico_status(
+                                    &mut tx,
+                                    &ctx,
+                                    atendimento_id,
+                                    "em_atendimento",
+                                    &format!("Assumido por {}", atendente.nome),
+                                )
+                                .await?;
+                        }
+                    }
+                    // Voltar para a fila é devolver a conversa: mantê-la
+                    // atribuída a quem a largou faria o rodízio pular quem está
+                    // livre. O bot NÃO é religado aqui (ver `desatribuir`).
+                    "fila" if atendimento.atendente_humano_id.is_some() => {
+                        repo_atendimento
+                            .desatribuir(&mut tx, &ctx, atendimento_id)
+                            .await?;
+                    }
+                    _ => {}
                 }
             }
 
@@ -513,6 +562,18 @@ impl AtendimentoStore for PgAtendimentoStore {
 
             repo.atualizar_status(&mut tx, &ctx, atendimento_id, &novo_status)
                 .await?;
+            repo.registrar_historico_status(
+                &mut tx,
+                &ctx,
+                atendimento_id,
+                &novo_status,
+                if motivo.is_empty() {
+                    "Estado alterado pelo atendente"
+                } else {
+                    &motivo
+                },
+            )
+            .await?;
 
             if novo_status == "fila" && atendimento.atendente_humano_id.is_some() {
                 repo.desatribuir(&mut tx, &ctx, atendimento_id).await?;

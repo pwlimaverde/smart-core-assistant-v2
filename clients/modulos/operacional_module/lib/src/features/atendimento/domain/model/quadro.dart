@@ -48,11 +48,24 @@ class ColunaDoQuadro {
   /// sem uma ida extra ao servidor só para reler o que se sabe. Tipo
   /// desconhecido devolve `null` — e aí o cartão fica como está, em vez de
   /// inventar um estado.
+  ///
+  /// Na finalização é o **nome** que decide: um fluxo nasce com "Resolvido" e
+  /// "Cancelado", ambas do mesmo tipo, e tratá-las igual faria o cartão
+  /// aparecer como resolvido no instante em que alguém o cancelou.
   String? get statusResultante => switch (tipo) {
     'fila' => 'fila',
     'trabalho' => 'em_atendimento',
     'espera' => 'pendencia',
-    'finalizacao' => 'resolvido',
+    'finalizacao' => _statusDaFinalizacao,
     _ => null,
   };
+
+  String get _statusDaFinalizacao {
+    final rotulo = nome.toLowerCase();
+    if (rotulo.contains('cancel')) return 'cancelado';
+    if (rotulo.contains('arquiv') || rotulo.contains('archiv')) {
+      return 'arquivado';
+    }
+    return 'resolvido';
+  }
 }

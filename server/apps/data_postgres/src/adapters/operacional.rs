@@ -29,16 +29,22 @@ use crate::ports::OperacionalStore;
 
 /// Esqueleto de um fluxo novo: `(nome, tipo_etapa, cor)`.
 ///
-/// Os quatro tipos vêm da v1 (`TipoEtapa`) e cada um significa uma coisa para o
-/// roteamento: `fila` é onde a conversa entra, `trabalho` é o que está sendo
-/// atendido, `espera` é o que depende de terceiro, `finalizacao` é o fim de
-/// linha. O tenant renomeia e acrescenta o que quiser; o que ele não deve
-/// precisar fazer é adivinhar que um fluxo vazio não funciona.
-const ETAPAS_PADRAO: [(&str, &str, &str); 4] = [
-    ("Fila de entrada", "fila", "#6B7280"),
-    ("Em atendimento", "trabalho", "#3B82F6"),
-    ("Aguardando retorno", "espera", "#F59E0B"),
-    ("Concluído", "finalizacao", "#10B981"),
+/// São as **cinco** colunas que a v1 criava por signal
+/// (`operacional/signals.py::create_default_etapas_fluxo`), com os mesmos
+/// nomes e cores. Os quatro tipos significam algo para o roteamento: `fila` é
+/// onde a conversa entra, `trabalho` é o que está sendo atendido, `espera` é o
+/// que depende de terceiro, `finalizacao` é fim de linha.
+///
+/// **Duas colunas de finalização, não uma**: encerrar e cancelar são desfechos
+/// diferentes, e o relatório precisa distingui-los. É o nome da coluna que
+/// decide o status (ver `status_do_tipo_etapa`), então "Cancelado" tem de
+/// existir para que cancelar seja possível pelo quadro.
+const ETAPAS_PADRAO: [(&str, &str, &str); 5] = [
+    ("Fila de Atendimento", "fila", "#B0C4DE"),
+    ("Em Atendimento", "trabalho", "#ADD8E6"),
+    ("Pendência", "espera", "#FFFACD"),
+    ("Resolvido", "finalizacao", "#66CDAA"),
+    ("Cancelado", "finalizacao", "#FA8072"),
 ];
 
 /// Resposta de operação que pode ser recusada por regra de negócio.
