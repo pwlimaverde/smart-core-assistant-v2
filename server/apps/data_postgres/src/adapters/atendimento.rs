@@ -38,6 +38,28 @@ use crate::ports::{
     TicketKanbanOutcome, TransferenciaFluxoOutcome,
 };
 
+/// A saudação que o contato recebe quando alguém assume a conversa.
+///
+/// A v1 mandava um texto fixo — "Olá, meu nome é X, sou Vendedor da Ecoprint,
+/// irei continuar seu atendimento" —, o que só funcionava num sistema de uma
+/// empresa só. Aqui o cargo e a empresa saem do cadastro: é o mesmo
+/// comportamento, dito por cada tenant com as palavras dele.
+///
+/// Cargo e empresa vazios não viram buraco no texto ("sou  da ,"): a frase
+/// encolhe. Conta nova costuma ter os dois em branco, e uma saudação
+/// esquisita é a primeira coisa que o cliente lê.
+fn texto_da_saudacao(nome_atendente: &str, cargo: &str, empresa: &str) -> String {
+    let cargo = cargo.trim();
+    let empresa = empresa.trim();
+    let quem = match (cargo.is_empty(), empresa.is_empty()) {
+        (false, false) => format!(", sou {cargo} da {empresa}"),
+        (false, true) => format!(", sou {cargo}"),
+        (true, false) => format!(", da {empresa}"),
+        (true, true) => String::new(),
+    };
+    format!("Olá, meu nome é {nome_atendente}{quem}, irei continuar seu atendimento.")
+}
+
 /// Implementação Postgres da port Atendimento.
 /// `admin_pool` (BYPASSRLS) é usado apenas nas varreduras cross-tenant do
 /// scheduler do worker (F4.3b); quando ausente, recai no pool de aplicação
@@ -495,6 +517,66 @@ impl AtendimentoStore for PgAtendimentoStore {
                                     &format!("Assumido por {}", atendente.nome),
                                 )
                                 .await?;
+
+                            // Saudação automática (v1:
+                            // `transferir_para_humano_com_saudacao`). O bot
+                            // acabou de ser desligado; sem uma palavra, o
+                            // contato fica falando com o silêncio até alguém
+                            // digitar.
+                            let empresa = sqlx::query_scalar!(
+                                "SELECT name FROM tenants_tenant WHERE id = $1",
+                                ctx.tenant_id
+                            )
+                            .fetch_optional(&mut *tx)
+                            .await?
+                            .unwrap_or_default();
+
+                            let saudacao =
+                                texto_da_saudacao(&atendente.nome, &atendente.cargo, &empresa);
+
+                            // Na MESMA transação do movimento: se o cartão
+                            // andar e a saudação não sair, o contato fica sem
+                            // resposta com o bot já desligado.
+                            let msg = PostgresMensagemRepository
+                                .criar(
+                                    &mut tx,
+                                    &ctx,
+                                    infrastructure_postgres::atendimentos::mensagens::NovaMensagem {
+                                        atendimento_id,
+                                        tipo: "extendedTextMessage",
+                                        conteudo: &saudacao,
+                                        // `atendente` é o que o worker procura
+                                        // no outbox para enviar de verdade.
+                                        remetente: "atendente",
+                                        message_id_whatsapp: None,
+                                        mensagem_citada_id: None,
+                                        ja_entregue: false,
+                                    },
+                                )
+                                .await?;
+                            repo_atendimento
+                                .touch_last_message(&mut tx, &ctx, atendimento_id)
+                                .await?;
+
+                            let evento = serde_json::json!({
+                                "message_id": msg.id.to_string(),
+                                "sender_id": msg.remetente,
+                                "content": msg.conteudo,
+                                "timestamp": msg.timestamp.timestamp_millis(),
+                            });
+                            sqlx::query(
+                                "INSERT INTO outbox (tenant_id, event_type, payload, traceparent) \
+                                 VALUES ($1, $2, $3, $4)",
+                            )
+                            .bind(tenant_id)
+                            .bind("message.persisted")
+                            .bind(
+                                serde_json::to_vec(&evento)
+                                    .map_err(|e| DbError::ConfigError(e.to_string()))?,
+                            )
+                            .bind("")
+                            .execute(&mut *tx)
+                            .await?;
                         }
                     }
                     // Voltar para a fila é devolver a conversa: mantê-la
@@ -1087,5 +1169,54 @@ impl AtendimentoStore for PgAtendimentoStore {
             Ok((json, tx))
         })
         .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::texto_da_saudacao;
+
+    /// A saudação é a primeira coisa que o contato lê depois que o bot cala.
+    /// Um texto com buraco ("sou  da ,") é pior que um texto curto.
+    #[test]
+    fn com_cargo_e_empresa_a_frase_e_a_da_v1() {
+        assert_eq!(
+            texto_da_saudacao("Ana", "Vendedora", "Ecoprint"),
+            "Olá, meu nome é Ana, sou Vendedora da Ecoprint, irei continuar seu atendimento."
+        );
+    }
+
+    #[test]
+    fn sem_cargo_a_frase_encolhe_em_vez_de_abrir_buraco() {
+        assert_eq!(
+            texto_da_saudacao("Ana", "", "Ecoprint"),
+            "Olá, meu nome é Ana, da Ecoprint, irei continuar seu atendimento."
+        );
+    }
+
+    #[test]
+    fn sem_empresa_tambem() {
+        assert_eq!(
+            texto_da_saudacao("Ana", "Vendedora", ""),
+            "Olá, meu nome é Ana, sou Vendedora, irei continuar seu atendimento."
+        );
+    }
+
+    #[test]
+    fn conta_nova_sem_cargo_nem_empresa_ainda_se_apresenta() {
+        // É o caso mais comum de quem acabou de instalar: os dois em branco.
+        assert_eq!(
+            texto_da_saudacao("Ana", "", ""),
+            "Olá, meu nome é Ana, irei continuar seu atendimento."
+        );
+    }
+
+    #[test]
+    fn espaco_em_branco_conta_como_vazio() {
+        // Um campo com espaços passa em `is_empty` e produziria "sou   da  ,".
+        assert_eq!(
+            texto_da_saudacao("Ana", "   ", "  "),
+            "Olá, meu nome é Ana, irei continuar seu atendimento."
+        );
     }
 }

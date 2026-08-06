@@ -302,12 +302,20 @@ Além disso, `historico_status` passou a ser alimentado a cada transição — m
 formato da v1 (`{status, timestamp, observacao}`). É o que responde "quem mudou
 isto, e quando" quando o cliente reclama; o `status` sozinho só conta o presente.
 
-**Falta desta etapa:**
+**5. Saudação automática ao assumir.** A v1 mandava um texto fixo — "sou
+Vendedor da Ecoprint" —, o que só funcionava num sistema de uma empresa só.
+Aqui cargo e empresa saem do cadastro: mesmo comportamento, dito por cada tenant
+com as palavras dele. Campos vazios encolhem a frase em vez de abrir buraco
+("sou  da ,"), porque conta nova costuma ter os dois em branco e a saudação é a
+primeira coisa que o cliente lê.
 
-- **Saudação automática ao assumir.** A v1 envia "Olá, meu nome é X, irei
-  continuar seu atendimento" pela instância do atendente. Depende de compor uma
-  mensagem outbound dentro da transação do movimento.
-- Etiquetas, notas e campos personalizados no cartão — Etapa 8.
+A mensagem é criada **na mesma transação do movimento**, com
+`remetente = "atendente"` e evento no outbox — é o que o worker procura para
+enviar de verdade. Se o cartão andasse e a saudação não saísse, o contato
+ficaria falando com o silêncio, com o bot já desligado.
+
+**Falta desta etapa**: etiquetas, notas e campos personalizados no cartão —
+Etapa 8.
 
 ### Etapa 7 — Treinamento: intents e teste de resposta — FEITO
 
