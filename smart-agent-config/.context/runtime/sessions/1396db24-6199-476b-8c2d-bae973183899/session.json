@@ -4,9 +4,9 @@
   "status": "completed",
   "repoPath": "C:\\PROJETOS\\FULL-STACK\\smart-core-assistant-v2\\smart-agent-config",
   "createdAt": "2026-07-23T18:02:41.145Z",
-  "updatedAt": "2026-07-23T22:18:59.975Z",
+  "updatedAt": "2026-08-09T03:43:33.885Z",
   "startedAt": "2026-07-23T18:02:41.145Z",
-  "traceCount": 34,
+  "traceCount": 37,
   "artifactCount": 1,
   "checkpointCount": 4,
   "checkpoints": [
@@ -83,7 +83,7 @@
     "workflow": true,
     "description": "Fase N8 — Migração de dados v1→v2 (ETL idempotente) + habilitação da produção web completa (Caddy) + rollout do enforce + runbook de cutover/rollback. Escopo desta execução: construir todo o código/config versionado (scripts ETL, blocos Caddy prod, flags de enforce, runbook), SEM executar contra infraestrutura de produção real, sem decriptar credenciais reais de tenant e sem apagar old/ — a execução real fica para o usuário rodar depois com os runbooks prontos."
   },
-  "lastTraceAt": "2026-07-23T22:18:59.975Z",
+  "lastTraceAt": "2026-08-09T03:43:33.885Z",
   "lastCheckpointAt": "2026-07-23T19:54:10.298Z",
   "completedAt": "2026-07-23T22:18:59.961Z"
 }

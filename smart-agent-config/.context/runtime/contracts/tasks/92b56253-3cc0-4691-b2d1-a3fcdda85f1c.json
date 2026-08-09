@@ -1,0 +1,37 @@
+{
+  "id": "92b56253-3cc0-4691-b2d1-a3fcdda85f1c",
+  "title": "Fase N8.5 — Defeitos de comportamento do pipeline de mensagem: Planning",
+  "description": "Derived from linked plan \"n85-defeitos-pipeline\" for PREVC phase P (Planning). Plan phases: Planning. Expected outputs: prd, tech-spec, requirements, wireframes.",
+  "sessionId": "41d55275-88c4-46b5-91a6-a3ee55456f65",
+  "owner": "planner",
+  "status": "completed",
+  "inputs": [],
+  "expectedOutputs": [
+    "prd",
+    "tech-spec",
+    "requirements",
+    "wireframes"
+  ],
+  "acceptanceCriteria": [
+    "Complete Planning"
+  ],
+  "requiredSensors": [],
+  "requiredArtifacts": [],
+  "createdAt": "2026-08-09T03:46:01.733Z",
+  "updatedAt": "2026-08-09T03:46:12.960Z",
+  "metadata": {
+    "requirementsSource": "none",
+    "source": "workflow.plan",
+    "planSlug": "n85-defeitos-pipeline",
+    "prevcPhase": "P",
+    "planPhaseIds": [
+      "phase-p"
+    ],
+    "planPhaseNames": [
+      "Planning"
+    ],
+    "planPhaseSummaries": [],
+    "derivedFrom": "linked-plan",
+    "completionReason": "Workflow advanced from P to R"
+  }
+}

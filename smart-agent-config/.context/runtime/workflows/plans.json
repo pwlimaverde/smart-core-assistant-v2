@@ -1,16 +1,14 @@
 {
-  "active": [],
-  "completed": [
+  "active": [
     {
-      "slug": "n8-migracao-e-cutover",
-      "path": "plans/n8-migracao-e-cutover.md",
-      "title": "n8-migracao-e-cutover",
-      "linkedAt": "2026-07-23T18:02:45.454Z",
-      "status": "completed",
-      "approval_status": "approved",
-      "approved_at": "2026-07-23T18:24:09.221Z",
-      "approved_by": "architect"
+      "slug": "n85-defeitos-pipeline",
+      "path": "plans/n85-defeitos-pipeline.md",
+      "title": "Fase N8.5 — Defeitos de comportamento do pipeline de mensagem",
+      "summary": "**Primeira fase do backlog N8.5–N12**, derivado da auditoria de código v1 × v2",
+      "linkedAt": "2026-08-09T03:46:01.711Z",
+      "status": "active"
     }
   ],
-  "primary": "n8-migracao-e-cutover"
+  "completed": [],
+  "primary": "n85-defeitos-pipeline"
 }
