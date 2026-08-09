@@ -13,6 +13,15 @@ pub struct AuthDeps {
     pub pg: transport::MuxClient,
     /// Cliente multiplexado para chamadas ao data_redis.
     pub redis: transport::MuxClient,
+    /// Cliente do `data_storage` (N9/E1). A borda precisa dele para compor o
+    /// upload de mídia: o `data_postgres` valida o atendimento e a quota, e o
+    /// `data_storage` assina a URL — são duas portas de dados distintas, e quem
+    /// as combina para atender uma tela é a borda, não uma delas.
+    ///
+    /// `Option` porque o `control_plane` e os testes montam `AuthDeps` sem
+    /// storage; nesses casos o caminho de mídia responde "indisponível" em vez
+    /// de exigir um serviço que aquele processo não usa.
+    pub storage: Option<transport::MuxClient>,
     /// Tempo de expiração em segundos do access token (JWT).
     pub access_ttl_s: i64,
     /// Tempo de expiração em segundos do refresh token.

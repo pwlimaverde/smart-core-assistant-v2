@@ -86,6 +86,7 @@ async fn test_login_flow_success() {
         refresh_ttl_s: 604800,
         login_rate_max: 5,
         login_rate_window_s: 60,
+        storage: None,
     };
 
     // 4. Executa o login
@@ -182,6 +183,7 @@ async fn test_login_flow_invalid_credentials() {
         refresh_ttl_s: 604800,
         login_rate_max: 5,
         login_rate_window_s: 60,
+        storage: None,
     };
 
     let result = login(
@@ -262,6 +264,7 @@ async fn test_login_flow_usuario_sem_tenant() {
         refresh_ttl_s: 604800,
         login_rate_max: 5,
         login_rate_window_s: 60,
+        storage: None,
     };
 
     let result = login(
@@ -350,6 +353,7 @@ async fn test_login_flow_superuser_deriva_escopos() {
         refresh_ttl_s: 604800,
         login_rate_max: 5,
         login_rate_window_s: 60,
+        storage: None,
     };
 
     let result = login(
@@ -465,6 +469,7 @@ async fn test_login_flow_module_permissions_e_fallbacks() {
         refresh_ttl_s: 604800,
         login_rate_max: 5,
         login_rate_window_s: 60,
+        storage: None,
     };
 
     // 1. Testa permissões em array
@@ -564,6 +569,7 @@ async fn test_login_flow_rate_limit_excedido() {
         refresh_ttl_s: 604800,
         login_rate_max: 5,
         login_rate_window_s: 60,
+        storage: None,
     };
 
     let result = login(
@@ -674,6 +680,7 @@ async fn test_login_flow_username_success() {
         refresh_ttl_s: 604800,
         login_rate_max: 5,
         login_rate_window_s: 60,
+        storage: None,
     };
 
     // 4. Executa o login passando o username

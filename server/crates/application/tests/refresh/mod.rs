@@ -88,6 +88,7 @@ async fn test_refresh_flow_feliz() {
         refresh_ttl_s: 604800,
         login_rate_max: 5,
         login_rate_window_s: 60,
+        storage: None,
     };
 
     let result = refresh(
@@ -163,6 +164,7 @@ async fn test_refresh_flow_reuso_token_rotacionado() {
         refresh_ttl_s: 604800,
         login_rate_max: 5,
         login_rate_window_s: 60,
+        storage: None,
     };
 
     let result = refresh(&deps, "00-trace-refresh2-span2-01", "token_reutilizado").await;
@@ -247,6 +249,7 @@ async fn test_refresh_flow_usuario_desativado() {
         refresh_ttl_s: 604800,
         login_rate_max: 5,
         login_rate_window_s: 60,
+        storage: None,
     };
 
     let result = refresh(
@@ -336,6 +339,7 @@ async fn test_refresh_flow_usuario_sem_tenant() {
         refresh_ttl_s: 604800,
         login_rate_max: 5,
         login_rate_window_s: 60,
+        storage: None,
     };
 
     let result = refresh(
@@ -432,6 +436,7 @@ async fn test_refresh_flow_erro_get_user_identity() {
         refresh_ttl_s: 604800,
         login_rate_max: 5,
         login_rate_window_s: 60,
+        storage: None,
     };
 
     let result = refresh(

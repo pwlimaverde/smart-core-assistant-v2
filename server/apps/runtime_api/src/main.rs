@@ -50,6 +50,9 @@ async fn main() -> anyhow::Result<()> {
     // 3. Conecta clientes multiplexados
     let pg_client = transport::conectar_cliente("data_postgres").await?;
     let redis_client = transport::conectar_cliente("data_redis").await?;
+    // N9/E1: a borda compõe pg (valida atendimento e quota) + storage (assina a
+    // URL de upload). Nenhuma das duas portas de dados chama a outra.
+    let storage_client = transport::conectar_cliente("data_storage").await?;
 
     // Conexão com o barramento Redis para publicar eventos de segurança (auditoria de reuso).
     let bus_url = std::env::var("REDIS_BUS_URL")
@@ -66,6 +69,8 @@ async fn main() -> anyhow::Result<()> {
         refresh_ttl_s,
         login_rate_max,
         login_rate_window_s,
+        // N9/E1: composicao do upload de midia (presign no data_storage).
+        storage: Some(storage_client),
     });
 
     // 4. Inicia o Servidor RPC síncrono nos 3 protocolos
@@ -1110,6 +1115,7 @@ mod tests {
             refresh_ttl_s: 604800,
             login_rate_max: 5,
             login_rate_window_s: 60,
+            storage: None,
         });
         let bus = fake_bus(29150).await;
 
@@ -1303,6 +1309,7 @@ mod tests {
             refresh_ttl_s: 604800,
             login_rate_max: 5,
             login_rate_window_s: 60,
+            storage: None,
         });
         let bus = fake_bus(29151).await;
 
@@ -1427,6 +1434,7 @@ mod tests {
             refresh_ttl_s: 604800,
             login_rate_max: 5,
             login_rate_window_s: 60,
+            storage: None,
         });
 
         // 1. Testa refresh feliz
@@ -1542,6 +1550,7 @@ mod tests {
             refresh_ttl_s: 604800,
             login_rate_max: 5,
             login_rate_window_s: 60,
+            storage: None,
         });
         let bus = fake_bus(29153).await;
 
@@ -1629,6 +1638,7 @@ mod tests {
             refresh_ttl_s: 604800,
             login_rate_max: 5,
             login_rate_window_s: 60,
+            storage: None,
         });
 
         // 1. Testa handler_stream_atendimentos

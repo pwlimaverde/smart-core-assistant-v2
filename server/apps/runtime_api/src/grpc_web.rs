@@ -48,6 +48,8 @@ use contracts::grpc::queries::{
     DeleteCoreSettingRequest,
     DeleteCoreSettingResponse,
     DetalheAtendimentoResponse,
+    EnviarMidiaAtendimentoRequest,
+    EnviarMidiaAtendimentoResponse,
     Etiqueta as ProtoEtiqueta,
     EtiquetaResponse,
     ExportTenantsCsvRequest,
@@ -115,10 +117,13 @@ use contracts::grpc::queries::{
     ListVoucherRedemptionsResponse,
     ListVouchersRequest,
     ListVouchersResponse,
+    ListarMidiasAtendimentoRequest,
+    ListarMidiasAtendimentoResponse,
     LoginRequest,
     LogoutRequest,
     LogoutResponse,
     MensagemThread as ProtoMensagemThread,
+    MidiaMensagem as ProtoMidiaMensagem,
     MoveAtendimentoEtapaRequest,
     MoveAtendimentoEtapaResponse,
     MoverMyEtapaFluxoRequest,
@@ -173,6 +178,8 @@ use contracts::grpc::queries::{
     SetTenantActiveRequest,
     SetTenantActiveResponse,
     SimpleOkResponse,
+    SolicitarUploadMidiaRequest,
+    SolicitarUploadMidiaResponse,
     StreamAtendimentosRequest,
     Subscription as ProtoSubscription,
     Tenant as ProtoTenant,
@@ -267,6 +274,49 @@ pub(crate) fn ip_do_metadata<T>(req: &Request<T>) -> Option<String> {
         .and_then(|s| s.split(',').next())
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
+}
+
+/// N9/E7 — converte um timestamp RFC3339 do `data_postgres` em millis, ou `None`
+/// quando o campo está ausente/nulo (mensagem ainda não entregue ou não lida).
+fn millis_do_item(item: &serde_json::Value, campo: &str) -> Option<i64> {
+    item.get(campo)
+        .and_then(|v| v.as_str())
+        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+        .map(|d| d.timestamp_millis())
+}
+
+/// N9/E2 — monta a mídia da mensagem quando ela existe.
+///
+/// A `url_assinada` vem pronta do `data_postgres` (gerada no momento da leitura,
+/// com TTL curto). Aqui é só transporte: **não logar** este campo em nenhum
+/// ponto — é credencial de leitura do objeto até expirar.
+fn midia_do_item(item: &serde_json::Value) -> Option<ProtoMidiaMensagem> {
+    let m = item.get("midia")?;
+    // Sem URL não há o que o cliente possa fazer com o registro: a mídia foi
+    // purgada (retenção) ou o presign falhou. Melhor não mandar o bloco do que
+    // mandar um player que não toca nada.
+    let url = m.get("url_assinada").and_then(|v| v.as_str())?;
+    Some(ProtoMidiaMensagem {
+        kind: m
+            .get("kind")
+            .and_then(|v| v.as_str())
+            .unwrap_or("document")
+            .to_string(),
+        url_assinada: url.to_string(),
+        mimetype: m
+            .get("mimetype")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        filename: m
+            .get("filename")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        size_bytes: m.get("size_bytes").and_then(|v| v.as_i64()).unwrap_or(0),
+        seconds: m.get("seconds").and_then(|v| v.as_i64()).map(|v| v as i32),
+        is_ptt: m.get("is_ptt").and_then(|v| v.as_bool()),
+    })
 }
 
 /// Extrai o `User-Agent` da requisição gRPC-Web (WS-5b). Metadado de auditoria,
@@ -4312,6 +4362,27 @@ impl AdminService for AdminFacade {
                                 .get("resumo_midia")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string()),
+                            // N9/E2: o `data_postgres` já devolve a mídia com a
+                            // URL assinada na hora da leitura (TTL curto).
+                            midia: midia_do_item(item),
+                            // N9/E7: ticks. As colunas existem desde a 0006 e
+                            // nunca foram expostas — sem elas a bolha não
+                            // distingue "enviado" de "lido".
+                            data_entregue: millis_do_item(item, "data_entregue"),
+                            data_lida: millis_do_item(item, "data_lida"),
+                            // N9/E6: citação.
+                            mensagem_citada_id: item
+                                .get("mensagem_citada_id")
+                                .and_then(|v| v.as_i64())
+                                .map(|v| v as i32),
+                            citada_remetente: item
+                                .get("citada_remetente")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string()),
+                            citada_preview: item
+                                .get("citada_preview")
+                                .and_then(|v| v.as_str())
+                                .map(|s| s.to_string()),
                         });
                     }
                 }
@@ -4320,6 +4391,312 @@ impl AdminService for AdminFacade {
             }
             Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
         }
+    }
+
+    /// N9/E1 — passo 1 do envio de mídia: dizer ao cliente onde subir.
+    ///
+    /// Compõe duas portas de dados, e é por isso que mora aqui e não numa delas:
+    /// o `data_postgres` valida o atendimento, o tipo e a quota do tenant; o
+    /// `data_storage` assina a URL. Nenhuma porta chama a outra.
+    ///
+    /// A validação de tipo/tamanho aqui é a **primeira** barreira, feita sobre o
+    /// que o cliente declara. A segunda — e a que vale — é a conferência do
+    /// conteúdo real no passo 3, depois que o objeto está no bucket.
+    ///
+    /// `skip_all`: o nome do arquivo pode conter PII (nome de cliente, número de
+    /// contrato) e a URL assinada é credencial.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "SolicitarUploadMidia",
+            atendimento_id = tracing::field::Empty,
+            bytes = tracing::field::Empty,
+            traceparent
+        )
+    )]
+    async fn solicitar_upload_midia(
+        &self,
+        req: Request<SolicitarUploadMidiaRequest>,
+    ) -> Result<Response<SolicitarUploadMidiaResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+
+        let span = tracing::Span::current();
+        span.record("atendimento_id", inner.atendimento_id);
+        span.record("bytes", inner.bytes);
+
+        let Some(storage) = self.deps.storage.as_ref() else {
+            return Err(Status::unavailable("errors.midia.storage_indisponivel"));
+        };
+
+        // Barreira declarada: tipo aceito e tamanho dentro do teto da categoria.
+        // Recusar aqui poupa o upload inteiro de um arquivo que seria rejeitado
+        // no passo 3 — o atendente descobre antes de esperar a barra encher.
+        let categoria = infrastructure_storage::midia::categoria_de(&inner.mimetype)
+            .ok_or_else(|| Status::invalid_argument("errors.midia.tipo_nao_permitido"))?;
+        if inner.bytes <= 0 {
+            return Err(Status::invalid_argument("errors.midia.arquivo_vazio"));
+        }
+        if inner.bytes > categoria.limite_bytes() {
+            return Err(Status::invalid_argument("errors.midia.acima_do_limite"));
+        }
+
+        // O `data_postgres` responde se o atendimento é deste tenant, se quem
+        // pede tem permissão no fluxo, e se a quota de storage comporta.
+        let auth_user_id = claims.sub.parse::<i32>().unwrap_or(0);
+        let flow_permissions = if claims.is_superuser {
+            Vec::new()
+        } else {
+            resolver_flow_permissions_web(&self.deps, &claims.tenant_id, auth_user_id, &traceparent)
+                .await
+        };
+        let env_valida = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "AutorizarUploadMidia".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({
+                "atendimento_id": inner.atendimento_id,
+                "bytes": inner.bytes,
+            }))
+            .unwrap(),
+            auth_user_id,
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            flow_permissions,
+            ..Default::default()
+        };
+        let autorizacao = self
+            .deps
+            .pg
+            .call(env_valida, std::time::Duration::from_secs(5))
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço interno: {e}")))?;
+        if autorizacao.kind == MessageKind::Error as i32 {
+            let msg = autorizacao.error.map(|e| e.message).unwrap_or_default();
+            // Quota estourada e atendimento de outro tenant chegam por aqui; a
+            // mensagem já vem pronta para o operador ler.
+            return Err(Status::failed_precondition(msg));
+        }
+        let corpo: serde_json::Value = serde_json::from_slice(&autorizacao.payload)
+            .map_err(|e| Status::internal(e.to_string()))?;
+        let chave = corpo
+            .get("chave")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Status::internal("autorização de upload sem chave"))?
+            .to_string();
+
+        // Assinatura no data_storage. O `content_type` volta ao cliente porque o
+        // PUT precisa mandar exatamente este valor — o R2 recusa divergência.
+        let env_presign = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "PresignUpload".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({
+                "file_name": chave,
+                "content_type": inner.mimetype,
+            }))
+            .unwrap(),
+            ..Default::default()
+        };
+        let presign = storage
+            .call(env_presign, std::time::Duration::from_secs(5))
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço de storage: {e}")))?;
+        if presign.kind == MessageKind::Error as i32 {
+            // Sem detalhe do erro do storage para o cliente: a mensagem pode
+            // carregar a chave do objeto.
+            tracing::warn!("falha ao assinar upload de mídia");
+            return Err(Status::internal("errors.midia.presign_falhou"));
+        }
+        let corpo_presign: serde_json::Value = serde_json::from_slice(&presign.payload)
+            .map_err(|e| Status::internal(e.to_string()))?;
+
+        tracing::info!(categoria = categoria.as_str(), "upload de mídia autorizado");
+
+        Ok(Response::new(SolicitarUploadMidiaResponse {
+            // Nunca logada: é credencial de escrita no bucket.
+            url_upload: corpo_presign
+                .get("url")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string(),
+            chave,
+            content_type: inner.mimetype,
+            expira_em_segundos: corpo_presign
+                .get("expires_in")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(900),
+        }))
+    }
+
+    /// N9/E1 — passo 3: o upload terminou, confira e ponha na conversa.
+    ///
+    /// Encaminha ao `data_postgres`, que lê o cabeçalho do objeto no bucket,
+    /// confere a assinatura contra o mimetype declarado, contabiliza a quota e
+    /// persiste a mensagem com o evento no outbox.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "EnviarMidiaAtendimento",
+            atendimento_id = tracing::field::Empty,
+            traceparent
+        )
+    )]
+    async fn enviar_midia_atendimento(
+        &self,
+        req: Request<EnviarMidiaAtendimentoRequest>,
+    ) -> Result<Response<EnviarMidiaAtendimentoResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+        tracing::Span::current().record("atendimento_id", inner.atendimento_id);
+
+        let auth_user_id = claims.sub.parse::<i32>().unwrap_or(0);
+        let flow_permissions = if claims.is_superuser {
+            Vec::new()
+        } else {
+            resolver_flow_permissions_web(&self.deps, &claims.tenant_id, auth_user_id, &traceparent)
+                .await
+        };
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "EnviarMidiaAtendimento".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({
+                "atendimento_id": inner.atendimento_id,
+                "chave": inner.chave,
+                "mimetype": inner.mimetype,
+                "nome_arquivo": inner.nome_arquivo,
+                "legenda": inner.legenda,
+                "is_ptt": inner.is_ptt,
+                "action_id": inner.action_id,
+            }))
+            .unwrap(),
+            auth_user_id,
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            flow_permissions,
+            ..Default::default()
+        };
+
+        let resp = self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(10))
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço interno: {e}")))?;
+        if resp.kind == MessageKind::Error as i32 {
+            let msg = resp.error.map(|e| e.message).unwrap_or_default();
+            // Conteúdo divergente do declarado é erro do cliente, não do
+            // servidor: devolver `internal` faria a tela sugerir "tente de novo"
+            // para um arquivo que nunca vai passar.
+            return Err(Status::invalid_argument(msg));
+        }
+        let corpo: serde_json::Value =
+            serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))?;
+
+        Ok(Response::new(EnviarMidiaAtendimentoResponse {
+            message_id: corpo
+                .get("message_id")
+                .and_then(|v| v.as_i64())
+                .unwrap_or_default() as i32,
+        }))
+    }
+
+    /// N9/E2 — galeria da ficha: as mídias do atendimento, com URL assinada.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListarMidiasAtendimento", traceparent)
+    )]
+    async fn listar_midias_atendimento(
+        &self,
+        req: Request<ListarMidiasAtendimentoRequest>,
+    ) -> Result<Response<ListarMidiasAtendimentoResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+
+        let auth_user_id = claims.sub.parse::<i32>().unwrap_or(0);
+        let flow_permissions = if claims.is_superuser {
+            Vec::new()
+        } else {
+            resolver_flow_permissions_web(&self.deps, &claims.tenant_id, auth_user_id, &traceparent)
+                .await
+        };
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "ListarMidiasAtendimento".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({
+                "atendimento_id": inner.atendimento_id,
+                "limit": if inner.limit <= 0 { 50 } else { inner.limit },
+                "offset": inner.offset.max(0),
+            }))
+            .unwrap(),
+            auth_user_id,
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            flow_permissions,
+            ..Default::default()
+        };
+
+        let resp = self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(10))
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço interno: {e}")))?;
+        if resp.kind == MessageKind::Error as i32 {
+            let msg = resp.error.map(|e| e.message).unwrap_or_default();
+            return Err(Status::internal(format!("Erro no banco: {msg}")));
+        }
+        let corpo: serde_json::Value =
+            serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))?;
+
+        let midias = corpo
+            .get("midias")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    // Reaproveita o mesmo montador da thread: a mídia sem URL
+                    // (purgada pela retenção) simplesmente não entra na galeria.
+                    .filter_map(|item| midia_do_item(&serde_json::json!({ "midia": item })))
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(Response::new(ListarMidiasAtendimentoResponse { midias }))
     }
 
     #[tracing::instrument(
@@ -6288,6 +6665,9 @@ mod tests {
             refresh_ttl_s: 604_800,
             login_rate_max: 5,
             login_rate_window_s: 300,
+            // Os testes desta fachada não exercitam o caminho de mídia; sem
+            // storage, ele responde `unavailable` em vez de exigir o serviço.
+            storage: None,
         });
         let control = stub_rpc(&format!("tcp://127.0.0.1:{}", porta_base + 2)).await;
         let whatsapp = stub_rpc(&format!("tcp://127.0.0.1:{}", porta_base + 3)).await;

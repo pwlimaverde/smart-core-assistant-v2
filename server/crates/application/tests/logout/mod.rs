@@ -77,6 +77,7 @@ async fn test_logout_completo_com_refresh() {
         refresh_ttl_s: 604800,
         login_rate_max: 5,
         login_rate_window_s: 60,
+        storage: None,
     };
 
     let claims = Claims {
@@ -148,6 +149,7 @@ async fn test_logout_apenas_com_access_token() {
         refresh_ttl_s: 604800,
         login_rate_max: 5,
         login_rate_window_s: 60,
+        storage: None,
     };
 
     let claims = Claims {
@@ -225,6 +227,7 @@ async fn test_logout_falha_bloquear_token() {
         refresh_ttl_s: 604800,
         login_rate_max: 5,
         login_rate_window_s: 60,
+        storage: None,
     };
 
     let claims = Claims {

@@ -479,6 +479,21 @@ message ListAtendimentosResponse {
   repeated AtendimentoResumo atendimentos = 1;
 }
 
+// Mídia anexada a uma mensagem da thread (N9/E2).
+//
+// A `url_assinada` é gerada NO MOMENTO da leitura da thread, com TTL curto. Não
+// é URL permanente nem proxy pelo backend: presign curto é o que o R2 faz bem, e
+// virar CDN não é papel do servidor.
+message MidiaMensagem {
+  string kind = 1;                 // image | audio | video | document
+  string url_assinada = 2;         // credencial temporária — não persistir no cliente
+  string mimetype = 3;
+  string filename = 4;
+  int64 size_bytes = 5;
+  optional int32 seconds = 6;      // duração, para áudio/vídeo
+  optional bool is_ptt = 7;        // áudio gravado na hora (push-to-talk)
+}
+
 message MensagemThread {
   int32 id = 1;
   int32 atendimento_id = 2;
@@ -489,6 +504,16 @@ message MensagemThread {
   string status_envio = 7;
   bool gerado_por_ia = 8;            // selo "gerado por IA" no chat (N6.2)
   optional string resumo_midia = 9;  // resumo/transcrição da mídia analisada (N6.1/N6.2)
+  // N9/E2: presente só quando a mensagem tem mídia.
+  optional MidiaMensagem midia = 10;
+  // N9/E7: ticks de entrega e leitura. As colunas existem desde a 0006 e nunca
+  // foram expostas — sem elas a bolha não distingue "enviado" de "lido".
+  optional int64 data_entregue = 11;
+  optional int64 data_lida = 12;
+  // N9/E6: citação (responder mensagem). Colunas existentes desde a 0006.
+  optional int32 mensagem_citada_id = 13;
+  optional string citada_remetente = 14;
+  optional string citada_preview = 15;
 }
 
 message GetThreadRequest {
@@ -540,10 +565,59 @@ message SendOutboundMessageRequest {
   // N7.2: idempotência do sync offline. Campo aditivo/opcional — clientes
   // antigos (sem action_id) seguem funcionando sem dedupe server-side.
   optional string action_id = 4;
+  // N9/E6: responder citando outra mensagem da mesma thread.
+  optional int32 mensagem_citada_id = 5;
 }
 
 message SendOutboundMessageResponse {
   int32 message_id = 1;
+}
+
+// --- N9a: mídia na conversa ---
+
+// Passo 1 do envio: pedir onde subir. O binário NÃO trafega pelo gRPC-Web.
+message SolicitarUploadMidiaRequest {
+  int32 atendimento_id = 1;
+  string nome_arquivo = 2;
+  string mimetype = 3;
+  int64 bytes = 4;
+}
+
+message SolicitarUploadMidiaResponse {
+  // URL pré-assinada de PUT. É credencial de escrita: usar e descartar.
+  string url_upload = 1;
+  // Chave do objeto no bucket — é o que volta em EnviarMidiaAtendimento.
+  string chave = 2;
+  // Content-Type que o PUT DEVE mandar: o R2 recusa se divergir do assinado.
+  string content_type = 3;
+  int64 expira_em_segundos = 4;
+}
+
+// Passo 3: o upload terminou. O servidor confere o conteúdo (magic bytes),
+// contabiliza a quota e só então põe a mensagem na thread.
+message EnviarMidiaAtendimentoRequest {
+  int32 atendimento_id = 1;
+  string chave = 2;
+  string mimetype = 3;
+  string nome_arquivo = 4;
+  string legenda = 5;
+  optional bool is_ptt = 6;
+  // Mesma idempotência do envio de texto (N7.2).
+  optional string action_id = 7;
+}
+
+message EnviarMidiaAtendimentoResponse {
+  int32 message_id = 1;
+}
+
+message ListarMidiasAtendimentoRequest {
+  int32 atendimento_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message ListarMidiasAtendimentoResponse {
+  repeated MidiaMensagem midias = 1;
 }
 
 // --- Fase N3: Painel do Tenant (convites, usuários e config tenant-scoped) ---
@@ -836,6 +910,12 @@ service AdminService {
   rpc AlternarEtiqueta(AlternarEtiquetaRequest) returns (SimpleOkResponse);
   rpc CreateNota(CreateNotaRequest) returns (NotaResponse);
   rpc SendOutboundMessage(SendOutboundMessageRequest) returns (SendOutboundMessageResponse);
+
+  // N9a — mídia na conversa. Upload em duas etapas (presign + confirmação) para
+  // o binário não passar pelo envelope.
+  rpc SolicitarUploadMidia(SolicitarUploadMidiaRequest) returns (SolicitarUploadMidiaResponse);
+  rpc EnviarMidiaAtendimento(EnviarMidiaAtendimentoRequest) returns (EnviarMidiaAtendimentoResponse);
+  rpc ListarMidiasAtendimento(ListarMidiasAtendimentoRequest) returns (ListarMidiasAtendimentoResponse);
 
   // Fase N3: Painel do Tenant. Exigem só autenticação (não superuser); o RBAC fino
   // `tenant:admin` é aplicado no data_postgres. AcceptInvite é rota pública (sem sessão).

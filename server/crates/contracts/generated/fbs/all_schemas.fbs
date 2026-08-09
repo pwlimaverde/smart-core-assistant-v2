@@ -465,6 +465,16 @@ table ListAtendimentosResponse {
   atendimentos:[AtendimentoResumo];
 }
 
+table MidiaMensagem {
+  kind:string;
+  url_assinada:string;
+  mimetype:string;
+  filename:string;
+  size_bytes:long;
+  seconds:int;
+  is_ptt:bool;
+}
+
 table MensagemThread {
   id:int;
   atendimento_id:int;
@@ -475,6 +485,12 @@ table MensagemThread {
   status_envio:string;
   gerado_por_ia:bool;
   resumo_midia:string;
+  midia:MidiaMensagem;
+  data_entregue:long;
+  data_lida:long;
+  mensagem_citada_id:int;
+  citada_remetente:string;
+  citada_preview:string;
 }
 
 table GetThreadRequest {
@@ -515,10 +531,49 @@ table SendOutboundMessageRequest {
   conteudo:string;
   tipo:string;
   action_id:string;
+  mensagem_citada_id:int;
 }
 
 table SendOutboundMessageResponse {
   message_id:int;
+}
+
+table SolicitarUploadMidiaRequest {
+  atendimento_id:int;
+  nome_arquivo:string;
+  mimetype:string;
+  bytes:long;
+}
+
+table SolicitarUploadMidiaResponse {
+  url_upload:string;
+  chave:string;
+  content_type:string;
+  expira_em_segundos:long;
+}
+
+table EnviarMidiaAtendimentoRequest {
+  atendimento_id:int;
+  chave:string;
+  mimetype:string;
+  nome_arquivo:string;
+  legenda:string;
+  is_ptt:bool;
+  action_id:string;
+}
+
+table EnviarMidiaAtendimentoResponse {
+  message_id:int;
+}
+
+table ListarMidiasAtendimentoRequest {
+  atendimento_id:int;
+  limit:int;
+  offset:int;
+}
+
+table ListarMidiasAtendimentoResponse {
+  midias:[MidiaMensagem];
 }
 
 table CreateInviteRequest {

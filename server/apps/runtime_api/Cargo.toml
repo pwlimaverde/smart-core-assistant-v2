@@ -21,6 +21,10 @@ observability = { workspace = true }
 application = { workspace = true }
 ia_client = { workspace = true }
 infrastructure_redis = { path = "../../crates/infrastructure_redis" }
+# N9/E1: só pela tabela de tipos de mídia aceitos e limites por categoria. A
+# borda recusa o que nunca passaria na conferência de conteúdo do passo 3 —
+# duplicar a lista aqui faria as duas divergirem na primeira mudança.
+infrastructure_storage = { path = "../../crates/infrastructure_storage" }
 redis = { workspace = true }
 tracing = { workspace = true }
 tokio-stream = "0.1"
@@ -36,3 +40,4 @@ http = { workspace = true }
 # A feature `mock` só entra na compilação de teste: o binário de produção não
 # carrega mockall.
 ia_client = { workspace = true, features = ["mock"] }
+

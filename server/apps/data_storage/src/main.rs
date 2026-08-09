@@ -142,7 +142,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_put = state_clone2.clone();
     let state_for_get = state_clone2.clone();
     let state_for_presign = state_clone2.clone();
-    let state_for_presign_upload = state_clone2;
+    let state_for_presign_upload = state_clone2.clone();
+    let state_for_inspecionar = state_clone2;
 
     let server = Server::from_env("DATA_STORAGE")
         .route("PutFile", move |env| {
@@ -162,6 +163,11 @@ async fn main() -> anyhow::Result<()> {
         .route("PresignUpload", move |env| {
             let state = state_for_presign_upload.clone();
             Box::pin(async move { handler_presign_upload(state.client, env).await })
+        })
+        // N9/E1: confere o conteúdo real do que subiu, antes de virar mensagem.
+        .route("InspecionarMidia", move |env| {
+            let state = state_for_inspecionar.clone();
+            Box::pin(async move { handler_inspecionar_midia(state.client, env).await })
         });
 
     tracing::info!("Servidor RPC do data_storage configurado e pronto.");
@@ -598,6 +604,107 @@ async fn handler_presign_upload(client: StorageClient, env: Envelope) -> Envelop
             env,
             "PresignUploadReply",
         ),
+    }
+}
+
+/// N9/E1 — passo 2 e meio: o objeto subiu, ele é mesmo o que disseram que era?
+///
+/// Esta é a validação **que vale**. A do passo 1 age sobre o que o cliente
+/// declara; esta lê o conteúdo real no bucket. Fica aqui, e não no
+/// `data_postgres`, porque é o `data_storage` que conhece o bucket — dar um
+/// cliente de S3 ao dono do banco misturaria dois domínios.
+///
+/// Devolve o veredito, nunca o conteúdo: só categoria, tamanho e o motivo da
+/// recusa em texto pronto para o operador ler.
+async fn handler_inspecionar_midia(client: StorageClient, env: Envelope) -> Envelope {
+    let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
+
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let Some(file_name) = extrair_file_name(&payload_json) else {
+        return responder_erro(
+            error_core::AppError::Validation("file_name obrigatório no payload".to_string()),
+            env,
+            "InspecionarMidiaReply",
+        );
+    };
+    let mimetype = payload_json
+        .get("mimetype")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    // Tamanho pelo HEAD (não baixa corpo) — é a fonte da verdade do que subiu,
+    // não o que o cliente prometeu no passo 1.
+    let bytes = match client.tamanho(tenant_id, &file_name).await {
+        Ok(Some(b)) => b,
+        Ok(None) => {
+            return responder_erro(
+                error_core::AppError::Validation(
+                    "arquivo não encontrado no storage (upload não concluído)".to_string(),
+                ),
+                env,
+                "InspecionarMidiaReply",
+            )
+        }
+        Err(e) => {
+            return responder_erro(
+                error_core::AppError::Storage(e.to_string()),
+                env,
+                "InspecionarMidiaReply",
+            )
+        }
+    };
+
+    // 32 bytes cobrem a assinatura de todos os formatos aceitos.
+    let cabecalho = match client.primeiros_bytes(tenant_id, &file_name, 32).await {
+        Ok(b) => b,
+        Err(e) => {
+            return responder_erro(
+                error_core::AppError::Storage(e.to_string()),
+                env,
+                "InspecionarMidiaReply",
+            )
+        }
+    };
+
+    match infrastructure_storage::midia::validar(&mimetype, bytes, &cabecalho) {
+        Ok(categoria) => {
+            tracing::info!(
+                categoria = categoria.as_str(),
+                bytes,
+                "mídia conferida e aprovada"
+            );
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "InspecionarMidiaReply".to_string(),
+                payload: serde_json::to_vec(&serde_json::json!({
+                    "ok": true,
+                    "categoria": categoria.as_str(),
+                    "bytes": bytes,
+                }))
+                .unwrap_or_default(),
+                error: None,
+                ..env
+            }
+        }
+        Err(recusa) => {
+            // WARN, não ERROR: arquivo recusado é o sistema funcionando. Vira
+            // alerta só se o volume disparar (tentativa de abuso).
+            tracing::warn!(motivo = %recusa, bytes, "mídia recusada na conferência");
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "InspecionarMidiaReply".to_string(),
+                payload: serde_json::to_vec(&serde_json::json!({
+                    "ok": false,
+                    "motivo": recusa.to_string(),
+                    "bytes": bytes,
+                }))
+                .unwrap_or_default(),
+                error: None,
+                ..env
+            }
+        }
     }
 }
 
