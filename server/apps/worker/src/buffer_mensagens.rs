@@ -146,6 +146,9 @@ pub(crate) async fn enfileirar(
             .unwrap_or(false)
     });
 
+    // Guardado para poder desfazer o `RPUSH` se o agendamento falhar (ver abaixo).
+    let mut payload_enfileirado: Option<String> = None;
+
     if !ja_esta {
         let payload = match serde_json::to_string(mensagem) {
             Ok(p) => p,
@@ -163,6 +166,7 @@ pub(crate) async fn enfileirar(
             tracing::warn!("falha ao enfileirar mensagem no buffer: {e}");
             return Enfileiramento::Indisponivel;
         }
+        payload_enfileirado = Some(payload);
         let _: Result<i64, _> = redis::cmd("EXPIRE")
             .arg(&chave)
             .arg(ttl_seguranca(janela))
@@ -187,7 +191,31 @@ pub(crate) async fn enfileirar(
         Ok(true) => Enfileiramento::Agendador,
         Ok(false) => Enfileiramento::Acumulada,
         Err(e) => {
+            // Falha pontual entre dois comandos da MESMA conexão: o `RPUSH` já
+            // passou, o `SET` não. Sem desfazer o push, o chamador responderia a
+            // esta mensagem sozinha (degradação) **e** ela continuaria no buffer
+            // para o agendador anterior drenar — o contato receberia duas
+            // respostas ao mesmo fragmento.
+            //
+            // O `LREM` remove exatamente a entrada que acabamos de inserir
+            // (`count=-1`: da cauda para o início, uma ocorrência). Se ele também
+            // falhar, a duplicata volta a ser possível — mas aí o Redis está
+            // realmente fora, e o TTL do buffer limita o estrago.
             tracing::warn!("falha ao agendar janela de agregação: {e}");
+            if let Some(payload) = payload_enfileirado {
+                let desfez: Result<i64, _> = redis::cmd("LREM")
+                    .arg(&chave)
+                    .arg(-1)
+                    .arg(&payload)
+                    .query_async(&mut conn)
+                    .await;
+                if let Err(e) = desfez {
+                    tracing::warn!(
+                        "falha ao desfazer o enfileiramento após agendamento falho \
+                         (possível resposta duplicada nesta janela): {e}"
+                    );
+                }
+            }
             Enfileiramento::Indisponivel
         }
     }
