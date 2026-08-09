@@ -121,6 +121,31 @@ async fn solicitar_pesquisa_satisfacao(
         return Ok(false);
     }
 
+    // Contato na whitelist de IGNORADOS não recebe a pesquisa.
+    //
+    // Parece redundante — quem está na lista não gera atendimento, porque o
+    // `webhook_ingress` descarta na ingestão. Mas o filtro age no momento da
+    // MENSAGEM, e a lista muda com o tempo: um número adicionado à whitelist
+    // depois de já ter um atendimento aberto (diretoria, número de teste que
+    // virou interno) continuaria recebendo o pedido de avaliação ao encerrarem
+    // a conversa dele. A checagem aqui é o que faz a lista valer para o ciclo
+    // inteiro, e não só para a porta de entrada.
+    let ignorado: Option<i32> = sqlx::query_scalar(
+        r#"SELECT 1
+           FROM oraculo_atendimento a
+           JOIN oraculo_contato c ON c.id = a.contato_id AND c.tenant_id = a.tenant_id
+           JOIN whatsapp_whitelist w
+             ON w.tenant_id = a.tenant_id AND w.phone_number = c.telefone AND w.active = TRUE
+           WHERE a.tenant_id = $1 AND a.id = $2"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    if ignorado.is_some() {
+        return Ok(false);
+    }
+
     let texto = msg_tenant
         .filter(|t| !t.trim().is_empty())
         .or(msg_global)
