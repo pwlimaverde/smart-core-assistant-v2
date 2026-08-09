@@ -32,3 +32,9 @@ ia_client = { workspace = true }
 
 [dev-dependencies]
 mockall = { workspace = true }
+# Sem isto, `cargo test -p worker` isolado NÃO compila: os testes usam
+# `MockIaEngineClient`, que vive atrás da feature `mock` do `ia_client`. Funcionava
+# só por acidente — rodando o workspace inteiro, o `runtime_api` habilita a feature
+# e a unificação do Cargo a empresta ao worker. Quem rodasse os testes deste app
+# sozinho via erro de compilação, não falha de teste.
+ia_client = { workspace = true, features = ["mock"] }
