@@ -11,6 +11,7 @@
 pub mod connection;
 pub mod errors;
 pub mod keys;
+pub mod midia;
 
 use aws_sdk_s3::presigning::PresigningConfig;
 use aws_sdk_s3::primitives::ByteStream;
@@ -20,6 +21,7 @@ use uuid::Uuid;
 
 pub use errors::StorageError;
 pub use keys::{chave_midia, MediaType};
+pub use midia::{CategoriaMidia, RecusaMidia};
 
 /// Cliente de armazenamento de objetos S3-compatible (MinIO/R2).
 #[derive(Clone)]
@@ -124,6 +126,50 @@ impl StorageClient {
         Ok(bytes)
     }
 
+    /// N9/E1 — lê apenas os primeiros `n` bytes do objeto (via `Range`).
+    ///
+    /// Existe por causa da validação de mídia enviada pelo cliente: como o upload
+    /// vai **direto** do navegador para o R2 (presign de PUT), o servidor nunca vê
+    /// o binário. Sem isto, o mimetype declarado pelo cliente seria a única
+    /// verdade — e um `.exe` renomeado para `.jpg` entraria na conversa.
+    ///
+    /// Baixar o arquivo inteiro só para ler a assinatura seria caro num vídeo de
+    /// dezenas de MB; 32 bytes bastam para todos os formatos que aceitamos.
+    #[tracing::instrument(skip(self), fields(tenant_id = %tenant_id, file_name = %file_name, n = n), err)]
+    pub async fn primeiros_bytes(
+        &self,
+        tenant_id: Uuid,
+        file_name: &str,
+        n: usize,
+    ) -> Result<Vec<u8>, StorageError> {
+        let key = Self::chave(tenant_id, file_name);
+        let saida = self
+            .client
+            .get_object()
+            .bucket(&self.bucket)
+            .key(&key)
+            // `Range` é inclusivo nas duas pontas no HTTP: 0-31 são 32 bytes.
+            .range(format!("bytes=0-{}", n.saturating_sub(1)))
+            .send()
+            .await
+            .map_err(|e| {
+                let svc = e.into_service_error();
+                if svc.is_no_such_key() {
+                    StorageError::NotFound
+                } else {
+                    StorageError::S3(svc.to_string())
+                }
+            })?;
+
+        Ok(saida
+            .body
+            .collect()
+            .await
+            .map_err(|e| StorageError::S3(e.to_string()))?
+            .into_bytes()
+            .to_vec())
+    }
+
     /// Tamanho em bytes do objeto, ou `None` quando ele não existe (`HEAD`, sem
     /// baixar o corpo). Sustenta a contabilidade de `tenants_storage_usage`
     /// (N7.1): o `PutFile` só soma bytes quando a chave é nova (a mídia é
@@ -172,6 +218,48 @@ impl StorageClient {
             .get_object()
             .bucket(&self.bucket)
             .key(&key)
+            .presigned(cfg)
+            .await
+            .map_err(|e| StorageError::S3(e.to_string()))?;
+        Ok(req.uri().to_string())
+    }
+
+    /// N9/E1 — URL pré-assinada de **PUT**, para o cliente subir o binário direto
+    /// ao R2 sem passar pelo gRPC-Web.
+    ///
+    /// Existe separada de [`Self::presign`] (que assina GET) porque a assinatura
+    /// cobre o método HTTP: uma URL de GET não aceita PUT.
+    ///
+    /// **`content_type` faz parte da assinatura.** O R2 recusa o upload se o
+    /// header `Content-Type` do PUT divergir do que foi assinado — o cliente
+    /// precisa mandar exatamente este valor. Assinar sem `Content-Type` também
+    /// não serve: o objeto chegaria como `application/octet-stream` e o browser
+    /// baixaria a imagem em vez de exibi-la.
+    ///
+    /// A URL devolvida é **credencial temporária**: quem a tiver escreve no
+    /// bucket até o TTL. Nunca pode ir para log, span, métrica ou mensagem de
+    /// erro (ver `08_diretrizes_seguranca.md` §4.1).
+    #[tracing::instrument(
+        skip(self),
+        fields(tenant_id = %tenant_id, file_name = %file_name, ttl = ttl_segundos),
+        err
+    )]
+    pub async fn presign_put(
+        &self,
+        tenant_id: Uuid,
+        file_name: &str,
+        content_type: &str,
+        ttl_segundos: u64,
+    ) -> Result<String, StorageError> {
+        let key = Self::chave(tenant_id, file_name);
+        let cfg = PresigningConfig::expires_in(Duration::from_secs(ttl_segundos))
+            .map_err(|e| StorageError::ConfigError(e.to_string()))?;
+        let req = self
+            .client
+            .put_object()
+            .bucket(&self.bucket)
+            .key(&key)
+            .content_type(content_type)
             .presigned(cfg)
             .await
             .map_err(|e| StorageError::S3(e.to_string()))?;

@@ -141,7 +141,8 @@ async fn main() -> anyhow::Result<()> {
     let state_clone2 = state.clone();
     let state_for_put = state_clone2.clone();
     let state_for_get = state_clone2.clone();
-    let state_for_presign = state_clone2;
+    let state_for_presign = state_clone2.clone();
+    let state_for_presign_upload = state_clone2;
 
     let server = Server::from_env("DATA_STORAGE")
         .route("PutFile", move |env| {
@@ -155,6 +156,12 @@ async fn main() -> anyhow::Result<()> {
         .route("PresignFile", move |env| {
             let state = state_for_presign.clone();
             Box::pin(async move { handler_presign_file(state.client, env).await })
+        })
+        // N9/E1: assinatura de PUT (upload do cliente direto ao R2). Separada da
+        // de GET porque o método HTTP faz parte da assinatura.
+        .route("PresignUpload", move |env| {
+            let state = state_for_presign_upload.clone();
+            Box::pin(async move { handler_presign_upload(state.client, env).await })
         });
 
     tracing::info!("Servidor RPC do data_storage configurado e pronto.");
@@ -521,6 +528,75 @@ async fn handler_presign_file(client: StorageClient, env: Envelope) -> Envelope 
             error_core::AppError::Storage(e.to_string()),
             env,
             "PresignFileReply",
+        ),
+    }
+}
+
+/// N9/E1 — URL pré-assinada de **PUT** para o cliente subir mídia direto ao R2.
+///
+/// O binário não trafega pelo gRPC-Web: o navegador faz o PUT no bucket e depois
+/// avisa o servidor com a chave. Isso tira o payload grande do caminho do
+/// envelope, que é dimensionado para mensagem, não para arquivo.
+///
+/// **Nunca logar a URL devolvida** — ela é credencial de escrita no bucket até o
+/// TTL expirar.
+async fn handler_presign_upload(client: StorageClient, env: Envelope) -> Envelope {
+    let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
+
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let Some(file_name) = extrair_file_name(&payload_json) else {
+        return responder_erro(
+            error_core::AppError::Validation("file_name obrigatório no payload".to_string()),
+            env,
+            "PresignUploadReply",
+        );
+    };
+    // O `content_type` entra na assinatura: sem ele, o R2 recusaria o PUT que
+    // mandasse o header, e aceitá-lo vazio faria o objeto virar
+    // `application/octet-stream` (o browser baixaria a imagem em vez de exibir).
+    let Some(content_type) = payload_json
+        .get("content_type")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+    else {
+        return responder_erro(
+            error_core::AppError::Validation("content_type obrigatório no payload".to_string()),
+            env,
+            "PresignUploadReply",
+        );
+    };
+    // Janela curta: é tempo de subir um arquivo, não de guardar a credencial.
+    let expires_in = payload_json
+        .get("expires_in")
+        .and_then(|v| v.as_u64())
+        .unwrap_or(900)
+        .min(3600);
+
+    match client
+        .presign_put(tenant_id, &file_name, content_type, expires_in)
+        .await
+    {
+        Ok(url) => {
+            let res = serde_json::json!({
+                "url": url,
+                "content_type": content_type,
+                "expires_in": expires_in,
+            });
+            Envelope {
+                kind: MessageKind::Reply as i32,
+                method: "PresignUploadReply".to_string(),
+                payload: serde_json::to_vec(&res).unwrap_or_default(),
+                error: None,
+                ..env
+            }
+        }
+        // A mensagem do erro do S3 pode conter a chave do objeto, mas não a URL
+        // assinada (que só existe no caminho de sucesso).
+        Err(e) => responder_erro(
+            error_core::AppError::Storage(e.to_string()),
+            env,
+            "PresignUploadReply",
         ),
     }
 }
