@@ -1,49 +1,76 @@
-# Final Review — n3-painel-do-tenant
-Data: 2026-07-15 · Modelo: Opus · Diff: dev..HEAD (3 commits: e4225d9, 7511a38, 99ada03)
+# Final Review — n85-defeitos-pipeline
 
-## Rótulo: CORRIGIDO
+Data: 2026-08-09 · Diff: working tree sobre `dev` (branch `feature/n85-defeitos-pipeline`)
+
+## Rótulo: CORRIGIDO (informativo — não bloqueia o ciclo)
 
 ## Resumo das correções
-- Fechada uma falha de segurança real introduzida no ciclo: convite **revogado** ainda podia ser **aceito** (o `buscar_por_token` ignorava `revoked` e o accept nunca o checava) — a revogação era cosmética. Agora um convite revogado é tratado como inexistente no aceite.
-- Preenchida a lacuna de auditoria do bootstrap do 1º admin em `CreateTenant`: a concessão inicial de `tenant:admin` passou a emitir evento de auditoria (`tenant_user_bootstrap_admin`), conforme doc 08 §4.2.
+
+Um achado real durante a auditoria: o buffer de agregação gravava conteúdo de
+mensagem no Redis **mesmo quando o bot não ia responder** (humano assumiu, flag
+desligada, mensagem sem texto). Era PII em repouso coletada para alimentar uma
+resposta que nunca sairia. Corrigido com um atalho antes do enfileiramento.
+Também foi corrigido, de passagem, um vazamento pré-existente: o log
+"Assistente virtual respondendo" imprimia o **telefone completo** do contato.
 
 ## 1. Plano vs. Implementado
+
 | Item do plano | Status | Observação |
 |---|---|---|
-| N3.1 — Convites (gerar/listar/revogar) + aceite + register | ⚠️→✅ | RPCs completos e expostos via gRPC-Web; UI de convites com token exibido **só** no diálogo pós-criação. Desvio crítico corrigido: aceite não honrava a revogação. |
-| N3.2 — Gestão de usuários + `flow_permissions` | ✅ | `UpdateTenantUser`/`ListTenantUsers` criados do zero; RBAC `tenant:admin` no repositório (`ctx.exigir_qualquer`); filtro explícito `WHERE tenant_id = $1`. Invalidação de cache mantida passiva (TTL 30s) — decisão registrada, não é lacuna. |
-| N3.3 — Configuração do tenant (keys mascaradas) | ✅ | `GetMyTenantConfig`/`UpdateMyTenantConfig` tenant-scoped com guard extra `exigir_escopo_tenant_admin`; `tenant_id` sempre de `claims`. Chaves vêm mascaradas (`••••••••`) e o update trata a máscara como "preservar" (sem sobrescrever a chave real). |
-| N3.4 — Empacotamento (app dedicado) | ✅ | Decisão do dono: app `smart-core-tenant` criado; `OperacionalModule` removido do `smart-core-admin` (agora só superusuário/`AdminModule`). |
-| ➕ Bootstrap do 1º TenantUser admin em `CreateTenant` | ➕ | Além do plano original; gap descoberto na execução. Auditoria agora presente (correção). |
-| ➕ Exposição gRPC-Web dos 8 RPCs tenant-scoped | ➕ | Além do plano original; lacuna crítica descoberta na execução (nem CreateInvite/AcceptInvite eram alcançáveis pelo Flutter Web). Guard `exigir_autenticado_do_metadata` + RBAC fino no `data_postgres`. |
+| **E1** — descartar grupo na ingestão | ✅ | `webhook_ingress/src/main.rs`: `evento_de_grupo` com checagem dupla (flag `isGroup`/`IsGroup` + sufixo `@g.us`), nos dois formatos de payload. Descarte com 202 **antes** do rate limit e da idempotência, como o plano exigia. |
+| **E2** — buffer de agregação | ✅ | Módulo próprio `worker/src/buffer_mensagens.rs`. Dedupe por `message_id`, drain atômico via Lua, TTL com piso e teto, degradação declarada (`Enfileiramento::Indisponivel`). |
+| **E3** — ciclo de satisfação | ✅ | Migration 0028 (coluna + índice parcial + 2 CoreSettings), solicitação na mesma transação do encerramento, interpretação da resposta (regex → IA), expirador corrigido. |
+| **E4** — `msg_fallback`/`msg_sem_info` | ✅ | Worker lê `tenant:config:<uuid>` com invalidação por Pub/Sub; `msg_sem_info` aplicada no `ia_engine`. |
+| **E5** — consumir `CONNECTION` | ⚠️ | `CONNECTION` e `PRESENCE` implementados. **`CONTACTS` não** — ver "Pendências". |
+| ➕ Extra (não planejado) | ➕ | Telefone mascarado no log do acionamento do bot; 3 warnings pré-existentes de clippy corrigidos (`clone_on_copy` ×2, `result_large_err`). |
 
 ## 2. Correções Aplicadas
+
 | Arquivo:linha | Problema | Correção |
 |---|---|---|
-| `server/crates/infrastructure_postgres/src/tenants/tenants.rs:505` (`buscar_por_token`) | Convite revogado ainda era aceitável — accept checava `used`/`expires_at` mas não `revoked`; a feature de revogação do N3 era contornável (link continuava válido). | Query convertida para runtime `query_as::<_, TenantInvite>` com `AND revoked = FALSE` (revogado = inexistente). Sem quebra do cache offline do sqlx. |
-| `server/apps/data_postgres/src/main.rs:964` (`handler_create_tenant`) | Bootstrap do 1º admin (concessão de `tenant:admin`) não publicava auditoria — evento crítico de `TenantUser` (doc 08 §4.2) ficava sem trilha. | `if let Err` trocado por `match`; no ramo `Ok` publica `tenant_user_bootstrap_admin` com contexto só de ids (`tenant_id`, `user_id`), sem segredos. |
+| `worker/src/main.rs` (antes do `enfileirar`) | Conteúdo de mensagem ia para o Redis mesmo com o bot silenciado — PII gravada para ser descartada 5 s depois | Atalho: quando `!bot_pode_atender \|\| humano_ativo \|\| sem texto`, chama `acionar_bot` direto e retorna, sem tocar no buffer |
+| `worker/src/main.rs` (`acionar_bot`) | `sender = %msg_normalized.sender` imprimia telefone **completo** em INFO (defeito pré-existente) | Passou a usar `mascarar_telefone` |
+| `worker/src/config_tenant.rs:139` | `get_async_connection` deprecada | `#[allow(deprecated)]` com justificativa (Pub/Sub exige conexão dedicada), igual ao `realtime.rs` |
+| `runtime_api/src/grpc_web.rs:3279,4531` | `clone_on_copy` (pré-existente) | `*req.get_ref()` |
+| `data_postgres/src/main.rs:3774` | `result_large_err` (pré-existente) | `#[allow]` justificado: os dois lados do `Result` são o mesmo `Envelope` do protocolo |
 
 ## 2b. Observabilidade & Auditoria
+
 | Comportamento | Logs/Trace | Audit log | Sanitização | Observação |
 |---|---|---|---|---|
-| CreateInvite | ✅ `#[instrument]` | ✅ `tenant_invite_created` | ✅ | token só na resposta; ausente do log (span sem token). |
-| AcceptInvite | ✅ | ✅ `tenant_invite_accepted` | ✅ | `buscar_por_token` com `skip_all` (token é segredo); contexto usa `username` (ator, não segredo). |
-| RevokeInvite | ✅ | ✅ `tenant_invite_revoked` | ✅ | contexto só `invite_id`. |
-| UpdateTenantUser | ✅ | ✅ `tenant_user_role_change` + `tenant_user_flow_permissions_alteradas` (WARN) | ✅ | contexto só ids/flags booleanas. |
-| ListInvites / ListTenantUsers | ✅ | N/A (leitura) | ✅ | projeção `TenantInviteListItem` **sem** `token`. |
-| CreateTenant (bootstrap 1º admin) | ✅ | ✅ `tenant_user_bootstrap_admin` (após correção) | ✅ | contexto só `tenant_id`/`user_id`. |
-| Get/UpdateMyTenantConfig | ✅ | ✅ (via forward: `tenant_config_updated` + `tenant_api_key_changed`) | ✅ | api_keys mascaradas na leitura; máscara preservada no update (não sobrescreve chave real). |
+| Descarte de grupo (E1) | ✅ INFO com `motivo`/`event_type` | ✅ N/A intencional | ✅ JID nunca sai; contador `smartcore_webhook_evento_descartado_total{tenant,motivo}` | Nível INFO deliberado: descartar grupo é o caso normal, WARN poluiria o alerta |
+| Agregação de rajada (E2) | ✅ span `mensagem.buffer` com `trace_id`, `mensagens_agregadas`, `janela_ms` | ✅ N/A intencional | ✅ só a **contagem**; conteúdo nunca em log/span/métrica | PII em repouso documentada em `08_diretrizes_seguranca.md` §6.1 |
+| Pesquisa solicitada (E3) | ✅ | ✅ `atendimento.pesquisa_solicitada` | ✅ | Emitida no handler porque a trilha vai pelo barramento, e a transação não o alcança |
+| Avaliação registrada (E3) | ✅ INFO com `nota` e `origem` (`regex`\|`ia`) | ✅ `atendimento.avaliado` | ✅ `skip_all`; comentário do cliente só na coluna | |
+| Fallback do bot (E4) | ✅ campo novo `origem_texto` (`tenant`\|`default`) | ✅ reaproveita `bot.degradado` | ✅ | O campo existe para tornar visível em produção se a config do tenant está sendo aplicada |
+| Estado da conexão (E5) | ✅ span `whatsapp.conexao_mudou` | ✅ `whatsapp_instance.state_updated` com `origem` novo | ✅ | `origem` separa "provedor avisou" de "alguém consultou" |
+| Presença (E5) | ✅ DEBUG (alto volume) | ✅ N/A intencional | ✅ telefone mascarado no log | Publicado no realtime, **não** persistido |
 
-## 3. Decisões Autônomas (revisar depois)
-- **Revogado = inexistente no aceite:** filtro no SQL (`AND revoked = FALSE`) em vez de adicionar campo `revoked` ao struct `TenantInvite` + checagem explícita no handler, para não invalidar o cache offline do sqlx (`query_as!` macro) sem acesso ao banco para `cargo sqlx prepare`. Efeito colateral: o convidado recebe "Convite não encontrado" em vez de "Convite revogado" — aceitável (não vaza o estado do convite). Follow-up de baixo risco se quiserem a mensagem explícita.
+## 3. Riscos específicos verificados
+
+- **Buffer perde mensagem?** Não. A persistência acontece **antes** do buffer; o que se perde num crash durante a janela é a *resposta automática*, não a mensagem — mesmo comportamento da v1, e o TTL evita chave órfã.
+- **Buffer responde duas vezes?** Não no caminho normal (a chave `:timer` elege um único agendador). Existe uma janela teórica de resposta dupla se o Redis falhar **entre** o `RPUSH` e o `SET` do timer: a mensagem responde inline (degradação) e permanece no buffer. É falha parcial de Redis, o efeito é uma repetição, e a alternativa (não responder) é pior.
+- **Nota inventada?** Não. A escala é validada nas duas pontas (regex conservador + `1..=5` no handler, que recusa fora da faixa). Testes fixam explicitamente o que **não** pode casar: `"meu pedido 512 ainda não chegou…"` → `None`.
+- **Filtro de grupo come mensagem individual?** Não. Só descarta com flag `true` **ou** sufixo `@g.us`; há teste de regressão com JID individual e flag `false`.
+- **Migration 0028 idempotente?** Sim: `ADD COLUMN IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `INSERT … ON CONFLICT DO NOTHING`. Só acrescenta — nenhuma perda ao reverter.
 
 ## 4. Revalidação
-- cargo fmt: ✅ (limpo)
-- cargo clippy --all-targets --all-features -D warnings: ✅ (todas as crates)
-- cargo check (infrastructure_postgres + data_postgres, reconfirmado pelo agente principal): ✅
-- flutter analyze: ✅ (No issues found! — Flutter não foi tocado pelas correções)
 
-## 5. Pendências (escopo extra ou fora do plano)
-- Auditoria de `AcceptInvite`/`CreateInvite` inclui `username`/`email` do convidado no contexto — é identidade do ator, não segredo; mantido como está (comportamento pré-existente ao ciclo, dentro do doc 08).
-- Nenhum teste automatizado foi adicionado (conforme regra do gate). O teste de integração de revogação existente não cobre o caminho `buscar_por_token` + revoked; um caso "aceitar após revogar → falha" seria uma boa regressão futura.
-- Validação manual contra runtime real (subir infra + clicar na UI) não foi realizada neste ciclo — decisão do dono na fase V, aceitando a cobertura de testes automatizados (unit + integração) como evidência suficiente.
+- `cargo fmt --check`: ✅
+- `cargo clippy --all-targets --all-features -- -D warnings`: ✅
+- Testes Rust: ✅ (unit/bins 25 suítes; `infrastructure_postgres` 42 + 45; demais 34 suítes)
+- `cargo sqlx prepare --workspace --check`: ✅
+- `ia_engine`: ✅ 169 testes, `ruff` e `mypy` limpos
+
+## 5. Pendências (fora do escopo desta fase)
+
+- **`whatsapp.contact.updated` sem consumidor.** O plano previa atualizar nome/foto
+  do contato, mas **não existe porta de escrita de `whatsapp_contact`** no
+  `data_postgres` — nenhum RPC toca essa tabela. Criá-la pela metade agora
+  atrapalharia a **N11/E6** (perfil do contato sob demanda), que é onde esse
+  domínio tem dono. Registrado em comentário no `despachar_evento`.
+- **Override de janela por tenant.** `SMARTCORE_BUFFER_JANELA_MS` é global; o
+  `time_cache` por tenant chega com o ETL da N12.
+- **A auditoria independente por subagente não produziu relatório** (comportamento
+  já registrado na memória do projeto para agentes de modelo alto neste ambiente).
+  Esta revisão foi conduzida pelo agente principal seguindo o mesmo roteiro.

@@ -40,6 +40,11 @@ pub struct RuntimeConfigDto {
     pub msg_fallback: String,
     pub msg_sem_info: String,
     pub msg_transferencia: String,
+    /// N8.5/E3. O `ia_engine` não usa este campo (a pesquisa é decisão do
+    /// servidor), mas ele viaja no mesmo JSON porque é o **worker** quem lê a
+    /// chave `tenant:config:<uuid>` para montar o texto do pedido de avaliação.
+    pub msg_pesquisa_satisfacao: String,
+    pub pesquisa_satisfacao_ativa: bool,
     // LLM
     pub llm_class: String,
     pub model: String,
@@ -78,6 +83,8 @@ impl From<&RuntimeConfig> for RuntimeConfigDto {
             msg_fallback: cfg.msg_fallback.clone(),
             msg_sem_info: cfg.msg_sem_info.clone(),
             msg_transferencia: cfg.msg_transferencia.clone(),
+            msg_pesquisa_satisfacao: cfg.msg_pesquisa_satisfacao.clone(),
+            pesquisa_satisfacao_ativa: cfg.pesquisa_satisfacao_ativa,
             llm_class: cfg.llm_class.clone(),
             model: cfg.model.clone(),
             llm_temperature: cfg.llm_temperature,

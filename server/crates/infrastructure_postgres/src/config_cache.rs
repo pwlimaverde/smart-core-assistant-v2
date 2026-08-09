@@ -20,6 +20,11 @@ pub struct RuntimeConfig {
     pub msg_fallback: String,
     pub msg_sem_info: String,
     pub msg_transferencia: String,
+    /// N8.5/E3 — pedido de avaliação enviado ao encerrar o atendimento. A v1
+    /// tinha esse texto fixo no código, com o nome de uma empresa dentro.
+    pub msg_pesquisa_satisfacao: String,
+    /// Liga a pesquisa de satisfação para o tenant (default global `true`).
+    pub pesquisa_satisfacao_ativa: bool,
     // LLM
     pub llm_class: String,
     pub model: String,

@@ -60,6 +60,125 @@ fn texto_da_saudacao(nome_atendente: &str, cargo: &str, empresa: &str) -> String
     format!("Olá, meu nome é {nome_atendente}{quem}, irei continuar seu atendimento.")
 }
 
+/// N8.5/E3 — pede a avaliação ao contato quando a conversa termina.
+///
+/// ## O defeito
+///
+/// `avaliacao` e `feedback` existem desde a migration 0006 e só apareciam em
+/// SELECT. Ninguém nunca perguntou a nota — mas o scheduler rodava
+/// `processar_feedback_vencido` e marcava como "expirado" todo atendimento
+/// resolvido. A v2 expirava uma pesquisa que jamais existiu.
+///
+/// ## Regras
+///
+/// - **Só em `resolvido`.** Não se pede nota de atendimento que o cliente
+///   cancelou nem de um arquivado administrativamente: no primeiro caso não houve
+///   atendimento a avaliar, no segundo não há ninguém do outro lado esperando.
+/// - **Só uma vez por atendimento** (`marcar_feedback_solicitado` é idempotente).
+/// - **Só se o tenant quiser** (`pesquisa_satisfacao_ativa`).
+/// - **Na MESMA transação do encerramento.** Se o status mudasse e a pesquisa não
+///   saísse, o atendimento entraria na contagem de "aguardando resposta" sem
+///   nunca ter perguntado nada — recriando o bug numa forma nova.
+///
+/// Devolve `true` quando a pesquisa foi criada.
+async fn solicitar_pesquisa_satisfacao(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+    novo_status: &str,
+) -> Result<bool, DbError> {
+    if novo_status != "resolvido" {
+        return Ok(false);
+    }
+
+    // Cascata Tenant > CoreSettings resolvida em uma consulta só: o adapter não
+    // tem o `TenantConfigCache` (ele vive no serviço, não na transação), e abrir
+    // um round-trip de cache aqui dentro quebraria a atomicidade que é o ponto.
+    let cfg = sqlx::query_as::<_, (Option<String>, Option<bool>, Option<String>, Option<String>)>(
+        r#"SELECT tc.msg_pesquisa_satisfacao,
+                  tc.pesquisa_satisfacao_ativa,
+                  txt.value,
+                  flag.value
+           FROM (SELECT 1) AS _base
+           LEFT JOIN tenants_tenantconfig tc ON tc.tenant_id = $1
+           LEFT JOIN settings_manager_coresettings txt ON txt.key = 'MSG_PESQUISA_SATISFACAO'
+           LEFT JOIN settings_manager_coresettings flag ON flag.key = 'PESQUISA_SATISFACAO_ATIVA'"#,
+    )
+    .bind(ctx.tenant_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+
+    let (msg_tenant, ativa_tenant, msg_global, flag_global) = cfg.unwrap_or_default();
+
+    // Default `true`: pedir avaliação é o comportamento da v1, e desligá-lo por
+    // omissão apagaria a métrica de satisfação logo na migração.
+    let ativa = ativa_tenant.unwrap_or_else(|| {
+        flag_global
+            .map(|v| v.eq_ignore_ascii_case("true"))
+            .unwrap_or(true)
+    });
+    if !ativa {
+        return Ok(false);
+    }
+
+    let texto = msg_tenant
+        .filter(|t| !t.trim().is_empty())
+        .or(msg_global)
+        .filter(|t| !t.trim().is_empty())
+        .unwrap_or_else(|| TEXTO_PESQUISA_PADRAO.to_string());
+
+    let repo = PostgresAtendimentoRepository;
+    // Idempotência: a segunda passagem pelo mesmo encerramento não repergunta.
+    if !repo
+        .marcar_feedback_solicitado(tx, ctx, atendimento_id)
+        .await?
+    {
+        return Ok(false);
+    }
+
+    let msg = PostgresMensagemRepository
+        .criar(
+            tx,
+            ctx,
+            infrastructure_postgres::atendimentos::mensagens::NovaMensagem {
+                atendimento_id,
+                tipo: "extendedTextMessage",
+                conteudo: &texto,
+                // "bot": a pergunta é do sistema, não de um atendente. O worker
+                // envia mensagens de bot que ainda estão `pending` — a resposta
+                // que ele mesmo já entregou nasce `sent` e não é reenviada.
+                remetente: "bot",
+                message_id_whatsapp: None,
+                mensagem_citada_id: None,
+                ja_entregue: false,
+            },
+        )
+        .await?;
+    repo.touch_last_message(tx, ctx, atendimento_id).await?;
+
+    let evento = serde_json::json!({
+        "message_id": msg.id.to_string(),
+        "sender_id": msg.remetente,
+        "content": msg.conteudo,
+        "timestamp": msg.timestamp.timestamp_millis(),
+    });
+    sqlx::query(
+        "INSERT INTO outbox (tenant_id, event_type, payload, traceparent) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(ctx.tenant_id)
+    .bind("message.persisted")
+    .bind(serde_json::to_vec(&evento).map_err(|e| DbError::ConfigError(e.to_string()))?)
+    .bind("")
+    .execute(&mut **tx)
+    .await?;
+
+    Ok(true)
+}
+
+/// Último elo da cascata do texto da pesquisa. A migration 0028 semeia o mesmo
+/// texto como CoreSetting; esta constante cobre a base que ainda não a rodou.
+const TEXTO_PESQUISA_PADRAO: &str = "Seu atendimento foi encerrado. Que nota de 1 a 5 você dá para o atendimento que recebeu? Se quiser, escreva também o que achou.";
+
 /// Implementação Postgres da port Atendimento.
 /// `admin_pool` (BYPASSRLS) é usado apenas nas varreduras cross-tenant do
 /// scheduler do worker (F4.3b); quando ausente, recai no pool de aplicação
@@ -488,6 +607,13 @@ impl AtendimentoStore for PgAtendimentoStore {
                                 &format!("Movido para \"{}\" no quadro", etapa.nome),
                             )
                             .await?;
+
+                        // N8.5/E3: arrastar o cartão para a finalização encerra a
+                        // conversa tanto quanto apertar o botão — os dois caminhos
+                        // precisam pedir a avaliação, senão a pesquisa depende de
+                        // por onde o atendente encerrou.
+                        solicitar_pesquisa_satisfacao(&mut tx, &ctx, atendimento_id, novo_status)
+                            .await?;
                     }
                 }
 
@@ -661,6 +787,12 @@ impl AtendimentoStore for PgAtendimentoStore {
                 repo.desatribuir(&mut tx, &ctx, atendimento_id).await?;
             }
 
+            // N8.5/E3 — encerrou, então pergunta. Na mesma transação: um
+            // atendimento que vira "resolvido" sem a pesquisa sair entraria na
+            // contagem de "aguardando resposta" sem ter perguntado nada.
+            let pesquisa_solicitada =
+                solicitar_pesquisa_satisfacao(&mut tx, &ctx, atendimento_id, &novo_status).await?;
+
             // A coluna acompanha. Quando o fluxo não tem etapa daquele tipo, o
             // cartão fica onde está — mover para lugar nenhum seria pior que
             // deixá-lo visível na coluna antiga.
@@ -699,6 +831,10 @@ impl AtendimentoStore for PgAtendimentoStore {
                 "sucesso": true,
                 "status": novo_status,
                 "etapa_atual_id": etapa_destino.or(atendimento.etapa_atual_id),
+                // Sai no retorno para o handler poder auditar
+                // `atendimento.pesquisa_solicitada`: a trilha de auditoria é
+                // publicada no barramento, e a transação não tem acesso a ela.
+                "pesquisa_solicitada": pesquisa_solicitada,
             });
             Ok((json, tx))
         })
@@ -741,6 +877,51 @@ impl AtendimentoStore for PgAtendimentoStore {
             repo.marcar_feedback_expirado(&mut tx, &ctx, atendimento_id)
                 .await?;
             Ok(((), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn aguardando_avaliacao(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        ttl_horas: i64,
+    ) -> Result<bool, DbError> {
+        let repo = PostgresAtendimentoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, move |mut tx| async move {
+            let r = repo
+                .aguardando_avaliacao(&mut tx, &ctx, atendimento_id, ttl_horas)
+                .await?;
+            Ok((r, tx))
+        })
+        .await
+    }
+
+    /// `skip_all` e sem `comentario` nos campos: é texto livre do cliente (PII).
+    /// Só a nota entra no span.
+    #[tracing::instrument(
+        skip_all,
+        fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, nota = nota)
+    )]
+    async fn registrar_avaliacao(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        nota: i32,
+        comentario: &str,
+    ) -> Result<bool, DbError> {
+        let repo = PostgresAtendimentoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let comentario = comentario.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, move |mut tx| async move {
+            let r = repo
+                .registrar_avaliacao(&mut tx, &ctx, atendimento_id, nota, &comentario)
+                .await?;
+            Ok((r, tx))
         })
         .await
     }

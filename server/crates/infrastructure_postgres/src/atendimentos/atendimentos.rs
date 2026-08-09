@@ -245,6 +245,49 @@ pub trait AtendimentoRepository: Send + Sync {
         ctx: &RequestContext,
         atendimento_id: i32,
     ) -> Result<(), DbError>;
+
+    /// N8.5/E3 — registra que a pesquisa de satisfação foi ENVIADA ao contato.
+    ///
+    /// Sem esta marca não existe diferença observável entre "o cliente não
+    /// respondeu" e "nunca foi perguntado" — e era essa ambiguidade que fazia o
+    /// expirador marcar como vencido todo atendimento resolvido.
+    ///
+    /// Idempotente: só grava quando ainda está nulo, para uma reentrega não
+    /// reabrir a janela de resposta do contato.
+    async fn marcar_feedback_solicitado(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<bool, DbError>;
+
+    /// N8.5/E3 — grava a nota (1..5) e o comentário do contato.
+    ///
+    /// Só age em atendimento com pesquisa solicitada e ainda sem avaliação: a
+    /// mensagem seguinte do contato num atendimento que nunca foi perguntado é
+    /// conversa nova, não resposta de pesquisa.
+    ///
+    /// Devolve `true` quando gravou de fato.
+    async fn registrar_avaliacao(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        nota: i32,
+        comentario: &str,
+    ) -> Result<bool, DbError>;
+
+    /// N8.5/E3 — o atendimento está aguardando resposta da pesquisa?
+    ///
+    /// `ttl_horas` limita a janela: passado o prazo do expirador, a fala do
+    /// contato volta a ser conversa comum.
+    async fn aguardando_avaliacao(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        ttl_horas: i64,
+    ) -> Result<bool, DbError>;
 }
 
 pub struct PostgresAtendimentoRepository;
@@ -633,6 +676,11 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                  AND feedback IS NULL
                  AND avaliacao IS NULL
                  AND feedback_expirado_em IS NULL
+                 -- N8.5/E3: só expira o que foi de fato PERGUNTADO. Sem esta
+                 -- linha, o job marcava como "feedback expirado" todo
+                 -- atendimento resolvido — inclusive os que nunca receberam a
+                 -- pesquisa, que até a N8.5 eram todos.
+                 AND feedback_solicitado_em IS NOT NULL
                  AND data_fim IS NOT NULL
                  AND data_fim < NOW() - ($1 || ' hours')::interval
                ORDER BY data_fim ASC
@@ -662,6 +710,80 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         .execute(&mut **tx)
         .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn marcar_feedback_solicitado(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<bool, DbError> {
+        let r = sqlx::query(
+            r#"UPDATE oraculo_atendimento
+               SET feedback_solicitado_em = NOW()
+               WHERE tenant_id = $1 AND id = $2 AND feedback_solicitado_em IS NULL"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(atendimento_id)
+        .execute(&mut **tx)
+        .await?;
+        Ok(r.rows_affected() > 0)
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, nota = nota)
+    )]
+    async fn registrar_avaliacao(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        nota: i32,
+        comentario: &str,
+    ) -> Result<bool, DbError> {
+        // O comentário é texto livre do cliente — PII. Fica só na coluna: não
+        // entra em span (`skip_all` acima), log, métrica nem descrição de
+        // auditoria. O que circula é a nota.
+        let r = sqlx::query(
+            r#"UPDATE oraculo_atendimento
+               SET avaliacao = $3, feedback = NULLIF($4, '')
+               WHERE tenant_id = $1 AND id = $2
+                 AND feedback_solicitado_em IS NOT NULL
+                 AND avaliacao IS NULL"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(atendimento_id)
+        .bind(nota)
+        .bind(comentario)
+        .execute(&mut **tx)
+        .await?;
+        Ok(r.rows_affected() > 0)
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn aguardando_avaliacao(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        ttl_horas: i64,
+    ) -> Result<bool, DbError> {
+        let existe: Option<i32> = sqlx::query_scalar(
+            r#"SELECT 1
+               FROM oraculo_atendimento
+               WHERE tenant_id = $1 AND id = $2
+                 AND feedback_solicitado_em IS NOT NULL
+                 AND avaliacao IS NULL
+                 AND feedback_solicitado_em > NOW() - ($3 || ' hours')::interval"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(atendimento_id)
+        .bind(ttl_horas.to_string())
+        .fetch_optional(&mut **tx)
+        .await?;
+        Ok(existe.is_some())
     }
 }
 

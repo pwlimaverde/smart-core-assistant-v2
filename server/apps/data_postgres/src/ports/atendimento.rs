@@ -250,6 +250,26 @@ pub trait AtendimentoStore: Send + Sync {
         atendimento_id: i32,
     ) -> Result<(), DbError>;
 
+    /// N8.5/E3 — o atendimento está aguardando a resposta da pesquisa dentro da
+    /// janela de `ttl_horas`? É o que separa "resposta da pesquisa" de "conversa
+    /// nova" quando o contato volta a escrever depois de encerrado.
+    async fn aguardando_avaliacao(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        ttl_horas: i64,
+    ) -> Result<bool, DbError>;
+
+    /// N8.5/E3 — grava nota (1..5) e comentário do contato. `false` quando o
+    /// atendimento não estava aguardando avaliação (nada foi alterado).
+    async fn registrar_avaliacao(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        nota: i32,
+        comentario: &str,
+    ) -> Result<bool, DbError>;
+
     /// Varredura CROSS-TENANT do scheduler do worker (F4.3b): mensagens com mídia
     /// vencida (idade além do limite). Exige `admin_pool` (BYPASSRLS).
     async fn listar_midias_expiradas(

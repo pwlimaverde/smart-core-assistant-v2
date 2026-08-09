@@ -72,6 +72,8 @@ impl FluxosCache {
 // de testar pergunta, no runtime_api). O apelido preserva os caminhos
 // `ia_engine::...` que o pipeline inteiro já usa.
 use ia_client as ia_engine;
+mod buffer_mensagens;
+mod config_tenant;
 mod scheduler;
 
 /// Escopos de um ator de SISTEMA (worker). O worker é um serviço interno confiável
@@ -564,9 +566,14 @@ async fn main() -> anyhow::Result<()> {
         std::env::var("REDIS_URL").unwrap_or_else(|_| "redis://127.0.0.1:6379".to_string());
     let bus_url = std::env::var("REDIS_BUS_URL").unwrap_or_else(|_| redis_url.clone());
 
-    // Cache: estado efêmero do próprio worker (lock de debounce).
+    // Cache: estado efêmero do próprio worker (buffer de agregação) e leitura da
+    // config publicada do tenant (`tenant:config:<uuid>`).
     let redis_client = redis::Client::open(redis_url)?;
     let redis_conn = ConnectionManager::new(redis_client.clone()).await?;
+
+    // N8.5/E4: mantém a cópia em RAM da config do tenant coerente com o painel.
+    // Sem isto, alterar `msg_fallback` só teria efeito quando o TTL expirasse.
+    config_tenant::iniciar_escuta_invalidacao(redis_client.clone());
 
     // Barramento: consumo de `events:stream`, auditoria e realtime.
     let bus_client = redis::Client::open(bus_url)?;
@@ -713,10 +720,195 @@ async fn despachar_evento(
         }
         "whatsapp.message.status" => processar_status_mensagem(state, evt).await,
         "message.persisted" => processar_mensagem_persistida(state, evt).await,
+        // N8.5/E5: o `webhook_ingress` normaliza e publica estes desde a N4, e o
+        // worker roteava só os dois de cima — o resto caía no `_ => Ok(())`. Na
+        // prática, `connection_state` só mudava quando alguém CONSULTAVA o status:
+        // uma queda às 2h da manhã só aparecia no painel quando um humano abria a
+        // tela de conexões.
+        "whatsapp.connection.updated" => processar_estado_conexao(state, evt).await,
+        "whatsapp.presence.updated" => processar_presenca_contato(state, evt).await,
+        // `whatsapp.contact.updated` (nome/foto de perfil) continua sem consumidor
+        // de propósito: **não existe porta de escrita de contato** no
+        // `data_postgres` — nenhum RPC toca `whatsapp_contact`. Criá-la é o escopo
+        // da N11/E6 (perfil do contato sob demanda), junto com a leitura do avatar.
+        // Consumir aqui hoje exigiria inventar a porta pela metade.
         // Eventos de outros consumidores (ex.: `media.purge`, do data_storage)
         // compartilham o stream: ignorar é o comportamento correto, e o XACK do
         // Consumer evita que fiquem pendurados na PEL deste grupo.
         _ => Ok(()),
+    }
+}
+
+/// N8.5/E5 — reage à mudança de estado da conexão do WhatsApp comunicada pelo
+/// provedor, em vez de esperar alguém consultar.
+///
+/// Persiste via `AtualizarEstadoInstancia` (que já existia, com a auditoria
+/// `whatsapp_instance.state_updated` dentro) e publica no realtime do tenant para
+/// o painel reagir sem refresh.
+///
+/// Nunca devolve `Err` por instância desconhecida: derrubar o processamento do
+/// evento faria o consumidor reentregar em loop um evento que jamais vai ter
+/// sucesso — o mesmo raciocínio do descarte 202 na ingestão.
+#[tracing::instrument(
+    skip_all,
+    name = "whatsapp.conexao_mudou",
+    fields(tenant_id = %evt.tenant_id, instance_id = tracing::field::Empty, estado = tracing::field::Empty)
+)]
+async fn processar_estado_conexao(
+    state: &AppState,
+    evt: transport::bus::EventoBruto,
+) -> anyhow::Result<()> {
+    let envelope = evt.desserializar::<serde_json::Value>()?;
+    let payload = &envelope.payload;
+
+    let instance_id = payload
+        .get("instance_id")
+        .and_then(|v| v.as_i64())
+        .ok_or_else(|| anyhow::anyhow!("instance_id ausente no evento de conexão"))?
+        as i32;
+    // `build_connection_payload` no webhook_ingress já normaliza para
+    // connected/disconnected/connecting/unknown.
+    let estado = payload
+        .get("state")
+        .and_then(|v| v.as_str())
+        .unwrap_or("unknown");
+
+    let span = tracing::Span::current();
+    span.record("instance_id", instance_id);
+    span.record("estado", estado);
+
+    // `unknown` não é informação: gravá-lo apagaria o último estado conhecido e
+    // faria o painel piscar "desconhecido" a cada evento malformado.
+    if estado == "unknown" {
+        tracing::debug!("evento de conexão sem estado reconhecível; ignorado");
+        return Ok(());
+    }
+
+    let tenant_str = envelope.tenant_id.to_string();
+    let resultado = chamar_rpc(
+        &state.pg_client,
+        &tenant_str,
+        "AtualizarEstadoInstancia",
+        serde_json::json!({
+            "id": instance_id,
+            "connection_state": estado,
+            // Distingue "o provedor avisou" de "alguém consultou a tela" na
+            // trilha de auditoria — é o que responde "por que paramos de receber
+            // mensagem às 2h" depois do fato.
+            "origem": "webhook",
+        }),
+        &envelope.event_id.to_string(),
+        &envelope.traceparent,
+    )
+    .await;
+
+    if let Err(e) = resultado {
+        // Instância removida ou id desconhecido: registra e segue. O evento é
+        // reentregue em loop se devolvermos erro aqui.
+        tracing::warn!(erro = %e, "falha ao atualizar estado da instância; evento descartado");
+        return Ok(());
+    }
+
+    tracing::info!("estado da conexão atualizado a partir do webhook");
+    publicar_realtime(
+        state,
+        envelope.tenant_id,
+        "whatsapp.conexao",
+        serde_json::json!({
+            "instance_id": instance_id,
+            "connection_state": estado,
+        }),
+    )
+    .await;
+
+    Ok(())
+}
+
+/// N8.5/E5 — presença do contato ("digitando", "online").
+///
+/// Publica no realtime e **não persiste**: presença é efêmera por natureza e
+/// gravá-la só encheria o banco de linha morta. A UI que a consome é da N9.4; até
+/// lá o evento sai e ninguém escuta, ao custo de um PUBLISH.
+///
+/// DEBUG, não INFO: é o evento de maior volume do provedor.
+async fn processar_presenca_contato(
+    state: &AppState,
+    evt: transport::bus::EventoBruto,
+) -> anyhow::Result<()> {
+    let envelope = evt.desserializar::<serde_json::Value>()?;
+    let raw = envelope.payload.get("raw_event");
+
+    // O JID é PII: só a última parte identificável sai daqui, e mesmo essa vai
+    // mascarada para o log. O realtime carrega o número porque o cliente precisa
+    // casar a presença com a conversa aberta — mas nada disso vai para log.
+    let contato = raw
+        .and_then(|r| r.get("data"))
+        .and_then(|d| {
+            d.get("id")
+                .or_else(|| d.get("remoteJid"))
+                .or_else(|| d.get("Chat"))
+        })
+        .and_then(|v| v.as_str())
+        .map(|jid| jid.split('@').next().unwrap_or(jid).to_string());
+
+    let Some(contato) = contato else {
+        tracing::debug!("evento de presença sem identificador de contato; ignorado");
+        return Ok(());
+    };
+
+    let situacao = raw
+        .and_then(|r| r.get("data"))
+        .and_then(|d| d.get("presence").or_else(|| d.get("state")))
+        .and_then(|v| v.as_str())
+        .unwrap_or("unavailable");
+
+    tracing::debug!(
+        contato = %mascarar_telefone(&contato),
+        situacao,
+        "presença do contato recebida"
+    );
+
+    publicar_realtime(
+        state,
+        envelope.tenant_id,
+        "whatsapp.presenca",
+        serde_json::json!({ "contato": contato, "situacao": situacao }),
+    )
+    .await;
+
+    Ok(())
+}
+
+/// Publica um evento no canal de realtime do tenant (`tenant:<id>:events`), que o
+/// `RealtimeManager` do runtime_api assina.
+///
+/// Best-effort: uma falha do Redis não pode derrubar o processamento do evento que
+/// já teve efeito no banco.
+async fn publicar_realtime(
+    state: &AppState,
+    tenant_id: Uuid,
+    tipo: &str,
+    payload: serde_json::Value,
+) {
+    let Some(ref bus_conn) = state.bus_conn else {
+        return;
+    };
+    let canal = format!("tenant:{tenant_id}:events");
+    let corpo = serde_json::json!({
+        "event_type": tipo,
+        "tenant_id": tenant_id.to_string(),
+        "payload": payload,
+    })
+    .to_string();
+
+    let mut conn = bus_conn.clone();
+    let publicado: Result<u32, _> = redis::cmd("PUBLISH")
+        .arg(&canal)
+        .arg(&corpo)
+        .query_async(&mut conn)
+        .await;
+    if let Err(e) = publicado {
+        tracing::warn!(evento = tipo, "falha ao publicar realtime: {e}");
     }
 }
 
@@ -1064,261 +1256,577 @@ async fn processar_mensagem_recebida(
         return Ok(());
     }
 
-    // 4. Aplica o debounce de 2 segundos para regras do Bot/Kanban
-    let mut is_debounce_winner = true;
-    if let Some(ref redis_conn) = state.redis_conn {
-        let lock_key = format!(
-            "tenant:{}:lock:debounce:{}",
-            tenant_uuid, msg_normalized.sender
-        );
-        let mut conn = redis_conn.clone();
-        let set_res: Result<bool, _> = redis::cmd("SET")
-            .arg(&lock_key)
-            .arg("1")
-            .arg("NX")
-            .arg("EX")
-            .arg(2) // 2 segundos
-            .query_async(&mut conn)
-            .await;
+    // 4. N8.5/E2 — buffer de agregação da rajada (substitui o lock de debounce).
+    //
+    // O que havia aqui: `SET NX EX 2` por remetente, e só a PRIMEIRA mensagem da
+    // janela acionava o bot. Quem escrevia "oi" → "quero o preço" → "do produto X"
+    // recebia resposta ao "oi". A v1 acumulava a rajada e respondia ao conjunto;
+    // este bloco restaura esse comportamento.
+    let contexto_bot = ContextoBot {
+        tenant_uuid,
+        tenant_str: envelope.tenant_id.to_string(),
+        atendimento_id,
+        instance_id,
+        sender: msg_normalized.sender.clone(),
+        event_id: envelope.event_id.to_string(),
+        traceparent: envelope.traceparent.clone(),
+        bot_pode_atender: resolve_body
+            .get("bot_pode_atender")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        atendente_humano_id: resolve_body
+            .get("atendente_humano_id")
+            .and_then(|v| v.as_i64()),
+    };
 
-        match set_res {
-            Ok(inserted) => {
-                is_debounce_winner = inserted;
-            }
-            Err(e) => {
-                tracing::error!("Erro no Redis ao obter lock de debounce: {:?}", e);
-            }
+    // Sem texto do contato não há pergunta a responder: mídia sem legenda,
+    // sticker, localização. Antes o bot era acionado de todo jeito com `content`,
+    // que nesses casos é a URL da CDN — a IA recebia "https://..." como se fosse a
+    // fala do cliente. O conteúdo da mídia entra na conversa pelo pipeline de
+    // mídia (transcrição/análise), não por aqui.
+    // `to_string`: o texto atravessa a fronteira da `tokio::spawn` abaixo e não
+    // pode continuar emprestando de `msg_normalized`.
+    let texto_do_contato = msg_normalized.texto_para_ia().map(str::to_string);
+
+    // N8.5/E3 — a fala do contato num atendimento encerrado com pesquisa aberta é
+    // candidata a ser a nota. Vem ANTES do buffer: se for avaliação, não há
+    // pergunta a agregar nem resposta de bot a dar — responder "posso ajudar em
+    // algo mais?" a quem acabou de avaliar reabriria a conversa encerrada.
+    if let Some(ref texto) = texto_do_contato {
+        if tentar_registrar_avaliacao(
+            state,
+            tenant_uuid,
+            &envelope.tenant_id.to_string(),
+            atendimento_id,
+            texto,
+            &envelope.event_id.to_string(),
+            &envelope.traceparent,
+        )
+        .await
+        {
+            return Ok(());
         }
     }
 
-    if is_debounce_winner {
-        // 5. Verifica a barreira de bot
-        let bot_pode_atender = resolve_body
-            .get("bot_pode_atender")
-            .and_then(|v| v.as_bool())
-            .unwrap_or(false);
-        let atendente_humano_id = resolve_body
-            .get("atendente_humano_id")
-            .and_then(|v| v.as_i64());
+    // Se o bot não vai responder de qualquer forma — humano assumiu a conversa,
+    // flag desligada, ou mensagem sem fala a responder — não há rajada a agregar.
+    //
+    // Este atalho não é otimização: sem ele, o conteúdo da mensagem iria para o
+    // Redis (PII em repouso, §6.1 das diretrizes de segurança) para alimentar uma
+    // resposta que nunca vai sair. Gravar PII para jogar fora 5 s depois é
+    // exatamente o tipo de coleta que a diretriz manda evitar.
+    if !contexto_bot.bot_pode_atender
+        || contexto_bot.atendente_humano_id.is_some()
+        || texto_do_contato.is_none()
+    {
+        acionar_bot(state, &contexto_bot, texto_do_contato).await?;
+        return Ok(());
+    }
 
-        // Sem texto do contato não há pergunta a responder: mídia sem legenda,
-        // sticker, localização. Antes o bot era acionado de todo jeito com
-        // `content`, que nesses casos é a URL da CDN — a IA recebia "https://..."
-        // como se fosse a fala do cliente. O conteúdo da mídia entra na conversa
-        // pelo pipeline de mídia (transcrição/análise), não por aqui.
-        let texto_do_contato = msg_normalized.texto_para_ia();
+    let janela = buffer_mensagens::janela();
+    let na_janela = buffer_mensagens::enfileirar(
+        state.redis_conn.as_ref(),
+        tenant_uuid,
+        &msg_normalized.sender,
+        &buffer_mensagens::MensagemBufferizada {
+            message_id: msg_normalized.message_id.clone(),
+            texto: texto_do_contato.clone().unwrap_or_default(),
+        },
+        janela,
+    )
+    .await;
 
-        if bot_pode_atender && atendente_humano_id.is_none() && texto_do_contato.is_some() {
-            tracing::info!(
+    match na_janela {
+        // Outra task já está esperando esta janela e vai responder pelo conjunto.
+        buffer_mensagens::Enfileiramento::Acumulada => {
+            tracing::debug!(
                 atendimento_id = atendimento_id,
-                sender = %msg_normalized.sender,
-                "Assistente virtual respondendo à mensagem..."
+                "mensagem acumulada na janela de agregação em curso"
             );
+        }
+        // Esta mensagem abriu a janela: espera, drena e responde pelo conjunto.
+        //
+        // Em `tokio::spawn` de propósito. O `Consumer::run` chama o handler de
+        // forma SEQUENCIAL (`handler(evento).await` dentro do laço): esperar aqui
+        // pararia o consumo de TODOS os tenants pela duração da janela. O `XACK`
+        // não depende disto — a persistência da mensagem já aconteceu acima.
+        buffer_mensagens::Enfileiramento::Agendador => {
+            let state_janela = state.clone();
+            let sender = msg_normalized.sender.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(janela).await;
 
-            const BOT_TEXT_FALLBACK: &str = "Olá! Sou o assistente virtual. Recebi sua mensagem e ela já está na nossa fila de atendimento. Em breve um atendente falará com você.";
+                let acumuladas = buffer_mensagens::drenar(
+                    state_janela.redis_conn.as_ref(),
+                    contexto_bot.tenant_uuid,
+                    &sender,
+                )
+                .await;
+                let quantidade = acumuladas.len();
+                let compilado = buffer_mensagens::compilar(&acumuladas);
 
-            // N2.5: tenta responder via ia_engine (RAG); degrada para o texto fixo
-            // em qualquer falha (timeout/indisponibilidade/erro do provedor) — a
-            // barreira de bot NUNCA trava o atendimento por causa da IA.
-            let bot_text = match responder_via_ia(
-                state,
-                tenant_uuid,
-                atendimento_id,
-                texto_do_contato.unwrap_or_default(),
-                &envelope.event_id.to_string(),
-                &envelope.traceparent,
-            )
-            .await
-            {
-                Ok(texto) if !texto.trim().is_empty() => texto,
-                Ok(_) => {
-                    tracing::warn!(
-                        atendimento_id = atendimento_id,
-                        "ia_engine devolveu resposta vazia; usando fallback"
-                    );
-                    state.audit_logger.warn(
-                        tenant_uuid,
-                        "bot.degradado",
-                        "Resposta da IA veio vazia — usando resposta padrão",
-                        serde_json::json!({ "atendimento_id": atendimento_id }),
-                        None,
-                        None,
-                        Some(envelope.event_id.to_string()),
-                    );
-                    BOT_TEXT_FALLBACK.to_string()
-                }
-                Err(e) => {
-                    tracing::warn!(
-                        atendimento_id = atendimento_id,
-                        "ia_engine indisponível/erro, usando fallback: {:?}",
-                        e
-                    );
-                    state.audit_logger.warn(
-                        tenant_uuid,
-                        "bot.degradado",
-                        "Falha ao consultar a IA — usando resposta padrão",
-                        serde_json::json!({
-                            "atendimento_id": atendimento_id,
-                            "motivo": e.to_string(),
-                        }),
-                        None,
-                        None,
-                        Some(envelope.event_id.to_string()),
-                    );
-                    BOT_TEXT_FALLBACK.to_string()
-                }
-            };
-            let bot_text = bot_text.as_str();
-
-            // Chaves exigidas pelo handler de data_whatsapp (main.rs de data_whatsapp,
-            // handler_send_whatsapp_message): "id" (db id da instância) e "to_number"
-            // (telefone) — não "instance_id"/"to" (bug pré-existente corrigido na N1.3).
-            let outbound_payload = serde_json::json!({
-                "id": instance_id,
-                "to_number": msg_normalized.sender,
-                "text": bot_text,
-            });
-
-            let outbound_envelope = Envelope {
-                tenant_id: envelope.tenant_id.to_string(),
-                schema_version: 1,
-                message_id: Uuid::now_v7().to_string(),
-                causation_id: envelope.event_id.to_string(),
-                traceparent: envelope.traceparent.clone(),
-                occurred_at: chrono::Utc::now().timestamp_millis(),
-                kind: MessageKind::Request as i32,
-                method: "SendWhatsappMessage".to_string(),
-                payload: serde_json::to_vec(&outbound_payload).unwrap_or_default(),
-                error: None,
-                auth_user_id: 0,
-                auth_scopes: escopos_sistema(),
-                auth_is_superuser: false,
-                flow_permissions: vec![],
-                user_agent: String::new(),
-            };
-
-            let out_resp = state
-                .whatsapp_client
-                .call(outbound_envelope, Duration::from_secs(5))
-                .await?;
-            if out_resp.kind == MessageKind::Error as i32 {
-                let err_msg = out_resp
-                    .error
-                    .as_ref()
-                    .map(|e| e.message.as_str())
-                    .unwrap_or("Erro desconhecido");
-                tracing::error!("Falha ao enviar resposta do bot: {}", err_msg);
-
-                // Auditoria de falha de envio outbound (sem corpo da mensagem).
-                state.audit_logger.warn(
-                    tenant_uuid,
-                    "mensagem.falha_envio",
-                    "Falha ao enviar resposta automática do assistente virtual",
-                    serde_json::json!({
-                        "atendimento_id": atendimento_id,
-                        "recipient": mascarar_telefone(&msg_normalized.sender),
-                        "error": err_msg,
-                    }),
-                    None,
-                    None,
-                    Some(envelope.event_id.to_string()),
+                // Span próprio: a task não herda o do handler, e sem ele a cadeia
+                // webhook → resposta some para a rajada inteira. `traceparent` do
+                // contexto liga esta task à mensagem que abriu a janela.
+                let span = tracing::info_span!(
+                    "mensagem.buffer",
+                    tenant_id = %contexto_bot.tenant_uuid,
+                    atendimento_id = contexto_bot.atendimento_id,
+                    trace_id = %trace_id_de(&contexto_bot.traceparent),
+                    mensagens_agregadas = quantidade,
+                    janela_ms = janela.as_millis() as u64,
                 );
-            } else {
-                // Persiste a resposta do bot no thread (remetente "bot" ⇒
-                // `gerado_por_ia=true` no INSERT do data_postgres). Sem isto: o
-                // atendente não vê no chat o que o bot respondeu, e o próprio bot
-                // perde a memória das suas respostas — o `historico` do
-                // `Responder` é montado a partir do `GetThread`, então cada turno
-                // veria só as falas do contato. Best-effort: a mensagem já foi
-                // entregue ao contato, uma falha aqui não deve derrubar o
-                // processamento (só deixa o thread incompleto).
-                //
-                // Não realimenta o loop de envio: `processar_mensagem_persistida`
-                // só reage a `sender_id == "atendente"`.
-                //
-                // O stanzaId devolvido pelo provedor vai junto: é o que correlaciona
-                // os webhooks de status (`sent`/`delivered`/`read`) desta resposta
-                // com a linha no thread — sem ele, `UpdateMessageStatus` não acha a
-                // mensagem e o atendente nunca vê o "entregue/lido" do que o bot
-                // respondeu. Também torna a persistência idempotente se o evento
-                // for reentregue pela PEL.
-                let stanza_bot = serde_json::from_slice::<serde_json::Value>(&out_resp.payload)
-                    .ok()
-                    .and_then(|v| {
-                        v.get("message_id")
-                            .and_then(|m| m.as_str())
-                            .map(|s| s.to_string())
-                    })
-                    .unwrap_or_default();
-                if let Err(e) = chamar_rpc(
-                    &state.pg_client,
-                    &envelope.tenant_id.to_string(),
-                    "PersistMessage",
-                    serde_json::json!({
-                        "atendimento_id": atendimento_id,
-                        "content": bot_text,
-                        "sender_id": REMETENTE_BOT,
-                        "tipo": "texto",
-                        "message_id_whatsapp": stanza_bot,
-                        // Já entregue ao contato pelo envio acima.
-                        "ja_entregue": true,
-                    }),
-                    &envelope.event_id.to_string(),
-                    &envelope.traceparent,
+                let _guarda = span.enter();
+                // Só a contagem: o texto agregado é fala do cliente (PII).
+                tracing::info!("janela de agregação drenada");
+
+                let texto = (!compilado.trim().is_empty()).then_some(compilado);
+                if let Err(e) = acionar_bot(&state_janela, &contexto_bot, texto).await {
+                    tracing::warn!(erro = %e, "falha ao acionar o bot após a janela de agregação");
+                }
+            });
+        }
+        // Redis fora do ar (ou ausente, como nos testes): degrada para o
+        // comportamento anterior — responde a esta mensagem sozinha, na hora.
+        // Perder a agregação é aceitável; deixar o cliente sem resposta não é.
+        buffer_mensagens::Enfileiramento::Indisponivel => {
+            acionar_bot(state, &contexto_bot, texto_do_contato).await?;
+        }
+    }
+
+    Ok(())
+}
+
+/// N8.5/E3 — extrai a nota 1..5 de uma resposta de pesquisa de satisfação.
+///
+/// Trata o caso barato antes de gastar uma chamada de IA: a esmagadora maioria
+/// das respostas é o dígito solto. Só o que não casar aqui vai para o
+/// `Sentimento` do `ia_engine`.
+///
+/// Deliberadamente conservador — devolve `None` em vez de chutar. Uma nota errada
+/// contamina a média de satisfação, e o custo de errar para menos é só a pesquisa
+/// expirar, que é o comportamento de quem não respondeu.
+fn extrair_nota_da_resposta(texto: &str) -> Option<i32> {
+    let t = texto.trim();
+
+    // "5", "4." — resposta isolada.
+    if let Some(n) = t
+        .trim_end_matches(['.', '!', ')'])
+        .trim()
+        .parse::<i32>()
+        .ok()
+        .filter(|n| (1..=5).contains(n))
+    {
+        return Some(n);
+    }
+
+    // Contagem de estrelas: "⭐⭐⭐⭐" é resposta comum e não tem dígito.
+    let estrelas = t.chars().filter(|c| *c == '⭐' || *c == '★').count();
+    if (1..=5).contains(&estrelas)
+        && t.chars()
+            .all(|c| c == '⭐' || c == '★' || c.is_whitespace())
+    {
+        return Some(estrelas as i32);
+    }
+
+    // "nota 4", "dou 5", "4 estrelas" — um único dígito de 1 a 5 no texto curto.
+    // O limite de tamanho evita casar o "5" de "meu pedido 512 não chegou".
+    if t.chars().count() <= 40 {
+        let digitos: Vec<i32> = t
+            .chars()
+            .filter(|c| c.is_ascii_digit())
+            .filter_map(|c| c.to_digit(10).map(|d| d as i32))
+            .collect();
+        if digitos.len() == 1 && (1..=5).contains(&digitos[0]) {
+            return Some(digitos[0]);
+        }
+    }
+
+    None
+}
+
+/// N8.5/E3 — tenta interpretar a mensagem do contato como resposta da pesquisa.
+///
+/// Devolve `true` quando a mensagem FOI a avaliação — nesse caso o chamador não
+/// aciona o bot: responder "posso ajudar em algo mais?" a quem acabou de dar nota
+/// reabriria a conversa que o atendente encerrou.
+///
+/// Best-effort em todas as pontas: falha de RPC ou de IA significa "não era
+/// avaliação", e a mensagem segue o fluxo normal.
+async fn tentar_registrar_avaliacao(
+    state: &AppState,
+    tenant_uuid: Uuid,
+    tenant_str: &str,
+    atendimento_id: i32,
+    texto: &str,
+    causation_id: &str,
+    traceparent: &str,
+) -> bool {
+    // Mesma janela do expirador: fora dela, a fala do contato é conversa nova.
+    let ttl_horas = std::env::var("SMARTCORE_SCHEDULER_FEEDBACK_TTL_HORAS")
+        .ok()
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(48);
+
+    let aguardando = chamar_rpc(
+        &state.pg_client,
+        tenant_str,
+        "AtendimentoAguardandoAvaliacao",
+        serde_json::json!({ "atendimento_id": atendimento_id, "ttl_horas": ttl_horas }),
+        causation_id,
+        traceparent,
+    )
+    .await
+    .ok()
+    .and_then(|v| v.get("aguardando").and_then(|a| a.as_bool()))
+    .unwrap_or(false);
+
+    if !aguardando {
+        return false;
+    }
+
+    // Regex primeiro (barato e determinístico); IA só no que sobrar.
+    let (nota, origem) = match extrair_nota_da_resposta(texto) {
+        Some(n) => (Some(n), "regex"),
+        None => {
+            let da_ia = state
+                .ia_client
+                .sentimento(
+                    ia_engine::client::SentimentoInput {
+                        tenant_id: tenant_str.to_string(),
+                        historico: vec![ia_engine::ChatTurnInput {
+                            role: "human".to_string(),
+                            conteudo: texto.to_string(),
+                        }],
+                    },
+                    traceparent,
                 )
                 .await
-                {
-                    tracing::warn!(
-                        atendimento_id = atendimento_id,
-                        erro = %e,
-                        "falha ao persistir a resposta do bot no thread (mensagem já entregue ao contato)"
-                    );
-                }
+                .ok()
+                .map(|s| s.nota)
+                .filter(|n| (1..=5).contains(n));
+            (da_ia, "ia")
+        }
+    };
 
-                // Auditoria de barreira de bot (respondeu) e do envio outbound.
-                state.audit_logger.info(
-                    tenant_uuid,
-                    "bot.respondeu",
-                    "Resposta automática do assistente virtual enviada com sucesso",
-                    serde_json::json!({
-                        "atendimento_id": atendimento_id,
-                        "recipient": mascarar_telefone(&msg_normalized.sender),
-                    }),
-                    None,
-                    None,
-                    Some(envelope.event_id.to_string()),
-                );
-                state.audit_logger.info(
-                    tenant_uuid,
-                    "mensagem.enviada",
-                    "Mensagem outbound enviada com sucesso via data_whatsapp",
-                    serde_json::json!({
-                        "atendimento_id": atendimento_id,
-                        "recipient": mascarar_telefone(&msg_normalized.sender),
-                    }),
-                    None,
-                    None,
-                    Some(envelope.event_id.to_string()),
+    let Some(nota) = nota else {
+        // Nem regex nem IA reconheceram nota: o contato escreveu outra coisa. A
+        // pesquisa continua aberta até o TTL e a mensagem segue o fluxo normal.
+        tracing::debug!(
+            atendimento_id = atendimento_id,
+            "mensagem em atendimento com pesquisa aberta não continha nota"
+        );
+        return false;
+    };
+
+    let gravou = chamar_rpc(
+        &state.pg_client,
+        tenant_str,
+        "RegistrarAvaliacaoAtendimento",
+        // O texto íntegro do cliente vai para a coluna `feedback` — é o comentário
+        // dele sobre o atendimento. Não entra em log nem em span (ver abaixo).
+        serde_json::json!({
+            "atendimento_id": atendimento_id,
+            "nota": nota,
+            "feedback": texto,
+        }),
+        causation_id,
+        traceparent,
+    )
+    .await;
+
+    match gravou {
+        Ok(v) => {
+            let ok = v.get("gravado").and_then(|g| g.as_bool()).unwrap_or(false);
+            if ok {
+                // Só a nota e a origem: o comentário é PII e fica na coluna.
+                tracing::info!(
+                    tenant_id = %tenant_uuid,
+                    atendimento_id = atendimento_id,
+                    nota,
+                    origem,
+                    "avaliação do contato registrada"
                 );
             }
-        } else {
-            // Barreira de bot impediu a resposta automática (humano ativo, flag
-            // desligada ou mensagem sem texto a responder).
-            state.audit_logger.info(
+            ok
+        }
+        Err(e) => {
+            tracing::warn!(erro = %e, "falha ao registrar avaliação; mensagem segue o fluxo normal");
+            false
+        }
+    }
+}
+
+/// Tudo que o acionamento do bot precisa saber, em valores próprios.
+///
+/// Existe porque a resposta passou a acontecer numa `tokio::spawn` (ver E2): a
+/// task sobrevive ao handler que a criou e não pode emprestar nada dele.
+struct ContextoBot {
+    tenant_uuid: Uuid,
+    tenant_str: String,
+    atendimento_id: i32,
+    instance_id: i32,
+    /// Telefone do contato. Vai mascarado para log/auditoria — nunca em claro.
+    sender: String,
+    event_id: String,
+    traceparent: String,
+    bot_pode_atender: bool,
+    atendente_humano_id: Option<i64>,
+}
+
+/// Barreira de bot + resposta automática: decide se o assistente responde e, em
+/// caso positivo, consulta a IA, envia ao contato e registra no thread.
+///
+/// `texto_do_contato` é o texto **já agregado** da janela (E2) — não o de uma
+/// mensagem isolada. `None` significa "não há fala a responder" (mídia sem
+/// legenda, sticker, localização).
+async fn acionar_bot(
+    state: &AppState,
+    ctx: &ContextoBot,
+    texto_do_contato: Option<String>,
+) -> anyhow::Result<()> {
+    let tenant_uuid = ctx.tenant_uuid;
+    let atendimento_id = ctx.atendimento_id;
+
+    if ctx.bot_pode_atender && ctx.atendente_humano_id.is_none() && texto_do_contato.is_some() {
+        tracing::info!(
+            atendimento_id = atendimento_id,
+            sender = %mascarar_telefone(&ctx.sender),
+            "Assistente virtual respondendo à mensagem..."
+        );
+
+        // Último elo da cascata de fallback: só vale quando o tenant não
+        // configurou `msg_fallback`. O texto versionado no código existe para que
+        // uma config não semeada nunca deixe o contato sem resposta.
+        const BOT_TEXT_FALLBACK: &str = "Olá! Sou o assistente virtual. Recebi sua mensagem e ela já está na nossa fila de atendimento. Em breve um atendente falará com você.";
+
+        // N8.5/E4: `msg_fallback` é configurável no painel, persistida e publicada
+        // no Redis desde a N6 — e ninguém a lia. O tenant ajustava o texto e o
+        // sistema continuava mandando a constante acima.
+        //
+        // `origem_texto` vai para o log e para a auditoria justamente porque a
+        // ausência desse campo foi o que manteve o bug gêmeo (`persona_bot`,
+        // corrigido em 28/07) invisível por semanas: sem ele não há como saber, em
+        // produção, se a config do tenant está mesmo sendo aplicada.
+        let (texto_fallback, origem_texto) = match config_tenant::texto(
+            state.redis_conn.as_ref(),
+            tenant_uuid,
+            "msg_fallback",
+        )
+        .await
+        {
+            Some(t) => (t, "tenant"),
+            None => (BOT_TEXT_FALLBACK.to_string(), "default"),
+        };
+
+        // N2.5: tenta responder via ia_engine (RAG); degrada para o texto fixo em
+        // qualquer falha (timeout/indisponibilidade/erro do provedor) — a barreira
+        // de bot NUNCA trava o atendimento por causa da IA.
+        let pergunta = texto_do_contato.clone().unwrap_or_default();
+        let bot_text = match responder_via_ia(
+            state,
+            tenant_uuid,
+            atendimento_id,
+            &pergunta,
+            &ctx.event_id,
+            &ctx.traceparent,
+        )
+        .await
+        {
+            Ok(texto) if !texto.trim().is_empty() => texto,
+            Ok(_) => {
+                tracing::warn!(
+                    atendimento_id = atendimento_id,
+                    origem_texto,
+                    "ia_engine devolveu resposta vazia; usando fallback"
+                );
+                state.audit_logger.warn(
+                    tenant_uuid,
+                    "bot.degradado",
+                    "Resposta da IA veio vazia — usando resposta padrão",
+                    serde_json::json!({
+                        "atendimento_id": atendimento_id,
+                        "origem_texto": origem_texto,
+                    }),
+                    None,
+                    None,
+                    Some(ctx.event_id.clone()),
+                );
+                texto_fallback
+            }
+            Err(e) => {
+                tracing::warn!(
+                    atendimento_id = atendimento_id,
+                    origem_texto,
+                    "ia_engine indisponível/erro, usando fallback: {:?}",
+                    e
+                );
+                state.audit_logger.warn(
+                    tenant_uuid,
+                    "bot.degradado",
+                    "Falha ao consultar a IA — usando resposta padrão",
+                    serde_json::json!({
+                        "atendimento_id": atendimento_id,
+                        "motivo": e.to_string(),
+                        "origem_texto": origem_texto,
+                    }),
+                    None,
+                    None,
+                    Some(ctx.event_id.clone()),
+                );
+                texto_fallback
+            }
+        };
+        let bot_text = bot_text.as_str();
+
+        // Chaves exigidas pelo handler de data_whatsapp (main.rs de data_whatsapp,
+        // handler_send_whatsapp_message): "id" (db id da instância) e "to_number"
+        // (telefone) — não "instance_id"/"to" (bug pré-existente corrigido na N1.3).
+        let outbound_payload = serde_json::json!({
+            "id": ctx.instance_id,
+            "to_number": ctx.sender,
+            "text": bot_text,
+        });
+
+        let outbound_envelope = Envelope {
+            tenant_id: ctx.tenant_str.clone(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: ctx.event_id.clone(),
+            traceparent: ctx.traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "SendWhatsappMessage".to_string(),
+            payload: serde_json::to_vec(&outbound_payload).unwrap_or_default(),
+            error: None,
+            auth_user_id: 0,
+            auth_scopes: escopos_sistema(),
+            auth_is_superuser: false,
+            flow_permissions: vec![],
+            user_agent: String::new(),
+        };
+
+        let out_resp = state
+            .whatsapp_client
+            .call(outbound_envelope, Duration::from_secs(5))
+            .await?;
+        if out_resp.kind == MessageKind::Error as i32 {
+            let err_msg = out_resp
+                .error
+                .as_ref()
+                .map(|e| e.message.as_str())
+                .unwrap_or("Erro desconhecido");
+            tracing::error!("Falha ao enviar resposta do bot: {}", err_msg);
+
+            // Auditoria de falha de envio outbound (sem corpo da mensagem).
+            state.audit_logger.warn(
                 tenant_uuid,
-                "bot.silenciado",
-                "Assistente virtual silenciado para o atendimento",
+                "mensagem.falha_envio",
+                "Falha ao enviar resposta automática do assistente virtual",
                 serde_json::json!({
                     "atendimento_id": atendimento_id,
-                    "bot_pode_atender": bot_pode_atender,
-                    "humano_ativo": atendente_humano_id.is_some(),
-                    "sem_texto": texto_do_contato.is_none(),
+                    "recipient": mascarar_telefone(&ctx.sender),
+                    "error": err_msg,
                 }),
                 None,
                 None,
-                Some(envelope.event_id.to_string()),
+                Some(ctx.event_id.clone()),
+            );
+        } else {
+            // Persiste a resposta do bot no thread (remetente "bot" ⇒
+            // `gerado_por_ia=true` no INSERT do data_postgres). Sem isto: o
+            // atendente não vê no chat o que o bot respondeu, e o próprio bot
+            // perde a memória das suas respostas — o `historico` do `Responder` é
+            // montado a partir do `GetThread`, então cada turno veria só as falas
+            // do contato. Best-effort: a mensagem já foi entregue ao contato, uma
+            // falha aqui não deve derrubar o processamento (só deixa o thread
+            // incompleto).
+            //
+            // Não realimenta o loop de envio: `processar_mensagem_persistida` só
+            // reage a `sender_id == "atendente"`.
+            //
+            // O stanzaId devolvido pelo provedor vai junto: é o que correlaciona
+            // os webhooks de status (`sent`/`delivered`/`read`) desta resposta com
+            // a linha no thread — sem ele, `UpdateMessageStatus` não acha a
+            // mensagem e o atendente nunca vê o "entregue/lido" do que o bot
+            // respondeu. Também torna a persistência idempotente se o evento for
+            // reentregue pela PEL.
+            let stanza_bot = serde_json::from_slice::<serde_json::Value>(&out_resp.payload)
+                .ok()
+                .and_then(|v| {
+                    v.get("message_id")
+                        .and_then(|m| m.as_str())
+                        .map(|s| s.to_string())
+                })
+                .unwrap_or_default();
+            if let Err(e) = chamar_rpc(
+                &state.pg_client,
+                &ctx.tenant_str,
+                "PersistMessage",
+                serde_json::json!({
+                    "atendimento_id": atendimento_id,
+                    "content": bot_text,
+                    "sender_id": REMETENTE_BOT,
+                    "tipo": "texto",
+                    "message_id_whatsapp": stanza_bot,
+                    // Já entregue ao contato pelo envio acima.
+                    "ja_entregue": true,
+                }),
+                &ctx.event_id,
+                &ctx.traceparent,
+            )
+            .await
+            {
+                tracing::warn!(
+                    atendimento_id = atendimento_id,
+                    erro = %e,
+                    "falha ao persistir a resposta do bot no thread (mensagem já entregue ao contato)"
+                );
+            }
+
+            // Auditoria de barreira de bot (respondeu) e do envio outbound.
+            state.audit_logger.info(
+                tenant_uuid,
+                "bot.respondeu",
+                "Resposta automática do assistente virtual enviada com sucesso",
+                serde_json::json!({
+                    "atendimento_id": atendimento_id,
+                    "recipient": mascarar_telefone(&ctx.sender),
+                }),
+                None,
+                None,
+                Some(ctx.event_id.clone()),
+            );
+            state.audit_logger.info(
+                tenant_uuid,
+                "mensagem.enviada",
+                "Mensagem outbound enviada com sucesso via data_whatsapp",
+                serde_json::json!({
+                    "atendimento_id": atendimento_id,
+                    "recipient": mascarar_telefone(&ctx.sender),
+                }),
+                None,
+                None,
+                Some(ctx.event_id.clone()),
             );
         }
+    } else {
+        // Barreira de bot impediu a resposta automática (humano ativo, flag
+        // desligada ou mensagem sem texto a responder).
+        state.audit_logger.info(
+            tenant_uuid,
+            "bot.silenciado",
+            "Assistente virtual silenciado para o atendimento",
+            serde_json::json!({
+                "atendimento_id": atendimento_id,
+                "bot_pode_atender": ctx.bot_pode_atender,
+                "humano_ativo": ctx.atendente_humano_id.is_some(),
+                "sem_texto": texto_do_contato.is_none(),
+            }),
+            None,
+            None,
+            Some(ctx.event_id.clone()),
+        );
     }
 
     Ok(())
@@ -2011,7 +2519,13 @@ async fn processar_mensagem_persistida(
         .get("sender_id")
         .and_then(|v| v.as_str())
         .unwrap_or_default();
-    if sender_id != REMETENTE_ATENDENTE {
+    // N8.5/E3: mensagens do BOT criadas pelo servidor (hoje, o pedido de
+    // avaliação) também precisam sair para o contato. A resposta que o próprio
+    // worker já entregou nasce com `status_envio='sent'` e é descartada pelo
+    // check de idempotência logo abaixo — a fonte de verdade é o status, não o
+    // remetente. Sem este par de remetentes, a pesquisa ficava no thread e o
+    // cliente nunca era perguntado.
+    if sender_id != REMETENTE_ATENDENTE && sender_id != REMETENTE_BOT {
         return Ok(());
     }
 
@@ -2872,6 +3386,45 @@ mod tests {
         );
         // Formato fora do padrão: devolve o próprio valor.
         assert_eq!(trace_id_de("semtracos"), "semtracos");
+    }
+
+    /// N8.5/E3 — a extração de nota roda antes da IA e decide se a mensagem do
+    /// contato vira avaliação. Errar aqui contamina a média de satisfação com
+    /// número que o cliente nunca deu, então o teste fixa os dois lados: o que
+    /// TEM de casar e, principalmente, o que NÃO pode casar.
+    #[test]
+    fn extrai_nota_das_respostas_tipicas_da_pesquisa() {
+        assert_eq!(extrair_nota_da_resposta("5"), Some(5));
+        assert_eq!(extrair_nota_da_resposta(" 4 "), Some(4));
+        assert_eq!(extrair_nota_da_resposta("3."), Some(3));
+        assert_eq!(extrair_nota_da_resposta("1!"), Some(1));
+        assert_eq!(extrair_nota_da_resposta("nota 4"), Some(4));
+        assert_eq!(extrair_nota_da_resposta("dou 5, obrigado"), Some(5));
+        assert_eq!(extrair_nota_da_resposta("⭐⭐⭐⭐"), Some(4));
+        assert_eq!(extrair_nota_da_resposta("★★★"), Some(3));
+    }
+
+    #[test]
+    fn nao_inventa_nota_onde_nao_ha() {
+        // Fora da escala 1..5.
+        assert_eq!(extrair_nota_da_resposta("0"), None);
+        assert_eq!(extrair_nota_da_resposta("10"), None);
+        assert_eq!(extrair_nota_da_resposta("7"), None);
+        // Texto sem número: é o `Sentimento` da IA que decide, não o regex.
+        assert_eq!(extrair_nota_da_resposta("foi ótimo, obrigado!"), None);
+        // O "5" aqui é parte de um número de pedido — não é avaliação. Este é o
+        // caso que justifica o limite de tamanho na heurística.
+        assert_eq!(
+            extrair_nota_da_resposta(
+                "meu pedido 512 ainda não chegou e eu preciso muito dele para amanhã"
+            ),
+            None
+        );
+        // Dois dígitos soltos: ambíguo demais para chutar.
+        assert_eq!(extrair_nota_da_resposta("entre 3 e 4"), None);
+        assert_eq!(extrair_nota_da_resposta(""), None);
+        // Estrelas demais não viram nota 5 por arredondamento.
+        assert_eq!(extrair_nota_da_resposta("⭐⭐⭐⭐⭐⭐⭐"), None);
     }
 
     /// HAPPY PATH do pipeline de mídia (áudio): download -> storage -> transcrição

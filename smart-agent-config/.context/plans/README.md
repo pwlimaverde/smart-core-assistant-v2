@@ -8,12 +8,12 @@ Backlog derivado da **auditoria de código v1 × v2** de 2026-08-08/09
 (`doc_dev/planejamento/26-levantamento-paridade-v1-v2.md` e
 `27-mapa-telas-rotas-v2.md`). **Ordem de execução:**
 
-1. **[N8.5 Defeitos do Pipeline](./n85-defeitos-pipeline.md)** — 🚧 **ativo**
-   (workflow PREVC na fase R). Correção de cinco divergências de comportamento em
-   caminho que já roda: grupo virando atendimento, buffer de agregação,
-   pesquisa de satisfação, `msg_fallback`, evento `CONNECTION` sem consumidor.
-2. [N9 Conversa Completa](./n9-conversa-completa.md) — caminho crítico: mídia,
-   leitura, presença, citação, busca e ficha. Depende de N8.5.
+1. ~~N8.5 Defeitos do Pipeline~~ — ✅ **concluído** em 2026-08-09
+   (ver `archive/n85-defeitos-pipeline/`). Corrigiu as cinco divergências de
+   comportamento: grupo virando atendimento, buffer de agregação, pesquisa de
+   satisfação, `msg_fallback`, evento `CONNECTION` sem consumidor.
+2. **[N9 Conversa Completa](./n9-conversa-completa.md)** — 🚧 **próximo**.
+   Caminho crítico: mídia, leitura, presença, citação, busca e ficha.
 3. [N10 IA Analítica](./n10-ia-analitica.md) — ligar o `Analyse`, assunto e
    etiqueta automáticos, treinamento por arquivo. Paralelizável com N11.
 4. [N11 Operação e Cadastros](./n11-operacao-cadastros.md) — conexões, roteamento
@@ -27,7 +27,7 @@ as referências brutas coletadas.
 
 ## Concluídos (ver `archive/`)
 - N6 Ia Fluxo Vivo · N7 Endurecimento Residual · N8 Migração e Cutover
-  (código; a execução real é a N12)
+  (código; a execução real é a N12) · **N8.5 Defeitos do Pipeline**
 
 ## How To Create Or Update Plans
 - Run "dotcontext plan <name>" to scaffold a new plan template.

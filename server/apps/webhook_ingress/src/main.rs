@@ -138,6 +138,45 @@ fn extrair_sender(event_type: &str, raw: &serde_json::Value) -> Option<String> {
     })
 }
 
+/// N8.5/E1 — decide se o evento é de **grupo** e portanto não deve ser ingerido.
+///
+/// Motivo (herdado da v1, `evolution_sync/services/webhook.py:158-191`): em evento
+/// de grupo o `pushName` é do participante que escreveu, não do dono da conversa.
+/// Ingerir abre um atendimento individual por participante, com nome errado, e o
+/// bot passa a responder dentro do grupo.
+///
+/// A checagem é **dupla e independente do formato**, porque o campo booleano
+/// depende da versão do Evolution Go e não é garantido:
+/// 1. `data.isGroup` (payload traduzido) ou `data.Info.IsGroup` (payload cru do Go);
+/// 2. fallback pelo sufixo `@g.us` do JID da conversa — `data.key.remoteJid`
+///    (traduzido) ou `data.Info.Chat` (cru).
+///
+/// **Decisão registrada:** não existe "atendimento de grupo" na v2, nem como opção
+/// de configuração. Se um dia houver, será um domínio próprio (participantes,
+/// menções, autoria), não um atendimento individual disfarçado.
+fn evento_de_grupo(raw: &serde_json::Value) -> bool {
+    let Some(data) = raw.get("data") else {
+        return false;
+    };
+
+    let flag = data
+        .get("isGroup")
+        .or_else(|| data.get("Info").and_then(|i| i.get("IsGroup")))
+        .and_then(|g| g.as_bool())
+        .unwrap_or(false);
+    if flag {
+        return true;
+    }
+
+    // Fallback pelo JID: só o sufixo importa; o identificador em si é PII e não
+    // sai desta função.
+    data.get("key")
+        .and_then(|k| k.get("remoteJid"))
+        .or_else(|| data.get("Info").and_then(|i| i.get("Chat")))
+        .and_then(|j| j.as_str())
+        .is_some_and(|jid| jid.ends_with("@g.us"))
+}
+
 fn extrair_message_id(event_type: &str, raw: &serde_json::Value) -> Option<String> {
     match event_type {
         "messages.upsert" => raw
@@ -357,6 +396,30 @@ async fn handle_webhook(
             None,
         );
         return Err(StatusCode::UNAUTHORIZED);
+    }
+
+    // 2b-bis. N8.5/E1 — descarte de evento de grupo.
+    //
+    // Vem ANTES do rate limit e da idempotência de propósito: grupo não é tráfego
+    // legítimo do tenant, então não pode consumir a cota da instância nem gravar
+    // chave de idempotência para uma mensagem que jamais será ingerida.
+    //
+    // Responde 202, nunca erro: devolver erro faz a Evolution reentregar o evento
+    // em retry infinito, sem nunca ter sucesso — mesmo raciocínio já aplicado no
+    // descarte por whitelist logo abaixo.
+    if evento_de_grupo(&raw) {
+        // INFO, não WARN: descartar grupo é o comportamento correto e esperado.
+        // WARN aqui poluiria o alerta de anomalia com o caso normal.
+        tracing::info!(
+            motivo = "grupo",
+            event_type,
+            "Evento de grupo descartado na ingestão"
+        );
+        observability::usage_metrics::registrar_evento_descartado(
+            &params.tenant_id.to_string(),
+            "grupo",
+        );
+        return Ok(StatusCode::ACCEPTED);
     }
 
     // 2c. Rate limiting amplo por instância/tenant (N4.4). N7.3: contador
@@ -990,6 +1053,71 @@ mod tests {
         assert!(!remetente_deve_ser_ignorado(Some(false)));
         // Resposta sem a flag → não pode calar a ingestão.
         assert!(!remetente_deve_ser_ignorado(None));
+    }
+
+    /// N8.5/E1 — o campo `isGroup` não é garantido em toda versão do Evolution Go,
+    /// então o filtro precisa acertar pelos dois caminhos, nos dois formatos de
+    /// payload (traduzido e cru), sem nunca comer mensagem individual.
+    #[test]
+    fn evento_de_grupo_detecta_pelos_dois_caminhos_e_poupa_mensagem_individual() {
+        // Formato traduzido, flag explícita.
+        assert!(evento_de_grupo(&json!({
+            "data": { "isGroup": true, "key": { "remoteJid": "12036300@g.us" } }
+        })));
+        // Formato traduzido, SEM a flag — só o sufixo do JID denuncia o grupo.
+        assert!(evento_de_grupo(&json!({
+            "data": { "key": { "remoteJid": "12036300@g.us" } }
+        })));
+        // Formato cru do Go, flag explícita.
+        assert!(evento_de_grupo(&json!({
+            "data": { "Info": { "IsGroup": true, "Chat": "12036300@g.us" } }
+        })));
+        // Formato cru do Go, SEM a flag.
+        assert!(evento_de_grupo(&json!({
+            "data": { "Info": { "Chat": "12036300@g.us" } }
+        })));
+        // Flag explicitamente falsa e JID individual → mensagem boa, não descartar.
+        assert!(!evento_de_grupo(&json!({
+            "data": { "isGroup": false, "key": { "remoteJid": "5511999998888@s.whatsapp.net" } }
+        })));
+        assert!(!evento_de_grupo(&json!({
+            "data": { "Info": { "IsGroup": false, "Chat": "5511999998888@s.whatsapp.net" } }
+        })));
+        // Payload sem `data` (evento de conexão, por exemplo) → não é grupo.
+        assert!(!evento_de_grupo(&json!({ "event": "connection.update" })));
+    }
+
+    /// Regressão do defeito: a mensagem de grupo tem de morrer na ingestão, com 202
+    /// (nunca erro, que faria a Evolution reentregar em loop).
+    #[tokio::test]
+    async fn webhook_descarta_mensagem_de_grupo() {
+        let app = setup_test_app().await;
+
+        let payload = json!({
+            "event": "messages.upsert",
+            "data": {
+                "isGroup": true,
+                "participant": "5511999998888@s.whatsapp.net",
+                "key": { "id": "MSG-GRUPO-1", "remoteJid": "12036300@g.us" },
+                "pushName": "Fulano do Grupo",
+                "message": { "conversation": "Olá pessoal" }
+            }
+        });
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/webhook/evolution/00000000-0000-0000-0000-000000000001/42")
+                    .header("content-type", "application/json")
+                    .header("apikey", "token-123")
+                    .body(Body::from(payload.to_string()))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
     }
 
     #[tokio::test]

@@ -287,6 +287,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                 persona_bot=config.persona_bot,
                 bot_agent_name=config.bot_agent_name,
                 msg_transferencia=config.msg_transferencia,
+                msg_sem_info=config.msg_sem_info,
                 dados_treinamento=request.dados_treinamento,
                 similarity_threshold=config.similarity_threshold,
                 llm=config.spec_llm(),

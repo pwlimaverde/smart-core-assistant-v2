@@ -210,6 +210,68 @@ async def test_sem_mensagem_configurada_cai_no_texto_generico():
     assert "um de nossos atendentes" in resp.resposta_texto
 
 
+# ----------------------------------------------------- mensagem de "sem info"
+@pytest.mark.asyncio
+async def test_msg_sem_info_do_tenant_substitui_o_palpite_sem_rag():
+    """Sem `dados_treinamento` e com confiança baixa, o texto do LLM é palpite
+    sem base. O contato deve ver o que o tenant configurou — até aqui
+    `msg_sem_info` existia no banco, no painel e no RuntimeConfig lido pelo
+    ia_engine, e não era aplicada em lugar nenhum."""
+    chat = _chat_com_resposta(
+        "Acho que é R$ 300, mas não tenho certeza.", confianca=0.1
+    )
+    servicer = IaEngineServicer(
+        chat_model_factory=lambda _spec: chat,
+        embeddings_factory=lambda _spec: FakeEmbeddings(),
+        config_cache=FakeConfigCache(
+            runtime_config(
+                msg_sem_info="Não encontrei essa informação por aqui.",
+                msg_transferencia="Chamando o Zé, aguarde.",
+                similarity_threshold=0.99,
+            )
+        ),
+    )
+    async with _stub(servicer) as stub:
+        resp = await stub.Responder(
+            pb.ResponderRequest(
+                tenant_id="t1",
+                atendimento_id="42",
+                mensagem="quanto custa o serviço?",
+                dados_treinamento="",  # RAG não trouxe nada
+            )
+        )
+
+    assert "Não encontrei essa informação por aqui." in resp.resposta_texto
+    # O palpite do modelo não pode sobreviver: é justamente o que se quer evitar.
+    assert "R$ 300" not in resp.resposta_texto
+    assert "Chamando o Zé, aguarde." in resp.resposta_texto
+
+
+@pytest.mark.asyncio
+async def test_msg_sem_info_nao_atropela_resposta_com_rag():
+    """Com RAG e confiança baixa, o bot transfere — mas o texto que ele produziu
+    tem base no treinamento e deve ser preservado. Trocar tudo por "não sei"
+    esconderia do contato a informação que o sistema de fato tinha."""
+    chat = _chat_com_resposta(
+        "Reinicie o aparelho segurando o botão.", confianca=0.1
+    )
+    servicer = IaEngineServicer(
+        chat_model_factory=lambda _spec: chat,
+        embeddings_factory=lambda _spec: FakeEmbeddings(),
+        config_cache=FakeConfigCache(
+            runtime_config(
+                msg_sem_info="Não encontrei essa informação por aqui.",
+                similarity_threshold=0.99,
+            )
+        ),
+    )
+    async with _stub(servicer) as stub:
+        resp = await stub.Responder(_responder_request())  # com dados_treinamento
+
+    assert "Reinicie o aparelho segurando o botão." in resp.resposta_texto
+    assert "Não encontrei essa informação" not in resp.resposta_texto
+
+
 # --------------------------------------------------------- config indisponível
 @pytest.mark.asyncio
 async def test_config_ausente_aborta_com_failed_precondition():
