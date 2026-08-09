@@ -3276,7 +3276,7 @@ impl AdminService for AdminFacade {
         &self,
         req: Request<MoverMyEtapaFluxoRequest>,
     ) -> Result<Response<SimpleOkResponse>, Status> {
-        let inner = req.get_ref().clone();
+        let inner = *req.get_ref();
         let corpo = self
             .encaminhar_tenant(
                 &req,
@@ -4528,7 +4528,7 @@ impl AdminService for AdminFacade {
         &self,
         req: Request<AlternarEtiquetaRequest>,
     ) -> Result<Response<SimpleOkResponse>, Status> {
-        let inner = req.get_ref().clone();
+        let inner = *req.get_ref();
         self.encaminhar_tenant(
             &req,
             &self.deps.pg,

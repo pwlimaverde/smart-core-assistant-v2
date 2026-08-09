@@ -562,6 +562,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_send_outbound_message = state_clone.clone();
     let state_for_listar_feedback_vencido = state_clone.clone();
     let state_for_marcar_feedback_expirado = state_clone.clone();
+    let state_for_aguardando_avaliacao = state_clone.clone();
+    let state_for_registrar_avaliacao = state_clone.clone();
     let state_for_listar_midias_expiradas = state_clone.clone();
     let state_for_marcar_midia_purgada = state_clone.clone();
     let state_for_resolver_destino_envio = state_clone.clone();
@@ -664,6 +666,21 @@ async fn main() -> anyhow::Result<()> {
             let state = state_for_marcar_feedback_expirado.clone();
             Box::pin(async move {
                 handler_marcar_feedback_expirado(state.atendimento.as_ref(), env).await
+            })
+        })
+        // N8.5/E3 — ciclo da pesquisa de satisfação: o worker pergunta se o
+        // atendimento aguarda nota antes de tratar a mensagem como conversa nova.
+        .route("AtendimentoAguardandoAvaliacao", move |env| {
+            let state = state_for_aguardando_avaliacao.clone();
+            Box::pin(
+                async move { handler_aguardando_avaliacao(state.atendimento.as_ref(), env).await },
+            )
+        })
+        .route("RegistrarAvaliacaoAtendimento", move |env| {
+            let state = state_for_registrar_avaliacao.clone();
+            Box::pin(async move {
+                handler_registrar_avaliacao(state.atendimento.as_ref(), state.audit.as_ref(), env)
+                    .await
             })
         })
         .route("ListarMidiasExpiradas", move |env| {
@@ -2686,6 +2703,24 @@ async fn handler_set_atendimento_status(
                     resultado.clone(),
                 )
                 .await;
+
+            // N8.5/E3: evento próprio para a solicitação da pesquisa. Sem ele não
+            // dá para responder "quantos clientes chegamos a perguntar" — que é
+            // metade da métrica de satisfação (a outra é quantos responderam).
+            if resultado
+                .get("pesquisa_solicitada")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                audit
+                    .publish(
+                        &env,
+                        "atendimento.pesquisa_solicitada",
+                        format!("pesquisa de satisfação enviada no atendimento {atendimento_id}"),
+                        serde_json::json!({ "atendimento_id": atendimento_id }),
+                    )
+                    .await;
+            }
             ok_reply(&env, "SetAtendimentoStatusReply", resultado)
         }
         // `.into()` preserva o ErrorCode: RBAC de fluxo negado não pode virar
@@ -2815,6 +2850,112 @@ async fn handler_marcar_feedback_expirado(
             "MarcarFeedbackExpiradoReply",
             serde_json::json!({ "status": "ok" }),
         ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// N8.5/E3 — o atendimento aguarda resposta da pesquisa de satisfação?
+///
+/// O worker consulta antes de tratar a mensagem do contato como conversa nova:
+/// dentro da janela, um "5" solto é a nota; fora dela, é uma pergunta.
+async fn handler_aguardando_avaliacao(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    // Mesma janela do expirador: fora dela a conversa recomeça.
+    let ttl_horas = payload_json
+        .get("ttl_horas")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(48);
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .aguardando_avaliacao(&ctx, atendimento_id, ttl_horas)
+        .await
+    {
+        Ok(aguardando) => ok_reply(
+            &env,
+            "AtendimentoAguardandoAvaliacaoReply",
+            serde_json::json!({ "aguardando": aguardando }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// N8.5/E3 — grava a nota e o comentário que o contato mandou.
+///
+/// **Auditado**: a avaliação vira métrica de operação e pode embasar decisão
+/// sobre atendente; alteração desse dado precisa de trilha. A descrição carrega
+/// só a NOTA — o comentário é texto livre do cliente (PII) e fica na coluna.
+async fn handler_registrar_avaliacao(
+    store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let nota = match payload_json.get("nota").and_then(|v| v.as_i64()) {
+        // A escala é 1..5 (v1). Nota fora dela é erro de extração, não avaliação:
+        // gravá-la contaminaria a média com valor que o cliente nunca deu.
+        Some(n) if (1..=5).contains(&n) => n as i32,
+        _ => {
+            return erro(
+                error_core::AppError::Validation("nota ausente ou fora de 1..5".into()),
+                &env,
+            )
+        }
+    };
+    let comentario = payload_json
+        .get("feedback")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .registrar_avaliacao(&ctx, atendimento_id, nota, comentario)
+        .await
+    {
+        Ok(gravou) => {
+            if gravou {
+                audit
+                    .publish(
+                        &env,
+                        "atendimento.avaliado",
+                        format!("atendimento '{atendimento_id}' avaliado com nota {nota}"),
+                        serde_json::json!({ "atendimento_id": atendimento_id, "nota": nota }),
+                    )
+                    .await;
+            }
+            ok_reply(
+                &env,
+                "RegistrarAvaliacaoAtendimentoReply",
+                serde_json::json!({ "gravado": gravou }),
+            )
+        }
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }
@@ -3767,6 +3908,11 @@ async fn handler_create_fluxo(
 ///
 /// A recusa por regra de negócio vira `Validation`, não `Database`: ela é
 /// explicável e o texto é para ser lido por quem opera.
+///
+/// `result_large_err` silenciado de propósito: os dois lados do `Result` são o
+/// mesmo `Envelope` — é o tipo do protocolo, não um erro incidental. Boxar só o
+/// `Err` deixaria a assinatura assimétrica sem ganho real.
+#[allow(clippy::result_large_err)]
 fn responder_resultado(
     env: &Envelope,
     reply: &str,
@@ -6443,6 +6589,15 @@ async fn handler_atualizar_estado_instancia(
         }
     };
 
+    // N8.5/E5: quem provocou a mudança. `consulta` = alguém abriu a tela e o
+    // status foi lido do provedor; `webhook` = o provedor avisou sozinho. Sem esta
+    // distinção, a trilha não responde se a queda foi detectada na hora ou horas
+    // depois, quando um humano finalmente olhou.
+    let origem = payload
+        .get("origem")
+        .and_then(|v| v.as_str())
+        .unwrap_or("consulta");
+
     let ctx = contexto_do_envelope(&env);
     match store.atualizar_estado(&ctx, id, connection_state).await {
         Ok(_) => {
@@ -6454,7 +6609,11 @@ async fn handler_atualizar_estado_instancia(
                         "estado da instância '{}' atualizado para '{}'",
                         id, connection_state
                     ),
-                    serde_json::json!({ "instance_id": id, "connection_state": connection_state }),
+                    serde_json::json!({
+                        "instance_id": id,
+                        "connection_state": connection_state,
+                        "origem": origem,
+                    }),
                 )
                 .await;
             ok_reply(

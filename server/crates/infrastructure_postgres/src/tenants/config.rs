@@ -16,6 +16,8 @@ struct TenantConfigRow {
     msg_fallback: Option<String>,
     msg_sem_info: Option<String>,
     msg_transferencia: Option<String>,
+    msg_pesquisa_satisfacao: Option<String>,
+    pesquisa_satisfacao_ativa: Option<bool>,
     llm_class: Option<String>,
     model: Option<String>,
     llm_temperature: Option<rust_decimal::Decimal>,
@@ -95,6 +97,7 @@ pub async fn resolve_runtime_config(
         TenantConfigRow,
         r#"SELECT dados_empresa, persona_bot, bot_agent_name,
                   msg_fallback, msg_sem_info, msg_transferencia,
+                  msg_pesquisa_satisfacao, pesquisa_satisfacao_ativa,
                   llm_class, model, llm_temperature,
                   transcription_provider, transcription_model, transcription_enabled,
                   vision_provider, vision_model,
@@ -175,6 +178,8 @@ pub async fn resolve_runtime_config(
         msg_fallback: None,
         msg_sem_info: None,
         msg_transferencia: None,
+        msg_pesquisa_satisfacao: None,
+        pesquisa_satisfacao_ativa: None,
         llm_class: None,
         model: None,
         llm_temperature: None,
@@ -201,6 +206,14 @@ pub async fn resolve_runtime_config(
         msg_fallback: fallback(tc.msg_fallback, "MSG_FALLBACK"),
         msg_sem_info: fallback(tc.msg_sem_info, "MSG_SEM_INFO"),
         msg_transferencia: fallback(tc.msg_transferencia, "MSG_TRANSFERENCIA"),
+        msg_pesquisa_satisfacao: fallback(tc.msg_pesquisa_satisfacao, "MSG_PESQUISA_SATISFACAO"),
+        // Diferente do kill-switch de transcrição, aqui o default do CoreSetting é
+        // `true` (migration 0028): pedir avaliação é o comportamento da v1, e
+        // desligá-lo por omissão apagaria a métrica de satisfação na migração.
+        pesquisa_satisfacao_ativa: fallback_bool(
+            tc.pesquisa_satisfacao_ativa,
+            "PESQUISA_SATISFACAO_ATIVA",
+        ),
         llm_class: fallback(tc.llm_class, "LLM_CLASS"),
         model: fallback(tc.model, "MODEL"),
         llm_temperature: fallback_dec(tc.llm_temperature, "LLM_TEMPERATURE"),

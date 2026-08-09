@@ -136,6 +136,8 @@ def resolve_resposta(
     final_score: float,
     similarity_threshold: float,
     msg_transferencia: str = "",
+    msg_sem_info: str = "",
+    sem_treinamento: bool = False,
 ) -> RespostaFinal:
     """Decide transferência a partir do structured output + score triádico.
 
@@ -145,6 +147,17 @@ def resolve_resposta(
     - Força transferência quando `final_score < threshold` E
       `confianca_llm < 0.5` E o LLM não indicou transferência.
     - Score baixo mas confiança alta NÃO transfere (respeita o LLM).
+
+    Args:
+        msg_sem_info: texto do tenant para "não encontrei essa informação".
+            Só substitui a resposta do LLM quando `sem_treinamento` é True E a
+            transferência foi forçada — isto é, quando o RAG não trouxe nada e o
+            próprio modelo declarou baixa confiança. Nesse ponto o texto gerado é
+            palpite sem base, e o tenant configurou justamente o que dizer no
+            lugar. Fora dessa combinação a resposta do LLM é preservada: saudação
+            e agradecimento não precisam de RAG e não podem virar "não sei".
+        sem_treinamento: True quando `dados_treinamento` chegou vazio (o
+            datasource sinaliza isso não gerando `training_vec`).
     """
     response_text = str(resposta.resposta_texto).strip()
     acao = resposta.acao_transferencia
@@ -167,6 +180,11 @@ def resolve_resposta(
     )
     if should_force_transfer:
         transfer_attendance = True
+        # Sem RAG e sem confiança: o texto do LLM é palpite. Se o tenant definiu
+        # `msg_sem_info`, é ele que o contato deve ver.
+        sem_info = (msg_sem_info or "").strip()
+        if sem_treinamento and sem_info:
+            response_text = sem_info
         aviso = (msg_transferencia or "").strip() or _MSG_TRANSFERENCIA_GENERICA
         response_text = f"{response_text}\n\n{aviso}"
 
@@ -210,6 +228,10 @@ class ResponderUsecase(
                 final_score=final_score,
                 similarity_threshold=parameters.similarity_threshold,
                 msg_transferencia=parameters.msg_transferencia,
+                msg_sem_info=parameters.msg_sem_info,
+                # `training_vec` ausente é o sinal de que o RAG não trouxe nada:
+                # o datasource só o calcula com `dados_treinamento` preenchido.
+                sem_treinamento=data.training_vec is None,
             )
         )
 

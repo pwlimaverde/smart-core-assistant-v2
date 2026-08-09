@@ -247,6 +247,33 @@ O Redis (`server/crates/infrastructure_redis/`) passou a armazenar `RuntimeConfi
 * **TLS em Produção:** Em produção (Hostinger KVM2), configurar `tls-port` no Redis e certificados TLS para a comunicação entre os serviços Rust e Python, mesmo que na mesma máquina.
 * **Sem Logs de Comandos:** Desativar o comando `MONITOR` e o log de comandos `loglevel debug` no Redis em produção, pois estes expõem os valores das chaves nos logs do Redis.
 
+### 6.1 PII transitória no Redis de cache (N8.5/E2)
+
+O buffer de agregação de rajada (`worker/src/buffer_mensagens.rs`) **grava conteúdo
+de mensagem do contato** na chave `tenant:{id}:buf:{sender}` durante a janela de
+agregação. É a primeira vez que o Redis de cache carrega PII de conversa, e não
+apenas configuração — o registro aqui existe para que ninguém trate esse Redis
+como armazenamento inócuo em auditoria futura.
+
+Mitigações aplicadas no código (todas verificáveis no módulo):
+
+* **TTL curto e obrigatório:** janela × 10, com teto de 300 s e piso de 1 s. Não
+  existe caminho que crie a chave sem `EXPIRE` — buffer órfão de worker que morreu
+  no meio da janela não pode virar PII imortal.
+* **Namespace por tenant:** a chave carrega o `tenant_id`, e o telefone do
+  remetente entra no nome da chave (não no valor) — o mesmo dado que o Redis já
+  via nas chaves de idempotência e rate limit.
+* **Conteúdo nunca sai em log:** o drain registra apenas a **contagem** de
+  mensagens agregadas. Nem o texto compilado nem o individual entram em span,
+  evento de log ou métrica.
+* **Nada de auditoria:** agregar não muda estado sensível; o que muda
+  (`mensagem.persistida`, `bot.respondeu`) já é auditado nos pontos existentes.
+
+Consequência operacional: **o Redis de cache passa a estar no escopo do direito ao
+esquecimento** (§3.1) na janela de até 5 minutos. Como o TTL é sempre menor que
+isso, o expurgo do banco não precisa de passo extra no Redis — mas um pedido de
+exclusão durante a janela deve ser considerado atendido só após o TTL vencer.
+
 ---
 
 ## 7. Check-list para o Ciclo de Desenvolvimento (Code Review Gate)

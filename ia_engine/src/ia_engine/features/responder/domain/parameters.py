@@ -51,6 +51,9 @@ class ResponderParameters(Parameters):
     bot_agent_name: str = ""
     # Mensagem de transferência do tenant; vazia cai no texto genérico.
     msg_transferencia: str = ""
+    # Mensagem do tenant para "não encontrei essa informação". Existia no banco,
+    # no painel e no RuntimeConfig lido daqui — e nunca era aplicada.
+    msg_sem_info: str = ""
     campos_coletados: tuple[CampoColetado, ...] = field(default=())
     campos_pendentes: tuple[CampoPendente, ...] = field(default=())
     # Overrides de prompt resolvidos pelo Rust (chave ausente => default do

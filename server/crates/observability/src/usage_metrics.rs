@@ -26,6 +26,20 @@ fn contador_midia() -> &'static Counter<u64> {
     })
 }
 
+/// N8.5/E1 — contador de eventos descartados na ingestão, por motivo. Existe para
+/// que o descarte seja *visível* sem depender de log: o filtro de grupo acerta
+/// silenciosamente, e sem métrica não há como distinguir "não chegou mensagem de
+/// grupo" de "o filtro comeu mensagem boa".
+fn contador_eventos_descartados() -> &'static Counter<u64> {
+    static C: OnceLock<Counter<u64>> = OnceLock::new();
+    C.get_or_init(|| {
+        global::meter("smartcore_usage")
+            .u64_counter("smartcore_webhook_evento_descartado_total")
+            .with_description("Eventos de webhook descartados na ingestão, por tenant e motivo")
+            .init()
+    })
+}
+
 /// Direção da mensagem para o contador de uso (rótulo de baixa cardinalidade).
 #[derive(Clone, Copy)]
 pub enum DirecaoMensagem {
@@ -57,6 +71,20 @@ pub fn registrar_mensagem(tenant_id: &str, direcao: DirecaoMensagem) {
 /// Incrementa o contador de arquivos de mídia armazenados para o tenant.
 pub fn registrar_midia_armazenada(tenant_id: &str) {
     contador_midia().add(1, &[KeyValue::new("tenant_id", tenant_id.to_string())]);
+}
+
+/// Incrementa o contador de eventos descartados na ingestão.
+///
+/// `motivo` precisa ser um literal de baixa cardinalidade (`"grupo"`,
+/// `"remetente_ignorado"`, …) — nunca telefone, JID ou conteúdo.
+pub fn registrar_evento_descartado(tenant_id: &str, motivo: &'static str) {
+    contador_eventos_descartados().add(
+        1,
+        &[
+            KeyValue::new("tenant_id", tenant_id.to_string()),
+            KeyValue::new("motivo", motivo),
+        ],
+    );
 }
 
 #[cfg(test)]
@@ -91,5 +119,12 @@ mod tests {
     fn registrar_midia_armazenada_nao_entra_em_panico() {
         registrar_midia_armazenada("tenant-a");
         registrar_midia_armazenada("tenant-b");
+    }
+
+    #[test]
+    fn registrar_evento_descartado_nao_entra_em_panico() {
+        registrar_evento_descartado("tenant-a", "grupo");
+        registrar_evento_descartado("tenant-a", "remetente_ignorado");
+        registrar_evento_descartado("tenant-b", "grupo");
     }
 }

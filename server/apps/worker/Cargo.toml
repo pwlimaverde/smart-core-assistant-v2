@@ -16,6 +16,7 @@ redis = { workspace = true }
 tonic = { workspace = true }
 async-trait = { workspace = true }
 sha2 = { workspace = true }
+futures-util = { workspace = true }
 
 contracts = { workspace = true }
 transport = { workspace = true }
@@ -23,6 +24,10 @@ error_core = { workspace = true }
 observability = { workspace = true }
 tracing = { workspace = true }
 domain_whatsapp = { path = "../../crates/domain_whatsapp" }
+# N8.5/E4: só pelas chaves de Redis, que são CONTRATO com o ia_engine
+# (`tenant:config:<uuid>` e o canal de invalidação) — duplicar o literal aqui
+# deixaria worker e Python divergirem em silêncio numa renomeação.
+infrastructure_redis = { path = "../../crates/infrastructure_redis" }
 ia_client = { workspace = true }
 
 [dev-dependencies]

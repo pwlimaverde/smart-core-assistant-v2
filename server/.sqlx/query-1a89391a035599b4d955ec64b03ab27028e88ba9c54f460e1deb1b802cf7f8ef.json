@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT dados_empresa, persona_bot, bot_agent_name,\n                  msg_fallback, msg_sem_info, msg_transferencia,\n                  llm_class, model, llm_temperature,\n                  transcription_provider, transcription_model, transcription_enabled,\n                  vision_provider, vision_model,\n                  embeddings_class, embeddings_model,\n                  chunk_size, chunk_overlap,\n                  similarity_threshold, vector_distance_threshold,\n                  api_keys, prompts\n           FROM tenants_tenantconfig\n           WHERE tenant_id = $1",
+  "query": "SELECT dados_empresa, persona_bot, bot_agent_name,\n                  msg_fallback, msg_sem_info, msg_transferencia,\n                  msg_pesquisa_satisfacao, pesquisa_satisfacao_ativa,\n                  llm_class, model, llm_temperature,\n                  transcription_provider, transcription_model, transcription_enabled,\n                  vision_provider, vision_model,\n                  embeddings_class, embeddings_model,\n                  chunk_size, chunk_overlap,\n                  similarity_threshold, vector_distance_threshold,\n                  api_keys, prompts\n           FROM tenants_tenantconfig\n           WHERE tenant_id = $1",
   "describe": {
     "columns": [
       {
@@ -71,6 +71,28 @@
       },
       {
         "ordinal": 6,
+        "name": "msg_pesquisa_satisfacao",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "msg_pesquisa_satisfacao"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "pesquisa_satisfacao_ativa",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "tenants_tenantconfig",
+            "name": "pesquisa_satisfacao_ativa"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
         "name": "llm_class",
         "type_info": "Varchar",
         "origin": {
@@ -81,7 +103,7 @@
         }
       },
       {
-        "ordinal": 7,
+        "ordinal": 9,
         "name": "model",
         "type_info": "Varchar",
         "origin": {
@@ -92,7 +114,7 @@
         }
       },
       {
-        "ordinal": 8,
+        "ordinal": 10,
         "name": "llm_temperature",
         "type_info": "Numeric",
         "origin": {
@@ -103,7 +125,7 @@
         }
       },
       {
-        "ordinal": 9,
+        "ordinal": 11,
         "name": "transcription_provider",
         "type_info": "Varchar",
         "origin": {
@@ -114,7 +136,7 @@
         }
       },
       {
-        "ordinal": 10,
+        "ordinal": 12,
         "name": "transcription_model",
         "type_info": "Varchar",
         "origin": {
@@ -125,7 +147,7 @@
         }
       },
       {
-        "ordinal": 11,
+        "ordinal": 13,
         "name": "transcription_enabled",
         "type_info": "Bool",
         "origin": {
@@ -136,7 +158,7 @@
         }
       },
       {
-        "ordinal": 12,
+        "ordinal": 14,
         "name": "vision_provider",
         "type_info": "Varchar",
         "origin": {
@@ -147,7 +169,7 @@
         }
       },
       {
-        "ordinal": 13,
+        "ordinal": 15,
         "name": "vision_model",
         "type_info": "Varchar",
         "origin": {
@@ -158,7 +180,7 @@
         }
       },
       {
-        "ordinal": 14,
+        "ordinal": 16,
         "name": "embeddings_class",
         "type_info": "Varchar",
         "origin": {
@@ -169,7 +191,7 @@
         }
       },
       {
-        "ordinal": 15,
+        "ordinal": 17,
         "name": "embeddings_model",
         "type_info": "Varchar",
         "origin": {
@@ -180,7 +202,7 @@
         }
       },
       {
-        "ordinal": 16,
+        "ordinal": 18,
         "name": "chunk_size",
         "type_info": "Int4",
         "origin": {
@@ -191,7 +213,7 @@
         }
       },
       {
-        "ordinal": 17,
+        "ordinal": 19,
         "name": "chunk_overlap",
         "type_info": "Int4",
         "origin": {
@@ -202,7 +224,7 @@
         }
       },
       {
-        "ordinal": 18,
+        "ordinal": 20,
         "name": "similarity_threshold",
         "type_info": "Numeric",
         "origin": {
@@ -213,7 +235,7 @@
         }
       },
       {
-        "ordinal": 19,
+        "ordinal": 21,
         "name": "vector_distance_threshold",
         "type_info": "Numeric",
         "origin": {
@@ -224,7 +246,7 @@
         }
       },
       {
-        "ordinal": 20,
+        "ordinal": 22,
         "name": "api_keys",
         "type_info": "Jsonb",
         "origin": {
@@ -235,7 +257,7 @@
         }
       },
       {
-        "ordinal": 21,
+        "ordinal": 23,
         "name": "prompts",
         "type_info": "Jsonb",
         "origin": {
@@ -272,9 +294,11 @@
       true,
       true,
       true,
+      true,
+      true,
       false,
       false
     ]
   },
-  "hash": "2d289d9b1fb4e19b64d968cb0a66b55f36d17cdcb2103801f0796cbdd9469a93"
+  "hash": "1a89391a035599b4d955ec64b03ab27028e88ba9c54f460e1deb1b802cf7f8ef"
 }
