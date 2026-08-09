@@ -81,6 +81,29 @@ pub struct OrigemMensagem {
     pub ja_entregue: bool,
 }
 
+/// N9/E1 — dados de uma mídia que o atendente enviou pelo painel.
+///
+/// Struct, e não lista de parâmetros: são sete campos, quase todos `String`, e
+/// posicionalmente seria fácil trocar `mimetype` com `nome_arquivo` sem o
+/// compilador reclamar.
+#[derive(Debug, Clone)]
+pub struct MidiaEnviada {
+    pub atendimento_id: i32,
+    /// Chave do objeto no bucket (devolvida por `autorizar_upload_midia`).
+    pub chave: String,
+    pub mimetype: String,
+    /// Nome original do arquivo. Pode conter PII (nome de cliente, nº de
+    /// contrato) — não entra em log nem em auditoria.
+    pub nome_arquivo: String,
+    pub legenda: String,
+    /// Áudio gravado na hora (push-to-talk), que o WhatsApp mostra diferente.
+    pub is_ptt: bool,
+    /// Tamanho conferido no bucket — não o que o cliente declarou.
+    pub bytes: i64,
+    /// Categoria confirmada pela inspeção de conteúdo (`image`/`audio`/…).
+    pub categoria: String,
+}
+
 /// Operações de persistência do domínio Atendimento expostas aos handlers RPC.
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
@@ -126,6 +149,45 @@ pub trait AtendimentoStore: Send + Sync {
         action_id: Option<Uuid>,
         origem: OrigemMensagem,
     ) -> Result<Mensagem, DbError>;
+
+    /// N9/E1 — autoriza um upload de mídia e devolve a **chave** do objeto.
+    ///
+    /// Responde às perguntas que só o banco sabe: o atendimento é deste tenant?
+    /// quem pede tem permissão no fluxo dele? a quota de armazenamento comporta
+    /// mais `bytes`? Não toca no bucket — quem assina a URL é o `data_storage`.
+    ///
+    /// A chave é gerada aqui (e não pelo cliente) porque ela é o identificador
+    /// do objeto: deixar o cliente escolhê-la permitiria sobrescrever a mídia de
+    /// outra conversa do mesmo tenant.
+    async fn autorizar_upload_midia(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        bytes: i64,
+    ) -> Result<String, DbError>;
+
+    /// N9/E1 — põe a mídia já conferida na conversa.
+    ///
+    /// Persiste a mensagem com o ponteiro do objeto, contabiliza o uso de
+    /// armazenamento do tenant e publica no outbox para o worker enviar ao
+    /// contato. Tudo na mesma transação: uma mensagem que aparecesse no thread
+    /// sem evento no outbox ficaria eternamente "enviando" na tela.
+    async fn enviar_midia(
+        &self,
+        ctx: &RequestContext,
+        midia: MidiaEnviada,
+        traceparent: &str,
+        action_id: Option<Uuid>,
+    ) -> Result<Mensagem, DbError>;
+
+    /// N9/E2 — mídias do atendimento, da mais recente para a mais antiga.
+    async fn listar_midias(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Mensagem>, DbError>;
 
     /// Busca ou cria um contato pelo telefone, e busca ou cria um atendimento ativo para esse contato.
     async fn resolver_atendimento_para_contato(

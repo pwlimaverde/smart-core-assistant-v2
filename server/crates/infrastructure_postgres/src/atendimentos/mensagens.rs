@@ -31,6 +31,15 @@ pub struct Mensagem {
     pub arquivo_midia: Option<String>,
     pub analise_midia: Option<String>,
     pub resumo_midia: Option<String>,
+    /// N9/E1 — metadados do anexo (migration 0029). Sem eles a tela não sabe se
+    /// monta um player de áudio, um visualizador de imagem ou um cartão de
+    /// documento; `arquivo_midia` sozinho é só uma chave opaca.
+    ///
+    /// O mimetype é o **conferido** por magic bytes, não o declarado no upload.
+    pub mimetype_midia: Option<String>,
+    /// Nome original do arquivo. Pode conter PII — nunca em log ou auditoria.
+    pub nome_arquivo_midia: Option<String>,
+    pub tamanho_midia: Option<i64>,
     pub gerado_por_ia: bool,
     pub mensagem_citada_id: Option<i32>,
     pub quoted_preview: Option<serde_json::Value>,
@@ -258,7 +267,8 @@ impl MensagemRepository for PostgresMensagemRepository {
                          timestamp, message_id_whatsapp, metadados, respondida, lido,
                          resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
                          arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,
-                         quoted_preview, status_envio, data_entregue, data_lida"#,
+                         quoted_preview, status_envio, data_entregue, data_lida,
+                         mimetype_midia, nome_arquivo_midia, tamanho_midia"#,
         )
         .bind(ctx.tenant_id)
         .bind(nova.atendimento_id)
@@ -287,7 +297,8 @@ impl MensagemRepository for PostgresMensagemRepository {
                       timestamp, message_id_whatsapp, metadados, respondida, lido,
                       resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
                       arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,
-                      quoted_preview, status_envio, data_entregue, data_lida
+                      quoted_preview, status_envio, data_entregue, data_lida,
+                      mimetype_midia, nome_arquivo_midia, tamanho_midia
                FROM oraculo_mensagem
                WHERE tenant_id = $1 AND message_id_whatsapp = $2
                ORDER BY id DESC
@@ -316,7 +327,8 @@ impl MensagemRepository for PostgresMensagemRepository {
                       timestamp, message_id_whatsapp, metadados, respondida, lido,
                       resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
                       arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,
-                      quoted_preview, status_envio, data_entregue, data_lida
+                      quoted_preview, status_envio, data_entregue, data_lida,
+                      mimetype_midia, nome_arquivo_midia, tamanho_midia
                FROM oraculo_mensagem
                WHERE tenant_id = $1 AND atendimento_id = $2
                ORDER BY timestamp ASC, id ASC
@@ -414,7 +426,8 @@ impl MensagemRepository for PostgresMensagemRepository {
                       m.timestamp, m.message_id_whatsapp, m.metadados, m.respondida, m.lido,
                       m.resposta_bot, m.intent_detectado, m.entidades_extraidas, m.confianca_resposta,
                       m.arquivo_midia, m.analise_midia, m.resumo_midia, m.gerado_por_ia, m.mensagem_citada_id,
-                      m.quoted_preview, m.status_envio, m.data_entregue, m.data_lida
+                      m.quoted_preview, m.status_envio, m.data_entregue, m.data_lida,
+                      m.mimetype_midia, m.nome_arquivo_midia, m.tamanho_midia
                FROM oraculo_mensagem m
                LEFT JOIN tenants_subscription s ON s.tenant_id = m.tenant_id
                LEFT JOIN tenants_plan p ON p.id = s.plan_id

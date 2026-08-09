@@ -564,6 +564,9 @@ async fn main() -> anyhow::Result<()> {
     let state_for_marcar_feedback_expirado = state_clone.clone();
     let state_for_aguardando_avaliacao = state_clone.clone();
     let state_for_registrar_avaliacao = state_clone.clone();
+    let state_for_autorizar_upload_midia = state_clone.clone();
+    let state_for_enviar_midia = state_clone.clone();
+    let state_for_listar_midias = state_clone.clone();
     let state_for_listar_midias_expiradas = state_clone.clone();
     let state_for_marcar_midia_purgada = state_clone.clone();
     let state_for_resolver_destino_envio = state_clone.clone();
@@ -666,6 +669,31 @@ async fn main() -> anyhow::Result<()> {
             let state = state_for_marcar_feedback_expirado.clone();
             Box::pin(async move {
                 handler_marcar_feedback_expirado(state.atendimento.as_ref(), env).await
+            })
+        })
+        // N9/E1 — mídia na conversa: autorizar (banco), enviar (banco) e listar.
+        // A assinatura da URL fica no data_storage; a borda compõe os dois.
+        .route("AutorizarUploadMidia", move |env| {
+            let state = state_for_autorizar_upload_midia.clone();
+            Box::pin(async move {
+                handler_autorizar_upload_midia(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("EnviarMidiaAtendimento", move |env| {
+            let state = state_for_enviar_midia.clone();
+            Box::pin(async move {
+                handler_enviar_midia_atendimento(
+                    state.atendimento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("ListarMidiasAtendimento", move |env| {
+            let state = state_for_listar_midias.clone();
+            Box::pin(async move {
+                handler_listar_midias_atendimento(state.atendimento.as_ref(), env).await
             })
         })
         // N8.5/E3 — ciclo da pesquisa de satisfação: o worker pergunta se o
@@ -2851,6 +2879,204 @@ async fn handler_marcar_feedback_expirado(
             serde_json::json!({ "status": "ok" }),
         ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// N9/E1 — passo 1: o atendimento aceita esta mídia? Devolve a chave do objeto.
+///
+/// Não toca no bucket: só responde o que o banco sabe (atendimento do tenant,
+/// permissão de fluxo, quota). A assinatura da URL é do `data_storage`, e quem
+/// combina os dois é a borda.
+async fn handler_autorizar_upload_midia(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let atendimento_id = match payload.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let bytes = payload.get("bytes").and_then(|v| v.as_i64()).unwrap_or(0);
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .autorizar_upload_midia(&ctx, atendimento_id, bytes)
+        .await
+    {
+        Ok(chave) => ok_reply(
+            &env,
+            "AutorizarUploadMidiaReply",
+            serde_json::json!({ "chave": chave }),
+        ),
+        // `.into()` preserva o ErrorCode: quota estourada e RBAC negado não podem
+        // virar erro de banco genérico na borda — a tela precisa distinguir.
+        Err(err) => erro(err.into(), &env),
+    }
+}
+
+/// N9/E1 — passo 3: põe na conversa a mídia já conferida.
+///
+/// **Auditado**: enviar arquivo ao contato é ação de operador com efeito externo
+/// irreversível (o cliente recebe). A trilha registra quem, para qual
+/// atendimento, tipo e tamanho — **nunca** o nome do arquivo (pode conter PII)
+/// nem a legenda.
+async fn handler_enviar_midia_atendimento(
+    store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let campo_texto = |nome: &str| {
+        payload
+            .get(nome)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+
+    let atendimento_id = match payload.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let chave = campo_texto("chave");
+    if chave.is_empty() {
+        return erro(
+            error_core::AppError::Validation("chave do objeto ausente".into()),
+            &env,
+        );
+    }
+    let categoria = campo_texto("categoria");
+    if categoria.is_empty() {
+        return erro(
+            // A categoria vem da conferência de conteúdo; sem ela, este handler
+            // estaria confiando de novo no que o cliente declarou.
+            error_core::AppError::Validation(
+                "categoria ausente (mídia não passou pela conferência)".into(),
+            ),
+            &env,
+        );
+    }
+    let bytes = payload.get("bytes").and_then(|v| v.as_i64()).unwrap_or(0);
+
+    let midia = ports::atendimento::MidiaEnviada {
+        atendimento_id,
+        chave,
+        mimetype: campo_texto("mimetype"),
+        nome_arquivo: campo_texto("nome_arquivo"),
+        legenda: campo_texto("legenda"),
+        is_ptt: payload
+            .get("is_ptt")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        bytes,
+        categoria: categoria.clone(),
+    };
+
+    let action_id = extrair_action_id_opcional(&payload);
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .enviar_midia(&ctx, midia, &env.traceparent, action_id)
+        .await
+    {
+        Ok(msg) => {
+            audit
+                .publish(
+                    &env,
+                    "mensagem.midia_enviada",
+                    format!(
+                        "mídia ({categoria}, {bytes} bytes) enviada no atendimento {atendimento_id}"
+                    ),
+                    serde_json::json!({
+                        "atendimento_id": atendimento_id,
+                        "mensagem_id": msg.id,
+                        "categoria": categoria,
+                        "bytes": bytes,
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "EnviarMidiaAtendimentoReply",
+                serde_json::json!({ "message_id": msg.id }),
+            )
+        }
+        Err(err) => erro(err.into(), &env),
+    }
+}
+
+/// N9/E2 — mídias do atendimento para a galeria da ficha.
+///
+/// Devolve os ponteiros e metadados; **não** assina URLs — quem faz isso é o
+/// `data_storage`, e a borda compõe. Assinar aqui exigiria que o dono do banco
+/// falasse S3.
+async fn handler_listar_midias_atendimento(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let atendimento_id = match payload.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let limit = payload
+        .get("limit")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(50)
+        .clamp(1, 200);
+    let offset = payload
+        .get("offset")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0)
+        .max(0);
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .listar_midias(&ctx, atendimento_id, limit, offset)
+        .await
+    {
+        Ok(msgs) => {
+            let midias: Vec<serde_json::Value> = msgs
+                .iter()
+                .map(|m| {
+                    serde_json::json!({
+                        "mensagem_id": m.id,
+                        "chave": m.arquivo_midia,
+                        "mimetype": m.mimetype_midia,
+                        "filename": m.nome_arquivo_midia,
+                        "size_bytes": m.tamanho_midia,
+                        "timestamp": m.timestamp.timestamp_millis(),
+                    })
+                })
+                .collect();
+            ok_reply(
+                &env,
+                "ListarMidiasAtendimentoReply",
+                serde_json::json!({ "midias": midias }),
+            )
+        }
+        Err(err) => erro(err.into(), &env),
     }
 }
 
@@ -7321,6 +7547,9 @@ mod tests_atendimento_cliente_unit {
             entidades_extraidas: serde_json::json!({}),
             confianca_resposta: None,
             arquivo_midia: None,
+            mimetype_midia: None,
+            nome_arquivo_midia: None,
+            tamanho_midia: None,
             analise_midia: None,
             resumo_midia: None,
             gerado_por_ia: false,

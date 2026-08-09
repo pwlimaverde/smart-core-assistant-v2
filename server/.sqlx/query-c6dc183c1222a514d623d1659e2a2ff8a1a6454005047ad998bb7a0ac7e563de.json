@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, tenant_id, atendimento_id, tipo, conteudo, remetente,\n                      timestamp, message_id_whatsapp, metadados, respondida, lido,\n                      resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,\n                      arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,\n                      quoted_preview, status_envio, data_entregue, data_lida\n               FROM oraculo_mensagem\n               WHERE tenant_id = $1 AND atendimento_id = $2\n               ORDER BY timestamp ASC, id ASC\n               LIMIT $3 OFFSET $4",
+  "query": "SELECT id, tenant_id, atendimento_id, tipo, conteudo, remetente,\n                      timestamp, message_id_whatsapp, metadados, respondida, lido,\n                      resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,\n                      arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,\n                      quoted_preview, status_envio, data_entregue, data_lida,\n                      mimetype_midia, nome_arquivo_midia, tamanho_midia\n               FROM oraculo_mensagem\n               WHERE tenant_id = $1 AND atendimento_id = $2\n               ORDER BY timestamp ASC, id ASC\n               LIMIT $3 OFFSET $4",
   "describe": {
     "columns": [
       {
@@ -266,6 +266,39 @@
             "name": "data_lida"
           }
         }
+      },
+      {
+        "ordinal": 24,
+        "name": "mimetype_midia",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "mimetype_midia"
+          }
+        }
+      },
+      {
+        "ordinal": 25,
+        "name": "nome_arquivo_midia",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "nome_arquivo_midia"
+          }
+        }
+      },
+      {
+        "ordinal": 26,
+        "name": "tamanho_midia",
+        "type_info": "Int8",
+        "origin": {
+          "Table": {
+            "table": "oraculo_mensagem",
+            "name": "tamanho_midia"
+          }
+        }
       }
     ],
     "parameters": {
@@ -300,8 +333,11 @@
       true,
       false,
       true,
+      true,
+      true,
+      true,
       true
     ]
   },
-  "hash": "de242ce53bf3f11fa580ac99dc5b30e08c2a98398cbad600c0eef12cbf894d78"
+  "hash": "c6dc183c1222a514d623d1659e2a2ff8a1a6454005047ad998bb7a0ac7e563de"
 }

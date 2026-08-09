@@ -33,6 +33,7 @@ use infrastructure_postgres::operacional::fluxos::{
 use infrastructure_postgres::{run_in_tenant_transaction, DbError, RequestContext};
 use uuid::Uuid;
 
+use crate::ports::atendimento::MidiaEnviada;
 use crate::ports::{
     AtendimentoStore, CampoColetadoDto, CampoPendenteDto, CamposAtendimentoDto, OrigemMensagem,
     TicketKanbanOutcome, TransferenciaFluxoOutcome,
@@ -375,6 +376,250 @@ impl AtendimentoStore for PgAtendimentoStore {
             }
 
             Ok((msg, tx))
+        })
+        .await
+    }
+
+    /// `skip_all`: `bytes` entra por campo; nada mais desta chamada é seguro
+    /// logar (a chave devolvida identifica o objeto do tenant).
+    #[tracing::instrument(
+        skip_all,
+        fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, bytes = bytes)
+    )]
+    async fn autorizar_upload_midia(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        bytes: i64,
+    ) -> Result<String, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let pool = self.pool.clone();
+        run_in_tenant_transaction(&pool, tenant_id, move |mut tx| async move {
+            // O atendimento tem de existir NESTE tenant. A RLS já isola, então
+            // "não encontrado" cobre também "é de outro tenant" — e é o que deve
+            // ser dito de volta: confirmar a existência de um id alheio já
+            // vazaria informação.
+            let atendimento = PostgresAtendimentoRepository
+                .buscar_por_id(&mut tx, &ctx, atendimento_id)
+                .await?
+                .ok_or(DbError::NotFound)?;
+
+            // Mesmo RBAC fino do arrasto: quem não pode mexer no cartão não
+            // manda arquivo na conversa dele.
+            if let Some(fluxo_id) = atendimento.fluxo_atendimento_id {
+                ctx.exigir_fluxo(fluxo_id)?;
+            }
+
+            // Quota de armazenamento (N7.1). Diferente do resto do sistema, aqui
+            // ela MORDE: o guard nasceu log-only para observação, mas deixar o
+            // upload passar da quota significa pagar armazenamento que o plano
+            // não cobre, num caminho que o próprio tenant dispara à vontade.
+            let uso: Option<(i64, i64)> = sqlx::query_as(
+                r#"SELECT COALESCE(u.total_bytes, 0), COALESCE(p.max_storage_bytes, 0)
+                   FROM tenants_tenant t
+                   LEFT JOIN tenants_storage_usage u ON u.tenant_id = t.id
+                   LEFT JOIN tenants_subscription s ON s.tenant_id = t.id
+                   LEFT JOIN tenants_plan p ON p.id = s.plan_id
+                   WHERE t.id = $1"#,
+            )
+            .bind(tenant_id)
+            .fetch_optional(&mut *tx)
+            .await
+            // A coluna de limite pode não existir em base antiga: tratar a falha
+            // da consulta como "sem limite conhecido" evita bloquear o envio por
+            // um detalhe de esquema.
+            .unwrap_or(None);
+
+            if let Some((usado, limite)) = uso {
+                // Limite 0 = plano sem teto declarado.
+                if limite > 0 && usado + bytes > limite {
+                    return Err(DbError::ConfigError(
+                        "limite de armazenamento do plano atingido".to_string(),
+                    ));
+                }
+            }
+
+            // A chave é do servidor, nunca do cliente: deixá-lo escolher
+            // permitiria sobrescrever a mídia de outra conversa do mesmo tenant.
+            // O `data_storage` prefixa o tenant, então ela não repete aqui.
+            let chave = format!("outbound/{}/{}", atendimento_id, Uuid::now_v7());
+            Ok((chave, tx))
+        })
+        .await
+    }
+
+    /// `skip_all`: legenda e nome do arquivo são conteúdo do usuário.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            tenant_id = %ctx.tenant_id,
+            atendimento_id = midia.atendimento_id,
+            categoria = %midia.categoria,
+            bytes = midia.bytes
+        )
+    )]
+    async fn enviar_midia(
+        &self,
+        ctx: &RequestContext,
+        midia: MidiaEnviada,
+        traceparent: &str,
+        action_id: Option<Uuid>,
+    ) -> Result<Mensagem, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let traceparent = traceparent.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, move |mut tx| async move {
+            // Mesmo dedupe do envio de texto (N7.2): reenviar o mesmo action_id
+            // devolve a mensagem já criada em vez de duplicar o anexo no chat.
+            if let Some(action_id) = action_id {
+                if let Some(resultado) =
+                    idempotencia::buscar_acao_aplicada(&mut tx, tenant_id, action_id).await?
+                {
+                    let msg: Mensagem = serde_json::from_value(resultado).map_err(|e| {
+                        DbError::ConfigError(format!("resultado idempotente corrompido: {e}"))
+                    })?;
+                    return Ok((msg, tx));
+                }
+            }
+
+            // O tipo segue o vocabulário do WhatsApp, que é o que o worker manda
+            // adiante e o que a v1 gravava — não uma taxonomia nossa.
+            let tipo = match midia.categoria.as_str() {
+                "image" => "imageMessage",
+                "audio" if midia.is_ptt => "audioMessage",
+                "audio" => "audioMessage",
+                "video" => "videoMessage",
+                _ => "documentMessage",
+            };
+
+            let msg = PostgresMensagemRepository
+                .criar(
+                    &mut tx,
+                    &ctx,
+                    infrastructure_postgres::atendimentos::mensagens::NovaMensagem {
+                        atendimento_id: midia.atendimento_id,
+                        tipo,
+                        // A legenda é o texto da bolha; sem ela, o nome do
+                        // arquivo é o que o atendente vê no lugar do vazio.
+                        conteudo: if midia.legenda.trim().is_empty() {
+                            &midia.nome_arquivo
+                        } else {
+                            &midia.legenda
+                        },
+                        remetente: "atendente",
+                        message_id_whatsapp: None,
+                        mensagem_citada_id: None,
+                        // Ainda não passou pelo WhatsApp: é o worker que envia.
+                        ja_entregue: false,
+                    },
+                )
+                .await?;
+
+            // Ponteiro do objeto + metadados que a tela precisa para montar o
+            // player sem baixar o arquivo.
+            sqlx::query(
+                r#"UPDATE oraculo_mensagem
+                   SET arquivo_midia = $3,
+                       mimetype_midia = $4,
+                       nome_arquivo_midia = $5,
+                       tamanho_midia = $6
+                   WHERE tenant_id = $1 AND id = $2"#,
+            )
+            .bind(tenant_id)
+            .bind(msg.id)
+            .bind(&midia.chave)
+            .bind(&midia.mimetype)
+            .bind(&midia.nome_arquivo)
+            .bind(midia.bytes)
+            .execute(&mut *tx)
+            .await?;
+
+            PostgresAtendimentoRepository
+                .touch_last_message(&mut tx, &ctx, midia.atendimento_id)
+                .await?;
+
+            // Contabilidade de armazenamento na MESMA transação da mensagem: se
+            // fosse depois, uma falha entre as duas deixaria bytes no bucket que
+            // o tenant nunca pagaria.
+            sqlx::query(
+                r#"INSERT INTO tenants_storage_usage (tenant_id, total_bytes)
+                   VALUES ($1, $2)
+                   ON CONFLICT (tenant_id)
+                   DO UPDATE SET total_bytes = tenants_storage_usage.total_bytes + $2,
+                                 updated_at = NOW()"#,
+            )
+            .bind(tenant_id)
+            .bind(midia.bytes)
+            .execute(&mut *tx)
+            .await?;
+
+            let evento = serde_json::json!({
+                "message_id": msg.id.to_string(),
+                "sender_id": msg.remetente,
+                "content": msg.conteudo,
+                "timestamp": msg.timestamp.timestamp_millis(),
+                // O worker precisa saber que é mídia para chamar SendWhatsappMedia
+                // em vez de SendWhatsappMessage.
+                "midia": {
+                    "chave": midia.chave,
+                    "mimetype": midia.mimetype,
+                    "categoria": midia.categoria,
+                    "nome_arquivo": midia.nome_arquivo,
+                    "is_ptt": midia.is_ptt,
+                },
+            });
+            sqlx::query(
+                "INSERT INTO outbox (tenant_id, event_type, payload, traceparent) \
+                 VALUES ($1, $2, $3, $4)",
+            )
+            .bind(tenant_id)
+            .bind("message.persisted")
+            .bind(serde_json::to_vec(&evento).map_err(|e| DbError::ConfigError(e.to_string()))?)
+            .bind(&traceparent)
+            .execute(&mut *tx)
+            .await?;
+
+            if let Some(action_id) = action_id {
+                let resultado =
+                    serde_json::to_value(&msg).map_err(|e| DbError::ConfigError(e.to_string()))?;
+                idempotencia::registrar_acao_aplicada(&mut tx, tenant_id, action_id, &resultado)
+                    .await?;
+            }
+
+            Ok((msg, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn listar_midias(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Mensagem>, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, move |mut tx| async move {
+            let rows = sqlx::query_as::<_, Mensagem>(
+                r#"SELECT * FROM oraculo_mensagem
+                   WHERE tenant_id = $1 AND atendimento_id = $2
+                     AND arquivo_midia IS NOT NULL
+                     -- Mídia purgada pela retenção continua com o ponteiro, mas o
+                     -- objeto não existe mais: mostrá-la daria um player quebrado.
+                     AND midia_purgada_em IS NULL
+                   ORDER BY timestamp DESC
+                   LIMIT $3 OFFSET $4"#,
+            )
+            .bind(tenant_id)
+            .bind(atendimento_id)
+            .bind(limit)
+            .bind(offset)
+            .fetch_all(&mut *tx)
+            .await?;
+            Ok((rows, tx))
         })
         .await
     }
