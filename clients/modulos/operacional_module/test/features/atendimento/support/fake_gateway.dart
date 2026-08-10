@@ -8,6 +8,7 @@ import 'package:operacional_module/src/features/atendimento/domain/model/atendim
 import 'package:operacional_module/src/features/atendimento/domain/model/atendimento_resumo.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/mensagem_thread.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/ficha.dart';
+import 'package:operacional_module/src/features/atendimento/domain/model/midia_mensagem.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/quadro.dart';
 import 'package:operacional_module/src/features/atendimento/domain/streams/atendimento_evento_stream.dart';
 import 'package:operacional_module/src/features/atendimento/domain/usecases/atendimento_usecases.dart';
@@ -111,6 +112,44 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
     if (erroSend != null) throw erroSend!;
     return messageId;
   }
+
+  /// N9/E1 — registra o que a tela pediu para enviar, sem tocar em rede.
+  int chamadasEnviarMidia = 0;
+  String? mimetypeEnviado;
+  int bytesEnviados = 0;
+  Object? erroEnviarMidia;
+
+  /// Progresso reportado ao chamador, para o teste verificar que a barra chega
+  /// ao fim (e não fica pendurada em 0).
+  final List<double> progressosReportados = [];
+
+  List<MidiaMensagem> midias = const [];
+
+  @override
+  Future<int> enviarMidia({
+    required int atendimentoId,
+    required String nomeArquivo,
+    required String mimetype,
+    required List<int> bytes,
+    String legenda = '',
+    bool ehPtt = false,
+    void Function(double progresso)? aoProgredir,
+  }) async {
+    chamadasEnviarMidia++;
+    mimetypeEnviado = mimetype;
+    bytesEnviados = bytes.length;
+    aoProgredir?.call(0);
+    if (erroEnviarMidia != null) throw erroEnviarMidia!;
+    aoProgredir?.call(1);
+    return messageId;
+  }
+
+  @override
+  Future<List<MidiaMensagem>> listarMidias({
+    required int atendimentoId,
+    int limit = 50,
+    int offset = 0,
+  }) async => midias;
 
   @override
   Future<void> setAtendimentoStatus({

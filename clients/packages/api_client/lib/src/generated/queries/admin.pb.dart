@@ -6045,6 +6045,138 @@ class ListAtendimentosResponse extends $pb.GeneratedMessage {
   $pb.PbList<AtendimentoResumo> get atendimentos => $_getList(0);
 }
 
+/// Mídia anexada a uma mensagem da thread (N9/E2).
+///
+/// A `url_assinada` é gerada NO MOMENTO da leitura da thread, com TTL curto. Não
+/// é URL permanente nem proxy pelo backend: presign curto é o que o R2 faz bem, e
+/// virar CDN não é papel do servidor.
+class MidiaMensagem extends $pb.GeneratedMessage {
+  factory MidiaMensagem({
+    $core.String? kind,
+    $core.String? urlAssinada,
+    $core.String? mimetype,
+    $core.String? filename,
+    $fixnum.Int64? sizeBytes,
+    $core.int? seconds,
+    $core.bool? isPtt,
+  }) {
+    final result = create();
+    if (kind != null) result.kind = kind;
+    if (urlAssinada != null) result.urlAssinada = urlAssinada;
+    if (mimetype != null) result.mimetype = mimetype;
+    if (filename != null) result.filename = filename;
+    if (sizeBytes != null) result.sizeBytes = sizeBytes;
+    if (seconds != null) result.seconds = seconds;
+    if (isPtt != null) result.isPtt = isPtt;
+    return result;
+  }
+
+  MidiaMensagem._();
+
+  factory MidiaMensagem.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MidiaMensagem.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MidiaMensagem',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'kind')
+    ..aOS(2, _omitFieldNames ? '' : 'urlAssinada')
+    ..aOS(3, _omitFieldNames ? '' : 'mimetype')
+    ..aOS(4, _omitFieldNames ? '' : 'filename')
+    ..aInt64(5, _omitFieldNames ? '' : 'sizeBytes')
+    ..aI(6, _omitFieldNames ? '' : 'seconds')
+    ..aOB(7, _omitFieldNames ? '' : 'isPtt')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MidiaMensagem clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MidiaMensagem copyWith(void Function(MidiaMensagem) updates) =>
+      super.copyWith((message) => updates(message as MidiaMensagem))
+          as MidiaMensagem;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MidiaMensagem create() => MidiaMensagem._();
+  @$core.override
+  MidiaMensagem createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MidiaMensagem getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MidiaMensagem>(create);
+  static MidiaMensagem? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get kind => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set kind($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasKind() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearKind() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get urlAssinada => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set urlAssinada($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasUrlAssinada() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearUrlAssinada() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get mimetype => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set mimetype($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasMimetype() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearMimetype() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get filename => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set filename($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasFilename() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearFilename() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $fixnum.Int64 get sizeBytes => $_getI64(4);
+  @$pb.TagNumber(5)
+  set sizeBytes($fixnum.Int64 value) => $_setInt64(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasSizeBytes() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearSizeBytes() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.int get seconds => $_getIZ(5);
+  @$pb.TagNumber(6)
+  set seconds($core.int value) => $_setSignedInt32(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasSeconds() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearSeconds() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $core.bool get isPtt => $_getBF(6);
+  @$pb.TagNumber(7)
+  set isPtt($core.bool value) => $_setBool(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasIsPtt() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearIsPtt() => $_clearField(7);
+}
+
 class MensagemThread extends $pb.GeneratedMessage {
   factory MensagemThread({
     $core.int? id,
@@ -6056,6 +6188,12 @@ class MensagemThread extends $pb.GeneratedMessage {
     $core.String? statusEnvio,
     $core.bool? geradoPorIa,
     $core.String? resumoMidia,
+    MidiaMensagem? midia,
+    $fixnum.Int64? dataEntregue,
+    $fixnum.Int64? dataLida,
+    $core.int? mensagemCitadaId,
+    $core.String? citadaRemetente,
+    $core.String? citadaPreview,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -6067,6 +6205,12 @@ class MensagemThread extends $pb.GeneratedMessage {
     if (statusEnvio != null) result.statusEnvio = statusEnvio;
     if (geradoPorIa != null) result.geradoPorIa = geradoPorIa;
     if (resumoMidia != null) result.resumoMidia = resumoMidia;
+    if (midia != null) result.midia = midia;
+    if (dataEntregue != null) result.dataEntregue = dataEntregue;
+    if (dataLida != null) result.dataLida = dataLida;
+    if (mensagemCitadaId != null) result.mensagemCitadaId = mensagemCitadaId;
+    if (citadaRemetente != null) result.citadaRemetente = citadaRemetente;
+    if (citadaPreview != null) result.citadaPreview = citadaPreview;
     return result;
   }
 
@@ -6093,6 +6237,13 @@ class MensagemThread extends $pb.GeneratedMessage {
     ..aOS(7, _omitFieldNames ? '' : 'statusEnvio')
     ..aOB(8, _omitFieldNames ? '' : 'geradoPorIa')
     ..aOS(9, _omitFieldNames ? '' : 'resumoMidia')
+    ..aOM<MidiaMensagem>(10, _omitFieldNames ? '' : 'midia',
+        subBuilder: MidiaMensagem.create)
+    ..aInt64(11, _omitFieldNames ? '' : 'dataEntregue')
+    ..aInt64(12, _omitFieldNames ? '' : 'dataLida')
+    ..aI(13, _omitFieldNames ? '' : 'mensagemCitadaId')
+    ..aOS(14, _omitFieldNames ? '' : 'citadaRemetente')
+    ..aOS(15, _omitFieldNames ? '' : 'citadaPreview')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -6194,6 +6345,66 @@ class MensagemThread extends $pb.GeneratedMessage {
   $core.bool hasResumoMidia() => $_has(8);
   @$pb.TagNumber(9)
   void clearResumoMidia() => $_clearField(9);
+
+  /// N9/E2: presente só quando a mensagem tem mídia.
+  @$pb.TagNumber(10)
+  MidiaMensagem get midia => $_getN(9);
+  @$pb.TagNumber(10)
+  set midia(MidiaMensagem value) => $_setField(10, value);
+  @$pb.TagNumber(10)
+  $core.bool hasMidia() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearMidia() => $_clearField(10);
+  @$pb.TagNumber(10)
+  MidiaMensagem ensureMidia() => $_ensure(9);
+
+  /// N9/E7: ticks de entrega e leitura. As colunas existem desde a 0006 e nunca
+  /// foram expostas — sem elas a bolha não distingue "enviado" de "lido".
+  @$pb.TagNumber(11)
+  $fixnum.Int64 get dataEntregue => $_getI64(10);
+  @$pb.TagNumber(11)
+  set dataEntregue($fixnum.Int64 value) => $_setInt64(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasDataEntregue() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearDataEntregue() => $_clearField(11);
+
+  @$pb.TagNumber(12)
+  $fixnum.Int64 get dataLida => $_getI64(11);
+  @$pb.TagNumber(12)
+  set dataLida($fixnum.Int64 value) => $_setInt64(11, value);
+  @$pb.TagNumber(12)
+  $core.bool hasDataLida() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearDataLida() => $_clearField(12);
+
+  /// N9/E6: citação (responder mensagem). Colunas existentes desde a 0006.
+  @$pb.TagNumber(13)
+  $core.int get mensagemCitadaId => $_getIZ(12);
+  @$pb.TagNumber(13)
+  set mensagemCitadaId($core.int value) => $_setSignedInt32(12, value);
+  @$pb.TagNumber(13)
+  $core.bool hasMensagemCitadaId() => $_has(12);
+  @$pb.TagNumber(13)
+  void clearMensagemCitadaId() => $_clearField(13);
+
+  @$pb.TagNumber(14)
+  $core.String get citadaRemetente => $_getSZ(13);
+  @$pb.TagNumber(14)
+  set citadaRemetente($core.String value) => $_setString(13, value);
+  @$pb.TagNumber(14)
+  $core.bool hasCitadaRemetente() => $_has(13);
+  @$pb.TagNumber(14)
+  void clearCitadaRemetente() => $_clearField(14);
+
+  @$pb.TagNumber(15)
+  $core.String get citadaPreview => $_getSZ(14);
+  @$pb.TagNumber(15)
+  set citadaPreview($core.String value) => $_setString(14, value);
+  @$pb.TagNumber(15)
+  $core.bool hasCitadaPreview() => $_has(14);
+  @$pb.TagNumber(15)
+  void clearCitadaPreview() => $_clearField(15);
 }
 
 class GetThreadRequest extends $pb.GeneratedMessage {
@@ -6656,12 +6867,14 @@ class SendOutboundMessageRequest extends $pb.GeneratedMessage {
     $core.String? conteudo,
     $core.String? tipo,
     $core.String? actionId,
+    $core.int? mensagemCitadaId,
   }) {
     final result = create();
     if (atendimentoId != null) result.atendimentoId = atendimentoId;
     if (conteudo != null) result.conteudo = conteudo;
     if (tipo != null) result.tipo = tipo;
     if (actionId != null) result.actionId = actionId;
+    if (mensagemCitadaId != null) result.mensagemCitadaId = mensagemCitadaId;
     return result;
   }
 
@@ -6683,6 +6896,7 @@ class SendOutboundMessageRequest extends $pb.GeneratedMessage {
     ..aOS(2, _omitFieldNames ? '' : 'conteudo')
     ..aOS(3, _omitFieldNames ? '' : 'tipo')
     ..aOS(4, _omitFieldNames ? '' : 'actionId')
+    ..aI(5, _omitFieldNames ? '' : 'mensagemCitadaId')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -6743,6 +6957,16 @@ class SendOutboundMessageRequest extends $pb.GeneratedMessage {
   $core.bool hasActionId() => $_has(3);
   @$pb.TagNumber(4)
   void clearActionId() => $_clearField(4);
+
+  /// N9/E6: responder citando outra mensagem da mesma thread.
+  @$pb.TagNumber(5)
+  $core.int get mensagemCitadaId => $_getIZ(4);
+  @$pb.TagNumber(5)
+  set mensagemCitadaId($core.int value) => $_setSignedInt32(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasMensagemCitadaId() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearMensagemCitadaId() => $_clearField(5);
 }
 
 class SendOutboundMessageResponse extends $pb.GeneratedMessage {
@@ -6801,6 +7025,525 @@ class SendOutboundMessageResponse extends $pb.GeneratedMessage {
   $core.bool hasMessageId() => $_has(0);
   @$pb.TagNumber(1)
   void clearMessageId() => $_clearField(1);
+}
+
+/// Passo 1 do envio: pedir onde subir. O binário NÃO trafega pelo gRPC-Web.
+class SolicitarUploadMidiaRequest extends $pb.GeneratedMessage {
+  factory SolicitarUploadMidiaRequest({
+    $core.int? atendimentoId,
+    $core.String? nomeArquivo,
+    $core.String? mimetype,
+    $fixnum.Int64? bytes,
+  }) {
+    final result = create();
+    if (atendimentoId != null) result.atendimentoId = atendimentoId;
+    if (nomeArquivo != null) result.nomeArquivo = nomeArquivo;
+    if (mimetype != null) result.mimetype = mimetype;
+    if (bytes != null) result.bytes = bytes;
+    return result;
+  }
+
+  SolicitarUploadMidiaRequest._();
+
+  factory SolicitarUploadMidiaRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SolicitarUploadMidiaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SolicitarUploadMidiaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'atendimentoId')
+    ..aOS(2, _omitFieldNames ? '' : 'nomeArquivo')
+    ..aOS(3, _omitFieldNames ? '' : 'mimetype')
+    ..aInt64(4, _omitFieldNames ? '' : 'bytes')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SolicitarUploadMidiaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SolicitarUploadMidiaRequest copyWith(
+          void Function(SolicitarUploadMidiaRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as SolicitarUploadMidiaRequest))
+          as SolicitarUploadMidiaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SolicitarUploadMidiaRequest create() =>
+      SolicitarUploadMidiaRequest._();
+  @$core.override
+  SolicitarUploadMidiaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SolicitarUploadMidiaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SolicitarUploadMidiaRequest>(create);
+  static SolicitarUploadMidiaRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get atendimentoId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set atendimentoId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAtendimentoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAtendimentoId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nomeArquivo => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nomeArquivo($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNomeArquivo() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNomeArquivo() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get mimetype => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set mimetype($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasMimetype() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearMimetype() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $fixnum.Int64 get bytes => $_getI64(3);
+  @$pb.TagNumber(4)
+  set bytes($fixnum.Int64 value) => $_setInt64(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasBytes() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearBytes() => $_clearField(4);
+}
+
+class SolicitarUploadMidiaResponse extends $pb.GeneratedMessage {
+  factory SolicitarUploadMidiaResponse({
+    $core.String? urlUpload,
+    $core.String? chave,
+    $core.String? contentType,
+    $fixnum.Int64? expiraEmSegundos,
+  }) {
+    final result = create();
+    if (urlUpload != null) result.urlUpload = urlUpload;
+    if (chave != null) result.chave = chave;
+    if (contentType != null) result.contentType = contentType;
+    if (expiraEmSegundos != null) result.expiraEmSegundos = expiraEmSegundos;
+    return result;
+  }
+
+  SolicitarUploadMidiaResponse._();
+
+  factory SolicitarUploadMidiaResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SolicitarUploadMidiaResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SolicitarUploadMidiaResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'urlUpload')
+    ..aOS(2, _omitFieldNames ? '' : 'chave')
+    ..aOS(3, _omitFieldNames ? '' : 'contentType')
+    ..aInt64(4, _omitFieldNames ? '' : 'expiraEmSegundos')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SolicitarUploadMidiaResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SolicitarUploadMidiaResponse copyWith(
+          void Function(SolicitarUploadMidiaResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as SolicitarUploadMidiaResponse))
+          as SolicitarUploadMidiaResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SolicitarUploadMidiaResponse create() =>
+      SolicitarUploadMidiaResponse._();
+  @$core.override
+  SolicitarUploadMidiaResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SolicitarUploadMidiaResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SolicitarUploadMidiaResponse>(create);
+  static SolicitarUploadMidiaResponse? _defaultInstance;
+
+  /// URL pré-assinada de PUT. É credencial de escrita: usar e descartar.
+  @$pb.TagNumber(1)
+  $core.String get urlUpload => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set urlUpload($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasUrlUpload() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearUrlUpload() => $_clearField(1);
+
+  /// Chave do objeto no bucket — é o que volta em EnviarMidiaAtendimento.
+  @$pb.TagNumber(2)
+  $core.String get chave => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set chave($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasChave() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearChave() => $_clearField(2);
+
+  /// Content-Type que o PUT DEVE mandar: o R2 recusa se divergir do assinado.
+  @$pb.TagNumber(3)
+  $core.String get contentType => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set contentType($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasContentType() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearContentType() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $fixnum.Int64 get expiraEmSegundos => $_getI64(3);
+  @$pb.TagNumber(4)
+  set expiraEmSegundos($fixnum.Int64 value) => $_setInt64(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasExpiraEmSegundos() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearExpiraEmSegundos() => $_clearField(4);
+}
+
+/// Passo 3: o upload terminou. O servidor confere o conteúdo (magic bytes),
+/// contabiliza a quota e só então põe a mensagem na thread.
+class EnviarMidiaAtendimentoRequest extends $pb.GeneratedMessage {
+  factory EnviarMidiaAtendimentoRequest({
+    $core.int? atendimentoId,
+    $core.String? chave,
+    $core.String? mimetype,
+    $core.String? nomeArquivo,
+    $core.String? legenda,
+    $core.bool? isPtt,
+    $core.String? actionId,
+  }) {
+    final result = create();
+    if (atendimentoId != null) result.atendimentoId = atendimentoId;
+    if (chave != null) result.chave = chave;
+    if (mimetype != null) result.mimetype = mimetype;
+    if (nomeArquivo != null) result.nomeArquivo = nomeArquivo;
+    if (legenda != null) result.legenda = legenda;
+    if (isPtt != null) result.isPtt = isPtt;
+    if (actionId != null) result.actionId = actionId;
+    return result;
+  }
+
+  EnviarMidiaAtendimentoRequest._();
+
+  factory EnviarMidiaAtendimentoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory EnviarMidiaAtendimentoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'EnviarMidiaAtendimentoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'atendimentoId')
+    ..aOS(2, _omitFieldNames ? '' : 'chave')
+    ..aOS(3, _omitFieldNames ? '' : 'mimetype')
+    ..aOS(4, _omitFieldNames ? '' : 'nomeArquivo')
+    ..aOS(5, _omitFieldNames ? '' : 'legenda')
+    ..aOB(6, _omitFieldNames ? '' : 'isPtt')
+    ..aOS(7, _omitFieldNames ? '' : 'actionId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EnviarMidiaAtendimentoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EnviarMidiaAtendimentoRequest copyWith(
+          void Function(EnviarMidiaAtendimentoRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as EnviarMidiaAtendimentoRequest))
+          as EnviarMidiaAtendimentoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static EnviarMidiaAtendimentoRequest create() =>
+      EnviarMidiaAtendimentoRequest._();
+  @$core.override
+  EnviarMidiaAtendimentoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static EnviarMidiaAtendimentoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<EnviarMidiaAtendimentoRequest>(create);
+  static EnviarMidiaAtendimentoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get atendimentoId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set atendimentoId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAtendimentoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAtendimentoId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get chave => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set chave($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasChave() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearChave() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get mimetype => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set mimetype($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasMimetype() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearMimetype() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get nomeArquivo => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set nomeArquivo($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasNomeArquivo() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearNomeArquivo() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get legenda => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set legenda($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasLegenda() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearLegenda() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.bool get isPtt => $_getBF(5);
+  @$pb.TagNumber(6)
+  set isPtt($core.bool value) => $_setBool(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasIsPtt() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearIsPtt() => $_clearField(6);
+
+  /// Mesma idempotência do envio de texto (N7.2).
+  @$pb.TagNumber(7)
+  $core.String get actionId => $_getSZ(6);
+  @$pb.TagNumber(7)
+  set actionId($core.String value) => $_setString(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasActionId() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearActionId() => $_clearField(7);
+}
+
+class EnviarMidiaAtendimentoResponse extends $pb.GeneratedMessage {
+  factory EnviarMidiaAtendimentoResponse({
+    $core.int? messageId,
+  }) {
+    final result = create();
+    if (messageId != null) result.messageId = messageId;
+    return result;
+  }
+
+  EnviarMidiaAtendimentoResponse._();
+
+  factory EnviarMidiaAtendimentoResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory EnviarMidiaAtendimentoResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'EnviarMidiaAtendimentoResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'messageId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EnviarMidiaAtendimentoResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EnviarMidiaAtendimentoResponse copyWith(
+          void Function(EnviarMidiaAtendimentoResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as EnviarMidiaAtendimentoResponse))
+          as EnviarMidiaAtendimentoResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static EnviarMidiaAtendimentoResponse create() =>
+      EnviarMidiaAtendimentoResponse._();
+  @$core.override
+  EnviarMidiaAtendimentoResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static EnviarMidiaAtendimentoResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<EnviarMidiaAtendimentoResponse>(create);
+  static EnviarMidiaAtendimentoResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get messageId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set messageId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasMessageId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearMessageId() => $_clearField(1);
+}
+
+class ListarMidiasAtendimentoRequest extends $pb.GeneratedMessage {
+  factory ListarMidiasAtendimentoRequest({
+    $core.int? atendimentoId,
+    $core.int? limit,
+    $core.int? offset,
+  }) {
+    final result = create();
+    if (atendimentoId != null) result.atendimentoId = atendimentoId;
+    if (limit != null) result.limit = limit;
+    if (offset != null) result.offset = offset;
+    return result;
+  }
+
+  ListarMidiasAtendimentoRequest._();
+
+  factory ListarMidiasAtendimentoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListarMidiasAtendimentoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListarMidiasAtendimentoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'atendimentoId')
+    ..aI(2, _omitFieldNames ? '' : 'limit')
+    ..aI(3, _omitFieldNames ? '' : 'offset')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListarMidiasAtendimentoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListarMidiasAtendimentoRequest copyWith(
+          void Function(ListarMidiasAtendimentoRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListarMidiasAtendimentoRequest))
+          as ListarMidiasAtendimentoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListarMidiasAtendimentoRequest create() =>
+      ListarMidiasAtendimentoRequest._();
+  @$core.override
+  ListarMidiasAtendimentoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListarMidiasAtendimentoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListarMidiasAtendimentoRequest>(create);
+  static ListarMidiasAtendimentoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get atendimentoId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set atendimentoId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAtendimentoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAtendimentoId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get limit => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set limit($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasLimit() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearLimit() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.int get offset => $_getIZ(2);
+  @$pb.TagNumber(3)
+  set offset($core.int value) => $_setSignedInt32(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasOffset() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearOffset() => $_clearField(3);
+}
+
+class ListarMidiasAtendimentoResponse extends $pb.GeneratedMessage {
+  factory ListarMidiasAtendimentoResponse({
+    $core.Iterable<MidiaMensagem>? midias,
+  }) {
+    final result = create();
+    if (midias != null) result.midias.addAll(midias);
+    return result;
+  }
+
+  ListarMidiasAtendimentoResponse._();
+
+  factory ListarMidiasAtendimentoResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListarMidiasAtendimentoResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListarMidiasAtendimentoResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<MidiaMensagem>(1, _omitFieldNames ? '' : 'midias',
+        subBuilder: MidiaMensagem.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListarMidiasAtendimentoResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListarMidiasAtendimentoResponse copyWith(
+          void Function(ListarMidiasAtendimentoResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListarMidiasAtendimentoResponse))
+          as ListarMidiasAtendimentoResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListarMidiasAtendimentoResponse create() =>
+      ListarMidiasAtendimentoResponse._();
+  @$core.override
+  ListarMidiasAtendimentoResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListarMidiasAtendimentoResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListarMidiasAtendimentoResponse>(
+          create);
+  static ListarMidiasAtendimentoResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<MidiaMensagem> get midias => $_getList(0);
 }
 
 class CreateInviteRequest extends $pb.GeneratedMessage {

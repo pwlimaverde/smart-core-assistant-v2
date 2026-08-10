@@ -36,6 +36,12 @@ dependencies:
   connectivity_plus: ^7.3.0
   # Int64 dos campos BIGSERIAL do contrato (etiqueta e nota).
   fixnum: ^1.1.0
+  # N9/E1: o upload de mídia vai por PUT direto ao R2, fora do gRPC-Web — o
+  # binário não cabe no envelope. É o único uso de HTTP cru no módulo.
+  http: ^1.2.2
+  # N9/E1: escolher o arquivo. Na Web devolve `bytes`, no Windows `path`; o
+  # gateway resolve a diferença e a tela nunca a vê.
+  file_picker: ^11.0.2
 
 dev_dependencies:
   # Registro do controller nos testes de widget.

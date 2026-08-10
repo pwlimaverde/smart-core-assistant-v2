@@ -1481,6 +1481,40 @@ final $typed_data.Uint8List listAtendimentosResponseDescriptor = $convert.base64
     'ChhMaXN0QXRlbmRpbWVudG9zUmVzcG9uc2USUgoMYXRlbmRpbWVudG9zGAEgAygLMi4uc21hcn'
     'Rjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkF0ZW5kaW1lbnRvUmVzdW1vUgxhdGVuZGltZW50b3M=');
 
+@$core.Deprecated('Use midiaMensagemDescriptor instead')
+const MidiaMensagem$json = {
+  '1': 'MidiaMensagem',
+  '2': [
+    {'1': 'kind', '3': 1, '4': 1, '5': 9, '10': 'kind'},
+    {'1': 'url_assinada', '3': 2, '4': 1, '5': 9, '10': 'urlAssinada'},
+    {'1': 'mimetype', '3': 3, '4': 1, '5': 9, '10': 'mimetype'},
+    {'1': 'filename', '3': 4, '4': 1, '5': 9, '10': 'filename'},
+    {'1': 'size_bytes', '3': 5, '4': 1, '5': 3, '10': 'sizeBytes'},
+    {
+      '1': 'seconds',
+      '3': 6,
+      '4': 1,
+      '5': 5,
+      '9': 0,
+      '10': 'seconds',
+      '17': true
+    },
+    {'1': 'is_ptt', '3': 7, '4': 1, '5': 8, '9': 1, '10': 'isPtt', '17': true},
+  ],
+  '8': [
+    {'1': '_seconds'},
+    {'1': '_is_ptt'},
+  ],
+};
+
+/// Descriptor for `MidiaMensagem`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List midiaMensagemDescriptor = $convert.base64Decode(
+    'Cg1NaWRpYU1lbnNhZ2VtEhIKBGtpbmQYASABKAlSBGtpbmQSIQoMdXJsX2Fzc2luYWRhGAIgAS'
+    'gJUgt1cmxBc3NpbmFkYRIaCghtaW1ldHlwZRgDIAEoCVIIbWltZXR5cGUSGgoIZmlsZW5hbWUY'
+    'BCABKAlSCGZpbGVuYW1lEh0KCnNpemVfYnl0ZXMYBSABKANSCXNpemVCeXRlcxIdCgdzZWNvbm'
+    'RzGAYgASgFSABSB3NlY29uZHOIAQESGgoGaXNfcHR0GAcgASgISAFSBWlzUHR0iAEBQgoKCF9z'
+    'ZWNvbmRzQgkKB19pc19wdHQ=');
+
 @$core.Deprecated('Use mensagemThreadDescriptor instead')
 const MensagemThread$json = {
   '1': 'MensagemThread',
@@ -1502,9 +1536,70 @@ const MensagemThread$json = {
       '10': 'resumoMidia',
       '17': true
     },
+    {
+      '1': 'midia',
+      '3': 10,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MidiaMensagem',
+      '9': 1,
+      '10': 'midia',
+      '17': true
+    },
+    {
+      '1': 'data_entregue',
+      '3': 11,
+      '4': 1,
+      '5': 3,
+      '9': 2,
+      '10': 'dataEntregue',
+      '17': true
+    },
+    {
+      '1': 'data_lida',
+      '3': 12,
+      '4': 1,
+      '5': 3,
+      '9': 3,
+      '10': 'dataLida',
+      '17': true
+    },
+    {
+      '1': 'mensagem_citada_id',
+      '3': 13,
+      '4': 1,
+      '5': 5,
+      '9': 4,
+      '10': 'mensagemCitadaId',
+      '17': true
+    },
+    {
+      '1': 'citada_remetente',
+      '3': 14,
+      '4': 1,
+      '5': 9,
+      '9': 5,
+      '10': 'citadaRemetente',
+      '17': true
+    },
+    {
+      '1': 'citada_preview',
+      '3': 15,
+      '4': 1,
+      '5': 9,
+      '9': 6,
+      '10': 'citadaPreview',
+      '17': true
+    },
   ],
   '8': [
     {'1': '_resumo_midia'},
+    {'1': '_midia'},
+    {'1': '_data_entregue'},
+    {'1': '_data_lida'},
+    {'1': '_mensagem_citada_id'},
+    {'1': '_citada_remetente'},
+    {'1': '_citada_preview'},
   ],
 };
 
@@ -1515,7 +1610,14 @@ final $typed_data.Uint8List mensagemThreadDescriptor = $convert.base64Decode(
     'Y29udGV1ZG8SHAoJcmVtZXRlbnRlGAUgASgJUglyZW1ldGVudGUSHAoJdGltZXN0YW1wGAYgAS'
     'gDUgl0aW1lc3RhbXASIQoMc3RhdHVzX2VudmlvGAcgASgJUgtzdGF0dXNFbnZpbxIiCg1nZXJh'
     'ZG9fcG9yX2lhGAggASgIUgtnZXJhZG9Qb3JJYRImCgxyZXN1bW9fbWlkaWEYCSABKAlIAFILcm'
-    'VzdW1vTWlkaWGIAQFCDwoNX3Jlc3Vtb19taWRpYQ==');
+    'VzdW1vTWlkaWGIAQESRQoFbWlkaWEYCiABKAsyKi5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJp'
+    'ZXMuTWlkaWFNZW5zYWdlbUgBUgVtaWRpYYgBARIoCg1kYXRhX2VudHJlZ3VlGAsgASgDSAJSDG'
+    'RhdGFFbnRyZWd1ZYgBARIgCglkYXRhX2xpZGEYDCABKANIA1IIZGF0YUxpZGGIAQESMQoSbWVu'
+    'c2FnZW1fY2l0YWRhX2lkGA0gASgFSARSEG1lbnNhZ2VtQ2l0YWRhSWSIAQESLgoQY2l0YWRhX3'
+    'JlbWV0ZW50ZRgOIAEoCUgFUg9jaXRhZGFSZW1ldGVudGWIAQESKgoOY2l0YWRhX3ByZXZpZXcY'
+    'DyABKAlIBlINY2l0YWRhUHJldmlld4gBAUIPCg1fcmVzdW1vX21pZGlhQggKBl9taWRpYUIQCg'
+    '5fZGF0YV9lbnRyZWd1ZUIMCgpfZGF0YV9saWRhQhUKE19tZW5zYWdlbV9jaXRhZGFfaWRCEwoR'
+    'X2NpdGFkYV9yZW1ldGVudGVCEQoPX2NpdGFkYV9wcmV2aWV3');
 
 @$core.Deprecated('Use getThreadRequestDescriptor instead')
 const GetThreadRequest$json = {
@@ -1645,9 +1747,19 @@ const SendOutboundMessageRequest$json = {
       '10': 'actionId',
       '17': true
     },
+    {
+      '1': 'mensagem_citada_id',
+      '3': 5,
+      '4': 1,
+      '5': 5,
+      '9': 1,
+      '10': 'mensagemCitadaId',
+      '17': true
+    },
   ],
   '8': [
     {'1': '_action_id'},
+    {'1': '_mensagem_citada_id'},
   ],
 };
 
@@ -1655,7 +1767,9 @@ const SendOutboundMessageRequest$json = {
 final $typed_data.Uint8List sendOutboundMessageRequestDescriptor = $convert.base64Decode(
     'ChpTZW5kT3V0Ym91bmRNZXNzYWdlUmVxdWVzdBIlCg5hdGVuZGltZW50b19pZBgBIAEoBVINYX'
     'RlbmRpbWVudG9JZBIaCghjb250ZXVkbxgCIAEoCVIIY29udGV1ZG8SEgoEdGlwbxgDIAEoCVIE'
-    'dGlwbxIgCglhY3Rpb25faWQYBCABKAlIAFIIYWN0aW9uSWSIAQFCDAoKX2FjdGlvbl9pZA==');
+    'dGlwbxIgCglhY3Rpb25faWQYBCABKAlIAFIIYWN0aW9uSWSIAQESMQoSbWVuc2FnZW1fY2l0YW'
+    'RhX2lkGAUgASgFSAFSEG1lbnNhZ2VtQ2l0YWRhSWSIAQFCDAoKX2FjdGlvbl9pZEIVChNfbWVu'
+    'c2FnZW1fY2l0YWRhX2lk');
 
 @$core.Deprecated('Use sendOutboundMessageResponseDescriptor instead')
 const SendOutboundMessageResponse$json = {
@@ -1670,6 +1784,133 @@ final $typed_data.Uint8List sendOutboundMessageResponseDescriptor =
     $convert.base64Decode(
         'ChtTZW5kT3V0Ym91bmRNZXNzYWdlUmVzcG9uc2USHQoKbWVzc2FnZV9pZBgBIAEoBVIJbWVzc2'
         'FnZUlk');
+
+@$core.Deprecated('Use solicitarUploadMidiaRequestDescriptor instead')
+const SolicitarUploadMidiaRequest$json = {
+  '1': 'SolicitarUploadMidiaRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'nome_arquivo', '3': 2, '4': 1, '5': 9, '10': 'nomeArquivo'},
+    {'1': 'mimetype', '3': 3, '4': 1, '5': 9, '10': 'mimetype'},
+    {'1': 'bytes', '3': 4, '4': 1, '5': 3, '10': 'bytes'},
+  ],
+};
+
+/// Descriptor for `SolicitarUploadMidiaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List solicitarUploadMidiaRequestDescriptor =
+    $convert.base64Decode(
+        'ChtTb2xpY2l0YXJVcGxvYWRNaWRpYVJlcXVlc3QSJQoOYXRlbmRpbWVudG9faWQYASABKAVSDW'
+        'F0ZW5kaW1lbnRvSWQSIQoMbm9tZV9hcnF1aXZvGAIgASgJUgtub21lQXJxdWl2bxIaCghtaW1l'
+        'dHlwZRgDIAEoCVIIbWltZXR5cGUSFAoFYnl0ZXMYBCABKANSBWJ5dGVz');
+
+@$core.Deprecated('Use solicitarUploadMidiaResponseDescriptor instead')
+const SolicitarUploadMidiaResponse$json = {
+  '1': 'SolicitarUploadMidiaResponse',
+  '2': [
+    {'1': 'url_upload', '3': 1, '4': 1, '5': 9, '10': 'urlUpload'},
+    {'1': 'chave', '3': 2, '4': 1, '5': 9, '10': 'chave'},
+    {'1': 'content_type', '3': 3, '4': 1, '5': 9, '10': 'contentType'},
+    {
+      '1': 'expira_em_segundos',
+      '3': 4,
+      '4': 1,
+      '5': 3,
+      '10': 'expiraEmSegundos'
+    },
+  ],
+};
+
+/// Descriptor for `SolicitarUploadMidiaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List solicitarUploadMidiaResponseDescriptor = $convert.base64Decode(
+    'ChxTb2xpY2l0YXJVcGxvYWRNaWRpYVJlc3BvbnNlEh0KCnVybF91cGxvYWQYASABKAlSCXVybF'
+    'VwbG9hZBIUCgVjaGF2ZRgCIAEoCVIFY2hhdmUSIQoMY29udGVudF90eXBlGAMgASgJUgtjb250'
+    'ZW50VHlwZRIsChJleHBpcmFfZW1fc2VndW5kb3MYBCABKANSEGV4cGlyYUVtU2VndW5kb3M=');
+
+@$core.Deprecated('Use enviarMidiaAtendimentoRequestDescriptor instead')
+const EnviarMidiaAtendimentoRequest$json = {
+  '1': 'EnviarMidiaAtendimentoRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'chave', '3': 2, '4': 1, '5': 9, '10': 'chave'},
+    {'1': 'mimetype', '3': 3, '4': 1, '5': 9, '10': 'mimetype'},
+    {'1': 'nome_arquivo', '3': 4, '4': 1, '5': 9, '10': 'nomeArquivo'},
+    {'1': 'legenda', '3': 5, '4': 1, '5': 9, '10': 'legenda'},
+    {'1': 'is_ptt', '3': 6, '4': 1, '5': 8, '9': 0, '10': 'isPtt', '17': true},
+    {
+      '1': 'action_id',
+      '3': 7,
+      '4': 1,
+      '5': 9,
+      '9': 1,
+      '10': 'actionId',
+      '17': true
+    },
+  ],
+  '8': [
+    {'1': '_is_ptt'},
+    {'1': '_action_id'},
+  ],
+};
+
+/// Descriptor for `EnviarMidiaAtendimentoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List enviarMidiaAtendimentoRequestDescriptor = $convert.base64Decode(
+    'Ch1FbnZpYXJNaWRpYUF0ZW5kaW1lbnRvUmVxdWVzdBIlCg5hdGVuZGltZW50b19pZBgBIAEoBV'
+    'INYXRlbmRpbWVudG9JZBIUCgVjaGF2ZRgCIAEoCVIFY2hhdmUSGgoIbWltZXR5cGUYAyABKAlS'
+    'CG1pbWV0eXBlEiEKDG5vbWVfYXJxdWl2bxgEIAEoCVILbm9tZUFycXVpdm8SGAoHbGVnZW5kYR'
+    'gFIAEoCVIHbGVnZW5kYRIaCgZpc19wdHQYBiABKAhIAFIFaXNQdHSIAQESIAoJYWN0aW9uX2lk'
+    'GAcgASgJSAFSCGFjdGlvbklkiAEBQgkKB19pc19wdHRCDAoKX2FjdGlvbl9pZA==');
+
+@$core.Deprecated('Use enviarMidiaAtendimentoResponseDescriptor instead')
+const EnviarMidiaAtendimentoResponse$json = {
+  '1': 'EnviarMidiaAtendimentoResponse',
+  '2': [
+    {'1': 'message_id', '3': 1, '4': 1, '5': 5, '10': 'messageId'},
+  ],
+};
+
+/// Descriptor for `EnviarMidiaAtendimentoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List enviarMidiaAtendimentoResponseDescriptor =
+    $convert.base64Decode(
+        'Ch5FbnZpYXJNaWRpYUF0ZW5kaW1lbnRvUmVzcG9uc2USHQoKbWVzc2FnZV9pZBgBIAEoBVIJbW'
+        'Vzc2FnZUlk');
+
+@$core.Deprecated('Use listarMidiasAtendimentoRequestDescriptor instead')
+const ListarMidiasAtendimentoRequest$json = {
+  '1': 'ListarMidiasAtendimentoRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'limit', '3': 2, '4': 1, '5': 5, '10': 'limit'},
+    {'1': 'offset', '3': 3, '4': 1, '5': 5, '10': 'offset'},
+  ],
+};
+
+/// Descriptor for `ListarMidiasAtendimentoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listarMidiasAtendimentoRequestDescriptor =
+    $convert.base64Decode(
+        'Ch5MaXN0YXJNaWRpYXNBdGVuZGltZW50b1JlcXVlc3QSJQoOYXRlbmRpbWVudG9faWQYASABKA'
+        'VSDWF0ZW5kaW1lbnRvSWQSFAoFbGltaXQYAiABKAVSBWxpbWl0EhYKBm9mZnNldBgDIAEoBVIG'
+        'b2Zmc2V0');
+
+@$core.Deprecated('Use listarMidiasAtendimentoResponseDescriptor instead')
+const ListarMidiasAtendimentoResponse$json = {
+  '1': 'ListarMidiasAtendimentoResponse',
+  '2': [
+    {
+      '1': 'midias',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MidiaMensagem',
+      '10': 'midias'
+    },
+  ],
+};
+
+/// Descriptor for `ListarMidiasAtendimentoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listarMidiasAtendimentoResponseDescriptor =
+    $convert.base64Decode(
+        'Ch9MaXN0YXJNaWRpYXNBdGVuZGltZW50b1Jlc3BvbnNlEkIKBm1pZGlhcxgBIAMoCzIqLnNtYX'
+        'J0Y29yZS5jb250cmFjdHMucXVlcmllcy5NaWRpYU1lbnNhZ2VtUgZtaWRpYXM=');
 
 @$core.Deprecated('Use createInviteRequestDescriptor instead')
 const CreateInviteRequest$json = {

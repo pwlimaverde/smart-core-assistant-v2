@@ -327,6 +327,33 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$sendOutboundMessage, request, options: options);
   }
 
+  /// N9a — mídia na conversa. Upload em duas etapas (presign + confirmação) para
+  /// o binário não passar pelo envelope.
+  $grpc.ResponseFuture<$0.SolicitarUploadMidiaResponse> solicitarUploadMidia(
+    $0.SolicitarUploadMidiaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$solicitarUploadMidia, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.EnviarMidiaAtendimentoResponse>
+      enviarMidiaAtendimento(
+    $0.EnviarMidiaAtendimentoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$enviarMidiaAtendimento, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ListarMidiasAtendimentoResponse>
+      listarMidiasAtendimento(
+    $0.ListarMidiasAtendimentoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listarMidiasAtendimento, request,
+        options: options);
+  }
+
   /// Fase N3: Painel do Tenant. Exigem só autenticação (não superuser); o RBAC fino
   /// `tenant:admin` é aplicado no data_postgres. AcceptInvite é rota pública (sem sessão).
   $grpc.ResponseFuture<$0.CreateInviteResponse> createInvite(
@@ -867,6 +894,22 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/SendOutboundMessage',
       ($0.SendOutboundMessageRequest value) => value.writeToBuffer(),
       $0.SendOutboundMessageResponse.fromBuffer);
+  static final _$solicitarUploadMidia = $grpc.ClientMethod<
+          $0.SolicitarUploadMidiaRequest, $0.SolicitarUploadMidiaResponse>(
+      '/smartcore.contracts.queries.AdminService/SolicitarUploadMidia',
+      ($0.SolicitarUploadMidiaRequest value) => value.writeToBuffer(),
+      $0.SolicitarUploadMidiaResponse.fromBuffer);
+  static final _$enviarMidiaAtendimento = $grpc.ClientMethod<
+          $0.EnviarMidiaAtendimentoRequest, $0.EnviarMidiaAtendimentoResponse>(
+      '/smartcore.contracts.queries.AdminService/EnviarMidiaAtendimento',
+      ($0.EnviarMidiaAtendimentoRequest value) => value.writeToBuffer(),
+      $0.EnviarMidiaAtendimentoResponse.fromBuffer);
+  static final _$listarMidiasAtendimento = $grpc.ClientMethod<
+          $0.ListarMidiasAtendimentoRequest,
+          $0.ListarMidiasAtendimentoResponse>(
+      '/smartcore.contracts.queries.AdminService/ListarMidiasAtendimento',
+      ($0.ListarMidiasAtendimentoRequest value) => value.writeToBuffer(),
+      $0.ListarMidiasAtendimentoResponse.fromBuffer);
   static final _$createInvite =
       $grpc.ClientMethod<$0.CreateInviteRequest, $0.CreateInviteResponse>(
           '/smartcore.contracts.queries.AdminService/CreateInvite',
@@ -1442,6 +1485,33 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.SendOutboundMessageRequest.fromBuffer(value),
         ($0.SendOutboundMessageResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.SolicitarUploadMidiaRequest,
+            $0.SolicitarUploadMidiaResponse>(
+        'SolicitarUploadMidia',
+        solicitarUploadMidia_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.SolicitarUploadMidiaRequest.fromBuffer(value),
+        ($0.SolicitarUploadMidiaResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.EnviarMidiaAtendimentoRequest,
+            $0.EnviarMidiaAtendimentoResponse>(
+        'EnviarMidiaAtendimento',
+        enviarMidiaAtendimento_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.EnviarMidiaAtendimentoRequest.fromBuffer(value),
+        ($0.EnviarMidiaAtendimentoResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListarMidiasAtendimentoRequest,
+            $0.ListarMidiasAtendimentoResponse>(
+        'ListarMidiasAtendimento',
+        listarMidiasAtendimento_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListarMidiasAtendimentoRequest.fromBuffer(value),
+        ($0.ListarMidiasAtendimentoResponse value) => value.writeToBuffer()));
     $addMethod(
         $grpc.ServiceMethod<$0.CreateInviteRequest, $0.CreateInviteResponse>(
             'CreateInvite',
@@ -2185,6 +2255,33 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.SendOutboundMessageResponse> sendOutboundMessage(
       $grpc.ServiceCall call, $0.SendOutboundMessageRequest request);
+
+  $async.Future<$0.SolicitarUploadMidiaResponse> solicitarUploadMidia_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.SolicitarUploadMidiaRequest> $request) async {
+    return solicitarUploadMidia($call, await $request);
+  }
+
+  $async.Future<$0.SolicitarUploadMidiaResponse> solicitarUploadMidia(
+      $grpc.ServiceCall call, $0.SolicitarUploadMidiaRequest request);
+
+  $async.Future<$0.EnviarMidiaAtendimentoResponse> enviarMidiaAtendimento_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.EnviarMidiaAtendimentoRequest> $request) async {
+    return enviarMidiaAtendimento($call, await $request);
+  }
+
+  $async.Future<$0.EnviarMidiaAtendimentoResponse> enviarMidiaAtendimento(
+      $grpc.ServiceCall call, $0.EnviarMidiaAtendimentoRequest request);
+
+  $async.Future<$0.ListarMidiasAtendimentoResponse> listarMidiasAtendimento_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListarMidiasAtendimentoRequest> $request) async {
+    return listarMidiasAtendimento($call, await $request);
+  }
+
+  $async.Future<$0.ListarMidiasAtendimentoResponse> listarMidiasAtendimento(
+      $grpc.ServiceCall call, $0.ListarMidiasAtendimentoRequest request);
 
   $async.Future<$0.CreateInviteResponse> createInvite_Pre(
       $grpc.ServiceCall $call,

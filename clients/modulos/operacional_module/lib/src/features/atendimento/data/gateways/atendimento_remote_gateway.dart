@@ -2,12 +2,14 @@ import 'dart:convert';
 
 import 'package:api_client/api_client.dart' as proto;
 import 'package:fixnum/fixnum.dart';
+import 'package:http/http.dart' as http;
 
 import '../../domain/gateways/atendimento_gateway.dart';
 import '../../domain/model/atendimento_evento.dart';
 import '../../domain/model/atendimento_resumo.dart';
 import '../../domain/model/mensagem_thread.dart';
 import '../../domain/model/ficha.dart';
+import '../../domain/model/midia_mensagem.dart';
 import '../../domain/model/quadro.dart';
 
 /// Adapter Web do [AtendimentoGateway] via gRPC-Web (`AdminServiceClient`).
@@ -23,7 +25,16 @@ import '../../domain/model/quadro.dart';
 final class AtendimentoRemoteGateway implements AtendimentoGateway {
   final proto.AdminServiceClient _client;
 
-  const AtendimentoRemoteGateway({required this._client});
+  /// Cliente HTTP do PUT no bucket. Injetável para o teste poder observar o
+  /// header `Content-Type` — que é onde o upload quebra na prática, e é uma
+  /// falha silenciosa (o R2 responde 403 sem dizer por quê).
+  final http.Client _http;
+
+  AtendimentoRemoteGateway({
+    required proto.AdminServiceClient client,
+    http.Client? httpClient,
+  }) : _client = client, // ignore: prefer_initializing_formals
+       _http = httpClient ?? http.Client();
 
   @override
   Future<List<AtendimentoResumo>> listAtendimentos({
@@ -90,6 +101,78 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
   }
 
   @override
+  Future<int> enviarMidia({
+    required int atendimentoId,
+    required String nomeArquivo,
+    required String mimetype,
+    required List<int> bytes,
+    String legenda = '',
+    bool ehPtt = false,
+    void Function(double progresso)? aoProgredir,
+  }) async {
+    // 1. Onde subir. O servidor valida tipo, tamanho e quota ANTES de assinar —
+    // se o arquivo não pode entrar, o atendente descobre agora, não depois de
+    // esperar a barra encher.
+    final autorizacao = await _client.solicitarUploadMidia(
+      proto.SolicitarUploadMidiaRequest(
+        atendimentoId: atendimentoId,
+        nomeArquivo: nomeArquivo,
+        mimetype: mimetype,
+        bytes: Int64(bytes.length),
+      ),
+    );
+    aoProgredir?.call(0);
+
+    // 2. PUT direto no bucket.
+    //
+    // O `Content-Type` TEM de ser exatamente o que foi assinado — vem no
+    // `content_type` da resposta, e não do que escolhemos aqui. Divergir faz o
+    // R2 responder 403 sem explicar, e o sintoma na tela é "falhou" sem motivo.
+    final resposta = await _http.put(
+      Uri.parse(autorizacao.urlUpload),
+      headers: {'Content-Type': autorizacao.contentType},
+      body: bytes,
+    );
+    if (resposta.statusCode < 200 || resposta.statusCode >= 300) {
+      // Sem a URL na mensagem: é credencial de escrita no bucket.
+      throw FalhaUploadMidia(
+        'o envio do arquivo falhou (HTTP ${resposta.statusCode})',
+      );
+    }
+    aoProgredir?.call(1);
+
+    // 3. Confirmar. É aqui que o servidor confere o CONTEÚDO do que subiu e põe
+    // a mensagem na conversa.
+    final confirmacao = await _client.enviarMidiaAtendimento(
+      proto.EnviarMidiaAtendimentoRequest(
+        atendimentoId: atendimentoId,
+        chave: autorizacao.chave,
+        mimetype: mimetype,
+        nomeArquivo: nomeArquivo,
+        legenda: legenda,
+        isPtt: ehPtt,
+      ),
+    );
+    return confirmacao.messageId;
+  }
+
+  @override
+  Future<List<MidiaMensagem>> listarMidias({
+    required int atendimentoId,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final resp = await _client.listarMidiasAtendimento(
+      proto.ListarMidiasAtendimentoRequest(
+        atendimentoId: atendimentoId,
+        limit: limit,
+        offset: offset,
+      ),
+    );
+    return resp.midias.map(_paraMidia).toList();
+  }
+
+  @override
   Stream<AtendimentoEvento> streamAtendimentos() {
     // O erro do stream sobe cru: quem trata queda de conexão é a apresentação
     // (backoff exponencial + jitter), e ela decide com base no erro original.
@@ -130,7 +213,33 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
         statusEnvio: m.statusEnvio,
         geradoPorIa: m.geradoPorIa,
         resumoMidia: m.hasResumoMidia() ? m.resumoMidia : null,
+        midia: m.hasMidia() ? _paraMidia(m.midia) : null,
+        entregueEm: m.hasDataEntregue()
+            ? DateTime.fromMillisecondsSinceEpoch(m.dataEntregue.toInt())
+            : null,
+        lidaEm: m.hasDataLida()
+            ? DateTime.fromMillisecondsSinceEpoch(m.dataLida.toInt())
+            : null,
+        // A citação só existe completa: sem o id não há para onde rolar, e sem
+        // preview não há o que desenhar. Meia citação é pior que nenhuma.
+        citacao: m.hasMensagemCitadaId() && m.hasCitadaPreview()
+            ? CitacaoMensagem(
+                mensagemId: m.mensagemCitadaId,
+                remetente: m.hasCitadaRemetente() ? m.citadaRemetente : '',
+                preview: m.citadaPreview,
+              )
+            : null,
       );
+
+  static MidiaMensagem _paraMidia(proto.MidiaMensagem m) => MidiaMensagem(
+    tipo: TipoMidia.doServidor(m.kind),
+    urlAssinada: m.urlAssinada,
+    mimetype: m.mimetype,
+    nomeArquivo: m.filename,
+    tamanhoBytes: m.sizeBytes.toInt(),
+    segundos: m.hasSeconds() ? m.seconds : null,
+    ehPtt: m.hasIsPtt() && m.isPtt,
+  );
 
   static AtendimentoEvento _paraAtendimentoEvento(proto.AtendimentoEvent e) {
     Map<String, Object?> payload;

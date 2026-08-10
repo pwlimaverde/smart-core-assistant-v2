@@ -2,6 +2,7 @@ import '../model/atendimento_evento.dart';
 import '../model/atendimento_resumo.dart';
 import '../model/mensagem_thread.dart';
 import '../model/ficha.dart';
+import '../model/midia_mensagem.dart';
 import '../model/quadro.dart';
 
 /// Fronteira de infraestrutura do atendimento, **escolhida por plataforma**:
@@ -94,6 +95,39 @@ abstract interface class AtendimentoGateway {
     String tipo,
   });
 
+  /// N9/E1 — sobe um anexo e o põe na conversa.
+  ///
+  /// **Uma operação só, e não três**, apesar de o servidor expor o upload em
+  /// duas etapas (`SolicitarUploadMidia` → PUT no bucket →
+  /// `EnviarMidiaAtendimento`). O protocolo de duas etapas existe para tirar o
+  /// binário do gRPC-Web; a tela não tem nada a decidir no meio dele. Expor as
+  /// três chamadas separadas obrigaria cada chamador a repetir a coreografia —
+  /// e a errá-la (o PUT precisa mandar EXATAMENTE o `Content-Type` assinado, ou
+  /// o R2 recusa).
+  ///
+  /// [aoProgredir] recebe de 0 a 1 durante o envio dos bytes, para a barra.
+  ///
+  /// Devolve o id da mensagem criada.
+  Future<int> enviarMidia({
+    required int atendimentoId,
+    required String nomeArquivo,
+    required String mimetype,
+    required List<int> bytes,
+    String legenda,
+    bool ehPtt,
+    void Function(double progresso)? aoProgredir,
+  });
+
+  /// N9/E2 — mídias do atendimento, para a galeria da ficha.
+  ///
+  /// As URLs vêm assinadas com TTL curto: a lista é para exibir agora, não para
+  /// guardar.
+  Future<List<MidiaMensagem>> listarMidias({
+    required int atendimentoId,
+    int limit,
+    int offset,
+  });
+
   /// Abre o stream realtime de eventos do tenant (fila/Kanban/chat).
   ///
   /// Cada reconexão chama este método novamente — a política de backoff mora na
@@ -102,6 +136,23 @@ abstract interface class AtendimentoGateway {
   /// request/response, e embrulhar um fluxo contínuo nela esconderia justamente
   /// o que a UI precisa observar.
   Stream<AtendimentoEvento> streamAtendimentos();
+}
+
+/// N9/E1 — o PUT do anexo no bucket falhou.
+///
+/// Exceção técnica separada porque o upload é o **único** passo do sistema que
+/// não passa pelo gRPC: um erro aqui não é `GrpcError` nem falha do motor local,
+/// e o `mapError` do repositório precisa distingui-lo para dizer "o arquivo não
+/// subiu" em vez de "a conversa não carregou".
+///
+/// A mensagem nunca carrega a URL assinada.
+final class FalhaUploadMidia implements Exception {
+  final String message;
+
+  const FalhaUploadMidia(this.message);
+
+  @override
+  String toString() => 'FalhaUploadMidia - $message';
 }
 
 /// Falha do motor local (FFI/`local_engine`): índice SQLite, fila offline, cache

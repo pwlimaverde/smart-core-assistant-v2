@@ -12,7 +12,9 @@ import '../../domain/model/atendimento_evento.dart';
 import '../../domain/model/atendimento_resumo.dart';
 import '../../domain/model/mensagem_thread.dart';
 import '../../domain/model/ficha.dart';
+import '../../domain/model/midia_mensagem.dart';
 import '../../domain/model/quadro.dart';
+import 'atendimento_remote_gateway.dart';
 
 /// Debounce do gatilho de reconexão (N7.4): `connectivity_plus` reporta o tipo
 /// de interface (não garante alcance real à internet) e pode disparar eventos
@@ -57,10 +59,16 @@ final class LocalEngineGateway implements AtendimentoGateway {
 
   /// `adminClient` e `tenantIdProvider` como private named parameters (Dart
   /// 3.12): nomes públicos no chamador, campos privados aqui.
+  /// N9/E1 — o caminho de mídia é o mesmo do Web (PUT direto no bucket), então
+  /// o desktop delega ao gateway remoto em vez de reimplementá-lo. Ver
+  /// [enviarMidia] para por que a mídia não entra na fila offline.
+  final AtendimentoRemoteGateway _remoto;
+
   LocalEngineGateway({
     required this._tenantIdProvider,
     required proto.AdminServiceClient adminClient,
-  }) : _admin = adminClient; // ignore: prefer_initializing_formals
+  }) : _admin = adminClient, // ignore: prefer_initializing_formals
+       _remoto = AtendimentoRemoteGateway(client: adminClient);
 
   /// `RustLib.init()` é global (carrega a `.dll`): memoizado entre instâncias.
   static Future<void>? _rustInit;
@@ -270,6 +278,52 @@ final class LocalEngineGateway implements AtendimentoGateway {
     } catch (e) {
       throw _mapErro(e);
     }
+  }
+
+  /// N9/E1 — envio de mídia no desktop.
+  ///
+  /// **Vai direto ao servidor, sem passar pela fila offline.** É a única
+  /// operação de escrita do módulo que faz isso, e por um motivo concreto: a
+  /// fila guarda a intenção no índice SQLite, e enfileirar um vídeo de 16 MB
+  /// significaria carregar o binário no banco local por tempo indeterminado —
+  /// para no fim mandá-lo a uma URL assinada que já teria expirado.
+  ///
+  /// Consequência aceita: sem rede, o anexo falha na hora, com mensagem clara,
+  /// em vez de "enviando" para sempre. Texto continua funcionando offline.
+  @override
+  Future<int> enviarMidia({
+    required int atendimentoId,
+    required String nomeArquivo,
+    required String mimetype,
+    required List<int> bytes,
+    String legenda = '',
+    bool ehPtt = false,
+    void Function(double progresso)? aoProgredir,
+  }) async {
+    return _remoto.enviarMidia(
+      atendimentoId: atendimentoId,
+      nomeArquivo: nomeArquivo,
+      mimetype: mimetype,
+      bytes: bytes,
+      legenda: legenda,
+      ehPtt: ehPtt,
+      aoProgredir: aoProgredir,
+    );
+  }
+
+  /// A galeria é leitura de URLs assinadas com TTL curto: cacheá-las no índice
+  /// offline entregaria links vencidos na próxima abertura.
+  @override
+  Future<List<MidiaMensagem>> listarMidias({
+    required int atendimentoId,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    return _remoto.listarMidias(
+      atendimentoId: atendimentoId,
+      limit: limit,
+      offset: offset,
+    );
   }
 
   @override
