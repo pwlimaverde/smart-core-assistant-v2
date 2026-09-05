@@ -1,0 +1,28 @@
+# Configuração do `cargo audit` (job "Dependências — advisories RustSec" do CI).
+#
+# O `cargo audit` lê o `Cargo.lock` inteiro, e o lock inclui dependências
+# OPCIONAIS que nenhuma feature ativa — elas são resolvidas, mas nunca
+# compiladas. Por isso um advisory aqui não significa, por si só, código
+# vulnerável no binário.
+#
+# Regra da casa: só entra nesta lista o que for comprovadamente não compilado
+# (verificável com `cargo tree`), e sempre com a prova ao lado. Vulnerabilidade
+# em código que roda se corrige atualizando, não ignorando.
+
+[advisories]
+ignore = [
+    # rkyv 0.7.46 — leitura fora dos limites em arquivos com Rc/Arc.
+    #
+    # Chega pelo `rust_decimal` como dependência OPCIONAL, atrás da feature
+    # `rkyv`, que este workspace não liga (usamos apenas `serde-with-str`).
+    #
+    # Prova: `cargo tree -i rkyv` responde "nothing to print" — não há caminho
+    # até ele no grafo de build; e `cargo tree -p rust_decimal -e features` não
+    # lista `rkyv` entre as features ativas.
+    #
+    # A correção de verdade (upgrade para >=0.8.17) depende do `rust_decimal`
+    # publicar uma versão que use o rkyv novo. REVISAR a cada bump dessa crate:
+    # se algum dia a feature for ligada, o advisory passa a valer e esta entrada
+    # tem de sair.
+    "RUSTSEC-2026-0235",
+]
