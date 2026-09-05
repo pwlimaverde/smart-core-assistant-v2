@@ -726,15 +726,7 @@ async fn handler_reconciliar_conexao_instancia(state: AppState, env: Envelope) -
         .await
         .unwrap_or(ConnectionState::Unknown);
 
-    let (texto, religada, precisa_parear) = match estado_final {
-        ConnectionState::Connected => ("connected", true, false),
-        // Socket aberto e sessão recusada: o aparelho foi desvinculado do lado
-        // do WhatsApp. Nenhuma reconexão resolve — é QR na mão do usuário. Quem
-        // avisa é a tela, por isso o sinalizador sobe até o cliente.
-        ConnectionState::Connecting => ("connecting", false, true),
-        ConnectionState::Disconnected => ("disconnected", false, true),
-        ConnectionState::Unknown => ("unknown", false, false),
-    };
+    let (texto, religada, precisa_parear) = desfecho_da_religada(estado_final);
 
     if texto != "unknown" {
         gravar_estado(&env, db_id, texto).await;
@@ -759,6 +751,27 @@ async fn handler_reconciliar_conexao_instancia(state: AppState, env: Envelope) -
             "precisa_parear": precisa_parear
         }),
     )
+}
+
+/// O que o estado, depois da tentativa de religar, significa para quem espera:
+/// `(texto_do_banco, religada, precisa_parear)`.
+///
+/// A distinção que importa é entre "o servidor resolve" e "só o dono do celular
+/// resolve" — é ela que decide se o cliente vê um aviso na tela ou se nem fica
+/// sabendo que houve queda.
+fn desfecho_da_religada(estado: ConnectionState) -> (&'static str, bool, bool) {
+    match estado {
+        ConnectionState::Connected => ("connected", true, false),
+        // Socket aberto e sessão recusada: o aparelho foi desvinculado do lado
+        // do WhatsApp. Nenhuma reconexão resolve — é QR na mão do usuário. Quem
+        // avisa é a tela, por isso o sinalizador sobe até o cliente.
+        ConnectionState::Connecting => ("connecting", false, true),
+        ConnectionState::Disconnected => ("disconnected", false, true),
+        // "Não sei" não vira alarme: o provedor pode ter engasgado, e mandar o
+        // cliente parear um WhatsApp que talvez esteja no ar seria pior que
+        // esperar o próximo ciclo.
+        ConnectionState::Unknown => ("unknown", false, false),
+    }
 }
 
 /// Carimba o estado no banco. Best-effort: a reconciliação não deve falhar
@@ -1792,6 +1805,49 @@ fn bytes_estimados_base64(base64_len: usize) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- O que a reconciliação conclui depois de tentar religar ---
+    //
+    // A regra que decide se o cliente é incomodado ou não. Errar aqui custa dos
+    // dois lados: pedir QR de um WhatsApp saudável, ou ficar em silêncio
+    // enquanto nenhuma mensagem entra.
+
+    #[test]
+    fn religada_com_sucesso_nao_incomoda_o_cliente() {
+        let (texto, religada, parear) = desfecho_da_religada(ConnectionState::Connected);
+        assert_eq!(texto, "connected");
+        assert!(religada);
+        assert!(!parear, "religou sozinho: o atendente nem precisa saber");
+    }
+
+    #[test]
+    fn sessao_recusada_apos_religar_exige_pareamento() {
+        // Socket aberto e sessão não confirmada DEPOIS de um connect é o retrato
+        // do aparelho desvinculado pelo WhatsApp: reconectar de novo não muda
+        // nada, só o QR resolve.
+        let (texto, religada, parear) = desfecho_da_religada(ConnectionState::Connecting);
+        assert_eq!(texto, "connecting");
+        assert!(!religada);
+        assert!(parear);
+    }
+
+    #[test]
+    fn socket_que_nem_abriu_tambem_pede_pareamento() {
+        let (texto, religada, parear) = desfecho_da_religada(ConnectionState::Disconnected);
+        assert_eq!(texto, "disconnected");
+        assert!(!religada);
+        assert!(parear);
+    }
+
+    #[test]
+    fn provedor_mudo_nao_vira_pedido_de_qr() {
+        // "Não sei" não é "está fora". Mandar parear por causa de um provedor
+        // que engasgou seria pior que esperar o próximo ciclo.
+        let (texto, religada, parear) = desfecho_da_religada(ConnectionState::Unknown);
+        assert_eq!(texto, "unknown");
+        assert!(!religada);
+        assert!(!parear);
+    }
     use contracts::Envelope;
     use secrecy::SecretString;
     use transport::{Endpoint, Server};
