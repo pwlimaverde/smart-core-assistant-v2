@@ -19,6 +19,10 @@ exporters:
     # no código da aplicação (ex.: smartcore_rpc_duration_ms); um namespace aqui
     # duplicaria o prefixo (smartcore_smartcore_...) e quebraria as queries dos
     # dashboards provisionados (N1.4).
+    # add_metric_suffixes: false — sem isto o exporter acrescenta o sufixo da
+    # unidade (ex.: smartcore_rpc_duration_ms_milliseconds_bucket), quebrando o
+    # dashboard latencia_grpc.json, que consulta smartcore_rpc_duration_ms_bucket.
+    add_metric_suffixes: false
     # resource_to_telemetry_conversion: converte o atributo de recurso
     # "service.name" (setado por observability::init_telemetry por binário) em
     # label "service_name" nas métricas — sem isso, métricas de worker/

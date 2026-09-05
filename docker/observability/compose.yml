@@ -34,7 +34,13 @@ services:
     restart: unless-stopped
 
   tempo:
-    image: grafana/tempo:latest
+    # Pinada (nao ":latest"): a tag "latest" no Docker Hub aponta hoje para o
+    # v3.0.0, que substituiu o "compactor:" monolitico por uma arquitetura
+    # backend-scheduler/backend-worker incompativel com o config abaixo (o
+    # container entra em crash loop: "field compactor not found in type
+    # app.Config"). 2.10.8 e a ultima release estavel da serie 2.x, onde
+    # "compactor.compaction.block_retention" (tempo-config.yml) funciona.
+    image: grafana/tempo:2.10.8
     command: ["-config.file=/etc/tempo/tempo.yaml"]
     volumes:
       - ./tempo-config.yml:/etc/tempo/tempo.yaml:ro
@@ -44,6 +50,15 @@ services:
 
   prometheus:
     image: prom/prometheus:latest
+    # Retencao explicita: sem "command", o entrypoint usa so os defaults da
+    # imagem. Declarar aqui documenta a decisao (14 dias, ver P5 do plano de
+    # observabilidade) e blinda contra mudanca de default em versao futura.
+    # Atencao: declarar "command" SUBSTITUI o do entrypoint por inteiro, entao
+    # os caminhos padrao de config/storage precisam ser repetidos.
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
@@ -68,6 +83,13 @@ services:
       GF_SMTP_USER: ${GF_SMTP_USER:-}
       GF_SMTP_PASSWORD: ${GF_SMTP_PASSWORD:-}
       GF_SMTP_FROM_ADDRESS: ${GF_SMTP_FROM_ADDRESS:-}
+      # Sem isto o usuario admin nasce com senha ninguem-definiu e, como o
+      # Grafana fica exposto publicamente pelo Caddy, vira admin/admin de fato.
+      # O ":?" e proposital: falta a variavel, a stack NAO sobe, em vez de
+      # subir insegura em silencio.
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?defina no .env}
+      GF_SERVER_ROOT_URL: https://grafana.smartcoreassistant.com.br
+      GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - ./provisioning:/etc/grafana/provisioning:ro
       - grafana_data:/var/lib/grafana

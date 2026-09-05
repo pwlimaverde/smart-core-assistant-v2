@@ -274,10 +274,17 @@ jobs:
           # evolution e ele cairia no projeto smart-core-v2-dev (vira órfão e some).
           cp /opt/smartcore/dev/env/dev.env docker/evolution/.env
 
-      # Observabilidade (cria a rede external compartilhada). Idempotente.
+      # Observabilidade (cria a rede external compartilhada). --force-recreate
+      # é necessário: os configs (otel-collector, loki, tempo, prometheus)
+      # entram por bind mount, e `up -d` sozinho NÃO recria o container quando
+      # só o conteúdo do arquivo montado muda — foi assim que os painéis do
+      # Grafana passaram dois meses vazios sem ninguém notar.
+      - name: Provisiona env da observabilidade
+        run: cp /opt/smartcore/observability/env/observability.env docker/observability/.env
+
       - name: Sobe observabilidade
         working-directory: docker/observability
-        run: docker compose up -d
+        run: docker compose --env-file .env up -d --force-recreate
 
       # Stack FUNDACIONAL evolution: stateful (sessão/auth do WhatsApp em volumes +
       # restart: unless-stopped). `up -d` é idempotente — NÃO reinicia se a config
