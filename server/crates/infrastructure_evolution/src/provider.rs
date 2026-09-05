@@ -362,7 +362,17 @@ impl InstanceManager for EvolutionProvider {
         // códigos a Evolution força logout ("Maximum QR code count reached (5),
         // forcing logout") e derruba a sessão recém-pareada — o usuário lia o
         // código, conectava, e via o QR reaparecer.
-        if self.tem_aparelho_vinculado(instance_name).await {
+        //
+        // MAS o `jid` sozinho não prova conexão: ele CONTINUA no registro depois
+        // que o WhatsApp desvincula o aparelho. Aplicar o atalho com o socket
+        // fechado fazia o servidor responder `Connected` para uma instância
+        // morta — para sempre. Nada reconectava, o painel mentia, e ao fim de
+        // ~14 dias offline o WhatsApp cortava o vínculo de vez, obrigando um QR
+        // novo. Por isso o atalho vale só em `Connecting`, que é o estado que o
+        // comentário acima descreve: socket ABERTO, sessão ainda não confirmada.
+        // Socket fechado é desconexão de verdade, com ou sem `jid`.
+        if estado == ConnectionState::Connecting && self.tem_aparelho_vinculado(instance_name).await
+        {
             return Ok(ConnectionState::Connected);
         }
 
@@ -987,5 +997,44 @@ mod tests {
         // String vazia chegaria a tela como imagem invalida, sem dizer por que.
         assert!(qr_do_corpo(&serde_json::json!({ "qrcode": "", "code": "" })).is_none());
         assert!(qr_do_corpo(&serde_json::json!({})).is_none());
+    }
+
+    // --- Estado da conexão: o que o  significa ---
+    //
+    // Estes testes fixam a leitura crua do corpo. A regra de negócio que usa o
+    // `jid` como desempate vive em `get_connection_state` (que faz HTTP), mas
+    // ela depende inteiramente do que sai daqui: o atalho do aparelho vinculado
+    // só pode valer em `Connecting` — socket aberto, sessão não confirmada.
+
+    #[test]
+    fn socket_fechado_e_sessao_ausente_e_desconexao() {
+        // O caso que quebrou em produção: a instância cai, o `jid` CONTINUA no
+        // registro do provedor, e tratar isso como "conectado" fazia o servidor
+        // jurar que estava tudo bem enquanto nenhuma mensagem chegava. Aqui o
+        // corpo tem de dizer "desconectado" — sem meio-termo.
+        let corpo = serde_json::json!({ "Connected": false, "LoggedIn": false });
+        assert_eq!(estado_do_corpo(&corpo), ConnectionState::Disconnected);
+    }
+
+    #[test]
+    fn socket_aberto_sem_login_confirmado_e_connecting() {
+        // É o estado em que o desempate pelo `jid` é legítimo: a evolution-go
+        // mantém `LoggedIn: false` mesmo depois de validar o cliente.
+        let corpo = serde_json::json!({ "Connected": true, "LoggedIn": false });
+        assert_eq!(estado_do_corpo(&corpo), ConnectionState::Connecting);
+    }
+
+    #[test]
+    fn login_confirmado_e_conexao_independente_do_socket() {
+        let corpo = serde_json::json!({ "Connected": false, "LoggedIn": true });
+        assert_eq!(estado_do_corpo(&corpo), ConnectionState::Connected);
+    }
+
+    #[test]
+    fn campo_state_textual_tem_precedencia_sobre_os_booleanos() {
+        // Provedores diferentes respondem de formas diferentes; quando vem
+        // `state`, é ele que manda.
+        let corpo = serde_json::json!({ "state": "open", "Connected": false });
+        assert_eq!(estado_do_corpo(&corpo), ConnectionState::Connected);
     }
 }

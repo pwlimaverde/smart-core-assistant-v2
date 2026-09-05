@@ -33,7 +33,16 @@ class KanbanPage extends StatefulWidget {
   /// aqui em vez de virar uma dependência ao contrário.
   final Widget? drawer;
 
-  const KanbanPage({this.drawer, super.key});
+  /// Faixa de aviso acima do quadro, injetada pelo app do tenant.
+  ///
+  /// Existe para uma coisa em especial: WhatsApp fora do ar. O quadro parece
+  /// normal quando a conexão cai — só não chega conversa nenhuma, e quem está
+  /// atendendo demora a entender por quê. O aviso mora aqui, na primeira tela,
+  /// e não numa página de configuração que ninguém abre. Como conexão é assunto
+  /// do `tenant_module`, entra por injeção, igual ao menu.
+  final Widget? aviso;
+
+  const KanbanPage({this.drawer, this.aviso, super.key});
 
   @override
   State<KanbanPage> createState() => _KanbanPageState();
@@ -60,22 +69,33 @@ class _KanbanPageState extends State<KanbanPage> {
           onPressed: () => controller.carregar(),
         ),
       ],
-      body: BlocBuilder<KanbanController, ViewState<KanbanViewModel>>(
-        bloc: controller,
-        builder: (context, state) {
-          return switch (state) {
-            InitialState() ||
-            LoadingState() => const Center(child: CircularProgressIndicator()),
-            ErrorState(:final error) => AppErrorView(
-              message: error.message,
-              onRetry: () => controller.carregar(),
+      // O aviso fica FORA do BlocBuilder: ele avisa que não chega conversa, e
+      // some justamente quando o quadro está carregando ou falhou — que é
+      // quando mais se precisa dele.
+      body: Column(
+        children: [
+          if (widget.aviso != null) widget.aviso!,
+          Expanded(
+            child: BlocBuilder<KanbanController, ViewState<KanbanViewModel>>(
+              bloc: controller,
+              builder: (context, state) {
+                return switch (state) {
+                  InitialState() || LoadingState() => const Center(
+                    child: CircularProgressIndicator(),
+                  ),
+                  ErrorState(:final error) => AppErrorView(
+                    message: error.message,
+                    onRetry: () => controller.carregar(),
+                  ),
+                  SuccessState(:final data) => _Quadro(
+                    viewModel: data,
+                    controller: controller,
+                  ),
+                };
+              },
             ),
-            SuccessState(:final data) => _Quadro(
-              viewModel: data,
-              controller: controller,
-            ),
-          };
-        },
+          ),
+        ],
       ),
     );
   }

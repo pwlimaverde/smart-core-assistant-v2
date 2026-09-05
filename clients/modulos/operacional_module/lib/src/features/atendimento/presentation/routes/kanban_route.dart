@@ -14,13 +14,18 @@ final class KanbanRoute extends GetItModule {
   /// boot não teria esse contexto.
   final Widget Function()? drawerBuilder;
 
-  KanbanRoute({this.drawerBuilder});
+  /// Faixa de aviso acima do quadro (ver `KanbanPage.aviso`). Builder pelo mesmo
+  /// motivo do menu: o widget precisa do contexto da rota, não do boot.
+  final Widget Function()? avisoBuilder;
+
+  KanbanRoute({this.drawerBuilder, this.avisoBuilder});
 
   @override
   String get path => '/atendimentos';
 
   @override
-  Widget get page => KanbanPage(drawer: drawerBuilder?.call());
+  Widget get page =>
+      KanbanPage(drawer: drawerBuilder?.call(), aviso: avisoBuilder?.call());
 
   @override
   void binds(Injector i) {

@@ -28,7 +28,12 @@ final class OperacionalModule extends AppModule {
   /// vez de virar uma dependência ao contrário.
   final Widget Function()? drawerBuilder;
 
-  OperacionalModule({this.drawerBuilder});
+  /// Faixa de aviso no topo do quadro — hoje, WhatsApp fora do ar. Entra por
+  /// parâmetro pelo mesmo motivo do menu: conexão é assunto do `tenant_module`,
+  /// e este módulo não o conhece.
+  final Widget Function()? avisoBuilder;
+
+  OperacionalModule({this.drawerBuilder, this.avisoBuilder});
 
   @override
   void globalBinds(Injector i) {
@@ -150,5 +155,7 @@ final class OperacionalModule extends AppModule {
   }
 
   @override
-  List<GetItModule> routes() => [KanbanRoute(drawerBuilder: drawerBuilder)];
+  List<GetItModule> routes() => [
+    KanbanRoute(drawerBuilder: drawerBuilder, avisoBuilder: avisoBuilder),
+  ];
 }

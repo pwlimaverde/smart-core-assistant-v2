@@ -104,6 +104,26 @@ async fn executar_tick(state: &AppState, clock: &dyn Clock) {
                 Err(e) => tracing::error!("scheduler: falha ao vetorizar intenções: {:?}", e),
             }
         }
+
+        // O TTL de 5 min faz as vezes de intervalo: com o tick de 60s, os quatro
+        // ticks seguintes encontram o lock de pé e pulam. É de propósito —
+        // conferir conexão de minuto em minuto não acrescenta nada (o webhook
+        // avisa antes) e cada instância fora custa um `connect` mais 5s de
+        // espera pelo handshake, em varredura serial.
+        let mut conn = redis_conn.clone();
+        if tentar_lock(&mut conn, "scheduler:lock:conexoes_whatsapp", 300_000).await {
+            match reconciliar_conexoes_whatsapp(state).await {
+                Ok((religadas, parear)) if religadas > 0 || parear > 0 => tracing::info!(
+                    religadas = religadas,
+                    aguardando_pareamento = parear,
+                    "scheduler: conexões de WhatsApp reconciliadas"
+                ),
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::error!("scheduler: falha ao reconciliar conexões: {:?}", e)
+                }
+            }
+        }
     } else {
         tracing::warn!("scheduler: sem conexão Redis, tick pulado (sem lock disponível)");
     }
@@ -534,6 +554,127 @@ async fn processar_intents_sem_embedding(state: &AppState) -> anyhow::Result<usi
     }
 
     Ok(processadas)
+}
+
+/// Confere todas as conexões de WhatsApp ativas e religa as que caíram.
+///
+/// É o que faz o sistema se parecer com o WhatsApp Web: a sessão se mantém
+/// sozinha, esteja o atendente com o programa aberto ou não. Sem isto, uma
+/// queda de socket — rede, restart do provedor, o próprio WhatsApp derrubando —
+/// deixa o tenant mudo até alguém abrir a tela e clicar em reconectar.
+///
+/// O custo de não fazer isto não é uma janela de indisponibilidade: é
+/// permanente. O WhatsApp **desvincula** um aparelho que fica ~14 dias offline,
+/// e aí só um QR novo resolve, com a pessoa e o celular na mão.
+///
+/// Varre todos os tenants numa chamada só (a listagem é cross-tenant, sob o
+/// pool admin), e é serial de propósito: são poucas instâncias por tenant e
+/// religar em paralelo criaria rajadas contra o provedor.
+///
+/// Devolve `(religadas, aguardando_pareamento)`.
+async fn reconciliar_conexoes_whatsapp(state: &AppState) -> anyhow::Result<(usize, usize)> {
+    let resp = chamar_rpc(
+        &state.pg_client,
+        SISTEMA_TENANT_PLACEHOLDER,
+        "AdminListAllConnectedInstances",
+        serde_json::json!({}),
+        "scheduler.tick",
+        "",
+    )
+    .await?;
+
+    let instancias = resp
+        .get("instances")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let mut religadas = 0usize;
+    let mut parear = 0usize;
+
+    for inst in instancias {
+        let id = match inst.get("id").and_then(|v| v.as_i64()) {
+            Some(v) => v,
+            None => continue,
+        };
+        let tenant_id = match inst.get("tenant_id").and_then(|v| v.as_str()) {
+            Some(t) => t.to_string(),
+            None => continue,
+        };
+
+        // O `data_whatsapp` é quem fala com o provedor; aqui só orquestramos.
+        // Timeout próprio: a reconciliação dorme 5s esperando o handshake, e o
+        // padrão de `chamar_rpc` não cobriria isso.
+        let resultado = chamar_rpc_longo(
+            &state.whatsapp_client,
+            &tenant_id,
+            "ReconciliarConexaoInstancia",
+            serde_json::json!({ "id": id }),
+        )
+        .await;
+
+        match resultado {
+            Ok(v) => {
+                if v.get("religada").and_then(|b| b.as_bool()) == Some(true) {
+                    religadas += 1;
+                }
+                if v.get("precisa_parear").and_then(|b| b.as_bool()) == Some(true) {
+                    parear += 1;
+                }
+            }
+            // Uma instância que falha não interrompe a varredura: as outras
+            // seguem, e esta é retentada no próximo tick.
+            Err(e) => tracing::warn!(
+                instance_id = id,
+                "scheduler: falha ao reconciliar instância: {e}"
+            ),
+        }
+    }
+
+    Ok((religadas, parear))
+}
+
+/// `chamar_rpc` com folga de tempo, para a reconciliação de conexão.
+///
+/// O `chamar_rpc` padrão usa 5s — exatamente o que o handler gasta só esperando
+/// o handshake do WhatsApp depois de reabrir o socket. Com ele, toda religada
+/// bem-sucedida seria contabilizada como timeout.
+async fn chamar_rpc_longo(
+    client: &transport::MuxClient,
+    tenant_id: &str,
+    method: &str,
+    payload: serde_json::Value,
+) -> anyhow::Result<serde_json::Value> {
+    use contracts::{Envelope, MessageKind};
+
+    let envelope = Envelope {
+        tenant_id: tenant_id.to_string(),
+        schema_version: 1,
+        message_id: uuid::Uuid::now_v7().to_string(),
+        causation_id: "scheduler.tick".to_string(),
+        traceparent: String::new(),
+        occurred_at: chrono::Utc::now().timestamp_millis(),
+        kind: MessageKind::Request as i32,
+        method: method.to_string(),
+        payload: serde_json::to_vec(&payload).unwrap_or_default(),
+        error: None,
+        auth_user_id: 0,
+        auth_scopes: vec!["*".to_string()],
+        auth_is_superuser: false,
+        flow_permissions: vec![],
+        user_agent: String::new(),
+    };
+
+    let resp = client.call(envelope, Duration::from_secs(30)).await?;
+    if resp.kind == MessageKind::Error as i32 {
+        let msg = resp
+            .error
+            .as_ref()
+            .map(|e| e.message.as_str())
+            .unwrap_or("erro desconhecido");
+        anyhow::bail!("RPC {} falhou: {}", method, msg);
+    }
+    Ok(serde_json::from_slice(&resp.payload)?)
 }
 
 const SISTEMA_TENANT_PLACEHOLDER: &str = "00000000-0000-0000-0000-000000000000";

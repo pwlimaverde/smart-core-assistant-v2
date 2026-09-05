@@ -41,7 +41,12 @@ Future<void> bootstrap(AppConfig config) async {
     OnboardingModule(),
     // O menu do tenant vai junto: o quadro é a primeira tela depois do login,
     // e sem ele não havia caminho para nenhuma configuração.
-    OperacionalModule(drawerBuilder: TenantDrawer.new),
+    OperacionalModule(
+      drawerBuilder: TenantDrawer.new,
+      // WhatsApp fora do ar aparece na primeira tela: sem isso, a fila só
+      // para de encher e ninguém entende por quê.
+      avisoBuilder: AvisoConexao.new,
+    ),
     TenantModule(),
     TreinamentoModule(drawerBuilder: TenantDrawer.new),
     InitialLoadingModule(),

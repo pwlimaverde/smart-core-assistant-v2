@@ -58,6 +58,7 @@ async fn main() -> anyhow::Result<()> {
     let s_send_text = state.clone();
     let s_send_media = state.clone();
     let s_bulk_disconnect = state.clone();
+    let s_reconciliar = state.clone();
 
     // Novas rotas de capacidades opcionais
     let s_mark_read = state.clone();
@@ -82,6 +83,10 @@ async fn main() -> anyhow::Result<()> {
         .route("GetWhatsappInstanceStatus", move |env| {
             let s = s_status.clone();
             Box::pin(async move { handler_get_whatsapp_instance_status(s, env).await })
+        })
+        .route("ReconciliarConexaoInstancia", move |env| {
+            let s = s_reconciliar.clone();
+            Box::pin(async move { handler_reconciliar_conexao_instancia(s, env).await })
         })
         .route("SendWhatsappMessage", move |env| {
             let s = s_send_text.clone();
@@ -586,6 +591,190 @@ async fn handler_reconnect_whatsapp_instance(state: AppState, env: Envelope) -> 
         "ReconnectWhatsappInstanceReply",
         serde_json::json!({ "status": "success" }),
     )
+}
+
+/// Confere uma instância com o provedor e a religa se o socket caiu.
+///
+/// É o que mantém o WhatsApp no ar sem ninguém olhando. O socket cai por
+/// motivos banais — rede, restart do container do provedor, o próprio WhatsApp
+/// derrubando — e, sem alguém para religá-lo, a instância fica fora
+/// indefinidamente. Passados ~14 dias offline o WhatsApp **desvincula o
+/// aparelho**, e aí não há reconexão que resolva: só um QR novo, presencial.
+/// Religar cedo é o que evita esse ponto sem volta.
+///
+/// **Nunca pede o QR** — diferente de `GetWhatsappInstanceStatus`, que o pede
+/// quando não está conectado. Pedir o QR reinicia o cliente no provedor, e ao
+/// quinto código a evolution-go força logout. Num laço periódico isso derrubaria
+/// justamente a sessão que viemos preservar.
+///
+/// Religar usa `connect`, não `reconnect`: `/instance/reconnect` responde
+/// "no active session found" quando o socket já caiu — ele serve para uma sessão
+/// viva, não para ressuscitar uma morta.
+#[tracing::instrument(skip_all, fields(rpc = "ReconciliarConexaoInstancia", tenant_id = %env.tenant_id))]
+async fn handler_reconciliar_conexao_instancia(state: AppState, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let db_id = match payload.get("id").and_then(|v| v.as_i64()) {
+        Some(id) => id,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+
+    let instance = match chamar_data_postgres(
+        "GetWhatsappInstance",
+        &env.tenant_id,
+        serde_json::json!({ "id": db_id }),
+        &env,
+    )
+    .await
+    {
+        Ok(inst) => inst,
+        Err(e) => return erro(e, &env),
+    };
+
+    let name = match instance.get("name").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => {
+            return erro(
+                error_core::AppError::Database("não encontrado: Instância não encontrada".into()),
+                &env,
+            )
+        }
+    };
+
+    let api_key = match instance.get("api_key").and_then(|v| v.as_str()) {
+        Some(s) => s,
+        None => {
+            return erro(
+                error_core::AppError::Validation("Chave da instância ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let provider_name = instance
+        .get("provider")
+        .and_then(|v| v.as_str())
+        .unwrap_or("evolution");
+    let p = match state.registry.resolve(provider_name) {
+        Ok(prov) => prov,
+        Err(e) => return erro(error_core::AppError::Internal(e.to_string()), &env),
+    };
+
+    let api_key_sec = SecretString::from(api_key.to_string());
+
+    let estado_inicial = p
+        .get_connection_state(name, &api_key_sec)
+        .await
+        .unwrap_or(ConnectionState::Unknown);
+
+    // Já no ar: só carimba o estado e sai. É o caminho de todo tick normal.
+    if estado_inicial == ConnectionState::Connected {
+        gravar_estado(&env, db_id, "connected").await;
+        return ok_reply(
+            &env,
+            "ReconciliarConexaoInstanciaReply",
+            serde_json::json!({ "state": "connected", "religada": false, "precisa_parear": false }),
+        );
+    }
+
+    // `Unknown` é "não sei", não "está fora": o provedor pode ter engasgado.
+    // Religar por não saber acabaria reiniciando um cliente saudável.
+    if estado_inicial == ConnectionState::Unknown {
+        tracing::warn!(
+            instance_id = db_id,
+            "provedor não respondeu o estado; sem ação"
+        );
+        return ok_reply(
+            &env,
+            "ReconciliarConexaoInstanciaReply",
+            serde_json::json!({ "state": "unknown", "religada": false, "precisa_parear": false }),
+        );
+    }
+
+    let webhook_conf = WebhookConfig {
+        url: format!(
+            "http://webhook_ingress:9200/webhook/{}/{}/{}",
+            provider_name, env.tenant_id, db_id
+        ),
+        subscribe: vec![
+            "MESSAGE".to_string(),
+            "CONNECTION".to_string(),
+            "PRESENCE".to_string(),
+            "QRCODE".to_string(),
+        ],
+    };
+
+    if let Err(e) = p.connect_instance(name, &api_key_sec, &webhook_conf).await {
+        tracing::warn!(instance_id = db_id, erro = %e, "falha ao religar instância");
+        gravar_estado(&env, db_id, "disconnected").await;
+        return ok_reply(
+            &env,
+            "ReconciliarConexaoInstanciaReply",
+            serde_json::json!({ "state": "disconnected", "religada": false, "precisa_parear": false }),
+        );
+    }
+
+    // O handshake não é instantâneo: o socket abre e a sessão é validada logo
+    // depois. Conferir no mesmo instante devolveria `Connecting` sempre.
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    let estado_final = p
+        .get_connection_state(name, &api_key_sec)
+        .await
+        .unwrap_or(ConnectionState::Unknown);
+
+    let (texto, religada, precisa_parear) = match estado_final {
+        ConnectionState::Connected => ("connected", true, false),
+        // Socket aberto e sessão recusada: o aparelho foi desvinculado do lado
+        // do WhatsApp. Nenhuma reconexão resolve — é QR na mão do usuário. Quem
+        // avisa é a tela, por isso o sinalizador sobe até o cliente.
+        ConnectionState::Connecting => ("connecting", false, true),
+        ConnectionState::Disconnected => ("disconnected", false, true),
+        ConnectionState::Unknown => ("unknown", false, false),
+    };
+
+    if texto != "unknown" {
+        gravar_estado(&env, db_id, texto).await;
+    }
+
+    if religada {
+        tracing::info!(instance_id = db_id, "instância religada pela reconciliação");
+    } else if precisa_parear {
+        tracing::warn!(
+            instance_id = db_id,
+            estado = texto,
+            "instância exige novo pareamento (QR); reconexão não resolve"
+        );
+    }
+
+    ok_reply(
+        &env,
+        "ReconciliarConexaoInstanciaReply",
+        serde_json::json!({
+            "state": texto,
+            "religada": religada,
+            "precisa_parear": precisa_parear
+        }),
+    )
+}
+
+/// Carimba o estado no banco. Best-effort: a reconciliação não deve falhar
+/// porque a escrita do estado falhou — o próximo tick tenta de novo.
+async fn gravar_estado(env: &Envelope, db_id: i64, estado: &str) {
+    let _ = chamar_data_postgres(
+        "AtualizarEstadoInstancia",
+        &env.tenant_id,
+        serde_json::json!({
+            "id": db_id,
+            "connection_state": estado,
+            "origem": "reconciliacao",
+        }),
+        env,
+    )
+    .await;
 }
 
 #[tracing::instrument(skip_all, fields(rpc = "GetWhatsappInstanceStatus", tenant_id = %env.tenant_id))]
