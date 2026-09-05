@@ -256,3 +256,7 @@ $RECYCLE.BIN/
 .nfs*
 
 
+
+# Backups da desativacao da v1 (2026-09-05). Guardados no repo para ficarem a
+# mao, NUNCA versionados: os dumps carregam API keys e dados de clientes.
+smart-agent-config/doc_dev/backups/
