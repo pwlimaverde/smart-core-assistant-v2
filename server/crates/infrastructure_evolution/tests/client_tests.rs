@@ -160,14 +160,15 @@ async fn test_delete_instance_sem_listagem_usa_o_nome() {
 
 /// Depois do pareamento a evolution-go continua dizendo `LoggedIn: false` no
 /// `/instance/status` — mesmo tendo anotado "Client successfully validated" no
-/// proprio log. Quem sabe a verdade e o `jid`.
+/// proprio log. Quem desempata e o `/instance/all`: aparelho vinculado (`jid`)
+/// E instancia dada por conectada (`connected`).
 ///
 /// Nao e detalhe: enquanto o estado nao for `Connected` o handler segue pedindo
 /// o QR, e pedir o QR reinicia o cliente. Ao fim de cinco codigos a Evolution
 /// forca logout e derruba a sessao recem-pareada — o usuario conectava e via o
 /// QR reaparecer.
 #[tokio::test]
-async fn test_status_com_jid_e_tratado_como_conectado() {
+async fn test_status_com_jid_e_conectado_e_tratado_como_conectado() {
     let (server, provider) = setup().await;
 
     Mock::given(method("GET"))
@@ -185,7 +186,8 @@ async fn test_status_com_jid_e_tratado_como_conectado() {
             "data": [{
                 "id": "47b63c55-ed20-402d-99d4-67a88ef36378",
                 "name": "atendimento",
-                "jid": "558881061874:75@s.whatsapp.net"
+                "jid": "558881061874:75@s.whatsapp.net",
+                "connected": true
             }],
             "message": "success"
         })))
@@ -197,6 +199,55 @@ async fn test_status_com_jid_e_tratado_como_conectado() {
         .await
         .unwrap();
     assert_eq!(estado, ConnectionState::Connected);
+}
+
+/// O `jid` sozinho NAO prova conexao: ele continua no registro depois que o
+/// WhatsApp desvincula o aparelho.
+///
+/// Retrato do que aconteceu em producao: o socket reabre a cada `connect`
+/// (`/instance/status` responde `Connected: true`), o `jid` antigo segue la, e
+/// mesmo assim o `/instance/all` diz `connected: false` com
+/// `disconnect_reason: "websocket is closed by the server"` — sessao recusada.
+/// Tratar isso como conectado deixava a instancia morta reportada como no ar
+/// para sempre: nada religava, o painel mentia, e ao fim de ~14 dias offline o
+/// vinculo expirava de vez.
+#[tokio::test]
+async fn test_status_com_jid_mas_sessao_recusada_nao_e_conectado() {
+    let (server, provider) = setup().await;
+
+    Mock::given(method("GET"))
+        .and(path("/instance/status"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": { "Connected": true, "LoggedIn": false, "Name": "" },
+            "message": "success"
+        })))
+        .mount(&server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/instance/all"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": [{
+                "id": "47b63c55-ed20-402d-99d4-67a88ef36378",
+                "name": "atendimento",
+                "jid": "558881061874:75@s.whatsapp.net",
+                "connected": false,
+                "disconnect_reason": "Disconnected emitted because the websocket is closed by the server."
+            }],
+            "message": "success"
+        })))
+        .mount(&server)
+        .await;
+
+    let estado = provider
+        .get_connection_state("atendimento", &SecretString::from("tok".to_string()))
+        .await
+        .unwrap();
+    assert_eq!(
+        estado,
+        ConnectionState::Connecting,
+        "sessao recusada nao pode passar por conectada — e o que trava a religada automatica"
+    );
 }
 
 /// Sem aparelho vinculado, `jid` vazio: segue `Connecting` e o QR continua
