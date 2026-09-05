@@ -1,0 +1,30 @@
+# =============================================================================
+# Site público — Smart Core Assistant
+# =============================================================================
+# Projeto compose PRÓPRIO, como evolution/observability/edge. Isolado de
+# propósito: o site tem de sobreviver a qualquer mexida na v2, e é a única coisa
+# que continua no ar do lado público enquanto a plataforma não abre.
+#
+# Não usa `shared_network`: o edge alcança pela porta publicada no host
+# (`host.docker.internal:SITE_HOST_PORT`), o mesmo caminho de todo o resto da
+# v2. Isso é o que permite desligar a stack da v1 sem levar o site junto.
+#
+# Subir (a partir de docker/site/):
+#   docker compose -p smart-core-site up -d --build
+# =============================================================================
+name: smart-core-site
+
+services:
+  site:
+    build:
+      context: .
+    image: smartcore-site:local
+    restart: unless-stopped
+    ports:
+      - "${SITE_HOST_PORT:-8085}:80"
+    mem_limit: 64m
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

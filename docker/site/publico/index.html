@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Core Assistant</title>
+
+    <!-- Tailwind CSS — compilado pós-modularização -->
+    <link rel="stylesheet" href="/static/css/core.build.css?v=1781024516">
+
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
+
+    <style>
+        [x-cloak] { display: none !important; }
+        /* Entrar e Criar conta desligados enquanto a v2 nao abre ao publico. */
+        [data-acesso-desativado] { opacity: .45; cursor: not-allowed; pointer-events: none; }
+    </style>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Custom CSS (overrides herdados da v1.2.3) -->
+
+    
+</head>
+
+<body class="bg-stone-50 text-stone-900 font-outfit antialiased selection:bg-[#a98f71] selection:text-white">
+
+    
+
+<!-- Public Navbar -->
+<header id="public-navbar" class="fixed w-full top-0 z-50 transition-all duration-300 bg-transparent py-4">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center">
+            <!-- Logo -->
+            <div class="flex items-center gap-3">
+                <a href="/" class="flex items-center gap-2 group">
+                    <img src="/static/img/logo_branca_smart_v2.png" alt="Smart Core" class="h-8 w-auto">
+                    <span
+                        class="text-xl font-medium tracking-wide text-white group-hover:text-[#a98f71] transition-colors">
+                        Smart Core
+                    </span>
+                </a>
+            </div>
+
+            <!-- Desktop Navigation -->
+            <nav class="hidden md:flex items-center gap-8">
+                <a href="#funcionalidades"
+                    class="text-sm font-medium text-white/90 hover:text-[#a98f71] transition-colors">Funcionalidades</a>
+                <a href="#como-funciona"
+                    class="text-sm font-medium text-white/90 hover:text-[#a98f71] transition-colors">Como Funciona</a>
+            </nav>
+
+            <!-- Auth Actions -->
+            <div class="hidden md:flex items-center gap-4">
+                <a href="#" data-acesso-desativado title="Acesso em breve"
+                    class="px-5 py-2 text-sm font-medium text-white border border-white/20 rounded-full hover:bg-white/10 transition-all">
+                    Entrar
+                </a>
+                <a href="#" data-acesso-desativado title="Cadastro em breve"
+                    class="px-5 py-2 text-sm font-medium text-white bg-[#a98f71] rounded-full hover:bg-[#8b7355] shadow-lg shadow-[#a98f71]/20 transition-all transform hover:-translate-y-0.5">
+                    Criar Conta
+                </a>
+            </div>
+
+            <!-- Mobile Menu Button -->
+            <button class="md:hidden text-white p-2">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16">
+                    </path>
+                </svg>
+            </button>
+        </div>
+    </div>
+</header>
+
+
+<!-- Content -->
+<main class="min-h-screen">
+    
+<!-- Hero Section -->
+<section class="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#1c1917] pt-20">
+    <!-- Overlay Gradient -->
+    <div class="absolute inset-0 z-0 bg-gradient-to-b from-[#1c1917]/50 via-transparent to-[#1c1917]"></div>
+    <div class="absolute inset-0 z-0 opacity-20 bg-[url('https://grainy-gradients.vercel.app/noise.svg')]"></div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 w-full text-center">
+        <!-- Badge -->
+        <div
+            class="inline-flex items-center px-4 py-2 rounded-full border border-white/10 bg-white/5 backdrop-blur-sm mb-8 animate-fade-in-up">
+            <span class="w-2 h-2 rounded-full bg-[#a98f71] mr-2"></span>
+            <span class="text-stone-300 text-sm font-medium">Revolução no Atendimento</span>
+        </div>
+
+        <h1 class="text-5xl md:text-7xl font-bold text-white mb-6 leading-tight tracking-tight">
+            A Inteligência Central do <br>
+            <span class="text-transparent bg-clip-text bg-gradient-to-r from-[#a98f71] to-[#e2d5c5]">Seu Negócio</span>
+        </h1>
+
+        <p class="text-xl text-stone-400 mb-10 max-w-2xl mx-auto font-light leading-relaxed">
+            Orquestre atendimento, vendas e gestão em uma única plataforma unificada.
+            Automatize o repetitivo para que sua equipe foque no que realmente importa.
+        </p>
+
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
+            <a href="#" data-acesso-desativado title="Acesso em breve"
+                class="w-full sm:w-auto px-8 py-4 bg-[#a98f71] hover:bg-[#8b7355] text-white font-semibold rounded-full shadow-[0_0_30px_rgba(169,143,113,0.3)] transition-all transform hover:-translate-y-1">
+                Acessar Plataforma
+            </a>
+            <a href="#" data-acesso-desativado title="Cadastro em breve"
+                class="w-full sm:w-auto px-8 py-4 bg-transparent border border-stone-600 hover:border-[#a98f71] text-stone-300 hover:text-white font-medium rounded-full transition-all flex items-center justify-center gap-2 group">
+                Criar Conta
+                <svg class="w-4 h-4 group-hover:translate-x-1 transition-transform" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                </svg>
+            </a>
+        </div>
+
+        <!-- Video Container -->
+        <div
+            class="relative w-full max-w-4xl mx-auto aspect-video rounded-2xl overflow-hidden shadow-2xl border border-white/10 group">
+            <iframe class="w-full h-full"
+                src="https://www.youtube.com/embed/jJN4SsMhxdg?si=BdK8g1jzOL3utjcq&autoplay=0&controls=1&rel=0"
+                title="Smart Core Presentation" frameborder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                referrerpolicy="strict-origin-when-cross-origin" allowfullscreen>
+            </iframe>
+        </div>
+    </div>
+</section>
+
+<!-- Stats / Social Proof -->
+<section class="py-12 bg-[#1c1917] border-y border-white/5">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-8 text-center divide-x divide-white/5">
+            <div>
+                <div class="text-3xl font-bold text-white mb-1">24/7</div>
+                <div class="text-sm text-stone-500 uppercase tracking-wider">Disponibilidade</div>
+            </div>
+            <div>
+                <div class="text-3xl font-bold text-white mb-1">+50%</div>
+                <div class="text-sm text-stone-500 uppercase tracking-wider">Produtividade</div>
+            </div>
+            <div>
+                <div class="text-3xl font-bold text-white mb-1">Zero</div>
+                <div class="text-sm text-stone-500 uppercase tracking-wider">Perda de Leads</div>
+            </div>
+            <div>
+                <div class="text-3xl font-bold text-white mb-1">100%</div>
+                <div class="text-sm text-stone-500 uppercase tracking-wider">Centralizado</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Why Choose Us -->
+<section id="funcionalidades" class="py-24 bg-stone-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-16">
+            <h2 class="text-3xl font-bold text-[#1c1917] mb-4">Por Que Escolher o Smart Core?</h2>
+            <p class="text-stone-600 max-w-2xl mx-auto">
+                Uma suíte completa de ferramentas projetada para escalar sua operação sem perder a qualidade humana.
+            </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <!-- Card 1 -->
+            <div
+                class="bg-white p-8 rounded-2xl shadow-sm border border-stone-100 hover:shadow-xl hover:border-[#a98f71]/30 transition-all group">
+                <div
+                    class="w-12 h-12 bg-[#a98f71]/10 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                    <span class="text-2xl">🔗</span>
+                </div>
+                <h3 class="text-xl font-semibold text-[#1c1917] mb-3">Centralização Total</h3>
+                <p class="text-stone-600 text-sm leading-relaxed">
+                    Gerencie múltiplos números de WhatsApp e departamentos em um único lugar, sem alternar telas.
+                </p>
+            </div>
+
+            <!-- Card 2 -->
+            <div
+                class="bg-white p-8 rounded-2xl shadow-sm border border-stone-100 hover:shadow-xl hover:border-[#a98f71]/30 transition-all group">
+                <div
+                    class="w-12 h-12 bg-[#a98f71]/10 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                    <span class="text-2xl">🤖</span>
+                </div>
+                <h3 class="text-xl font-semibold text-[#1c1917] mb-3">Atendimento Híbrido</h3>
+                <p class="text-stone-600 text-sm leading-relaxed">
+                    A IA inicia, tira dúvidas e qualifica. Quando necessário, transfere para humano com todo o contexto.
+                </p>
+            </div>
+
+            <!-- Card 3 -->
+            <div
+                class="bg-white p-8 rounded-2xl shadow-sm border border-stone-100 hover:shadow-xl hover:border-[#a98f71]/30 transition-all group">
+                <div
+                    class="w-12 h-12 bg-[#a98f71]/10 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                    <span class="text-2xl">📋</span>
+                </div>
+                <h3 class="text-xl font-semibold text-[#1c1917] mb-3">Organização Visual</h3>
+                <p class="text-stone-600 text-sm leading-relaxed">
+                    Integração nativa com Trello. Cada atendimento vira um cartão Kanban para fácil acompanhamento.
+                </p>
+            </div>
+
+            <!-- Card 4 -->
+            <div
+                class="bg-white p-8 rounded-2xl shadow-sm border border-stone-100 hover:shadow-xl hover:border-[#a98f71]/30 transition-all group">
+                <div
+                    class="w-12 h-12 bg-[#a98f71]/10 rounded-xl flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
+                    <span class="text-2xl">⏰</span>
+                </div>
+                <h3 class="text-xl font-semibold text-[#1c1917] mb-3">Disponibilidade 24/7</h3>
+                <p class="text-stone-600 text-sm leading-relaxed">
+                    Seu negócio nunca para. A IA inteligente atende seus clientes a qualquer hora do dia ou da noite.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Features Deep Dive -->
+<section class="py-24 bg-white relative overflow-hidden">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-12">
+            <!-- Feature Block -->
+            <div class="md:col-span-1">
+                <h2 class="text-3xl font-bold text-[#1c1917] mb-6">Funcionalidades Poderosas</h2>
+                <p class="text-stone-600 mb-8">
+                    Tudo o que você precisa para profissionalizar seu atendimento e escalar suas vendas.
+                </p>
+                <a href="#" data-acesso-desativado title="Cadastro em breve"
+                    class="text-[#a98f71] font-semibold hover:text-[#8b7355] flex items-center gap-2">
+                    Começar Agora
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                    </svg>
+                </a>
+            </div>
+
+            <!-- Features Grid -->
+            <div class="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-8">
+                <div class="flex gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-stone-100 flex items-center justify-center shrink-0 text-xl">🧠
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-[#1c1917] mb-2">IA com RAG (Base de Conhecimento)</h4>
+                        <p class="text-sm text-stone-600">Treine a IA com seus PDFs e manuais. Ela aprende sobre seu
+                            negócio e responde com precisão.</p>
+                    </div>
+                </div>
+
+                <div class="flex gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-stone-100 flex items-center justify-center shrink-0 text-xl">📱
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-[#1c1917] mb-2">Omnichannel WhatsApp</h4>
+                        <p class="text-sm text-stone-600">Conecte múltiplos números. Envie áudios, imagens e documentos
+                            de forma transparente.</p>
+                    </div>
+                </div>
+
+                <div class="flex gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-stone-100 flex items-center justify-center shrink-0 text-xl">👥
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-[#1c1917] mb-2">Gestão de Equipes</h4>
+                        <p class="text-sm text-stone-600">Controle permissões, departamentos e horários de atendimento
+                            de cada agente.</p>
+                    </div>
+                </div>
+
+                <div class="flex gap-4">
+                    <div class="w-10 h-10 rounded-lg bg-stone-100 flex items-center justify-center shrink-0 text-xl">📊
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-[#1c1917] mb-2">Dashboards em Tempo Real</h4>
+                        <p class="text-sm text-stone-600">Acompanhe métricas vitais e tenha auditoria completa de todas
+                            as interações.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- How it Works (Timeline) -->
+<section id="como-funciona" class="py-24 bg-[#1c1917] text-white">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-16">
+            <h2 class="text-3xl font-bold mb-4">Como Funciona na Prática?</h2>
+            <p class="text-stone-400">Um fluxo simples e eficiente para resolver problemas.</p>
+        </div>
+
+        <div class="relative">
+            <!-- Line -->
+            <div class="absolute left-1/2 transform -translate-x-1/2 w-0.5 h-full bg-stone-800 hidden md:block"></div>
+
+            <div class="space-y-12 relative z-10">
+                <!-- Step 1 -->
+                <div class="flex flex-col md:flex-row items-center gap-8">
+                    <div class="w-full md:w-1/2 text-center md:text-right">
+                        <h3 class="text-xl font-bold text-[#a98f71]">1. Cliente Manda Mensagem</h3>
+                        <p class="text-stone-400 mt-2">O cliente entra em contato pelo WhatsApp como faria normalmente.
+                        </p>
+                    </div>
+                    <div
+                        class="w-12 h-12 rounded-full bg-[#a98f71] border-4 border-[#1c1917] flex items-center justify-center font-bold text-white shrink-0">
+                        1</div>
+                    <div class="w-full md:w-1/2"></div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="flex flex-col md:flex-row items-center gap-8">
+                    <div class="w-full md:w-1/2 hidden md:block"></div>
+                    <div
+                        class="w-12 h-12 rounded-full bg-[#a98f71] border-4 border-[#1c1917] flex items-center justify-center font-bold text-white shrink-0">
+                        2</div>
+                    <div class="w-full md:w-1/2 text-center md:text-left">
+                        <h3 class="text-xl font-bold text-[#a98f71]">2. A IA Atende</h3>
+                        <p class="text-stone-400 mt-2">Analisa a dúvida, consulta a base de conhecimento e responde
+                            instantaneamente.</p>
+                    </div>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="flex flex-col md:flex-row items-center gap-8">
+                    <div class="w-full md:w-1/2 text-center md:text-right">
+                        <h3 class="text-xl font-bold text-[#a98f71]">3. Criação de Ticket</h3>
+                        <p class="text-stone-400 mt-2">Um cartão é criado automaticamente no Trello para organização
+                            visual.</p>
+                    </div>
+                    <div
+                        class="w-12 h-12 rounded-full bg-[#a98f71] border-4 border-[#1c1917] flex items-center justify-center font-bold text-white shrink-0">
+                        3</div>
+                    <div class="w-full md:w-1/2"></div>
+                </div>
+
+                <!-- Step 4 -->
+                <div class="flex flex-col md:flex-row items-center gap-8">
+                    <div class="w-full md:w-1/2 hidden md:block"></div>
+                    <div
+                        class="w-12 h-12 rounded-full bg-[#a98f71] border-4 border-[#1c1917] flex items-center justify-center font-bold text-white shrink-0">
+                        4</div>
+                    <div class="w-full md:w-1/2 text-center md:text-left">
+                        <h3 class="text-xl font-bold text-[#a98f71]">4. Resolução ou Humano</h3>
+                        <p class="text-stone-400 mt-2">A IA resolve ou transfere para um atendente humano com todo o
+                            histórico.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Final CTA -->
+<section class="py-24 bg-stone-50 border-t border-stone-200">
+    <div class="max-w-4xl mx-auto px-4 text-center">
+        <h2 class="text-3xl md:text-4xl font-bold text-[#1c1917] mb-6">Pronto para Transformar seu Atendimento?</h2>
+        <p class="text-xl text-stone-600 mb-10">
+            Não é apenas um chatbot; é uma solução completa de gestão de relacionamento.
+        </p>
+        <a href="#" data-acesso-desativado title="Cadastro em breve"
+            class="inline-block px-10 py-4 bg-[#a98f71] hover:bg-[#8b7355] text-white font-bold rounded-full shadow-lg transition-all transform hover:-translate-y-1">
+            Começar Agora
+        </a>
+    </div>
+</section>
+
+</main>
+
+<!-- Public Footer -->
+<footer class="bg-[#1c1917] border-t border-white/10 pt-16 pb-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-12 mb-12">
+            <div class="col-span-1 md:col-span-1">
+                <img src="/static/img/logo_branca_smart_v2.png" alt="Smart Core"
+                    class="h-8 w-auto mb-6 opacity-80">
+                <p class="text-stone-400 text-sm leading-relaxed">
+                    A inteligência central que orquestra atendimento, vendas e gestão em uma única plataforma.
+                </p>
+            </div>
+            <div>
+                <h4 class="text-white font-medium mb-4">Plataforma</h4>
+                <ul class="space-y-2 text-sm text-stone-400">
+                    <li><a href="#" class="hover:text-[#a98f71]">Funcionalidades</a></li>
+                    <li><a href="#" class="hover:text-[#a98f71]">Integrações</a></li>
+                    <li><a href="#" class="hover:text-[#a98f71]">Preços</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="text-white font-medium mb-4">Legal</h4>
+                <ul class="space-y-2 text-sm text-stone-400">
+                    <li><a href="#" class="hover:text-[#a98f71]">Termos de Uso</a></li>
+                    <li><a href="#" class="hover:text-[#a98f71]">Privacidade</a></li>
+                    <li><a href="#" class="hover:text-[#a98f71]">Compliance</a></li>
+                </ul>
+            </div>
+            <div>
+                <h4 class="text-white font-medium mb-4">Contato</h4>
+                <ul class="space-y-2 text-sm text-stone-400">
+                    <li>contato@smartcoreassistant.com.br</li>
+                    <li>(88) 92172-9550</li>
+                </ul>
+            </div>
+        </div>
+        <div class="border-t border-white/10 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
+            <p class="text-xs text-stone-500">© 2026 Smart Core Assistant. Todos os direitos reservados.</p>
+            <div class="flex items-center gap-4">
+                <!-- Social icons placehoder -->
+            </div>
+        </div>
+    </div>
+</footer>
+
+<script>
+    // Navbar scroll effect
+    window.addEventListener('scroll', () => {
+        const navbar = document.getElementById('public-navbar');
+        if (window.scrollY > 50) {
+            navbar.classList.add('bg-[#1c1917]/90', 'backdrop-blur-md', 'shadow-lg', 'py-2');
+            navbar.classList.remove('bg-transparent', 'py-4');
+        } else {
+            navbar.classList.remove('bg-[#1c1917]/90', 'backdrop-blur-md', 'shadow-lg', 'py-2');
+            navbar.classList.add('bg-transparent', 'py-4');
+        }
+    });
+</script>
+
+
+    
+</body>
+
+</html>

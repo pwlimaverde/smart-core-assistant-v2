@@ -80,13 +80,15 @@ smartcoreassistant.com.br {
 		reverse_proxy h2c://host.docker.internal:{$RUNTIME_WEB_PORT:50052}
 	}
 
-	# v1: painel Django (fallback — tudo que nao bateu acima; app/dados intactos,
-	# so o ingress passou pro Docker).
+	# Site publico (fallback — tudo que nao bateu acima).
+	#
+	# Era o Django da v1 (`smartcoreassistant_app:8000`), o que obrigava a manter
+	# app, Celery, Redis e Postgres da v1 ligados so para a landing page ficar no
+	# ar. Agora e um container estatico proprio (docker/site), alcancado pela
+	# porta publicada no host — sem `shared_network`, que era a outra amarra com
+	# a stack antiga.
 	handle {
-		reverse_proxy smartcoreassistant_app:8000 {
-			header_up X-Real-IP {remote_host}
-			header_up Host {host}
-		}
+		reverse_proxy host.docker.internal:{$SITE_HOST_PORT:8085}
 	}
 
 	header {

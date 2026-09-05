@@ -26,13 +26,13 @@ services:
     volumes:
       - caddy_data:/data       # certificados Let's Encrypt (PERSISTIR)
       - caddy_config:/config
-    networks:
-      - v1net                  # alcanca o container do painel v1 (smartcoreassistant_app)
 
-networks:
-  v1net:
-    name: shared_network
-    external: true
+# Sem `networks`: a borda alcanca TUDO por porta publicada no host
+# (host.docker.internal). Havia aqui uma ligacao a `shared_network`, a rede da
+# stack v1, usada so para falar com o Django do painel antigo. Com o site
+# publico servido por container proprio, a v1 saiu do ar e essa amarra tinha de
+# sair junto — mantida, ela faria a borda (e todo o dominio) deixar de subir no
+# dia em que a rede da v1 fosse removida.
 
 volumes:
   caddy_data:
