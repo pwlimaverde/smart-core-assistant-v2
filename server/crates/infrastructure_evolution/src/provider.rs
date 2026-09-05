@@ -146,21 +146,41 @@ impl EvolutionProvider {
             .cloned()
     }
 
-    /// `true` quando existe aparelho vinculado à instância.
+    /// `true` quando a instância tem aparelho vinculado **e** o provedor a
+    /// considera conectada.
     ///
-    /// O `jid` é o identificador do dispositivo pareado. Ele é o sinal confiável
-    /// de "já conectou": a evolution-go mantém `LoggedIn: false` no
-    /// `/instance/status` mesmo depois de registrar
-    /// "Client successfully validated - Connected: true" no próprio log.
-    async fn tem_aparelho_vinculado(&self, instance_name: &str) -> bool {
-        self.buscar_instancia(instance_name)
-            .await
-            .and_then(|i| {
-                i.get("jid")
-                    .and_then(|v| v.as_str())
-                    .map(|s| !s.trim().is_empty())
-            })
-            .unwrap_or(false)
+    /// Serve de desempate para o `/instance/status`, que mantém
+    /// `LoggedIn: false` mesmo depois de a evolution-go registrar "Client
+    /// successfully validated - Connected: true" no próprio log.
+    ///
+    /// As duas condições são necessárias, e cada uma sozinha engana:
+    ///
+    /// - o `jid` **continua** no registro depois que o WhatsApp desvincula o
+    ///   aparelho, então ele prova "já foi pareado um dia", não "está no ar";
+    /// - `connected` sem `jid` é socket de pé aguardando o primeiro pareamento.
+    ///
+    /// Foi essa diferença que deixou uma instância morta reportada como
+    /// conectada: o socket reabria, o `jid` antigo continuava lá, e o
+    /// `/instance/all` dizia `connected: false` com
+    /// `disconnect_reason: "websocket is closed by the server"` — a sessão
+    /// recusada pelo WhatsApp. Quem tem a verdade é este endpoint.
+    async fn sessao_confirmada_no_provedor(&self, instance_name: &str) -> bool {
+        let Some(inst) = self.buscar_instancia(instance_name).await else {
+            return false;
+        };
+
+        let tem_jid = inst
+            .get("jid")
+            .and_then(|v| v.as_str())
+            .map(|s| !s.trim().is_empty())
+            .unwrap_or(false);
+
+        let conectada = inst
+            .get("connected")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        tem_jid && conectada
     }
 
     /// Traduz o nome da instância no UUID que as rotas com `{instanceId}` na
@@ -364,14 +384,18 @@ impl InstanceManager for EvolutionProvider {
         // código, conectava, e via o QR reaparecer.
         //
         // MAS o `jid` sozinho não prova conexão: ele CONTINUA no registro depois
-        // que o WhatsApp desvincula o aparelho. Aplicar o atalho com o socket
-        // fechado fazia o servidor responder `Connected` para uma instância
-        // morta — para sempre. Nada reconectava, o painel mentia, e ao fim de
-        // ~14 dias offline o WhatsApp cortava o vínculo de vez, obrigando um QR
-        // novo. Por isso o atalho vale só em `Connecting`, que é o estado que o
-        // comentário acima descreve: socket ABERTO, sessão ainda não confirmada.
-        // Socket fechado é desconexão de verdade, com ou sem `jid`.
-        if estado == ConnectionState::Connecting && self.tem_aparelho_vinculado(instance_name).await
+        // que o WhatsApp desvincula o aparelho. Confiar nele fazia o servidor
+        // responder `Connected` para uma instância morta — para sempre. Nada
+        // reconectava, o painel mentia, e ao fim de ~14 dias offline o WhatsApp
+        // cortava o vínculo de vez, obrigando um QR novo.
+        //
+        // Duas guardas contra isso. O atalho vale só em `Connecting` — socket
+        // ABERTO, que é o caso descrito acima; socket fechado é desconexão, com
+        // `jid` ou sem. E o desempate exige que o provedor também dê a instância
+        // por conectada (ver `sessao_confirmada_no_provedor`), porque o socket
+        // reabre mesmo quando o WhatsApp recusa a sessão.
+        if estado == ConnectionState::Connecting
+            && self.sessao_confirmada_no_provedor(instance_name).await
         {
             return Ok(ConnectionState::Connected);
         }
