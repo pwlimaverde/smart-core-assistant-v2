@@ -28,6 +28,8 @@ void main() {
   setUpAll(() {
     registerFallbackValue(proto.ListMyWhatsappInstancesRequest());
     registerFallbackValue(proto.MyWhatsappInstanceIdRequest());
+    registerFallbackValue(proto.CreateMyWhatsappInstanceRequest());
+    registerFallbackValue(proto.GetMyWhatsappInstanceStatusRequest());
   });
 
   setUp(() => client = _MockAdminClient());
@@ -138,6 +140,99 @@ void main() {
 
       final res = await listar()(noParams);
       expect((res as Failure).error, isA<ConexoesIndisponivel>());
+    });
+  });
+
+  group('pareamento', () {
+    EstadoPareamentoUsecase pareamento() => EstadoPareamentoUsecase(
+          repository: EstadoPareamentoRepository(
+            datasource: EstadoPareamentoDatasource(client: client),
+          ),
+        );
+
+    test('criar devolve o id necessário para acompanhar o pareamento', () async {
+      // Sem o id não há como consultar o QR em seguida — a instância nasceria
+      // e ficaria pendurada, que é o defeito que esta tela veio corrigir.
+      when(() => client.createMyWhatsappInstance(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.CreateMyWhatsappInstanceResponse(
+            id: 42,
+            instanceName: 'vendas',
+            provider: 'evolution',
+          ),
+        ),
+      );
+
+      final usecase = CriarConexaoUsecase(
+        repository: CriarConexaoRepository(
+          datasource: CriarConexaoDatasource(client: client),
+        ),
+      );
+      final res = await usecase(const CriarConexaoParameters(nome: 'vendas'));
+      final criada = (res as Success<ConexaoCriada, ConexoesError>).value;
+
+      expect(criada.id, 42);
+      expect(criada.nome, 'vendas');
+
+      final enviado = verify(() => client.createMyWhatsappInstance(captureAny()))
+          .captured
+          .single as proto.CreateMyWhatsappInstanceRequest;
+      expect(enviado.instanceName, 'vendas');
+    });
+
+    test('estado com QR ainda não está conectado', () async {
+      when(() => client.getMyWhatsappInstanceStatus(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.GetMyWhatsappInstanceStatusResponse(
+            connectionState: 'connecting',
+            qrCode: 'iVBORw0KGgo=',
+          ),
+        ),
+      );
+
+      final res = await pareamento()(const ConexaoIdParameters(id: 1));
+      final estado =
+          (res as Success<EstadoPareamento, ConexoesError>).value;
+
+      expect(estado.temQr, isTrue);
+      expect(estado.conectado, isFalse);
+    });
+
+    test('conectado vem sem QR — a caixa fecha por aqui', () async {
+      when(() => client.getMyWhatsappInstanceStatus(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.GetMyWhatsappInstanceStatusResponse(
+            connectionState: 'connected',
+            qrCode: '',
+          ),
+        ),
+      );
+
+      final res = await pareamento()(const ConexaoIdParameters(id: 1));
+      final estado =
+          (res as Success<EstadoPareamento, ConexoesError>).value;
+
+      expect(estado.conectado, isTrue);
+      expect(estado.temQr, isFalse);
+    });
+
+    test('nome repetido é recusa do provedor, não erro nosso', () async {
+      when(() => client.createMyWhatsappInstance(any())).thenAnswer(
+        (_) => falhaGrpc(
+          proto.GrpcError.alreadyExists('já existe uma instância com esse nome'),
+        ),
+      );
+
+      final usecase = CriarConexaoUsecase(
+        repository: CriarConexaoRepository(
+          datasource: CriarConexaoDatasource(client: client),
+        ),
+      );
+      final res = await usecase(const CriarConexaoParameters(nome: 'atendimento'));
+
+      final erro = (res as Failure).error;
+      expect(erro, isA<ConexaoRecusada>());
+      expect(erro.message, contains('já existe'));
     });
   });
 }

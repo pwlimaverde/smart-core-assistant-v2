@@ -19,6 +19,8 @@ final class ConexoesRoute extends GetItModule {
         listar: inject<ListarConexoesUsecase>(),
         reconectar: inject<ReconectarConexaoUsecase>(),
         remover: inject<RemoverConexaoUsecase>(),
+        criar: inject<CriarConexaoUsecase>(),
+        pareamento: inject<EstadoPareamentoUsecase>(),
       ),
     );
   }

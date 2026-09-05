@@ -29,6 +29,8 @@ void main() {
   setUpAll(() {
     registerFallbackValue(proto.ListMyWhatsappInstancesRequest());
     registerFallbackValue(proto.MyWhatsappInstanceIdRequest());
+    registerFallbackValue(proto.CreateMyWhatsappInstanceRequest());
+    registerFallbackValue(proto.GetMyWhatsappInstanceStatusRequest());
     registerFallbackValue(proto.ListMyDepartamentosRequest());
     registerFallbackValue(proto.ListMyAtendentesRequest());
     registerFallbackValue(proto.CreateMyDepartamentoRequest());
@@ -75,6 +77,16 @@ void main() {
               datasource: RemoverConexaoDatasource(client: client),
             ),
           ),
+          criar: CriarConexaoUsecase(
+            repository: CriarConexaoRepository(
+              datasource: CriarConexaoDatasource(client: client),
+            ),
+          ),
+          pareamento: EstadoPareamentoUsecase(
+            repository: EstadoPareamentoRepository(
+              datasource: EstadoPareamentoDatasource(client: client),
+            ),
+          ),
         ),
       );
     }
@@ -97,6 +109,16 @@ void main() {
           ),
         ),
       );
+      // A tela confere cada conexão com o provedor ao carregar; por padrão o
+      // provedor concorda com o banco.
+      when(() => client.getMyWhatsappInstanceStatus(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.GetMyWhatsappInstanceStatusResponse(
+            connectionState: estado,
+            qrCode: '',
+          ),
+        ),
+      );
     }
 
     testWidgets('lista as conexões com a situação', (tester) async {
@@ -108,6 +130,29 @@ void main() {
 
       expect(find.text('atendimento'), findsOneWidget);
       expect(find.text('Conectada'), findsOneWidget);
+    });
+
+    testWidgets('estado velho no banco não engana a tela', (tester) async {
+      // O banco guarda o último estado conhecido, e ele envelhece: uma sessão
+      // que caiu no WhatsApp continua gravada como `connected`. Sem conferir
+      // com o provedor, a tela mostrava "Conectada" para uma conexão morta — e
+      // escondia justamente o botão de reconectar.
+      respondeCom('connected');
+      when(() => client.getMyWhatsappInstanceStatus(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.GetMyWhatsappInstanceStatusResponse(
+            connectionState: 'disconnected',
+            qrCode: '',
+          ),
+        ),
+      );
+      registrar();
+
+      await montar(tester, const ConexoesPage());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Desconectada'), findsOneWidget);
+      expect(find.byTooltip('Reconectar'), findsOneWidget);
     });
 
     testWidgets('conexão conectada NÃO oferece reconectar', (tester) async {
@@ -134,11 +179,27 @@ void main() {
       expect(find.byTooltip('Reconectar'), findsOneWidget);
     });
 
-    testWidgets('reconectar avisa para ler o QR', (tester) async {
+    testWidgets('reconectar abre a caixa de pareamento', (tester) async {
+      // A promessa antiga era um aviso ("leia o QR se ele aparecer") sem lugar
+      // nenhum onde o código aparecesse. Agora reconectar abre a caixa que
+      // mostra o QR e acompanha o pareamento.
       respondeCom('disconnected');
       when(() => client.reconnectMyWhatsappInstance(any())).thenAnswer(
         (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
       );
+      // Desconectada ao abrir a tela (para o botão aparecer) e conectada da
+      // segunda consulta em diante: o pareamento conclui, a caixa anuncia e o
+      // ciclo de espera para — sem isso o teste não estabiliza.
+      var consultas = 0;
+      when(() => client.getMyWhatsappInstanceStatus(any())).thenAnswer((_) {
+        consultas += 1;
+        return respostaGrpc(
+          proto.GetMyWhatsappInstanceStatusResponse(
+            connectionState: consultas == 1 ? 'disconnected' : 'connected',
+            qrCode: '',
+          ),
+        );
+      });
       registrar();
 
       await montar(tester, const ConexoesPage());
@@ -148,7 +209,30 @@ void main() {
       await tester.pumpAndSettle();
 
       verify(() => client.reconnectMyWhatsappInstance(any())).called(1);
-      expect(find.textContaining('Leia o QR code'), findsOneWidget);
+      expect(find.textContaining('WhatsApp conectado'), findsOneWidget);
+
+      await tester.tap(find.text('Fechar'));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('nova conexão pede o nome antes de criar', (tester) async {
+      // Sem este caminho, o tenant que remove a última conexão fica sem saída:
+      // o roteiro inicial, que criava a primeira, só roda uma vez.
+      respondeCom('connected');
+      registrar();
+
+      await montar(tester, const ConexoesPage());
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('Nova conexão'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Nova conexão'), findsWidgets);
+      expect(find.text('Nome da conexão'), findsOneWidget);
+
+      await tester.tap(find.text('Cancelar'));
+      await tester.pumpAndSettle();
+      verifyNever(() => client.createMyWhatsappInstance(any()));
     });
 
     testWidgets('falha ao reconectar mostra a mensagem do provedor', (

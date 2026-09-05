@@ -6,3 +6,11 @@ final class ConexaoIdParameters extends Parameters {
 
   const ConexaoIdParameters({required this.id});
 }
+
+/// Nome da instância no provedor — precisa ser único entre todos os tenants,
+/// e é o servidor quem recusa a repetição.
+final class CriarConexaoParameters extends Parameters {
+  final String nome;
+
+  const CriarConexaoParameters({required this.nome});
+}

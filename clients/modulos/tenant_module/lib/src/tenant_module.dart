@@ -196,6 +196,20 @@ final class TenantModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<CriarConexaoUsecase>(
+      () => CriarConexaoUsecase(
+        repository: CriarConexaoRepository(
+          datasource: CriarConexaoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<EstadoPareamentoUsecase>(
+      () => EstadoPareamentoUsecase(
+        repository: EstadoPareamentoRepository(
+          datasource: EstadoPareamentoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
 
     // ── contatos ──────────────────────────────────────────────────────────
     i.lazySingleton<ListarContatosUsecase>(

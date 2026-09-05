@@ -3359,10 +3359,14 @@ impl AdminService for AdminFacade {
         &self,
         req: Request<ListMyWhatsappInstancesRequest>,
     ) -> Result<Response<ListMyWhatsappInstancesResponse>, Status> {
+        // Listar é leitura do BANCO, não do provedor: quem tem a rota
+        // `ListWhatsappInstances` é o `data_postgres`. Mandar para o
+        // `data_whatsapp` (que só fala com a Evolution) devolvia "método
+        // desconhecido" e a tela de conexões nunca carregava.
         let corpo = self
             .encaminhar_tenant(
                 &req,
-                &self.whatsapp,
+                &self.deps.pg,
                 "ListWhatsappInstances",
                 serde_json::json!({}),
             )

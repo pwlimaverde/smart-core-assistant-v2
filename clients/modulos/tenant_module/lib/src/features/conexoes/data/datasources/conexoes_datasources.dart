@@ -63,3 +63,40 @@ final class RemoverConexaoDatasource
     return unit;
   }
 }
+
+final class CriarConexaoDatasource
+    implements Datasource<ConexaoCriada, CriarConexaoParameters> {
+  final proto.AdminServiceClient _client;
+
+  const CriarConexaoDatasource({required proto.AdminServiceClient client})
+      // ignore: prefer_initializing_formals
+      : _client = client;
+
+  @override
+  Future<ConexaoCriada> call(CriarConexaoParameters parameters) async {
+    final resp = await _client.createMyWhatsappInstance(
+      proto.CreateMyWhatsappInstanceRequest(instanceName: parameters.nome),
+    );
+    return ConexaoCriada(id: resp.id, nome: resp.instanceName);
+  }
+}
+
+final class EstadoPareamentoDatasource
+    implements Datasource<EstadoPareamento, ConexaoIdParameters> {
+  final proto.AdminServiceClient _client;
+
+  const EstadoPareamentoDatasource({required proto.AdminServiceClient client})
+      // ignore: prefer_initializing_formals
+      : _client = client;
+
+  @override
+  Future<EstadoPareamento> call(ConexaoIdParameters parameters) async {
+    final resp = await _client.getMyWhatsappInstanceStatus(
+      proto.GetMyWhatsappInstanceStatusRequest(id: parameters.id),
+    );
+    return EstadoPareamento(
+      estado: resp.connectionState,
+      qrCode: resp.qrCode,
+    );
+  }
+}

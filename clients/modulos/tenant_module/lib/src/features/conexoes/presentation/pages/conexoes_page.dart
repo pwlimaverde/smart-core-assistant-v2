@@ -3,6 +3,7 @@ import 'package:dependencies_module/dependencies_module.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/conexao.dart';
 import '../controllers/conexoes_controllers.dart';
+import '../widgets/pareamento_dialog.dart';
 
 /// Conexões de WhatsApp do tenant.
 ///
@@ -33,6 +34,11 @@ class _ConexoesPageState extends State<ConexoesPage> {
       drawer: const TenantDrawer(),
       actions: [
         IconButton(
+          icon: const Icon(Icons.add_link),
+          tooltip: 'Nova conexão',
+          onPressed: () => _novaConexao(context),
+        ),
+        IconButton(
           icon: const Icon(Icons.refresh),
           tooltip: 'Atualizar',
           onPressed: _controller.carregar,
@@ -47,22 +53,111 @@ class _ConexoesPageState extends State<ConexoesPage> {
             onRetry: _controller.carregar,
           ),
           onSuccess: (context, itens) => itens.isEmpty
-              ? const AppEmptyView(
-                  title: 'Nenhuma conexão',
-                  subtitle: 'Conecte um WhatsApp para começar a receber '
-                      'mensagens dos seus clientes.',
+              ? Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const AppEmptyView(
+                      title: 'Nenhuma conexão',
+                      subtitle: 'Conecte um WhatsApp para começar a receber '
+                          'mensagens dos seus clientes.',
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    // Sem este botão o tenant que remove a última conexão fica
+                    // sem saída: o roteiro inicial, que criava a primeira, só
+                    // roda uma vez.
+                    SizedBox(
+                      width: 260,
+                      child: PrimaryButton(
+                        label: 'Conectar WhatsApp',
+                        onPressed: () => _novaConexao(context),
+                      ),
+                    ),
+                  ],
                 )
               : ListView.separated(
                   itemCount: itens.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 12),
                   // O context do item não abre diálogos: ele é desmontado
                   // quando a lista recarrega.
-                  itemBuilder: (_, i) =>
-                      _Linha(conexao: itens[i], controller: _controller),
+                  itemBuilder: (_, i) => _Linha(
+                    conexao: itens[i],
+                    controller: _controller,
+                    abrirPareamento: _abrirPareamento,
+                  ),
                 ),
         ),
       ),
     );
+  }
+
+  /// A caixa de pareamento é aberta a partir da PÁGINA, não da linha da lista:
+  /// a linha é desmontada assim que a lista recarrega, e o `context` dela morre
+  /// junto — a página sobrevive à volta toda.
+  Future<void> _abrirPareamento(int id, String nome) async {
+    if (!mounted) return;
+    await mostrarPareamento(
+      context,
+      controller: _controller,
+      id: id,
+      nome: nome,
+    );
+  }
+
+  /// Cria a conexão e emenda direto no pareamento: o nome sozinho não serve de
+  /// nada — sem ler o QR em seguida a instância nasce e fica pendurada.
+  Future<void> _novaConexao(BuildContext context) async {
+    final nome = TextEditingController();
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (_) => DialogoComCampos(
+        campos: [nome],
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Nova conexão'),
+          content: SizedBox(
+            width: 320,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Dê um nome para identificar este aparelho — por exemplo, '
+                  '"atendimento" ou "vendas".',
+                ),
+                const SizedBox(height: AppSpacing.md),
+                AppTextField(
+                  controller: nome,
+                  label: 'Nome da conexão',
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Criar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmado != true || !context.mounted) return;
+
+    final texto = nome.text.trim();
+    if (texto.isEmpty) return;
+
+    final messenger = ScaffoldMessenger.of(context);
+    final res = await _controller.criar(texto);
+    if (!context.mounted) return;
+
+    switch (res) {
+      case Success(:final value):
+        await _abrirPareamento(value.id, value.nome);
+      case Failure(:final error):
+        messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    }
   }
 }
 
@@ -70,7 +165,14 @@ class _Linha extends StatelessWidget {
   final Conexao conexao;
   final ConexoesController controller;
 
-  const _Linha({required this.conexao, required this.controller});
+  /// Aberta pela página: ver `_abrirPareamento`.
+  final Future<void> Function(int id, String nome) abrirPareamento;
+
+  const _Linha({
+    required this.conexao,
+    required this.controller,
+    required this.abrirPareamento,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -127,20 +229,19 @@ class _Linha extends StatelessWidget {
 
   Future<void> _reconectar(BuildContext context) async {
     // Resolvido antes do await: reconectar recarrega a lista e desmonta esta
-    // linha antes de a resposta chegar.
+    // linha antes de a resposta chegar — inclusive o `context` dela.
     final messenger = ScaffoldMessenger.of(context);
     final res = await controller.reconectar(conexao.id);
 
-    messenger.showSnackBar(
-      SnackBar(
-        content: Text(
-          switch (res) {
-            Success() => 'Reconectando. Leia o QR code se ele aparecer.',
-            Failure(:final error) => error.message,
-          },
-        ),
-      ),
-    );
+    switch (res) {
+      // A sessão pode voltar sozinha (o aparelho ainda está pareado) ou exigir
+      // um QR novo. Como não dá para saber antes, abre a caixa de pareamento:
+      // se o provedor reconectar sem código, ela mesma anuncia e fecha.
+      case Success():
+        await abrirPareamento(conexao.id, conexao.nome);
+      case Failure(:final error):
+        messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    }
   }
 
   Future<void> _remover(BuildContext context) async {

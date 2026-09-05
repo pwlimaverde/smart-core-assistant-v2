@@ -58,3 +58,21 @@ final class RemoverConexaoRepository
   ConexoesError mapError(Object e, StackTrace s, ConexaoIdParameters p) =>
       _traduzir(e, 'remover conexão');
 }
+
+final class CriarConexaoRepository
+    extends RepositoryBase<ConexaoCriada, CriarConexaoParameters, ConexoesError> {
+  const CriarConexaoRepository({required super.datasource});
+
+  @override
+  ConexoesError mapError(Object e, StackTrace s, CriarConexaoParameters p) =>
+      _traduzir(e, 'criar conexão');
+}
+
+final class EstadoPareamentoRepository
+    extends RepositoryBase<EstadoPareamento, ConexaoIdParameters, ConexoesError> {
+  const EstadoPareamentoRepository({required super.datasource});
+
+  @override
+  ConexoesError mapError(Object e, StackTrace s, ConexaoIdParameters p) =>
+      _traduzir(e, 'consultar pareamento');
+}

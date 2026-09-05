@@ -54,3 +54,29 @@ final class RemoverConexaoUsecase extends UsecaseBaseCallData<Unit, Unit,
   ConexoesError onUnexpected(Object e, StackTrace s) =>
       _inesperado('remover conexão', e, s);
 }
+
+final class CriarConexaoUsecase extends UsecaseBaseCallData<ConexaoCriada,
+    ConexaoCriada, CriarConexaoParameters, ConexoesError> {
+  const CriarConexaoUsecase({required super.repository});
+
+  @override
+  ProcessData<ConexaoCriada, ConexaoCriada, CriarConexaoParameters,
+      ConexoesError> get process => (data, _) => Success(data);
+
+  @override
+  ConexoesError onUnexpected(Object e, StackTrace s) =>
+      _inesperado('criar conexão', e, s);
+}
+
+final class EstadoPareamentoUsecase extends UsecaseBaseCallData<
+    EstadoPareamento, EstadoPareamento, ConexaoIdParameters, ConexoesError> {
+  const EstadoPareamentoUsecase({required super.repository});
+
+  @override
+  ProcessData<EstadoPareamento, EstadoPareamento, ConexaoIdParameters,
+      ConexoesError> get process => (data, _) => Success(data);
+
+  @override
+  ConexoesError onUnexpected(Object e, StackTrace s) =>
+      _inesperado('consultar pareamento', e, s);
+}

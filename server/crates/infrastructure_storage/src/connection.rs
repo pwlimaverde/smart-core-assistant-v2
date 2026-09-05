@@ -187,6 +187,10 @@ pub async fn garantir_cors(client: &Client, bucket: &str, allowed_origins: &[Str
         .set_allowed_origins(Some(allowed_origins.to_vec()))
         .allowed_methods("GET")
         .allowed_methods("HEAD")
+        // PUT porque o upload de mídia (N9/E1) sobe do próprio navegador para o
+        // bucket, por URL pré-assinada — o binário não passa pelo gRPC-Web. Sem
+        // PUT aqui o preflight falha e o anexo nunca sai da tela.
+        .allowed_methods("PUT")
         .allowed_headers("*")
         .expose_headers("Content-Range")
         .expose_headers("Accept-Ranges")
