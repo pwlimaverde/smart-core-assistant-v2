@@ -177,7 +177,14 @@ groups:
             datasourceUid: prometheus
             relativeTimeRange: { from: 300, to: 0 }
             model:
-              expr: "100 * sum(rate(smartcore_rpc_total{error=\"true\"}[5m])) / sum(rate(smartcore_rpc_total[5m]))"
+              # "or vector(0)" e obrigatorio aqui: smartcore_rpc_total{error="true"}
+              # so existe como serie depois do primeiro erro (contador Prometheus
+              # nao vem pre-inicializado por valor de label). Sem isso, um sistema
+              # saudavel (zero erros desde o boot) faz o numerador sumir e a regra
+              # fica em NoData para sempre — foi o que aconteceu na pratica desde
+              # 2026-08-01, e teria virado spam de e-mail assim que o SMTP (P4)
+              # foi ligado.
+              expr: "100 * (sum(rate(smartcore_rpc_total{error=\"true\"}[5m])) or vector(0)) / sum(rate(smartcore_rpc_total[5m]))"
               instant: true
               refId: A
           - refId: B
