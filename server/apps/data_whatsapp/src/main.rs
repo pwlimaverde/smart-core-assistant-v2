@@ -415,16 +415,16 @@ async fn handler_create_whatsapp_instance(mut state: AppState, env: Envelope) ->
     // serde_json::json!({...}) solto (formato antigo deste arquivo) falha com
     // "missing field `level`" e o evento é descartado em silêncio, nunca gravado
     // em audit_log. Confirmado ao vivo nos logs de produção.
-    let tenant_uuid = Uuid::parse_str(&env.tenant_id).ok().filter(|id| !id.is_nil());
+    let tenant_uuid = Uuid::parse_str(&env.tenant_id)
+        .ok()
+        .filter(|id| !id.is_nil());
     let audit_payload = observability::AuditLogPayload {
         tenant_id: tenant_uuid,
         level: "INFO".to_string(),
         service: "data_whatsapp".to_string(),
         trace_id: Some(env.traceparent.clone()),
         event: "whatsapp.instance.create".to_string(),
-        message: format!(
-            "Instância WhatsApp '{instance_name}' criada (provedor: {provider_name})"
-        ),
+        message: format!("Instância WhatsApp '{instance_name}' criada (provedor: {provider_name})"),
         context: serde_json::json!({ "instance_name": instance_name, "provider": provider_name }),
         user_id: (env.auth_user_id > 0).then_some(env.auth_user_id),
         ip_address: None,
@@ -519,7 +519,9 @@ async fn handler_delete_whatsapp_instance(mut state: AppState, env: Envelope) ->
 
     // 4. Publica auditoria (ver comentário em handler_create_instance sobre o
     // formato exigido pelo consumidor — AuditLogPayload, não json!({}) solto).
-    let tenant_uuid = Uuid::parse_str(&env.tenant_id).ok().filter(|id| !id.is_nil());
+    let tenant_uuid = Uuid::parse_str(&env.tenant_id)
+        .ok()
+        .filter(|id| !id.is_nil());
     let audit_payload = observability::AuditLogPayload {
         tenant_id: tenant_uuid,
         level: "INFO".to_string(),
@@ -1241,7 +1243,11 @@ async fn handler_admin_bulk_disconnect(mut state: AppState, env: Envelope) -> En
 
     // Publica auditoria admin global se necessário (ver comentário em
     // handler_create_instance sobre o formato exigido pelo consumidor).
-    let escopo = if tenant_id_opt.is_some() { "tenant" } else { "global" };
+    let escopo = if tenant_id_opt.is_some() {
+        "tenant"
+    } else {
+        "global"
+    };
     let audit_payload = observability::AuditLogPayload {
         tenant_id: tenant_id_opt,
         level: "WARN".to_string(),
