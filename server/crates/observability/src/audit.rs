@@ -145,6 +145,27 @@ impl AuditLogger {
         user_agent: Option<String>,
         trace_id: Option<String>,
     ) {
+        // user_id=0 é o sentinela documentado de "público/não autenticado"
+        // (envelope.proto: auth_user_id). Nunca deve virar Some(0) no payload —
+        // não existe auth_user id=0, violaria audit_log_user_id_fkey. Filtrado
+        // aqui uma vez para blindar todos os chamadores (dezenas, entre
+        // webhook_ingress, worker e runtime_api).
+        let user_id = user_id.filter(|&id| id > 0);
+
+        // tenant_id nil é o sentinela já usado em todo o codebase para "sem
+        // tenant real" (webhook não autenticado, login antes de resolver o
+        // tenant, job de sistema). Sem este guard, Some(Uuid::nil()) ia pro
+        // payload e violava audit_log_tenant_id_fkey — o evento se perdia em
+        // silêncio. Achado ao auditar o sistema de auditoria: reproduzível por
+        // qualquer request HTTP externo sem autenticação em webhook_ingress
+        // (tenant_id vem direto do path da URL, antes da checagem de api key).
+        if tenant_id.is_nil() {
+            self.log_global_event_com_user_agent(
+                event, message, level, context, user_id, ip_address, user_agent, trace_id,
+            );
+            return;
+        }
+
         let service = self.service_name.clone();
         let event = event.to_string();
         let message = message.to_string();
@@ -278,6 +299,11 @@ impl AuditLogger {
         user_agent: Option<String>,
         trace_id: Option<String>,
     ) {
+        // Mesmo filtro de log_tenant_event_com_user_agent — repetido aqui porque
+        // esta função também é chamada diretamente (log_global_event/_ctx), não só
+        // por delegação do caminho de tenant.
+        let user_id = user_id.filter(|&id| id > 0);
+
         let service = self.service_name.clone();
         let event = event.to_string();
         let message = message.to_string();

@@ -46,11 +46,36 @@ pub fn init_telemetry(
     let otlp_endpoint = std::env::var("OTEL_EXPORTER_OTLP_ENDPOINT")
         .unwrap_or_else(|_| "http://localhost:4317".into());
 
+    // Namespace do serviço dentro da stack de observabilidade COMPARTILHADA
+    // entre dev e prod (ver docker/{dev,prod}/.env.example: OTEL_SERVICE_NAMESPACE
+    // já vem setado como "smart-core-v2-dev"/"smart-core-v2-prod" nos dois
+    // ambientes) — mas nunca era lido aqui. Resultado prático hoje: todos os 9
+    // binários chamam init_telemetry(..., "production") com a string LITERAL
+    // hardcoded (não reflete o ambiente real de execução), então
+    // deployment.environment sempre sai "production" em Tempo/Prometheus,
+    // mesmo rodando via docker/dev/compose.yml. Quando o prod subir, as duas
+    // stacks ficariam misturadas sob o mesmo valor, sem filtro possível.
+    let namespace = std::env::var("OTEL_SERVICE_NAMESPACE").ok();
+    let deployment_environment = namespace
+        .as_deref()
+        .map(|ns| {
+            if ns.contains("dev") {
+                "development"
+            } else {
+                "production"
+            }
+        })
+        .unwrap_or(env);
+
     // Resource com metadados do serviço
-    let resource = Resource::new(vec![
+    let mut resource_attrs = vec![
         KeyValue::new("service.name", service_name.to_string()),
-        KeyValue::new("deployment.environment", env.to_string()),
-    ]);
+        KeyValue::new("deployment.environment", deployment_environment.to_string()),
+    ];
+    if let Some(ns) = namespace {
+        resource_attrs.push(KeyValue::new("service.namespace", ns));
+    }
+    let resource = Resource::new(resource_attrs);
 
     use opentelemetry::trace::TracerProvider as _;
 

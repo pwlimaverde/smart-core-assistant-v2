@@ -408,18 +408,34 @@ async fn handler_create_whatsapp_instance(mut state: AppState, env: Envelope) ->
     )
     .await;
 
-    // 6. Publica evento de auditoria no security:stream
-    let tenant_uuid = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
-    let auth_user_id = env.auth_user_id;
+    // 6. Publica evento de auditoria no security:stream.
+    //
+    // O consumidor (data_postgres::processar_eventos_auditoria_lote) desserializa
+    // TODA mensagem deste stream como observability::AuditLogPayload — publicar um
+    // serde_json::json!({...}) solto (formato antigo deste arquivo) falha com
+    // "missing field `level`" e o evento é descartado em silêncio, nunca gravado
+    // em audit_log. Confirmado ao vivo nos logs de produção.
+    let tenant_uuid = Uuid::parse_str(&env.tenant_id).ok().filter(|id| !id.is_nil());
+    let audit_payload = observability::AuditLogPayload {
+        tenant_id: tenant_uuid,
+        level: "INFO".to_string(),
+        service: "data_whatsapp".to_string(),
+        trace_id: Some(env.traceparent.clone()),
+        event: "whatsapp.instance.create".to_string(),
+        message: format!(
+            "Instância WhatsApp '{instance_name}' criada (provedor: {provider_name})"
+        ),
+        context: serde_json::json!({ "instance_name": instance_name, "provider": provider_name }),
+        user_id: (env.auth_user_id > 0).then_some(env.auth_user_id),
+        ip_address: None,
+        user_agent: None,
+    };
     let audit_event = TenantEnvelope::novo(
-        tenant_uuid,
-        "whatsapp.instance.create",
-        serde_json::json!({
-            "user_id": auth_user_id,
-            "instance_name": instance_name,
-            "provider": provider_name,
-        }),
-    );
+        tenant_uuid.unwrap_or_else(Uuid::nil),
+        "security.audit",
+        audit_payload,
+    )
+    .com_traceparent(env.traceparent.clone());
 
     let _ = transport::bus::publicar_evento_seguranca(&mut state.redis_conn, &audit_event).await;
 
@@ -501,17 +517,27 @@ async fn handler_delete_whatsapp_instance(mut state: AppState, env: Envelope) ->
         return erro(e, &env);
     }
 
-    // 4. Publica auditoria
-    let tenant_uuid = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
-    let auth_user_id = env.auth_user_id;
+    // 4. Publica auditoria (ver comentário em handler_create_instance sobre o
+    // formato exigido pelo consumidor — AuditLogPayload, não json!({}) solto).
+    let tenant_uuid = Uuid::parse_str(&env.tenant_id).ok().filter(|id| !id.is_nil());
+    let audit_payload = observability::AuditLogPayload {
+        tenant_id: tenant_uuid,
+        level: "INFO".to_string(),
+        service: "data_whatsapp".to_string(),
+        trace_id: Some(env.traceparent.clone()),
+        event: "whatsapp.instance.delete".to_string(),
+        message: format!("Instância WhatsApp '{name}' removida"),
+        context: serde_json::json!({ "instance_name": name }),
+        user_id: (env.auth_user_id > 0).then_some(env.auth_user_id),
+        ip_address: None,
+        user_agent: None,
+    };
     let audit_event = TenantEnvelope::novo(
-        tenant_uuid,
-        "whatsapp.instance.delete",
-        serde_json::json!({
-            "user_id": auth_user_id,
-            "instance_name": name,
-        }),
-    );
+        tenant_uuid.unwrap_or_else(Uuid::nil),
+        "security.audit",
+        audit_payload,
+    )
+    .com_traceparent(env.traceparent.clone());
     let _ = transport::bus::publicar_evento_seguranca(&mut state.redis_conn, &audit_event).await;
 
     ok_reply(
@@ -1143,7 +1169,8 @@ async fn handler_admin_bulk_disconnect(mut state: AppState, env: Envelope) -> En
     let tenant_id_opt = payload
         .get("tenant_id")
         .and_then(|v| v.as_str())
-        .and_then(|s| Uuid::parse_str(s).ok());
+        .and_then(|s| Uuid::parse_str(s).ok())
+        .filter(|id| !id.is_nil());
 
     let lista_res = if let Some(tenant_id) = tenant_id_opt {
         chamar_data_postgres(
@@ -1212,18 +1239,27 @@ async fn handler_admin_bulk_disconnect(mut state: AppState, env: Envelope) -> En
         count += 1;
     }
 
-    // Publica auditoria admin global se necessário
-    let tenant_uuid = tenant_id_opt.unwrap_or_else(Uuid::nil);
-    let auth_user_id = env.auth_user_id;
+    // Publica auditoria admin global se necessário (ver comentário em
+    // handler_create_instance sobre o formato exigido pelo consumidor).
+    let escopo = if tenant_id_opt.is_some() { "tenant" } else { "global" };
+    let audit_payload = observability::AuditLogPayload {
+        tenant_id: tenant_id_opt,
+        level: "WARN".to_string(),
+        service: "data_whatsapp".to_string(),
+        trace_id: Some(env.traceparent.clone()),
+        event: "whatsapp.admin.bulk_disconnect".to_string(),
+        message: format!("Desconexão em massa de {count} instância(s) WhatsApp ({escopo})"),
+        context: serde_json::json!({ "count": count, "scope": escopo }),
+        user_id: (env.auth_user_id > 0).then_some(env.auth_user_id),
+        ip_address: None,
+        user_agent: None,
+    };
     let audit_event = TenantEnvelope::novo(
-        tenant_uuid,
-        "whatsapp.admin.bulk_disconnect",
-        serde_json::json!({
-            "user_id": auth_user_id,
-            "count": count,
-            "scope": if tenant_id_opt.is_some() { "tenant" } else { "global" }
-        }),
-    );
+        tenant_id_opt.unwrap_or_else(Uuid::nil),
+        "security.audit",
+        audit_payload,
+    )
+    .com_traceparent(env.traceparent.clone());
     let _ = transport::bus::publicar_evento_seguranca(&mut state.redis_conn, &audit_event).await;
 
     ok_reply(

@@ -3788,11 +3788,18 @@ async fn handler_verify_credentials(
             "Tentativa de login falhou: credenciais inválidas"
         );
 
-        let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
+        // VerifyCredentials é chamada por application::auth::login::login() ANTES do
+        // tenant ser resolvido — env.tenant_id aqui é sempre o Uuid nulo. Sem o
+        // .filter, Some(Uuid::nil()) violava audit_log_tenant_id_fkey e TODA
+        // tentativa de login com credencial inválida perdia o próprio evento de
+        // auditoria que deveria registrá-la (achado ao auditar o sistema de logs).
+        let tenant_id = Uuid::parse_str(&env.tenant_id)
+            .ok()
+            .filter(|id| !id.is_nil());
         audit
             .publish_security(
                 &env.traceparent,
-                Some(tenant_id),
+                tenant_id,
                 "WARN",
                 "login_failed",
                 format!("Tentativa de login falhou para o email: {}", email),

@@ -103,8 +103,8 @@ pub async fn processar_eventos_auditoria_lote(
             for (stream_id, entry) in &globais {
                 let row = sqlx::query(
                     r#"
-                    INSERT INTO audit_log (tenant_id, level, service, trace_id, event, message, context, user_id, ip_address)
-                    VALUES (NULL, $1, $2, $3, $4, $5, $6, $7, $8)
+                    INSERT INTO audit_log (tenant_id, level, service, trace_id, event, message, context, user_id, ip_address, user_agent)
+                    VALUES (NULL, $1, $2, $3, $4, $5, $6, $7, $8, $9)
                     RETURNING id
                     "#
                 )
@@ -116,6 +116,7 @@ pub async fn processar_eventos_auditoria_lote(
                 .bind(&entry.context)
                 .bind(entry.user_id)
                 .bind(&entry.ip_address)
+                .bind(&entry.user_agent)
                 .fetch_one(&mut *tx)
                 .await?;
 
