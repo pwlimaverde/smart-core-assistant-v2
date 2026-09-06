@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO oraculo_departamento (tenant_id, nome, descricao)\n               VALUES ($1, $2, $3)\n               RETURNING id, tenant_id, nome, slug, descricao, ativo,\n                         telefone_instancia, api_key, configuracoes, metadados, data_criacao",
+  "query": "INSERT INTO oraculo_departamento (tenant_id, nome, descricao, slug)\n               VALUES ($1, $2, $3, $4)\n               RETURNING id, tenant_id, nome, slug, descricao, ativo,\n                         telefone_instancia, api_key, configuracoes, metadados, data_criacao",
   "describe": {
     "columns": [
       {
@@ -129,7 +129,8 @@
       "Left": [
         "Uuid",
         "Varchar",
-        "Text"
+        "Text",
+        "Varchar"
       ]
     },
     "nullable": [
@@ -146,5 +147,5 @@
       false
     ]
   },
-  "hash": "8acfcf9554867e544c80366f9717977e3937a216c7e80782aa3dd1aa8ebf544e"
+  "hash": "a48926c168f703e576dc13211761aa78a992113bedf754e708dbfb93410ff23a"
 }

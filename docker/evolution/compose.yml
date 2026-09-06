@@ -4,6 +4,22 @@ services:
   postgres_evolution:
     image: postgres:16-alpine
     container_name: smartcore-evolution-postgres
+    # A evolution-go VAZA conexão: cada pedido de QR que não acha cliente ativo
+    # abre uma nova e não a devolve. Elas ficam `idle` para sempre, e ao chegar
+    # em `max_connections` o provedor para de funcionar inteiro — sem device
+    # store não há cliente whatsmeow, sem cliente não há websocket, sem
+    # websocket não há QR. O sintoma na tela é um QR que nunca aparece; o log
+    # diz "sorry, too many clients already".
+    #
+    # `idle_session_timeout` devolve o slot sozinho: sessão parada por 5 min é
+    # encerrada. Não conserta o vazamento (é da evolution-go), mas impede que
+    # ele acumule até derrubar o pareamento. `max_connections` maior só adiaria.
+    command:
+      - postgres
+      - -c
+      - idle_session_timeout=300000
+      - -c
+      - max_connections=200
     environment:
       POSTGRES_USER: ${EVOLUTION_POSTGRES_USER:-evolution}
       POSTGRES_PASSWORD: ${EVOLUTION_POSTGRES_PASSWORD:?defina EVOLUTION_POSTGRES_PASSWORD no .env}

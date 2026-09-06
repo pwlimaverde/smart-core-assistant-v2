@@ -45,7 +45,13 @@ pub async fn processar_eventos_auditoria_lote(
             event: envelope.payload.event,
             message: envelope.payload.message,
             context: envelope.payload.context,
-            user_id: envelope.payload.user_id,
+            // `0` é o "sem usuário" das chamadas de sistema (scheduler, webhook,
+            // reconciliação de conexão) — não é um id real, e `audit_log.user_id`
+            // tem FK para `auth_user`. Gravá-lo estourava a constraint e, pior,
+            // derrubava o LOTE INTEIRO daquele tenant: a auditoria de ações de
+            // pessoas se perdia junto, silenciosamente, por causa de um evento
+            // de máquina. NULL é o que a coluna já espera para ação sem autor.
+            user_id: envelope.payload.user_id.filter(|id| *id != 0),
             ip_address: envelope.payload.ip_address,
             user_agent: envelope.payload.user_agent,
         };

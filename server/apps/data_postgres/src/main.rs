@@ -5969,6 +5969,18 @@ async fn handler_create_departamento(
         .await
     {
         Ok(departamento) => ok_reply(&env, "CreateDepartamentoReply", departamento),
+        // Nome repetido é erro de quem digitou, não falha de infraestrutura. A
+        // conversão padrão manda `DbError` para `AppError::Database`, e a borda
+        // (com razão) não vaza detalhe de banco para o cliente — o resultado na
+        // tela era "erro ao acessar o banco de dados" para quem só repetiu um
+        // nome, sem pista do que corrigir. Aqui a causa ainda é conhecida, então
+        // é aqui que ela vira uma frase acionável.
+        Err(infrastructure_postgres::DbError::UniqueViolation(_)) => erro(
+            error_core::AppError::Validation(format!(
+                "Já existe um departamento chamado \"{nome}\". Escolha outro nome."
+            )),
+            &env,
+        ),
         Err(err) => erro(err.into(), &env),
     }
 }

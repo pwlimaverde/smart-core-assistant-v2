@@ -47,9 +47,16 @@ class _PareamentoDialog extends StatefulWidget {
 }
 
 class _PareamentoDialogState extends State<_PareamentoDialog> {
-  /// O QR do provedor gira a cada ~20s; 3s dá sensação de tempo real sem
-  /// martelar a API.
-  static const _intervalo = Duration(seconds: 3);
+  /// O QR do provedor gira a cada ~20s, então consultar de 3 em 3 segundos não
+  /// mostrava nada de novo — e cobrava caro: cada consulta faz o servidor pedir
+  /// o QR, e cada pedido de QR sem cliente ativo abre uma conexão que a
+  /// evolution-go não devolve. Vinte consultas por minuto esgotavam o pool do
+  /// Postgres dela, e aí o pareamento parava de funcionar de vez ("sorry, too
+  /// many clients already") — justamente o que esta caixa veio resolver.
+  ///
+  /// 8s ainda é bem mais rápido que o giro do código e reduz a pressão a menos
+  /// de um terço.
+  static const _intervalo = Duration(seconds: 8);
 
   Timer? _poll;
   String _qr = '';

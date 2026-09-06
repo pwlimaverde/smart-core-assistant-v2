@@ -78,6 +78,45 @@ pub trait DepartamentoRepository: Send + Sync {
     ) -> Result<Option<Departamento>, DbError>;
 }
 
+/// Slug a partir do nome: minúsculas, sem acento, separado por hífen.
+///
+/// Existe porque a coluna `slug` é `NOT NULL DEFAULT ''` e ninguém a preenchia —
+/// todo departamento nascia com slug vazio. Com `UNIQUE (tenant_id, slug)`, o
+/// primeiro entrava e **o segundo sempre colidia**: um tenant só conseguia ter
+/// um departamento, e o erro que chegava à tela era "erro ao acessar o banco de
+/// dados", que não diz nada a quem está cadastrando.
+///
+/// Acento vira a letra base (`Ações` → `acoes`) para o slug não depender de
+/// codificação. O que sobra fora de `[a-z0-9-]` vira hífen, e hífens repetidos
+/// ou nas pontas são removidos.
+fn slug_do_nome(nome: &str) -> String {
+    const COM_ACENTO: &str = "áàâãäéèêëíìîïóòôõöúùûüçñ";
+    const SEM_ACENTO: [&str; 24] = [
+        "a", "a", "a", "a", "a", "e", "e", "e", "e", "i", "i", "i", "i", "o", "o", "o", "o", "o",
+        "u", "u", "u", "u", "c", "n",
+    ];
+
+    let mut saida = String::with_capacity(nome.len());
+    for c in nome.to_lowercase().chars() {
+        if let Some(pos) = COM_ACENTO.chars().position(|a| a == c) {
+            saida.push_str(SEM_ACENTO[pos]);
+        } else if c.is_ascii_alphanumeric() {
+            saida.push(c);
+        } else if !saida.ends_with('-') {
+            saida.push('-');
+        }
+    }
+
+    let slug = saida.trim_matches('-').to_string();
+    // Nome só de símbolos ("!!!") esvaziaria o slug e recriaria a colisão que
+    // esta função veio resolver. O banco decide o id; aqui basta não colidir.
+    if slug.is_empty() {
+        "departamento".to_string()
+    } else {
+        slug
+    }
+}
+
 pub struct PostgresDepartamentoRepository;
 
 #[async_trait]
@@ -91,15 +130,17 @@ impl DepartamentoRepository for PostgresDepartamentoRepository {
         descricao: Option<&str>,
     ) -> Result<Departamento, DbError> {
         ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
+        let slug = slug_do_nome(nome);
         let row = sqlx::query_as!(
             Departamento,
-            r#"INSERT INTO oraculo_departamento (tenant_id, nome, descricao)
-               VALUES ($1, $2, $3)
+            r#"INSERT INTO oraculo_departamento (tenant_id, nome, descricao, slug)
+               VALUES ($1, $2, $3, $4)
                RETURNING id, tenant_id, nome, slug, descricao, ativo,
                          telefone_instancia, api_key, configuracoes, metadados, data_criacao"#,
             ctx.tenant_id,
             nome,
-            descricao
+            descricao,
+            slug
         )
         .fetch_one(&mut **tx)
         .await
@@ -213,5 +254,56 @@ impl DepartamentoRepository for PostgresDepartamentoRepository {
         .fetch_optional(&mut **tx)
         .await?;
         Ok(row)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::slug_do_nome;
+
+    // O slug vazio era o defeito: com `NOT NULL DEFAULT ''` e
+    // `UNIQUE (tenant_id, slug)`, o primeiro departamento entrava e o SEGUNDO
+    // colidia — um tenant só conseguia ter um. Estes testes fixam que nomes
+    // diferentes geram slugs diferentes, que é o que destrava o cadastro.
+
+    #[test]
+    fn nomes_diferentes_geram_slugs_diferentes() {
+        assert_ne!(slug_do_nome("Vendas"), slug_do_nome("Suporte"));
+        assert_eq!(slug_do_nome("Vendas"), "vendas");
+        assert_eq!(slug_do_nome("Suporte Técnico"), "suporte-tecnico");
+    }
+
+    #[test]
+    fn acento_vira_letra_base() {
+        // O slug não pode depender de codificação: "Ações" e "Acoes" viram o
+        // mesmo identificador estável.
+        assert_eq!(slug_do_nome("Ações"), "acoes");
+        assert_eq!(slug_do_nome("Manutenção"), "manutencao");
+        assert_eq!(slug_do_nome("Pós-Venda"), "pos-venda");
+    }
+
+    #[test]
+    fn simbolos_e_espacos_nao_deixam_hifen_solto() {
+        assert_eq!(slug_do_nome("  Vendas   Online  "), "vendas-online");
+        assert_eq!(slug_do_nome("Vendas / Trocas"), "vendas-trocas");
+        assert_eq!(slug_do_nome("A&B"), "a-b");
+    }
+
+    #[test]
+    fn nome_so_de_simbolos_nao_volta_a_colidir() {
+        // Um slug vazio recriaria exatamente o bug que esta função corrige.
+        assert_eq!(slug_do_nome("!!!"), "departamento");
+        assert_eq!(slug_do_nome("---"), "departamento");
+        assert!(!slug_do_nome("@#$").is_empty());
+    }
+
+    #[test]
+    fn nomes_que_diferem_so_por_caixa_colidem_de_proposito() {
+        // "Vendas" e "vendas" SÃO o mesmo departamento para quem usa. Colidir
+        // aqui é o comportamento certo: o banco recusa e o handler responde
+        // "já existe um departamento com esse nome", em vez de criar duplicata
+        // que ninguém distingue na tela.
+        assert_eq!(slug_do_nome("Vendas"), slug_do_nome("vendas"));
+        assert_eq!(slug_do_nome("VENDAS"), slug_do_nome("Vendas"));
     }
 }
