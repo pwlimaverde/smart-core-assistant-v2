@@ -276,7 +276,8 @@ async fn handler_admin_bulk_disconnect(mut state: AppState, env: Envelope) -> En
     let target_tenant = payload
         .get("tenant_id")
         .and_then(|v| v.as_str())
-        .and_then(|s| Uuid::parse_str(s).ok());
+        .and_then(|s| Uuid::parse_str(s).ok())
+        .filter(|id| !id.is_nil());
 
     let wa_client = match transport::conectar_cliente("data_whatsapp").await {
         Ok(c) => c,
@@ -320,17 +321,28 @@ async fn handler_admin_bulk_disconnect(mut state: AppState, env: Envelope) -> En
                 .unwrap_or("global")
                 .to_string();
 
-            // Auditoria do admin disconnect
-            let audit_tenant = target_tenant.unwrap_or(Uuid::nil());
+            // Auditoria do admin disconnect. O consumidor (data_postgres) desserializa
+            // toda mensagem deste stream como observability::AuditLogPayload — um
+            // json!({}) solto (formato antigo aqui) falha com "missing field `level`"
+            // e o evento é descartado em silêncio, nunca gravado em audit_log.
+            let audit_payload = observability::AuditLogPayload {
+                tenant_id: target_tenant,
+                level: "WARN".to_string(),
+                service: "control_plane".to_string(),
+                trace_id: Some(env.traceparent.clone()),
+                event: "whatsapp.admin.bulk_disconnect".to_string(),
+                message: format!("Desconexão em massa de {count} instância(s) WhatsApp ({scope})"),
+                context: serde_json::json!({ "scope": scope, "count": count }),
+                user_id: (env.auth_user_id > 0).then_some(env.auth_user_id),
+                ip_address: None,
+                user_agent: None,
+            };
             let audit_event = TenantEnvelope::novo(
-                audit_tenant,
-                "whatsapp.admin.bulk_disconnect",
-                serde_json::json!({
-                    "scope": scope,
-                    "count": count,
-                    "user_id": env.auth_user_id,
-                }),
-            );
+                target_tenant.unwrap_or_else(Uuid::nil),
+                "security.audit",
+                audit_payload,
+            )
+            .com_traceparent(env.traceparent.clone());
 
             let _ = transport::bus::publicar_evento_seguranca(&mut state.redis_conn, &audit_event)
                 .await;

@@ -3788,11 +3788,18 @@ async fn handler_verify_credentials(
             "Tentativa de login falhou: credenciais inválidas"
         );
 
-        let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
+        // VerifyCredentials é chamada por application::auth::login::login() ANTES do
+        // tenant ser resolvido — env.tenant_id aqui é sempre o Uuid nulo. Sem o
+        // .filter, Some(Uuid::nil()) violava audit_log_tenant_id_fkey e TODA
+        // tentativa de login com credencial inválida perdia o próprio evento de
+        // auditoria que deveria registrá-la (achado ao auditar o sistema de logs).
+        let tenant_id = Uuid::parse_str(&env.tenant_id)
+            .ok()
+            .filter(|id| !id.is_nil());
         audit
             .publish_security(
                 &env.traceparent,
-                Some(tenant_id),
+                tenant_id,
                 "WARN",
                 "login_failed",
                 format!("Tentativa de login falhou para o email: {}", email),
@@ -5173,6 +5180,25 @@ fn ok_reply(env: &Envelope, method_reply: &str, payload: serde_json::Value) -> E
     }
 }
 
+/// Extrai o tenant do Envelope para o payload de auditoria. `None` quando
+/// vazio, invalido ou nil — nunca `Some(Uuid::nil())`. `run_in_tenant_transaction`
+/// nao trata nil como caso especial: ele configura a RLS para qualquer Uuid
+/// recebido e tenta o INSERT, entao um payload com `Some(nil)` violava
+/// `audit_log_tenant_id_fkey` (nao existe tenant "00000000-...").
+fn tenant_id_para_auditoria(env: &Envelope) -> Option<Uuid> {
+    Uuid::parse_str(&env.tenant_id)
+        .ok()
+        .filter(|id| !id.is_nil())
+}
+
+/// Extrai o user_id do Envelope para o payload de auditoria. `None` quando 0
+/// (publico/nao autenticado — ver `auth_user_id` em envelope.proto) — nunca
+/// `Some(0)`, que violava `audit_log_user_id_fkey` (nao existe auth_user id=0).
+/// Mesmo idioma ja usado em `onboarding.rs` (`criado_por`).
+fn user_id_para_auditoria(env: &Envelope) -> Option<i32> {
+    (env.auth_user_id > 0).then_some(env.auth_user_id)
+}
+
 async fn publicar_auditoria(
     redis_conn: &mut ConnectionManager,
     env: &Envelope,
@@ -5180,27 +5206,80 @@ async fn publicar_auditoria(
     message: String,
     context: serde_json::Value,
 ) {
-    let tenant_id = Uuid::parse_str(&env.tenant_id).unwrap_or_else(|_| Uuid::nil());
+    let tenant_id = tenant_id_para_auditoria(env);
     let audit_payload = observability::AuditLogPayload {
-        tenant_id: Some(tenant_id),
+        tenant_id,
         level: "WARN".to_string(),
         service: "data_postgres".to_string(),
         trace_id: Some(env.traceparent.clone()),
         event: event.to_string(),
         message,
         context,
-        user_id: Some(env.auth_user_id),
+        user_id: user_id_para_auditoria(env),
         ip_address: None,
         user_agent: (!env.user_agent.is_empty()).then(|| env.user_agent.clone()),
     };
 
-    let envelope_auditoria =
-        contracts::TenantEnvelope::novo(tenant_id, "security.audit", audit_payload)
-            .com_traceparent(env.traceparent.clone());
+    let envelope_auditoria = contracts::TenantEnvelope::novo(
+        tenant_id.unwrap_or_else(Uuid::nil),
+        "security.audit",
+        audit_payload,
+    )
+    .com_traceparent(env.traceparent.clone());
 
     if let Err(e) = transport::bus::publicar_evento_seguranca(redis_conn, &envelope_auditoria).await
     {
         tracing::error!("Falha ao publicar auditoria de '{}': {:?}", event, e);
+    }
+}
+
+#[cfg(test)]
+mod tests_auditoria_unit {
+    use super::*;
+
+    fn envelope_com(tenant_id: &str, auth_user_id: i32) -> Envelope {
+        Envelope {
+            tenant_id: tenant_id.to_string(),
+            auth_user_id,
+            ..Default::default()
+        }
+    }
+
+    // --- tenant_id_para_auditoria: regressao do audit_log_tenant_id_fkey ---
+
+    #[test]
+    fn tenant_id_para_auditoria_vazio_e_none() {
+        assert!(tenant_id_para_auditoria(&envelope_com("", 0)).is_none());
+    }
+
+    #[test]
+    fn tenant_id_para_auditoria_nil_e_none() {
+        let env = envelope_com(&Uuid::nil().to_string(), 0);
+        assert!(tenant_id_para_auditoria(&env).is_none());
+    }
+
+    #[test]
+    fn tenant_id_para_auditoria_invalido_e_none_sem_falhar() {
+        assert!(tenant_id_para_auditoria(&envelope_com("nao-e-um-uuid", 0)).is_none());
+    }
+
+    #[test]
+    fn tenant_id_para_auditoria_valido_e_some() {
+        let id = Uuid::now_v7();
+        let env = envelope_com(&id.to_string(), 0);
+        assert_eq!(tenant_id_para_auditoria(&env), Some(id));
+    }
+
+    // --- user_id_para_auditoria: regressao do audit_log_user_id_fkey ---
+
+    #[test]
+    fn user_id_para_auditoria_zero_e_none() {
+        assert!(user_id_para_auditoria(&envelope_com("", 0)).is_none());
+    }
+
+    #[test]
+    fn user_id_para_auditoria_positivo_e_some() {
+        assert_eq!(user_id_para_auditoria(&envelope_com("", 42)), Some(42));
     }
 }
 

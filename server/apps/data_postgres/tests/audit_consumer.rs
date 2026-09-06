@@ -132,3 +132,56 @@ async fn processa_evento_de_auditoria_persiste_no_audit_log() {
         .await
         .unwrap();
 }
+
+/// Regressão: o branch "globais" (tenant_id: None, ações de superusuário/sistema)
+/// de `processar_eventos_auditoria_lote` usava um INSERT SQL manual que esquecia
+/// a coluna `user_agent` — só o branch por tenant (`inserir_audit_log`) a incluía.
+/// Todo evento de auditoria global perdia esse metadado em silêncio. O teste
+/// acima só cobria o caminho por tenant; este cobre especificamente o global.
+#[tokio::test]
+async fn processa_evento_de_auditoria_global_persiste_user_agent() {
+    let pool = setup_pool().await;
+
+    let audit_payload = observability::AuditLogPayload {
+        tenant_id: None,
+        level: "WARN".to_string(),
+        service: "data_postgres_test".to_string(),
+        trace_id: Some("00-trace6-span6-01".to_string()),
+        event: "test_event_global".to_string(),
+        message: "Evento de auditoria global de teste".to_string(),
+        context: serde_json::json!({}),
+        user_id: None,
+        ip_address: None,
+        user_agent: Some("integration-test-suite/1.0".to_string()),
+    };
+    let payload_json_str = serde_json::to_string(&audit_payload).unwrap();
+
+    let evt = transport::bus::EventoBruto {
+        stream_id: "12346-0".to_string(),
+        tenant_id: Uuid::nil().to_string(),
+        event_id: Uuid::now_v7().to_string(),
+        event_type: "security.audit".to_string(),
+        timestamp: chrono::Utc::now().to_rfc3339(),
+        traceparent: "00-trace6-span6-01".to_string(),
+        payload: payload_json_str,
+    };
+
+    // Act: consolida o lote (1 evento global) no audit_log.
+    let processou = data_postgres::processar_eventos_auditoria_lote(pool.clone(), vec![evt]).await;
+    assert!(processou.is_ok(), "drenagem falhou: {:?}", processou.err());
+
+    // Assert: persistiu com tenant_id NULL e o user_agent intacto.
+    let row: (Option<String>,) = sqlx::query_as(
+        "SELECT user_agent FROM audit_log WHERE tenant_id IS NULL AND event = 'test_event_global'",
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.0.as_deref(), Some("integration-test-suite/1.0"));
+
+    // Limpeza
+    sqlx::query("DELETE FROM audit_log WHERE event = 'test_event_global'")
+        .execute(&pool)
+        .await
+        .unwrap();
+}

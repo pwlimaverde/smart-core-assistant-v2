@@ -211,3 +211,84 @@ async fn test_audit_logger_async_fire_and_forget() {
         .await
         .expect("Falha ao limpar log global temporário");
 }
+
+/// Regressão: `Uuid::nil()` e `user_id = Some(0)` são os sentinelas já usados em
+/// todo o codebase para "sem tenant real"/"público, não autenticado"
+/// (webhook_ingress extrai tenant_id direto da URL antes de autenticar;
+/// login_failed nunca tem tenant resolvido; vários call-sites fazem
+/// `claims.sub.parse().ok()` sem checar `> 0`). Antes desta correção,
+/// `log_tenant_event_com_user_agent` sempre gravava `Some(tenant_id)`/o user_id
+/// cru, violando `audit_log_tenant_id_fkey`/`audit_log_user_id_fkey` — o
+/// evento se perdia em silêncio (confirmado ao vivo em produção). Agora deve
+/// cair no caminho global, com `user_id` `NULL`.
+#[tokio::test]
+async fn test_audit_logger_tenant_nil_e_user_id_zero_caem_no_global() {
+    carregar_env_teste();
+
+    let admin_url = std::env::var("DATABASE_ADMIN_URL")
+        .expect("DATABASE_ADMIN_URL não configurada para testes do AuditLogger");
+    let admin_pool = PgPool::connect(&admin_url)
+        .await
+        .expect("Falha ao conectar admin pool");
+    infrastructure_postgres::inicializar_banco_dados(&admin_pool)
+        .await
+        .expect("Falha ao inicializar o banco de dados/migrations");
+
+    let tenant_pool = infrastructure_postgres::criar_pool(2)
+        .await
+        .expect("Falha ao criar tenant pool");
+
+    let logger = AuditLogger::new(
+        tenant_pool,
+        admin_pool.clone(),
+        "test-observability-service",
+    );
+
+    let context = serde_json::json!({"action": "regression_test"});
+    let unique_event = format!("TEST_NIL_TENANT_{}", Uuid::new_v4());
+
+    // Act: chama com o Uuid nulo e user_id=0 — exatamente como webhook_ingress
+    // faz para requisições não autenticadas (params.tenant_id vem cru da URL).
+    logger.info(
+        Uuid::nil(),
+        &unique_event,
+        "Mensagem de teste com tenant nil",
+        context.clone(),
+        Some(0),
+        None,
+        None,
+    );
+
+    let mut logs = Vec::new();
+    for _ in 0..50 {
+        logs = sqlx::query_as::<_, AuditLogEntry>("SELECT * FROM audit_log WHERE event = $1")
+            .bind(&unique_event)
+            .fetch_all(&admin_pool)
+            .await
+            .expect("Falha ao consultar log de regressão");
+        if logs.len() == 1 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    assert_eq!(
+        logs.len(),
+        1,
+        "o evento com tenant nil deveria ter sido persistido como global, não perdido"
+    );
+    assert_eq!(
+        logs[0].tenant_id, None,
+        "tenant nil deve virar NULL, nunca Some(nil)"
+    );
+    assert_eq!(
+        logs[0].user_id, None,
+        "user_id=0 deve virar NULL, nunca Some(0)"
+    );
+
+    sqlx::query("DELETE FROM audit_log WHERE event = $1")
+        .bind(&unique_event)
+        .execute(&admin_pool)
+        .await
+        .expect("Falha ao limpar log de regressão");
+}
