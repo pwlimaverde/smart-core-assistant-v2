@@ -24,7 +24,9 @@ CONVENTIONS.md
 .claude/worktrees/
 
 # dotcontext runtime state
-.context/plans/
+# `.context/plans/` NAO entra: o dotcontext os classifica como locais, mas aqui
+# eles sao documentacao de trabalho (planos canonicos das fases N*), versionada
+# e referenciada pelos runbooks.
 .context/cache/semantic/
 .context/runtime/
 .context/**/archive/
