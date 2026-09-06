@@ -1,6 +1,6 @@
 # Project Rules and Guidelines
 
-> Auto-generated from .context/docs on 2026-06-12T14:00:02.389Z
+> Auto-generated from .context/docs on 2026-09-06T11:44:35.808Z
 
 ## README
 

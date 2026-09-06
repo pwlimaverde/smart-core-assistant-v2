@@ -33,3 +33,7 @@ Welcome to the repository knowledge base. Start with the project overview, then 
 | Data Flow & Integrations | [data-flow.md](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/.context/docs/data-flow.md) | System diagrams, integration specs, queue topics |
 | Security & Compliance Notes | [security.md](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/.context/docs/security.md) | Auth model, secrets management, compliance requirements |
 | Tooling & Productivity Guide | [tooling.md](file:///C:/PROJETOS/FULL-STACK/smart-core-assistant-v2/smart-agent-config/.context/docs/tooling.md) | CLI scripts, IDE configs, automation workflows |
+## AI Context References
+- Documentation index: `.context/docs/README.md`
+- Agent playbooks: `.context/agents/README.md`
+

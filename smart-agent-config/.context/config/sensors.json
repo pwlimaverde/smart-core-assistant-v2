@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "source": "manual",
+  "stack": {
+    "primaryLanguage": "rust",
+    "languages": ["rust", "dart", "python"],
+    "frameworks": ["tonic", "sqlx", "flutter", "langchain"],
+    "buildTools": ["cargo", "flutter", "uv", "docker compose"],
+    "testFrameworks": ["cargo test", "flutter test", "pytest"],
+    "packageManager": "cargo"
+  },
+  "sensors": [
+    {
+      "id": "rust-rapido",
+      "name": "Rust — fmt, clippy e unitários",
+      "description": "Esteira curta do servidor: formatação, lint sem warnings e testes unitários. NÃO toca no banco.",
+      "command": "powershell -NoProfile -File ./infra/test-local.ps1 -Fast",
+      "cwd": "..",
+      "severity": "critical",
+      "blocking": true
+    },
+    {
+      "id": "rust-completo",
+      "name": "Rust — suíte completa (unit + integração)",
+      "description": "Inclui integração contra o banco remoto pelo túnel SSH. Leva HORAS nesta máquina: cada query cruza a internet e os testes são serializados. Use só quando o alvo for justamente um teste de integração; no dia a dia, o gate é o CI, que roda no runner com o Postgres ao lado.",
+      "command": "powershell -NoProfile -File ./infra/test-local.ps1",
+      "cwd": "..",
+      "severity": "critical",
+      "blocking": false
+    },
+    {
+      "id": "flutter-analise-testes",
+      "name": "Flutter — analyze e testes",
+      "description": "Percorre os 19 pacotes do workspace (packages, modulos e apps), espelhando o job do CI.",
+      "command": "powershell -NoProfile -File ./infra/test-flutter.ps1",
+      "cwd": "..",
+      "severity": "critical",
+      "blocking": true
+    },
+    {
+      "id": "ia-engine-testes",
+      "name": "ia_engine — pytest",
+      "description": "Testes do motor de IA em Python. Não fala com Postgres: quem faz a ponte é o worker, por gRPC.",
+      "command": "uv run pytest",
+      "cwd": "../ia_engine",
+      "severity": "warning",
+      "blocking": false
+    },
+    {
+      "id": "advisories-rust",
+      "name": "Dependências — advisories RustSec",
+      "description": "cargo audit sobre o Cargo.lock. Advisory de dependência OPCIONAL não compilada entra em .cargo/audit.toml com a prova, nunca ignorado em silêncio.",
+      "command": "cargo audit",
+      "cwd": "../server",
+      "severity": "warning",
+      "blocking": false
+    }
+  ]
+}

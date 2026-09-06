@@ -22,3 +22,10 @@ CONVENTIONS.md
 # Worktrees efêmeros criados por subagentes (isolation: worktree).
 # Nunca devem ser commitados — viram gitlink órfão (erro no CI).
 .claude/worktrees/
+
+# dotcontext runtime state
+.context/plans/
+.context/cache/semantic/
+.context/runtime/
+.context/**/archive/
+
