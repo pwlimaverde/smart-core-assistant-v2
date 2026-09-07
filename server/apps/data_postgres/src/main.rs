@@ -559,6 +559,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_is_phone_whitelisted = state_clone.clone();
     let state_for_resolve_atendimento = state_clone.clone();
     let state_for_toggle_bot = state_clone.clone();
+    let state_for_toggle_bot_conversa = state_clone.clone();
     let state_for_aplicar_politica = state_clone.clone();
     let state_for_move_atendimento_etapa = state_clone.clone();
     let state_for_send_outbound_message = state_clone.clone();
@@ -604,6 +605,17 @@ async fn main() -> anyhow::Result<()> {
                 handler_resolve_atendimento_para_contato(
                     state.atendimento.as_ref(),
                     state.whatsapp.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("DefinirBotDaConversa", move |env| {
+            let state = state_for_toggle_bot_conversa.clone();
+            Box::pin(async move {
+                handler_definir_bot_da_conversa(
+                    state.atendimento.as_ref(),
+                    state.audit.as_ref(),
                     env,
                 )
                 .await
@@ -2455,6 +2467,78 @@ async fn handler_resolve_atendimento_para_contato(
                 "atendente_humano_id": atendimento.atendente_humano_id,
                 "is_new": is_new,
             }),
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// D3 — liga/desliga a resposta automática da IA **nesta conversa**.
+///
+/// O caminho de volta que faltava. `assumir_atendimento` desliga o bot ao alguém
+/// assumir o cartão, e nada no servidor devolvia o valor para `true`: uma
+/// conversa que passou por um humano ficava sem bot para sempre.
+///
+/// A tranca do `desatribuir` continua de pé — devolver o cartão não religa
+/// sozinho. O que muda é existir uma ação deliberada para religar.
+async fn handler_definir_bot_da_conversa(
+    store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(i) => i as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let habilitado = match payload_json.get("habilitado").and_then(|v| v.as_bool()) {
+        Some(h) => h,
+        None => {
+            return erro(
+                error_core::AppError::Validation("habilitado ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .definir_bot_da_conversa(&ctx, atendimento_id, habilitado)
+        .await
+    {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "atendimento.bot_alterado",
+                    if habilitado {
+                        "Resposta automatica da IA LIGADA para o atendimento".to_string()
+                    } else {
+                        "Resposta automatica da IA DESLIGADA para o atendimento".to_string()
+                    },
+                    serde_json::json!({
+                        "atendimento_id": atendimento_id,
+                        "habilitado": habilitado,
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "DefinirBotDaConversaReply",
+                serde_json::json!({ "habilitado": habilitado }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Validation("atendimento não encontrado".into()),
+            &env,
         ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }

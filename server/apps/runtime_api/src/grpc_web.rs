@@ -45,6 +45,10 @@ use contracts::grpc::queries::{
     // Vouchers de ativação
     CreateVoucherRequest,
     CreateVoucherResponse,
+    DefinirBotDaConversaRequest,
+    DefinirBotDaConversaResponse,
+    DefinirRespostaBotInstanciaRequest,
+    DefinirRespostaBotInstanciaResponse,
     DeleteCoreSettingRequest,
     DeleteCoreSettingResponse,
     DetalheAtendimentoResponse,
@@ -156,8 +160,6 @@ use contracts::grpc::queries::{
     QueryAuditLogResponse,
     QuitarMinhaAssinaturaRequest,
     QuitarMinhaAssinaturaResponse,
-    DefinirRespostaBotInstanciaRequest,
-    DefinirRespostaBotInstanciaResponse,
     RefreshRequest,
     RegisterPaymentRequest,
     RegisterPaymentResponse,
@@ -3614,6 +3616,43 @@ impl AdminService for AdminFacade {
         }))
     }
 
+    /// D3 — liga/desliga a resposta automática da IA **nesta conversa**.
+    ///
+    /// Escopo de atendimento, não de admin: quem atende a conversa é quem sabe
+    /// se ela deve voltar para o robô. O `data_postgres` revalida com
+    /// `atendimentos:write` ou `tenant:admin`.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DefinirBotDaConversa", traceparent)
+    )]
+    async fn definir_bot_da_conversa(
+        &self,
+        req: Request<DefinirBotDaConversaRequest>,
+    ) -> Result<Response<DefinirBotDaConversaResponse>, Status> {
+        let inner = *req.get_ref();
+        if inner.atendimento_id <= 0 {
+            return Err(Status::invalid_argument("atendimento inválido"));
+        }
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "DefinirBotDaConversa",
+                serde_json::json!({
+                    "atendimento_id": inner.atendimento_id,
+                    "habilitado": inner.habilitado,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(DefinirBotDaConversaResponse {
+            habilitado: corpo
+                .get("habilitado")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(inner.habilitado),
+        }))
+    }
+
     /// D3 — liga/desliga a resposta automática da IA para a conexão inteira.
     ///
     /// Equivale ao `instances/<pk>/toggle-bot/` da v1. `tenant_id` das claims e
@@ -3622,13 +3661,17 @@ impl AdminService for AdminFacade {
     /// e não é decisão de quem só atende.
     #[tracing::instrument(
         skip_all,
-        fields(service = "runtime_api", rpc = "DefinirRespostaBotInstancia", traceparent)
+        fields(
+            service = "runtime_api",
+            rpc = "DefinirRespostaBotInstancia",
+            traceparent
+        )
     )]
     async fn definir_resposta_bot_instancia(
         &self,
         req: Request<DefinirRespostaBotInstanciaRequest>,
     ) -> Result<Response<DefinirRespostaBotInstanciaResponse>, Status> {
-        let inner = req.get_ref().clone();
+        let inner = *req.get_ref();
         if inner.id <= 0 {
             return Err(Status::invalid_argument("conexão inválida"));
         }
@@ -7087,6 +7130,7 @@ mod tests {
             // Operação financeira: a barreira aqui vale mais que nas demais.
             "QuitarMinhaAssinatura" => facade.quitar_minha_assinatura(Request::new(QuitarMinhaAssinaturaRequest::default())).await,
             "DefinirRespostaBotInstancia" => facade.definir_resposta_bot_instancia(Request::new(DefinirRespostaBotInstanciaRequest { id: 1, habilitado: false })).await,
+            "DefinirBotDaConversa" => facade.definir_bot_da_conversa(Request::new(DefinirBotDaConversaRequest { atendimento_id: 1, habilitado: true })).await,
         }
     }
 

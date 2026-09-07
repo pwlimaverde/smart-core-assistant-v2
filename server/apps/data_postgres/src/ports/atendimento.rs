@@ -161,6 +161,16 @@ pub trait AtendimentoStore: Send + Sync {
         origem: OrigemMensagem,
     ) -> Result<Mensagem, DbError>;
 
+    /// D3 — liga/desliga a resposta automática da IA nesta conversa.
+    ///
+    /// `false` no retorno = atendimento inexistente ou de outro tenant.
+    async fn definir_bot_da_conversa(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        habilitado: bool,
+    ) -> Result<bool, DbError>;
+
     /// N9/E1 — autoriza um upload de mídia e devolve a **chave** do objeto.
     ///
     /// Responde às perguntas que só o banco sabe: o atendimento é deste tenant?

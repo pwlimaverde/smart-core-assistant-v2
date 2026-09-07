@@ -386,6 +386,27 @@ impl AtendimentoStore for PgAtendimentoStore {
     /// logar (a chave devolvida identifica o objeto do tenant).
     #[tracing::instrument(
         skip_all,
+        fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, habilitado = habilitado)
+    )]
+    async fn definir_bot_da_conversa(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        habilitado: bool,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let afetou = PostgresAtendimentoRepository
+                .definir_bot_da_conversa(&mut tx, &ctx, atendimento_id, habilitado)
+                .await?;
+            Ok((afetou, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(
+        skip_all,
         fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, bytes = bytes)
     )]
     async fn autorizar_upload_midia(

@@ -1006,6 +1006,7 @@ service AdminService {
   // sem saída — não há como ver o estado, reconectar nem trocar de aparelho.
   rpc ListMyWhatsappInstances(ListMyWhatsappInstancesRequest) returns (ListMyWhatsappInstancesResponse);
   rpc DefinirRespostaBotInstancia(DefinirRespostaBotInstanciaRequest) returns (DefinirRespostaBotInstanciaResponse);
+  rpc DefinirBotDaConversa(DefinirBotDaConversaRequest) returns (DefinirBotDaConversaResponse);
   rpc ReconnectMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
   rpc DeleteMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
 
@@ -1281,6 +1282,20 @@ message DefinirRespostaBotInstanciaRequest {
 }
 
 message DefinirRespostaBotInstanciaResponse {
+  bool habilitado = 1;
+}
+
+// D3 — liga/desliga a IA nesta conversa.
+//
+// O caminho de volta que faltava: assumir o atendimento desliga o bot, e nada
+// devolvia o valor. Uma conversa que passou por um humano ficava sem bot para
+// sempre.
+message DefinirBotDaConversaRequest {
+  int32 atendimento_id = 1;
+  bool habilitado = 2;
+}
+
+message DefinirBotDaConversaResponse {
   bool habilitado = 1;
 }
 

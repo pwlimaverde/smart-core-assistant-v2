@@ -143,6 +143,23 @@ pub trait AtendimentoRepository: Send + Sync {
         atendente_id: i32,
     ) -> Result<(), DbError>;
 
+    /// Liga/desliga a resposta automática da IA **nesta conversa** (D3).
+    ///
+    /// O caminho de volta que faltava. `assumir_atendimento` desliga o bot, e
+    /// nada no servidor devolvia o valor para `true` — uma conversa que passou
+    /// por um humano ficava sem bot para sempre, sem tela para reverter.
+    ///
+    /// Isto **não** enfraquece a regra documentada em [`Self::desatribuir`]:
+    /// devolver o cartão continua sem religar sozinho. A diferença é que agora
+    /// existe uma ação deliberada para religar, em vez de nenhuma.
+    async fn definir_bot_da_conversa(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        habilitado: bool,
+    ) -> Result<bool, DbError>;
+
     /// Solta a conversa de quem a estava atendendo, devolvendo-a ao rodízio.
     ///
     /// **Não mexe em `bot_pode_atender`** — regra herdada da v1
@@ -468,6 +485,28 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         .execute(&mut **tx)
         .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, habilitado = habilitado))]
+    async fn definir_bot_da_conversa(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        habilitado: bool,
+    ) -> Result<bool, DbError> {
+        ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+        let res = sqlx::query!(
+            r#"UPDATE oraculo_atendimento
+               SET bot_pode_atender = $1
+               WHERE tenant_id = $2 AND id = $3"#,
+            habilitado,
+            ctx.tenant_id,
+            atendimento_id
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(res.rows_affected() > 0)
     }
 
     #[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]

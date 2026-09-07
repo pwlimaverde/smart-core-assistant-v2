@@ -986,6 +986,15 @@ table DefinirRespostaBotInstanciaResponse {
   habilitado:bool;
 }
 
+table DefinirBotDaConversaRequest {
+  atendimento_id:int;
+  habilitado:bool;
+}
+
+table DefinirBotDaConversaResponse {
+  habilitado:bool;
+}
+
 table ListMyWhatsappInstancesRequest {
 }
 
