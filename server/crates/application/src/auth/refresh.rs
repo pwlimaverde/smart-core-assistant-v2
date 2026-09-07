@@ -190,19 +190,20 @@ pub async fn refresh(
 }
 
 /// Helper local para derivar escopos no refresh.
+/// Delega para a mesma regra do login.
+///
+/// **Antes divergia, e a divergência era um defeito silencioso.** Esta função
+/// tinha fallback próprio — `["atendimentos:read", "clientes:write"]`, sem
+/// `atendimentos:write` e sem tratar `role` — e só reconhecia
+/// `module_permissions` como array. O efeito: um admin sem `module_permissions`
+/// explícito **perdia `tenant:admin` e a escrita ao renovar o token**. A sessão
+/// ia degradando sozinha, e o sintoma ("de repente não consigo mais") não
+/// apontava para o refresh.
+///
+/// Renovar um token não é lugar de decidir permissão de forma diferente de
+/// emiti-lo: a regra é uma só, e mora no login.
 fn derivar_escopos_refresh(is_superuser: bool, user_info: &serde_json::Value) -> Vec<String> {
-    if is_superuser {
-        return vec!["*".to_string()];
-    }
-    if let Some(perms) = user_info.get("module_permissions") {
-        if let Some(arr) = perms.as_array() {
-            return arr
-                .iter()
-                .filter_map(|v| v.as_str().map(|s| s.to_string()))
-                .collect();
-        }
-    }
-    vec!["atendimentos:read".into(), "clientes:write".into()]
+    crate::auth::login::derivar_escopos(is_superuser, user_info).0
 }
 
 #[cfg(test)]
@@ -235,31 +236,40 @@ mod tests {
     }
 
     #[test]
-    fn derivar_escopos_refresh_sem_module_permissions_usa_fallback_padrao() {
+    fn derivar_escopos_refresh_sem_module_permissions_usa_o_mesmo_fallback_do_login() {
+        // Antes esta variante tinha fallback próprio, sem `atendimentos:write`.
         let info = serde_json::json!({});
         assert_eq!(
             derivar_escopos_refresh(false, &info),
             vec![
                 "atendimentos:read".to_string(),
-                "clientes:write".to_string()
+                "atendimentos:write".to_string(),
+                "clientes:write".to_string(),
             ]
         );
     }
 
     #[test]
-    fn derivar_escopos_refresh_module_permissions_como_objeto_cai_no_fallback() {
-        // Diferente de `derivar_escopos` (login.rs), esta variante só reconhece
-        // `module_permissions` como array — um objeto de flags não é tratado e
-        // cai no fallback padrão. Comportamento existente documentado pelo teste.
+    fn derivar_escopos_refresh_reconhece_module_permissions_como_objeto() {
+        // Antes só array era reconhecido, e um objeto de flags caía no fallback:
+        // quem tinha permissão gravada como objeto perdia o que tinha ao renovar.
         let info = serde_json::json!({
             "module_permissions": { "tenant:admin": true },
         });
         assert_eq!(
             derivar_escopos_refresh(false, &info),
-            vec![
-                "atendimentos:read".to_string(),
-                "clientes:write".to_string()
-            ]
+            vec!["tenant:admin".to_string()]
+        );
+    }
+
+    /// O defeito que a unificação corrige, dito de forma direta.
+    #[test]
+    fn admin_sem_module_permissions_nao_perde_tenant_admin_ao_renovar() {
+        let info = serde_json::json!({ "role": "admin" });
+        let escopos = derivar_escopos_refresh(false, &info);
+        assert!(
+            escopos.contains(&"tenant:admin".to_string()),
+            "renovar o token rebaixava o admin: {escopos:?}"
         );
     }
 }
