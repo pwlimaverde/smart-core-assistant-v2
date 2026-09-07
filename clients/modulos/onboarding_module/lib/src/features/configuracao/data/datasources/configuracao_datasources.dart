@@ -95,7 +95,13 @@ final class ConsultarProgressoDatasource
     final resp = await _client.getMyOnboardingProgress(
       GetMyOnboardingProgressRequest(),
     );
-    return ProgressoOnboarding(passo: resp.passo, concluido: resp.concluido);
+    return ProgressoOnboarding(
+      passo: resp.passo,
+      concluido: resp.concluido,
+      pagamentoPendente: resp.pagamentoPendente,
+      assinaturaStatus: resp.assinaturaStatus,
+      planoNome: resp.planoNome,
+    );
   }
 }
 

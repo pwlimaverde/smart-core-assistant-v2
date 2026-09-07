@@ -461,6 +461,13 @@ class AdminServiceClient extends $grpc.Client {
         options: options);
   }
 
+  $grpc.ResponseFuture<$0.QuitarMinhaAssinaturaResponse> quitarMinhaAssinatura(
+    $0.QuitarMinhaAssinaturaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$quitarMinhaAssinatura, request, options: options);
+  }
+
   /// Treinamento da IA (o tenant treina o próprio assistente)
   $grpc.ResponseFuture<$0.MyTreinamentoResponse> createMyTreinamento(
     $0.CreateMyTreinamentoRequest request, {
@@ -983,6 +990,11 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/GetMyOnboardingProgress',
       ($0.GetMyOnboardingProgressRequest value) => value.writeToBuffer(),
       $0.GetMyOnboardingProgressResponse.fromBuffer);
+  static final _$quitarMinhaAssinatura = $grpc.ClientMethod<
+          $0.QuitarMinhaAssinaturaRequest, $0.QuitarMinhaAssinaturaResponse>(
+      '/smartcore.contracts.queries.AdminService/QuitarMinhaAssinatura',
+      ($0.QuitarMinhaAssinaturaRequest value) => value.writeToBuffer(),
+      $0.QuitarMinhaAssinaturaResponse.fromBuffer);
   static final _$createMyTreinamento = $grpc.ClientMethod<
           $0.CreateMyTreinamentoRequest, $0.MyTreinamentoResponse>(
       '/smartcore.contracts.queries.AdminService/CreateMyTreinamento',
@@ -1639,6 +1651,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.GetMyOnboardingProgressRequest.fromBuffer(value),
         ($0.GetMyOnboardingProgressResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.QuitarMinhaAssinaturaRequest,
+            $0.QuitarMinhaAssinaturaResponse>(
+        'QuitarMinhaAssinatura',
+        quitarMinhaAssinatura_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.QuitarMinhaAssinaturaRequest.fromBuffer(value),
+        ($0.QuitarMinhaAssinaturaResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.CreateMyTreinamentoRequest,
             $0.MyTreinamentoResponse>(
         'CreateMyTreinamento',
@@ -2408,6 +2429,15 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.GetMyOnboardingProgressResponse> getMyOnboardingProgress(
       $grpc.ServiceCall call, $0.GetMyOnboardingProgressRequest request);
+
+  $async.Future<$0.QuitarMinhaAssinaturaResponse> quitarMinhaAssinatura_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.QuitarMinhaAssinaturaRequest> $request) async {
+    return quitarMinhaAssinatura($call, await $request);
+  }
+
+  $async.Future<$0.QuitarMinhaAssinaturaResponse> quitarMinhaAssinatura(
+      $grpc.ServiceCall call, $0.QuitarMinhaAssinaturaRequest request);
 
   $async.Future<$0.MyTreinamentoResponse> createMyTreinamento_Pre(
       $grpc.ServiceCall $call,

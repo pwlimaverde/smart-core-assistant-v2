@@ -9603,10 +9603,18 @@ class GetMyOnboardingProgressResponse extends $pb.GeneratedMessage {
   factory GetMyOnboardingProgressResponse({
     $core.int? passo,
     $core.bool? concluido,
+    $core.bool? pagamentoPendente,
+    $core.String? assinaturaStatus,
+    $core.String? planoNome,
+    $core.int? planoId,
   }) {
     final result = create();
     if (passo != null) result.passo = passo;
     if (concluido != null) result.concluido = concluido;
+    if (pagamentoPendente != null) result.pagamentoPendente = pagamentoPendente;
+    if (assinaturaStatus != null) result.assinaturaStatus = assinaturaStatus;
+    if (planoNome != null) result.planoNome = planoNome;
+    if (planoId != null) result.planoId = planoId;
     return result;
   }
 
@@ -9626,6 +9634,10 @@ class GetMyOnboardingProgressResponse extends $pb.GeneratedMessage {
       createEmptyInstance: create)
     ..aI(1, _omitFieldNames ? '' : 'passo')
     ..aOB(2, _omitFieldNames ? '' : 'concluido')
+    ..aOB(3, _omitFieldNames ? '' : 'pagamentoPendente')
+    ..aOS(4, _omitFieldNames ? '' : 'assinaturaStatus')
+    ..aOS(5, _omitFieldNames ? '' : 'planoNome')
+    ..aI(6, _omitFieldNames ? '' : 'planoId')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -9670,6 +9682,245 @@ class GetMyOnboardingProgressResponse extends $pb.GeneratedMessage {
   $core.bool hasConcluido() => $_has(1);
   @$pb.TagNumber(2)
   void clearConcluido() => $_clearField(2);
+
+  /// Campos aditivos: o progresso não dizia nada sobre dinheiro, e por isso o
+  /// guard mandava para /configuracao/* quem nunca pagou. Aditivos de propósito —
+  /// campo novo em proto3 não quebra cliente antigo, que segue no comportamento
+  /// atual (degradado, não quebrado) enquanto não atualiza.
+  ///
+  /// subscription.status != ACTIVE. Sem assinatura nenhuma também conta como
+  /// pendente: o tenant não pode operar.
+  @$pb.TagNumber(3)
+  $core.bool get pagamentoPendente => $_getBF(2);
+  @$pb.TagNumber(3)
+  set pagamentoPendente($core.bool value) => $_setBool(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasPagamentoPendente() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearPagamentoPendente() => $_clearField(3);
+
+  /// PENDING_PAYMENT | ACTIVE | SUSPENDED | ... Vazio = sem assinatura.
+  @$pb.TagNumber(4)
+  $core.String get assinaturaStatus => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set assinaturaStatus($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasAssinaturaStatus() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearAssinaturaStatus() => $_clearField(4);
+
+  /// Para a tela dizer o que está sendo cobrado. Vazio = plano não escolhido.
+  @$pb.TagNumber(5)
+  $core.String get planoNome => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set planoNome($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasPlanoNome() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearPlanoNome() => $_clearField(5);
+
+  /// 0 = plano não escolhido.
+  @$pb.TagNumber(6)
+  $core.int get planoId => $_getIZ(5);
+  @$pb.TagNumber(6)
+  set planoId($core.int value) => $_setSignedInt32(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasPlanoId() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearPlanoId() => $_clearField(6);
+}
+
+/// Quitação da assinatura **depois do login**.
+///
+/// O `ConfirmPayment` do wizard exige `signup_token`, que morre com a sessão de
+/// cadastro. Sem este RPC, um tenant cuja sessão expirou no meio do wizard entra
+/// no app e não tem como pagar: esbarra em "assinatura inadimplente" a cada
+/// cadastro e não existe tela que resolva.
+///
+/// O `tenant_id` vem das **claims**, nunca do request — mesma regra dos demais
+/// `*My*`. Exige escopo `tenant:admin`: cobrança é assunto do dono, não do
+/// colaborador.
+class QuitarMinhaAssinaturaRequest extends $pb.GeneratedMessage {
+  factory QuitarMinhaAssinaturaRequest({
+    $core.String? provedor,
+    $core.String? credencial,
+  }) {
+    final result = create();
+    if (provedor != null) result.provedor = provedor;
+    if (credencial != null) result.credencial = credencial;
+    return result;
+  }
+
+  QuitarMinhaAssinaturaRequest._();
+
+  factory QuitarMinhaAssinaturaRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory QuitarMinhaAssinaturaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'QuitarMinhaAssinaturaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'provedor')
+    ..aOS(2, _omitFieldNames ? '' : 'credencial')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  QuitarMinhaAssinaturaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  QuitarMinhaAssinaturaRequest copyWith(
+          void Function(QuitarMinhaAssinaturaRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as QuitarMinhaAssinaturaRequest))
+          as QuitarMinhaAssinaturaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static QuitarMinhaAssinaturaRequest create() =>
+      QuitarMinhaAssinaturaRequest._();
+  @$core.override
+  QuitarMinhaAssinaturaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static QuitarMinhaAssinaturaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<QuitarMinhaAssinaturaRequest>(create);
+  static QuitarMinhaAssinaturaRequest? _defaultInstance;
+
+  /// `id` de um PaymentProvider (hoje só `voucher`).
+  @$pb.TagNumber(1)
+  $core.String get provedor => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set provedor($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasProvedor() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearProvedor() => $_clearField(1);
+
+  /// O que o dono digitou. Para `voucher`, o código. É credencial: não entra em
+  /// span, log nem auditoria.
+  @$pb.TagNumber(2)
+  $core.String get credencial => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set credencial($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasCredencial() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearCredencial() => $_clearField(2);
+}
+
+class QuitarMinhaAssinaturaResponse extends $pb.GeneratedMessage {
+  factory QuitarMinhaAssinaturaResponse({
+    $core.bool? confirmado,
+    $core.String? assinaturaStatus,
+    $core.String? urlExterna,
+    $core.String? motivo,
+    $core.String? erroLegivel,
+  }) {
+    final result = create();
+    if (confirmado != null) result.confirmado = confirmado;
+    if (assinaturaStatus != null) result.assinaturaStatus = assinaturaStatus;
+    if (urlExterna != null) result.urlExterna = urlExterna;
+    if (motivo != null) result.motivo = motivo;
+    if (erroLegivel != null) result.erroLegivel = erroLegivel;
+    return result;
+  }
+
+  QuitarMinhaAssinaturaResponse._();
+
+  factory QuitarMinhaAssinaturaResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory QuitarMinhaAssinaturaResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'QuitarMinhaAssinaturaResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOB(1, _omitFieldNames ? '' : 'confirmado')
+    ..aOS(2, _omitFieldNames ? '' : 'assinaturaStatus')
+    ..aOS(3, _omitFieldNames ? '' : 'urlExterna')
+    ..aOS(4, _omitFieldNames ? '' : 'motivo')
+    ..aOS(5, _omitFieldNames ? '' : 'erroLegivel')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  QuitarMinhaAssinaturaResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  QuitarMinhaAssinaturaResponse copyWith(
+          void Function(QuitarMinhaAssinaturaResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as QuitarMinhaAssinaturaResponse))
+          as QuitarMinhaAssinaturaResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static QuitarMinhaAssinaturaResponse create() =>
+      QuitarMinhaAssinaturaResponse._();
+  @$core.override
+  QuitarMinhaAssinaturaResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static QuitarMinhaAssinaturaResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<QuitarMinhaAssinaturaResponse>(create);
+  static QuitarMinhaAssinaturaResponse? _defaultInstance;
+
+  /// true = assinatura ativa ao fim da chamada (inclusive se já estava).
+  @$pb.TagNumber(1)
+  $core.bool get confirmado => $_getBF(0);
+  @$pb.TagNumber(1)
+  set confirmado($core.bool value) => $_setBool(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasConfirmado() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearConfirmado() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get assinaturaStatus => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set assinaturaStatus($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasAssinaturaStatus() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearAssinaturaStatus() => $_clearField(2);
+
+  /// Preenchida quando o provedor exige concluir o pagamento fora do app.
+  @$pb.TagNumber(3)
+  $core.String get urlExterna => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set urlExterna($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasUrlExterna() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearUrlExterna() => $_clearField(3);
+
+  /// Recusa de negócio (código expirado, já usado...). Vai para junto do campo
+  /// na tela, não para um erro de RPC.
+  @$pb.TagNumber(4)
+  $core.String get motivo => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set motivo($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasMotivo() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearMotivo() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get erroLegivel => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set erroLegivel($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasErroLegivel() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearErroLegivel() => $_clearField(5);
 }
 
 /// N3.3: config do PRÓPRIO tenant (tenant_id vem das claims, não do request).
