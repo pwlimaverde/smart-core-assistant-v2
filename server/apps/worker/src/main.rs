@@ -307,6 +307,19 @@ async fn aplicar_transferencia_ia(
     }
 }
 
+/// O que a IA devolveu, com o número que decide.
+///
+/// Antes desta struct a função devolvia só o texto, e a `confiabilidade` que o
+/// `ia_engine` calcula era descartada na mesma linha — `oraculo_mensagem.
+/// confianca_resposta` ficava sempre nulo em produção. Sem histórico não há como
+/// calibrar limiar nenhum, então **gravar vem antes de decidir**: este passo só
+/// mede; o veto por faixa é o passo seguinte, com dado real na mão.
+struct RespostaIa {
+    texto: String,
+    /// 0..1. O `ia_engine` sempre a devolve; guardamos como veio.
+    confianca: f64,
+}
+
 /// Orquestra a resposta via IA (fase N2.5): resolve a config do tenant, embeda a
 /// mensagem, compõe o contexto de RAG (`data_postgres.QueryCompose`) e chama
 /// `ia_engine.Responder`. Passos de RAG/histórico são best-effort — só falham a
@@ -314,7 +327,8 @@ async fn aplicar_transferencia_ia(
 /// (`processar_mensagem_recebida`) decide o fallback textual em caso de erro.
 ///
 /// `skip_all` + `fields` explícitos: a mensagem do usuário é PII e nunca entra no
-/// span; só ids de correlação (`tenant_id`/`atendimento_id`).
+/// span; só ids de correlação (`tenant_id`/`atendimento_id`) e a confiança, que é
+/// número e não revela conteúdo.
 #[tracing::instrument(
     skip_all,
     name = "ia.responder",
@@ -323,6 +337,7 @@ async fn aplicar_transferencia_ia(
         atendimento_id = atendimento_id,
         fluxos_count = tracing::field::Empty,
         campos_pendentes_count = tracing::field::Empty,
+        confianca = tracing::field::Empty,
     )
 )]
 async fn responder_via_ia(
@@ -332,7 +347,7 @@ async fn responder_via_ia(
     mensagem_texto: &str,
     causation_id: &str,
     traceparent: &str,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<RespostaIa> {
     let tenant_id_str = tenant_uuid.to_string();
 
     // 1. Config de IA do tenant (LLM + embeddings provider/api_key), resolvida
@@ -540,7 +555,14 @@ async fn responder_via_ia(
         .await;
     }
 
-    Ok(resposta.resposta_texto)
+    // A confiança entra no span: é número, não revela conteúdo, e é o que
+    // permitirá calibrar os limiares antes de ligar o veto.
+    span.record("confianca", resposta.confiabilidade);
+
+    Ok(RespostaIa {
+        texto: resposta.resposta_texto,
+        confianca: resposta.confiabilidade,
+    })
 }
 
 #[tokio::main]
@@ -1623,7 +1645,7 @@ async fn acionar_bot(
         // qualquer falha (timeout/indisponibilidade/erro do provedor) — a barreira
         // de bot NUNCA trava o atendimento por causa da IA.
         let pergunta = texto_do_contato.clone().unwrap_or_default();
-        let bot_text = match responder_via_ia(
+        let (bot_text, confianca_bot) = match responder_via_ia(
             state,
             tenant_uuid,
             atendimento_id,
@@ -1633,7 +1655,7 @@ async fn acionar_bot(
         )
         .await
         {
-            Ok(texto) if !texto.trim().is_empty() => texto,
+            Ok(r) if !r.texto.trim().is_empty() => (r.texto, Some(r.confianca)),
             Ok(_) => {
                 tracing::warn!(
                     atendimento_id = atendimento_id,
@@ -1652,7 +1674,9 @@ async fn acionar_bot(
                     None,
                     Some(ctx.event_id.clone()),
                 );
-                texto_fallback
+                // Sem confiança: este texto não veio da IA, veio da config do
+                // tenant (ou da constante). Gravar 0.0 seria mentir na medição.
+                (texto_fallback, None)
             }
             Err(e) => {
                 tracing::warn!(
@@ -1674,7 +1698,9 @@ async fn acionar_bot(
                     None,
                     Some(ctx.event_id.clone()),
                 );
-                texto_fallback
+                // Sem confiança: este texto não veio da IA, veio da config do
+                // tenant (ou da constante). Gravar 0.0 seria mentir na medição.
+                (texto_fallback, None)
             }
         };
         let bot_text = bot_text.as_str();
@@ -1771,6 +1797,11 @@ async fn acionar_bot(
                     "message_id_whatsapp": stanza_bot,
                     // Já entregue ao contato pelo envio acima.
                     "ja_entregue": true,
+                    // D1, passo 1: a confiança da IA passa a ser gravada. Fica na
+                    // linha da resposta porque o bot responde a uma rajada
+                    // agregada — não existe "a mensagem respondida". Ausente
+                    // quando o texto veio do fallback, e não da IA.
+                    "confianca": confianca_bot,
                 }),
                 &ctx.event_id,
                 &ctx.traceparent,
@@ -2878,6 +2909,16 @@ mod tests {
         assert_eq!(
             do_bot[0].get("ja_entregue").and_then(|v| v.as_bool()),
             Some(true)
+        );
+        // D1: neste teste a IA não responde (mock sem expectativa), então o texto
+        // vem do fallback — e fallback NÃO tem confiança. Gravar 0.0 aqui seria
+        // mentir na medição que vai calibrar os limiares.
+        assert!(
+            do_bot[0]
+                .get("confianca")
+                .is_none_or(serde_json::Value::is_null),
+            "resposta de fallback não pode carregar confiança: {:?}",
+            do_bot[0]
         );
         // A mensagem inbound do contato segue persistida (não foi substituída) e
         // carrega o stanzaId, que é a chave de idempotência da reentrega.

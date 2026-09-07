@@ -2347,6 +2347,11 @@ async fn handler_persist_message(store: &dyn ports::AtendimentoStore, env: Envel
             .get("ja_entregue")
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
+        // Só o bot manda este campo; para os demais remetentes fica nulo.
+        confianca_resposta: payload_json
+            .get("confianca")
+            .and_then(|v| v.as_f64())
+            .filter(|c| c.is_finite()),
     };
 
     // O traceparent é persistido no outbox para manter o trace distribuído vivo

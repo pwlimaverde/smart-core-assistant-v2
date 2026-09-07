@@ -177,6 +177,7 @@ async fn solicitar_pesquisa_satisfacao(
                 message_id_whatsapp: None,
                 mensagem_citada_id: None,
                 ja_entregue: false,
+                confianca_resposta: None,
             },
         )
         .await?;
@@ -340,6 +341,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                         message_id_whatsapp: origem.message_id_whatsapp.as_deref(),
                         mensagem_citada_id,
                         ja_entregue: origem.ja_entregue,
+                        confianca_resposta: origem.confianca_resposta,
                     },
                 )
                 .await?;
@@ -512,6 +514,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                         mensagem_citada_id: None,
                         // Ainda não passou pelo WhatsApp: é o worker que envia.
                         ja_entregue: false,
+                        confianca_resposta: None,
                     },
                 )
                 .await?;
@@ -947,6 +950,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                                         message_id_whatsapp: None,
                                         mensagem_citada_id: None,
                                         ja_entregue: false,
+                        confianca_resposta: None,
                                     },
                                 )
                                 .await?;
