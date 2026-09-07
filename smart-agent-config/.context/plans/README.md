@@ -8,6 +8,7 @@ This directory contains plans for coordinating work across documentation and pla
 3. [N11 Operacao Cadastros](./n11-operacao-cadastros.md)
 4. [N12 Cutover Producao](./n12-cutover-producao.md)
 5. [N9 Conversa Completa](./n9-conversa-completa.md)
+6. [Regras do bot e permissões](./regras-do-bot-e-permissoes.md)
 
 ## How To Create Or Update Plans
 - Run "dotcontext plan <name>" to scaffold a new plan template.

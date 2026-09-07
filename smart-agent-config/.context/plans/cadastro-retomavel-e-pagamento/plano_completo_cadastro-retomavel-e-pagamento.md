@@ -160,10 +160,53 @@ Faixa no topo do quadro (reusa o slot `avisoBuilder` criado para o
 Sem isso, o sintoma continua sendo "não consigo cadastrar nada" com uma
 mensagem de erro de banco.
 
+## E6 — Assinatura vencida precisa suspender
+
+> Acrescentado em 2026-09-06, a partir do doc
+> [31](../../doc_dev/planejamento/31-superficie-completa-v1-rotas-celery-admin.md),
+> achado **N1**. É o espelho exato do defeito deste plano.
+
+A v1 tinha `check_subscription_expirations` (Celery): busca `Subscription`
+`ACTIVE` com `current_period_end < now` e passa para `SUSPENDED`.
+
+O `scheduler.rs` da v2 tem cinco rotinas e **nenhuma olha para assinatura**. O
+`period_end` só é escrito na confirmação do pagamento e nunca mais é consultado
+por ninguém.
+
+**Consequência:** uma assinatura vence e o tenant continua operando
+indefinidamente. Este plano corrige quem pagou e não consegue entrar; sem a E6,
+fica de pé o contrário — quem não pagou e nunca sai.
+
+### Onde
+
+Rotina nova no `scheduler.rs`, no mesmo padrão das outras cinco: lote com limite
+por variável de ambiente, lock com TTL, `chamar_rpc` para um handler novo no
+`data_postgres` que faz o `UPDATE ... WHERE status = 'ACTIVE' AND period_end <
+NOW() RETURNING`.
+
+### Cuidados
+
+- **Fail-safe ao contrário do guard.** Aqui a falha de consulta resolve para
+  "não suspender": suspender por engano tira o cliente do ar.
+- **Auditoria** `assinatura.suspensa_por_vencimento`, com o `period_end` que
+  motivou.
+- **Aviso antes do corte.** A E5 já monta a faixa de pendência; ela deve
+  aparecer também para assinatura próxima do vencimento, não só para
+  `PENDING_PAYMENT`.
+- **Não notificar por e-mail aqui.** A v1 tinha `notify_expiring_subscriptions`,
+  mas era um `logger.info` com um TODO — nunca enviou nada e nunca foi agendada.
+  Notificação depende do canal de e-mail do plano de equipe; fora de escopo.
+
+### Testes
+
+Assinatura vencida ontem suspende; vencendo amanhã não; já `SUSPENDED` não é
+tocada duas vezes; falha de RPC não suspende ninguém.
+
 ## Sequência
 
 E1 → E2 (servidor, um deploy) → E3 → E4 → E5 (cliente). E3 sem E1 não tem o que
-consultar; E4 sem E2 não tem o que chamar.
+consultar; E4 sem E2 não tem o que chamar. **E6 é independente** — pode ir junto
+da E1/E2, no mesmo deploy de servidor.
 
 ## Riscos
 

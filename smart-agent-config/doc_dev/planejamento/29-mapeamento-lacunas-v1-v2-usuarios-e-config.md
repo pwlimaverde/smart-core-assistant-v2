@@ -7,8 +7,11 @@
 >
 > **Método:** schema do banco (v1 `models.py` × v2 `information_schema`),
 > contratos (`admin.proto`), telas (`templates/apps/**` × rotas do Flutter) e
-> rastreio de uso no código Rust. Nada aqui é suposição — o que não pôde ser
-> confirmado está marcado como **a confirmar**.
+> rastreio de uso no código Rust. Nada aqui é suposição.
+>
+> **Revisado em 2026-09-06:** os quatro pontos que estavam "a confirmar" foram
+> fechados (seção 7) e **duas conclusões foram corrigidas** — L3 e L4. Ver os
+> avisos ⚠️ no corpo delas.
 
 ---
 
@@ -16,13 +19,13 @@
 
 O **schema** da v2 está completo — em vários pontos é superconjunto da v1.
 O que falta é **comportamento e superfície**: campos que existem no banco e
-ninguém edita, permissões que são gravadas e nunca aplicadas, e um fluxo de
-convite que não entrega o convite.
+ninguém edita, um fluxo de convite que não entrega o convite, e um fallback de
+permissões que dá escrita a quem deveria só ler.
 
 | Área | Schema | Contrato | Tela | Veredito |
 |---|---|---|---|---|
 | Config do tenant | ✅ 33 campos (v1: 12) | ✅ | ⚠️ **6 editáveis** | Tela incompleta |
-| Papéis/permissões | ✅ role + module + flow | ⚠️ parcial | ❌ sem editor | `module_permissions` inerte |
+| Papéis/permissões | ✅ role + module + flow | ✅ | ⚠️ editor cru | Sem papel somente-leitura |
 | Convite de usuário | ✅ token, validade, revogação | ✅ | ✅ | ❌ **sem envio de e-mail** |
 | Atendente ↔ usuário | ✅ `usuario_id` existe | ❌ | ❌ | **Não vincula** |
 | Liga/desliga do bot | ❌ | ❌ | ❌ | **Perdido na migração** |
@@ -87,17 +90,53 @@ fica **nula**. Por isso a tela de usuários mostra só o admin: ela lista
 → Falta decidir e implementar o elo: cadastrar atendente **cria convite** para
 o e-mail informado, e o aceite preenche `usuario_id`.
 
-**L3 — `module_permissions` é inerte.** Aparece só em `INSERT`/`UPDATE`
-(`signup.rs`, `tenant.rs`); **nenhum ponto do código lê para autorizar**. Os
-escopos vêm do `role`. Já `flow_permissions` **é aplicado de verdade** (RBAC
-fino por fluxo, resolvido em `grpc_web.rs:434` e usado no `data_postgres` —
-há teste `listar_por_status_filtra_por_flow_permission`).
-→ Ou implementar a checagem por módulo, ou remover o campo. Hoje ele **promete
-uma segurança que não existe** — o pior dos dois mundos.
+**L3 — `module_permissions` ~~é inerte~~ mudou de forma, e o fallback é largo
+demais.**
 
-**L4 — Sem editor de permissões.** A v1 tinha `edit_permissions.html` com os
-módulos e as ações. A v2 tem `UpdateTenantUser`, mas **a confirmar** se a tela
-`/tenant/usuarios` expõe módulos e fluxos ou apenas ativa/desativa.
+> ⚠️ **Correção (2026-09-06).** A primeira versão desta lacuna dizia que o campo
+> era inerte. **Estava errado.** Ele é lido, e é a fonte primária dos escopos do
+> token.
+
+`derivar_escopos` (`application/src/auth/login.rs:244`, e o gêmeo em
+`refresh.rs:133`) resolve os escopos do JWT nesta ordem:
+
+1. superusuário → `["*"]`;
+2. `module_permissions` como **array** → vira a lista de escopos tal e qual;
+3. `module_permissions` como **objeto** → as chaves com valor `true`;
+4. **fallback pelo `role`**, quando o campo está vazio.
+
+Esses escopos são exigidos de verdade no `data_postgres`
+(`ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])`). O campo
+funciona. `flow_permissions` também (RBAC fino por fluxo, `grpc_web.rs:434`, com
+teste `listar_por_status_filtra_por_flow_permission`).
+
+O que **de fato** mudou em relação à v1 é a **forma** e o **alcance**:
+
+| | v1 | v2 |
+|---|---|---|
+| Formato | `{modulo: {view, edit, delete}}` | lista plana de escopos (`"atendimentos:write"`) |
+| Granularidade | por módulo × ação | por escopo, sem separar leitura de escrita por módulo |
+| Papéis | `admin`, `manager`, `staff`, `viewer` | **só `admin` e `staff`** nas telas |
+
+→ A lacuna real é outra, e é de **segurança**: o fallback do `role` dá a
+**qualquer** não-admin `atendimentos:read`, `atendimentos:write` e
+`clientes:write`. **Não existe papel somente-leitura** — o `viewer` da v1 não
+tem equivalente possível hoje, porque um usuário sem `module_permissions` cai no
+fallback e nasce podendo escrever.
+
+**L4 — Editor de permissões existe, mas é cru.**
+
+> ⚠️ **Correção (2026-09-06).** Confirmado na UI: `/tenant/usuarios` e
+> `/tenant/convites` **já editam** papel, escopos e fluxos.
+
+`tenant_users_page.dart` e `invites_page.dart` oferecem: dropdown de papel
+(**só `admin` e `staff`**), `CheckboxListTile` por escopo e — este é o ponto —
+um `AppTextField` com o rótulo *"IDs dos fluxos permitidos (separados por
+vírgula)"*, hint `ex: 1,2,3`.
+
+→ O que falta não é a tela, é o **acabamento**: escolher fluxo por nome em vez de
+digitar ID, escopos com rótulo de negócio em vez de `atendimentos:write`, e os
+papéis que faltam (`manager`, `viewer`) — este último bloqueado pela L3.
 
 **L5 — Recuperação de senha não portada.** A v1 tinha o ciclo completo
 (`password_reset_form`, `_done`, `_confirm`, `_complete`, `_email`). Na v2 não
@@ -159,9 +198,12 @@ last_connection_state, media_storage_backend, subscribed_events, created_at` —
 o dono quer atender manualmente. Requer migration, contrato, checagem no worker
 (antes de acionar a IA) e o controle na tela.
 
-**A confirmar:** se a v2 desliga o bot ao assumir o atendimento (a v1 fazia).
-Há indício de que sim — o commit `cf30905` menciona "assumir a conversa não
-avisava o contato" — mas não foi verificado neste levantamento.
+**Confirmado (2026-09-06):** a v2 **desliga** o bot ao assumir —
+`assumir_atendimento` grava `bot_pode_atender = false`
+(`atendimentos.rs:461`), e `desatribuir` não religa, por decisão documentada no
+trait. O que não existe é o caminho de volta: **nenhum `UPDATE` no servidor
+devolve `bot_pode_atender` para `true`**, e o campo não aparece em nenhum arquivo
+Dart. O interruptor da conversa é de mão única e sem botão. Ver F2 no doc 30.
 
 ---
 
@@ -177,7 +219,7 @@ avisava o contato" — mas não foi verificado neste levantamento.
 | `tenants/backoffice/register_payment.html` | — | registro manual de pagamento (`tenants_paymentrecord` existe, vazia) |
 | `settings_manager/configuracoes/whitelist*` | — | `whatsapp_whitelist` existe no banco, sem tela |
 | `evolution_sync/instance_detail.html` | `/tenant/conexoes` | parcial — sem detalhe nem toggle do bot |
-| `trello_sync/*` | — | integração Trello inteira (fora de escopo?) |
+| `trello_sync/*` | — | **descontinuado** por decisão de produto (2026-09-06) |
 | `core/dashboard.html` | `/tenant/painel` | equivalente |
 
 ---
@@ -188,8 +230,8 @@ avisava o contato" — mas não foi verificado neste levantamento.
    atendimento humano não tem como silenciar a IA.
 2. **L1 + L2 — convite entregue e atendente virando usuário.** É o que trava a
    entrada de equipe hoje; sem isso o tenant é de uma pessoa só.
-3. **L3 — decidir sobre `module_permissions`.** Aplicar ou remover; manter
-   inerte é risco de segurança presumida.
+3. **L3 — fechar o fallback de escopos.** Hoje qualquer não-admin nasce com
+   `atendimentos:write` e `clientes:write`; falta o papel somente-leitura.
 4. **L6 — completar a tela de configuração**, definindo a fronteira tenant ×
    superusuário.
 5. **L5 — recuperação de senha** (depende do canal de e-mail de L1).
@@ -200,12 +242,23 @@ tem em lugar nenhum. Essa é a primeira decisão a tomar (SMTP próprio, SES,
 Resend…), e ela também serve ao alerta de operação descrito em
 `28-operacao-autonoma-e-alertas.md`.
 
-## 7. Pontos a confirmar antes de planejar
+## 7. Pontos confirmados em 2026-09-06
 
-- O que `/tenant/usuarios` e `/tenant/convites` já expõem na prática (a leitura
-  foi do schema e das rotas, não da UI renderizada).
-- O que `/admin/tenant-config` (superusuário) edita hoje — para não duplicar
-  superfície com a tela do tenant.
-- Se a v2 já silencia o bot ao assumir o atendimento.
-- Se a integração Trello (`trello_sync`, 5 models na v1) entra no escopo da v2
-  ou foi descontinuada por decisão de produto.
+Os quatro pontos que ficaram em aberto foram fechados por leitura da UI e do
+código:
+
+- **`/tenant/usuarios` e `/tenant/convites`** editam papel, escopos e fluxos —
+  L4 revisada acima. A tela existe; o acabamento é que falta.
+- **`/admin/tenant-config`** (superusuário) edita **24 campos**: os seis prompts,
+  LLM (classe/modelo/temperatura), transcrição, visão, embeddings, chunk,
+  os dois limiares e as três chaves de API — com o tenant identificado por **UUID
+  digitado à mão**. A fronteira, portanto, **já existe de fato**: motor de IA e
+  segredos ficam com o superusuário; texto e identidade com o tenant.
+  → O que **nenhuma das duas telas** edita: `brand_name`, `primary_color`,
+  `secondary_color`, `timezone`, `language_code`, `transcription_enabled`,
+  `prompts`, `msg_pesquisa_satisfacao`, `pesquisa_satisfacao_ativa`. São **9
+  campos órfãos** — e a pesquisa de satisfação, que o scheduler já executa, não
+  tem como ser ligada ou desligada por ninguém.
+- **A v2 silencia o bot ao assumir** — confirmado na seção 4.
+- **Trello: descontinuado** por decisão de produto (2026-09-06). Sai do escopo e
+  da tabela da seção 5.

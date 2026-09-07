@@ -89,6 +89,7 @@ cadastro, **não existe RPC que o dono logado possa chamar para pagar**.
 | **E3** cliente | E3 | Guard: pagamento pendente tem precedência sobre o roteiro |
 | **E4** cliente | E4 | Tela de pagamento **depois do login**, visível só para o dono |
 | **E5** cliente | E5 | Aviso persistente de pendência, com o caminho para resolver |
+| **E6** servidor | E6 | Suspensão automática de assinatura vencida (achado N1 do doc 31; a v1 tinha, a v2 não) |
 
 ## Riscos principais
 
@@ -109,4 +110,5 @@ cadastro, **não existe RPC que o dono logado possa chamar para pagar**.
 - [ ] Colaborador sem `tenant:admin` não vê a tela nem o RPC responde a ele.
 - [ ] Resgate idempotente: repetir não consome dois usos do voucher.
 - [ ] `assinatura.quitada` na trilha de auditoria, com autor e meio.
+- [ ] Assinatura vencida passa a `SUSPENDED` sozinha; falha de consulta não suspende ninguém.
 - [ ] Sensores `rust-rapido` e `flutter-analise-testes` verdes.
