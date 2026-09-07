@@ -819,6 +819,50 @@ message GetMyOnboardingProgressResponse {
   int32 passo = 1;
   // true = terminou (ou pulou o que faltava); o app vai para o workspace.
   bool concluido = 2;
+  // Campos aditivos: o progresso não dizia nada sobre dinheiro, e por isso o
+  // guard mandava para /configuracao/* quem nunca pagou. Aditivos de propósito —
+  // campo novo em proto3 não quebra cliente antigo, que segue no comportamento
+  // atual (degradado, não quebrado) enquanto não atualiza.
+  //
+  // subscription.status != ACTIVE. Sem assinatura nenhuma também conta como
+  // pendente: o tenant não pode operar.
+  bool pagamento_pendente = 3;
+  // PENDING_PAYMENT | ACTIVE | SUSPENDED | ... Vazio = sem assinatura.
+  string assinatura_status = 4;
+  // Para a tela dizer o que está sendo cobrado. Vazio = plano não escolhido.
+  string plano_nome = 5;
+  // 0 = plano não escolhido.
+  int32 plano_id = 6;
+}
+
+// Quitação da assinatura **depois do login**.
+//
+// O `ConfirmPayment` do wizard exige `signup_token`, que morre com a sessão de
+// cadastro. Sem este RPC, um tenant cuja sessão expirou no meio do wizard entra
+// no app e não tem como pagar: esbarra em "assinatura inadimplente" a cada
+// cadastro e não existe tela que resolva.
+//
+// O `tenant_id` vem das **claims**, nunca do request — mesma regra dos demais
+// `*My*`. Exige escopo `tenant:admin`: cobrança é assunto do dono, não do
+// colaborador.
+message QuitarMinhaAssinaturaRequest {
+  // `id` de um PaymentProvider (hoje só `voucher`).
+  string provedor = 1;
+  // O que o dono digitou. Para `voucher`, o código. É credencial: não entra em
+  // span, log nem auditoria.
+  string credencial = 2;
+}
+
+message QuitarMinhaAssinaturaResponse {
+  // true = assinatura ativa ao fim da chamada (inclusive se já estava).
+  bool confirmado = 1;
+  string assinatura_status = 2;
+  // Preenchida quando o provedor exige concluir o pagamento fora do app.
+  string url_externa = 3;
+  // Recusa de negócio (código expirado, já usado...). Vai para junto do campo
+  // na tela, não para um erro de RPC.
+  string motivo = 4;
+  string erro_legivel = 5;
 }
 
 // N3.3: config do PRÓPRIO tenant (tenant_id vem das claims, não do request).
@@ -935,6 +979,7 @@ service AdminService {
   rpc SetMyBotPersona(SetMyBotPersonaRequest) returns (SetMyBotPersonaResponse);
   rpc SetOnboardingProgress(SetOnboardingProgressRequest) returns (SetOnboardingProgressResponse);
   rpc GetMyOnboardingProgress(GetMyOnboardingProgressRequest) returns (GetMyOnboardingProgressResponse);
+  rpc QuitarMinhaAssinatura(QuitarMinhaAssinaturaRequest) returns (QuitarMinhaAssinaturaResponse);
 
   // Treinamento da IA (o tenant treina o próprio assistente)
   rpc CreateMyTreinamento(CreateMyTreinamentoRequest) returns (MyTreinamentoResponse);

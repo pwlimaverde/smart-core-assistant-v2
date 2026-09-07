@@ -143,6 +143,50 @@ impl PlansStore for PgPlansStore {
         Ok(res.rows_affected() > 0)
     }
 
+    #[tracing::instrument(skip_all, fields(limite = limite))]
+    async fn suspender_assinaturas_vencidas(
+        &self,
+        limite: i64,
+    ) -> Result<Vec<(Uuid, chrono::DateTime<chrono::Utc>)>, DbError> {
+        // `UPDATE ... RETURNING` num passo só: sem SELECT-depois-UPDATE não há
+        // janela para duas réplicas do scheduler suspenderem a mesma assinatura
+        // (o lock do Redis já as separa, mas ele expira por TTL e não é garantia
+        // de exclusão mútua).
+        //
+        // `current_period_end IS NOT NULL` é essencial: assinatura ativada por
+        // voucher sem prazo definido tem período nulo, e `NULL < NOW()` é NULL,
+        // não `true` — mas deixar explícito evita que uma mudança futura no
+        // predicado transforme "sem prazo" em "vencida".
+        //
+        // O `LIMIT` protege o tick: uma base com muitas vencidas não vira uma
+        // transação gigante; o resto sai no tick seguinte.
+        let rows = sqlx::query(
+            r#"UPDATE tenants_subscription
+                  SET status = 'SUSPENDED', updated_at = NOW()
+                WHERE id IN (
+                    SELECT id FROM tenants_subscription
+                     WHERE status = 'ACTIVE'
+                       AND current_period_end IS NOT NULL
+                       AND current_period_end < NOW()
+                     ORDER BY current_period_end
+                     LIMIT $1
+                )
+            RETURNING tenant_id, current_period_end"#,
+        )
+        .bind(limite)
+        .fetch_all(self.cross_tenant_pool())
+        .await?;
+
+        Ok(rows
+            .iter()
+            .filter_map(|row| {
+                let tenant_id = row.get::<Uuid, _>("tenant_id");
+                row.get::<Option<chrono::DateTime<chrono::Utc>>, _>("current_period_end")
+                    .map(|fim| (tenant_id, fim))
+            })
+            .collect())
+    }
+
     #[tracing::instrument(skip_all)]
     async fn listar_subscriptions(&self) -> Result<Vec<serde_json::Value>, DbError> {
         let rows = sqlx::query(

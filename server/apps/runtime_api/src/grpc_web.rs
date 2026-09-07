@@ -154,6 +154,8 @@ use contracts::grpc::queries::{
     // Fase 5 - Auditoria & Saúde
     QueryAuditLogRequest,
     QueryAuditLogResponse,
+    QuitarMinhaAssinaturaRequest,
+    QuitarMinhaAssinaturaResponse,
     RefreshRequest,
     RegisterPaymentRequest,
     RegisterPaymentResponse,
@@ -802,6 +804,13 @@ pub struct AdminFacade {
     /// a mesma crate, então timeout, retry e degradação são configurados num
     /// lugar só.
     ia: Arc<dyn ia_client::IaEngineClient>,
+    /// Os mesmos provedores de pagamento do wizard público.
+    ///
+    /// Compartilhar o registro é o ponto: quitar depois do login e pagar durante
+    /// o cadastro passam pelo mesmo provedor, com as mesmas regras de resgate. A
+    /// única diferença é de onde vem a identidade — claims aqui, `signup_token`
+    /// lá. Duplicar a lógica faria as duas divergirem na primeira mudança.
+    provedores: application::pagamento::RegistroProvedores,
 }
 
 impl AdminFacade {
@@ -812,6 +821,7 @@ impl AdminFacade {
         realtime: crate::realtime::RealtimeManager,
         whatsapp: transport::MuxClient,
         ia: Arc<dyn ia_client::IaEngineClient>,
+        provedores: application::pagamento::RegistroProvedores,
     ) -> Self {
         Self {
             deps,
@@ -820,6 +830,7 @@ impl AdminFacade {
             realtime,
             whatsapp,
             ia,
+            provedores,
         }
     }
 
@@ -2525,7 +2536,225 @@ impl AdminService for AdminFacade {
                 .get("concluido")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(false),
+            // Campo ausente resolve para "não pendente". A ausência só acontece
+            // com `data_postgres` defasado, e nesse caso prender quem já pagou é
+            // pior do que deixar passar quem não pagou: o `data_postgres` ainda
+            // recusa as escritas do inadimplente, então o pior caso é um aviso
+            // que não aparece — não um cliente trancado do lado de fora.
+            pagamento_pendente: corpo
+                .get("pagamento_pendente")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            assinatura_status: corpo
+                .get("assinatura_status")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string(),
+            plano_nome: corpo
+                .get("plano_nome")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string(),
+            plano_id: corpo.get("plano_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
         }))
+    }
+
+    /// Quita a assinatura **com sessão**, sem `signup_token`.
+    ///
+    /// O `ConfirmPayment` do wizard exige o token do cadastro, que morre quando a
+    /// sessão expira. Quem passou por isso entrava no app e não tinha como pagar:
+    /// esbarrava em "assinatura inadimplente" a cada cadastro, sem tela que
+    /// resolvesse. Este é o caminho de volta.
+    ///
+    /// Reusa o **mesmo** registro de provedores e o mesmo resgate do wizard; a
+    /// única diferença é a origem da identidade — claims, nunca o request.
+    #[tracing::instrument(
+        // `skip_all` obrigatório: a credencial (código do voucher) não pode
+        // aparecer em span nem em log. É reutilizável enquanto tiver resgates.
+        skip_all,
+        fields(service = "runtime_api", rpc = "QuitarMinhaAssinatura", traceparent)
+    )]
+    async fn quitar_minha_assinatura(
+        &self,
+        req: Request<QuitarMinhaAssinaturaRequest>,
+    ) -> Result<Response<QuitarMinhaAssinaturaResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        // Cobrança é assunto do dono. Um colaborador não vê nem resolve.
+        exigir_escopo_tenant_admin(&claims)?;
+        let traceparent = traceparent_do_metadata(&req);
+        let ip = ip_do_metadata(&req);
+        let user_agent = user_agent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("sessão sem tenant válido"))?;
+        let r = req.into_inner();
+
+        // Helper local: envelope de tenant já com as claims desta sessão. O
+        // `encaminhar_tenant` não serve aqui porque reautentica pelo metadata do
+        // request, e este método faz duas chamadas com a mesma sessão.
+        let envelope_para = |metodo: &str, payload: serde_json::Value| Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: metodo.to_string(),
+            payload: serde_json::to_vec(&payload).unwrap_or_default(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        // 1. Estado atual. Serve para duas coisas: a guarda de idempotência e o
+        //    `plan_id` que um gateway externo precisaria para cobrar.
+        let resp = self
+            .deps
+            .pg
+            .call(
+                envelope_para(
+                    "GetOnboardingProgress",
+                    serde_json::json!({ "tenant_id": tenant_uuid.to_string() }),
+                ),
+                std::time::Duration::from_secs(5),
+            )
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço interno: {e}")))?;
+        if resp.kind == MessageKind::Error as i32 {
+            return Err(status_do_erro_interno(resp.error));
+        }
+        let progresso: serde_json::Value =
+            serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))?;
+
+        let status_atual = progresso
+            .get("assinatura_status")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+
+        // 2. Já ativa: responde sucesso **sem tocar no provedor**. Dois cliques
+        //    não podem consumir dois resgates do voucher — o `UPDATE ...
+        //    RETURNING` do resgate resolve a corrida entre requisições
+        //    simultâneas, mas não o caso de quem já está em dia e clica de novo.
+        if status_atual == "ACTIVE" {
+            return Ok(Response::new(QuitarMinhaAssinaturaResponse {
+                confirmado: true,
+                assinatura_status: status_atual,
+                url_externa: String::new(),
+                motivo: String::new(),
+                erro_legivel: String::new(),
+            }));
+        }
+
+        let plan_id = progresso
+            .get("plano_id")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as i32;
+
+        // 3. O provedor decide. Id desconhecido é erro de validação, nunca
+        //    "escolhe qualquer um".
+        let provedor = self
+            .provedores
+            .obter(&r.provedor)
+            .ok_or_else(|| Status::invalid_argument("forma de pagamento indisponível"))?;
+
+        let dados = application::pagamento::DadosCobranca {
+            tenant_id: tenant_uuid,
+            plan_id,
+            email: String::new(),
+            credencial: r.credencial,
+            ip: ip.clone().unwrap_or_default(),
+            traceparent: traceparent.clone(),
+        };
+
+        let intencao = provedor
+            .iniciar(&dados)
+            .await
+            .map_err(|e| app_err_para_status(&e))?;
+
+        match intencao {
+            application::pagamento::IntencaoPagamento::Confirmada {
+                plan_id,
+                periodo_fim,
+                referencia,
+            } => {
+                // 4. Pago: ativa. `ActivateSignup` é idempotente e não exige
+                //    `signup_token` — só o `tenant_id`, que aqui vem das claims.
+                let resp = self
+                    .deps
+                    .pg
+                    .call(
+                        envelope_para(
+                            "ActivateSignup",
+                            serde_json::json!({
+                                "tenant_id": tenant_uuid.to_string(),
+                                "plan_id": plan_id,
+                                "periodo_fim": periodo_fim.to_rfc3339(),
+                                "gateway": r.provedor,
+                                "referencia": referencia,
+                            }),
+                        ),
+                        std::time::Duration::from_secs(10),
+                    )
+                    .await
+                    .map_err(|e| Status::internal(format!("Falha no serviço interno: {e}")))?;
+                if resp.kind == MessageKind::Error as i32 {
+                    return Err(status_do_erro_interno(resp.error));
+                }
+
+                // Auditoria do evento financeiro. **Sem a credencial**: o código
+                // do voucher é reutilizável enquanto tiver resgates, e a trilha
+                // é lida por mais gente do que o log.
+                let mut bus = self.bus.clone();
+                publicar_auditoria_borda(
+                    &mut bus,
+                    Some(tenant_uuid),
+                    "INFO",
+                    "assinatura.quitada",
+                    "Assinatura quitada pelo dono, ja logado.".to_string(),
+                    serde_json::json!({
+                        "meio": r.provedor,
+                        "plan_id": plan_id,
+                        "periodo_fim": periodo_fim.to_rfc3339(),
+                    }),
+                    claims.sub.parse::<i32>().ok(),
+                    &traceparent,
+                    ip,
+                    Some(user_agent),
+                )
+                .await;
+
+                Ok(Response::new(QuitarMinhaAssinaturaResponse {
+                    confirmado: true,
+                    assinatura_status: "ACTIVE".to_string(),
+                    url_externa: String::new(),
+                    motivo: String::new(),
+                    erro_legivel: String::new(),
+                }))
+            }
+            // Gateway externo: o dono conclui fora do app e a ativação vem depois.
+            application::pagamento::IntencaoPagamento::Redirect { url, .. } => {
+                Ok(Response::new(QuitarMinhaAssinaturaResponse {
+                    confirmado: false,
+                    assinatura_status: status_atual,
+                    url_externa: url,
+                    motivo: String::new(),
+                    erro_legivel: String::new(),
+                }))
+            }
+            // Recusa é resposta de sucesso: a tela precisa da mensagem junto do
+            // campo, não de um erro de RPC que vira snackbar e some.
+            application::pagamento::IntencaoPagamento::Recusada { motivo, mensagem } => {
+                Ok(Response::new(QuitarMinhaAssinaturaResponse {
+                    confirmado: false,
+                    assinatura_status: status_atual,
+                    url_externa: String::new(),
+                    motivo,
+                    erro_legivel: mensagem,
+                }))
+            }
+        }
     }
 
     // --- Treinamento da IA ---
@@ -6270,7 +6499,7 @@ pub async fn serve(deps: Arc<AuthDeps>, bus: redis::aio::ConnectionManager) -> a
     )]);
     let facade_onboarding =
         contracts::grpc::queries::onboarding_service_server::OnboardingServiceServer::new(
-            crate::onboarding_web::OnboardingFacade::new(deps.clone(), provedores),
+            crate::onboarding_web::OnboardingFacade::new(deps.clone(), provedores.clone()),
         );
 
     let whatsapp = transport::conectar_cliente("data_whatsapp").await?;
@@ -6285,8 +6514,15 @@ pub async fn serve(deps: Arc<AuthDeps>, bus: redis::aio::ConnectionManager) -> a
         ia_client::TonicIaEngineClient::connect_lazy(&ia_endpoint)?,
     ));
 
-    let facade_admin =
-        AdminServiceServer::new(AdminFacade::new(deps, bus, control, realtime, whatsapp, ia));
+    let facade_admin = AdminServiceServer::new(AdminFacade::new(
+        deps,
+        bus,
+        control,
+        realtime,
+        whatsapp,
+        ia,
+        provedores.clone(),
+    ));
 
     // CORS restritivo (defesa em profundidade mesmo servindo na mesma origem que o WASM).
     let cors = tower_http::cors::CorsLayer::new()
@@ -6687,6 +6923,10 @@ mod tests {
             // A IA só é tocada pelo ensaio de pergunta, que nenhum teste daqui
             // exercita; o mock sem expectativa basta para construir a fachada.
             Arc::new(ia_client::MockIaEngineClient::new()),
+            // Registro vazio: os testes de autorização param antes do provedor.
+            // Um id desconhecido devolve o mesmo erro de validação que um
+            // registro cheio devolveria para um provedor inexistente.
+            application::pagamento::RegistroProvedores::default(),
         )
     }
 
@@ -6799,6 +7039,9 @@ mod tests {
             "UpdateTenantUser" => facade.update_tenant_user(Request::new(UpdateTenantUserRequest::default())).await,
             "GetMyTenantConfig" => facade.get_my_tenant_config(Request::new(GetMyTenantConfigRequest::default())).await,
             "UpdateMyTenantConfig" => facade.update_my_tenant_config(Request::new(UpdateMyTenantConfigRequest::default())).await,
+            "GetMyOnboardingProgress" => facade.get_my_onboarding_progress(Request::new(GetMyOnboardingProgressRequest::default())).await,
+            // Operação financeira: a barreira aqui vale mais que nas demais.
+            "QuitarMinhaAssinatura" => facade.quitar_minha_assinatura(Request::new(QuitarMinhaAssinaturaRequest::default())).await,
         }
     }
 

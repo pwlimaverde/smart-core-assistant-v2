@@ -537,6 +537,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_create_plan = state_clone.clone();
     let state_for_update_plan = state_clone.clone();
     let state_for_list_subscriptions = state_clone.clone();
+    let state_for_suspender_vencidas = state_clone.clone();
     let state_for_register_payment = state_clone.clone();
     let state_for_get_evolution_instance_by_tenant = state_clone.clone();
     let state_for_list_feature_flags = state_clone.clone();
@@ -1167,6 +1168,17 @@ async fn main() -> anyhow::Result<()> {
         .route("ListSubscriptions", move |env| {
             let state = state_for_list_subscriptions.clone();
             Box::pin(async move { handler_list_subscriptions(state.plans.as_ref(), env).await })
+        })
+        .route("SuspenderAssinaturasVencidas", move |env| {
+            let state = state_for_suspender_vencidas.clone();
+            Box::pin(async move {
+                handler_suspender_assinaturas_vencidas(
+                    state.plans.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
         })
         .route("RegisterPayment", move |env| {
             let state = state_for_register_payment.clone();
@@ -6244,6 +6256,54 @@ async fn handler_list_subscriptions(store: &dyn ports::PlansStore, env: Envelope
             "ListSubscriptionsReply",
             serde_json::json!({ "subscriptions": subs }),
         ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// Suspende assinaturas ACTIVE cujo período venceu. Chamado pelo scheduler do
+/// worker, cross-tenant.
+///
+/// A v1 tinha `check_subscription_expirations` no Celery; a v2 não tinha
+/// equivalente, e uma assinatura vencida deixava o tenant operando
+/// indefinidamente. É o espelho do beco sem saída que este plano corrige: lá
+/// alguém pagou e não conseguia entrar, aqui alguém não pagou e nunca saía.
+///
+/// Audita **uma linha por assinatura**, não uma pelo lote: quando o cliente
+/// perguntar por que o sistema parou, a resposta precisa ter o tenant e a data
+/// de vencimento que motivou.
+async fn handler_suspender_assinaturas_vencidas(
+    store: &dyn ports::PlansStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let limite = payload
+        .get("limite")
+        .and_then(|v| v.as_i64())
+        .filter(|n| *n > 0)
+        .unwrap_or(100);
+
+    match store.suspender_assinaturas_vencidas(limite).await {
+        Ok(suspensas) => {
+            for (tenant_id, period_end) in &suspensas {
+                audit
+                    .publish(
+                        &env,
+                        "assinatura.suspensa_por_vencimento",
+                        "Assinatura suspensa: periodo vencido".to_string(),
+                        serde_json::json!({
+                            "tenant_id": tenant_id.to_string(),
+                            "period_end": period_end.to_rfc3339(),
+                        }),
+                    )
+                    .await;
+            }
+            ok_reply(
+                &env,
+                "SuspenderAssinaturasVencidasReply",
+                serde_json::json!({ "suspensas": suspensas.len() }),
+            )
+        }
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }
 }
