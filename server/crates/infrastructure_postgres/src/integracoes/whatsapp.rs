@@ -22,6 +22,12 @@ pub struct WhatsappInstance {
     pub provider: String,
     pub subscribed_events: serde_json::Value,
     pub last_connection_state: Option<String>,
+    /// Quando `false`, a IA nao responde NENHUMA conversa desta instancia.
+    ///
+    /// E a barreira mais externa do bot: precede o `bot_pode_atender` do
+    /// atendimento e o bloqueio por atendente humano ativo. Equivale ao
+    /// `AppInstance.resposta_bot` da v1, que a v2 tinha perdido.
+    pub resposta_bot: bool,
     pub created_at: DateTime<Utc>,
 }
 
@@ -41,6 +47,7 @@ struct WhatsappInstanceRow {
     provider: String,
     subscribed_events: serde_json::Value,
     last_connection_state: Option<String>,
+    resposta_bot: bool,
     created_at: DateTime<Utc>,
 }
 
@@ -61,6 +68,7 @@ impl WhatsappInstanceRow {
             provider: self.provider,
             subscribed_events: self.subscribed_events,
             last_connection_state: self.last_connection_state,
+            resposta_bot: self.resposta_bot,
             created_at: self.created_at,
         })
     }
@@ -124,6 +132,19 @@ pub trait WhatsappInstanceRepository: Send + Sync {
         id: i32,
         connection_state: &str,
     ) -> Result<(), DbError>;
+
+    /// Liga/desliga a resposta automatica da IA para a instancia inteira (D3).
+    ///
+    /// Devolve `true` quando alguma linha foi afetada — `false` significa
+    /// instancia inexistente ou de outro tenant (a RLS ja filtra, mas o
+    /// chamador precisa saber para nao auditar uma alteracao que nao houve).
+    async fn definir_resposta_bot(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+        habilitado: bool,
+    ) -> Result<bool, DbError>;
 
     async fn atualizar_instancia_provider_id(
         &self,
@@ -198,7 +219,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
                VALUES ($1, $2, $3, $4)
                RETURNING id, tenant_id, name, instance_id, api_key, phone_number, active,
                          connection_state, last_state_check, media_storage_backend, provider,
-                         subscribed_events, last_connection_state, created_at"#,
+                         subscribed_events, last_connection_state, resposta_bot, created_at"#,
             ctx.tenant_id,
             name,
             api_key_json,
@@ -225,7 +246,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
             WhatsappInstanceRow,
             r#"SELECT id, tenant_id, name, instance_id, api_key, phone_number, active,
                        connection_state, last_state_check, media_storage_backend, provider,
-                       subscribed_events, last_connection_state, created_at
+                       subscribed_events, last_connection_state, resposta_bot, created_at
                FROM whatsapp_instance
                WHERE tenant_id = $1 AND name = $2"#,
             ctx.tenant_id,
@@ -248,7 +269,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
             WhatsappInstanceRow,
             r#"SELECT id, tenant_id, name, instance_id, api_key, phone_number, active,
                        connection_state, last_state_check, media_storage_backend, provider,
-                       subscribed_events, last_connection_state, created_at
+                       subscribed_events, last_connection_state, resposta_bot, created_at
                FROM whatsapp_instance
                WHERE tenant_id = $1 AND id = $2"#,
             ctx.tenant_id,
@@ -271,7 +292,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
             WhatsappInstanceRow,
             r#"SELECT id, tenant_id, name, instance_id, api_key, phone_number, active,
                        connection_state, last_state_check, media_storage_backend, provider,
-                       subscribed_events, last_connection_state, created_at
+                       subscribed_events, last_connection_state, resposta_bot, created_at
                FROM whatsapp_instance
                WHERE tenant_id = $1 AND instance_id = $2"#,
             ctx.tenant_id,
@@ -303,6 +324,27 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
         .execute(&mut **tx)
         .await?;
         Ok(())
+    }
+
+    #[tracing::instrument(skip_all, fields(id = id, habilitado = habilitado))]
+    async fn definir_resposta_bot(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+        habilitado: bool,
+    ) -> Result<bool, DbError> {
+        let res = sqlx::query!(
+            r#"UPDATE whatsapp_instance
+               SET resposta_bot = $1
+               WHERE tenant_id = $2 AND id = $3"#,
+            habilitado,
+            ctx.tenant_id,
+            id
+        )
+        .execute(&mut **tx)
+        .await?;
+        Ok(res.rows_affected() > 0)
     }
 
     #[tracing::instrument(skip_all, fields(id = id, instance_id = %instance_id))]
@@ -340,7 +382,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
             WhatsappInstanceRow,
             r#"SELECT id, tenant_id, name, instance_id, api_key, phone_number, active,
                        connection_state, last_state_check, media_storage_backend, provider,
-                       subscribed_events, last_connection_state, created_at
+                       subscribed_events, last_connection_state, resposta_bot, created_at
                FROM whatsapp_instance
                WHERE tenant_id = $1 AND active = true
                ORDER BY created_at DESC"#,
@@ -367,7 +409,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
             WhatsappInstanceRow,
             r#"SELECT id, tenant_id, name, instance_id, api_key, phone_number, active,
                        connection_state, last_state_check, media_storage_backend, provider,
-                       subscribed_events, last_connection_state, created_at
+                       subscribed_events, last_connection_state, resposta_bot, created_at
                FROM whatsapp_instance
                WHERE active = true"#
         )

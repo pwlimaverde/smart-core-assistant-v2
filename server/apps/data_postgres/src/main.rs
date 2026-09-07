@@ -558,6 +558,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_verify_whatsapp_instance_token = state_clone.clone();
     let state_for_is_phone_whitelisted = state_clone.clone();
     let state_for_resolve_atendimento = state_clone.clone();
+    let state_for_toggle_bot = state_clone.clone();
     let state_for_aplicar_politica = state_clone.clone();
     let state_for_move_atendimento_etapa = state_clone.clone();
     let state_for_send_outbound_message = state_clone.clone();
@@ -600,7 +601,23 @@ async fn main() -> anyhow::Result<()> {
         .route("ResolveAtendimentoParaContato", move |env| {
             let state = state_for_resolve_atendimento.clone();
             Box::pin(async move {
-                handler_resolve_atendimento_para_contato(state.atendimento.as_ref(), env).await
+                handler_resolve_atendimento_para_contato(
+                    state.atendimento.as_ref(),
+                    state.whatsapp.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("DefinirRespostaBotInstancia", move |env| {
+            let state = state_for_toggle_bot.clone();
+            Box::pin(async move {
+                handler_definir_resposta_bot_instancia(
+                    state.whatsapp.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
             })
         })
         .route("UpdateMessageStatus", move |env| {
@@ -2382,6 +2399,7 @@ async fn handler_persist_message(store: &dyn ports::AtendimentoStore, env: Envel
 
 async fn handler_resolve_atendimento_para_contato(
     store: &dyn ports::AtendimentoStore,
+    whatsapp: &dyn ports::WhatsappStore,
     env: Envelope,
 ) -> Envelope {
     let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
@@ -2404,6 +2422,22 @@ async fn handler_resolve_atendimento_para_contato(
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
+    // D3: a barreira mais externa do bot é a da INSTÂNCIA, e ela é resolvida
+    // aqui — no mesmo RPC que já roda uma vez por mensagem — para não custar uma
+    // ida extra ao banco no caminho quente. Ausente ou ilegível resolve para
+    // "responde": a instância nasce com `resposta_bot = TRUE` e uma falha de
+    // leitura não pode calar o bot de quem nunca o desligou.
+    let instancia_responde_bot = match payload_json.get("instance_id").and_then(|v| v.as_i64()) {
+        Some(id) => whatsapp
+            .buscar_instancia(&contexto_do_envelope(&env), id as i32)
+            .await
+            .ok()
+            .flatten()
+            .map(|i| i.resposta_bot)
+            .unwrap_or(true),
+        None => true,
+    };
+
     let ctx = contexto_do_envelope(&env);
     match store
         .resolver_atendimento_para_contato(&ctx, phone, push_name)
@@ -2417,9 +2451,79 @@ async fn handler_resolve_atendimento_para_contato(
                 "contato_id": contato_id,
                 "atendimento_id": atendimento.id,
                 "bot_pode_atender": atendimento.bot_pode_atender,
+                "instancia_responde_bot": instancia_responde_bot,
                 "atendente_humano_id": atendimento.atendente_humano_id,
                 "is_new": is_new,
             }),
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// D3 — liga/desliga a resposta automática da IA para a instância inteira.
+///
+/// Equivale ao `InstanceToggleBotView` da v1. A v2 tinha perdido a capacidade:
+/// só existia o desligamento por conversa (`bot_pode_atender`), que além de tudo
+/// não tem controle em tela nenhuma e só desliga — nunca religa.
+///
+/// Auditado sempre que efetiva: "por que o bot parou de responder?" precisa ter
+/// resposta, e sem trilha a pergunta fica sem dono.
+async fn handler_definir_resposta_bot_instancia(
+    store: &dyn ports::WhatsappStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let id = match payload_json.get("id").and_then(|v| v.as_i64()) {
+        Some(i) => i as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("id da instância ausente".into()),
+                &env,
+            )
+        }
+    };
+    // Sem default: "não mandou o campo" é erro de contrato, não "desligue".
+    let habilitado = match payload_json.get("habilitado").and_then(|v| v.as_bool()) {
+        Some(h) => h,
+        None => {
+            return erro(
+                error_core::AppError::Validation("habilitado ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.definir_resposta_bot(&ctx, id, habilitado).await {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "instancia.bot_alterado",
+                    if habilitado {
+                        "Resposta automatica da IA LIGADA para a conexao".to_string()
+                    } else {
+                        "Resposta automatica da IA DESLIGADA para a conexao".to_string()
+                    },
+                    serde_json::json!({ "instance_id": id, "habilitado": habilitado }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "DefinirRespostaBotInstanciaReply",
+                serde_json::json!({ "alterado": true, "habilitado": habilitado }),
+            )
+        }
+        // Instância de outro tenant (ou inexistente) responde o mesmo: quem
+        // chuta um id não descobre se ele existe.
+        Ok(false) => erro(
+            error_core::AppError::Validation("conexão não encontrada".into()),
+            &env,
         ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }
@@ -7177,6 +7281,7 @@ mod tests_whatsapp_unit {
             provider: "evolution".to_string(),
             subscribed_events: serde_json::json!([]),
             last_connection_state: None,
+            resposta_bot: true,
             created_at: chrono::Utc::now(),
         }
     }

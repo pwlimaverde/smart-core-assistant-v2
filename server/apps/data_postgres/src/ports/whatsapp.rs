@@ -38,6 +38,17 @@ pub trait WhatsappStore: Send + Sync {
     /// Remoção admin de instância.
     async fn admin_deletar_instancia(&self, ctx: &RequestContext, id: i32) -> Result<(), DbError>;
 
+    /// D3 — liga/desliga a resposta automática da IA para a instância inteira.
+    ///
+    /// `false` no retorno = instância inexistente ou de outro tenant; o chamador
+    /// precisa saber para não auditar uma alteração que não houve.
+    async fn definir_resposta_bot(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        habilitado: bool,
+    ) -> Result<bool, DbError>;
+
     /// Atualiza o estado de conexão da instância.
     async fn atualizar_estado(
         &self,
