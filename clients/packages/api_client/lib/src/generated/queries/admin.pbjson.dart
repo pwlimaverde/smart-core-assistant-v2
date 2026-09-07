@@ -3154,6 +3154,7 @@ const MyWhatsappInstance$json = {
     {'1': 'active', '3': 5, '4': 1, '5': 8, '10': 'active'},
     {'1': 'provider', '3': 6, '4': 1, '5': 9, '10': 'provider'},
     {'1': 'created_at', '3': 7, '4': 1, '5': 3, '10': 'createdAt'},
+    {'1': 'resposta_bot', '3': 8, '4': 1, '5': 8, '10': 'respostaBot'},
   ],
 };
 
@@ -3162,7 +3163,37 @@ final $typed_data.Uint8List myWhatsappInstanceDescriptor = $convert.base64Decode
     'ChJNeVdoYXRzYXBwSW5zdGFuY2USDgoCaWQYASABKAVSAmlkEhIKBG5hbWUYAiABKAlSBG5hbW'
     'USIQoMcGhvbmVfbnVtYmVyGAMgASgJUgtwaG9uZU51bWJlchIpChBjb25uZWN0aW9uX3N0YXRl'
     'GAQgASgJUg9jb25uZWN0aW9uU3RhdGUSFgoGYWN0aXZlGAUgASgIUgZhY3RpdmUSGgoIcHJvdm'
-    'lkZXIYBiABKAlSCHByb3ZpZGVyEh0KCmNyZWF0ZWRfYXQYByABKANSCWNyZWF0ZWRBdA==');
+    'lkZXIYBiABKAlSCHByb3ZpZGVyEh0KCmNyZWF0ZWRfYXQYByABKANSCWNyZWF0ZWRBdBIhCgxy'
+    'ZXNwb3N0YV9ib3QYCCABKAhSC3Jlc3Bvc3RhQm90');
+
+@$core.Deprecated('Use definirRespostaBotInstanciaRequestDescriptor instead')
+const DefinirRespostaBotInstanciaRequest$json = {
+  '1': 'DefinirRespostaBotInstanciaRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'habilitado', '3': 2, '4': 1, '5': 8, '10': 'habilitado'},
+  ],
+};
+
+/// Descriptor for `DefinirRespostaBotInstanciaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List definirRespostaBotInstanciaRequestDescriptor =
+    $convert.base64Decode(
+        'CiJEZWZpbmlyUmVzcG9zdGFCb3RJbnN0YW5jaWFSZXF1ZXN0Eg4KAmlkGAEgASgFUgJpZBIeCg'
+        'poYWJpbGl0YWRvGAIgASgIUgpoYWJpbGl0YWRv');
+
+@$core.Deprecated('Use definirRespostaBotInstanciaResponseDescriptor instead')
+const DefinirRespostaBotInstanciaResponse$json = {
+  '1': 'DefinirRespostaBotInstanciaResponse',
+  '2': [
+    {'1': 'habilitado', '3': 1, '4': 1, '5': 8, '10': 'habilitado'},
+  ],
+};
+
+/// Descriptor for `DefinirRespostaBotInstanciaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List definirRespostaBotInstanciaResponseDescriptor =
+    $convert.base64Decode(
+        'CiNEZWZpbmlyUmVzcG9zdGFCb3RJbnN0YW5jaWFSZXNwb25zZRIeCgpoYWJpbGl0YWRvGAEgAS'
+        'gIUgpoYWJpbGl0YWRv');
 
 @$core.Deprecated('Use listMyWhatsappInstancesRequestDescriptor instead')
 const ListMyWhatsappInstancesRequest$json = {

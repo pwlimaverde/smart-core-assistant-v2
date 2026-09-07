@@ -12755,6 +12755,7 @@ class MyWhatsappInstance extends $pb.GeneratedMessage {
     $core.bool? active,
     $core.String? provider,
     $fixnum.Int64? createdAt,
+    $core.bool? respostaBot,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -12764,6 +12765,7 @@ class MyWhatsappInstance extends $pb.GeneratedMessage {
     if (active != null) result.active = active;
     if (provider != null) result.provider = provider;
     if (createdAt != null) result.createdAt = createdAt;
+    if (respostaBot != null) result.respostaBot = respostaBot;
     return result;
   }
 
@@ -12788,6 +12790,7 @@ class MyWhatsappInstance extends $pb.GeneratedMessage {
     ..aOB(5, _omitFieldNames ? '' : 'active')
     ..aOS(6, _omitFieldNames ? '' : 'provider')
     ..aInt64(7, _omitFieldNames ? '' : 'createdAt')
+    ..aOB(8, _omitFieldNames ? '' : 'respostaBot')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -12874,6 +12877,155 @@ class MyWhatsappInstance extends $pb.GeneratedMessage {
   $core.bool hasCreatedAt() => $_has(6);
   @$pb.TagNumber(7)
   void clearCreatedAt() => $_clearField(7);
+
+  /// D3 — quando false, a IA nao responde NENHUMA conversa desta conexao.
+  /// Aditivo: cliente antigo o le como `false` por omissao, mas nunca o mostra,
+  /// entao segue no comportamento de hoje.
+  @$pb.TagNumber(8)
+  $core.bool get respostaBot => $_getBF(7);
+  @$pb.TagNumber(8)
+  set respostaBot($core.bool value) => $_setBool(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasRespostaBot() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearRespostaBot() => $_clearField(8);
+}
+
+/// D3 — liga/desliga a resposta automatica da IA para a conexao inteira.
+///
+/// Equivale ao `instances/<pk>/toggle-bot/` da v1. O `tenant_id` vem das claims:
+/// ninguem cala o bot da conexao de outro tenant mandando o id na mensagem.
+class DefinirRespostaBotInstanciaRequest extends $pb.GeneratedMessage {
+  factory DefinirRespostaBotInstanciaRequest({
+    $core.int? id,
+    $core.bool? habilitado,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (habilitado != null) result.habilitado = habilitado;
+    return result;
+  }
+
+  DefinirRespostaBotInstanciaRequest._();
+
+  factory DefinirRespostaBotInstanciaRequest.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory DefinirRespostaBotInstanciaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'DefinirRespostaBotInstanciaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOB(2, _omitFieldNames ? '' : 'habilitado')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DefinirRespostaBotInstanciaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DefinirRespostaBotInstanciaRequest copyWith(
+          void Function(DefinirRespostaBotInstanciaRequest) updates) =>
+      super.copyWith((message) =>
+              updates(message as DefinirRespostaBotInstanciaRequest))
+          as DefinirRespostaBotInstanciaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static DefinirRespostaBotInstanciaRequest create() =>
+      DefinirRespostaBotInstanciaRequest._();
+  @$core.override
+  DefinirRespostaBotInstanciaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static DefinirRespostaBotInstanciaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<DefinirRespostaBotInstanciaRequest>(
+          create);
+  static DefinirRespostaBotInstanciaRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  /// Sem default no servidor: "nao mandou" e erro de contrato, nao "desligue".
+  @$pb.TagNumber(2)
+  $core.bool get habilitado => $_getBF(1);
+  @$pb.TagNumber(2)
+  set habilitado($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasHabilitado() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearHabilitado() => $_clearField(2);
+}
+
+class DefinirRespostaBotInstanciaResponse extends $pb.GeneratedMessage {
+  factory DefinirRespostaBotInstanciaResponse({
+    $core.bool? habilitado,
+  }) {
+    final result = create();
+    if (habilitado != null) result.habilitado = habilitado;
+    return result;
+  }
+
+  DefinirRespostaBotInstanciaResponse._();
+
+  factory DefinirRespostaBotInstanciaResponse.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory DefinirRespostaBotInstanciaResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'DefinirRespostaBotInstanciaResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOB(1, _omitFieldNames ? '' : 'habilitado')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DefinirRespostaBotInstanciaResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DefinirRespostaBotInstanciaResponse copyWith(
+          void Function(DefinirRespostaBotInstanciaResponse) updates) =>
+      super.copyWith((message) =>
+              updates(message as DefinirRespostaBotInstanciaResponse))
+          as DefinirRespostaBotInstanciaResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static DefinirRespostaBotInstanciaResponse create() =>
+      DefinirRespostaBotInstanciaResponse._();
+  @$core.override
+  DefinirRespostaBotInstanciaResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static DefinirRespostaBotInstanciaResponse getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<
+          DefinirRespostaBotInstanciaResponse>(create);
+  static DefinirRespostaBotInstanciaResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.bool get habilitado => $_getBF(0);
+  @$pb.TagNumber(1)
+  set habilitado($core.bool value) => $_setBool(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasHabilitado() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearHabilitado() => $_clearField(1);
 }
 
 class ListMyWhatsappInstancesRequest extends $pb.GeneratedMessage {

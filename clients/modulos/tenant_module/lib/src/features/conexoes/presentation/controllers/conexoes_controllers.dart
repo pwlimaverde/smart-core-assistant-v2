@@ -15,6 +15,7 @@ final class ConexoesController extends BaseController<List<Conexao>> {
   final RemoverConexaoUsecase _remover;
   final CriarConexaoUsecase _criar;
   final EstadoPareamentoUsecase _pareamento;
+  final DefinirRespostaBotUsecase _respostaBot;
 
   ConexoesController({
     required ListarConexoesUsecase listar,
@@ -22,11 +23,13 @@ final class ConexoesController extends BaseController<List<Conexao>> {
     required RemoverConexaoUsecase remover,
     required CriarConexaoUsecase criar,
     required EstadoPareamentoUsecase pareamento,
+    required DefinirRespostaBotUsecase respostaBot,
   })  : _listar = listar,
         _reconectar = reconectar,
         _remover = remover,
         _criar = criar,
-        _pareamento = pareamento;
+        _pareamento = pareamento,
+        _respostaBot = respostaBot;
 
   /// Lista as conexões e confere o estado de cada uma COM O PROVEDOR.
   ///
@@ -67,6 +70,32 @@ final class ConexoesController extends BaseController<List<Conexao>> {
   Future<ReturnSuccessOrError<Unit, ConexoesError>> remover(int id) async {
     final res = await _remover(ConexaoIdParameters(id: id));
     if (res is Success) await carregar();
+    return res;
+  }
+
+  /// D3 — liga/desliga a IA para a conexão inteira.
+  ///
+  /// **Não chama [carregar] no sucesso**, diferente das outras mutações: aquele
+  /// método consulta o provedor conexão por conexão, e gastar essa varredura
+  /// para refletir um interruptor deixaria o toggle lento sem necessidade.
+  /// Troca só o item na lista já carregada.
+  Future<ReturnSuccessOrError<bool, ConexoesError>> definirRespostaBot(
+    int id,
+    bool habilitado,
+  ) async {
+    final res = await _respostaBot(
+      RespostaBotParameters(id: id, habilitado: habilitado),
+    );
+    if (res case Success(:final value)) {
+      if (state case SuccessState<List<Conexao>>(:final data)) {
+        emit(
+          SuccessState<List<Conexao>>([
+            for (final c in data)
+              if (c.id == id) c.comRespostaBot(value) else c,
+          ]),
+        );
+      }
+    }
     return res;
   }
 

@@ -76,3 +76,13 @@ final class EstadoPareamentoRepository
   ConexoesError mapError(Object e, StackTrace s, ConexaoIdParameters p) =>
       _traduzir(e, 'consultar pareamento');
 }
+
+/// D3 — liga/desliga a IA da conexão.
+final class DefinirRespostaBotRepository
+    extends RepositoryBase<bool, RespostaBotParameters, ConexoesError> {
+  const DefinirRespostaBotRepository({required super.datasource});
+
+  @override
+  ConexoesError mapError(Object e, StackTrace s, RespostaBotParameters p) =>
+      _traduzir(e, 'definirRespostaBot');
+}

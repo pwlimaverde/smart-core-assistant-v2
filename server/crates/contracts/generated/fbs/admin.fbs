@@ -974,6 +974,16 @@ table MyWhatsappInstance {
   active:bool;
   provider:string;
   created_at:long;
+  resposta_bot:bool;
+}
+
+table DefinirRespostaBotInstanciaRequest {
+  id:int;
+  habilitado:bool;
+}
+
+table DefinirRespostaBotInstanciaResponse {
+  habilitado:bool;
 }
 
 table ListMyWhatsappInstancesRequest {

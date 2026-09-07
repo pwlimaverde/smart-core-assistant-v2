@@ -14,3 +14,14 @@ final class CriarConexaoParameters extends Parameters {
 
   const CriarConexaoParameters({required this.nome});
 }
+
+/// Liga/desliga a resposta automática da IA para a conexão inteira (D3).
+///
+/// Não carrega `tenant_id`: o backend resolve o tenant pelas claims. Aceitar um
+/// tenant do cliente seria deixar alguém calar o bot da conexão de outro.
+final class RespostaBotParameters extends Parameters {
+  final int id;
+  final bool habilitado;
+
+  const RespostaBotParameters({required this.id, required this.habilitado});
+}

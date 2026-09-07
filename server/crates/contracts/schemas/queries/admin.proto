@@ -1005,6 +1005,7 @@ service AdminService {
   // O onboarding cria a primeira; sem estas, uma conexão que cai deixa o tenant
   // sem saída — não há como ver o estado, reconectar nem trocar de aparelho.
   rpc ListMyWhatsappInstances(ListMyWhatsappInstancesRequest) returns (ListMyWhatsappInstancesResponse);
+  rpc DefinirRespostaBotInstancia(DefinirRespostaBotInstanciaRequest) returns (DefinirRespostaBotInstanciaResponse);
   rpc ReconnectMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
   rpc DeleteMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
 
@@ -1263,6 +1264,24 @@ message MyWhatsappInstance {
   bool active = 5;
   string provider = 6;
   int64 created_at = 7;
+  // D3 — quando false, a IA nao responde NENHUMA conversa desta conexao.
+  // Aditivo: cliente antigo o le como `false` por omissao, mas nunca o mostra,
+  // entao segue no comportamento de hoje.
+  bool resposta_bot = 8;
+}
+
+// D3 — liga/desliga a resposta automatica da IA para a conexao inteira.
+//
+// Equivale ao `instances/<pk>/toggle-bot/` da v1. O `tenant_id` vem das claims:
+// ninguem cala o bot da conexao de outro tenant mandando o id na mensagem.
+message DefinirRespostaBotInstanciaRequest {
+  int32 id = 1;
+  // Sem default no servidor: "nao mandou" e erro de contrato, nao "desligue".
+  bool habilitado = 2;
+}
+
+message DefinirRespostaBotInstanciaResponse {
+  bool habilitado = 1;
 }
 
 message ListMyWhatsappInstancesRequest {}

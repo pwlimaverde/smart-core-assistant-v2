@@ -11,6 +11,7 @@ Conexao _paraDominio(proto.MyWhatsappInstance c) => Conexao(
       estado: c.connectionState,
       ativa: c.active,
       criadaEm: DateTime.fromMillisecondsSinceEpoch(c.createdAt.toInt()),
+      respostaBot: c.respostaBot,
     );
 
 final class ListarConexoesDatasource
@@ -98,5 +99,26 @@ final class EstadoPareamentoDatasource
       estado: resp.connectionState,
       qrCode: resp.qrCode,
     );
+  }
+}
+
+/// D3 — liga/desliga a IA para a conexão inteira.
+final class DefinirRespostaBotDatasource
+    implements Datasource<bool, RespostaBotParameters> {
+  final proto.AdminServiceClient _client;
+
+  const DefinirRespostaBotDatasource({required proto.AdminServiceClient client})
+      // ignore: prefer_initializing_formals
+      : _client = client;
+
+  @override
+  Future<bool> call(RespostaBotParameters parameters) async {
+    final resp = await _client.definirRespostaBotInstancia(
+      proto.DefinirRespostaBotInstanciaRequest(
+        id: parameters.id,
+        habilitado: parameters.habilitado,
+      ),
+    );
+    return resp.habilitado;
   }
 }

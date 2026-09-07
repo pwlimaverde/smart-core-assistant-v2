@@ -156,6 +156,8 @@ use contracts::grpc::queries::{
     QueryAuditLogResponse,
     QuitarMinhaAssinaturaRequest,
     QuitarMinhaAssinaturaResponse,
+    DefinirRespostaBotInstanciaRequest,
+    DefinirRespostaBotInstanciaResponse,
     RefreshRequest,
     RegisterPaymentRequest,
     RegisterPaymentResponse,
@@ -3612,6 +3614,41 @@ impl AdminService for AdminFacade {
         }))
     }
 
+    /// D3 — liga/desliga a resposta automática da IA para a conexão inteira.
+    ///
+    /// Equivale ao `instances/<pk>/toggle-bot/` da v1. `tenant_id` das claims e
+    /// escopo `tenant:admin` (via `encaminhar_tenant`): calar o bot de um número
+    /// muda o comportamento do produto para todos os atendentes daquele tenant,
+    /// e não é decisão de quem só atende.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DefinirRespostaBotInstancia", traceparent)
+    )]
+    async fn definir_resposta_bot_instancia(
+        &self,
+        req: Request<DefinirRespostaBotInstanciaRequest>,
+    ) -> Result<Response<DefinirRespostaBotInstanciaResponse>, Status> {
+        let inner = req.get_ref().clone();
+        if inner.id <= 0 {
+            return Err(Status::invalid_argument("conexão inválida"));
+        }
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "DefinirRespostaBotInstancia",
+                serde_json::json!({ "id": inner.id, "habilitado": inner.habilitado }),
+            )
+            .await?;
+
+        Ok(Response::new(DefinirRespostaBotInstanciaResponse {
+            habilitado: corpo
+                .get("habilitado")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(inner.habilitado),
+        }))
+    }
+
     #[tracing::instrument(
         skip_all,
         fields(
@@ -6446,6 +6483,13 @@ fn instancia_do_json(v: &serde_json::Value) -> MyWhatsappInstance {
             .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
             .map(|d| d.timestamp_millis())
             .unwrap_or(0),
+        // Ausente resolve para `true`: a coluna nasce TRUE, e um
+        // `data_postgres` defasado nao pode fazer a tela mostrar "bot
+        // desligado" numa conexao que esta respondendo normalmente.
+        resposta_bot: v
+            .get("resposta_bot")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(true),
     }
 }
 
@@ -7042,6 +7086,7 @@ mod tests {
             "GetMyOnboardingProgress" => facade.get_my_onboarding_progress(Request::new(GetMyOnboardingProgressRequest::default())).await,
             // Operação financeira: a barreira aqui vale mais que nas demais.
             "QuitarMinhaAssinatura" => facade.quitar_minha_assinatura(Request::new(QuitarMinhaAssinaturaRequest::default())).await,
+            "DefinirRespostaBotInstancia" => facade.definir_resposta_bot_instancia(Request::new(DefinirRespostaBotInstanciaRequest { id: 1, habilitado: false })).await,
         }
     }
 
