@@ -4,8 +4,8 @@ name: "Cadastro retomável e pagamento resolvível pelo dono"
 planSlug: cadastro-retomavel-e-pagamento
 description: "Sessão que expira no meio do wizard de cadastro deixa o tenant com assinatura PENDING_PAYMENT e sem caminho de volta: ao logar, o guard olha só o passo do roteiro de configuração e manda para /configuracao/*, como se estivesse pago. A tela de pagamento é pública (/cadastro/pagamento) e depende de um signup_token que morreu com a sessão — depois do login não existe rota alguma para aplicar voucher ou quitar. O tenant entra, esbarra em 'assinatura inadimplente' a cada cadastro e não tem onde resolver."
 summary: "Duas correções e uma tela: o servidor passa a contar ao cliente o estado da assinatura, o guard dá precedência ao pagamento sobre o roteiro, e o dono ganha onde resolver a pendência depois de logado. Observado em produção-dev em 2026-09-06."
-status: filled
-progress: 0
+status: done
+progress: 100
 generated: "2026-09-06"
 scaffoldVersion: "2.0.0"
 agents:
@@ -22,29 +22,29 @@ phases:
     name: "Planning"
     prevc: "P"
     agent: "architect-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-r"
     name: "Review"
     prevc: "R"
     agent: "security-auditor"
-    status: "pending"
+    status: "completed"
   - id: "phase-e"
     name: "Execution"
     prevc: "E"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
     required_sensors: [rust-rapido, flutter-analise-testes]
     required_artifacts: [handoff-summary]
   - id: "phase-v"
     name: "Validation"
     prevc: "V"
     agent: "test-writer"
-    status: "pending"
+    status: "completed"
   - id: "phase-c"
     name: "Confirmation"
     prevc: "C"
     agent: "documentation-writer"
-    status: "pending"
+    status: "completed"
 ---
 
 # Cadastro retomável e pagamento resolvível pelo dono
@@ -104,11 +104,11 @@ cadastro, **não existe RPC que o dono logado possa chamar para pagar**.
 
 ## Definition of Done
 
-- [ ] Sessão que expira no meio do wizard é retomável: ao logar, o dono cai na
+- [x] Sessão que expira no meio do wizard é retomável: ao logar, o dono cai na
       tela de pagamento, não em `/configuracao/pronto`.
-- [ ] O dono aplica voucher **logado**, sem `signup_token`, e a assinatura ativa.
-- [ ] Colaborador sem `tenant:admin` não vê a tela nem o RPC responde a ele.
-- [ ] Resgate idempotente: repetir não consome dois usos do voucher.
-- [ ] `assinatura.quitada` na trilha de auditoria, com autor e meio.
-- [ ] Assinatura vencida passa a `SUSPENDED` sozinha; falha de consulta não suspende ninguém.
-- [ ] Sensores `rust-rapido` e `flutter-analise-testes` verdes.
+- [x] O dono aplica voucher **logado**, sem `signup_token`, e a assinatura ativa.
+- [x] Colaborador sem `tenant:admin` não vê a tela nem o RPC responde a ele.
+- [x] Resgate idempotente: repetir não consome dois usos do voucher.
+- [x] `assinatura.quitada` na trilha de auditoria, com autor e meio.
+- [x] Assinatura vencida passa a `SUSPENDED` sozinha; falha de consulta não suspende ninguém.
+- [x] Sensores `rust-rapido` e `flutter-analise-testes` verdes.

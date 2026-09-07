@@ -16,6 +16,16 @@ pub trait PlansStore: Send + Sync {
     /// Lista os planos de faturamento.
     async fn listar_planos(&self) -> Result<Vec<serde_json::Value>, DbError>;
 
+    /// Suspende assinaturas ACTIVE cujo período já venceu.
+    ///
+    /// Devolve os tenants afetados, para o chamador auditar um evento por
+    /// assinatura — sem isso ninguém explica ao cliente por que o sistema parou.
+    /// Cross-tenant por natureza: o scheduler varre todos.
+    async fn suspender_assinaturas_vencidas(
+        &self,
+        limite: i64,
+    ) -> Result<Vec<(Uuid, chrono::DateTime<chrono::Utc>)>, DbError>;
+
     /// Cria um plano e retorna o JSON do plano criado.
     async fn criar_plano(
         &self,

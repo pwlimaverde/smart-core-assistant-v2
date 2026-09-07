@@ -124,6 +124,25 @@ async fn executar_tick(state: &AppState, clock: &dyn Clock) {
                 }
             }
         }
+
+        // TTL de 1h fazendo as vezes de intervalo: vencimento é evento diário, e
+        // varrer de minuto em minuto só gastaria consulta. Uma hora de atraso no
+        // corte não muda nada para quem venceu ontem.
+        let mut conn = redis_conn.clone();
+        if tentar_lock(&mut conn, "scheduler:lock:assinaturas_vencidas", 3_600_000).await {
+            match suspender_assinaturas_vencidas(state).await {
+                Ok(n) if n > 0 => {
+                    tracing::info!(suspensas = n, "scheduler: assinaturas vencidas suspensas")
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::error!(
+                        "scheduler: falha ao suspender assinaturas vencidas: {:?}",
+                        e
+                    )
+                }
+            }
+        }
     } else {
         tracing::warn!("scheduler: sem conexão Redis, tick pulado (sem lock disponível)");
     }
@@ -230,6 +249,30 @@ async fn processar_feedback_vencido(state: &AppState) -> anyhow::Result<usize> {
 /// `data_storage` consome esse evento (`processar_purga_midia`) e faz a deleção
 /// física do objeto. A auditoria `midia.purgada` (um evento por arquivo) é emitida
 /// aqui, no ponto de disparo da purga.
+/// Suspende assinaturas cujo período venceu (equivalente ao
+/// `check_subscription_expirations` do Celery da v1, que a v2 não tinha).
+///
+/// **Fail-safe ao contrário do guard de rota.** Lá, falha de consulta resolve
+/// para "sem pendência" — prender quem pagou é pior que deixar entrar. Aqui é o
+/// inverso: qualquer falha resolve para "não suspender", porque tirar do ar um
+/// cliente adimplente por causa de um erro de RPC é o dano maior. O `?` já
+/// garante isso: o erro sobe e o tick seguinte tenta de novo.
+async fn suspender_assinaturas_vencidas(state: &AppState) -> anyhow::Result<usize> {
+    let limite = env_u64("SMARTCORE_SCHEDULER_LOTE", 100);
+
+    let resp = chamar_rpc(
+        &state.pg_client,
+        SISTEMA_TENANT_PLACEHOLDER,
+        "SuspenderAssinaturasVencidas",
+        serde_json::json!({ "limite": limite }),
+        "scheduler.tick",
+        "",
+    )
+    .await?;
+
+    Ok(resp.get("suspensas").and_then(|v| v.as_u64()).unwrap_or(0) as usize)
+}
+
 async fn processar_midia_expirada(state: &AppState) -> anyhow::Result<usize> {
     let limite = env_u64("SMARTCORE_SCHEDULER_LOTE", 100);
     let idade_max_dias = env_u64("SMARTCORE_SCHEDULER_MEDIA_IDADE_MAX_DIAS", 30);

@@ -562,10 +562,19 @@ pub async fn handler_get_onboarding_progress(
     };
 
     match store.obter_progresso_onboarding(tenant_id).await {
-        Ok(Some((passo, concluido))) => ok_reply(
+        Ok(Some(p)) => ok_reply(
             &env,
             "GetOnboardingProgressReply",
-            serde_json::json!({ "passo": passo, "concluido": concluido }),
+            serde_json::json!({
+                "passo": p.passo,
+                "concluido": p.concluido,
+                // Sem estes três o cliente não tinha como saber que a conta está
+                // pendente, e o guard mandava para o roteiro quem não pagou.
+                "pagamento_pendente": p.pagamento_pendente(),
+                "assinatura_status": p.assinatura_status.clone().unwrap_or_default(),
+                "plano_nome": p.plano_nome.clone().unwrap_or_default(),
+                "plano_id": p.plano_id.unwrap_or(0),
+            }),
         ),
         Ok(None) => erro(
             error_core::AppError::Validation("tenant não encontrado".into()),
@@ -789,7 +798,10 @@ pub async fn handler_list_voucher_redemptions(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ports::{MockAuditPort, MockSignupStore, MockVoucherStore, SignupIniciado};
+    use crate::ports::{
+        MockAuditPort, MockSignupStore, MockTenantStore, MockVoucherStore, ProgressoOnboarding,
+        SignupIniciado,
+    };
     use chrono::{Duration, Utc};
     use contracts::MessageKind;
 
@@ -806,6 +818,129 @@ mod tests {
 
     fn corpo(resp: &Envelope) -> serde_json::Value {
         serde_json::from_slice(&resp.payload).unwrap()
+    }
+
+    // -- E1: o progresso passa a falar de dinheiro -----------------------------
+    //
+    // Os três estados que o cliente precisa distinguir. Antes destes campos o
+    // app só via `passo`/`concluido` e mandava para `/configuracao/pronto` quem
+    // nunca pagou.
+
+    fn progresso(status: Option<&str>, plano: Option<&str>) -> ProgressoOnboarding {
+        ProgressoOnboarding {
+            passo: 8,
+            concluido: true,
+            assinatura_status: status.map(|s| s.to_string()),
+            plano_nome: plano.map(|s| s.to_string()),
+            plano_id: plano.map(|_| 1),
+        }
+    }
+
+    #[tokio::test]
+    async fn progresso_com_assinatura_ativa_nao_e_pendente() {
+        let mut store = MockTenantStore::new();
+        store
+            .expect_obter_progresso_onboarding()
+            .times(1)
+            .returning(|_| Ok(Some(progresso(Some("ACTIVE"), Some("Básico")))));
+
+        let body = corpo(
+            &handler_get_onboarding_progress(
+                &store,
+                envelope("GetOnboardingProgress", serde_json::json!({})),
+            )
+            .await,
+        );
+
+        assert_eq!(body["pagamento_pendente"], false);
+        assert_eq!(body["assinatura_status"], "ACTIVE");
+        assert_eq!(body["plano_nome"], "Básico");
+        assert_eq!(body["passo"], 8);
+    }
+
+    #[tokio::test]
+    async fn progresso_com_pagamento_pendente_chega_ao_cliente() {
+        // É o estado exato do defeito reproduzido: roteiro no fim, conta não paga.
+        let mut store = MockTenantStore::new();
+        store
+            .expect_obter_progresso_onboarding()
+            .times(1)
+            .returning(|_| Ok(Some(progresso(Some("PENDING_PAYMENT"), Some("Básico")))));
+
+        let body = corpo(
+            &handler_get_onboarding_progress(
+                &store,
+                envelope("GetOnboardingProgress", serde_json::json!({})),
+            )
+            .await,
+        );
+
+        assert_eq!(body["pagamento_pendente"], true);
+        assert_eq!(body["assinatura_status"], "PENDING_PAYMENT");
+    }
+
+    #[tokio::test]
+    async fn tenant_sem_assinatura_conta_como_pendente() {
+        // Sem linha em tenants_subscription o tenant não passou pelo pagamento, e
+        // o data_postgres já recusa as escritas dele. Tratar como em dia
+        // reproduziria o beco sem saída.
+        let mut store = MockTenantStore::new();
+        store
+            .expect_obter_progresso_onboarding()
+            .times(1)
+            .returning(|_| Ok(Some(progresso(None, None))));
+
+        let body = corpo(
+            &handler_get_onboarding_progress(
+                &store,
+                envelope("GetOnboardingProgress", serde_json::json!({})),
+            )
+            .await,
+        );
+
+        assert_eq!(body["pagamento_pendente"], true);
+        assert_eq!(body["assinatura_status"], "");
+        assert_eq!(body["plano_nome"], "");
+    }
+
+    #[tokio::test]
+    async fn suspensa_tambem_e_pendente() {
+        // Só ACTIVE é "em dia": SUSPENDED, CANCELED e qualquer status futuro
+        // caem no mesmo lado, sem precisar enumerá-los.
+        let mut store = MockTenantStore::new();
+        store
+            .expect_obter_progresso_onboarding()
+            .times(1)
+            .returning(|_| Ok(Some(progresso(Some("SUSPENDED"), Some("Básico")))));
+
+        let body = corpo(
+            &handler_get_onboarding_progress(
+                &store,
+                envelope("GetOnboardingProgress", serde_json::json!({})),
+            )
+            .await,
+        );
+
+        assert_eq!(body["pagamento_pendente"], true);
+    }
+
+    #[tokio::test]
+    async fn tenant_inexistente_continua_erro() {
+        // `None` é "tenant não existe" — distinto de "existe e não tem
+        // assinatura", que devolve linha.
+        let mut store = MockTenantStore::new();
+        store
+            .expect_obter_progresso_onboarding()
+            .times(1)
+            .returning(|_| Ok(None));
+
+        let resp = handler_get_onboarding_progress(
+            &store,
+            envelope("GetOnboardingProgress", serde_json::json!({})),
+        )
+        .await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
     }
 
     #[tokio::test]

@@ -16,6 +16,11 @@ dependencies:
     path: ../core_module
   login_module:
     path: ../login_module
+  # A tela de pagamento e o aviso de pendencia leem o PortaoConfiguracao, que
+  # guarda o estado da conta consultado uma vez por sessao. Dependencia de mao
+  # unica: onboarding_module nao conhece tenant_module.
+  onboarding_module:
+    path: ../onboarding_module
   presentation_module:
     path: ../presentation_module
   api_client:

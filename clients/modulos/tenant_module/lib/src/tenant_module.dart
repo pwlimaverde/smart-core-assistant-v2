@@ -29,6 +29,10 @@ import 'features/convites/data/repositories/convites_repositories.dart';
 import 'features/convites/domain/usecases/convites_usecases.dart';
 import 'features/convites/presentation/routes/accept_invite_route.dart';
 import 'features/convites/presentation/routes/invites_route.dart';
+import 'features/pagamento/data/datasources/pagamento_datasources.dart';
+import 'features/pagamento/data/repositories/pagamento_repositories.dart';
+import 'features/pagamento/domain/usecases/pagamento_usecases.dart';
+import 'features/pagamento/presentation/routes/pagamento_route.dart';
 import 'features/usuarios/data/datasources/usuarios_datasources.dart';
 import 'features/usuarios/data/repositories/usuarios_repositories.dart';
 import 'features/usuarios/domain/usecases/usuarios_usecases.dart';
@@ -220,6 +224,15 @@ final class TenantModule extends AppModule {
       ),
     );
 
+    // ── pagamento da assinatura (pós-login) ───────────────────────────────
+    i.lazySingleton<QuitarAssinaturaUsecase>(
+      () => QuitarAssinaturaUsecase(
+        repository: QuitarAssinaturaRepository(
+          datasource: QuitarAssinaturaDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+
     // ── convites ──────────────────────────────────────────────────────────
     i.lazySingleton<CreateInviteUsecase>(
       () => CreateInviteUsecase(
@@ -295,6 +308,7 @@ final class TenantModule extends AppModule {
     FluxosRoute(),
     EtapasFluxoRoute(),
     PainelRoute(),
+    PagamentoRoute(),
   ];
 
   /// Stub gRPC do admin, extraído do `ApiClient` global da plataforma.

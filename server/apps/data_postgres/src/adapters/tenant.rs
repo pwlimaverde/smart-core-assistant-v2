@@ -15,7 +15,7 @@ use infrastructure_postgres::tenants::tenants::{
 };
 use infrastructure_postgres::{run_in_tenant_transaction, DbError};
 
-use crate::ports::TenantStore;
+use crate::ports::{ProgressoOnboarding, TenantStore};
 
 /// Implementação Postgres da port Tenant (operações administrativas).
 #[derive(Clone)]
@@ -165,19 +165,30 @@ impl TenantStore for PgTenantStore {
     async fn obter_progresso_onboarding(
         &self,
         tenant_id: Uuid,
-    ) -> Result<Option<(i32, bool)>, DbError> {
+    ) -> Result<Option<ProgressoOnboarding>, DbError> {
+        // `LEFT JOIN` nos dois: tenant sem assinatura (ou com assinatura sem
+        // plano escolhido) é estado real e precisa devolver linha, não `None`.
+        // `None` aqui significa "tenant não existe", e o handler o traduz em erro
+        // — confundir os dois casos faria um tenant recém-criado parecer
+        // inexistente.
         let row = sqlx::query(
-            "SELECT onboarding_step, setup_completed FROM tenants_tenant WHERE id = $1",
+            r#"SELECT t.onboarding_step, t.setup_completed, s.status AS assinatura_status,
+                      p.name AS plano_nome, s.plan_id AS plano_id
+                 FROM tenants_tenant t
+                 LEFT JOIN tenants_subscription s ON s.tenant_id = t.id
+                 LEFT JOIN tenants_plan p ON p.id = s.plan_id
+                WHERE t.id = $1"#,
         )
         .bind(tenant_id)
         .fetch_optional(&self.pool)
         .await?;
 
-        Ok(row.map(|r| {
-            (
-                r.get::<i32, _>("onboarding_step"),
-                r.get::<bool, _>("setup_completed"),
-            )
+        Ok(row.map(|r| ProgressoOnboarding {
+            passo: r.get::<i32, _>("onboarding_step"),
+            concluido: r.get::<bool, _>("setup_completed"),
+            assinatura_status: r.get::<Option<String>, _>("assinatura_status"),
+            plano_nome: r.get::<Option<String>, _>("plano_nome"),
+            plano_id: r.get::<Option<i32>, _>("plano_id"),
         }))
     }
 

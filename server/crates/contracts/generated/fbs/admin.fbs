@@ -732,6 +732,23 @@ table GetMyOnboardingProgressRequest {
 table GetMyOnboardingProgressResponse {
   passo:int;
   concluido:bool;
+  pagamento_pendente:bool;
+  assinatura_status:string;
+  plano_nome:string;
+  plano_id:int;
+}
+
+table QuitarMinhaAssinaturaRequest {
+  provedor:string;
+  credencial:string;
+}
+
+table QuitarMinhaAssinaturaResponse {
+  confirmado:bool;
+  assinatura_status:string;
+  url_externa:string;
+  motivo:string;
+  erro_legivel:string;
 }
 
 table GetMyTenantConfigRequest {

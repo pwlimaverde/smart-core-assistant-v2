@@ -2407,14 +2407,72 @@ const GetMyOnboardingProgressResponse$json = {
   '2': [
     {'1': 'passo', '3': 1, '4': 1, '5': 5, '10': 'passo'},
     {'1': 'concluido', '3': 2, '4': 1, '5': 8, '10': 'concluido'},
+    {
+      '1': 'pagamento_pendente',
+      '3': 3,
+      '4': 1,
+      '5': 8,
+      '10': 'pagamentoPendente'
+    },
+    {
+      '1': 'assinatura_status',
+      '3': 4,
+      '4': 1,
+      '5': 9,
+      '10': 'assinaturaStatus'
+    },
+    {'1': 'plano_nome', '3': 5, '4': 1, '5': 9, '10': 'planoNome'},
+    {'1': 'plano_id', '3': 6, '4': 1, '5': 5, '10': 'planoId'},
   ],
 };
 
 /// Descriptor for `GetMyOnboardingProgressResponse`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List getMyOnboardingProgressResponseDescriptor =
+final $typed_data.Uint8List getMyOnboardingProgressResponseDescriptor = $convert.base64Decode(
+    'Ch9HZXRNeU9uYm9hcmRpbmdQcm9ncmVzc1Jlc3BvbnNlEhQKBXBhc3NvGAEgASgFUgVwYXNzbx'
+    'IcCgljb25jbHVpZG8YAiABKAhSCWNvbmNsdWlkbxItChJwYWdhbWVudG9fcGVuZGVudGUYAyAB'
+    'KAhSEXBhZ2FtZW50b1BlbmRlbnRlEisKEWFzc2luYXR1cmFfc3RhdHVzGAQgASgJUhBhc3Npbm'
+    'F0dXJhU3RhdHVzEh0KCnBsYW5vX25vbWUYBSABKAlSCXBsYW5vTm9tZRIZCghwbGFub19pZBgG'
+    'IAEoBVIHcGxhbm9JZA==');
+
+@$core.Deprecated('Use quitarMinhaAssinaturaRequestDescriptor instead')
+const QuitarMinhaAssinaturaRequest$json = {
+  '1': 'QuitarMinhaAssinaturaRequest',
+  '2': [
+    {'1': 'provedor', '3': 1, '4': 1, '5': 9, '10': 'provedor'},
+    {'1': 'credencial', '3': 2, '4': 1, '5': 9, '10': 'credencial'},
+  ],
+};
+
+/// Descriptor for `QuitarMinhaAssinaturaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List quitarMinhaAssinaturaRequestDescriptor =
     $convert.base64Decode(
-        'Ch9HZXRNeU9uYm9hcmRpbmdQcm9ncmVzc1Jlc3BvbnNlEhQKBXBhc3NvGAEgASgFUgVwYXNzbx'
-        'IcCgljb25jbHVpZG8YAiABKAhSCWNvbmNsdWlkbw==');
+        'ChxRdWl0YXJNaW5oYUFzc2luYXR1cmFSZXF1ZXN0EhoKCHByb3ZlZG9yGAEgASgJUghwcm92ZW'
+        'RvchIeCgpjcmVkZW5jaWFsGAIgASgJUgpjcmVkZW5jaWFs');
+
+@$core.Deprecated('Use quitarMinhaAssinaturaResponseDescriptor instead')
+const QuitarMinhaAssinaturaResponse$json = {
+  '1': 'QuitarMinhaAssinaturaResponse',
+  '2': [
+    {'1': 'confirmado', '3': 1, '4': 1, '5': 8, '10': 'confirmado'},
+    {
+      '1': 'assinatura_status',
+      '3': 2,
+      '4': 1,
+      '5': 9,
+      '10': 'assinaturaStatus'
+    },
+    {'1': 'url_externa', '3': 3, '4': 1, '5': 9, '10': 'urlExterna'},
+    {'1': 'motivo', '3': 4, '4': 1, '5': 9, '10': 'motivo'},
+    {'1': 'erro_legivel', '3': 5, '4': 1, '5': 9, '10': 'erroLegivel'},
+  ],
+};
+
+/// Descriptor for `QuitarMinhaAssinaturaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List quitarMinhaAssinaturaResponseDescriptor = $convert.base64Decode(
+    'Ch1RdWl0YXJNaW5oYUFzc2luYXR1cmFSZXNwb25zZRIeCgpjb25maXJtYWRvGAEgASgIUgpjb2'
+    '5maXJtYWRvEisKEWFzc2luYXR1cmFfc3RhdHVzGAIgASgJUhBhc3NpbmF0dXJhU3RhdHVzEh8K'
+    'C3VybF9leHRlcm5hGAMgASgJUgp1cmxFeHRlcm5hEhYKBm1vdGl2bxgEIAEoCVIGbW90aXZvEi'
+    'EKDGVycm9fbGVnaXZlbBgFIAEoCVILZXJyb0xlZ2l2ZWw=');
 
 @$core.Deprecated('Use getMyTenantConfigRequestDescriptor instead')
 const GetMyTenantConfigRequest$json = {

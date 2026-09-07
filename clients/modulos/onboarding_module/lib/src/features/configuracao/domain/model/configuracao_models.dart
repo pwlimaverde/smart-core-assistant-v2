@@ -44,11 +44,32 @@ final class Departamento {
   const Departamento({required this.id, required this.nome});
 }
 
-/// Progresso registrado no servidor.
+/// Progresso registrado no servidor, junto do estado da conta.
+///
+/// Os dois vêm juntos porque a decisão de rota precisa dos dois: o roteiro
+/// pendente manda de volta para `/configuracao/*`, mas pagamento pendente tem
+/// precedência. Sem o estado da assinatura aqui, quem nunca pagou era levado
+/// para a tela de "tudo pronto" e esbarrava em "assinatura inadimplente" a cada
+/// cadastro, sem tela que resolvesse.
 @immutable
 final class ProgressoOnboarding {
   final int passo;
   final bool concluido;
 
-  const ProgressoOnboarding({required this.passo, required this.concluido});
+  /// `subscription.status != ACTIVE`. Ausência de assinatura também conta.
+  final bool pagamentoPendente;
+
+  /// `PENDING_PAYMENT`, `ACTIVE`, `SUSPENDED`… Vazio = sem assinatura.
+  final String assinaturaStatus;
+
+  /// Nome do plano, para a tela dizer o que está sendo cobrado.
+  final String planoNome;
+
+  const ProgressoOnboarding({
+    required this.passo,
+    required this.concluido,
+    this.pagamentoPendente = false,
+    this.assinaturaStatus = '',
+    this.planoNome = '',
+  });
 }
