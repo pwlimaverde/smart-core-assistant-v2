@@ -47,6 +47,7 @@ class _ChatPageState extends State<ChatPage> {
       criarEtiqueta: inject(),
       alternar: inject(),
       criarNota: inject(),
+      definirBot: inject(),
     );
     _controller.abrir(widget.atendimentoId);
     _ficha.abrir(widget.atendimentoId);

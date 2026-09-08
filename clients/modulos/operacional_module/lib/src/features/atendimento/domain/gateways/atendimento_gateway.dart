@@ -85,6 +85,12 @@ abstract interface class AtendimentoGateway {
     required bool aplicar,
   });
 
+  /// Liga/desliga a resposta automática da IA **nesta conversa** (D3).
+  Future<void> definirBotDaConversa({
+    required int atendimentoId,
+    required bool habilitado,
+  });
+
   /// Anota algo na conversa. A nota é interna: o contato nunca a vê.
   Future<void> criarNota({required int atendimentoId, required String texto});
 

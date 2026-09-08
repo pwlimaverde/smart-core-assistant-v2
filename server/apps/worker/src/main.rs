@@ -269,6 +269,10 @@ async fn aplicar_transferencia_ia(
     }
 
     // Auditoria: SEM conteúdo da conversa — só ids/fluxo destino.
+    //
+    // `atendente_id` entra porque a transferência agora atribui (D2), e "para
+    // quem foi" é a pergunta que se faz quando uma conversa some da vista de
+    // quem esperava por ela. Nulo significa fila sem ninguém disponível.
     state.audit_logger.info(
         tenant_uuid,
         "atendimento.transferido_por_ia",
@@ -277,6 +281,7 @@ async fn aplicar_transferencia_ia(
             "atendimento_id": atendimento_id,
             "fluxo_id": item.fluxo_id,
             "etapa_id": resp.get("etapa_id"),
+            "atendente_id": resp.get("atendente_id"),
         }),
         None,
         None,
@@ -295,6 +300,8 @@ async fn aplicar_transferencia_ia(
                 "fluxo_id": item.fluxo_id,
                 "etapa_id": resp.get("etapa_id"),
                 "etapa_nome": resp.get("etapa_nome"),
+                "atendente_id": resp.get("atendente_id"),
+                "atendente_nome": resp.get("atendente_nome"),
             }
         });
         let mut conn = bus_conn.clone();

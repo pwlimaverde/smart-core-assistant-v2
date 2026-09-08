@@ -109,12 +109,24 @@ pub trait AtendenteRepository: Send + Sync {
         ctx: &RequestContext,
     ) -> Result<Vec<Atendente>, DbError>;
 
-    /// Seleciona o próximo atendente disponível pelo algoritmo Round-Robin (menor carga, mais antigo na fila).
+    /// Seleciona o próximo atendente da fila de rodízio: quem está há mais tempo
+    /// sem receber conversa, entre os que ainda cabem no próprio limite (D2).
+    ///
+    /// **Trava a linha escolhida** (`FOR UPDATE SKIP LOCKED`). Sem isso, duas
+    /// transferências simultâneas leem a mesma pessoa como "a próxima" e ambas
+    /// atribuem — `max_atendimentos_simultaneos` seria estourado justamente no
+    /// momento de pico, que é quando ele existe para valer. `SKIP LOCKED` faz a
+    /// segunda transação pular para o próximo da fila em vez de esperar.
+    ///
+    /// `departamento_id` e `fluxo_id` são filtros independentes: o atendente tem
+    /// `fluxo_id` obrigatório e `departamento_id` opcional, então filtrar pelos
+    /// dois de uma vez excluiria quem está no fluxo certo e sem departamento.
     async fn buscar_disponivel_round_robin(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
         departamento_id: Option<i32>,
+        fluxo_id: Option<i32>,
     ) -> Result<Option<Atendente>, DbError>;
 
     async fn atualizar_ultima_atribuicao(
@@ -304,15 +316,28 @@ impl AtendenteRepository for PostgresAtendenteRepository {
         Ok(total)
     }
 
-    #[tracing::instrument(skip_all)]
+    #[tracing::instrument(skip_all, fields(departamento_id, fluxo_id))]
     async fn buscar_disponivel_round_robin(
         &self,
         tx: &mut Transaction<'_, Postgres>,
         ctx: &RequestContext,
         departamento_id: Option<i32>,
+        fluxo_id: Option<i32>,
     ) -> Result<Option<Atendente>, DbError> {
-        // Seleciona o atendente com menor carga e mais antigo na fila de atribuição.
-        // Subquery conta atendimentos ativos para respeitar o limite configurado.
+        // `NULLS FIRST`: quem nunca recebeu conversa vai antes de quem já
+        // recebeu — é a ordem justa para quem acabou de entrar na equipe.
+        // Desempate por `id` para a fila ser determinística quando duas pessoas
+        // têm o mesmo instante (equipe recém-criada tem todo mundo em NULL).
+        //
+        // A contagem de carga usa o MESMO recorte de
+        // `contar_atendimentos_em_andamento` (`NOT IN` dos estados finais), e não
+        // uma lista dos estados abertos: um status novo entraria como carga em
+        // vez de sumir silenciosamente do cálculo.
+        //
+        // `at.tenant_id = a.tenant_id` é redundante sob RLS, e está aqui de
+        // propósito: `atendente_humano_id` vem de uma sequência global, então a
+        // subconsulta sem recorte de tenant só está correta por causa da
+        // política — e a política pode um dia ser afrouxada para uma migração.
         let row = sqlx::query_as!(
             Atendente,
             r#"SELECT a.id, a.tenant_id, a.nome, a.slug, a.telefone, a.cargo, a.email,
@@ -325,16 +350,20 @@ impl AtendenteRepository for PostgresAtendenteRepository {
                  AND a.ativo = true
                  AND a.disponivel = true
                  AND ($2::int IS NULL OR a.departamento_id = $2)
+                 AND ($3::int IS NULL OR a.fluxo_id = $3)
                  AND (
                      SELECT COUNT(*)::int
                      FROM oraculo_atendimento at
-                     WHERE at.atendente_humano_id = a.id
-                       AND at.status IN ('fila', 'em_atendimento', 'pendencia')
+                     WHERE at.tenant_id = a.tenant_id
+                       AND at.atendente_humano_id = a.id
+                       AND at.status NOT IN ('resolvido', 'cancelado', 'arquivado')
                  ) < a.max_atendimentos_simultaneos
-               ORDER BY a.data_ultima_atribuicao ASC NULLS FIRST
+               ORDER BY a.data_ultima_atribuicao ASC NULLS FIRST, a.id
+               FOR UPDATE SKIP LOCKED
                LIMIT 1"#,
             ctx.tenant_id,
-            departamento_id
+            departamento_id,
+            fluxo_id
         )
         .fetch_optional(&mut **tx)
         .await?;

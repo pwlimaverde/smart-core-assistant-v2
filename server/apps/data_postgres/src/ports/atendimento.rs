@@ -3,7 +3,7 @@
 //! persistência de mensagem) vive no adapter (DIP).
 
 use async_trait::async_trait;
-use infrastructure_postgres::atendimentos::atendimentos::Atendimento;
+use infrastructure_postgres::atendimentos::atendimentos::{Atendimento, AtendimentoInativo};
 use infrastructure_postgres::atendimentos::mensagens::{DestinoEnvioOutbound, Mensagem};
 use infrastructure_postgres::operacional::fluxos::FluxoDisponivel;
 use infrastructure_postgres::{DbError, RequestContext};
@@ -45,6 +45,13 @@ pub struct TransferenciaFluxoOutcome {
     pub etapa_nome: Option<String>,
     /// Motivo quando `transferido == false` (ex.: "fluxo_inexistente", "sem_etapa_inicial").
     pub reason: Option<String>,
+    /// D2 — quem recebeu a conversa no rodízio, quando houve alguém para receber.
+    ///
+    /// `None` não é erro: fluxo sem atendente disponível deixa o cartão na fila
+    /// do destino, que é melhor que recusar a transferência e devolver o cliente
+    /// a uma IA que já declarou não dar conta.
+    pub atendente_id: Option<i32>,
+    pub atendente_nome: Option<String>,
 }
 
 /// Resultado da aplicação da política de ticket/Kanban sobre um atendimento (WS-2.4).
@@ -319,6 +326,25 @@ pub trait AtendimentoStore: Send + Sync {
 
     /// Varredura CROSS-TENANT do scheduler do worker (F4.3b): atendimentos
     /// resolvidos aguardando feedback além do TTL. Exige `admin_pool` (BYPASSRLS).
+    /// D5 — conversas paradas tempo demais (varredura cross-tenant do scheduler).
+    async fn listar_inativos(
+        &self,
+        ctx: &RequestContext,
+        limite: i64,
+        minutos_padrao: i64,
+    ) -> Result<Vec<AtendimentoInativo>, DbError>;
+
+    /// D5 — arquiva a conversa abandonada.
+    ///
+    /// `arquivado`, nunca `resolvido`: a pesquisa de satisfação só dispara em
+    /// `resolvido`, e perguntar "como foi seu atendimento?" a quem parou de
+    /// responder envenena a métrica e incomoda o cliente.
+    async fn encerrar_por_inatividade(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<bool, DbError>;
+
     async fn listar_feedback_vencido(
         &self,
         ctx: &RequestContext,

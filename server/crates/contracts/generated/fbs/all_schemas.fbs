@@ -649,6 +649,39 @@ table RevokeInviteResponse {
   success:bool;
 }
 
+table AdminListUsersRequest {
+  busca:string;
+  limite:int;
+  offset:int;
+}
+
+table AdminUserItem {
+  id:int;
+  username:string;
+  email:string;
+  nome:string;
+  is_active:bool;
+  is_superuser:bool;
+  last_login:long;
+  date_joined:long;
+  tenant_dono:string;
+  tenant_membro:string;
+  papel:string;
+}
+
+table AdminListUsersResponse {
+  usuarios:[AdminUserItem];
+}
+
+table AdminSetUserActiveRequest {
+  user_id:int;
+  ativo:bool;
+}
+
+table AdminSetUserActiveResponse {
+  ativo:bool;
+}
+
 table ListTenantUsersRequest {
 }
 
@@ -1142,6 +1175,7 @@ table DetalheAtendimentoResponse {
   catalogo:[Etiqueta];
   etiquetas:[Etiqueta];
   notas:[Nota];
+  bot_pode_atender:bool;
 }
 
 table CreateEtiquetaRequest {

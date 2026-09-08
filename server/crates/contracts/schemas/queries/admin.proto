@@ -700,6 +700,45 @@ message RevokeInviteResponse {
   bool success = 1;
 }
 
+// D7 — usuarios de TODOS os tenants, para o painel do superusuario.
+//
+// `ListTenantUsers` resolve o tenant a partir das claims de quem chama e nunca
+// enxerga alem do proprio; a v1 tinha esta visao global no admin do Django.
+message AdminListUsersRequest {
+  // Casa em username, e-mail e nome. Vazio lista todo mundo.
+  string busca = 1;
+  int32 limite = 2;   // teto de 200 no servidor
+  int32 offset = 3;
+}
+
+message AdminUserItem {
+  int32 id = 1;
+  string username = 2;
+  string email = 3;
+  string nome = 4;
+  bool is_active = 5;
+  bool is_superuser = 6;
+  int64 last_login = 7;   // timestamp_millis; 0 = nunca entrou
+  int64 date_joined = 8;  // timestamp_millis
+  string tenant_dono = 9;    // tenant de que e DONO, se for
+  string tenant_membro = 10; // tenant em que e FUNCIONARIO, se for
+  string papel = 11;         // papel como funcionario
+}
+
+message AdminListUsersResponse {
+  repeated AdminUserItem usuarios = 1;
+}
+
+// D7 — bloqueia/desbloqueia o acesso de um usuario.
+message AdminSetUserActiveRequest {
+  int32 user_id = 1;
+  bool ativo = 2;
+}
+
+message AdminSetUserActiveResponse {
+  bool ativo = 1;
+}
+
 message ListTenantUsersRequest {}
 
 message TenantUserItem {
@@ -902,6 +941,8 @@ service AdminService {
   rpc UpdateTenantConfig(UpdateTenantConfigRequest) returns (UpdateTenantConfigResponse);
 
   // Fase 2: Tenants
+  rpc AdminListUsers(AdminListUsersRequest) returns (AdminListUsersResponse);
+  rpc AdminSetUserActive(AdminSetUserActiveRequest) returns (AdminSetUserActiveResponse);
   rpc ListTenants(ListTenantsRequest) returns (ListTenantsResponse);
   rpc GetTenant(GetTenantRequest) returns (GetTenantResponse);
   rpc CreateTenant(CreateTenantRequest) returns (CreateTenantResponse);
@@ -1474,6 +1515,10 @@ message DetalheAtendimentoResponse {
   // O que esta colado nesta conversa.
   repeated Etiqueta etiquetas = 2;
   repeated Nota notas = 3;
+  // D3 — a IA responde nesta conversa? Assumir o atendimento desliga; so o
+  // controle da ficha religa. Sem este campo a tela nao teria como saber em
+  // que estado esta o interruptor que ela mesma desenha.
+  bool bot_pode_atender = 4;
 }
 
 message CreateEtiquetaRequest {

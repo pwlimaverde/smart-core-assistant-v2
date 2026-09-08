@@ -1,3 +1,8 @@
+import 'package:admin_module/src/features/usuarios/data/datasources/usuarios_datasources.dart';
+import 'package:admin_module/src/features/usuarios/data/repositories/usuarios_repositories.dart';
+import 'package:admin_module/src/features/usuarios/domain/usecases/usuarios_usecases.dart';
+import 'package:admin_module/src/features/usuarios/presentation/controllers/usuarios_controller.dart';
+import 'package:admin_module/src/features/usuarios/presentation/pages/usuarios_page.dart';
 import 'package:admin_module/src/features/billing/data/datasources/billing_datasources.dart';
 import 'package:admin_module/src/features/billing/data/repositories/billing_repositories.dart';
 import 'package:admin_module/src/features/billing/domain/usecases/billing_usecases.dart';
@@ -136,6 +141,102 @@ void main() {
       registrar();
 
       await montar(tester, const DashboardPage());
+      await tester.pumpAndSettle();
+
+      expect(find.textContaining('superusuário'), findsWidgets);
+    });
+  });
+
+  group('UsuariosPage', () {
+    void registrar() {
+      getIt.registerSingleton<UsuariosController>(
+        UsuariosController(
+          listar: ListarUsuariosUsecase(
+            repository: ListarUsuariosRepository(
+              datasource: ListarUsuariosDatasource(client: client),
+            ),
+          ),
+          definirAtivo: DefinirUsuarioAtivoUsecase(
+            repository: DefinirUsuarioAtivoRepository(
+              datasource: DefinirUsuarioAtivoDatasource(client: client),
+            ),
+          ),
+        ),
+      );
+    }
+
+    testWidgets('lista os usuários com o vínculo de tenant', (tester) async {
+      when(() => client.adminListUsers(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.AdminListUsersResponse(
+            usuarios: [
+              proto.AdminUserItem(
+                id: 1,
+                username: 'ana',
+                email: 'ana@alfa.com',
+                nome: 'Ana Souza',
+                isActive: true,
+                isSuperuser: false,
+                lastLogin: ms(DateTime.fromMillisecondsSinceEpoch(0)),
+                dateJoined: ms(DateTime(2026, 1, 1)),
+                tenantDono: 'Empresa Alfa',
+                tenantMembro: '',
+                papel: '',
+              ),
+            ],
+          ),
+        ),
+      );
+      registrar();
+
+      await montar(tester, const UsuariosPage());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ana Souza'), findsOneWidget);
+      expect(find.textContaining('dono de Empresa Alfa'), findsOneWidget);
+      // `last_login` zero é "nunca entrou", não a data do epoch.
+      expect(find.textContaining('nunca entrou'), findsOneWidget);
+    });
+
+    testWidgets('usuário bloqueado aparece marcado na lista', (tester) async {
+      // É o que alguém vem procurar aqui: por que o cliente não entra.
+      when(() => client.adminListUsers(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.AdminListUsersResponse(
+            usuarios: [
+              proto.AdminUserItem(
+                id: 2,
+                username: 'zeca',
+                email: 'zeca@alfa.com',
+                nome: 'Zeca Lima',
+                isActive: false,
+                isSuperuser: false,
+                lastLogin: ms(DateTime(2026, 2, 3)),
+                dateJoined: ms(DateTime(2026, 1, 1)),
+                tenantDono: '',
+                tenantMembro: 'Empresa Alfa',
+                papel: 'staff',
+              ),
+            ],
+          ),
+        ),
+      );
+      registrar();
+
+      await montar(tester, const UsuariosPage());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Bloqueado'), findsOneWidget);
+      expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
+    });
+
+    testWidgets('erro de permissão aparece na tela', (tester) async {
+      when(() => client.adminListUsers(any())).thenAnswer(
+        (_) => falhaGrpc(proto.GrpcError.permissionDenied('sem escopo')),
+      );
+      registrar();
+
+      await montar(tester, const UsuariosPage());
       await tester.pumpAndSettle();
 
       expect(find.textContaining('superusuário'), findsWidgets);

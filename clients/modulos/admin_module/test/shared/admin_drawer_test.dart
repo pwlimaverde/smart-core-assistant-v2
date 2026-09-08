@@ -52,6 +52,7 @@ void main() {
       'Configurações Globais',
       'Configurações de Tenant',
       'Clientes / Tenants',
+      'Usuários',
       'Planos & Faturamento',
       'Integração Evolution',
       'Feature Flags',

@@ -134,6 +134,15 @@ final class OperacionalModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<DefinirBotDaConversaUsecase>(
+      () => DefinirBotDaConversaUsecase(
+        repository: DefinirBotDaConversaRepository(
+          datasource: DefinirBotDaConversaDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
     i.lazySingleton<CriarNotaUsecase>(
       () => CriarNotaUsecase(
         repository: CriarNotaRepository(

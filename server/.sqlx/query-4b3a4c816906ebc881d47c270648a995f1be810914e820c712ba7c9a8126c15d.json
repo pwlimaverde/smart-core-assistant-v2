@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oraculo_atendimento\n                  SET atendente_humano_id = $1\n                WHERE tenant_id = $2 AND id = $3\n                  AND atendente_humano_id IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4b3a4c816906ebc881d47c270648a995f1be810914e820c712ba7c9a8126c15d"
+}

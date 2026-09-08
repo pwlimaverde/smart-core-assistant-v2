@@ -81,15 +81,23 @@ phases:
 
 ## Entregas
 
-| Bloco | Lacuna | O que fazer |
-|---|---|---|
-| **D4** | L3 🚨 | **Fallback de escopos**, em 3 passos: medir → migrar → fechar. Criar papel somente-leitura. *Vai primeiro: é a única com risco de segurança ativo* |
-| **D1** | F1 | Gravar `confianca_resposta` (deploy 1) → **veto por faixa** sobre o `transferir_atendimento` do LLM (deploy 2) |
-| **D2** | F3 | **Rodízio** por `data_ultima_atribuicao`, respeitando `disponivel` e `max_atendimentos_simultaneos` |
-| **D3** | F2 / L7 | `resposta_bot` na instância + caminho para **religar** o `bot_pode_atender` da conversa |
-| **D5** | F6 | Encerramento por inatividade no scheduler (**construção nova** — a v1 não tinha) |
-| **D6** | F7 | Notificar o atendente (**construção nova**; exige decisão de contrato de realtime) |
-| **D7** | doc 31 | `PaymentRecord` (registro manual) e gestão global de usuários pelo superusuário |
+| Bloco | Lacuna | O que fazer | Estado |
+|---|---|---|---|
+| **D4** | L3 🚨 | **Fallback de escopos**, em 3 passos: medir → migrar → fechar. Criar papel somente-leitura | passo 1 ✅ · 2 e 3 **esperam tráfego** |
+| **D1** | F1 | Gravar `confianca_resposta` (deploy 1) → **veto por faixa** sobre o `transferir_atendimento` do LLM (deploy 2) | deploy 1 ✅ · deploy 2 **espera histórico** |
+| **D2** | F3 | **Rodízio** por `data_ultima_atribuicao`, respeitando `disponivel` e `max_atendimentos_simultaneos` | ✅ |
+| **D3** | F2 / L7 | `resposta_bot` na instância + caminho para **religar** o `bot_pode_atender` da conversa | ✅ |
+| **D5** | F6 | Encerramento por inatividade no scheduler (**construção nova** — a v1 não tinha) | ✅ |
+| **D6** | F7 | Notificar o atendente (**construção nova**; exige decisão de contrato de realtime) | ⛔ **bloqueado** — decisão de contrato |
+| **D7** | doc 31 | ~~`PaymentRecord` (registro manual)~~ e gestão global de usuários pelo superusuário | ✅ (ver correção abaixo) |
+
+## Correções ao levantamento (verificadas em código)
+
+| Afirmação original | O que se mediu |
+|---|---|
+| *"o superusuário não registra pagamento"* (D7) | **Falso.** `RegisterPayment` está completo do `admin.proto` (l. 917) à tela: `grpc_web.rs:2125`, `RegisterPaymentUsecase` no DI (`admin_module.dart`), `billing_page.dart`. O que faltava era só a **gestão global de usuários** |
+| *"rodízio: construir"* (D2) | **Já existia e nunca foi chamado.** `buscar_disponivel_round_robin`, `atualizar_ultima_atribuicao` e `contar_atendimentos_em_andamento` estão na 0005 e só eram exercitados por teste. O trabalho foi corrigir três defeitos (sem trava de concorrência, contagem de carga divergente da consulta irmã, filtro por departamento em vez de fluxo) e **ligar à transferência** |
+| — (achado fora do plano) | `GetFichaUsecase` reconstruía a ficha campo a campo para ordenar as notas; o campo novo do D3 caía no padrão e a tela dizia "a IA responde" numa conversa calada. Corrigido com `copyWith` no modelo |
 
 ## Sequência
 
@@ -118,14 +126,25 @@ D6                       (por último: depende de D2 e do realtime do desktop, q
 
 - [ ] Existe papel somente-leitura, e ele **não** consegue escrever — provado por teste.
 - [ ] Nenhum usuário nasce com escopo de escrita por omissão.
-- [ ] `confianca_resposta` gravada em toda resposta do bot.
+- [x] `confianca_resposta` gravada em toda resposta do bot.
 - [ ] Confiança abaixo do piso transfere **e atribui**, mesmo com o LLM dizendo o contrário.
 - [ ] Limiares editáveis por tenant.
-- [ ] Bot silenciável por instância e por conversa, **com caminho de volta**.
-- [ ] Atendimento parado encerra sozinho, sem disparar pesquisa de satisfação.
+- [x] Bot silenciável por instância e por conversa, **com caminho de volta**.
+- [x] Atendimento parado encerra sozinho, sem disparar pesquisa de satisfação
+      (garantido pela estrutura: arquiva como `arquivado`, e o gatilho da
+      pesquisa só age em `resolvido`).
 - [ ] O atendente é avisado do atendimento que recebeu, sem ver os dos outros.
-- [ ] Superusuário registra pagamento manual e gere usuários.
+- [x] Superusuário registra pagamento manual (já existia) e gere usuários
+      (`AdminListUsers` / `AdminSetUserActive`, com recusa a bloquear o próprio
+      acesso no servidor).
 - [ ] Sensores `rust-rapido` e `flutter-analise-testes` verdes.
+      ⚠️ `flutter-analise-testes` verde. Em `rust-rapido`, `fmt` e
+      `clippy --all-targets -- -D warnings` estão verdes, mas **os testes não
+      rodaram**: as ferramentas MSVC e o Windows SDK foram desinstalados da
+      máquina em 2026-09-08 (`VC\Tools\MSVC` ausente, `Windows Kits\10` só com
+      `UnionMetadata`), e sem `dbghelp.lib` nenhum binário de teste linka.
+      Reparar pelo Visual Studio Installer (carga "Desenvolvimento para desktop
+      com C++") e reexecutar.
 
 ## Fora de escopo
 

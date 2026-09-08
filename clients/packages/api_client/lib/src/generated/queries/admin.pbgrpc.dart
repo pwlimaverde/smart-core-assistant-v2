@@ -69,6 +69,20 @@ class AdminServiceClient extends $grpc.Client {
   }
 
   /// Fase 2: Tenants
+  $grpc.ResponseFuture<$0.AdminListUsersResponse> adminListUsers(
+    $0.AdminListUsersRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$adminListUsers, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.AdminSetUserActiveResponse> adminSetUserActive(
+    $0.AdminSetUserActiveRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$adminSetUserActive, request, options: options);
+  }
+
   $grpc.ResponseFuture<$0.ListTenantsResponse> listTenants(
     $0.ListTenantsRequest request, {
     $grpc.CallOptions? options,
@@ -567,6 +581,13 @@ class AdminServiceClient extends $grpc.Client {
         options: options);
   }
 
+  $grpc.ResponseFuture<$0.DefinirBotDaConversaResponse> definirBotDaConversa(
+    $0.DefinirBotDaConversaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$definirBotDaConversa, request, options: options);
+  }
+
   $grpc.ResponseFuture<$0.SimpleOkResponse> reconnectMyWhatsappInstance(
     $0.MyWhatsappInstanceIdRequest request, {
     $grpc.CallOptions? options,
@@ -739,6 +760,16 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/UpdateTenantConfig',
       ($0.UpdateTenantConfigRequest value) => value.writeToBuffer(),
       $0.UpdateTenantConfigResponse.fromBuffer);
+  static final _$adminListUsers =
+      $grpc.ClientMethod<$0.AdminListUsersRequest, $0.AdminListUsersResponse>(
+          '/smartcore.contracts.queries.AdminService/AdminListUsers',
+          ($0.AdminListUsersRequest value) => value.writeToBuffer(),
+          $0.AdminListUsersResponse.fromBuffer);
+  static final _$adminSetUserActive = $grpc.ClientMethod<
+          $0.AdminSetUserActiveRequest, $0.AdminSetUserActiveResponse>(
+      '/smartcore.contracts.queries.AdminService/AdminSetUserActive',
+      ($0.AdminSetUserActiveRequest value) => value.writeToBuffer(),
+      $0.AdminSetUserActiveResponse.fromBuffer);
   static final _$listTenants =
       $grpc.ClientMethod<$0.ListTenantsRequest, $0.ListTenantsResponse>(
           '/smartcore.contracts.queries.AdminService/ListTenants',
@@ -1066,6 +1097,11 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/DefinirRespostaBotInstancia',
       ($0.DefinirRespostaBotInstanciaRequest value) => value.writeToBuffer(),
       $0.DefinirRespostaBotInstanciaResponse.fromBuffer);
+  static final _$definirBotDaConversa = $grpc.ClientMethod<
+          $0.DefinirBotDaConversaRequest, $0.DefinirBotDaConversaResponse>(
+      '/smartcore.contracts.queries.AdminService/DefinirBotDaConversa',
+      ($0.DefinirBotDaConversaRequest value) => value.writeToBuffer(),
+      $0.DefinirBotDaConversaResponse.fromBuffer);
   static final _$reconnectMyWhatsappInstance = $grpc.ClientMethod<
           $0.MyWhatsappInstanceIdRequest, $0.SimpleOkResponse>(
       '/smartcore.contracts.queries.AdminService/ReconnectMyWhatsappInstance',
@@ -1218,6 +1254,24 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.UpdateTenantConfigRequest.fromBuffer(value),
         ($0.UpdateTenantConfigResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.AdminListUsersRequest,
+            $0.AdminListUsersResponse>(
+        'AdminListUsers',
+        adminListUsers_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.AdminListUsersRequest.fromBuffer(value),
+        ($0.AdminListUsersResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.AdminSetUserActiveRequest,
+            $0.AdminSetUserActiveResponse>(
+        'AdminSetUserActive',
+        adminSetUserActive_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.AdminSetUserActiveRequest.fromBuffer(value),
+        ($0.AdminSetUserActiveResponse value) => value.writeToBuffer()));
     $addMethod(
         $grpc.ServiceMethod<$0.ListTenantsRequest, $0.ListTenantsResponse>(
             'ListTenants',
@@ -1780,6 +1834,15 @@ abstract class AdminServiceBase extends $grpc.Service {
             $0.DefinirRespostaBotInstanciaRequest.fromBuffer(value),
         ($0.DefinirRespostaBotInstanciaResponse value) =>
             value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.DefinirBotDaConversaRequest,
+            $0.DefinirBotDaConversaResponse>(
+        'DefinirBotDaConversa',
+        definirBotDaConversa_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.DefinirBotDaConversaRequest.fromBuffer(value),
+        ($0.DefinirBotDaConversaResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.MyWhatsappInstanceIdRequest,
             $0.SimpleOkResponse>(
         'ReconnectMyWhatsappInstance',
@@ -2003,6 +2066,24 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.UpdateTenantConfigResponse> updateTenantConfig(
       $grpc.ServiceCall call, $0.UpdateTenantConfigRequest request);
+
+  $async.Future<$0.AdminListUsersResponse> adminListUsers_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.AdminListUsersRequest> $request) async {
+    return adminListUsers($call, await $request);
+  }
+
+  $async.Future<$0.AdminListUsersResponse> adminListUsers(
+      $grpc.ServiceCall call, $0.AdminListUsersRequest request);
+
+  $async.Future<$0.AdminSetUserActiveResponse> adminSetUserActive_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.AdminSetUserActiveRequest> $request) async {
+    return adminSetUserActive($call, await $request);
+  }
+
+  $async.Future<$0.AdminSetUserActiveResponse> adminSetUserActive(
+      $grpc.ServiceCall call, $0.AdminSetUserActiveRequest request);
 
   $async.Future<$0.ListTenantsResponse> listTenants_Pre($grpc.ServiceCall $call,
       $async.Future<$0.ListTenantsRequest> $request) async {
@@ -2569,6 +2650,15 @@ abstract class AdminServiceBase extends $grpc.Service {
   $async.Future<$0.DefinirRespostaBotInstanciaResponse>
       definirRespostaBotInstancia($grpc.ServiceCall call,
           $0.DefinirRespostaBotInstanciaRequest request);
+
+  $async.Future<$0.DefinirBotDaConversaResponse> definirBotDaConversa_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.DefinirBotDaConversaRequest> $request) async {
+    return definirBotDaConversa($call, await $request);
+  }
+
+  $async.Future<$0.DefinirBotDaConversaResponse> definirBotDaConversa(
+      $grpc.ServiceCall call, $0.DefinirBotDaConversaRequest request);
 
   $async.Future<$0.SimpleOkResponse> reconnectMyWhatsappInstance_Pre(
       $grpc.ServiceCall $call,
