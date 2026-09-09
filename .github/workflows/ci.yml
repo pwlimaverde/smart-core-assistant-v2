@@ -286,6 +286,54 @@ jobs:
           path: ia_engine/coverage.xml
           if-no-files-found: ignore
 
+  # N13: mesmo molde do job do ia_engine. Sem banco e sem Rust — o mcp_server
+  # não fala com Postgres (nem alcança a rede dele) e consome o backend por gRPC.
+  mcp_server:
+    name: mcp_server — testes e cobertura (Python)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Instala uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: uv sync (dev)
+        working-directory: mcp_server
+        run: uv sync --dev
+
+      # Stubs gRPC a partir do .proto canônico compartilhado com o Rust
+      # (server/crates/contracts/schemas/queries/{admin,auth}.proto). Sem eles
+      # nem os testes importam o módulo.
+      - name: Gera stubs gRPC (proto canônico)
+        working-directory: mcp_server
+        run: uv run python scripts/gen_proto.py
+
+      - name: ruff check
+        working-directory: mcp_server
+        run: uv run ruff check .
+
+      - name: mypy
+        working-directory: mcp_server
+        run: uv run mypy src/mcp_server
+
+      # Piso mais baixo que o do ia_engine (95%) porque este módulo nasce agora:
+      # o ratchet sobe conforme a cobertura real, e começar com o piso do vizinho
+      # travaria o CI por dívida que ainda não existe. O compromisso é subir este
+      # número, não mantê-lo.
+      - name: "uv run pytest --cov (ratchet: falha abaixo de 70%)"
+        working-directory: mcp_server
+        run: uv run pytest --cov=mcp_server --cov-report=xml --cov-report=term-missing --cov-fail-under=70
+
+      - name: Publica cobertura mcp_server como artefato
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mcp-server-coverage
+          path: mcp_server/coverage.xml
+          if-no-files-found: ignore
+
   # Detecta se o app Flutter já existe.
   # hashFiles() NÃO funciona em if de nível de job (avaliado antes do checkout),
   # por isso a detecção roda num job próprio com checkout e expõe um output.

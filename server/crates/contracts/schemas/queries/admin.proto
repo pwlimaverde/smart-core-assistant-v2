@@ -700,6 +700,44 @@ message RevokeInviteResponse {
   bool success = 1;
 }
 
+// ---------------------------------------------------------------------------
+// N13 — Consentimentos OAuth dos clientes MCP ("Aplicativos conectados")
+// ---------------------------------------------------------------------------
+
+message ListMcpGrantsRequest {}
+
+message McpGrantItem {
+  string id = 1;
+  // URL do Client ID Metadata Document — é o identificador do cliente na spec
+  // MCP (Dynamic Client Registration foi deprecado).
+  string client_id = 2;
+  // Nome exibido, vindo do documento do terceiro. TEXTO NÃO CONFIÁVEL: escapar
+  // na renderização.
+  string client_name = 3;
+  // Guardado inteiro para a trilha; a tela mostra só o hostname, que é o que o
+  // usuário consegue reconhecer.
+  string redirect_uri = 4;
+  repeated string scopes = 5;
+  int64 last_used_at = 6; // timestamp_millis; 0 = nunca usado
+  int64 created_at = 7;   // timestamp_millis
+}
+
+message ListMcpGrantsResponse {
+  repeated McpGrantItem grants = 1;
+}
+
+message RevokeMcpGrantRequest {
+  string grant_id = 1;
+}
+
+message RevokeMcpGrantResponse {
+  bool success = 1;
+  // Minutos que o acesso em curso ainda pode durar depois da revogação (o
+  // access token morre no `exp`). Vem do servidor para que a tela não precise
+  // repetir um número que a configuração pode mudar.
+  int32 janela_revogacao_min = 2;
+}
+
 message ListTenantUsersRequest {}
 
 message TenantUserItem {
@@ -927,6 +965,12 @@ service AdminService {
   rpc UpdateTenantUser(UpdateTenantUserRequest) returns (UpdateTenantUserResponse);
   rpc GetMyTenantConfig(GetMyTenantConfigRequest) returns (GetTenantConfigResponse);
   rpc UpdateMyTenantConfig(UpdateMyTenantConfigRequest) returns (UpdateTenantConfigResponse);
+
+  // Fase N13: aplicativos de IA conectados por OAuth 2.1 (servidor MCP).
+  // Cada usuário enxerga e revoga APENAS os próprios consentimentos — nem um
+  // `tenant:admin` vê o do colega. Por isso não há variante administrativa.
+  rpc ListMcpGrants(ListMcpGrantsRequest) returns (ListMcpGrantsResponse);
+  rpc RevokeMcpGrant(RevokeMcpGrantRequest) returns (RevokeMcpGrantResponse);
 
   // Configuração inicial guiada (passos 5 a 8)
   rpc CreateMyWhatsappInstance(CreateMyWhatsappInstanceRequest) returns (CreateMyWhatsappInstanceResponse);

@@ -22,6 +22,7 @@ pub mod crypto;
 pub mod errors;
 pub mod idempotencia;
 pub mod integracoes;
+pub mod mcp;
 pub mod operacional;
 pub mod security;
 pub mod tenants;
@@ -44,4 +45,5 @@ pub use connection::{
 };
 pub use crypto::CipherManager;
 pub use errors::DbError;
+pub use mcp::grants::{McpGrant, McpGrantComSegredo};
 pub use security::RequestContext;

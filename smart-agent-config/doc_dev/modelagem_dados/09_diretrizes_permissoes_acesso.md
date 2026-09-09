@@ -97,6 +97,85 @@ Os escopos seguem a convenção `recurso:acao`. A lista abaixo é a fonte de ver
 | `configuracoes:write` | Editar TenantConfig (prompts, LLM, API keys) |
 | `tenant:admin` | Acesso administrativo total ao tenant (implica todos os escopos acima) |
 
+### 3.1 Mapa rota → escopo da borda gRPC-Web (N13.3)
+
+Até a fase N13, o catálogo acima estava **documentado e não aplicado**: a borda
+exigia `tenant:admin` em todas as 40 rotas encaminhadas por `encaminhar_tenant`, e
+os handlers operacionais escritos à mão exigiam apenas sessão válida. Na prática
+só existiam dois papéis — admin e ninguém — e um `viewer` conseguia enviar mensagem
+a cliente final.
+
+A fonte de verdade do mapa é `server/apps/runtime_api/src/rbac.rs`. Ele é
+**fail-closed**: rota não declarada é negada, e o teste
+`toda_rota_de_encaminhar_tenant_tem_escopo_declarado` lê o próprio `grpc_web.rs` e
+falha se uma rota nova entrar sem escopo.
+
+`tenant:admin` e o coringa `*` do superusuário satisfazem qualquer linha e por isso
+não aparecem na coluna.
+
+| Rota | Escopo exigido |
+|---|---|
+| `ListFluxos`, `ListEtapasFluxo` | `atendimentos:read` |
+| `CreateFluxo`, `UpdateFluxo`, `DesativarFluxo` | `kanban:admin` |
+| `CreateEtapaFluxo`, `UpdateEtapaFluxo`, `DesativarEtapaFluxo`, `MoverEtapaFluxo` | `kanban:admin` |
+| `ListDepartamentos`, `ListAtendentes` | `operacional:read` |
+| `CreateDepartamento`, `UpdateDepartamento`, `DesativarDepartamento` | `operacional:admin` |
+| `CreateAtendente`, `UpdateAtendente`, `DesativarAtendente` | `operacional:admin` |
+| `ListWhatsappInstances`, `GetWhatsappInstanceStatus` | `operacional:read` |
+| `CreateWhatsappInstance`, `ReconnectWhatsappInstance`, `DeleteWhatsappInstance` | `operacional:admin` |
+| `ListTreinamentos`, `GetTreinamento`, `QueryCompose`, `ListIntents` | `treinamento:read` |
+| `CreateTreinamento`, `FinalizarTreinamento`, `RemoverTreinamento` | `treinamento:write` |
+| `CreateIntent`, `UpdateIntent`, `RemoveIntent` | `treinamento:write` |
+| `GetDetalheAtendimento` | `atendimentos:read` |
+| `CreateEtiqueta`, `AlternarEtiqueta`, `CreateNota` | `atendimentos:write` |
+| `ListContatos` | `clientes:read` |
+| `GetPainelTenant` | `atendimentos:read` |
+| `UpdateTenantConfig` | `configuracoes:write` |
+| `GetOnboardingProgress` | `configuracoes:read` |
+| `SetOnboardingProgress` | `configuracoes:write` |
+
+Handlers operacionais (fora do `encaminhar_tenant`), que antes exigiam só sessão:
+
+| Rota | Escopo exigido |
+|---|---|
+| `ListAtendimentos`, `GetThread`, `ListarMidiasAtendimento` | `atendimentos:read` |
+| `MoveAtendimentoEtapa`, `SetAtendimentoStatus` | `atendimentos:write` |
+| `SolicitarUploadMidia`, `EnviarMidiaAtendimento` | `atendimentos:write` |
+| **`SendOutboundMessage`** | `atendimentos:write` |
+| `TestarPergunta` | `treinamento:read` |
+| `GetMyTenantConfig` | `configuracoes:read` |
+| `UpdateMyTenantConfig` | `configuracoes:write` |
+| `CreateInvite`, `ListInvites`, `RevokeInvite` | `tenant:admin` |
+| `ListTenantUsers`, `UpdateTenantUser` | `tenant:admin` |
+| `ListMcpGrants`, `RevokeMcpGrant` | *só sessão* — o recurso é do próprio usuário |
+
+`SendOutboundMessage` está em negrito porque é a rota com o único efeito
+irreversível do sistema (a mensagem chega ao telefone de um cliente real) e era a
+única do grupo operacional que também saía com `flow_permissions` **vazio** no
+envelope. As duas coisas foram corrigidas em N13.3.
+
+### 3.2 Credenciais não-interativas (N13)
+
+Além da sessão do painel, existe um segundo caminho de credencial: o **OAuth 2.1
+do servidor MCP**, para agentes de IA externos. Ele não amplia o catálogo de
+escopos nem cria escopos próprios — ele **projeta** os mesmos 14.
+
+Três propriedades que o tornam seguro apesar de ser credencial de longa duação:
+
+1. **Subconjunto por construção.** A tela de consentimento só oferece os escopos
+   que o usuário logado possui. Não existe caminho de emissão em que se peça a
+   mais — a garantia é estrutural, não uma validação que alguém pode esquecer de
+   chamar.
+2. **Reinterseção a cada emissão.** Os escopos do grant são reinterseccionados com
+   os escopos atuais do usuário em todo access token. Rebaixar alguém no painel
+   encolhe o agente dele na renovação seguinte, sem tocar no consentimento.
+3. **Sem superusuário.** Uma conta com `is_superuser` não pode conectar agente
+   (D4 da fase): um token vazado alcança no máximo um tenant.
+
+O detalhamento está em `06_modulo_integracoes.md` §4.
+
+---
+
 > **Mapeamento de roles para escopos:** A role `admin` recebe `tenant:admin`. A role `manager` recebe todos os escopos de `read` e `write` exceto `financeiro:write` e `configuracoes:write`. A role `staff` recebe `clientes:read`, `atendimentos:read` e `atendimentos:write`. A role `viewer` recebe apenas os escopos `read`. Esta expansão acontece no `control_plane` no momento de emissão do JWT.
 
 ---

@@ -1,0 +1,75 @@
+"""O que não pode sair deste servidor.
+
+Três regras, três testes:
+
+* `get_tenant_config` nunca devolve chave de provedor;
+* a configuração nunca imprime segredo no log de startup;
+* o texto que vai ao agente não carrega dado de cliente.
+"""
+
+from __future__ import annotations
+
+import os
+
+os.environ.setdefault("OTEL_SDK_DISABLED", "true")
+
+from mcp_server.grpc.contracts import admin_pb2 as pb  # noqa: E402
+from mcp_server.settings import Settings  # noqa: E402
+from mcp_server.tools import leitura  # noqa: E402
+from tests.conftest import como  # noqa: E402
+from tests.unit.test_guards import montar_ambiente  # noqa: E402
+
+
+async def test_get_tenant_config_nao_devolve_chave_de_provedor():
+    """A chave de um provedor não tem por que entrar no contexto de um LLM.
+
+    Nem inteira, nem mascarada, nem truncada: um prefixo de chave ainda é
+    material para um ataque, e o agente não tem uso para ele.
+    """
+    chave_secreta = "sk-proj-ABCDEF1234567890segredoquenaopodevazar"
+    config = pb.GetTenantConfigResponse(
+        dados_empresa="Loja do Zé",
+        persona_bot="Atendente simpático",
+        model="gpt-5",
+        api_keys=[
+            pb.ApiKeyEntry(key="openai", value=chave_secreta),
+            pb.ApiKeyEntry(key="groq", value="gsk_outrachave"),
+            # Provedor sem chave configurada não deve aparecer na lista.
+            pb.ApiKeyEntry(key="anthropic", value=""),
+        ],
+    )
+    servidor, registro, executor, _, _ = montar_ambiente({"GetMyTenantConfig": config})
+    leitura.registrar(servidor, registro, executor)
+
+    with como(["configuracoes:read"]):
+        resultado = await servidor.funcoes["get_tenant_config"]()
+
+    serializado = repr(resultado)
+    assert chave_secreta not in serializado
+    assert "sk-proj" not in serializado
+    assert "gsk_" not in serializado
+    # O que o agente precisa saber é *quais* provedores estão configurados.
+    assert resultado["provedores_configurados"] == ["groq", "openai"]
+    assert "anthropic" not in resultado["provedores_configurados"]
+
+
+def test_resumo_de_configuracao_nao_imprime_segredo():
+    cfg = Settings(
+        oauth_public_key_pem="-----BEGIN PUBLIC KEY-----\nMIIB...\n",
+        service_secret="segredo-de-servico-que-nao-pode-aparecer",
+    )
+    resumo = repr(cfg.resumo_seguro())
+
+    assert "segredo-de-servico" not in resumo
+    assert "BEGIN PUBLIC KEY" not in resumo
+    # O que interessa no log é se está configurado, não o valor.
+    assert "'chave_publica_configurada': True" in resumo
+    assert "'segredo_de_servico_configurado': True" in resumo
+
+
+def test_url_de_metadata_do_recurso_segue_a_rfc_9728():
+    cfg = Settings(oauth_resource="https://mcp.smartcoreassistant.com.br/")
+    assert (
+        cfg.resource_metadata_url
+        == "https://mcp.smartcoreassistant.com.br/.well-known/oauth-protected-resource"
+    )

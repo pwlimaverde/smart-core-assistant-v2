@@ -412,6 +412,23 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$updateMyTenantConfig, request, options: options);
   }
 
+  /// Fase N13: aplicativos de IA conectados por OAuth 2.1 (servidor MCP).
+  /// Cada usuário enxerga e revoga APENAS os próprios consentimentos — nem um
+  /// `tenant:admin` vê o do colega. Por isso não há variante administrativa.
+  $grpc.ResponseFuture<$0.ListMcpGrantsResponse> listMcpGrants(
+    $0.ListMcpGrantsRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMcpGrants, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.RevokeMcpGrantResponse> revokeMcpGrant(
+    $0.RevokeMcpGrantRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$revokeMcpGrant, request, options: options);
+  }
+
   /// Configuração inicial guiada (passos 5 a 8)
   $grpc.ResponseFuture<$0.CreateMyWhatsappInstanceResponse>
       createMyWhatsappInstance(
@@ -950,6 +967,16 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/UpdateMyTenantConfig',
       ($0.UpdateMyTenantConfigRequest value) => value.writeToBuffer(),
       $0.UpdateTenantConfigResponse.fromBuffer);
+  static final _$listMcpGrants =
+      $grpc.ClientMethod<$0.ListMcpGrantsRequest, $0.ListMcpGrantsResponse>(
+          '/smartcore.contracts.queries.AdminService/ListMcpGrants',
+          ($0.ListMcpGrantsRequest value) => value.writeToBuffer(),
+          $0.ListMcpGrantsResponse.fromBuffer);
+  static final _$revokeMcpGrant =
+      $grpc.ClientMethod<$0.RevokeMcpGrantRequest, $0.RevokeMcpGrantResponse>(
+          '/smartcore.contracts.queries.AdminService/RevokeMcpGrant',
+          ($0.RevokeMcpGrantRequest value) => value.writeToBuffer(),
+          $0.RevokeMcpGrantResponse.fromBuffer);
   static final _$createMyWhatsappInstance = $grpc.ClientMethod<
           $0.CreateMyWhatsappInstanceRequest,
           $0.CreateMyWhatsappInstanceResponse>(
@@ -1584,6 +1611,24 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.UpdateMyTenantConfigRequest.fromBuffer(value),
         ($0.UpdateTenantConfigResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.ListMcpGrantsRequest, $0.ListMcpGrantsResponse>(
+            'ListMcpGrants',
+            listMcpGrants_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.ListMcpGrantsRequest.fromBuffer(value),
+            ($0.ListMcpGrantsResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.RevokeMcpGrantRequest,
+            $0.RevokeMcpGrantResponse>(
+        'RevokeMcpGrant',
+        revokeMcpGrant_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.RevokeMcpGrantRequest.fromBuffer(value),
+        ($0.RevokeMcpGrantResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.CreateMyWhatsappInstanceRequest,
             $0.CreateMyWhatsappInstanceResponse>(
         'CreateMyWhatsappInstance',
@@ -2353,6 +2398,24 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.UpdateTenantConfigResponse> updateMyTenantConfig(
       $grpc.ServiceCall call, $0.UpdateMyTenantConfigRequest request);
+
+  $async.Future<$0.ListMcpGrantsResponse> listMcpGrants_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListMcpGrantsRequest> $request) async {
+    return listMcpGrants($call, await $request);
+  }
+
+  $async.Future<$0.ListMcpGrantsResponse> listMcpGrants(
+      $grpc.ServiceCall call, $0.ListMcpGrantsRequest request);
+
+  $async.Future<$0.RevokeMcpGrantResponse> revokeMcpGrant_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.RevokeMcpGrantRequest> $request) async {
+    return revokeMcpGrant($call, await $request);
+  }
+
+  $async.Future<$0.RevokeMcpGrantResponse> revokeMcpGrant(
+      $grpc.ServiceCall call, $0.RevokeMcpGrantRequest request);
 
   $async.Future<$0.CreateMyWhatsappInstanceResponse>
       createMyWhatsappInstance_Pre($grpc.ServiceCall $call,

@@ -152,3 +152,114 @@ dev.smartcoreassistant.com.br {
 grafana.smartcoreassistant.com.br {
 	reverse_proxy host.docker.internal:3000
 }
+
+# ============================================================================
+# N13 — Servidor MCP para agentes de IA (Claude, ChatGPT, Cursor)
+# ============================================================================
+# Dois subdominios, dois papeis distintos da spec OAuth 2.1:
+#
+#   auth.  -> AUTHORIZATION SERVER (control_plane). Recebe o NAVEGADOR do
+#             usuario: login, tela de consentimento e troca de token.
+#   mcp.   -> RESOURCE SERVER (mcp_server). Recebe o CLIENTE MCP: Streamable
+#             HTTP com o access token no header.
+#
+# Os dois exigem DNS apontado antes do deploy, senao o Let's Encrypt falha e o
+# Caddy fica tentando emitir certificado em laco.
+
+# ----- Authorization server OAuth 2.1 (control_plane) -----
+auth.smartcoreassistant.com.br {
+	encode gzip zstd
+
+	# CSP restritiva: a tela de consentimento e HTML estatico com CSS embutido
+	# e NENHUM script. `script-src 'none'` e a defesa mais forte possivel para
+	# uma pagina que exibe `client_name` vindo de terceiro — mesmo que o escape
+	# do lado Rust falhasse, nao haveria como executar nada.
+	header {
+		Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	# A troca interna de token e alcancada pelo mcp_server DENTRO da rede
+	# `mcp_net`, nunca pela internet. Bloquear aqui evita que o endpoint fique
+	# exposto so porque o subdominio existe.
+	handle /internal/* {
+		respond "não encontrado" 404
+	}
+
+	handle {
+		reverse_proxy host.docker.internal:{$MCP_OAUTH_HOST_PORT:8095}
+	}
+}
+
+# ----- DEV: os mesmos dois papeis, na stack de desenvolvimento -----
+# Mesmas portas do host: hoje so a stack DEV esta no ar (docker/prod nao subiu).
+# Quando o prod subir, estas duas linhas precisam apontar para portas proprias —
+# senao os dois ambientes competem pelo mesmo processo.
+auth.dev.smartcoreassistant.com.br {
+	encode gzip zstd
+
+	header {
+		Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	handle /internal/* {
+		respond "não encontrado" 404
+	}
+
+	handle {
+		reverse_proxy host.docker.internal:{$MCP_OAUTH_HOST_PORT:8095}
+	}
+}
+
+mcp.dev.smartcoreassistant.com.br {
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
+	reverse_proxy host.docker.internal:{$MCP_HOST_PORT:8099} {
+		flush_interval -1
+		transport http {
+			read_timeout 300s
+			write_timeout 300s
+		}
+	}
+}
+
+# ----- Resource server MCP (mcp_server) -----
+mcp.smartcoreassistant.com.br {
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+
+	reverse_proxy host.docker.internal:{$MCP_HOST_PORT:8099} {
+		# Streamable HTTP usa SSE na resposta. Sem `flush_interval -1` o Caddy
+		# bufferiza e o cliente fica esperando por um stream que ja chegou —
+		# sintoma classico: a tool "trava" e estoura o timeout do lado do agente.
+		flush_interval -1
+
+		# Uma tool que cria fluxo fala com a Evolution (WhatsApp) e pode passar
+		# de 30s. O deadline do cliente gRPC do mcp_server e 30s; a borda
+		# precisa de folga sobre ele, nunca menos.
+		transport http {
+			read_timeout 300s
+			write_timeout 300s
+		}
+	}
+}

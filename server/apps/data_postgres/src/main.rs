@@ -100,6 +100,7 @@ mod outbox_relay;
 use outbox_relay::OutboxRelay;
 
 mod adapters;
+mod mcp_grants;
 mod onboarding;
 mod ports;
 
@@ -127,6 +128,8 @@ struct AppState {
     treinamento: std::sync::Arc<dyn ports::TreinamentoStore>,
     signup: std::sync::Arc<dyn ports::SignupStore>,
     vouchers: std::sync::Arc<dyn ports::VoucherStore>,
+    /// Consentimentos OAuth 2.1 dos clientes MCP (N13.2).
+    mcp_grants: std::sync::Arc<dyn ports::McpGrantStore>,
 }
 
 #[tokio::main]
@@ -279,6 +282,8 @@ async fn main() -> anyhow::Result<()> {
     );
     let voucher_store: std::sync::Arc<dyn ports::VoucherStore> =
         std::sync::Arc::new(adapters::PgVoucherStore::new(pool.clone()));
+    let mcp_grant_store: std::sync::Arc<dyn ports::McpGrantStore> =
+        std::sync::Arc::new(adapters::PgMcpGrantStore::new(pool.clone()));
 
     let state = AppState {
         pool: pool.clone(),
@@ -298,6 +303,7 @@ async fn main() -> anyhow::Result<()> {
         treinamento: treinamento_store,
         signup: signup_store,
         vouchers: voucher_store,
+        mcp_grants: mcp_grant_store,
     };
 
     // Logger dedicado à supervisão das tasks de background. O `AuditPort` acima
@@ -1305,6 +1311,10 @@ async fn main() -> anyhow::Result<()> {
     // não alongar ainda mais a cadeia acima (ver `registrar_rotas_onboarding`).
     let server = registrar_rotas_onboarding(server, state.clone());
 
+    // Consentimentos OAuth dos clientes MCP (N13.2) — mesmo motivo de estarem à
+    // parte: seis rotas novas não cabem na cadeia acima sem torná-la ilegível.
+    let server = registrar_rotas_mcp(server, state.clone());
+
     tracing::info!("Servidor RPC configurado e pronto.");
 
     // Aguarda execução.
@@ -1325,6 +1335,73 @@ async fn main() -> anyhow::Result<()> {
 
     observability::shutdown_telemetry();
     Ok(())
+}
+
+/// Registra as rotas dos consentimentos OAuth 2.1 dos clientes MCP (N13.2).
+///
+/// Duas delas (`ListMcpGrants`, `RevokeMcpGrant`) chegam da borda a pedido do
+/// usuário; as outras quatro vêm do `control_plane` durante o fluxo OAuth e não
+/// são alcançáveis de fora da rede interna.
+fn registrar_rotas_mcp(server: Server, state: AppState) -> Server {
+    let s_registrar = state.clone();
+    let s_listar = state.clone();
+    let s_revogar = state.clone();
+    let s_hash = state.clone();
+    let s_buscar = state.clone();
+    let s_reuso = state;
+
+    server
+        .route("RegisterMcpGrant", move |env| {
+            let state = s_registrar.clone();
+            Box::pin(async move {
+                mcp_grants::handler_register_mcp_grant(
+                    state.mcp_grants.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("ListMcpGrants", move |env| {
+            let state = s_listar.clone();
+            Box::pin(async move {
+                mcp_grants::handler_list_mcp_grants(state.mcp_grants.as_ref(), env).await
+            })
+        })
+        .route("RevokeMcpGrant", move |env| {
+            let state = s_revogar.clone();
+            Box::pin(async move {
+                mcp_grants::handler_revoke_mcp_grant(
+                    state.mcp_grants.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("SetMcpGrantRefreshHash", move |env| {
+            let state = s_hash.clone();
+            Box::pin(async move {
+                mcp_grants::handler_set_mcp_grant_refresh_hash(state.mcp_grants.as_ref(), env).await
+            })
+        })
+        .route("GetMcpGrantComSegredo", move |env| {
+            let state = s_buscar.clone();
+            Box::pin(async move {
+                mcp_grants::handler_get_mcp_grant_com_segredo(state.mcp_grants.as_ref(), env).await
+            })
+        })
+        .route("RevokeMcpGrantPorReuso", move |env| {
+            let state = s_reuso.clone();
+            Box::pin(async move {
+                mcp_grants::handler_revoke_mcp_grant_por_reuso(
+                    state.mcp_grants.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
 }
 
 /// Registra as rotas do cadastro público e da gestão de vouchers.

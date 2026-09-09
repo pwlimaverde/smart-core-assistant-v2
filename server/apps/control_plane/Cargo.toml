@@ -20,6 +20,21 @@ error_core = { workspace = true }
 observability = { workspace = true }
 tracing = { workspace = true }
 
+# Authorization server OAuth 2.1 do módulo MCP (N13.1). É a primeira superfície
+# HTTP deste serviço: até aqui ele só atendia RPC interno pelo `transport`.
+application  = { workspace = true }
+axum         = "0.8"
+jsonwebtoken = { workspace = true }
+sha2         = { workspace = true }
+base64       = { workspace = true }
+subtle       = { workspace = true }
+thiserror    = { workspace = true }
+url          = "2"
+# Só para buscar o Client ID Metadata Document do cliente MCP (com a guarda
+# anti-SSRF de `oauth/cimd.rs`). `rustls-tls` em vez do default `native-tls`: a
+# imagem final é slim e não carrega OpenSSL.
+reqwest      = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
 

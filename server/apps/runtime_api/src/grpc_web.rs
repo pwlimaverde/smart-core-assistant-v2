@@ -86,6 +86,10 @@ use contracts::grpc::queries::{
     ListFeatureFlagsResponse,
     ListInvitesRequest,
     ListInvitesResponse,
+    // N13 — aplicativos de IA conectados por OAuth (servidor MCP)
+    ListMcpGrantsRequest,
+    ListMcpGrantsResponse,
+    McpGrantItem,
     ListMyAtendentesRequest,
     ListMyAtendentesResponse,
     ListMyContatosRequest,
@@ -160,6 +164,8 @@ use contracts::grpc::queries::{
     RemoverMyTreinamentoRequest,
     RevokeInviteRequest,
     RevokeInviteResponse,
+    RevokeMcpGrantRequest,
+    RevokeMcpGrantResponse,
     RevokeVoucherRequest,
     RevokeVoucherResponse,
     SendOutboundMessageRequest,
@@ -407,18 +413,73 @@ async fn exigir_autenticado_do_metadata<T>(
     Ok(claims)
 }
 
-/// Exige que a sessão (já autenticada) tenha o escopo `tenant:admin` (ou o coringa
-/// `*` de superusuário) — usado pelos RPCs tenant-scoped de config (N3.3), que expõem
-/// dado sensível (api keys, prompts) e não devem ficar abertos a qualquer `TenantUser`.
-fn exigir_escopo_tenant_admin(claims: &application::jwt::Claims) -> Result<(), Status> {
-    if claims.is_superuser
-        || claims
-            .scopes
-            .iter()
-            .any(|s| s == "tenant:admin" || s == "*")
-    {
+/// Janela em minutos entre revogar um consentimento MCP e o acesso em curso
+/// realmente cessar — o access token só morre no `exp`.
+///
+/// Lê a mesma variável que o authorization server (`MCP_ACCESS_TTL_S`), para que
+/// a tela não prometa um número diferente do que o sistema pratica.
+fn janela_revogacao_min() -> i32 {
+    let ttl = std::env::var("MCP_ACCESS_TTL_S")
+        .ok()
+        .and_then(|v| v.parse::<i64>().ok())
+        .unwrap_or(900);
+    // Arredonda para cima: dizer "15 minutos" quando são 15min e 1s seria
+    // prometer por baixo justo na informação que o usuário usa para decidir se
+    // precisa fazer mais alguma coisa depois de desconectar.
+    ((ttl + 59) / 60) as i32
+}
+
+/// Exige, para a rota informada, o escopo declarado em [`crate::rbac::MAPA`].
+///
+/// Fail-closed: rota não declarada é negada. É de propósito — esquecer de
+/// declarar aparece no primeiro teste; esquecer de restringir não apareceria em
+/// lugar nenhum até virar incidente.
+fn exigir_escopo_de_rota(
+    claims: &application::jwt::Claims,
+    metodo: &str,
+) -> Result<(), Status> {
+    let Some(exigidos) = crate::rbac::escopos_da_rota(metodo) else {
+        tracing::error!(
+            rota = metodo,
+            "rota sem escopo declarado em rbac::MAPA — negada por segurança"
+        );
+        return Err(Status::permission_denied("errors.auth.forbidden"));
+    };
+
+    if crate::rbac::autorizado(&claims.scopes, exigidos, claims.is_superuser) {
         return Ok(());
     }
+
+    // O corpo da requisição NÃO entra no log: pode carregar conteúdo de mensagem
+    // ou dado de contato. Rota e escopo faltante bastam para diagnosticar.
+    tracing::warn!(
+        rota = metodo,
+        escopos_exigidos = ?exigidos,
+        user_id = %claims.sub,
+        "permissão negada: sessão sem escopo para a rota"
+    );
+    Err(Status::permission_denied("errors.auth.forbidden"))
+}
+
+/// Exige que a sessão (já autenticada) tenha **um** dos escopos informados.
+///
+/// Usada pelos handlers operacionais escritos à mão, que até N13.3 exigiam
+/// apenas sessão válida — e por isso deixavam um `viewer` enviar mensagem a
+/// cliente final.
+fn exigir_escopo(
+    claims: &application::jwt::Claims,
+    exigidos: &[&str],
+    rota: &str,
+) -> Result<(), Status> {
+    if crate::rbac::autorizado(&claims.scopes, exigidos, claims.is_superuser) {
+        return Ok(());
+    }
+    tracing::warn!(
+        rota,
+        escopos_exigidos = ?exigidos,
+        user_id = %claims.sub,
+        "permissão negada: sessão sem escopo para a operação"
+    );
     Err(Status::permission_denied("errors.auth.forbidden"))
 }
 
@@ -823,12 +884,17 @@ impl AdminFacade {
         }
     }
 
-    /// Encaminha um RPC com escopo de **tenant**: exige sessão autenticada com
-    /// `tenant:admin` e injeta o `tenant_id` das claims no envelope.
+    /// Encaminha um RPC com escopo de **tenant**: exige sessão autenticada com o
+    /// escopo declarado para a rota e injeta o `tenant_id` das claims no envelope.
     ///
     /// A diferença para [`Self::encaminhar_admin`] é onde o tenant vem: aqui das
     /// claims, nunca do request. Um tenant não alcança o de outro nem mandando o
     /// id na mensagem.
+    ///
+    /// **N13.3:** o escopo exigido deixou de ser `tenant:admin` fixo e passou a
+    /// vir de [`crate::rbac::MAPA`], por rota. O gate anterior barrava
+    /// `manager`, `staff` e `viewer` em *todas* as 40 rotas — o catálogo de
+    /// escopos do doc 09 §3 existia no papel e não no comportamento.
     async fn encaminhar_tenant<T>(
         &self,
         req: &Request<T>,
@@ -837,7 +903,7 @@ impl AdminFacade {
         mut payload: serde_json::Value,
     ) -> Result<serde_json::Value, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, req).await?;
-        exigir_escopo_tenant_admin(&claims)?;
+        exigir_escopo_de_rota(&claims, metodo)?;
         let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
             .map_err(|_| Status::invalid_argument("sessão sem tenant válido"))?;
 
@@ -862,6 +928,11 @@ impl AdminFacade {
             auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
             auth_scopes: claims.scopes.clone(),
             auth_is_superuser: claims.is_superuser,
+            // N13.7: o `user_agent` viaja até o `audit_log`, e é ele que
+            // distingue ação de agente de IA (`SmartCoreAssistant-MCP/<tool>`)
+            // de ação humana no painel. Antes saía vazio nestas 41 rotas, e a
+            // trilha não tinha como dizer de onde a mudança veio.
+            user_agent: user_agent_do_metadata(req),
             ..Default::default()
         };
 
@@ -2607,7 +2678,10 @@ impl AdminService for AdminFacade {
         req: Request<TestarPerguntaRequest>,
     ) -> Result<Response<TestarPerguntaResponse>, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
-        exigir_escopo_tenant_admin(&claims)?;
+        // Testar a pergunta é exercitar a base de conhecimento; quem pode lê-la
+        // pode testá-la. Antes exigia `tenant:admin`, o que deixava fora de
+        // alcance justamente quem cuida do treinamento.
+        exigir_escopo(&claims, &["treinamento:read"], "TestarPergunta")?;
         let traceparent = traceparent_do_metadata(&req);
         let pergunta = req.get_ref().pergunta.trim().to_string();
 
@@ -4140,6 +4214,7 @@ impl AdminService for AdminFacade {
         req: Request<ListAtendimentosRequest>,
     ) -> Result<Response<ListAtendimentosResponse>, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(&claims, &["atendimentos:read"], "ListAtendimentos")?;
         let traceparent = traceparent_do_metadata(&req);
         let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
             .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
@@ -4278,6 +4353,7 @@ impl AdminService for AdminFacade {
         req: Request<GetThreadRequest>,
     ) -> Result<Response<GetThreadResponse>, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(&claims, &["atendimentos:read"], "GetThread")?;
         let traceparent = traceparent_do_metadata(&req);
         let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
             .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
@@ -4424,6 +4500,7 @@ impl AdminService for AdminFacade {
         req: Request<SolicitarUploadMidiaRequest>,
     ) -> Result<Response<SolicitarUploadMidiaResponse>, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(&claims, &["atendimentos:write"], "SolicitarUploadMidia")?;
         let traceparent = traceparent_do_metadata(&req);
         let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
             .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
@@ -4566,6 +4643,7 @@ impl AdminService for AdminFacade {
         req: Request<EnviarMidiaAtendimentoRequest>,
     ) -> Result<Response<EnviarMidiaAtendimentoResponse>, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(&claims, &["atendimentos:write"], "EnviarMidiaAtendimento")?;
         let traceparent = traceparent_do_metadata(&req);
         let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
             .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
@@ -4640,6 +4718,7 @@ impl AdminService for AdminFacade {
         req: Request<ListarMidiasAtendimentoRequest>,
     ) -> Result<Response<ListarMidiasAtendimentoResponse>, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(&claims, &["atendimentos:read"], "ListarMidiasAtendimento")?;
         let traceparent = traceparent_do_metadata(&req);
         let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
             .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
@@ -4712,6 +4791,7 @@ impl AdminService for AdminFacade {
         req: Request<MoveAtendimentoEtapaRequest>,
     ) -> Result<Response<MoveAtendimentoEtapaResponse>, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(&claims, &["atendimentos:write"], "MoveAtendimentoEtapa")?;
         let traceparent = traceparent_do_metadata(&req);
         let ip = ip_do_metadata(&req);
         let user_agent = user_agent_do_metadata(&req);
@@ -4973,6 +5053,7 @@ impl AdminService for AdminFacade {
         req: Request<SetAtendimentoStatusRequest>,
     ) -> Result<Response<SetAtendimentoStatusResponse>, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(&claims, &["atendimentos:write"], "SetAtendimentoStatus")?;
         let traceparent = traceparent_do_metadata(&req);
         let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
             .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
@@ -5077,6 +5158,10 @@ impl AdminService for AdminFacade {
         req: Request<SendOutboundMessageRequest>,
     ) -> Result<Response<SendOutboundMessageResponse>, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        // A rota mais sensível do serviço: daqui sai mensagem para o telefone de
+        // um cliente final, e não há desfazer. Até N13.3 ela exigia apenas sessão
+        // válida — um `viewer` mandava mensagem em nome do negócio.
+        exigir_escopo(&claims, &["atendimentos:write"], "SendOutboundMessage")?;
         let traceparent = traceparent_do_metadata(&req);
         let ip = ip_do_metadata(&req);
         let user_agent = user_agent_do_metadata(&req);
@@ -5097,6 +5182,19 @@ impl AdminService for AdminFacade {
             "action_id": inner.action_id.clone(),
         });
 
+        // RBAC fino por fluxo (WS-5a). Esta rota era a única do grupo operacional
+        // que saía com `flow_permissions` vazio: o `data_postgres` recebia um
+        // envelope dizendo "este usuário não tem acesso a fluxo nenhum" e, na
+        // prática, ou barrava atendente legítimo ou dependia do escopo largo para
+        // salvar a chamada. Agora o campo é resolvido como nas outras seis rotas.
+        let auth_user_id = claims.sub.parse::<i32>().unwrap_or(0);
+        let flow_permissions = if claims.is_superuser {
+            Vec::new()
+        } else {
+            resolver_flow_permissions_web(&self.deps, &claims.tenant_id, auth_user_id, &traceparent)
+                .await
+        };
+
         let env_req = Envelope {
             tenant_id: tenant_uuid.to_string(),
             schema_version: 1,
@@ -5107,9 +5205,10 @@ impl AdminService for AdminFacade {
             kind: MessageKind::Request as i32,
             method: "SendOutboundMessage".to_string(),
             payload: serde_json::to_vec(&payload).unwrap(),
-            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_user_id,
             auth_scopes: claims.scopes.clone(),
             auth_is_superuser: claims.is_superuser,
+            flow_permissions,
             ..Default::default()
         };
 
@@ -5386,6 +5485,9 @@ impl AdminService for AdminFacade {
         req: Request<CreateInviteRequest>,
     ) -> Result<Response<CreateInviteResponse>, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        // Convidar alguém é conceder acesso ao negócio: só `tenant:admin`
+        // (a lista vazia significa exatamente isso — ver `rbac::autorizado`).
+        exigir_escopo(&claims, &[], "CreateInvite")?;
         let traceparent = traceparent_do_metadata(&req);
         let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
             .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
@@ -5563,6 +5665,7 @@ impl AdminService for AdminFacade {
         req: Request<ListInvitesRequest>,
     ) -> Result<Response<ListInvitesResponse>, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(&claims, &[], "ListInvites")?;
         let traceparent = traceparent_do_metadata(&req);
         let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
             .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
@@ -5658,6 +5761,7 @@ impl AdminService for AdminFacade {
         req: Request<RevokeInviteRequest>,
     ) -> Result<Response<RevokeInviteResponse>, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(&claims, &[], "RevokeInvite")?;
         let traceparent = traceparent_do_metadata(&req);
         let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
             .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
@@ -5697,6 +5801,148 @@ impl AdminService for AdminFacade {
         }
     }
 
+    /// Lista os aplicativos de IA que **este** usuário conectou por OAuth (N13.2).
+    ///
+    /// Sem escopo exigido além de sessão válida, e é de propósito: o grant é do
+    /// usuário, não do tenant. O filtro por `user_id` acontece no repositório —
+    /// um `tenant:admin` não vê com que agente o colega conectou, e um `viewer`
+    /// vê os próprios.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMcpGrants", traceparent)
+    )]
+    async fn list_mcp_grants(
+        &self,
+        req: Request<ListMcpGrantsRequest>,
+    ) -> Result<Response<ListMcpGrantsResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent,
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "ListMcpGrants".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({})).unwrap(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(resp) => {
+                if resp.kind == MessageKind::Error as i32 {
+                    return Err(status_do_erro_interno(resp.error));
+                }
+                let val: serde_json::Value = serde_json::from_slice(&resp.payload)
+                    .map_err(|e| Status::internal(e.to_string()))?;
+                let grants = val
+                    .get("grants")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .map(|item| {
+                                let texto = |campo: &str| {
+                                    item.get(campo)
+                                        .and_then(|v| v.as_str())
+                                        .unwrap_or_default()
+                                        .to_string()
+                                };
+                                McpGrantItem {
+                                    id: texto("id"),
+                                    client_id: texto("client_id"),
+                                    client_name: texto("client_name"),
+                                    redirect_uri: texto("redirect_uri"),
+                                    scopes: json_strings(item.get("scopes")),
+                                    last_used_at: item
+                                        .get("last_used_at")
+                                        .and_then(|v| v.as_i64())
+                                        .unwrap_or_default(),
+                                    created_at: item
+                                        .get("created_at")
+                                        .and_then(|v| v.as_i64())
+                                        .unwrap_or_default(),
+                                }
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                Ok(Response::new(ListMcpGrantsResponse { grants }))
+            }
+            Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
+        }
+    }
+
+    /// Desconecta um aplicativo de IA (N13.2/N13.8).
+    ///
+    /// A revogação corta o refresh token na hora; o access token em curso morre
+    /// no `exp`. A resposta devolve essa janela em minutos para que a tela diga
+    /// ao usuário a verdade — e não um número escrito à mão no Flutter que
+    /// deixaria de bater no dia em que a configuração mudasse.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "RevokeMcpGrant", traceparent)
+    )]
+    async fn revoke_mcp_grant(
+        &self,
+        req: Request<RevokeMcpGrantRequest>,
+    ) -> Result<Response<RevokeMcpGrantResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent,
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "RevokeMcpGrant".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({
+                "grant_id": inner.grant_id,
+            }))
+            .unwrap(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(resp) => {
+                if resp.kind == MessageKind::Error as i32 {
+                    return Err(status_do_erro_interno(resp.error));
+                }
+                Ok(Response::new(RevokeMcpGrantResponse {
+                    success: true,
+                    janela_revogacao_min: janela_revogacao_min(),
+                }))
+            }
+            Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
+        }
+    }
+
     #[tracing::instrument(
         skip_all,
         fields(service = "runtime_api", rpc = "ListTenantUsers", traceparent)
@@ -5706,6 +5952,7 @@ impl AdminService for AdminFacade {
         req: Request<ListTenantUsersRequest>,
     ) -> Result<Response<ListTenantUsersResponse>, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(&claims, &[], "ListTenantUsers")?;
         let traceparent = traceparent_do_metadata(&req);
         let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
             .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
@@ -5785,6 +6032,8 @@ impl AdminService for AdminFacade {
         req: Request<UpdateTenantUserRequest>,
     ) -> Result<Response<UpdateTenantUserResponse>, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        // Mudar cargo/permissão de alguém é evento crítico (08 §4.2).
+        exigir_escopo(&claims, &[], "UpdateTenantUser")?;
         let traceparent = traceparent_do_metadata(&req);
         let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
             .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
@@ -5852,7 +6101,7 @@ impl AdminService for AdminFacade {
         req: Request<GetMyTenantConfigRequest>,
     ) -> Result<Response<GetTenantConfigResponse>, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
-        exigir_escopo_tenant_admin(&claims)?;
+        exigir_escopo(&claims, &["configuracoes:read"], "GetMyTenantConfig")?;
         let traceparent = traceparent_do_metadata(&req);
         let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
             .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
@@ -5904,7 +6153,7 @@ impl AdminService for AdminFacade {
         req: Request<UpdateMyTenantConfigRequest>,
     ) -> Result<Response<UpdateTenantConfigResponse>, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
-        exigir_escopo_tenant_admin(&claims)?;
+        exigir_escopo(&claims, &["configuracoes:write"], "UpdateMyTenantConfig")?;
         let traceparent = traceparent_do_metadata(&req);
         let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
             .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
@@ -6475,21 +6724,54 @@ mod tests {
     }
 
     #[test]
-    fn exigir_escopo_tenant_admin_aceita_superuser_e_escopos_validos() {
+    fn exigir_escopo_aceita_superuser_tenant_admin_e_coringa() {
         // Superusuário passa mesmo sem escopo explícito.
-        assert!(exigir_escopo_tenant_admin(&claims_com(&[], true)).is_ok());
-        // Escopo tenant:admin passa.
-        assert!(exigir_escopo_tenant_admin(&claims_com(&["tenant:admin"], false)).is_ok());
+        assert!(exigir_escopo(&claims_com(&[], true), &["operacional:admin"], "R").is_ok());
+        // `tenant:admin` implica qualquer escopo (doc 09 §3).
+        assert!(
+            exigir_escopo(&claims_com(&["tenant:admin"], false), &["treinamento:write"], "R")
+                .is_ok()
+        );
         // Coringa de superusuário `*` passa.
-        assert!(exigir_escopo_tenant_admin(&claims_com(&["*"], false)).is_ok());
+        assert!(exigir_escopo(&claims_com(&["*"], false), &["configuracoes:write"], "R").is_ok());
     }
 
     #[test]
-    fn exigir_escopo_tenant_admin_nega_sem_escopo() {
-        // Usuário comum sem os escopos exigidos recebe PERMISSION_DENIED.
-        let err = exigir_escopo_tenant_admin(&claims_com(&["kanban:read"], false)).unwrap_err();
+    fn exigir_escopo_aceita_quem_tem_o_escopo_pedido() {
+        assert!(
+            exigir_escopo(&claims_com(&["treinamento:read"], false), &["treinamento:read"], "R")
+                .is_ok()
+        );
+    }
+
+    #[test]
+    fn exigir_escopo_nega_quem_nao_tem() {
+        let err = exigir_escopo(
+            &claims_com(&["atendimentos:read"], false),
+            &["configuracoes:write"],
+            "UpdateMyTenantConfig",
+        )
+        .unwrap_err();
         assert_eq!(err.code(), tonic::Code::PermissionDenied);
         assert_eq!(err.message(), "errors.auth.forbidden");
+    }
+
+    #[test]
+    fn exigir_escopo_de_rota_nega_rota_nao_declarada() {
+        // Fail-closed: uma rota nova que ninguém declarou no mapa é negada, e
+        // não liberada por omissão.
+        let err = exigir_escopo_de_rota(&claims_com(&["tenant:admin"], false), "RotaInexistente")
+            .unwrap_err();
+        assert_eq!(err.code(), tonic::Code::PermissionDenied);
+    }
+
+    #[test]
+    fn exigir_escopo_de_rota_libera_manager_em_fluxo() {
+        // O caso concreto que a fase N13.3 conserta: antes, `encaminhar_tenant`
+        // exigia `tenant:admin` e um manager não editava fluxo nenhum.
+        assert!(
+            exigir_escopo_de_rota(&claims_com(&["kanban:admin"], false), "UpdateFluxo").is_ok()
+        );
     }
 
     #[test]

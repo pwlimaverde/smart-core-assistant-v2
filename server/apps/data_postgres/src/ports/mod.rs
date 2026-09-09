@@ -2,6 +2,7 @@ pub mod atendimento;
 pub mod audit;
 pub mod auth;
 pub mod cliente;
+pub mod mcp;
 pub mod operacional;
 pub mod plans;
 pub mod quota;
@@ -18,6 +19,7 @@ pub use atendimento::{
 pub use audit::AuditPort;
 pub use auth::AuthStore;
 pub use cliente::ClienteStore;
+pub use mcp::McpGrantStore;
 pub use operacional::OperacionalStore;
 pub use plans::PlansStore;
 pub use quota::QuotaStore;

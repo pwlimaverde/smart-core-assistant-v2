@@ -59,16 +59,35 @@ pub fn montar_envelope_request(
     }
 }
 
-/// Realiza o login real do usuário validando as credenciais no Postgres
-/// e persistindo a sessão (refresh token) no Redis.
+/// Identidade resolvida de um usuário que acabou de provar quem é.
+///
+/// É o resultado de [`autenticar`], compartilhado por dois consumidores que
+/// precisam **exatamente** dos mesmos escopos: o login do painel e a tela de
+/// consentimento do authorization server OAuth (N13.1). Se cada um derivasse os
+/// escopos por conta própria, a regra do subconjunto do MCP passaria a comparar
+/// dois catálogos que poderiam divergir — e divergiriam, na primeira mudança.
+#[derive(Debug, Clone)]
+pub struct UsuarioAutenticado {
+    pub user_id: i32,
+    /// `Uuid::nil()` para superusuário (contexto global, sem tenant).
+    pub tenant_id: Uuid,
+    pub is_superuser: bool,
+    pub scopes: Vec<String>,
+}
+
+/// Verifica credenciais e resolve identidade + escopos, sem emitir token nenhum.
+///
+/// Inclui o rate limit por e-mail: qualquer caminho que aceite senha passa por
+/// aqui, então a proteção contra força bruta não depende de o chamador lembrar
+/// de aplicá-la.
 // `email`/`password` ficam fora do span (PII/credencial); a correlação é pelo traceparent.
 #[tracing::instrument(skip_all, fields(traceparent = %traceparent))]
-pub async fn login(
+pub async fn autenticar(
     deps: &AuthDeps,
     traceparent: &str,
     email: &str,
     password: &str,
-) -> Result<serde_json::Value, AppError> {
+) -> Result<UsuarioAutenticado, AppError> {
     // 0. Rate limiting por e-mail (INCR+EXPIRE via data_redis, doc 09 §6.5).
     // Falha fechada: o login já depende do data_redis para persistir a sessão,
     // então uma indisponibilidade aqui não abre brecha para força bruta.
@@ -150,7 +169,19 @@ pub async fn login(
             ))
         })?;
 
-    let user_id = user_info.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    // Resposta sem `id` (ou com `id` zero) significa que o `data_postgres`
+    // devolveu algo que não é um usuário. Antes isso virava `unwrap_or(0)` e
+    // seguia adiante, emitindo um JWT com `sub = "0"` — uma sessão que existe
+    // sem dono. Agora falha fechado: nenhum caminho a jusante (nem o login, nem
+    // o consentimento OAuth) precisa lidar com um usuário inexistente.
+    let user_id = match user_info.get("id").and_then(|v| v.as_i64()) {
+        Some(id) if id > 0 => id as i32,
+        _ => {
+            return Err(AppError::Auth(
+                "resposta de credenciais sem identificador de usuário".to_string(),
+            ))
+        }
+    };
     let is_superuser = user_info
         .get("is_superuser")
         .and_then(|v| v.as_bool())
@@ -170,11 +201,36 @@ pub async fn login(
 
     let tenant_id = tenant_opt.unwrap_or_else(Uuid::nil);
 
+    Ok(UsuarioAutenticado {
+        user_id,
+        tenant_id,
+        is_superuser,
+        scopes: derivar_escopos(is_superuser, &user_info),
+    })
+}
+
+/// Realiza o login real do usuário validando as credenciais no Postgres
+/// e persistindo a sessão (refresh token) no Redis.
+// `email`/`password` ficam fora do span (PII/credencial); a correlação é pelo traceparent.
+#[tracing::instrument(skip_all, fields(traceparent = %traceparent))]
+pub async fn login(
+    deps: &AuthDeps,
+    traceparent: &str,
+    email: &str,
+    password: &str,
+) -> Result<serde_json::Value, AppError> {
+    let usuario = autenticar(deps, traceparent, email, password).await?;
+    let UsuarioAutenticado {
+        user_id,
+        tenant_id,
+        is_superuser,
+        scopes,
+    } = usuario;
+
     // 3. Montar as claims e gerar o access token (JWT)
     let agora = chrono::Utc::now().timestamp() as usize;
     let jti = Uuid::now_v7().to_string();
     let family_id = Uuid::now_v7().to_string();
-    let scopes = derivar_escopos(is_superuser, &user_info);
 
     let claims = Claims {
         sub: user_id.to_string(),
@@ -241,7 +297,13 @@ pub async fn login(
 
 /// Deriva a lista de escopos do usuário com base no seu status de superusuário
 /// ou informações de permissão explícitas.
-fn derivar_escopos(is_superuser: bool, user_info: &serde_json::Value) -> Vec<String> {
+///
+/// Público porque o authorization server OAuth (N13.1) precisa **reler** os
+/// escopos atuais do usuário a cada emissão de token, a partir da resposta de
+/// `GetUserIdentity`, que tem o mesmo formato (`is_superuser`, `role`,
+/// `module_permissions`). Se o AS derivasse por conta própria, um rebaixamento
+/// no painel poderia encolher a sessão web e não o agente — ou o contrário.
+pub fn derivar_escopos(is_superuser: bool, user_info: &serde_json::Value) -> Vec<String> {
     if is_superuser {
         // Superusuário possui acesso administrativo global.
         return vec!["*".to_string()];

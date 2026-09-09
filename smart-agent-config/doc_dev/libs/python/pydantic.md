@@ -1,8 +1,9 @@
 # Pydantic
 
-- **Versão Recomendada:** 2.7.1
+- **Versão Recomendada:** 2.13.5
+- **pydantic-settings:** 2.15.0
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-05-31
+- **Última Verificação:** 2026-09-06 (WebSearch/WebFetch — context7 indisponível na sessão)
 - **Propósito no Projeto:** Validação de tipos em tempo de execução, parsing de dados JSON e gerenciamento de configurações de ambiente.
 - **Documentação Oficial:** [https://docs.pydantic.dev/](https://docs.pydantic.dev/)
 
@@ -91,3 +92,106 @@ def ffi_summarize(json_payload: str) -> str:
 
 ### 2.4 Proibição do tipo `Any`
 Não utilize `Any` em propriedades de modelos do Pydantic. Se uma propriedade puder aceitar mais de um tipo, utilize tipos união (`str | int`) ou tipagem estrutural.
+
+---
+
+## 3. JSON Schema e Geração de Schemas
+
+O Pydantic continua oferecendo métodos robustos para geração de JSON Schema, essencial para a derivação de schemas de tools MCP via FastMCP:
+
+### 3.1 Método `model_json_schema()`
+```python
+from pydantic import BaseModel, Field
+
+class MyModel(BaseModel):
+    name: str = Field(description="Nome do usuário")
+    age: int = Field(description="Idade em anos", ge=0)
+
+# Gera JSON Schema
+schema = MyModel.model_json_schema()
+# Você pode controlar aliases e outras opções:
+schema_by_alias = MyModel.model_json_schema(by_alias=True)
+```
+
+### 3.2 `WithJsonSchema` para Customização
+Use a anotação `WithJsonSchema` para override customizado do schema sem implementar geradores complexos:
+
+```python
+from pydantic import BaseModel, WithJsonSchema
+from typing import Annotated
+
+class MyModel(BaseModel):
+    # Override o schema gerado automaticamente
+    custom_field: Annotated[str, WithJsonSchema({"type": "string", "pattern": "^[A-Z]"})]
+```
+
+### 3.3 `GenerateJsonSchema` Customizado
+Para controle fino sobre toda a geração, estenda `GenerateJsonSchema`:
+
+```python
+from pydantic.json_schema import GenerateJsonSchema
+
+class CustomJsonSchema(GenerateJsonSchema):
+    def string_schema(self, schema):
+        # Customiza geração de schemas de string
+        json_schema = super().string_schema(schema)
+        # Sua lógica aqui
+        return json_schema
+```
+
+---
+
+## 4. Breaking Changes e Migrações (2.7.1 → 2.13.5)
+
+### 4.1 Requisitos de Python
+- **Remover:** Python 3.8 (descontinuado em v2.11)
+- **Novo:** Python 3.14 suportado (v2.12), mas Pydantic V1 namespace é incompatível com 3.14+
+
+### 4.2 Acesso a `model_fields` e `model_computed_fields`
+Desde v2.11, acessar esses atributos em **instâncias** de modelo (não em classes) dispara deprecation warning:
+
+```python
+# ❌ Deprecado (v2.11+)
+instance = MyModel(...)
+fields = instance.model_fields  # Gera warning!
+
+# ✅ Correto
+fields = MyModel.model_fields  # Sempre na classe
+```
+
+### 4.3 `create_model()` — Formato Reworked (v2.11)
+Se você usa `create_model()` dinamicamente, verifique a mudança de formato na v2.11 (definições de campo foram reorganizadas).
+
+### 4.4 `polymorphic_serialization` (v2.13)
+Nova opção para resolver inconsistências com `serialize_as_any` (introduzido em v2.12):
+
+```python
+class MyModel(BaseModel):
+    model_config = ConfigDict(polymorphic_serialization=True)
+```
+
+### 4.5 Validator/Serializer Alignment (v2.13)
+Em v2.13.0b1, a lógica de `field_serializer` foi alinhada com `field_validator`, afetando comportamento de validadores customizados. Revise se você implementa ambos.
+
+### 4.6 Merge de pydantic-core (v2.13)
+O repositório `pydantic-core` foi merged no main `pydantic` em v2.13.0b1. A build/dependencies agora são gerenciadas de forma integrada. Isso simplifica o setup, mas confirme compatibilidade se você estende `pydantic-core` diretamente.
+
+---
+
+## 5. Novas Features Relevantes (v2.8 → v2.13)
+
+- **`exclude_if`** (v2.13): Exclusão condicional em nível de campo durante serialização
+- **`ValidateAs`** (v2.13): Anotação helper para validação flexível de tipos
+- **`exclude_computed_fields`** (v2.13): Opção de serialização para excluir campos computados
+- **PEP 728 Support** (v2.13): TypedDict com variadic keyword arguments
+- **UUID v6, v7, v8** (v2.13): Novos tipos UUID para standards modernos
+- **`SocketPath`** (v2.13): Tipo para caminhos de socket Unix no Linux
+
+---
+
+## 6. Histórico de Atualizações
+
+| Data | Versão | Motivo da Atualização |
+|------|--------|----------------------|
+| 2026-09-06 | 2.7.1 → 2.13.5 | Verificação regular: versão antiga tinha >90 dias. Adicionadas seções sobre JSON Schema, breaking changes, novas features. pydantic-settings atualizado para 2.15.0. |
+| 2026-05-31 | 2.7.1 | Última verificação anterior |

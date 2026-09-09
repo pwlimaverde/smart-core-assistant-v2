@@ -204,3 +204,97 @@ groups:
                 - evaluator:
                     type: gt
                     params: [5]
+
+      # ---------------------------------------------------------------------
+      # N13 — Agentes de IA (servidor MCP)
+      # ---------------------------------------------------------------------
+      # Duas regras, dois riscos distintos. Nenhuma delas usa `grant_id` como
+      # label: identificador em métrica explode a série temporal. O alerta diz
+      # QUE algo está errado; QUEM está no `audit_log` com `source: "mcp"`.
+
+      - uid: mcp-recusas-anomalas
+        title: Pico de recusas no servidor MCP
+        condition: C
+        for: 5m
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severidade: alta
+        annotations:
+          resumo: >-
+            Mais de 30 recusas por minuto no servidor MCP nos últimos 5 minutos.
+            É a assinatura de um agente em laço ou de um token vazado sendo
+            sondado. Veja o dashboard "Agentes de IA (MCP)" e, para saber qual
+            aplicativo, o audit_log com source=mcp.
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 300, to: 0 }
+            model:
+              # `or vector(0)` pelo mesmo motivo da regra de erro gRPC acima: o
+              # contador de recusas só passa a existir como série depois da
+              # primeira recusa. Sem isso, um sistema saudável fica em NoData
+              # para sempre e a regra nunca dispara quando precisar.
+              expr: "sum(rate(smartcore_mcp_denied_total[5m])) * 60 or vector(0)"
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [30]
+
+      - uid: mcp-destrutivas-em-volume
+        title: Volume anômalo de ações destrutivas por agente de IA
+        condition: C
+        # Sem `for`: o teto por consentimento é 5/min e 30/dia. Passar de 10 numa
+        # hora já significa que alguém (ou vários) está removendo coisas em série,
+        # e esperar cinco minutos para avisar não ajuda ninguém.
+        for: 0m
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severidade: alta
+        annotations:
+          resumo: >-
+            Mais de 10 ações destrutivas executadas por agentes de IA na última
+            hora (desativar/remover). Em operação normal este número fica perto
+            de zero. Confira no audit_log quais consentimentos executaram e, se
+            não reconhecer, desconecte o aplicativo na tela do tenant.
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 3600, to: 0 }
+            model:
+              expr: "sum(increase(smartcore_mcp_tool_total{tool=~\"desativar_.*|remover_.*\",result=\"ok\"}[1h])) or vector(0)"
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [10]

@@ -44,6 +44,16 @@ class TenantDrawer extends StatelessWidget {
                   rota: '/atendimentos',
                   atual: location,
                 ),
+                // FORA do bloco de admin, de propósito: os aplicativos de IA
+                // conectados são de cada pessoa (N13.8). Esconder esta tela de
+                // quem não é admin deixaria um `staff` sem meio de desconectar
+                // um agente que ele mesmo autorizou.
+                _Item(
+                  icone: Icons.smart_toy_outlined,
+                  titulo: 'Aplicativos conectados',
+                  rota: '/tenant/integracoes',
+                  atual: location,
+                ),
                 if (isTenantAdmin) ...[
                   const Divider(),
                   _Item(

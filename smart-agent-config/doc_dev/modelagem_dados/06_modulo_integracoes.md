@@ -1,6 +1,21 @@
-# Módulo Sincronizadores & Integrações (WhatsApp)
+# Módulo Sincronizadores & Integrações
 
-Este documento descreve os modelos responsáveis pelo controle das instâncias do WhatsApp conectadas via **Evolution API** no único servidor central, residindo no **banco de dados único** do sistema e isolados logicamente por `tenant_id`.
+Este documento descreve as integrações do sistema com o mundo externo. Desde a
+fase N13 elas são **duas famílias**, com direções opostas:
+
+| Família | Direção | Quem inicia | Credencial |
+|---|---|---|---|
+| **WhatsApp / Evolution** (§1) | nós → provedor | o sistema | `apikey` da instância, por tenant |
+| **Servidor MCP** (§4) | agente externo → nós | um cliente de IA de terceiro | OAuth 2.1 por usuário |
+
+A distinção importa porque o risco é diferente. Na primeira, nós somos o cliente
+e a credencial é do tenant. Na segunda, **nós somos o provedor**: quem chega é
+software de terceiro agindo em nome de uma pessoa, e a credencial é dela — o que
+exige consentimento explícito, escopo por usuário e revogação na mão do dono.
+
+A parte de WhatsApp descreve os modelos que controlam as instâncias conectadas via
+**Evolution API**, residindo no **banco de dados único** e isolados logicamente por
+`tenant_id`.
 
 ---
 
@@ -100,3 +115,92 @@ Cadastro de números de WhatsApp que devem ser completamente ignorados pelas aut
 *   **Restrições e Unicidade:**
     *   Unicidade composta: A combinação de `tenant_id` e `phone_number` deve ser única.
 *   **Ordenação:** Ordenado alfabeticamente por `name`.
+
+
+---
+
+## 4. Integração: Servidor MCP (agentes de IA externos)
+
+Fase **N13**. Permite que um agente de IA externo — Claude (web, desktop, mobile,
+Cowork, Code), Cursor, ChatGPT — configure e opere o tenant **em nome do usuário
+que autorizou**.
+
+### 4.1 Inversão de papel
+
+Nas integrações anteriores nós chamamos alguém. Aqui alguém nos chama, e o
+"alguém" é um modelo de linguagem executando instruções em linguagem natural. As
+consequências de desenho:
+
+* **A autorização é por pessoa, não por tenant.** O `api_key` do tenant não serve:
+  ele não distingue quem pediu, e o limite do módulo é "o agente nunca faz nada
+  que o usuário que o autorizou não pudesse fazer no painel".
+* **Consentimento é explícito e revogável.** O usuário vê o que está concedendo e
+  pode desconectar — o que não existe numa chave de tenant.
+* **A superfície é descrita, não documentada.** A descrição de cada operação é
+  lida pelo modelo e determina se ele acerta. Descrição ruim não gera erro: gera
+  agente que erra com confiança.
+
+### 4.2 Modelo de dados
+
+Uma tabela nova, `mcp_oauth_grant` (migration `0030`) — o consentimento de um
+usuário a um cliente:
+
+| Coluna | Nota |
+|---|---|
+| `tenant_id`, `user_id` | RLS por tenant; toda consulta filtra também por usuário |
+| `client_id` | URL do Client ID Metadata Document. Na spec MCP, o `client_id` **é** a URL — não há registro prévio de aplicativo (DCR foi deprecado) |
+| `client_name` | Nome exibido, vindo do documento do terceiro. **Texto não confiável**: escapado na renderização e limitado a 200 caracteres |
+| `redirect_uri` | O exato usado, para a trilha |
+| `scopes` | Escopos concedidos (catálogo do doc 09 §3) |
+| `refresh_token_hash` | SHA-256 do segredo, rotacionado a cada uso. Reapresentar um hash antigo **derruba o grant inteiro** |
+| `revoked_at` | Revogação soft — a trilha de auditoria referencia `grant_id` |
+
+O **access token** não é persistido em lugar nenhum: é um JWT RS256 de ~15 min. O
+**código de autorização** vive no Redis, com TTL de ~60s e consumo atômico por
+`GETDEL` (uso único).
+
+### 4.3 Componentes
+
+| Componente | Papel OAuth | Onde vive |
+|---|---|---|
+| `control_plane` (módulo `oauth/`) | **Authorization server** | `auth.smartcoreassistant.com.br` |
+| `mcp_server` (Python) | **Resource server** | `mcp.smartcoreassistant.com.br` |
+
+Os tokens são assinados com **par de chaves RSA**: o `control_plane` tem a
+privada, o `mcp_server` só a pública. Assimétrico de propósito — o `mcp_server` é
+o processo exposto à internet e o que executa entrada de terceiros, e ele
+**confere** tokens sem poder **emitir** nenhum.
+
+### 4.4 Dois invariantes
+
+**O `mcp_server` não alcança o banco.** Sem `DATABASE_URL`, fora da rede
+`internal`, numa rede própria (`mcp_net`) onde os nomes `postgres`,
+`data_postgres` e `data_redis` não resolvem. Toda leitura e escrita passa pelo
+`runtime_api`, herdando o interceptor de autenticação, a RLS e a auditoria que já
+existem. É topologia, não convenção — e há teste provando.
+
+**O token do cliente nunca é repassado.** Ele é trocado por um JWT interno de vida
+curta antes de qualquer chamada ao backend. Exigência normativa da spec MCP:
+*"The MCP server MUST NOT pass through the token it received from the MCP
+client."*
+
+### 4.5 Trilha de auditoria
+
+Sem tabela nova. Os eventos entram no `audit_log` existente:
+
+* `oauth.consentimento_concedido` (INFO), com `client_id`, `client_name` e escopos;
+* `oauth.grant_revogado` (INFO);
+* `oauth.refresh_reutilizado` (**WARN** — sinal de roubo de token);
+* as ações em si (`mensagem.enviada`, `<entidade>.desativada`) já eram auditadas;
+  o que muda é o campo `user_agent`, que passa a carregar
+  `SmartCoreAssistant-MCP/<tool>`. É por ele que se distingue ação de agente de
+  ação humana com um filtro só.
+
+**Nunca na trilha:** código de autorização, `code_verifier`, refresh token, access
+token, hash, conteúdo de mensagem, telefone ou nome de contato, chave de provedor.
+
+### 4.6 Referências
+
+* Guia do usuário final: `doc_dev/apis/mcp-guia-do-usuario.md`
+* README técnico do módulo: `mcp_server/README.md`
+* Plano da fase: `.context/plans/n13-mcp-agentes.md`

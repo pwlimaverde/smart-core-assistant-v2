@@ -220,8 +220,18 @@ densa da v1 e a que mais distância tem da v2. Inventário completo do que ela f
 /tenant/treinamento         material · intenções · teste ⚠️
 /tenant/usuarios            membros e permissões         ✅
 /tenant/convites            convites                     ⚠️
+/tenant/integracoes         aplicativos de IA conectados 🆕
 /tenant/config              abas: assistente · mensagens · marca · IA ⚠️
 ```
+
+> **`/tenant/integracoes` (N13.8)** — única tela do app do tenant **fora** do
+> bloco de admin no menu, e de propósito: os aplicativos de IA conectados são de
+> cada pessoa. Um `staff` que autorizou um agente precisa poder desconectá-lo, e
+> nem um `tenant:admin` vê os consentimentos do colega. A tela lista o que está
+> conectado (nome do aplicativo, host de retorno, permissões concedidas em
+> linguagem de negócio, quando conectou, último uso), mostra o endereço do
+> servidor MCP para colar no conector — **não** há token a copiar — e permite
+> desconectar, avisando que o acesso em curso ainda pode durar até 15 minutos.
 
 ## Árvore — app do superusuário
 

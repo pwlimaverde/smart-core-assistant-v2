@@ -36,6 +36,15 @@ x-healthcheck-rpc: &healthcheck-rpc
 networks:
   internal:
     driver: bridge
+  # Rede exclusiva do mcp_server + runtime_api (N13.4).
+  #
+  # É ela que faz o invariante "o mcp_server não alcança o banco" ser topologia
+  # e não convenção: fora de `internal`, os nomes `postgres`, `data_postgres`,
+  # `data_redis` e `data_storage` simplesmente não resolvem dentro daquele
+  # container. NÃO acrescente `internal` ao serviço `mcp_server` — o teste
+  # `tests/integration/test_isolamento_de_rede.py` existe para pegar isso.
+  mcp_net:
+    driver: bridge
   observability:
     name: smart_core_v2_observability
     external: true
@@ -227,7 +236,12 @@ services:
     image: *server-image
     command: ["control_plane"]
     env_file: [.env]
-    networks: [internal, observability]
+    # `mcp_net` porque o mcp_server troca o token do cliente por um JWT interno
+    # aqui (N13.4). O AS também escuta HTTP para o navegador; quem publica isso
+    # para fora é o Caddy da borda, no subdomínio `auth.`.
+    networks: [internal, observability, mcp_net]
+    ports:
+      - "${MCP_OAUTH_HOST_PORT:-8095}:8095"
     depends_on:
       data_postgres: { condition: service_started }
     healthcheck:
@@ -261,6 +275,41 @@ services:
     logging: *logging
     mem_limit: ${MEM_IA_ENGINE:-2g}
 
+  # ---------- SERVIDOR MCP (Python — imagem própria) ----------
+  # Resource server do módulo N13: é onde Claude, ChatGPT e Cursor se conectam.
+  #
+  # Rede: [mcp_net, observability] e NUNCA `internal`. Ver o comentário em
+  # `networks:` — este é o serviço cujo isolamento a rede existe para garantir.
+  mcp_server:
+    image: ${MCP_SERVER_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-mcp-server:dev}
+    build:
+      # Contexto na RAIZ do repo: o Dockerfile gera os stubs a partir dos
+      # .proto canônicos em server/crates/contracts (fora de mcp_server/).
+      context: ../..
+      dockerfile: mcp_server/Dockerfile
+    env_file: [.env]
+    environment:
+      MCP_RUNTIME_ENDPOINT: runtime_api:50051
+      MCP_TOKEN_EXCHANGE_URL: http://control_plane:8095/internal/mcp/token-exchange
+    networks: [mcp_net, observability]
+    ports:
+      - "${MCP_HOST_PORT:-8099}:8099"
+    depends_on:
+      runtime_api: { condition: service_started }
+      control_plane: { condition: service_started }
+    # A sonda bate no próprio endpoint sem token e espera 401: prova que o
+    # processo está de pé E que a autenticação está montada. Um 200 aqui seria
+    # falha, não saúde.
+    healthcheck:
+      test: ["CMD", "python", "-m", "mcp_server.healthcheck"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 25s
+    restart: unless-stopped
+    logging: *logging
+    mem_limit: ${MEM_MCP_SERVER:-512m}
+
   worker:
     image: *server-image
     command: ["worker"]
@@ -292,7 +341,9 @@ services:
     image: *server-image
     command: ["runtime_api"]
     env_file: [.env]
-    networks: [internal, observability]
+    # `mcp_net` além das de sempre: é por ela que o mcp_server chega ao gRPC
+    # daqui, sem que ele precise entrar na rede `internal`.
+    networks: [internal, observability, mcp_net]
     # Publica a fachada gRPC-Web no host; o admin.caddy do Caddy do host faz o
     # reverse_proxy p/ esta porta (dev: 50051).
     ports:

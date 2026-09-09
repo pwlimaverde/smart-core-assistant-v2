@@ -29,6 +29,10 @@ import 'features/convites/data/repositories/convites_repositories.dart';
 import 'features/convites/domain/usecases/convites_usecases.dart';
 import 'features/convites/presentation/routes/accept_invite_route.dart';
 import 'features/convites/presentation/routes/invites_route.dart';
+import 'features/integracoes/data/datasources/integracoes_datasources.dart';
+import 'features/integracoes/data/repositories/integracoes_repositories.dart';
+import 'features/integracoes/domain/usecases/integracoes_usecases.dart';
+import 'features/integracoes/presentation/routes/integracoes_route.dart';
 import 'features/usuarios/data/datasources/usuarios_datasources.dart';
 import 'features/usuarios/data/repositories/usuarios_repositories.dart';
 import 'features/usuarios/domain/usecases/usuarios_usecases.dart';
@@ -266,6 +270,22 @@ final class TenantModule extends AppModule {
       ),
     );
 
+    // ── integracoes (aplicativos de IA conectados por OAuth — N13.8) ─────
+    i.lazySingleton<ListMcpGrantsUsecase>(
+      () => ListMcpGrantsUsecase(
+        repository: ListMcpGrantsRepository(
+          datasource: ListMcpGrantsDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<RevokeMcpGrantUsecase>(
+      () => RevokeMcpGrantUsecase(
+        repository: RevokeMcpGrantRepository(
+          datasource: RevokeMcpGrantDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+
     // ── config ────────────────────────────────────────────────────────────
     i.lazySingleton<GetMyTenantConfigUsecase>(
       () => GetMyTenantConfigUsecase(
@@ -289,6 +309,7 @@ final class TenantModule extends AppModule {
     InvitesRoute(),
     TenantUsersRoute(),
     TenantOwnConfigRoute(),
+    IntegracoesRoute(),
     ConexoesRoute(),
     ContatosRoute(),
     EquipeRoute(),

@@ -2133,6 +2133,90 @@ final $typed_data.Uint8List revokeInviteResponseDescriptor =
     $convert.base64Decode(
         'ChRSZXZva2VJbnZpdGVSZXNwb25zZRIYCgdzdWNjZXNzGAEgASgIUgdzdWNjZXNz');
 
+@$core.Deprecated('Use listMcpGrantsRequestDescriptor instead')
+const ListMcpGrantsRequest$json = {
+  '1': 'ListMcpGrantsRequest',
+};
+
+/// Descriptor for `ListMcpGrantsRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMcpGrantsRequestDescriptor =
+    $convert.base64Decode('ChRMaXN0TWNwR3JhbnRzUmVxdWVzdA==');
+
+@$core.Deprecated('Use mcpGrantItemDescriptor instead')
+const McpGrantItem$json = {
+  '1': 'McpGrantItem',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 9, '10': 'id'},
+    {'1': 'client_id', '3': 2, '4': 1, '5': 9, '10': 'clientId'},
+    {'1': 'client_name', '3': 3, '4': 1, '5': 9, '10': 'clientName'},
+    {'1': 'redirect_uri', '3': 4, '4': 1, '5': 9, '10': 'redirectUri'},
+    {'1': 'scopes', '3': 5, '4': 3, '5': 9, '10': 'scopes'},
+    {'1': 'last_used_at', '3': 6, '4': 1, '5': 3, '10': 'lastUsedAt'},
+    {'1': 'created_at', '3': 7, '4': 1, '5': 3, '10': 'createdAt'},
+  ],
+};
+
+/// Descriptor for `McpGrantItem`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List mcpGrantItemDescriptor = $convert.base64Decode(
+    'CgxNY3BHcmFudEl0ZW0SDgoCaWQYASABKAlSAmlkEhsKCWNsaWVudF9pZBgCIAEoCVIIY2xpZW'
+    '50SWQSHwoLY2xpZW50X25hbWUYAyABKAlSCmNsaWVudE5hbWUSIQoMcmVkaXJlY3RfdXJpGAQg'
+    'ASgJUgtyZWRpcmVjdFVyaRIWCgZzY29wZXMYBSADKAlSBnNjb3BlcxIgCgxsYXN0X3VzZWRfYX'
+    'QYBiABKANSCmxhc3RVc2VkQXQSHQoKY3JlYXRlZF9hdBgHIAEoA1IJY3JlYXRlZEF0');
+
+@$core.Deprecated('Use listMcpGrantsResponseDescriptor instead')
+const ListMcpGrantsResponse$json = {
+  '1': 'ListMcpGrantsResponse',
+  '2': [
+    {
+      '1': 'grants',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.McpGrantItem',
+      '10': 'grants'
+    },
+  ],
+};
+
+/// Descriptor for `ListMcpGrantsResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMcpGrantsResponseDescriptor = $convert.base64Decode(
+    'ChVMaXN0TWNwR3JhbnRzUmVzcG9uc2USQQoGZ3JhbnRzGAEgAygLMikuc21hcnRjb3JlLmNvbn'
+    'RyYWN0cy5xdWVyaWVzLk1jcEdyYW50SXRlbVIGZ3JhbnRz');
+
+@$core.Deprecated('Use revokeMcpGrantRequestDescriptor instead')
+const RevokeMcpGrantRequest$json = {
+  '1': 'RevokeMcpGrantRequest',
+  '2': [
+    {'1': 'grant_id', '3': 1, '4': 1, '5': 9, '10': 'grantId'},
+  ],
+};
+
+/// Descriptor for `RevokeMcpGrantRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List revokeMcpGrantRequestDescriptor =
+    $convert.base64Decode(
+        'ChVSZXZva2VNY3BHcmFudFJlcXVlc3QSGQoIZ3JhbnRfaWQYASABKAlSB2dyYW50SWQ=');
+
+@$core.Deprecated('Use revokeMcpGrantResponseDescriptor instead')
+const RevokeMcpGrantResponse$json = {
+  '1': 'RevokeMcpGrantResponse',
+  '2': [
+    {'1': 'success', '3': 1, '4': 1, '5': 8, '10': 'success'},
+    {
+      '1': 'janela_revogacao_min',
+      '3': 2,
+      '4': 1,
+      '5': 5,
+      '10': 'janelaRevogacaoMin'
+    },
+  ],
+};
+
+/// Descriptor for `RevokeMcpGrantResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List revokeMcpGrantResponseDescriptor =
+    $convert.base64Decode(
+        'ChZSZXZva2VNY3BHcmFudFJlc3BvbnNlEhgKB3N1Y2Nlc3MYASABKAhSB3N1Y2Nlc3MSMAoUam'
+        'FuZWxhX3Jldm9nYWNhb19taW4YAiABKAVSEmphbmVsYVJldm9nYWNhb01pbg==');
+
 @$core.Deprecated('Use listTenantUsersRequestDescriptor instead')
 const ListTenantUsersRequest$json = {
   '1': 'ListTenantUsersRequest',

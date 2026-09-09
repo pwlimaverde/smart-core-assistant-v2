@@ -214,9 +214,38 @@ jobs:
           cache-from: type=gha,scope=ia-engine
           cache-to: type=gha,mode=max,scope=ia-engine
 
+  # Imagem Python do mcp_server (N13), paridade com o dev.
+  build-mcp-server:
+    name: Build MCP Server (PROD)
+    needs: verifica-ci
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository }}/smartcore-mcp-server
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: mcp_server/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=mcp-server
+          cache-to: type=gha,mode=max,scope=mcp-server
+
   deploy-prod:
     name: Deploy PROD (compose)
-    needs: [build-server, build-web, build-web-tenant, build-ia-engine]
+    needs: [build-server, build-web, build-web-tenant, build-ia-engine, build-mcp-server]
     runs-on: [self-hosted, hostinger]
     environment: production
     steps:

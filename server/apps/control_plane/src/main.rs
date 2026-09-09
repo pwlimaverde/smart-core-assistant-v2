@@ -1,6 +1,14 @@
 //! Serviço control_plane: Painel administrativo e tarefas de back office.
+//!
+//! Desde N13.1 ele também é o **authorization server OAuth 2.1** do módulo MCP
+//! (ver `oauth/`), servido por HTTP no subdomínio `auth.`. São dois servidores
+//! no mesmo processo: o RPC interno de sempre, e o HTTP voltado ao navegador.
+//! Ficam juntos porque a autorização precisa exatamente do que este serviço já
+//! tem — o caminho de credenciais e o barramento de auditoria — e separá-los
+//! criaria um quarto serviço só para duas telas.
 
 mod cli;
+mod oauth;
 
 use contracts::{Envelope, MessageKind, TenantEnvelope};
 use std::time::Duration;
@@ -39,6 +47,10 @@ async fn main() -> anyhow::Result<()> {
     let client = redis::Client::open(redis_url)?;
     let redis_conn = redis::aio::ConnectionManager::new(client).await?;
 
+    // Conexão própria para o AS: o `ConnectionManager` é clonável e multiplexa,
+    // mas o estado do OAuth e o stream de auditoria têm ciclos de vida
+    // independentes e vale deixar isso explícito.
+    let redis_conn_oauth = redis_conn.clone();
     let s_disconnect = AppState { redis_conn };
 
     // 2. Inicia o Servidor RPC síncrono nos 3 de protocolos
@@ -56,8 +68,33 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("Servidor RPC do control_plane configurado e pronto.");
 
+    // Authorization server OAuth 2.1 do MCP. Sobe só se estiver configurado: um
+    // ambiente sem o par de chaves segue rodando o control_plane normalmente, e
+    // o que falta aparece no log em vez de derrubar o processo.
+    let servidor_oauth = match montar_oauth(redis_conn_oauth).await {
+        Ok(Some(fut)) => Some(fut),
+        Ok(None) => None,
+        Err(e) => {
+            tracing::error!(erro = %e, "authorization server do MCP não pôde subir");
+            None
+        }
+    };
+
     // Ver a nota em `data_redis`: SIGTERM precisa ser tratado, senão todo deploy
     // mata o processo no meio do que estava em voo.
+    //
+    // Os dois servidores compartilham o mesmo sinal de parada: derrubar só um
+    // deixaria o processo vivo atendendo metade das requisições — que é pior que
+    // não atender nenhuma, porque o healthcheck continuaria verde.
+    let oauth_fut = async {
+        match servidor_oauth {
+            Some(fut) => fut.await,
+            // Sem AS configurado, este ramo nunca resolve: o `select!` fica
+            // decidido pelos outros dois.
+            None => std::future::pending().await,
+        }
+    };
+
     tokio::select! {
         res = server.run() => {
             if let Err(e) = res {
@@ -67,11 +104,116 @@ async fn main() -> anyhow::Result<()> {
                 );
             }
         }
+        res = oauth_fut => {
+            if let Err(e) = res {
+                tracing::error!("Authorization server OAuth parou com erro crítico: {:?}", e);
+            }
+        }
         _ = observability::aguardar_sinal_de_parada() => {}
     }
 
     observability::shutdown_telemetry();
     Ok(())
+}
+
+/// Monta o authorization server OAuth do MCP, se houver configuração para isso.
+///
+/// `Ok(None)` significa "não configurado neste ambiente" — não é erro. O AS só
+/// existe onde o par de chaves RS256 foi provisionado; sem ele não há como
+/// assinar token nenhum, e subir um servidor que responderia 500 em toda troca
+/// seria pior do que não subir.
+async fn montar_oauth(
+    redis_conn: redis::aio::ConnectionManager,
+) -> anyhow::Result<Option<impl std::future::Future<Output = std::io::Result<()>>>> {
+    let Ok(pem_privado) = std::env::var("MCP_OAUTH_PRIVATE_KEY_PEM") else {
+        tracing::info!(
+            "MCP_OAUTH_PRIVATE_KEY_PEM ausente: authorization server do MCP não será iniciado"
+        );
+        return Ok(None);
+    };
+    let pem_publico = std::env::var("MCP_OAUTH_PUBLIC_KEY_PEM")
+        .map_err(|_| anyhow::anyhow!("MCP_OAUTH_PUBLIC_KEY_PEM ausente"))?;
+
+    let chaves = oauth::tokens::ChavesMcp::carregar(&pem_privado, &pem_publico)
+        .map_err(|e| anyhow::anyhow!("par de chaves do MCP inválido: {e}"))?;
+
+    let config = oauth::OauthConfig::from_env();
+    if config.servico_secreto.is_empty() {
+        // Sem o segredo de serviço, a troca interna de token ficaria aberta a
+        // qualquer processo da rede interna. Recusa fechada.
+        anyhow::bail!("MCP_SERVICE_SECRET ausente: a troca interna de token ficaria sem guarda");
+    }
+
+    // O JWT interno é assinado com o mesmo segredo que o `runtime_api` valida.
+    let jwt_secret = std::env::var("JWT_SECRET")
+        .map_err(|_| anyhow::anyhow!("JWT_SECRET ausente: o token interno não teria assinatura"))?;
+    application::jwt::inicializar_chaves(&jwt_secret)
+        .map_err(|e| anyhow::anyhow!("JWT_SECRET inválido: {e}"))?;
+
+    // Duas conexões ao `data_postgres`, não uma: `MuxClient` não é `Clone`
+    // (mantém a conexão atrás de um `Mutex`), e o `AuthDeps` a consome por
+    // valor. As duas multiplexam sobre a mesma porta, então o custo é uma
+    // conexão TCP a mais no processo inteiro.
+    let pg_auth = transport::conectar_cliente("data_postgres").await?;
+    let pg_oauth = transport::conectar_cliente("data_postgres").await?;
+    let redis_rpc = transport::conectar_cliente("data_redis").await?;
+
+    let auth_deps = application::auth::login::AuthDeps {
+        pg: pg_auth,
+        redis: redis_rpc,
+        // O AS não faz upload de mídia; `None` é o caminho previsto pelo campo.
+        storage: None,
+        // Estes três não são usados por `autenticar` (ele não emite token), mas
+        // `AuthDeps` é uma estrutura só. Os valores acompanham os do runtime_api
+        // para não sugerirem uma política diferente a quem ler.
+        access_ttl_s: 900,
+        refresh_ttl_s: 604_800,
+        login_rate_max: std::env::var("LOGIN_RATE_MAX")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(10),
+        login_rate_window_s: std::env::var("LOGIN_RATE_WINDOW_S")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(60),
+    };
+
+    let http = reqwest::Client::builder()
+        // Nenhum redirect é seguido no fetch do CIMD: um 302 para um endereço
+        // interno contornaria a validação feita na URL de entrada.
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(5))
+        .user_agent("SmartCoreAssistant-OAuth/1.0")
+        .build()?;
+
+    let porta: u16 = std::env::var("MCP_OAUTH_HTTP_PORT")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(8095);
+
+    let estado = oauth::OauthState {
+        config: std::sync::Arc::new(config),
+        chaves: std::sync::Arc::new(chaves),
+        redis: redis_conn,
+        http,
+        auth: std::sync::Arc::new(auth_deps),
+        pg: std::sync::Arc::new(pg_oauth),
+    };
+
+    let app = oauth::rotas(estado);
+    let listener = tokio::net::TcpListener::bind(("0.0.0.0", porta)).await?;
+    tracing::info!(porta, "authorization server OAuth do MCP escutando");
+
+    // `into_make_service_with_connect_info` porque o consentimento registra o IP
+    // de origem no grant — é o que permite ao usuário reconhecer, na tela de
+    // aplicativos conectados, de onde a autorização partiu.
+    Ok(Some(async move {
+        axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<std::net::SocketAddr>(),
+        )
+        .await
+    }))
 }
 
 fn ok_reply(env: &Envelope, method: &str, payload: serde_json::Value) -> Envelope {

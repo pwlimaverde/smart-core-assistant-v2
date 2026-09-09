@@ -8469,6 +8469,351 @@ class RevokeInviteResponse extends $pb.GeneratedMessage {
   void clearSuccess() => $_clearField(1);
 }
 
+class ListMcpGrantsRequest extends $pb.GeneratedMessage {
+  factory ListMcpGrantsRequest() => create();
+
+  ListMcpGrantsRequest._();
+
+  factory ListMcpGrantsRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMcpGrantsRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMcpGrantsRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMcpGrantsRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMcpGrantsRequest copyWith(void Function(ListMcpGrantsRequest) updates) =>
+      super.copyWith((message) => updates(message as ListMcpGrantsRequest))
+          as ListMcpGrantsRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMcpGrantsRequest create() => ListMcpGrantsRequest._();
+  @$core.override
+  ListMcpGrantsRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMcpGrantsRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMcpGrantsRequest>(create);
+  static ListMcpGrantsRequest? _defaultInstance;
+}
+
+class McpGrantItem extends $pb.GeneratedMessage {
+  factory McpGrantItem({
+    $core.String? id,
+    $core.String? clientId,
+    $core.String? clientName,
+    $core.String? redirectUri,
+    $core.Iterable<$core.String>? scopes,
+    $fixnum.Int64? lastUsedAt,
+    $fixnum.Int64? createdAt,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (clientId != null) result.clientId = clientId;
+    if (clientName != null) result.clientName = clientName;
+    if (redirectUri != null) result.redirectUri = redirectUri;
+    if (scopes != null) result.scopes.addAll(scopes);
+    if (lastUsedAt != null) result.lastUsedAt = lastUsedAt;
+    if (createdAt != null) result.createdAt = createdAt;
+    return result;
+  }
+
+  McpGrantItem._();
+
+  factory McpGrantItem.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory McpGrantItem.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'McpGrantItem',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'clientId')
+    ..aOS(3, _omitFieldNames ? '' : 'clientName')
+    ..aOS(4, _omitFieldNames ? '' : 'redirectUri')
+    ..pPS(5, _omitFieldNames ? '' : 'scopes')
+    ..aInt64(6, _omitFieldNames ? '' : 'lastUsedAt')
+    ..aInt64(7, _omitFieldNames ? '' : 'createdAt')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  McpGrantItem clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  McpGrantItem copyWith(void Function(McpGrantItem) updates) =>
+      super.copyWith((message) => updates(message as McpGrantItem))
+          as McpGrantItem;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static McpGrantItem create() => McpGrantItem._();
+  @$core.override
+  McpGrantItem createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static McpGrantItem getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<McpGrantItem>(create);
+  static McpGrantItem? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get id => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set id($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  /// URL do Client ID Metadata Document — é o identificador do cliente na spec
+  /// MCP (Dynamic Client Registration foi deprecado).
+  @$pb.TagNumber(2)
+  $core.String get clientId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set clientId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasClientId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearClientId() => $_clearField(2);
+
+  /// Nome exibido, vindo do documento do terceiro. TEXTO NÃO CONFIÁVEL: escapar
+  /// na renderização.
+  @$pb.TagNumber(3)
+  $core.String get clientName => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set clientName($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasClientName() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearClientName() => $_clearField(3);
+
+  /// Guardado inteiro para a trilha; a tela mostra só o hostname, que é o que o
+  /// usuário consegue reconhecer.
+  @$pb.TagNumber(4)
+  $core.String get redirectUri => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set redirectUri($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasRedirectUri() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearRedirectUri() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $pb.PbList<$core.String> get scopes => $_getList(4);
+
+  @$pb.TagNumber(6)
+  $fixnum.Int64 get lastUsedAt => $_getI64(5);
+  @$pb.TagNumber(6)
+  set lastUsedAt($fixnum.Int64 value) => $_setInt64(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasLastUsedAt() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearLastUsedAt() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $fixnum.Int64 get createdAt => $_getI64(6);
+  @$pb.TagNumber(7)
+  set createdAt($fixnum.Int64 value) => $_setInt64(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasCreatedAt() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearCreatedAt() => $_clearField(7);
+}
+
+class ListMcpGrantsResponse extends $pb.GeneratedMessage {
+  factory ListMcpGrantsResponse({
+    $core.Iterable<McpGrantItem>? grants,
+  }) {
+    final result = create();
+    if (grants != null) result.grants.addAll(grants);
+    return result;
+  }
+
+  ListMcpGrantsResponse._();
+
+  factory ListMcpGrantsResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMcpGrantsResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMcpGrantsResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<McpGrantItem>(1, _omitFieldNames ? '' : 'grants',
+        subBuilder: McpGrantItem.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMcpGrantsResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMcpGrantsResponse copyWith(
+          void Function(ListMcpGrantsResponse) updates) =>
+      super.copyWith((message) => updates(message as ListMcpGrantsResponse))
+          as ListMcpGrantsResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMcpGrantsResponse create() => ListMcpGrantsResponse._();
+  @$core.override
+  ListMcpGrantsResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMcpGrantsResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMcpGrantsResponse>(create);
+  static ListMcpGrantsResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<McpGrantItem> get grants => $_getList(0);
+}
+
+class RevokeMcpGrantRequest extends $pb.GeneratedMessage {
+  factory RevokeMcpGrantRequest({
+    $core.String? grantId,
+  }) {
+    final result = create();
+    if (grantId != null) result.grantId = grantId;
+    return result;
+  }
+
+  RevokeMcpGrantRequest._();
+
+  factory RevokeMcpGrantRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory RevokeMcpGrantRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'RevokeMcpGrantRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'grantId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RevokeMcpGrantRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RevokeMcpGrantRequest copyWith(
+          void Function(RevokeMcpGrantRequest) updates) =>
+      super.copyWith((message) => updates(message as RevokeMcpGrantRequest))
+          as RevokeMcpGrantRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static RevokeMcpGrantRequest create() => RevokeMcpGrantRequest._();
+  @$core.override
+  RevokeMcpGrantRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static RevokeMcpGrantRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<RevokeMcpGrantRequest>(create);
+  static RevokeMcpGrantRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get grantId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set grantId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasGrantId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearGrantId() => $_clearField(1);
+}
+
+class RevokeMcpGrantResponse extends $pb.GeneratedMessage {
+  factory RevokeMcpGrantResponse({
+    $core.bool? success,
+    $core.int? janelaRevogacaoMin,
+  }) {
+    final result = create();
+    if (success != null) result.success = success;
+    if (janelaRevogacaoMin != null)
+      result.janelaRevogacaoMin = janelaRevogacaoMin;
+    return result;
+  }
+
+  RevokeMcpGrantResponse._();
+
+  factory RevokeMcpGrantResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory RevokeMcpGrantResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'RevokeMcpGrantResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOB(1, _omitFieldNames ? '' : 'success')
+    ..aI(2, _omitFieldNames ? '' : 'janelaRevogacaoMin')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RevokeMcpGrantResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RevokeMcpGrantResponse copyWith(
+          void Function(RevokeMcpGrantResponse) updates) =>
+      super.copyWith((message) => updates(message as RevokeMcpGrantResponse))
+          as RevokeMcpGrantResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static RevokeMcpGrantResponse create() => RevokeMcpGrantResponse._();
+  @$core.override
+  RevokeMcpGrantResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static RevokeMcpGrantResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<RevokeMcpGrantResponse>(create);
+  static RevokeMcpGrantResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.bool get success => $_getBF(0);
+  @$pb.TagNumber(1)
+  set success($core.bool value) => $_setBool(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSuccess() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSuccess() => $_clearField(1);
+
+  /// Minutos que o acesso em curso ainda pode durar depois da revogação (o
+  /// access token morre no `exp`). Vem do servidor para que a tela não precise
+  /// repetir um número que a configuração pode mudar.
+  @$pb.TagNumber(2)
+  $core.int get janelaRevogacaoMin => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set janelaRevogacaoMin($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasJanelaRevogacaoMin() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearJanelaRevogacaoMin() => $_clearField(2);
+}
+
 class ListTenantUsersRequest extends $pb.GeneratedMessage {
   factory ListTenantUsersRequest() => create();
 

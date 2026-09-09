@@ -11,6 +11,8 @@ use uuid::Uuid;
 mod audit;
 mod grpc_web;
 mod onboarding_web;
+/// Mapa rota → escopo exigido (N13.3). Fonte única do RBAC da borda gRPC-Web.
+mod rbac;
 mod realtime;
 
 use audit::{publicar_auditoria_borda, publicar_reuso_detectado};
