@@ -172,3 +172,7 @@ normal?** Não. Não existe chave para colar. Se pedirem, desconfie.
 **Perdi o acesso ao computador onde o assistente estava instalado.** Desconecte o
 aplicativo na tela de aplicativos conectados. Sem o consentimento, ele não
 renova.
+
+**A conexão dura para sempre?** Não. Depois de **30 dias** o aplicativo pede que
+você reconecte — uma tela, alguns segundos. É de propósito: uma autorização que
+nunca expira é o tipo de coisa que ninguém revisa até dar problema.

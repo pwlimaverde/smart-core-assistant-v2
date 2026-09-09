@@ -816,6 +816,32 @@ async fn token_por_refresh(estado: OauthState, form: TokenForm) -> Response {
         })
         .unwrap_or_default();
 
+    // Teto de vida do consentimento.
+    //
+    // Sem isto, um refresh token rotacionado indefinidamente vale para sempre —
+    // e "para sempre" numa credencial de cliente público é o tipo de coisa que
+    // ninguém nota até vazar. Não há coluna de expiração na tabela: o teto é
+    // medido sobre o `created_at` do grant, que já vem na resposta. Passado o
+    // prazo, o usuário reconecta pelo navegador (uma tela, dez segundos) e o
+    // consentimento nasce novo.
+    let criado_em_ms = grant
+        .get("created_at")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0);
+    let idade_s = (chrono::Utc::now().timestamp_millis() - criado_em_ms) / 1000;
+    if criado_em_ms > 0 && idade_s > cfg.refresh_ttl_s {
+        tracing::info!(
+            %grant_id,
+            idade_dias = idade_s / 86_400,
+            "consentimento MCP passou do teto de vida: exigindo reconexão"
+        );
+        return erro_token(
+            StatusCode::BAD_REQUEST,
+            "invalid_grant",
+            "esta autorização expirou; reconecte o aplicativo",
+        );
+    }
+
     if hash_guardado.is_empty()
         || !tokens::hash_confere(&hash_guardado, &tokens::hash_refresh(&segredo))
     {
@@ -1210,6 +1236,16 @@ mod tests {
         // 901s são 15min e 1s: dizer "15 minutos" ao usuário seria mentir por
         // baixo. Arredonda para cima.
         assert_eq!(cfg.janela_revogacao_min(), 16);
+    }
+
+    #[test]
+    fn teto_de_vida_do_consentimento_e_lido_da_configuracao() {
+        // O default de 30 dias vem de MCP_REFRESH_TTL_S. O teste existe para que
+        // trocar a unidade (segundos → dias, por exemplo) não passe em silêncio:
+        // o número é comparado contra a idade do grant EM SEGUNDOS.
+        std::env::remove_var("MCP_REFRESH_TTL_S");
+        let cfg = OauthConfig::from_env();
+        assert_eq!(cfg.refresh_ttl_s, 30 * 24 * 3600);
     }
 
     #[test]

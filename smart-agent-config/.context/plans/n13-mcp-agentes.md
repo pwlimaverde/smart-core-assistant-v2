@@ -53,7 +53,7 @@ phases:
     prevc: "C"
     agent: "documentation-writer"
     status: "pending"
-lastUpdated: "2026-09-07T03:23:15.998Z"
+lastUpdated: "2026-09-09T22:28:51.807Z"
 ---
 
 # Fase N13 — Módulo `mcp_server` (servidor MCP para agentes de IA)
@@ -83,6 +83,11 @@ lastUpdated: "2026-09-07T03:23:15.998Z"
 - [06_modulo_integracoes.md](../../doc_dev/modelagem_dados/06_modulo_integracoes.md) — "Integrações" ganha uma segunda família
 
 ## Etapas
+
+**Estado em 2026-09-09: E1–E9 escritas e commitadas** em
+`feature/n13-mcp-agentes` (2 commits). O que foi verificado nesta máquina e o que
+depende do CI está na seção "Estado da implementação", mais abaixo — leia antes
+de tratar qualquer etapa como concluída.
 
 | # | Entregável | Área |
 |---|---|---|
@@ -145,6 +150,61 @@ e no span.
 **Trace:** `traceparent` W3C injetado no metadata gRPC do `mcp_server` ao
 `runtime_api` e adiante, como o `ia_engine` já faz.
 
+## Estado da implementação (2026-09-09)
+
+Tudo escrito. A distinção que importa não é "feito / não feito", é **o que foi
+executado** e **o que só foi lido**.
+
+### Verificado nesta máquina
+
+| O que | Como |
+|---|---|
+| `mcp_server` | `ruff` + `mypy` limpos, **49 testes** passando; o servidor monta e registra as 28 tools |
+| Caminho criptográfico | Token assinado com a chave RSA **real** do `dev.env` valida no `VerificadorDeToken`; audiência alheia e chave errada são recusadas |
+| Sintaxe de todo o Rust novo | `rustfmt` parseia os 20 arquivos sem erro |
+| `cargo fmt --all -- --check` | Passa nos arquivos tocados (é gate de CI) |
+| Caddyfile | `caddy validate` contra o Caddy real → *Valid configuration*. A config no ar não foi tocada |
+| Composes dev e prod | `docker compose config` válido |
+| Workflows | YAML válido nos três |
+| Stubs Dart do protobuf | Regenerados e `dart analyze` limpo. Confirmado antes que regenerar **sem** as mudanças dá arquivos byte-idênticos aos commitados |
+| Proto | Compila em Python e em Dart |
+
+### NÃO verificado — o CI é o primeiro a ver
+
+| O que | Por quê |
+|---|---|
+| **Compilação do Rust** (~4.500 linhas novas) | Esta máquina não tem toolchain além do `rustfmt`; `cargo build` derruba a stack (2 vCPU, 7,8 GB) |
+| `cargo clippy -- -D warnings` | Exige compilar. Fiz uma revisão manual de `dead_code` e `too_many_arguments`; espere achados |
+| `flutter analyze` / `flutter test` | Sem Flutter SDK. `dart analyze` isolado mostrou **nenhum erro de sintaxe** no Dart escrito à mão |
+| Migration `0030` | Não aplicada em banco nenhum |
+| Fluxo OAuth ponta a ponta | Depende de DNS e de deploy |
+
+### Desvios do plano, com o motivo
+
+| # | Plano dizia | Ficou | Por quê |
+|---|---|---|---|
+| 1 | `refresh_token_hash` em **argon2id** | **SHA-256** | O segredo tem 256 bits de CSPRNG — não há dicionário contra isso. Argon2 custaria ~100 ms por renovação e o salt aleatório inutilizaria o índice de busca. É o que `application::tokens::hash_refresh_token` já faz |
+| 2 | Confirmação de `send_message` casada com o **nome** do contato | **`contato_id`** | Nenhum RPC do backend resolve contato por id, e o texto do `ToolError` vai para o log do processo — nome de cliente ali seria vazamento de PII. O `contato_id` preserva a propriedade que importa: só se obtém listando de verdade. As destrutivas seguem usando o nome |
+| 3 | `challenges.py` no `mcp_server` | **não existe** | O SDK já monta o `/.well-known/oauth-protected-resource` e o `WWW-Authenticate` com `resource_metadata`. Escrever os nossos duplicaria a implementação conformante e divergiria dela na primeira atualização |
+| 4 | Repositório com `sqlx::query_as!` | **queries verificadas em runtime** | O cache `.sqlx/` exige `cargo sqlx prepare` contra um banco, o que não é possível aqui, e um cache desatualizado quebra o `--check` do CI |
+| 5 | Confirmação **nível 1** por `elicitation` | **só o nível 2** (argumento) | O nível 2 é o que o plano chama de garantido; o nível 1 depende de capacidade opcional do cliente. Fica como o primeiro incremento de N13.6 |
+| 6 | — | **teto de vida de 30 dias no consentimento** | Não estava no plano. Um refresh rotacionado indefinidamente vale para sempre; o teto é medido sobre `created_at`, sem coluna nova |
+
+### O que falta para funcionar
+
+1. **DNS** de `auth.dev.` e `mcp.dev.` — antes do deploy, senão o Let's Encrypt entra em laço.
+2. Push → CI. Espere iteração no Rust.
+3. Os segredos **já estão** em `/opt/smartcore/dev/env/` (par RSA + `MCP_SERVICE_SECRET`, gerados em 2026-09-09).
+
+### Bug corrigido no caminho
+
+`application/src/auth/login.rs` fazia `unwrap_or(0)` no `id` vindo de
+`VerifyCredentials`: uma resposta malformada emitia JWT com `sub="0"` — sessão sem
+dono. Agora falha fechado. Passou a ser bloqueante porque o consentimento OAuth
+grava `user_id` com FK.
+
+---
+
 ## Definition of Done
 
 - [ ] **O conector funciona sem colar configuração:** o usuário adiciona a URL no Claude, é levado ao login, consente e o agente passa a operar.
@@ -164,4 +224,4 @@ e no span.
 
 ## Execution History
 
-> Last updated: 2026-09-07T03:23:15.998Z | Progress: 0%
+> Last updated: 2026-09-09T22:28:51.807Z | Progress: 0%

@@ -153,6 +153,7 @@ usuário a um cliente:
 | `redirect_uri` | O exato usado, para a trilha |
 | `scopes` | Escopos concedidos (catálogo do doc 09 §3) |
 | `refresh_token_hash` | SHA-256 do segredo, rotacionado a cada uso. Reapresentar um hash antigo **derruba o grant inteiro** |
+| `created_at` | Além da trilha, é o que mede o **teto de vida** do consentimento (`MCP_REFRESH_TTL_S`, 30 dias): passado o prazo, o refresh é recusado e o usuário reconecta. Não há coluna de expiração — o teto é calculado, para não acrescentar estado que precisaria ser mantido em sincronia |
 | `revoked_at` | Revogação soft — a trilha de auditoria referencia `grant_id` |
 
 O **access token** não é persistido em lugar nenhum: é um JWT RS256 de ~15 min. O
