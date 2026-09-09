@@ -163,7 +163,10 @@ fn validar_destino(url: &url::Url) -> Result<(), CimdErro> {
 /// `client_id` é a URL; o retorno é o documento já validado e com o
 /// `client_name` truncado no tamanho que o banco aceita.
 #[tracing::instrument(skip_all, fields(cimd_host = tracing::field::Empty))]
-pub async fn buscar(cliente_http: &reqwest::Client, client_id: &str) -> Result<ClientMetadata, CimdErro> {
+pub async fn buscar(
+    cliente_http: &reqwest::Client,
+    client_id: &str,
+) -> Result<ClientMetadata, CimdErro> {
     let url = url::Url::parse(client_id).map_err(|_| CimdErro::UrlInvalida)?;
 
     // O host entra no span de propósito: é ele que denuncia uma tentativa de
@@ -219,7 +222,9 @@ pub fn validar_documento(
     }
     // Só `https` ou `http://localhost` — a exceção de localhost existe para
     // clientes de desktop, que escutam numa porta efêmera da própria máquina.
-    metadata.redirect_uris.retain(|uri| redirect_uri_aceitavel(uri));
+    metadata
+        .redirect_uris
+        .retain(|uri| redirect_uri_aceitavel(uri));
     if metadata.redirect_uris.is_empty() {
         return Err(CimdErro::SemRedirectUri);
     }
@@ -248,7 +253,10 @@ pub fn redirect_uri_aceitavel(uri: &str) -> bool {
     }
     match url.scheme() {
         "https" => true,
-        "http" => matches!(url.host_str(), Some("localhost") | Some("127.0.0.1") | Some("[::1]") | Some("::1")),
+        "http" => matches!(
+            url.host_str(),
+            Some("localhost") | Some("127.0.0.1") | Some("[::1]") | Some("::1")
+        ),
         // Esquemas próprios de app (`claudeapp://`) não são aceitos na v1: não
         // dá para mostrar ao usuário um host que ele reconheça, e a spec pede
         // exatamente isso na tela de consentimento.
@@ -266,7 +274,10 @@ pub fn somente_localhost(metadata: &ClientMetadata) -> bool {
     metadata.redirect_uris.iter().all(|uri| {
         url::Url::parse(uri)
             .ok()
-            .and_then(|u| u.host_str().map(|h| matches!(h, "localhost" | "127.0.0.1" | "::1")))
+            .and_then(|u| {
+                u.host_str()
+                    .map(|h| matches!(h, "localhost" | "127.0.0.1" | "::1"))
+            })
             .unwrap_or(false)
     })
 }
@@ -431,7 +442,10 @@ mod tests {
 
     #[test]
     fn detecta_cliente_somente_localhost() {
-        assert!(somente_localhost(&doc("https://x/y", &["http://localhost:1/cb"])));
+        assert!(somente_localhost(&doc(
+            "https://x/y",
+            &["http://localhost:1/cb"]
+        )));
         assert!(!somente_localhost(&doc(
             "https://x/y",
             &["http://localhost:1/cb", "https://claude.ai/cb"]

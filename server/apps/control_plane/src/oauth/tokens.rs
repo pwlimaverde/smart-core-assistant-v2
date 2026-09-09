@@ -68,11 +68,32 @@ impl ChavesMcp {
     /// openssl rsa -in mcp_oauth_key.pem -pubout -out mcp_oauth_key.pub.pem
     /// ```
     pub fn carregar(pem_privado: &str, pem_publico: &str) -> Result<Self, TokenErro> {
-        let privada = EncodingKey::from_rsa_pem(pem_privado.as_bytes())
-            .map_err(|_| TokenErro::ChaveInvalida)?;
-        let publica = DecodingKey::from_rsa_pem(pem_publico.as_bytes())
-            .map_err(|_| TokenErro::ChaveInvalida)?;
+        let privado = normalizar_pem(pem_privado);
+        let publico = normalizar_pem(pem_publico);
+        let privada =
+            EncodingKey::from_rsa_pem(privado.as_bytes()).map_err(|_| TokenErro::ChaveInvalida)?;
+        let publica =
+            DecodingKey::from_rsa_pem(publico.as_bytes()).map_err(|_| TokenErro::ChaveInvalida)?;
         Ok(Self { privada, publica })
+    }
+}
+
+/// Devolve o PEM com quebras de linha reais, aceitando as duas formas.
+///
+/// O `env_file` do Docker Compose **não** aceita valor multilinha, então o PEM é
+/// gravado numa linha só, com `\n` escapado. O que chega aqui depende do dialeto
+/// dotenv da versão do Compose: algumas interpretam o escape e entregam quebras
+/// reais, outras entregam os dois caracteres literais. Um PEM com `\n` literal é
+/// recusado pelo parser de chave, e a falha aparece só no deploy — como
+/// "chave inválida", sem dizer por quê.
+///
+/// Normalizar aqui resolve nos dois casos: se as quebras já são reais, a troca
+/// não encontra nada e é no-op.
+fn normalizar_pem(bruto: &str) -> String {
+    if bruto.contains("\\n") {
+        bruto.replace("\\n", "\n")
+    } else {
+        bruto.to_string()
     }
 }
 
@@ -163,7 +184,11 @@ pub fn emitir_token_interno(
 /// com uma consulta indexada em vez de comparar hashes contra a tabela inteira —
 /// que é o que aconteceria com um token totalmente opaco.
 pub fn gerar_refresh_token(grant_id: Uuid) -> String {
-    format!("{}.{}", grant_id, application::tokens::gerar_refresh_token())
+    format!(
+        "{}.{}",
+        grant_id,
+        application::tokens::gerar_refresh_token()
+    )
 }
 
 /// Separa o refresh token nas suas duas partes. `None` para qualquer formato
@@ -220,6 +245,22 @@ pub fn pkce_confere(code_verifier: &str, code_challenge: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn normalizar_pem_aceita_n_literal_do_env_file() {
+        // Forma que o env_file do Compose entrega em algumas versões.
+        let numa_linha = "-----BEGIN PUBLIC KEY-----\\nMIIB\\n-----END PUBLIC KEY-----\\n";
+        let normalizado = normalizar_pem(numa_linha);
+        assert!(normalizado.contains('\n'));
+        assert!(!normalizado.contains("\\n"));
+        assert_eq!(normalizado.lines().count(), 3);
+    }
+
+    #[test]
+    fn normalizar_pem_e_noop_quando_as_quebras_ja_sao_reais() {
+        let real = "-----BEGIN PUBLIC KEY-----\nMIIB\n-----END PUBLIC KEY-----\n";
+        assert_eq!(normalizar_pem(real), real);
+    }
 
     #[test]
     fn pkce_aceita_o_par_correto() {

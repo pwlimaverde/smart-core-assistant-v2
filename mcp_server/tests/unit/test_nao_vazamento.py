@@ -73,3 +73,23 @@ def test_url_de_metadata_do_recurso_segue_a_rfc_9728():
         cfg.resource_metadata_url
         == "https://mcp.smartcoreassistant.com.br/.well-known/oauth-protected-resource"
     )
+
+
+def test_chave_publica_normaliza_n_escapado_do_env_file():
+    """O `env_file` do Compose não aceita PEM multilinha.
+
+    Se o valor chegar com `\\n` literal e ninguém normalizar, o `cryptography`
+    recusa a chave e **todo** token é rejeitado — servidor de pé que não atende
+    ninguém. Este teste é a trava contra alguém "simplificar" a propriedade.
+    """
+    escapado = "-----BEGIN PUBLIC KEY-----\\nMIIB\\n-----END PUBLIC KEY-----\\n"
+    cfg = Settings(oauth_public_key_pem=escapado)
+
+    assert "\\n" not in cfg.chave_publica
+    assert cfg.chave_publica.count("\n") == 3
+    assert cfg.chave_publica.startswith("-----BEGIN PUBLIC KEY-----")
+
+
+def test_chave_publica_e_noop_quando_as_quebras_ja_sao_reais():
+    real = "-----BEGIN PUBLIC KEY-----\nMIIB\n-----END PUBLIC KEY-----\n"
+    assert Settings(oauth_public_key_pem=real).chave_publica == real

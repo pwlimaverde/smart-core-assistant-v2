@@ -150,10 +150,7 @@ pub async fn handler_register_mcp_grant(
 ///
 /// Sem auditoria: é leitura do próprio dado, feita toda vez que a tela abre — o
 /// evento seria ruído puro na trilha. Ausência intencional, ver plano §N13.2.
-pub async fn handler_list_mcp_grants(
-    store: &dyn ports::McpGrantStore,
-    env: Envelope,
-) -> Envelope {
+pub async fn handler_list_mcp_grants(store: &dyn ports::McpGrantStore, env: Envelope) -> Envelope {
     let ctx = contexto_do_envelope(&env);
     match store.listar(&ctx).await {
         Ok(grants) => {
@@ -282,7 +279,7 @@ pub async fn handler_get_mcp_grant_com_segredo(
             }),
         ),
         Ok(None) => erro(
-            error_core::AppError::NotFound("consentimento não encontrado".to_string()),
+            error_core::AppError::Validation("consentimento não encontrado".to_string()),
             &env,
         ),
         Err(err) => erro(err.into(), &env),

@@ -89,7 +89,6 @@ use contracts::grpc::queries::{
     // N13 — aplicativos de IA conectados por OAuth (servidor MCP)
     ListMcpGrantsRequest,
     ListMcpGrantsResponse,
-    McpGrantItem,
     ListMyAtendentesRequest,
     ListMyAtendentesResponse,
     ListMyContatosRequest,
@@ -126,6 +125,7 @@ use contracts::grpc::queries::{
     LoginRequest,
     LogoutRequest,
     LogoutResponse,
+    McpGrantItem,
     MensagemThread as ProtoMensagemThread,
     MidiaMensagem as ProtoMidiaMensagem,
     MoveAtendimentoEtapaRequest,
@@ -434,10 +434,7 @@ fn janela_revogacao_min() -> i32 {
 /// Fail-closed: rota não declarada é negada. É de propósito — esquecer de
 /// declarar aparece no primeiro teste; esquecer de restringir não apareceria em
 /// lugar nenhum até virar incidente.
-fn exigir_escopo_de_rota(
-    claims: &application::jwt::Claims,
-    metodo: &str,
-) -> Result<(), Status> {
+fn exigir_escopo_de_rota(claims: &application::jwt::Claims, metodo: &str) -> Result<(), Status> {
     let Some(exigidos) = crate::rbac::escopos_da_rota(metodo) else {
         tracing::error!(
             rota = metodo,
@@ -6728,20 +6725,24 @@ mod tests {
         // Superusuário passa mesmo sem escopo explícito.
         assert!(exigir_escopo(&claims_com(&[], true), &["operacional:admin"], "R").is_ok());
         // `tenant:admin` implica qualquer escopo (doc 09 §3).
-        assert!(
-            exigir_escopo(&claims_com(&["tenant:admin"], false), &["treinamento:write"], "R")
-                .is_ok()
-        );
+        assert!(exigir_escopo(
+            &claims_com(&["tenant:admin"], false),
+            &["treinamento:write"],
+            "R"
+        )
+        .is_ok());
         // Coringa de superusuário `*` passa.
         assert!(exigir_escopo(&claims_com(&["*"], false), &["configuracoes:write"], "R").is_ok());
     }
 
     #[test]
     fn exigir_escopo_aceita_quem_tem_o_escopo_pedido() {
-        assert!(
-            exigir_escopo(&claims_com(&["treinamento:read"], false), &["treinamento:read"], "R")
-                .is_ok()
-        );
+        assert!(exigir_escopo(
+            &claims_com(&["treinamento:read"], false),
+            &["treinamento:read"],
+            "R"
+        )
+        .is_ok());
     }
 
     #[test]

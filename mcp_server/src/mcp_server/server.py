@@ -64,7 +64,9 @@ def montar() -> ServidorMcpFiltrado:
     logger.info("configuração carregada: {}", cfg.resumo_seguro())
 
     verificador = VerificadorDeToken(
-        chave_publica_pem=cfg.oauth_public_key_pem,
+        # `chave_publica`, não `oauth_public_key_pem`: o valor cru pode vir com
+        # `\n` escapado do env_file (ver a nota em settings.py).
+        chave_publica_pem=cfg.chave_publica,
         issuer=cfg.oauth_issuer,
         resource=cfg.oauth_resource,
     )

@@ -160,12 +160,12 @@ mod tests {
             // O método é a primeira string literal depois do `&self.deps.pg`/
             // destino — na prática, a primeira string entre aspas da janela que
             // comece com maiúscula.
-            let Some(metodo) = janela
-                .split('"')
-                .skip(1)
-                .step_by(2)
-                .find(|s| s.chars().next().map(|c| c.is_ascii_uppercase()).unwrap_or(false))
-            else {
+            let Some(metodo) = janela.split('"').skip(1).step_by(2).find(|s| {
+                s.chars()
+                    .next()
+                    .map(|c| c.is_ascii_uppercase())
+                    .unwrap_or(false)
+            }) else {
                 continue;
             };
             if escopos_da_rota(metodo).is_none() {
@@ -240,7 +240,11 @@ mod tests {
             "configuracoes:read",
             "financeiro:read",
         ]);
-        assert!(autorizado(&viewer, escopos_da_rota("ListFluxos").unwrap(), false));
+        assert!(autorizado(
+            &viewer,
+            escopos_da_rota("ListFluxos").unwrap(),
+            false
+        ));
         assert!(!autorizado(
             &viewer,
             escopos_da_rota("MoverEtapaFluxo").unwrap(),
@@ -256,7 +260,11 @@ mod tests {
     #[test]
     fn staff_cria_nota_mas_nao_mexe_em_departamento() {
         let staff = v(&["clientes:read", "atendimentos:read", "atendimentos:write"]);
-        assert!(autorizado(&staff, escopos_da_rota("CreateNota").unwrap(), false));
+        assert!(autorizado(
+            &staff,
+            escopos_da_rota("CreateNota").unwrap(),
+            false
+        ));
         assert!(!autorizado(
             &staff,
             escopos_da_rota("CreateDepartamento").unwrap(),

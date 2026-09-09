@@ -237,7 +237,10 @@ mod tests {
 
     #[test]
     fn escapar_cobre_os_cinco_caracteres_perigosos() {
-        assert_eq!(escapar(r#"<a href="x">&'"#), "&lt;a href=&quot;x&quot;&gt;&amp;&#x27;");
+        assert_eq!(
+            escapar(r#"<a href="x">&'"#),
+            "&lt;a href=&quot;x&quot;&gt;&amp;&#x27;"
+        );
     }
 
     #[test]

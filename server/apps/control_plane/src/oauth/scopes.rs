@@ -135,9 +135,7 @@ pub fn interseccionar(concedidos: &[String], atuais_do_usuario: &[String]) -> Ve
     CATALOGO
         .iter()
         .map(|e| e.escopo)
-        .filter(|escopo| {
-            ofertaveis.contains(escopo) && concedidos.iter().any(|c| c == escopo)
-        })
+        .filter(|escopo| ofertaveis.contains(escopo) && concedidos.iter().any(|c| c == escopo))
         .map(str::to_string)
         .collect()
 }

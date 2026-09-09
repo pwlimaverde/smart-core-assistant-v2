@@ -290,10 +290,7 @@ mod tests {
         let valor = serde_json::json!(["atendimentos:read", "clientes:read"]);
         assert_eq!(
             escopos_do_json(&valor),
-            vec![
-                "atendimentos:read".to_string(),
-                "clientes:read".to_string()
-            ]
+            vec!["atendimentos:read".to_string(), "clientes:read".to_string()]
         );
     }
 

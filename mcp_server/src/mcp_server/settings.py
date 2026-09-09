@@ -79,6 +79,22 @@ class Settings(BaseSettings):
     max_itens_por_pagina: int = Field(default=50)
 
     @property
+    def chave_publica(self) -> str:
+        """A chave pública com quebras de linha reais.
+
+        O `env_file` do Docker Compose **não** aceita valor multilinha, então o
+        PEM é gravado numa linha só, com `\\n` escapado. O que chega aqui depende
+        do dialeto dotenv da versão do Compose: algumas interpretam o escape,
+        outras entregam os dois caracteres literais. Um PEM com `\\n` literal é
+        recusado pelo `cryptography`, e o sintoma seria **todo token rejeitado**
+        com "chave inválida" — um servidor de pé que não atende ninguém.
+
+        Normalizar aceita as duas formas: se as quebras já são reais, é no-op.
+        """
+        bruto = self.oauth_public_key_pem
+        return bruto.replace("\\n", "\n") if "\\n" in bruto else bruto
+
+    @property
     def resource_metadata_url(self) -> str:
         """URL do documento RFC 9728, citada no header `WWW-Authenticate`."""
         base = self.oauth_resource.rstrip("/")

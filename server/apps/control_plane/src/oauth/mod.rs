@@ -113,10 +113,7 @@ pub struct OauthState {
 
 pub fn rotas(estado: OauthState) -> Router {
     Router::new()
-        .route(
-            "/.well-known/oauth-authorization-server",
-            get(metadata_as),
-        )
+        .route("/.well-known/oauth-authorization-server", get(metadata_as))
         // Alguns clientes pedem a metadata no caminho com sufixo do recurso
         // (RFC 8414 §3.1). Servir o mesmo documento nos dois evita o 404 que
         // faria o cliente desistir antes de tentar o caminho canônico.
@@ -500,7 +497,7 @@ async fn authorize_consent(
              Volte ao aplicativo e conecte de novo.",
         );
     };
-    tracing::Span::current().record("client_id", &requisicao.client_id);
+    tracing::Span::current().record("client_id", requisicao.client_id.as_str());
 
     let Some(usuario) = requisicao.usuario.clone() else {
         return erro_de_pagina(
@@ -523,10 +520,8 @@ async fn authorize_consent(
     // Regra do subconjunto, aplicada de novo no servidor. A tela já filtrava,
     // mas a tela é HTML: qualquer um pode reenviar o formulário com escopos a
     // mais. Esta interseção é a que vale.
-    let concedidos = scopes::interseccionar(
-        &scopes::apenas_conhecidos(&form.escopos),
-        &usuario.escopos,
-    );
+    let concedidos =
+        scopes::interseccionar(&scopes::apenas_conhecidos(&form.escopos), &usuario.escopos);
     if concedidos.is_empty() {
         return erro_por_redirect(
             &requisicao.redirect_uri,
@@ -582,7 +577,7 @@ async fn authorize_consent(
             "resposta inesperada ao registrar a autorização",
         );
     };
-    tracing::Span::current().record("grant_id", grant_id.to_string());
+    tracing::Span::current().record("grant_id", tracing::field::display(grant_id));
 
     // Código de autorização: uso único, 60s, amarrado ao desafio PKCE, ao
     // `redirect_uri` e ao `resource`.
@@ -597,7 +592,10 @@ async fn authorize_consent(
         resource: requisicao.resource.clone(),
         escopos: concedidos,
     };
-    if store::gravar_codigo(&mut redis, &codigo, &dados).await.is_err() {
+    if store::gravar_codigo(&mut redis, &codigo, &dados)
+        .await
+        .is_err()
+    {
         return erro_por_redirect(
             &requisicao.redirect_uri,
             &cfg.issuer,
@@ -690,7 +688,7 @@ async fn token_por_codigo(estado: OauthState, form: TokenForm) -> Response {
             "código inválido, expirado ou já utilizado",
         );
     };
-    tracing::Span::current().record("grant_id", dados.grant_id.to_string());
+    tracing::Span::current().record("grant_id", tracing::field::display(dados.grant_id));
 
     if !tokens::pkce_confere(code_verifier, &dados.code_challenge) {
         tracing::warn!(
@@ -763,7 +761,7 @@ async fn token_por_refresh(estado: OauthState, form: TokenForm) -> Response {
             "refresh token inválido",
         );
     };
-    tracing::Span::current().record("grant_id", grant_id.to_string());
+    tracing::Span::current().record("grant_id", tracing::field::display(grant_id));
 
     // O tenant vem do próprio grant; para buscá-lo é preciso o tenant. O
     // `data_postgres` resolve isso porque o `grant_id` é UUID e a busca leva o
@@ -818,7 +816,9 @@ async fn token_por_refresh(estado: OauthState, form: TokenForm) -> Response {
         })
         .unwrap_or_default();
 
-    if hash_guardado.is_empty() || !tokens::hash_confere(&hash_guardado, &tokens::hash_refresh(&segredo)) {
+    if hash_guardado.is_empty()
+        || !tokens::hash_confere(&hash_guardado, &tokens::hash_refresh(&segredo))
+    {
         // Hash que não confere num grant que existe = refresh já rotacionado
         // sendo reapresentado. Duas partes têm o token; não dá para saber qual
         // é a legítima, e a única resposta segura é derrubar o consentimento.
@@ -864,13 +864,7 @@ async fn token_por_refresh(estado: OauthState, form: TokenForm) -> Response {
     }
 
     emitir_par_de_tokens(
-        &estado,
-        grant_id,
-        user_id,
-        tenant_id,
-        &client_id,
-        &efetivos,
-        cfg,
+        &estado, grant_id, user_id, tenant_id, &client_id, &efetivos, cfg,
     )
     .await
 }
@@ -985,9 +979,7 @@ async fn token_exchange(
         .get("x-servico-secreto")
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
-    if cfg.servico_secreto.is_empty()
-        || !tokens::hash_confere(&cfg.servico_secreto, apresentado)
-    {
+    if cfg.servico_secreto.is_empty() || !tokens::hash_confere(&cfg.servico_secreto, apresentado) {
         return erro_token(
             StatusCode::UNAUTHORIZED,
             "invalid_client",
@@ -1010,7 +1002,7 @@ async fn token_exchange(
             )
         }
     };
-    tracing::Span::current().record("grant_id", &claims.grant_id);
+    tracing::Span::current().record("grant_id", claims.grant_id.as_str());
 
     let tenant_id = Uuid::parse_str(&claims.tenant_id).unwrap_or_else(|_| Uuid::nil());
     let user_id: i32 = claims.sub.parse().unwrap_or(0);
