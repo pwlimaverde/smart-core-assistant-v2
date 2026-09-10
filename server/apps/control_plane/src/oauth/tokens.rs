@@ -204,7 +204,7 @@ pub fn partir_refresh_token(token: &str) -> Option<(Uuid, String)> {
 }
 
 /// Hash guardado no grant. SHA-256, não argon2id — ver a justificativa na
-/// migration `0030`: o segredo tem 256 bits de entropia de CSPRNG.
+/// migration `0032`: o segredo tem 256 bits de entropia de CSPRNG.
 pub fn hash_refresh(segredo: &str) -> String {
     application::tokens::hash_sha256_hex(segredo)
 }

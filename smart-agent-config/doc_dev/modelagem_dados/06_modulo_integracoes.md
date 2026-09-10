@@ -142,7 +142,7 @@ consequências de desenho:
 
 ### 4.2 Modelo de dados
 
-Uma tabela nova, `mcp_oauth_grant` (migration `0030`) — o consentimento de um
+Uma tabela nova, `mcp_oauth_grant` (migration `0032`) — o consentimento de um
 usuário a um cliente:
 
 | Coluna | Nota |

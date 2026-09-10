@@ -2,6 +2,11 @@
 -- N13.2 — Consentimentos OAuth 2.1 dos clientes MCP
 -- ============================================================
 --
+-- Nasceu como 0030 e virou 0032: enquanto a fase N13 era escrita, a `dev`
+-- recebeu 0030 (bot por instância) e 0031 (encerramento por inatividade). Duas
+-- migrations com o mesmo número quebram o `sqlx::migrate!` — ele ordena por
+-- versão, e versão repetida é erro na aplicação, não no merge.
+--
 -- Registro de "este usuário autorizou este cliente MCP a operar o tenant dele".
 -- É a linha que a tela "Aplicativos conectados" (N13.8) lista e revoga, e é
 -- também o que permite invalidar um refresh token na hora, sem esperar o `exp`.

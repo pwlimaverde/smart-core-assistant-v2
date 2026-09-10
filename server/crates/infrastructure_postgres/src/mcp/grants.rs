@@ -17,7 +17,7 @@
 //!
 //! O refresh token **nunca** existe em claro aqui: o AS gera o token opaco,
 //! guarda o SHA-256 do segredo e devolve o claro ao cliente uma única vez
-//! (SHA-256 e não argon2id — a justificativa está na migration 0030). Rotação é
+//! (SHA-256 e não argon2id — a justificativa está na migration 0032). Rotação é
 //! obrigatória (spec OAuth 2.1 para clientes públicos) e o reuso de um hash já
 //! rotacionado é tratado como roubo — [`revogar_por_reuso`] derruba o grant
 //! inteiro em vez de só recusar a chamada.
