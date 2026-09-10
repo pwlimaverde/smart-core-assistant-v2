@@ -250,7 +250,7 @@ async fn main() -> anyhow::Result<()> {
     let tenant_store: std::sync::Arc<dyn ports::TenantStore> =
         std::sync::Arc::new(adapters::PgTenantStore::new(pool.clone()));
     let auth_store: std::sync::Arc<dyn ports::AuthStore> =
-        std::sync::Arc::new(adapters::PgAuthStore::new(pool.clone()));
+        std::sync::Arc::new(adapters::PgAuthStore::new(pool.clone(), admin_pool.clone()));
     let atendimento_store: std::sync::Arc<dyn ports::AtendimentoStore> = std::sync::Arc::new(
         adapters::PgAtendimentoStore::new(pool.clone(), admin_pool.clone()),
     );
@@ -486,6 +486,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_update_tenant_user = state_clone.clone();
     let state_for_create_superuser = state_clone.clone();
     let state_for_list_superusers = state_clone.clone();
+    let state_for_admin_list_users = state_clone.clone();
+    let state_for_admin_set_user_active = state_clone.clone();
     let state_for_delete_superuser = state_clone.clone();
     let state_for_get_user_identity = state_clone.clone();
     let state_for_get_user_flow_permissions = state_clone.clone();
@@ -558,10 +560,14 @@ async fn main() -> anyhow::Result<()> {
     let state_for_verify_whatsapp_instance_token = state_clone.clone();
     let state_for_is_phone_whitelisted = state_clone.clone();
     let state_for_resolve_atendimento = state_clone.clone();
+    let state_for_toggle_bot = state_clone.clone();
+    let state_for_toggle_bot_conversa = state_clone.clone();
     let state_for_aplicar_politica = state_clone.clone();
     let state_for_move_atendimento_etapa = state_clone.clone();
     let state_for_send_outbound_message = state_clone.clone();
     let state_for_listar_feedback_vencido = state_clone.clone();
+    let state_for_listar_inativos = state_clone.clone();
+    let state_for_encerrar_inatividade = state_clone.clone();
     let state_for_marcar_feedback_expirado = state_clone.clone();
     let state_for_aguardando_avaliacao = state_clone.clone();
     let state_for_registrar_avaliacao = state_clone.clone();
@@ -600,7 +606,34 @@ async fn main() -> anyhow::Result<()> {
         .route("ResolveAtendimentoParaContato", move |env| {
             let state = state_for_resolve_atendimento.clone();
             Box::pin(async move {
-                handler_resolve_atendimento_para_contato(state.atendimento.as_ref(), env).await
+                handler_resolve_atendimento_para_contato(
+                    state.atendimento.as_ref(),
+                    state.whatsapp.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("DefinirBotDaConversa", move |env| {
+            let state = state_for_toggle_bot_conversa.clone();
+            Box::pin(async move {
+                handler_definir_bot_da_conversa(
+                    state.atendimento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("DefinirRespostaBotInstancia", move |env| {
+            let state = state_for_toggle_bot.clone();
+            Box::pin(async move {
+                handler_definir_resposta_bot_instancia(
+                    state.whatsapp.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
             })
         })
         .route("UpdateMessageStatus", move |env| {
@@ -659,6 +692,16 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(
                 async move { handler_send_outbound_message(state.atendimento.as_ref(), env).await },
             )
+        })
+        .route("ListarAtendimentosInativos", move |env| {
+            let state = state_for_listar_inativos.clone();
+            Box::pin(async move { handler_listar_inativos(state.atendimento.as_ref(), env).await })
+        })
+        .route("EncerrarAtendimentoPorInatividade", move |env| {
+            let state = state_for_encerrar_inatividade.clone();
+            Box::pin(async move {
+                handler_encerrar_por_inatividade(state.atendimento.as_ref(), env).await
+            })
         })
         .route("ListarAtendimentosFeedbackVencido", move |env| {
             let state = state_for_listar_feedback_vencido.clone();
@@ -929,6 +972,16 @@ async fn main() -> anyhow::Result<()> {
             let state = state_for_create_superuser.clone();
             Box::pin(async move {
                 handler_create_superuser(state.auth.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("AdminListUsers", move |env| {
+            let state = state_for_admin_list_users.clone();
+            Box::pin(async move { handler_admin_list_users(state.auth.as_ref(), env).await })
+        })
+        .route("AdminSetUserActive", move |env| {
+            let state = state_for_admin_set_user_active.clone();
+            Box::pin(async move {
+                handler_admin_set_user_active(state.auth.as_ref(), state.audit.as_ref(), env).await
             })
         })
         .route("ListSuperusers", move |env| {
@@ -2211,6 +2264,128 @@ async fn handler_create_superuser(
 }
 
 /// Lista os superusuários do sistema (operação administrativa, tabela global).
+/// D7 — lista usuários de todos os tenants (painel do superusuário).
+///
+/// A v1 tinha isto no admin do Django; a v2 só tinha `ListTenantUsers`, que
+/// resolve o tenant a partir de quem chama e nunca enxerga além do próprio.
+async fn handler_admin_list_users(store: &dyn ports::AuthStore, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let busca = payload_json
+        .get("busca")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    // Teto de 200: a listagem é paginada e um pedido sem limite traria a base de
+    // usuários inteira num único envelope.
+    let limite = payload_json
+        .get("limite")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(50)
+        .clamp(1, 200);
+    let offset = payload_json
+        .get("offset")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0)
+        .max(0);
+
+    match store.listar_usuarios_global(busca, limite, offset).await {
+        Ok(usuarios) => {
+            let lista: Vec<serde_json::Value> = usuarios
+                .iter()
+                .map(|u| {
+                    serde_json::json!({
+                        "id": u.id,
+                        "username": u.username,
+                        "email": u.email,
+                        "nome": format!("{} {}", u.first_name, u.last_name).trim().to_string(),
+                        "is_active": u.is_active,
+                        "is_superuser": u.is_superuser,
+                        "last_login": u.last_login.map(|d| d.timestamp_millis()),
+                        "date_joined": u.date_joined.timestamp_millis(),
+                        "tenant_dono": u.tenant_dono,
+                        "tenant_membro": u.tenant_membro,
+                        "papel": u.papel,
+                    })
+                })
+                .collect();
+            ok_reply(
+                &env,
+                "AdminListUsersReply",
+                serde_json::json!({ "usuarios": lista }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// D7 — bloqueia/desbloqueia o acesso de um usuário.
+///
+/// **O superusuário não pode se bloquear.** Não é zelo: `is_active = false`
+/// derruba o login, e o único caminho de volta seria um `UPDATE` manual no
+/// banco. A recusa acontece aqui, com o autor vindo do envelope — o cliente não
+/// tem como ser a única defesa contra isso.
+async fn handler_admin_set_user_active(
+    store: &dyn ports::AuthStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let user_id = payload_json
+        .get("user_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let ativo = payload_json
+        .get("ativo")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+
+    if user_id <= 0 {
+        return erro(
+            error_core::AppError::Validation("id de usuário inválido".to_string()),
+            &env,
+        );
+    }
+    if !ativo && user_id == env.auth_user_id {
+        return erro(
+            error_core::AppError::Validation(
+                "não é possível bloquear o próprio acesso".to_string(),
+            ),
+            &env,
+        );
+    }
+
+    match store.definir_usuario_ativo(user_id, ativo).await {
+        Ok(false) => erro(
+            error_core::AppError::Validation("usuário não encontrado".to_string()),
+            &env,
+        ),
+        Ok(true) => {
+            // Evento crítico: mexer em acesso é o que a trilha de auditoria
+            // existe para registrar. Sem e-mail nem nome — o id basta para
+            // reconstituir quem foi.
+            audit
+                .publish(
+                    &env,
+                    "usuario.acesso_alterado",
+                    if ativo {
+                        "Acesso do usuario DESBLOQUEADO pelo superusuario".to_string()
+                    } else {
+                        "Acesso do usuario BLOQUEADO pelo superusuario".to_string()
+                    },
+                    serde_json::json!({ "user_id": user_id, "ativo": ativo }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "AdminSetUserActiveReply",
+                serde_json::json!({ "ativo": ativo }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
 async fn handler_list_superusers(store: &dyn ports::AuthStore, env: Envelope) -> Envelope {
     match store.listar_superusers().await {
         Ok(usuarios) => {
@@ -2347,6 +2522,11 @@ async fn handler_persist_message(store: &dyn ports::AtendimentoStore, env: Envel
             .get("ja_entregue")
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
+        // Só o bot manda este campo; para os demais remetentes fica nulo.
+        confianca_resposta: payload_json
+            .get("confianca")
+            .and_then(|v| v.as_f64())
+            .filter(|c| c.is_finite()),
     };
 
     // O traceparent é persistido no outbox para manter o trace distribuído vivo
@@ -2377,6 +2557,7 @@ async fn handler_persist_message(store: &dyn ports::AtendimentoStore, env: Envel
 
 async fn handler_resolve_atendimento_para_contato(
     store: &dyn ports::AtendimentoStore,
+    whatsapp: &dyn ports::WhatsappStore,
     env: Envelope,
 ) -> Envelope {
     let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
@@ -2399,6 +2580,22 @@ async fn handler_resolve_atendimento_para_contato(
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
+    // D3: a barreira mais externa do bot é a da INSTÂNCIA, e ela é resolvida
+    // aqui — no mesmo RPC que já roda uma vez por mensagem — para não custar uma
+    // ida extra ao banco no caminho quente. Ausente ou ilegível resolve para
+    // "responde": a instância nasce com `resposta_bot = TRUE` e uma falha de
+    // leitura não pode calar o bot de quem nunca o desligou.
+    let instancia_responde_bot = match payload_json.get("instance_id").and_then(|v| v.as_i64()) {
+        Some(id) => whatsapp
+            .buscar_instancia(&contexto_do_envelope(&env), id as i32)
+            .await
+            .ok()
+            .flatten()
+            .map(|i| i.resposta_bot)
+            .unwrap_or(true),
+        None => true,
+    };
+
     let ctx = contexto_do_envelope(&env);
     match store
         .resolver_atendimento_para_contato(&ctx, phone, push_name)
@@ -2412,9 +2609,151 @@ async fn handler_resolve_atendimento_para_contato(
                 "contato_id": contato_id,
                 "atendimento_id": atendimento.id,
                 "bot_pode_atender": atendimento.bot_pode_atender,
+                "instancia_responde_bot": instancia_responde_bot,
                 "atendente_humano_id": atendimento.atendente_humano_id,
                 "is_new": is_new,
             }),
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// D3 — liga/desliga a resposta automática da IA **nesta conversa**.
+///
+/// O caminho de volta que faltava. `assumir_atendimento` desliga o bot ao alguém
+/// assumir o cartão, e nada no servidor devolvia o valor para `true`: uma
+/// conversa que passou por um humano ficava sem bot para sempre.
+///
+/// A tranca do `desatribuir` continua de pé — devolver o cartão não religa
+/// sozinho. O que muda é existir uma ação deliberada para religar.
+async fn handler_definir_bot_da_conversa(
+    store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(i) => i as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let habilitado = match payload_json.get("habilitado").and_then(|v| v.as_bool()) {
+        Some(h) => h,
+        None => {
+            return erro(
+                error_core::AppError::Validation("habilitado ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .definir_bot_da_conversa(&ctx, atendimento_id, habilitado)
+        .await
+    {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "atendimento.bot_alterado",
+                    if habilitado {
+                        "Resposta automatica da IA LIGADA para o atendimento".to_string()
+                    } else {
+                        "Resposta automatica da IA DESLIGADA para o atendimento".to_string()
+                    },
+                    serde_json::json!({
+                        "atendimento_id": atendimento_id,
+                        "habilitado": habilitado,
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "DefinirBotDaConversaReply",
+                serde_json::json!({ "habilitado": habilitado }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Validation("atendimento não encontrado".into()),
+            &env,
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// D3 — liga/desliga a resposta automática da IA para a instância inteira.
+///
+/// Equivale ao `InstanceToggleBotView` da v1. A v2 tinha perdido a capacidade:
+/// só existia o desligamento por conversa (`bot_pode_atender`), que além de tudo
+/// não tem controle em tela nenhuma e só desliga — nunca religa.
+///
+/// Auditado sempre que efetiva: "por que o bot parou de responder?" precisa ter
+/// resposta, e sem trilha a pergunta fica sem dono.
+async fn handler_definir_resposta_bot_instancia(
+    store: &dyn ports::WhatsappStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let id = match payload_json.get("id").and_then(|v| v.as_i64()) {
+        Some(i) => i as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("id da instância ausente".into()),
+                &env,
+            )
+        }
+    };
+    // Sem default: "não mandou o campo" é erro de contrato, não "desligue".
+    let habilitado = match payload_json.get("habilitado").and_then(|v| v.as_bool()) {
+        Some(h) => h,
+        None => {
+            return erro(
+                error_core::AppError::Validation("habilitado ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.definir_resposta_bot(&ctx, id, habilitado).await {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "instancia.bot_alterado",
+                    if habilitado {
+                        "Resposta automatica da IA LIGADA para a conexao".to_string()
+                    } else {
+                        "Resposta automatica da IA DESLIGADA para a conexao".to_string()
+                    },
+                    serde_json::json!({ "instance_id": id, "habilitado": habilitado }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "DefinirRespostaBotInstanciaReply",
+                serde_json::json!({ "alterado": true, "habilitado": habilitado }),
+            )
+        }
+        // Instância de outro tenant (ou inexistente) responde o mesmo: quem
+        // chuta um id não descobre se ele existe.
+        Ok(false) => erro(
+            error_core::AppError::Validation("conexão não encontrada".into()),
+            &env,
         ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
     }
@@ -2836,6 +3175,71 @@ async fn handler_send_outbound_message(
 
 /// Varredura cross-tenant (scheduler do worker, F4.3b): atendimentos com feedback vencido.
 /// `limite`/`ttl_horas` vêm do payload; sem eles, usa defaults conservadores.
+/// D5 — varredura cross-tenant das conversas paradas (scheduler).
+async fn handler_listar_inativos(store: &dyn ports::AtendimentoStore, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let limite = payload_json
+        .get("limite")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(100);
+    let minutos_padrao = payload_json
+        .get("minutos_padrao")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(30);
+
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_inativos(&ctx, limite, minutos_padrao).await {
+        Ok(list) => {
+            let itens: Vec<serde_json::Value> = list
+                .into_iter()
+                .map(|a| serde_json::json!({ "id": a.id, "tenant_id": a.tenant_id.to_string() }))
+                .collect();
+            ok_reply(
+                &env,
+                "ListarAtendimentosInativosReply",
+                serde_json::json!({ "atendimentos": itens }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// D5 — arquiva uma conversa abandonada (tenant-scoped).
+async fn handler_encerrar_por_inatividade(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.encerrar_por_inatividade(&ctx, atendimento_id).await {
+        // `encerrado: false` não é erro: entre a varredura e a escrita o cliente
+        // pode ter voltado a escrever, e a recheca de status recusou. O job só
+        // não conta essa linha.
+        Ok(encerrado) => ok_reply(
+            &env,
+            "EncerrarAtendimentoPorInatividadeReply",
+            serde_json::json!({ "encerrado": encerrado }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
 async fn handler_listar_feedback_vencido(
     store: &dyn ports::AtendimentoStore,
     env: Envelope,
@@ -3373,6 +3777,8 @@ async fn handler_transferir_atendimento_para_fluxo(
                 "etapa_id": outcome.etapa_id,
                 "etapa_nome": outcome.etapa_nome,
                 "reason": outcome.reason,
+                "atendente_id": outcome.atendente_id,
+                "atendente_nome": outcome.atendente_nome,
             }),
         ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
@@ -7172,6 +7578,7 @@ mod tests_whatsapp_unit {
             provider: "evolution".to_string(),
             subscribed_events: serde_json::json!([]),
             last_connection_state: None,
+            resposta_bot: true,
             created_at: chrono::Utc::now(),
         }
     }
@@ -7936,6 +8343,8 @@ mod tests_atendimento_cliente_unit {
                     etapa_id: Some(11),
                     etapa_nome: Some("Fila".to_string()),
                     reason: None,
+                    atendente_id: Some(3),
+                    atendente_nome: Some("Ana".to_string()),
                 })
             });
         let env = envelope_com_payload(

@@ -293,6 +293,18 @@ final class AlternarEtiquetaRepository
       _erroDeFicha(e, s, p.atendimentoId);
 }
 
+final class DefinirBotDaConversaRepository
+    extends RepositoryBase<Unit, DefinirBotDaConversaParameters, FichaError> {
+  const DefinirBotDaConversaRepository({required super.datasource});
+
+  @override
+  FichaError mapError(
+    Object e,
+    StackTrace s,
+    DefinirBotDaConversaParameters p,
+  ) => _erroDeFicha(e, s, p.atendimentoId);
+}
+
 final class CriarNotaRepository
     extends RepositoryBase<Unit, CriarNotaParameters, FichaError> {
   const CriarNotaRepository({required super.datasource});

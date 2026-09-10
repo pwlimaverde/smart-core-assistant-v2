@@ -455,6 +455,7 @@ final class LocalEngineGateway implements AtendimentoGateway {
             ),
           )
           .toList(),
+      botPodeAtender: resp.botPodeAtender,
     );
   }
 
@@ -479,6 +480,19 @@ final class LocalEngineGateway implements AtendimentoGateway {
         atendimentoId: atendimentoId,
         etiquetaId: Int64(etiquetaId),
         aplicar: aplicar,
+      ),
+    );
+  }
+
+  @override
+  Future<void> definirBotDaConversa({
+    required int atendimentoId,
+    required bool habilitado,
+  }) async {
+    await _admin.definirBotDaConversa(
+      proto.DefinirBotDaConversaRequest(
+        atendimentoId: atendimentoId,
+        habilitado: habilitado,
       ),
     );
   }

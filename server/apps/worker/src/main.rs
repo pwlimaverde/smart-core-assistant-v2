@@ -269,6 +269,10 @@ async fn aplicar_transferencia_ia(
     }
 
     // Auditoria: SEM conteúdo da conversa — só ids/fluxo destino.
+    //
+    // `atendente_id` entra porque a transferência agora atribui (D2), e "para
+    // quem foi" é a pergunta que se faz quando uma conversa some da vista de
+    // quem esperava por ela. Nulo significa fila sem ninguém disponível.
     state.audit_logger.info(
         tenant_uuid,
         "atendimento.transferido_por_ia",
@@ -277,6 +281,7 @@ async fn aplicar_transferencia_ia(
             "atendimento_id": atendimento_id,
             "fluxo_id": item.fluxo_id,
             "etapa_id": resp.get("etapa_id"),
+            "atendente_id": resp.get("atendente_id"),
         }),
         None,
         None,
@@ -295,6 +300,8 @@ async fn aplicar_transferencia_ia(
                 "fluxo_id": item.fluxo_id,
                 "etapa_id": resp.get("etapa_id"),
                 "etapa_nome": resp.get("etapa_nome"),
+                "atendente_id": resp.get("atendente_id"),
+                "atendente_nome": resp.get("atendente_nome"),
             }
         });
         let mut conn = bus_conn.clone();
@@ -307,6 +314,19 @@ async fn aplicar_transferencia_ia(
     }
 }
 
+/// O que a IA devolveu, com o número que decide.
+///
+/// Antes desta struct a função devolvia só o texto, e a `confiabilidade` que o
+/// `ia_engine` calcula era descartada na mesma linha — `oraculo_mensagem.
+/// confianca_resposta` ficava sempre nulo em produção. Sem histórico não há como
+/// calibrar limiar nenhum, então **gravar vem antes de decidir**: este passo só
+/// mede; o veto por faixa é o passo seguinte, com dado real na mão.
+struct RespostaIa {
+    texto: String,
+    /// 0..1. O `ia_engine` sempre a devolve; guardamos como veio.
+    confianca: f64,
+}
+
 /// Orquestra a resposta via IA (fase N2.5): resolve a config do tenant, embeda a
 /// mensagem, compõe o contexto de RAG (`data_postgres.QueryCompose`) e chama
 /// `ia_engine.Responder`. Passos de RAG/histórico são best-effort — só falham a
@@ -314,7 +334,8 @@ async fn aplicar_transferencia_ia(
 /// (`processar_mensagem_recebida`) decide o fallback textual em caso de erro.
 ///
 /// `skip_all` + `fields` explícitos: a mensagem do usuário é PII e nunca entra no
-/// span; só ids de correlação (`tenant_id`/`atendimento_id`).
+/// span; só ids de correlação (`tenant_id`/`atendimento_id`) e a confiança, que é
+/// número e não revela conteúdo.
 #[tracing::instrument(
     skip_all,
     name = "ia.responder",
@@ -323,6 +344,7 @@ async fn aplicar_transferencia_ia(
         atendimento_id = atendimento_id,
         fluxos_count = tracing::field::Empty,
         campos_pendentes_count = tracing::field::Empty,
+        confianca = tracing::field::Empty,
     )
 )]
 async fn responder_via_ia(
@@ -332,7 +354,7 @@ async fn responder_via_ia(
     mensagem_texto: &str,
     causation_id: &str,
     traceparent: &str,
-) -> anyhow::Result<String> {
+) -> anyhow::Result<RespostaIa> {
     let tenant_id_str = tenant_uuid.to_string();
 
     // 1. Config de IA do tenant (LLM + embeddings provider/api_key), resolvida
@@ -540,7 +562,14 @@ async fn responder_via_ia(
         .await;
     }
 
-    Ok(resposta.resposta_texto)
+    // A confiança entra no span: é número, não revela conteúdo, e é o que
+    // permitirá calibrar os limiares antes de ligar o veto.
+    span.record("confianca", resposta.confiabilidade);
+
+    Ok(RespostaIa {
+        texto: resposta.resposta_texto,
+        confianca: resposta.confiabilidade,
+    })
 }
 
 #[tokio::main]
@@ -1274,6 +1303,13 @@ async fn processar_mensagem_recebida(
             .get("bot_pode_atender")
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
+        // Ausente resolve para "responde": `data_postgres` antigo não manda o
+        // campo, e nesse caso o comportamento correto é o de hoje. O padrão da
+        // coluna é TRUE, então isto só difere para quem desligou de propósito.
+        instancia_responde_bot: resolve_body
+            .get("instancia_responde_bot")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true),
         atendente_humano_id: resolve_body
             .get("atendente_humano_id")
             .and_then(|v| v.as_i64()),
@@ -1571,6 +1607,9 @@ struct ContextoBot {
     event_id: String,
     traceparent: String,
     bot_pode_atender: bool,
+    /// D3 — barreira da INSTÂNCIA: `false` cala a IA em todas as conversas
+    /// daquele número. Precede o `bot_pode_atender` da conversa.
+    instancia_responde_bot: bool,
     atendente_humano_id: Option<i64>,
 }
 
@@ -1588,7 +1627,16 @@ async fn acionar_bot(
     let tenant_uuid = ctx.tenant_uuid;
     let atendimento_id = ctx.atendimento_id;
 
-    if ctx.bot_pode_atender && ctx.atendente_humano_id.is_none() && texto_do_contato.is_some() {
+    // Ordem das barreiras, da mais externa para a mais interna:
+    //  1. instância desligada  → nenhuma conversa daquele número é respondida;
+    //  2. conversa desligada   → `bot_pode_atender` (assumir o atendimento zera);
+    //  3. humano ativo         → `atendente_humano_id`;
+    //  4. sem texto            → mídia sem legenda, sticker, localização.
+    if ctx.instancia_responde_bot
+        && ctx.bot_pode_atender
+        && ctx.atendente_humano_id.is_none()
+        && texto_do_contato.is_some()
+    {
         tracing::info!(
             atendimento_id = atendimento_id,
             sender = %mascarar_telefone(&ctx.sender),
@@ -1623,7 +1671,7 @@ async fn acionar_bot(
         // qualquer falha (timeout/indisponibilidade/erro do provedor) — a barreira
         // de bot NUNCA trava o atendimento por causa da IA.
         let pergunta = texto_do_contato.clone().unwrap_or_default();
-        let bot_text = match responder_via_ia(
+        let (bot_text, confianca_bot) = match responder_via_ia(
             state,
             tenant_uuid,
             atendimento_id,
@@ -1633,7 +1681,7 @@ async fn acionar_bot(
         )
         .await
         {
-            Ok(texto) if !texto.trim().is_empty() => texto,
+            Ok(r) if !r.texto.trim().is_empty() => (r.texto, Some(r.confianca)),
             Ok(_) => {
                 tracing::warn!(
                     atendimento_id = atendimento_id,
@@ -1652,7 +1700,9 @@ async fn acionar_bot(
                     None,
                     Some(ctx.event_id.clone()),
                 );
-                texto_fallback
+                // Sem confiança: este texto não veio da IA, veio da config do
+                // tenant (ou da constante). Gravar 0.0 seria mentir na medição.
+                (texto_fallback, None)
             }
             Err(e) => {
                 tracing::warn!(
@@ -1674,7 +1724,9 @@ async fn acionar_bot(
                     None,
                     Some(ctx.event_id.clone()),
                 );
-                texto_fallback
+                // Sem confiança: este texto não veio da IA, veio da config do
+                // tenant (ou da constante). Gravar 0.0 seria mentir na medição.
+                (texto_fallback, None)
             }
         };
         let bot_text = bot_text.as_str();
@@ -1771,6 +1823,11 @@ async fn acionar_bot(
                     "message_id_whatsapp": stanza_bot,
                     // Já entregue ao contato pelo envio acima.
                     "ja_entregue": true,
+                    // D1, passo 1: a confiança da IA passa a ser gravada. Fica na
+                    // linha da resposta porque o bot responde a uma rajada
+                    // agregada — não existe "a mensagem respondida". Ausente
+                    // quando o texto veio do fallback, e não da IA.
+                    "confianca": confianca_bot,
                 }),
                 &ctx.event_id,
                 &ctx.traceparent,
@@ -1811,17 +1868,31 @@ async fn acionar_bot(
             );
         }
     } else {
-        // Barreira de bot impediu a resposta automática (humano ativo, flag
-        // desligada ou mensagem sem texto a responder).
+        // Barreira de bot impediu a resposta automática (instância desligada,
+        // humano ativo, flag da conversa desligada, ou mensagem sem texto).
+        //
+        // O motivo vai explícito: "por que o bot não respondeu?" é a pergunta que
+        // chega ao suporte, e sem ele a trilha diz que houve barreira sem dizer
+        // qual das quatro.
         state.audit_logger.info(
             tenant_uuid,
             "bot.silenciado",
             "Assistente virtual silenciado para o atendimento",
             serde_json::json!({
                 "atendimento_id": atendimento_id,
+                "instancia_responde_bot": ctx.instancia_responde_bot,
                 "bot_pode_atender": ctx.bot_pode_atender,
                 "humano_ativo": ctx.atendente_humano_id.is_some(),
                 "sem_texto": texto_do_contato.is_none(),
+                "motivo": if !ctx.instancia_responde_bot {
+                    "instancia_desligada"
+                } else if !ctx.bot_pode_atender {
+                    "conversa_desligada"
+                } else if ctx.atendente_humano_id.is_some() {
+                    "humano_ativo"
+                } else {
+                    "sem_texto"
+                },
             }),
             None,
             None,
@@ -2776,6 +2847,105 @@ mod tests {
     /// memória das suas falas (o `historico` do Responder vem do `GetThread`).
     /// Aqui a IA é deixada falhar de propósito (sem rota `ResolverConfigIa`): o
     /// fallback textual é enviado e DEVE ser persistido com `sender_id = "bot"`.
+    /// D3 — a barreira da instância cala o bot mesmo com a conversa liberada.
+    ///
+    /// É o `AppInstance.resposta_bot` da v1, que a v2 tinha perdido: sem ele não
+    /// havia como silenciar um número inteiro para atender no plantão ou durante
+    /// uma campanha manual.
+    #[tokio::test]
+    async fn instancia_com_bot_desligado_nao_aciona_a_ia() {
+        let _guard = WORKER_TEST_MUTEX.lock().await;
+        let pg_addr = "tcp://127.0.0.1:29244";
+        std::env::set_var("SMARTCORE_DATA_POSTGRES_ENDPOINT", pg_addr);
+
+        let persistidas: Arc<std::sync::Mutex<Vec<serde_json::Value>>> =
+            Arc::new(std::sync::Mutex::new(Vec::new()));
+        let persistidas_rota = persistidas.clone();
+
+        let pg_endpoint = Endpoint::parse(pg_addr).unwrap();
+        let pg_server = Server::new(pg_endpoint, "flatbuffers")
+            .route("ResolveAtendimentoParaContato", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({
+                        "status": "success",
+                        "contato_id": 10,
+                        "atendimento_id": 42,
+                        // Conversa liberada, humano ausente — só a INSTÂNCIA está
+                        // desligada. É exatamente a barreira sob teste.
+                        "bot_pode_atender": true,
+                        "instancia_responde_bot": false,
+                    });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "ResolveAtendimentoParaContatoReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("PersistMessage", move |env| {
+                let coletor = persistidas_rota.clone();
+                Box::pin(async move {
+                    if let Ok(p) = serde_json::from_slice::<serde_json::Value>(&env.payload) {
+                        coletor.lock().unwrap().push(p);
+                    }
+                    let reply = serde_json::json!({ "status": "success", "message_id": 100 });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "PersistMessageReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("SendWhatsappMessage", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({ "status": "success" });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "SendWhatsappMessageReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let pg_handle = tokio::spawn(async move {
+            pg_server.run().await.unwrap();
+        });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let pg_client = Arc::new(transport::conectar_cliente("data_postgres").await.unwrap());
+        let state = AppState {
+            redis_conn: None,
+            bus_conn: None,
+            audit_logger: observability::AuditLogger::new_dummy("worker"),
+            storage_client: pg_client.clone(),
+            fluxos_cache: FluxosCache::novo(),
+            whatsapp_client: pg_client.clone(),
+            pg_client,
+            ia_client: std::sync::Arc::new(ia_engine::MockIaEngineClient::new()),
+        };
+
+        let evt = evento_message_received(&Uuid::new_v4().to_string());
+        let resultado = processar_mensagem_recebida(&state, evt).await;
+        assert!(resultado.is_ok(), "obteve: {:?}", resultado);
+
+        let vistas = persistidas.lock().unwrap().clone();
+        let do_bot: Vec<_> = vistas
+            .iter()
+            .filter(|p| p.get("sender_id").and_then(|v| v.as_str()) == Some(REMETENTE_BOT))
+            .collect();
+        assert!(
+            do_bot.is_empty(),
+            "instância com bot desligado não pode responder; persistidas: {vistas:?}"
+        );
+        // A mensagem do contato continua sendo registrada: desligar o bot cala a
+        // resposta automática, não a conversa.
+        assert_eq!(vistas.len(), 1, "a mensagem do contato deve ser persistida");
+
+        pg_handle.abort();
+    }
+
     #[tokio::test]
     async fn test_resposta_do_bot_e_persistida_no_thread() {
         let _guard = WORKER_TEST_MUTEX.lock().await;
@@ -2878,6 +3048,16 @@ mod tests {
         assert_eq!(
             do_bot[0].get("ja_entregue").and_then(|v| v.as_bool()),
             Some(true)
+        );
+        // D1: neste teste a IA não responde (mock sem expectativa), então o texto
+        // vem do fallback — e fallback NÃO tem confiança. Gravar 0.0 aqui seria
+        // mentir na medição que vai calibrar os limiares.
+        assert!(
+            do_bot[0]
+                .get("confianca")
+                .is_none_or(serde_json::Value::is_null),
+            "resposta de fallback não pode carregar confiança: {:?}",
+            do_bot[0]
         );
         // A mensagem inbound do contato segue persistida (não foi substituída) e
         // carrega o stanzaId, que é a chave de idempotência da reentrega.

@@ -62,7 +62,10 @@ pub fn montar_envelope_request(
 /// Realiza o login real do usuário validando as credenciais no Postgres
 /// e persistindo a sessão (refresh token) no Redis.
 // `email`/`password` ficam fora do span (PII/credencial); a correlação é pelo traceparent.
-#[tracing::instrument(skip_all, fields(traceparent = %traceparent))]
+// `origem_escopos` é preenchido depois de derivar os escopos: é o instrumento da
+// D4 (plano `regras-do-bot-e-permissoes`), que mede quantas sessões dependem do
+// fallback pelo `role` antes de fechá-lo.
+#[tracing::instrument(skip_all, fields(traceparent = %traceparent, origem_escopos = tracing::field::Empty))]
 pub async fn login(
     deps: &AuthDeps,
     traceparent: &str,
@@ -174,7 +177,10 @@ pub async fn login(
     let agora = chrono::Utc::now().timestamp() as usize;
     let jti = Uuid::now_v7().to_string();
     let family_id = Uuid::now_v7().to_string();
-    let scopes = derivar_escopos(is_superuser, &user_info);
+    let (scopes, origem_escopos) = derivar_escopos(is_superuser, &user_info);
+    // O instrumento da D4: sem este campo não há como saber quantas sessões
+    // dependem do fallback, e sem esse número fechar o fallback é chute.
+    tracing::Span::current().record("origem_escopos", origem_escopos.como_str());
 
     let claims = Claims {
         sub: user_id.to_string(),
@@ -241,47 +247,108 @@ pub async fn login(
 
 /// Deriva a lista de escopos do usuário com base no seu status de superusuário
 /// ou informações de permissão explícitas.
-fn derivar_escopos(is_superuser: bool, user_info: &serde_json::Value) -> Vec<String> {
+/// De onde vieram os escopos de uma sessão.
+///
+/// Existe para **medir antes de apertar**. O fallback pelo `role` (ver
+/// [`derivar_escopos`]) dá escrita a qualquer não-admin, e não há papel
+/// somente-leitura enquanto ele for assim. Fechá-lo às cegas derrubaria o acesso
+/// de quem já trabalha — então o primeiro passo é descobrir **quantos** dependem
+/// dele, com este campo no span de login.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum OrigemEscopos {
+    /// Superusuário: `["*"]`.
+    Superusuario,
+    /// `module_permissions` explícito — o caminho desejado.
+    ModulePermissions,
+    /// Caiu no `role`. É este que precisa acabar.
+    FallbackRole,
+}
+
+impl OrigemEscopos {
+    pub(crate) fn como_str(self) -> &'static str {
+        match self {
+            Self::Superusuario => "superusuario",
+            Self::ModulePermissions => "module_permissions",
+            Self::FallbackRole => "fallback_role",
+        }
+    }
+}
+
+/// Escopos de leitura, sem nenhuma escrita.
+///
+/// Base do papel `viewer` da v1, que a v2 não tinha como representar.
+fn escopos_somente_leitura() -> Vec<String> {
+    vec!["atendimentos:read".into()]
+}
+
+pub(crate) fn derivar_escopos(
+    is_superuser: bool,
+    user_info: &serde_json::Value,
+) -> (Vec<String>, OrigemEscopos) {
     if is_superuser {
         // Superusuário possui acesso administrativo global.
-        return vec!["*".to_string()];
+        return (vec!["*".to_string()], OrigemEscopos::Superusuario);
     }
 
-    // Tenta obter permissões explícitas em module_permissions
+    // Tenta obter permissões explícitas em module_permissions.
+    //
+    // Lista vazia **não** conta como explícita: um `[]` gravado por engano
+    // deixaria a sessão sem escopo nenhum, e o usuário não conseguiria abrir uma
+    // tela sequer. Nesse caso o fallback abaixo ainda é a rede de proteção — e é
+    // exatamente por isso que fechá-lo exige medir antes.
     if let Some(perms) = user_info.get("module_permissions") {
         if let Some(arr) = perms.as_array() {
-            return arr
+            let escopos: Vec<String> = arr
                 .iter()
                 .filter_map(|v| v.as_str().map(|s| s.to_string()))
                 .collect();
+            if !escopos.is_empty() {
+                return (escopos, OrigemEscopos::ModulePermissions);
+            }
         }
         if let Some(obj) = perms.as_object() {
-            return obj
+            let escopos: Vec<String> = obj
                 .iter()
                 .filter(|(_, v)| v.as_bool().unwrap_or(false))
                 .map(|(k, _)| k.clone())
                 .collect();
+            if !escopos.is_empty() {
+                return (escopos, OrigemEscopos::ModulePermissions);
+            }
         }
     }
 
-    // Fallback com base no cargo (role) do usuário no tenant
+    // Fallback pelo cargo (role) do usuário no tenant.
+    //
+    // 🚩 **Este bloco é o problema conhecido**, registrado no plano
+    // `regras-do-bot-e-permissoes` (D4): quem não tem `module_permissions`
+    // explícito nasce podendo **escrever**. Não dá para apertá-lo sem antes
+    // migrar quem depende dele — daí o `origem_escopos` no span de login, que
+    // mede exatamente isso.
+    //
+    // O que já é seguro fazer, e está feito: `viewer` ganha o arco somente
+    // leitura. Ele não muda nada para ninguém hoje (nenhum usuário tem esse
+    // papel) e é o que torna o papel **representável** quando a migração
+    // acontecer.
     let role = user_info
         .get("role")
         .and_then(|v| v.as_str())
         .unwrap_or("atendente");
-    match role {
+    let escopos = match role {
         "admin" | "owner" => vec![
             "atendimentos:read".into(),
             "atendimentos:write".into(),
             "clientes:write".into(),
             "tenant:admin".into(),
         ],
+        "viewer" => escopos_somente_leitura(),
         _ => vec![
             "atendimentos:read".into(),
             "atendimentos:write".into(),
             "clientes:write".into(),
         ],
-    }
+    };
+    (escopos, OrigemEscopos::FallbackRole)
 }
 
 #[cfg(test)]
@@ -296,7 +363,7 @@ mod tests {
             "module_permissions": ["atendimentos:read"],
             "role": "atendente",
         });
-        assert_eq!(derivar_escopos(true, &info), vec!["*".to_string()]);
+        assert_eq!(derivar_escopos(true, &info).0, vec!["*".to_string()]);
     }
 
     #[test]
@@ -305,7 +372,7 @@ mod tests {
             "module_permissions": ["atendimentos:read", "clientes:write"],
         });
         assert_eq!(
-            derivar_escopos(false, &info),
+            derivar_escopos(false, &info).0,
             vec![
                 "atendimentos:read".to_string(),
                 "clientes:write".to_string()
@@ -322,7 +389,7 @@ mod tests {
                 "tenant:admin": true,
             },
         });
-        let mut escopos = derivar_escopos(false, &info);
+        let (mut escopos, _) = derivar_escopos(false, &info);
         escopos.sort();
         assert_eq!(
             escopos,
@@ -333,21 +400,21 @@ mod tests {
     #[test]
     fn derivar_escopos_fallback_para_admin_inclui_tenant_admin() {
         let info = serde_json::json!({ "role": "admin" });
-        let escopos = derivar_escopos(false, &info);
+        let (escopos, _) = derivar_escopos(false, &info);
         assert!(escopos.contains(&"tenant:admin".to_string()));
     }
 
     #[test]
     fn derivar_escopos_fallback_para_owner_inclui_tenant_admin() {
         let info = serde_json::json!({ "role": "owner" });
-        let escopos = derivar_escopos(false, &info);
+        let (escopos, _) = derivar_escopos(false, &info);
         assert!(escopos.contains(&"tenant:admin".to_string()));
     }
 
     #[test]
     fn derivar_escopos_fallback_para_role_desconhecida_e_restrito() {
         let info = serde_json::json!({ "role": "atendente" });
-        let escopos = derivar_escopos(false, &info);
+        let (escopos, _) = derivar_escopos(false, &info);
         assert!(!escopos.contains(&"tenant:admin".to_string()));
         assert_eq!(
             escopos,
@@ -362,7 +429,7 @@ mod tests {
     #[test]
     fn derivar_escopos_sem_role_nem_permissoes_usa_o_fallback_padrao() {
         let info = serde_json::json!({});
-        let escopos = derivar_escopos(false, &info);
+        let (escopos, _) = derivar_escopos(false, &info);
         assert_eq!(
             escopos,
             vec![
@@ -370,6 +437,83 @@ mod tests {
                 "atendimentos:write".to_string(),
                 "clientes:write".to_string(),
             ]
+        );
+    }
+
+    // -- D4: instrumento e papel somente-leitura ----------------------------
+
+    #[test]
+    fn origem_declara_de_onde_vieram_os_escopos() {
+        // O instrumento da D4: sem distinguir estas três origens não há como
+        // medir quantas sessões dependem do fallback antes de fechá-lo.
+        assert_eq!(
+            derivar_escopos(true, &serde_json::json!({})).1,
+            OrigemEscopos::Superusuario
+        );
+        assert_eq!(
+            derivar_escopos(
+                false,
+                &serde_json::json!({ "module_permissions": ["atendimentos:read"] })
+            )
+            .1,
+            OrigemEscopos::ModulePermissions
+        );
+        assert_eq!(
+            derivar_escopos(false, &serde_json::json!({ "role": "admin" })).1,
+            OrigemEscopos::FallbackRole
+        );
+    }
+
+    #[test]
+    fn origem_vira_rotulo_estavel_para_o_span() {
+        // Os valores vão para o span de login e serão agregados em consulta;
+        // mudá-los invalidaria a medição em curso.
+        assert_eq!(OrigemEscopos::Superusuario.como_str(), "superusuario");
+        assert_eq!(
+            OrigemEscopos::ModulePermissions.como_str(),
+            "module_permissions"
+        );
+        assert_eq!(OrigemEscopos::FallbackRole.como_str(), "fallback_role");
+    }
+
+    #[test]
+    fn module_permissions_vazio_nao_conta_como_explicito() {
+        // Um `[]` gravado por engano deixaria a sessão sem escopo nenhum, e o
+        // usuário não abriria uma tela sequer. Cai no fallback e é CONTADO como
+        // fallback — é justamente o caso que a migração precisa enxergar.
+        let (escopos, origem) =
+            derivar_escopos(false, &serde_json::json!({ "module_permissions": [] }));
+        assert_eq!(origem, OrigemEscopos::FallbackRole);
+        assert!(!escopos.is_empty());
+
+        let (_, origem_obj) = derivar_escopos(
+            false,
+            &serde_json::json!({ "module_permissions": { "tenant:admin": false } }),
+        );
+        assert_eq!(origem_obj, OrigemEscopos::FallbackRole);
+    }
+
+    #[test]
+    fn viewer_nao_escreve_em_lugar_nenhum() {
+        // O papel `viewer` da v1, que a v2 não tinha como representar. Hoje
+        // ninguém o tem — o arco existe para a migração poder atribuí-lo.
+        let (escopos, _) = derivar_escopos(false, &serde_json::json!({ "role": "viewer" }));
+        assert_eq!(escopos, vec!["atendimentos:read".to_string()]);
+        assert!(!escopos.iter().any(|e| e.ends_with(":write")));
+        assert!(!escopos.contains(&"tenant:admin".to_string()));
+    }
+
+    #[test]
+    fn o_fallback_atual_ainda_da_escrita_a_quem_nao_e_admin() {
+        // Este teste **documenta o problema**, não o comportamento desejado. Ele
+        // deve falhar (e ser reescrito) no dia em que o passo 3 da D4 fechar o
+        // fallback — é o alarme de que a mudança aconteceu de propósito.
+        let (escopos, origem) = derivar_escopos(false, &serde_json::json!({ "role": "atendente" }));
+        assert_eq!(origem, OrigemEscopos::FallbackRole);
+        assert!(
+            escopos.contains(&"atendimentos:write".to_string()),
+            "se este assert quebrou, o fallback foi fechado: confirme que a \
+             migração dos usuários existentes foi feita antes"
         );
     }
 

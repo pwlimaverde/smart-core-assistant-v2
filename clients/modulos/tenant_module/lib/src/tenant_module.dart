@@ -207,6 +207,13 @@ final class TenantModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<DefinirRespostaBotUsecase>(
+      () => DefinirRespostaBotUsecase(
+        repository: DefinirRespostaBotRepository(
+          datasource: DefinirRespostaBotDatasource(client: _adminClient()),
+        ),
+      ),
+    );
     i.lazySingleton<EstadoPareamentoUsecase>(
       () => EstadoPareamentoUsecase(
         repository: EstadoPareamentoRepository(

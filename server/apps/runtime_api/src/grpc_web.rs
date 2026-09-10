@@ -16,6 +16,11 @@ use contracts::grpc::queries::{
     AcceptInviteRequest,
     AcceptInviteResponse,
     AcceptedTenantUser,
+    AdminListUsersRequest,
+    AdminListUsersResponse,
+    AdminSetUserActiveRequest,
+    AdminSetUserActiveResponse,
+    AdminUserItem,
     AlternarEtiquetaRequest,
     ApiKeyEntry as ProtoApiKeyEntry,
     AtendimentoEvent,
@@ -45,6 +50,10 @@ use contracts::grpc::queries::{
     // Vouchers de ativação
     CreateVoucherRequest,
     CreateVoucherResponse,
+    DefinirBotDaConversaRequest,
+    DefinirBotDaConversaResponse,
+    DefinirRespostaBotInstanciaRequest,
+    DefinirRespostaBotInstanciaResponse,
     DeleteCoreSettingRequest,
     DeleteCoreSettingResponse,
     DetalheAtendimentoResponse,
@@ -1300,6 +1309,160 @@ impl AdminService for AdminFacade {
         skip_all,
         fields(service = "runtime_api", rpc = "ListTenants", traceparent)
     )]
+    /// D7 — usuários de todos os tenants. Só superusuário.
+    ///
+    /// `skip_all` e **sem a busca nos campos do span**: o termo é nome ou e-mail
+    /// de gente, e um log de busca vira um log de PII.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "AdminListUsers", traceparent)
+    )]
+    async fn admin_list_users(
+        &self,
+        req: Request<AdminListUsersRequest>,
+    ) -> Result<Response<AdminListUsersResponse>, Status> {
+        let claims = exigir_superuser_do_metadata(&self.deps, &self.bus, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let inner = req.get_ref().clone();
+
+        let env_req = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent,
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "AdminListUsers".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({
+                "busca": inner.busca,
+                "limite": inner.limite,
+                "offset": inner.offset,
+            }))
+            .unwrap_or_default(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: true,
+            ..Default::default()
+        };
+
+        let resp = self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        if resp.kind == MessageKind::Error as i32 {
+            let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
+            return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
+        }
+        let val: serde_json::Value =
+            serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))?;
+
+        let txt = |item: &serde_json::Value, chave: &str| -> String {
+            item.get(chave)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string()
+        };
+
+        let mut usuarios = Vec::new();
+        if let Some(arr) = val.get("usuarios").and_then(|v| v.as_array()) {
+            for item in arr {
+                usuarios.push(AdminUserItem {
+                    id: item.get("id").and_then(|v| v.as_i64()).unwrap_or_default() as i32,
+                    username: txt(item, "username"),
+                    email: txt(item, "email"),
+                    nome: txt(item, "nome"),
+                    is_active: item
+                        .get("is_active")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
+                    is_superuser: item
+                        .get("is_superuser")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
+                    // 0 = nunca entrou. `proto3` não tem opcional em `int64`
+                    // sem `optional`, e um zero aqui é inequívoco: ninguém
+                    // logou na época do epoch.
+                    last_login: item
+                        .get("last_login")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or_default(),
+                    date_joined: item
+                        .get("date_joined")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or_default(),
+                    tenant_dono: txt(item, "tenant_dono"),
+                    tenant_membro: txt(item, "tenant_membro"),
+                    papel: txt(item, "papel"),
+                });
+            }
+        }
+
+        Ok(Response::new(AdminListUsersResponse { usuarios }))
+    }
+
+    /// D7 — bloqueia/desbloqueia o acesso de um usuário. Só superusuário.
+    ///
+    /// A recusa de bloquear a si mesmo mora no `data_postgres`, onde o autor vem
+    /// do envelope: uma checagem só no cliente não seria defesa nenhuma.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "AdminSetUserActive", traceparent)
+    )]
+    async fn admin_set_user_active(
+        &self,
+        req: Request<AdminSetUserActiveRequest>,
+    ) -> Result<Response<AdminSetUserActiveResponse>, Status> {
+        let claims = exigir_superuser_do_metadata(&self.deps, &self.bus, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let inner = *req.get_ref();
+        if inner.user_id <= 0 {
+            return Err(Status::invalid_argument("usuário inválido"));
+        }
+
+        let env_req = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent,
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "AdminSetUserActive".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({
+                "user_id": inner.user_id,
+                "ativo": inner.ativo,
+            }))
+            .unwrap_or_default(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: true,
+            ..Default::default()
+        };
+
+        let resp = self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        if resp.kind == MessageKind::Error as i32 {
+            let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
+            return Err(Status::invalid_argument(err_msg));
+        }
+        let val: serde_json::Value =
+            serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))?;
+
+        Ok(Response::new(AdminSetUserActiveResponse {
+            ativo: val
+                .get("ativo")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(inner.ativo),
+        }))
+    }
+
     async fn list_tenants(
         &self,
         req: Request<ListTenantsRequest>,
@@ -3612,6 +3775,82 @@ impl AdminService for AdminFacade {
         }))
     }
 
+    /// D3 — liga/desliga a resposta automática da IA **nesta conversa**.
+    ///
+    /// Escopo de atendimento, não de admin: quem atende a conversa é quem sabe
+    /// se ela deve voltar para o robô. O `data_postgres` revalida com
+    /// `atendimentos:write` ou `tenant:admin`.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DefinirBotDaConversa", traceparent)
+    )]
+    async fn definir_bot_da_conversa(
+        &self,
+        req: Request<DefinirBotDaConversaRequest>,
+    ) -> Result<Response<DefinirBotDaConversaResponse>, Status> {
+        let inner = *req.get_ref();
+        if inner.atendimento_id <= 0 {
+            return Err(Status::invalid_argument("atendimento inválido"));
+        }
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "DefinirBotDaConversa",
+                serde_json::json!({
+                    "atendimento_id": inner.atendimento_id,
+                    "habilitado": inner.habilitado,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(DefinirBotDaConversaResponse {
+            habilitado: corpo
+                .get("habilitado")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(inner.habilitado),
+        }))
+    }
+
+    /// D3 — liga/desliga a resposta automática da IA para a conexão inteira.
+    ///
+    /// Equivale ao `instances/<pk>/toggle-bot/` da v1. `tenant_id` das claims e
+    /// escopo `tenant:admin` (via `encaminhar_tenant`): calar o bot de um número
+    /// muda o comportamento do produto para todos os atendentes daquele tenant,
+    /// e não é decisão de quem só atende.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "DefinirRespostaBotInstancia",
+            traceparent
+        )
+    )]
+    async fn definir_resposta_bot_instancia(
+        &self,
+        req: Request<DefinirRespostaBotInstanciaRequest>,
+    ) -> Result<Response<DefinirRespostaBotInstanciaResponse>, Status> {
+        let inner = *req.get_ref();
+        if inner.id <= 0 {
+            return Err(Status::invalid_argument("conexão inválida"));
+        }
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "DefinirRespostaBotInstancia",
+                serde_json::json!({ "id": inner.id, "habilitado": inner.habilitado }),
+            )
+            .await?;
+
+        Ok(Response::new(DefinirRespostaBotInstanciaResponse {
+            habilitado: corpo
+                .get("habilitado")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(inner.habilitado),
+        }))
+    }
+
     #[tracing::instrument(
         skip_all,
         fields(
@@ -5097,6 +5336,13 @@ impl AdminService for AdminFacade {
                 .and_then(|v| v.as_array())
                 .map(|arr| arr.iter().map(nota_do_json).collect())
                 .unwrap_or_default(),
+            // Ausente = `true`: um servidor mais antigo não manda o campo, e o
+            // padrão da coluna é a IA ligada. Assumir `false` faria a tela
+            // anunciar um silêncio que não existe.
+            bot_pode_atender: corpo
+                .get("bot_pode_atender")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true),
         }))
     }
 
@@ -6446,6 +6692,13 @@ fn instancia_do_json(v: &serde_json::Value) -> MyWhatsappInstance {
             .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
             .map(|d| d.timestamp_millis())
             .unwrap_or(0),
+        // Ausente resolve para `true`: a coluna nasce TRUE, e um
+        // `data_postgres` defasado nao pode fazer a tela mostrar "bot
+        // desligado" numa conexao que esta respondendo normalmente.
+        resposta_bot: v
+            .get("resposta_bot")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(true),
     }
 }
 
@@ -7042,6 +7295,8 @@ mod tests {
             "GetMyOnboardingProgress" => facade.get_my_onboarding_progress(Request::new(GetMyOnboardingProgressRequest::default())).await,
             // Operação financeira: a barreira aqui vale mais que nas demais.
             "QuitarMinhaAssinatura" => facade.quitar_minha_assinatura(Request::new(QuitarMinhaAssinaturaRequest::default())).await,
+            "DefinirRespostaBotInstancia" => facade.definir_resposta_bot_instancia(Request::new(DefinirRespostaBotInstanciaRequest { id: 1, habilitado: false })).await,
+            "DefinirBotDaConversa" => facade.definir_bot_da_conversa(Request::new(DefinirBotDaConversaRequest { atendimento_id: 1, habilitado: true })).await,
         }
     }
 

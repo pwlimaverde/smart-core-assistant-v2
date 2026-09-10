@@ -647,6 +647,39 @@ table RevokeInviteResponse {
   success:bool;
 }
 
+table AdminListUsersRequest {
+  busca:string;
+  limite:int;
+  offset:int;
+}
+
+table AdminUserItem {
+  id:int;
+  username:string;
+  email:string;
+  nome:string;
+  is_active:bool;
+  is_superuser:bool;
+  last_login:long;
+  date_joined:long;
+  tenant_dono:string;
+  tenant_membro:string;
+  papel:string;
+}
+
+table AdminListUsersResponse {
+  usuarios:[smartcore.contracts.queries.AdminUserItem];
+}
+
+table AdminSetUserActiveRequest {
+  user_id:int;
+  ativo:bool;
+}
+
+table AdminSetUserActiveResponse {
+  ativo:bool;
+}
+
 table ListTenantUsersRequest {
 }
 
@@ -974,6 +1007,25 @@ table MyWhatsappInstance {
   active:bool;
   provider:string;
   created_at:long;
+  resposta_bot:bool;
+}
+
+table DefinirRespostaBotInstanciaRequest {
+  id:int;
+  habilitado:bool;
+}
+
+table DefinirRespostaBotInstanciaResponse {
+  habilitado:bool;
+}
+
+table DefinirBotDaConversaRequest {
+  atendimento_id:int;
+  habilitado:bool;
+}
+
+table DefinirBotDaConversaResponse {
+  habilitado:bool;
 }
 
 table ListMyWhatsappInstancesRequest {
@@ -1122,6 +1174,7 @@ table DetalheAtendimentoResponse {
   catalogo:[smartcore.contracts.queries.Etiqueta];
   etiquetas:[smartcore.contracts.queries.Etiqueta];
   notas:[smartcore.contracts.queries.Nota];
+  bot_pode_atender:bool;
 }
 
 table CreateEtiquetaRequest {

@@ -87,6 +87,11 @@ void main() {
               datasource: EstadoPareamentoDatasource(client: client),
             ),
           ),
+          respostaBot: DefinirRespostaBotUsecase(
+            repository: DefinirRespostaBotRepository(
+              datasource: DefinirRespostaBotDatasource(client: client),
+            ),
+          ),
         ),
       );
     }

@@ -80,3 +80,16 @@ final class EstadoPareamentoUsecase extends UsecaseBaseCallData<
   ConexoesError onUnexpected(Object e, StackTrace s) =>
       _inesperado('consultar pareamento', e, s);
 }
+
+final class DefinirRespostaBotUsecase extends UsecaseBaseCallData<bool, bool,
+    RespostaBotParameters, ConexoesError> {
+  const DefinirRespostaBotUsecase({required super.repository});
+
+  @override
+  ProcessData<bool, bool, RespostaBotParameters, ConexoesError> get process =>
+      (data, _) => Success(data);
+
+  @override
+  ConexoesError onUnexpected(Object e, StackTrace s) =>
+      _inesperado('definirRespostaBot', e, s);
+}

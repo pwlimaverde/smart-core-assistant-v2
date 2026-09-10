@@ -10,6 +10,14 @@ class Conexao {
   final String telefone;
   final String estado;
   final bool ativa;
+
+  /// Quando `false`, a IA não responde NENHUMA conversa desta conexão.
+  ///
+  /// É a barreira mais externa do bot: precede o desligamento por conversa e o
+  /// bloqueio por atendente humano ativo. Equivale ao `resposta_bot` da v1, que
+  /// a v2 tinha perdido.
+  final bool respostaBot;
+
   final DateTime criadaEm;
 
   const Conexao({
@@ -19,6 +27,7 @@ class Conexao {
     required this.estado,
     required this.ativa,
     required this.criadaEm,
+    this.respostaBot = true,
   });
 
   /// Mesma conexão com o estado trocado — usado para substituir o valor
@@ -30,6 +39,19 @@ class Conexao {
         estado: novoEstado,
         ativa: ativa,
         criadaEm: criadaEm,
+        respostaBot: respostaBot,
+      );
+
+  /// Mesma conexão com o bot ligado/desligado — para a tela refletir o toggle
+  /// sem recarregar a lista inteira do servidor.
+  Conexao comRespostaBot(bool valor) => Conexao(
+        id: id,
+        nome: nome,
+        telefone: telefone,
+        estado: estado,
+        ativa: ativa,
+        criadaEm: criadaEm,
+        respostaBot: valor,
       );
 
   /// Vocabulário de `whatsapp_instance.connection_state`. `unknown` existe

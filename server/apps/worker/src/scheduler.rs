@@ -125,6 +125,22 @@ async fn executar_tick(state: &AppState, clock: &dyn Clock) {
             }
         }
 
+        // TTL de 5 min: o prazo padrão é de 30 minutos, então varrer a cada
+        // tick não acrescenta precisão nenhuma — só consulta. Cinco minutos de
+        // atraso em cima de trinta é ruído.
+        let mut conn = redis_conn.clone();
+        if tentar_lock(&mut conn, "scheduler:lock:atendimentos_inativos", 300_000).await {
+            match encerrar_atendimentos_inativos(state).await {
+                Ok(n) if n > 0 => {
+                    tracing::info!(encerrados = n, "scheduler: conversas paradas arquivadas")
+                }
+                Ok(_) => {}
+                Err(e) => {
+                    tracing::error!("scheduler: falha ao encerrar conversas paradas: {:?}", e)
+                }
+            }
+        }
+
         // TTL de 1h fazendo as vezes de intervalo: vencimento é evento diário, e
         // varrer de minuto em minuto só gastaria consulta. Uma hora de atraso no
         // corte não muda nada para quem venceu ontem.
@@ -271,6 +287,104 @@ async fn suspender_assinaturas_vencidas(state: &AppState) -> anyhow::Result<usiz
     .await?;
 
     Ok(resp.get("suspensas").and_then(|v| v.as_u64()).unwrap_or(0) as usize)
+}
+
+/// D5 — arquiva conversas paradas tempo demais.
+///
+/// **Construção nova**: a v1 não tinha isto, e a v2 herdou a ausência. Uma
+/// conversa em que o cliente sumiu ficava na fila para sempre — ocupando coluna
+/// no quadro, contando como carga do atendente no rodízio (D2) e fazendo a fila
+/// parecer maior do que é.
+///
+/// **Arquiva, não resolve.** A pesquisa de satisfação é disparada por
+/// `solicitar_pesquisa_satisfacao`, que só age quando o status novo é
+/// `resolvido`. Encerrar por inatividade como resolvido perguntaria "como foi
+/// seu atendimento?" justamente a quem parou de responder, e ainda contaminaria
+/// a métrica com conversas que nunca terminaram. A garantia é estrutural: o
+/// status escrito é `arquivado`, e o gatilho da pesquisa nunca chega a ser
+/// avaliado.
+///
+/// **Best-effort por linha.** Falha ao arquivar um atendimento não derruba o
+/// lote: o próximo tick reencontra a conversa, que continua parada.
+async fn encerrar_atendimentos_inativos(state: &AppState) -> anyhow::Result<usize> {
+    let limite = env_u64("SMARTCORE_SCHEDULER_LOTE", 100);
+    let minutos_padrao = env_u64("SMARTCORE_SCHEDULER_INATIVIDADE_MINUTOS", 30);
+
+    let resp = chamar_rpc(
+        &state.pg_client,
+        SISTEMA_TENANT_PLACEHOLDER,
+        "ListarAtendimentosInativos",
+        serde_json::json!({ "limite": limite, "minutos_padrao": minutos_padrao }),
+        "scheduler.tick",
+        "",
+    )
+    .await?;
+
+    let atendimentos = resp
+        .get("atendimentos")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let mut encerrados = 0usize;
+    for item in atendimentos {
+        let atendimento_id = match item.get("id").and_then(|v| v.as_i64()) {
+            Some(id) => id,
+            None => continue,
+        };
+        let tenant_id = match item.get("tenant_id").and_then(|v| v.as_str()) {
+            Some(t) => t.to_string(),
+            None => continue,
+        };
+
+        let resp_acao = match chamar_rpc(
+            &state.pg_client,
+            &tenant_id,
+            "EncerrarAtendimentoPorInatividade",
+            serde_json::json!({ "atendimento_id": atendimento_id }),
+            "scheduler.tick",
+            "",
+        )
+        .await
+        {
+            Ok(v) => v,
+            Err(e) => {
+                tracing::error!(
+                    atendimento_id = atendimento_id,
+                    "scheduler: falha ao arquivar conversa parada: {:?}",
+                    e
+                );
+                continue;
+            }
+        };
+
+        // O cliente pode ter voltado a escrever entre a varredura e a escrita; a
+        // recheca de status no UPDATE recusa, e a linha não conta como encerrada
+        // nem gera auditoria de algo que não aconteceu.
+        if !resp_acao
+            .get("encerrado")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+        {
+            continue;
+        }
+
+        let tenant_uuid = uuid::Uuid::parse_str(&tenant_id).unwrap_or(uuid::Uuid::nil());
+        state.audit_logger.info(
+            tenant_uuid,
+            "atendimento.encerrado_por_inatividade",
+            "Conversa arquivada automaticamente por falta de mensagens",
+            // Sem conteúdo da conversa: só o id. O motivo do encerramento já está
+            // no nome do evento.
+            serde_json::json!({ "atendimento_id": atendimento_id }),
+            None,
+            None,
+            None,
+        );
+        encerrados += 1;
+    }
+
+    Ok(encerrados)
 }
 
 async fn processar_midia_expirada(state: &AppState) -> anyhow::Result<usize> {
@@ -825,6 +939,100 @@ Dois."
             ia_client: std::sync::Arc::new(crate::ia_engine::MockIaEngineClient::new()),
             fluxos_cache: crate::FluxosCache::novo(),
         }
+    }
+
+    /// D5 — o job arquiva a conversa parada e conta só o que o servidor
+    /// confirmou.
+    #[tokio::test]
+    async fn encerrar_atendimentos_inativos_arquiva_e_conta() {
+        let _guard = SCHEDULER_TEST_MUTEX.lock().await;
+        let pg_addr = "tcp://127.0.0.1:29323";
+        let endpoint = Endpoint::parse(pg_addr).unwrap();
+        let server = Server::new(endpoint, "flatbuffers")
+            .route("ListarAtendimentosInativos", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({
+                        "atendimentos": [
+                            { "id": 11, "tenant_id": Uuid::new_v4().to_string() }
+                        ]
+                    });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "ListarAtendimentosInativosReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("EncerrarAtendimentoPorInatividade", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({ "encerrado": true });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "EncerrarAtendimentoPorInatividadeReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let handle = tokio::spawn(async move { server.run().await.unwrap() });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let state = estado_sem_redis(pg_addr).await;
+        let encerrados = encerrar_atendimentos_inativos(&state).await.unwrap();
+        assert_eq!(encerrados, 1);
+
+        handle.abort();
+    }
+
+    /// D5 — o cliente voltou a escrever entre a varredura e a escrita.
+    ///
+    /// A recheca de status no `UPDATE` recusa e devolve `encerrado: false`. O
+    /// job **não** pode contar isso como encerramento nem auditar um
+    /// arquivamento que não aconteceu.
+    #[tokio::test]
+    async fn encerrar_atendimentos_inativos_ignora_conversa_que_reviveu() {
+        let _guard = SCHEDULER_TEST_MUTEX.lock().await;
+        let pg_addr = "tcp://127.0.0.1:29324";
+        let endpoint = Endpoint::parse(pg_addr).unwrap();
+        let server = Server::new(endpoint, "flatbuffers")
+            .route("ListarAtendimentosInativos", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({
+                        "atendimentos": [
+                            { "id": 12, "tenant_id": Uuid::new_v4().to_string() }
+                        ]
+                    });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "ListarAtendimentosInativosReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            })
+            .route("EncerrarAtendimentoPorInatividade", |env| {
+                Box::pin(async move {
+                    let reply = serde_json::json!({ "encerrado": false });
+                    Envelope {
+                        kind: MessageKind::Reply as i32,
+                        method: "EncerrarAtendimentoPorInatividadeReply".to_string(),
+                        payload: serde_json::to_vec(&reply).unwrap(),
+                        ..env
+                    }
+                })
+            });
+        let handle = tokio::spawn(async move { server.run().await.unwrap() });
+        tokio::time::sleep(Duration::from_millis(150)).await;
+
+        let state = estado_sem_redis(pg_addr).await;
+        let encerrados = encerrar_atendimentos_inativos(&state).await.unwrap();
+        assert_eq!(
+            encerrados, 0,
+            "conversa que reviveu foi contada como arquivada"
+        );
+
+        handle.abort();
     }
 
     #[tokio::test]

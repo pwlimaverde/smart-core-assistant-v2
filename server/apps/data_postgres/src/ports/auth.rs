@@ -3,7 +3,7 @@
 //! A verificação de senha (argon2) é operação de CPU pura e permanece no handler.
 
 use async_trait::async_trait;
-use infrastructure_postgres::auth::users::AuthUser;
+use infrastructure_postgres::auth::users::{AuthUser, UsuarioGlobal};
 use infrastructure_postgres::tenants::tenants::TenantUser;
 use infrastructure_postgres::DbError;
 
@@ -38,6 +38,17 @@ pub trait AuthStore: Send + Sync {
     ) -> Result<AuthUser, DbError>;
 
     /// Lista todos os superusuários.
+    /// D7 — lista usuários de todos os tenants (painel do superusuário).
+    async fn listar_usuarios_global(
+        &self,
+        busca: &str,
+        limite: i64,
+        offset: i64,
+    ) -> Result<Vec<UsuarioGlobal>, DbError>;
+
+    /// D7 — bloqueia/desbloqueia o acesso de um usuário. `false` = não existe.
+    async fn definir_usuario_ativo(&self, user_id: i32, ativo: bool) -> Result<bool, DbError>;
+
     async fn listar_superusers(&self) -> Result<Vec<AuthUser>, DbError>;
 
     /// Remove fisicamente um superusuário; retorna linhas afetadas (0 = inexistente).

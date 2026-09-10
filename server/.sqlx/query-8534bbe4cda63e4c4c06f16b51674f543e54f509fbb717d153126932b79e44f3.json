@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, tenant_id, name, instance_id, api_key, phone_number, active,\n                       connection_state, last_state_check, media_storage_backend, provider,\n                       subscribed_events, last_connection_state, created_at\n               FROM whatsapp_instance\n               WHERE tenant_id = $1 AND active = true\n               ORDER BY created_at DESC",
+  "query": "SELECT id, tenant_id, name, instance_id, api_key, phone_number, active,\n                       connection_state, last_state_check, media_storage_backend, provider,\n                       subscribed_events, last_connection_state, resposta_bot, created_at\n               FROM whatsapp_instance\n               WHERE tenant_id = $1 AND instance_id = $2",
   "describe": {
     "columns": [
       {
@@ -148,6 +148,17 @@
       },
       {
         "ordinal": 13,
+        "name": "resposta_bot",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "whatsapp_instance",
+            "name": "resposta_bot"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
         "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -160,7 +171,8 @@
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "Text"
       ]
     },
     "nullable": [
@@ -177,8 +189,9 @@
       false,
       false,
       true,
+      false,
       false
     ]
   },
-  "hash": "0e6dbb44d1384a00945b6f316b3c1e80fa03b177cf70b2f68af851e173fde818"
+  "hash": "8534bbe4cda63e4c4c06f16b51674f543e54f509fbb717d153126932b79e44f3"
 }

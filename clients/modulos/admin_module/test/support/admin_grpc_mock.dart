@@ -43,4 +43,7 @@ void registrarFallbacksDoAdmin() {
   registerFallbackValue(proto.GetServiceHealthRequest());
   registerFallbackValue(proto.GetDashboardSummaryRequest());
   registerFallbackValue(proto.TestEvolutionConnectionRequest());
+  // D7 — gestao global de usuarios pelo superusuario.
+  registerFallbackValue(proto.AdminListUsersRequest());
+  registerFallbackValue(proto.AdminSetUserActiveRequest());
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, tenant_id, name, instance_id, api_key, phone_number, active,\n                       connection_state, last_state_check, media_storage_backend, provider,\n                       subscribed_events, last_connection_state, created_at\n               FROM whatsapp_instance\n               WHERE tenant_id = $1 AND instance_id = $2",
+  "query": "INSERT INTO whatsapp_instance (tenant_id, name, api_key, provider)\n               VALUES ($1, $2, $3, $4)\n               RETURNING id, tenant_id, name, instance_id, api_key, phone_number, active,\n                         connection_state, last_state_check, media_storage_backend, provider,\n                         subscribed_events, last_connection_state, resposta_bot, created_at",
   "describe": {
     "columns": [
       {
@@ -148,6 +148,17 @@
       },
       {
         "ordinal": 13,
+        "name": "resposta_bot",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "whatsapp_instance",
+            "name": "resposta_bot"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
         "name": "created_at",
         "type_info": "Timestamptz",
         "origin": {
@@ -161,7 +172,9 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Text"
+        "Varchar",
+        "Jsonb",
+        "Varchar"
       ]
     },
     "nullable": [
@@ -178,8 +191,9 @@
       false,
       false,
       true,
+      false,
       false
     ]
   },
-  "hash": "0552c0b08733c659136b2f777b5570bedc9053cb12c2089e4a4052fb889c52d7"
+  "hash": "a1b2b2969f86b04419715a276f6b448f601e390748140c37ef51e030d8be9563"
 }

@@ -206,7 +206,42 @@ class _Linha extends StatelessWidget {
                       .bodySmall
                       ?.copyWith(color: context.colors.fgMuted),
                 ),
+                // O estado desligado precisa ser visível no cartão, e não só no
+                // interruptor: quem abre a tela para entender por que o bot
+                // parou tem que achar a resposta aqui.
+                if (!conexao.respostaBot) ...[
+                  const SizedBox(height: AppSpacing.xs),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.smart_toy_outlined,
+                        size: 14,
+                        color: context.colors.warning,
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Text(
+                        'Resposta automática desligada',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodySmall
+                            ?.copyWith(color: context.colors.warning),
+                      ),
+                    ],
+                  ),
+                ],
               ],
+            ),
+          ),
+          // D3 — o interruptor do bot. Vale mesmo com a conexão fora do ar: o
+          // dono desliga a IA antes de reconectar justamente para atender à mão
+          // sem que o robô responda no meio.
+          Tooltip(
+            message: conexao.respostaBot
+                ? 'A IA responde automaticamente nesta conexão'
+                : 'A IA não responde nesta conexão',
+            child: Switch(
+              value: conexao.respostaBot,
+              onChanged: (v) => _alternarBot(context, v),
             ),
           ),
           // Reconectar só faz sentido quando não está conectada — oferecer no
@@ -225,6 +260,45 @@ class _Linha extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// Liga/desliga a IA da conexão.
+  ///
+  /// Confirma só ao DESLIGAR: ligar de volta é reversível e inofensivo, mas
+  /// desligar cala o atendimento automático de um número inteiro — e quem
+  /// esbarrou no interruptor sem querer não descobriria pelo silêncio.
+  Future<void> _alternarBot(BuildContext context, bool habilitar) async {
+    final messenger = ScaffoldMessenger.of(context);
+
+    if (!habilitar) {
+      final confirmou = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Desligar a resposta automática?'),
+          content: Text(
+            'A IA deixa de responder todas as conversas de "${conexao.nome}". '
+            'As mensagens continuam chegando normalmente — só não são '
+            'respondidas sozinhas.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('Desligar'),
+            ),
+          ],
+        ),
+      );
+      if (confirmou != true) return;
+    }
+
+    final res = await controller.definirRespostaBot(conexao.id, habilitar);
+    if (res case Failure(:final error)) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    }
   }
 
   Future<void> _reconectar(BuildContext context) async {

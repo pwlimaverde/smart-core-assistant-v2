@@ -71,6 +71,11 @@ pub struct NovaMensagem<'a> {
     /// `status_envio='sent'` para o elo outbox->outbound do worker NÃO tentar
     /// enviá-la de novo — o que devolveria a mesma mensagem ao contato.
     pub ja_entregue: bool,
+    /// Confiança (0..1) da IA na resposta. Só o remetente `bot` a preenche.
+    ///
+    /// Fica na linha da **resposta**, não na da pergunta como fazia a v1: a v2
+    /// responde a uma rajada agregada, e não existe "a mensagem respondida".
+    pub confianca_resposta: Option<f64>,
 }
 
 impl<'a> NovaMensagem<'a> {
@@ -84,6 +89,7 @@ impl<'a> NovaMensagem<'a> {
             message_id_whatsapp: None,
             mensagem_citada_id: None,
             ja_entregue: false,
+            confianca_resposta: None,
         }
     }
 }
@@ -261,8 +267,9 @@ impl MensagemRepository for PostgresMensagemRepository {
         let row = sqlx::query_as::<_, Mensagem>(
             r#"INSERT INTO oraculo_mensagem
                    (tenant_id, atendimento_id, tipo, conteudo, remetente,
-                    message_id_whatsapp, mensagem_citada_id, gerado_por_ia, status_envio)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    message_id_whatsapp, mensagem_citada_id, gerado_por_ia, status_envio,
+                    confianca_resposta)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
                RETURNING id, tenant_id, atendimento_id, tipo, conteudo, remetente,
                          timestamp, message_id_whatsapp, metadados, respondida, lido,
                          resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
@@ -279,6 +286,7 @@ impl MensagemRepository for PostgresMensagemRepository {
         .bind(nova.mensagem_citada_id)
         .bind(gerado_por_ia)
         .bind(status_envio)
+        .bind(nova.confianca_resposta)
         .fetch_one(&mut **tx)
         .await
         .map_err(DbError::from_sqlx_unique)?;

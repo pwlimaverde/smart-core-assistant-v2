@@ -54,6 +54,9 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
 
   /// Últimos valores recebidos pelas escritas da ficha.
   String? notaRecebida;
+
+  /// Último valor recebido por [definirBotDaConversa] — para verificar o repasse.
+  bool? botDefinido;
   (int, bool)? etiquetaAlternada;
   String? etiquetaCriada;
 
@@ -188,6 +191,16 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   }
 
   @override
+  Future<void> definirBotDaConversa({
+    required int atendimentoId,
+    required bool habilitado,
+  }) async {
+    botDefinido = habilitado;
+    if (erroFicha != null) throw erroFicha!;
+    ficha = ficha.copyWith(botPodeAtender: habilitado);
+  }
+
+  @override
   Future<void> alternarEtiqueta({
     required int atendimentoId,
     required int etiquetaId,
@@ -223,6 +236,7 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   CriarEtiquetaUsecase criarEtiqueta,
   AlternarEtiquetaUsecase alternarEtiqueta,
   CriarNotaUsecase criarNota,
+  DefinirBotDaConversaUsecase definirBot,
   AtendimentoEventoStream eventos,
 })
 usecasesSobre(FakeAtendimentoGateway gateway) => (
@@ -279,6 +293,11 @@ usecasesSobre(FakeAtendimentoGateway gateway) => (
   criarNota: CriarNotaUsecase(
     repository: CriarNotaRepository(
       datasource: CriarNotaDatasource(gateway: gateway),
+    ),
+  ),
+  definirBot: DefinirBotDaConversaUsecase(
+    repository: DefinirBotDaConversaRepository(
+      datasource: DefinirBotDaConversaDatasource(gateway: gateway),
     ),
   ),
   eventos: AtendimentoEventoStreamImpl(gateway: gateway),
