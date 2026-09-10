@@ -277,9 +277,7 @@ final class GetFichaUsecase
   >
   get process =>
       (data, _) => Success(
-        FichaAtendimento(
-          catalogo: data.catalogo,
-          aplicadas: data.aplicadas,
+        data.copyWith(
           notas: List.of(data.notas)
             ..sort((a, b) => b.criadoEm.compareTo(a.criadoEm)),
         ),
@@ -320,6 +318,27 @@ final class AlternarEtiquetaUsecase
   @override
   FichaError onUnexpected(Object exception, StackTrace stackTrace) {
     _logBug('alternarEtiqueta', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
+final class DefinirBotDaConversaUsecase
+    extends
+        UsecaseBaseCallData<
+          Unit,
+          Unit,
+          DefinirBotDaConversaParameters,
+          FichaError
+        > {
+  const DefinirBotDaConversaUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, DefinirBotDaConversaParameters, FichaError>
+  get process => (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('definirBotDaConversa', exception, stackTrace);
     return const FichaInesperado();
   }
 }

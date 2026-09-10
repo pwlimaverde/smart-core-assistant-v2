@@ -700,6 +700,45 @@ message RevokeInviteResponse {
   bool success = 1;
 }
 
+// D7 — usuarios de TODOS os tenants, para o painel do superusuario.
+//
+// `ListTenantUsers` resolve o tenant a partir das claims de quem chama e nunca
+// enxerga alem do proprio; a v1 tinha esta visao global no admin do Django.
+message AdminListUsersRequest {
+  // Casa em username, e-mail e nome. Vazio lista todo mundo.
+  string busca = 1;
+  int32 limite = 2;   // teto de 200 no servidor
+  int32 offset = 3;
+}
+
+message AdminUserItem {
+  int32 id = 1;
+  string username = 2;
+  string email = 3;
+  string nome = 4;
+  bool is_active = 5;
+  bool is_superuser = 6;
+  int64 last_login = 7;   // timestamp_millis; 0 = nunca entrou
+  int64 date_joined = 8;  // timestamp_millis
+  string tenant_dono = 9;    // tenant de que e DONO, se for
+  string tenant_membro = 10; // tenant em que e FUNCIONARIO, se for
+  string papel = 11;         // papel como funcionario
+}
+
+message AdminListUsersResponse {
+  repeated AdminUserItem usuarios = 1;
+}
+
+// D7 — bloqueia/desbloqueia o acesso de um usuario.
+message AdminSetUserActiveRequest {
+  int32 user_id = 1;
+  bool ativo = 2;
+}
+
+message AdminSetUserActiveResponse {
+  bool ativo = 1;
+}
+
 // ---------------------------------------------------------------------------
 // N13 — Consentimentos OAuth dos clientes MCP ("Aplicativos conectados")
 // ---------------------------------------------------------------------------
@@ -857,6 +896,50 @@ message GetMyOnboardingProgressResponse {
   int32 passo = 1;
   // true = terminou (ou pulou o que faltava); o app vai para o workspace.
   bool concluido = 2;
+  // Campos aditivos: o progresso não dizia nada sobre dinheiro, e por isso o
+  // guard mandava para /configuracao/* quem nunca pagou. Aditivos de propósito —
+  // campo novo em proto3 não quebra cliente antigo, que segue no comportamento
+  // atual (degradado, não quebrado) enquanto não atualiza.
+  //
+  // subscription.status != ACTIVE. Sem assinatura nenhuma também conta como
+  // pendente: o tenant não pode operar.
+  bool pagamento_pendente = 3;
+  // PENDING_PAYMENT | ACTIVE | SUSPENDED | ... Vazio = sem assinatura.
+  string assinatura_status = 4;
+  // Para a tela dizer o que está sendo cobrado. Vazio = plano não escolhido.
+  string plano_nome = 5;
+  // 0 = plano não escolhido.
+  int32 plano_id = 6;
+}
+
+// Quitação da assinatura **depois do login**.
+//
+// O `ConfirmPayment` do wizard exige `signup_token`, que morre com a sessão de
+// cadastro. Sem este RPC, um tenant cuja sessão expirou no meio do wizard entra
+// no app e não tem como pagar: esbarra em "assinatura inadimplente" a cada
+// cadastro e não existe tela que resolva.
+//
+// O `tenant_id` vem das **claims**, nunca do request — mesma regra dos demais
+// `*My*`. Exige escopo `tenant:admin`: cobrança é assunto do dono, não do
+// colaborador.
+message QuitarMinhaAssinaturaRequest {
+  // `id` de um PaymentProvider (hoje só `voucher`).
+  string provedor = 1;
+  // O que o dono digitou. Para `voucher`, o código. É credencial: não entra em
+  // span, log nem auditoria.
+  string credencial = 2;
+}
+
+message QuitarMinhaAssinaturaResponse {
+  // true = assinatura ativa ao fim da chamada (inclusive se já estava).
+  bool confirmado = 1;
+  string assinatura_status = 2;
+  // Preenchida quando o provedor exige concluir o pagamento fora do app.
+  string url_externa = 3;
+  // Recusa de negócio (código expirado, já usado...). Vai para junto do campo
+  // na tela, não para um erro de RPC.
+  string motivo = 4;
+  string erro_legivel = 5;
 }
 
 // N3.3: config do PRÓPRIO tenant (tenant_id vem das claims, não do request).
@@ -896,6 +979,8 @@ service AdminService {
   rpc UpdateTenantConfig(UpdateTenantConfigRequest) returns (UpdateTenantConfigResponse);
 
   // Fase 2: Tenants
+  rpc AdminListUsers(AdminListUsersRequest) returns (AdminListUsersResponse);
+  rpc AdminSetUserActive(AdminSetUserActiveRequest) returns (AdminSetUserActiveResponse);
   rpc ListTenants(ListTenantsRequest) returns (ListTenantsResponse);
   rpc GetTenant(GetTenantRequest) returns (GetTenantResponse);
   rpc CreateTenant(CreateTenantRequest) returns (CreateTenantResponse);
@@ -979,6 +1064,7 @@ service AdminService {
   rpc SetMyBotPersona(SetMyBotPersonaRequest) returns (SetMyBotPersonaResponse);
   rpc SetOnboardingProgress(SetOnboardingProgressRequest) returns (SetOnboardingProgressResponse);
   rpc GetMyOnboardingProgress(GetMyOnboardingProgressRequest) returns (GetMyOnboardingProgressResponse);
+  rpc QuitarMinhaAssinatura(QuitarMinhaAssinaturaRequest) returns (QuitarMinhaAssinaturaResponse);
 
   // Treinamento da IA (o tenant treina o próprio assistente)
   rpc CreateMyTreinamento(CreateMyTreinamentoRequest) returns (MyTreinamentoResponse);
@@ -1004,6 +1090,8 @@ service AdminService {
   // O onboarding cria a primeira; sem estas, uma conexão que cai deixa o tenant
   // sem saída — não há como ver o estado, reconectar nem trocar de aparelho.
   rpc ListMyWhatsappInstances(ListMyWhatsappInstancesRequest) returns (ListMyWhatsappInstancesResponse);
+  rpc DefinirRespostaBotInstancia(DefinirRespostaBotInstanciaRequest) returns (DefinirRespostaBotInstanciaResponse);
+  rpc DefinirBotDaConversa(DefinirBotDaConversaRequest) returns (DefinirBotDaConversaResponse);
   rpc ReconnectMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
   rpc DeleteMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
 
@@ -1262,6 +1350,38 @@ message MyWhatsappInstance {
   bool active = 5;
   string provider = 6;
   int64 created_at = 7;
+  // D3 — quando false, a IA nao responde NENHUMA conversa desta conexao.
+  // Aditivo: cliente antigo o le como `false` por omissao, mas nunca o mostra,
+  // entao segue no comportamento de hoje.
+  bool resposta_bot = 8;
+}
+
+// D3 — liga/desliga a resposta automatica da IA para a conexao inteira.
+//
+// Equivale ao `instances/<pk>/toggle-bot/` da v1. O `tenant_id` vem das claims:
+// ninguem cala o bot da conexao de outro tenant mandando o id na mensagem.
+message DefinirRespostaBotInstanciaRequest {
+  int32 id = 1;
+  // Sem default no servidor: "nao mandou" e erro de contrato, nao "desligue".
+  bool habilitado = 2;
+}
+
+message DefinirRespostaBotInstanciaResponse {
+  bool habilitado = 1;
+}
+
+// D3 — liga/desliga a IA nesta conversa.
+//
+// O caminho de volta que faltava: assumir o atendimento desliga o bot, e nada
+// devolvia o valor. Uma conversa que passou por um humano ficava sem bot para
+// sempre.
+message DefinirBotDaConversaRequest {
+  int32 atendimento_id = 1;
+  bool habilitado = 2;
+}
+
+message DefinirBotDaConversaResponse {
+  bool habilitado = 1;
 }
 
 message ListMyWhatsappInstancesRequest {}
@@ -1439,6 +1559,10 @@ message DetalheAtendimentoResponse {
   // O que esta colado nesta conversa.
   repeated Etiqueta etiquetas = 2;
   repeated Nota notas = 3;
+  // D3 — a IA responde nesta conversa? Assumir o atendimento desliga; so o
+  // controle da ficha religa. Sem este campo a tela nao teria como saber em
+  // que estado esta o interruptor que ela mesma desenha.
+  bool bot_pode_atender = 4;
 }
 
 message CreateEtiquetaRequest {

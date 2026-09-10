@@ -67,6 +67,11 @@ class _Conteudo extends StatelessWidget {
     return ListView(
       padding: const EdgeInsets.all(AppSpacing.md),
       children: [
+        // D3 — o interruptor da IA vem primeiro, e não no fim da ficha: é o
+        // estado mais consequente da conversa, e é o que alguém vem procurar
+        // aqui quando o bot parou de responder só nesta thread.
+        _BotDaConversa(ficha: ficha, controller: controller),
+        const Divider(height: AppSpacing.xl),
         Row(
           children: [
             Expanded(
@@ -206,6 +211,80 @@ String _quando(DateTime quando) {
   if (horas < 24) return 'há ${horas}h';
   final dias = horas ~/ 24;
   return dias == 1 ? 'ontem' : 'há $dias dias';
+}
+
+/// D3 — o interruptor da IA nesta conversa.
+///
+/// Assumir o atendimento desliga o bot automaticamente, e por muito tempo nada
+/// devolvia o valor: a conversa que passou por um humano ficava sem IA para
+/// sempre, sem tela para reverter. Este é o caminho de volta.
+///
+/// A tranca do `desatribuir` continua de pé no servidor — devolver o cartão
+/// não religa sozinho. O que existe agora é uma ação deliberada.
+class _BotDaConversa extends StatelessWidget {
+  final FichaAtendimento ficha;
+  final FichaController controller;
+
+  const _BotDaConversa({required this.ficha, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    final ligado = ficha.botPodeAtender;
+
+    return Row(
+      children: [
+        Icon(
+          ligado ? Icons.smart_toy_outlined : Icons.smart_toy,
+          size: 18,
+          color: ligado ? context.colors.fgMuted : context.colors.warning,
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Resposta automática',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              Text(
+                ligado
+                    ? 'A IA responde nesta conversa.'
+                    : 'A IA está calada nesta conversa.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: ligado
+                      ? context.colors.fgMuted
+                      : context.colors.warning,
+                ),
+              ),
+            ],
+          ),
+        ),
+        Switch(
+          value: ligado,
+          onChanged: (v) => _definirBot(context, controller, v),
+        ),
+      ],
+    );
+  }
+}
+
+/// Sem diálogo de confirmação, ao contrário do interruptor da conexão.
+///
+/// Lá o desligamento cala um número inteiro e quem esbarrou no controle não
+/// descobriria pelo silêncio. Aqui o efeito é de uma conversa só, está à vista
+/// de quem a está lendo, e é reversível no mesmo clique — pedir confirmação
+/// seria atrito numa ação que o atendente toma o tempo todo.
+Future<void> _definirBot(
+  BuildContext context,
+  FichaController controller,
+  bool habilitado,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final erro = await controller.definirBot(habilitado);
+  if (erro != null) {
+    messenger.showSnackBar(SnackBar(content: Text(erro.message)));
+  }
 }
 
 Future<void> _alternar(

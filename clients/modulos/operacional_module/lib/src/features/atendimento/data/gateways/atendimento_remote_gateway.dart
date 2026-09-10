@@ -321,6 +321,7 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
             ),
           )
           .toList(),
+      botPodeAtender: resp.botPodeAtender,
     );
   }
 
@@ -345,6 +346,19 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
         atendimentoId: atendimentoId,
         etiquetaId: Int64(etiquetaId),
         aplicar: aplicar,
+      ),
+    );
+  }
+
+  @override
+  Future<void> definirBotDaConversa({
+    required int atendimentoId,
+    required bool habilitado,
+  }) async {
+    await _client.definirBotDaConversa(
+      proto.DefinirBotDaConversaRequest(
+        atendimentoId: atendimentoId,
+        habilitado: habilitado,
       ),
     );
   }

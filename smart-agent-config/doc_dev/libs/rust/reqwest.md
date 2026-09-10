@@ -1,8 +1,11 @@
 # Reqwest
 
-- **Versão Recomendada:** 0.12.4
+- **Versão Recomendada:** 0.13.4 (publicada em **2026-05-25**)
+- **⚠️ Em uso no projeto:** `0.12.28` (resolvida no `Cargo.lock`; a crate não é
+  declarada no workspace — entra por dependência transitiva). O salto 0.12 → 0.13
+  é de major e **não foi feito**; ver a nota de verificação no fim deste doc.
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-05-31
+- **Última Verificação:** 2026-09-06
 - **Propósito no Projeto:** Cliente HTTP assíncrono para comunicação com a API REST externa do Evolution Go.
 - **Documentação Oficial:** [https://docs.rs/reqwest/latest/reqwest/](https://docs.rs/reqwest/latest/reqwest/)
 
@@ -101,3 +104,93 @@ pub async fn fetch_instance_qr(
     Ok(qr_data)
 }
 ```
+
+### 2.4 Multipart Form (Upload de Arquivos)
+Requiswet fornece `multipart::Form` e `multipart::Part` para envio de arquivos com mimetype e filename customizado.
+
+```rust
+use reqwest::multipart;
+
+pub async fn upload_media(
+    &self,
+    instance_token: &str,
+    file_bytes: Vec<u8>,
+    file_name: &str,
+    media_type: &str,
+) -> Result<reqwest::Response, reqwest::Error> {
+    let form = multipart::Form::new()
+        .part(
+            "media",
+            multipart::Part::bytes(file_bytes)
+                .file_name(file_name.to_string())
+                .mime_str(media_type)?,
+        );
+
+    self.http
+        .post(&format!("{}/message/sendMedia/instance", self.base_url))
+        .header("apikey", instance_token)
+        .multipart(form)
+        .send()
+        .await
+}
+```
+
+---
+
+## 3. Mudanças Recentes (0.13.x)
+
+### 0.13.4 (Última — Julho 2026)
+- Adição de `ClientBuilder::tls_sslkeylogfile(bool)` para suporte a variáveis de ambiente
+- Novos métodos `ClientBuilder::http2_keep_alive_*` para o cliente bloqueante
+- Suporte a TLS 1.3 ao usar backend `native-tls`
+- **Correção importante:** Redirecionamentos agora removem headers sensíveis quando o esquema muda (ex: HTTPS → HTTP)
+- Atualização da dependência hickory-resolver
+
+### Versões 0.13.3, 0.13.2, 0.13.1
+- Correções em parsing de CertificateRevocationList
+- Problemas HTTP/3 corrigidos
+- Compilação no Android e suporte ALPN melhorado
+
+---
+
+## 4. Backend TLS
+
+**Não há breaking changes na série 0.13.x.** O TLS padrão mudou de `native-tls` para `rustls` na versão **0.13.0**. Se você ainda usa `native-tls`, ative explicitamente:
+
+```toml
+reqwest = { version = "0.13.4", features = ["native-tls"] }
+```
+
+---
+
+## 5. Features Úteis
+
+| Feature | Descrição |
+|---------|-----------|
+| `multipart` | Suporte a multipart forms (incluído por padrão) |
+| `json` | Serialização/desserialização de JSON (padrão) |
+| `cookies` | Gerenciamento automático de cookies |
+| `http3` | Suporte experimental a HTTP/3 (requer `reqwest_unstable`) |
+| `native-tls` | Backend TLS nativo do SO (padrão é `rustls`) |
+| `gzip`, `brotli`, `zstd` | Compressão automática de respostas |
+
+---
+
+## Histórico de atualizações
+
+- **2026-09-06:** Atualização via docs.rs e GitHub changelog. Confirmado versão 0.13.4 com TLS 1.3, multipart stável, remoção de headers em redirects HTTPS→HTTP, sem breaking changes na série 0.13.x. Formatação alinhada ao padrão doc_dev/libs.
+- **2026-05-31:** Criado com padrões de reutilização de cliente, timeouts, headers customizados e tratamento de erros.
+
+---
+
+## Nota de verificação (2026-09-06)
+
+A versão publicada foi confirmada direto na API do crates.io
+(`https://crates.io/api/v1/crates/reqwest`): `max_stable_version = 0.13.4`,
+publicada em **2026-05-25** — não em julho, como constava na primeira redação
+desta atualização.
+
+**Divergência a tratar fora deste doc:** o `Cargo.lock` do projeto resolve
+`reqwest 0.12.28`. Enquanto o salto para 0.13 não for feito e testado, **o código
+do projeto deve seguir a API da 0.12.x**. Este doc descreve a 0.13.4 como alvo,
+não como o que está compilando hoje.

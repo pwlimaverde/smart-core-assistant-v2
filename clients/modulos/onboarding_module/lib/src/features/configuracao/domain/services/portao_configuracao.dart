@@ -17,6 +17,13 @@ import '../usecases/configuracao_usecases.dart';
 /// roteiro por causa de uma consulta que falhou seria pior do que deixá-lo
 /// entrar no workspace: o roteiro é retomável a qualquer momento, e o
 /// workspace não some.
+///
+/// O mesmo objeto expõe o **estado da conta** ([pagamentoPendente]), que vem na
+/// mesma consulta — não há ida extra ao servidor. A regra de falha é idêntica e
+/// pela mesma razão: mandar pagar de novo quem já pagou, por causa de uma
+/// consulta que falhou, é pior do que deixar entrar. O `data_postgres` continua
+/// recusando as escritas de quem está inadimplente, então o pior caso é um
+/// aviso que não aparece.
 final class PortaoConfiguracao extends ChangeNotifier {
   final ConsultarProgressoUsecase _consultar;
 
@@ -27,12 +34,24 @@ final class PortaoConfiguracao extends ChangeNotifier {
   bool? _pendente;
   int _passo = 5;
   bool _consultando = false;
+  bool? _pagamentoPendente;
+  String _assinaturaStatus = '';
+  String _planoNome = '';
 
   /// `null` enquanto não se sabe. Ver a nota da classe.
   bool? get pendente => _pendente;
 
   /// Passo gravado no servidor (5..8). Só faz sentido quando [pendente] é true.
   int get passo => _passo;
+
+  /// `null` enquanto não se sabe; `true` = conta não está em dia.
+  bool? get pagamentoPendente => _pagamentoPendente;
+
+  /// `PENDING_PAYMENT`, `ACTIVE`, `SUSPENDED`… Vazio = sem assinatura.
+  String get assinaturaStatus => _assinaturaStatus;
+
+  /// Nome do plano, para a tela de pagamento dizer o que está sendo cobrado.
+  String get planoNome => _planoNome;
 
   /// Consulta o servidor, no máximo uma vez por vez.
   ///
@@ -49,9 +68,23 @@ final class PortaoConfiguracao extends ChangeNotifier {
       case Success(:final value):
         _pendente = !value.concluido;
         _passo = value.passo;
+        _pagamentoPendente = value.pagamentoPendente;
+        _assinaturaStatus = value.assinaturaStatus;
+        _planoNome = value.planoNome;
       case Failure():
         _pendente = false;
+        _pagamentoPendente = false;
     }
+    notifyListeners();
+  }
+
+  /// Marca a conta como em dia sem ida ao servidor — para a tela de pagamento,
+  /// que acabou de quitar e não deve esperar outra consulta para liberar a
+  /// navegação. Mesmo padrão de [concluir].
+  void quitar() {
+    if (_pagamentoPendente == false) return;
+    _pagamentoPendente = false;
+    _assinaturaStatus = 'ACTIVE';
     notifyListeners();
   }
 
@@ -69,6 +102,9 @@ final class PortaoConfiguracao extends ChangeNotifier {
     _pendente = null;
     _passo = 5;
     _consultando = false;
+    _pagamentoPendente = null;
+    _assinaturaStatus = '';
+    _planoNome = '';
     notifyListeners();
   }
 }

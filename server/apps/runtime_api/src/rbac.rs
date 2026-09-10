@@ -30,6 +30,14 @@
 /// `tenant:admin` e o coringa `*` do superusuário não aparecem nas listas: são
 /// tratados em [`autorizado`] como implicando qualquer escopo, exatamente como
 /// `RequestContext::has_permission` faz do lado do banco.
+/// Rotas que **só** o administrador do tenant pode chamar.
+///
+/// Lista vazia NÃO significa "qualquer sessão passa": [`autorizado`] só devolve
+/// `true` para uma lista vazia quando a sessão já tem `tenant:admin` ou o
+/// coringa `*`. A constante existe para que quem lê o mapa não precise deduzir
+/// isso a partir de um `&[]` solto.
+pub const SOMENTE_ADMIN: &[&str] = &[];
+
 pub const MAPA: &[(&str, &[&str])] = &[
     // --- Kanban: ver o quadro é leitura de atendimento; mexer na estrutura do
     // --- quadro é administração de Kanban.
@@ -56,6 +64,15 @@ pub const MAPA: &[(&str, &[&str])] = &[
     ("CreateWhatsappInstance", &["operacional:admin"]),
     ("ReconnectWhatsappInstance", &["operacional:admin"]),
     ("DeleteWhatsappInstance", &["operacional:admin"]),
+    // D3 (plano `regras-do-bot-e-permissoes`). Os escopos abaixo são os que a
+    // própria fase D3 documentou nos handlers — não escolhi por conta própria:
+    //
+    // · calar o bot da CONEXÃO muda o produto para todos os atendentes do
+    //   tenant, então é decisão de administrador;
+    // · calar o bot de UMA CONVERSA é decisão de quem atende aquela conversa, e
+    //   o `data_postgres` revalida com `atendimentos:write` ou `tenant:admin`.
+    ("DefinirRespostaBotInstancia", SOMENTE_ADMIN),
+    ("DefinirBotDaConversa", &["atendimentos:write"]),
     // --- Base de conhecimento do assistente.
     ("ListTreinamentos", &["treinamento:read"]),
     ("GetTreinamento", &["treinamento:read"]),
@@ -126,12 +143,37 @@ mod tests {
     }
 
     #[test]
-    fn nenhuma_rota_declara_lista_vazia_de_escopos() {
-        // Lista vazia significaria "qualquer sessão passa" — que é exatamente o
-        // problema que este mapa existe para corrigir.
-        for (rota, escopos) in MAPA {
-            assert!(!escopos.is_empty(), "rota sem escopo exigido: {rota}");
-        }
+    fn lista_vazia_de_escopos_significa_somente_admin() {
+        // Este teste substituiu um que proibia lista vazia "porque significaria
+        // qualquer sessão passa". O motivo estava errado: `autorizado` com lista
+        // vazia só aceita `tenant:admin` ou o coringa. O que vale testar é o
+        // comportamento, não a forma — e ele é o mais restritivo possível.
+        let admin = v(&["tenant:admin"]);
+        let staff = v(&["clientes:read", "atendimentos:read", "atendimentos:write"]);
+
+        assert!(autorizado(&admin, SOMENTE_ADMIN, false));
+        assert!(autorizado(&[], SOMENTE_ADMIN, true)); // superusuário
+        assert!(!autorizado(&staff, SOMENTE_ADMIN, false));
+        assert!(!autorizado(&[], SOMENTE_ADMIN, false));
+    }
+
+    #[test]
+    fn rota_de_bot_por_conexao_e_so_do_admin_e_a_de_conversa_e_de_quem_atende() {
+        // Vieram da fase D3, que chegou pela dev. O par existe porque a decisão
+        // tem alcance diferente: calar o bot de um número afeta todos os
+        // atendentes; calar o de uma conversa afeta uma conversa.
+        let staff = v(&["clientes:read", "atendimentos:read", "atendimentos:write"]);
+
+        assert!(!autorizado(
+            &staff,
+            escopos_da_rota("DefinirRespostaBotInstancia").unwrap(),
+            false
+        ));
+        assert!(autorizado(
+            &staff,
+            escopos_da_rota("DefinirBotDaConversa").unwrap(),
+            false
+        ));
     }
 
     #[test]

@@ -82,6 +82,25 @@ impl WhatsappStore for PgWhatsappStore {
         .await
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id, habilitado = habilitado))]
+    async fn definir_resposta_bot(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        habilitado: bool,
+    ) -> Result<bool, DbError> {
+        let repo = PostgresWhatsappInstanceRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let afetou = repo
+                .definir_resposta_bot(&mut tx, &ctx, id, habilitado)
+                .await?;
+            Ok((afetou, tx))
+        })
+        .await
+    }
+
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
     async fn listar_ativas(&self, ctx: &RequestContext) -> Result<Vec<WhatsappInstance>, DbError> {
         let repo = PostgresWhatsappInstanceRepository;

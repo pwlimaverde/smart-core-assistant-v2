@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT a.id, a.tenant_id, a.nome, a.slug, a.telefone, a.cargo, a.email,\n                      a.departamento_id, a.fluxo_id, a.usuario_id, a.usuario_sistema,\n                      a.ativo, a.disponivel, a.max_atendimentos_simultaneos,\n                      a.data_ultima_atribuicao, a.horario_trabalho, a.especialidades,\n                      a.metadados, a.data_cadastro, a.ultima_atividade\n               FROM oraculo_atendente a\n               WHERE a.tenant_id = $1\n                 AND a.ativo = true\n                 AND a.disponivel = true\n                 AND ($2::int IS NULL OR a.departamento_id = $2)\n                 AND (\n                     SELECT COUNT(*)::int\n                     FROM oraculo_atendimento at\n                     WHERE at.atendente_humano_id = a.id\n                       AND at.status IN ('fila', 'em_atendimento', 'pendencia')\n                 ) < a.max_atendimentos_simultaneos\n               ORDER BY a.data_ultima_atribuicao ASC NULLS FIRST\n               LIMIT 1",
+  "query": "SELECT a.id, a.tenant_id, a.nome, a.slug, a.telefone, a.cargo, a.email,\n                      a.departamento_id, a.fluxo_id, a.usuario_id, a.usuario_sistema,\n                      a.ativo, a.disponivel, a.max_atendimentos_simultaneos,\n                      a.data_ultima_atribuicao, a.horario_trabalho, a.especialidades,\n                      a.metadados, a.data_cadastro, a.ultima_atividade\n               FROM oraculo_atendente a\n               WHERE a.tenant_id = $1\n                 AND a.ativo = true\n                 AND a.disponivel = true\n                 AND ($2::int IS NULL OR a.departamento_id = $2)\n                 AND ($3::int IS NULL OR a.fluxo_id = $3)\n                 AND (\n                     SELECT COUNT(*)::int\n                     FROM oraculo_atendimento at\n                     WHERE at.tenant_id = a.tenant_id\n                       AND at.atendente_humano_id = a.id\n                       AND at.status NOT IN ('resolvido', 'cancelado', 'arquivado')\n                 ) < a.max_atendimentos_simultaneos\n               ORDER BY a.data_ultima_atribuicao ASC NULLS FIRST, a.id\n               FOR UPDATE SKIP LOCKED\n               LIMIT 1",
   "describe": {
     "columns": [
       {
@@ -227,6 +227,7 @@
     "parameters": {
       "Left": [
         "Uuid",
+        "Int4",
         "Int4"
       ]
     },
@@ -253,5 +254,5 @@
       false
     ]
   },
-  "hash": "4d75cce050afa6f6946b677e57a722d717ef2bd53911abcf470a818fc2eef761"
+  "hash": "acdc8f386d33ee446f5de0454588f882bb8bb5e88327d789587216ea7d15857a"
 }

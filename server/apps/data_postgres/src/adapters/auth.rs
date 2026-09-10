@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 
 use infrastructure_postgres::auth::users::{
-    AuthUser, AuthUserRepository, PostgresAuthUserRepository,
+    AuthUser, AuthUserRepository, PostgresAuthUserRepository, UsuarioGlobal,
 };
 use infrastructure_postgres::tenants::tenants::{
     PostgresTenantUserRepository, TenantUser, TenantUserRepository,
@@ -18,11 +18,18 @@ use crate::ports::AuthStore;
 #[derive(Clone)]
 pub struct PgAuthStore {
     pub pool: PgPool,
+    /// Pool com BYPASSRLS, para a listagem global do superusuário (D7).
+    ///
+    /// O login não precisa dele — `auth_user` não tem RLS. A listagem precisa,
+    /// porque junta `tenants_tenant` e `tenants_tenantuser`, que têm RLS com
+    /// FORCE: sem BYPASSRLS os LEFT JOIN devolveriam NULL em toda linha e a tela
+    /// mostraria todo mundo "sem tenant" — um dado errado com cara de certo.
+    pub admin_pool: Option<PgPool>,
 }
 
 impl PgAuthStore {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(pool: PgPool, admin_pool: Option<PgPool>) -> Self {
+        Self { pool, admin_pool }
     }
 }
 
@@ -35,6 +42,34 @@ impl AuthStore for PgAuthStore {
             Some(u) => Ok(Some(u)),
             None => repo.buscar_por_username(&self.pool, login).await,
         }
+    }
+
+    /// `skip_all`: o termo de busca é nome ou e-mail de gente.
+    #[tracing::instrument(skip_all, fields(limite = limite, offset = offset))]
+    async fn listar_usuarios_global(
+        &self,
+        busca: &str,
+        limite: i64,
+        offset: i64,
+    ) -> Result<Vec<UsuarioGlobal>, DbError> {
+        if self.admin_pool.is_none() {
+            tracing::warn!(
+                "listar_usuarios_global sem DATABASE_ADMIN_URL: a RLS de \
+                 tenants_tenant esconderá o vínculo e todo usuário aparecerá \
+                 sem tenant"
+            );
+        }
+        let effective_pool = self.admin_pool.as_ref().unwrap_or(&self.pool);
+        PostgresAuthUserRepository
+            .listar_global(effective_pool, busca, limite, offset)
+            .await
+    }
+
+    #[tracing::instrument(skip_all, fields(user_id = user_id, ativo = ativo))]
+    async fn definir_usuario_ativo(&self, user_id: i32, ativo: bool) -> Result<bool, DbError> {
+        PostgresAuthUserRepository
+            .definir_ativo(&self.pool, user_id, ativo)
+            .await
     }
 
     #[tracing::instrument(skip_all, fields(user_id = id))]

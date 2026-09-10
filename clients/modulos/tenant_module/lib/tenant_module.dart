@@ -8,3 +8,6 @@ export 'src/tenant_module.dart' show TenantModule;
 // Mesmo motivo do menu: a faixa de aviso de WhatsApp fora do ar aparece no
 // quadro, que é do módulo operacional, mas conexão é assunto deste módulo.
 export 'src/shared/widgets/aviso_conexao.dart' show AvisoConexao;
+// Composição das faixas do topo do quadro: o slot do operacional_module aceita
+// um widget só, e há dois avisos possíveis (assinatura e conexão).
+export 'src/shared/widgets/avisos_do_quadro.dart' show AvisosDoQuadro;

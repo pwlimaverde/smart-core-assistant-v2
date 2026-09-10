@@ -1,23 +1,22 @@
 # aws-sdk-s3
 
-- **Versão recomendada:** `1` (resolveu para `1.135.0` em jun/2026)
-- **Status:** ✅ ATUALIZADA
-- **Última verificação:** 2026-06-06 (context7 `/awslabs/aws-sdk-rust` + uso real)
-- **Propósito no projeto:** cliente S3-compatible da crate `infrastructure_storage`
-  (exclusiva do app `data_storage`). Backend é o **Cloudflare R2** (S3-compatible)
-  em dev e em produção, via configuração por ambiente (`S3_*`).
+- **Versão Recomendada:** 1.145.0 (setembro 2026)
+- **Em uso no projeto:** `1.135.0` (resolvida no `Cargo.lock`; o workspace
+  declara `version = "1"`, então o salto é só um `cargo update`).
+- **Status de Atualização:** ✅ ATUALIZADA
+- **Última Verificação:** 2026-09-06
+- **Propósito no Projeto:** cliente S3-compatible da crate `infrastructure_storage` (exclusiva do app `data_storage`). Backend é o **Cloudflare R2** (S3-compatible) em dev e em produção, via configuração por ambiente (`S3_*`).
+- **Documentação Oficial:** [https://docs.rs/aws-sdk-s3/latest/aws_sdk_s3/](https://docs.rs/aws-sdk-s3/latest/aws_sdk_s3/)
 
 ## Por que aws-sdk-s3 (e não aws-config)
 
-Usamos o cliente com **configuração manual** (`aws_sdk_s3::Config::builder`), sem a
-dependência pesada `aws-config`. Credenciais explícitas + `endpoint_url` +
-`force_path_style(true)` falam com o R2 (100% compatível com a API S3).
+Usamos o cliente com **configuração manual** (`aws_sdk_s3::Config::builder`), sem a dependência pesada `aws-config`. Credenciais explícitas + `endpoint_url` + `force_path_style(true)` falam com o R2 (100% compatível com a API S3).
 
 ## Matriz de compatibilidade
 
 | Crate | Versão | Observação |
 |---|---|---|
-| `aws-sdk-s3` | 1.135.0 | Cliente, presigning, `primitives::ByteStream` |
+| `aws-sdk-s3` | 1.145.0 | Cliente, presigning, `primitives::ByteStream` |
 | crypto provider | `aws-lc-rs` | Default; no Windows compila via build (precisa toolchain C/NASM) |
 | `tokio` | 1.x (full) | Runtime async |
 
@@ -75,6 +74,8 @@ let req = client.get_object().bucket(&b).key(&k).presigned(cfg).await?;
 let url = req.uri().to_string(); // contém X-Amz-Signature (SigV4)
 ```
 
+**Nota sobre R2:** Presigned URLs funcionam normalmente com R2. A expiração pode ser configurada de 1 segundo a 7 dias (604.800 segundos). O endpoint customizado é automaticamente incluído na URL gerada.
+
 ### Verificação do bucket (não cria)
 
 ```rust
@@ -85,17 +86,13 @@ client.head_bucket().bucket(&b).send().await
 
 ## Notas de produção (R2)
 
-- O bucket do R2 é provisionado **no painel da Cloudflare**; o token de acesso
-  normalmente não tem permissão de `create_bucket`. Por isso `garantir_bucket` faz
-  **apenas `head_bucket`** (verify-only) e devolve erro de configuração claro se o
-  bucket não existir/estiver inacessível.
-- `S3_REGION=auto`, `S3_FORCE_PATH_STYLE=true`. Endpoint:
-  `https://<account_id>.r2.cloudflarestorage.com`.
-- Testes de integração de storage são **opt-in** (rodam só com `S3_*` no `.env`),
-  para não escrever no bucket real em execuções rotineiras de `cargo test`.
+- O bucket do R2 é provisionado **no painel da Cloudflare**; o token de acesso normalmente não tem permissão de `create_bucket`. Por isso `garantir_bucket` faz **apenas `head_bucket`** (verify-only) e devolve erro de configuração claro se o bucket não existir/estiver inacessível.
+- `S3_REGION=auto`, `S3_FORCE_PATH_STYLE=true`. Endpoint: `https://<account_id>.r2.cloudflarestorage.com`.
+- Testes de integração de storage são **opt-in** (rodam só com `S3_*` no `.env`), para não escrever no bucket real em execuções rotineiras de `cargo test`.
+- **Operações implementadas no R2:** HeadBucket, GetObject, PutObject, DeleteObject, ListObjectsV2 (preferido a ListObjects), CreateMultipartUpload, UploadPart, CompleteMultipartUpload.
+- **Operações não implementadas:** Tagging de objetos, versionamento, ACLs, muitas configurações de segurança.
 
 ## Histórico de atualizações
 
-- **2026-06-06:** Criado. Adoção do `aws-sdk-s3` 1.x na crate `infrastructure_storage`
-  (substituição do stub filesystem), com config manual para Cloudflare R2 (dev e
-  prod), presign real, detecção de NotFound e `garantir_bucket` verify-only.
+- **2026-09-06:** Atualização via docs.rs e documentação da Cloudflare. Confirmado que presigned URLs funcionam com R2, detalhes de operações implementadas vs não implementadas, expiração de presigned URLs (1 segundo a 7 dias).
+- **2026-06-06:** Criado. Adoção do `aws-sdk-s3` 1.x na crate `infrastructure_storage` (substituição do stub filesystem), com config manual para Cloudflare R2 (dev e prod), presign real, detecção de NotFound e `garantir_bucket` verify-only.

@@ -649,6 +649,39 @@ table RevokeInviteResponse {
   success:bool;
 }
 
+table AdminListUsersRequest {
+  busca:string;
+  limite:int;
+  offset:int;
+}
+
+table AdminUserItem {
+  id:int;
+  username:string;
+  email:string;
+  nome:string;
+  is_active:bool;
+  is_superuser:bool;
+  last_login:long;
+  date_joined:long;
+  tenant_dono:string;
+  tenant_membro:string;
+  papel:string;
+}
+
+table AdminListUsersResponse {
+  usuarios:[AdminUserItem];
+}
+
+table AdminSetUserActiveRequest {
+  user_id:int;
+  ativo:bool;
+}
+
+table AdminSetUserActiveResponse {
+  ativo:bool;
+}
+
 table ListTenantUsersRequest {
 }
 
@@ -734,6 +767,23 @@ table GetMyOnboardingProgressRequest {
 table GetMyOnboardingProgressResponse {
   passo:int;
   concluido:bool;
+  pagamento_pendente:bool;
+  assinatura_status:string;
+  plano_nome:string;
+  plano_id:int;
+}
+
+table QuitarMinhaAssinaturaRequest {
+  provedor:string;
+  credencial:string;
+}
+
+table QuitarMinhaAssinaturaResponse {
+  confirmado:bool;
+  assinatura_status:string;
+  url_externa:string;
+  motivo:string;
+  erro_legivel:string;
 }
 
 table GetMyTenantConfigRequest {
@@ -959,6 +1009,25 @@ table MyWhatsappInstance {
   active:bool;
   provider:string;
   created_at:long;
+  resposta_bot:bool;
+}
+
+table DefinirRespostaBotInstanciaRequest {
+  id:int;
+  habilitado:bool;
+}
+
+table DefinirRespostaBotInstanciaResponse {
+  habilitado:bool;
+}
+
+table DefinirBotDaConversaRequest {
+  atendimento_id:int;
+  habilitado:bool;
+}
+
+table DefinirBotDaConversaResponse {
+  habilitado:bool;
 }
 
 table ListMyWhatsappInstancesRequest {
@@ -1106,6 +1175,7 @@ table DetalheAtendimentoResponse {
   catalogo:[Etiqueta];
   etiquetas:[Etiqueta];
   notas:[Nota];
+  bot_pode_atender:bool;
 }
 
 table CreateEtiquetaRequest {

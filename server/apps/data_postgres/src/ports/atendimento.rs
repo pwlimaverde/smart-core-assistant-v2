@@ -3,7 +3,7 @@
 //! persistência de mensagem) vive no adapter (DIP).
 
 use async_trait::async_trait;
-use infrastructure_postgres::atendimentos::atendimentos::Atendimento;
+use infrastructure_postgres::atendimentos::atendimentos::{Atendimento, AtendimentoInativo};
 use infrastructure_postgres::atendimentos::mensagens::{DestinoEnvioOutbound, Mensagem};
 use infrastructure_postgres::operacional::fluxos::FluxoDisponivel;
 use infrastructure_postgres::{DbError, RequestContext};
@@ -45,6 +45,13 @@ pub struct TransferenciaFluxoOutcome {
     pub etapa_nome: Option<String>,
     /// Motivo quando `transferido == false` (ex.: "fluxo_inexistente", "sem_etapa_inicial").
     pub reason: Option<String>,
+    /// D2 — quem recebeu a conversa no rodízio, quando houve alguém para receber.
+    ///
+    /// `None` não é erro: fluxo sem atendente disponível deixa o cartão na fila
+    /// do destino, que é melhor que recusar a transferência e devolver o cliente
+    /// a uma IA que já declarou não dar conta.
+    pub atendente_id: Option<i32>,
+    pub atendente_nome: Option<String>,
 }
 
 /// Resultado da aplicação da política de ticket/Kanban sobre um atendimento (WS-2.4).
@@ -67,7 +74,7 @@ pub struct TicketKanbanOutcome {
 /// Metadados de origem de uma mensagem que chega para ser persistida — o que o
 /// provedor de WhatsApp informou sobre ela. Todos opcionais: o caminho do bot e o
 /// do painel não têm nenhum deles.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct OrigemMensagem {
     /// stanzaId da própria mensagem. Presente, é a chave natural de idempotência:
     /// reentrega do mesmo evento pelo bus devolve a mensagem já persistida em vez
@@ -79,6 +86,17 @@ pub struct OrigemMensagem {
     /// (mensagem `fromMe`, digitada pelo atendente no próprio celular): nasce
     /// `status_envio='sent'` para o worker não reenviá-la ao contato.
     pub ja_entregue: bool,
+    /// Confiança (0..1) da IA na resposta que esta linha carrega.
+    ///
+    /// Só faz sentido para mensagens do **bot**. Fica na linha da resposta, e
+    /// não na pergunta como na v1, porque a v2 responde a uma **rajada
+    /// agregada** — não existe "a mensagem respondida", existe o conjunto.
+    ///
+    /// Antes disto o campo `confianca_resposta` era sempre nulo em produção: o
+    /// worker descartava o valor que o `ia_engine` devolvia, e o único `UPDATE`
+    /// que o gravava era chamado apenas por um teste. Sem histórico não há como
+    /// calibrar limiar nenhum — daí gravar vir antes de decidir.
+    pub confianca_resposta: Option<f64>,
 }
 
 /// N9/E1 — dados de uma mídia que o atendente enviou pelo painel.
@@ -149,6 +167,16 @@ pub trait AtendimentoStore: Send + Sync {
         action_id: Option<Uuid>,
         origem: OrigemMensagem,
     ) -> Result<Mensagem, DbError>;
+
+    /// D3 — liga/desliga a resposta automática da IA nesta conversa.
+    ///
+    /// `false` no retorno = atendimento inexistente ou de outro tenant.
+    async fn definir_bot_da_conversa(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        habilitado: bool,
+    ) -> Result<bool, DbError>;
 
     /// N9/E1 — autoriza um upload de mídia e devolve a **chave** do objeto.
     ///
@@ -298,6 +326,25 @@ pub trait AtendimentoStore: Send + Sync {
 
     /// Varredura CROSS-TENANT do scheduler do worker (F4.3b): atendimentos
     /// resolvidos aguardando feedback além do TTL. Exige `admin_pool` (BYPASSRLS).
+    /// D5 — conversas paradas tempo demais (varredura cross-tenant do scheduler).
+    async fn listar_inativos(
+        &self,
+        ctx: &RequestContext,
+        limite: i64,
+        minutos_padrao: i64,
+    ) -> Result<Vec<AtendimentoInativo>, DbError>;
+
+    /// D5 — arquiva a conversa abandonada.
+    ///
+    /// `arquivado`, nunca `resolvido`: a pesquisa de satisfação só dispara em
+    /// `resolvido`, e perguntar "como foi seu atendimento?" a quem parou de
+    /// responder envenena a métrica e incomoda o cliente.
+    async fn encerrar_por_inatividade(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<bool, DbError>;
+
     async fn listar_feedback_vencido(
         &self,
         ctx: &RequestContext,

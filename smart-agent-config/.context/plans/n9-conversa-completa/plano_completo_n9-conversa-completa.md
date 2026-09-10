@@ -213,20 +213,99 @@ cartão e no chat. A foto vem de `whatsapp_contact` (populada pelo evento
 Quadro / dividido / conversa, com `Alt+1/2/3`, `Esc` e `i`. Só cliente. Persistir
 a preferência localmente.
 
+**O modo dividido é o padrão, e é o requisito de produto (doc 33 / P2):** clicar
+num cartão abre a conversa **num painel à direita, com o quadro visível ao
+lado** — não numa tela cheia empilhada. Hoje é `Navigator.push` para uma rota
+nova (`kanban_page.dart:234`), o que tira o quadro da frente a cada conversa
+aberta e obriga a voltar para trocar de cartão.
+
+A conversa **já está construída**: `ChatPage` (histórico, realtime com backoff,
+envio, selo de conexão) e `PainelFicha`. A entrega é enquadramento, não
+capacidade — extrair o miolo da `ChatPage` para um widget montável em painel e
+manter a rota de tela cheia como o modo "conversa". Trocar de cartão troca o
+conteúdo do painel sem desmontar o quadro; o `ChatController` é por atendimento
+e precisa ser descartado na troca, ou a conversa anterior segue consumindo o
+stream.
+
 ---
 
 # N9d — A ficha completa
 
 ## E13 — Campos personalizados
 
-Catálogo por fluxo (`/tenant/fluxos/:id/campos`): `ListMyCamposPersonalizados`,
-`CreateMyCampoPersonalizado`, `UpdateMyCampoPersonalizado`,
-`DesativarMyCampoPersonalizado`. As tabelas (`atu_campo_personalizado`,
-`atu_valor_campo`) e o repositório (`campos.rs`) **já existem**; o `Responder` já
-consome os campos como contexto.
+> Especificação detalhada e o estudo do modelo do Trello que a sustenta:
+> [doc 33 §5](../../../doc_dev/planejamento/33-painel-como-crm-atendimento-ativo-e-campos-do-cartao.md).
 
-Na ficha: valor, **origem** (BOT/MANUAL/IMPORT), **barra de confiança** quando a
-origem é BOT, e edição inline → `SetValorCampoAtendimento`.
+Catálogo em **dois escopos**: `/tenant/campos` (escopo `GLOBAL` — o "menu de
+personalização do cartão de atendimento" pedido) e
+`/tenant/fluxos/:id/campos` (escopo `FLUXO`). RPCs
+`ListMyCamposPersonalizados`, `CreateMyCampoPersonalizado`,
+`UpdateMyCampoPersonalizado`, `DesativarMyCampoPersonalizado`,
+`ReordenarMyCamposPersonalizados`.
+
+As tabelas (`atu_campo_personalizado`, `atu_valor_campo`) e o repositório
+(`campos.rs`) **já existem**, e o `Responder` já consome os campos como
+contexto. Mas `campos.rs::criar` aceita seis argumentos e **nenhum** é
+`descricao`, `opcoes`, `obrigatorio`, `extrair_hint`, `mostrar_no_card` ou
+`ordem` — e não há `atualizar` nem `desativar`. O repositório é ampliado aqui.
+
+### O que um campo é
+
+Cinco tipos, fechados por `CHECK` na coluna (hoje `tipo` é `VARCHAR(20)` sem
+restrição e o repositório o recebe como `&str` cru):
+`texto`, `numero`, `data`, `booleano`, `lista`.
+
+O valor é **tipado pela definição**, não texto livre:
+
+```jsonc
+texto    -> {"texto": "Rua das Flores, 120"}
+numero   -> {"numero": 42.5}
+data     -> {"data": "2026-09-15T09:00:00Z"}
+booleano -> {"marcado": true}
+lista    -> {"opcao_ids": ["opt_7f3a", "opt_91bc"]}   // múltipla, ver abaixo
+```
+
+E cada opção de lista, dentro de `opcoes`:
+
+```jsonc
+{"id": "opt_7f3a", "rotulo": "Camiseta", "cor": "#a98f71", "ordem": 0}
+```
+
+**O valor guarda o id da opção, nunca o rótulo.** É a decisão que o Trello toma
+em silêncio e a que mais importa: renomear "Camiseta" para "Camiseta Premium"
+não pode reescrever — nem corromper — nenhum atendimento já preenchido.
+
+**Lista é de seleção múltipla**, ao contrário do Trello: o campo existe para
+registrar interesse declarado ("um ou mais produtos"), e interesse não é
+excludente.
+
+**`descricao` não é enfeite** — é a instrução que orienta a extração pela IA,
+junto com `extrair_hint`. É o que faz "Agendamento de novo contato" virar um
+campo que se preenche sozinho em vez de um rótulo vazio.
+
+**Teto por tenant e escopo** (50, o número do Trello). Lá é ergonomia de tela;
+aqui é custo: todo campo pendente entra no prompt de toda mensagem.
+
+### Na ficha e no cartão
+
+Valor, **origem** (`MANUAL` / `IA`), **barra de confiança** quando a origem é
+`IA`, e edição inline → `SetValorCampoAtendimento`.
+
+⚠️ **A origem `IA` não é alcançável hoje** — o `ResponderResponse` não tem por
+onde devolver campo extraído (`ai_engine.proto:131`), e o próprio port
+documenta a ausência (`ports/atendimento.rs:435`). Quem fecha esse laço é o
+bloco **C1** do plano `painel-crm-e-campos-do-cartao`. **Sem ele esta tela
+exibe um estado que nada sabe produzir** — a barra de confiança nunca apareceria.
+
+`mostrar_no_card = true` reflete no cartão do quadro (junto com o preview da
+E11), respeitando `ordem`.
+
+**Valor apagado ≠ valor nunca preenchido.** Linha ausente = nunca preenchido;
+linha com `valor = 'null'::jsonb` (válido e não-nulo numa coluna `JSONB NOT
+NULL`) = deliberadamente vazio. A distinção existe porque, quando C1 entrar, a
+IA **não pode** repreencher o que um humano apagou; o guarda é
+`editado_por_id IS NOT NULL`, coluna que existe e hoje nunca é gravada — passa
+a ser gravada na edição manual.
 
 **Auditoria:** `campo_personalizado.alterado` — registrar **qual campo**, nunca
 o valor (pode ser CPF, endereço, o que o tenant quiser).

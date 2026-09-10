@@ -18,6 +18,7 @@ final class FichaController extends BaseController<FichaAtendimento> {
   final CriarEtiquetaUsecase _criarEtiqueta;
   final AlternarEtiquetaUsecase _alternar;
   final CriarNotaUsecase _criarNota;
+  final DefinirBotDaConversaUsecase _definirBot;
 
   int _atendimentoId = 0;
 
@@ -26,10 +27,12 @@ final class FichaController extends BaseController<FichaAtendimento> {
     required CriarEtiquetaUsecase criarEtiqueta,
     required AlternarEtiquetaUsecase alternar,
     required CriarNotaUsecase criarNota,
+    required DefinirBotDaConversaUsecase definirBot,
   }) : _carregar = carregar,
        _criarEtiqueta = criarEtiqueta,
        _alternar = alternar,
-       _criarNota = criarNota;
+       _criarNota = criarNota,
+       _definirBot = definirBot;
 
   int get atendimentoId => _atendimentoId;
 
@@ -61,6 +64,23 @@ final class FichaController extends BaseController<FichaAtendimento> {
         atendimentoId: _atendimentoId,
         etiquetaId: etiquetaId,
         aplicar: aplicar,
+      ),
+    );
+    if (res case Failure(:final error)) return error;
+    await abrir(_atendimentoId);
+    return null;
+  }
+
+  /// D3 — liga/desliga a IA nesta conversa.
+  ///
+  /// Recarrega a ficha ao final, como as demais escritas: o servidor é quem diz
+  /// em que estado a conversa ficou, e refletir o pedido em vez da resposta
+  /// deixaria o interruptor mentindo se a escrita fosse negada.
+  Future<FichaError?> definirBot(bool habilitado) async {
+    final res = await _definirBot(
+      DefinirBotDaConversaParameters(
+        atendimentoId: _atendimentoId,
+        habilitado: habilitado,
       ),
     );
     if (res case Failure(:final error)) return error;

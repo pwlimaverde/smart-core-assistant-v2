@@ -6,7 +6,7 @@ use sqlx::PgPool;
 
 use infrastructure_postgres::atendimentos::atendimentos::{
     status_do_tipo_etapa, status_e_fim_de_linha, tipo_etapa_do_status, Atendimento,
-    AtendimentoRepository, PostgresAtendimentoRepository,
+    AtendimentoInativo, AtendimentoRepository, PostgresAtendimentoRepository,
 };
 use infrastructure_postgres::atendimentos::campos::{
     CampoPersonalizadoRepository, PostgresCampoPersonalizadoRepository,
@@ -177,6 +177,7 @@ async fn solicitar_pesquisa_satisfacao(
                 message_id_whatsapp: None,
                 mensagem_citada_id: None,
                 ja_entregue: false,
+                confianca_resposta: None,
             },
         )
         .await?;
@@ -340,6 +341,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                         message_id_whatsapp: origem.message_id_whatsapp.as_deref(),
                         mensagem_citada_id,
                         ja_entregue: origem.ja_entregue,
+                        confianca_resposta: origem.confianca_resposta,
                     },
                 )
                 .await?;
@@ -382,6 +384,27 @@ impl AtendimentoStore for PgAtendimentoStore {
 
     /// `skip_all`: `bytes` entra por campo; nada mais desta chamada é seguro
     /// logar (a chave devolvida identifica o objeto do tenant).
+    #[tracing::instrument(
+        skip_all,
+        fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, habilitado = habilitado)
+    )]
+    async fn definir_bot_da_conversa(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        habilitado: bool,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let afetou = PostgresAtendimentoRepository
+                .definir_bot_da_conversa(&mut tx, &ctx, atendimento_id, habilitado)
+                .await?;
+            Ok((afetou, tx))
+        })
+        .await
+    }
+
     #[tracing::instrument(
         skip_all,
         fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, bytes = bytes)
@@ -512,6 +535,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                         mensagem_citada_id: None,
                         // Ainda não passou pelo WhatsApp: é o worker que envia.
                         ja_entregue: false,
+                        confianca_resposta: None,
                     },
                 )
                 .await?;
@@ -947,6 +971,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                                         message_id_whatsapp: None,
                                         mensagem_citada_id: None,
                                         ja_entregue: false,
+                        confianca_resposta: None,
                                     },
                                 )
                                 .await?;
@@ -1107,6 +1132,59 @@ impl AtendimentoStore for PgAtendimentoStore {
                 "pesquisa_solicitada": pesquisa_solicitada,
             });
             Ok((json, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(limite = limite, minutos_padrao = minutos_padrao))]
+    async fn listar_inativos(
+        &self,
+        ctx: &RequestContext,
+        limite: i64,
+        minutos_padrao: i64,
+    ) -> Result<Vec<AtendimentoInativo>, DbError> {
+        if self.admin_pool.is_none() {
+            tracing::warn!(
+                "listar_inativos sem DATABASE_ADMIN_URL: a RLS bloqueará a \
+                 varredura cross-tenant e a lista virá vazia"
+            );
+        }
+        let effective_pool = self.admin_pool.as_ref().unwrap_or(&self.pool);
+        let repo = PostgresAtendimentoRepository;
+        let mut tx = effective_pool.begin().await?;
+        let rows = repo
+            .listar_inativos(&mut tx, ctx, limite, minutos_padrao)
+            .await?;
+        tx.commit().await?;
+        Ok(rows)
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn encerrar_por_inatividade(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<bool, DbError> {
+        let repo = PostgresAtendimentoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let encerrado = repo
+                .encerrar_por_inatividade(&mut tx, &ctx, atendimento_id)
+                .await?;
+            // Só registra no histórico o que de fato mudou: a recheca de status
+            // dentro do UPDATE pode ter recusado porque o cliente voltou.
+            if encerrado {
+                repo.registrar_historico_status(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    "arquivado",
+                    "Encerrado automaticamente por inatividade",
+                )
+                .await?;
+            }
+            Ok((encerrado, tx))
         })
         .await
     }
@@ -1367,6 +1445,7 @@ impl AtendimentoStore for PgAtendimentoStore {
         let repo_fluxo = PostgresFluxoAtendimentoRepository;
         let repo_etapa = PostgresEtapaFluxoRepository;
         let repo_movimento = PostgresMovimentoFluxoRepository;
+        let repo_atendente = PostgresAtendenteRepository;
         let ctx = ctx.clone();
         let tenant_id = ctx.tenant_id;
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
@@ -1427,6 +1506,41 @@ impl AtendimentoStore for PgAtendimentoStore {
                 )
                 .await?;
 
+            // D2 — a transferência agora ATRIBUI, não só enfileira.
+            //
+            // Transbordar para uma fila que ninguém puxa troca uma resposta ruim
+            // por silêncio: a IA declarou não dar conta, o cartão mudou de
+            // coluna, e o cliente continua esperando alguém que não sabe que
+            // existe uma conversa esperando por ele.
+            //
+            // Filtra por FLUXO e não por departamento: o atendente tem
+            // `fluxo_id` obrigatório e `departamento_id` opcional, então filtrar
+            // pelo departamento do fluxo excluiria quem está no fluxo certo sem
+            // departamento definido.
+            //
+            // Ninguém disponível **não** desfaz a transferência: o cartão fica na
+            // fila do destino, que ainda é melhor que devolvê-lo à IA.
+            let mut atendente_id = None;
+            let mut atendente_nome = None;
+            if let Some(candidato) = repo_atendente
+                .buscar_disponivel_round_robin(&mut tx, &ctx, None, Some(fluxo.id))
+                .await?
+            {
+                // `atribuir_se_livre` devolve `false` quando a conversa já tem
+                // dono. Nesse caso NÃO se gasta a vez do candidato: ele continua
+                // no topo da fila para a próxima transferência.
+                if repo_atendimento
+                    .atribuir_se_livre(&mut tx, &ctx, atendimento_id, candidato.id)
+                    .await?
+                {
+                    repo_atendente
+                        .atualizar_ultima_atribuicao(&mut tx, &ctx, candidato.id)
+                        .await?;
+                    atendente_id = Some(candidato.id);
+                    atendente_nome = Some(candidato.nome);
+                }
+            }
+
             let outcome = TransferenciaFluxoOutcome {
                 transferido: true,
                 fluxo_id: Some(fluxo.id),
@@ -1434,6 +1548,8 @@ impl AtendimentoStore for PgAtendimentoStore {
                 etapa_id: Some(etapa.id),
                 etapa_nome: Some(etapa.nome),
                 reason: None,
+                atendente_id,
+                atendente_nome,
             };
             Ok((outcome, tx))
         })
@@ -1548,10 +1664,23 @@ impl AtendimentoStore for PgAtendimentoStore {
                 .listar_por_atendimento(&mut tx, &ctx, atendimento_id)
                 .await?;
 
+            // D3 — a ficha desenha o interruptor do bot, então precisa saber em
+            // que estado ele está. Vem na mesma transação: um RPC extra só para
+            // ler um booleano seria uma ida ao servidor por cartão aberto.
+            // Atendimento inexistente cai em `true`, o padrão da coluna — o
+            // painel inteiro já falha nesse caso, e mentir para menos faria a
+            // tela sugerir que a IA está calada quando não está.
+            let bot_pode_atender = PostgresAtendimentoRepository
+                .buscar_por_id(&mut tx, &ctx, atendimento_id)
+                .await?
+                .map(|a| a.bot_pode_atender)
+                .unwrap_or(true);
+
             let json = serde_json::json!({
                 "catalogo": catalogo,
                 "etiquetas": aplicadas,
                 "notas": notas,
+                "bot_pode_atender": bot_pode_atender,
             });
             Ok((json, tx))
         })

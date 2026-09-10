@@ -2133,6 +2133,97 @@ final $typed_data.Uint8List revokeInviteResponseDescriptor =
     $convert.base64Decode(
         'ChRSZXZva2VJbnZpdGVSZXNwb25zZRIYCgdzdWNjZXNzGAEgASgIUgdzdWNjZXNz');
 
+@$core.Deprecated('Use adminListUsersRequestDescriptor instead')
+const AdminListUsersRequest$json = {
+  '1': 'AdminListUsersRequest',
+  '2': [
+    {'1': 'busca', '3': 1, '4': 1, '5': 9, '10': 'busca'},
+    {'1': 'limite', '3': 2, '4': 1, '5': 5, '10': 'limite'},
+    {'1': 'offset', '3': 3, '4': 1, '5': 5, '10': 'offset'},
+  ],
+};
+
+/// Descriptor for `AdminListUsersRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List adminListUsersRequestDescriptor = $convert.base64Decode(
+    'ChVBZG1pbkxpc3RVc2Vyc1JlcXVlc3QSFAoFYnVzY2EYASABKAlSBWJ1c2NhEhYKBmxpbWl0ZR'
+    'gCIAEoBVIGbGltaXRlEhYKBm9mZnNldBgDIAEoBVIGb2Zmc2V0');
+
+@$core.Deprecated('Use adminUserItemDescriptor instead')
+const AdminUserItem$json = {
+  '1': 'AdminUserItem',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'username', '3': 2, '4': 1, '5': 9, '10': 'username'},
+    {'1': 'email', '3': 3, '4': 1, '5': 9, '10': 'email'},
+    {'1': 'nome', '3': 4, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'is_active', '3': 5, '4': 1, '5': 8, '10': 'isActive'},
+    {'1': 'is_superuser', '3': 6, '4': 1, '5': 8, '10': 'isSuperuser'},
+    {'1': 'last_login', '3': 7, '4': 1, '5': 3, '10': 'lastLogin'},
+    {'1': 'date_joined', '3': 8, '4': 1, '5': 3, '10': 'dateJoined'},
+    {'1': 'tenant_dono', '3': 9, '4': 1, '5': 9, '10': 'tenantDono'},
+    {'1': 'tenant_membro', '3': 10, '4': 1, '5': 9, '10': 'tenantMembro'},
+    {'1': 'papel', '3': 11, '4': 1, '5': 9, '10': 'papel'},
+  ],
+};
+
+/// Descriptor for `AdminUserItem`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List adminUserItemDescriptor = $convert.base64Decode(
+    'Cg1BZG1pblVzZXJJdGVtEg4KAmlkGAEgASgFUgJpZBIaCgh1c2VybmFtZRgCIAEoCVIIdXNlcm'
+    '5hbWUSFAoFZW1haWwYAyABKAlSBWVtYWlsEhIKBG5vbWUYBCABKAlSBG5vbWUSGwoJaXNfYWN0'
+    'aXZlGAUgASgIUghpc0FjdGl2ZRIhCgxpc19zdXBlcnVzZXIYBiABKAhSC2lzU3VwZXJ1c2VyEh'
+    '0KCmxhc3RfbG9naW4YByABKANSCWxhc3RMb2dpbhIfCgtkYXRlX2pvaW5lZBgIIAEoA1IKZGF0'
+    'ZUpvaW5lZBIfCgt0ZW5hbnRfZG9ubxgJIAEoCVIKdGVuYW50RG9ubxIjCg10ZW5hbnRfbWVtYn'
+    'JvGAogASgJUgx0ZW5hbnRNZW1icm8SFAoFcGFwZWwYCyABKAlSBXBhcGVs');
+
+@$core.Deprecated('Use adminListUsersResponseDescriptor instead')
+const AdminListUsersResponse$json = {
+  '1': 'AdminListUsersResponse',
+  '2': [
+    {
+      '1': 'usuarios',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.AdminUserItem',
+      '10': 'usuarios'
+    },
+  ],
+};
+
+/// Descriptor for `AdminListUsersResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List adminListUsersResponseDescriptor =
+    $convert.base64Decode(
+        'ChZBZG1pbkxpc3RVc2Vyc1Jlc3BvbnNlEkYKCHVzdWFyaW9zGAEgAygLMiouc21hcnRjb3JlLm'
+        'NvbnRyYWN0cy5xdWVyaWVzLkFkbWluVXNlckl0ZW1SCHVzdWFyaW9z');
+
+@$core.Deprecated('Use adminSetUserActiveRequestDescriptor instead')
+const AdminSetUserActiveRequest$json = {
+  '1': 'AdminSetUserActiveRequest',
+  '2': [
+    {'1': 'user_id', '3': 1, '4': 1, '5': 5, '10': 'userId'},
+    {'1': 'ativo', '3': 2, '4': 1, '5': 8, '10': 'ativo'},
+  ],
+};
+
+/// Descriptor for `AdminSetUserActiveRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List adminSetUserActiveRequestDescriptor =
+    $convert.base64Decode(
+        'ChlBZG1pblNldFVzZXJBY3RpdmVSZXF1ZXN0EhcKB3VzZXJfaWQYASABKAVSBnVzZXJJZBIUCg'
+        'VhdGl2bxgCIAEoCFIFYXRpdm8=');
+
+@$core.Deprecated('Use adminSetUserActiveResponseDescriptor instead')
+const AdminSetUserActiveResponse$json = {
+  '1': 'AdminSetUserActiveResponse',
+  '2': [
+    {'1': 'ativo', '3': 1, '4': 1, '5': 8, '10': 'ativo'},
+  ],
+};
+
+/// Descriptor for `AdminSetUserActiveResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List adminSetUserActiveResponseDescriptor =
+    $convert.base64Decode(
+        'ChpBZG1pblNldFVzZXJBY3RpdmVSZXNwb25zZRIUCgVhdGl2bxgBIAEoCFIFYXRpdm8=');
+
 @$core.Deprecated('Use listMcpGrantsRequestDescriptor instead')
 const ListMcpGrantsRequest$json = {
   '1': 'ListMcpGrantsRequest',
@@ -2491,14 +2582,72 @@ const GetMyOnboardingProgressResponse$json = {
   '2': [
     {'1': 'passo', '3': 1, '4': 1, '5': 5, '10': 'passo'},
     {'1': 'concluido', '3': 2, '4': 1, '5': 8, '10': 'concluido'},
+    {
+      '1': 'pagamento_pendente',
+      '3': 3,
+      '4': 1,
+      '5': 8,
+      '10': 'pagamentoPendente'
+    },
+    {
+      '1': 'assinatura_status',
+      '3': 4,
+      '4': 1,
+      '5': 9,
+      '10': 'assinaturaStatus'
+    },
+    {'1': 'plano_nome', '3': 5, '4': 1, '5': 9, '10': 'planoNome'},
+    {'1': 'plano_id', '3': 6, '4': 1, '5': 5, '10': 'planoId'},
   ],
 };
 
 /// Descriptor for `GetMyOnboardingProgressResponse`. Decode as a `google.protobuf.DescriptorProto`.
-final $typed_data.Uint8List getMyOnboardingProgressResponseDescriptor =
+final $typed_data.Uint8List getMyOnboardingProgressResponseDescriptor = $convert.base64Decode(
+    'Ch9HZXRNeU9uYm9hcmRpbmdQcm9ncmVzc1Jlc3BvbnNlEhQKBXBhc3NvGAEgASgFUgVwYXNzbx'
+    'IcCgljb25jbHVpZG8YAiABKAhSCWNvbmNsdWlkbxItChJwYWdhbWVudG9fcGVuZGVudGUYAyAB'
+    'KAhSEXBhZ2FtZW50b1BlbmRlbnRlEisKEWFzc2luYXR1cmFfc3RhdHVzGAQgASgJUhBhc3Npbm'
+    'F0dXJhU3RhdHVzEh0KCnBsYW5vX25vbWUYBSABKAlSCXBsYW5vTm9tZRIZCghwbGFub19pZBgG'
+    'IAEoBVIHcGxhbm9JZA==');
+
+@$core.Deprecated('Use quitarMinhaAssinaturaRequestDescriptor instead')
+const QuitarMinhaAssinaturaRequest$json = {
+  '1': 'QuitarMinhaAssinaturaRequest',
+  '2': [
+    {'1': 'provedor', '3': 1, '4': 1, '5': 9, '10': 'provedor'},
+    {'1': 'credencial', '3': 2, '4': 1, '5': 9, '10': 'credencial'},
+  ],
+};
+
+/// Descriptor for `QuitarMinhaAssinaturaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List quitarMinhaAssinaturaRequestDescriptor =
     $convert.base64Decode(
-        'Ch9HZXRNeU9uYm9hcmRpbmdQcm9ncmVzc1Jlc3BvbnNlEhQKBXBhc3NvGAEgASgFUgVwYXNzbx'
-        'IcCgljb25jbHVpZG8YAiABKAhSCWNvbmNsdWlkbw==');
+        'ChxRdWl0YXJNaW5oYUFzc2luYXR1cmFSZXF1ZXN0EhoKCHByb3ZlZG9yGAEgASgJUghwcm92ZW'
+        'RvchIeCgpjcmVkZW5jaWFsGAIgASgJUgpjcmVkZW5jaWFs');
+
+@$core.Deprecated('Use quitarMinhaAssinaturaResponseDescriptor instead')
+const QuitarMinhaAssinaturaResponse$json = {
+  '1': 'QuitarMinhaAssinaturaResponse',
+  '2': [
+    {'1': 'confirmado', '3': 1, '4': 1, '5': 8, '10': 'confirmado'},
+    {
+      '1': 'assinatura_status',
+      '3': 2,
+      '4': 1,
+      '5': 9,
+      '10': 'assinaturaStatus'
+    },
+    {'1': 'url_externa', '3': 3, '4': 1, '5': 9, '10': 'urlExterna'},
+    {'1': 'motivo', '3': 4, '4': 1, '5': 9, '10': 'motivo'},
+    {'1': 'erro_legivel', '3': 5, '4': 1, '5': 9, '10': 'erroLegivel'},
+  ],
+};
+
+/// Descriptor for `QuitarMinhaAssinaturaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List quitarMinhaAssinaturaResponseDescriptor = $convert.base64Decode(
+    'Ch1RdWl0YXJNaW5oYUFzc2luYXR1cmFSZXNwb25zZRIeCgpjb25maXJtYWRvGAEgASgIUgpjb2'
+    '5maXJtYWRvEisKEWFzc2luYXR1cmFfc3RhdHVzGAIgASgJUhBhc3NpbmF0dXJhU3RhdHVzEh8K'
+    'C3VybF9leHRlcm5hGAMgASgJUgp1cmxFeHRlcm5hEhYKBm1vdGl2bxgEIAEoCVIGbW90aXZvEi'
+    'EKDGVycm9fbGVnaXZlbBgFIAEoCVILZXJyb0xlZ2l2ZWw=');
 
 @$core.Deprecated('Use getMyTenantConfigRequestDescriptor instead')
 const GetMyTenantConfigRequest$json = {
@@ -3180,6 +3329,7 @@ const MyWhatsappInstance$json = {
     {'1': 'active', '3': 5, '4': 1, '5': 8, '10': 'active'},
     {'1': 'provider', '3': 6, '4': 1, '5': 9, '10': 'provider'},
     {'1': 'created_at', '3': 7, '4': 1, '5': 3, '10': 'createdAt'},
+    {'1': 'resposta_bot', '3': 8, '4': 1, '5': 8, '10': 'respostaBot'},
   ],
 };
 
@@ -3188,7 +3338,66 @@ final $typed_data.Uint8List myWhatsappInstanceDescriptor = $convert.base64Decode
     'ChJNeVdoYXRzYXBwSW5zdGFuY2USDgoCaWQYASABKAVSAmlkEhIKBG5hbWUYAiABKAlSBG5hbW'
     'USIQoMcGhvbmVfbnVtYmVyGAMgASgJUgtwaG9uZU51bWJlchIpChBjb25uZWN0aW9uX3N0YXRl'
     'GAQgASgJUg9jb25uZWN0aW9uU3RhdGUSFgoGYWN0aXZlGAUgASgIUgZhY3RpdmUSGgoIcHJvdm'
-    'lkZXIYBiABKAlSCHByb3ZpZGVyEh0KCmNyZWF0ZWRfYXQYByABKANSCWNyZWF0ZWRBdA==');
+    'lkZXIYBiABKAlSCHByb3ZpZGVyEh0KCmNyZWF0ZWRfYXQYByABKANSCWNyZWF0ZWRBdBIhCgxy'
+    'ZXNwb3N0YV9ib3QYCCABKAhSC3Jlc3Bvc3RhQm90');
+
+@$core.Deprecated('Use definirRespostaBotInstanciaRequestDescriptor instead')
+const DefinirRespostaBotInstanciaRequest$json = {
+  '1': 'DefinirRespostaBotInstanciaRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'habilitado', '3': 2, '4': 1, '5': 8, '10': 'habilitado'},
+  ],
+};
+
+/// Descriptor for `DefinirRespostaBotInstanciaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List definirRespostaBotInstanciaRequestDescriptor =
+    $convert.base64Decode(
+        'CiJEZWZpbmlyUmVzcG9zdGFCb3RJbnN0YW5jaWFSZXF1ZXN0Eg4KAmlkGAEgASgFUgJpZBIeCg'
+        'poYWJpbGl0YWRvGAIgASgIUgpoYWJpbGl0YWRv');
+
+@$core.Deprecated('Use definirRespostaBotInstanciaResponseDescriptor instead')
+const DefinirRespostaBotInstanciaResponse$json = {
+  '1': 'DefinirRespostaBotInstanciaResponse',
+  '2': [
+    {'1': 'habilitado', '3': 1, '4': 1, '5': 8, '10': 'habilitado'},
+  ],
+};
+
+/// Descriptor for `DefinirRespostaBotInstanciaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List definirRespostaBotInstanciaResponseDescriptor =
+    $convert.base64Decode(
+        'CiNEZWZpbmlyUmVzcG9zdGFCb3RJbnN0YW5jaWFSZXNwb25zZRIeCgpoYWJpbGl0YWRvGAEgAS'
+        'gIUgpoYWJpbGl0YWRv');
+
+@$core.Deprecated('Use definirBotDaConversaRequestDescriptor instead')
+const DefinirBotDaConversaRequest$json = {
+  '1': 'DefinirBotDaConversaRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'habilitado', '3': 2, '4': 1, '5': 8, '10': 'habilitado'},
+  ],
+};
+
+/// Descriptor for `DefinirBotDaConversaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List definirBotDaConversaRequestDescriptor =
+    $convert.base64Decode(
+        'ChtEZWZpbmlyQm90RGFDb252ZXJzYVJlcXVlc3QSJQoOYXRlbmRpbWVudG9faWQYASABKAVSDW'
+        'F0ZW5kaW1lbnRvSWQSHgoKaGFiaWxpdGFkbxgCIAEoCFIKaGFiaWxpdGFkbw==');
+
+@$core.Deprecated('Use definirBotDaConversaResponseDescriptor instead')
+const DefinirBotDaConversaResponse$json = {
+  '1': 'DefinirBotDaConversaResponse',
+  '2': [
+    {'1': 'habilitado', '3': 1, '4': 1, '5': 8, '10': 'habilitado'},
+  ],
+};
+
+/// Descriptor for `DefinirBotDaConversaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List definirBotDaConversaResponseDescriptor =
+    $convert.base64Decode(
+        'ChxEZWZpbmlyQm90RGFDb252ZXJzYVJlc3BvbnNlEh4KCmhhYmlsaXRhZG8YASABKAhSCmhhYm'
+        'lsaXRhZG8=');
 
 @$core.Deprecated('Use listMyWhatsappInstancesRequestDescriptor instead')
 const ListMyWhatsappInstancesRequest$json = {
@@ -3665,6 +3874,7 @@ const DetalheAtendimentoResponse$json = {
       '6': '.smartcore.contracts.queries.Nota',
       '10': 'notas'
     },
+    {'1': 'bot_pode_atender', '3': 4, '4': 1, '5': 8, '10': 'botPodeAtender'},
   ],
 };
 
@@ -3673,7 +3883,8 @@ final $typed_data.Uint8List detalheAtendimentoResponseDescriptor = $convert.base
     'ChpEZXRhbGhlQXRlbmRpbWVudG9SZXNwb25zZRJBCghjYXRhbG9nbxgBIAMoCzIlLnNtYXJ0Y2'
     '9yZS5jb250cmFjdHMucXVlcmllcy5FdGlxdWV0YVIIY2F0YWxvZ28SQwoJZXRpcXVldGFzGAIg'
     'AygLMiUuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkV0aXF1ZXRhUglldGlxdWV0YXMSNw'
-    'oFbm90YXMYAyADKAsyIS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTm90YVIFbm90YXM=');
+    'oFbm90YXMYAyADKAsyIS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTm90YVIFbm90YXMS'
+    'KAoQYm90X3BvZGVfYXRlbmRlchgEIAEoCFIOYm90UG9kZUF0ZW5kZXI=');
 
 @$core.Deprecated('Use createEtiquetaRequestDescriptor instead')
 const CreateEtiquetaRequest$json = {

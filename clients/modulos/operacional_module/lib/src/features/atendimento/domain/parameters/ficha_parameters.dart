@@ -27,6 +27,17 @@ final class AlternarEtiquetaParameters extends Parameters {
   });
 }
 
+/// D3 — liga/desliga a resposta automática da IA nesta conversa.
+final class DefinirBotDaConversaParameters extends Parameters {
+  final int atendimentoId;
+  final bool habilitado;
+
+  const DefinirBotDaConversaParameters({
+    required this.atendimentoId,
+    required this.habilitado,
+  });
+}
+
 final class CriarNotaParameters extends Parameters {
   final int atendimentoId;
   final String texto;

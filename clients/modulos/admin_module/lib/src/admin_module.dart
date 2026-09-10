@@ -4,6 +4,10 @@ import 'features/core_settings/data/datasources/core_settings_datasources.dart';
 import 'features/core_settings/data/repositories/core_settings_repositories.dart';
 import 'features/core_settings/domain/usecases/core_settings_usecases.dart';
 import 'features/core_settings/presentation/routes/core_settings_route.dart';
+import 'features/usuarios/data/datasources/usuarios_datasources.dart';
+import 'features/usuarios/data/repositories/usuarios_repositories.dart';
+import 'features/usuarios/domain/usecases/usuarios_usecases.dart';
+import 'features/usuarios/presentation/routes/usuarios_route.dart';
 import 'features/tenants/data/datasources/tenants_datasources.dart';
 import 'features/tenants/data/repositories/tenants_repositories.dart';
 import 'features/tenants/domain/usecases/tenants_usecases.dart';
@@ -34,7 +38,7 @@ import 'features/dashboard/domain/usecases/dashboard_usecases.dart';
 import 'features/dashboard/presentation/routes/dashboard_route.dart';
 
 /// Módulo de administração (painel do superusuário), em **oito features**:
-/// core_settings, tenants, tenant_config, billing, feature_flags, audit,
+/// core_settings, tenants, usuarios, tenant_config, billing, feature_flags, audit,
 /// evolution e dashboard.
 ///
 /// Antes existia uma única feature `config` com tudo dentro, servida por um
@@ -64,6 +68,22 @@ final class AdminModule extends AppModule {
       () => DeleteCoreSettingUsecase(
         repository: DeleteCoreSettingRepository(
           datasource: DeleteCoreSettingDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+
+    // ── usuarios (D7: gestao global pelo superusuario) ────────────────
+    i.lazySingleton<ListarUsuariosUsecase>(
+      () => ListarUsuariosUsecase(
+        repository: ListarUsuariosRepository(
+          datasource: ListarUsuariosDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<DefinirUsuarioAtivoUsecase>(
+      () => DefinirUsuarioAtivoUsecase(
+        repository: DefinirUsuarioAtivoRepository(
+          datasource: DefinirUsuarioAtivoDatasource(client: _adminClient()),
         ),
       ),
     );
@@ -269,6 +289,7 @@ final class AdminModule extends AppModule {
   List<GetItModule> routes() => [
     CoreSettingsRoute(),
     TenantsRoute(),
+    UsuariosRoute(),
     TenantConfigRoute(),
     BillingRoute(),
     FeatureFlagsRoute(),

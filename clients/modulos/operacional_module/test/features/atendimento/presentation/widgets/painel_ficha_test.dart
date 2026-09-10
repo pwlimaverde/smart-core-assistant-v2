@@ -51,6 +51,11 @@ void main() {
             datasource: CriarNotaDatasource(gateway: gateway),
           ),
         ),
+        definirBot: DefinirBotDaConversaUsecase(
+          repository: DefinirBotDaConversaRepository(
+            datasource: DefinirBotDaConversaDatasource(gateway: gateway),
+          ),
+        ),
       );
 
   Future<FichaController> montar(
@@ -287,6 +292,77 @@ void main() {
     final erro = (res as Failure).error;
     expect(erro, isA<FichaRecusado>());
     expect(erro.message, contains('urgente'));
+  });
+
+  group('interruptor da IA na conversa (D3)', () {
+    testWidgets('mostra que a IA está calada quando o bot está desligado', (
+      tester,
+    ) async {
+      // É o que alguém vem procurar aqui: por que o bot parou só nesta thread.
+      final gateway = FakeAtendimentoGateway()
+        ..ficha = const FichaAtendimento(
+          catalogo: [],
+          aplicadas: [],
+          notas: [],
+          botPodeAtender: false,
+        );
+
+      await montar(tester, gateway);
+
+      expect(find.text('A IA está calada nesta conversa.'), findsOneWidget);
+      expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
+    });
+
+    testWidgets('religar a IA chega ao servidor e a ficha reflete o novo estado', (
+      tester,
+    ) async {
+      // O caminho de volta que faltava: assumir o atendimento desliga o bot, e
+      // nada devolvia o valor.
+      final gateway = FakeAtendimentoGateway()
+        ..ficha = const FichaAtendimento(
+          catalogo: [],
+          aplicadas: [],
+          notas: [],
+          botPodeAtender: false,
+        );
+
+      await montar(tester, gateway);
+      await tester.tap(find.byType(Switch));
+      await tester.pumpAndSettle();
+
+      expect(gateway.botDefinido, isTrue);
+      expect(find.text('A IA responde nesta conversa.'), findsOneWidget);
+    });
+
+    testWidgets('desligar não pede confirmação — é reversível no mesmo clique', (
+      tester,
+    ) async {
+      // Ao contrário do interruptor da conexão, que cala um número inteiro.
+      final gateway = FakeAtendimentoGateway();
+
+      await montar(tester, gateway);
+      await tester.tap(find.byType(Switch));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(AlertDialog), findsNothing);
+      expect(gateway.botDefinido, isFalse);
+    });
+
+    testWidgets('recusa do servidor não deixa o interruptor mentir', (
+      tester,
+    ) async {
+      // A ficha recarrega ao final; se a escrita foi negada, o estado exibido
+      // continua sendo o do servidor, não o do clique.
+      final gateway = FakeAtendimentoGateway();
+      await montar(tester, gateway);
+
+      gateway.erroFicha = GrpcError.permissionDenied('sem escopo');
+      await tester.tap(find.byType(Switch));
+      await tester.pumpAndSettle();
+
+      expect(gateway.botDefinido, isFalse);
+      expect(find.byType(SnackBar), findsOneWidget);
+    });
   });
 
   test('sessão expirada é distinguida de servidor fora do ar', () async {

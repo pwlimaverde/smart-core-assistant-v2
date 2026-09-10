@@ -1,9 +1,9 @@
 # Pydantic
 
-- **Versão Recomendada:** 2.13.5
-- **pydantic-settings:** 2.15.0
+- **Versão Recomendada:** 2.13.5 (publicada em 2026-08-28); `pydantic-settings` 2.15.0
+- **Pisos nos manifestos:** o `ia_engine` exige `pydantic>=2.9`; o `mcp_server` exige `>=2.12`, porque o SDK `mcp` 2.1.1 o impõe
 - **Status de Atualização:** ✅ ATUALIZADA
-- **Última Verificação:** 2026-09-06 (WebSearch/WebFetch — context7 indisponível na sessão)
+- **Última Verificação:** 2026-09-10 (PyPI JSON API, ao resolver o conflito de merge entre duas verificações divergentes)
 - **Propósito no Projeto:** Validação de tipos em tempo de execução, parsing de dados JSON e gerenciamento de configurações de ambiente.
 - **Documentação Oficial:** [https://docs.pydantic.dev/](https://docs.pydantic.dev/)
 
@@ -195,3 +195,51 @@ O repositório `pydantic-core` foi merged no main `pydantic` em v2.13.0b1. A bui
 |------|--------|----------------------|
 | 2026-09-06 | 2.7.1 → 2.13.5 | Verificação regular: versão antiga tinha >90 dias. Adicionadas seções sobre JSON Schema, breaking changes, novas features. pydantic-settings atualizado para 2.15.0. |
 | 2026-05-31 | 2.7.1 | Última verificação anterior |
+
+## 3. Saída estruturada de LLM (2026-09-07)
+
+Base do bloco **C1** do plano `painel-crm-e-campos-do-cartao`: o `Responder`
+precisa devolver campos extraídos da conversa em forma tipada, e não em texto
+livre. O caminho é `BaseModel` + `with_structured_output` do LangChain — que
+desde a 1.x usa **`pydantic.BaseModel` (v2) direto**, sem o shim
+`langchain_core.pydantic_v1`, removido.
+
+```python
+from pydantic import BaseModel, Field
+
+class CampoExtraido(BaseModel):
+    slug: str = Field(description="slug exato do campo pendente; nunca invente")
+    valor_json: str = Field(description="valor na forma tipada do campo")
+    confianca: float = Field(ge=0.0, le=1.0)
+
+class RespostaDoResponder(BaseModel):
+    resposta_texto: str
+    transferir_atendimento: bool = False
+    fluxo_transferencia: str = ""
+    confiabilidade: float = Field(ge=0.0, le=1.0)
+    # Lista vazia é o resultado esperado na maioria das mensagens:
+    # omitir é sempre preferível a inferir.
+    campos_extraidos: list[CampoExtraido] = Field(default_factory=list)
+```
+
+O schema é derivado por `model_json_schema()`; a validação da resposta do
+modelo, por `model_validate`. Ambos estáveis de 2.7 a 2.13.
+
+> ⚠️ **O schema restringe a forma, não a verdade.** Um modelo pode devolver um
+> `slug` que não existe e um `valor_json` inventado, ambos perfeitamente
+> válidos para o Pydantic. A validação semântica (slug no catálogo, valor
+> compatível com o tipo, piso de confiança) é do servidor — ver as cinco
+> guardas de C1.
+
+## Histórico de Atualizações
+
+- **2026-09-07** — Versão recomendada corrigida de 2.7.1 para 2.13.4; o
+  manifesto do `ia_engine` já exigia `>=2.9`, e o doc apontava uma versão
+  anterior à do próprio projeto. Verificado o changelog oficial: entre 2.7 e
+  2.13 **nada quebra** em `BaseModel`, `Field`, `model_validate` ou
+  `model_json_schema`. Mudanças de ruptura ficaram em áreas que o projeto não
+  usa: remoção do Python 3.8, `model_fields` acessado em instância (agora
+  deprecado), formato de campos do `create_model` e comportamento de
+  `serialize_as_any`. Seção 3 acrescentada para a saída estruturada do
+  `Responder` (plano `painel-crm-e-campos-do-cartao`, bloco C1).
+

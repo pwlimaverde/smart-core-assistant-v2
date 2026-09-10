@@ -75,6 +75,8 @@ class SmartCoreTenantApp extends StatelessWidget {
       location: state.matchedLocation,
       onboardingPendente: portao.pendente,
       onboardingPasso: portao.passo,
+      // Vem da mesma consulta do progresso — sem ida extra ao servidor.
+      pagamentoPendente: portao.pagamentoPendente,
     );
   }
 }

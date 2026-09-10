@@ -63,6 +63,15 @@ class AdminDrawer extends StatelessWidget {
             },
           ),
           ListTile(
+            leading: const Icon(Icons.manage_accounts_outlined),
+            title: const Text('Usuários'),
+            selected: location == '/admin/usuarios',
+            onTap: () {
+              Navigator.pop(context);
+              context.go('/admin/usuarios');
+            },
+          ),
+          ListTile(
             leading: const Icon(Icons.payment),
             title: const Text('Planos & Faturamento'),
             selected: location == '/admin/billing',

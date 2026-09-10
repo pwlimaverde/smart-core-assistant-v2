@@ -1197,7 +1197,19 @@ async fn escopos_atuais_do_usuario(
         return None;
     }
 
-    Some(application::auth::login::derivar_escopos(false, &resposta))
+    // `derivar_escopos` devolve também a ORIGEM dos escopos, que é o instrumento
+    // da D4 (plano `regras-do-bot-e-permissoes`). Registrá-la aqui não é enfeite:
+    // um agente conectado renova token a cada 15 minutos, então este caminho tem
+    // muito mais volume que o login do painel. Sem o campo, a medição de quantas
+    // sessões dependem do fallback pelo `role` ficaria cega justamente onde o
+    // número é maior.
+    let (escopos, origem) = application::auth::login::derivar_escopos(false, &resposta);
+    tracing::debug!(
+        origem_escopos = origem.como_str(),
+        user_id,
+        "escopos atuais relidos para emissão de token MCP"
+    );
+    Some(escopos)
 }
 
 #[cfg(test)]

@@ -24,7 +24,7 @@ pub use operacional::OperacionalStore;
 pub use plans::PlansStore;
 pub use quota::QuotaStore;
 pub use signup::{SignupIniciado, SignupStore, SlugIndisponivel, StatusSignup};
-pub use tenant::TenantStore;
+pub use tenant::{ProgressoOnboarding, TenantStore};
 pub use treinamento::{
     DocumentoTrecho, QueryComposeResultado, TreinamentoResumo, TreinamentoStore,
 };

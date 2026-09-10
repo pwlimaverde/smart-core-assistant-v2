@@ -43,9 +43,9 @@ Future<void> bootstrap(AppConfig config) async {
     // e sem ele não havia caminho para nenhuma configuração.
     OperacionalModule(
       drawerBuilder: TenantDrawer.new,
-      // WhatsApp fora do ar aparece na primeira tela: sem isso, a fila só
-      // para de encher e ninguém entende por quê.
-      avisoBuilder: AvisoConexao.new,
+      // Assinatura pendente e WhatsApp fora do ar aparecem na primeira tela:
+      // sem isso, a fila só para de encher e ninguém entende por quê.
+      avisoBuilder: AvisosDoQuadro.new,
     ),
     TenantModule(),
     TreinamentoModule(drawerBuilder: TenantDrawer.new),

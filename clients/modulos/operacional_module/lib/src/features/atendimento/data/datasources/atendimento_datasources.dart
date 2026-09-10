@@ -173,6 +173,22 @@ final class AlternarEtiquetaDatasource
   }
 }
 
+final class DefinirBotDaConversaDatasource
+    implements Datasource<Unit, DefinirBotDaConversaParameters> {
+  final AtendimentoGateway _gateway;
+
+  const DefinirBotDaConversaDatasource({required this._gateway});
+
+  @override
+  Future<Unit> call(DefinirBotDaConversaParameters parameters) async {
+    await _gateway.definirBotDaConversa(
+      atendimentoId: parameters.atendimentoId,
+      habilitado: parameters.habilitado,
+    );
+    return unit;
+  }
+}
+
 final class CriarNotaDatasource implements Datasource<Unit, CriarNotaParameters> {
   final AtendimentoGateway _gateway;
 

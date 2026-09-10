@@ -77,8 +77,14 @@ phases:
 |---|---|---|
 | **N9a** mídia | E1–E3 | enviar anexo, ver/baixar mídia recebida, gravar áudio |
 | **N9b** conversa real | E4–E8 | marcar lida + não lidas, presença, citação, ticks, separador de dia |
-| **N9c** quadro operável | E9–E12 | busca e filtros, prioridade, atribuir, exportar, preview e foto no cartão, modos de foco |
-| **N9d** ficha | E13–E15 | campos personalizados (catálogo + valor), galeria, linha do tempo, catálogo de etiquetas, excluir nota |
+| **N9c** quadro operável | E9–E12 | busca e filtros, prioridade, atribuir, exportar, preview e foto no cartão, **conversa em painel ao lado do quadro** (E12) |
+| **N9d** ficha | E13–E15 | campos personalizados (**cinco tipos, opções com id estável, escopo global e por fluxo**), galeria, linha do tempo, catálogo de etiquetas, excluir nota |
+
+> ⚠️ **E12 e E13 foram precisados em 2026-09-07** a partir de três pedidos de
+> produto (doc 33). E12 passa a exigir a conversa **em painel ao lado do
+> quadro**; E13 ganha o sistema de tipos, as opções com id estável e o escopo
+> global. **E13 depende de C1** (`painel-crm-e-campos-do-cartao`) para que a
+> origem `IA` que ela exibe seja alcançável.
 
 ## Riscos principais
 - 🚨 **`video_player` não suporta Windows** — spike de `media_kit` no início da
@@ -102,5 +108,6 @@ operacional trivial.
 - [ ] Conversa some do contador ao ser lida; contato vê "digitando".
 - [ ] Citação e ticks de entrega/leitura funcionando.
 - [ ] Busca por telefone acha a conversa; filtros combinam.
+- [ ] Clicar num cartão abre a conversa ao lado do quadro, sem empilhar tela.
 - [ ] Ficha mostra campos personalizados (origem + confiança), galeria e timeline.
 - [ ] `.\infra\test-local.ps1` e `.\infra\test-flutter.ps1` verdes; ratchet mantido.

@@ -10,6 +10,41 @@ use infrastructure_postgres::tenants::tenants::{
 use infrastructure_postgres::DbError;
 use uuid::Uuid;
 
+/// Onde o tenant parou na configuração guiada **e** como está a conta.
+///
+/// Os dois andam juntos porque a decisão de rota precisa dos dois: roteiro
+/// pendente manda para `/configuracao/*`, mas pagamento pendente tem
+/// precedência — senão o app leva para a tela de "tudo pronto" quem não pode
+/// cadastrar nada.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProgressoOnboarding {
+    /// 5..8 enquanto o roteiro corre. 0 = nunca registrou nada.
+    pub passo: i32,
+    /// Roteiro concluído (ou pulado).
+    pub concluido: bool,
+    /// `status` da assinatura. `None` = tenant sem assinatura nenhuma.
+    pub assinatura_status: Option<String>,
+    /// Nome do plano contratado. `None` = plano ainda não escolhido.
+    pub plano_nome: Option<String>,
+    /// Id do plano. `None` = plano ainda não escolhido. O provedor de voucher
+    /// ignora este valor (o plano vem do próprio código), mas um gateway
+    /// externo precisará dele para cobrar o valor certo.
+    pub plano_id: Option<i32>,
+}
+
+impl ProgressoOnboarding {
+    /// `true` quando a conta não está em dia.
+    ///
+    /// **Ausência de assinatura conta como pendente**: um tenant sem linha em
+    /// `tenants_subscription` não passou pelo pagamento, e o `data_postgres` já
+    /// recusa suas escritas com "assinatura inadimplente". Tratá-lo como em dia
+    /// reproduziria exatamente o beco sem saída que este campo existe para
+    /// fechar.
+    pub fn pagamento_pendente(&self) -> bool {
+        !matches!(self.assinatura_status.as_deref(), Some("ACTIVE"))
+    }
+}
+
 /// Operações de persistência do domínio Tenant expostas aos handlers RPC.
 /// Operações administrativas (cross-tenant) do control_plane; cada método
 /// encapsula a abertura/commit da transação (ou o SQL direto) no adapter concreto.
@@ -61,14 +96,20 @@ pub trait TenantStore: Send + Sync {
         concluido: bool,
     ) -> Result<bool, DbError>;
 
-    /// Lê o progresso gravado: `(passo, concluido)`.
+    /// Lê o progresso gravado, junto do estado da assinatura.
     ///
     /// A contraparte de leitura existe para que reabrir o app volte ao roteiro
     /// de onde parou — sem ela o progresso era gravado e nunca consultado.
+    ///
+    /// A assinatura vem na mesma consulta de propósito: separá-la custaria uma
+    /// ida a mais ao banco num caminho que o cliente chama uma vez por sessão, e
+    /// o guard precisa dos dois valores para decidir a rota. Sem o estado da
+    /// assinatura aqui, quem nunca pagou era mandado para `/configuracao/pronto`
+    /// como se estivesse em dia.
     async fn obter_progresso_onboarding(
         &self,
         tenant_id: Uuid,
-    ) -> Result<Option<(i32, bool)>, DbError>;
+    ) -> Result<Option<ProgressoOnboarding>, DbError>;
 
     /// Cria um convite para o tenant, já com as permissões (`module_permissions` =
     /// escopos; `flow_permissions` = ids de fluxo) que o convidado receberá no aceite.

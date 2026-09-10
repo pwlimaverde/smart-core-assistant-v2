@@ -33,6 +33,10 @@ import 'features/integracoes/data/datasources/integracoes_datasources.dart';
 import 'features/integracoes/data/repositories/integracoes_repositories.dart';
 import 'features/integracoes/domain/usecases/integracoes_usecases.dart';
 import 'features/integracoes/presentation/routes/integracoes_route.dart';
+import 'features/pagamento/data/datasources/pagamento_datasources.dart';
+import 'features/pagamento/data/repositories/pagamento_repositories.dart';
+import 'features/pagamento/domain/usecases/pagamento_usecases.dart';
+import 'features/pagamento/presentation/routes/pagamento_route.dart';
 import 'features/usuarios/data/datasources/usuarios_datasources.dart';
 import 'features/usuarios/data/repositories/usuarios_repositories.dart';
 import 'features/usuarios/domain/usecases/usuarios_usecases.dart';
@@ -207,6 +211,13 @@ final class TenantModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<DefinirRespostaBotUsecase>(
+      () => DefinirRespostaBotUsecase(
+        repository: DefinirRespostaBotRepository(
+          datasource: DefinirRespostaBotDatasource(client: _adminClient()),
+        ),
+      ),
+    );
     i.lazySingleton<EstadoPareamentoUsecase>(
       () => EstadoPareamentoUsecase(
         repository: EstadoPareamentoRepository(
@@ -220,6 +231,15 @@ final class TenantModule extends AppModule {
       () => ListarContatosUsecase(
         repository: ListarContatosRepository(
           datasource: ListarContatosDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+
+    // ── pagamento da assinatura (pós-login) ───────────────────────────────
+    i.lazySingleton<QuitarAssinaturaUsecase>(
+      () => QuitarAssinaturaUsecase(
+        repository: QuitarAssinaturaRepository(
+          datasource: QuitarAssinaturaDatasource(client: _adminClient()),
         ),
       ),
     );
@@ -316,6 +336,7 @@ final class TenantModule extends AppModule {
     FluxosRoute(),
     EtapasFluxoRoute(),
     PainelRoute(),
+    PagamentoRoute(),
   ];
 
   /// Stub gRPC do admin, extraído do `ApiClient` global da plataforma.

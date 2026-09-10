@@ -230,5 +230,140 @@ void main() {
         );
       });
     });
+
+    group('pagamento pendente', () {
+      // O defeito reproduzido em 2026-09-06: a sessão expirou no meio do wizard,
+      // o tenant ficou com PENDING_PAYMENT e onboarding_step = 8, e ao logar foi
+      // direto para '/configuracao/pronto' — a tela que diz "tudo certo" para
+      // quem não conseguia cadastrar nada.
+
+      test('vence o roteiro: dono pendente vai para o pagamento, não para o roteiro', () {
+        expect(
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: true,
+            isSuperuser: false,
+            scopes: const ['tenant:admin'],
+            location: '/atendimentos',
+            onboardingPendente: true,
+            onboardingPasso: 8,
+            pagamentoPendente: true,
+          ),
+          '/conta/pagamento',
+        );
+      });
+
+      test('vence até quando o roteiro já terminou', () {
+        // Este é o caso exato do defeito: onboarding_step = 8, concluído, e a
+        // assinatura nunca foi paga.
+        expect(
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: true,
+            isSuperuser: false,
+            scopes: const ['tenant:admin'],
+            location: '/configuracao/pronto',
+            onboardingPendente: false,
+            pagamentoPendente: true,
+          ),
+          '/conta/pagamento',
+        );
+      });
+
+      test('já na tela de pagamento não redireciona (evita laço)', () {
+        expect(
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: true,
+            isSuperuser: false,
+            scopes: const ['tenant:admin'],
+            location: '/conta/pagamento',
+            onboardingPendente: false,
+            pagamentoPendente: true,
+          ),
+          isNull,
+        );
+      });
+
+      test('colaborador pendente NÃO é mandado para a cobrança (evita laço)', () {
+        // Sem esta exceção o guard oscilaria: pagamento manda para
+        // '/conta/pagamento', o RBAC devolve para '/atendimentos', e repete.
+        // Para o colaborador o caminho é o aviso no quadro.
+        expect(
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: true,
+            isSuperuser: false,
+            scopes: const ['atendimentos:read'],
+            location: '/atendimentos',
+            onboardingPendente: false,
+            pagamentoPendente: true,
+          ),
+          isNull,
+        );
+      });
+
+      test('colaborador que tenta a rota de cobrança volta ao quadro', () {
+        expect(
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: true,
+            isSuperuser: false,
+            scopes: const ['atendimentos:read'],
+            location: '/conta/pagamento',
+            onboardingPendente: false,
+            pagamentoPendente: false,
+          ),
+          '/atendimentos',
+        );
+      });
+
+      test('sem pendência, o comportamento atual fica intacto', () {
+        expect(
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: true,
+            isSuperuser: false,
+            scopes: const ['tenant:admin'],
+            location: '/atendimentos',
+            onboardingPendente: false,
+            pagamentoPendente: false,
+          ),
+          isNull,
+        );
+      });
+
+      test('pendência desconhecida não prende ninguém na cobrança', () {
+        // `null` = a consulta ainda não respondeu. Aqui o roteiro (também
+        // desconhecido) segura na splash; o que importa é NÃO ir para a
+        // cobrança por falta de informação.
+        expect(
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: true,
+            isSuperuser: false,
+            scopes: const ['tenant:admin'],
+            location: '/atendimentos',
+            onboardingPendente: false,
+            pagamentoPendente: null,
+          ),
+          isNull,
+        );
+      });
+
+      test('deslogado com pendência vai para o login, não para a cobrança', () {
+        expect(
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: false,
+            isSuperuser: false,
+            scopes: const [],
+            location: '/conta/pagamento',
+            pagamentoPendente: true,
+          ),
+          '/login',
+        );
+      });
+    });
   });
 }

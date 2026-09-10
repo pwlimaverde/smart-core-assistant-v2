@@ -43,11 +43,40 @@ class FichaAtendimento {
   final List<Etiqueta> aplicadas;
   final List<Nota> notas;
 
+  /// D3 — a IA responde **nesta conversa**?
+  ///
+  /// Assumir o atendimento desliga o bot, e por muito tempo nada devolvia o
+  /// valor: uma conversa que passou por um humano ficava sem IA para sempre.
+  /// O interruptor da ficha é o caminho de volta.
+  ///
+  /// Padrão `true`: é o padrão da coluna, e um servidor antigo que não mande o
+  /// campo não deve fazer a tela anunciar um silêncio que não existe.
+  final bool botPodeAtender;
+
   const FichaAtendimento({
     required this.catalogo,
     required this.aplicadas,
     required this.notas,
+    this.botPodeAtender = true,
   });
+
+  /// Reconstrói a ficha trocando só o que foi passado.
+  ///
+  /// Existe porque reconstruir campo a campo já custou um defeito: o
+  /// `GetFichaUsecase` refazia a ficha para ordenar as notas e deixava
+  /// `botPodeAtender` cair no padrão `true` — a tela anunciava a IA ligada numa
+  /// conversa calada. Todo campo novo daqui em diante entra de graça.
+  FichaAtendimento copyWith({
+    List<Etiqueta>? catalogo,
+    List<Etiqueta>? aplicadas,
+    List<Nota>? notas,
+    bool? botPodeAtender,
+  }) => FichaAtendimento(
+    catalogo: catalogo ?? this.catalogo,
+    aplicadas: aplicadas ?? this.aplicadas,
+    notas: notas ?? this.notas,
+    botPodeAtender: botPodeAtender ?? this.botPodeAtender,
+  );
 
   Set<int> get idsAplicados => aplicadas.map((e) => e.id).toSet();
 
