@@ -88,7 +88,11 @@ impl OauthConfig {
     /// Janela real de revogação, em minutos — o número que aparece na tela de
     /// consentimento e na tela de aplicativos conectados.
     pub fn janela_revogacao_min(&self) -> i64 {
-        self.access_ttl_s.div_ceil(60)
+        // `(x + 59) / 60` e não `x.div_ceil(60)`: `div_ceil` é estável apenas para
+        // inteiros SEM sinal — em `i64` ainda depende do feature instável
+        // `int_roundings` (rust-lang/rust#88581). Trocar por `div_ceil` aqui parece
+        // mais limpo e não compila.
+        (self.access_ttl_s + 59) / 60
     }
 }
 

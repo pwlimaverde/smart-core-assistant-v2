@@ -437,7 +437,9 @@ fn janela_revogacao_min() -> i32 {
     // Arredonda para cima: dizer "15 minutos" quando são 15min e 1s seria
     // prometer por baixo justo na informação que o usuário usa para decidir se
     // precisa fazer mais alguma coisa depois de desconectar.
-    ttl.div_ceil(60) as i32
+    // `div_ceil` é estável só para inteiros sem sinal; em `i64` ainda é instável
+    // (`int_roundings`, rust-lang/rust#88581).
+    ((ttl + 59) / 60) as i32
 }
 
 /// Exige, para a rota informada, o escopo declarado em [`crate::rbac::MAPA`].
