@@ -78,22 +78,36 @@ impl ChavesMcp {
     }
 }
 
-/// Devolve o PEM com quebras de linha reais, aceitando as duas formas.
+/// Devolve o PEM utilizável, aceitando as três formas em que ele pode chegar.
 ///
-/// O `env_file` do Docker Compose **não** aceita valor multilinha, então o PEM é
-/// gravado numa linha só, com `\n` escapado. O que chega aqui depende do dialeto
-/// dotenv da versão do Compose: algumas interpretam o escape e entregam quebras
-/// reais, outras entregam os dois caracteres literais. Um PEM com `\n` literal é
-/// recusado pelo parser de chave, e a falha aparece só no deploy — como
-/// "chave inválida", sem dizer por quê.
+/// Nenhum arquivo de ambiente aceita valor multilinha, então o PEM é gravado numa
+/// linha só com `\n` escapado. O que chega ao processo depende de **quem** leu o
+/// arquivo, e a diferença foi medida (2026-09-11, Docker Compose 5.1.4):
 ///
-/// Normalizar aqui resolve nos dois casos: se as quebras já são reais, a troca
-/// não encontra nada e é no-op.
+/// | Leitor | O que entrega para `VAR="-----BEGIN…\n…"` |
+/// |---|---|
+/// | `docker compose` (`env_file:`) | aspas removidas, `\n` virando quebra REAL |
+/// | `docker run --env-file` | aspas **mantidas** no valor, `\n` literal |
+///
+/// O deploy usa o Compose, então o caminho normal já entrega o PEM pronto. As
+/// outras duas formas são tratadas porque quem for depurar um container à mão
+/// vai usar `docker run`, e o sintoma seria "chave inválida" sem dizer por quê —
+/// um servidor de pé rejeitando todo token.
 fn normalizar_pem(bruto: &str) -> String {
-    if bruto.contains("\\n") {
-        bruto.replace("\\n", "\n")
+    // Só desembrulha quando o valor ESTÁ entre aspas. Um `trim` cego comeria a
+    // quebra de linha final de um PEM legítimo — não quebra o parser, mas é
+    // alterar em silêncio um valor que já estava correto.
+    let podado = bruto.trim();
+    let sem_aspas = match (podado.chars().next(), podado.chars().last()) {
+        (Some(a), Some(b)) if a == b && (a == '"' || a == '\'') && podado.len() >= 2 => {
+            &podado[1..podado.len() - 1]
+        }
+        _ => bruto,
+    };
+    if sem_aspas.contains("\\n") {
+        sem_aspas.replace("\\n", "\n")
     } else {
-        bruto.to_string()
+        sem_aspas.to_string()
     }
 }
 
@@ -254,6 +268,17 @@ mod tests {
         assert!(normalizado.contains('\n'));
         assert!(!normalizado.contains("\\n"));
         assert_eq!(normalizado.lines().count(), 3);
+    }
+
+    #[test]
+    fn normalizar_pem_remove_as_aspas_que_o_docker_run_deixa_no_valor() {
+        // Medido: `docker run --env-file` entrega o valor COM as aspas. Sem
+        // removê-las o PEM começa com `"` e o parser de chave recusa.
+        let com_aspas = "\"-----BEGIN PUBLIC KEY-----\\nMIIB\\n-----END PUBLIC KEY-----\\n\"";
+        let normalizado = normalizar_pem(com_aspas);
+        assert!(normalizado.starts_with("-----BEGIN PUBLIC KEY-----"));
+        assert!(!normalizado.contains('"'));
+        assert!(normalizado.contains('\n'));
     }
 
     #[test]

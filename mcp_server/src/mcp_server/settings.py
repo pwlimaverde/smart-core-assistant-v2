@@ -89,9 +89,17 @@ class Settings(BaseSettings):
         recusado pelo `cryptography`, e o sintoma seria **todo token rejeitado**
         com "chave inválida" — um servidor de pé que não atende ninguém.
 
-        Normalizar aceita as duas formas: se as quebras já são reais, é no-op.
+        Medido em 2026-09-11 (Docker Compose 5.1.4): o `env_file:` do Compose
+        remove as aspas e converte `\\n` em quebra real — ou seja, o caminho do
+        deploy já entrega o PEM pronto. Já o `docker run --env-file` **mantém as
+        aspas** no valor e não converte nada, e é ele que alguém usa ao depurar um
+        container à mão. As três formas são aceitas; quando o valor já está certo,
+        a normalização é no-op.
         """
         bruto = self.oauth_public_key_pem
+        podado = bruto.strip()
+        if len(podado) >= 2 and podado[0] == podado[-1] and podado[0] in "\"'":
+            bruto = podado[1:-1]
         return bruto.replace("\\n", "\n") if "\\n" in bruto else bruto
 
     @property

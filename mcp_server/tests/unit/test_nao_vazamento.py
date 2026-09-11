@@ -138,3 +138,18 @@ def test_healthcheck_falha_quando_o_processo_nao_responde(monkeypatch):
 
     monkeypatch.setattr(healthcheck.httpx, "post", explode)
     assert healthcheck.main() == 1
+
+
+def test_chave_publica_remove_aspas_do_docker_run():
+    """`docker run --env-file` mantém as aspas no valor — medido, não suposto.
+
+    O `env_file:` do Compose as remove, então o deploy não passa por aqui. Mas
+    quem depurar um container à mão usa `docker run`, e sem esta limpeza o PEM
+    começaria com `"` e **todo** token seria rejeitado.
+    """
+    com_aspas = '"-----BEGIN PUBLIC KEY-----\\nMIIB\\n-----END PUBLIC KEY-----\\n"'
+    cfg = Settings(oauth_public_key_pem=com_aspas)
+
+    assert cfg.chave_publica.startswith("-----BEGIN PUBLIC KEY-----")
+    assert '"' not in cfg.chave_publica
+    assert cfg.chave_publica.count("\n") == 3
