@@ -93,3 +93,48 @@ def test_chave_publica_normaliza_n_escapado_do_env_file():
 def test_chave_publica_e_noop_quando_as_quebras_ja_sao_reais():
     real = "-----BEGIN PUBLIC KEY-----\nMIIB\n-----END PUBLIC KEY-----\n"
     assert Settings(oauth_public_key_pem=real).chave_publica == real
+
+
+# ---------------------------------------------------------------------------
+# Sonda do container
+# ---------------------------------------------------------------------------
+
+
+def test_healthcheck_trata_401_como_saude(monkeypatch):
+    """401 é o sinal de saúde, e não um erro.
+
+    Parece invertido, mas é o teste mais forte disponível: um 401 com
+    `WWW-Authenticate` prova que o processo está de pé, que o roteamento funciona
+    e que a camada de autenticação está montada.
+    """
+    from mcp_server import healthcheck
+
+    class Resposta:
+        status_code = 401
+
+    monkeypatch.setattr(healthcheck.httpx, "post", lambda *a, **k: Resposta())
+    assert healthcheck.main() == 0
+
+
+def test_healthcheck_trata_200_como_FALHA(monkeypatch):
+    """200 sem token significa servidor aceitando requisição sem autorização.
+
+    Isso é defeito, não saúde — e a sonda tem de derrubar o container.
+    """
+    from mcp_server import healthcheck
+
+    class Resposta:
+        status_code = 200
+
+    monkeypatch.setattr(healthcheck.httpx, "post", lambda *a, **k: Resposta())
+    assert healthcheck.main() == 1
+
+
+def test_healthcheck_falha_quando_o_processo_nao_responde(monkeypatch):
+    from mcp_server import healthcheck
+
+    def explode(*_a, **_k):
+        raise OSError("conexão recusada")
+
+    monkeypatch.setattr(healthcheck.httpx, "post", explode)
+    assert healthcheck.main() == 1

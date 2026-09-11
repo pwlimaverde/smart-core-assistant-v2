@@ -82,8 +82,13 @@ fn escopos_do_json(valor: &serde_json::Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
-const COLUNAS: &str = "id, tenant_id, user_id, client_id, client_name, redirect_uri, \
-                       scopes, last_used_at, revoked_at, created_at";
+// As colunas são repetidas por extenso em cada query, e não extraídas para uma
+// constante interpolada com `format!`. Não é descuido: o `sqlx::query` aceita
+// apenas `&'static str`, e uma string montada em tempo de execução é recusada na
+// compilação — "dynamic SQL strings should be audited for possible injections".
+// O diagnóstico está certo: a conveniência de não repetir dez nomes de coluna
+// não vale abrir a porta para SQL montado com `format!` neste arquivo, ainda que
+// aqui a interpolação fosse de uma constante nossa.
 
 /// Registra (ou atualiza) o consentimento do usuário a um cliente.
 ///
@@ -117,12 +122,13 @@ pub async fn registrar_consentimento(
     .execute(&mut **tx)
     .await?;
 
-    let row = sqlx::query(&format!(
+    let row = sqlx::query(
         "INSERT INTO mcp_oauth_grant
              (tenant_id, user_id, client_id, client_name, redirect_uri, scopes, created_ip)
          VALUES ($1, $2, $3, $4, $5, $6, $7::inet)
-         RETURNING {COLUNAS}"
-    ))
+         RETURNING id, tenant_id, user_id, client_id, client_name, redirect_uri,
+                   scopes, last_used_at, revoked_at, created_at",
+    )
     .bind(ctx.tenant_id)
     .bind(ctx.user_id)
     .bind(client_id)
@@ -145,11 +151,13 @@ pub async fn listar_do_usuario(
     tx: &mut Transaction<'_, Postgres>,
     ctx: &RequestContext,
 ) -> Result<Vec<McpGrant>, DbError> {
-    let rows = sqlx::query(&format!(
-        "SELECT {COLUNAS} FROM mcp_oauth_grant
+    let rows = sqlx::query(
+        "SELECT id, tenant_id, user_id, client_id, client_name, redirect_uri,
+                scopes, last_used_at, revoked_at, created_at
+           FROM mcp_oauth_grant
           WHERE tenant_id = $1 AND user_id = $2 AND revoked_at IS NULL
-          ORDER BY created_at DESC"
-    ))
+          ORDER BY created_at DESC",
+    )
     .bind(ctx.tenant_id)
     .bind(ctx.user_id)
     .fetch_all(&mut **tx)
@@ -209,10 +217,12 @@ pub async fn buscar_ativo_com_segredo(
     tenant_id: Uuid,
     grant_id: Uuid,
 ) -> Result<Option<McpGrantComSegredo>, DbError> {
-    let row = sqlx::query(&format!(
-        "SELECT {COLUNAS}, refresh_token_hash FROM mcp_oauth_grant
-          WHERE id = $1 AND tenant_id = $2 AND revoked_at IS NULL"
-    ))
+    let row = sqlx::query(
+        "SELECT id, tenant_id, user_id, client_id, client_name, redirect_uri,
+                scopes, last_used_at, revoked_at, created_at, refresh_token_hash
+           FROM mcp_oauth_grant
+          WHERE id = $1 AND tenant_id = $2 AND revoked_at IS NULL",
+    )
     .bind(grant_id)
     .bind(tenant_id)
     .fetch_optional(&mut **tx)

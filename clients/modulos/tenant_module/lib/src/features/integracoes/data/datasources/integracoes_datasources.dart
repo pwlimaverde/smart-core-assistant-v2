@@ -30,9 +30,7 @@ final class ListMcpGrantsDatasource
             lastUsedAt: g.lastUsedAt == 0
                 ? null
                 : DateTime.fromMillisecondsSinceEpoch(g.lastUsedAt.toInt()),
-            createdAt: DateTime.fromMillisecondsSinceEpoch(
-              g.createdAt.toInt(),
-            ),
+            createdAt: DateTime.fromMillisecondsSinceEpoch(g.createdAt.toInt()),
           ),
         )
         .toList(growable: false);

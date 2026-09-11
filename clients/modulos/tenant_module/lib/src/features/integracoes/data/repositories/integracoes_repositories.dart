@@ -53,8 +53,7 @@ final class ListMcpGrantsRepository
 }
 
 final class RevokeMcpGrantRepository
-    extends
-        RepositoryBase<int, RevokeMcpGrantParameters, IntegracoesError> {
+    extends RepositoryBase<int, RevokeMcpGrantParameters, IntegracoesError> {
   const RevokeMcpGrantRepository({required super.datasource});
 
   @override

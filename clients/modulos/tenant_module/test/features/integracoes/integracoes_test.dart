@@ -43,7 +43,9 @@ proto.McpGrantItem grantProto({
   clientName: clientName,
   redirectUri: redirectUri,
   scopes: scopes,
-  lastUsedAt: lastUsedAt == null ? ms(DateTime.fromMillisecondsSinceEpoch(0)) : ms(lastUsedAt),
+  lastUsedAt: lastUsedAt == null
+      ? ms(DateTime.fromMillisecondsSinceEpoch(0))
+      : ms(lastUsedAt),
   createdAt: ms(createdAt ?? DateTime(2026, 1, 1)),
 );
 
@@ -74,7 +76,8 @@ void main() {
 
       final r = await _usecases(client).list(noParams);
 
-      final grant = (r as Success<List<McpGrant>, IntegracoesError>).value.single;
+      final grant =
+          (r as Success<List<McpGrant>, IntegracoesError>).value.single;
       expect(grant.id, 'g-9');
       expect(grant.clientName, 'Claude');
       expect(grant.scopes, ['atendimentos:read', 'clientes:read']);
@@ -89,7 +92,13 @@ void main() {
 
       final r = await _usecases(client).list(noParams);
 
-      expect((r as Success<List<McpGrant>, IntegracoesError>).value.single.lastUsedAt, isNull);
+      expect(
+        (r as Success<List<McpGrant>, IntegracoesError>)
+            .value
+            .single
+            .lastUsedAt,
+        isNull,
+      );
     });
 
     test('extrai o host do redirect_uri, que é o que o usuário reconhece', () {
@@ -173,11 +182,12 @@ void main() {
 
       final r = await _usecases(client).list(noParams);
 
-      expect((r as Success<List<McpGrant>, IntegracoesError>).value.map((g) => g.id).toList(), [
-        'escreve-recente',
-        'escreve-antigo',
-        'so-leitura-recente',
-      ]);
+      expect(
+        (r as Success<List<McpGrant>, IntegracoesError>).value
+            .map((g) => g.id)
+            .toList(),
+        ['escreve-recente', 'escreve-antigo', 'so-leitura-recente'],
+      );
     });
 
     test('sessão inválida vira erro de sessão, não de permissão', () async {
@@ -192,9 +202,8 @@ void main() {
     });
 
     test('servidor fora do ar vira falha de rede', () async {
-      when(
-        () => client.listMcpGrants(any()),
-      ).thenAnswer((_) => falhaGrpc(proto.GrpcError.unavailable('offline')));
+      when(() => client.listMcpGrants(any()))
+          .thenAnswer((_) => falhaGrpc(proto.GrpcError.unavailable('offline')));
 
       final r = await _usecases(client).list(noParams);
 
@@ -212,26 +221,27 @@ void main() {
         ),
       );
 
-      final r = await _usecases(
-        client,
-      ).revoke(const RevokeMcpGrantParameters(grantId: 'g-1'));
+      final r = await _usecases(client)
+          .revoke(const RevokeMcpGrantParameters(grantId: 'g-1'));
 
       expect((r as Success<int, IntegracoesError>).value, 15);
     });
 
-    test('grant de outra pessoa e grant inexistente dão o mesmo erro', () async {
-      // O backend não distingue os casos de propósito, para não confirmar a
-      // existência de consentimento alheio. A tela não pode reintroduzir a
-      // distinção.
-      when(() => client.revokeMcpGrant(any())).thenAnswer(
-        (_) => falhaGrpc(proto.GrpcError.invalidArgument('inexistente')),
-      );
+    test(
+      'grant de outra pessoa e grant inexistente dão o mesmo erro',
+      () async {
+        // O backend não distingue os casos de propósito, para não confirmar a
+        // existência de consentimento alheio. A tela não pode reintroduzir a
+        // distinção.
+        when(() => client.revokeMcpGrant(any())).thenAnswer(
+          (_) => falhaGrpc(proto.GrpcError.invalidArgument('inexistente')),
+        );
 
-      final r = await _usecases(
-        client,
-      ).revoke(const RevokeMcpGrantParameters(grantId: 'g-de-outro'));
+        final r = await _usecases(client)
+            .revoke(const RevokeMcpGrantParameters(grantId: 'g-de-outro'));
 
-      expect((r as Failure).error, isA<ConexaoNaoEncontrada>());
-    });
+        expect((r as Failure).error, isA<ConexaoNaoEncontrada>());
+      },
+    );
   });
 }

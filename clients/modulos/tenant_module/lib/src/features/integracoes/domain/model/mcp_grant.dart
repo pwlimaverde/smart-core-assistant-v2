@@ -52,7 +52,8 @@ class McpGrant {
 
   /// `true` quando o aplicativo só devolve o acesso para a própria máquina do
   /// usuário — típico de programa instalado. A tela sinaliza isso.
-  bool get ehLocal => const {'localhost', '127.0.0.1', '::1'}.contains(redirectHost);
+  bool get ehLocal =>
+      const {'localhost', '127.0.0.1', '::1'}.contains(redirectHost);
 
   /// `true` se algum escopo concedido permite alterar dados.
   ///
@@ -60,9 +61,6 @@ class McpGrant {
   /// entre um agente que só lê e um que envia mensagem a cliente é a informação
   /// mais importante desta lista.
   bool get podeAlterar => scopes.any(
-    (s) =>
-        s == 'tenant:admin' ||
-        s.endsWith(':write') ||
-        s.endsWith(':admin'),
+    (s) => s == 'tenant:admin' || s.endsWith(':write') || s.endsWith(':admin'),
   );
 }

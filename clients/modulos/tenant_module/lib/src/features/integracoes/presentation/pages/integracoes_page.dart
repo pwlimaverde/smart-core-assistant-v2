@@ -1,4 +1,7 @@
 import 'package:dependencies_module/dependencies_module.dart';
+// `Clipboard` não vem pelo dependencies_module (que reexporta material, não
+// services). Import direto, como fazem as outras telas que copiam texto.
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/mcp_grant.dart';
@@ -75,9 +78,8 @@ class _IntegracoesPageState extends State<IntegracoesPage> {
           children: [
             Text(
               'Aplicativos de IA conectados',
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+              style: Theme.of(context).textTheme.headlineMedium
+                  ?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
@@ -108,7 +110,8 @@ class _IntegracoesPageState extends State<IntegracoesPage> {
                   return ListView.separated(
                     itemCount: grants.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 12),
-                    itemBuilder: (context, i) => _cartaoDoApp(context, grants[i]),
+                    itemBuilder: (context, i) =>
+                        _cartaoDoApp(context, grants[i]),
                   );
                 },
               ),
@@ -345,9 +348,9 @@ class _IntegracoesPageState extends State<IntegracoesPage> {
           ),
         );
       case Failure(:final error):
-        ScaffoldMessenger.of(this.context).showSnackBar(
-          SnackBar(content: Text(ErrorMessageMapper.map(error))),
-        );
+        ScaffoldMessenger.of(
+          this.context,
+        ).showSnackBar(SnackBar(content: Text(ErrorMessageMapper.map(error))));
     }
   }
 }

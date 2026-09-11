@@ -16,10 +16,9 @@ final class IntegracoesController extends BaseController<List<McpGrant>> {
   final RevokeMcpGrantUsecase _revokeUsecase;
 
   IntegracoesController({
-    required ListMcpGrantsUsecase listUsecase,
-    required RevokeMcpGrantUsecase revokeUsecase,
-  }) : _listUsecase = listUsecase,
-       _revokeUsecase = revokeUsecase;
+    required this._listUsecase,
+    required this._revokeUsecase,
+  });
 
   Future<void> fetchGrants() => execute(() => _listUsecase(noParams));
 
