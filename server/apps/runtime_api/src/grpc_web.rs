@@ -437,7 +437,7 @@ fn janela_revogacao_min() -> i32 {
     // Arredonda para cima: dizer "15 minutos" quando são 15min e 1s seria
     // prometer por baixo justo na informação que o usuário usa para decidir se
     // precisa fazer mais alguma coisa depois de desconectar.
-    ((ttl + 59) / 60) as i32
+    ttl.div_ceil(60) as i32
 }
 
 /// Exige, para a rota informada, o escopo declarado em [`crate::rbac::MAPA`].
@@ -2811,7 +2811,12 @@ impl AdminService for AdminFacade {
     ) -> Result<Response<QuitarMinhaAssinaturaResponse>, Status> {
         let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
         // Cobrança é assunto do dono. Um colaborador não vê nem resolve.
-        exigir_escopo_tenant_admin(&claims)?;
+        //
+        // Chegou da `dev` chamando `exigir_escopo_tenant_admin`, que a N13.3
+        // removeu ao trocar o gate binário pelo mapa rota→escopo. O equivalente
+        // exato é `SOMENTE_ADMIN`: lista vazia, satisfeita apenas por
+        // `tenant:admin` ou pelo coringa do superusuário.
+        exigir_escopo(&claims, crate::rbac::SOMENTE_ADMIN, "QuitarMinhaAssinatura")?;
         let traceparent = traceparent_do_metadata(&req);
         let ip = ip_do_metadata(&req);
         let user_agent = user_agent_do_metadata(&req);

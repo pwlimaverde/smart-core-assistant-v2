@@ -45,6 +45,9 @@ pub use auth::MockAuthStore;
 pub use cliente::MockClienteStore;
 #[cfg(test)]
 #[allow(unused_imports)]
+pub use mcp::MockMcpGrantStore;
+#[cfg(test)]
+#[allow(unused_imports)]
 pub use operacional::MockOperacionalStore;
 #[cfg(test)]
 #[allow(unused_imports)]

@@ -88,7 +88,7 @@ impl OauthConfig {
     /// Janela real de revogação, em minutos — o número que aparece na tela de
     /// consentimento e na tela de aplicativos conectados.
     pub fn janela_revogacao_min(&self) -> i64 {
-        (self.access_ttl_s + 59) / 60
+        self.access_ttl_s.div_ceil(60)
     }
 }
 
