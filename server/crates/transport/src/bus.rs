@@ -172,6 +172,53 @@ pub async fn confirmar(
     confirmar_stream(con, STREAM_EVENTOS, grupo, stream_id).await
 }
 
+/// Refaz a conexão do consumidor depois de um erro; `None` se não conseguiu.
+///
+/// # Por que isto precisa existir
+///
+/// `get_async_connection()` entrega uma conexão **única**, sem reconexão
+/// automática. Os dois laços de consumo pegavam essa conexão UMA vez, antes do
+/// `loop`, e no erro apenas dormiam 2s e tentavam de novo — **no mesmo socket
+/// morto**. Resultado: bastava o Redis reiniciar (o que acontece em todo deploy
+/// que recria o `redis-bus`) para o consumidor girar para sempre, imprimindo
+/// "Broken pipe" a cada 2 segundos e **sem consumir mais nada**.
+///
+/// Isso aconteceu em produção em 2026-09-11: o `entries-read` do grupo
+/// `data_postgres_audit_group` ficou congelado em 36330 enquanto o serviço
+/// parecia vivo e saudável. A trilha de auditoria parou de ser gravada e nada
+/// no healthcheck acusou — o batimento de liveness só é registrado no caminho
+/// de SUCESSO, então ele também congelava, mas a sonda do container olha outra
+/// coisa.
+///
+/// Reconectar aqui é o que transforma "parou para sempre" em "perdeu alguns
+/// segundos". O grupo é reafirmado porque a conexão nova não herda nada.
+async fn reconectar_consumidor(
+    client: &redis::Client,
+    stream: &str,
+    grupo: &str,
+) -> Option<Connection> {
+    match client.get_async_connection().await {
+        Ok(mut nova) => match garantir_consumer_group_stream(&mut nova, stream, grupo).await {
+            Ok(()) => {
+                tracing::info!(stream, grupo, "Conexão do consumidor restabelecida");
+                Some(nova)
+            }
+            Err(e) => {
+                tracing::warn!(
+                    stream,
+                    grupo,
+                    "Reconectou mas falhou ao garantir o grupo: {e:?}"
+                );
+                None
+            }
+        },
+        Err(e) => {
+            tracing::warn!(stream, grupo, "Falha ao reconectar ao Redis: {e:?}");
+            None
+        }
+    }
+}
+
 /// Garante a existência do consumer group (idempotente) em um stream específico.
 #[tracing::instrument(skip(con), fields(stream = %stream, grupo = %grupo), err)]
 pub async fn garantir_consumer_group_stream<C>(
@@ -518,7 +565,11 @@ impl Consumer {
 
         // 2. Loop de consumo ativo
         loop {
-            match consumir_stream(
+            // O resultado passa por um binding DE PROPÓSITO: escrito como
+            // `match consumir_stream(&mut con, ..).await { .. }`, o temporário que
+            // carrega o empréstimo mutável de `con` vive até o fim do `match`, e o
+            // braço de erro não poderia REATRIBUIR `con` para reconectar.
+            let lido = consumir_stream(
                 &mut con,
                 &self.stream,
                 &self.grupo,
@@ -526,8 +577,8 @@ impl Consumer {
                 10,
                 1000,
             )
-            .await
-            {
+            .await;
+            match lido {
                 Ok(eventos) => {
                     // Batimento no ponto exato em que o loop provou estar vivo: o
                     // read do Redis voltou. Registrar antes disso (ou num timer
@@ -554,11 +605,15 @@ impl Consumer {
                     }
                 }
                 Err(e) => {
-                    tracing::error!(
-                        "Erro consumindo do Redis Streams: {:?}. Aguardando re-tentativa...",
-                        e
-                    );
+                    tracing::error!("Erro consumindo do Redis Streams: {:?}. Reconectando...", e);
                     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    // Sem isto, a próxima volta reusa o MESMO socket morto e o
+                    // laço gira para sempre sem consumir nada.
+                    if let Some(nova) =
+                        reconectar_consumidor(&self.client, &self.stream, &self.grupo).await
+                    {
+                        con = nova;
+                    }
                 }
             }
         }
@@ -615,7 +670,11 @@ impl Consumer {
 
         // 2. Loop de consumo ativo
         loop {
-            match consumir_stream(
+            // O resultado passa por um binding DE PROPÓSITO: escrito como
+            // `match consumir_stream(&mut con, ..).await { .. }`, o temporário que
+            // carrega o empréstimo mutável de `con` vive até o fim do `match`, e o
+            // braço de erro não poderia REATRIBUIR `con` para reconectar.
+            let lido = consumir_stream(
                 &mut con,
                 &self.stream,
                 &self.grupo,
@@ -623,8 +682,8 @@ impl Consumer {
                 10,
                 1000,
             )
-            .await
-            {
+            .await;
+            match lido {
                 Ok(eventos) => {
                     // Ver a nota em `run`: o batimento vale a volta do loop, não o
                     // recebimento de evento — stream vazio também é sinal de vida.
@@ -649,10 +708,17 @@ impl Consumer {
                 }
                 Err(e) => {
                     tracing::error!(
-                        "Erro consumindo em lote do Redis Streams: {:?}. Aguardando re-tentativa...",
+                        "Erro consumindo em lote do Redis Streams: {:?}. Reconectando...",
                         e
                     );
                     tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                    // Ver `reconectar_consumidor`: reusar o socket morto aqui foi
+                    // o que parou a consolidação da auditoria em 2026-09-11.
+                    if let Some(nova) =
+                        reconectar_consumidor(&self.client, &self.stream, &self.grupo).await
+                    {
+                        con = nova;
+                    }
                 }
             }
         }
