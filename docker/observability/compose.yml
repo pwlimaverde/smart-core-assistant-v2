@@ -17,12 +17,28 @@ networks:
     name: smart_core_v2_observability
     driver: bridge
 
+  # Rede só para o `mcp_server` alcançar o collector (N13.4).
+  #
+  # Existe porque a `smart_core_v2_observability` tem TODOS os serviços, inclusive
+  # `data_postgres`, `data_redis` e `data_storage`. Pôr o mcp_server nela dava a
+  # ele resolução e alcance de rede para esses três — o que destrói o invariante
+  # da fase N13: "o mcp_server não fala com o banco, e a barreira é topológica".
+  # Verificado no servidor em 2026-09-11: os três resolviam de dentro do
+  # container. O teste de isolamento do módulo pegou.
+  #
+  # Aqui só entram o collector e os `mcp_server` (dev e prod). Declarada NESTA
+  # stack porque ela sobe antes da stack de aplicação no deploy; a stack de
+  # aplicação a consome como externa.
+  smart_core_v2_mcp_telemetria:
+    name: smart_core_v2_mcp_telemetria
+    driver: bridge
+
 services:
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
     volumes:
       - ./otel-collector-config.yml:/etc/otelcol-contrib/config.yaml:ro
-    networks: [smart_core_v2_observability]
+    networks: [smart_core_v2_observability, smart_core_v2_mcp_telemetria]
     restart: unless-stopped
 
   loki:

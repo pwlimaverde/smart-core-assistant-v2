@@ -42,6 +42,12 @@ networks:
   # `tests/integration/test_isolamento_de_rede.py` existe para pegar isso.
   mcp_net:
     driver: bridge
+  # Criada pela stack de observabilidade (que sobe antes). Só o collector e os
+  # `mcp_server` vivem nela — é o caminho de telemetria SEM dar ao mcp_server
+  # alcance aos serviços de dados, que compartilham a `observability`.
+  mcp_telemetria:
+    name: smart_core_v2_mcp_telemetria
+    external: true
   observability:
     name: smart_core_v2_observability
     external: true
@@ -234,11 +240,29 @@ services:
       # .proto canônicos em server/crates/contracts (fora de mcp_server/).
       context: ../..
       dockerfile: mcp_server/Dockerfile
-    env_file: [.env]
+    # SEM `env_file`, ao contrário de todos os outros serviços — e é o ponto.
+    #
+    # O `dev.env` traz `DATABASE_URL` e `DATABASE_ADMIN_URL`. Um serviço cujo
+    # invariante é "não alcança o banco" não pode receber a credencial do banco:
+    # a rede já barra, mas entregar o segredo a quem não deve usá-lo é convidar o
+    # atalho. Cada variável abaixo é declarada de propósito.
     environment:
+      MCP_OAUTH_ISSUER: ${MCP_OAUTH_ISSUER}
+      MCP_OAUTH_RESOURCE: ${MCP_OAUTH_RESOURCE}
+      # A chave PÚBLICA. A privada fica no control_plane e não entra aqui.
+      MCP_OAUTH_PUBLIC_KEY_PEM: ${MCP_OAUTH_PUBLIC_KEY_PEM}
+      MCP_SERVICE_SECRET: ${MCP_SERVICE_SECRET}
+      MCP_ACCESS_TTL_S: ${MCP_ACCESS_TTL_S:-900}
       MCP_RUNTIME_ENDPOINT: runtime_api:50051
       MCP_TOKEN_EXCHANGE_URL: http://control_plane:8095/internal/mcp/token-exchange
-    networks: [mcp_net, observability]
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4317}
+      OTEL_SERVICE_NAMESPACE: ${OTEL_SERVICE_NAMESPACE:-smart-core-v2}
+      RUST_LOG: ${RUST_LOG:-info}
+    # NÃO entra em `observability`: aquela rede tem `data_postgres`, `data_redis` e
+    # `data_storage`, e estar nela dava ao mcp_server alcance de rede aos três —
+    # o oposto do invariante. A telemetria vai pela `mcp_telemetria`, onde só o
+    # collector mora.
+    networks: [mcp_net, mcp_telemetria]
     ports:
       - "${MCP_HOST_PORT:-8099}:8099"
     depends_on:
