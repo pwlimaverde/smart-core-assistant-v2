@@ -215,12 +215,34 @@ services:
     image: *server-image
     command: ["data_postgres"]
     env_file: [.env]
+    environment:
+      # Este serviço faz DUAS coisas: atende RPC e consome o barramento. A sonda
+      # de PING só enxerga a primeira — ver o healthcheck abaixo.
+      SMARTCORE_LIVENESS_FILE: /tmp/data_postgres_batimento
     networks: [internal, observability]
     depends_on:
       postgres: { condition: service_healthy }
     healthcheck:
       <<: *healthcheck-rpc
-      test: ["CMD", "healthcheck", "rpc", "DATA_POSTGRES"]
+      # Duas condições, porque há dois jeitos de este serviço morrer sem morrer.
+      #
+      # Em 2026-09-11 o consumidor do barramento ficou 15 HORAS preso num socket
+      # morto do Redis (ver `reconectar_consumidor` em transport/src/bus.rs) e o
+      # container seguiu `healthy` o tempo todo: a porta RPC continuava
+      # respondendo PING. A trilha de auditoria parou e nada acusou.
+      #
+      # O `&&` cobre o outro lado também: só o batimento deixaria passar um
+      # processo que consome o barramento com o servidor RPC travado.
+      #
+      # `start_period` folgado de propósito: o consumidor só sobe depois das
+      # migrations, e sem essa folga uma migration demorada viraria laço de
+      # restart — o watchdog reiniciando um serviço que estava subindo.
+      start_period: 120s
+      test:
+        [
+          "CMD-SHELL",
+          "healthcheck rpc DATA_POSTGRES && healthcheck batimento /tmp/data_postgres_batimento 90",
+        ]
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_DATA_POSTGRES:-512m}
@@ -244,10 +266,32 @@ services:
     image: *server-image
     command: ["data_storage"]
     env_file: [.env]
+    environment:
+      # Este serviço faz DUAS coisas: atende RPC e consome o barramento. A sonda
+      # de PING só enxerga a primeira — ver o healthcheck abaixo.
+      SMARTCORE_LIVENESS_FILE: /tmp/data_storage_batimento
     networks: [internal, observability]
     healthcheck:
       <<: *healthcheck-rpc
-      test: ["CMD", "healthcheck", "rpc", "DATA_STORAGE"]
+      # Duas condições, porque há dois jeitos de este serviço morrer sem morrer.
+      #
+      # Em 2026-09-11 o consumidor do barramento ficou 15 HORAS preso num socket
+      # morto do Redis (ver `reconectar_consumidor` em transport/src/bus.rs) e o
+      # container seguiu `healthy` o tempo todo: a porta RPC continuava
+      # respondendo PING. A trilha de auditoria parou e nada acusou.
+      #
+      # O `&&` cobre o outro lado também: só o batimento deixaria passar um
+      # processo que consome o barramento com o servidor RPC travado.
+      #
+      # `start_period` folgado de propósito: o consumidor só sobe depois das
+      # migrations, e sem essa folga uma migration demorada viraria laço de
+      # restart — o watchdog reiniciando um serviço que estava subindo.
+      start_period: 120s
+      test:
+        [
+          "CMD-SHELL",
+          "healthcheck rpc DATA_STORAGE && healthcheck batimento /tmp/data_storage_batimento 90",
+        ]
     restart: unless-stopped
     logging: *logging
     mem_limit: ${MEM_DATA_STORAGE:-512m}
