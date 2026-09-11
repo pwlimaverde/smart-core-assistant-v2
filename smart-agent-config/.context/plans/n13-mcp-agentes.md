@@ -169,15 +169,34 @@ executado** e **o que só foi lido**.
 | Stubs Dart do protobuf | Regenerados e `dart analyze` limpo. Confirmado antes que regenerar **sem** as mudanças dá arquivos byte-idênticos aos commitados |
 | Proto | Compila em Python e em Dart |
 
-### NÃO verificado — o CI é o primeiro a ver
+### O que o CI achou (2026-09-11)
+
+Publicado na `dev`; o CI foi o primeiro compilador a ver o Rust. Registro aqui
+porque a lição vale além desta fase: **três dos seis defeitos só aparecem quando
+os dois lados do merge coexistem**, e nenhum deles daria conflito de merge.
+
+| # | Defeito | Como apareceu |
+|---|---|---|
+| 1 | `sqlx::query(&format!(…))` não compila | O sqlx 0.9 aceita só `&'static str` e recusa string dinâmica: *"dynamic SQL strings should be audited for possible injections"*. Eu havia extraído a lista de colunas para uma constante e a interpolava — conveniência que custou erro de compilação e um cheiro de injeção. As colunas voltaram a ser literais |
+| 2 | `quitar_minha_assinatura` chamava `exigir_escopo_tenant_admin` | **Defeito de merge que o git não pega.** A `dev` acrescentou a rota usando a função que a N13.3 removeu. Nomes diferentes, pontos diferentes do arquivo: zero conflito, erro garantido |
+| 3 | `MockMcpGrantStore` não existia em `crate::ports` | O `automock` gera o mock no módulo da trait; os outros dez ports o reexportam sob `#[cfg(test)]`. O meu não |
+| 4 | `Clipboard`/`ClipboardData` indefinidos | Vivem em `flutter/services`, que o `dependencies_module` não reexporta |
+| 5 | `prefer_initializing_formals` (2 infos) | Infos são **fatais** no `melos analyze`. O padrão da casa usa formal de inicialização privado |
+| 6 | Cobertura 56% contra o piso de 70% | Piso que eu mesmo escrevi. Corrigido escrevendo 49 testes novos — não baixando o piso |
+
+**`cargo fmt --check` passou de primeira**, porque instalei o toolchain só para
+rodar `rustfmt` (que parseia, não compila) antes de publicar. Sem isso seria um
+sétimo ciclo.
+
+### NÃO verificado nesta máquina
 
 | O que | Por quê |
 |---|---|
-| **Compilação do Rust** (~4.500 linhas novas) | Esta máquina não tem toolchain além do `rustfmt`; `cargo build` derruba a stack (2 vCPU, 7,8 GB) |
-| `cargo clippy -- -D warnings` | Exige compilar. Fiz uma revisão manual de `dead_code` e `too_many_arguments`; espere achados |
-| `flutter analyze` / `flutter test` | Sem Flutter SDK. `dart analyze` isolado mostrou **nenhum erro de sintaxe** no Dart escrito à mão |
-| Migration `0030` | Não aplicada em banco nenhum |
-| Fluxo OAuth ponta a ponta | Depende de DNS e de deploy |
+| **Compilação do Rust** | Esta máquina não tem toolchain além do `rustfmt`; `cargo build` derruba a stack (2 vCPU, 7,8 GB). O CI compila |
+| `cargo clippy -- -D warnings` | Exige compilar |
+| `flutter analyze` / `flutter test` | Sem Flutter SDK. O CI roda |
+| Migration `0032` | Não aplicada em banco nenhum aqui; o deploy a aplica |
+| Fluxo OAuth ponta a ponta | Depende de deploy. **DNS não é bloqueio**: há curinga `*.smartcoreassistant.com.br` apontando para este servidor |
 
 ### Desvios do plano, com o motivo
 
@@ -192,9 +211,17 @@ executado** e **o que só foi lido**.
 
 ### O que falta para funcionar
 
-1. **DNS** de `auth.dev.` e `mcp.dev.` — antes do deploy, senão o Let's Encrypt entra em laço.
-2. Push → CI. Espere iteração no Rust.
-3. Os segredos **já estão** em `/opt/smartcore/dev/env/` (par RSA + `MCP_SERVICE_SECRET`, gerados em 2026-09-09).
+1. ~~DNS~~ — resolvido: há curinga apontando para o servidor, e `auth.dev.` e
+   `mcp.dev.` já resolvem.
+2. ~~Segredos~~ — par RSA e `MCP_SERVICE_SECRET` provisionados em
+   `/opt/smartcore/dev/env/` (2026-09-09), com o PEM em linha única e `\n`
+   escapado; os dois lados normalizam.
+3. **CI verde e deploy concluído** — em andamento.
+4. **O teste prático**: conectar um cliente MCP real e rodar o teste de aceitação
+   do plano (*"configure um funil de vendas com 4 etapas e um departamento
+   comercial"*, partindo de tenant vazio).
+5. **A auditoria de segurança da fase R** continua devendo. Agora ela pode
+   acontecer de verdade: o código compila e a migration aplica.
 
 ### Bug corrigido no caminho
 
