@@ -83,13 +83,31 @@ fn avaliar(inspecao: &bollard::models::ContainerInspectResponse) -> Situacao {
             Some(HealthStatusEnum::HEALTHY) => Situacao::Saudavel,
             Some(HealthStatusEnum::STARTING) => Situacao::Subindo,
             Some(HealthStatusEnum::UNHEALTHY) => {
-                // A última saída da sonda é o que explica a falha; sem ela, o
-                // evento de auditoria diria apenas "unhealthy" e a investigação
-                // começaria do zero.
+                // A saída da sonda é o que explica a falha; sem ela, o evento de
+                // auditoria diria apenas "unhealthy" e a investigação começaria
+                // do zero.
+                //
+                // Precisa ser a última entrada que REPROVOU (`exit_code != 0`),
+                // não a última entrada. O Docker guarda as cinco últimas sondas e
+                // só volta o status para `healthy` depois de uma aprovação; existe
+                // uma janela em que o status ainda é `unhealthy` e a última
+                // entrada do log já passou. Pegando `.last()` cego, o evento saía
+                // com a mensagem de SUCESSO como se fosse o motivo da falha.
+                //
+                // Aconteceu de verdade em 2026-09-11 06:25 com o Postgres:
+                // "healthcheck falhou: /var/run/postgresql:5432 - accepting
+                // connections" — que é exatamente o que o `pg_isready` imprime
+                // quando está tudo bem. Uma hora inteira de investigação foi
+                // gasta perseguindo um banco que nunca esteve doente.
                 let ultima = saude
                     .log
                     .as_ref()
-                    .and_then(|l| l.last())
+                    .and_then(|l| {
+                        l.iter()
+                            .rev()
+                            .find(|e| e.exit_code.unwrap_or(0) != 0)
+                            .or_else(|| l.last())
+                    })
                     .and_then(|e| e.output.clone())
                     .unwrap_or_default();
                 let ultima = ultima.trim();
@@ -318,6 +336,32 @@ async fn agir(
                         None,
                     );
                     tracing::info!(servico = %servico, tentativa, "Servico reiniciado");
+                }
+                Err(e) if e.to_string().contains("marked for removal") => {
+                    // O deploy está trocando este container agora. Não é falha:
+                    // o compose vai subir o substituto em segundos, e insistir
+                    // aqui só atrapalharia.
+                    //
+                    // Isto acontece em TODO deploy — o watchdog varre a cada 30s
+                    // e a janela de substituição é maior que isso. Registrar como
+                    // ERROR gerava um evento crítico por publicação, e o alerta
+                    // por e-mail (doc 28) chamaria alguém de madrugada para
+                    // avisar que o deploy estava funcionando.
+                    tracing::info!(
+                        servico = %servico,
+                        "Servico em substituicao pelo deploy; watchdog nao intervem"
+                    );
+                    audit.info_global(
+                        "service.substituicao_em_andamento",
+                        &format!("{servico} esta sendo substituido pelo deploy; sem intervencao"),
+                        serde_json::json!({
+                            "servico": servico,
+                            "projeto": projeto,
+                        }),
+                        None,
+                        None,
+                        None,
+                    );
                 }
                 Err(e) => {
                     tracing::error!(servico = %servico, erro = ?e, "Falha ao reiniciar o servico");
