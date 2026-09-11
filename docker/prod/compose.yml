@@ -30,6 +30,17 @@ x-healthcheck-rpc: &healthcheck-rpc
   retries: 3
   start_period: 30s
 
+# -----------------------------------------------------------------------------
+# Interfaces de publicação de porta
+# -----------------------------------------------------------------------------
+# O Docker NÃO respeita o UFW: uma porta publicada em 0.0.0.0 fica acessível pela
+# internet mesmo com `ufw` ativo e política DROP, porque o Docker insere as
+# próprias regras e a chain `DOCKER-USER` nasce vazia.
+#
+# `HOST_BRIDGE_IP` — portas que o Caddy da borda consome; ele alcança o host por
+# `host.docker.internal`, que resolve para o gateway da docker0.
+# `HOST_ADMIN_IP` — portas de administração (banco, cache): só loopback.
+
 networks:
   internal:
     driver: bridge
@@ -196,7 +207,7 @@ services:
     # para fora é o Caddy da borda, no subdomínio `auth.`.
     networks: [internal, observability, mcp_net]
     ports:
-      - "${MCP_OAUTH_HOST_PORT:-8095}:8095"
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${MCP_OAUTH_HOST_PORT:-8095}:8095"
     depends_on:
       data_postgres: { condition: service_started }
     healthcheck:
@@ -264,7 +275,7 @@ services:
     # collector mora.
     networks: [mcp_net, mcp_telemetria]
     ports:
-      - "${MCP_HOST_PORT:-8099}:8099"
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${MCP_HOST_PORT:-8099}:8099"
     depends_on:
       runtime_api: { condition: service_started }
       control_plane: { condition: service_started }
@@ -313,7 +324,7 @@ services:
     networks: [internal, observability, mcp_net]
     # Publica a fachada gRPC-Web no host (prod: 50052; dev usa 50051).
     ports:
-      - "${RUNTIME_WEB_PORT:-50052}:50051"
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${RUNTIME_WEB_PORT:-50052}:50051"
     depends_on:
       control_plane: { condition: service_started }
     healthcheck:
@@ -328,7 +339,7 @@ services:
   web:
     image: ${WEB_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-web:latest}
     ports:
-      - "${WEB_HOST_PORT:-8082}:80"
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${WEB_HOST_PORT:-8082}:80"
     networks: [internal]
     restart: unless-stopped
     logging: *logging
@@ -342,7 +353,7 @@ services:
   web-tenant:
     image: ${WEB_TENANT_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-web-tenant:latest}
     ports:
-      - "${WEB_TENANT_HOST_PORT:-8084}:80"
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${WEB_TENANT_HOST_PORT:-8084}:80"
     networks: [internal]
     restart: unless-stopped
     logging: *logging
@@ -369,7 +380,10 @@ services:
     env_file: [.env]
     networks: [internal, observability, evolution_net]
     ports:
-      - "${WEBHOOK_INGRESS_PORT:-9200}:9200"
+      - "${HOST_ADMIN_IP:-127.0.0.1}:${WEBHOOK_INGRESS_PORT:-9200}:9200"
+      # Só loopback: o Evolution alcança este serviço pelo nome na rede
+      # `evolution_net` (verificado — resolve para 172.24.0.x). A porta publicada
+      # existe apenas para depuração a partir do próprio host.
     # HTTP puro (axum): a sonda é a rota /health, que exercita o roteador e não
     # apenas a porta aberta. `curl` já vem na imagem.
     healthcheck:

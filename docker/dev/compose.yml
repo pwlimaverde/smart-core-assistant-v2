@@ -33,6 +33,20 @@ x-healthcheck-rpc: &healthcheck-rpc
   retries: 3
   start_period: 30s
 
+# -----------------------------------------------------------------------------
+# Interfaces de publicação de porta
+# -----------------------------------------------------------------------------
+# O Docker NÃO respeita o UFW: ele insere as próprias regras e uma porta
+# publicada em 0.0.0.0 fica acessível pela internet mesmo com `ufw` ativo e
+# política DROP. Verificado neste servidor em 2026-09-11 — a `DOCKER-USER` está
+# vazia e todas as portas abaixo respondiam pelo IP público.
+#
+# `HOST_BRIDGE_IP` — portas que o Caddy da borda consome. Ele alcança o host por
+# `host.docker.internal`, que resolve para o gateway da docker0 (172.17.0.1).
+# Publicar ali mantém o roteamento e tira a porta da interface pública.
+#
+# `HOST_ADMIN_IP` — portas de administração (banco, cache). Só loopback: o acesso
+# do desenvolvedor é por túnel SSH, que termina no host e sai de 127.0.0.1.
 networks:
   internal:
     driver: bridge
@@ -70,7 +84,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ../init-scripts:/docker-entrypoint-initdb.d:ro
     ports:
-      - "${POSTGRES_PORT:-5434}:5432"
+      - "${HOST_ADMIN_IP:-127.0.0.1}:${POSTGRES_PORT:-5434}:5432"
     networks: [internal]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
@@ -89,7 +103,7 @@ services:
       --maxmemory 150mb --maxmemory-policy allkeys-lru --bind 0.0.0.0 --protected-mode yes
     volumes: [redis_data:/data]
     ports:
-      - "${REDIS_PORT:-6380}:6379"
+      - "${HOST_ADMIN_IP:-127.0.0.1}:${REDIS_PORT:-6380}:6379"
     networks: [internal]
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
@@ -107,7 +121,7 @@ services:
       --maxmemory 150mb --maxmemory-policy noeviction --bind 0.0.0.0 --protected-mode yes
     volumes: [redis_bus_data:/data]
     ports:
-      - "${REDIS_BUS_PORT:-6381}:6379"
+      - "${HOST_ADMIN_IP:-127.0.0.1}:${REDIS_BUS_PORT:-6381}:6379"
     networks: [internal]
     # O barramento não tinha sonda, apesar de ser por onde passa TODA mensagem e
     # todo evento de auditoria: era o ponto mais crítico sem verificação.
@@ -247,7 +261,7 @@ services:
     # para fora é o Caddy da borda, no subdomínio `auth.`.
     networks: [internal, observability, mcp_net]
     ports:
-      - "${MCP_OAUTH_HOST_PORT:-8095}:8095"
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${MCP_OAUTH_HOST_PORT:-8095}:8095"
     depends_on:
       data_postgres: { condition: service_started }
     healthcheck:
@@ -317,7 +331,7 @@ services:
     # collector mora.
     networks: [mcp_net, mcp_telemetria]
     ports:
-      - "${MCP_HOST_PORT:-8099}:8099"
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${MCP_HOST_PORT:-8099}:8099"
     depends_on:
       runtime_api: { condition: service_started }
       control_plane: { condition: service_started }
@@ -371,7 +385,7 @@ services:
     # Publica a fachada gRPC-Web no host; o admin.caddy do Caddy do host faz o
     # reverse_proxy p/ esta porta (dev: 50051).
     ports:
-      - "${RUNTIME_WEB_PORT:-50051}:50051"
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${RUNTIME_WEB_PORT:-50051}:50051"
     depends_on:
       control_plane: { condition: service_started }
     healthcheck:
@@ -386,7 +400,7 @@ services:
   web:
     image: ${WEB_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-web:dev}
     ports:
-      - "${WEB_HOST_PORT:-8081}:80"
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${WEB_HOST_PORT:-8081}:80"
     networks: [internal]
     # Serve o bundle estático pelo Caddy; `wget` vem do busybox da imagem alpine.
     # Buscar a index confirma que o bundle está no lugar — container de pé com
@@ -409,7 +423,7 @@ services:
   web-tenant:
     image: ${WEB_TENANT_IMAGE:-ghcr.io/pwlimaverde/smart-core-assistant-v2/smartcore-web-tenant:dev}
     ports:
-      - "${WEB_TENANT_HOST_PORT:-8083}:80"
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${WEB_TENANT_HOST_PORT:-8083}:80"
     networks: [internal]
     restart: unless-stopped
     logging: *logging
@@ -436,7 +450,10 @@ services:
     env_file: [.env]
     networks: [internal, observability, evolution_net]
     ports:
-      - "${WEBHOOK_INGRESS_PORT:-9200}:9200"
+      - "${HOST_ADMIN_IP:-127.0.0.1}:${WEBHOOK_INGRESS_PORT:-9200}:9200"
+      # Só loopback: o Evolution alcança este serviço pelo nome na rede
+      # `evolution_net` (verificado — resolve para 172.24.0.x). A porta publicada
+      # existe apenas para depuração a partir do próprio host.
     # HTTP puro (axum), não `transport::Server`: a sonda é a rota /health, que
     # exercita o roteador e não apenas a porta aberta. `curl` já vem na imagem.
     healthcheck:
