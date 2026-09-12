@@ -5069,6 +5069,17 @@ const TIPOS_DE_ETAPA: [&str; 4] = ["fila", "trabalho", "espera", "finalizacao"];
 
 // --- N9 E13: campos do cartão --------------------------------------------
 
+/// Teto de campos ativos por tenant (N9 E13).
+///
+/// Todo campo com extração automática entra no prompt de **cada** mensagem: a
+/// ficha cresce e o custo por conversa sobe junto, sem nada na tela dizendo
+/// isso. 30 é bem mais do que qualquer ficha que uma pessoa consiga preencher,
+/// e ainda assim um limite.
+///
+/// Conta os ativos: desativar um campo o tira do prompt e das fichas novas,
+/// então ele deixa de custar — e essa é a saída de quem esbarra aqui.
+const TETO_CAMPOS_ATIVOS: usize = 30;
+
 /// O que impede um campo de nascer inútil.
 ///
 /// Na borda, e não no adaptador: aqui existe `AppError::Validation`, e a
@@ -5142,6 +5153,27 @@ async fn handler_create_campo(
     }
 
     let ctx = contexto_do_envelope(&env);
+
+    // Reusa a listagem em vez de uma consulta de contagem: são no máximo
+    // algumas dezenas de linhas, e uma query a mais no cache por causa de um
+    // `COUNT` seria trocar clareza por nada. Falha ao listar não barra a
+    // criação — o teto protege do crescimento silencioso, e negar o cadastro
+    // por um erro de leitura seria um preço maior que o problema.
+    if let Ok(existentes) = store.listar_campos(&ctx).await {
+        let ativos = existentes
+            .iter()
+            .filter(|c| c.get("ativo").and_then(|v| v.as_bool()).unwrap_or(true))
+            .count();
+        if ativos >= TETO_CAMPOS_ATIVOS {
+            return erro(
+                error_core::AppError::Conflict(format!(
+                    "Você já tem {ativos} campos ativos, que é o limite. Cada                      campo entra no que a IA lê em toda mensagem, então a conta                      sobe junto. Desative um que não use para abrir espaço."
+                )),
+                &env,
+            );
+        }
+    }
+
     match store.criar_campo(&ctx, payload).await {
         Ok(campo) => {
             audit

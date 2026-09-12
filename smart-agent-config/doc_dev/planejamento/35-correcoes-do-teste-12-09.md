@@ -305,3 +305,23 @@ Fora da transação de propósito: uma corrida deixaria passar a 51ª de 50, e
 ninguém está protegido de disparo em massa por uma unidade. Falha ao contar
 não barra ninguém — o teto protege de abuso, e transformá-lo em ponto único de
 falha impediria o uso legítimo por um problema que não é do usuário.
+
+## Teto de campos por tenant *(entregue)*
+
+O último item que o doc 33 listava como risco sem dono: 30 campos ativos.
+Cada campo com extração automática entra no prompt de **toda** mensagem — a
+ficha cresce e o custo por conversa sobe junto, sem nada na tela dizendo isso.
+Conta os ativos, porque desativar um o tira do prompt, e essa é a saída de
+quem esbarra no limite.
+
+## O que fica de fora, e por quê
+
+**Vínculo contato ↔ cliente** (a segunda metade do C4 no doc 33). A tabela
+`oraculo_cliente` existe desde a migration 0004 — com CNPJ, CPF e razão
+social —, e a associativa `oraculo_cliente_contatos` também. Não existe nem
+RPC nem tela para nenhuma das duas.
+
+Não é uma correção do teste: é uma entidade nova no produto, com tela
+própria, e o cadastro de contato entregue aqui já resolve o que travava o C3
+(não havia quem escolher no diálogo). Fica registrado como o próximo bloco,
+não como pendência desta rodada.
