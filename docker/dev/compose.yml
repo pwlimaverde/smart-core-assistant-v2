@@ -175,7 +175,16 @@ services:
 
   # Storage de midia local (dev). Em prod usa-se R2 (sem MinIO).
   minio:
-    image: minio/minio:latest
+    # quay.io, nao Docker Hub: a MinIO parou de publicar lá e em 2026-09-11 o
+    # `docker compose pull` do deploy passou a falhar com "pull access denied for
+    # minio/mc, repository does not exist". A stack continuava de pé porque a
+    # imagem estava no disco desde 2025-09-07 — o deploy e que morria, e levava
+    # com ele qualquer correcao que estivesse na fila.
+    #
+    # Tag fixa, nao `latest`: foi o `latest` que deixou isto apodrecer em
+    # silencio por semanas. Esta e exatamente a versao que já roda aqui, então a
+    # troca de registro nao muda comportamento nenhum.
+    image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
@@ -189,7 +198,9 @@ services:
   # Provisiona o bucket no MinIO. Sem ele, o data_storage entra em crash-loop num
   # volume novo ("bucket inexistente"). One-off idempotente.
   minio-setup:
-    image: minio/mc:latest
+    # Mesmo motivo do `minio` acima. A tag mais nova disponivel no quay e uma
+    # semana posterior a que estava em disco; o `mc` aqui so cria bucket.
+    image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
     depends_on:
       minio: { condition: service_started }
     environment:
