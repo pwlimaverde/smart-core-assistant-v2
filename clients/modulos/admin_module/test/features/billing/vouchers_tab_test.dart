@@ -169,10 +169,7 @@ void main() {
   testWidgets('voucher revogado não oferece o botão de revogar', (
     tester,
   ) async {
-    await montar(
-      tester,
-      vouchers: [voucher(revogadoEm: DateTime(2026, 6, 1))],
-    );
+    await montar(tester, vouchers: [voucher(revogadoEm: DateTime(2026, 6, 1))]);
     expect(find.byTooltip('Revogar'), findsNothing);
     expect(find.byTooltip('Ver resgates'), findsOneWidget);
     expect(find.textContaining('revogado: vazou'), findsOneWidget);
@@ -206,9 +203,9 @@ void main() {
     await tester.tap(find.text('Criar'));
     await tester.pumpAndSettle();
 
-    final req = verify(
-      () => client.createVoucher(captureAny()),
-    ).captured.single as proto.CreateVoucherRequest;
+    final req =
+        verify(() => client.createVoucher(captureAny())).captured.single
+            as proto.CreateVoucherRequest;
     expect(req.codigo, 'PROMO');
     expect(req.duracaoDias, 30);
     expect(req.planId, 1);
@@ -240,9 +237,9 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Revogar'));
     await tester.pumpAndSettle();
 
-    final req = verify(
-      () => client.revokeVoucher(captureAny()),
-    ).captured.single as proto.RevokeVoucherRequest;
+    final req =
+        verify(() => client.revokeVoucher(captureAny())).captured.single
+            as proto.RevokeVoucherRequest;
     expect(req.voucherId, 'v-1');
     expect(req.motivo, 'código vazou');
     expect(find.text('Voucher revogado.'), findsOneWidget);
@@ -295,9 +292,9 @@ void main() {
   });
 
   testWidgets('voucher sem resgates diz isso', (tester) async {
-    when(() => client.listVoucherRedemptions(any())).thenAnswer(
-      (_) => respostaGrpc(proto.ListVoucherRedemptionsResponse()),
-    );
+    when(
+      () => client.listVoucherRedemptions(any()),
+    ).thenAnswer((_) => respostaGrpc(proto.ListVoucherRedemptionsResponse()));
     await montar(tester, vouchers: [voucher()]);
 
     await tester.tap(find.byTooltip('Ver resgates'));

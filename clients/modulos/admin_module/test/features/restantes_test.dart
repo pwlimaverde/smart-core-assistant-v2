@@ -281,9 +281,9 @@ void main() {
         ),
       );
       // A carga única do painel também busca vouchers desde a migration 0027.
-      when(() => client.listVouchers(any())).thenAnswer(
-        (_) => respostaGrpc(proto.ListVouchersResponse()),
-      );
+      when(
+        () => client.listVouchers(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.ListVouchersResponse()));
     }
 
     test('converte plano, assinatura e pagamento', () async {

@@ -125,7 +125,7 @@ void main() {
 
       expect(
         ((await usecasesSobre(gateway).thread(threadParams)) as Failure).error,
-        isA<GetThreadAcessoNegado>(),
+        isA<GetThreadSessaoExpirada>(),
       );
     });
   });

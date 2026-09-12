@@ -40,7 +40,10 @@ final class CadastroSessao {
     _senha = senha;
   }
 
-  void registrarInicio({required String tenantId, required String signupToken}) {
+  void registrarInicio({
+    required String tenantId,
+    required String signupToken,
+  }) {
     _tenantId = tenantId;
     _signupToken = signupToken;
   }

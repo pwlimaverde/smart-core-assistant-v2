@@ -305,7 +305,13 @@ usecasesSobre(FakeAtendimentoGateway gateway) => (
 
 /// Colunas de um quadro padrao (fila -> trabalho -> finalizacao).
 List<ColunaDoQuadro> colunasDeTeste() => const [
-  ColunaDoQuadro(id: 10, nome: 'Entrada', cor: '#6B7280', ordem: 1, tipo: 'fila'),
+  ColunaDoQuadro(
+    id: 10,
+    nome: 'Entrada',
+    cor: '#6B7280',
+    ordem: 1,
+    tipo: 'fila',
+  ),
   ColunaDoQuadro(
     id: 20,
     nome: 'Trabalhando',

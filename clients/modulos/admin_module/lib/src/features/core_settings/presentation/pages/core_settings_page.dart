@@ -216,109 +216,111 @@ class _CoreSettingsPageState extends State<CoreSettingsPage> {
       builder: (dialogContext) => DialogoComCampos(
         campos: [keyController, valController, descController],
         builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (stateContext, setStateDialog) {
-            return AlertDialog(
-              title: Text(
-                isNew ? 'Nova Configuração Global' : 'Editar Configuração',
-              ),
-              content: SizedBox(
-                width: 500,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AppTextField(
-                        label: 'Chave (Key)',
-                        hint: 'ex: OPENAI_DEFAULT_MODEL',
-                        controller: keyController,
-                        // Não permite editar a chave de uma config existente
-                        keyboardType: TextInputType.text,
-                      ),
-                      const SizedBox(height: 16),
-                      AppTextField(
-                        label: 'Valor (Value)',
-                        hint: 'Informe o valor',
-                        controller: valController,
-                        obscureText: encrypted,
-                        obscureToggle: encrypted,
-                      ),
-                      const SizedBox(height: 16),
-                      AppTextField(
-                        label: 'Descrição',
-                        hint: 'Explicação sobre a utilidade desta configuração',
-                        controller: descController,
-                      ),
-                      const SizedBox(height: 16),
-                      CheckboxListTile(
-                        title: const Text('Criptografar/Cifrar valor no banco'),
-                        subtitle: const Text(
-                          'Recomendado para senhas e API Keys',
+          return StatefulBuilder(
+            builder: (stateContext, setStateDialog) {
+              return AlertDialog(
+                title: Text(
+                  isNew ? 'Nova Configuração Global' : 'Editar Configuração',
+                ),
+                content: SizedBox(
+                  width: 500,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AppTextField(
+                          label: 'Chave (Key)',
+                          hint: 'ex: OPENAI_DEFAULT_MODEL',
+                          controller: keyController,
+                          // Não permite editar a chave de uma config existente
+                          keyboardType: TextInputType.text,
                         ),
-                        value: encrypted,
-                        onChanged: isNew
-                            ? (val) =>
-                                  setStateDialog(() => encrypted = val ?? false)
-                            : null, // Não permite alterar criptografia de chave existente
-                      ),
-                    ],
+                        const SizedBox(height: 16),
+                        AppTextField(
+                          label: 'Valor (Value)',
+                          hint: 'Informe o valor',
+                          controller: valController,
+                          obscureText: encrypted,
+                          obscureToggle: encrypted,
+                        ),
+                        const SizedBox(height: 16),
+                        AppTextField(
+                          label: 'Descrição',
+                          hint:
+                              'Explicação sobre a utilidade desta configuração',
+                          controller: descController,
+                        ),
+                        const SizedBox(height: 16),
+                        CheckboxListTile(
+                          title: const Text(
+                            'Criptografar/Cifrar valor no banco',
+                          ),
+                          subtitle: const Text(
+                            'Recomendado para senhas e API Keys',
+                          ),
+                          value: encrypted,
+                          onChanged: isNew
+                              ? (val) => setStateDialog(
+                                  () => encrypted = val ?? false,
+                                )
+                              : null, // Não permite alterar criptografia de chave existente
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Cancelar'),
-                ),
-                PrimaryButton(
-                  label: 'Salvar',
-                  expand: false,
-                  onPressed: () async {
-                    final key = keyController.text.trim();
-                    final value = valController.text.trim();
-                    final description = descController.text.trim();
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('Cancelar'),
+                  ),
+                  PrimaryButton(
+                    label: 'Salvar',
+                    expand: false,
+                    onPressed: () async {
+                      final key = keyController.text.trim();
+                      final value = valController.text.trim();
+                      final description = descController.text.trim();
 
-                    if (key.isBlank()) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('A chave não pode ser vazia.'),
-                        ),
+                      if (key.isBlank()) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('A chave não pode ser vazia.'),
+                          ),
+                        );
+                        return;
+                      }
+
+                      // Resolvidos ANTES do await: salvar recarrega a lista, e o
+                      // context que abriu o diálogo pode já ter sido desmontado
+                      // quando a resposta chega.
+                      final navigator = Navigator.of(dialogContext);
+                      final messenger = ScaffoldMessenger.of(context);
+
+                      final res = await _controller.upsertSetting(
+                        key: key,
+                        value: value,
+                        encrypted: encrypted,
+                        description: description,
                       );
-                      return;
-                    }
 
-                    // Resolvidos ANTES do await: salvar recarrega a lista, e o
-                    // context que abriu o diálogo pode já ter sido desmontado
-                    // quando a resposta chega.
-                    final navigator = Navigator.of(dialogContext);
-                    final messenger = ScaffoldMessenger.of(context);
-
-                    final res = await _controller.upsertSetting(
-                      key: key,
-                      value: value,
-                      encrypted: encrypted,
-                      description: description,
-                    );
-
-                    navigator.pop();
-                    messenger.showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          switch (res) {
+                      navigator.pop();
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Text(switch (res) {
                             Failure(:final error) =>
                               'Erro ao salvar: ${ErrorMessageMapper.map(error)}',
                             _ => 'Configuração salva com sucesso.',
-                          },
+                          }),
                         ),
-                      ),
-                    );
-                  },
-                ),
-              ],
-            );
-          },
-        );
-      },
+                      );
+                    },
+                  ),
+                ],
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -346,13 +348,11 @@ class _CoreSettingsPageState extends State<CoreSettingsPage> {
                 navigator.pop();
                 messenger.showSnackBar(
                   SnackBar(
-                    content: Text(
-                      switch (res) {
-                        Failure(:final error) =>
-                          'Erro ao excluir: ${ErrorMessageMapper.map(error)}',
-                        _ => 'Configuração excluída com sucesso.',
-                      },
-                    ),
+                    content: Text(switch (res) {
+                      Failure(:final error) =>
+                        'Erro ao excluir: ${ErrorMessageMapper.map(error)}',
+                      _ => 'Configuração excluída com sucesso.',
+                    }),
                   ),
                 );
               },

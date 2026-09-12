@@ -106,8 +106,9 @@ final class TreinamentoModule extends AppModule {
   }
 
   @override
-  List<GetItModule> routes() =>
-      [TreinamentoRoute(drawerBuilder: drawerBuilder)];
+  List<GetItModule> routes() => [
+    TreinamentoRoute(drawerBuilder: drawerBuilder),
+  ];
 
   /// Stub autenticado — o treinamento é do tenant logado.
   static AdminServiceClient _admin() =>

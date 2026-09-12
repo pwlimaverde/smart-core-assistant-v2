@@ -57,9 +57,9 @@ enum TipoEtapa {
   /// qualquer texto de 20 caracteres, e uma tela que quebra por causa de uma
   /// linha antiga é pior que uma coluna com o rótulo genérico.
   static TipoEtapa doCodigo(String codigo) => TipoEtapa.values.firstWhere(
-        (t) => t.codigo == codigo,
-        orElse: () => TipoEtapa.trabalho,
-      );
+    (t) => t.codigo == codigo,
+    orElse: () => TipoEtapa.trabalho,
+  );
 }
 
 /// Uma coluna do quadro.

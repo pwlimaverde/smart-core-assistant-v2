@@ -19,12 +19,12 @@ void main() {
   setUp(() => client = _MockAdminClient());
 
   PortaoConfiguracao portao() => PortaoConfiguracao(
-        consultar: ConsultarProgressoUsecase(
-          repository: ConsultarProgressoRepository(
-            datasource: ConsultarProgressoDatasource(client: client),
-          ),
-        ),
-      );
+    consultar: ConsultarProgressoUsecase(
+      repository: ConsultarProgressoRepository(
+        datasource: ConsultarProgressoDatasource(client: client),
+      ),
+    ),
+  );
 
   void respondeProgresso({required bool concluido, required int passo}) {
     when(() => client.getMyOnboardingProgress(any())).thenAnswer(
@@ -76,9 +76,9 @@ void main() {
   });
 
   test('consulta que falha não prende ninguém no roteiro', () async {
-    when(() => client.getMyOnboardingProgress(any())).thenAnswer(
-      (_) => falhaGrpc(proto.GrpcError.unavailable('fora do ar')),
-    );
+    when(
+      () => client.getMyOnboardingProgress(any()),
+    ).thenAnswer((_) => falhaGrpc(proto.GrpcError.unavailable('fora do ar')));
     final p = portao();
 
     await p.avaliar();

@@ -255,5 +255,6 @@ final class AppColors extends ThemeExtension<AppColors> {
 
 /// Açúcar para ler os tokens semânticos do tema ativo: `context.colors.accent`.
 extension AppColorsX on BuildContext {
-  AppColors get colors => Theme.of(this).extension<AppColors>() ?? AppColors.light;
+  AppColors get colors =>
+      Theme.of(this).extension<AppColors>() ?? AppColors.light;
 }

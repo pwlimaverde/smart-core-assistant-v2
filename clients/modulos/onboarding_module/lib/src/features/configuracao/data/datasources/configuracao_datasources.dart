@@ -119,9 +119,6 @@ final class ProgressoDatasource
         concluido: parameters.concluido,
       ),
     );
-    return ProgressoOnboarding(
-      passo: resp.passo,
-      concluido: resp.concluido,
-    );
+    return ProgressoOnboarding(passo: resp.passo, concluido: resp.concluido);
   }
 }

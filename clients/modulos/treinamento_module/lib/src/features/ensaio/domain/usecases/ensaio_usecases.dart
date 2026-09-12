@@ -6,8 +6,14 @@ import '../errors/ensaio_errors.dart';
 import '../model/ensaio.dart';
 import '../parameters/ensaio_parameters.dart';
 
-final class TestarPerguntaUsecase extends UsecaseBaseCallData<Ensaio, Ensaio,
-    TestarPerguntaParameters, EnsaioError> {
+final class TestarPerguntaUsecase
+    extends
+        UsecaseBaseCallData<
+          Ensaio,
+          Ensaio,
+          TestarPerguntaParameters,
+          EnsaioError
+        > {
   const TestarPerguntaUsecase({required super.repository});
 
   /// Ordena os trechos do mais parecido para o menos.
@@ -17,17 +23,18 @@ final class TestarPerguntaUsecase extends UsecaseBaseCallData<Ensaio, Ensaio,
   /// apresentação, não da consulta.
   @override
   ProcessData<Ensaio, Ensaio, TestarPerguntaParameters, EnsaioError>
-      get process => (data, _) => Success(
-            Ensaio(
-              resposta: data.resposta,
-              comportamentoAplicado: data.comportamentoAplicado,
-              trechos: List.of(data.trechos)
-                ..sort((a, b) => a.distancia.compareTo(b.distancia)),
-              confiabilidade: data.confiabilidade,
-              transferiria: data.transferiria,
-              fluxoTransferencia: data.fluxoTransferencia,
-            ),
-          );
+  get process =>
+      (data, _) => Success(
+        Ensaio(
+          resposta: data.resposta,
+          comportamentoAplicado: data.comportamentoAplicado,
+          trechos: List.of(data.trechos)
+            ..sort((a, b) => a.distancia.compareTo(b.distancia)),
+          confiabilidade: data.confiabilidade,
+          transferiria: data.transferiria,
+          fluxoTransferencia: data.fluxoTransferencia,
+        ),
+      );
 
   @override
   EnsaioError onUnexpected(Object e, StackTrace s) {

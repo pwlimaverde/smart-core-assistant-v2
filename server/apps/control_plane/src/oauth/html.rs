@@ -32,47 +32,139 @@ pub fn escapar(bruto: &str) -> String {
     saida
 }
 
+/// Tokens do `design_system_module`, transcritos.
+///
+/// Transcritos e não importados: o AS é Rust e serve HTML estático, sem acesso
+/// ao pacote Dart. O que se copia são **tokens** (paleta, raio, espaçamento) —
+/// copiar componentes é que criaria duas implementações para manter.
+///
+/// A paleta é a do produto: acento `gold` (#A98F71) sobre neutros `stone`, e o
+/// escuro quente (#14110F) em vez do cinza-azulado genérico. Antes desta tela
+/// usar a paleta, ela era a única superfície do produto que não parecia com
+/// ele — logo a que pede a senha.
 const ESTILO: &str = r#"<style>
-:root { color-scheme: light dark; }
+:root {
+  --gold: #A98F71; --gold-600: #8B7355; --gold-50: #F5EFE7;
+  --stone-900: #1C1917; --stone-700: #44403C; --stone-500: #78716C;
+  --stone-300: #D6D3D1; --stone-200: #E7E5E4; --stone-100: #F5F5F4;
+  --surface: #FFFFFF; --fundo: var(--stone-100);
+  --fg: var(--stone-900); --fg-muted: var(--stone-500); --borda: var(--stone-300);
+  --aviso: #D97706; --aviso-bg: rgba(217,119,6,.10);
+  --perigo: #DC2626; --perigo-bg: rgba(220,38,38,.10);
+  --r-sm: 6px; --r-md: 8px; --r-card: 10px; --r-panel: 16px;
+  --s-xs: 4px; --s-sm: 8px; --s-md: 16px; --s-lg: 24px; --s-xl: 32px;
+  color-scheme: light dark;
+}
 * { box-sizing: border-box; }
-body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0;
-       display: flex; align-items: center; justify-content: center;
-       min-height: 100vh; background: #f4f5f7; color: #14181f; padding: 24px; }
-.cartao { background: #fff; border-radius: 14px; padding: 32px; width: 100%;
-          max-width: 460px; box-shadow: 0 6px 28px rgba(0,0,0,.10); }
-h1 { font-size: 20px; margin: 0 0 4px; }
-p.sub { color: #5b6472; font-size: 14px; margin: 0 0 24px; line-height: 1.5; }
-label { display: block; font-size: 13px; font-weight: 600; margin: 14px 0 6px; }
-input[type=email], input[type=password] { width: 100%; padding: 11px 12px;
-    border: 1px solid #ccd2da; border-radius: 8px; font-size: 15px; }
-button { width: 100%; margin-top: 22px; padding: 12px; border: 0; border-radius: 8px;
-         background: #1d63ed; color: #fff; font-size: 15px; font-weight: 600; cursor: pointer; }
-button.secundario { background: transparent; color: #5b6472; margin-top: 10px;
-                    border: 1px solid #ccd2da; }
-.escopos { list-style: none; padding: 0; margin: 0; border: 1px solid #e3e6ea;
-           border-radius: 10px; }
-.escopos li { padding: 11px 14px; border-bottom: 1px solid #eef0f3; font-size: 14px;
-              display: flex; gap: 10px; align-items: flex-start; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  margin: 0; display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; background: var(--fundo); color: var(--fg);
+  padding: var(--s-md); line-height: 1.5;
+}
+.cartao {
+  background: var(--surface); border: 1px solid var(--borda);
+  border-radius: var(--r-panel); padding: var(--s-xl); width: 100%;
+  max-width: 460px; box-shadow: 0 1px 3px rgba(28,25,23,.06);
+}
+/* Marca: o losango do produto + o nome. Serve para reconhecer a tela num
+   piscar — que é exatamente o que distingue autorização de phishing. */
+.marca {
+  display: flex; align-items: center; gap: var(--s-sm);
+  margin-bottom: var(--s-lg); padding-bottom: var(--s-md);
+  border-bottom: 1px solid var(--stone-200);
+}
+.marca svg { flex: 0 0 auto; }
+.marca span { font-size: 14px; font-weight: 600; letter-spacing: .01em; }
+h1 { font-size: 20px; line-height: 1.3; margin: 0 0 var(--s-xs); font-weight: 650; }
+p.sub { color: var(--fg-muted); font-size: 14px; margin: 0 0 var(--s-lg); }
+label { display: block; font-size: 13px; font-weight: 600; margin: var(--s-md) 0 var(--s-xs); }
+input[type=email], input[type=password] {
+  width: 100%; padding: 11px 12px; border: 1px solid var(--borda);
+  border-radius: var(--r-md); font-size: 15px; background: var(--surface);
+  color: var(--fg);
+}
+input[type=email]:focus, input[type=password]:focus {
+  outline: none; border-color: var(--gold);
+  box-shadow: 0 0 0 3px rgba(169,143,113,.20);
+}
+button {
+  width: 100%; margin-top: var(--s-lg); padding: 12px; border: 0;
+  border-radius: var(--r-md); background: var(--gold-600); color: #fff;
+  font-size: 15px; font-weight: 600; cursor: pointer;
+}
+button:hover { background: var(--gold); }
+button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+button.secundario {
+  background: transparent; color: var(--fg-muted); margin-top: var(--s-sm);
+  border: 1px solid var(--borda);
+}
+button.secundario:hover { background: var(--stone-100); color: var(--fg); }
+.escopos {
+  list-style: none; padding: 0; margin: 0; border: 1px solid var(--borda);
+  border-radius: var(--r-card);
+}
+.escopos li {
+  padding: 11px 14px; border-bottom: 1px solid var(--stone-200); font-size: 14px;
+  display: flex; gap: var(--s-sm); align-items: flex-start;
+}
 .escopos li:last-child { border-bottom: 0; }
-.escopos input { margin-top: 3px; }
-.tag { font-size: 11px; font-weight: 700; color: #9a4b00; background: #ffedd5;
-       border-radius: 4px; padding: 1px 6px; margin-left: 6px; }
-.alerta { background: #fff4e5; border: 1px solid #ffd9a8; color: #7a4a00;
-          border-radius: 8px; padding: 12px 14px; font-size: 13px; line-height: 1.5;
-          margin-bottom: 18px; }
-.erro { background: #fdecec; border: 1px solid #f6c2c2; color: #8a1c1c;
-        border-radius: 8px; padding: 11px 14px; font-size: 13px; margin-bottom: 16px; }
-.destino { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
-           background: #f4f5f7; border-radius: 6px; padding: 2px 6px; }
-.rodape { margin-top: 20px; font-size: 12px; color: #7a8291; line-height: 1.5; }
+.escopos input { margin-top: 3px; accent-color: var(--gold-600); }
+.tag {
+  font-size: 11px; font-weight: 700; color: var(--aviso);
+  background: var(--aviso-bg); border-radius: var(--r-sm); padding: 1px 6px;
+  margin-left: var(--s-xs);
+}
+.alerta {
+  background: var(--aviso-bg); border: 1px solid rgba(217,119,6,.30);
+  color: var(--aviso); border-radius: var(--r-md); padding: 12px 14px;
+  font-size: 13px; margin-bottom: var(--s-md);
+}
+.erro {
+  background: var(--perigo-bg); border: 1px solid rgba(220,38,38,.30);
+  color: var(--perigo); border-radius: var(--r-md); padding: 11px 14px;
+  font-size: 13px; margin-bottom: var(--s-md);
+}
+.destino {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 13px;
+  background: var(--gold-50); border-radius: var(--r-sm); padding: 2px 6px;
+  word-break: break-all;
+}
+.rodape {
+  margin-top: var(--s-lg); padding-top: var(--s-md);
+  border-top: 1px solid var(--stone-200);
+  font-size: 12px; color: var(--fg-muted);
+}
+/* O fluxo do Claude no celular abre esta página num navegador pequeno. */
+@media (max-width: 420px) {
+  body { padding: var(--s-sm); align-items: flex-start; }
+  .cartao { padding: var(--s-lg) var(--s-md); border-radius: var(--r-card); }
+  h1 { font-size: 18px; }
+}
 @media (prefers-color-scheme: dark) {
-  body { background: #12151a; color: #e8eaee; }
-  .cartao { background: #1b1f26; box-shadow: none; }
-  input[type=email], input[type=password] { background: #12151a; color: #e8eaee; border-color: #333a45; }
-  .escopos { border-color: #333a45; } .escopos li { border-color: #262b33; }
-  .destino { background: #12151a; }
+  :root {
+    --surface: #1F1B18; --fundo: #14110F;
+    --fg: #F5EFE7; --fg-muted: #8B8175;
+    --borda: #3A342E; --stone-100: #25201C; --stone-200: #2B2622;
+    --gold-50: #25201C;
+  }
+  .cartao { box-shadow: none; }
+  button.secundario:hover { background: #25201C; }
 }
 </style>"#;
+
+/// Losango do produto, em SVG inline.
+///
+/// Inline, e não `<img src>`: o CSP é `default-src 'none'`, e afrouxá-lo por um
+/// logotipo seria mau negócio. SVG inline é parte do documento — não é recurso
+/// buscado, e não abre porta nenhuma.
+const MARCA: &str = r##"<div class="marca">
+<svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
+  <path d="M10 1.5 18.5 10 10 18.5 1.5 10Z" fill="none" stroke="#A98F71" stroke-width="1.6" stroke-linejoin="round"/>
+  <path d="M10 6.2 13.8 10 10 13.8 6.2 10Z" fill="#A98F71"/>
+</svg>
+<span>Smart Core Assistant</span>
+</div>"##;
 
 fn pagina(titulo: &str, corpo: &str) -> String {
     format!(
@@ -85,7 +177,7 @@ fn pagina(titulo: &str, corpo: &str) -> String {
 <title>{titulo}</title>
 {ESTILO}
 </head>
-<body><div class="cartao">{corpo}</div></body>
+<body><div class="cartao">{MARCA}{corpo}</div></body>
 </html>"#
     )
 }

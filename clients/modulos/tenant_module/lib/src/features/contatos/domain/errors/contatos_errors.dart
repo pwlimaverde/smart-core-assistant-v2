@@ -9,12 +9,24 @@ sealed class ContatosError extends AppError {
 final class ContatosAcessoNegado extends ContatosError
     with UnauthorizedFailure {
   const ContatosAcessoNegado()
-      : super('Você não tem permissão para ver os contatos.');
+    : super('Você não tem permissão para ver os contatos.');
+}
+
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [ContatosAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class ContatosSessaoExpirada extends ContatosError
+    with UnauthorizedFailure {
+  const ContatosSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
 }
 
 final class ContatosIndisponivel extends ContatosError with NetworkFailure {
   const ContatosIndisponivel()
-      : super('Não foi possível falar com o servidor. Tente de novo.');
+    : super('Não foi possível falar com o servidor. Tente de novo.');
 }
 
 final class ContatosInesperado extends ContatosError {

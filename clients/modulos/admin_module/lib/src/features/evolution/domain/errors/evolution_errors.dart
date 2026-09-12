@@ -19,6 +19,18 @@ final class EvolutionAcessoNegado extends EvolutionError
     : super('Somente o superusuário pode testar instâncias.');
 }
 
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [EvolutionAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class EvolutionSessaoExpirada extends EvolutionError
+    with UnauthorizedFailure {
+  const EvolutionSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
 final class EvolutionNaoEncontrado extends EvolutionError {
   const EvolutionNaoEncontrado() : super('Tenant sem instância configurada.');
 }

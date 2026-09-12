@@ -125,9 +125,9 @@ void main() {
   });
 
   testWidgets('sem material, convida a ensinar algo', (tester) async {
-    when(() => client.listMyTreinamentos(any())).thenAnswer(
-      (_) => respostaGrpc(proto.ListMyTreinamentosResponse()),
-    );
+    when(
+      () => client.listMyTreinamentos(any()),
+    ).thenAnswer((_) => respostaGrpc(proto.ListMyTreinamentosResponse()));
     registrar();
 
     await montar(tester);
@@ -137,9 +137,9 @@ void main() {
   });
 
   testWidgets('erro do servidor aparece na tela', (tester) async {
-    when(() => client.listMyTreinamentos(any())).thenAnswer(
-      (_) => falhaGrpc(proto.GrpcError.unavailable('fora do ar')),
-    );
+    when(
+      () => client.listMyTreinamentos(any()),
+    ).thenAnswer((_) => falhaGrpc(proto.GrpcError.unavailable('fora do ar')));
     registrar();
 
     await montar(tester);
@@ -149,9 +149,9 @@ void main() {
   });
 
   testWidgets('o diálogo de criação valida antes de enviar', (tester) async {
-    when(() => client.listMyTreinamentos(any())).thenAnswer(
-      (_) => respostaGrpc(proto.ListMyTreinamentosResponse()),
-    );
+    when(
+      () => client.listMyTreinamentos(any()),
+    ).thenAnswer((_) => respostaGrpc(proto.ListMyTreinamentosResponse()));
     registrar();
 
     await montar(tester);
@@ -169,9 +169,9 @@ void main() {
   });
 
   testWidgets('conteúdo vazio também é barrado', (tester) async {
-    when(() => client.listMyTreinamentos(any())).thenAnswer(
-      (_) => respostaGrpc(proto.ListMyTreinamentosResponse()),
-    );
+    when(
+      () => client.listMyTreinamentos(any()),
+    ).thenAnswer((_) => respostaGrpc(proto.ListMyTreinamentosResponse()));
     registrar();
 
     await montar(tester);
@@ -197,9 +197,9 @@ void main() {
   testWidgets('criar material fecha a janela e recarrega a lista', (
     tester,
   ) async {
-    when(() => client.listMyTreinamentos(any())).thenAnswer(
-      (_) => respostaGrpc(proto.ListMyTreinamentosResponse()),
-    );
+    when(
+      () => client.listMyTreinamentos(any()),
+    ).thenAnswer((_) => respostaGrpc(proto.ListMyTreinamentosResponse()));
     when(() => client.createMyTreinamento(any())).thenAnswer(
       (_) => respostaGrpc(
         proto.MyTreinamentoResponse(
@@ -239,9 +239,9 @@ void main() {
   testWidgets('erro ao criar fica dentro da janela, que não fecha', (
     tester,
   ) async {
-    when(() => client.listMyTreinamentos(any())).thenAnswer(
-      (_) => respostaGrpc(proto.ListMyTreinamentosResponse()),
-    );
+    when(
+      () => client.listMyTreinamentos(any()),
+    ).thenAnswer((_) => respostaGrpc(proto.ListMyTreinamentosResponse()));
     when(() => client.createMyTreinamento(any())).thenAnswer(
       (_) => falhaGrpc(proto.GrpcError.invalidArgument('tag já existe')),
     );
@@ -274,9 +274,9 @@ void main() {
     // O ponto do passo de revisão: é o texto da tela que vira vetor. Enviar o
     // original faria a revisão não valer nada.
     respondeCom();
-    when(() => client.finalizarMyTreinamento(any())).thenAnswer(
-      (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
-    );
+    when(
+      () => client.finalizarMyTreinamento(any()),
+    ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
     registrar();
 
     await montar(tester);
@@ -292,9 +292,11 @@ void main() {
     await tester.tap(find.text('Aceitar e treinar'));
     await tester.pumpAndSettle();
 
-    final enviado = verify(() => client.finalizarMyTreinamento(captureAny()))
-        .captured
-        .single as proto.FinalizarMyTreinamentoRequest;
+    final enviado =
+        verify(
+              () => client.finalizarMyTreinamento(captureAny()),
+            ).captured.single
+            as proto.FinalizarMyTreinamentoRequest;
     expect(enviado.conteudo, 'Abrimos de segunda a sábado.');
   });
 
@@ -321,9 +323,9 @@ void main() {
 
   testWidgets('remover pede confirmação e avisa o efeito', (tester) async {
     respondeCom();
-    when(() => client.removerMyTreinamento(any())).thenAnswer(
-      (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
-    );
+    when(
+      () => client.removerMyTreinamento(any()),
+    ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
     registrar();
 
     await montar(tester);

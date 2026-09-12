@@ -55,7 +55,8 @@ class _PainelPageState extends State<PainelPage> {
                   icone: Icons.link_off,
                   cor: Theme.of(context).colorScheme.error,
                   titulo: 'Uma conexão de WhatsApp caiu',
-                  detalhe: '${p.conexoesAtivas} de ${p.conexoesTotal} '
+                  detalhe:
+                      '${p.conexoesAtivas} de ${p.conexoesTotal} '
                       'conectadas. Sem conexão, mensagem nenhuma entra.',
                   rotuloAcao: 'Ver conexões',
                   aoAgir: () => context.go('/tenant/conexoes'),
@@ -68,7 +69,7 @@ class _PainelPageState extends State<PainelPage> {
                   detalhe: p.conexoesTotal == 0
                       ? 'Nenhum WhatsApp conectado ainda.'
                       : 'Nenhum departamento: a fila não tem para onde mandar '
-                          'as conversas que chegam.',
+                            'as conversas que chegam.',
                   rotuloAcao: p.conexoesTotal == 0
                       ? 'Conectar WhatsApp'
                       : 'Criar departamento',
@@ -79,10 +80,7 @@ class _PainelPageState extends State<PainelPage> {
                   ),
                 ),
               const SizedBox(height: AppSpacing.lg),
-              Text(
-                'Agora',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text('Agora', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: AppSpacing.sm),
               Wrap(
                 spacing: AppSpacing.md,
@@ -109,10 +107,7 @@ class _PainelPageState extends State<PainelPage> {
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),
-              Text(
-                'Estrutura',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
+              Text('Estrutura', style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: AppSpacing.sm),
               Wrap(
                 spacing: AppSpacing.md,
@@ -180,10 +175,9 @@ class _Aviso extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   detalhe,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: context.colors.fgMuted),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: context.colors.fgMuted,
+                  ),
                 ),
               ],
             ),
@@ -233,10 +227,9 @@ class _Numero extends StatelessWidget {
                 Expanded(
                   child: Text(
                     rotulo,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: context.colors.fgMuted),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: context.colors.fgMuted,
+                    ),
                   ),
                 ),
               ],
@@ -245,9 +238,9 @@ class _Numero extends StatelessWidget {
             Text(
               '$valor$sufixo',
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: destaque ? cor : null,
-                  ),
+                fontWeight: FontWeight.bold,
+                color: destaque ? cor : null,
+              ),
             ),
           ],
         ),

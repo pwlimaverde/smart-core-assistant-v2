@@ -16,8 +16,9 @@ FluxosError _inesperado(String operacao, Object e, StackTrace s) {
   return const FluxosInesperado();
 }
 
-final class ListarFluxosUsecase extends UsecaseBaseCallData<List<Fluxo>,
-    List<Fluxo>, NoParams, FluxosError> {
+final class ListarFluxosUsecase
+    extends
+        UsecaseBaseCallData<List<Fluxo>, List<Fluxo>, NoParams, FluxosError> {
   const ListarFluxosUsecase({required super.repository});
 
   @override
@@ -42,8 +43,9 @@ final class CriarFluxoUsecase
       _inesperado('criar fluxo', e, s);
 }
 
-final class AtualizarFluxoUsecase extends UsecaseBaseCallData<Unit, Unit,
-    AtualizarFluxoParameters, FluxosError> {
+final class AtualizarFluxoUsecase
+    extends
+        UsecaseBaseCallData<Unit, Unit, AtualizarFluxoParameters, FluxosError> {
   const AtualizarFluxoUsecase({required super.repository});
 
   @override
@@ -68,13 +70,25 @@ final class DesativarFluxoUsecase
       _inesperado('desativar fluxo', e, s);
 }
 
-final class ListarEtapasUsecase extends UsecaseBaseCallData<List<EtapaFluxo>,
-    List<EtapaFluxo>, FluxoIdParameters, FluxosError> {
+final class ListarEtapasUsecase
+    extends
+        UsecaseBaseCallData<
+          List<EtapaFluxo>,
+          List<EtapaFluxo>,
+          FluxoIdParameters,
+          FluxosError
+        > {
   const ListarEtapasUsecase({required super.repository});
 
   @override
-  ProcessData<List<EtapaFluxo>, List<EtapaFluxo>, FluxoIdParameters,
-      FluxosError> get process => (data, _) => Success(data);
+  ProcessData<
+    List<EtapaFluxo>,
+    List<EtapaFluxo>,
+    FluxoIdParameters,
+    FluxosError
+  >
+  get process =>
+      (data, _) => Success(data);
 
   @override
   FluxosError onUnexpected(Object e, StackTrace s) =>
@@ -94,8 +108,9 @@ final class CriarEtapaUsecase
       _inesperado('criar etapa', e, s);
 }
 
-final class AtualizarEtapaUsecase extends UsecaseBaseCallData<Unit, Unit,
-    AtualizarEtapaParameters, FluxosError> {
+final class AtualizarEtapaUsecase
+    extends
+        UsecaseBaseCallData<Unit, Unit, AtualizarEtapaParameters, FluxosError> {
   const AtualizarEtapaUsecase({required super.repository});
 
   @override

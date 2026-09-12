@@ -49,9 +49,7 @@ final class VouchersTab extends StatelessWidget {
         const SizedBox(height: 16),
         Expanded(
           child: vouchers.isEmpty
-              ? const Center(
-                  child: Text('Nenhum voucher criado até agora.'),
-                )
+              ? const Center(child: Text('Nenhum voucher criado até agora.'))
               : ListView.separated(
                   itemCount: vouchers.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
@@ -169,73 +167,73 @@ Future<void> _abrirCriacao(
     builder: (dialogContext) => DialogoComCampos(
       campos: [codigo, descricao, duracao, maxResgates],
       builder: (dialogContext) => StatefulBuilder(
-      builder: (dialogContext, setState) => AlertDialog(
-        title: const Text('Novo voucher'),
-        content: SizedBox(
-          width: 420,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: codigo,
-                  decoration: const InputDecoration(
-                    labelText: 'Código',
-                    helperText: 'Maiúsculas e minúsculas dão no mesmo.',
+        builder: (dialogContext, setState) => AlertDialog(
+          title: const Text('Novo voucher'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: codigo,
+                    decoration: const InputDecoration(
+                      labelText: 'Código',
+                      helperText: 'Maiúsculas e minúsculas dão no mesmo.',
+                    ),
+                    autofocus: true,
                   ),
-                  autofocus: true,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: descricao,
-                  decoration: const InputDecoration(
-                    labelText: 'Descrição (interna)',
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: descricao,
+                    decoration: const InputDecoration(
+                      labelText: 'Descrição (interna)',
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<int>(
-                  initialValue: planoId,
-                  decoration: const InputDecoration(labelText: 'Plano'),
-                  items: [
-                    for (final p in planos)
-                      DropdownMenuItem(value: p.id, child: Text(p.name)),
-                  ],
-                  onChanged: (v) => setState(() => planoId = v ?? planoId),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: duracao,
-                  decoration: const InputDecoration(
-                    labelText: 'Duração concedida (dias)',
-                    helperText: '180 ≈ 6 meses.',
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<int>(
+                    initialValue: planoId,
+                    decoration: const InputDecoration(labelText: 'Plano'),
+                    items: [
+                      for (final p in planos)
+                        DropdownMenuItem(value: p.id, child: Text(p.name)),
+                    ],
+                    onChanged: (v) => setState(() => planoId = v ?? planoId),
                   ),
-                  keyboardType: TextInputType.number,
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: maxResgates,
-                  decoration: const InputDecoration(
-                    labelText: 'Máximo de resgates',
-                    helperText: '0 = ilimitado (campanha aberta).',
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: duracao,
+                    decoration: const InputDecoration(
+                      labelText: 'Duração concedida (dias)',
+                      helperText: '180 ≈ 6 meses.',
+                    ),
+                    keyboardType: TextInputType.number,
                   ),
-                  keyboardType: TextInputType.number,
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: maxResgates,
+                    decoration: const InputDecoration(
+                      labelText: 'Máximo de resgates',
+                      helperText: '0 = ilimitado (campanha aberta).',
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ],
+              ),
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              child: const Text('Criar'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: const Text('Cancelar'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: const Text('Criar'),
-          ),
-        ],
       ),
-    ),
     ),
   );
 
@@ -257,12 +255,10 @@ Future<void> _abrirCriacao(
 
   messenger.showSnackBar(
     SnackBar(
-      content: Text(
-        switch (res) {
-          Success() => 'Voucher criado.',
-          Failure(:final error) => error.message,
-        },
-      ),
+      content: Text(switch (res) {
+        Success() => 'Voucher criado.',
+        Failure(:final error) => error.message,
+      }),
     ),
   );
 }
@@ -281,43 +277,43 @@ Future<void> _abrirRevogacao(
     builder: (dialogContext) => DialogoComCampos(
       campos: [motivo],
       builder: (dialogContext) => AlertDialog(
-      title: Text('Revogar ${voucher.codigo}?'),
-      content: SizedBox(
-        width: 420,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'O código deixa de ser aceito em novos cadastros. '
-              'As contas que já o resgataram continuam ativas até o fim do '
-              'período contratado.',
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: motivo,
-              decoration: const InputDecoration(
-                labelText: 'Motivo (fica no registro)',
+        title: Text('Revogar ${voucher.codigo}?'),
+        content: SizedBox(
+          width: 420,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'O código deixa de ser aceito em novos cadastros. '
+                'As contas que já o resgataram continuam ativas até o fim do '
+                'período contratado.',
               ),
-              autofocus: true,
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: Theme.of(context).colorScheme.error,
+              const SizedBox(height: 12),
+              TextField(
+                controller: motivo,
+                decoration: const InputDecoration(
+                  labelText: 'Motivo (fica no registro)',
+                ),
+                autofocus: true,
+              ),
+            ],
           ),
-          onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('Revogar'),
         ),
-      ],
-    ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Revogar'),
+          ),
+        ],
+      ),
     ),
   );
 
@@ -334,15 +330,13 @@ Future<void> _abrirRevogacao(
 
   messenger.showSnackBar(
     SnackBar(
-      content: Text(
-        switch (res) {
-          // `false` = já estava revogado. Não é erro, mas o superusuário
-          // precisa saber que o clique dele não mudou nada.
-          Success(:final value) =>
-            value ? 'Voucher revogado.' : 'Este voucher já estava revogado.',
-          Failure(:final error) => error.message,
-        },
-      ),
+      content: Text(switch (res) {
+        // `false` = já estava revogado. Não é erro, mas o superusuário
+        // precisa saber que o clique dele não mudou nada.
+        Success(:final value) =>
+          value ? 'Voucher revogado.' : 'Este voucher já estava revogado.',
+        Failure(:final error) => error.message,
+      }),
     ),
   );
 }

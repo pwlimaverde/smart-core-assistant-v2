@@ -188,10 +188,9 @@ final class CadastroErrorBanner extends StatelessWidget {
           Expanded(
             child: Text(
               message,
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: colors.danger),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: colors.danger),
             ),
           ),
         ],

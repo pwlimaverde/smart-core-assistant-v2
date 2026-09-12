@@ -29,8 +29,10 @@ final class _FakeDatasource<T, P extends Parameters>
 ConfirmarPagamentoUsecase _confirmarCom(ResultadoPagamento resultado) =>
     ConfirmarPagamentoUsecase(
       repository: ConfirmarPagamentoRepository(
-        datasource: _FakeDatasource<ResultadoPagamento,
-            ConfirmarPagamentoParameters>(valor: resultado),
+        datasource:
+            _FakeDatasource<ResultadoPagamento, ConfirmarPagamentoParameters>(
+              valor: resultado,
+            ),
       ),
     );
 
@@ -88,8 +90,7 @@ void main() {
 
       final res = await usecase(_paramsPagamento);
 
-      final valor =
-          (res as Success<ResultadoPagamento, CadastroError>).value;
+      final valor = (res as Success<ResultadoPagamento, CadastroError>).value;
       expect(valor.exigeRedirecionamento, isTrue);
     });
 
@@ -116,14 +117,17 @@ void main() {
       // com um botão de tentar de novo do que travar o usuário no passo 2.
       final usecase = IniciarCadastroUsecase(
         repository: IniciarCadastroRepository(
-          datasource: const _FakeDatasource<CadastroIniciado,
-              IniciarCadastroParameters>(
-            valor: CadastroIniciado(
-              tenantId: 't-1',
-              signupToken: '',
-              proximoPasso: 2,
-            ),
-          ),
+          datasource:
+              const _FakeDatasource<
+                CadastroIniciado,
+                IniciarCadastroParameters
+              >(
+                valor: CadastroIniciado(
+                  tenantId: 't-1',
+                  signupToken: '',
+                  proximoPasso: 2,
+                ),
+              ),
         ),
       );
 
@@ -141,27 +145,29 @@ void main() {
   });
 
   group('ListarProvedoresUsecase', () {
-    test('nenhuma forma de pagamento é indisponibilidade, não lista vazia',
-        () async {
-      // Sem provedor ninguém conclui o cadastro; a tela precisa dizer isso em
-      // vez de mostrar um espaço em branco.
-      final usecase = ListarProvedoresUsecase(
-        repository: ListarProvedoresRepository(
-          datasource:
-              const _FakeDatasource<List<ProvedorPagamento>, SemParametros>(
-            valor: <ProvedorPagamento>[],
+    test(
+      'nenhuma forma de pagamento é indisponibilidade, não lista vazia',
+      () async {
+        // Sem provedor ninguém conclui o cadastro; a tela precisa dizer isso em
+        // vez de mostrar um espaço em branco.
+        final usecase = ListarProvedoresUsecase(
+          repository: ListarProvedoresRepository(
+            datasource:
+                const _FakeDatasource<List<ProvedorPagamento>, SemParametros>(
+                  valor: <ProvedorPagamento>[],
+                ),
           ),
-        ),
-      );
+        );
 
-      final res = await usecase(const SemParametros());
+        final res = await usecase(const SemParametros());
 
-      expect(res, isA<Failure<List<ProvedorPagamento>, CadastroError>>());
-      expect(
-        (res as Failure<List<ProvedorPagamento>, CadastroError>).error,
-        isA<CadastroIndisponivel>(),
-      );
-    });
+        expect(res, isA<Failure<List<ProvedorPagamento>, CadastroError>>());
+        expect(
+          (res as Failure<List<ProvedorPagamento>, CadastroError>).error,
+          isA<CadastroIndisponivel>(),
+        );
+      },
+    );
   });
 
   group('tradução de falha do transporte', () {
@@ -203,14 +209,19 @@ void main() {
     });
 
     test('servidor fora do ar vira indisponibilidade', () async {
-      expect(await erroDe(GrpcError.unavailable()), isA<CadastroIndisponivel>());
+      expect(
+        await erroDe(GrpcError.unavailable()),
+        isA<CadastroIndisponivel>(),
+      );
     });
 
     test('exceção que não é do transporte vira inesperado', () async {
       // O que não vem do gRPC (um bug no mapeamento, por exemplo) nunca é
       // classificado por palpite.
-      expect(await erroDe(const FormatException('json')),
-          isA<CadastroInesperado>());
+      expect(
+        await erroDe(const FormatException('json')),
+        isA<CadastroInesperado>(),
+      );
     });
   });
 

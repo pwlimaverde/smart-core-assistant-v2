@@ -76,10 +76,7 @@ void main() {
       ..fluxos = fluxosDeTeste();
     registrar(gateway);
 
-    await montar(
-      tester,
-      drawer: const Drawer(child: Text('menu do tenant')),
-    );
+    await montar(tester, drawer: const Drawer(child: Text('menu do tenant')));
 
     expect(find.byTooltip('Open navigation menu'), findsOneWidget);
   });
@@ -97,11 +94,12 @@ void main() {
   });
 
   testWidgets('a conversa aparece na coluna em que está', (tester) async {
-    final gateway = FakeAtendimentoGateway(
-      fila: [atendimentoDeTeste(id: 1, etapaAtualId: 20)],
-    )
-      ..colunas = colunasDeTeste()
-      ..fluxos = fluxosDeTeste();
+    final gateway =
+        FakeAtendimentoGateway(
+            fila: [atendimentoDeTeste(id: 1, etapaAtualId: 20)],
+          )
+          ..colunas = colunasDeTeste()
+          ..fluxos = fluxosDeTeste();
     registrar(gateway);
 
     await montar(tester);
@@ -114,11 +112,12 @@ void main() {
   ) async {
     // Chegou antes de o fluxo existir, ou aponta para coluna já removida.
     // Escondê-la faria sumir atendimento de verdade.
-    final gateway = FakeAtendimentoGateway(
-      fila: [atendimentoDeTeste(id: 7, etapaAtualId: 999)],
-    )
-      ..colunas = colunasDeTeste()
-      ..fluxos = fluxosDeTeste();
+    final gateway =
+        FakeAtendimentoGateway(
+            fila: [atendimentoDeTeste(id: 7, etapaAtualId: 999)],
+          )
+          ..colunas = colunasDeTeste()
+          ..fluxos = fluxosDeTeste();
     registrar(gateway);
 
     await montar(tester);
@@ -156,11 +155,12 @@ void main() {
   testWidgets('o menu de estado não oferece o estado atual', (tester) async {
     // Oferecer "assumir" para quem já está atendendo seria um clique que não
     // muda nada.
-    final gateway = FakeAtendimentoGateway(
-      fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
-    )
-      ..colunas = colunasDeTeste()
-      ..fluxos = fluxosDeTeste();
+    final gateway =
+        FakeAtendimentoGateway(
+            fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
+          )
+          ..colunas = colunasDeTeste()
+          ..fluxos = fluxosDeTeste();
     registrar(gateway);
 
     await montar(tester);
@@ -175,11 +175,12 @@ void main() {
   });
 
   testWidgets('escolher um estado manda ao servidor', (tester) async {
-    final gateway = FakeAtendimentoGateway(
-      fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
-    )
-      ..colunas = colunasDeTeste()
-      ..fluxos = fluxosDeTeste();
+    final gateway =
+        FakeAtendimentoGateway(
+            fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
+          )
+          ..colunas = colunasDeTeste()
+          ..fluxos = fluxosDeTeste();
     registrar(gateway);
 
     await montar(tester);

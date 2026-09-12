@@ -8,7 +8,7 @@ sealed class IntentsError extends AppError {
 
 final class IntentsAcessoNegado extends IntentsError with UnauthorizedFailure {
   const IntentsAcessoNegado()
-      : super('Você não tem permissão para editar as intenções.');
+    : super('Você não tem permissão para editar as intenções.');
 }
 
 /// Sessão morta — e NÃO falta de permissão.
@@ -21,24 +21,24 @@ final class IntentsAcessoNegado extends IntentsError with UnauthorizedFailure {
 final class IntentsSessaoExpirada extends IntentsError
     with UnauthorizedFailure {
   const IntentsSessaoExpirada()
-      : super('Sua sessão expirou. Entre de novo para continuar.');
+    : super('Sua sessão expirou. Entre de novo para continuar.');
 }
 
 final class IntentNaoEncontrada extends IntentsError {
   const IntentNaoEncontrada()
-      : super('Esta intenção não existe mais. Atualize a lista.');
+    : super('Esta intenção não existe mais. Atualize a lista.');
 }
 
 /// Recusa do servidor — a mensagem vem dele. É por aqui que chega a duplicata
 /// de tag+grupo, que tem `UNIQUE` no banco.
 final class IntentsRecusado extends IntentsError with ValidationFailure {
   const IntentsRecusado([String? mensagem])
-      : super(mensagem ?? 'Verifique os dados informados.');
+    : super(mensagem ?? 'Verifique os dados informados.');
 }
 
 final class IntentsIndisponivel extends IntentsError with NetworkFailure {
   const IntentsIndisponivel()
-      : super('Não foi possível falar com o servidor. Tente de novo.');
+    : super('Não foi possível falar com o servidor. Tente de novo.');
 }
 
 final class IntentsInesperado extends IntentsError {

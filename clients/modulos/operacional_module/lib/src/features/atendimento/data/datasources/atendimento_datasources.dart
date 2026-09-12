@@ -189,7 +189,8 @@ final class DefinirBotDaConversaDatasource
   }
 }
 
-final class CriarNotaDatasource implements Datasource<Unit, CriarNotaParameters> {
+final class CriarNotaDatasource
+    implements Datasource<Unit, CriarNotaParameters> {
   final AtendimentoGateway _gateway;
 
   const CriarNotaDatasource({required this._gateway});

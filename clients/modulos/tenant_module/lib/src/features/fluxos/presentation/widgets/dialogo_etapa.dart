@@ -29,15 +29,13 @@ Color corDoHex(String hex) {
 Future<void> abrirCriacaoEtapa(
   BuildContext context,
   EtapasFluxoController controller,
-) =>
-    _abrirFormulario(context: context, controller: controller);
+) => _abrirFormulario(context: context, controller: controller);
 
 Future<void> abrirEdicaoEtapa(
   BuildContext context,
   EtapaFluxo item,
   EtapasFluxoController controller,
-) =>
-    _abrirFormulario(context: context, controller: controller, item: item);
+) => _abrirFormulario(context: context, controller: controller, item: item);
 
 Future<void> _abrirFormulario({
   required BuildContext context,
@@ -89,10 +87,9 @@ Future<void> _abrirFormulario({
                   // onde a conversa entra e quando o atendimento termina.
                   Text(
                     tipo.explicacao,
-                    style: Theme.of(stateCtx)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: stateCtx.colors.fgMuted),
+                    style: Theme.of(stateCtx).textTheme.bodySmall?.copyWith(
+                      color: stateCtx.colors.fgMuted,
+                    ),
                   ),
                   if (editando) ...[
                     const SizedBox(height: AppSpacing.md),
@@ -103,10 +100,7 @@ Future<void> _abrirFormulario({
                     ),
                   ],
                   const SizedBox(height: AppSpacing.md),
-                  Text(
-                    'Cor',
-                    style: Theme.of(stateCtx).textTheme.bodySmall,
-                  ),
+                  Text('Cor', style: Theme.of(stateCtx).textTheme.bodySmall),
                   const SizedBox(height: AppSpacing.xs),
                   Wrap(
                     spacing: AppSpacing.sm,
@@ -129,8 +123,9 @@ Future<void> _abrirFormulario({
           ),
           actions: [
             TextButton(
-              onPressed:
-                  salvando ? null : () => Navigator.of(dialogContext).pop(),
+              onPressed: salvando
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancelar'),
             ),
             PrimaryButton(
@@ -141,7 +136,9 @@ Future<void> _abrirFormulario({
                   ? null
                   : () async {
                       if (nome.text.trim().isEmpty) {
-                        setStateDialog(() => erro = 'Informe o nome da coluna.');
+                        setStateDialog(
+                          () => erro = 'Informe o nome da coluna.',
+                        );
                         return;
                       }
 
@@ -217,14 +214,12 @@ Future<void> abrirRemocaoEtapa(
 
   messenger.showSnackBar(
     SnackBar(
-      content: Text(
-        switch (res) {
-          Success() => 'Coluna removida.',
-          // As recusas do servidor (coluna ocupada, última fila de entrada)
-          // chegam aqui com o motivo escrito.
-          Failure(:final error) => error.message,
-        },
-      ),
+      content: Text(switch (res) {
+        Success() => 'Coluna removida.',
+        // As recusas do servidor (coluna ocupada, última fila de entrada)
+        // chegam aqui com o motivo escrito.
+        Failure(:final error) => error.message,
+      }),
     ),
   );
 }
@@ -279,7 +274,9 @@ class _Erro extends StatelessWidget {
       children: [
         Icon(Icons.error_outline, size: 18, color: cor),
         const SizedBox(width: AppSpacing.xs),
-        Expanded(child: Text(mensagem, style: TextStyle(color: cor))),
+        Expanded(
+          child: Text(mensagem, style: TextStyle(color: cor)),
+        ),
       ],
     );
   }

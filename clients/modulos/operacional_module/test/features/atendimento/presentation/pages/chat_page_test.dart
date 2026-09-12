@@ -46,21 +46,23 @@ void main() {
   }
 
   testWidgets('mostra a conversa e a ficha lado a lado', (tester) async {
-    final gateway = FakeAtendimentoGateway(
-      thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 8, 1))],
-    )..ficha = const FichaAtendimento(
-        catalogo: [],
-        aplicadas: [
-          Etiqueta(
-            id: 1,
-            nome: 'urgente',
-            cor: '#ef4444',
-            descricao: '',
-            ativo: true,
-          ),
-        ],
-        notas: [],
-      );
+    final gateway =
+        FakeAtendimentoGateway(
+            thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 8, 1))],
+          )
+          ..ficha = const FichaAtendimento(
+            catalogo: [],
+            aplicadas: [
+              Etiqueta(
+                id: 1,
+                nome: 'urgente',
+                cor: '#ef4444',
+                descricao: '',
+                ativo: true,
+              ),
+            ],
+            notas: [],
+          );
 
     await montar(tester, gateway);
 

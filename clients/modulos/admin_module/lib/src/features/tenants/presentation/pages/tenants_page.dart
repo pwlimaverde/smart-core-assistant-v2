@@ -357,145 +357,148 @@ class _TenantsPageState extends State<TenantsPage> {
           phoneController,
         ],
         builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (dialogContext, setDialogState) => AlertDialog(
-          title: Text(isNew ? 'Novo Tenant' : 'Editar Tenant'),
-          content: SizedBox(
-            width: 500,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  AppTextField(
-                    label: 'Nome da Empresa',
-                    hint: 'ex: Minha Empresa LTDA',
-                    controller: nameController,
-                  ),
-                  const SizedBox(height: 16),
-                  AppTextField(
-                    label: 'Slug (identificador único)',
-                    hint: 'ex: minha-empresa',
-                    controller: slugController,
-                  ),
-                  const SizedBox(height: 16),
-                  AppTextField(
-                    label: 'ID do Dono (Owner ID)',
-                    hint: 'ex: 123',
-                    controller: ownerController,
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  AppTextField(
-                    label: 'E-mail de Contato',
-                    hint: 'ex: contato@empresa.com',
-                    controller: emailController,
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  const SizedBox(height: 16),
-                  AppTextField(
-                    label: 'Telefone',
-                    hint: 'ex: +5511999999999',
-                    controller: phoneController,
-                    keyboardType: TextInputType.phone,
-                  ),
-                  if (erroSalvar case final msg?) ...[
-                    const SizedBox(height: 12),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          size: 18,
-                          color: Theme.of(dialogContext).colorScheme.error,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            msg,
-                            style: TextStyle(
+          return StatefulBuilder(
+            builder: (dialogContext, setDialogState) => AlertDialog(
+              title: Text(isNew ? 'Novo Tenant' : 'Editar Tenant'),
+              content: SizedBox(
+                width: 500,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AppTextField(
+                        label: 'Nome da Empresa',
+                        hint: 'ex: Minha Empresa LTDA',
+                        controller: nameController,
+                      ),
+                      const SizedBox(height: 16),
+                      AppTextField(
+                        label: 'Slug (identificador único)',
+                        hint: 'ex: minha-empresa',
+                        controller: slugController,
+                      ),
+                      const SizedBox(height: 16),
+                      AppTextField(
+                        label: 'ID do Dono (Owner ID)',
+                        hint: 'ex: 123',
+                        controller: ownerController,
+                        keyboardType: TextInputType.number,
+                      ),
+                      const SizedBox(height: 16),
+                      AppTextField(
+                        label: 'E-mail de Contato',
+                        hint: 'ex: contato@empresa.com',
+                        controller: emailController,
+                        keyboardType: TextInputType.emailAddress,
+                      ),
+                      const SizedBox(height: 16),
+                      AppTextField(
+                        label: 'Telefone',
+                        hint: 'ex: +5511999999999',
+                        controller: phoneController,
+                        keyboardType: TextInputType.phone,
+                      ),
+                      if (erroSalvar case final msg?) ...[
+                        const SizedBox(height: 12),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              size: 18,
                               color: Theme.of(dialogContext).colorScheme.error,
                             ),
-                          ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                msg,
+                                style: TextStyle(
+                                  color: Theme.of(
+                                    dialogContext,
+                                  ).colorScheme.error,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
-                    ),
-                  ],
-                ],
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancelar'),
-            ),
-            PrimaryButton(
-              label: 'Salvar',
-              expand: false,
-              onPressed: () async {
-                // Resolvido antes do await: salvar recarrega a lista.
-                final navigator = Navigator.of(dialogContext);
-                final name = nameController.text.trim();
-                final slug = slugController.text.trim();
-                final ownerStr = ownerController.text.trim();
-                final email = emailController.text.trim();
-                final phone = phoneController.text.trim();
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext),
+                  child: const Text('Cancelar'),
+                ),
+                PrimaryButton(
+                  label: 'Salvar',
+                  expand: false,
+                  onPressed: () async {
+                    // Resolvido antes do await: salvar recarrega a lista.
+                    final navigator = Navigator.of(dialogContext);
+                    final name = nameController.text.trim();
+                    final slug = slugController.text.trim();
+                    final ownerStr = ownerController.text.trim();
+                    final email = emailController.text.trim();
+                    final phone = phoneController.text.trim();
 
-                if (name.isEmpty ||
-                    slug.isEmpty ||
-                    ownerStr.isEmpty ||
-                    email.isEmpty) {
-                  setDialogState(
-                    () => erroSalvar = 'Preencha todos os campos obrigatórios.',
-                  );
-                  return;
-                }
-                final ownerId = int.tryParse(ownerStr);
-                if (ownerId == null) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'O ID do Dono deve ser um número inteiro válido.',
-                      ),
-                    ),
-                  );
-                  return;
-                }
+                    if (name.isEmpty ||
+                        slug.isEmpty ||
+                        ownerStr.isEmpty ||
+                        email.isEmpty) {
+                      setDialogState(
+                        () => erroSalvar =
+                            'Preencha todos os campos obrigatórios.',
+                      );
+                      return;
+                    }
+                    final ownerId = int.tryParse(ownerStr);
+                    if (ownerId == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'O ID do Dono deve ser um número inteiro válido.',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
 
-                final ReturnSuccessOrError res;
-                if (isNew) {
-                  res = await _controller.createTenant(
-                    name: name,
-                    slug: slug,
-                    ownerId: ownerId,
-                    email: email,
-                    phone: phone,
-                  );
-                } else {
-                  res = await _controller.updateTenant(
-                    id: tenant.id,
-                    name: name,
-                    slug: slug,
-                    ownerId: ownerId,
-                    email: email,
-                    phone: phone,
-                  );
-                }
+                    final ReturnSuccessOrError res;
+                    if (isNew) {
+                      res = await _controller.createTenant(
+                        name: name,
+                        slug: slug,
+                        ownerId: ownerId,
+                        email: email,
+                        phone: phone,
+                      );
+                    } else {
+                      res = await _controller.updateTenant(
+                        id: tenant.id,
+                        name: name,
+                        slug: slug,
+                        ownerId: ownerId,
+                        email: email,
+                        phone: phone,
+                      );
+                    }
 
-                if (res is Success) {
-                  navigator.pop();
-                } else if (res case Failure(:final error)) {
-                  setDialogState(() {
-                    erroSalvar =
-                        'Erro ao salvar: ${ErrorMessageMapper.map(error)}';
-                  });
-                }
-              },
+                    if (res is Success) {
+                      navigator.pop();
+                    } else if (res case Failure(:final error)) {
+                      setDialogState(() {
+                        erroSalvar =
+                            'Erro ao salvar: ${ErrorMessageMapper.map(error)}';
+                      });
+                    }
+                  },
+                ),
+              ],
             ),
-          ],
-        ),
-        );
-      },
+          );
+        },
       ),
     );
   }

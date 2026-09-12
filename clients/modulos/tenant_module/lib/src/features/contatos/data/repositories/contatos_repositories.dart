@@ -7,8 +7,9 @@ import '../../domain/errors/contatos_errors.dart';
 import '../../domain/model/contato.dart';
 import '../../domain/parameters/contatos_parameters.dart';
 
-final class ListarContatosRepository extends RepositoryBase<List<Contato>,
-    ListarContatosParameters, ContatosError> {
+final class ListarContatosRepository
+    extends
+        RepositoryBase<List<Contato>, ListarContatosParameters, ContatosError> {
   const ListarContatosRepository({required super.datasource});
 
   @override
@@ -20,7 +21,10 @@ final class ListarContatosRepository extends RepositoryBase<List<Contato>,
       error: e,
     );
     return switch (kind) {
-      GrpcFailureKind.unauthenticated ||
+      // Separados de propósito: sessão expirada não é falta de
+      // permissão, e juntar as duas manda a pessoa caçar um acesso
+      // que ela já tem.
+      GrpcFailureKind.unauthenticated => const ContatosSessaoExpirada(),
       GrpcFailureKind.permissionDenied => const ContatosAcessoNegado(),
       GrpcFailureKind.unknown => const ContatosInesperado(),
       _ => const ContatosIndisponivel(),

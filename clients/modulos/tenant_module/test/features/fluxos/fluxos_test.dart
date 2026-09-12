@@ -59,21 +59,16 @@ void main() {
   setUp(() => client = _MockAdminClient());
   tearDown(() => getIt.reset());
 
-  Fluxo fluxoCom({
-    bool ativo = true,
-    int etapas = 4,
-    int abertos = 0,
-  }) =>
-      Fluxo(
-        id: 1,
-        departamentoId: 1,
-        departamentoNome: 'Suporte',
-        nome: 'Padrão',
-        descricao: '',
-        ativo: ativo,
-        etapas: etapas,
-        atendimentosAbertos: abertos,
-      );
+  Fluxo fluxoCom({bool ativo = true, int etapas = 4, int abertos = 0}) => Fluxo(
+    id: 1,
+    departamentoId: 1,
+    departamentoNome: 'Suporte',
+    nome: 'Padrão',
+    descricao: '',
+    ativo: ativo,
+    etapas: etapas,
+    atendimentosAbertos: abertos,
+  );
 
   group('regras do fluxo', () {
     test('quadro sem coluna é sinalizado', () {
@@ -126,16 +121,15 @@ void main() {
     bool ativo = true,
     int etapas = 4,
     int abertos = 0,
-  }) =>
-      proto.MyFluxo(
-        id: id,
-        departamentoId: 1,
-        departamentoNome: 'Suporte',
-        nome: nome,
-        ativo: ativo,
-        etapas: etapas,
-        atendimentosAbertos: abertos,
-      );
+  }) => proto.MyFluxo(
+    id: id,
+    departamentoId: 1,
+    departamentoNome: 'Suporte',
+    nome: nome,
+    ativo: ativo,
+    etapas: etapas,
+    atendimentosAbertos: abertos,
+  );
 
   proto.MyEtapaFluxo pbEtapa({
     int id = 1,
@@ -143,16 +137,15 @@ void main() {
     String tipo = 'fila',
     int ordem = 1,
     String cor = '#6B7280',
-  }) =>
-      proto.MyEtapaFluxo(
-        id: id,
-        fluxoId: 1,
-        nome: nome,
-        ordem: ordem,
-        cor: cor,
-        tipoEtapa: tipo,
-        ativo: true,
-      );
+  }) => proto.MyEtapaFluxo(
+    id: id,
+    fluxoId: 1,
+    nome: nome,
+    ordem: ordem,
+    cor: cor,
+    tipoEtapa: tipo,
+    ativo: true,
+  );
 
   void respondeDepartamentos() {
     when(() => client.listMyDepartamentos(any())).thenAnswer(
@@ -165,66 +158,66 @@ void main() {
         ),
       ),
     );
-    when(() => client.listMyAtendentes(any())).thenAnswer(
-      (_) => respostaGrpc(proto.ListMyAtendentesResponse()),
-    );
+    when(
+      () => client.listMyAtendentes(any()),
+    ).thenAnswer((_) => respostaGrpc(proto.ListMyAtendentesResponse()));
   }
 
   FluxosController criarControllerDeFluxos() => FluxosController(
-        listar: ListarFluxosUsecase(
-          repository: ListarFluxosRepository(
-            datasource: ListarFluxosDatasource(client: client),
-          ),
-        ),
-        criar: CriarFluxoUsecase(
-          repository: CriarFluxoRepository(
-            datasource: CriarFluxoDatasource(client: client),
-          ),
-        ),
-        atualizar: AtualizarFluxoUsecase(
-          repository: AtualizarFluxoRepository(
-            datasource: AtualizarFluxoDatasource(client: client),
-          ),
-        ),
-        desativar: DesativarFluxoUsecase(
-          repository: DesativarFluxoRepository(
-            datasource: DesativarFluxoDatasource(client: client),
-          ),
-        ),
-        equipe: CarregarEquipeUsecase(
-          repository: CarregarEquipeRepository(
-            datasource: CarregarEquipeDatasource(client: client),
-          ),
-        ),
-      );
+    listar: ListarFluxosUsecase(
+      repository: ListarFluxosRepository(
+        datasource: ListarFluxosDatasource(client: client),
+      ),
+    ),
+    criar: CriarFluxoUsecase(
+      repository: CriarFluxoRepository(
+        datasource: CriarFluxoDatasource(client: client),
+      ),
+    ),
+    atualizar: AtualizarFluxoUsecase(
+      repository: AtualizarFluxoRepository(
+        datasource: AtualizarFluxoDatasource(client: client),
+      ),
+    ),
+    desativar: DesativarFluxoUsecase(
+      repository: DesativarFluxoRepository(
+        datasource: DesativarFluxoDatasource(client: client),
+      ),
+    ),
+    equipe: CarregarEquipeUsecase(
+      repository: CarregarEquipeRepository(
+        datasource: CarregarEquipeDatasource(client: client),
+      ),
+    ),
+  );
 
   EtapasFluxoController criarControllerDeEtapas() => EtapasFluxoController(
-        listar: ListarEtapasUsecase(
-          repository: ListarEtapasRepository(
-            datasource: ListarEtapasDatasource(client: client),
-          ),
-        ),
-        criar: CriarEtapaUsecase(
-          repository: CriarEtapaRepository(
-            datasource: CriarEtapaDatasource(client: client),
-          ),
-        ),
-        atualizar: AtualizarEtapaUsecase(
-          repository: AtualizarEtapaRepository(
-            datasource: AtualizarEtapaDatasource(client: client),
-          ),
-        ),
-        desativar: DesativarEtapaUsecase(
-          repository: DesativarEtapaRepository(
-            datasource: DesativarEtapaDatasource(client: client),
-          ),
-        ),
-        mover: MoverEtapaUsecase(
-          repository: MoverEtapaRepository(
-            datasource: MoverEtapaDatasource(client: client),
-          ),
-        ),
-      );
+    listar: ListarEtapasUsecase(
+      repository: ListarEtapasRepository(
+        datasource: ListarEtapasDatasource(client: client),
+      ),
+    ),
+    criar: CriarEtapaUsecase(
+      repository: CriarEtapaRepository(
+        datasource: CriarEtapaDatasource(client: client),
+      ),
+    ),
+    atualizar: AtualizarEtapaUsecase(
+      repository: AtualizarEtapaRepository(
+        datasource: AtualizarEtapaDatasource(client: client),
+      ),
+    ),
+    desativar: DesativarEtapaUsecase(
+      repository: DesativarEtapaRepository(
+        datasource: DesativarEtapaDatasource(client: client),
+      ),
+    ),
+    mover: MoverEtapaUsecase(
+      repository: MoverEtapaRepository(
+        datasource: MoverEtapaDatasource(client: client),
+      ),
+    ),
+  );
 
   void registrarSessao() {
     final auth = _MockAuthService();
@@ -299,8 +292,10 @@ void main() {
       await montar(tester, const FluxosPage());
       await tester.pumpAndSettle();
 
-      expect(_botaoDeTooltip(tester, 'Tem conversa em aberto neste fluxo'),
-          isNull);
+      expect(
+        _botaoDeTooltip(tester, 'Tem conversa em aberto neste fluxo'),
+        isNull,
+      );
     });
 
     testWidgets('conta sem fluxo explica o que falta', (tester) async {
@@ -314,9 +309,9 @@ void main() {
     });
 
     testWidgets('erro do servidor vira tela de erro', (tester) async {
-      when(() => client.listMyFluxos(any())).thenAnswer(
-        (_) => falhaGrpc(proto.GrpcError.unavailable('fora do ar')),
-      );
+      when(
+        () => client.listMyFluxos(any()),
+      ).thenAnswer((_) => falhaGrpc(proto.GrpcError.unavailable('fora do ar')));
       respondeDepartamentos();
       registrar();
 
@@ -379,9 +374,9 @@ void main() {
       await tester.tap(find.text('Salvar'));
       await tester.pumpAndSettle();
 
-      final enviado = verify(() => client.createMyFluxo(captureAny()))
-          .captured
-          .single as proto.CreateMyFluxoRequest;
+      final enviado =
+          verify(() => client.createMyFluxo(captureAny())).captured.single
+              as proto.CreateMyFluxoRequest;
       expect(enviado.nome, 'Comercial');
       expect(enviado.departamentoId, 1);
       // Uma na montagem, outra depois de criar.
@@ -418,9 +413,9 @@ void main() {
       // Mover um fluxo de departamento mudaria o destino de conversas já em
       // andamento — isso não é edição de cadastro.
       responde([pbFluxo()]);
-      when(() => client.updateMyFluxo(any())).thenAnswer(
-        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
-      );
+      when(
+        () => client.updateMyFluxo(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
       registrar();
 
       await montar(tester, const FluxosPage());
@@ -438,18 +433,18 @@ void main() {
       await tester.tap(find.text('Salvar'));
       await tester.pumpAndSettle();
 
-      final enviado = verify(() => client.updateMyFluxo(captureAny()))
-          .captured
-          .single as proto.UpdateMyFluxoRequest;
+      final enviado =
+          verify(() => client.updateMyFluxo(captureAny())).captured.single
+              as proto.UpdateMyFluxoRequest;
       expect(enviado.nome, 'Padrão renomeado');
       expect(enviado.ativo, isTrue);
     });
 
     testWidgets('desativar confirma antes e avisa o resultado', (tester) async {
       responde([pbFluxo()]);
-      when(() => client.desativarMyFluxo(any())).thenAnswer(
-        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
-      );
+      when(
+        () => client.desativarMyFluxo(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
       registrar();
 
       await montar(tester, const FluxosPage());
@@ -457,8 +452,10 @@ void main() {
 
       await tester.tap(find.byTooltip('Desativar'));
       await tester.pumpAndSettle();
-      expect(find.textContaining('para de receber conversas novas'),
-          findsOneWidget);
+      expect(
+        find.textContaining('para de receber conversas novas'),
+        findsOneWidget,
+      );
 
       await tester.tap(find.widgetWithText(FilledButton, 'Desativar'));
       await tester.pumpAndSettle();
@@ -485,15 +482,15 @@ void main() {
     testWidgets('sem departamento nenhum, a janela diz o que fazer antes', (
       tester,
     ) async {
-      when(() => client.listMyFluxos(any())).thenAnswer(
-        (_) => respostaGrpc(proto.ListMyFluxosResponse()),
-      );
-      when(() => client.listMyDepartamentos(any())).thenAnswer(
-        (_) => respostaGrpc(proto.ListMyDepartamentosResponse()),
-      );
-      when(() => client.listMyAtendentes(any())).thenAnswer(
-        (_) => respostaGrpc(proto.ListMyAtendentesResponse()),
-      );
+      when(
+        () => client.listMyFluxos(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.ListMyFluxosResponse()));
+      when(
+        () => client.listMyDepartamentos(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.ListMyDepartamentosResponse()));
+      when(
+        () => client.listMyAtendentes(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.ListMyAtendentesResponse()));
       registrar();
 
       await montar(tester, const FluxosPage());
@@ -523,10 +520,10 @@ void main() {
     }
 
     List<proto.MyEtapaFluxo> tresEtapas() => [
-          pbEtapa(),
-          pbEtapa(id: 2, nome: 'Trabalhando', tipo: 'trabalho', ordem: 2),
-          pbEtapa(id: 3, nome: 'Fechado', tipo: 'finalizacao', ordem: 3),
-        ];
+      pbEtapa(),
+      pbEtapa(id: 2, nome: 'Trabalhando', tipo: 'trabalho', ordem: 2),
+      pbEtapa(id: 3, nome: 'Fechado', tipo: 'finalizacao', ordem: 3),
+    ];
 
     testWidgets('lista as colunas na ordem do quadro', (tester) async {
       responde(tresEtapas());
@@ -557,9 +554,9 @@ void main() {
 
     testWidgets('mover manda a direção e recarrega', (tester) async {
       responde(tresEtapas());
-      when(() => client.moverMyEtapaFluxo(any())).thenAnswer(
-        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
-      );
+      when(
+        () => client.moverMyEtapaFluxo(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
       registrar();
 
       await montar(tester, const EtapasFluxoPage(fluxoId: 1));
@@ -568,9 +565,9 @@ void main() {
       await tester.tap(find.byTooltip('Mover para cima').last);
       await tester.pumpAndSettle();
 
-      final enviado = verify(() => client.moverMyEtapaFluxo(captureAny()))
-          .captured
-          .single as proto.MoverMyEtapaFluxoRequest;
+      final enviado =
+          verify(() => client.moverMyEtapaFluxo(captureAny())).captured.single
+              as proto.MoverMyEtapaFluxoRequest;
       expect(enviado.id, 3);
       expect(enviado.paraCima, isTrue);
       verify(() => client.listMyEtapasFluxo(any())).called(2);
@@ -580,9 +577,9 @@ void main() {
       // `sucesso: false` é "já está na ponta", não falha: recarregar por isso
       // seria uma ida ao servidor para redesenhar a mesma tela.
       responde(tresEtapas());
-      when(() => client.moverMyEtapaFluxo(any())).thenAnswer(
-        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: false)),
-      );
+      when(
+        () => client.moverMyEtapaFluxo(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: false)));
       registrar();
 
       await montar(tester, const EtapasFluxoPage(fluxoId: 1));
@@ -628,9 +625,9 @@ void main() {
       await tester.tap(find.text('Salvar'));
       await tester.pumpAndSettle();
 
-      final enviado = verify(() => client.createMyEtapaFluxo(captureAny()))
-          .captured
-          .single as proto.CreateMyEtapaFluxoRequest;
+      final enviado =
+          verify(() => client.createMyEtapaFluxo(captureAny())).captured.single
+              as proto.CreateMyEtapaFluxoRequest;
       expect(enviado.nome, 'Aguardando NF');
       expect(enviado.tipoEtapa, 'trabalho');
       expect(enviado.fluxoId, 1);
@@ -697,14 +694,13 @@ void main() {
       verifyNever(() => client.desativarMyEtapaFluxo(any()));
     });
 
-
     testWidgets('editar coluna leva a descrição e o tipo escolhidos', (
       tester,
     ) async {
       responde(tresEtapas());
-      when(() => client.updateMyEtapaFluxo(any())).thenAnswer(
-        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
-      );
+      when(
+        () => client.updateMyEtapaFluxo(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
       registrar();
 
       await montar(tester, const EtapasFluxoPage(fluxoId: 1));
@@ -714,16 +710,19 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.enterText(
-        find.widgetWithText(TextField, 'ex: Esperando o cliente enviar o '
-            'comprovante'),
+        find.widgetWithText(
+          TextField,
+          'ex: Esperando o cliente enviar o '
+          'comprovante',
+        ),
         'Entra por aqui',
       );
       await tester.tap(find.text('Salvar'));
       await tester.pumpAndSettle();
 
-      final enviado = verify(() => client.updateMyEtapaFluxo(captureAny()))
-          .captured
-          .single as proto.UpdateMyEtapaFluxoRequest;
+      final enviado =
+          verify(() => client.updateMyEtapaFluxo(captureAny())).captured.single
+              as proto.UpdateMyEtapaFluxoRequest;
       expect(enviado.id, 1);
       expect(enviado.descricao, 'Entra por aqui');
       // O tipo original é preservado quando não se mexe nele.
@@ -732,9 +731,9 @@ void main() {
 
     testWidgets('remover coluna avisa que o histórico fica', (tester) async {
       responde(tresEtapas());
-      when(() => client.desativarMyEtapaFluxo(any())).thenAnswer(
-        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
-      );
+      when(
+        () => client.desativarMyEtapaFluxo(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
       registrar();
 
       await montar(tester, const EtapasFluxoPage(fluxoId: 1));
@@ -764,9 +763,9 @@ void main() {
   });
 
   test('sessão expirada é distinguida de servidor fora do ar', () async {
-    when(() => client.listMyFluxos(any())).thenAnswer(
-      (_) => falhaGrpc(proto.GrpcError.unauthenticated('expirou')),
-    );
+    when(
+      () => client.listMyFluxos(any()),
+    ).thenAnswer((_) => falhaGrpc(proto.GrpcError.unauthenticated('expirou')));
 
     final res = await ListarFluxosUsecase(
       repository: ListarFluxosRepository(
@@ -774,13 +773,13 @@ void main() {
       ),
     )(noParams);
 
-    expect((res as Failure).error, isA<FluxosAcessoNegado>());
+    expect((res as Failure).error, isA<FluxosSessaoExpirada>());
   });
 
   test('item que sumiu não vira erro de rede', () async {
-    when(() => client.desativarMyFluxo(any())).thenAnswer(
-      (_) => falhaGrpc(proto.GrpcError.notFound('sumiu')),
-    );
+    when(
+      () => client.desativarMyFluxo(any()),
+    ).thenAnswer((_) => falhaGrpc(proto.GrpcError.notFound('sumiu')));
 
     final res = await DesativarFluxoUsecase(
       repository: DesativarFluxoRepository(

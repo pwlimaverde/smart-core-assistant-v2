@@ -7,8 +7,8 @@ final class CarregarPainelDatasource implements Datasource<Painel, NoParams> {
   final proto.AdminServiceClient _client;
 
   const CarregarPainelDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Painel> call(NoParams parameters) async {

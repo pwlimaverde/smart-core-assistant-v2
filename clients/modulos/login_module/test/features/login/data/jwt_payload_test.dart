@@ -54,18 +54,21 @@ void main() {
       expect(s.tenantId, '');
     });
 
-    test('segmento de payload ilegível cai no catch e degrada com segurança', () {
-      // Dois segmentos (passa da checagem de formato) mas o meio não é base64
-      // válido: é o caminho em que o decode precisa não lançar.
-      final s = JwtPayload.decode(
-        'cabecalho.!!!nao-e-base64!!!.assinatura',
-      ).paraSession(accessToken: 'x', refreshToken: 'r');
+    test(
+      'segmento de payload ilegível cai no catch e degrada com segurança',
+      () {
+        // Dois segmentos (passa da checagem de formato) mas o meio não é base64
+        // válido: é o caminho em que o decode precisa não lançar.
+        final s = JwtPayload.decode(
+          'cabecalho.!!!nao-e-base64!!!.assinatura',
+        ).paraSession(accessToken: 'x', refreshToken: 'r');
 
-      expect(s.isExpired, isTrue);
-      expect(s.tenantId, '');
-      expect(s.scopes, isEmpty);
-      expect(s.isSuperuser, isFalse);
-    });
+        expect(s.isExpired, isTrue);
+        expect(s.tenantId, '');
+        expect(s.scopes, isEmpty);
+        expect(s.isSuperuser, isFalse);
+      },
+    );
 
     test('payload sem exp não é tratado como expirado imediato', () {
       // Sem `exp`, o decode assume "agora" — a sessão nasce no limite, e a

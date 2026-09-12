@@ -25,7 +25,10 @@ UsuariosError _mapUsuarios(
     stackTrace: stackTrace,
   );
   return switch (kind) {
-    GrpcFailureKind.unauthenticated ||
+    // Separados de propósito: sessão expirada não é falta de
+    // permissão, e juntar as duas manda a pessoa caçar um acesso
+    // que ela já tem.
+    GrpcFailureKind.unauthenticated => const UsuariosSessaoExpirada(),
     GrpcFailureKind.permissionDenied => const UsuariosAcessoNegado(),
     GrpcFailureKind.notFound => const UsuariosNaoEncontrado(),
     // A recusa a bloquear o próprio acesso chega por aqui, e a mensagem do
@@ -57,8 +60,7 @@ final class ListarUsuariosRepository
 }
 
 final class DefinirUsuarioAtivoRepository
-    extends
-        RepositoryBase<Unit, DefinirUsuarioAtivoParameters, UsuariosError> {
+    extends RepositoryBase<Unit, DefinirUsuarioAtivoParameters, UsuariosError> {
   const DefinirUsuarioAtivoRepository({required super.datasource});
 
   @override

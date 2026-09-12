@@ -39,9 +39,9 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
 
     Widget comDrawer(String titulo) => Scaffold(
-          appBar: AppBar(title: Text(titulo)),
-          drawer: const TenantDrawer(),
-        );
+      appBar: AppBar(title: Text(titulo)),
+      drawer: const TenantDrawer(),
+    );
 
     final router = GoRouter(
       initialLocation: rota,
@@ -224,9 +224,9 @@ void main() {
     registrarSessao(admin: true);
     await montar(tester, rota: '/tenant/equipe');
 
-    final marcado = tester.widgetList<ListTile>(find.byType(ListTile)).where(
-          (t) => t.selected,
-        );
+    final marcado = tester
+        .widgetList<ListTile>(find.byType(ListTile))
+        .where((t) => t.selected);
     expect(marcado, hasLength(1));
   });
 }

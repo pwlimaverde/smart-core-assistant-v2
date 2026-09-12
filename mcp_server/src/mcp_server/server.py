@@ -25,7 +25,6 @@ import sys
 
 from loguru import logger
 from mcp.server.auth.settings import AuthSettings
-from pydantic import AnyHttpUrl
 
 from mcp_server import settings as config
 from mcp_server import telemetry
@@ -80,8 +79,12 @@ def montar() -> ServidorMcpFiltrado:
         website_url="https://smartcoreassistant.com.br",
         token_verifier=verificador,
         auth=AuthSettings(
-            issuer_url=AnyHttpUrl(cfg.oauth_issuer),
-            resource_server_url=AnyHttpUrl(cfg.oauth_resource),
+            # `cfg.issuer_url`/`cfg.resource_url`, e não `AnyHttpUrl(...)`:
+            # construir a URL aqui fora acrescenta a barra do path vazio, e
+            # o documento RFC 9728 passa a anunciar um identificador
+            # diferente do `issuer` do AS. Ver a nota em settings.py.
+            issuer_url=cfg.issuer_url,
+            resource_server_url=cfg.resource_url,
             # `required_scopes` fica vazio de propósito: exigir um escopo no
             # nível HTTP recusaria a conexão inteira de um token que ainda pode
             # usar parte das tools. O escopo é checado por tool, onde a recusa

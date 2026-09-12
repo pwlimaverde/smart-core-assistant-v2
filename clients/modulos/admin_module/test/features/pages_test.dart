@@ -522,9 +522,9 @@ void main() {
     testWidgets('a aba de vouchers lista os códigos com a situação', (
       tester,
     ) async {
-      when(() => client.listPlans(any())).thenAnswer(
-        (_) => respostaGrpc(proto.ListPlansResponse()),
-      );
+      when(
+        () => client.listPlans(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.ListPlansResponse()));
       when(
         () => client.listSubscriptions(any()),
       ).thenAnswer((_) => respostaGrpc(proto.ListSubscriptionsResponse()));

@@ -25,8 +25,11 @@ IntegracoesError _mapIntegracoes(
     stackTrace: stackTrace,
   );
   return switch (kind) {
-    GrpcFailureKind.unauthenticated ||
-    GrpcFailureKind.permissionDenied => const IntegracoesSessaoInvalida(),
+    // Separados de propósito: sessão expirada não é falta de
+    // permissão, e juntar as duas manda a pessoa caçar um acesso
+    // que ela já tem.
+    GrpcFailureKind.unauthenticated => const IntegracoesSessaoInvalida(),
+    GrpcFailureKind.permissionDenied => const IntegracoesAcessoNegado(),
     // O backend devolve `Validation` quando o grant não existe, é de outra
     // pessoa ou já foi revogado — os três indistinguíveis de propósito, para não
     // confirmar a existência de consentimento alheio.

@@ -74,8 +74,9 @@ final class DepartamentoController extends BaseController<Departamento> {
   Future<ReturnSuccessOrError<Departamento, ConfiguracaoError>> criar({
     required String nome,
     String descricao = '',
-  }) =>
-      _criarUsecase(CriarDepartamentoParameters(nome: nome, descricao: descricao));
+  }) => _criarUsecase(
+    CriarDepartamentoParameters(nome: nome, descricao: descricao),
+  );
 
   Future<void> registrarAvanco() =>
       _progresso(const ProgressoParameters(passo: 7));
@@ -94,10 +95,9 @@ final class PersonaController extends BaseController<Unit> {
   Future<ReturnSuccessOrError<Unit, ConfiguracaoError>> definir({
     required String persona,
     required String nomeDoAgente,
-  }) =>
-      _definirUsecase(
-        PersonaParameters(personaBot: persona, nomeDoAgente: nomeDoAgente),
-      );
+  }) => _definirUsecase(
+    PersonaParameters(personaBot: persona, nomeDoAgente: nomeDoAgente),
+  );
 
   Future<void> registrarAvanco() =>
       _progresso(const ProgressoParameters(passo: 8));
@@ -113,6 +113,6 @@ final class ConclusaoConfiguracaoController
   /// Marca a configuração como concluída. É este ponto — e não o pagamento —
   /// que grava `setup_completed` no servidor.
   Future<ReturnSuccessOrError<ProgressoOnboarding, ConfiguracaoError>>
-      concluir() =>
-          _progresso(const ProgressoParameters(passo: 8, concluido: true));
+  concluir() =>
+      _progresso(const ProgressoParameters(passo: 8, concluido: true));
 }

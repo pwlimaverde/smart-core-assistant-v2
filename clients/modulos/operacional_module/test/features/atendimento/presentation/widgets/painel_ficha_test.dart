@@ -19,14 +19,7 @@ Etiqueta _etiqueta({
   required String nome,
   String cor = '#3b82f6',
   bool ativo = true,
-}) =>
-    Etiqueta(
-      id: id,
-      nome: nome,
-      cor: cor,
-      descricao: '',
-      ativo: ativo,
-    );
+}) => Etiqueta(id: id, nome: nome, cor: cor, descricao: '', ativo: ativo);
 
 void main() {
   FichaController controllerSobre(FakeAtendimentoGateway gateway) =>
@@ -68,7 +61,9 @@ void main() {
     final controller = controllerSobre(gateway);
     addTearDown(controller.close);
     await tester.pumpWidget(
-      MaterialApp(home: Scaffold(body: PainelFicha(controller: controller))),
+      MaterialApp(
+        home: Scaffold(body: PainelFicha(controller: controller)),
+      ),
     );
     await controller.abrir(7);
     await tester.pumpAndSettle();
@@ -207,8 +202,7 @@ void main() {
 
       final controller = await montar(tester, gateway);
 
-      final ficha =
-          (controller.state as SuccessState<FichaAtendimento>).data;
+      final ficha = (controller.state as SuccessState<FichaAtendimento>).data;
       expect(ficha.notas.first.texto, 'ultima');
       expect(find.text('agora'), findsOneWidget);
     });
@@ -313,40 +307,42 @@ void main() {
       expect(tester.widget<Switch>(find.byType(Switch)).value, isFalse);
     });
 
-    testWidgets('religar a IA chega ao servidor e a ficha reflete o novo estado', (
-      tester,
-    ) async {
-      // O caminho de volta que faltava: assumir o atendimento desliga o bot, e
-      // nada devolvia o valor.
-      final gateway = FakeAtendimentoGateway()
-        ..ficha = const FichaAtendimento(
-          catalogo: [],
-          aplicadas: [],
-          notas: [],
-          botPodeAtender: false,
-        );
+    testWidgets(
+      'religar a IA chega ao servidor e a ficha reflete o novo estado',
+      (tester) async {
+        // O caminho de volta que faltava: assumir o atendimento desliga o bot, e
+        // nada devolvia o valor.
+        final gateway = FakeAtendimentoGateway()
+          ..ficha = const FichaAtendimento(
+            catalogo: [],
+            aplicadas: [],
+            notas: [],
+            botPodeAtender: false,
+          );
 
-      await montar(tester, gateway);
-      await tester.tap(find.byType(Switch));
-      await tester.pumpAndSettle();
+        await montar(tester, gateway);
+        await tester.tap(find.byType(Switch));
+        await tester.pumpAndSettle();
 
-      expect(gateway.botDefinido, isTrue);
-      expect(find.text('A IA responde nesta conversa.'), findsOneWidget);
-    });
+        expect(gateway.botDefinido, isTrue);
+        expect(find.text('A IA responde nesta conversa.'), findsOneWidget);
+      },
+    );
 
-    testWidgets('desligar não pede confirmação — é reversível no mesmo clique', (
-      tester,
-    ) async {
-      // Ao contrário do interruptor da conexão, que cala um número inteiro.
-      final gateway = FakeAtendimentoGateway();
+    testWidgets(
+      'desligar não pede confirmação — é reversível no mesmo clique',
+      (tester) async {
+        // Ao contrário do interruptor da conexão, que cala um número inteiro.
+        final gateway = FakeAtendimentoGateway();
 
-      await montar(tester, gateway);
-      await tester.tap(find.byType(Switch));
-      await tester.pumpAndSettle();
+        await montar(tester, gateway);
+        await tester.tap(find.byType(Switch));
+        await tester.pumpAndSettle();
 
-      expect(find.byType(AlertDialog), findsNothing);
-      expect(gateway.botDefinido, isFalse);
-    });
+        expect(find.byType(AlertDialog), findsNothing);
+        expect(gateway.botDefinido, isFalse);
+      },
+    );
 
     testWidgets('recusa do servidor não deixa o interruptor mentir', (
       tester,
@@ -375,6 +371,6 @@ void main() {
       ),
     )(const AtendimentoIdParameters(atendimentoId: 1));
 
-    expect((res as Failure).error, isA<FichaAcessoNegado>());
+    expect((res as Failure).error, isA<FichaSessaoExpirada>());
   });
 }

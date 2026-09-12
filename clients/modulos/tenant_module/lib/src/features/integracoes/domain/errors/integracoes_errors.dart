@@ -18,6 +18,17 @@ final class IntegracoesSessaoInvalida extends IntegracoesError
     : super('Sua sessão expirou. Entre novamente.');
 }
 
+/// Recusa real de permissão — e NÃO sessão morta.
+///
+/// Esta família errava ao contrário das demais: mandava [IntegracoesSessaoInvalida]
+/// ("sua sessão expirou") também para negação de escopo, dizendo à pessoa para
+/// reentrar quando reentrar não resolveria nada.
+final class IntegracoesAcessoNegado extends IntegracoesError
+    with UnauthorizedFailure {
+  const IntegracoesAcessoNegado()
+    : super('Você não tem permissão para gerenciar estes aplicativos.');
+}
+
 /// O consentimento não existe mais — provavelmente já foi desconectado, aqui ou
 /// em outra aba.
 final class ConexaoNaoEncontrada extends IntegracoesError {

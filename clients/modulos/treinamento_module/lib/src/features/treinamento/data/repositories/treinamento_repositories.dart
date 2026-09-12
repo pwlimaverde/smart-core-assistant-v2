@@ -17,18 +17,21 @@ TreinamentoError _traduzir(Object exception, String operacao) {
   );
   return switch (kind) {
     GrpcFailureKind.invalidArgument => TreinamentoDadosInvalidos(
-        exception is GrpcError ? exception.message : null,
-      ),
+      exception is GrpcError ? exception.message : null,
+    ),
     // O servidor recusa por `Validation` tanto dado inválido quanto
     // "não encontrado" — para quem está na tela, ambos querem dizer
     // "esse treinamento não serve", e a mensagem dele já explica qual é.
     GrpcFailureKind.notFound => const TreinamentoDadosInvalidos(
-        'Este treinamento não existe mais. Atualize a lista.',
-      ),
+      'Este treinamento não existe mais. Atualize a lista.',
+    ),
     GrpcFailureKind.alreadyExists => const TreinamentoDadosInvalidos(
-        'Já existe um treinamento com essa tag neste grupo.',
-      ),
-    GrpcFailureKind.unauthenticated ||
+      'Já existe um treinamento com essa tag neste grupo.',
+    ),
+    // Separados de propósito: sessão expirada não é falta de
+    // permissão, e juntar as duas manda a pessoa caçar um acesso
+    // que ela já tem.
+    GrpcFailureKind.unauthenticated => const TreinamentoSessaoExpirada(),
     GrpcFailureKind.permissionDenied => const TreinamentoNaoAutorizado(),
     GrpcFailureKind.unavailable ||
     GrpcFailureKind.rateLimited ||
@@ -46,26 +49,39 @@ final class ListarTreinamentosRepository
       _traduzir(e, 'listar treinamentos');
 }
 
-final class CriarTreinamentoRepository extends RepositoryBase<Treinamento,
-    CriarTreinamentoParameters, TreinamentoError> {
+final class CriarTreinamentoRepository
+    extends
+        RepositoryBase<
+          Treinamento,
+          CriarTreinamentoParameters,
+          TreinamentoError
+        > {
   const CriarTreinamentoRepository({required super.datasource});
 
   @override
-  TreinamentoError mapError(Object e, StackTrace s, CriarTreinamentoParameters p) =>
-      _traduzir(e, 'criar treinamento');
+  TreinamentoError mapError(
+    Object e,
+    StackTrace s,
+    CriarTreinamentoParameters p,
+  ) => _traduzir(e, 'criar treinamento');
 }
 
-final class ObterTreinamentoRepository extends RepositoryBase<Treinamento,
-    TreinamentoIdParameters, TreinamentoError> {
+final class ObterTreinamentoRepository
+    extends
+        RepositoryBase<Treinamento, TreinamentoIdParameters, TreinamentoError> {
   const ObterTreinamentoRepository({required super.datasource});
 
   @override
-  TreinamentoError mapError(Object e, StackTrace s, TreinamentoIdParameters p) =>
-      _traduzir(e, 'obter treinamento');
+  TreinamentoError mapError(
+    Object e,
+    StackTrace s,
+    TreinamentoIdParameters p,
+  ) => _traduzir(e, 'obter treinamento');
 }
 
-final class FinalizarTreinamentoRepository extends RepositoryBase<Unit,
-    FinalizarTreinamentoParameters, TreinamentoError> {
+final class FinalizarTreinamentoRepository
+    extends
+        RepositoryBase<Unit, FinalizarTreinamentoParameters, TreinamentoError> {
   const FinalizarTreinamentoRepository({required super.datasource});
 
   @override
@@ -73,8 +89,7 @@ final class FinalizarTreinamentoRepository extends RepositoryBase<Unit,
     Object e,
     StackTrace s,
     FinalizarTreinamentoParameters p,
-  ) =>
-      _traduzir(e, 'finalizar treinamento');
+  ) => _traduzir(e, 'finalizar treinamento');
 }
 
 final class RemoverTreinamentoRepository
@@ -82,6 +97,9 @@ final class RemoverTreinamentoRepository
   const RemoverTreinamentoRepository({required super.datasource});
 
   @override
-  TreinamentoError mapError(Object e, StackTrace s, TreinamentoIdParameters p) =>
-      _traduzir(e, 'remover treinamento');
+  TreinamentoError mapError(
+    Object e,
+    StackTrace s,
+    TreinamentoIdParameters p,
+  ) => _traduzir(e, 'remover treinamento');
 }

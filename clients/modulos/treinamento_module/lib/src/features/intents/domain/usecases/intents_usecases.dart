@@ -16,12 +16,19 @@ IntentsError _inesperado(String operacao, Object e, StackTrace s) {
   return const IntentsInesperado();
 }
 
-final class ListarIntentsUsecase extends UsecaseBaseCallData<List<IntentIa>,
-    List<IntentIa>, NoParams, IntentsError> {
+final class ListarIntentsUsecase
+    extends
+        UsecaseBaseCallData<
+          List<IntentIa>,
+          List<IntentIa>,
+          NoParams,
+          IntentsError
+        > {
   const ListarIntentsUsecase({required super.repository});
 
   @override
-  ProcessData<List<IntentIa>, List<IntentIa>, NoParams, IntentsError> get process =>
+  ProcessData<List<IntentIa>, List<IntentIa>, NoParams, IntentsError>
+  get process =>
       (data, _) => Success(data);
 
   @override
@@ -29,8 +36,9 @@ final class ListarIntentsUsecase extends UsecaseBaseCallData<List<IntentIa>,
       _inesperado('listar intenções', e, s);
 }
 
-final class CriarIntentUsecase extends UsecaseBaseCallData<Unit, Unit,
-    CriarIntentParameters, IntentsError> {
+final class CriarIntentUsecase
+    extends
+        UsecaseBaseCallData<Unit, Unit, CriarIntentParameters, IntentsError> {
   const CriarIntentUsecase({required super.repository});
 
   @override
@@ -42,21 +50,28 @@ final class CriarIntentUsecase extends UsecaseBaseCallData<Unit, Unit,
       _inesperado('criar intenção', e, s);
 }
 
-final class AtualizarIntentUsecase extends UsecaseBaseCallData<Unit, Unit,
-    AtualizarIntentParameters, IntentsError> {
+final class AtualizarIntentUsecase
+    extends
+        UsecaseBaseCallData<
+          Unit,
+          Unit,
+          AtualizarIntentParameters,
+          IntentsError
+        > {
   const AtualizarIntentUsecase({required super.repository});
 
   @override
   ProcessData<Unit, Unit, AtualizarIntentParameters, IntentsError>
-      get process => (data, _) => Success(data);
+  get process =>
+      (data, _) => Success(data);
 
   @override
   IntentsError onUnexpected(Object e, StackTrace s) =>
       _inesperado('atualizar intenção', e, s);
 }
 
-final class RemoverIntentUsecase extends UsecaseBaseCallData<Unit, Unit,
-    IntentIdParameters, IntentsError> {
+final class RemoverIntentUsecase
+    extends UsecaseBaseCallData<Unit, Unit, IntentIdParameters, IntentsError> {
   const RemoverIntentUsecase({required super.repository});
 
   @override

@@ -19,6 +19,18 @@ final class TenantConfigAcessoNegado extends TenantConfigError
     : super('Somente o superusuário pode alterar a configuração de um tenant.');
 }
 
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [TenantConfigAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class TenantConfigSessaoExpirada extends TenantConfigError
+    with UnauthorizedFailure {
+  const TenantConfigSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
 final class TenantConfigNaoEncontrado extends TenantConfigError {
   const TenantConfigNaoEncontrado() : super('Tenant não encontrado.');
 }

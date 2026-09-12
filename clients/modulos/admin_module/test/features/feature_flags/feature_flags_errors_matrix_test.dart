@@ -46,7 +46,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> FeatureFlagsAcessoNegado', () async {
+    test('unauthenticated -> FeatureFlagsSessaoExpirada', () async {
       when(
         () => client.listFeatureFlags(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -59,7 +59,7 @@ void main() {
       final r = await usecase(noParams);
 
       final erro = (r as Failure).error;
-      expect(erro, isA<FeatureFlagsAcessoNegado>());
+      expect(erro, isA<FeatureFlagsSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as FeatureFlagsError).message,
@@ -268,7 +268,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> FeatureFlagsAcessoNegado', () async {
+    test('unauthenticated -> FeatureFlagsSessaoExpirada', () async {
       when(
         () => client.setFeatureFlag(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -283,7 +283,7 @@ void main() {
       );
 
       final erro = (r as Failure).error;
-      expect(erro, isA<FeatureFlagsAcessoNegado>());
+      expect(erro, isA<FeatureFlagsSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as FeatureFlagsError).message,
@@ -513,7 +513,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> FeatureFlagsAcessoNegado', () async {
+    test('unauthenticated -> FeatureFlagsSessaoExpirada', () async {
       when(
         () => client.setFeatureFlagOverride(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -533,7 +533,7 @@ void main() {
       );
 
       final erro = (r as Failure).error;
-      expect(erro, isA<FeatureFlagsAcessoNegado>());
+      expect(erro, isA<FeatureFlagsSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as FeatureFlagsError).message,

@@ -58,7 +58,8 @@ class _ConexoesPageState extends State<ConexoesPage> {
                   children: [
                     const AppEmptyView(
                       title: 'Nenhuma conexão',
-                      subtitle: 'Conecte um WhatsApp para começar a receber '
+                      subtitle:
+                          'Conecte um WhatsApp para começar a receber '
                           'mensagens dos seus clientes.',
                     ),
                     const SizedBox(height: AppSpacing.md),
@@ -123,10 +124,7 @@ class _ConexoesPageState extends State<ConexoesPage> {
                   '"atendimento" ou "vendas".',
                 ),
                 const SizedBox(height: AppSpacing.md),
-                AppTextField(
-                  controller: nome,
-                  label: 'Nome da conexão',
-                ),
+                AppTextField(controller: nome, label: 'Nome da conexão'),
               ],
             ),
           ),
@@ -201,10 +199,9 @@ class _Linha extends StatelessWidget {
                   conexao.telefone.isEmpty
                       ? situacao.explicacao
                       : '${conexao.telefone} · ${situacao.explicacao}',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: context.colors.fgMuted),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: context.colors.fgMuted,
+                  ),
                 ),
                 // O estado desligado precisa ser visível no cartão, e não só no
                 // interruptor: quem abre a tela para entender por que o bot
@@ -221,10 +218,9 @@ class _Linha extends StatelessWidget {
                       const SizedBox(width: AppSpacing.xs),
                       Text(
                         'Resposta automática desligada',
-                        style: Theme.of(context)
-                            .textTheme
-                            .bodySmall
-                            ?.copyWith(color: context.colors.warning),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: context.colors.warning,
+                        ),
                       ),
                     ],
                   ),
@@ -349,12 +345,10 @@ class _Linha extends StatelessWidget {
 
     messenger.showSnackBar(
       SnackBar(
-        content: Text(
-          switch (res) {
-            Success() => 'Conexão removida.',
-            Failure(:final error) => error.message,
-          },
-        ),
+        content: Text(switch (res) {
+          Success() => 'Conexão removida.',
+          Failure(:final error) => error.message,
+        }),
       ),
     );
   }
@@ -383,11 +377,7 @@ class _Selo extends StatelessWidget {
       ),
       child: Text(
         situacao.rotulo,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: cor,
-        ),
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: cor),
       ),
     );
   }

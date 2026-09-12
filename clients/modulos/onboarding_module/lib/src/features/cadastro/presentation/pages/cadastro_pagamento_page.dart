@@ -102,39 +102,41 @@ class _CadastroPagamentoPageState extends State<CadastroPagamentoPage> {
       titulo: 'Pagamento',
       subtitulo: 'Confirme o pagamento para liberar o acesso.',
       aoVoltar: () => context.go('/cadastro/plano'),
-      child: BlocBuilder<PagamentoController, ViewState<List<ProvedorPagamento>>>(
-        bloc: _controller,
-        builder: (context, state) => switch (state) {
-          InitialState() || LoadingState() => const Padding(
-              padding: EdgeInsets.all(AppSpacing.xl),
-              child: Center(child: CircularProgressIndicator()),
-            ),
-          ErrorState(:final error) => Column(
-              children: [
-                CadastroErrorBanner(message: ErrorMessageMapper.map(error)),
-                const SizedBox(height: AppSpacing.md),
-                PrimaryButton(
-                  label: 'Tentar de novo',
-                  onPressed: _controller.carregar,
-                ),
-              ],
-            ),
-          SuccessState(:final data) => _Formas(
-              provedores: data,
-              selecionado: _provedorSelecionado ??
-                  (data.length == 1 ? data.first.id : null),
-              credencial: _credencial,
-              recusa: _recusa,
-              erro: _erro,
-              confirmando: _confirmando,
-              onSelecionar: (id) => setState(() {
-                _provedorSelecionado = id;
-                _recusa = null;
-              }),
-              onConfirmar: _confirmar,
-            ),
-        },
-      ),
+      child:
+          BlocBuilder<PagamentoController, ViewState<List<ProvedorPagamento>>>(
+            bloc: _controller,
+            builder: (context, state) => switch (state) {
+              InitialState() || LoadingState() => const Padding(
+                padding: EdgeInsets.all(AppSpacing.xl),
+                child: Center(child: CircularProgressIndicator()),
+              ),
+              ErrorState(:final error) => Column(
+                children: [
+                  CadastroErrorBanner(message: ErrorMessageMapper.map(error)),
+                  const SizedBox(height: AppSpacing.md),
+                  PrimaryButton(
+                    label: 'Tentar de novo',
+                    onPressed: _controller.carregar,
+                  ),
+                ],
+              ),
+              SuccessState(:final data) => _Formas(
+                provedores: data,
+                selecionado:
+                    _provedorSelecionado ??
+                    (data.length == 1 ? data.first.id : null),
+                credencial: _credencial,
+                recusa: _recusa,
+                erro: _erro,
+                confirmando: _confirmando,
+                onSelecionar: (id) => setState(() {
+                  _provedorSelecionado = id;
+                  _recusa = null;
+                }),
+                onConfirmar: _confirmar,
+              ),
+            },
+          ),
     );
   }
 }
@@ -193,8 +195,9 @@ class _Formas extends StatelessWidget {
                           ? Icons.radio_button_checked
                           : Icons.radio_button_unchecked,
                       size: 20,
-                      color:
-                          p.id == selecionado ? colors.accent : colors.fgSubtle,
+                      color: p.id == selecionado
+                          ? colors.accent
+                          : colors.fgSubtle,
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
@@ -205,8 +208,9 @@ class _Formas extends StatelessWidget {
                           if (p.instrucao.isNotEmpty)
                             Text(
                               p.instrucao,
-                              style: textTheme.bodySmall
-                                  ?.copyWith(color: colors.fgMuted),
+                              style: textTheme.bodySmall?.copyWith(
+                                color: colors.fgMuted,
+                              ),
                             ),
                         ],
                       ),

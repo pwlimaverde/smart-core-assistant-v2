@@ -511,9 +511,9 @@ final class LocalEngineGateway implements AtendimentoGateway {
 
 /// Converte a etiqueta do contrato no modelo de domínio.
 Etiqueta _etiquetaDoProto(proto.Etiqueta e) => Etiqueta(
-      id: e.id.toInt(),
-      nome: e.nome,
-      cor: e.cor,
-      descricao: e.descricao,
-      ativo: e.ativo,
-    );
+  id: e.id.toInt(),
+  nome: e.nome,
+  cor: e.cor,
+  descricao: e.descricao,
+  ativo: e.ativo,
+);

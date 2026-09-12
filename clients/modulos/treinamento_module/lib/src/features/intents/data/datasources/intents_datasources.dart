@@ -5,30 +5,30 @@ import '../../domain/model/intent.dart';
 import '../../domain/parameters/intents_parameters.dart';
 
 IntentIa _intent(proto.MyIntent i) => IntentIa(
-      id: i.id,
-      tag: i.tag,
-      grupo: i.grupo,
-      descricao: i.descricao,
-      exemplo: i.exemplo,
-      comportamento: i.comportamento,
-      vetorizada: i.vetorizada,
-    );
+  id: i.id,
+  tag: i.tag,
+  grupo: i.grupo,
+  descricao: i.descricao,
+  exemplo: i.exemplo,
+  comportamento: i.comportamento,
+  vetorizada: i.vetorizada,
+);
 
 proto.MyIntentDados _dados(DadosIntent d) => proto.MyIntentDados(
-      tag: d.tag,
-      grupo: d.grupo,
-      descricao: d.descricao,
-      exemplo: d.exemplo,
-      comportamento: d.comportamento,
-    );
+  tag: d.tag,
+  grupo: d.grupo,
+  descricao: d.descricao,
+  exemplo: d.exemplo,
+  comportamento: d.comportamento,
+);
 
 final class ListarIntentsDatasource
     implements Datasource<List<IntentIa>, NoParams> {
   final proto.AdminServiceClient _client;
 
   const ListarIntentsDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<List<IntentIa>> call(NoParams parameters) async {
@@ -42,8 +42,8 @@ final class CriarIntentDatasource
   final proto.AdminServiceClient _client;
 
   const CriarIntentDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Unit> call(CriarIntentParameters parameters) async {
@@ -57,8 +57,8 @@ final class AtualizarIntentDatasource
   final proto.AdminServiceClient _client;
 
   const AtualizarIntentDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Unit> call(AtualizarIntentParameters parameters) async {
@@ -77,8 +77,8 @@ final class RemoverIntentDatasource
   final proto.AdminServiceClient _client;
 
   const RemoverIntentDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Unit> call(IntentIdParameters parameters) async {

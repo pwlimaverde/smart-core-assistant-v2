@@ -33,16 +33,15 @@ void main() {
     int conexoesAtivas = 1,
     int conexoesTotal = 1,
     int departamentos = 1,
-  }) =>
-      Painel(
-        emAndamento: emAndamento,
-        aguardando: aguardando,
-        mensagens24h: 0,
-        conexoesAtivas: conexoesAtivas,
-        conexoesTotal: conexoesTotal,
-        departamentos: departamentos,
-        treinamentosAtivos: 0,
-      );
+  }) => Painel(
+    emAndamento: emAndamento,
+    aguardando: aguardando,
+    mensagens24h: 0,
+    conexoesAtivas: conexoesAtivas,
+    conexoesTotal: conexoesTotal,
+    departamentos: departamentos,
+    treinamentosAtivos: 0,
+  );
 
   group('leitura dos números', () {
     test('conexão caída é detectada pela diferença, não por um flag', () {
@@ -60,7 +59,11 @@ void main() {
 
     test('conta nova, sem nada configurado, não conta como conexão caída', () {
       // 0 de 0 não é queda — é conta nova, e o aviso tem de ser outro.
-      final novo = painelCom(conexoesAtivas: 0, conexoesTotal: 0, departamentos: 0);
+      final novo = painelCom(
+        conexoesAtivas: 0,
+        conexoesTotal: 0,
+        departamentos: 0,
+      );
       expect(novo.temConexaoCaida, isFalse);
       expect(novo.faltaEstrutura, isTrue);
     });
@@ -185,9 +188,7 @@ void main() {
     testWidgets('com WhatsApp e sem departamento, aponta o departamento', (
       tester,
     ) async {
-      responde(
-        proto.GetMyPainelResponse(conexoesAtivas: 1, conexoesTotal: 1),
-      );
+      responde(proto.GetMyPainelResponse(conexoesAtivas: 1, conexoesTotal: 1));
       registrar();
 
       final router = await montar(tester);
@@ -221,9 +222,9 @@ void main() {
     });
 
     testWidgets('erro do servidor vira tela de erro', (tester) async {
-      when(() => client.getMyPainel(any())).thenAnswer(
-        (_) => falhaGrpc(proto.GrpcError.unavailable('fora do ar')),
-      );
+      when(
+        () => client.getMyPainel(any()),
+      ).thenAnswer((_) => falhaGrpc(proto.GrpcError.unavailable('fora do ar')));
       registrar();
 
       await montar(tester);
@@ -243,7 +244,7 @@ void main() {
         ),
       )(noParams);
 
-      expect((res as Failure).error, isA<PainelAcessoNegado>());
+      expect((res as Failure).error, isA<PainelSessaoExpirada>());
     });
   });
 }

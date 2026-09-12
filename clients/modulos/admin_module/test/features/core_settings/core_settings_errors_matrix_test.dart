@@ -46,7 +46,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> CoreSettingsAcessoNegado', () async {
+    test('unauthenticated -> CoreSettingsSessaoExpirada', () async {
       when(
         () => client.listCoreSettings(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -59,7 +59,7 @@ void main() {
       final r = await usecase(noParams);
 
       final erro = (r as Failure).error;
-      expect(erro, isA<CoreSettingsAcessoNegado>());
+      expect(erro, isA<CoreSettingsSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as CoreSettingsError).message,
@@ -273,7 +273,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> CoreSettingsAcessoNegado', () async {
+    test('unauthenticated -> CoreSettingsSessaoExpirada', () async {
       when(
         () => client.upsertCoreSetting(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -293,7 +293,7 @@ void main() {
       );
 
       final erro = (r as Failure).error;
-      expect(erro, isA<CoreSettingsAcessoNegado>());
+      expect(erro, isA<CoreSettingsSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as CoreSettingsError).message,
@@ -556,7 +556,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> CoreSettingsAcessoNegado', () async {
+    test('unauthenticated -> CoreSettingsSessaoExpirada', () async {
       when(
         () => client.deleteCoreSetting(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -569,7 +569,7 @@ void main() {
       final r = await usecase(const DeleteCoreSettingParameters(key: 'k'));
 
       final erro = (r as Failure).error;
-      expect(erro, isA<CoreSettingsAcessoNegado>());
+      expect(erro, isA<CoreSettingsSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as CoreSettingsError).message,

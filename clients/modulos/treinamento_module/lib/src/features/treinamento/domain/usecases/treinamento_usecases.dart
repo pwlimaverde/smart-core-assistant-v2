@@ -16,65 +16,110 @@ TreinamentoError _inesperado(String operacao, Object e, StackTrace s) {
   return const TreinamentoInesperado();
 }
 
-final class ListarTreinamentosUsecase extends UsecaseBaseCallData<
-    List<Treinamento>, List<Treinamento>, NoParams, TreinamentoError> {
+final class ListarTreinamentosUsecase
+    extends
+        UsecaseBaseCallData<
+          List<Treinamento>,
+          List<Treinamento>,
+          NoParams,
+          TreinamentoError
+        > {
   const ListarTreinamentosUsecase({required super.repository});
 
   @override
   ProcessData<List<Treinamento>, List<Treinamento>, NoParams, TreinamentoError>
-      get process => (data, _) => Success(data);
+  get process =>
+      (data, _) => Success(data);
 
   @override
   TreinamentoError onUnexpected(Object e, StackTrace s) =>
       _inesperado('listar treinamentos', e, s);
 }
 
-final class CriarTreinamentoUsecase extends UsecaseBaseCallData<Treinamento,
-    Treinamento, CriarTreinamentoParameters, TreinamentoError> {
+final class CriarTreinamentoUsecase
+    extends
+        UsecaseBaseCallData<
+          Treinamento,
+          Treinamento,
+          CriarTreinamentoParameters,
+          TreinamentoError
+        > {
   const CriarTreinamentoUsecase({required super.repository});
 
   @override
-  ProcessData<Treinamento, Treinamento, CriarTreinamentoParameters,
-      TreinamentoError> get process => (data, _) => Success(data);
+  ProcessData<
+    Treinamento,
+    Treinamento,
+    CriarTreinamentoParameters,
+    TreinamentoError
+  >
+  get process =>
+      (data, _) => Success(data);
 
   @override
   TreinamentoError onUnexpected(Object e, StackTrace s) =>
       _inesperado('criar treinamento', e, s);
 }
 
-final class ObterTreinamentoUsecase extends UsecaseBaseCallData<Treinamento,
-    Treinamento, TreinamentoIdParameters, TreinamentoError> {
+final class ObterTreinamentoUsecase
+    extends
+        UsecaseBaseCallData<
+          Treinamento,
+          Treinamento,
+          TreinamentoIdParameters,
+          TreinamentoError
+        > {
   const ObterTreinamentoUsecase({required super.repository});
 
   @override
-  ProcessData<Treinamento, Treinamento, TreinamentoIdParameters,
-      TreinamentoError> get process => (data, _) => Success(data);
+  ProcessData<
+    Treinamento,
+    Treinamento,
+    TreinamentoIdParameters,
+    TreinamentoError
+  >
+  get process =>
+      (data, _) => Success(data);
 
   @override
   TreinamentoError onUnexpected(Object e, StackTrace s) =>
       _inesperado('obter treinamento', e, s);
 }
 
-final class FinalizarTreinamentoUsecase extends UsecaseBaseCallData<Unit, Unit,
-    FinalizarTreinamentoParameters, TreinamentoError> {
+final class FinalizarTreinamentoUsecase
+    extends
+        UsecaseBaseCallData<
+          Unit,
+          Unit,
+          FinalizarTreinamentoParameters,
+          TreinamentoError
+        > {
   const FinalizarTreinamentoUsecase({required super.repository});
 
   @override
   ProcessData<Unit, Unit, FinalizarTreinamentoParameters, TreinamentoError>
-      get process => (data, _) => Success(data);
+  get process =>
+      (data, _) => Success(data);
 
   @override
   TreinamentoError onUnexpected(Object e, StackTrace s) =>
       _inesperado('finalizar treinamento', e, s);
 }
 
-final class RemoverTreinamentoUsecase extends UsecaseBaseCallData<Unit, Unit,
-    TreinamentoIdParameters, TreinamentoError> {
+final class RemoverTreinamentoUsecase
+    extends
+        UsecaseBaseCallData<
+          Unit,
+          Unit,
+          TreinamentoIdParameters,
+          TreinamentoError
+        > {
   const RemoverTreinamentoUsecase({required super.repository});
 
   @override
   ProcessData<Unit, Unit, TreinamentoIdParameters, TreinamentoError>
-      get process => (data, _) => Success(data);
+  get process =>
+      (data, _) => Success(data);
 
   @override
   TreinamentoError onUnexpected(Object e, StackTrace s) =>

@@ -46,10 +46,9 @@ class _AbaEnsaioState extends State<AbaEnsaio> {
         Text(
           'A pergunta passa pelo mesmo caminho de uma mensagem real. Nada é '
           'gravado: não cria atendimento nem contato.',
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: context.colors.fgMuted),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: context.colors.fgMuted),
         ),
         const SizedBox(height: AppSpacing.md),
         Row(
@@ -85,13 +84,12 @@ class _AbaEnsaioState extends State<AbaEnsaio> {
             onInitial: (context) => const AppEmptyView(
               icon: Icons.science_outlined,
               title: 'Faça uma pergunta',
-              subtitle: 'Escreva como um cliente escreveria, com as palavras '
+              subtitle:
+                  'Escreva como um cliente escreveria, com as palavras '
                   'dele. É assim que a busca compara.',
             ),
-            onError: (context, error) => AppErrorView(
-              message: error.message,
-              onRetry: _enviar,
-            ),
+            onError: (context, error) =>
+                AppErrorView(message: error.message, onRetry: _enviar),
             onSuccess: (context, ensaio) => _Resultado(
               pergunta: _controller.ultimaPergunta,
               ensaio: ensaio,
@@ -117,10 +115,10 @@ class _Resultado extends StatelessWidget {
       children: [
         Text(
           '"$pergunta"',
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: muted, fontStyle: FontStyle.italic),
+          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: muted,
+            fontStyle: FontStyle.italic,
+          ),
         ),
         const SizedBox(height: AppSpacing.md),
         AppCard(
@@ -162,7 +160,8 @@ class _Resultado extends StatelessWidget {
           const _Aviso(
             icone: Icons.warning_amber_outlined,
             cor: Colors.orange,
-            texto: 'Nenhum material e nenhuma intenção casaram com esta '
+            texto:
+                'Nenhum material e nenhuma intenção casaram com esta '
                 'pergunta. O que veio acima não saiu do seu treinamento.',
           ),
         ],
@@ -196,10 +195,9 @@ class _Resultado extends StatelessWidget {
                   // investigado.
                   Text(
                     '${trecho.semelhanca}% de semelhança',
-                    style: Theme.of(context)
-                        .textTheme
-                        .labelSmall
-                        ?.copyWith(color: muted),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelSmall?.copyWith(color: muted),
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(trecho.conteudo),
@@ -230,7 +228,9 @@ class _Aviso extends StatelessWidget {
         children: [
           Icon(icone, size: 18, color: cor),
           const SizedBox(width: AppSpacing.sm),
-          Expanded(child: Text(texto, style: TextStyle(color: cor))),
+          Expanded(
+            child: Text(texto, style: TextStyle(color: cor)),
+          ),
         ],
       ),
     );

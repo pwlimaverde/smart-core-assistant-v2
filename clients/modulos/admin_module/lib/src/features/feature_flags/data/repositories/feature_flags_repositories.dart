@@ -27,7 +27,10 @@ FeatureFlagsError _mapFeatureFlags(
     stackTrace: stackTrace,
   );
   return switch (kind) {
-    GrpcFailureKind.unauthenticated ||
+    // Separados de propósito: sessão expirada não é falta de
+    // permissão, e juntar as duas manda a pessoa caçar um acesso
+    // que ela já tem.
+    GrpcFailureKind.unauthenticated => const FeatureFlagsSessaoExpirada(),
     GrpcFailureKind.permissionDenied => const FeatureFlagsAcessoNegado(),
     GrpcFailureKind.notFound => const FeatureFlagsNaoEncontrado(),
     GrpcFailureKind.alreadyExists => const FeatureFlagsConflito(),

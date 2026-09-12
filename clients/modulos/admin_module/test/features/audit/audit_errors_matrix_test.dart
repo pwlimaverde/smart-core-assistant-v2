@@ -46,7 +46,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> AuditAcessoNegado', () async {
+    test('unauthenticated -> AuditSessaoExpirada', () async {
       when(
         () => client.queryAuditLog(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -59,7 +59,7 @@ void main() {
       final r = await usecase(const QueryAuditLogParameters());
 
       final erro = (r as Failure).error;
-      expect(erro, isA<AuditAcessoNegado>());
+      expect(erro, isA<AuditSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as AuditError).message,

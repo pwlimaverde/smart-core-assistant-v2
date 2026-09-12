@@ -21,8 +21,8 @@ IntentsError _traduzir(Object exception, String operacao) {
     GrpcFailureKind.invalidArgument ||
     GrpcFailureKind.alreadyExists ||
     GrpcFailureKind.failedPrecondition => IntentsRecusado(
-        exception is GrpcError ? exception.message : null,
-      ),
+      exception is GrpcError ? exception.message : null,
+    ),
     // Separados de propósito: sessão expirada não é falta de permissão, e
     // juntar as duas fez um dono de conta caçar permissões que ele já tinha.
     GrpcFailureKind.unauthenticated => const IntentsSessaoExpirada(),

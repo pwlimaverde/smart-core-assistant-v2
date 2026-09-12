@@ -6,13 +6,25 @@ import '../errors/contatos_errors.dart';
 import '../model/contato.dart';
 import '../parameters/contatos_parameters.dart';
 
-final class ListarContatosUsecase extends UsecaseBaseCallData<List<Contato>,
-    List<Contato>, ListarContatosParameters, ContatosError> {
+final class ListarContatosUsecase
+    extends
+        UsecaseBaseCallData<
+          List<Contato>,
+          List<Contato>,
+          ListarContatosParameters,
+          ContatosError
+        > {
   const ListarContatosUsecase({required super.repository});
 
   @override
-  ProcessData<List<Contato>, List<Contato>, ListarContatosParameters,
-      ContatosError> get process => (data, _) => Success(data);
+  ProcessData<
+    List<Contato>,
+    List<Contato>,
+    ListarContatosParameters,
+    ContatosError
+  >
+  get process =>
+      (data, _) => Success(data);
 
   @override
   ContatosError onUnexpected(Object e, StackTrace s) {

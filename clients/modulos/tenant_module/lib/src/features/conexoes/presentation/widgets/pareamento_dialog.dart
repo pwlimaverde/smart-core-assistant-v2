@@ -20,16 +20,11 @@ Future<void> mostrarPareamento(
   required ConexoesController controller,
   required int id,
   required String nome,
-}) =>
-    showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => _PareamentoDialog(
-        controller: controller,
-        id: id,
-        nome: nome,
-      ),
-    );
+}) => showDialog<void>(
+  context: context,
+  barrierDismissible: false,
+  builder: (_) => _PareamentoDialog(controller: controller, id: id, nome: nome),
+);
 
 class _PareamentoDialog extends StatefulWidget {
   final ConexoesController controller;
@@ -115,13 +110,18 @@ class _PareamentoDialogState extends State<_PareamentoDialog> {
           mainAxisSize: MainAxisSize.min,
           children: _conectado
               ? [
-                  Icon(Icons.check_circle_outline, size: 56,
-                      color: colors.success),
+                  Icon(
+                    Icons.check_circle_outline,
+                    size: 56,
+                    color: colors.success,
+                  ),
                   const SizedBox(height: AppSpacing.md),
                   Text(
                     'WhatsApp conectado. As mensagens já chegam ao sistema.',
                     textAlign: TextAlign.center,
-                    style: textTheme.bodyMedium?.copyWith(color: colors.fgMuted),
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colors.fgMuted,
+                    ),
                   ),
                 ]
               : [
@@ -129,7 +129,9 @@ class _PareamentoDialogState extends State<_PareamentoDialog> {
                     'No celular, abra o WhatsApp › Aparelhos conectados › '
                     'Conectar aparelho, e aponte para o código.',
                     textAlign: TextAlign.center,
-                    style: textTheme.bodyMedium?.copyWith(color: colors.fgMuted),
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colors.fgMuted,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.lg),
                   _Qr(base64: _qr),
@@ -147,7 +149,9 @@ class _PareamentoDialogState extends State<_PareamentoDialog> {
                         child: Text(
                           _erro ?? 'Aguardando a leitura...',
                           style: textTheme.bodySmall?.copyWith(
-                            color: _erro == null ? colors.fgMuted : colors.danger,
+                            color: _erro == null
+                                ? colors.fgMuted
+                                : colors.danger,
                           ),
                         ),
                       ),
@@ -202,7 +206,12 @@ class _Qr extends StatelessWidget {
         borderRadius: AppRadius.md,
         border: Border.all(color: colors.border),
       ),
-      child: Image.memory(bytes, width: 240, height: 240, gaplessPlayback: true),
+      child: Image.memory(
+        bytes,
+        width: 240,
+        height: 240,
+        gaplessPlayback: true,
+      ),
     );
   }
 

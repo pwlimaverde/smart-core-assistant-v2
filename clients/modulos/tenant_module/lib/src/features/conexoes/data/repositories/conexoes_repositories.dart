@@ -22,9 +22,12 @@ ConexoesError _traduzir(Object exception, String operacao) {
     // é recusa da operação, não indisponibilidade nossa — e a mensagem dele
     // explica o que houve.
     GrpcFailureKind.failedPrecondition => ConexaoRecusada(
-        exception is GrpcError ? exception.message : null,
-      ),
-    GrpcFailureKind.unauthenticated ||
+      exception is GrpcError ? exception.message : null,
+    ),
+    // Separados de propósito: sessão expirada não é falta de
+    // permissão, e juntar as duas manda a pessoa caçar um acesso
+    // que ela já tem.
+    GrpcFailureKind.unauthenticated => const ConexoesSessaoExpirada(),
     GrpcFailureKind.permissionDenied => const ConexoesAcessoNegado(),
     GrpcFailureKind.unavailable ||
     GrpcFailureKind.rateLimited => const ConexoesIndisponivel(),
@@ -60,7 +63,8 @@ final class RemoverConexaoRepository
 }
 
 final class CriarConexaoRepository
-    extends RepositoryBase<ConexaoCriada, CriarConexaoParameters, ConexoesError> {
+    extends
+        RepositoryBase<ConexaoCriada, CriarConexaoParameters, ConexoesError> {
   const CriarConexaoRepository({required super.datasource});
 
   @override
@@ -69,7 +73,8 @@ final class CriarConexaoRepository
 }
 
 final class EstadoPareamentoRepository
-    extends RepositoryBase<EstadoPareamento, ConexaoIdParameters, ConexoesError> {
+    extends
+        RepositoryBase<EstadoPareamento, ConexaoIdParameters, ConexoesError> {
   const EstadoPareamentoRepository({required super.datasource});
 
   @override

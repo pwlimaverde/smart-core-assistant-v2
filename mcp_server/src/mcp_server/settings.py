@@ -8,7 +8,9 @@ se o verificador de token está configurado.
 
 from __future__ import annotations
 
-from pydantic import Field
+from typing import ClassVar
+
+from pydantic import AnyHttpUrl, ConfigDict, Field, TypeAdapter, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,6 +27,25 @@ class Settings(BaseSettings):
     #: URL do authorization server (o `control_plane`). Vai no documento de
     #: metadados do recurso (RFC 9728) e é o `iss` esperado nos tokens.
     oauth_issuer: str = Field(default="https://auth.smartcoreassistant.com.br")
+
+    @field_validator("oauth_resource", "oauth_issuer")
+    @classmethod
+    def _sem_barra_final(cls, v: str) -> str:
+        """Remove a barra final, como o `control_plane` já fazia do lado Rust.
+
+        Não é cosmético. O cliente descobre o AS pela URL que este documento
+        publica em `authorization_servers` e então **compara** com o `issuer`
+        anunciado pelo próprio AS (RFC 8414 §3). O Rust normaliza e publicava
+        `https://auth…com.br`; aqui a variável de ambiente vinha com barra e
+        publicávamos `https://auth…com.br/`. Um cliente conforme vê dois
+        identificadores diferentes e desiste.
+
+        O sintoma não parecia de configuração: o consentimento gravava o grant,
+        a tela "piscava", e a conexão simplesmente não se completava — porque a
+        recusa acontece dentro do cliente, depois do redirect, sem passar por
+        nenhum log nosso. Medido em 12/09/2026 com o Claude.
+        """
+        return v.rstrip("/")
 
     # --- Validação de token -------------------------------------------------
 
@@ -101,6 +122,33 @@ class Settings(BaseSettings):
         if len(podado) >= 2 and podado[0] == podado[-1] and podado[0] in "\"'":
             bruto = podado[1:-1]
         return bruto.replace("\\n", "\n") if "\\n" in bruto else bruto
+
+    #: Valida uma URL **preservando o path vazio**.
+    #:
+    #: `AnyHttpUrl("https://x.com.br")` devolve `https://x.com.br/` — o pydantic
+    #: normaliza o path vazio para `/`. Dentro dos modelos do SDK do MCP isso
+    #: não acontece, porque eles declaram `url_preserve_empty_path=True`; mas a
+    #: config vive no modelo, e uma URL construída **fora** dele já chega
+    #: normalizada, com a barra que o modelo então preserva.
+    #:
+    #: Era exatamente esse o caminho: `AnyHttpUrl(cfg.oauth_issuer)` no
+    #: `server.py` punha a barra antes de o modelo ver a string, e o documento
+    #: RFC 9728 saía anunciando `authorization_servers: [".../"]` contra o
+    #: `issuer: "..."` do próprio AS. Dois identificadores para o mesmo servidor
+    #: (RFC 8414 §3), e o cliente desiste — em silêncio, do lado dele.
+    _url: ClassVar[TypeAdapter[AnyHttpUrl]] = TypeAdapter(
+        AnyHttpUrl, config=ConfigDict(url_preserve_empty_path=True)
+    )
+
+    @property
+    def issuer_url(self) -> AnyHttpUrl:
+        """`oauth_issuer` como URL, com a identidade preservada ao pé da letra."""
+        return self._url.validate_python(self.oauth_issuer)
+
+    @property
+    def resource_url(self) -> AnyHttpUrl:
+        """`oauth_resource` como URL, idem — é o `aud` exigido em cada token."""
+        return self._url.validate_python(self.oauth_resource)
 
     @property
     def resource_metadata_url(self) -> str:

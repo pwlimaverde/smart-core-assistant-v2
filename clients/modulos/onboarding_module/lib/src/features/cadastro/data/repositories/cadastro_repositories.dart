@@ -27,8 +27,8 @@ CadastroError _traduzir(Object exception, String operacao) {
   );
   return switch (kind) {
     GrpcFailureKind.invalidArgument => CadastroDadosInvalidos(
-        exception is GrpcError ? exception.message : null,
-      ),
+      exception is GrpcError ? exception.message : null,
+    ),
     GrpcFailureKind.alreadyExists => const CadastroDadosInvalidos(),
     GrpcFailureKind.unauthenticated ||
     GrpcFailureKind.permissionDenied ||
@@ -40,8 +40,8 @@ CadastroError _traduzir(Object exception, String operacao) {
   };
 }
 
-final class VerificarSlugRepository extends RepositoryBase<SlugDisponibilidade,
-    SlugParameters, CadastroError> {
+final class VerificarSlugRepository
+    extends RepositoryBase<SlugDisponibilidade, SlugParameters, CadastroError> {
   const VerificarSlugRepository({required super.datasource});
 
   @override
@@ -49,8 +49,8 @@ final class VerificarSlugRepository extends RepositoryBase<SlugDisponibilidade,
       _traduzir(e, 'verificar slug');
 }
 
-final class ListarPlanosRepository extends RepositoryBase<List<PlanoPublico>,
-    SemParametros, CadastroError> {
+final class ListarPlanosRepository
+    extends RepositoryBase<List<PlanoPublico>, SemParametros, CadastroError> {
   const ListarPlanosRepository({required super.datasource});
 
   @override
@@ -58,8 +58,9 @@ final class ListarPlanosRepository extends RepositoryBase<List<PlanoPublico>,
       _traduzir(e, 'listar planos');
 }
 
-final class ListarProvedoresRepository extends RepositoryBase<
-    List<ProvedorPagamento>, SemParametros, CadastroError> {
+final class ListarProvedoresRepository
+    extends
+        RepositoryBase<List<ProvedorPagamento>, SemParametros, CadastroError> {
   const ListarProvedoresRepository({required super.datasource});
 
   @override
@@ -69,8 +70,13 @@ final class ListarProvedoresRepository extends RepositoryBase<
 
 /// O log registra a **natureza** da falha, nunca os `parameters` — que aqui
 /// carregam a senha.
-final class IniciarCadastroRepository extends RepositoryBase<CadastroIniciado,
-    IniciarCadastroParameters, CadastroError> {
+final class IniciarCadastroRepository
+    extends
+        RepositoryBase<
+          CadastroIniciado,
+          IniciarCadastroParameters,
+          CadastroError
+        > {
   const IniciarCadastroRepository({required super.datasource});
 
   @override
@@ -88,8 +94,13 @@ final class SelecionarPlanoRepository
 }
 
 /// Idem: os `parameters` carregam o código de ativação.
-final class ConfirmarPagamentoRepository extends RepositoryBase<
-    ResultadoPagamento, ConfirmarPagamentoParameters, CadastroError> {
+final class ConfirmarPagamentoRepository
+    extends
+        RepositoryBase<
+          ResultadoPagamento,
+          ConfirmarPagamentoParameters,
+          CadastroError
+        > {
   const ConfirmarPagamentoRepository({required super.datasource});
 
   @override
@@ -97,12 +108,16 @@ final class ConfirmarPagamentoRepository extends RepositoryBase<
     Object e,
     StackTrace s,
     ConfirmarPagamentoParameters p,
-  ) =>
-      _traduzir(e, 'confirmar pagamento');
+  ) => _traduzir(e, 'confirmar pagamento');
 }
 
-final class StatusCadastroRepository extends RepositoryBase<StatusCadastro,
-    StatusCadastroParameters, CadastroError> {
+final class StatusCadastroRepository
+    extends
+        RepositoryBase<
+          StatusCadastro,
+          StatusCadastroParameters,
+          CadastroError
+        > {
   const StatusCadastroRepository({required super.datasource});
 
   @override

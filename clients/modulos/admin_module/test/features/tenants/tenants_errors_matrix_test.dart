@@ -46,7 +46,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> TenantsAcessoNegado', () async {
+    test('unauthenticated -> TenantsSessaoExpirada', () async {
       when(
         () => client.listTenants(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -59,7 +59,7 @@ void main() {
       final r = await usecase(noParams);
 
       final erro = (r as Failure).error;
-      expect(erro, isA<TenantsAcessoNegado>());
+      expect(erro, isA<TenantsSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as TenantsError).message,
@@ -266,7 +266,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> TenantsAcessoNegado', () async {
+    test('unauthenticated -> TenantsSessaoExpirada', () async {
       when(
         () => client.getTenant(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -279,7 +279,7 @@ void main() {
       final r = await usecase(const GetTenantParameters(id: 't1'));
 
       final erro = (r as Failure).error;
-      expect(erro, isA<TenantsAcessoNegado>());
+      expect(erro, isA<TenantsSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as TenantsError).message,
@@ -494,7 +494,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> TenantsAcessoNegado', () async {
+    test('unauthenticated -> TenantsSessaoExpirada', () async {
       when(
         () => client.createTenant(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -515,7 +515,7 @@ void main() {
       );
 
       final erro = (r as Failure).error;
-      expect(erro, isA<TenantsAcessoNegado>());
+      expect(erro, isA<TenantsSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as TenantsError).message,
@@ -795,7 +795,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> TenantsAcessoNegado', () async {
+    test('unauthenticated -> TenantsSessaoExpirada', () async {
       when(
         () => client.updateTenant(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -817,7 +817,7 @@ void main() {
       );
 
       final erro = (r as Failure).error;
-      expect(erro, isA<TenantsAcessoNegado>());
+      expect(erro, isA<TenantsSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as TenantsError).message,
@@ -1098,7 +1098,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> TenantsAcessoNegado', () async {
+    test('unauthenticated -> TenantsSessaoExpirada', () async {
       when(
         () => client.setTenantActive(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -1113,7 +1113,7 @@ void main() {
       );
 
       final erro = (r as Failure).error;
-      expect(erro, isA<TenantsAcessoNegado>());
+      expect(erro, isA<TenantsSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as TenantsError).message,
@@ -1336,7 +1336,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> TenantsAcessoNegado', () async {
+    test('unauthenticated -> TenantsSessaoExpirada', () async {
       when(
         () => client.generateAccessCode(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -1349,7 +1349,7 @@ void main() {
       final r = await usecase(const GenerateAccessCodeParameters(id: 't1'));
 
       final erro = (r as Failure).error;
-      expect(erro, isA<TenantsAcessoNegado>());
+      expect(erro, isA<TenantsSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as TenantsError).message,
@@ -1559,7 +1559,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> TenantsAcessoNegado', () async {
+    test('unauthenticated -> TenantsSessaoExpirada', () async {
       when(() => client.exportTenantsCsv(any())).thenAnswer(
         (_) => streamGrpcComFalha(
           const [],
@@ -1575,7 +1575,7 @@ void main() {
       final r = await usecase(noParams);
 
       final erro = (r as Failure).error;
-      expect(erro, isA<TenantsAcessoNegado>());
+      expect(erro, isA<TenantsSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as TenantsError).message,

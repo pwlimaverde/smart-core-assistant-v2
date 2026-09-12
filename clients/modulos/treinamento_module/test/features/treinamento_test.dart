@@ -17,17 +17,16 @@ proto.MyTreinamento protoTreinamento({
   int id = 1,
   bool finalizado = false,
   bool vetorizado = false,
-}) =>
-    proto.MyTreinamento(
-      id: id,
-      tag: 'horario',
-      grupo: 'atendimento',
-      conteudo: 'Abrimos de segunda a sexta, das 8h às 18h.',
-      finalizado: finalizado,
-      vetorizado: vetorizado,
-      criadoEm: Int64(DateTime(2026, 8, 1).millisecondsSinceEpoch),
-      atualizadoEm: Int64(DateTime(2026, 8, 2).millisecondsSinceEpoch),
-    );
+}) => proto.MyTreinamento(
+  id: id,
+  tag: 'horario',
+  grupo: 'atendimento',
+  conteudo: 'Abrimos de segunda a sexta, das 8h às 18h.',
+  finalizado: finalizado,
+  vetorizado: vetorizado,
+  criadoEm: Int64(DateTime(2026, 8, 1).millisecondsSinceEpoch),
+  atualizadoEm: Int64(DateTime(2026, 8, 2).millisecondsSinceEpoch),
+);
 
 void main() {
   late MockAdminClient client;
@@ -43,10 +42,10 @@ void main() {
   setUp(() => client = MockAdminClient());
 
   ListarTreinamentosUsecase listarUsecase() => ListarTreinamentosUsecase(
-        repository: ListarTreinamentosRepository(
-          datasource: ListarTreinamentosDatasource(client: client),
-        ),
-      );
+    repository: ListarTreinamentosRepository(
+      datasource: ListarTreinamentosDatasource(client: client),
+    ),
+  );
 
   group('situação derivada dos dois booleanos', () {
     // A tela mostra os três estados do ciclo; eles não vêm prontos do servidor,
@@ -112,9 +111,9 @@ void main() {
     );
 
     expect(res, isA<Success<Treinamento, TreinamentoError>>());
-    final enviado = verify(() => client.createMyTreinamento(captureAny()))
-        .captured
-        .single as proto.CreateMyTreinamentoRequest;
+    final enviado =
+        verify(() => client.createMyTreinamento(captureAny())).captured.single
+            as proto.CreateMyTreinamentoRequest;
     expect(enviado.tag, 'horario');
     expect(enviado.grupo, 'atendimento');
     expect(enviado.conteudo, 'Abrimos de segunda a sexta.');
@@ -123,9 +122,9 @@ void main() {
   test('finalizar leva o texto revisado, não o original', () async {
     // O ponto: é o texto que está na tela que vira vetor. Enviar o original
     // faria a revisão não valer nada.
-    when(() => client.finalizarMyTreinamento(any())).thenAnswer(
-      (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
-    );
+    when(
+      () => client.finalizarMyTreinamento(any()),
+    ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
 
     final usecase = FinalizarTreinamentoUsecase(
       repository: FinalizarTreinamentoRepository(
@@ -136,9 +135,11 @@ void main() {
       const FinalizarTreinamentoParameters(id: 7, conteudo: 'texto revisado'),
     );
 
-    final enviado = verify(() => client.finalizarMyTreinamento(captureAny()))
-        .captured
-        .single as proto.FinalizarMyTreinamentoRequest;
+    final enviado =
+        verify(
+              () => client.finalizarMyTreinamento(captureAny()),
+            ).captured.single
+            as proto.FinalizarMyTreinamentoRequest;
     expect(enviado.id, 7);
     expect(enviado.conteudo, 'texto revisado');
   });
@@ -154,9 +155,9 @@ void main() {
     });
 
     test('servidor fora do ar vira erro de rede', () async {
-      when(() => client.listMyTreinamentos(any())).thenAnswer(
-        (_) => falhaGrpc(proto.GrpcError.unavailable('fora do ar')),
-      );
+      when(
+        () => client.listMyTreinamentos(any()),
+      ).thenAnswer((_) => falhaGrpc(proto.GrpcError.unavailable('fora do ar')));
 
       final res = await listarUsecase()(noParams);
       expect((res as Failure).error, isA<TreinamentoIndisponivel>());

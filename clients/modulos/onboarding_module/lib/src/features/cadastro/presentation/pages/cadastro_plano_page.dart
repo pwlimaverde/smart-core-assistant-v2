@@ -67,42 +67,42 @@ class _CadastroPlanoPageState extends State<CadastroPlanoPage> {
         bloc: _controller,
         builder: (context, state) => switch (state) {
           InitialState() || LoadingState() => const Padding(
-              padding: EdgeInsets.all(AppSpacing.xl),
-              child: Center(child: CircularProgressIndicator()),
-            ),
+            padding: EdgeInsets.all(AppSpacing.xl),
+            child: Center(child: CircularProgressIndicator()),
+          ),
           ErrorState(:final error) => Column(
-              children: [
-                CadastroErrorBanner(message: ErrorMessageMapper.map(error)),
-                const SizedBox(height: AppSpacing.md),
-                PrimaryButton(
-                  label: 'Tentar de novo',
-                  onPressed: _controller.carregar,
-                ),
-              ],
-            ),
+            children: [
+              CadastroErrorBanner(message: ErrorMessageMapper.map(error)),
+              const SizedBox(height: AppSpacing.md),
+              PrimaryButton(
+                label: 'Tentar de novo',
+                onPressed: _controller.carregar,
+              ),
+            ],
+          ),
           SuccessState(:final data) => Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                for (final plano in data) ...[
-                  _CartaoPlano(
-                    plano: plano,
-                    selecionado: _selecionado == plano.id,
-                    onTap: () => setState(() => _selecionado = plano.id),
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                ],
-                if (_erroAvanco case final msg?) ...[
-                  const SizedBox(height: AppSpacing.sm),
-                  CadastroErrorBanner(message: msg),
-                ],
-                const SizedBox(height: AppSpacing.md),
-                PrimaryButton(
-                  label: 'Continuar',
-                  isLoading: _avancando,
-                  onPressed: _selecionado == null || _avancando ? null : _avancar,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final plano in data) ...[
+                _CartaoPlano(
+                  plano: plano,
+                  selecionado: _selecionado == plano.id,
+                  onTap: () => setState(() => _selecionado = plano.id),
                 ),
+                const SizedBox(height: AppSpacing.sm),
               ],
-            ),
+              if (_erroAvanco case final msg?) ...[
+                const SizedBox(height: AppSpacing.sm),
+                CadastroErrorBanner(message: msg),
+              ],
+              const SizedBox(height: AppSpacing.md),
+              PrimaryButton(
+                label: 'Continuar',
+                isLoading: _avancando,
+                onPressed: _selecionado == null || _avancando ? null : _avancar,
+              ),
+            ],
+          ),
         },
       ),
     );
@@ -224,10 +224,9 @@ class _Limite extends StatelessWidget {
         const SizedBox(width: 4),
         Text(
           texto,
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: colors.fgMuted),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colors.fgMuted),
         ),
       ],
     );

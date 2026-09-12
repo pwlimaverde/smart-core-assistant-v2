@@ -11,15 +11,13 @@ import '../controllers/equipe_controllers.dart';
 Future<void> abrirCriacaoDepartamento(
   BuildContext context,
   EquipeController controller,
-) =>
-    _abrirFormulario(context: context, controller: controller);
+) => _abrirFormulario(context: context, controller: controller);
 
 Future<void> abrirEdicaoDepartamento(
   BuildContext context,
   Departamento item,
   EquipeController controller,
-) =>
-    _abrirFormulario(context: context, controller: controller, item: item);
+) => _abrirFormulario(context: context, controller: controller, item: item);
 
 Future<void> _abrirFormulario({
   required BuildContext context,
@@ -81,8 +79,9 @@ Future<void> _abrirFormulario({
           ),
           actions: [
             TextButton(
-              onPressed:
-                  salvando ? null : () => Navigator.of(dialogContext).pop(),
+              onPressed: salvando
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancelar'),
             ),
             PrimaryButton(
@@ -169,12 +168,10 @@ Future<void> abrirDesativacaoDepartamento(
 
   messenger.showSnackBar(
     SnackBar(
-      content: Text(
-        switch (res) {
-          Success() => 'Departamento desativado.',
-          Failure(:final error) => error.message,
-        },
-      ),
+      content: Text(switch (res) {
+        Success() => 'Departamento desativado.',
+        Failure(:final error) => error.message,
+      }),
     ),
   );
 }
@@ -192,7 +189,9 @@ class _Erro extends StatelessWidget {
       children: [
         Icon(Icons.error_outline, size: 18, color: cor),
         const SizedBox(width: AppSpacing.xs),
-        Expanded(child: Text(mensagem, style: TextStyle(color: cor))),
+        Expanded(
+          child: Text(mensagem, style: TextStyle(color: cor)),
+        ),
       ],
     );
   }

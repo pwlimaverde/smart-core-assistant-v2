@@ -24,12 +24,12 @@ final class ConexoesController extends BaseController<List<Conexao>> {
     required CriarConexaoUsecase criar,
     required EstadoPareamentoUsecase pareamento,
     required DefinirRespostaBotUsecase respostaBot,
-  })  : _listar = listar,
-        _reconectar = reconectar,
-        _remover = remover,
-        _criar = criar,
-        _pareamento = pareamento,
-        _respostaBot = respostaBot;
+  }) : _listar = listar,
+       _reconectar = reconectar,
+       _remover = remover,
+       _criar = criar,
+       _pareamento = pareamento,
+       _respostaBot = respostaBot;
 
   /// Lista as conexões e confere o estado de cada uma COM O PROVEDOR.
   ///
@@ -43,20 +43,20 @@ final class ConexoesController extends BaseController<List<Conexao>> {
   /// provedor não respondeu fica com o valor do banco em vez de derrubar a
   /// lista inteira.
   Future<void> carregar() => execute<ConexoesError>(() async {
-        final res = await _listar(noParams);
-        if (res is! Success<List<Conexao>, ConexoesError>) return res;
+    final res = await _listar(noParams);
+    if (res is! Success<List<Conexao>, ConexoesError>) return res;
 
-        final conferidas = <Conexao>[];
-        for (final conexao in res.value) {
-          final estado = await _pareamento(ConexaoIdParameters(id: conexao.id));
-          conferidas.add(
-            estado is Success<EstadoPareamento, ConexoesError>
-                ? conexao.comEstado(estado.value.estado)
-                : conexao,
-          );
-        }
-        return Success(conferidas);
-      });
+    final conferidas = <Conexao>[];
+    for (final conexao in res.value) {
+      final estado = await _pareamento(ConexaoIdParameters(id: conexao.id));
+      conferidas.add(
+        estado is Success<EstadoPareamento, ConexoesError>
+            ? conexao.comEstado(estado.value.estado)
+            : conexao,
+      );
+    }
+    return Success(conferidas);
+  });
 
   /// As mutações devolvem o resultado para a tela dizer o que houve, e só
   /// recarregam quando deram certo — recarregar depois de falhar apagaria da
@@ -111,5 +111,5 @@ final class ConexoesController extends BaseController<List<Conexao>> {
   /// que consulta de segundos em segundos, e recarregar junto piscaria a tela
   /// atrás dele a cada volta.
   Future<ReturnSuccessOrError<EstadoPareamento, ConexoesError>>
-      consultarPareamento(int id) => _pareamento(ConexaoIdParameters(id: id));
+  consultarPareamento(int id) => _pareamento(ConexaoIdParameters(id: id));
 }

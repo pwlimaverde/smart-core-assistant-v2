@@ -34,14 +34,14 @@ final class EquipeController extends BaseController<Equipe> {
     required AtualizarAtendenteUsecase atualizarAtendente,
     required DesativarAtendenteUsecase desativarAtendente,
     required ListarFluxosUsecase fluxos,
-  })  : _carregar = carregar,
-        _criar = criar,
-        _atualizar = atualizar,
-        _desativar = desativar,
-        _criarAtendente = criarAtendente,
-        _atualizarAtendente = atualizarAtendente,
-        _desativarAtendente = desativarAtendente,
-        _fluxos = fluxos;
+  }) : _carregar = carregar,
+       _criar = criar,
+       _atualizar = atualizar,
+       _desativar = desativar,
+       _criarAtendente = criarAtendente,
+       _atualizarAtendente = atualizarAtendente,
+       _desativarAtendente = desativarAtendente,
+       _fluxos = fluxos;
 
   List<Fluxo> get fluxosDisponiveis => _fluxosDisponiveis;
 

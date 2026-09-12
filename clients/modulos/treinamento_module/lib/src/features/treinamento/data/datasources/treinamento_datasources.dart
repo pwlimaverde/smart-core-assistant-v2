@@ -8,23 +8,23 @@ import '../../domain/parameters/treinamento_parameters.dart';
 /// Burros de propósito — a exceção sobe crua para o `mapError` do repositório.
 
 Treinamento _paraDominio(proto.MyTreinamento t) => Treinamento(
-      id: t.id,
-      tag: t.tag,
-      grupo: t.grupo,
-      conteudo: t.conteudo,
-      finalizado: t.finalizado,
-      vetorizado: t.vetorizado,
-      criadoEm: DateTime.fromMillisecondsSinceEpoch(t.criadoEm.toInt()),
-      atualizadoEm: DateTime.fromMillisecondsSinceEpoch(t.atualizadoEm.toInt()),
-    );
+  id: t.id,
+  tag: t.tag,
+  grupo: t.grupo,
+  conteudo: t.conteudo,
+  finalizado: t.finalizado,
+  vetorizado: t.vetorizado,
+  criadoEm: DateTime.fromMillisecondsSinceEpoch(t.criadoEm.toInt()),
+  atualizadoEm: DateTime.fromMillisecondsSinceEpoch(t.atualizadoEm.toInt()),
+);
 
 final class ListarTreinamentosDatasource
     implements Datasource<List<Treinamento>, NoParams> {
   final proto.AdminServiceClient _client;
 
   const ListarTreinamentosDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<List<Treinamento>> call(NoParams parameters) async {
@@ -40,8 +40,8 @@ final class CriarTreinamentoDatasource
   final proto.AdminServiceClient _client;
 
   const CriarTreinamentoDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Treinamento> call(CriarTreinamentoParameters parameters) async {
@@ -61,8 +61,8 @@ final class ObterTreinamentoDatasource
   final proto.AdminServiceClient _client;
 
   const ObterTreinamentoDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Treinamento> call(TreinamentoIdParameters parameters) async {

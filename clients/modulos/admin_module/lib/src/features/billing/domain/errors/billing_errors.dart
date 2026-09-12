@@ -18,6 +18,18 @@ final class BillingAcessoNegado extends BillingError with UnauthorizedFailure {
     : super('Somente o superusuário pode administrar a cobrança.');
 }
 
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [BillingAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class BillingSessaoExpirada extends BillingError
+    with UnauthorizedFailure {
+  const BillingSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
 final class BillingNaoEncontrado extends BillingError {
   const BillingNaoEncontrado()
     : super('Plano, assinatura ou pagamento não encontrado.');

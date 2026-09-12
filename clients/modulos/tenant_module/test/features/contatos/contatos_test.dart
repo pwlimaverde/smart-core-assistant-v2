@@ -34,25 +34,26 @@ void main() {
     String nomePerfilWhatsapp = '',
     String telefone = '',
     bool ativo = true,
-  }) =>
-      Contato(
-        id: 1,
-        telefone: telefone,
-        nomeContato: nomeContato,
-        nomePerfilWhatsapp: nomePerfilWhatsapp,
-        email: '',
-        ativo: ativo,
-        ultimaInteracao: DateTime.now(),
-        cadastradoEm: DateTime.now(),
-      );
+  }) => Contato(
+    id: 1,
+    telefone: telefone,
+    nomeContato: nomeContato,
+    nomePerfilWhatsapp: nomePerfilWhatsapp,
+    email: '',
+    ativo: ativo,
+    ultimaInteracao: DateTime.now(),
+    cadastradoEm: DateTime.now(),
+  );
 
   group('nome de exibição', () {
     test('o cadastro ganha do perfil do WhatsApp', () {
       // Quem cadastrou o contato escolheu aquele nome de propósito; o perfil
       // do WhatsApp é o que a própria pessoa pôs, e muda sem aviso.
       expect(
-        contatoCom(nomeContato: 'Maria Silva', nomePerfilWhatsapp: 'Mari 💜')
-            .exibicao,
+        contatoCom(
+          nomeContato: 'Maria Silva',
+          nomePerfilWhatsapp: 'Mari 💜',
+        ).exibicao,
         'Maria Silva',
       );
     });
@@ -73,8 +74,10 @@ void main() {
     test('nome só com espaço não conta como nome', () {
       // Espaço em branco passa em `isNotEmpty` e deixaria a linha aparentemente
       // vazia na lista.
-      expect(contatoCom(nomeContato: '   ', telefone: '551199').exibicao,
-          '551199');
+      expect(
+        contatoCom(nomeContato: '   ', telefone: '551199').exibicao,
+        '551199',
+      );
     });
 
     test('sem nome e sem telefone ainda rende alguma coisa na tela', () {
@@ -105,9 +108,7 @@ void main() {
 
     void responde(List<proto.MyContato> contatos) {
       when(() => client.listMyContatos(any())).thenAnswer(
-        (_) => respostaGrpc(
-          proto.ListMyContatosResponse(contatos: contatos),
-        ),
+        (_) => respostaGrpc(proto.ListMyContatosResponse(contatos: contatos)),
       );
     }
 
@@ -118,19 +119,18 @@ void main() {
       String telefone = '',
       bool ativo = true,
       int diasAtras = 0,
-    }) =>
-        proto.MyContato(
-          id: id,
-          telefone: telefone,
-          nomeContato: nome,
-          nomePerfilWhatsapp: perfil,
-          ativo: ativo,
-          ultimaInteracao: Int64(
-            DateTime.now()
-                .subtract(Duration(days: diasAtras))
-                .millisecondsSinceEpoch,
-          ),
-        );
+    }) => proto.MyContato(
+      id: id,
+      telefone: telefone,
+      nomeContato: nome,
+      nomePerfilWhatsapp: perfil,
+      ativo: ativo,
+      ultimaInteracao: Int64(
+        DateTime.now()
+            .subtract(Duration(days: diasAtras))
+            .millisecondsSinceEpoch,
+      ),
+    );
 
     Future<void> montar(WidgetTester tester) async {
       tester.view.physicalSize = const Size(1400, 1600);
@@ -215,9 +215,9 @@ void main() {
       await tester.pump(const Duration(milliseconds: 500));
       await tester.pumpAndSettle();
 
-      final enviados = verify(() => client.listMyContatos(captureAny()))
-          .captured
-          .cast<proto.ListMyContatosRequest>();
+      final enviados = verify(
+        () => client.listMyContatos(captureAny()),
+      ).captured.cast<proto.ListMyContatosRequest>();
       // Uma na montagem, uma da busca — o 'mar' intermediário foi descartado.
       expect(enviados, hasLength(2));
       expect(enviados.last.busca, 'maria');
@@ -254,16 +254,16 @@ void main() {
       await tester.tap(find.byTooltip('Recarregar'));
       await tester.pumpAndSettle();
 
-      final enviados = verify(() => client.listMyContatos(captureAny()))
-          .captured
-          .cast<proto.ListMyContatosRequest>();
+      final enviados = verify(
+        () => client.listMyContatos(captureAny()),
+      ).captured.cast<proto.ListMyContatosRequest>();
       expect(enviados.last.busca, 'maria');
     });
 
     testWidgets('erro do servidor vira tela de erro', (tester) async {
-      when(() => client.listMyContatos(any())).thenAnswer(
-        (_) => falhaGrpc(proto.GrpcError.unavailable('fora do ar')),
-      );
+      when(
+        () => client.listMyContatos(any()),
+      ).thenAnswer((_) => falhaGrpc(proto.GrpcError.unavailable('fora do ar')));
       registrar();
 
       await montar(tester);
@@ -283,7 +283,7 @@ void main() {
         ),
       )(const ListarContatosParameters());
 
-      expect((res as Failure).error, isA<ContatosAcessoNegado>());
+      expect((res as Failure).error, isA<ContatosSessaoExpirada>());
     });
   });
 }

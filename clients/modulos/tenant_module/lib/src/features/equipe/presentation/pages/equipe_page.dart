@@ -112,10 +112,9 @@ class _AbaDepartamentos extends StatelessWidget {
             Expanded(
               child: Text(
                 'Para onde as conversas vão quando chegam.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: context.colors.fgMuted),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: context.colors.fgMuted),
               ),
             ),
             ElevatedButton.icon(
@@ -130,14 +129,17 @@ class _AbaDepartamentos extends StatelessWidget {
           child: itens.isEmpty
               ? const AppEmptyView(
                   title: 'Nenhum departamento',
-                  subtitle: 'Sem departamento a fila não tem para onde mandar '
+                  subtitle:
+                      'Sem departamento a fila não tem para onde mandar '
                       'as conversas que chegam.',
                 )
               : ListView.separated(
                   itemCount: itens.length,
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (_, i) =>
-                      _LinhaDepartamento(item: itens[i], controller: controller),
+                  itemBuilder: (_, i) => _LinhaDepartamento(
+                    item: itens[i],
+                    controller: controller,
+                  ),
                 ),
         ),
       ],
@@ -169,10 +171,7 @@ class _LinhaDepartamento extends StatelessWidget {
                     ),
                     if (!item.ativo) ...[
                       const SizedBox(width: AppSpacing.sm),
-                      _Etiqueta(
-                        texto: 'Inativo',
-                        cor: context.colors.fgMuted,
-                      ),
+                      _Etiqueta(texto: 'Inativo', cor: context.colors.fgMuted),
                     ],
                   ],
                 ),
@@ -180,10 +179,9 @@ class _LinhaDepartamento extends StatelessWidget {
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     item.descricao,
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: context.colors.fgMuted),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: context.colors.fgMuted,
+                    ),
                   ),
                 ],
               ],
@@ -232,10 +230,9 @@ class _AbaAtendentes extends StatelessWidget {
             Expanded(
               child: Text(
                 'Quem atende, em qual fluxo e com quanta conversa por vez.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: context.colors.fgMuted),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: context.colors.fgMuted),
               ),
             ),
             ElevatedButton.icon(
@@ -251,7 +248,8 @@ class _AbaAtendentes extends StatelessWidget {
           child: itens.isEmpty
               ? const AppEmptyView(
                   title: 'Nenhum atendente',
-                  subtitle: 'Sem alguém cadastrado, a fila não tem para quem '
+                  subtitle:
+                      'Sem alguém cadastrado, a fila não tem para quem '
                       'distribuir as conversas.',
                 )
               : ListView.separated(
@@ -289,69 +287,61 @@ class _LinhaAtendente extends StatelessWidget {
     final depto = departamento;
 
     return AppCard(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   children: [
-                    Row(
-                      children: [
-                        Text(
-                          a.nome,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(width: AppSpacing.sm),
-                        // Ativo é o cadastro; disponível é "aceitando conversa
-                        // agora". Quem está de férias fica ativo e indisponível
-                        // — por isso os dois estados aparecem.
-                        if (!a.ativo)
-                          _Etiqueta(
-                            texto: 'Inativo',
-                            cor: context.colors.fgMuted,
-                          )
-                        else if (!a.disponivel)
-                          const _Etiqueta(
-                            texto: 'Indisponível',
-                            cor: Colors.orange,
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
                     Text(
-                      [
-                        if (a.cargo.isNotEmpty) a.cargo,
-                        depto ?? 'sem departamento',
-                        'até ${a.maxSimultaneos} simultâneos',
-                      ].join(' · '),
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: context.colors.fgMuted),
+                      a.nome,
+                      style: const TextStyle(fontWeight: FontWeight.bold),
                     ),
+                    const SizedBox(width: AppSpacing.sm),
+                    // Ativo é o cadastro; disponível é "aceitando conversa
+                    // agora". Quem está de férias fica ativo e indisponível
+                    // — por isso os dois estados aparecem.
+                    if (!a.ativo)
+                      _Etiqueta(texto: 'Inativo', cor: context.colors.fgMuted)
+                    else if (!a.disponivel)
+                      const _Etiqueta(
+                        texto: 'Indisponível',
+                        cor: Colors.orange,
+                      ),
                   ],
                 ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.edit_outlined),
-                tooltip: 'Editar',
-                onPressed: () => abrirEdicaoAtendente(
-                  context,
-                  a,
-                  controller,
-                  departamentos,
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  [
+                    if (a.cargo.isNotEmpty) a.cargo,
+                    depto ?? 'sem departamento',
+                    'até ${a.maxSimultaneos} simultâneos',
+                  ].join(' · '),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: context.colors.fgMuted,
+                  ),
                 ),
-              ),
-              if (a.ativo)
-                IconButton(
-                  icon: const Icon(Icons.block),
-                  tooltip: 'Desativar',
-                  onPressed: () =>
-                      abrirDesativacaoAtendente(context, a, controller),
-                ),
-            ],
+              ],
+            ),
           ),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Editar',
+            onPressed: () =>
+                abrirEdicaoAtendente(context, a, controller, departamentos),
+          ),
+          if (a.ativo)
+            IconButton(
+              icon: const Icon(Icons.block),
+              tooltip: 'Desativar',
+              onPressed: () =>
+                  abrirDesativacaoAtendente(context, a, controller),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -373,11 +363,7 @@ class _Etiqueta extends StatelessWidget {
       ),
       child: Text(
         texto,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: cor,
-        ),
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: cor),
       ),
     );
   }

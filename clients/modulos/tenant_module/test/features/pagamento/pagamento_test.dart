@@ -88,7 +88,8 @@ void main() {
       );
 
       final q =
-          ((await _usecase(client)(_params())) as Success<Quitacao, PagamentoError>)
+          ((await _usecase(client)(_params()))
+                  as Success<Quitacao, PagamentoError>)
               .value;
 
       expect(q.exigeSaidaDoApp, isTrue);
@@ -102,28 +103,27 @@ void main() {
         (_) => falhaGrpc(proto.GrpcError.permissionDenied('sem escopo')),
       );
 
-      final erro =
-          ((await _usecase(client)(_params())) as Failure).error;
+      final erro = ((await _usecase(client)(_params())) as Failure).error;
 
       expect(erro, isA<PagamentoAcessoNegado>());
       expect(erro, isA<UnauthorizedFailure>());
     });
 
-    test('sessão expirada também é acesso negado', () async {
+    test('sessão expirada não vira "sem permissão"', () async {
       when(() => client.quitarMinhaAssinatura(any())).thenAnswer(
         (_) => falhaGrpc(proto.GrpcError.unauthenticated('token vencido')),
       );
 
       expect(
         ((await _usecase(client)(_params())) as Failure).error,
-        isA<PagamentoAcessoNegado>(),
+        isA<PagamentoSessaoExpirada>(),
       );
     });
 
     test('servidor fora do ar é falha de rede', () async {
-      when(() => client.quitarMinhaAssinatura(any())).thenAnswer(
-        (_) => falhaGrpc(proto.GrpcError.unavailable('offline')),
-      );
+      when(
+        () => client.quitarMinhaAssinatura(any()),
+      ).thenAnswer((_) => falhaGrpc(proto.GrpcError.unavailable('offline')));
 
       final erro = ((await _usecase(client)(_params())) as Failure).error;
 
@@ -150,8 +150,7 @@ void main() {
       final capturados = <String>[];
       when(() => client.quitarMinhaAssinatura(any())).thenAnswer((inv) {
         capturados.add(
-          (inv.positionalArguments.first
-                  as proto.QuitarMinhaAssinaturaRequest)
+          (inv.positionalArguments.first as proto.QuitarMinhaAssinaturaRequest)
               .credencial,
         );
         return respostaGrpc(

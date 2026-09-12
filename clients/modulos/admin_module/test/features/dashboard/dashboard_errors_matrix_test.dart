@@ -45,7 +45,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> DashboardAcessoNegado', () async {
+    test('unauthenticated -> DashboardSessaoExpirada', () async {
       when(
         () => client.getServiceHealth(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -58,7 +58,7 @@ void main() {
       final r = await usecase(noParams);
 
       final erro = (r as Failure).error;
-      expect(erro, isA<DashboardAcessoNegado>());
+      expect(erro, isA<DashboardSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as DashboardError).message,
@@ -265,7 +265,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> DashboardAcessoNegado', () async {
+    test('unauthenticated -> DashboardSessaoExpirada', () async {
       when(
         () => client.getDashboardSummary(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -278,7 +278,7 @@ void main() {
       final r = await usecase(noParams);
 
       final erro = (r as Failure).error;
-      expect(erro, isA<DashboardAcessoNegado>());
+      expect(erro, isA<DashboardSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as DashboardError).message,

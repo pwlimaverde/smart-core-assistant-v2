@@ -5,22 +5,22 @@ import '../../domain/model/conexao.dart';
 import '../../domain/parameters/conexoes_parameters.dart';
 
 Conexao _paraDominio(proto.MyWhatsappInstance c) => Conexao(
-      id: c.id,
-      nome: c.name,
-      telefone: c.phoneNumber,
-      estado: c.connectionState,
-      ativa: c.active,
-      criadaEm: DateTime.fromMillisecondsSinceEpoch(c.createdAt.toInt()),
-      respostaBot: c.respostaBot,
-    );
+  id: c.id,
+  nome: c.name,
+  telefone: c.phoneNumber,
+  estado: c.connectionState,
+  ativa: c.active,
+  criadaEm: DateTime.fromMillisecondsSinceEpoch(c.createdAt.toInt()),
+  respostaBot: c.respostaBot,
+);
 
 final class ListarConexoesDatasource
     implements Datasource<List<Conexao>, NoParams> {
   final proto.AdminServiceClient _client;
 
   const ListarConexoesDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<List<Conexao>> call(NoParams parameters) async {
@@ -36,8 +36,8 @@ final class ReconectarConexaoDatasource
   final proto.AdminServiceClient _client;
 
   const ReconectarConexaoDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Unit> call(ConexaoIdParameters parameters) async {
@@ -53,8 +53,8 @@ final class RemoverConexaoDatasource
   final proto.AdminServiceClient _client;
 
   const RemoverConexaoDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Unit> call(ConexaoIdParameters parameters) async {
@@ -70,8 +70,8 @@ final class CriarConexaoDatasource
   final proto.AdminServiceClient _client;
 
   const CriarConexaoDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<ConexaoCriada> call(CriarConexaoParameters parameters) async {
@@ -87,18 +87,15 @@ final class EstadoPareamentoDatasource
   final proto.AdminServiceClient _client;
 
   const EstadoPareamentoDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<EstadoPareamento> call(ConexaoIdParameters parameters) async {
     final resp = await _client.getMyWhatsappInstanceStatus(
       proto.GetMyWhatsappInstanceStatusRequest(id: parameters.id),
     );
-    return EstadoPareamento(
-      estado: resp.connectionState,
-      qrCode: resp.qrCode,
-    );
+    return EstadoPareamento(estado: resp.connectionState, qrCode: resp.qrCode);
   }
 }
 
@@ -108,8 +105,8 @@ final class DefinirRespostaBotDatasource
   final proto.AdminServiceClient _client;
 
   const DefinirRespostaBotDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<bool> call(RespostaBotParameters parameters) async {

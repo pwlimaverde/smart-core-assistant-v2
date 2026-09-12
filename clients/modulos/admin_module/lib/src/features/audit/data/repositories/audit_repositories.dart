@@ -23,7 +23,10 @@ AuditError _mapAudit(String operacao, Object exception, StackTrace stackTrace) {
     stackTrace: stackTrace,
   );
   return switch (kind) {
-    GrpcFailureKind.unauthenticated ||
+    // Separados de propósito: sessão expirada não é falta de
+    // permissão, e juntar as duas manda a pessoa caçar um acesso
+    // que ela já tem.
+    GrpcFailureKind.unauthenticated => const AuditSessaoExpirada(),
     GrpcFailureKind.permissionDenied => const AuditAcessoNegado(),
     GrpcFailureKind.notFound => const AuditNaoEncontrado(),
     GrpcFailureKind.alreadyExists => const AuditConflito(),

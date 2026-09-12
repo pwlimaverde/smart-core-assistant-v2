@@ -106,8 +106,8 @@ class _ConexaoWhatsappPageState extends State<ConexaoWhatsappPage> {
             );
           }
 
-          final conectado = state is SuccessState<EstadoConexao> &&
-              state.data.conectado;
+          final conectado =
+              state is SuccessState<EstadoConexao> && state.data.conectado;
           if (conectado) {
             return _Conectado(onContinuar: _avancar);
           }
@@ -257,7 +257,12 @@ class _Qr extends StatelessWidget {
         borderRadius: AppRadius.md,
         border: Border.all(color: colors.border),
       ),
-      child: Image.memory(bytes, width: 240, height: 240, gaplessPlayback: true),
+      child: Image.memory(
+        bytes,
+        width: 240,
+        height: 240,
+        gaplessPlayback: true,
+      ),
     );
   }
 
@@ -290,10 +295,9 @@ class _Conectado extends StatelessWidget {
         Text(
           'WhatsApp conectado. As mensagens já chegam ao sistema.',
           textAlign: TextAlign.center,
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: colors.fgMuted),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: colors.fgMuted),
         ),
         const SizedBox(height: AppSpacing.lg),
         PrimaryButton(label: 'Continuar', onPressed: onContinuar),
