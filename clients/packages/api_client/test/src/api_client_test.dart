@@ -8,6 +8,7 @@ void main() {
       const config = AppConfig(
         flavor: AppFlavor.dev,
         apiEndpoint: 'http://localhost:50051',
+        mcpEndpoint: 'https://mcp.example/mcp',
         enableLogging: false,
       );
 
@@ -19,6 +20,7 @@ void main() {
       const config = AppConfig(
         flavor: AppFlavor.dev,
         apiEndpoint: 'http://localhost:50051',
+        mcpEndpoint: 'https://mcp.example/mcp',
         enableLogging: true,
       );
 

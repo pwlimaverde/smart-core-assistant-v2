@@ -7,6 +7,7 @@ void main() {
       const config = AppConfig(
         flavor: AppFlavor.dev,
         apiEndpoint: 'https://api-dev.smartcore.com',
+        mcpEndpoint: 'https://mcp.example/mcp',
         enableLogging: true,
       );
 
@@ -20,18 +21,21 @@ void main() {
       const prodConfig = AppConfig(
         flavor: AppFlavor.prod,
         apiEndpoint: 'https://api.smartcore.com',
+        mcpEndpoint: 'https://mcp.example/mcp',
       );
       expect(prodConfig.isProd, isTrue);
 
       const devConfig = AppConfig(
         flavor: AppFlavor.dev,
         apiEndpoint: 'https://api-dev.smartcore.com',
+        mcpEndpoint: 'https://mcp.example/mcp',
       );
       expect(devConfig.isProd, isFalse);
 
       const stagingConfig = AppConfig(
         flavor: AppFlavor.staging,
         apiEndpoint: 'https://api-staging.smartcore.com',
+        mcpEndpoint: 'https://mcp.example/mcp',
       );
       expect(stagingConfig.isProd, isFalse);
     });

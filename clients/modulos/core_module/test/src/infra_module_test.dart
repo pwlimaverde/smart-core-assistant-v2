@@ -8,7 +8,9 @@ import 'package:mocktail/mocktail.dart';
 import 'package:navigation_module/navigation_module.dart';
 
 class MockLocalStorageService extends Mock implements LocalStorageService {}
+
 class MockApiClient extends Mock implements ApiClient {}
+
 class MockAuthService extends Mock implements AuthService {}
 
 void main() {
@@ -18,6 +20,7 @@ void main() {
     const config = AppConfig(
       flavor: AppFlavor.dev,
       apiEndpoint: 'http://localhost',
+      mcpEndpoint: 'https://mcp.example/mcp',
     );
 
     tearDown(() {
@@ -42,6 +45,7 @@ void main() {
     const config = AppConfig(
       flavor: AppFlavor.dev,
       apiEndpoint: 'http://localhost',
+      mcpEndpoint: 'https://mcp.example/mcp',
     );
 
     late MockLocalStorageService mockStorage;

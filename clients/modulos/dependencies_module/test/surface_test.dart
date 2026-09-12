@@ -13,6 +13,7 @@ void main() {
       const config = AppConfig(
         flavor: AppFlavor.dev,
         apiEndpoint: 'tcp://localhost:50051',
+        mcpEndpoint: 'https://mcp.example/mcp',
       );
       expect(config.isProd, isFalse);
       expect(config.apiEndpoint, 'tcp://localhost:50051');

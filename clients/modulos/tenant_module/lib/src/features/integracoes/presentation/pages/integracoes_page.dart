@@ -14,7 +14,26 @@ import '../controllers/integracoes_controller.dart';
 /// Esta tela **não** gera token, e é de propósito: o desenho anterior, com
 /// credencial copiada e colada, tinha a classe inteira de risco de "segredo
 /// esquecido num arquivo de configuração".
-const _urlDoServidorMcp = 'https://mcp.smartcoreassistant.com.br/mcp';
+///
+/// Vem do [AppConfig], **por ambiente**. Estava fixo no domínio de produção, e
+/// isso quebrava o app de dev: a descoberta OAuth de cada ambiente declara o
+/// `resource` com o próprio domínio, então colar o endereço de produção num app
+/// apontado para dev faz o cliente recusar por divergência. Os dois domínios
+/// respondem — por isso o defeito não aparecia numa checagem superficial.
+String get _urlDoServidorMcp => inject<AppConfig>().mcpEndpoint;
+
+/// Instalação por linha de comando (Claude Code, Cursor).
+///
+/// É o único cliente em que "instalar direto" é literalmente um comando. No
+/// Claude de janela e no ChatGPT não existe link de instalação para servidor
+/// **remoto**: a documentação da Anthropic descreve apenas colar o endereço em
+/// Conectores, e o instalador de um clique (`.mcpb`) vale só para servidor
+/// local. Daí o endereço acima continuar sendo o caminho de lá.
+///
+/// Derivado do endereço, e não escrito à mão: duplicá-lo faria uma troca de
+/// domínio corrigir só metade da tela.
+String get _comandoClaudeCode =>
+    'claude mcp add --transport http smartcore $_urlDoServidorMcp';
 
 /// Tradução dos escopos técnicos para o que o usuário entende.
 ///
@@ -78,8 +97,9 @@ class _IntegracoesPageState extends State<IntegracoesPage> {
           children: [
             Text(
               'Aplicativos de IA conectados',
-              style: Theme.of(context).textTheme.headlineMedium
-                  ?.copyWith(fontWeight: FontWeight.bold),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
@@ -165,9 +185,7 @@ class _IntegracoesPageState extends State<IntegracoesPage> {
                 icon: const Icon(Icons.copy, size: 18),
                 tooltip: 'Copiar endereço',
                 onPressed: () {
-                  Clipboard.setData(
-                    const ClipboardData(text: _urlDoServidorMcp),
-                  );
+                  Clipboard.setData(ClipboardData(text: _urlDoServidorMcp));
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Endereço copiado.')),
                   );
@@ -182,6 +200,50 @@ class _IntegracoesPageState extends State<IntegracoesPage> {
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
+          ),
+          const Divider(height: 32),
+          // Claude Code e Cursor instalam por linha de comando — é o único
+          // cliente em que "instalar direto" é literalmente um comando só.
+          //
+          // No Claude de janela e no ChatGPT **não existe** link de instalação:
+          // a documentação da Anthropic descreve apenas colar o endereço em
+          // Conectores, e o instalador de um clique (`.mcpb`) vale só para
+          // servidor LOCAL, não para servidor remoto com OAuth como o nosso.
+          // Por isso o endereço acima continua sendo o caminho de lá.
+          Text(
+            'No Claude Code ou no Cursor',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Cole este comando no terminal. Na primeira vez ele abre o '
+            'navegador para você entrar e autorizar.',
+            style: theme.textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: SelectableText(
+                  _comandoClaudeCode,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    fontFamily: 'monospace',
+                  ),
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.copy, size: 18),
+                tooltip: 'Copiar comando',
+                onPressed: () {
+                  Clipboard.setData(ClipboardData(text: _comandoClaudeCode));
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Comando copiado.')),
+                  );
+                },
+              ),
+            ],
           ),
         ],
       ),
