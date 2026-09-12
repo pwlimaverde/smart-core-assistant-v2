@@ -11,7 +11,7 @@ incomoda.
 | C | IA não responde no teste de treinamento | **configuração** | causa achada |
 | D1 | Convite: só 3 permissões de 13 | defeito | **corrigido** |
 | D2 | Convite: o "link" era um caminho relativo | defeito | **corrigido** |
-| D3 | Convite: não envia e-mail | **nunca existiu na v2** | a construir |
+| D3 | Convite: não envia e-mail | **nunca existiu na v2** | **construído** |
 | E | "Sessão expirada" o tempo todo | defeito | **causa achada e corrigida** |
 | F | Ícone do MCP mostra "S" em vez da logo | defeito | **corrigido** |
 | G | Chat do WhatsApp dentro do painel | **funcionalidade nova** (N9) | planejada, não feita |
@@ -108,7 +108,27 @@ A v1 usava SMTP direto (Django), via Brevo:
     EMAIL_PORT = 587, TLS
     EMAIL_HOST_USER / EMAIL_HOST_PASSWORD
 
-Construir isso na v2 é trabalho de verdade — cliente SMTP, template, ponto de
-envio no `CreateInvite`, e a regra de que **falha no e-mail não invalida o
-convite** (o link continua valendo). Depende também das credenciais Brevo no
-ambiente.
+Construído no crate `infrastructure_email`, com os **mesmos nomes de variável
+da v1** — as credenciais Brevo que já existem continuam servindo, sem ninguém
+ter de descobrir um vocabulário novo para o mesmo relay.
+
+Três decisões que valem registro:
+
+**Falha aberta.** O convite já está gravado quando o e-mail sai. SMTP fora do
+ar vira log; o link continua válido e visível na tela de quem convidou. Recusar
+a criação por causa do e-mail trocaria um problema pequeno (avisar por outro
+caminho) por um grande (não conseguir convidar ninguém).
+
+**Sem SMTP configurado não é erro.** Desenvolvimento local e CI não têm relay,
+e não devem quebrar nem encher o log de falha: o enviador entra em modo
+desligado e registra o que teria mandado.
+
+**O nome da empresa viaja junto do convite.** Quem manda o e-mail é a borda, e
+ela não descobriria o nome sem outra volta ao banco — enquanto no
+`data_postgres` ele está a uma consulta da transação já aberta. Sem o nome, o
+convidado receberia "alguém criou um acesso para você", que é a cara de golpe.
+
+Falta configurar no ambiente: `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`,
+`EMAIL_FROM` (remetente de domínio verificado no Brevo) e `APP_PUBLIC_URL` — o
+servidor não tem como adivinhar o endereço público, com um proxy na frente e
+domínios diferentes por ambiente.
