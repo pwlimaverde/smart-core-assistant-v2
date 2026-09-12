@@ -328,6 +328,33 @@ fn jitter(base: Duration) -> Duration {
 pub type Handler =
     Arc<dyn Fn(Envelope) -> futures_util::future::BoxFuture<'static, Envelope> + Send + Sync>;
 
+/// O `accept` esgotou descritores de arquivo? Nesse caso a falha é transitória.
+///
+/// # Por que isto não pode ser fatal
+///
+/// Em 2026-09-08 13:15 o `data_postgres` derrubou o servidor RPC inteiro com
+/// "Servidor RPC parou com erro crítico: Too many open files (os error 24)".
+/// Uma rajada de webhooks (6829 em 11 minutos) encostou no limite de
+/// descritores — que nos containers era o *soft* padrão de 1024 — e o `?` do
+/// `listener.accept().await?` propagou o erro para fora do `run()`, matando o
+/// processo.
+///
+/// Esgotar descritores é condição de PRESSÃO, não de corrupção: os handlers em
+/// voo terminam, os sockets fecham e o `accept` volta a funcionar em
+/// milissegundos. Derrubar o servidor é a pior reação possível — e foi o começo
+/// de uma interrupção que durou três dias, porque no restart o serviço bateu em
+/// outro problema e nunca mais subiu.
+///
+/// `raw_os_error` numérico porque a `std` não expõe EMFILE/ENFILE em
+/// `ErrorKind` fora do nightly. 24/23 valem em Linux e macOS.
+fn esgotou_descritores(e: &std::io::Error) -> bool {
+    matches!(e.raw_os_error(), Some(24) | Some(23))
+}
+
+/// Pausa curta depois de um `accept` que esgotou descritores. Existe para o laço
+/// não virar espera ocupada enquanto os handlers em voo devolvem seus sockets.
+const PAUSA_APOS_ESGOTAR_DESCRITORES: std::time::Duration = std::time::Duration::from_millis(100);
+
 pub struct Server {
     endpoint: Endpoint,
     handlers: Arc<HashMap<String, Handler>>,
@@ -410,7 +437,19 @@ impl Server {
                     tracing::info!("Servidor UDS rodando em {:?}", path);
 
                     loop {
-                        let (stream, _) = listener.accept().await?;
+                        let (stream, _) = match listener.accept().await {
+                            Ok(par) => par,
+                            // Ver `esgotou_descritores`: pressão, não corrupção.
+                            Err(e) if esgotou_descritores(&e) => {
+                                tracing::error!(
+                                    erro = %e,
+                                    "accept sem descritores disponíveis; pausando e seguindo"
+                                );
+                                tokio::time::sleep(PAUSA_APOS_ESGOTAR_DESCRITORES).await;
+                                continue;
+                            }
+                            Err(e) => return Err(e.into()),
+                        };
                         let handlers_clone = handlers.clone();
                         let codec_name_clone = codec_name.clone();
                         let semaforo_clone = semaforo.clone(); // P3
@@ -439,7 +478,20 @@ impl Server {
                 tracing::info!(endpoint = %addr, local = ?local, "Servidor TCP rodando");
 
                 loop {
-                    let (stream, _) = listener.accept().await?;
+                    let (stream, _) = match listener.accept().await {
+                        Ok(par) => par,
+                        // Ver `esgotou_descritores`: foi por aqui que o
+                        // data_postgres morreu em 2026-09-08.
+                        Err(e) if esgotou_descritores(&e) => {
+                            tracing::error!(
+                                erro = %e,
+                                "accept sem descritores disponíveis; pausando e seguindo"
+                            );
+                            tokio::time::sleep(PAUSA_APOS_ESGOTAR_DESCRITORES).await;
+                            continue;
+                        }
+                        Err(e) => return Err(e.into()),
+                    };
                     let handlers_clone = handlers.clone();
                     let codec_name_clone = codec_name.clone();
                     let semaforo_clone = semaforo.clone(); // P3
@@ -875,5 +927,28 @@ mod tests {
 
         assert!(resultado.is_ok(), "erro: {:?}", resultado.err());
         std::env::remove_var("SMARTCORE_SERVICO_DE_TESTE_ENDPOINT");
+    }
+
+    #[test]
+    fn esgotar_descritores_e_transitorio_e_o_resto_nao_e() {
+        use std::io::{Error, ErrorKind};
+
+        // EMFILE (24) e ENFILE (23): pressão de descritores, o laço de accept
+        // pausa e segue. Foi o EMFILE que derrubou o data_postgres em
+        // 2026-09-08 e começou uma interrupção de três dias.
+        assert!(esgotou_descritores(&Error::from_raw_os_error(24)));
+        assert!(esgotou_descritores(&Error::from_raw_os_error(23)));
+
+        // Qualquer outra coisa continua fatal de propósito: um listener que
+        // perdeu o socket ou um bind inválido não melhora com nova tentativa, e
+        // mascarar isso viraria um servidor de pé que não aceita ninguém.
+        // ECONNABORTED (103 no Linux) e EPERM (1): erros de accept que NÃO são
+        // pressão de descritores.
+        assert!(!esgotou_descritores(&Error::from_raw_os_error(103)));
+        assert!(!esgotou_descritores(&Error::from_raw_os_error(1)));
+        assert!(!esgotou_descritores(&Error::new(
+            ErrorKind::InvalidInput,
+            "sem código de OS"
+        )));
     }
 }

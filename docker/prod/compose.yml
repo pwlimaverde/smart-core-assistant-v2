@@ -24,6 +24,21 @@ x-logging: &logging
     max-file: "${LOG_MAX_FILE:-5}"
 
 # Sonda padrão dos serviços que atendem no `transport::Server` (PING→PONG).
+x-ulimits-rede: &ulimits-rede
+  # O soft limit padrao do container e 1024 descritores — medido em
+  # /proc/<pid>/limits em 2026-09-11, com o hard limit em 524288.
+  #
+  # Isso derrubou producao: em 2026-09-08 13:15 uma rajada de 6829 webhooks em 11
+  # minutos encostou no teto e o `data_postgres` morreu com "Too many open files
+  # (os error 24)". O laco de accept tratava EMFILE como fatal (corrigido em
+  # transport/src/runtime.rs), mas o gatilho foi o teto ridiculo.
+  #
+  # 65536 nao e generosidade: e a ordem de grandeza de qualquer servidor de rede.
+  # O hard limit do daemon permite bem mais; nao ha custo em reservar isto.
+  nofile:
+    soft: 65536
+    hard: 65536
+
 x-healthcheck-rpc: &healthcheck-rpc
   interval: 20s
   timeout: 5s
@@ -159,6 +174,7 @@ services:
   # ---------- SERVICOS RUST (imagem unica, command por servico) ----------
   data_postgres:
     image: *server-image
+    ulimits: *ulimits-rede
     command: ["data_postgres"]
     env_file: [.env]
     environment:
@@ -195,6 +211,7 @@ services:
 
   data_redis:
     image: *server-image
+    ulimits: *ulimits-rede
     command: ["data_redis"]
     env_file: [.env]
     networks: [internal, observability]
@@ -210,6 +227,7 @@ services:
 
   data_storage:
     image: *server-image
+    ulimits: *ulimits-rede
     command: ["data_storage"]
     env_file: [.env]
     environment:
@@ -244,6 +262,7 @@ services:
 
   control_plane:
     image: *server-image
+    ulimits: *ulimits-rede
     command: ["control_plane"]
     env_file: [.env]
     # `mcp_net` porque o mcp_server troca o token do cliente por um JWT interno
@@ -338,6 +357,7 @@ services:
 
   worker:
     image: *server-image
+    ulimits: *ulimits-rede
     command: ["worker"]
     env_file: [.env]
     environment:
@@ -361,6 +381,7 @@ services:
 
   runtime_api:
     image: *server-image
+    ulimits: *ulimits-rede
     command: ["runtime_api"]
     env_file: [.env]
     # `mcp_net` além das de sempre: é por ela que o mcp_server chega ao gRPC
@@ -406,6 +427,7 @@ services:
   # ---------- MENSAGERIA / WHATSAPP ----------
   data_whatsapp:
     image: *server-image
+    ulimits: *ulimits-rede
     command: ["data_whatsapp"]
     env_file: [.env]
     networks: [internal, observability, evolution_net]
@@ -420,6 +442,7 @@ services:
 
   webhook_ingress:
     image: *server-image
+    ulimits: *ulimits-rede
     command: ["webhook_ingress"]
     env_file: [.env]
     networks: [internal, observability, evolution_net]
@@ -446,6 +469,7 @@ services:
   # publica `smartcore_service_up`.
   watchdog:
     image: *server-image
+    ulimits: *ulimits-rede
     command: ["watchdog"]
     # Ver a nota no compose de dev: `smartcore` não tem acesso ao socket do
     # Docker, e sem root o watchdog falha em toda rodada.
