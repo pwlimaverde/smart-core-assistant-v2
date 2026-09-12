@@ -35,3 +35,69 @@ final class ListarContatosDatasource
     return resp.contatos.map(_contato).toList();
   }
 }
+
+final class CriarContatoDatasource
+    implements Datasource<Contato, CriarContatoParameters> {
+  final proto.AdminServiceClient _client;
+
+  const CriarContatoDatasource({required proto.AdminServiceClient client})
+    // ignore: prefer_initializing_formals
+    : _client = client;
+
+  @override
+  Future<Contato> call(CriarContatoParameters parameters) async {
+    final resp = await _client.createMyContato(
+      proto.CreateMyContatoRequest(
+        telefone: parameters.telefone,
+        nomeContato: parameters.nomeContato,
+        email: parameters.email,
+      ),
+    );
+    // O contato volta com o telefone já normalizado — é ele que a tela mostra
+    // depois de salvar, e não o que foi digitado.
+    return _contato(resp.contato);
+  }
+}
+
+final class AtualizarContatoDatasource
+    implements Datasource<Unit, AtualizarContatoParameters> {
+  final proto.AdminServiceClient _client;
+
+  const AtualizarContatoDatasource({required proto.AdminServiceClient client})
+    // ignore: prefer_initializing_formals
+    : _client = client;
+
+  @override
+  Future<Unit> call(AtualizarContatoParameters parameters) async {
+    await _client.updateMyContato(
+      proto.UpdateMyContatoRequest(
+        id: parameters.id,
+        nomeContato: parameters.nomeContato,
+        email: parameters.email,
+        telefone: parameters.telefone,
+      ),
+    );
+    return unit;
+  }
+}
+
+final class DefinirContatoAtivoDatasource
+    implements Datasource<Unit, DefinirContatoAtivoParameters> {
+  final proto.AdminServiceClient _client;
+
+  const DefinirContatoAtivoDatasource({
+    required proto.AdminServiceClient client,
+    // ignore: prefer_initializing_formals
+  }) : _client = client;
+
+  @override
+  Future<Unit> call(DefinirContatoAtivoParameters parameters) async {
+    await _client.definirMyContatoAtivo(
+      proto.DefinirMyContatoAtivoRequest(
+        id: parameters.id,
+        ativo: parameters.ativo,
+      ),
+    );
+    return unit;
+  }
+}

@@ -698,6 +698,18 @@ impl AtendimentoStore for PgAtendimentoStore {
         .await
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn contar_conversas_abertas_hoje(&self, ctx: &RequestContext) -> Result<i64, DbError> {
+        let repo = PostgresAtendimentoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let total = repo.contar_abertas_hoje_sem_mensagem(&mut tx, &ctx).await?;
+            Ok((total, tx))
+        })
+        .await
+    }
+
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, telefone = %telefone))]
     async fn resolver_atendimento_para_contato(
         &self,

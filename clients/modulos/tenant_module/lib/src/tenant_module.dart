@@ -267,6 +267,27 @@ final class TenantModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<CriarContatoUsecase>(
+      () => CriarContatoUsecase(
+        repository: CriarContatoRepository(
+          datasource: CriarContatoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<AtualizarContatoUsecase>(
+      () => AtualizarContatoUsecase(
+        repository: AtualizarContatoRepository(
+          datasource: AtualizarContatoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<DefinirContatoAtivoUsecase>(
+      () => DefinirContatoAtivoUsecase(
+        repository: DefinirContatoAtivoRepository(
+          datasource: DefinirContatoAtivoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
 
     // ── pagamento da assinatura (pós-login) ───────────────────────────────
     i.lazySingleton<QuitarAssinaturaUsecase>(

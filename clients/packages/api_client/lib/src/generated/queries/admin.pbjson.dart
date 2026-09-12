@@ -3371,6 +3371,73 @@ final $typed_data.Uint8List listMyContatosResponseDescriptor =
         'ChZMaXN0TXlDb250YXRvc1Jlc3BvbnNlEkIKCGNvbnRhdG9zGAEgAygLMiYuc21hcnRjb3JlLm'
         'NvbnRyYWN0cy5xdWVyaWVzLk15Q29udGF0b1IIY29udGF0b3M=');
 
+@$core.Deprecated('Use createMyContatoRequestDescriptor instead')
+const CreateMyContatoRequest$json = {
+  '1': 'CreateMyContatoRequest',
+  '2': [
+    {'1': 'telefone', '3': 1, '4': 1, '5': 9, '10': 'telefone'},
+    {'1': 'nome_contato', '3': 2, '4': 1, '5': 9, '10': 'nomeContato'},
+    {'1': 'email', '3': 3, '4': 1, '5': 9, '10': 'email'},
+  ],
+};
+
+/// Descriptor for `CreateMyContatoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createMyContatoRequestDescriptor = $convert.base64Decode(
+    'ChZDcmVhdGVNeUNvbnRhdG9SZXF1ZXN0EhoKCHRlbGVmb25lGAEgASgJUgh0ZWxlZm9uZRIhCg'
+    'xub21lX2NvbnRhdG8YAiABKAlSC25vbWVDb250YXRvEhQKBWVtYWlsGAMgASgJUgVlbWFpbA==');
+
+@$core.Deprecated('Use myContatoResponseDescriptor instead')
+const MyContatoResponse$json = {
+  '1': 'MyContatoResponse',
+  '2': [
+    {
+      '1': 'contato',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyContato',
+      '10': 'contato'
+    },
+  ],
+};
+
+/// Descriptor for `MyContatoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myContatoResponseDescriptor = $convert.base64Decode(
+    'ChFNeUNvbnRhdG9SZXNwb25zZRJACgdjb250YXRvGAEgASgLMiYuc21hcnRjb3JlLmNvbnRyYW'
+    'N0cy5xdWVyaWVzLk15Q29udGF0b1IHY29udGF0bw==');
+
+@$core.Deprecated('Use updateMyContatoRequestDescriptor instead')
+const UpdateMyContatoRequest$json = {
+  '1': 'UpdateMyContatoRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'nome_contato', '3': 2, '4': 1, '5': 9, '10': 'nomeContato'},
+    {'1': 'email', '3': 3, '4': 1, '5': 9, '10': 'email'},
+    {'1': 'telefone', '3': 4, '4': 1, '5': 9, '10': 'telefone'},
+  ],
+};
+
+/// Descriptor for `UpdateMyContatoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List updateMyContatoRequestDescriptor = $convert.base64Decode(
+    'ChZVcGRhdGVNeUNvbnRhdG9SZXF1ZXN0Eg4KAmlkGAEgASgFUgJpZBIhCgxub21lX2NvbnRhdG'
+    '8YAiABKAlSC25vbWVDb250YXRvEhQKBWVtYWlsGAMgASgJUgVlbWFpbBIaCgh0ZWxlZm9uZRgE'
+    'IAEoCVIIdGVsZWZvbmU=');
+
+@$core.Deprecated('Use definirMyContatoAtivoRequestDescriptor instead')
+const DefinirMyContatoAtivoRequest$json = {
+  '1': 'DefinirMyContatoAtivoRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'ativo', '3': 2, '4': 1, '5': 8, '10': 'ativo'},
+  ],
+};
+
+/// Descriptor for `DefinirMyContatoAtivoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List definirMyContatoAtivoRequestDescriptor =
+    $convert.base64Decode(
+        'ChxEZWZpbmlyTXlDb250YXRvQXRpdm9SZXF1ZXN0Eg4KAmlkGAEgASgFUgJpZBIUCgVhdGl2bx'
+        'gCIAEoCFIFYXRpdm8=');
+
 @$core.Deprecated('Use getMyPainelRequestDescriptor instead')
 const GetMyPainelRequest$json = {
   '1': 'GetMyPainelRequest',

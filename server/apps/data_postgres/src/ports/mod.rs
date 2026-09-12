@@ -18,7 +18,7 @@ pub use atendimento::{
 };
 pub use audit::AuditPort;
 pub use auth::AuthStore;
-pub use cliente::ClienteStore;
+pub use cliente::{ClienteStore, DesfechoEdicaoContato};
 pub use mcp::McpGrantStore;
 pub use operacional::OperacionalStore;
 pub use plans::PlansStore;

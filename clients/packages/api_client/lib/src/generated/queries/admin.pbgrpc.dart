@@ -695,6 +695,30 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$listMyContatos, request, options: options);
   }
 
+  /// C4 — cadastro de contato pela tela. Ate aqui um contato so existia
+  /// porque mandou mensagem, e o "iniciar atendimento" do C3 nao achava
+  /// ninguem para escolher.
+  $grpc.ResponseFuture<$0.MyContatoResponse> createMyContato(
+    $0.CreateMyContatoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$createMyContato, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> updateMyContato(
+    $0.UpdateMyContatoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$updateMyContato, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> definirMyContatoAtivo(
+    $0.DefinirMyContatoAtivoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$definirMyContatoAtivo, request, options: options);
+  }
+
   /// N9 E13 — o catalogo de campos do cartao, por tenant.
   $grpc.ResponseFuture<$0.ListMyCamposResponse> listMyCampos(
     $0.ListMyCamposRequest request, {
@@ -1236,6 +1260,21 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/ListMyContatos',
           ($0.ListMyContatosRequest value) => value.writeToBuffer(),
           $0.ListMyContatosResponse.fromBuffer);
+  static final _$createMyContato =
+      $grpc.ClientMethod<$0.CreateMyContatoRequest, $0.MyContatoResponse>(
+          '/smartcore.contracts.queries.AdminService/CreateMyContato',
+          ($0.CreateMyContatoRequest value) => value.writeToBuffer(),
+          $0.MyContatoResponse.fromBuffer);
+  static final _$updateMyContato =
+      $grpc.ClientMethod<$0.UpdateMyContatoRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/UpdateMyContato',
+          ($0.UpdateMyContatoRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$definirMyContatoAtivo =
+      $grpc.ClientMethod<$0.DefinirMyContatoAtivoRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/DefinirMyContatoAtivo',
+          ($0.DefinirMyContatoAtivoRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
   static final _$listMyCampos =
       $grpc.ClientMethod<$0.ListMyCamposRequest, $0.ListMyCamposResponse>(
           '/smartcore.contracts.queries.AdminService/ListMyCampos',
@@ -2073,6 +2112,33 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.ListMyContatosRequest.fromBuffer(value),
         ($0.ListMyContatosResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.CreateMyContatoRequest, $0.MyContatoResponse>(
+            'CreateMyContato',
+            createMyContato_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.CreateMyContatoRequest.fromBuffer(value),
+            ($0.MyContatoResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.UpdateMyContatoRequest, $0.SimpleOkResponse>(
+            'UpdateMyContato',
+            updateMyContato_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.UpdateMyContatoRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.DefinirMyContatoAtivoRequest,
+            $0.SimpleOkResponse>(
+        'DefinirMyContatoAtivo',
+        definirMyContatoAtivo_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.DefinirMyContatoAtivoRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
     $addMethod(
         $grpc.ServiceMethod<$0.ListMyCamposRequest, $0.ListMyCamposResponse>(
             'ListMyCampos',
@@ -2957,6 +3023,33 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.ListMyContatosResponse> listMyContatos(
       $grpc.ServiceCall call, $0.ListMyContatosRequest request);
+
+  $async.Future<$0.MyContatoResponse> createMyContato_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.CreateMyContatoRequest> $request) async {
+    return createMyContato($call, await $request);
+  }
+
+  $async.Future<$0.MyContatoResponse> createMyContato(
+      $grpc.ServiceCall call, $0.CreateMyContatoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> updateMyContato_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.UpdateMyContatoRequest> $request) async {
+    return updateMyContato($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> updateMyContato(
+      $grpc.ServiceCall call, $0.UpdateMyContatoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> definirMyContatoAtivo_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.DefinirMyContatoAtivoRequest> $request) async {
+    return definirMyContatoAtivo($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> definirMyContatoAtivo(
+      $grpc.ServiceCall call, $0.DefinirMyContatoAtivoRequest request);
 
   $async.Future<$0.ListMyCamposResponse> listMyCampos_Pre(
       $grpc.ServiceCall $call,

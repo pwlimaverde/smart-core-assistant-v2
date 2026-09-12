@@ -5,11 +5,17 @@ import 'package:dependencies_module/dependencies_module.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/contato.dart';
 import '../controllers/contatos_controllers.dart';
+import '../widgets/dialogo_contato.dart';
 
-/// Contatos do tenant — quem já falou com a empresa pelo WhatsApp.
+/// Contatos do tenant — quem fala com a empresa pelo WhatsApp.
 ///
 /// A v1 tinha esta tela no admin do tenant; sem ela não há como responder
 /// "esse número que ligou é cliente nosso?" sem abrir a conversa.
+///
+/// C4: o cadastro passa a nascer aqui também. Enquanto um contato só existia
+/// porque mandou mensagem, o "iniciar atendimento" do C3 não achava ninguém
+/// para escolher — e conhecer o cliente por telefone não bastava para
+/// registrá-lo.
 final class ContatosPage extends StatefulWidget {
   const ContatosPage({super.key});
 
@@ -58,6 +64,11 @@ class _ContatosPageState extends State<ContatosPage> {
           onPressed: () => _controller.carregar(),
         ),
       ],
+      floatingActionButton: FloatingActionButton.extended(
+        icon: const Icon(Icons.person_add_alt),
+        label: const Text('Novo contato'),
+        onPressed: () => abrirCadastroDeContato(context, _controller),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Column(
@@ -91,7 +102,9 @@ class _ContatosPageState extends State<ContatosPage> {
                           : 'Nada encontrado',
                       subtitle: _controller.busca.isEmpty
                           ? 'Os contatos aparecem sozinhos quando alguém manda '
-                                'mensagem para o seu WhatsApp.'
+                                'mensagem para o seu WhatsApp — e você pode '
+                                'cadastrar um agora, antes da primeira '
+                                'conversa.'
                           : 'Nenhum contato casa com "${_controller.busca}".',
                     );
                   }
@@ -99,7 +112,10 @@ class _ContatosPageState extends State<ContatosPage> {
                   return ListView.separated(
                     itemCount: contatos.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 8),
-                    itemBuilder: (_, i) => _LinhaContato(item: contatos[i]),
+                    itemBuilder: (_, i) => _LinhaContato(
+                      item: contatos[i],
+                      controller: _controller,
+                    ),
                   );
                 },
               ),
@@ -113,8 +129,9 @@ class _ContatosPageState extends State<ContatosPage> {
 
 class _LinhaContato extends StatelessWidget {
   final Contato item;
+  final ContatosController controller;
 
-  const _LinhaContato({required this.item});
+  const _LinhaContato({required this.item, required this.controller});
 
   @override
   Widget build(BuildContext context) {
@@ -178,6 +195,25 @@ class _LinhaContato extends StatelessWidget {
               context,
             ).textTheme.bodySmall?.copyWith(color: muted),
           ),
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            tooltip: 'Editar',
+            onPressed: () => abrirEdicaoDeContato(context, item, controller),
+          ),
+          if (item.ativo)
+            IconButton(
+              icon: const Icon(Icons.visibility_off_outlined),
+              tooltip: 'Tirar da lista',
+              onPressed: () =>
+                  abrirDesativacaoDeContato(context, item, controller),
+            )
+          else
+            IconButton(
+              icon: const Icon(Icons.restore_from_trash_outlined),
+              tooltip: 'Devolver à lista',
+              onPressed: () =>
+                  controller.definirAtivo(id: item.id, ativo: true),
+            ),
         ],
       ),
     );

@@ -5,11 +5,11 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 
 use infrastructure_postgres::clientes::contatos::{
-    Contato, ContatoRepository, PostgresContatoRepository,
+    Contato, ContatoRepository, EdicaoContato, PostgresContatoRepository,
 };
 use infrastructure_postgres::{run_in_tenant_transaction, DbError, RequestContext};
 
-use crate::ports::ClienteStore;
+use crate::ports::{ClienteStore, DesfechoEdicaoContato};
 
 /// Implementação Postgres da port Cliente.
 #[derive(Clone)]
@@ -64,6 +64,75 @@ impl ClienteStore for PgClienteStore {
                 .listar_por_tenant(&mut tx, &ctx, busca.as_deref(), limite)
                 .await?;
             Ok((itens, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn criar_contato(
+        &self,
+        ctx: &RequestContext,
+        telefone: String,
+        nome: Option<String>,
+        email: Option<String>,
+    ) -> Result<Contato, DbError> {
+        let repo = PostgresContatoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let contato = repo
+                .criar_manual(&mut tx, &ctx, &telefone, nome.as_deref(), email.as_deref())
+                .await?;
+            Ok((contato, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn atualizar_contato(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        edicao: EdicaoContato,
+    ) -> Result<DesfechoEdicaoContato, DbError> {
+        let repo = PostgresContatoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            // A contagem e o UPDATE na mesma transação de propósito: é ela que
+            // impede duas edições simultâneas de concluírem, as duas, que o
+            // contato "ainda não tinha conversa".
+            if edicao.telefone.is_some() {
+                let atendimentos = repo.contar_atendimentos(&mut tx, &ctx, id).await?;
+                if atendimentos > 0 {
+                    return Ok((DesfechoEdicaoContato::TelefoneTravado { atendimentos }, tx));
+                }
+            }
+
+            let achou = repo.atualizar(&mut tx, &ctx, id, edicao).await?;
+            let desfecho = if achou {
+                DesfechoEdicaoContato::Atualizado
+            } else {
+                DesfechoEdicaoContato::NaoEncontrado
+            };
+            Ok((desfecho, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id, ativo = ativo))]
+    async fn definir_contato_ativo(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        ativo: bool,
+    ) -> Result<bool, DbError> {
+        let repo = PostgresContatoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let achou = repo.desativar(&mut tx, &ctx, id, ativo).await?;
+            Ok((achou, tx))
         })
         .await
     }

@@ -516,6 +516,9 @@ async fn main() -> anyhow::Result<()> {
     let s_atendentes = state_clone.clone();
     let s_painel = state_clone.clone();
     let s_contatos = state_clone.clone();
+    let s_contato_criar = state_clone.clone();
+    let s_contato_update = state_clone.clone();
+    let s_contato_ativo = state_clone.clone();
     let s_fluxo_listar = state_clone.clone();
     let s_campo_listar = state_clone.clone();
     let s_campo_criar = state_clone.clone();
@@ -1145,6 +1148,26 @@ async fn main() -> anyhow::Result<()> {
         .route("ListContatos", move |env| {
             let state = s_contatos.clone();
             Box::pin(async move { handler_list_contatos(state.cliente.as_ref(), env).await })
+        })
+        // C4 — o cadastro de contatos, que até aqui só a ingestão criava.
+        .route("CreateContato", move |env| {
+            let state = s_contato_criar.clone();
+            Box::pin(async move {
+                handler_create_contato(state.cliente.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("UpdateContato", move |env| {
+            let state = s_contato_update.clone();
+            Box::pin(async move {
+                handler_update_contato(state.cliente.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("DefinirContatoAtivo", move |env| {
+            let state = s_contato_ativo.clone();
+            Box::pin(async move {
+                handler_definir_contato_ativo(state.cliente.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
         })
         .route("GetPainelTenant", move |env| {
             let state = s_painel.clone();
@@ -2702,6 +2725,18 @@ async fn handler_persist_message(store: &dyn ports::AtendimentoStore, env: Envel
     }
 }
 
+/// Teto diário de conversas abertas pelo painel, por tenant (C3).
+///
+/// A evolution-go é whatsmeow: aceita qualquer JID, sem a janela de 24 h da
+/// Cloud API. Iniciar conversa é tecnicamente trivial — e é o caminho mais
+/// curto para o número do tenant ser denunciado e o WhatsApp derrubá-lo.
+///
+/// 50 é folgado para uso humano (um operador não abre cinquenta fichas à mão
+/// num dia) e apertado para disparo em massa, que é o único uso que esbarra
+/// aqui. Constante por ora; se algum tenant legítimo bater no teto, ele vira
+/// plano — e aí é um número por plano, não um por instalação.
+const TETO_DIARIO_CONVERSAS_MANUAIS: i64 = 50;
+
 /// C3 — alguém no painel decide falar primeiro com um cliente cadastrado.
 ///
 /// Até aqui um atendimento só nascia de uma mensagem que chegou. Quem queria
@@ -2752,6 +2787,22 @@ async fn handler_iniciar_atendimento_manual(
         .map(|s| s.to_string());
 
     let ctx = contexto_do_envelope(&env);
+
+    // O teto vem antes da criação, e a contagem ignora conversas que já
+    // trocaram mensagem: quem responde a quem escreveu não é limitado por
+    // nada. Uma falha ao contar não barra ninguém — o teto protege de abuso,
+    // e transformá-lo em ponto único de falha impediria o uso legítimo por um
+    // problema que não é do usuário.
+    if let Ok(abertas) = store.contar_conversas_abertas_hoje(&ctx).await {
+        if abertas >= TETO_DIARIO_CONVERSAS_MANUAIS {
+            return erro(
+                error_core::AppError::Conflict(format!(
+                    "Você já abriu {abertas} conversas hoje sem trocar mensagem                      (o limite é {TETO_DIARIO_CONVERSAS_MANUAIS}). O limite existe                      para o WhatsApp não denunciar o seu número por disparo em                      massa. Amanhã ele reinicia."
+                )),
+                &env,
+            );
+        }
+    }
 
     match store
         .iniciar_atendimento_manual(
@@ -4748,6 +4799,258 @@ async fn handler_list_contatos(store: &dyn ports::ClienteStore, env: Envelope) -
             serde_json::json!({ "contatos": itens }),
         ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+// --- C4: o cadastro de contatos deixa de depender de alguém escrever -----
+//
+// Até aqui um contato só existia porque mandou mensagem. O operador que
+// conhece o cliente por telefone não tinha como registrá-lo — e sem contato
+// cadastrado, o "iniciar atendimento" do C3 não achava ninguém para escolher.
+
+/// Põe o telefone digitado no mesmo formato em que a ingestão o grava.
+///
+/// O webhook deriva o número do JID (`5511999998888@s.whatsapp.net`): só
+/// dígitos, com DDI, sem `+`. Um contato cadastrado à mão como
+/// "(11) 99999-8888" ficaria numa linha diferente do mesmo telefone que chega
+/// pelo WhatsApp — dois cadastros para uma pessoa, e a conversa aberta à mão
+/// não receberia as respostas dela.
+///
+/// `None` quando o que sobrou não pode ser um telefone.
+fn normalizar_telefone(bruto: &str) -> Option<String> {
+    let digitos: String = bruto.chars().filter(char::is_ascii_digit).collect();
+
+    match digitos.len() {
+        // Formato nacional (DDD + 8 ou 9 dígitos): assume Brasil. É a mesma
+        // suposição da v1, e a única possível — quem digita "11 99999-8888"
+        // não está informando país nenhum.
+        10 | 11 => Some(format!("55{digitos}")),
+        // Já veio com DDI. Não se toca: prefixar de novo criaria um número que
+        // não existe.
+        12..=15 => Some(digitos),
+        _ => None,
+    }
+}
+
+/// Aceita e-mail vazio como "não informado" e recusa o que não é e-mail.
+///
+/// A conferência é frouxa de propósito — regra estrita erra em endereços
+/// válidos e o campo é opcional. O que ela pega é o engano óbvio: texto sem
+/// arroba, que quase sempre é um nome digitado na linha errada.
+fn conferir_email(bruto: &str) -> Result<Option<String>, String> {
+    let e = bruto.trim();
+    if e.is_empty() {
+        return Ok(None);
+    }
+    if !e.contains('@') || e.starts_with('@') || e.ends_with('@') {
+        return Err("o e-mail informado não parece um endereço".into());
+    }
+    Ok(Some(e.to_string()))
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "CreateContato", tenant_id = %env.tenant_id))]
+async fn handler_create_contato(
+    store: &dyn ports::ClienteStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let texto = |chave: &str| {
+        payload
+            .get(chave)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+
+    let Some(telefone) = normalizar_telefone(&texto("telefone")) else {
+        return erro(
+            error_core::AppError::Validation(
+                "informe um telefone com DDD, por exemplo 11 99999-8888".into(),
+            ),
+            &env,
+        );
+    };
+    let email = match conferir_email(&texto("email")) {
+        Ok(e) => e,
+        Err(msg) => return erro(error_core::AppError::Validation(msg), &env),
+    };
+    let nome = Some(texto("nome_contato")).filter(|s| !s.is_empty());
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .criar_contato(&ctx, telefone, nome.clone(), email)
+        .await
+    {
+        Ok(contato) => {
+            // Dado pessoal de terceiro: o evento registra que houve cadastro,
+            // não o telefone — mesmo cuidado do `contato_gravado`.
+            audit
+                .publish(
+                    &env,
+                    "contato_cadastrado",
+                    "Contato cadastrado manualmente".to_string(),
+                    serde_json::json!({
+                        "id": contato.id,
+                        "nome_informado": nome.is_some(),
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "CreateContatoReply",
+                serde_json::to_value(&contato).unwrap_or_default(),
+            )
+        }
+        // O unique (tenant_id, telefone) vira Conflict, e a tela diz o que
+        // houve: o contato já existe e está na lista.
+        Err(infrastructure_postgres::DbError::UniqueViolation(_)) => erro(
+            error_core::AppError::Conflict(
+                "já existe um contato com este telefone — procure por ele na lista".into(),
+            ),
+            &env,
+        ),
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "UpdateContato", tenant_id = %env.tenant_id))]
+async fn handler_update_contato(
+    store: &dyn ports::ClienteStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    if id <= 0 {
+        return erro(
+            error_core::AppError::Validation("contato não informado".into()),
+            &env,
+        );
+    }
+
+    let texto = |chave: &str| {
+        payload
+            .get(chave)
+            .and_then(|v| v.as_str())
+            .map(|s| s.trim().to_string())
+    };
+
+    // Campo ausente é "não mexe". É isso que preserva o número de quem já tem
+    // conversa sem a tela precisar conhecer a regra.
+    let mut edicao = infrastructure_postgres::clientes::contatos::EdicaoContato {
+        nome_contato: texto("nome_contato"),
+        ..Default::default()
+    };
+    if let Some(bruto) = texto("email") {
+        match conferir_email(&bruto) {
+            // Vazio aqui é apagar o e-mail de propósito, e não "não mexe":
+            // quem mandou o campo em branco quer limpá-lo.
+            Ok(e) => edicao.email = Some(e.unwrap_or_default()),
+            Err(msg) => return erro(error_core::AppError::Validation(msg), &env),
+        }
+    }
+    if let Some(bruto) = texto("telefone").filter(|t| !t.is_empty()) {
+        let Some(t) = normalizar_telefone(&bruto) else {
+            return erro(
+                error_core::AppError::Validation(
+                    "informe um telefone com DDD, por exemplo 11 99999-8888".into(),
+                ),
+                &env,
+            );
+        };
+        edicao.telefone = Some(t);
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store.atualizar_contato(&ctx, id, edicao).await {
+        Ok(ports::DesfechoEdicaoContato::Atualizado) => {
+            audit
+                .publish(
+                    &env,
+                    "contato_editado",
+                    format!("Contato {id} editado"),
+                    serde_json::json!({ "id": id }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "UpdateContatoReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(ports::DesfechoEdicaoContato::NaoEncontrado) => erro(
+            error_core::AppError::Validation("contato não encontrado".into()),
+            &env,
+        ),
+        Ok(ports::DesfechoEdicaoContato::TelefoneTravado { atendimentos }) => erro(
+            error_core::AppError::Conflict(format!(
+                "este contato já tem {atendimentos} conversa(s) no histórico. \
+                 Trocar o telefone passaria essas mensagens para outra pessoa — \
+                 cadastre o número novo como um contato à parte."
+            )),
+            &env,
+        ),
+        Err(infrastructure_postgres::DbError::UniqueViolation(_)) => erro(
+            error_core::AppError::Conflict("já existe outro contato com este telefone".into()),
+            &env,
+        ),
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "DefinirContatoAtivo", tenant_id = %env.tenant_id))]
+async fn handler_definir_contato_ativo(
+    store: &dyn ports::ClienteStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    // Ausente = desativar. É a ação que a tela oferece; reativar é o caso raro
+    // e manda o campo explicitamente.
+    let ativo = payload
+        .get("ativo")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if id <= 0 {
+        return erro(
+            error_core::AppError::Validation("contato não informado".into()),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store.definir_contato_ativo(&ctx, id, ativo).await {
+        Ok(true) => {
+            let acao = if ativo {
+                "contato_reativado"
+            } else {
+                "contato_desativado"
+            };
+            audit
+                .publish(
+                    &env,
+                    acao,
+                    format!(
+                        "Contato {id} {}",
+                        if ativo { "reativado" } else { "desativado" }
+                    ),
+                    serde_json::json!({ "id": id, "ativo": ativo }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "DefinirContatoAtivoReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Validation("contato não encontrado".into()),
+            &env,
+        ),
+        Err(e) => erro(e.into(), &env),
     }
 }
 
@@ -8102,6 +8405,62 @@ async fn handler_is_phone_whitelisted(store: &dyn ports::WhatsappStore, env: Env
 /// mocks `mockall`, então rodam no caminho rápido `--lib --bins` SEM túnel SSH.
 /// A cobertura de SQL/RLS real vive em
 /// `crates/infrastructure_postgres/tests/integracoes/`.
+#[cfg(test)]
+mod tests_contatos_unit {
+    use super::*;
+
+    /// O formato tem de ser o mesmo que a ingestão grava, senão o contato
+    /// cadastrado à mão e o que escreve pelo WhatsApp viram duas pessoas.
+    #[test]
+    fn telefone_nacional_ganha_o_ddi() {
+        assert_eq!(
+            normalizar_telefone("(11) 99999-8888").as_deref(),
+            Some("5511999998888")
+        );
+        // Fixo, 8 dígitos.
+        assert_eq!(
+            normalizar_telefone("11 3333-4444").as_deref(),
+            Some("551133334444")
+        );
+    }
+
+    #[test]
+    fn telefone_com_ddi_nao_ganha_outro() {
+        assert_eq!(
+            normalizar_telefone("+55 11 99999-8888").as_deref(),
+            Some("5511999998888")
+        );
+        assert_eq!(
+            normalizar_telefone("5511999998888").as_deref(),
+            Some("5511999998888")
+        );
+    }
+
+    #[test]
+    fn o_que_nao_pode_ser_telefone_e_recusado() {
+        assert_eq!(normalizar_telefone(""), None);
+        assert_eq!(normalizar_telefone("99999"), None);
+        assert_eq!(normalizar_telefone("Maria"), None);
+        // Longo demais para E.164.
+        assert_eq!(normalizar_telefone("1234567890123456"), None);
+    }
+
+    #[test]
+    fn email_vazio_e_ausencia_e_nao_erro() {
+        assert_eq!(conferir_email("   "), Ok(None));
+    }
+
+    #[test]
+    fn email_sem_arroba_e_engano_de_digitacao() {
+        assert!(conferir_email("Maria Silva").is_err());
+        assert!(conferir_email("@dominio.com").is_err());
+        assert_eq!(
+            conferir_email(" maria@exemplo.com "),
+            Ok(Some("maria@exemplo.com".to_string()))
+        );
+    }
+}
+
 #[cfg(test)]
 mod tests_whatsapp_unit {
     use super::*;

@@ -15,7 +15,12 @@ final class ContatosRoute extends GetItModule {
   @override
   void binds(Injector i) {
     i.controller<ContatosController>(
-      () => ContatosController(listar: inject<ListarContatosUsecase>()),
+      () => ContatosController(
+        listar: inject<ListarContatosUsecase>(),
+        criar: inject<CriarContatoUsecase>(),
+        atualizar: inject<AtualizarContatoUsecase>(),
+        definirAtivo: inject<DefinirContatoAtivoUsecase>(),
+      ),
     );
   }
 }

@@ -13511,6 +13511,312 @@ class ListMyContatosResponse extends $pb.GeneratedMessage {
   $pb.PbList<MyContato> get contatos => $_getList(0);
 }
 
+class CreateMyContatoRequest extends $pb.GeneratedMessage {
+  factory CreateMyContatoRequest({
+    $core.String? telefone,
+    $core.String? nomeContato,
+    $core.String? email,
+  }) {
+    final result = create();
+    if (telefone != null) result.telefone = telefone;
+    if (nomeContato != null) result.nomeContato = nomeContato;
+    if (email != null) result.email = email;
+    return result;
+  }
+
+  CreateMyContatoRequest._();
+
+  factory CreateMyContatoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CreateMyContatoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CreateMyContatoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'telefone')
+    ..aOS(2, _omitFieldNames ? '' : 'nomeContato')
+    ..aOS(3, _omitFieldNames ? '' : 'email')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyContatoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyContatoRequest copyWith(
+          void Function(CreateMyContatoRequest) updates) =>
+      super.copyWith((message) => updates(message as CreateMyContatoRequest))
+          as CreateMyContatoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CreateMyContatoRequest create() => CreateMyContatoRequest._();
+  @$core.override
+  CreateMyContatoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CreateMyContatoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CreateMyContatoRequest>(create);
+  static CreateMyContatoRequest? _defaultInstance;
+
+  /// Como a pessoa digitou. O servidor normaliza para o mesmo formato que a
+  /// ingestao grava (so digitos, com DDI) — sem isso o contato cadastrado a
+  /// mao e o mesmo numero que chega pelo WhatsApp virariam duas pessoas.
+  @$pb.TagNumber(1)
+  $core.String get telefone => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set telefone($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTelefone() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTelefone() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nomeContato => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nomeContato($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNomeContato() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNomeContato() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get email => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set email($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasEmail() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearEmail() => $_clearField(3);
+}
+
+class MyContatoResponse extends $pb.GeneratedMessage {
+  factory MyContatoResponse({
+    MyContato? contato,
+  }) {
+    final result = create();
+    if (contato != null) result.contato = contato;
+    return result;
+  }
+
+  MyContatoResponse._();
+
+  factory MyContatoResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyContatoResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyContatoResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOM<MyContato>(1, _omitFieldNames ? '' : 'contato',
+        subBuilder: MyContato.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyContatoResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyContatoResponse copyWith(void Function(MyContatoResponse) updates) =>
+      super.copyWith((message) => updates(message as MyContatoResponse))
+          as MyContatoResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyContatoResponse create() => MyContatoResponse._();
+  @$core.override
+  MyContatoResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyContatoResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyContatoResponse>(create);
+  static MyContatoResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  MyContato get contato => $_getN(0);
+  @$pb.TagNumber(1)
+  set contato(MyContato value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasContato() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearContato() => $_clearField(1);
+  @$pb.TagNumber(1)
+  MyContato ensureContato() => $_ensure(0);
+}
+
+class UpdateMyContatoRequest extends $pb.GeneratedMessage {
+  factory UpdateMyContatoRequest({
+    $core.int? id,
+    $core.String? nomeContato,
+    $core.String? email,
+    $core.String? telefone,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (nomeContato != null) result.nomeContato = nomeContato;
+    if (email != null) result.email = email;
+    if (telefone != null) result.telefone = telefone;
+    return result;
+  }
+
+  UpdateMyContatoRequest._();
+
+  factory UpdateMyContatoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory UpdateMyContatoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'UpdateMyContatoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'nomeContato')
+    ..aOS(3, _omitFieldNames ? '' : 'email')
+    ..aOS(4, _omitFieldNames ? '' : 'telefone')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateMyContatoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateMyContatoRequest copyWith(
+          void Function(UpdateMyContatoRequest) updates) =>
+      super.copyWith((message) => updates(message as UpdateMyContatoRequest))
+          as UpdateMyContatoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static UpdateMyContatoRequest create() => UpdateMyContatoRequest._();
+  @$core.override
+  UpdateMyContatoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static UpdateMyContatoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<UpdateMyContatoRequest>(create);
+  static UpdateMyContatoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nomeContato => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nomeContato($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNomeContato() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNomeContato() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get email => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set email($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasEmail() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearEmail() => $_clearField(3);
+
+  /// Vazio = nao mexe. So e aceito enquanto o contato nao tem conversa: o
+  /// historico esta amarrado ao numero, e troca-lo passaria as mensagens de
+  /// uma pessoa para outra.
+  @$pb.TagNumber(4)
+  $core.String get telefone => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set telefone($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasTelefone() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearTelefone() => $_clearField(4);
+}
+
+class DefinirMyContatoAtivoRequest extends $pb.GeneratedMessage {
+  factory DefinirMyContatoAtivoRequest({
+    $core.int? id,
+    $core.bool? ativo,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (ativo != null) result.ativo = ativo;
+    return result;
+  }
+
+  DefinirMyContatoAtivoRequest._();
+
+  factory DefinirMyContatoAtivoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory DefinirMyContatoAtivoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'DefinirMyContatoAtivoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOB(2, _omitFieldNames ? '' : 'ativo')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DefinirMyContatoAtivoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DefinirMyContatoAtivoRequest copyWith(
+          void Function(DefinirMyContatoAtivoRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as DefinirMyContatoAtivoRequest))
+          as DefinirMyContatoAtivoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static DefinirMyContatoAtivoRequest create() =>
+      DefinirMyContatoAtivoRequest._();
+  @$core.override
+  DefinirMyContatoAtivoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static DefinirMyContatoAtivoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<DefinirMyContatoAtivoRequest>(create);
+  static DefinirMyContatoAtivoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.bool get ativo => $_getBF(1);
+  @$pb.TagNumber(2)
+  set ativo($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasAtivo() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearAtivo() => $_clearField(2);
+}
+
 class GetMyPainelRequest extends $pb.GeneratedMessage {
   factory GetMyPainelRequest() => create();
 

@@ -145,6 +145,18 @@ pub trait AtendimentoRepository: Send + Sync {
         assunto: Option<&str>,
     ) -> Result<Atendimento, DbError>;
 
+    /// Quantas conversas foram abertas hoje sem nenhuma mensagem trocada.
+    ///
+    /// É o retrato do disparo em massa, e só dele: uma conversa que veio de
+    /// mensagem recebida já nasce com `data_ultima_mensagem`, e uma que
+    /// alguém assumiu também. O que sobra são fichas abertas de propósito e
+    /// ainda mudas — exatamente o que o teto do C3 limita.
+    async fn contar_abertas_hoje_sem_mensagem(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+    ) -> Result<i64, DbError>;
+
     async fn buscar_por_id(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -471,6 +483,27 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         .fetch_one(&mut **tx)
         .await?;
         Ok(row)
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn contar_abertas_hoje_sem_mensagem(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+    ) -> Result<i64, DbError> {
+        // `date_trunc` no fuso do banco: o teto é diário no relógio do
+        // servidor, e não uma janela deslizante de 24 h. Quem esbarrou nele
+        // hoje volta a poder amanhã, que é o que se explica na tela.
+        let total = sqlx::query_scalar!(
+            r#"SELECT COUNT(*) FROM oraculo_atendimento
+                WHERE tenant_id = $1
+                  AND data_inicio >= date_trunc('day', NOW())
+                  AND data_ultima_mensagem IS NULL"#,
+            ctx.tenant_id
+        )
+        .fetch_one(&mut **tx)
+        .await?;
+        Ok(total.unwrap_or(0))
     }
 
     #[tracing::instrument(skip_all, fields(id = id))]

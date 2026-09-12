@@ -99,6 +99,21 @@ void main() {
               datasource: ListarContatosDatasource(client: client),
             ),
           ),
+          criar: CriarContatoUsecase(
+            repository: CriarContatoRepository(
+              datasource: CriarContatoDatasource(client: client),
+            ),
+          ),
+          atualizar: AtualizarContatoUsecase(
+            repository: AtualizarContatoRepository(
+              datasource: AtualizarContatoDatasource(client: client),
+            ),
+          ),
+          definirAtivo: DefinirContatoAtivoUsecase(
+            repository: DefinirContatoAtivoRepository(
+              datasource: DefinirContatoAtivoDatasource(client: client),
+            ),
+          ),
         ),
       );
       final auth = _MockAuthService();
@@ -284,6 +299,142 @@ void main() {
       )(const ListarContatosParameters());
 
       expect((res as Failure).error, isA<ContatosSessaoExpirada>());
+    });
+  });
+
+  // C4 — cadastrar contato sem esperar mensagem.
+  group('cadastro de contato', () {
+    setUpAll(() {
+      registerFallbackValue(proto.CreateMyContatoRequest());
+      registerFallbackValue(proto.UpdateMyContatoRequest());
+      registerFallbackValue(proto.DefinirMyContatoAtivoRequest());
+    });
+
+    CriarContatoUsecase criar() => CriarContatoUsecase(
+      repository: CriarContatoRepository(
+        datasource: CriarContatoDatasource(client: client),
+      ),
+    );
+
+    AtualizarContatoUsecase atualizar() => AtualizarContatoUsecase(
+      repository: AtualizarContatoRepository(
+        datasource: AtualizarContatoDatasource(client: client),
+      ),
+    );
+
+    test(
+      'o telefone volta do servidor normalizado, não como foi digitado',
+      () async {
+        // Quem digita "(11) 99999-8888" precisa VER em que número o cadastro
+        // ficou: é esse formato que a ingestão grava, e é por ele que a
+        // conversa que chegar pelo WhatsApp vai casar com este contato.
+        when(() => client.createMyContato(any())).thenAnswer(
+          (_) => respostaGrpc(
+            proto.MyContatoResponse(
+              contato: proto.MyContato(
+                id: 7,
+                telefone: '5511999998888',
+                nomeContato: 'Maria',
+              ),
+            ),
+          ),
+        );
+
+        final res = await criar()(
+          const CriarContatoParameters(
+            telefone: '(11) 99999-8888',
+            nomeContato: 'Maria',
+          ),
+        );
+
+        expect((res as Success).value.telefone, '5511999998888');
+        final enviado =
+            verify(() => client.createMyContato(captureAny())).captured.single
+                as proto.CreateMyContatoRequest;
+        // O cliente NÃO normaliza: dois lugares decidindo o formato acabariam
+        // discordando, e o servidor é quem grava.
+        expect(enviado.telefone, '(11) 99999-8888');
+      },
+    );
+
+    test(
+      'telefone repetido vira conflito com a mensagem do servidor',
+      () async {
+        when(() => client.createMyContato(any())).thenAnswer(
+          (_) => falhaGrpc(
+            proto.GrpcError.alreadyExists(
+              'já existe um contato com este telefone',
+            ),
+          ),
+        );
+
+        final res = await criar()(
+          const CriarContatoParameters(telefone: '11999998888'),
+        );
+
+        final erro = (res as Failure).error;
+        expect(erro, isA<ContatoEmConflito>());
+        // A mensagem é do servidor porque só ele sabe qual conflito é.
+        expect(erro.message, contains('já existe'));
+      },
+    );
+
+    test('telefone recusado explica o que corrigir', () async {
+      when(() => client.createMyContato(any())).thenAnswer(
+        (_) => falhaGrpc(
+          proto.GrpcError.invalidArgument(
+            'informe um telefone com DDD, por exemplo 11 99999-8888',
+          ),
+        ),
+      );
+
+      final res = await criar()(const CriarContatoParameters(telefone: '999'));
+
+      final erro = (res as Failure).error;
+      expect(erro, isA<ContatoInvalido>());
+      expect(erro.message, contains('DDD'));
+    });
+
+    test(
+      'troca de telefone barrada pelo histórico chega como conflito',
+      () async {
+        // O servidor recusa quando o contato já conversou: o histórico está
+        // amarrado ao número, e trocá-lo passaria as mensagens de uma pessoa
+        // para outra.
+        when(() => client.updateMyContato(any())).thenAnswer(
+          (_) => falhaGrpc(
+            proto.GrpcError.failedPrecondition(
+              'este contato já tem 3 conversa(s) no histórico.',
+            ),
+          ),
+        );
+
+        final res = await atualizar()(
+          const AtualizarContatoParameters(id: 1, telefone: '11888887777'),
+        );
+
+        final erro = (res as Failure).error;
+        expect(erro, isA<ContatoEmConflito>());
+        expect(erro.message, contains('histórico'));
+      },
+    );
+
+    test('editar só o nome não manda telefone nenhum', () async {
+      // Reenviar o número atual faria a recusa por histórico aparecer em toda
+      // edição de nome — o campo vazio é "não mexe".
+      when(
+        () => client.updateMyContato(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
+
+      await atualizar()(
+        const AtualizarContatoParameters(id: 1, nomeContato: 'Maria Silva'),
+      );
+
+      final enviado =
+          verify(() => client.updateMyContato(captureAny())).captured.single
+              as proto.UpdateMyContatoRequest;
+      expect(enviado.telefone, isEmpty);
+      expect(enviado.nomeContato, 'Maria Silva');
     });
   });
 }

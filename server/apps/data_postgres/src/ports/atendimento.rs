@@ -263,6 +263,14 @@ pub trait AtendimentoStore: Send + Sync {
         assunto: Option<String>,
     ) -> Result<(Atendimento, bool), DbError>;
 
+    /// C3 — quantas conversas o tenant abriu hoje sem trocar mensagem.
+    ///
+    /// Sustenta o teto diário. Fora da transação de propósito: uma corrida
+    /// deixaria passar a 51ª de 50, e ninguém está protegido de disparo em
+    /// massa por uma unidade — travar a criação para fechar essa fresta
+    /// custaria mais do que resolve.
+    async fn contar_conversas_abertas_hoje(&self, ctx: &RequestContext) -> Result<i64, DbError>;
+
     /// Busca ou cria um contato pelo telefone, e busca ou cria um atendimento ativo para esse contato.
     async fn resolver_atendimento_para_contato(
         &self,

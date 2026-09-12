@@ -22,6 +22,18 @@ pub struct Contato {
     pub foto_perfil_url_origem: Option<String>,
 }
 
+/// O que se pode mudar num contato já cadastrado (C4).
+///
+/// `None` em qualquer campo é "não mexe nisso" — diferente de string vazia,
+/// que é "apaga o que estava lá". A distinção importa porque a tela manda o
+/// formulário inteiro em toda edição.
+#[derive(Debug, Clone, Default)]
+pub struct EdicaoContato {
+    pub nome_contato: Option<String>,
+    pub email: Option<String>,
+    pub telefone: Option<String>,
+}
+
 #[async_trait]
 pub trait ContatoRepository: Send + Sync {
     async fn salvar(
@@ -31,6 +43,54 @@ pub trait ContatoRepository: Send + Sync {
         telefone: &str,
         nome_contato: Option<&str>,
     ) -> Result<Contato, DbError>;
+
+    /// Cadastra um contato de propósito, antes de qualquer mensagem (C4).
+    ///
+    /// Separado de [`ContatoRepository::salvar`], que é upsert: aquele existe
+    /// para a ingestão, onde encontrar o contato de novo é o caso normal.
+    /// Aqui, telefone repetido é um engano de quem digita — devolver em
+    /// silêncio o contato de outra pessoa seria pior que recusar.
+    async fn criar_manual(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        telefone: &str,
+        nome_contato: Option<&str>,
+        email: Option<&str>,
+    ) -> Result<Contato, DbError>;
+
+    /// Edita nome, e-mail e — sob condição — telefone.
+    ///
+    /// Devolve `Ok(false)` quando o id não existe no tenant.
+    async fn atualizar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+        edicao: EdicaoContato,
+    ) -> Result<bool, DbError>;
+
+    /// Some da lista sem perder o histórico: as conversas continuam
+    /// referenciando o contato, e apagar de verdade as deixaria órfãs.
+    async fn desativar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+        ativo: bool,
+    ) -> Result<bool, DbError>;
+
+    /// Quantos atendimentos o contato já teve.
+    ///
+    /// É o que decide se o telefone ainda pode mudar: um contato que já
+    /// conversou tem histórico amarrado àquele número, e trocá-lo passaria as
+    /// mensagens de uma pessoa para outra.
+    async fn contar_atendimentos(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        contato_id: i32,
+    ) -> Result<i64, DbError>;
 
     async fn buscar_por_telefone(
         &self,
@@ -109,6 +169,108 @@ impl ContatoRepository for PostgresContatoRepository {
         .await
         .map_err(DbError::from_sqlx_unique)?;
         Ok(row)
+    }
+
+    // PII de novo: nada de telefone/nome/e-mail no span.
+    #[tracing::instrument(skip_all)]
+    async fn criar_manual(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        telefone: &str,
+        nome_contato: Option<&str>,
+        email: Option<&str>,
+    ) -> Result<Contato, DbError> {
+        ctx.exigir_qualquer(&["clientes:write", "tenant:admin"])?;
+        // Sem ON CONFLICT: o unique (tenant_id, telefone) vira
+        // `DbError::UniqueViolation`, e é essa a resposta certa — quem digitou
+        // um número que já existe precisa saber disso, não receber a ficha
+        // alheia como se tivesse acabado de criá-la.
+        let row = sqlx::query_as!(
+            Contato,
+            r#"INSERT INTO oraculo_contato (tenant_id, telefone, nome_contato, email)
+               VALUES ($1, $2, $3, $4)
+               RETURNING id, tenant_id, telefone, nome_contato, slug, email,
+                         nome_perfil_whatsapp, data_cadastro, ultima_interacao,
+                         ativo, metadados, foto_perfil, foto_perfil_url_origem"#,
+            ctx.tenant_id,
+            telefone,
+            nome_contato,
+            email
+        )
+        .fetch_one(&mut **tx)
+        .await
+        .map_err(DbError::from_sqlx_unique)?;
+        Ok(row)
+    }
+
+    #[tracing::instrument(skip_all, fields(id = id))]
+    async fn atualizar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+        edicao: EdicaoContato,
+    ) -> Result<bool, DbError> {
+        ctx.exigir_qualquer(&["clientes:write", "tenant:admin"])?;
+        // `COALESCE($n, coluna)` faz o `None` significar "não mexe" num
+        // statement só. A alternativa seria montar o UPDATE por concatenação,
+        // que é exatamente o que `query_as!` existe para evitar.
+        let afetadas = sqlx::query!(
+            r#"UPDATE oraculo_contato
+                  SET nome_contato = COALESCE($3::text, nome_contato),
+                      email        = COALESCE($4::text, email),
+                      telefone     = COALESCE($5::text, telefone)
+                WHERE tenant_id = $1 AND id = $2"#,
+            ctx.tenant_id,
+            id,
+            edicao.nome_contato,
+            edicao.email,
+            edicao.telefone
+        )
+        .execute(&mut **tx)
+        .await
+        .map_err(DbError::from_sqlx_unique)?
+        .rows_affected();
+        Ok(afetadas > 0)
+    }
+
+    #[tracing::instrument(skip_all, fields(id = id, ativo = ativo))]
+    async fn desativar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        id: i32,
+        ativo: bool,
+    ) -> Result<bool, DbError> {
+        ctx.exigir_qualquer(&["clientes:write", "tenant:admin"])?;
+        let afetadas = sqlx::query!(
+            "UPDATE oraculo_contato SET ativo = $3 WHERE tenant_id = $1 AND id = $2",
+            ctx.tenant_id,
+            id,
+            ativo
+        )
+        .execute(&mut **tx)
+        .await?
+        .rows_affected();
+        Ok(afetadas > 0)
+    }
+
+    #[tracing::instrument(skip_all, fields(contato_id = contato_id))]
+    async fn contar_atendimentos(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        contato_id: i32,
+    ) -> Result<i64, DbError> {
+        let total = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM oraculo_atendimento WHERE tenant_id = $1 AND contato_id = $2",
+            ctx.tenant_id,
+            contato_id
+        )
+        .fetch_one(&mut **tx)
+        .await?;
+        Ok(total.unwrap_or(0))
     }
 
     #[tracing::instrument(skip_all)]

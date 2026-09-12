@@ -254,3 +254,54 @@ seria repetir no detalhe o que já está dito no geral.
 
 O teto diário por tenant fica: ele protege contra disparo em massa, que é outro
 problema e continua real.
+
+---
+
+## C4 — o cadastro de contato deixa de depender de alguém escrever *(entregue)*
+
+O C3 abriu a conversa a partir de um cliente cadastrado. Faltava a metade que
+o torna utilizável: **até aqui um contato só existia porque mandou mensagem**.
+Quem conhecia o cliente pelo telefone não tinha como registrá-lo, e a busca do
+diálogo de "iniciar atendimento" não achava ninguém para escolher.
+
+Ponta a ponta, na ordem de sempre: `CreateMyContato` / `UpdateMyContato` /
+`DefinirMyContatoAtivo` no proto, repositório (`criar_manual`, `atualizar`,
+`desativar`, `contar_atendimentos`), port, adapter, handler com auditoria,
+método concreto no `grpc_web.rs`, stubs Dart, cadeia RSOE e diálogo.
+
+Três decisões que o código explica no lugar:
+
+**O servidor normaliza o telefone, e o cliente não.** O webhook deriva o número
+do JID (`5511999998888@s.whatsapp.net`): só dígitos, com DDI, sem `+`. Um
+contato cadastrado à mão como "(11) 99999-8888" ficaria numa linha diferente do
+mesmo telefone que chega pelo WhatsApp — duas pessoas para uma, e a conversa
+aberta à mão nunca receberia as respostas dela. Sem DDI, assume 55, como a v1.
+A resposta devolve o número **já normalizado**, e é ele que a tela mostra: quem
+digitou precisa ver em que número o cadastro ficou.
+
+**Telefone repetido é recusa, não upsert.** O `salvar` que a ingestão usa é
+upsert de propósito — reencontrar o contato é o caso normal dela. No cadastro à
+mão, telefone repetido é engano de quem digita, e devolver em silêncio a ficha
+de outra pessoa seria pior que a recusa.
+
+**O número trava quando há histórico.** A troca só passa enquanto o contato não
+teve nenhum atendimento, e a contagem roda na mesma transação do UPDATE: fora
+dela, duas edições simultâneas concluiriam ambas que "ainda não havia
+conversa". Com histórico, a mensagem manda cadastrar o número novo à parte —
+trocá-lo passaria as mensagens de uma pessoa para outra.
+
+Desativar é *tirar da lista*, não apagar: as conversas continuam
+referenciando o contato, e se ele escrever de novo o cadastro volta a aparecer.
+
+## O teto diário do C3 *(entregue)*
+
+Ficou registrado como pendente e agora existe: 50 conversas abertas por dia,
+por tenant. A contagem é de **conversas abertas hoje sem nenhuma mensagem
+trocada** — que é o retrato do disparo em massa e só dele: conversa vinda de
+mensagem recebida já nasce com `data_ultima_mensagem`, e assumir uma também
+não conta.
+
+Fora da transação de propósito: uma corrida deixaria passar a 51ª de 50, e
+ninguém está protegido de disparo em massa por uma unidade. Falha ao contar
+não barra ninguém — o teto protege de abuso, e transformá-lo em ponto único de
+falha impediria o uso legítimo por um problema que não é do usuário.

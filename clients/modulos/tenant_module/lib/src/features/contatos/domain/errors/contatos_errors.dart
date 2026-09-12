@@ -29,6 +29,27 @@ final class ContatosIndisponivel extends ContatosError with NetworkFailure {
     : super('Não foi possível falar com o servidor. Tente de novo.');
 }
 
+/// Telefone que já está na lista, ou troca de número barrada pelo histórico.
+///
+/// A mensagem vem do servidor porque só ele sabe qual dos dois casos é — e a
+/// diferença muda o que a pessoa faz em seguida: procurar o contato que já
+/// existe, ou cadastrar o número novo à parte.
+final class ContatoEmConflito extends ContatosError with ValidationFailure {
+  const ContatoEmConflito(String? doServidor)
+    : super(doServidor ?? 'Este contato entra em conflito com outro já salvo.');
+}
+
+/// Telefone ou e-mail que o servidor recusou.
+final class ContatoInvalido extends ContatosError with ValidationFailure {
+  const ContatoInvalido(String? doServidor)
+    : super(doServidor ?? 'Confira os dados do contato e tente de novo.');
+}
+
+final class ContatoNaoEncontrado extends ContatosError {
+  const ContatoNaoEncontrado()
+    : super('Este contato não existe mais. Recarregue a lista.');
+}
+
 final class ContatosInesperado extends ContatosError {
   const ContatosInesperado() : super('Algo deu errado. Tente de novo.');
 }

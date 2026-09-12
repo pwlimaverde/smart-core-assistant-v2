@@ -1130,6 +1130,12 @@ service AdminService {
   rpc DesativarMyAtendente(MyAtendenteIdRequest) returns (SimpleOkResponse);
   rpc GetMyPainel(GetMyPainelRequest) returns (GetMyPainelResponse);
   rpc ListMyContatos(ListMyContatosRequest) returns (ListMyContatosResponse);
+  // C4 — cadastro de contato pela tela. Ate aqui um contato so existia
+  // porque mandou mensagem, e o "iniciar atendimento" do C3 nao achava
+  // ninguem para escolher.
+  rpc CreateMyContato(CreateMyContatoRequest) returns (MyContatoResponse);
+  rpc UpdateMyContato(UpdateMyContatoRequest) returns (SimpleOkResponse);
+  rpc DefinirMyContatoAtivo(DefinirMyContatoAtivoRequest) returns (SimpleOkResponse);
 
   // N9 E13 — o catalogo de campos do cartao, por tenant.
   rpc ListMyCampos(ListMyCamposRequest) returns (ListMyCamposResponse);
@@ -1354,6 +1360,34 @@ message ListMyContatosRequest {
 
 message ListMyContatosResponse {
   repeated MyContato contatos = 1;
+}
+
+message CreateMyContatoRequest {
+  // Como a pessoa digitou. O servidor normaliza para o mesmo formato que a
+  // ingestao grava (so digitos, com DDI) — sem isso o contato cadastrado a
+  // mao e o mesmo numero que chega pelo WhatsApp virariam duas pessoas.
+  string telefone = 1;
+  string nome_contato = 2;
+  string email = 3;
+}
+
+message MyContatoResponse {
+  MyContato contato = 1;
+}
+
+message UpdateMyContatoRequest {
+  int32 id = 1;
+  string nome_contato = 2;
+  string email = 3;
+  // Vazio = nao mexe. So e aceito enquanto o contato nao tem conversa: o
+  // historico esta amarrado ao numero, e troca-lo passaria as mensagens de
+  // uma pessoa para outra.
+  string telefone = 4;
+}
+
+message DefinirMyContatoAtivoRequest {
+  int32 id = 1;
+  bool ativo = 2;
 }
 
 // --- Painel do tenant ---

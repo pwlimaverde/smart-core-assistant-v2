@@ -35,6 +35,7 @@ use contracts::grpc::queries::{
     CreateInviteResponse,
     CreateMyAtendenteRequest,
     CreateMyCampoRequest,
+    CreateMyContatoRequest,
     CreateMyDepartamentoRequest,
     CreateMyDepartamentoResponse,
     CreateMyEtapaFluxoRequest,
@@ -53,6 +54,7 @@ use contracts::grpc::queries::{
     CreateVoucherResponse,
     DefinirBotDaConversaRequest,
     DefinirBotDaConversaResponse,
+    DefinirMyContatoAtivoRequest,
     DefinirRespostaBotInstanciaRequest,
     DefinirRespostaBotInstanciaResponse,
     DeleteCoreSettingRequest,
@@ -152,6 +154,7 @@ use contracts::grpc::queries::{
     MyCampoPersonalizado,
     MyCampoResponse,
     MyContato,
+    MyContatoResponse,
     MyDepartamento,
     MyDepartamentoIdRequest,
     MyEtapaFluxo,
@@ -221,6 +224,7 @@ use contracts::grpc::queries::{
     TrechoUsado,
     UpdateMyAtendenteRequest,
     UpdateMyCampoRequest,
+    UpdateMyContatoRequest,
     UpdateMyDepartamentoRequest,
     UpdateMyEtapaFluxoRequest,
     UpdateMyFluxoRequest,
@@ -3639,6 +3643,80 @@ impl AdminService for AdminFacade {
             .unwrap_or_default();
 
         Ok(Response::new(ListMyContatosResponse { contatos }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "CreateMyContato", traceparent)
+    )]
+    async fn create_my_contato(
+        &self,
+        req: Request<CreateMyContatoRequest>,
+    ) -> Result<Response<MyContatoResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "CreateContato",
+                serde_json::json!({
+                    "telefone": inner.telefone,
+                    "nome_contato": inner.nome_contato,
+                    "email": inner.email,
+                }),
+            )
+            .await?;
+
+        // O corpo é o contato inteiro, não um campo dentro dele: a resposta
+        // devolve o telefone JÁ normalizado, e é isso que a tela mostra — quem
+        // digitou "(11) 9..." precisa ver em que número o cadastro ficou.
+        Ok(Response::new(MyContatoResponse {
+            contato: Some(contato_do_json(&corpo)),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "UpdateMyContato", traceparent)
+    )]
+    async fn update_my_contato(
+        &self,
+        req: Request<UpdateMyContatoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = req.get_ref().clone();
+        // Telefone vazio não viaja: no `data_postgres` campo ausente é "não
+        // mexe", e mandar string vazia pediria para apagar o número.
+        let mut payload = serde_json::json!({
+            "id": inner.id,
+            "nome_contato": inner.nome_contato,
+            "email": inner.email,
+        });
+        if !inner.telefone.trim().is_empty() {
+            payload["telefone"] = serde_json::Value::String(inner.telefone.clone());
+        }
+
+        self.encaminhar_tenant(&req, &self.deps.pg, "UpdateContato", payload)
+            .await?;
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DefinirMyContatoAtivo", traceparent)
+    )]
+    async fn definir_my_contato_ativo(
+        &self,
+        req: Request<DefinirMyContatoAtivoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = *req.get_ref();
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "DefinirContatoAtivo",
+            serde_json::json!({ "id": inner.id, "ativo": inner.ativo }),
+        )
+        .await?;
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
     }
 
     #[tracing::instrument(

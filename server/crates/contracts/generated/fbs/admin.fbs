@@ -1024,6 +1024,28 @@ table ListMyContatosResponse {
   contatos:[smartcore.contracts.queries.MyContato];
 }
 
+table CreateMyContatoRequest {
+  telefone:string;
+  nome_contato:string;
+  email:string;
+}
+
+table MyContatoResponse {
+  contato:smartcore.contracts.queries.MyContato;
+}
+
+table UpdateMyContatoRequest {
+  id:int;
+  nome_contato:string;
+  email:string;
+  telefone:string;
+}
+
+table DefinirMyContatoAtivoRequest {
+  id:int;
+  ativo:bool;
+}
+
 table GetMyPainelRequest {
 }
 

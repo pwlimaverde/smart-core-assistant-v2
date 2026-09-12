@@ -2,8 +2,23 @@
 //! O handler depende SOMENTE desta trait; a transação vive no adapter (DIP).
 
 use async_trait::async_trait;
-use infrastructure_postgres::clientes::contatos::Contato;
+use infrastructure_postgres::clientes::contatos::{Contato, EdicaoContato};
 use infrastructure_postgres::{DbError, RequestContext};
+
+/// Como terminou uma edição de contato.
+///
+/// Três desfechos e não um `bool` porque "não encontrei" e "não deixo trocar o
+/// telefone" pedem respostas diferentes na tela, e `DbError` não tem onde
+/// carregar uma regra de negócio — ele fala de banco.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DesfechoEdicaoContato {
+    Atualizado,
+    NaoEncontrado,
+    /// O contato já conversou: o número está amarrado a esse histórico.
+    TelefoneTravado {
+        atendimentos: i64,
+    },
+}
 
 /// Operações de persistência do domínio Cliente expostas aos handlers RPC.
 #[cfg_attr(test, mockall::automock)]
@@ -26,4 +41,38 @@ pub trait ClienteStore: Send + Sync {
         busca: Option<String>,
         limite: i64,
     ) -> Result<Vec<Contato>, DbError>;
+
+    /// Cadastra um contato antes de qualquer mensagem (C4).
+    ///
+    /// Telefone repetido volta como `DbError::UniqueViolation`: cadastrar por
+    /// engano o número de outra pessoa e receber a ficha dela em silêncio é
+    /// pior que a recusa.
+    async fn criar_contato(
+        &self,
+        ctx: &RequestContext,
+        telefone: String,
+        nome: Option<String>,
+        email: Option<String>,
+    ) -> Result<Contato, DbError>;
+
+    /// Edita o cadastro.
+    ///
+    /// A troca de telefone é conferida aqui dentro, na mesma transação em que
+    /// se conta o histórico: fora dela, duas requisições simultâneas veriam
+    /// "nenhum atendimento" e uma delas mudaria o número de um contato que já
+    /// tinha conversa.
+    async fn atualizar_contato(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        edicao: EdicaoContato,
+    ) -> Result<DesfechoEdicaoContato, DbError>;
+
+    /// Tira (ou devolve) o contato da lista sem apagar o histórico.
+    async fn definir_contato_ativo(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        ativo: bool,
+    ) -> Result<bool, DbError>;
 }
