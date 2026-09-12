@@ -42,9 +42,7 @@ class ResponderDataSource(DataSource[ResponderData, ResponderParameters]):
         self._chat_model_factory = chat_model_factory
         self._embeddings_factory = embeddings_factory
 
-    async def __call__(
-        self, parameters: ResponderParameters
-    ) -> ResponderData:
+    async def __call__(self, parameters: ResponderParameters) -> ResponderData:
         llm = self._chat_model_factory(parameters.llm)
         embeddings = self._embeddings_factory(parameters.embeddings_provider)
 
@@ -78,17 +76,13 @@ class ResponderDataSource(DataSource[ResponderData, ResponderParameters]):
         response_vec = await embeddings.aembed_query(response_text)
         training_vec: list[float] | None = None
         if parameters.dados_treinamento and parameters.dados_treinamento.strip():
-            training_vec = await embeddings.aembed_query(
-                parameters.dados_treinamento
-            )
+            training_vec = await embeddings.aembed_query(parameters.dados_treinamento)
 
         return ResponderData(
             resposta=resposta,
             message_vec=tuple(message_vec),
             response_vec=tuple(response_vec),
-            training_vec=(
-                tuple(training_vec) if training_vec is not None else None
-            ),
+            training_vec=(tuple(training_vec) if training_vec is not None else None),
         )
 
 
@@ -116,9 +110,7 @@ def _build_system_prompt(parameters: ResponderParameters) -> str:
     campos_txt = _formatar_campos(
         parameters.campos_coletados, parameters.campos_pendentes
     )
-    regras = (
-        parameters.prompts.get(CHAVE_REGRAS_RESPOSTA, "").strip() or _REGRAS_PADRAO
-    )
+    regras = parameters.prompts.get(CHAVE_REGRAS_RESPOSTA, "").strip() or _REGRAS_PADRAO
     # Bloco separado na v1; sem override, as regras acima já cobrem transferência.
     transferencia = parameters.prompts.get(CHAVE_REGRAS_TRANSFERENCIA, "").strip()
     if transferencia:

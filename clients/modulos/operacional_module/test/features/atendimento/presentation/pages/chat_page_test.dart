@@ -27,7 +27,8 @@ void main() {
       ..registerSingleton<CriarEtiquetaUsecase>(u.criarEtiqueta)
       ..registerSingleton<AlternarEtiquetaUsecase>(u.alternarEtiqueta)
       ..registerSingleton<CriarNotaUsecase>(u.criarNota)
-      ..registerSingleton<DefinirBotDaConversaUsecase>(u.definirBot);
+      ..registerSingleton<DefinirBotDaConversaUsecase>(u.definirBot)
+      ..registerSingleton<DefinirValorCampoUsecase>(u.definirValorCampo);
   }
 
   Future<void> montar(

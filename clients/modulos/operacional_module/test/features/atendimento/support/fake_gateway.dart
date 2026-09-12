@@ -272,6 +272,7 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
 /// Monta os usecases reais sobre um [FakeAtendimentoGateway].
 ({
   IniciarAtendimentoUsecase iniciar,
+  DefinirValorCampoUsecase definirValorCampo,
   ListAtendimentosUsecase list,
   GetThreadUsecase thread,
   MoveAtendimentoEtapaUsecase move,
@@ -287,6 +288,11 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   AtendimentoEventoStream eventos,
 })
 usecasesSobre(FakeAtendimentoGateway gateway) => (
+  definirValorCampo: DefinirValorCampoUsecase(
+    repository: DefinirValorCampoRepository(
+      datasource: DefinirValorCampoDatasource(gateway: gateway),
+    ),
+  ),
   iniciar: IniciarAtendimentoUsecase(
     repository: IniciarAtendimentoRepository(
       datasource: IniciarAtendimentoDatasource(gateway: gateway),

@@ -1620,9 +1620,7 @@ impl AtendimentoStore for PgAtendimentoStore {
         campos: Vec<CampoExtraidoDto>,
         mensagem_origem_id: Option<i32>,
     ) -> Result<ResumoCamposExtraidos, DbError> {
-        use crate::adapters::campos_extraidos::{
-            valor_para_o_tipo, Descarte, PISO_CONFIANCA_PADRAO,
-        };
+        use crate::adapters::campos_extraidos::{valor_para_o_tipo, PISO_CONFIANCA_PADRAO};
 
         let repo_atendimento = PostgresAtendimentoRepository;
         let repo_campo = PostgresCampoPersonalizadoRepository;
@@ -1673,16 +1671,10 @@ impl AtendimentoStore for PgAtendimentoStore {
                 }
 
                 // 3. O valor tem de casar com o tipo declarado.
-                let valor = match valor_para_o_tipo(&extraido.valor_json, &def.tipo, &def.opcoes) {
-                    Ok(v) => v,
-                    Err(Descarte::TipoInvalido) => {
-                        resumo.tipo_invalido += 1;
-                        continue;
-                    }
-                    Err(_) => {
-                        resumo.tipo_invalido += 1;
-                        continue;
-                    }
+                let Some(valor) = valor_para_o_tipo(&extraido.valor_json, &def.tipo, &def.opcoes)
+                else {
+                    resumo.tipo_invalido += 1;
+                    continue;
                 };
 
                 // 4. Abaixo do piso é palpite, e palpite não entra na ficha.

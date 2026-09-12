@@ -7480,6 +7480,127 @@ pub async fn serve(deps: Arc<AuthDeps>, bus: redis::aio::ConnectionManager) -> a
     Ok(())
 }
 
+/// Um campo do catálogo, do JSON do `data_postgres` para o protobuf.
+fn campo_do_json(v: &serde_json::Value) -> MyCampoPersonalizado {
+    let texto = |k: &str| {
+        v.get(k)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let flag = |k: &str| {
+        v.get(k)
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    };
+
+    MyCampoPersonalizado {
+        id: v.get("id").and_then(serde_json::Value::as_i64).unwrap_or(0),
+        slug: texto("slug"),
+        nome: texto("nome"),
+        descricao: texto("descricao"),
+        escopo: texto("escopo"),
+        fluxo_id: v
+            .get("fluxo_id")
+            .and_then(serde_json::Value::as_i64)
+            .map(|n| n as i32),
+        tipo: texto("tipo"),
+        opcoes: v
+            .get("opcoes")
+            .and_then(serde_json::Value::as_array)
+            .map(|arr| {
+                arr.iter()
+                    .map(|o| OpcaoCampo {
+                        id: o
+                            .get("id")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or_default()
+                            .to_string(),
+                        rotulo: o
+                            .get("rotulo")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or_default()
+                            .to_string(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        obrigatorio: flag("obrigatorio"),
+        extrair_automaticamente: flag("extrair_automaticamente"),
+        extrair_hint: texto("extrair_hint"),
+        mostrar_no_card: flag("mostrar_no_card"),
+        ordem: v
+            .get("ordem")
+            .and_then(serde_json::Value::as_i64)
+            .unwrap_or(0) as i32,
+        ativo: flag("ativo"),
+    }
+}
+
+/// As opções de um campo de lista, do protobuf para o JSON do banco.
+fn opcoes_para_json(opcoes: &[OpcaoCampo]) -> serde_json::Value {
+    serde_json::Value::Array(
+        opcoes
+            .iter()
+            .map(|o| serde_json::json!({ "id": o.id, "rotulo": o.rotulo }))
+            .collect(),
+    )
+}
+
+/// Um campo do cartão na ficha de um atendimento.
+fn valor_campo_do_json(v: &serde_json::Value) -> ValorCampoDoAtendimento {
+    let texto = |k: &str| {
+        v.get(k)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    ValorCampoDoAtendimento {
+        campo_id: v
+            .get("campo_id")
+            .and_then(serde_json::Value::as_i64)
+            .unwrap_or(0),
+        slug: texto("slug"),
+        nome: texto("nome"),
+        descricao: texto("descricao"),
+        tipo: texto("tipo"),
+        opcoes: v
+            .get("opcoes")
+            .and_then(serde_json::Value::as_array)
+            .map(|arr| {
+                arr.iter()
+                    .map(|o| OpcaoCampo {
+                        id: o
+                            .get("id")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or_default()
+                            .to_string(),
+                        rotulo: o
+                            .get("rotulo")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or_default()
+                            .to_string(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        obrigatorio: v
+            .get("obrigatorio")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false),
+        valor_json: texto("valor_json"),
+        origem: texto("origem"),
+        confianca: v
+            .get("confianca")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0),
+        editado_por_humano: v
+            .get("editado_por_humano")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -8053,126 +8174,5 @@ mod tests {
 
         let status = facade.list_tenants(req).await.unwrap_err();
         assert_eq!(status.code(), tonic::Code::Unauthenticated);
-    }
-}
-
-/// Um campo do catálogo, do JSON do `data_postgres` para o protobuf.
-fn campo_do_json(v: &serde_json::Value) -> MyCampoPersonalizado {
-    let texto = |k: &str| {
-        v.get(k)
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or_default()
-            .to_string()
-    };
-    let flag = |k: &str| {
-        v.get(k)
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false)
-    };
-
-    MyCampoPersonalizado {
-        id: v.get("id").and_then(serde_json::Value::as_i64).unwrap_or(0),
-        slug: texto("slug"),
-        nome: texto("nome"),
-        descricao: texto("descricao"),
-        escopo: texto("escopo"),
-        fluxo_id: v
-            .get("fluxo_id")
-            .and_then(serde_json::Value::as_i64)
-            .map(|n| n as i32),
-        tipo: texto("tipo"),
-        opcoes: v
-            .get("opcoes")
-            .and_then(serde_json::Value::as_array)
-            .map(|arr| {
-                arr.iter()
-                    .map(|o| OpcaoCampo {
-                        id: o
-                            .get("id")
-                            .and_then(serde_json::Value::as_str)
-                            .unwrap_or_default()
-                            .to_string(),
-                        rotulo: o
-                            .get("rotulo")
-                            .and_then(serde_json::Value::as_str)
-                            .unwrap_or_default()
-                            .to_string(),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default(),
-        obrigatorio: flag("obrigatorio"),
-        extrair_automaticamente: flag("extrair_automaticamente"),
-        extrair_hint: texto("extrair_hint"),
-        mostrar_no_card: flag("mostrar_no_card"),
-        ordem: v
-            .get("ordem")
-            .and_then(serde_json::Value::as_i64)
-            .unwrap_or(0) as i32,
-        ativo: flag("ativo"),
-    }
-}
-
-/// As opções de um campo de lista, do protobuf para o JSON do banco.
-fn opcoes_para_json(opcoes: &[OpcaoCampo]) -> serde_json::Value {
-    serde_json::Value::Array(
-        opcoes
-            .iter()
-            .map(|o| serde_json::json!({ "id": o.id, "rotulo": o.rotulo }))
-            .collect(),
-    )
-}
-
-/// Um campo do cartão na ficha de um atendimento.
-fn valor_campo_do_json(v: &serde_json::Value) -> ValorCampoDoAtendimento {
-    let texto = |k: &str| {
-        v.get(k)
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or_default()
-            .to_string()
-    };
-    ValorCampoDoAtendimento {
-        campo_id: v
-            .get("campo_id")
-            .and_then(serde_json::Value::as_i64)
-            .unwrap_or(0),
-        slug: texto("slug"),
-        nome: texto("nome"),
-        descricao: texto("descricao"),
-        tipo: texto("tipo"),
-        opcoes: v
-            .get("opcoes")
-            .and_then(serde_json::Value::as_array)
-            .map(|arr| {
-                arr.iter()
-                    .map(|o| OpcaoCampo {
-                        id: o
-                            .get("id")
-                            .and_then(serde_json::Value::as_str)
-                            .unwrap_or_default()
-                            .to_string(),
-                        rotulo: o
-                            .get("rotulo")
-                            .and_then(serde_json::Value::as_str)
-                            .unwrap_or_default()
-                            .to_string(),
-                    })
-                    .collect()
-            })
-            .unwrap_or_default(),
-        obrigatorio: v
-            .get("obrigatorio")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false),
-        valor_json: texto("valor_json"),
-        origem: texto("origem"),
-        confianca: v
-            .get("confianca")
-            .and_then(serde_json::Value::as_f64)
-            .unwrap_or(0.0),
-        editado_por_humano: v
-            .get("editado_por_humano")
-            .and_then(serde_json::Value::as_bool)
-            .unwrap_or(false),
     }
 }

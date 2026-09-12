@@ -8,10 +8,10 @@ mapeados para `grpc.StatusCode`. Nunca loga `api_key`.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Callable
 from typing import NoReturn, assert_never
 
-import json
 import grpc
 from langchain_core.embeddings import Embeddings
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -160,9 +160,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
         config = await self._config(context, "InterpretMedia", request.tenant_id)
         usecase = InterpretMediaUsecase(
             InterpretMediaRepository(
-                InterpretMediaDataSource(
-                    chat_model_factory=self._chat_model_factory
-                )
+                InterpretMediaDataSource(chat_model_factory=self._chat_model_factory)
             )
         )
         result = await usecase(
@@ -181,9 +179,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                     analise=analysis.analise, resumo=analysis.resumo
                 )
             case Failure(error):
-                await self._abort(
-                    context, error, "InterpretMedia", request.tenant_id
-                )
+                await self._abort(context, error, "InterpretMedia", request.tenant_id)
             case _:  # pragma: no cover - provado pelo mypy
                 assert_never(result)
 
@@ -217,9 +213,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                         for i in analise.intents
                     ],
                     entidades=[
-                        pb.Entidade(
-                            tipo=e.tipo, valor=e.valor, confianca=e.confianca
-                        )
+                        pb.Entidade(tipo=e.tipo, valor=e.valor, confianca=e.confianca)
                         for e in analise.entidades
                     ],
                 )
@@ -234,9 +228,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
         if not list(request.textos):
             await self._abort(
                 context,
-                InvalidRequestError(
-                    message="nenhum texto informado para embeddings"
-                ),
+                InvalidRequestError(message="nenhum texto informado para embeddings"),
                 "Embed",
                 request.tenant_id,
             )
@@ -343,18 +335,14 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
         if not list(request.historico.turnos):
             await self._abort(
                 context,
-                InvalidRequestError(
-                    message="histórico vazio: nada a avaliar"
-                ),
+                InvalidRequestError(message="histórico vazio: nada a avaliar"),
                 "Sentimento",
                 request.tenant_id,
             )
         config = await self._config(context, "Sentimento", request.tenant_id)
         usecase = SentimentoUsecase(
             SentimentoRepository(
-                SentimentoDataSource(
-                    chat_model_factory=self._chat_model_factory
-                )
+                SentimentoDataSource(chat_model_factory=self._chat_model_factory)
             )
         )
         result = await usecase(
@@ -422,9 +410,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
         if not (value or "").strip():
             await self._abort(
                 context,
-                InvalidRequestError(
-                    message=f"campo obrigatório ausente: {field}"
-                ),
+                InvalidRequestError(message=f"campo obrigatório ausente: {field}"),
                 rpc,
                 tenant_id,
             )

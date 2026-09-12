@@ -69,9 +69,7 @@ def calculate_embedding_similarity(
     magnitude1 = math.sqrt(sum(a * a for a in embedding1))
     magnitude2 = math.sqrt(sum(b * b for b in embedding2))
     if magnitude1 == 0 or magnitude2 == 0:
-        raise ValueError(
-            "Não é possível calcular similaridade para vetores zero"
-        )
+        raise ValueError("Não é possível calcular similaridade para vetores zero")
     return dot_product / (magnitude1 * magnitude2)
 
 
@@ -221,9 +219,7 @@ class ResponderUsecase(
             message_vec=list(data.message_vec),
             response_vec=list(data.response_vec),
             training_vec=(
-                list(data.training_vec)
-                if data.training_vec is not None
-                else None
+                list(data.training_vec) if data.training_vec is not None else None
             ),
         )
         return self.ok(
@@ -241,6 +237,4 @@ class ResponderUsecase(
         )
 
     def on_unexpected(self, exception: Exception) -> ResponderError:
-        return ErrorGeneric(
-            message=f"{type(exception).__name__}: {exception}"
-        )
+        return ErrorGeneric(message=f"{type(exception).__name__}: {exception}")
