@@ -103,8 +103,8 @@ class _IntegracoesPageState extends State<IntegracoesPage> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Estes aplicativos podem agir na sua conta com as permissões que '
-              'você concedeu — nunca mais do que você mesmo pode fazer aqui.',
+              'Estes aplicativos agem na sua conta com as permissões que você '
+              'concedeu, e nunca além do que você mesmo pode fazer aqui.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 24),

@@ -349,9 +349,33 @@ void main() {
     expect(erro.message, contains('saudacao'));
   });
 
-  test('sessão expirada é distinguida de servidor fora do ar', () async {
+  test('sessão expirada não vira "sem permissão"', () async {
+    // O teste fixava `IntentsAcessoNegado` aqui, e por isso o defeito passava:
+    // um dono de conta com o token vencido lia "você não tem permissão para
+    // editar as intenções" e ia investigar as próprias permissões, enquanto o
+    // servidor jamais havia recusado nada.
     when(() => client.listMyIntents(any())).thenAnswer(
       (_) => falhaGrpc(proto.GrpcError.unauthenticated('expirou')),
+    );
+
+    final res = await ListarIntentsUsecase(
+      repository: ListarIntentsRepository(
+        datasource: ListarIntentsDatasource(client: client),
+      ),
+    )(noParams);
+
+    final erro = (res as Failure).error;
+    expect(erro, isA<IntentsSessaoExpirada>());
+    expect(
+      erro.message.toLowerCase(),
+      isNot(contains('permissão')),
+      reason: 'a mensagem não pode mandar a pessoa caçar permissão que ela tem',
+    );
+  });
+
+  test('recusa real de permissão continua dizendo que é permissão', () async {
+    when(() => client.listMyIntents(any())).thenAnswer(
+      (_) => falhaGrpc(proto.GrpcError.permissionDenied('sem escopo')),
     );
 
     final res = await ListarIntentsUsecase(

@@ -8,11 +8,20 @@ class AppEmptyView extends StatelessWidget {
   final String? subtitle;
   final IconData icon;
 
+  /// Botão do próximo passo, quando existe um.
+  ///
+  /// Um estado vazio que só descreve o vazio deixa a pessoa procurando o botão
+  /// sozinha — e às vezes ele nem mora naquela tela. Foi o que aconteceu na
+  /// lista de usuários do tenant: não há "adicionar" ali de propósito (usuário
+  /// entra por convite), mas nada apontava para onde a ação acontece.
+  final Widget? action;
+
   const AppEmptyView({
     super.key,
     required this.title,
     this.subtitle,
     this.icon = Icons.inbox_outlined,
+    this.action,
   });
 
   @override
@@ -41,6 +50,7 @@ class AppEmptyView extends StatelessWidget {
                 style: theme.textTheme.bodyMedium?.copyWith(color: muted),
               ),
             ],
+            if (action != null) ...[const SizedBox(height: 20), action!],
           ],
         ),
       ),

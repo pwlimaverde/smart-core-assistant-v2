@@ -46,6 +46,18 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+
+/// `Form` que junta chave repetida num `Vec` (usa `serde_html_form`).
+///
+/// O `axum::Form` usa `serde_urlencoded`, que **não** faz isso: um formulário
+/// com várias caixas `name="escopos"` chega como `escopos=a&escopos=b` e
+/// explode com *"invalid type: string, expected a sequence"*. Pior, com UMA
+/// caixa marcada o erro é o mesmo — foi assim que o defeito apareceu, no
+/// primeiro consentimento real.
+///
+/// Só o consentimento precisa disto; login e token continuam no `axum::Form`,
+/// que basta para campos escalares.
+use axum_extra::extract::Form as FormComRepeticao;
 use contracts::{Envelope, MessageKind};
 use serde::Deserialize;
 use uuid::Uuid;
@@ -480,6 +492,9 @@ pub struct ConsentForm {
     pub ticket: String,
     pub decisao: String,
     /// Checkboxes marcados. Ausente quando o usuário desmarcou tudo.
+    ///
+    /// ⚠️ Depende de [`FormComRepeticao`] no handler. Com o `axum::Form` padrão
+    /// este campo falha na desserialização assim que UMA caixa vem marcada.
     #[serde(default)]
     pub escopos: Vec<String>,
 }
@@ -488,7 +503,7 @@ pub struct ConsentForm {
 async fn authorize_consent(
     State(estado): State<OauthState>,
     ConnectInfo(origem): ConnectInfo<std::net::SocketAddr>,
-    Form(form): Form<ConsentForm>,
+    FormComRepeticao(form): FormComRepeticao<ConsentForm>,
 ) -> Response {
     let cfg = &estado.config;
     let mut redis = estado.redis.clone();
@@ -1219,6 +1234,50 @@ async fn escopos_atuais_do_usuario(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Regressão do defeito que impediu o PRIMEIRO consentimento real
+    /// (12/09/2026): com o `axum::Form` (serde_urlencoded), o formulário
+    /// respondia
+    ///
+    /// > Failed to deserialize form body: escopos: invalid type: string
+    /// > "atendimentos:read", expected a sequence
+    ///
+    /// assim que UMA caixa vinha marcada — o caso mais comum, não um extremo.
+    ///
+    /// O teste exercita o mesmo desserializador que o handler usa
+    /// (`serde_html_form`, via `axum_extra::extract::Form`), e não uma
+    /// aproximação: é a troca desse desserializador que corrige o defeito, e um
+    /// teste contra `serde_urlencoded` passaria a mentir se alguém revertesse.
+    #[test]
+    fn consentimento_aceita_uma_caixa_marcada_e_varias() {
+        // Uma só — o caso que quebrava.
+        let uma: ConsentForm =
+            serde_html_form::from_str("ticket=t1&decisao=aprovar&escopos=atendimentos%3Aread")
+                .expect("uma caixa marcada precisa desserializar");
+        assert_eq!(uma.escopos, vec!["atendimentos:read"]);
+        assert_eq!(uma.decisao, "aprovar");
+
+        // Várias: a chave repetida tem de virar lista, e não sobrescrever. Se
+        // só a última sobrevivesse, o usuário marcaria cinco permissões e
+        // receberia uma — pior que o erro, porque falha em silêncio.
+        let varias: ConsentForm = serde_html_form::from_str(
+            "ticket=t1&decisao=aprovar\
+             &escopos=atendimentos%3Aread\
+             &escopos=clientes%3Aread\
+             &escopos=operacional%3Aread",
+        )
+        .expect("varias caixas precisam desserializar");
+        assert_eq!(
+            varias.escopos,
+            vec!["atendimentos:read", "clientes:read", "operacional:read"]
+        );
+
+        // Nenhuma: o campo some do corpo, e `#[serde(default)]` responde. O
+        // handler trata isso como "nada concedido" e devolve `invalid_scope`.
+        let nenhuma: ConsentForm =
+            serde_html_form::from_str("ticket=t1&decisao=aprovar").expect("ausente e valido");
+        assert!(nenhuma.escopos.is_empty());
+    }
 
     #[test]
     fn config_normaliza_barra_final_do_issuer_e_do_resource() {

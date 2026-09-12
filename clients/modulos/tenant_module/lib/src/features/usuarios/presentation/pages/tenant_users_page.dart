@@ -37,6 +37,17 @@ class _TenantUsersPageState extends State<TenantUsersPage> {
       title: 'Usuários do Tenant',
       drawer: const TenantDrawer(),
       actions: [
+        // Não existe "adicionar" aqui, e é de propósito: ninguém cria um
+        // usuário por outro — a pessoa aceita o convite e define a própria
+        // senha. Mas a tela não dizia isso nem levava a lugar nenhum, e quem
+        // vinha adicionar alguém ficava procurando um botão que nunca
+        // existiria. Este atalho é o botão que falta, apontando para onde a
+        // ação de fato acontece.
+        TextButton.icon(
+          icon: const Icon(Icons.person_add_alt),
+          label: const Text('Convidar'),
+          onPressed: () => context.go('/tenant/convites'),
+        ),
         IconButton(
           icon: const Icon(Icons.refresh),
           tooltip: 'Recarregar',
@@ -53,10 +64,18 @@ class _TenantUsersPageState extends State<TenantUsersPage> {
           ),
           onSuccess: (context, users) {
             if (users.isEmpty) {
-              return const AppEmptyView(
+              return AppEmptyView(
                 icon: Icons.people_outline,
-                title: 'Nenhum usuario neste tenant',
-                subtitle: 'Convidados que aceitarem o convite aparecem aqui.',
+                title: 'Nenhum usuário neste tenant',
+                subtitle:
+                    'Usuários entram por convite: a pessoa aceita e define a '
+                    'própria senha. Depois disso ela aparece aqui, e você '
+                    'ajusta as permissões dela.',
+                action: FilledButton.icon(
+                  icon: const Icon(Icons.person_add_alt),
+                  label: const Text('Convidar usuário'),
+                  onPressed: () => context.go('/tenant/convites'),
+                ),
               );
             }
             return SingleChildScrollView(
@@ -154,122 +173,125 @@ class _TenantUsersPageState extends State<TenantUsersPage> {
       builder: (dialogContext) => DialogoComCampos(
         campos: [flowsController],
         builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (dialogContext, setDialogState) {
-            return AlertDialog(
-              title: Text('Editar usuário #${user.userId}'),
-              content: SizedBox(
-                width: 500,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      DropdownButtonFormField<String>(
-                        initialValue: role,
-                        decoration: const InputDecoration(labelText: 'Papel'),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'admin',
-                            child: Text('Admin'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'staff',
-                            child: Text('Atendente (staff)'),
-                          ),
-                        ],
-                        onChanged: (v) =>
-                            setDialogState(() => role = v ?? role),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Escopos',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      ..._escoposConhecidos.map(
-                        (s) => CheckboxListTile(
-                          dense: true,
-                          title: Text(s),
-                          value: scopesEscolhidos.contains(s),
-                          onChanged: (checked) => setDialogState(() {
-                            if (checked ?? false) {
-                              scopesEscolhidos.add(s);
-                            } else {
-                              scopesEscolhidos.remove(s);
-                            }
-                          }),
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      AppTextField(
-                        label:
-                            'IDs dos fluxos permitidos (separados por vírgula)',
-                        controller: flowsController,
-                      ),
-                      if (erroSalvar case final msg?) ...[
-                        const SizedBox(height: 12),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              Icons.error_outline,
-                              size: 18,
-                              color: Theme.of(dialogContext).colorScheme.error,
+          return StatefulBuilder(
+            builder: (dialogContext, setDialogState) {
+              return AlertDialog(
+                title: Text('Editar usuário #${user.userId}'),
+                content: SizedBox(
+                  width: 500,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        DropdownButtonFormField<String>(
+                          initialValue: role,
+                          decoration: const InputDecoration(labelText: 'Papel'),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'admin',
+                              child: Text('Admin'),
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                msg,
-                                style: TextStyle(
-                                  color:
-                                      Theme.of(dialogContext).colorScheme.error,
-                                ),
-                              ),
+                            DropdownMenuItem(
+                              value: 'staff',
+                              child: Text('Atendente (staff)'),
                             ),
                           ],
+                          onChanged: (v) =>
+                              setDialogState(() => role = v ?? role),
                         ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Escopos',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        ..._escoposConhecidos.map(
+                          (s) => CheckboxListTile(
+                            dense: true,
+                            title: Text(s),
+                            value: scopesEscolhidos.contains(s),
+                            onChanged: (checked) => setDialogState(() {
+                              if (checked ?? false) {
+                                scopesEscolhidos.add(s);
+                              } else {
+                                scopesEscolhidos.remove(s);
+                              }
+                            }),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        AppTextField(
+                          label:
+                              'IDs dos fluxos permitidos (separados por vírgula)',
+                          controller: flowsController,
+                        ),
+                        if (erroSalvar case final msg?) ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.error_outline,
+                                size: 18,
+                                color: Theme.of(
+                                  dialogContext,
+                                ).colorScheme.error,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  msg,
+                                  style: TextStyle(
+                                    color: Theme.of(
+                                      dialogContext,
+                                    ).colorScheme.error,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Cancelar'),
-                ),
-                PrimaryButton(
-                  label: 'Salvar',
-                  expand: false,
-                  onPressed: () async {
-                    final flowPermissions = flowsController.text
-                        .split(',')
-                        .map((s) => int.tryParse(s.trim()))
-                        .whereType<int>()
-                        .toList();
-                    final res = await _controller.updateUser(
-                      userId: user.userId,
-                      role: role,
-                      modulePermissions: scopesEscolhidos.toList(),
-                      flowPermissions: flowPermissions,
-                    );
-                    if (dialogContext.mounted) {
-                      if (res case Success()) {
-                        Navigator.pop(dialogContext);
-                      } else if (res case Failure(:final error)) {
-                        setDialogState(() {
-                          erroSalvar =
-                              'Erro ao salvar: ${ErrorMessageMapper.map(error)}';
-                        });
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('Cancelar'),
+                  ),
+                  PrimaryButton(
+                    label: 'Salvar',
+                    expand: false,
+                    onPressed: () async {
+                      final flowPermissions = flowsController.text
+                          .split(',')
+                          .map((s) => int.tryParse(s.trim()))
+                          .whereType<int>()
+                          .toList();
+                      final res = await _controller.updateUser(
+                        userId: user.userId,
+                        role: role,
+                        modulePermissions: scopesEscolhidos.toList(),
+                        flowPermissions: flowPermissions,
+                      );
+                      if (dialogContext.mounted) {
+                        if (res case Success()) {
+                          Navigator.pop(dialogContext);
+                        } else if (res case Failure(:final error)) {
+                          setDialogState(() {
+                            erroSalvar =
+                                'Erro ao salvar: ${ErrorMessageMapper.map(error)}';
+                          });
+                        }
                       }
-                    }
-                  },
-                ),
-              ],
-            );
-          },
-        );
-      },
+                    },
+                  ),
+                ],
+              );
+            },
+          );
+        },
       ),
     );
   }

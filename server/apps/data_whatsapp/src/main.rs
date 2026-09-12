@@ -818,6 +818,20 @@ async fn gravar_estado(env: &Envelope, db_id: i64, estado: &str) {
     .await;
 }
 
+/// Janela em que o mesmo QR é reaproveitado, em segundos.
+///
+/// O padrão de 20 s acompanha a rotação do próprio WhatsApp — pedir mais cedo
+/// devolveria o mesmo código e gastaria uma das cinco vidas da instância.
+/// Configurável porque a cadência do provedor pode mudar de versão; abaixo de
+/// 5 s não faz sentido e é elevado.
+fn qr_ttl_s() -> usize {
+    std::env::var("SMARTCORE_WHATSAPP_QR_TTL_S")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(20)
+        .max(5)
+}
+
 #[tracing::instrument(skip_all, fields(rpc = "GetWhatsappInstanceStatus", tenant_id = %env.tenant_id))]
 async fn handler_get_whatsapp_instance_status(state: AppState, env: Envelope) -> Envelope {
     let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
@@ -905,10 +919,54 @@ async fn handler_get_whatsapp_instance_status(state: AppState, env: Envelope) ->
     // pareamento: socket de pé no provedor, sessão ainda não autenticada,
     // QR na tela aguardando leitura. A tela de conexão ficava girando sem
     // nunca receber o código.
+    //
+    // 🚨 **Pedir o QR reinicia o cliente no provedor** (ver o comentário em
+    // `get_connection_state`, no `infrastructure_evolution`): ao quinto código
+    // a Evolution registra "Maximum QR code count reached (5), forcing logout"
+    // e derruba a sessão. Como a tela consulta o status em laço para saber
+    // quando pareou, sem freio aqui cada consulta gastava um código: com o
+    // polling de 3 s do onboarding, os cinco iam embora em 15 SEGUNDOS — menos
+    // tempo do que uma pessoa leva para pegar o celular e ler o código.
+    //
+    // O freio mora no servidor, e não no intervalo do timer da tela, por dois
+    // motivos: são duas telas com intervalos diferentes (3 s no onboarding, 8 s
+    // no painel), e duas abas abertas na mesma instância dobrariam a taxa de
+    // qualquer jeito. Aqui o teto vale para todo mundo.
+    //
+    // O QR fica em cache pelo tempo de rotação do próprio WhatsApp (~20 s):
+    // devolver o mesmo código dentro dessa janela não atrasa nada — é
+    // literalmente o código que está valendo — e ainda faz a imagem parar de
+    // piscar na tela a cada consulta.
     let mut qr_code = None;
     if prov_state != ConnectionState::Connected {
-        if let Ok(qr) = p.get_qr_code(name, &api_key_sec).await {
-            qr_code = Some(qr);
+        let chave = format!("whatsapp:qr:{name}");
+        let mut redis = state.redis_conn.clone();
+
+        let em_cache: Option<String> = redis::cmd("GET")
+            .arg(&chave)
+            .query_async(&mut redis)
+            .await
+            .unwrap_or(None);
+
+        match em_cache {
+            Some(qr) => {
+                tracing::debug!("QR servido do cache; provedor nao foi consultado");
+                qr_code = Some(qr);
+            }
+            None => {
+                if let Ok(qr) = p.get_qr_code(name, &api_key_sec).await {
+                    // `EX` e nao `PX`: a granularidade de segundos basta, e o
+                    // valor fica legivel no `redis-cli TTL`.
+                    let _: Result<(), _> = redis::cmd("SET")
+                        .arg(&chave)
+                        .arg(&qr)
+                        .arg("EX")
+                        .arg(qr_ttl_s())
+                        .query_async(&mut redis)
+                        .await;
+                    qr_code = Some(qr);
+                }
+            }
         }
     }
 
@@ -2020,8 +2078,20 @@ mod tests {
                             if parte.is_empty() {
                                 continue;
                             }
-                            if parte.to_uppercase().contains("PING") {
+                            let cmd = parte.to_uppercase();
+                            if cmd.contains("PING") {
                                 let _ = socket.write_all(b"+PONG\r\n").await;
+                            } else if cmd.contains("GET") {
+                                // Nil, como o Redis de verdade responde para
+                                // chave ausente.
+                                //
+                                // Responder `+OK` a TUDO parecia inofensivo
+                                // enquanto nada lia do Redis. Assim que o cache
+                                // do QR passou a ler com GET, o falso devolveu
+                                // a string "OK" e o handler a serviu como se
+                                // fosse o código — o teste do QR quebrou
+                                // exatamente aí, e quem mentia era o falso.
+                                let _ = socket.write_all(b"$-1\r\n").await;
                             } else {
                                 let _ = socket.write_all(b"+OK\r\n").await;
                             }

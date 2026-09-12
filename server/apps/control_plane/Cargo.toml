@@ -24,6 +24,12 @@ tracing = { workspace = true }
 # HTTP deste serviço: até aqui ele só atendia RPC interno pelo `transport`.
 application  = { workspace = true }
 axum         = "0.8"
+# `axum::Form` usa `serde_urlencoded`, que NAO junta chave repetida num `Vec`:
+# um formulario com varias caixas `name="escopos"` chega como `escopos=a&escopos=b`
+# e falha com "invalid type: string, expected a sequence". O `Form` do
+# axum-extra usa `serde_html_form`, que trata chave repetida — e e por isso que
+# esta dependencia existe.
+axum-extra   = { version = "0.10", features = ["form"] }
 jsonwebtoken = { workspace = true }
 sha2         = { workspace = true }
 base64       = { workspace = true }
@@ -37,4 +43,8 @@ reqwest      = { version = "0.12", default-features = false, features = ["json",
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full"] }
+# O mesmo desserializador que o `axum-extra` usa por baixo. O teste de regressao
+# do consentimento chama-o direto: testar contra `serde_urlencoded` passaria a
+# mentir no dia em que alguem revertesse o `Form`.
+serde_html_form = "0.2"
 

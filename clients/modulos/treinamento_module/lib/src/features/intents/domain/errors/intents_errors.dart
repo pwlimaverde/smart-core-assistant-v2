@@ -11,6 +11,19 @@ final class IntentsAcessoNegado extends IntentsError with UnauthorizedFailure {
       : super('Você não tem permissão para editar as intenções.');
 }
 
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [IntentsAcessoNegado], e o resultado foi um dono de
+/// conta lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token dele havia expirado, o refresh foi rejeitado, e todas
+/// as chamadas seguintes voltaram `unauthenticated`. A mensagem mandou a pessoa
+/// investigar as próprias permissões em vez de reentrar.
+final class IntentsSessaoExpirada extends IntentsError
+    with UnauthorizedFailure {
+  const IntentsSessaoExpirada()
+      : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
 final class IntentNaoEncontrada extends IntentsError {
   const IntentNaoEncontrada()
       : super('Esta intenção não existe mais. Atualize a lista.');
