@@ -240,6 +240,20 @@ class _Linha extends StatelessWidget {
               onChanged: (v) => _alternarBot(context, v),
             ),
           ),
+          // O QR é a saída quando a sessão foi desfeita do lado do WhatsApp —
+          // e era um caminho que só existia ao CRIAR a conexão. Depois disso a
+          // tela oferecia "Reconectar", que não resolve pareamento perdido: o
+          // aparelho foi desvinculado, e nenhuma reconexão o traz de volta.
+          //
+          // Aparece primeiro, e rotulado, quando a conexão está aguardando
+          // leitura: é a ação que de fato conserta.
+          if (situacao == SituacaoConexao.conectando ||
+              situacao == SituacaoConexao.desconectada)
+            TextButton.icon(
+              icon: const Icon(Icons.qr_code_2, size: 18),
+              label: const Text('Ler QR code'),
+              onPressed: () => abrirPareamento(conexao.id, conexao.nome),
+            ),
           // Reconectar só faz sentido quando não está conectada — oferecer no
           // estado bom convidaria a derrubar uma conexão que funciona.
           if (situacao != SituacaoConexao.conectada)
@@ -249,7 +263,7 @@ class _Linha extends StatelessWidget {
               onPressed: () => _reconectar(context),
             ),
           IconButton(
-            icon: const Icon(Icons.link_off),
+            icon: const Icon(Icons.delete_outline),
             tooltip: 'Remover conexão',
             onPressed: () => _remover(context),
           ),

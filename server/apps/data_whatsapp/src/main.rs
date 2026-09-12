@@ -649,22 +649,21 @@ async fn handler_reconnect_whatsapp_instance(state: AppState, env: Envelope) -> 
         gravar_estado(&env, db_id, texto).await;
     }
 
-    // Desvinculado do lado do WhatsApp: nenhuma reconexão resolve, e insistir
-    // no botão só gasta o tempo de quem está esperando. Vira erro de pré-
-    // condição, com o texto que diz o que fazer, em vez do `status: success`
-    // que a tela mostrava enquanto nada acontecia.
+    // Precisar de QR **não é erro**: é o desfecho normal de uma sessão que o
+    // WhatsApp desfez, e o caminho adiante existe — a tela abre a caixa de
+    // pareamento no sucesso, justamente porque não dá para saber antes se a
+    // reconexão bastaria.
+    //
+    // Chegou a virar erro aqui, para não repetir o `status: success` fixo que
+    // a tela mostrava enquanto nada acontecia. Mas o defeito era o "fixo", não
+    // o "success": transformar em erro tirou a tela do caminho que resolve e a
+    // deixou com uma mensagem sem saída. O que o cliente precisa é do
+    // desfecho, e é ele que vai no corpo.
     if precisa_parear {
         tracing::warn!(
             instance_id = db_id,
             estado = texto,
             "reconexão pedida, mas a instância exige novo pareamento (QR)"
-        );
-        return erro(
-            error_core::AppError::Validation(
-                "O WhatsApp desvinculou este aparelho. Reconectar não resolve:                  é preciso ler o QR code de novo, com o celular em mãos."
-                    .into(),
-            ),
-            &env,
         );
     }
 
@@ -674,7 +673,8 @@ async fn handler_reconnect_whatsapp_instance(state: AppState, env: Envelope) -> 
         serde_json::json!({
             "status": "success",
             "state": texto,
-            "religada": religada
+            "religada": religada,
+            "precisa_parear": precisa_parear
         }),
     )
 }
@@ -2408,14 +2408,18 @@ mod tests {
         pg_handle.abort();
     }
 
-    /// Aparelho desvinculado: o botão precisa dizer isso, não "pronto".
+    /// Aparelho desvinculado: a resposta precisa DIZER isso.
     ///
     /// O socket abre e a sessão é recusada — o provedor fica em `connecting`
-    /// para sempre. Nenhuma reconexão resolve; é QR na mão do usuário. Enquanto
-    /// isto respondia `status: success`, quem apertava o botão via a tela
-    /// dizer que deu certo e nada mudar, várias vezes seguidas.
+    /// para sempre e nenhuma reconexão resolve; é QR na mão do usuário.
+    ///
+    /// O desfecho vai no corpo, e não como erro. Já foi erro por um momento,
+    /// para não repetir o `status: success` fixo que a tela mostrava enquanto
+    /// nada acontecia — mas o defeito era o "fixo", não o "success": virar
+    /// erro tirou a tela do caminho que resolve (ela abre a caixa de
+    /// pareamento no sucesso) e a deixou com uma mensagem sem saída.
     #[tokio::test]
-    async fn reconectar_aparelho_desvinculado_devolve_erro_com_o_motivo() {
+    async fn reconectar_aparelho_desvinculado_sinaliza_pareamento() {
         let (server, state, pg_handle) = setup_test_env().await;
 
         Mock::given(method("POST"))
@@ -2440,15 +2444,17 @@ mod tests {
         };
 
         let res = handler_reconnect_whatsapp_instance(state, env).await;
+        assert_eq!(res.kind, MessageKind::Reply as i32);
+        let corpo: serde_json::Value = serde_json::from_slice(&res.payload).unwrap();
         assert_eq!(
-            res.kind,
-            MessageKind::Error as i32,
-            "reconexão que não reconectou não pode responder sucesso"
+            corpo.get("precisa_parear").and_then(|v| v.as_bool()),
+            Some(true),
+            "sem este sinal a tela não distingue 'voltou' de 'precisa de QR'"
         );
-        let mensagem = res.error.map(|e| e.message).unwrap_or_default();
-        assert!(
-            mensagem.contains("QR"),
-            "a mensagem tem de dizer o que fazer; veio: {mensagem}"
+        assert_eq!(
+            corpo.get("religada").and_then(|v| v.as_bool()),
+            Some(false),
+            "não religou, e dizer que sim é o defeito que veio antes"
         );
 
         pg_handle.abort();

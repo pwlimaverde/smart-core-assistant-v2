@@ -67,7 +67,11 @@ class Conexao {
 
 enum SituacaoConexao {
   conectada('Conectada', 'Recebendo e enviando mensagens.'),
-  conectando('Conectando', 'Aguardando a leitura do QR code.'),
+  // "Aguardando QR", e não "Conectando": o provedor não está tentando nada —
+  // ele espera alguém ler o código com o celular. "Conectando" fazia parecer
+  // que o sistema estava trabalhando, e a conexão ficava assim indefinidamente
+  // enquanto ninguém entendia que a ação era humana.
+  conectando('Aguardando QR', 'Leia o QR code com o celular para conectar.'),
   desconectada('Desconectada', 'Não recebe mensagens. Reconecte para voltar.'),
   desconhecida('Sem resposta', 'O provedor não respondeu. Tente atualizar.');
 
