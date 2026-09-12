@@ -73,6 +73,8 @@ pub const MAPA: &[(&str, &[&str])] = &[
     //   o `data_postgres` revalida com `atendimentos:write` ou `tenant:admin`.
     ("DefinirRespostaBotInstancia", SOMENTE_ADMIN),
     ("DefinirBotDaConversa", &["atendimentos:write"]),
+    // C3: abrir conversa é escrever no atendimento, não configurar o tenant.
+    ("IniciarAtendimentoManual", &["atendimentos:write"]),
     // --- Base de conhecimento do assistente.
     ("ListTreinamentos", &["treinamento:read"]),
     ("GetTreinamento", &["treinamento:read"]),

@@ -566,6 +566,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_verify_whatsapp_instance_token = state_clone.clone();
     let state_for_is_phone_whitelisted = state_clone.clone();
     let state_for_resolve_atendimento = state_clone.clone();
+    let state_for_iniciar_manual = state_clone.clone();
     let state_for_toggle_bot = state_clone.clone();
     let state_for_toggle_bot_conversa = state_clone.clone();
     let state_for_aplicar_politica = state_clone.clone();
@@ -608,6 +609,17 @@ async fn main() -> anyhow::Result<()> {
         .route("PersistMessage", move |env| {
             let state = state_for_persist.clone();
             Box::pin(async move { handler_persist_message(state.atendimento.as_ref(), env).await })
+        })
+        .route("IniciarAtendimentoManual", move |env| {
+            let state = state_for_iniciar_manual.clone();
+            Box::pin(async move {
+                handler_iniciar_atendimento_manual(
+                    state.atendimento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
         })
         .route("ResolveAtendimentoParaContato", move |env| {
             let state = state_for_resolve_atendimento.clone();
@@ -2643,6 +2655,103 @@ async fn handler_persist_message(store: &dyn ports::AtendimentoStore, env: Envel
             serde_json::json!({ "status": "success", "message_id": msg.id }),
         ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// C3 — alguém no painel decide falar primeiro com um cliente cadastrado.
+///
+/// Até aqui um atendimento só nascia de uma mensagem que chegou. Quem queria
+/// procurar o cliente tinha de abrir o WhatsApp por fora, mandar a mensagem e
+/// esperar a resposta cair no quadro — e o histórico dessa conversa começava
+/// pela metade.
+async fn handler_iniciar_atendimento_manual(
+    store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let inteiro = |chave: &str| {
+        payload
+            .get(chave)
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32)
+    };
+
+    let (contato_id, fluxo_id, etapa_inicial_id) = match (
+        inteiro("contato_id"),
+        inteiro("fluxo_id"),
+        inteiro("etapa_inicial_id"),
+    ) {
+        (Some(c), Some(f), Some(e)) => (c, f, e),
+        _ => {
+            // A etapa é exigida junto com o fluxo, e não preenchida por
+            // padrão: um atendimento sem etapa não aparece em coluna nenhuma
+            // do quadro. Nascer invisível é pior que recusar.
+            return erro(
+                error_core::AppError::Validation(
+                    "contato_id, fluxo_id e etapa_inicial_id são obrigatórios".into(),
+                ),
+                &env,
+            );
+        }
+    };
+
+    let assunto = payload
+        .get("assunto")
+        .and_then(|v| v.as_str())
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
+    let ctx = contexto_do_envelope(&env);
+
+    match store
+        .iniciar_atendimento_manual(
+            &ctx,
+            contato_id,
+            fluxo_id,
+            etapa_inicial_id,
+            inteiro("departamento_id"),
+            assunto,
+        )
+        .await
+    {
+        Ok((atendimento, ja_existia)) => {
+            // Só audita o que de fato criou. Reabrir a conversa que já estava
+            // aberta não é um ato novo, e registrá-lo encheria a trilha de
+            // ruído justamente onde ela serve para responder "quem começou a
+            // falar com este cliente?".
+            if !ja_existia {
+                audit
+                    .publish(
+                        &env,
+                        "atendimento.iniciado_manualmente",
+                        format!("Atendimento #{} iniciado pelo painel", atendimento.id),
+                        // Sem o assunto e sem a mensagem: a trilha diz quem
+                        // falou com quem, não o que foi dito.
+                        serde_json::json!({
+                            "atendimento_id": atendimento.id,
+                            "contato_id": contato_id,
+                            "fluxo_id": fluxo_id,
+                        }),
+                    )
+                    .await;
+            }
+
+            ok_reply(
+                &env,
+                "IniciarAtendimentoManualReply",
+                serde_json::json!({
+                    "atendimento_id": atendimento.id,
+                    "ja_existia": ja_existia,
+                }),
+            )
+        }
+        Err(err) => erro(err.into(), &env),
     }
 }
 

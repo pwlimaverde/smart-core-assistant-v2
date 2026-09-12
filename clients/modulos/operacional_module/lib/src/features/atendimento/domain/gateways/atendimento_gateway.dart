@@ -1,3 +1,4 @@
+import '../model/atendimento_iniciado.dart';
 import '../model/atendimento_evento.dart';
 import '../model/atendimento_resumo.dart';
 import '../model/mensagem_thread.dart';
@@ -38,6 +39,19 @@ abstract interface class AtendimentoGateway {
     required int atendimentoId,
     int limit,
     int offset,
+  });
+
+  /// C3 — abre um atendimento a partir de um cliente já cadastrado.
+  ///
+  /// Devolve `jaExistia = true` quando já havia conversa aberta com esse
+  /// contato: vale a invariante de um atendimento ativo por contato, e o
+  /// servidor devolve a existente em vez de criar a segunda.
+  Future<AtendimentoIniciado> iniciarAtendimento({
+    required int contatoId,
+    required int fluxoId,
+    required int etapaInicialId,
+    int? departamentoId,
+    String? assunto,
   });
 
   /// Move um atendimento para outra etapa do Kanban (drag-and-drop).

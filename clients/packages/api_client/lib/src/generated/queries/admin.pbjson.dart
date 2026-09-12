@@ -1654,6 +1654,61 @@ final $typed_data.Uint8List getThreadResponseDescriptor = $convert.base64Decode(
     'ChFHZXRUaHJlYWRSZXNwb25zZRJJCgltZW5zYWdlbnMYASADKAsyKy5zbWFydGNvcmUuY29udH'
     'JhY3RzLnF1ZXJpZXMuTWVuc2FnZW1UaHJlYWRSCW1lbnNhZ2Vucw==');
 
+@$core.Deprecated('Use iniciarAtendimentoManualRequestDescriptor instead')
+const IniciarAtendimentoManualRequest$json = {
+  '1': 'IniciarAtendimentoManualRequest',
+  '2': [
+    {'1': 'contato_id', '3': 1, '4': 1, '5': 5, '10': 'contatoId'},
+    {'1': 'fluxo_id', '3': 2, '4': 1, '5': 5, '10': 'fluxoId'},
+    {'1': 'etapa_inicial_id', '3': 3, '4': 1, '5': 5, '10': 'etapaInicialId'},
+    {
+      '1': 'departamento_id',
+      '3': 4,
+      '4': 1,
+      '5': 5,
+      '9': 0,
+      '10': 'departamentoId',
+      '17': true
+    },
+    {
+      '1': 'assunto',
+      '3': 5,
+      '4': 1,
+      '5': 9,
+      '9': 1,
+      '10': 'assunto',
+      '17': true
+    },
+  ],
+  '8': [
+    {'1': '_departamento_id'},
+    {'1': '_assunto'},
+  ],
+};
+
+/// Descriptor for `IniciarAtendimentoManualRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List iniciarAtendimentoManualRequestDescriptor = $convert.base64Decode(
+    'Ch9JbmljaWFyQXRlbmRpbWVudG9NYW51YWxSZXF1ZXN0Eh0KCmNvbnRhdG9faWQYASABKAVSCW'
+    'NvbnRhdG9JZBIZCghmbHV4b19pZBgCIAEoBVIHZmx1eG9JZBIoChBldGFwYV9pbmljaWFsX2lk'
+    'GAMgASgFUg5ldGFwYUluaWNpYWxJZBIsCg9kZXBhcnRhbWVudG9faWQYBCABKAVIAFIOZGVwYX'
+    'J0YW1lbnRvSWSIAQESHQoHYXNzdW50bxgFIAEoCUgBUgdhc3N1bnRviAEBQhIKEF9kZXBhcnRh'
+    'bWVudG9faWRCCgoIX2Fzc3VudG8=');
+
+@$core.Deprecated('Use iniciarAtendimentoManualResponseDescriptor instead')
+const IniciarAtendimentoManualResponse$json = {
+  '1': 'IniciarAtendimentoManualResponse',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'ja_existia', '3': 2, '4': 1, '5': 8, '10': 'jaExistia'},
+  ],
+};
+
+/// Descriptor for `IniciarAtendimentoManualResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List iniciarAtendimentoManualResponseDescriptor =
+    $convert.base64Decode(
+        'CiBJbmljaWFyQXRlbmRpbWVudG9NYW51YWxSZXNwb25zZRIlCg5hdGVuZGltZW50b19pZBgBIA'
+        'EoBVINYXRlbmRpbWVudG9JZBIdCgpqYV9leGlzdGlhGAIgASgIUglqYUV4aXN0aWE=');
+
 @$core.Deprecated('Use moveAtendimentoEtapaRequestDescriptor instead')
 const MoveAtendimentoEtapaRequest$json = {
   '1': 'MoveAtendimentoEtapaRequest',

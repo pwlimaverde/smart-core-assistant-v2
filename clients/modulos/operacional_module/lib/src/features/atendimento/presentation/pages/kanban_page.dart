@@ -4,6 +4,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it_module/get_it_module.dart';
 import 'package:presentation_module/presentation_module.dart';
 
+import '../widgets/dialogo_iniciar_atendimento.dart';
+import '../../domain/model/contato_para_atendimento.dart';
 import '../../domain/model/atendimento_resumo.dart';
 import '../../domain/model/quadro.dart';
 import '../controllers/kanban_controller.dart';
@@ -42,7 +44,20 @@ class KanbanPage extends StatefulWidget {
   /// do `tenant_module`, entra por injeção, igual ao menu.
   final Widget? aviso;
 
-  const KanbanPage({this.drawer, this.aviso, super.key});
+  /// Como procurar clientes para abrir uma conversa (C3).
+  ///
+  /// Entra por parâmetro pelo mesmo motivo do menu e do aviso: o cadastro de
+  /// contatos é do `tenant_module`, e este módulo não o conhece. Quando não
+  /// vem, o botão "Iniciar atendimento" simplesmente não aparece — um app que
+  /// não sabe listar clientes não deve oferecer o caminho.
+  final BuscarContatos? buscarContatos;
+
+  const KanbanPage({
+    this.drawer,
+    this.aviso,
+    this.buscarContatos,
+    super.key,
+  });
 
   @override
   State<KanbanPage> createState() => _KanbanPageState();
@@ -62,6 +77,40 @@ class _KanbanPageState extends State<KanbanPage> {
   void initState() {
     super.initState();
     inject<KanbanController>().carregar();
+  }
+
+  /// C3 — abre a conversa com um cliente que ainda não escreveu.
+  ///
+  /// Precisa do quadro carregado: sem fluxo e sem colunas não há onde a
+  /// conversa começar, e um atendimento sem etapa não aparece em coluna
+  /// nenhuma.
+  Future<void> _iniciarAtendimento(KanbanController controller) async {
+    final estado = controller.state;
+    if (estado is! SuccessState<KanbanViewModel>) return;
+    final quadro = estado.data;
+    if (quadro.colunas.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Crie um fluxo com pelo menos uma coluna antes de abrir '
+            'atendimentos.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    final id = await mostrarDialogoIniciarAtendimento(
+      context,
+      quadro: quadro,
+      buscarContatos: widget.buscarContatos!,
+    );
+    if (id == null || !mounted) return;
+
+    // Recarrega antes de abrir: o cartão novo precisa existir no quadro, senão
+    // fechar a conversa devolveria a um quadro que não a mostra.
+    await controller.carregar();
+    if (mounted) _abrir(id);
   }
 
   /// Abre a conversa onde ela couber.
@@ -86,6 +135,12 @@ class _KanbanPageState extends State<KanbanPage> {
       title: 'Atendimento',
       drawer: widget.drawer,
       actions: [
+        if (widget.buscarContatos != null)
+          IconButton(
+            icon: const Icon(Icons.person_add_alt_1_outlined),
+            tooltip: 'Iniciar atendimento',
+            onPressed: () => _iniciarAtendimento(controller),
+          ),
         IconButton(
           icon: const Icon(Icons.refresh),
           tooltip: 'Recarregar',

@@ -6536,6 +6536,196 @@ class GetThreadResponse extends $pb.GeneratedMessage {
   $pb.PbList<MensagemThread> get mensagens => $_getList(0);
 }
 
+/// C3 — iniciar um atendimento a partir de um cliente ja cadastrado.
+///
+/// Ate aqui um atendimento so nascia de uma mensagem que chegou: para procurar
+/// o cliente era preciso abrir o WhatsApp por fora, e o historico da conversa
+/// comecava pela metade.
+class IniciarAtendimentoManualRequest extends $pb.GeneratedMessage {
+  factory IniciarAtendimentoManualRequest({
+    $core.int? contatoId,
+    $core.int? fluxoId,
+    $core.int? etapaInicialId,
+    $core.int? departamentoId,
+    $core.String? assunto,
+  }) {
+    final result = create();
+    if (contatoId != null) result.contatoId = contatoId;
+    if (fluxoId != null) result.fluxoId = fluxoId;
+    if (etapaInicialId != null) result.etapaInicialId = etapaInicialId;
+    if (departamentoId != null) result.departamentoId = departamentoId;
+    if (assunto != null) result.assunto = assunto;
+    return result;
+  }
+
+  IniciarAtendimentoManualRequest._();
+
+  factory IniciarAtendimentoManualRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory IniciarAtendimentoManualRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'IniciarAtendimentoManualRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'contatoId')
+    ..aI(2, _omitFieldNames ? '' : 'fluxoId')
+    ..aI(3, _omitFieldNames ? '' : 'etapaInicialId')
+    ..aI(4, _omitFieldNames ? '' : 'departamentoId')
+    ..aOS(5, _omitFieldNames ? '' : 'assunto')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  IniciarAtendimentoManualRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  IniciarAtendimentoManualRequest copyWith(
+          void Function(IniciarAtendimentoManualRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as IniciarAtendimentoManualRequest))
+          as IniciarAtendimentoManualRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static IniciarAtendimentoManualRequest create() =>
+      IniciarAtendimentoManualRequest._();
+  @$core.override
+  IniciarAtendimentoManualRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static IniciarAtendimentoManualRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<IniciarAtendimentoManualRequest>(
+          create);
+  static IniciarAtendimentoManualRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get contatoId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set contatoId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasContatoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearContatoId() => $_clearField(1);
+
+  /// Fluxo e etapa sao OBRIGATORIOS, ao contrario da ingestao (que cria sem
+  /// etapa e preenche depois). Um atendimento sem etapa nao aparece em coluna
+  /// nenhuma do quadro — nasceria invisivel.
+  @$pb.TagNumber(2)
+  $core.int get fluxoId => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set fluxoId($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasFluxoId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearFluxoId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.int get etapaInicialId => $_getIZ(2);
+  @$pb.TagNumber(3)
+  set etapaInicialId($core.int value) => $_setSignedInt32(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasEtapaInicialId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearEtapaInicialId() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.int get departamentoId => $_getIZ(3);
+  @$pb.TagNumber(4)
+  set departamentoId($core.int value) => $_setSignedInt32(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasDepartamentoId() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearDepartamentoId() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get assunto => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set assunto($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasAssunto() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearAssunto() => $_clearField(5);
+}
+
+class IniciarAtendimentoManualResponse extends $pb.GeneratedMessage {
+  factory IniciarAtendimentoManualResponse({
+    $core.int? atendimentoId,
+    $core.bool? jaExistia,
+  }) {
+    final result = create();
+    if (atendimentoId != null) result.atendimentoId = atendimentoId;
+    if (jaExistia != null) result.jaExistia = jaExistia;
+    return result;
+  }
+
+  IniciarAtendimentoManualResponse._();
+
+  factory IniciarAtendimentoManualResponse.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory IniciarAtendimentoManualResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'IniciarAtendimentoManualResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'atendimentoId')
+    ..aOB(2, _omitFieldNames ? '' : 'jaExistia')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  IniciarAtendimentoManualResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  IniciarAtendimentoManualResponse copyWith(
+          void Function(IniciarAtendimentoManualResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as IniciarAtendimentoManualResponse))
+          as IniciarAtendimentoManualResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static IniciarAtendimentoManualResponse create() =>
+      IniciarAtendimentoManualResponse._();
+  @$core.override
+  IniciarAtendimentoManualResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static IniciarAtendimentoManualResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<IniciarAtendimentoManualResponse>(
+          create);
+  static IniciarAtendimentoManualResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get atendimentoId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set atendimentoId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAtendimentoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAtendimentoId() => $_clearField(1);
+
+  /// TRUE quando ja havia conversa aberta com esse contato: vale a invariante
+  /// de um atendimento ativo por contato, e a tela ABRE a existente em vez de
+  /// criar um segundo cartao para o mesmo cliente.
+  @$pb.TagNumber(2)
+  $core.bool get jaExistia => $_getBF(1);
+  @$pb.TagNumber(2)
+  set jaExistia($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasJaExistia() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearJaExistia() => $_clearField(2);
+}
+
 class MoveAtendimentoEtapaRequest extends $pb.GeneratedMessage {
   factory MoveAtendimentoEtapaRequest({
     $core.int? atendimentoId,

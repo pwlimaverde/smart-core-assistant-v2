@@ -113,6 +113,32 @@ pub trait AtendimentoRepository: Send + Sync {
         etapa_inicial_id: Option<i32>,
     ) -> Result<Atendimento, DbError>;
 
+    /// Cria um atendimento que **uma pessoa** começou, não uma mensagem que
+    /// chegou.
+    ///
+    /// Difere de [`AtendimentoRepository::criar`] em três pontos, e cada um
+    /// tem razão:
+    ///
+    /// - **`etapa_inicial_id` é obrigatório.** A ingestão cria sem etapa e o
+    ///   fluxo é preenchido depois por `COALESCE`; um atendimento sem etapa
+    ///   não aparece em coluna nenhuma do quadro — nasceria invisível, o que
+    ///   para uma conversa que alguém acabou de abrir é o pior desfecho.
+    /// - **`bot_pode_atender = false`.** Alguém decidiu falar com esse
+    ///   cliente; o robô não entra no meio de uma conversa que uma pessoa
+    ///   começou. O caminho de volta existe e é um clique
+    ///   (`definir_bot_da_conversa`).
+    /// - **`atendente_humano_id` = quem criou.** Quem inicia, atende.
+    async fn criar_manual(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        contato_id: i32,
+        fluxo_id: i32,
+        etapa_inicial_id: i32,
+        departamento_id: Option<i32>,
+        assunto: Option<&str>,
+    ) -> Result<Atendimento, DbError>;
+
     async fn buscar_por_id(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -397,6 +423,43 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
             departamento_id,
             fluxo_id,
             etapa_inicial_id
+        )
+        .fetch_one(&mut **tx)
+        .await?;
+        Ok(row)
+    }
+
+    #[tracing::instrument(skip_all, fields(contato_id = contato_id, fluxo_id = fluxo_id))]
+    async fn criar_manual(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        contato_id: i32,
+        fluxo_id: i32,
+        etapa_inicial_id: i32,
+        departamento_id: Option<i32>,
+        assunto: Option<&str>,
+    ) -> Result<Atendimento, DbError> {
+        ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+        let row = sqlx::query_as!(
+            Atendimento,
+            r#"INSERT INTO oraculo_atendimento
+                   (tenant_id, contato_id, departamento_id, fluxo_atendimento_id,
+                    etapa_atual_id, atendente_humano_id, bot_pode_atender, assunto)
+               VALUES ($1, $2, $3, $4, $5, $6, FALSE, $7)
+               RETURNING id, tenant_id, contato_id, departamento_id, fluxo_atendimento_id,
+                         status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
+                         assunto, prioridade, atendente_humano_id, contexto_conversa,
+                         historico_status, tags, avaliacao, feedback,
+                         data_primeira_resposta, bot_pode_atender,
+                         sentimento_nota, sentimento_label"#,
+            ctx.tenant_id,
+            contato_id,
+            departamento_id,
+            fluxo_id,
+            etapa_inicial_id,
+            ctx.user_id,
+            assunto
         )
         .fetch_one(&mut **tx)
         .await?;

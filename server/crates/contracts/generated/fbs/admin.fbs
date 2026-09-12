@@ -501,6 +501,19 @@ table GetThreadResponse {
   mensagens:[smartcore.contracts.queries.MensagemThread];
 }
 
+table IniciarAtendimentoManualRequest {
+  contato_id:int;
+  fluxo_id:int;
+  etapa_inicial_id:int;
+  departamento_id:int;
+  assunto:string;
+}
+
+table IniciarAtendimentoManualResponse {
+  atendimento_id:int;
+  ja_existia:bool;
+}
+
 table MoveAtendimentoEtapaRequest {
   atendimento_id:int;
   etapa_destino_id:int;

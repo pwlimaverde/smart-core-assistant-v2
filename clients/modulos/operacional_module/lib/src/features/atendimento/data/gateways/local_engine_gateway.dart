@@ -8,6 +8,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:local_engine_ffi/local_engine_ffi.dart';
 
 import '../../domain/gateways/atendimento_gateway.dart';
+import '../../domain/model/atendimento_iniciado.dart';
 import '../../domain/model/atendimento_evento.dart';
 import '../../domain/model/atendimento_resumo.dart';
 import '../../domain/model/mensagem_thread.dart';
@@ -402,6 +403,36 @@ final class LocalEngineGateway implements AtendimentoGateway {
         status: status,
         motivo: motivo,
       ),
+    );
+  }
+
+  /// Vai direto ao servidor, sem passar pela fila offline.
+  ///
+  /// Abrir conversa não é uma edição que se possa reconciliar depois: o
+  /// servidor precisa conferir se já existe atendimento ativo para aquele
+  /// contato, e essa decisão não pode ser tomada duas vezes. Enfileirada, a
+  /// ação criaria o cartão local que talvez nunca exista do outro lado — e o
+  /// operador ficaria escrevendo para um atendimento fantasma.
+  @override
+  Future<AtendimentoIniciado> iniciarAtendimento({
+    required int contatoId,
+    required int fluxoId,
+    required int etapaInicialId,
+    int? departamentoId,
+    String? assunto,
+  }) async {
+    final r = await _admin.iniciarAtendimentoManual(
+      proto.IniciarAtendimentoManualRequest(
+        contatoId: contatoId,
+        fluxoId: fluxoId,
+        etapaInicialId: etapaInicialId,
+        departamentoId: departamentoId,
+        assunto: assunto,
+      ),
+    );
+    return AtendimentoIniciado(
+      atendimentoId: r.atendimentoId,
+      jaExistia: r.jaExistia,
     );
   }
 

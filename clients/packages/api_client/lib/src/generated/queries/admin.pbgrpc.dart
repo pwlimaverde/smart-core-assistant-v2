@@ -290,6 +290,15 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$getThread, request, options: options);
   }
 
+  $grpc.ResponseFuture<$0.IniciarAtendimentoManualResponse>
+      iniciarAtendimentoManual(
+    $0.IniciarAtendimentoManualRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$iniciarAtendimentoManual, request,
+        options: options);
+  }
+
   $grpc.ResponseFuture<$0.MoveAtendimentoEtapaResponse> moveAtendimentoEtapa(
     $0.MoveAtendimentoEtapaRequest request, {
     $grpc.CallOptions? options,
@@ -923,6 +932,12 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/GetThread',
           ($0.GetThreadRequest value) => value.writeToBuffer(),
           $0.GetThreadResponse.fromBuffer);
+  static final _$iniciarAtendimentoManual = $grpc.ClientMethod<
+          $0.IniciarAtendimentoManualRequest,
+          $0.IniciarAtendimentoManualResponse>(
+      '/smartcore.contracts.queries.AdminService/IniciarAtendimentoManual',
+      ($0.IniciarAtendimentoManualRequest value) => value.writeToBuffer(),
+      $0.IniciarAtendimentoManualResponse.fromBuffer);
   static final _$moveAtendimentoEtapa = $grpc.ClientMethod<
           $0.MoveAtendimentoEtapaRequest, $0.MoveAtendimentoEtapaResponse>(
       '/smartcore.contracts.queries.AdminService/MoveAtendimentoEtapa',
@@ -1532,6 +1547,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         false,
         ($core.List<$core.int> value) => $0.GetThreadRequest.fromBuffer(value),
         ($0.GetThreadResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.IniciarAtendimentoManualRequest,
+            $0.IniciarAtendimentoManualResponse>(
+        'IniciarAtendimentoManual',
+        iniciarAtendimentoManual_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.IniciarAtendimentoManualRequest.fromBuffer(value),
+        ($0.IniciarAtendimentoManualResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.MoveAtendimentoEtapaRequest,
             $0.MoveAtendimentoEtapaResponse>(
         'MoveAtendimentoEtapa',
@@ -2366,6 +2390,15 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.GetThreadResponse> getThread(
       $grpc.ServiceCall call, $0.GetThreadRequest request);
+
+  $async.Future<$0.IniciarAtendimentoManualResponse>
+      iniciarAtendimentoManual_Pre($grpc.ServiceCall $call,
+          $async.Future<$0.IniciarAtendimentoManualRequest> $request) async {
+    return iniciarAtendimentoManual($call, await $request);
+  }
+
+  $async.Future<$0.IniciarAtendimentoManualResponse> iniciarAtendimentoManual(
+      $grpc.ServiceCall call, $0.IniciarAtendimentoManualRequest request);
 
   $async.Future<$0.MoveAtendimentoEtapaResponse> moveAtendimentoEtapa_Pre(
       $grpc.ServiceCall $call,

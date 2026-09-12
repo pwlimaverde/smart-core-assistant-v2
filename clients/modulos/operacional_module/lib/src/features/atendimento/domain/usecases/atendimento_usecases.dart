@@ -2,6 +2,8 @@ import 'dart:developer' as developer;
 
 import 'package:return_success_or_error/return_success_or_error.dart';
 
+import '../parameters/iniciar_atendimento_parameters.dart';
+import '../model/atendimento_iniciado.dart';
 import '../errors/atendimento_errors.dart';
 import '../model/atendimento_resumo.dart';
 import '../model/mensagem_thread.dart';
@@ -145,6 +147,55 @@ final class MoveAtendimentoEtapaUsecase
     Unit data,
     MoveAtendimentoEtapaParameters parameters,
   ) => const Success(unit);
+}
+
+/// C3 — abre um atendimento a partir de um cliente já cadastrado.
+final class IniciarAtendimentoUsecase
+    extends
+        UsecaseBaseCallData<
+          AtendimentoIniciado,
+          AtendimentoIniciado,
+          IniciarAtendimentoParameters,
+          IniciarAtendimentoError
+        > {
+  const IniciarAtendimentoUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    AtendimentoIniciado,
+    AtendimentoIniciado,
+    IniciarAtendimentoParameters,
+    IniciarAtendimentoError
+  >
+  get process => _process;
+
+  @override
+  IniciarAtendimentoError onUnexpected(
+    Object exception,
+    StackTrace stackTrace,
+  ) {
+    _logBug('iniciarAtendimento', exception, stackTrace);
+    return const IniciarAtendimentoInesperado();
+  }
+
+  /// Confere o que voltou, não o que foi pedido.
+  ///
+  /// O `process` do RSOE roda **depois** do datasource (fetch → curto-circuito
+  /// no erro → process), então validar a entrada aqui não pouparia a ida ao
+  /// servidor — só daria a impressão de poupar. Quem barra pedido incompleto é
+  /// a tela, que desabilita o botão, e o servidor, que recusa com
+  /// `invalid_argument`.
+  ///
+  /// O que sobra para este ponto é o contrato de saída: um atendimento sem id
+  /// não é um atendimento, e devolvê-lo como sucesso faria a tela navegar para
+  /// uma conversa que não existe.
+  static ReturnSuccessOrError<AtendimentoIniciado, IniciarAtendimentoError>
+  _process(AtendimentoIniciado data, IniciarAtendimentoParameters parameters) {
+    if (data.atendimentoId <= 0) {
+      return const Failure(IniciarAtendimentoInesperado());
+    }
+    return Success(data);
+  }
 }
 
 /// Envia uma mensagem do atendente.

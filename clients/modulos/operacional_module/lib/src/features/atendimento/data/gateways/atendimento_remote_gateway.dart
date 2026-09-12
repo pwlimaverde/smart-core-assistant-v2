@@ -5,6 +5,7 @@ import 'package:fixnum/fixnum.dart';
 import 'package:http/http.dart' as http;
 
 import '../../domain/gateways/atendimento_gateway.dart';
+import '../../domain/model/atendimento_iniciado.dart';
 import '../../domain/model/atendimento_evento.dart';
 import '../../domain/model/atendimento_resumo.dart';
 import '../../domain/model/mensagem_thread.dart';
@@ -66,6 +67,29 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
       ),
     );
     return resp.mensagens.map(_paraMensagemThread).toList();
+  }
+
+  @override
+  Future<AtendimentoIniciado> iniciarAtendimento({
+    required int contatoId,
+    required int fluxoId,
+    required int etapaInicialId,
+    int? departamentoId,
+    String? assunto,
+  }) async {
+    final r = await _client.iniciarAtendimentoManual(
+      proto.IniciarAtendimentoManualRequest(
+        contatoId: contatoId,
+        fluxoId: fluxoId,
+        etapaInicialId: etapaInicialId,
+        departamentoId: departamentoId,
+        assunto: assunto,
+      ),
+    );
+    return AtendimentoIniciado(
+      atendimentoId: r.atendimentoId,
+      jaExistia: r.jaExistia,
+    );
   }
 
   @override

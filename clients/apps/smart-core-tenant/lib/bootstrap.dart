@@ -46,6 +46,9 @@ Future<void> bootstrap(AppConfig config) async {
       // Assinatura pendente e WhatsApp fora do ar aparecem na primeira tela:
       // sem isso, a fila só para de encher e ninguém entende por quê.
       avisoBuilder: AvisosDoQuadro.new,
+      // C3: sem isto o quadro não oferece "iniciar atendimento" — um app que
+      // não sabe listar clientes não deve abrir esse caminho.
+      buscarContatos: buscarContatosDoTenant,
     ),
     TenantModule(),
     TreinamentoModule(drawerBuilder: TenantDrawer.new),

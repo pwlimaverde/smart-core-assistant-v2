@@ -6,6 +6,8 @@ import 'package:api_client/api_client.dart'
     show GrpcError, GrpcFailureKind, classificarFalhaGrpc;
 import 'package:return_success_or_error/return_success_or_error.dart';
 
+import '../../domain/parameters/iniciar_atendimento_parameters.dart';
+import '../../domain/model/atendimento_iniciado.dart';
 import '../../domain/errors/atendimento_errors.dart';
 import '../../domain/gateways/atendimento_gateway.dart';
 import '../../domain/model/atendimento_resumo.dart';
@@ -110,6 +112,45 @@ final class GetThreadRepository
       GrpcFailureKind.unavailable ||
       GrpcFailureKind.rateLimited => const GetThreadIndisponivel(),
       _ => const GetThreadInesperado(),
+    };
+  }
+}
+
+final class IniciarAtendimentoRepository
+    extends
+        RepositoryBase<
+          AtendimentoIniciado,
+          IniciarAtendimentoParameters,
+          IniciarAtendimentoError
+        > {
+  const IniciarAtendimentoRepository({required super.datasource});
+
+  @override
+  IniciarAtendimentoError mapError(
+    Object exception,
+    StackTrace stackTrace,
+    IniciarAtendimentoParameters parameters,
+  ) {
+    _log(
+      'iniciarAtendimento',
+      exception,
+      stackTrace,
+      atendimentoId: parameters.contatoId,
+    );
+    return switch (_kindDeTransporte(exception)) {
+      null => const IniciarAtendimentoInesperado(),
+      // Sessão expirada não é falta de permissão — ver a nota em
+      // `MoveAtendimentoEtapaRepository`.
+      GrpcFailureKind.unauthenticated =>
+        const IniciarAtendimentoSessaoExpirada(),
+      GrpcFailureKind.permissionDenied =>
+        const IniciarAtendimentoAcessoNegado(),
+      GrpcFailureKind.notFound => const IniciarAtendimentoNaoEncontrado(),
+      GrpcFailureKind.invalidArgument ||
+      GrpcFailureKind.failedPrecondition => const IniciarAtendimentoInvalido(),
+      GrpcFailureKind.unavailable ||
+      GrpcFailureKind.rateLimited => const IniciarAtendimentoIndisponivel(),
+      _ => const IniciarAtendimentoInesperado(),
     };
   }
 }

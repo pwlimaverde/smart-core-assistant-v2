@@ -648,6 +648,46 @@ impl AtendimentoStore for PgAtendimentoStore {
         .await
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, contato_id = contato_id))]
+    async fn iniciar_atendimento_manual(
+        &self,
+        ctx: &RequestContext,
+        contato_id: i32,
+        fluxo_id: i32,
+        etapa_inicial_id: i32,
+        departamento_id: Option<i32>,
+        assunto: Option<String>,
+    ) -> Result<(Atendimento, bool), DbError> {
+        let repo = PostgresAtendimentoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            // A mesma invariante da ingestão, na mesma transação: conferir
+            // fora dela deixaria a janela em que duas pessoas clicam ao mesmo
+            // tempo e nascem dois cartões para o mesmo cliente.
+            if let Some(existente) = repo
+                .buscar_ativo_por_contato(&mut tx, &ctx, contato_id)
+                .await?
+            {
+                return Ok(((existente, true), tx));
+            }
+
+            let novo = repo
+                .criar_manual(
+                    &mut tx,
+                    &ctx,
+                    contato_id,
+                    fluxo_id,
+                    etapa_inicial_id,
+                    departamento_id,
+                    assunto.as_deref(),
+                )
+                .await?;
+            Ok(((novo, false), tx))
+        })
+        .await
+    }
+
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, telefone = %telefone))]
     async fn resolver_atendimento_para_contato(
         &self,

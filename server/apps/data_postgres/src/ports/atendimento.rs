@@ -217,6 +217,23 @@ pub trait AtendimentoStore: Send + Sync {
         offset: i64,
     ) -> Result<Vec<Mensagem>, DbError>;
 
+    /// C3 — inicia um atendimento a partir de um contato já cadastrado.
+    ///
+    /// O booleano de retorno é `ja_existia`: **a invariante de um atendimento
+    /// ativo por contato vale aqui também**. Se já há conversa aberta com essa
+    /// pessoa, devolve a que existe em vez de criar a segunda — a tela abre
+    /// aquela. Criar um segundo cartão duplicaria a fila e faria o operador
+    /// responder em dois lugares sobre o mesmo assunto.
+    async fn iniciar_atendimento_manual(
+        &self,
+        ctx: &RequestContext,
+        contato_id: i32,
+        fluxo_id: i32,
+        etapa_inicial_id: i32,
+        departamento_id: Option<i32>,
+        assunto: Option<String>,
+    ) -> Result<(Atendimento, bool), DbError>;
+
     /// Busca ou cria um contato pelo telefone, e busca ou cria um atendimento ativo para esse contato.
     async fn resolver_atendimento_para_contato(
         &self,

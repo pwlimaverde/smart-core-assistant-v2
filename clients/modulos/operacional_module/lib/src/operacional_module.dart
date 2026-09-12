@@ -1,3 +1,4 @@
+import 'features/atendimento/domain/model/contato_para_atendimento.dart';
 import 'package:core_module/core_module.dart' as core;
 import 'package:dependencies_module/dependencies_module.dart';
 
@@ -33,7 +34,16 @@ final class OperacionalModule extends AppModule {
   /// e este módulo não o conhece.
   final Widget Function()? avisoBuilder;
 
-  OperacionalModule({this.drawerBuilder, this.avisoBuilder});
+  /// C3 — como o quadro procura clientes para abrir uma conversa. Entra por
+  /// parâmetro pelo mesmo motivo dos outros dois: cadastro de contato é do
+  /// `tenant_module`, e este módulo não o conhece.
+  final BuscarContatos? buscarContatos;
+
+  OperacionalModule({
+    this.drawerBuilder,
+    this.avisoBuilder,
+    this.buscarContatos,
+  });
 
   @override
   void globalBinds(Injector i) {
@@ -165,6 +175,10 @@ final class OperacionalModule extends AppModule {
 
   @override
   List<GetItModule> routes() => [
-    KanbanRoute(drawerBuilder: drawerBuilder, avisoBuilder: avisoBuilder),
+    KanbanRoute(
+      drawerBuilder: drawerBuilder,
+      avisoBuilder: avisoBuilder,
+      buscarContatos: buscarContatos,
+    ),
   ];
 }

@@ -86,6 +86,8 @@ use contracts::grpc::queries::{
     GetTenantResponse,
     GetThreadRequest,
     GetThreadResponse,
+    IniciarAtendimentoManualRequest,
+    IniciarAtendimentoManualResponse,
     ListAtendimentosRequest,
     ListAtendimentosResponse,
     ListCoreSettingsRequest,
@@ -5336,6 +5338,92 @@ impl AdminService for AdminFacade {
             .unwrap_or_default();
 
         Ok(Response::new(ListarMidiasAtendimentoResponse { midias }))
+    }
+
+    /// C3 — abre um atendimento a partir de um cliente já cadastrado.
+    ///
+    /// Um método concreto, e não só a rota no roteador de envelope: sem ele o
+    /// Flutter não alcança o RPC — é o que o `AdminService` expõe por
+    /// gRPC-Web que define o que o cliente pode chamar.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "IniciarAtendimentoManual", traceparent)
+    )]
+    async fn iniciar_atendimento_manual(
+        &self,
+        req: Request<IniciarAtendimentoManualRequest>,
+    ) -> Result<Response<IniciarAtendimentoManualResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(&claims, &["atendimentos:write"], "IniciarAtendimentoManual")?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+
+        let payload = serde_json::json!({
+            "contato_id": inner.contato_id,
+            "fluxo_id": inner.fluxo_id,
+            "etapa_inicial_id": inner.etapa_inicial_id,
+            "departamento_id": inner.departamento_id,
+            "assunto": inner.assunto,
+        });
+
+        let auth_user_id = claims.sub.parse::<i32>().unwrap_or(0);
+        // Mesmo RBAC fino por fluxo do Kanban: quem só pode operar o fluxo A
+        // não abre conversa dentro do fluxo B.
+        let flow_permissions = if claims.is_superuser {
+            Vec::new()
+        } else {
+            resolver_flow_permissions_web(&self.deps, &claims.tenant_id, auth_user_id, &traceparent)
+                .await
+        };
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "IniciarAtendimentoManual".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            auth_user_id,
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            flow_permissions,
+            ..Default::default()
+        };
+
+        match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(resp) => {
+                if resp.kind == MessageKind::Error as i32 {
+                    let err = resp.error.unwrap_or_default();
+                    if err.code == "AUTH_INSUFFICIENT_SCOPE" {
+                        return Err(Status::permission_denied("errors.auth.forbidden"));
+                    }
+                    return Err(status_do_erro_interno(Some(err)));
+                }
+                let val: serde_json::Value = serde_json::from_slice(&resp.payload)
+                    .map_err(|e| Status::internal(e.to_string()))?;
+                Ok(Response::new(IniciarAtendimentoManualResponse {
+                    atendimento_id: val
+                        .get("atendimento_id")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or_default() as i32,
+                    ja_existia: val
+                        .get("ja_existia")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
+                }))
+            }
+            Err(e) => Err(Status::internal(format!("Falha no serviço interno: {e}"))),
+        }
     }
 
     #[tracing::instrument(

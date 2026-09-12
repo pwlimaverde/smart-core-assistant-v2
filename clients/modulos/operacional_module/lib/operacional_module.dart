@@ -12,3 +12,7 @@ export 'src/features/atendimento/domain/model/mensagem_thread.dart';
 export 'src/features/atendimento/domain/streams/atendimento_evento_stream.dart';
 export 'src/features/atendimento/presentation/routes/kanban_route.dart';
 export 'src/operacional_module.dart';
+// C3: o app do tenant fornece a busca de clientes ao quadro; para isso precisa
+// enxergar o formato reduzido que o diálogo consome.
+export 'src/features/atendimento/domain/model/contato_para_atendimento.dart'
+    show BuscarContatos, ContatoParaAtendimento;

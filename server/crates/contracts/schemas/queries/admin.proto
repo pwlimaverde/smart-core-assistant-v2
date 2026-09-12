@@ -526,6 +526,30 @@ message GetThreadResponse {
   repeated MensagemThread mensagens = 1;
 }
 
+// C3 — iniciar um atendimento a partir de um cliente ja cadastrado.
+//
+// Ate aqui um atendimento so nascia de uma mensagem que chegou: para procurar
+// o cliente era preciso abrir o WhatsApp por fora, e o historico da conversa
+// comecava pela metade.
+message IniciarAtendimentoManualRequest {
+  int32 contato_id = 1;
+  // Fluxo e etapa sao OBRIGATORIOS, ao contrario da ingestao (que cria sem
+  // etapa e preenche depois). Um atendimento sem etapa nao aparece em coluna
+  // nenhuma do quadro — nasceria invisivel.
+  int32 fluxo_id = 2;
+  int32 etapa_inicial_id = 3;
+  optional int32 departamento_id = 4;
+  optional string assunto = 5;
+}
+
+message IniciarAtendimentoManualResponse {
+  int32 atendimento_id = 1;
+  // TRUE quando ja havia conversa aberta com esse contato: vale a invariante
+  // de um atendimento ativo por contato, e a tela ABRE a existente em vez de
+  // criar um segundo cartao para o mesmo cliente.
+  bool ja_existia = 2;
+}
+
 message MoveAtendimentoEtapaRequest {
   int32 atendimento_id = 1;
   int32 etapa_destino_id = 2;
@@ -1023,6 +1047,7 @@ service AdminService {
   // já é aplicado no data_postgres (WS-5a); estas rotas exigem só autenticação, não superuser.
   rpc ListAtendimentos(ListAtendimentosRequest) returns (ListAtendimentosResponse);
   rpc GetThread(GetThreadRequest) returns (GetThreadResponse);
+  rpc IniciarAtendimentoManual(IniciarAtendimentoManualRequest) returns (IniciarAtendimentoManualResponse);
   rpc MoveAtendimentoEtapa(MoveAtendimentoEtapaRequest) returns (MoveAtendimentoEtapaResponse);
   rpc SetAtendimentoStatus(SetAtendimentoStatusRequest) returns (SetAtendimentoStatusResponse);
 

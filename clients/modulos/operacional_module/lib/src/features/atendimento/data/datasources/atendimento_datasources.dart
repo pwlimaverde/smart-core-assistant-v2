@@ -1,5 +1,7 @@
 import 'package:return_success_or_error/return_success_or_error.dart';
 
+import '../../domain/parameters/iniciar_atendimento_parameters.dart';
+import '../../domain/model/atendimento_iniciado.dart';
 import '../../domain/gateways/atendimento_gateway.dart';
 import '../../domain/model/atendimento_resumo.dart';
 import '../../domain/model/mensagem_thread.dart';
@@ -54,6 +56,27 @@ final class GetThreadDatasource
 
 /// Movimento de etapa no Kanban. Devolve [Unit]: o gateway não produz dado, e
 /// `Unit` é como a lib representa "concluiu, sem valor".
+/// C3 — abre um atendimento a partir de um cliente já cadastrado.
+final class IniciarAtendimentoDatasource
+    implements Datasource<AtendimentoIniciado, IniciarAtendimentoParameters> {
+  final AtendimentoGateway _gateway;
+
+  const IniciarAtendimentoDatasource({required this._gateway});
+
+  @override
+  Future<AtendimentoIniciado> call(
+    IniciarAtendimentoParameters parameters,
+  ) async {
+    return _gateway.iniciarAtendimento(
+      contatoId: parameters.contatoId,
+      fluxoId: parameters.fluxoId,
+      etapaInicialId: parameters.etapaInicialId,
+      departamentoId: parameters.departamentoId,
+      assunto: parameters.assunto,
+    );
+  }
+}
+
 final class MoveAtendimentoEtapaDatasource
     implements Datasource<Unit, MoveAtendimentoEtapaParameters> {
   final AtendimentoGateway _gateway;

@@ -497,3 +497,122 @@ async fn test_listar_por_status_filtra_por_flow_permission() {
 
     tx.rollback().await.unwrap();
 }
+
+/// C3 — o atendimento que uma pessoa abre, não o que uma mensagem cria.
+///
+/// Três diferenças em relação ao que a ingestão cria, e cada uma existe por um
+/// motivo que se paga na tela:
+///
+/// - **Nasce numa etapa.** A ingestão cria sem, e o fluxo é encaixado depois;
+///   um atendimento sem etapa não aparece em coluna nenhuma do quadro. Para
+///   algo que alguém acabou de abrir, nascer invisível é o pior desfecho.
+/// - **`bot_pode_atender = false`.** Alguém decidiu falar com esse cliente; o
+///   robô não entra no meio de uma conversa que uma pessoa começou.
+/// - **`atendente_humano_id` = quem criou.** Quem inicia, atende.
+#[tokio::test]
+async fn atendimento_iniciado_pelo_painel_nasce_visivel_e_sem_bot() {
+    let pool = obter_pool_teste().await;
+    let mut tx = pool.begin().await.unwrap();
+
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant C3").await;
+    configurar_tenant_transacao(&mut tx, tenant.id).await;
+    let ctx = criar_contexto_teste(tenant.id);
+
+    let depto = PostgresDepartamentoRepository
+        .criar(&mut tx, &ctx, "Comercial", None)
+        .await
+        .unwrap();
+    let fluxo = PostgresFluxoAtendimentoRepository
+        .criar(&mut tx, &ctx, depto.id, "Prospecção", None)
+        .await
+        .unwrap();
+    let etapa = PostgresEtapaFluxoRepository
+        .criar(&mut tx, &ctx, fluxo.id, "Primeiro contato", 1, "fila", None)
+        .await
+        .unwrap();
+    let contato = PostgresContatoRepository
+        .salvar(&mut tx, &ctx, "5511988887777", Some("Cliente Ativo"))
+        .await
+        .unwrap();
+
+    let atendimento = PostgresAtendimentoRepository
+        .criar_manual(
+            &mut tx,
+            &ctx,
+            contato.id,
+            fluxo.id,
+            etapa.id,
+            Some(depto.id),
+            Some("Renovação do contrato"),
+        )
+        .await
+        .expect("atendimento manual criado");
+
+    assert_eq!(
+        atendimento.etapa_atual_id,
+        Some(etapa.id),
+        "nasceu sem etapa: não apareceria em coluna nenhuma do quadro"
+    );
+    assert!(
+        !atendimento.bot_pode_atender,
+        "a IA entraria numa conversa que uma pessoa começou"
+    );
+    assert_eq!(
+        atendimento.atendente_humano_id,
+        Some(ctx.user_id),
+        "quem inicia, atende"
+    );
+    assert_eq!(atendimento.assunto.as_deref(), Some("Renovação do contrato"));
+
+    tx.rollback().await.unwrap();
+}
+
+/// A invariante de um atendimento ativo por contato vale para o painel também.
+///
+/// É o que impede a fila de duplicar: dois cartões para o mesmo cliente fariam
+/// dois operadores responderem sobre o mesmo assunto sem saber um do outro.
+#[tokio::test]
+async fn painel_nao_abre_segundo_atendimento_para_o_mesmo_contato() {
+    let pool = obter_pool_teste().await;
+    let mut tx = pool.begin().await.unwrap();
+
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant C3 dup").await;
+    configurar_tenant_transacao(&mut tx, tenant.id).await;
+    let ctx = criar_contexto_teste(tenant.id);
+
+    let depto = PostgresDepartamentoRepository
+        .criar(&mut tx, &ctx, "Comercial", None)
+        .await
+        .unwrap();
+    let fluxo = PostgresFluxoAtendimentoRepository
+        .criar(&mut tx, &ctx, depto.id, "Prospecção", None)
+        .await
+        .unwrap();
+    let etapa = PostgresEtapaFluxoRepository
+        .criar(&mut tx, &ctx, fluxo.id, "Primeiro contato", 1, "fila", None)
+        .await
+        .unwrap();
+    let contato = PostgresContatoRepository
+        .salvar(&mut tx, &ctx, "5511977776666", Some("Cliente Repetido"))
+        .await
+        .unwrap();
+
+    let primeiro = PostgresAtendimentoRepository
+        .criar_manual(&mut tx, &ctx, contato.id, fluxo.id, etapa.id, None, None)
+        .await
+        .unwrap();
+
+    // É o que o adaptador consulta antes de criar o segundo.
+    let ativo = PostgresAtendimentoRepository
+        .buscar_ativo_por_contato(&mut tx, &ctx, contato.id)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        ativo.map(|a| a.id),
+        Some(primeiro.id),
+        "o painel criaria um segundo cartão para o mesmo cliente"
+    );
+
+    tx.rollback().await.unwrap();
+}

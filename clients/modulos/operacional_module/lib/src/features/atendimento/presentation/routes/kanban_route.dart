@@ -1,3 +1,4 @@
+import '../../domain/model/contato_para_atendimento.dart';
 import 'package:dependencies_module/dependencies_module.dart';
 
 import '../../domain/streams/atendimento_evento_stream.dart';
@@ -18,14 +19,21 @@ final class KanbanRoute extends GetItModule {
   /// motivo do menu: o widget precisa do contexto da rota, não do boot.
   final Widget Function()? avisoBuilder;
 
-  KanbanRoute({this.drawerBuilder, this.avisoBuilder});
+  /// C3 — ver `KanbanPage.buscarContatos`.
+  final BuscarContatos? buscarContatos;
+
+  KanbanRoute({this.drawerBuilder, this.avisoBuilder, this.buscarContatos});
 
   @override
   String get path => '/atendimentos';
 
   @override
   Widget get page =>
-      KanbanPage(drawer: drawerBuilder?.call(), aviso: avisoBuilder?.call());
+      KanbanPage(
+        drawer: drawerBuilder?.call(),
+        aviso: avisoBuilder?.call(),
+        buscarContatos: buscarContatos,
+      );
 
   @override
   void binds(Injector i) {

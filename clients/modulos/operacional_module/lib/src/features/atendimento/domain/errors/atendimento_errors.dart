@@ -360,3 +360,49 @@ final class FichaInesperado extends FichaError with UnexpectedFailure {
   const FichaInesperado()
     : super('Não foi possível carregar a ficha. Tente novamente.');
 }
+
+// ─── iniciarAtendimento (C3) ──────────────────────────────────────────────────
+
+/// Erros de "abrir um atendimento a partir de um cliente cadastrado".
+sealed class IniciarAtendimentoError extends AppError {
+  const IniciarAtendimentoError(super.message);
+}
+
+/// Sem permissão no fluxo escolhido — mesmo RBAC fino do arrasto no quadro.
+final class IniciarAtendimentoAcessoNegado extends IniciarAtendimentoError
+    with UnauthorizedFailure {
+  const IniciarAtendimentoAcessoNegado()
+    : super('Você não tem permissão para abrir atendimentos neste fluxo.');
+}
+
+/// Sessão morta — e NÃO falta de permissão. Ver a nota de
+/// [MoveEtapaSessaoExpirada]: conflatar as duas mandou um dono de conta caçar
+/// permissões que ele sempre teve.
+final class IniciarAtendimentoSessaoExpirada extends IniciarAtendimentoError
+    with UnauthorizedFailure {
+  const IniciarAtendimentoSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
+final class IniciarAtendimentoNaoEncontrado extends IniciarAtendimentoError {
+  const IniciarAtendimentoNaoEncontrado()
+    : super('Cliente, fluxo ou etapa não encontrados.');
+}
+
+final class IniciarAtendimentoInvalido extends IniciarAtendimentoError
+    with ValidationFailure {
+  const IniciarAtendimentoInvalido()
+    : super('Escolha o cliente, o quadro e a coluna onde a conversa começa.');
+}
+
+final class IniciarAtendimentoIndisponivel extends IniciarAtendimentoError
+    with NetworkFailure {
+  const IniciarAtendimentoIndisponivel()
+    : super('Não foi possível abrir o atendimento. Tente novamente.');
+}
+
+final class IniciarAtendimentoInesperado extends IniciarAtendimentoError
+    with UnexpectedFailure {
+  const IniciarAtendimentoInesperado()
+    : super('Não foi possível abrir o atendimento. Tente novamente.');
+}

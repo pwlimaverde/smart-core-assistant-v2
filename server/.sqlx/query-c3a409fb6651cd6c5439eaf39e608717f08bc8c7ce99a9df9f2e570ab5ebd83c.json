@@ -1,0 +1,286 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO oraculo_atendimento\n                   (tenant_id, contato_id, departamento_id, fluxo_atendimento_id,\n                    etapa_atual_id, atendente_humano_id, bot_pode_atender, assunto)\n               VALUES ($1, $2, $3, $4, $5, $6, FALSE, $7)\n               RETURNING id, tenant_id, contato_id, departamento_id, fluxo_atendimento_id,\n                         status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,\n                         assunto, prioridade, atendente_humano_id, contexto_conversa,\n                         historico_status, tags, avaliacao, feedback,\n                         data_primeira_resposta, bot_pode_atender,\n                         sentimento_nota, sentimento_label",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "tenant_id",
+        "type_info": "Uuid",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "tenant_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "contato_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "contato_id"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "departamento_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "departamento_id"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "fluxo_atendimento_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "fluxo_atendimento_id"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "status",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "status"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "etapa_atual_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "etapa_atual_id"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "data_inicio",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "data_inicio"
+          }
+        }
+      },
+      {
+        "ordinal": 8,
+        "name": "data_fim",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "data_fim"
+          }
+        }
+      },
+      {
+        "ordinal": 9,
+        "name": "data_ultima_mensagem",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "data_ultima_mensagem"
+          }
+        }
+      },
+      {
+        "ordinal": 10,
+        "name": "assunto",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "assunto"
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "prioridade",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "prioridade"
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "atendente_humano_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "atendente_humano_id"
+          }
+        }
+      },
+      {
+        "ordinal": 13,
+        "name": "contexto_conversa",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "contexto_conversa"
+          }
+        }
+      },
+      {
+        "ordinal": 14,
+        "name": "historico_status",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "historico_status"
+          }
+        }
+      },
+      {
+        "ordinal": 15,
+        "name": "tags",
+        "type_info": "Jsonb",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "tags"
+          }
+        }
+      },
+      {
+        "ordinal": 16,
+        "name": "avaliacao",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "avaliacao"
+          }
+        }
+      },
+      {
+        "ordinal": 17,
+        "name": "feedback",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "feedback"
+          }
+        }
+      },
+      {
+        "ordinal": 18,
+        "name": "data_primeira_resposta",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "data_primeira_resposta"
+          }
+        }
+      },
+      {
+        "ordinal": 19,
+        "name": "bot_pode_atender",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "bot_pode_atender"
+          }
+        }
+      },
+      {
+        "ordinal": 20,
+        "name": "sentimento_nota",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "sentimento_nota"
+          }
+        }
+      },
+      {
+        "ordinal": 21,
+        "name": "sentimento_label",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_atendimento",
+            "name": "sentimento_label"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "c3a409fb6651cd6c5439eaf39e608717f08bc8c7ce99a9df9f2e570ab5ebd83c"
+}

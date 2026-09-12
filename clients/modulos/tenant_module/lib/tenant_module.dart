@@ -11,3 +11,7 @@ export 'src/shared/widgets/aviso_conexao.dart' show AvisoConexao;
 // Composição das faixas do topo do quadro: o slot do operacional_module aceita
 // um widget só, e há dois avisos possíveis (assinatura e conexão).
 export 'src/shared/widgets/avisos_do_quadro.dart' show AvisosDoQuadro;
+// C3: o quadro (do operacional_module) precisa procurar clientes para abrir
+// uma conversa, e cadastro de cliente é assunto deste módulo. Mesmo desenho do
+// menu e dos avisos — a dependência corre nesta direção.
+export 'src/shared/buscar_contatos_do_tenant.dart' show buscarContatosDoTenant;

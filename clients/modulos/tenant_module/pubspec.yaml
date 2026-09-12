@@ -23,6 +23,11 @@ dependencies:
     path: ../onboarding_module
   presentation_module:
     path: ../presentation_module
+  # C3: este modulo fornece ao quadro a busca de clientes (cadastro e assunto
+  # daqui). Mao unica, como onboarding_module acima — o operacional_module nao
+  # conhece tenant_module, e e o app que compoe os dois.
+  operacional_module:
+    path: ../operacional_module
   api_client:
     path: ../../packages/api_client
   app_config:

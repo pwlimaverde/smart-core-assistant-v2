@@ -146,3 +146,47 @@ Falta configurar no ambiente: `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`,
 `EMAIL_FROM` (remetente de domínio verificado no Brevo) e `APP_PUBLIC_URL` — o
 servidor não tem como adivinhar o endereço público, com um proxy na frente e
 domínios diferentes por ambiente.
+
+---
+
+## C3 — atendimento a partir de um cliente cadastrado *(entregue)*
+
+Fecha o pedido de usar a aplicação como CRM estruturado: até aqui um
+atendimento só nascia de uma mensagem que chegou. Para procurar o cliente era
+preciso sair do produto, escrever pelo WhatsApp e esperar a resposta cair no
+quadro — e o histórico da conversa começava pela metade.
+
+Ponta a ponta: `IniciarAtendimentoManual` no proto, handler no `data_postgres`,
+método concreto no `runtime_api` (sem ele o Flutter não alcança o RPC, por mais
+que a rota exista no roteador de envelope), RBAC (`atendimentos:write` e o mesmo
+RBAC fino por fluxo do arrasto no quadro), e no cliente a cadeia RSOE completa
+até o diálogo.
+
+Três regras que o código explica no lugar:
+
+**Fluxo e etapa são obrigatórios.** A ingestão cria sem etapa e encaixa depois;
+um atendimento sem etapa não aparece em coluna nenhuma do quadro. Para uma
+conversa que alguém acabou de abrir, nascer invisível é o pior desfecho.
+
+**`bot_pode_atender = false`.** Alguém decidiu falar com esse cliente; o robô
+não entra no meio de uma conversa que uma pessoa começou. O caminho de volta já
+existe e é um clique (D3).
+
+**A invariante de um ativo por contato vale aqui também**, e é verificada
+dentro da mesma transação. Se já há conversa aberta, o servidor devolve a que
+existe com `ja_existia = true` e a tela **abre** aquela, dizendo isso. Duas
+pessoas clicando ao mesmo tempo não criam dois cartões, e o operador não sai
+procurando um cartão novo que não existe.
+
+A busca de clientes entra por injeção (`buscarContatos`), como o menu e os
+avisos: cadastro de contato é do `tenant_module`, e o `operacional_module` não
+o conhece — a dependência corre nessa direção. Sem a busca injetada, o botão
+não aparece.
+
+### O risco que não é técnico
+
+A evolution-go é whatsmeow: aceita qualquer JID, sem a janela de 24 h da Cloud
+API. Iniciar conversa é tecnicamente trivial — e é o caminho mais curto para o
+número do tenant ser denunciado. **Ainda falta**: teto diário por tenant e
+recusa clara quando a instância não está conectada. A auditoria
+(`atendimento.iniciado_manualmente`, com autor e contato, sem o texto) já está.

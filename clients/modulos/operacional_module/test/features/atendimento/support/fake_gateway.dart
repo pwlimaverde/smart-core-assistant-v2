@@ -1,5 +1,7 @@
 import 'dart:async';
 
+import 'package:operacional_module/src/features/atendimento/domain/parameters/iniciar_atendimento_parameters.dart';
+import 'package:operacional_module/src/features/atendimento/domain/model/atendimento_iniciado.dart';
 import 'package:operacional_module/src/features/atendimento/data/datasources/atendimento_datasources.dart';
 import 'package:operacional_module/src/features/atendimento/data/repositories/atendimento_repositories.dart';
 import 'package:operacional_module/src/features/atendimento/data/streams/atendimento_evento_stream_impl.dart';
@@ -35,6 +37,13 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   int chamadasMove = 0;
   int chamadasSend = 0;
   int chamadasStatus = 0;
+
+  /// C3 — o que `iniciarAtendimento` devolve, e o que ele recebeu.
+  int atendimentoIniciadoId = 900;
+  bool iniciarJaExistia = false;
+  Object? erroIniciar;
+  IniciarAtendimentoParameters? iniciarRecebido;
+  int chamadasIniciar = 0;
 
   /// Colunas do quadro devolvidas por [listColunas].
   List<ColunaDoQuadro> colunas = const [];
@@ -166,6 +175,29 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   }
 
   @override
+  Future<AtendimentoIniciado> iniciarAtendimento({
+    required int contatoId,
+    required int fluxoId,
+    required int etapaInicialId,
+    int? departamentoId,
+    String? assunto,
+  }) async {
+    chamadasIniciar++;
+    iniciarRecebido = IniciarAtendimentoParameters(
+      contatoId: contatoId,
+      fluxoId: fluxoId,
+      etapaInicialId: etapaInicialId,
+      departamentoId: departamentoId,
+      assunto: assunto,
+    );
+    if (erroIniciar != null) throw erroIniciar!;
+    return AtendimentoIniciado(
+      atendimentoId: atendimentoIniciadoId,
+      jaExistia: iniciarJaExistia,
+    );
+  }
+
+  @override
   Future<List<FluxoDoQuadro>> listFluxos() async => fluxos;
 
   @override
@@ -225,6 +257,7 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
 
 /// Monta os usecases reais sobre um [FakeAtendimentoGateway].
 ({
+  IniciarAtendimentoUsecase iniciar,
   ListAtendimentosUsecase list,
   GetThreadUsecase thread,
   MoveAtendimentoEtapaUsecase move,
@@ -240,6 +273,11 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   AtendimentoEventoStream eventos,
 })
 usecasesSobre(FakeAtendimentoGateway gateway) => (
+  iniciar: IniciarAtendimentoUsecase(
+    repository: IniciarAtendimentoRepository(
+      datasource: IniciarAtendimentoDatasource(gateway: gateway),
+    ),
+  ),
   list: ListAtendimentosUsecase(
     repository: ListAtendimentosRepository(
       datasource: ListAtendimentosDatasource(gateway: gateway),
