@@ -31,6 +31,9 @@ class _AuthOcioso implements AuthService {
   @override
   Session? get currentSession => null;
   @override
+  Future<String?> accessTokenParaChamada() async => null;
+
+  @override
   Listenable get authChanges => ValueNotifier<int>(0);
 }
 

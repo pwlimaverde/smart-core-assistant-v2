@@ -22,9 +22,13 @@ atualização.
 from __future__ import annotations
 
 import sys
+from importlib import resources
 
 from loguru import logger
 from mcp.server.auth.settings import AuthSettings
+from mcp_types import Icon
+from starlette.requests import Request
+from starlette.responses import Response
 
 from mcp_server import settings as config
 from mcp_server import telemetry
@@ -77,6 +81,18 @@ def montar() -> ServidorMcpFiltrado:
         instructions=INSTRUCOES,
         version="0.1.0",
         website_url="https://smartcoreassistant.com.br",
+        # Sem `icons` o cliente desenha um avatar com a inicial do nome — o
+        # "S" que aparecia no lugar da marca. O ícone é servido por este mesmo
+        # servidor (rota pública logo abaixo) em vez de ir embutido como
+        # `data:`: são ~7 KB que iriam em todo `initialize`, e por URL o
+        # cliente busca uma vez e guarda.
+        icons=[
+            Icon(
+                src=f"{cfg.oauth_resource}/icon.png",
+                mime_type="image/png",
+                sizes=["128x128"],
+            )
+        ],
         token_verifier=verificador,
         auth=AuthSettings(
             # `cfg.issuer_url`/`cfg.resource_url`, e não `AnyHttpUrl(...)`:
@@ -121,8 +137,34 @@ def montar() -> ServidorMcpFiltrado:
     envio.registrar(mcp, registro, executor)
     destrutivas.registrar(mcp, registro, executor)
 
+    _registrar_icone(mcp)
+
     logger.info("{} tools registradas", len(registro.todos()))
     return mcp
+
+
+def _registrar_icone(mcp: ServidorMcpFiltrado) -> None:
+    """Serve a marca do produto em `/icon.png`.
+
+    Pública de propósito: é o que o cliente busca **antes** de haver token, para
+    desenhar a lista de conexões. Exigir autenticação aqui devolveria 401 e o
+    cliente cairia de volta na inicial do nome.
+
+    O arquivo é lido uma vez, na subida, e servido de memória — são 7 KB, e um
+    `open()` por request seria trabalho à toa.
+    """
+    dados = (
+        resources.files("mcp_server.static").joinpath("icon-128.png").read_bytes()
+    )
+
+    @mcp.custom_route("/icon.png", methods=["GET"], include_in_schema=False)
+    async def icone(_: Request) -> Response:
+        return Response(
+            dados,
+            media_type="image/png",
+            # Um dia: a marca muda com o produto, não com o deploy.
+            headers={"Cache-Control": "public, max-age=86400"},
+        )
 
 
 def main() -> int:

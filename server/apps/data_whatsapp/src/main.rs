@@ -602,10 +602,29 @@ async fn handler_reconnect_whatsapp_instance(state: AppState, env: Envelope) -> 
         Err(e) => return erro(error_core::AppError::Internal(e.to_string()), &env),
     };
 
-    if let Err(e) = p
-        .reconnect_instance(name, &SecretString::from(api_key.to_string()))
-        .await
-    {
+    let api_key_sec = SecretString::from(api_key.to_string());
+
+    // `connect`, não `reconnect` — a mesma escolha que a reconciliação faz, e
+    // pela mesma razão, documentada lá: `/instance/reconnect` responde "no
+    // active session found" quando o socket já caiu. Ele serve para uma sessão
+    // viva; aqui a sessão está morta, que é justamente por que o usuário
+    // apertou o botão. Era isso o "não foi possível conectar" que ele via: o
+    // botão chamava a rota que não podia funcionar no caso em que é usada.
+    let webhook_conf = WebhookConfig {
+        url: format!(
+            "http://webhook_ingress:9200/webhook/{}/{}/{}",
+            provider_name, env.tenant_id, db_id
+        ),
+        subscribe: vec![
+            "MESSAGE".to_string(),
+            "CONNECTION".to_string(),
+            "PRESENCE".to_string(),
+            "QRCODE".to_string(),
+        ],
+    };
+
+    if let Err(e) = p.connect_instance(name, &api_key_sec, &webhook_conf).await {
+        gravar_estado(&env, db_id, "disconnected").await;
         return erro(
             error_core::AppError::Internal(format!(
                 "Falha ao reconectar instância no provedor: {e}"
@@ -614,10 +633,49 @@ async fn handler_reconnect_whatsapp_instance(state: AppState, env: Envelope) -> 
         );
     }
 
+    // O handshake não é instantâneo (ver a nota na reconciliação): perguntar
+    // agora devolveria `Connecting` sempre, e o botão diria "pronto" para uma
+    // conexão que não voltou.
+    tokio::time::sleep(Duration::from_secs(5)).await;
+
+    let estado_final = p
+        .get_connection_state(name, &api_key_sec)
+        .await
+        .unwrap_or(ConnectionState::Unknown);
+
+    let (texto, religada, precisa_parear) = desfecho_da_religada(estado_final);
+
+    if texto != "unknown" {
+        gravar_estado(&env, db_id, texto).await;
+    }
+
+    // Desvinculado do lado do WhatsApp: nenhuma reconexão resolve, e insistir
+    // no botão só gasta o tempo de quem está esperando. Vira erro de pré-
+    // condição, com o texto que diz o que fazer, em vez do `status: success`
+    // que a tela mostrava enquanto nada acontecia.
+    if precisa_parear {
+        tracing::warn!(
+            instance_id = db_id,
+            estado = texto,
+            "reconexão pedida, mas a instância exige novo pareamento (QR)"
+        );
+        return erro(
+            error_core::AppError::Validation(
+                "O WhatsApp desvinculou este aparelho. Reconectar não resolve:                  é preciso ler o QR code de novo, com o celular em mãos."
+                    .into(),
+            ),
+            &env,
+        );
+    }
+
     ok_reply(
         &env,
         "ReconnectWhatsappInstanceReply",
-        serde_json::json!({ "status": "success" }),
+        serde_json::json!({
+            "status": "success",
+            "state": texto,
+            "religada": religada
+        }),
     )
 }
 

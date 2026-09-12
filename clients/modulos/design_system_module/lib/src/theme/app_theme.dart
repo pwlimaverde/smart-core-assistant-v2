@@ -91,7 +91,22 @@ abstract final class AppTheme {
           foregroundColor: Colors.white,
           disabledBackgroundColor: c.fgSubtle,
           disabledForegroundColor: Colors.white,
-          minimumSize: const Size.fromHeight(48),
+          // `Size(64, 48)`, não `Size.fromHeight(48)`.
+          //
+          // `Size.fromHeight` é `Size(double.infinity, 48)`: pede LARGURA
+          // infinita. Fora de uma coluna isso não aparece — o botão só fica
+          // largo. Dentro de uma `Row` ele toma a linha inteira, e o `Expanded`
+          // ao lado fica com zero: o texto passa a quebrar uma letra por linha,
+          // cresce até milhares de pixels e empurra o resto da tela para fora.
+          //
+          // Foi assim que a faixa de "WhatsApp fora do ar" ocupou a página de
+          // atendimento inteira e sumiu com o quadro (12/09/2026). O aviso de
+          // que nada estava chegando impedia de ver o que já tinha chegado.
+          //
+          // 48 de altura é a intenção real (alvo de toque); 64 de largura é o
+          // mínimo do Material. Quem quer botão da largura toda pede — é o que
+          // `PrimaryButton(expand: true)` faz, com um `SizedBox` explícito.
+          minimumSize: const Size(64, 48),
           textStyle: AppTypography.labelLarge,
           shape: const RoundedRectangleBorder(borderRadius: AppRadius.md),
         ),

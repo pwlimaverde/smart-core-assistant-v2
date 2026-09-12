@@ -1,8 +1,10 @@
 import 'package:api_client/api_client.dart' as proto;
+import 'package:app_config/app_config.dart';
 import 'package:api_client/testing.dart';
 import 'package:bloc_test/bloc_test.dart';
 import 'package:domain_models/domain_models.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:presentation_module/presentation_module.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
@@ -15,6 +17,7 @@ import 'package:tenant_module/src/features/convites/domain/parameters/convites_p
 import 'package:tenant_module/src/features/convites/domain/usecases/convites_usecases.dart';
 import 'package:tenant_module/src/features/convites/presentation/controllers/accept_invite_controller.dart';
 import 'package:tenant_module/src/features/convites/presentation/controllers/invites_controller.dart';
+import 'package:tenant_module/src/features/convites/presentation/pages/invites_page.dart';
 
 import '../../support/admin_client_mock.dart';
 
@@ -58,6 +61,7 @@ InvitesController _invitesController(MockAdminClient client) {
 }
 
 void main() {
+  _linkDoConvite();
   late MockAdminClient client;
 
   setUpAll(registrarFallbacksDoTenant);
@@ -481,5 +485,50 @@ void main() {
         ),
       ],
     );
+  });
+}
+
+void _linkDoConvite() {
+  group('link do convite', () {
+    final getIt = GetIt.instance;
+
+    tearDown(() => getIt.reset());
+
+    void configurar(String endpoint) {
+      getIt.registerSingleton<AppConfig>(
+        AppConfig(
+          flavor: AppFlavor.dev,
+          apiEndpoint: endpoint,
+          mcpEndpoint: 'https://mcp.exemplo.com.br/mcp',
+        ),
+      );
+    }
+
+    /// O que a tela mostrava não era um link.
+    ///
+    /// Era `/aceitar-convite?token=…`: um caminho. Colado num WhatsApp não abre
+    /// nada, e quem convida não tem como saber qual host prefixar — dev e
+    /// produção são domínios diferentes. Quem sabe é o `AppConfig`.
+    test('é um endereço completo, não um caminho', () {
+      configurar('https://dev.smartcoreassistant.com.br');
+      expect(
+        linkDoConvite('abc123'),
+        'https://dev.smartcoreassistant.com.br/aceitar-convite?token=abc123',
+      );
+    });
+
+    test('não duplica a barra quando o endpoint já termina em uma', () {
+      configurar('https://dev.smartcoreassistant.com.br/');
+      expect(
+        linkDoConvite('abc123'),
+        'https://dev.smartcoreassistant.com.br/aceitar-convite?token=abc123',
+      );
+    });
+
+    test('acompanha o ambiente em vez de fixar o domínio', () {
+      configurar('https://smartcoreassistant.com.br');
+      expect(linkDoConvite('t').startsWith('https://smartcoreassistant.com.br/'),
+          isTrue);
+    });
   });
 }

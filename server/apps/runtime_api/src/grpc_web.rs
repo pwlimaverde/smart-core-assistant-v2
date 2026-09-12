@@ -247,6 +247,22 @@ impl AuthFacade {
     }
 }
 
+/// Endereço público do app do tenant, para montar links que saem daqui.
+///
+/// Existe porque o servidor não tem como adivinhá-lo: dev e produção são
+/// domínios diferentes, e o request que originou a ação nem sempre chega com
+/// um `Host` confiável (há um proxy na frente). Configuração explícita é a
+/// única resposta honesta.
+///
+/// O padrão aponta para produção: um convite com o link errado é pior calado
+/// do que barulhento, e em dev a variável está no `.env`.
+fn base_publica_do_app() -> String {
+    std::env::var("APP_PUBLIC_URL")
+        .unwrap_or_else(|_| "https://smartcoreassistant.com.br".to_string())
+        .trim_end_matches('/')
+        .to_string()
+}
+
 /// Converte o `AppError` interno num `tonic::Status` sem vazar detalhe sensível.
 /// As mensagens são chaves de i18n estáveis resolvidas no cliente (`ErrorMessageMapper`).
 pub(crate) fn app_err_para_status(err: &error_core::AppError) -> Status {
@@ -880,6 +896,13 @@ pub struct AdminFacade {
     /// única diferença é de onde vem a identidade — claims aqui, `signup_token`
     /// lá. Duplicar a lógica faria as duas divergirem na primeira mudança.
     provedores: application::pagamento::RegistroProvedores,
+    /// Envio de e-mail transacional — hoje, só o convite de equipe.
+    ///
+    /// Fica aqui e não no `AuthDeps` porque o `control_plane` compartilha
+    /// aquela struct e não manda e-mail nenhum. Quando não há SMTP no
+    /// ambiente, o enviador entra no modo desligado e registra em log em vez
+    /// de falhar — ver a nota do crate.
+    email: infrastructure_email::Enviador,
 }
 
 impl AdminFacade {
@@ -900,6 +923,67 @@ impl AdminFacade {
             whatsapp,
             ia,
             provedores,
+            email: infrastructure_email::Enviador::do_ambiente(),
+        }
+    }
+
+    /// Manda o e-mail do convite. **Nunca falha para o chamador.**
+    ///
+    /// O convite já está gravado quando isto roda: o link é válido e está na
+    /// tela de quem convidou. Um SMTP fora do ar é um aborrecimento — avisa-se
+    /// por outro caminho —, enquanto recusar a criação por causa dele seria
+    /// impedir de convidar qualquer pessoa. Por isso todo erro aqui vira log.
+    async fn enviar_convite_por_email(&self, invite: &serde_json::Value, tenant_id: &str) {
+        let campo = |k: &str| {
+            invite
+                .get(k)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string()
+        };
+        let (para, nome, token, empresa) = (
+            campo("email"),
+            campo("name"),
+            campo("token"),
+            campo("tenant_name"),
+        );
+        if para.is_empty() || token.is_empty() {
+            tracing::warn!(tenant_id, "convite sem e-mail ou token; nada a enviar");
+            return;
+        }
+
+        let link = format!("{}/aceitar-convite?token={}", base_publica_do_app(), token);
+        let empresa = if empresa.is_empty() {
+            "Sua equipe".to_string()
+        } else {
+            empresa
+        };
+
+        let envio = infrastructure_email::convite::enviar(
+            &self.email,
+            infrastructure_email::convite::DadosDoConvite {
+                para: &para,
+                nome: &nome,
+                empresa: &empresa,
+                link: &link,
+                // Espelha o `chrono::Duration::days(7)` do `data_postgres`.
+                // Dito no e-mail porque um link sem prazo é um link que fica
+                // para depois — e depois ele não funciona mais.
+                validade_dias: 7,
+            },
+        )
+        .await;
+
+        match envio {
+            Ok(()) if self.email.ativo() => {
+                tracing::info!(tenant_id, "convite enviado por e-mail")
+            }
+            Ok(()) => {}
+            Err(erro) => tracing::error!(
+                %erro,
+                tenant_id,
+                "convite criado, mas o e-mail não saiu; o link continua válido"
+            ),
         }
     }
 
@@ -6010,6 +6094,18 @@ impl AdminService for AdminFacade {
                     .map_err(|e| Status::internal(e.to_string()))?;
                 let invite = val.get("invite");
 
+                // O convite está gravado. Mandar o e-mail é o passo que a v1
+                // fazia e a v2 nunca fez: o link ficava só na tela de quem
+                // convidou, e o convidado não recebia nada.
+                //
+                // Depois de gravar e sem poder falhar: se o SMTP estiver fora,
+                // o link continua válido e visível. Recusar a criação por
+                // causa do e-mail trocaria "avisar por outro caminho" por "não
+                // conseguir convidar ninguém".
+                if let Some(i) = invite {
+                    self.enviar_convite_por_email(i, &claims.tenant_id).await;
+                }
+
                 Ok(Response::new(CreateInviteResponse {
                     invite: invite.map(|i| TenantInviteCreated {
                         id: i
@@ -7065,6 +7161,34 @@ pub async fn serve(deps: Arc<AuthDeps>, bus: redis::aio::ConnectionManager) -> a
 mod tests {
     use super::*;
     use tonic::Request;
+
+    /// O link do convite sai daqui e vai para dentro de um e-mail: uma barra a
+    /// mais ou a menos produz um endereço que não abre, e quem recebe não tem
+    /// como consertar.
+    ///
+    /// `#[serial]` não existe aqui; as duas checagens ficam num teste só para
+    /// não disputarem a variável de ambiente com outro em paralelo.
+    #[test]
+    fn base_publica_normaliza_a_barra_final() {
+        let anterior = std::env::var("APP_PUBLIC_URL").ok();
+
+        std::env::set_var("APP_PUBLIC_URL", "https://dev.exemplo.com.br/");
+        assert_eq!(base_publica_do_app(), "https://dev.exemplo.com.br");
+
+        std::env::set_var("APP_PUBLIC_URL", "https://dev.exemplo.com.br");
+        assert_eq!(base_publica_do_app(), "https://dev.exemplo.com.br");
+
+        std::env::remove_var("APP_PUBLIC_URL");
+        assert_eq!(
+            base_publica_do_app(),
+            "https://smartcoreassistant.com.br",
+            "sem configuração o padrão tem de ser produção: um convite com link              errado é pior calado do que barulhento"
+        );
+
+        if let Some(v) = anterior {
+            std::env::set_var("APP_PUBLIC_URL", v);
+        }
+    }
 
     #[test]
     fn mapeia_app_error_para_status_sem_vazar_detalhe() {

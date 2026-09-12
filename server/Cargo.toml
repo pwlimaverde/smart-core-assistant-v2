@@ -20,6 +20,7 @@ members = [
     "apps/control_plane",
     "crates/infrastructure_messaging",
     "crates/infrastructure_evolution",
+    "crates/infrastructure_email",
     "apps/webhook_ingress",
     "apps/data_whatsapp",
     "apps/healthcheck",
@@ -86,6 +87,7 @@ transport     = { path = "crates/transport" }
 application   = { path = "crates/application" }
 ia_client     = { path = "crates/ia_client" }
 observability = { path = "crates/observability" }
+infrastructure_email = { path = "crates/infrastructure_email" }
 anyhow        = "1.0.86"
 bytes         = "1.6.0"
 futures-util  = "0.3.30"

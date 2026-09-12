@@ -1879,6 +1879,19 @@ async fn handler_create_invite(
                 )
                 .await;
 
+            // O nome da empresa acompanha o convite porque quem manda o e-mail
+            // é a borda, e ela não tem como descobri-lo sem uma volta extra ao
+            // banco — enquanto aqui ele está a uma consulta de distância, na
+            // transação que já está aberta. Sem o nome, o convidado receberia
+            // "alguém criou um acesso para você", que é a cara de golpe.
+            let empresa = store
+                .buscar_por_id(invite.tenant_id)
+                .await
+                .ok()
+                .flatten()
+                .map(|t| t.name)
+                .unwrap_or_default();
+
             ok_reply(
                 &env,
                 "CreateInviteReply",
@@ -1886,6 +1899,7 @@ async fn handler_create_invite(
                     "status": "success",
                     "invite": {
                         "id": invite.id.to_string(),
+                        "tenant_name": empresa,
                         "tenant_id": invite.tenant_id.to_string(),
                         "email": invite.email,
                         "name": invite.name,

@@ -45,7 +45,16 @@ final class LoginModule extends AppModule {
     i.lazySingleton<ApiClient>(
       () => createPlatformApiClient(
         endpoint: inject<AppConfig>().apiEndpoint,
-        readAccessToken: () async => inject<core.SessionService>().token,
+        // Pelo `AuthService`, não pelo `SessionService`: é o caminho que
+        // renova o token vencendo antes de a chamada sair. Lendo o
+        // `SessionService` cru — como era —, o access vencia e o app passava a
+        // responder "sessão expirada" a tudo, com o refresh guardado e válido
+        // ali do lado, sem ninguém para usá-lo.
+        //
+        // `inject` acontece a cada chamada, não na construção: o `AuthService`
+        // depende deste mesmo `ApiClient`, e resolvê-lo agora fecharia um
+        // ciclo.
+        readAccessToken: () => inject<AuthService>().accessTokenParaChamada(),
         enableLogging: inject<AppConfig>().enableLogging,
       ),
     );

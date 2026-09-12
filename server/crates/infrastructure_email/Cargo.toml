@@ -1,0 +1,24 @@
+[package]
+name = "infrastructure_email"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# `rustls`, e não `native-tls`: é o que o resto do workspace já usa (sqlx),
+# e evita depender do OpenSSL do sistema dentro da imagem distroless.
+lettre = { version = "0.11", default-features = false, features = [
+    "smtp-transport",
+    "tokio1",
+    "tokio1-rustls-tls",
+    "ring",
+    "webpki-roots",
+    "builder",
+    "hostname",
+] }
+error_core = { workspace = true }
+secrecy = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
