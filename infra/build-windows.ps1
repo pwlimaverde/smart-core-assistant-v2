@@ -84,13 +84,13 @@ $config = @{
 }
 $api = $config[$Env].api
 $mcp = $config[$Env].mcp
-$app = $config[$Env].app
+$appUrl = $config[$Env].app
 $zip = Join-Path $saidaDir "smart-core-$App-windows-$Env.zip"
 
 Write-Host "app=$App  ambiente=$Env" -ForegroundColor Green
 Write-Host "  API = $api"
 Write-Host "  MCP = $mcp"
-Write-Host "  APP = $app"
+Write-Host "  APP = $appUrl"
 
 Push-Location $appDir
 try {
@@ -106,7 +106,7 @@ try {
         --target "lib/main_$Env.dart" `
         --dart-define=SMARTCORE_API_ENDPOINT=$api `
         --dart-define=SMARTCORE_MCP_ENDPOINT=$mcp `
-        --dart-define=SMARTCORE_APP_PUBLIC_URL=$app
+        --dart-define=SMARTCORE_APP_PUBLIC_URL=$appUrl
     if ($LASTEXITCODE -ne 0) {
         Write-Host "`nBuild falhou." -ForegroundColor Red
         Write-Host "Se o erro citar 'could not find specified instance of Visual Studio', rode de novo com -LimparCache." -ForegroundColor Yellow
@@ -130,7 +130,7 @@ try {
     $texto = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($snap))
 
     $falhas = @()
-    foreach ($esperado in @($api, $mcp, $app)) {
+    foreach ($esperado in @($api, $mcp, $appUrl)) {
         if ($texto.Contains($esperado)) {
             Write-Host "  ok      $esperado" -ForegroundColor Green
         } else {
