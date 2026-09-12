@@ -235,3 +235,45 @@ def test_tools_de_escrita_declaram_dry_run(servidor):
         if registro.exigir(t.name).categoria.value == "leitura":
             continue
         assert "dry_run" in t.input_schema.get("properties", {}), t.name
+
+
+def test_a_marca_do_produto_chega_ao_cliente(servidor):
+    """O cliente precisa de um ícone, senão desenha a inicial do nome.
+
+    Era o "S" que aparecia no lugar da logo: sem `icons` no `serverInfo`, o
+    Claude cai no avatar de letra. Duas coisas têm de valer juntas — o servidor
+    **declarar** o ícone e a URL declarada **responder** —, e é por isso que o
+    teste confere as duas: declarar apontando para um 404 dá no mesmo "S".
+    """
+    from starlette.testclient import TestClient
+
+    icones = servidor.icons
+    assert icones, "serverInfo sem icons: o cliente cai no avatar de letra"
+    assert icones[0].src == f"{RESOURCE}/icon.png"
+    assert icones[0].mime_type == "image/png"
+
+    app = servidor.streamable_http_app(stateless_http=True)
+    with TestClient(app) as cliente:
+        r = cliente.get("/icon.png")
+
+    assert r.status_code == 200, "a URL do ícone não responde"
+    assert r.headers["content-type"] == "image/png"
+    # PNG de verdade, não uma página de erro com 200.
+    assert r.content[:4] == b"\x89PNG"
+
+
+def test_o_icone_nao_exige_token(servidor):
+    """Pública de propósito.
+
+    O cliente busca o ícone para desenhar a lista de conexões, o que acontece
+    antes de haver token. Se esta rota entrar atrás da autenticação, ela
+    responde 401 e o ícone some — com o agravante de parecer um problema de
+    permissão.
+    """
+    from starlette.testclient import TestClient
+
+    app = servidor.streamable_http_app(stateless_http=True)
+    with TestClient(app) as cliente:
+        r = cliente.get("/icon.png")  # sem Authorization
+
+    assert r.status_code == 200

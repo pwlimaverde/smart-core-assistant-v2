@@ -55,6 +55,36 @@ final class AuthServiceImpl implements AuthService, core.AuthService {
   @override
   Listenable get authChanges => _authChanges;
 
+  /// Renova quando falta menos que isto para o access vencer.
+  ///
+  /// A margem cobre o tempo de voo da própria chamada e o desencontro de
+  /// relógio entre o aparelho e o servidor. Sem ela, um token que vence em dois
+  /// segundos sai daqui "válido" e chega ao servidor expirado — e o usuário vê
+  /// "sessão expirada" numa sessão que o app acabou de considerar boa.
+  static const _margem = Duration(seconds: 60);
+
+  @override
+  Future<String?> accessTokenParaChamada() async {
+    final atual = _current;
+
+    // Sem sessão: pode ser o primeiro boot, e o `checkCurrentUser` cuida disso.
+    // Tentar renovar aqui só disputaria com ele.
+    if (atual == null) return _session.token;
+
+    final falta = atual.expiresAt.difference(DateTime.now());
+    if (falta > _margem) return atual.accessToken;
+
+    final resultado = await refresh();
+    return switch (resultado) {
+      Success(:final value) => value.accessToken,
+      // Renovar falhou. Devolve o que existe em vez de `null`: se a recusa foi
+      // de rede, o access em memória talvez ainda passe, e mandar chamada sem
+      // `authorization` transformaria uma instabilidade momentânea numa sessão
+      // encerrada. Se de fato expirou, o servidor recusa — e aí é verdade.
+      Failure() => _current?.accessToken ?? _session.token,
+    };
+  }
+
   @override
   Future<ReturnSuccessOrError<Session, LoginError>> login({
     required String email,

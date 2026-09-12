@@ -127,6 +127,7 @@ _montar({
 }
 
 void main() {
+  renovacaoAutomatica();
   group('login', () {
     test(
       'aplica a sessão: access em memória, só o refresh persistido',
@@ -408,5 +409,97 @@ void main() {
         expect(erro, isA<UnauthorizedFailure>());
       },
     );
+  });
+}
+
+/// A renovação que não existia.
+///
+/// `refresh()` estava escrito, testado e ligado a **um** gatilho: o boot.
+/// Depois disso o access vencia e toda chamada voltava `unauthenticated` — o
+/// usuário era mandado para o login no meio do trabalho, com um refresh token
+/// válido guardado ali do lado e ninguém para usá-lo. Estes testes fixam o
+/// gatilho que faltava.
+void renovacaoAutomatica() {
+  group('accessTokenParaChamada', () {
+    test('token novo em folha vai como está, sem renovar', () async {
+      final m = _montar();
+      await m.service.login(email: 'a@b.c', password: 'x');
+      final antes = m.refreshDs.chamadas;
+
+      final token = await m.service.accessTokenParaChamada();
+
+      expect(token, 'access');
+      expect(
+        m.refreshDs.chamadas,
+        antes,
+        reason: 'renovou um token que ainda tinha 15 minutos',
+      );
+    });
+
+    test('token vencendo é renovado ANTES de a chamada sair', () async {
+      // 30s de vida: dentro da margem. O servidor recusaria antes mesmo de o
+      // app achar que a sessão acabou.
+      final m = _montar(
+        loginDs: _Ds<Session, LoginParameters>(
+          dado: () => _session(ttl: const Duration(seconds: 30)),
+        ),
+      );
+      await m.service.login(email: 'a@b.c', password: 'x');
+      final antes = m.refreshDs.chamadas;
+
+      final token = await m.service.accessTokenParaChamada();
+
+      expect(m.refreshDs.chamadas, antes + 1, reason: 'não renovou');
+      expect(token, isNotNull);
+    });
+
+    test('seis chamadas juntas renovam uma vez só', () async {
+      // Uma tela que dispara várias requisições ao abrir não pode virar seis
+      // rotações de refresh token — com rotação obrigatória, as cinco últimas
+      // apresentariam um hash já gasto, e o servidor trata reuso como roubo:
+      // derrubaria o grant inteiro.
+      final m = _montar(
+        loginDs: _Ds<Session, LoginParameters>(
+          dado: () => _session(ttl: const Duration(seconds: 5)),
+        ),
+        refreshDs: _Ds<Session, RefreshParameters>(
+          dado: _session,
+          atraso: const Duration(milliseconds: 50),
+        ),
+      );
+      await m.service.login(email: 'a@b.c', password: 'x');
+      final antes = m.refreshDs.chamadas;
+
+      await Future.wait([
+        for (var i = 0; i < 6; i++) m.service.accessTokenParaChamada(),
+      ]);
+
+      expect(m.refreshDs.chamadas, antes + 1);
+    });
+
+    test('renovação que falha não manda a chamada sem token', () async {
+      // Rede instável não é sessão encerrada. Sem o access, a chamada sairia
+      // sem `authorization` e voltaria `unauthenticated` — transformando um
+      // engasgo momentâneo num logout.
+      final m = _montar(
+        loginDs: _Ds<Session, LoginParameters>(
+          dado: () => _session(ttl: const Duration(seconds: 5)),
+        ),
+        refreshDs: _Ds<Session, RefreshParameters>(
+          erro: GrpcError.unavailable('servidor fora do ar'),
+        ),
+      );
+      await m.service.login(email: 'a@b.c', password: 'x');
+
+      expect(await m.service.accessTokenParaChamada(), isNotNull);
+    });
+
+    test('sem sessão não tenta renovar', () async {
+      final m = _montar();
+      final antes = m.refreshDs.chamadas;
+
+      expect(await m.service.accessTokenParaChamada(), isNull);
+      expect(m.refreshDs.chamadas, antes);
+    });
   });
 }

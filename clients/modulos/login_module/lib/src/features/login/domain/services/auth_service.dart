@@ -41,6 +41,21 @@ abstract interface class AuthService {
   /// A sessão atual, se houver.
   Session? get currentSession;
 
+  /// O access token a mandar na próxima chamada, **renovado se estiver
+  /// vencendo**.
+  ///
+  /// Existe porque nada mais chamava [refresh]. O método estava escrito,
+  /// testado e ligado a um único gatilho — o boot. Depois disso o access
+  /// vencia, e toda ação seguinte voltava `unauthenticated`: o usuário era
+  /// jogado para o login no meio do trabalho, sem ter feito nada de errado.
+  ///
+  /// Renovar aqui, e não num retry depois da falha, tem uma razão prática: o
+  /// interceptor injeta o token por um provider assíncrono que já roda antes
+  /// de **cada** chamada. É o único ponto do caminho que conhece toda chamada
+  /// e pode esperar. Como [refresh] é single-flight, uma tela que dispara seis
+  /// requisições juntas renova uma vez só.
+  Future<String?> accessTokenParaChamada();
+
   /// Notifica mudanças de autenticação (login/refresh/logout) — usado como
   /// `refreshListenable` do GoRouter para reavaliar o guard.
   Listenable get authChanges;

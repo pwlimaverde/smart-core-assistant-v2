@@ -1,9 +1,23 @@
 import 'package:dependencies_module/dependencies_module.dart'
     hide TenantInviteCreated;
+// `Clipboard` não vem pelo dependencies_module (que reexporta material, não
+// services).
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import '../../domain/model/tenant_invite.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../controllers/invites_controller.dart';
+
+/// O link que o convidado vai abrir, absoluto.
+///
+/// A tela mostrava `/aceitar-convite?token=…` — um caminho, não um endereço.
+/// Colado num WhatsApp ele não abre nada, e não havia como saber qual host
+/// prefixar: dev e produção são domínios diferentes. Sai do `AppConfig`, que é
+/// onde o flavor já define o ambiente.
+String linkDoConvite(String token) {
+  final base = inject<AppConfig>().apiEndpoint.replaceAll(RegExp(r'/+$'), '');
+  return '$base/aceitar-convite?token=$token';
+}
 
 class InvitesPage extends StatefulWidget {
   const InvitesPage({super.key});
@@ -195,11 +209,29 @@ class _InvitesPageState extends State<InvitesPage> {
     String role = 'staff';
     final flowsController = TextEditingController();
     final scopesEscolhidos = <String>{};
-    const escoposDisponiveis = [
-      'atendimentos:read',
-      'atendimentos:write',
-      'clientes:write',
-    ];
+    // O catálogo canônico inteiro, o mesmo que o authorization server publica
+    // em `scopes_supported`. Antes eram três escopos escritos à mão aqui, e
+    // convidar alguém para treinamento, financeiro ou configurações era
+    // impossível pela tela — restava editar a pessoa depois de ela entrar.
+    //
+    // `tenant:admin` fica de fora da lista: quem deve ser administrador é
+    // convidado pelo papel "Admin", logo acima, e não marcando uma caixa no
+    // meio das outras.
+    const escoposDisponiveis = <String, String>{
+      'atendimentos:read': 'Ver atendimentos',
+      'atendimentos:write': 'Atender e responder',
+      'clientes:read': 'Ver clientes',
+      'clientes:write': 'Cadastrar e editar clientes',
+      'operacional:read': 'Ver a operação (filas, atendentes)',
+      'operacional:admin': 'Administrar a operação',
+      'kanban:admin': 'Configurar os quadros',
+      'treinamento:read': 'Ver o treinamento da IA',
+      'treinamento:write': 'Treinar a IA',
+      'financeiro:read': 'Ver o financeiro',
+      'financeiro:write': 'Mexer no financeiro',
+      'configuracoes:read': 'Ver as configurações',
+      'configuracoes:write': 'Alterar as configurações',
+    };
 
     showDialog(
       context: context,
@@ -252,16 +284,27 @@ class _InvitesPageState extends State<InvitesPage> {
                           'Escopos iniciais',
                           style: TextStyle(fontWeight: FontWeight.bold),
                         ),
-                        ...escoposDisponiveis.map(
-                          (s) => CheckboxListTile(
+                        ...escoposDisponiveis.entries.map(
+                          (e) => CheckboxListTile(
                             dense: true,
-                            title: Text(s),
-                            value: scopesEscolhidos.contains(s),
+                            title: Text(e.value),
+                            // O nome técnico continua visível: é ele que
+                            // aparece na tela de usuários e no token do MCP,
+                            // e esconder cria dois vocabulários para a mesma
+                            // coisa.
+                            subtitle: Text(
+                              e.key,
+                              style: const TextStyle(
+                                fontFamily: 'monospace',
+                                fontSize: 11,
+                              ),
+                            ),
+                            value: scopesEscolhidos.contains(e.key),
                             onChanged: (checked) => setDialogState(() {
                               if (checked ?? false) {
-                                scopesEscolhidos.add(s);
+                                scopesEscolhidos.add(e.key);
                               } else {
-                                scopesEscolhidos.remove(s);
+                                scopesEscolhidos.remove(e.key);
                               }
                             }),
                           ),
@@ -324,20 +367,42 @@ class _InvitesPageState extends State<InvitesPage> {
                             showDialog(
                               context: context,
                               builder: (ctx) => AlertDialog(
-                                title: const Text('Convite Criado'),
+                                title: const Text('Convite criado'),
                                 content: Column(
                                   mainAxisSize: MainAxisSize.min,
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text(
-                                      'Compartilhe este link com o convidado:',
+                                    Text(
+                                      'Envie este link para ${convite.email}. '
+                                      'Ele vale uma vez e expira.',
                                     ),
                                     const SizedBox(height: 12),
                                     SelectableText(
-                                      '/aceitar-convite?token=${convite.token}',
+                                      linkDoConvite(convite.token),
                                       style: const TextStyle(
                                         fontFamily: 'monospace',
+                                        fontSize: 12,
                                       ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    // O link é longo e a pessoa vai colá-lo
+                                    // noutro aplicativo: selecionar à mão um
+                                    // token de 64 caracteres é onde se erra.
+                                    OutlinedButton.icon(
+                                      onPressed: () {
+                                        Clipboard.setData(
+                                          ClipboardData(
+                                            text: linkDoConvite(convite.token),
+                                          ),
+                                        );
+                                        ScaffoldMessenger.of(ctx).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Link copiado.'),
+                                          ),
+                                        );
+                                      },
+                                      icon: const Icon(Icons.copy, size: 16),
+                                      label: const Text('Copiar link'),
                                     ),
                                   ],
                                 ),
