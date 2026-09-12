@@ -22,21 +22,22 @@ Future<List<ContatoParaAtendimento>> buscarContatosDoTenant(
   );
 
   return switch (resultado) {
-    Success<List<Contato>, ContatosError>(:final value) => value
-        .where((c) => c.ativo)
-        .map(
-          (c) => ContatoParaAtendimento(
-            id: c.id,
-            // O nome cadastrado ganha do nome de perfil; quando não há
-            // nenhum dos dois, quem identifica é o telefone, e a tela o
-            // mostra no lugar do nome.
-            nome: c.nomeContato.isNotEmpty
-                ? c.nomeContato
-                : c.nomePerfilWhatsapp,
-            telefone: c.telefone,
-          ),
-        )
-        .toList(),
+    Success<List<Contato>, ContatosError>(:final value) =>
+      value
+          .where((c) => c.ativo)
+          .map(
+            (c) => ContatoParaAtendimento(
+              id: c.id,
+              // O nome cadastrado ganha do nome de perfil; quando não há
+              // nenhum dos dois, quem identifica é o telefone, e a tela o
+              // mostra no lugar do nome.
+              nome: c.nomeContato.isNotEmpty
+                  ? c.nomeContato
+                  : c.nomePerfilWhatsapp,
+              telefone: c.telefone,
+            ),
+          )
+          .toList(),
     // Falha vira lista vazia: quem chama trata a busca como auxiliar e não
     // derruba o diálogo por causa dela.
     _ => const <ContatoParaAtendimento>[],

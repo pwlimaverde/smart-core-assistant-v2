@@ -943,6 +943,78 @@ table MyContato {
   cadastrado_em:long;
 }
 
+table OpcaoCampo {
+  id:string;
+  rotulo:string;
+}
+
+table MyCampoPersonalizado {
+  id:long;
+  slug:string;
+  nome:string;
+  descricao:string;
+  escopo:string;
+  fluxo_id:int;
+  tipo:string;
+  opcoes:[smartcore.contracts.queries.OpcaoCampo];
+  obrigatorio:bool;
+  extrair_automaticamente:bool;
+  extrair_hint:string;
+  mostrar_no_card:bool;
+  ordem:int;
+  ativo:bool;
+}
+
+table ListMyCamposRequest {
+  fluxo_id:int;
+}
+
+table ListMyCamposResponse {
+  campos:[smartcore.contracts.queries.MyCampoPersonalizado];
+}
+
+table CreateMyCampoRequest {
+  nome:string;
+  descricao:string;
+  escopo:string;
+  fluxo_id:int;
+  tipo:string;
+  opcoes:[smartcore.contracts.queries.OpcaoCampo];
+  obrigatorio:bool;
+  extrair_automaticamente:bool;
+  extrair_hint:string;
+  mostrar_no_card:bool;
+  ordem:int;
+}
+
+table MyCampoResponse {
+  campo:smartcore.contracts.queries.MyCampoPersonalizado;
+}
+
+table UpdateMyCampoRequest {
+  id:long;
+  nome:string;
+  descricao:string;
+  tipo:string;
+  opcoes:[smartcore.contracts.queries.OpcaoCampo];
+  obrigatorio:bool;
+  extrair_automaticamente:bool;
+  extrair_hint:string;
+  mostrar_no_card:bool;
+  ordem:int;
+  ativo:bool;
+}
+
+table MyCampoIdRequest {
+  id:long;
+}
+
+table SetMyValorCampoRequest {
+  atendimento_id:int;
+  campo_id:long;
+  valor_json:string;
+}
+
 table ListMyContatosRequest {
   busca:string;
   limite:int;
@@ -1214,6 +1286,21 @@ table DetalheAtendimentoResponse {
   etiquetas:[smartcore.contracts.queries.Etiqueta];
   notas:[smartcore.contracts.queries.Nota];
   bot_pode_atender:bool;
+  campos:[smartcore.contracts.queries.ValorCampoDoAtendimento];
+}
+
+table ValorCampoDoAtendimento {
+  campo_id:long;
+  slug:string;
+  nome:string;
+  descricao:string;
+  tipo:string;
+  opcoes:[smartcore.contracts.queries.OpcaoCampo];
+  obrigatorio:bool;
+  valor_json:string;
+  origem:string;
+  confianca:double;
+  editado_por_humano:bool;
 }
 
 table CreateEtiquetaRequest {

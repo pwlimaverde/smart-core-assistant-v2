@@ -65,6 +65,7 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
       alternar: inject(),
       criarNota: inject(),
       definirBot: inject(),
+      definirValorCampo: inject(),
     );
     _controller.abrir(widget.atendimentoId);
     _ficha.abrir(widget.atendimentoId);

@@ -13,8 +13,8 @@ pub mod vouchers;
 pub mod whatsapp;
 
 pub use atendimento::{
-    AtendimentoStore, CampoColetadoDto, CampoPendenteDto, CamposAtendimentoDto, OrigemMensagem,
-    TicketKanbanOutcome, TransferenciaFluxoOutcome,
+    AtendimentoStore, CampoColetadoDto, CampoExtraidoDto, CampoPendenteDto, CamposAtendimentoDto,
+    OrigemMensagem, ResumoCamposExtraidos, TicketKanbanOutcome, TransferenciaFluxoOutcome,
 };
 pub use audit::AuditPort;
 pub use auth::AuthStore;

@@ -12462,6 +12462,934 @@ class MyContato extends $pb.GeneratedMessage {
   void clearCadastradoEm() => $_clearField(8);
 }
 
+class OpcaoCampo extends $pb.GeneratedMessage {
+  factory OpcaoCampo({
+    $core.String? id,
+    $core.String? rotulo,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (rotulo != null) result.rotulo = rotulo;
+    return result;
+  }
+
+  OpcaoCampo._();
+
+  factory OpcaoCampo.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory OpcaoCampo.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'OpcaoCampo',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'rotulo')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  OpcaoCampo clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  OpcaoCampo copyWith(void Function(OpcaoCampo) updates) =>
+      super.copyWith((message) => updates(message as OpcaoCampo)) as OpcaoCampo;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static OpcaoCampo create() => OpcaoCampo._();
+  @$core.override
+  OpcaoCampo createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static OpcaoCampo getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<OpcaoCampo>(create);
+  static OpcaoCampo? _defaultInstance;
+
+  /// Id estavel: e ele que fica gravado no valor. Renomear o rotulo depois nao
+  /// pode invalidar o que ja foi preenchido.
+  @$pb.TagNumber(1)
+  $core.String get id => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set id($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get rotulo => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set rotulo($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasRotulo() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearRotulo() => $_clearField(2);
+}
+
+class MyCampoPersonalizado extends $pb.GeneratedMessage {
+  factory MyCampoPersonalizado({
+    $fixnum.Int64? id,
+    $core.String? slug,
+    $core.String? nome,
+    $core.String? descricao,
+    $core.String? escopo,
+    $core.int? fluxoId,
+    $core.String? tipo,
+    $core.Iterable<OpcaoCampo>? opcoes,
+    $core.bool? obrigatorio,
+    $core.bool? extrairAutomaticamente,
+    $core.String? extrairHint,
+    $core.bool? mostrarNoCard,
+    $core.int? ordem,
+    $core.bool? ativo,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (slug != null) result.slug = slug;
+    if (nome != null) result.nome = nome;
+    if (descricao != null) result.descricao = descricao;
+    if (escopo != null) result.escopo = escopo;
+    if (fluxoId != null) result.fluxoId = fluxoId;
+    if (tipo != null) result.tipo = tipo;
+    if (opcoes != null) result.opcoes.addAll(opcoes);
+    if (obrigatorio != null) result.obrigatorio = obrigatorio;
+    if (extrairAutomaticamente != null)
+      result.extrairAutomaticamente = extrairAutomaticamente;
+    if (extrairHint != null) result.extrairHint = extrairHint;
+    if (mostrarNoCard != null) result.mostrarNoCard = mostrarNoCard;
+    if (ordem != null) result.ordem = ordem;
+    if (ativo != null) result.ativo = ativo;
+    return result;
+  }
+
+  MyCampoPersonalizado._();
+
+  factory MyCampoPersonalizado.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyCampoPersonalizado.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyCampoPersonalizado',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'slug')
+    ..aOS(3, _omitFieldNames ? '' : 'nome')
+    ..aOS(4, _omitFieldNames ? '' : 'descricao')
+    ..aOS(5, _omitFieldNames ? '' : 'escopo')
+    ..aI(6, _omitFieldNames ? '' : 'fluxoId')
+    ..aOS(7, _omitFieldNames ? '' : 'tipo')
+    ..pPM<OpcaoCampo>(8, _omitFieldNames ? '' : 'opcoes',
+        subBuilder: OpcaoCampo.create)
+    ..aOB(9, _omitFieldNames ? '' : 'obrigatorio')
+    ..aOB(10, _omitFieldNames ? '' : 'extrairAutomaticamente')
+    ..aOS(11, _omitFieldNames ? '' : 'extrairHint')
+    ..aOB(12, _omitFieldNames ? '' : 'mostrarNoCard')
+    ..aI(13, _omitFieldNames ? '' : 'ordem')
+    ..aOB(14, _omitFieldNames ? '' : 'ativo')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyCampoPersonalizado clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyCampoPersonalizado copyWith(void Function(MyCampoPersonalizado) updates) =>
+      super.copyWith((message) => updates(message as MyCampoPersonalizado))
+          as MyCampoPersonalizado;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyCampoPersonalizado create() => MyCampoPersonalizado._();
+  @$core.override
+  MyCampoPersonalizado createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyCampoPersonalizado getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyCampoPersonalizado>(create);
+  static MyCampoPersonalizado? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get id => $_getI64(0);
+  @$pb.TagNumber(1)
+  set id($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get slug => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set slug($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasSlug() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearSlug() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get nome => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set nome($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasNome() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearNome() => $_clearField(3);
+
+  /// Serve a duas leituras: explica o campo para quem preenche a mao e diz a
+  /// IA o que procurar. E a "descricao completa" do pedido original.
+  @$pb.TagNumber(4)
+  $core.String get descricao => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set descricao($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasDescricao() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearDescricao() => $_clearField(4);
+
+  /// GLOBAL (todo atendimento) ou FLUXO (so o quadro escolhido).
+  @$pb.TagNumber(5)
+  $core.String get escopo => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set escopo($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasEscopo() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearEscopo() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.int get fluxoId => $_getIZ(5);
+  @$pb.TagNumber(6)
+  set fluxoId($core.int value) => $_setSignedInt32(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasFluxoId() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearFluxoId() => $_clearField(6);
+
+  /// texto | numero | data | booleano | lista
+  @$pb.TagNumber(7)
+  $core.String get tipo => $_getSZ(6);
+  @$pb.TagNumber(7)
+  set tipo($core.String value) => $_setString(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasTipo() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearTipo() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $pb.PbList<OpcaoCampo> get opcoes => $_getList(7);
+
+  /// Regra de TELA: impede concluir o atendimento sem o campo.
+  @$pb.TagNumber(9)
+  $core.bool get obrigatorio => $_getBF(8);
+  @$pb.TagNumber(9)
+  set obrigatorio($core.bool value) => $_setBool(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasObrigatorio() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearObrigatorio() => $_clearField(9);
+
+  /// Regra de PROMPT: a IA tenta obter no meio da conversa. Sao coisas
+  /// diferentes, e trata-las como uma so foi um defeito real (C2).
+  @$pb.TagNumber(10)
+  $core.bool get extrairAutomaticamente => $_getBF(9);
+  @$pb.TagNumber(10)
+  set extrairAutomaticamente($core.bool value) => $_setBool(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasExtrairAutomaticamente() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearExtrairAutomaticamente() => $_clearField(10);
+
+  /// Como perguntar sem soar interrogatorio.
+  @$pb.TagNumber(11)
+  $core.String get extrairHint => $_getSZ(10);
+  @$pb.TagNumber(11)
+  set extrairHint($core.String value) => $_setString(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasExtrairHint() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearExtrairHint() => $_clearField(11);
+
+  @$pb.TagNumber(12)
+  $core.bool get mostrarNoCard => $_getBF(11);
+  @$pb.TagNumber(12)
+  set mostrarNoCard($core.bool value) => $_setBool(11, value);
+  @$pb.TagNumber(12)
+  $core.bool hasMostrarNoCard() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearMostrarNoCard() => $_clearField(12);
+
+  @$pb.TagNumber(13)
+  $core.int get ordem => $_getIZ(12);
+  @$pb.TagNumber(13)
+  set ordem($core.int value) => $_setSignedInt32(12, value);
+  @$pb.TagNumber(13)
+  $core.bool hasOrdem() => $_has(12);
+  @$pb.TagNumber(13)
+  void clearOrdem() => $_clearField(13);
+
+  @$pb.TagNumber(14)
+  $core.bool get ativo => $_getBF(13);
+  @$pb.TagNumber(14)
+  set ativo($core.bool value) => $_setBool(13, value);
+  @$pb.TagNumber(14)
+  $core.bool hasAtivo() => $_has(13);
+  @$pb.TagNumber(14)
+  void clearAtivo() => $_clearField(14);
+}
+
+class ListMyCamposRequest extends $pb.GeneratedMessage {
+  factory ListMyCamposRequest({
+    $core.int? fluxoId,
+  }) {
+    final result = create();
+    if (fluxoId != null) result.fluxoId = fluxoId;
+    return result;
+  }
+
+  ListMyCamposRequest._();
+
+  factory ListMyCamposRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyCamposRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyCamposRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'fluxoId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyCamposRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyCamposRequest copyWith(void Function(ListMyCamposRequest) updates) =>
+      super.copyWith((message) => updates(message as ListMyCamposRequest))
+          as ListMyCamposRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyCamposRequest create() => ListMyCamposRequest._();
+  @$core.override
+  ListMyCamposRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyCamposRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyCamposRequest>(create);
+  static ListMyCamposRequest? _defaultInstance;
+
+  /// Vazio = todos. Com fluxo, devolve os GLOBAL mais os daquele quadro.
+  @$pb.TagNumber(1)
+  $core.int get fluxoId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set fluxoId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasFluxoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearFluxoId() => $_clearField(1);
+}
+
+class ListMyCamposResponse extends $pb.GeneratedMessage {
+  factory ListMyCamposResponse({
+    $core.Iterable<MyCampoPersonalizado>? campos,
+  }) {
+    final result = create();
+    if (campos != null) result.campos.addAll(campos);
+    return result;
+  }
+
+  ListMyCamposResponse._();
+
+  factory ListMyCamposResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyCamposResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyCamposResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<MyCampoPersonalizado>(1, _omitFieldNames ? '' : 'campos',
+        subBuilder: MyCampoPersonalizado.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyCamposResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyCamposResponse copyWith(void Function(ListMyCamposResponse) updates) =>
+      super.copyWith((message) => updates(message as ListMyCamposResponse))
+          as ListMyCamposResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyCamposResponse create() => ListMyCamposResponse._();
+  @$core.override
+  ListMyCamposResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyCamposResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyCamposResponse>(create);
+  static ListMyCamposResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<MyCampoPersonalizado> get campos => $_getList(0);
+}
+
+class CreateMyCampoRequest extends $pb.GeneratedMessage {
+  factory CreateMyCampoRequest({
+    $core.String? nome,
+    $core.String? descricao,
+    $core.String? escopo,
+    $core.int? fluxoId,
+    $core.String? tipo,
+    $core.Iterable<OpcaoCampo>? opcoes,
+    $core.bool? obrigatorio,
+    $core.bool? extrairAutomaticamente,
+    $core.String? extrairHint,
+    $core.bool? mostrarNoCard,
+    $core.int? ordem,
+  }) {
+    final result = create();
+    if (nome != null) result.nome = nome;
+    if (descricao != null) result.descricao = descricao;
+    if (escopo != null) result.escopo = escopo;
+    if (fluxoId != null) result.fluxoId = fluxoId;
+    if (tipo != null) result.tipo = tipo;
+    if (opcoes != null) result.opcoes.addAll(opcoes);
+    if (obrigatorio != null) result.obrigatorio = obrigatorio;
+    if (extrairAutomaticamente != null)
+      result.extrairAutomaticamente = extrairAutomaticamente;
+    if (extrairHint != null) result.extrairHint = extrairHint;
+    if (mostrarNoCard != null) result.mostrarNoCard = mostrarNoCard;
+    if (ordem != null) result.ordem = ordem;
+    return result;
+  }
+
+  CreateMyCampoRequest._();
+
+  factory CreateMyCampoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CreateMyCampoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CreateMyCampoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'nome')
+    ..aOS(2, _omitFieldNames ? '' : 'descricao')
+    ..aOS(3, _omitFieldNames ? '' : 'escopo')
+    ..aI(4, _omitFieldNames ? '' : 'fluxoId')
+    ..aOS(5, _omitFieldNames ? '' : 'tipo')
+    ..pPM<OpcaoCampo>(6, _omitFieldNames ? '' : 'opcoes',
+        subBuilder: OpcaoCampo.create)
+    ..aOB(7, _omitFieldNames ? '' : 'obrigatorio')
+    ..aOB(8, _omitFieldNames ? '' : 'extrairAutomaticamente')
+    ..aOS(9, _omitFieldNames ? '' : 'extrairHint')
+    ..aOB(10, _omitFieldNames ? '' : 'mostrarNoCard')
+    ..aI(11, _omitFieldNames ? '' : 'ordem')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyCampoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyCampoRequest copyWith(void Function(CreateMyCampoRequest) updates) =>
+      super.copyWith((message) => updates(message as CreateMyCampoRequest))
+          as CreateMyCampoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CreateMyCampoRequest create() => CreateMyCampoRequest._();
+  @$core.override
+  CreateMyCampoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CreateMyCampoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<CreateMyCampoRequest>(create);
+  static CreateMyCampoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get nome => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set nome($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasNome() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearNome() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get descricao => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set descricao($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasDescricao() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearDescricao() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get escopo => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set escopo($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasEscopo() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearEscopo() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.int get fluxoId => $_getIZ(3);
+  @$pb.TagNumber(4)
+  set fluxoId($core.int value) => $_setSignedInt32(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasFluxoId() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearFluxoId() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get tipo => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set tipo($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasTipo() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearTipo() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $pb.PbList<OpcaoCampo> get opcoes => $_getList(5);
+
+  @$pb.TagNumber(7)
+  $core.bool get obrigatorio => $_getBF(6);
+  @$pb.TagNumber(7)
+  set obrigatorio($core.bool value) => $_setBool(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasObrigatorio() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearObrigatorio() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.bool get extrairAutomaticamente => $_getBF(7);
+  @$pb.TagNumber(8)
+  set extrairAutomaticamente($core.bool value) => $_setBool(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasExtrairAutomaticamente() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearExtrairAutomaticamente() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $core.String get extrairHint => $_getSZ(8);
+  @$pb.TagNumber(9)
+  set extrairHint($core.String value) => $_setString(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasExtrairHint() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearExtrairHint() => $_clearField(9);
+
+  @$pb.TagNumber(10)
+  $core.bool get mostrarNoCard => $_getBF(9);
+  @$pb.TagNumber(10)
+  set mostrarNoCard($core.bool value) => $_setBool(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasMostrarNoCard() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearMostrarNoCard() => $_clearField(10);
+
+  @$pb.TagNumber(11)
+  $core.int get ordem => $_getIZ(10);
+  @$pb.TagNumber(11)
+  set ordem($core.int value) => $_setSignedInt32(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasOrdem() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearOrdem() => $_clearField(11);
+}
+
+class MyCampoResponse extends $pb.GeneratedMessage {
+  factory MyCampoResponse({
+    MyCampoPersonalizado? campo,
+  }) {
+    final result = create();
+    if (campo != null) result.campo = campo;
+    return result;
+  }
+
+  MyCampoResponse._();
+
+  factory MyCampoResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyCampoResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyCampoResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOM<MyCampoPersonalizado>(1, _omitFieldNames ? '' : 'campo',
+        subBuilder: MyCampoPersonalizado.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyCampoResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyCampoResponse copyWith(void Function(MyCampoResponse) updates) =>
+      super.copyWith((message) => updates(message as MyCampoResponse))
+          as MyCampoResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyCampoResponse create() => MyCampoResponse._();
+  @$core.override
+  MyCampoResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyCampoResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyCampoResponse>(create);
+  static MyCampoResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  MyCampoPersonalizado get campo => $_getN(0);
+  @$pb.TagNumber(1)
+  set campo(MyCampoPersonalizado value) => $_setField(1, value);
+  @$pb.TagNumber(1)
+  $core.bool hasCampo() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearCampo() => $_clearField(1);
+  @$pb.TagNumber(1)
+  MyCampoPersonalizado ensureCampo() => $_ensure(0);
+}
+
+class UpdateMyCampoRequest extends $pb.GeneratedMessage {
+  factory UpdateMyCampoRequest({
+    $fixnum.Int64? id,
+    $core.String? nome,
+    $core.String? descricao,
+    $core.String? tipo,
+    $core.Iterable<OpcaoCampo>? opcoes,
+    $core.bool? obrigatorio,
+    $core.bool? extrairAutomaticamente,
+    $core.String? extrairHint,
+    $core.bool? mostrarNoCard,
+    $core.int? ordem,
+    $core.bool? ativo,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (nome != null) result.nome = nome;
+    if (descricao != null) result.descricao = descricao;
+    if (tipo != null) result.tipo = tipo;
+    if (opcoes != null) result.opcoes.addAll(opcoes);
+    if (obrigatorio != null) result.obrigatorio = obrigatorio;
+    if (extrairAutomaticamente != null)
+      result.extrairAutomaticamente = extrairAutomaticamente;
+    if (extrairHint != null) result.extrairHint = extrairHint;
+    if (mostrarNoCard != null) result.mostrarNoCard = mostrarNoCard;
+    if (ordem != null) result.ordem = ordem;
+    if (ativo != null) result.ativo = ativo;
+    return result;
+  }
+
+  UpdateMyCampoRequest._();
+
+  factory UpdateMyCampoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory UpdateMyCampoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'UpdateMyCampoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'nome')
+    ..aOS(3, _omitFieldNames ? '' : 'descricao')
+    ..aOS(4, _omitFieldNames ? '' : 'tipo')
+    ..pPM<OpcaoCampo>(5, _omitFieldNames ? '' : 'opcoes',
+        subBuilder: OpcaoCampo.create)
+    ..aOB(6, _omitFieldNames ? '' : 'obrigatorio')
+    ..aOB(7, _omitFieldNames ? '' : 'extrairAutomaticamente')
+    ..aOS(8, _omitFieldNames ? '' : 'extrairHint')
+    ..aOB(9, _omitFieldNames ? '' : 'mostrarNoCard')
+    ..aI(10, _omitFieldNames ? '' : 'ordem')
+    ..aOB(11, _omitFieldNames ? '' : 'ativo')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateMyCampoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateMyCampoRequest copyWith(void Function(UpdateMyCampoRequest) updates) =>
+      super.copyWith((message) => updates(message as UpdateMyCampoRequest))
+          as UpdateMyCampoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static UpdateMyCampoRequest create() => UpdateMyCampoRequest._();
+  @$core.override
+  UpdateMyCampoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static UpdateMyCampoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<UpdateMyCampoRequest>(create);
+  static UpdateMyCampoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get id => $_getI64(0);
+  @$pb.TagNumber(1)
+  set id($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nome => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nome($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNome() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNome() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get descricao => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set descricao($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDescricao() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDescricao() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get tipo => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set tipo($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasTipo() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearTipo() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $pb.PbList<OpcaoCampo> get opcoes => $_getList(4);
+
+  @$pb.TagNumber(6)
+  $core.bool get obrigatorio => $_getBF(5);
+  @$pb.TagNumber(6)
+  set obrigatorio($core.bool value) => $_setBool(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasObrigatorio() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearObrigatorio() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $core.bool get extrairAutomaticamente => $_getBF(6);
+  @$pb.TagNumber(7)
+  set extrairAutomaticamente($core.bool value) => $_setBool(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasExtrairAutomaticamente() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearExtrairAutomaticamente() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.String get extrairHint => $_getSZ(7);
+  @$pb.TagNumber(8)
+  set extrairHint($core.String value) => $_setString(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasExtrairHint() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearExtrairHint() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $core.bool get mostrarNoCard => $_getBF(8);
+  @$pb.TagNumber(9)
+  set mostrarNoCard($core.bool value) => $_setBool(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasMostrarNoCard() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearMostrarNoCard() => $_clearField(9);
+
+  @$pb.TagNumber(10)
+  $core.int get ordem => $_getIZ(9);
+  @$pb.TagNumber(10)
+  set ordem($core.int value) => $_setSignedInt32(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasOrdem() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearOrdem() => $_clearField(10);
+
+  @$pb.TagNumber(11)
+  $core.bool get ativo => $_getBF(10);
+  @$pb.TagNumber(11)
+  set ativo($core.bool value) => $_setBool(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasAtivo() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearAtivo() => $_clearField(11);
+}
+
+class MyCampoIdRequest extends $pb.GeneratedMessage {
+  factory MyCampoIdRequest({
+    $fixnum.Int64? id,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    return result;
+  }
+
+  MyCampoIdRequest._();
+
+  factory MyCampoIdRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyCampoIdRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyCampoIdRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'id')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyCampoIdRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyCampoIdRequest copyWith(void Function(MyCampoIdRequest) updates) =>
+      super.copyWith((message) => updates(message as MyCampoIdRequest))
+          as MyCampoIdRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyCampoIdRequest create() => MyCampoIdRequest._();
+  @$core.override
+  MyCampoIdRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyCampoIdRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyCampoIdRequest>(create);
+  static MyCampoIdRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get id => $_getI64(0);
+  @$pb.TagNumber(1)
+  set id($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+}
+
+/// Preenchimento manual, pelo operador. A origem fica registrada: um valor
+/// escrito por gente nao pode ser sobrescrito pela IA depois.
+class SetMyValorCampoRequest extends $pb.GeneratedMessage {
+  factory SetMyValorCampoRequest({
+    $core.int? atendimentoId,
+    $fixnum.Int64? campoId,
+    $core.String? valorJson,
+  }) {
+    final result = create();
+    if (atendimentoId != null) result.atendimentoId = atendimentoId;
+    if (campoId != null) result.campoId = campoId;
+    if (valorJson != null) result.valorJson = valorJson;
+    return result;
+  }
+
+  SetMyValorCampoRequest._();
+
+  factory SetMyValorCampoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SetMyValorCampoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SetMyValorCampoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'atendimentoId')
+    ..aInt64(2, _omitFieldNames ? '' : 'campoId')
+    ..aOS(3, _omitFieldNames ? '' : 'valorJson')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetMyValorCampoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SetMyValorCampoRequest copyWith(
+          void Function(SetMyValorCampoRequest) updates) =>
+      super.copyWith((message) => updates(message as SetMyValorCampoRequest))
+          as SetMyValorCampoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SetMyValorCampoRequest create() => SetMyValorCampoRequest._();
+  @$core.override
+  SetMyValorCampoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SetMyValorCampoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SetMyValorCampoRequest>(create);
+  static SetMyValorCampoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get atendimentoId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set atendimentoId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAtendimentoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAtendimentoId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $fixnum.Int64 get campoId => $_getI64(1);
+  @$pb.TagNumber(2)
+  set campoId($fixnum.Int64 value) => $_setInt64(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasCampoId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearCampoId() => $_clearField(2);
+
+  /// JSON na forma do `tipo`. `null` = apagar de proposito, que e diferente de
+  /// nunca ter sido preenchido: a IA nao repreenche o que alguem apagou.
+  @$pb.TagNumber(3)
+  $core.String get valorJson => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set valorJson($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasValorJson() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearValorJson() => $_clearField(3);
+}
+
 class ListMyContatosRequest extends $pb.GeneratedMessage {
   factory ListMyContatosRequest({
     $core.String? busca,
@@ -16037,12 +16965,14 @@ class DetalheAtendimentoResponse extends $pb.GeneratedMessage {
     $core.Iterable<Etiqueta>? etiquetas,
     $core.Iterable<Nota>? notas,
     $core.bool? botPodeAtender,
+    $core.Iterable<ValorCampoDoAtendimento>? campos,
   }) {
     final result = create();
     if (catalogo != null) result.catalogo.addAll(catalogo);
     if (etiquetas != null) result.etiquetas.addAll(etiquetas);
     if (notas != null) result.notas.addAll(notas);
     if (botPodeAtender != null) result.botPodeAtender = botPodeAtender;
+    if (campos != null) result.campos.addAll(campos);
     return result;
   }
 
@@ -16066,6 +16996,8 @@ class DetalheAtendimentoResponse extends $pb.GeneratedMessage {
         subBuilder: Etiqueta.create)
     ..pPM<Nota>(3, _omitFieldNames ? '' : 'notas', subBuilder: Nota.create)
     ..aOB(4, _omitFieldNames ? '' : 'botPodeAtender')
+    ..pPM<ValorCampoDoAtendimento>(5, _omitFieldNames ? '' : 'campos',
+        subBuilder: ValorCampoDoAtendimento.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -16111,6 +17043,189 @@ class DetalheAtendimentoResponse extends $pb.GeneratedMessage {
   $core.bool hasBotPodeAtender() => $_has(3);
   @$pb.TagNumber(4)
   void clearBotPodeAtender() => $_clearField(4);
+
+  /// N9 E13 — os campos do cartao aplicaveis a este atendimento, ja com o
+  /// valor quando ha. Vem juntos com o resto da ficha porque a tela os desenha
+  /// no mesmo painel: buscar em duas chamadas faria metade da ficha aparecer
+  /// antes da outra.
+  @$pb.TagNumber(5)
+  $pb.PbList<ValorCampoDoAtendimento> get campos => $_getList(4);
+}
+
+/// Um campo do cartao na ficha de UM atendimento: a definicao mais o valor.
+class ValorCampoDoAtendimento extends $pb.GeneratedMessage {
+  factory ValorCampoDoAtendimento({
+    $fixnum.Int64? campoId,
+    $core.String? slug,
+    $core.String? nome,
+    $core.String? descricao,
+    $core.String? tipo,
+    $core.Iterable<OpcaoCampo>? opcoes,
+    $core.bool? obrigatorio,
+    $core.String? valorJson,
+    $core.String? origem,
+    $core.double? confianca,
+    $core.bool? editadoPorHumano,
+  }) {
+    final result = create();
+    if (campoId != null) result.campoId = campoId;
+    if (slug != null) result.slug = slug;
+    if (nome != null) result.nome = nome;
+    if (descricao != null) result.descricao = descricao;
+    if (tipo != null) result.tipo = tipo;
+    if (opcoes != null) result.opcoes.addAll(opcoes);
+    if (obrigatorio != null) result.obrigatorio = obrigatorio;
+    if (valorJson != null) result.valorJson = valorJson;
+    if (origem != null) result.origem = origem;
+    if (confianca != null) result.confianca = confianca;
+    if (editadoPorHumano != null) result.editadoPorHumano = editadoPorHumano;
+    return result;
+  }
+
+  ValorCampoDoAtendimento._();
+
+  factory ValorCampoDoAtendimento.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ValorCampoDoAtendimento.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ValorCampoDoAtendimento',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'campoId')
+    ..aOS(2, _omitFieldNames ? '' : 'slug')
+    ..aOS(3, _omitFieldNames ? '' : 'nome')
+    ..aOS(4, _omitFieldNames ? '' : 'descricao')
+    ..aOS(5, _omitFieldNames ? '' : 'tipo')
+    ..pPM<OpcaoCampo>(6, _omitFieldNames ? '' : 'opcoes',
+        subBuilder: OpcaoCampo.create)
+    ..aOB(7, _omitFieldNames ? '' : 'obrigatorio')
+    ..aOS(8, _omitFieldNames ? '' : 'valorJson')
+    ..aOS(9, _omitFieldNames ? '' : 'origem')
+    ..aD(10, _omitFieldNames ? '' : 'confianca')
+    ..aOB(11, _omitFieldNames ? '' : 'editadoPorHumano')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ValorCampoDoAtendimento clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ValorCampoDoAtendimento copyWith(
+          void Function(ValorCampoDoAtendimento) updates) =>
+      super.copyWith((message) => updates(message as ValorCampoDoAtendimento))
+          as ValorCampoDoAtendimento;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ValorCampoDoAtendimento create() => ValorCampoDoAtendimento._();
+  @$core.override
+  ValorCampoDoAtendimento createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ValorCampoDoAtendimento getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ValorCampoDoAtendimento>(create);
+  static ValorCampoDoAtendimento? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get campoId => $_getI64(0);
+  @$pb.TagNumber(1)
+  set campoId($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasCampoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearCampoId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get slug => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set slug($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasSlug() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearSlug() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get nome => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set nome($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasNome() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearNome() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get descricao => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set descricao($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasDescricao() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearDescricao() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get tipo => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set tipo($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasTipo() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearTipo() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $pb.PbList<OpcaoCampo> get opcoes => $_getList(5);
+
+  @$pb.TagNumber(7)
+  $core.bool get obrigatorio => $_getBF(6);
+  @$pb.TagNumber(7)
+  set obrigatorio($core.bool value) => $_setBool(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasObrigatorio() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearObrigatorio() => $_clearField(7);
+
+  /// Vazio = nunca preenchido. `"null"` = apagado de proposito, e a IA nao
+  /// repreenche o que alguem apagou.
+  @$pb.TagNumber(8)
+  $core.String get valorJson => $_getSZ(7);
+  @$pb.TagNumber(8)
+  set valorJson($core.String value) => $_setString(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasValorJson() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearValorJson() => $_clearField(8);
+
+  /// MANUAL | IA — a tela mostra de onde veio, e a confianca quando foi a IA.
+  @$pb.TagNumber(9)
+  $core.String get origem => $_getSZ(8);
+  @$pb.TagNumber(9)
+  set origem($core.String value) => $_setString(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasOrigem() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearOrigem() => $_clearField(9);
+
+  @$pb.TagNumber(10)
+  $core.double get confianca => $_getN(9);
+  @$pb.TagNumber(10)
+  set confianca($core.double value) => $_setDouble(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasConfianca() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearConfianca() => $_clearField(10);
+
+  /// TRUE quando uma pessoa escreveu ou apagou: a IA nao sobrescreve.
+  @$pb.TagNumber(11)
+  $core.bool get editadoPorHumano => $_getBF(10);
+  @$pb.TagNumber(11)
+  set editadoPorHumano($core.bool value) => $_setBool(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasEditadoPorHumano() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearEditadoPorHumano() => $_clearField(11);
 }
 
 class CreateEtiquetaRequest extends $pb.GeneratedMessage {

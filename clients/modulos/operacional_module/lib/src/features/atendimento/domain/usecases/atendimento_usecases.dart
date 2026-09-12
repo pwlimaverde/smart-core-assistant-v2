@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:return_success_or_error/return_success_or_error.dart';
 
+import '../parameters/definir_valor_campo_parameters.dart';
 import '../parameters/iniciar_atendimento_parameters.dart';
 import '../model/atendimento_iniciado.dart';
 import '../errors/atendimento_errors.dart';
@@ -195,6 +196,29 @@ final class IniciarAtendimentoUsecase
       return const Failure(IniciarAtendimentoInesperado());
     }
     return Success(data);
+  }
+}
+
+/// N9 E13 — preenche um campo do cartão na ficha.
+final class DefinirValorCampoUsecase
+    extends
+        UsecaseBaseCallData<
+          Unit,
+          Unit,
+          DefinirValorCampoParameters,
+          DefinirValorCampoError
+        > {
+  const DefinirValorCampoUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, DefinirValorCampoParameters, DefinirValorCampoError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  DefinirValorCampoError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('definirValorCampo', exception, stackTrace);
+    return const ValorCampoInesperado();
   }
 }
 

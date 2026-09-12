@@ -406,3 +406,49 @@ final class IniciarAtendimentoInesperado extends IniciarAtendimentoError
   const IniciarAtendimentoInesperado()
     : super('Não foi possível abrir o atendimento. Tente novamente.');
 }
+
+// ─── definirValorCampo (N9 E13) ───────────────────────────────────────────────
+
+/// Erros de preencher um campo do cartão na ficha.
+sealed class DefinirValorCampoError extends AppError {
+  const DefinirValorCampoError(super.message);
+}
+
+final class ValorCampoAcessoNegado extends DefinirValorCampoError
+    with UnauthorizedFailure {
+  const ValorCampoAcessoNegado()
+    : super('Você não tem permissão para preencher a ficha.');
+}
+
+/// Sessão morta — e não falta de permissão. Ver a nota de
+/// [MoveEtapaSessaoExpirada].
+final class ValorCampoSessaoExpirada extends DefinirValorCampoError
+    with UnauthorizedFailure {
+  const ValorCampoSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
+final class ValorCampoNaoEncontrado extends DefinirValorCampoError {
+  const ValorCampoNaoEncontrado()
+    : super('Este campo não existe mais. Recarregue a conversa.');
+}
+
+/// O valor não serve para o tipo do campo — data fora do formato, opção que
+/// não está na lista. A mensagem é do servidor, que conhece o catálogo.
+final class ValorCampoInvalido extends DefinirValorCampoError
+    with ValidationFailure {
+  const ValorCampoInvalido([String? mensagem])
+    : super(mensagem ?? 'Esse valor não serve para este campo.');
+}
+
+final class ValorCampoIndisponivel extends DefinirValorCampoError
+    with NetworkFailure {
+  const ValorCampoIndisponivel()
+    : super('Não foi possível salvar. Tente de novo.');
+}
+
+final class ValorCampoInesperado extends DefinirValorCampoError
+    with UnexpectedFailure {
+  const ValorCampoInesperado()
+    : super('Não foi possível salvar. Tente de novo.');
+}

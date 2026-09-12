@@ -245,6 +245,21 @@ final class LocalEngineGateway implements AtendimentoGateway {
   }
 
   @override
+  Future<void> definirValorCampo({
+    required int atendimentoId,
+    required int campoId,
+    required String valorJson,
+  }) async {
+    await _admin.setMyValorCampo(
+      proto.SetMyValorCampoRequest(
+        atendimentoId: atendimentoId,
+        campoId: Int64(campoId),
+        valorJson: valorJson,
+      ),
+    );
+  }
+
+  @override
   Future<void> moveAtendimentoEtapa({
     required int atendimentoId,
     required int etapaDestinoId,
@@ -487,6 +502,7 @@ final class LocalEngineGateway implements AtendimentoGateway {
           )
           .toList(),
       botPodeAtender: resp.botPodeAtender,
+      campos: resp.campos.map(_valorCampoDoProto).toList(),
     );
   }
 
@@ -547,4 +563,21 @@ Etiqueta _etiquetaDoProto(proto.Etiqueta e) => Etiqueta(
   cor: e.cor,
   descricao: e.descricao,
   ativo: e.ativo,
+);
+
+/// Um campo do cartão, do protobuf para o domínio (N9 E13).
+ValorCampo _valorCampoDoProto(proto.ValorCampoDoAtendimento c) => ValorCampo(
+  campoId: c.campoId.toInt(),
+  slug: c.slug,
+  nome: c.nome,
+  descricao: c.descricao,
+  tipo: c.tipo,
+  opcoes: c.opcoes
+      .map((o) => (id: o.id, rotulo: o.rotulo))
+      .toList(growable: false),
+  obrigatorio: c.obrigatorio,
+  valorJson: c.valorJson,
+  origem: c.origem,
+  confianca: c.confianca,
+  editadoPorHumano: c.editadoPorHumano,
 );

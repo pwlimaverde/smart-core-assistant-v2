@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE atu_campo_personalizado\n                  SET ativo = false, data_atualizacao = NOW()\n                WHERE tenant_id = $1 AND id = $2 AND ativo = true",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7a806547eedea2fca82dbd24a2e8e59f3794735f4880df670fe1fd533a18f276"
+}

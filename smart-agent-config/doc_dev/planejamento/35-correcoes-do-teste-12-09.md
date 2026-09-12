@@ -236,3 +236,21 @@ reconectar essa condição também cobre "instância já está conectada".
 
 **Editar conexão**: decidido não construir. O nome é o identificador da
 instância no provedor; renomear desfaria o vínculo. A tela passa a explicar.
+
+---
+
+## Revisão: abrir conversa não exige WhatsApp no ar
+
+Eu havia barrado o `IniciarAtendimentoManual` quando nenhuma instância estava
+conectada, com o argumento de que a mensagem não sairia. O argumento vale para
+**enviar**, não para **abrir**: o produto separa os dois atos de propósito, e o
+operador prepara o cartão hoje para falar amanhã, ou registra um contato que
+chegou por telefone. Barrar o primeiro por causa do segundo tirava um uso
+legítimo por um risco que só existe no outro.
+
+O aviso continua existindo, e num lugar melhor: a faixa no topo do quadro, que
+diz que nada está chegando enquanto a conexão está fora. Duplicá-lo no diálogo
+seria repetir no detalhe o que já está dito no geral.
+
+O teto diário por tenant fica: ele protege contra disparo em massa, que é outro
+problema e continua real.

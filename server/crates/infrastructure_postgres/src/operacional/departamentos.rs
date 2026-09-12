@@ -89,7 +89,7 @@ pub trait DepartamentoRepository: Send + Sync {
 /// Acento vira a letra base (`Ações` → `acoes`) para o slug não depender de
 /// codificação. O que sobra fora de `[a-z0-9-]` vira hífen, e hífens repetidos
 /// ou nas pontas são removidos.
-fn slug_do_nome(nome: &str) -> String {
+pub fn slug_do_nome(nome: &str) -> String {
     const COM_ACENTO: &str = "áàâãäéèêëíìîïóòôõöúùûüçñ";
     const SEM_ACENTO: [&str; 24] = [
         "a", "a", "a", "a", "a", "e", "e", "e", "e", "i", "i", "i", "i", "o", "o", "o", "o", "o",

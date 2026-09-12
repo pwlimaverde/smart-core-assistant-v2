@@ -128,11 +128,28 @@ message ResponderRequest {
   // Todos vêm do RuntimeConfig (Redis).
   reserved 6, 10, 11, 12;
 }
+// C1 — o que a IA extraiu da mensagem do cliente.
+//
+// Sem isto o laco nao fecha: a IA recebe `campos_pendentes` com a `hint`,
+// pergunta, o cliente responde, e o valor e jogado fora — entao ela pergunta
+// de novo na mensagem seguinte, e na outra.
+message CampoExtraido {
+  string slug = 1;
+  // Ja na forma tipada do campo (texto, numero, data, lista...), serializado
+  // como JSON. O servidor revalida contra o `tipo` do catalogo antes de
+  // gravar: o LLM nao define o esquema.
+  string valor_json = 2;
+  double confianca = 3;
+}
+
 message ResponderResponse {
   string resposta_texto = 1;
   bool transferir_atendimento = 2;
   string fluxo_transferencia = 3;
   double confiabilidade = 4;
+  // Aditivo: um `ia_engine` antigo simplesmente nao envia nada aqui, e o
+  // servidor grava zero campos — que e o comportamento de hoje.
+  repeated CampoExtraido campos_extraidos = 5;
 }
 
 // --- Sentimento (equivalente a analise_avaliacao) ---

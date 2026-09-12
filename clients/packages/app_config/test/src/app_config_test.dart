@@ -8,7 +8,7 @@ void main() {
         flavor: AppFlavor.dev,
         apiEndpoint: 'https://api-dev.smartcore.com',
         mcpEndpoint: 'https://mcp.example/mcp',
-      appPublicUrl: 'https://exemplo.com.br/v2/tenant',
+        appPublicUrl: 'https://exemplo.com.br/v2/tenant',
         enableLogging: true,
       );
 
@@ -23,7 +23,7 @@ void main() {
         flavor: AppFlavor.prod,
         apiEndpoint: 'https://api.smartcore.com',
         mcpEndpoint: 'https://mcp.example/mcp',
-      appPublicUrl: 'https://exemplo.com.br/v2/tenant',
+        appPublicUrl: 'https://exemplo.com.br/v2/tenant',
       );
       expect(prodConfig.isProd, isTrue);
 
@@ -31,7 +31,7 @@ void main() {
         flavor: AppFlavor.dev,
         apiEndpoint: 'https://api-dev.smartcore.com',
         mcpEndpoint: 'https://mcp.example/mcp',
-      appPublicUrl: 'https://exemplo.com.br/v2/tenant',
+        appPublicUrl: 'https://exemplo.com.br/v2/tenant',
       );
       expect(devConfig.isProd, isFalse);
 
@@ -39,7 +39,7 @@ void main() {
         flavor: AppFlavor.staging,
         apiEndpoint: 'https://api-staging.smartcore.com',
         mcpEndpoint: 'https://mcp.example/mcp',
-      appPublicUrl: 'https://exemplo.com.br/v2/tenant',
+        appPublicUrl: 'https://exemplo.com.br/v2/tenant',
       );
       expect(stagingConfig.isProd, isFalse);
     });

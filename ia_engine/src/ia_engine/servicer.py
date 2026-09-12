@@ -11,6 +11,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import NoReturn, assert_never
 
+import json
 import grpc
 from langchain_core.embeddings import Embeddings
 from langchain_core.language_models.chat_models import BaseChatModel
@@ -315,6 +316,18 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                     transferir_atendimento=final.transferir_atendimento,
                     fluxo_transferencia=final.fluxo_transferencia,
                     confiabilidade=final.confiabilidade,
+                    # C1 — o valor vai como JSON porque o campo é tipado do
+                    # outro lado (texto, número, data, lista) e o contrato não
+                    # carrega o tipo. Serializar aqui deixa a conversão num
+                    # lugar só: quem conhece o `tipo` é o catálogo, no servidor.
+                    campos_extraidos=[
+                        pb.CampoExtraido(
+                            slug=c.slug,
+                            valor_json=json.dumps(c.valor, ensure_ascii=False),
+                            confianca=c.confianca,
+                        )
+                        for c in final.campos_extraidos
+                    ],
                 )
             case Failure(error):
                 await self._abort(context, error, "Responder", request.tenant_id)

@@ -27,9 +27,50 @@ class LlmProviderSpec:
     extra_params: tuple[tuple[str, str], ...] = ()
 
 
+class CampoExtraidoItem(BaseModel):
+    """Um campo do cartão que o cliente informou nesta mensagem (C1).
+
+    O laço estava aberto: a IA recebia os campos pendentes com a dica de como
+    perguntar, perguntava, o cliente respondia — e o valor era descartado. Na
+    mensagem seguinte ela perguntava de novo.
+    """
+
+    slug: str = Field(
+        description=(
+            "O slug EXATO do campo, copiado da lista de CAMPOS PENDENTES. "
+            "Nunca invente um slug."
+        ),
+    )
+    valor: str = Field(
+        description=(
+            "O valor que o CLIENTE informou, sem interpretação nem "
+            "complemento. Datas em AAAA-MM-DD, números sem unidade, e para "
+            "campos de lista o id exato da opção."
+        ),
+    )
+    confianca: float = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "O quanto o cliente foi explícito. Alto só quando ele disse o "
+            "valor com todas as letras; baixo quando você deduziu."
+        ),
+    )
+
+
 class RespostaBot(BaseModel):
     """Structured output da geração de resposta do bot (RPC Responder)."""
 
+    campos_extraidos: list[CampoExtraidoItem] = Field(
+        default_factory=list,
+        description=(
+            "Campos pendentes que o CLIENTE informou nesta mensagem. Deixe "
+            "vazio quando ele não informou nenhum — o caso mais comum. "
+            "Nunca deduza, nunca complete, nunca repita o que já estava "
+            "coletado."
+        ),
+    )
     resposta_texto: str = Field(
         description="Resposta completa e educada para o usuário final",
     )
@@ -111,3 +152,7 @@ class RespostaFinal(BaseModel):
     transferir_atendimento: bool
     fluxo_transferencia: str
     confiabilidade: float
+    # Vai como veio do modelo. Quem valida contra o catálogo — slug existe,
+    # tipo bate, opção existe, confiança acima do piso — é o servidor: o LLM
+    # não define o esquema, e conferir aqui duplicaria a regra no lugar errado.
+    campos_extraidos: list[CampoExtraidoItem] = Field(default_factory=list)

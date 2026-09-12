@@ -1,5 +1,9 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
+import 'features/campos/presentation/routes/campos_routes.dart';
+import 'features/campos/domain/usecases/campos_usecases.dart';
+import 'features/campos/data/repositories/campos_repositories.dart';
+import 'features/campos/data/datasources/campos_datasources.dart';
 import 'features/conexoes/data/datasources/conexoes_datasources.dart';
 import 'features/conexoes/data/repositories/conexoes_repositories.dart';
 import 'features/conexoes/domain/usecases/conexoes_usecases.dart';
@@ -117,6 +121,35 @@ final class TenantModule extends AppModule {
       ),
     );
 
+    // ── campos do cartão de atendimento (N9 E13) ──────────────────────────
+    i.lazySingleton<ListarCamposUsecase>(
+      () => ListarCamposUsecase(
+        repository: ListarCamposRepository(
+          datasource: ListarCamposDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<CriarCampoUsecase>(
+      () => CriarCampoUsecase(
+        repository: CriarCampoRepository(
+          datasource: CriarCampoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<AtualizarCampoUsecase>(
+      () => AtualizarCampoUsecase(
+        repository: AtualizarCampoRepository(
+          datasource: AtualizarCampoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<DesativarCampoUsecase>(
+      () => DesativarCampoUsecase(
+        repository: DesativarCampoRepository(
+          datasource: DesativarCampoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
     // ── fluxos de atendimento e etapas ────────────────────────────────────
     i.lazySingleton<ListarFluxosUsecase>(
       () => ListarFluxosUsecase(
@@ -333,6 +366,7 @@ final class TenantModule extends AppModule {
     ConexoesRoute(),
     ContatosRoute(),
     EquipeRoute(),
+    CamposRoute(),
     FluxosRoute(),
     EtapasFluxoRoute(),
     PainelRoute(),

@@ -538,14 +538,16 @@ void _linkDoConvite() {
       expect(
         linkDoConvite('abc'),
         'https://dev.smartcoreassistant.com.br/v2/tenant'
-            '/aceitar-convite?token=abc',
+        '/aceitar-convite?token=abc',
       );
     });
 
     test('acompanha o ambiente em vez de fixar o domínio', () {
       configurar('https://smartcoreassistant.com.br');
-      expect(linkDoConvite('t').startsWith('https://smartcoreassistant.com.br/'),
-          isTrue);
+      expect(
+        linkDoConvite('t').startsWith('https://smartcoreassistant.com.br/'),
+        isTrue,
+      );
     });
   });
 }

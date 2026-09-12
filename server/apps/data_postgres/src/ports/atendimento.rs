@@ -26,6 +26,35 @@ pub struct CampoPendenteDto {
     pub hint: String,
 }
 
+/// Um campo que a IA diz ter extraído da mensagem do cliente (C1).
+///
+/// `valor_json` chega como o LLM devolveu: é texto até o servidor conferir
+/// contra o `tipo` do catálogo. Confiar na forma aqui seria confiar no LLM
+/// para definir o esquema.
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+pub struct CampoExtraidoDto {
+    pub slug: String,
+    pub valor_json: String,
+    pub confianca: f64,
+}
+
+/// O que aconteceu com cada campo que a IA mandou.
+///
+/// Os descartes vêm separados por motivo de propósito: é a diferença entre
+/// "a IA não preenche" e "a IA preenche errado", e sem ela não há como
+/// calibrar o piso de confiança.
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct ResumoCamposExtraidos {
+    pub recebidos: usize,
+    pub gravados: usize,
+    pub slug_desconhecido: usize,
+    pub extracao_desligada: usize,
+    pub tipo_invalido: usize,
+    pub abaixo_do_piso: usize,
+    /// Humano escreveu ou apagou ali. Não é erro da IA: é a guarda operando.
+    pub humano_no_caminho: usize,
+}
+
 /// Campos personalizados resolvidos de um atendimento: já coletados (com valor)
 /// e obrigatórios ainda pendentes (N6.3, input-only para o Responder).
 #[derive(Debug, Clone, Default, serde::Serialize)]
@@ -473,15 +502,43 @@ pub trait AtendimentoStore: Send + Sync {
         fluxo_id: i32,
     ) -> Result<TransferenciaFluxoOutcome, DbError>;
 
-    /// Resolve os campos personalizados (globais + do fluxo atual) do atendimento:
-    /// já coletados (com valor) e obrigatórios pendentes (sem valor). Input-only
-    /// para o Responder (N6.3) — o contrato do Responder não devolve campos
-    /// extraídos, então não há write-back aqui.
+    /// Resolve os campos personalizados (globais + do fluxo atual) do
+    /// atendimento: já coletados (com valor) e pendentes de extração (sem).
+    ///
+    /// Já foi input-only, porque o `ResponderResponse` não tinha por onde
+    /// devolver o que a IA extraía — o laço ficava aberto e ela perguntava a
+    /// mesma coisa em toda mensagem. Agora devolve, e o write-back é o
+    /// [`AtendimentoStore::gravar_campos_extraidos`] abaixo.
     async fn resolver_campos_atendimento(
         &self,
         ctx: &RequestContext,
         atendimento_id: i32,
     ) -> Result<CamposAtendimentoDto, DbError>;
+
+    /// C1 — grava o que a IA extraiu, com as guardas que o LLM não tem.
+    ///
+    /// Cada item passa por cinco filtros, nesta ordem, e cada um existe por um
+    /// jeito específico de errar:
+    ///
+    /// 1. **O slug está no catálogo e ativo** — slug alucinado não vira coluna.
+    /// 2. **`extrair_automaticamente`** — campo marcado para não ser extraído
+    ///    não é gravado nem que a IA insista.
+    /// 3. **O valor casa com o `tipo`** (e, em lista, o id existe em `opcoes`)
+    ///    — inválido é descartado, não gravado como texto.
+    /// 4. **Confiança >= piso** — abaixo dele o palpite não entra na ficha.
+    /// 5. **Não passa por cima de humano** — nem repreenche o que humano
+    ///    apagou (ver `upsert_da_ia`).
+    ///
+    /// Devolve o resumo (recebidos, gravados, descartados por motivo). O
+    /// detalhamento é o que permite calibrar o piso: sem ele, "a IA não
+    /// preenche" é indistinguível de "a IA preenche errado".
+    async fn gravar_campos_extraidos(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        campos: Vec<CampoExtraidoDto>,
+        mensagem_origem_id: Option<i32>,
+    ) -> Result<ResumoCamposExtraidos, DbError>;
 
     /// Atualiza a última leitura de sentimento do atendimento, calculada pela IA
     /// a partir de mensagens inbound de texto/transcrição de áudio (N6.5, best-effort).

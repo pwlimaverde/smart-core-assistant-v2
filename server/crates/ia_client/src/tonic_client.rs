@@ -222,6 +222,15 @@ impl IaEngineClient for TonicIaEngineClient {
             transferir_atendimento: resp.transferir_atendimento,
             fluxo_transferencia: resp.fluxo_transferencia,
             confiabilidade: resp.confiabilidade,
+            campos_extraidos: resp
+                .campos_extraidos
+                .into_iter()
+                .map(|c| CampoExtraidoOutput {
+                    slug: c.slug,
+                    valor_json: c.valor_json,
+                    confianca: c.confianca,
+                })
+                .collect(),
         })
     }
 

@@ -34,6 +34,7 @@ use contracts::grpc::queries::{
     CreateInviteRequest,
     CreateInviteResponse,
     CreateMyAtendenteRequest,
+    CreateMyCampoRequest,
     CreateMyDepartamentoRequest,
     CreateMyDepartamentoResponse,
     CreateMyEtapaFluxoRequest,
@@ -102,6 +103,8 @@ use contracts::grpc::queries::{
     ListMcpGrantsResponse,
     ListMyAtendentesRequest,
     ListMyAtendentesResponse,
+    ListMyCamposRequest,
+    ListMyCamposResponse,
     ListMyContatosRequest,
     ListMyContatosResponse,
     ListMyDepartamentosRequest,
@@ -145,6 +148,9 @@ use contracts::grpc::queries::{
     MyAtendente,
     MyAtendenteIdRequest,
     MyAtendenteResponse,
+    MyCampoIdRequest,
+    MyCampoPersonalizado,
+    MyCampoResponse,
     MyContato,
     MyDepartamento,
     MyDepartamentoIdRequest,
@@ -164,6 +170,7 @@ use contracts::grpc::queries::{
     MyWhatsappInstanceIdRequest,
     Nota as ProtoNota,
     NotaResponse,
+    OpcaoCampo,
     PaymentRecord as ProtoPaymentRecord,
     Plan as ProtoPlan,
     // Fase 5 - Auditoria & Saúde
@@ -192,6 +199,7 @@ use contracts::grpc::queries::{
     SetFeatureFlagResponse,
     SetMyBotPersonaRequest,
     SetMyBotPersonaResponse,
+    SetMyValorCampoRequest,
     SetOnboardingProgressRequest,
     SetOnboardingProgressResponse,
     SetTenantActiveRequest,
@@ -212,6 +220,7 @@ use contracts::grpc::queries::{
     TestarPerguntaResponse,
     TrechoUsado,
     UpdateMyAtendenteRequest,
+    UpdateMyCampoRequest,
     UpdateMyDepartamentoRequest,
     UpdateMyEtapaFluxoRequest,
     UpdateMyFluxoRequest,
@@ -227,6 +236,7 @@ use contracts::grpc::queries::{
     UpdateTenantUserResponse,
     UpsertCoreSettingRequest,
     UpsertCoreSettingResponse,
+    ValorCampoDoAtendimento,
     Voucher as ProtoVoucher,
     VoucherRedemption as ProtoVoucherRedemption,
 };
@@ -929,85 +939,6 @@ impl AdminFacade {
             provedores,
             email: infrastructure_email::Enviador::do_ambiente(),
         }
-    }
-
-    /// Recusa abrir conversa com o WhatsApp fora do ar.
-    ///
-    /// Sem isto o atendimento nasce, o operador escreve, e a mensagem fica
-    /// numa fila que não vai sair — ele descobre pela ausência de resposta,
-    /// horas depois, e o cliente nunca soube que alguém tentou falar com ele.
-    /// Recusar na hora, dizendo o motivo, é a única resposta honesta.
-    ///
-    /// Lê o estado do BANCO, que pode estar velho por até um ciclo de
-    /// reconciliação. Consultar o provedor aqui custaria segundos em cada
-    /// clique, e o estado velho erra para o lado seguro: uma instância que
-    /// caiu agora ainda consta conectada e a conversa abre — o mesmo que
-    /// acontece quando ela cai um segundo depois.
-    async fn exigir_whatsapp_no_ar(
-        &self,
-        tenant_id: &Uuid,
-        claims: &application::jwt::Claims,
-        traceparent: &str,
-    ) -> Result<(), Status> {
-        let env_req = Envelope {
-            tenant_id: tenant_id.to_string(),
-            schema_version: 1,
-            message_id: Uuid::now_v7().to_string(),
-            traceparent: traceparent.to_string(),
-            occurred_at: chrono::Utc::now().timestamp_millis(),
-            kind: MessageKind::Request as i32,
-            method: "ListWhatsappInstances".to_string(),
-            payload: serde_json::to_vec(&serde_json::json!({})).unwrap(),
-            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
-            auth_scopes: claims.scopes.clone(),
-            auth_is_superuser: claims.is_superuser,
-            ..Default::default()
-        };
-
-        let resp = match self
-            .deps
-            .pg
-            .call(env_req, std::time::Duration::from_secs(5))
-            .await
-        {
-            Ok(r) if r.kind != MessageKind::Error as i32 => r,
-            // Fail-open, como o teto: não saber se o WhatsApp está no ar não é
-            // razão para impedir de atender.
-            outro => {
-                tracing::warn!(%tenant_id, "estado do WhatsApp indisponível: {outro:?}");
-                return Ok(());
-            }
-        };
-
-        let corpo: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap_or_default();
-        let instancias = corpo
-            .get("instances")
-            .and_then(|v| v.as_array())
-            .cloned()
-            .unwrap_or_default();
-
-        // Nenhuma instância cadastrada é outro problema (a conta nem conectou
-        // o WhatsApp ainda) e tem outra mensagem — mandar "reconecte" para
-        // quem nunca conectou não ajuda ninguém.
-        if instancias.is_empty() {
-            return Err(Status::failed_precondition(
-                "Conecte um WhatsApp antes de iniciar conversas.",
-            ));
-        }
-
-        let alguma_no_ar = instancias.iter().any(|i| {
-            i.get("active").and_then(|v| v.as_bool()).unwrap_or(false)
-                && i.get("connection_state").and_then(|v| v.as_str()) == Some("connected")
-        });
-
-        if !alguma_no_ar {
-            tracing::warn!(%tenant_id, "atendimento ativo recusado: WhatsApp fora do ar");
-            return Err(Status::failed_precondition(
-                "O WhatsApp está fora do ar: a mensagem não sairia.                  Reconecte em Conexões e tente de novo.",
-            ));
-        }
-
-        Ok(())
     }
 
     /// Quantas conversas o tenant ainda pode abrir hoje.
@@ -3814,6 +3745,148 @@ impl AdminService for AdminFacade {
         skip_all,
         fields(service = "runtime_api", rpc = "ListMyFluxos", traceparent)
     )]
+    /// N9 E13 — o catálogo de campos do cartão.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyCampos", traceparent)
+    )]
+    async fn list_my_campos(
+        &self,
+        req: Request<ListMyCamposRequest>,
+    ) -> Result<Response<ListMyCamposResponse>, Status> {
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "ListCamposPersonalizados",
+                serde_json::json!({}),
+            )
+            .await?;
+
+        let campos = corpo
+            .get("campos")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().map(campo_do_json).collect())
+            .unwrap_or_default();
+
+        Ok(Response::new(ListMyCamposResponse { campos }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "CreateMyCampo", traceparent)
+    )]
+    async fn create_my_campo(
+        &self,
+        req: Request<CreateMyCampoRequest>,
+    ) -> Result<Response<MyCampoResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "CreateCampoPersonalizado",
+                serde_json::json!({
+                    "nome": inner.nome,
+                    "descricao": inner.descricao,
+                    "escopo": inner.escopo,
+                    "fluxo_id": inner.fluxo_id,
+                    "tipo": inner.tipo,
+                    "opcoes": opcoes_para_json(&inner.opcoes),
+                    "obrigatorio": inner.obrigatorio,
+                    "extrair_automaticamente": inner.extrair_automaticamente,
+                    "extrair_hint": inner.extrair_hint,
+                    "mostrar_no_card": inner.mostrar_no_card,
+                    "ordem": inner.ordem,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(MyCampoResponse {
+            campo: corpo.get("campo").map(campo_do_json),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "UpdateMyCampo", traceparent)
+    )]
+    async fn update_my_campo(
+        &self,
+        req: Request<UpdateMyCampoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = req.get_ref().clone();
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "UpdateCampoPersonalizado",
+            serde_json::json!({
+                "id": inner.id,
+                "nome": inner.nome,
+                "descricao": inner.descricao,
+                "tipo": inner.tipo,
+                "opcoes": opcoes_para_json(&inner.opcoes),
+                "obrigatorio": inner.obrigatorio,
+                "extrair_automaticamente": inner.extrair_automaticamente,
+                "extrair_hint": inner.extrair_hint,
+                "mostrar_no_card": inner.mostrar_no_card,
+                "ordem": inner.ordem,
+                "ativo": inner.ativo,
+            }),
+        )
+        .await?;
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DesativarMyCampo", traceparent)
+    )]
+    async fn desativar_my_campo(
+        &self,
+        req: Request<MyCampoIdRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let id = req.get_ref().id;
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "DesativarCampoPersonalizado",
+            serde_json::json!({ "id": id }),
+        )
+        .await?;
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    /// Preenchimento manual de um campo na ficha do atendimento.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "SetMyValorCampo", traceparent)
+    )]
+    async fn set_my_valor_campo(
+        &self,
+        req: Request<SetMyValorCampoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = req.get_ref().clone();
+        // O valor chega como texto JSON e vai como JSON: o tipo real mora no
+        // catálogo, e reinterpretar aqui criaria uma segunda opinião sobre a
+        // mesma coisa. `null` é apagamento deliberado e passa intacto.
+        let valor: serde_json::Value = serde_json::from_str(&inner.valor_json)
+            .unwrap_or(serde_json::Value::String(inner.valor_json.clone()));
+
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "SetValorCampo",
+            serde_json::json!({
+                "atendimento_id": inner.atendimento_id,
+                "campo_id": inner.campo_id,
+                "valor": valor,
+            }),
+        )
+        .await?;
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
     async fn list_my_fluxos(
         &self,
         req: Request<ListMyFluxosRequest>,
@@ -5516,8 +5589,6 @@ impl AdminService for AdminFacade {
         // só o disparo. O limite protege o tenant de si mesmo.
         self.conferir_teto_de_atendimento_ativo(&tenant_uuid, &traceparent)
             .await?;
-        self.exigir_whatsapp_no_ar(&tenant_uuid, &claims, &traceparent)
-            .await?;
 
         let payload = serde_json::json!({
             "contato_id": inner.contato_id,
@@ -5758,6 +5829,11 @@ impl AdminService for AdminFacade {
                 .get("bot_pode_atender")
                 .and_then(|v| v.as_bool())
                 .unwrap_or(true),
+            campos: corpo
+                .get("campos")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().map(valor_campo_do_json).collect())
+                .unwrap_or_default(),
         }))
     }
 
@@ -7977,5 +8053,126 @@ mod tests {
 
         let status = facade.list_tenants(req).await.unwrap_err();
         assert_eq!(status.code(), tonic::Code::Unauthenticated);
+    }
+}
+
+/// Um campo do catálogo, do JSON do `data_postgres` para o protobuf.
+fn campo_do_json(v: &serde_json::Value) -> MyCampoPersonalizado {
+    let texto = |k: &str| {
+        v.get(k)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    let flag = |k: &str| {
+        v.get(k)
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false)
+    };
+
+    MyCampoPersonalizado {
+        id: v.get("id").and_then(serde_json::Value::as_i64).unwrap_or(0),
+        slug: texto("slug"),
+        nome: texto("nome"),
+        descricao: texto("descricao"),
+        escopo: texto("escopo"),
+        fluxo_id: v
+            .get("fluxo_id")
+            .and_then(serde_json::Value::as_i64)
+            .map(|n| n as i32),
+        tipo: texto("tipo"),
+        opcoes: v
+            .get("opcoes")
+            .and_then(serde_json::Value::as_array)
+            .map(|arr| {
+                arr.iter()
+                    .map(|o| OpcaoCampo {
+                        id: o
+                            .get("id")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or_default()
+                            .to_string(),
+                        rotulo: o
+                            .get("rotulo")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or_default()
+                            .to_string(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        obrigatorio: flag("obrigatorio"),
+        extrair_automaticamente: flag("extrair_automaticamente"),
+        extrair_hint: texto("extrair_hint"),
+        mostrar_no_card: flag("mostrar_no_card"),
+        ordem: v
+            .get("ordem")
+            .and_then(serde_json::Value::as_i64)
+            .unwrap_or(0) as i32,
+        ativo: flag("ativo"),
+    }
+}
+
+/// As opções de um campo de lista, do protobuf para o JSON do banco.
+fn opcoes_para_json(opcoes: &[OpcaoCampo]) -> serde_json::Value {
+    serde_json::Value::Array(
+        opcoes
+            .iter()
+            .map(|o| serde_json::json!({ "id": o.id, "rotulo": o.rotulo }))
+            .collect(),
+    )
+}
+
+/// Um campo do cartão na ficha de um atendimento.
+fn valor_campo_do_json(v: &serde_json::Value) -> ValorCampoDoAtendimento {
+    let texto = |k: &str| {
+        v.get(k)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or_default()
+            .to_string()
+    };
+    ValorCampoDoAtendimento {
+        campo_id: v
+            .get("campo_id")
+            .and_then(serde_json::Value::as_i64)
+            .unwrap_or(0),
+        slug: texto("slug"),
+        nome: texto("nome"),
+        descricao: texto("descricao"),
+        tipo: texto("tipo"),
+        opcoes: v
+            .get("opcoes")
+            .and_then(serde_json::Value::as_array)
+            .map(|arr| {
+                arr.iter()
+                    .map(|o| OpcaoCampo {
+                        id: o
+                            .get("id")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or_default()
+                            .to_string(),
+                        rotulo: o
+                            .get("rotulo")
+                            .and_then(serde_json::Value::as_str)
+                            .unwrap_or_default()
+                            .to_string(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default(),
+        obrigatorio: v
+            .get("obrigatorio")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false),
+        valor_json: texto("valor_json"),
+        origem: texto("origem"),
+        confianca: v
+            .get("confianca")
+            .and_then(serde_json::Value::as_f64)
+            .unwrap_or(0.0),
+        editado_por_humano: v
+            .get("editado_por_humano")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false),
     }
 }

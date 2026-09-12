@@ -6,6 +6,7 @@ import 'package:api_client/api_client.dart'
     show GrpcError, GrpcFailureKind, classificarFalhaGrpc;
 import 'package:return_success_or_error/return_success_or_error.dart';
 
+import '../../domain/parameters/definir_valor_campo_parameters.dart';
 import '../../domain/parameters/iniciar_atendimento_parameters.dart';
 import '../../domain/model/atendimento_iniciado.dart';
 import '../../domain/errors/atendimento_errors.dart';
@@ -151,6 +152,41 @@ final class IniciarAtendimentoRepository
       GrpcFailureKind.unavailable ||
       GrpcFailureKind.rateLimited => const IniciarAtendimentoIndisponivel(),
       _ => const IniciarAtendimentoInesperado(),
+    };
+  }
+}
+
+final class DefinirValorCampoRepository
+    extends
+        RepositoryBase<
+          Unit,
+          DefinirValorCampoParameters,
+          DefinirValorCampoError
+        > {
+  const DefinirValorCampoRepository({required super.datasource});
+
+  @override
+  DefinirValorCampoError mapError(
+    Object exception,
+    StackTrace stackTrace,
+    DefinirValorCampoParameters parameters,
+  ) {
+    _log(
+      'definirValorCampo',
+      exception,
+      stackTrace,
+      atendimentoId: parameters.atendimentoId,
+    );
+    return switch (_kindDeTransporte(exception)) {
+      null => const ValorCampoInesperado(),
+      GrpcFailureKind.unauthenticated => const ValorCampoSessaoExpirada(),
+      GrpcFailureKind.permissionDenied => const ValorCampoAcessoNegado(),
+      GrpcFailureKind.notFound => const ValorCampoNaoEncontrado(),
+      GrpcFailureKind.invalidArgument || GrpcFailureKind.failedPrecondition =>
+        ValorCampoInvalido(exception is GrpcError ? exception.message : null),
+      GrpcFailureKind.unavailable ||
+      GrpcFailureKind.rateLimited => const ValorCampoIndisponivel(),
+      _ => const ValorCampoInesperado(),
     };
   }
 }

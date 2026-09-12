@@ -98,15 +98,13 @@ void main() {
     );
     addTearDown(router.dispose);
 
-    await tester.pumpWidget(MaterialApp.router(routerConfig: router, theme: AppTheme.light));
+    await tester.pumpWidget(
+      MaterialApp.router(routerConfig: router, theme: AppTheme.light),
+    );
     await tester.pumpAndSettle();
 
     final faixa = tester.getSize(find.byType(AvisoConexao));
-    expect(
-      faixa.width,
-      1400,
-      reason: 'a faixa encolheu na horizontal: $faixa',
-    );
+    expect(faixa.width, 1400, reason: 'a faixa encolheu na horizontal: $faixa');
     expect(
       faixa.height,
       lessThan(120),
@@ -114,8 +112,10 @@ void main() {
     );
 
     // E o quadro continua visível — é o que o operador veio ver.
-    expect(tester.getSize(find.byKey(const Key('quadro'))).height,
-        greaterThan(700));
+    expect(
+      tester.getSize(find.byKey(const Key('quadro'))).height,
+      greaterThan(700),
+    );
   });
 
   /// Mesma prova, mas pela composição que o app usa de verdade.
@@ -152,7 +152,9 @@ void main() {
     );
     addTearDown(router.dispose);
 
-    await tester.pumpWidget(MaterialApp.router(routerConfig: router, theme: AppTheme.light));
+    await tester.pumpWidget(
+      MaterialApp.router(routerConfig: router, theme: AppTheme.light),
+    );
     await tester.pumpAndSettle();
 
     final faixa = tester.getSize(find.byType(AvisoConexao));

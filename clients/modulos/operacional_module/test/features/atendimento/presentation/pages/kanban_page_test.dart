@@ -230,7 +230,10 @@ void conversaAoLadoDoQuadro() {
       ..registerSingleton<DefinirBotDaConversaUsecase>(u.definirBot);
   }
 
-  Future<void> abrirOQuadro(WidgetTester tester, {required double largura}) async {
+  Future<void> abrirOQuadro(
+    WidgetTester tester, {
+    required double largura,
+  }) async {
     final gateway = FakeAtendimentoGateway()
       ..colunas = colunasDeTeste()
       ..fluxos = fluxosDeTeste()

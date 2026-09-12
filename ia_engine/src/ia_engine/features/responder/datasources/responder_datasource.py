@@ -188,4 +188,22 @@ def _formatar_campos(
             "\nSe a oportunidade surgir naturalmente, colete esses dados de "
             "forma sutil e não intrusiva."
         )
+        # A instrução de DEVOLVER é tão necessária quanto a de perguntar: sem
+        # ela o modelo conduz a conversa, obtém o dado — e não o entrega, que
+        # foi o comportamento até aqui.
+        partes.append(
+            "\n\n### EXTRAÇÃO (campos_extraidos):\n"
+            "Quando o CLIENTE informar um desses campos NESTA mensagem, "
+            "devolva-o em `campos_extraidos` com o slug exato da lista "
+            "acima.\n"
+            "- Só o que ele disse. Não deduza, não complete, não aproveite "
+            "o que já estava no histórico.\n"
+            "- Na dúvida, omita. Vazio é o resultado certo na maioria das "
+            "mensagens, e um campo errado na ficha do cliente é pior que um "
+            "campo em branco.\n"
+            "- `confianca` alta só quando ele disse o valor com todas as "
+            "letras; baixa quando você interpretou.\n"
+            "- Datas em AAAA-MM-DD; números sem unidade; em campos de "
+            "lista, o id exato da opção."
+        )
     return "".join(partes)

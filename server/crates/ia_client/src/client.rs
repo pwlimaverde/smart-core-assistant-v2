@@ -109,6 +109,24 @@ pub struct ResponderOutput {
     pub transferir_atendimento: bool,
     pub fluxo_transferencia: String,
     pub confiabilidade: f64,
+    /// C1 — campos do cartão que o cliente informou nesta mensagem.
+    ///
+    /// Vazio na maioria das respostas, e vazio também quando o `ia_engine` é
+    /// anterior ao C1: o campo é aditivo no proto, e um servidor antigo
+    /// simplesmente não o envia.
+    pub campos_extraidos: Vec<CampoExtraidoOutput>,
+}
+
+/// Um campo extraído, como o modelo devolveu — sem validação.
+///
+/// `valor_json` é texto de propósito: o tipo real (número, data, lista) mora
+/// no catálogo do tenant, que esta crate não conhece. Quem converte e recusa
+/// é o `data_postgres`.
+#[derive(Debug, Clone, Default)]
+pub struct CampoExtraidoOutput {
+    pub slug: String,
+    pub valor_json: String,
+    pub confianca: f64,
 }
 
 #[derive(Debug, Clone, Default)]

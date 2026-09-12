@@ -171,6 +171,19 @@ final class OperacionalModule extends AppModule {
         ),
       ),
     );
+
+    // N9 E13 — preencher um campo do cartão. Fica no operacional, e não no
+    // tenant_module com o catálogo: desenhar o campo é configuração,
+    // preenchê-lo é atendimento — quem está na conversa é quem sabe o valor.
+    i.lazySingleton<DefinirValorCampoUsecase>(
+      () => DefinirValorCampoUsecase(
+        repository: DefinirValorCampoRepository(
+          datasource: DefinirValorCampoDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
   }
 
   @override

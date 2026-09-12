@@ -196,6 +196,11 @@ def resolve_resposta(
         transferir_atendimento=transfer_attendance,
         fluxo_transferencia=fluxo_transferencia,
         confiabilidade=final_score,
+        # Repassados sem filtro: quem decide o que grava é o servidor, contra o
+        # catálogo. Filtrar aqui esconderia do log o que o modelo devolveu — e
+        # é justamente essa diferença (recebidos vs. gravados) que permite
+        # calibrar o piso de confiança depois.
+        campos_extraidos=list(resposta.campos_extraidos),
     )
 
 

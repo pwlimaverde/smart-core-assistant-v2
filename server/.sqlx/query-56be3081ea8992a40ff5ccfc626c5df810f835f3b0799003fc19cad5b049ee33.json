@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE atu_campo_personalizado\n                  SET nome = $1, descricao = $2, tipo = $3, opcoes = $4,\n                      obrigatorio = $5, extrair_automaticamente = $6,\n                      extrair_hint = $7, mostrar_no_card = $8, ordem = $9,\n                      ativo = $10, data_atualizacao = NOW()\n                WHERE tenant_id = $11 AND id = $12",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Text",
+        "Varchar",
+        "Jsonb",
+        "Bool",
+        "Bool",
+        "Varchar",
+        "Bool",
+        "Int4",
+        "Bool",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "56be3081ea8992a40ff5ccfc626c5df810f835f3b0799003fc19cad5b049ee33"
+}

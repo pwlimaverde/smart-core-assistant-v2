@@ -35,8 +35,8 @@ use uuid::Uuid;
 
 use crate::ports::atendimento::MidiaEnviada;
 use crate::ports::{
-    AtendimentoStore, CampoColetadoDto, CampoPendenteDto, CamposAtendimentoDto, OrigemMensagem,
-    TicketKanbanOutcome, TransferenciaFluxoOutcome,
+    AtendimentoStore, CampoColetadoDto, CampoExtraidoDto, CampoPendenteDto, CamposAtendimentoDto,
+    OrigemMensagem, ResumoCamposExtraidos, TicketKanbanOutcome, TransferenciaFluxoOutcome,
 };
 
 /// A saudação que o contato recebe quando alguém assume a conversa.
@@ -1606,6 +1606,116 @@ impl AtendimentoStore for PgAtendimentoStore {
         .await
     }
 
+    /// C1 — grava o que a IA extraiu, aplicando as guardas do port.
+    ///
+    /// Tudo numa transação só: o catálogo é lido e os valores escritos no
+    /// mesmo instante. Ler fora dela deixaria a janela em que um campo é
+    /// desativado entre a leitura e a escrita, e a IA gravaria num campo que
+    /// já não existe.
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn gravar_campos_extraidos(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        campos: Vec<CampoExtraidoDto>,
+        mensagem_origem_id: Option<i32>,
+    ) -> Result<ResumoCamposExtraidos, DbError> {
+        use crate::adapters::campos_extraidos::{
+            valor_para_o_tipo, Descarte, PISO_CONFIANCA_PADRAO,
+        };
+
+        let repo_atendimento = PostgresAtendimentoRepository;
+        let repo_campo = PostgresCampoPersonalizadoRepository;
+        let repo_valor = PostgresValorCampoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let mut resumo = ResumoCamposExtraidos {
+                recebidos: campos.len(),
+                ..Default::default()
+            };
+            if campos.is_empty() {
+                return Ok((resumo, tx));
+            }
+
+            let fluxo_id = repo_atendimento
+                .buscar_por_id(&mut tx, &ctx, atendimento_id)
+                .await?
+                .and_then(|a| a.fluxo_atendimento_id);
+
+            let mut definicoes = repo_campo
+                .listar_por_escopo(&mut tx, &ctx, "GLOBAL", None)
+                .await?;
+            if let Some(fluxo_id) = fluxo_id {
+                definicoes.extend(
+                    repo_campo
+                        .listar_por_escopo(&mut tx, &ctx, "FLUXO", Some(fluxo_id))
+                        .await?,
+                );
+            }
+
+            for extraido in campos {
+                // 1. O slug tem de existir no catálogo aplicável.
+                let Some(def) = definicoes
+                    .iter()
+                    .find(|d| d.slug == extraido.slug && d.ativo)
+                else {
+                    resumo.slug_desconhecido += 1;
+                    continue;
+                };
+
+                // 2. Campo marcado para não ser extraído não é gravado nem
+                //    que a IA devolva — a marca é uma decisão do tenant.
+                if !def.extrair_automaticamente {
+                    resumo.extracao_desligada += 1;
+                    continue;
+                }
+
+                // 3. O valor tem de casar com o tipo declarado.
+                let valor = match valor_para_o_tipo(&extraido.valor_json, &def.tipo, &def.opcoes) {
+                    Ok(v) => v,
+                    Err(Descarte::TipoInvalido) => {
+                        resumo.tipo_invalido += 1;
+                        continue;
+                    }
+                    Err(_) => {
+                        resumo.tipo_invalido += 1;
+                        continue;
+                    }
+                };
+
+                // 4. Abaixo do piso é palpite, e palpite não entra na ficha.
+                if extraido.confianca < PISO_CONFIANCA_PADRAO {
+                    resumo.abaixo_do_piso += 1;
+                    continue;
+                }
+
+                // 5. A quinta guarda mora no SQL: não passa por cima de gente
+                //    nem repreenche o que gente apagou.
+                let gravou = repo_valor
+                    .upsert_da_ia(
+                        &mut tx,
+                        &ctx,
+                        atendimento_id,
+                        def.id,
+                        valor,
+                        extraido.confianca,
+                        mensagem_origem_id,
+                    )
+                    .await?;
+                if gravou {
+                    resumo.gravados += 1;
+                } else {
+                    resumo.humano_no_caminho += 1;
+                }
+            }
+
+            Ok((resumo, tx))
+        })
+        .await
+    }
+
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
     async fn resolver_campos_atendimento(
         &self,
@@ -1656,7 +1766,17 @@ impl AtendimentoStore for PgAtendimentoStore {
                             .map(str::to_string)
                             .unwrap_or_else(|| v.valor.to_string()),
                     }),
-                    None if def.obrigatorio => pendentes.push(CampoPendenteDto {
+                    // C2 — quem decide o que a IA tenta coletar é
+                    // `extrair_automaticamente`, não `obrigatorio`.
+                    //
+                    // São coisas diferentes que estavam sendo tratadas como
+                    // uma: `obrigatorio` é regra de TELA (não deixa concluir o
+                    // atendimento sem o campo) e `extrair_automaticamente` é
+                    // regra de PROMPT (a IA tenta obter no meio da conversa).
+                    // Com o filtro velho, marcar um campo como obrigatório
+                    // punha a IA a persegui-lo, e um campo que se queria
+                    // extraído mas não obrigatório nunca chegava ao prompt.
+                    None if def.extrair_automaticamente => pendentes.push(CampoPendenteDto {
                         slug: def.slug,
                         nome: def.nome,
                         descricao: def.descricao,
@@ -1726,11 +1846,63 @@ impl AtendimentoStore for PgAtendimentoStore {
                 .map(|a| a.bot_pode_atender)
                 .unwrap_or(true);
 
+            // N9 E13 — os campos do cartão, na mesma transação e na mesma
+            // resposta. A ficha os desenha ao lado das etiquetas; buscá-los
+            // numa segunda chamada faria metade do painel aparecer antes da
+            // outra, e o valor de um campo é justamente o que se quer ver ao
+            // abrir a conversa.
+            let fluxo_id = PostgresAtendimentoRepository
+                .buscar_por_id(&mut tx, &ctx, atendimento_id)
+                .await?
+                .and_then(|a| a.fluxo_atendimento_id);
+
+            let repo_campo = PostgresCampoPersonalizadoRepository;
+            let mut definicoes = repo_campo
+                .listar_por_escopo(&mut tx, &ctx, "GLOBAL", None)
+                .await?;
+            if let Some(fluxo_id) = fluxo_id {
+                definicoes.extend(
+                    repo_campo
+                        .listar_por_escopo(&mut tx, &ctx, "FLUXO", Some(fluxo_id))
+                        .await?,
+                );
+            }
+            let valores = PostgresValorCampoRepository
+                .listar_por_atendimento(&mut tx, &ctx, atendimento_id)
+                .await?;
+
+            let campos: Vec<serde_json::Value> = definicoes
+                .iter()
+                .map(|def| {
+                    let v = valores.iter().find(|v| v.campo_id == def.id);
+                    serde_json::json!({
+                        "campo_id": def.id,
+                        "slug": def.slug,
+                        "nome": def.nome,
+                        "descricao": def.descricao,
+                        "tipo": def.tipo,
+                        "opcoes": def.opcoes,
+                        "obrigatorio": def.obrigatorio,
+                        // Sem valor vira string vazia, e não `"null"`: os dois
+                        // significam coisas diferentes — nunca preenchido
+                        // versus apagado de propósito, que a IA respeita.
+                        "valor_json": v
+                            .map(|v| v.valor.to_string())
+                            .unwrap_or_default(),
+                        "origem": v.map(|v| v.origem.clone()).unwrap_or_default(),
+                        "confianca": v.and_then(|v| v.confianca).unwrap_or(0.0),
+                        "editado_por_humano": v
+                            .is_some_and(|v| v.editado_por_id.is_some()),
+                    })
+                })
+                .collect();
+
             let json = serde_json::json!({
                 "catalogo": catalogo,
                 "etiquetas": aplicadas,
                 "notas": notas,
                 "bot_pode_atender": bot_pode_atender,
+                "campos": campos,
             });
             Ok((json, tx))
         })

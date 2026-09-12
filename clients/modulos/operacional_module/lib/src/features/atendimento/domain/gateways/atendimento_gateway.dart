@@ -54,6 +54,17 @@ abstract interface class AtendimentoGateway {
     String? assunto,
   });
 
+  /// N9 E13 — preenche (ou apaga) um campo do cartão nesta conversa.
+  ///
+  /// `valorJson` na forma do tipo; `"null"` apaga de propósito — e o servidor
+  /// registra quem editou, que é a marca que impede a IA de sobrescrever
+  /// depois.
+  Future<void> definirValorCampo({
+    required int atendimentoId,
+    required int campoId,
+    required String valorJson,
+  });
+
   /// Move um atendimento para outra etapa do Kanban (drag-and-drop).
   Future<void> moveAtendimentoEtapa({
     required int atendimentoId,

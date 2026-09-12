@@ -945,6 +945,78 @@ table MyContato {
   cadastrado_em:long;
 }
 
+table OpcaoCampo {
+  id:string;
+  rotulo:string;
+}
+
+table MyCampoPersonalizado {
+  id:long;
+  slug:string;
+  nome:string;
+  descricao:string;
+  escopo:string;
+  fluxo_id:int;
+  tipo:string;
+  opcoes:[OpcaoCampo];
+  obrigatorio:bool;
+  extrair_automaticamente:bool;
+  extrair_hint:string;
+  mostrar_no_card:bool;
+  ordem:int;
+  ativo:bool;
+}
+
+table ListMyCamposRequest {
+  fluxo_id:int;
+}
+
+table ListMyCamposResponse {
+  campos:[MyCampoPersonalizado];
+}
+
+table CreateMyCampoRequest {
+  nome:string;
+  descricao:string;
+  escopo:string;
+  fluxo_id:int;
+  tipo:string;
+  opcoes:[OpcaoCampo];
+  obrigatorio:bool;
+  extrair_automaticamente:bool;
+  extrair_hint:string;
+  mostrar_no_card:bool;
+  ordem:int;
+}
+
+table MyCampoResponse {
+  campo:MyCampoPersonalizado;
+}
+
+table UpdateMyCampoRequest {
+  id:long;
+  nome:string;
+  descricao:string;
+  tipo:string;
+  opcoes:[OpcaoCampo];
+  obrigatorio:bool;
+  extrair_automaticamente:bool;
+  extrair_hint:string;
+  mostrar_no_card:bool;
+  ordem:int;
+  ativo:bool;
+}
+
+table MyCampoIdRequest {
+  id:long;
+}
+
+table SetMyValorCampoRequest {
+  atendimento_id:int;
+  campo_id:long;
+  valor_json:string;
+}
+
 table ListMyContatosRequest {
   busca:string;
   limite:int;
@@ -1215,6 +1287,21 @@ table DetalheAtendimentoResponse {
   etiquetas:[Etiqueta];
   notas:[Nota];
   bot_pode_atender:bool;
+  campos:[ValorCampoDoAtendimento];
+}
+
+table ValorCampoDoAtendimento {
+  campo_id:long;
+  slug:string;
+  nome:string;
+  descricao:string;
+  tipo:string;
+  opcoes:[OpcaoCampo];
+  obrigatorio:bool;
+  valor_json:string;
+  origem:string;
+  confianca:double;
+  editado_por_humano:bool;
 }
 
 table CreateEtiquetaRequest {
@@ -1347,11 +1434,18 @@ table ResponderRequest {
   campos_pendentes:[CampoPendente];
 }
 
+table CampoExtraido {
+  slug:string;
+  valor_json:string;
+  confianca:double;
+}
+
 table ResponderResponse {
   resposta_texto:string;
   transferir_atendimento:bool;
   fluxo_transferencia:string;
   confiabilidade:double;
+  campos_extraidos:[CampoExtraido];
 }
 
 table SentimentoRequest {

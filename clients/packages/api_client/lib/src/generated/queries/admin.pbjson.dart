@@ -3080,6 +3080,262 @@ final $typed_data.Uint8List myContatoDescriptor = $convert.base64Decode(
     'F0aXZvGAYgASgIUgVhdGl2bxIpChB1bHRpbWFfaW50ZXJhY2FvGAcgASgDUg91bHRpbWFJbnRl'
     'cmFjYW8SIwoNY2FkYXN0cmFkb19lbRgIIAEoA1IMY2FkYXN0cmFkb0Vt');
 
+@$core.Deprecated('Use opcaoCampoDescriptor instead')
+const OpcaoCampo$json = {
+  '1': 'OpcaoCampo',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 9, '10': 'id'},
+    {'1': 'rotulo', '3': 2, '4': 1, '5': 9, '10': 'rotulo'},
+  ],
+};
+
+/// Descriptor for `OpcaoCampo`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List opcaoCampoDescriptor = $convert.base64Decode(
+    'CgpPcGNhb0NhbXBvEg4KAmlkGAEgASgJUgJpZBIWCgZyb3R1bG8YAiABKAlSBnJvdHVsbw==');
+
+@$core.Deprecated('Use myCampoPersonalizadoDescriptor instead')
+const MyCampoPersonalizado$json = {
+  '1': 'MyCampoPersonalizado',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 3, '10': 'id'},
+    {'1': 'slug', '3': 2, '4': 1, '5': 9, '10': 'slug'},
+    {'1': 'nome', '3': 3, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'descricao', '3': 4, '4': 1, '5': 9, '10': 'descricao'},
+    {'1': 'escopo', '3': 5, '4': 1, '5': 9, '10': 'escopo'},
+    {
+      '1': 'fluxo_id',
+      '3': 6,
+      '4': 1,
+      '5': 5,
+      '9': 0,
+      '10': 'fluxoId',
+      '17': true
+    },
+    {'1': 'tipo', '3': 7, '4': 1, '5': 9, '10': 'tipo'},
+    {
+      '1': 'opcoes',
+      '3': 8,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.OpcaoCampo',
+      '10': 'opcoes'
+    },
+    {'1': 'obrigatorio', '3': 9, '4': 1, '5': 8, '10': 'obrigatorio'},
+    {
+      '1': 'extrair_automaticamente',
+      '3': 10,
+      '4': 1,
+      '5': 8,
+      '10': 'extrairAutomaticamente'
+    },
+    {'1': 'extrair_hint', '3': 11, '4': 1, '5': 9, '10': 'extrairHint'},
+    {'1': 'mostrar_no_card', '3': 12, '4': 1, '5': 8, '10': 'mostrarNoCard'},
+    {'1': 'ordem', '3': 13, '4': 1, '5': 5, '10': 'ordem'},
+    {'1': 'ativo', '3': 14, '4': 1, '5': 8, '10': 'ativo'},
+  ],
+  '8': [
+    {'1': '_fluxo_id'},
+  ],
+};
+
+/// Descriptor for `MyCampoPersonalizado`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myCampoPersonalizadoDescriptor = $convert.base64Decode(
+    'ChRNeUNhbXBvUGVyc29uYWxpemFkbxIOCgJpZBgBIAEoA1ICaWQSEgoEc2x1ZxgCIAEoCVIEc2'
+    'x1ZxISCgRub21lGAMgASgJUgRub21lEhwKCWRlc2NyaWNhbxgEIAEoCVIJZGVzY3JpY2FvEhYK'
+    'BmVzY29wbxgFIAEoCVIGZXNjb3BvEh4KCGZsdXhvX2lkGAYgASgFSABSB2ZsdXhvSWSIAQESEg'
+    'oEdGlwbxgHIAEoCVIEdGlwbxI/CgZvcGNvZXMYCCADKAsyJy5zbWFydGNvcmUuY29udHJhY3Rz'
+    'LnF1ZXJpZXMuT3BjYW9DYW1wb1IGb3Bjb2VzEiAKC29icmlnYXRvcmlvGAkgASgIUgtvYnJpZ2'
+    'F0b3JpbxI3ChdleHRyYWlyX2F1dG9tYXRpY2FtZW50ZRgKIAEoCFIWZXh0cmFpckF1dG9tYXRp'
+    'Y2FtZW50ZRIhCgxleHRyYWlyX2hpbnQYCyABKAlSC2V4dHJhaXJIaW50EiYKD21vc3RyYXJfbm'
+    '9fY2FyZBgMIAEoCFINbW9zdHJhck5vQ2FyZBIUCgVvcmRlbRgNIAEoBVIFb3JkZW0SFAoFYXRp'
+    'dm8YDiABKAhSBWF0aXZvQgsKCV9mbHV4b19pZA==');
+
+@$core.Deprecated('Use listMyCamposRequestDescriptor instead')
+const ListMyCamposRequest$json = {
+  '1': 'ListMyCamposRequest',
+  '2': [
+    {
+      '1': 'fluxo_id',
+      '3': 1,
+      '4': 1,
+      '5': 5,
+      '9': 0,
+      '10': 'fluxoId',
+      '17': true
+    },
+  ],
+  '8': [
+    {'1': '_fluxo_id'},
+  ],
+};
+
+/// Descriptor for `ListMyCamposRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyCamposRequestDescriptor = $convert.base64Decode(
+    'ChNMaXN0TXlDYW1wb3NSZXF1ZXN0Eh4KCGZsdXhvX2lkGAEgASgFSABSB2ZsdXhvSWSIAQFCCw'
+    'oJX2ZsdXhvX2lk');
+
+@$core.Deprecated('Use listMyCamposResponseDescriptor instead')
+const ListMyCamposResponse$json = {
+  '1': 'ListMyCamposResponse',
+  '2': [
+    {
+      '1': 'campos',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyCampoPersonalizado',
+      '10': 'campos'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyCamposResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyCamposResponseDescriptor = $convert.base64Decode(
+    'ChRMaXN0TXlDYW1wb3NSZXNwb25zZRJJCgZjYW1wb3MYASADKAsyMS5zbWFydGNvcmUuY29udH'
+    'JhY3RzLnF1ZXJpZXMuTXlDYW1wb1BlcnNvbmFsaXphZG9SBmNhbXBvcw==');
+
+@$core.Deprecated('Use createMyCampoRequestDescriptor instead')
+const CreateMyCampoRequest$json = {
+  '1': 'CreateMyCampoRequest',
+  '2': [
+    {'1': 'nome', '3': 1, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'descricao', '3': 2, '4': 1, '5': 9, '10': 'descricao'},
+    {'1': 'escopo', '3': 3, '4': 1, '5': 9, '10': 'escopo'},
+    {
+      '1': 'fluxo_id',
+      '3': 4,
+      '4': 1,
+      '5': 5,
+      '9': 0,
+      '10': 'fluxoId',
+      '17': true
+    },
+    {'1': 'tipo', '3': 5, '4': 1, '5': 9, '10': 'tipo'},
+    {
+      '1': 'opcoes',
+      '3': 6,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.OpcaoCampo',
+      '10': 'opcoes'
+    },
+    {'1': 'obrigatorio', '3': 7, '4': 1, '5': 8, '10': 'obrigatorio'},
+    {
+      '1': 'extrair_automaticamente',
+      '3': 8,
+      '4': 1,
+      '5': 8,
+      '10': 'extrairAutomaticamente'
+    },
+    {'1': 'extrair_hint', '3': 9, '4': 1, '5': 9, '10': 'extrairHint'},
+    {'1': 'mostrar_no_card', '3': 10, '4': 1, '5': 8, '10': 'mostrarNoCard'},
+    {'1': 'ordem', '3': 11, '4': 1, '5': 5, '10': 'ordem'},
+  ],
+  '8': [
+    {'1': '_fluxo_id'},
+  ],
+};
+
+/// Descriptor for `CreateMyCampoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createMyCampoRequestDescriptor = $convert.base64Decode(
+    'ChRDcmVhdGVNeUNhbXBvUmVxdWVzdBISCgRub21lGAEgASgJUgRub21lEhwKCWRlc2NyaWNhbx'
+    'gCIAEoCVIJZGVzY3JpY2FvEhYKBmVzY29wbxgDIAEoCVIGZXNjb3BvEh4KCGZsdXhvX2lkGAQg'
+    'ASgFSABSB2ZsdXhvSWSIAQESEgoEdGlwbxgFIAEoCVIEdGlwbxI/CgZvcGNvZXMYBiADKAsyJy'
+    '5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuT3BjYW9DYW1wb1IGb3Bjb2VzEiAKC29icmln'
+    'YXRvcmlvGAcgASgIUgtvYnJpZ2F0b3JpbxI3ChdleHRyYWlyX2F1dG9tYXRpY2FtZW50ZRgIIA'
+    'EoCFIWZXh0cmFpckF1dG9tYXRpY2FtZW50ZRIhCgxleHRyYWlyX2hpbnQYCSABKAlSC2V4dHJh'
+    'aXJIaW50EiYKD21vc3RyYXJfbm9fY2FyZBgKIAEoCFINbW9zdHJhck5vQ2FyZBIUCgVvcmRlbR'
+    'gLIAEoBVIFb3JkZW1CCwoJX2ZsdXhvX2lk');
+
+@$core.Deprecated('Use myCampoResponseDescriptor instead')
+const MyCampoResponse$json = {
+  '1': 'MyCampoResponse',
+  '2': [
+    {
+      '1': 'campo',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyCampoPersonalizado',
+      '10': 'campo'
+    },
+  ],
+};
+
+/// Descriptor for `MyCampoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myCampoResponseDescriptor = $convert.base64Decode(
+    'Cg9NeUNhbXBvUmVzcG9uc2USRwoFY2FtcG8YASABKAsyMS5zbWFydGNvcmUuY29udHJhY3RzLn'
+    'F1ZXJpZXMuTXlDYW1wb1BlcnNvbmFsaXphZG9SBWNhbXBv');
+
+@$core.Deprecated('Use updateMyCampoRequestDescriptor instead')
+const UpdateMyCampoRequest$json = {
+  '1': 'UpdateMyCampoRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 3, '10': 'id'},
+    {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'descricao', '3': 3, '4': 1, '5': 9, '10': 'descricao'},
+    {'1': 'tipo', '3': 4, '4': 1, '5': 9, '10': 'tipo'},
+    {
+      '1': 'opcoes',
+      '3': 5,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.OpcaoCampo',
+      '10': 'opcoes'
+    },
+    {'1': 'obrigatorio', '3': 6, '4': 1, '5': 8, '10': 'obrigatorio'},
+    {
+      '1': 'extrair_automaticamente',
+      '3': 7,
+      '4': 1,
+      '5': 8,
+      '10': 'extrairAutomaticamente'
+    },
+    {'1': 'extrair_hint', '3': 8, '4': 1, '5': 9, '10': 'extrairHint'},
+    {'1': 'mostrar_no_card', '3': 9, '4': 1, '5': 8, '10': 'mostrarNoCard'},
+    {'1': 'ordem', '3': 10, '4': 1, '5': 5, '10': 'ordem'},
+    {'1': 'ativo', '3': 11, '4': 1, '5': 8, '10': 'ativo'},
+  ],
+};
+
+/// Descriptor for `UpdateMyCampoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List updateMyCampoRequestDescriptor = $convert.base64Decode(
+    'ChRVcGRhdGVNeUNhbXBvUmVxdWVzdBIOCgJpZBgBIAEoA1ICaWQSEgoEbm9tZRgCIAEoCVIEbm'
+    '9tZRIcCglkZXNjcmljYW8YAyABKAlSCWRlc2NyaWNhbxISCgR0aXBvGAQgASgJUgR0aXBvEj8K'
+    'Bm9wY29lcxgFIAMoCzInLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5PcGNhb0NhbXBvUg'
+    'ZvcGNvZXMSIAoLb2JyaWdhdG9yaW8YBiABKAhSC29icmlnYXRvcmlvEjcKF2V4dHJhaXJfYXV0'
+    'b21hdGljYW1lbnRlGAcgASgIUhZleHRyYWlyQXV0b21hdGljYW1lbnRlEiEKDGV4dHJhaXJfaG'
+    'ludBgIIAEoCVILZXh0cmFpckhpbnQSJgoPbW9zdHJhcl9ub19jYXJkGAkgASgIUg1tb3N0cmFy'
+    'Tm9DYXJkEhQKBW9yZGVtGAogASgFUgVvcmRlbRIUCgVhdGl2bxgLIAEoCFIFYXRpdm8=');
+
+@$core.Deprecated('Use myCampoIdRequestDescriptor instead')
+const MyCampoIdRequest$json = {
+  '1': 'MyCampoIdRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 3, '10': 'id'},
+  ],
+};
+
+/// Descriptor for `MyCampoIdRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myCampoIdRequestDescriptor =
+    $convert.base64Decode('ChBNeUNhbXBvSWRSZXF1ZXN0Eg4KAmlkGAEgASgDUgJpZA==');
+
+@$core.Deprecated('Use setMyValorCampoRequestDescriptor instead')
+const SetMyValorCampoRequest$json = {
+  '1': 'SetMyValorCampoRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'campo_id', '3': 2, '4': 1, '5': 3, '10': 'campoId'},
+    {'1': 'valor_json', '3': 3, '4': 1, '5': 9, '10': 'valorJson'},
+  ],
+};
+
+/// Descriptor for `SetMyValorCampoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List setMyValorCampoRequestDescriptor = $convert.base64Decode(
+    'ChZTZXRNeVZhbG9yQ2FtcG9SZXF1ZXN0EiUKDmF0ZW5kaW1lbnRvX2lkGAEgASgFUg1hdGVuZG'
+    'ltZW50b0lkEhkKCGNhbXBvX2lkGAIgASgDUgdjYW1wb0lkEh0KCnZhbG9yX2pzb24YAyABKAlS'
+    'CXZhbG9ySnNvbg==');
+
 @$core.Deprecated('Use listMyContatosRequestDescriptor instead')
 const ListMyContatosRequest$json = {
   '1': 'ListMyContatosRequest',
@@ -3930,6 +4186,14 @@ const DetalheAtendimentoResponse$json = {
       '10': 'notas'
     },
     {'1': 'bot_pode_atender', '3': 4, '4': 1, '5': 8, '10': 'botPodeAtender'},
+    {
+      '1': 'campos',
+      '3': 5,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.ValorCampoDoAtendimento',
+      '10': 'campos'
+    },
   ],
 };
 
@@ -3939,7 +4203,50 @@ final $typed_data.Uint8List detalheAtendimentoResponseDescriptor = $convert.base
     '9yZS5jb250cmFjdHMucXVlcmllcy5FdGlxdWV0YVIIY2F0YWxvZ28SQwoJZXRpcXVldGFzGAIg'
     'AygLMiUuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkV0aXF1ZXRhUglldGlxdWV0YXMSNw'
     'oFbm90YXMYAyADKAsyIS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTm90YVIFbm90YXMS'
-    'KAoQYm90X3BvZGVfYXRlbmRlchgEIAEoCFIOYm90UG9kZUF0ZW5kZXI=');
+    'KAoQYm90X3BvZGVfYXRlbmRlchgEIAEoCFIOYm90UG9kZUF0ZW5kZXISTAoGY2FtcG9zGAUgAy'
+    'gLMjQuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlZhbG9yQ2FtcG9Eb0F0ZW5kaW1lbnRv'
+    'UgZjYW1wb3M=');
+
+@$core.Deprecated('Use valorCampoDoAtendimentoDescriptor instead')
+const ValorCampoDoAtendimento$json = {
+  '1': 'ValorCampoDoAtendimento',
+  '2': [
+    {'1': 'campo_id', '3': 1, '4': 1, '5': 3, '10': 'campoId'},
+    {'1': 'slug', '3': 2, '4': 1, '5': 9, '10': 'slug'},
+    {'1': 'nome', '3': 3, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'descricao', '3': 4, '4': 1, '5': 9, '10': 'descricao'},
+    {'1': 'tipo', '3': 5, '4': 1, '5': 9, '10': 'tipo'},
+    {
+      '1': 'opcoes',
+      '3': 6,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.OpcaoCampo',
+      '10': 'opcoes'
+    },
+    {'1': 'obrigatorio', '3': 7, '4': 1, '5': 8, '10': 'obrigatorio'},
+    {'1': 'valor_json', '3': 8, '4': 1, '5': 9, '10': 'valorJson'},
+    {'1': 'origem', '3': 9, '4': 1, '5': 9, '10': 'origem'},
+    {'1': 'confianca', '3': 10, '4': 1, '5': 1, '10': 'confianca'},
+    {
+      '1': 'editado_por_humano',
+      '3': 11,
+      '4': 1,
+      '5': 8,
+      '10': 'editadoPorHumano'
+    },
+  ],
+};
+
+/// Descriptor for `ValorCampoDoAtendimento`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List valorCampoDoAtendimentoDescriptor = $convert.base64Decode(
+    'ChdWYWxvckNhbXBvRG9BdGVuZGltZW50bxIZCghjYW1wb19pZBgBIAEoA1IHY2FtcG9JZBISCg'
+    'RzbHVnGAIgASgJUgRzbHVnEhIKBG5vbWUYAyABKAlSBG5vbWUSHAoJZGVzY3JpY2FvGAQgASgJ'
+    'UglkZXNjcmljYW8SEgoEdGlwbxgFIAEoCVIEdGlwbxI/CgZvcGNvZXMYBiADKAsyJy5zbWFydG'
+    'NvcmUuY29udHJhY3RzLnF1ZXJpZXMuT3BjYW9DYW1wb1IGb3Bjb2VzEiAKC29icmlnYXRvcmlv'
+    'GAcgASgIUgtvYnJpZ2F0b3JpbxIdCgp2YWxvcl9qc29uGAggASgJUgl2YWxvckpzb24SFgoGb3'
+    'JpZ2VtGAkgASgJUgZvcmlnZW0SHAoJY29uZmlhbmNhGAogASgBUgljb25maWFuY2ESLAoSZWRp'
+    'dGFkb19wb3JfaHVtYW5vGAsgASgIUhBlZGl0YWRvUG9ySHVtYW5v');
 
 @$core.Deprecated('Use createEtiquetaRequestDescriptor instead')
 const CreateEtiquetaRequest$json = {

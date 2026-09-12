@@ -208,6 +208,52 @@ pub trait OperacionalStore: Send + Sync {
         id: i32,
     ) -> Result<serde_json::Value, DbError>;
 
+    // --- N9 E13: campos do cartão -------------------------------------
+    //
+    // A tabela existe desde a migration 0006 e o repositório sabia criar. O
+    // que faltava era o caminho até a tela — e é por isso que nenhum tenant
+    // tem um campo personalizado, não por falta de vontade.
+
+    /// Catálogo do tenant, ativos e inativos, para a tela de configuração.
+    async fn listar_campos(&self, ctx: &RequestContext) -> Result<Vec<serde_json::Value>, DbError>;
+
+    /// Cria o campo. O `slug` é derivado do nome aqui, e não pedido à tela:
+    /// é identificador, o valor extraído pela IA o carrega, e deixá-lo à mão
+    /// convidaria a espaços, acentos e duplicidade.
+    async fn criar_campo(
+        &self,
+        ctx: &RequestContext,
+        campo: serde_json::Value,
+    ) -> Result<serde_json::Value, DbError>;
+
+    /// Atualiza o que a tela edita. `slug`, `escopo` e `fluxo_id` ficam de
+    /// fora: são a identidade do campo, e o slug já está dentro dos valores
+    /// coletados.
+    async fn atualizar_campo(
+        &self,
+        ctx: &RequestContext,
+        id: i64,
+        campo: serde_json::Value,
+    ) -> Result<bool, DbError>;
+
+    /// Desativa (soft). Apagar levaria junto os valores já coletados, pelo
+    /// `ON DELETE CASCADE` — e com eles o histórico das fichas.
+    async fn desativar_campo(&self, ctx: &RequestContext, id: i64) -> Result<bool, DbError>;
+
+    /// Preenchimento **manual** de um campo na ficha.
+    ///
+    /// Grava `origem = 'MANUAL'` e `editado_por_id`, e é essa marca que
+    /// impede a IA de sobrescrever depois: quem escreveu ali viu a conversa e
+    /// decidiu. `valor = null` é o apagamento deliberado, que também é
+    /// respeitado — a IA não repreenche o que alguém tirou.
+    async fn definir_valor_campo(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        campo_id: i64,
+        valor: serde_json::Value,
+    ) -> Result<bool, DbError>;
+
     /// Etapas ativas de um fluxo, na ordem em que aparecem no quadro.
     async fn listar_etapas(
         &self,

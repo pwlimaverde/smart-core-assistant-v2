@@ -6,7 +6,11 @@ import 'package:mocktail/mocktail.dart';
 class MockClientMethod<Q, R> extends Mock implements ClientMethod<Q, R> {}
 
 class MockClientUnaryInvoker<Q, R> extends Mock {
-  ResponseFuture<R> call(ClientMethod<Q, R> method, Q request, CallOptions options);
+  ResponseFuture<R> call(
+    ClientMethod<Q, R> method,
+    Q request,
+    CallOptions options,
+  );
 }
 
 class FakeResponseFuture<R> extends Mock implements ResponseFuture<R> {}
@@ -38,7 +42,9 @@ void main() {
       mockInvoker = MockClientUnaryInvoker<String, String>();
       fakeResponse = FakeResponseFuture<String>();
 
-      when(() => mockInvoker.call(any(), any(), any())).thenAnswer((_) => fakeResponse);
+      when(
+        () => mockInvoker.call(any(), any(), any()),
+      ).thenAnswer((_) => fakeResponse);
     });
 
     test('injeta access token quando presente e não vazio', () async {
@@ -51,9 +57,11 @@ void main() {
         mockInvoker.call,
       );
 
-      final captured = verify(
-        () => mockInvoker.call(mockMethod, 'requisicao', captureAny()),
-      ).captured.single as CallOptions;
+      final captured =
+          verify(
+                () => mockInvoker.call(mockMethod, 'requisicao', captureAny()),
+              ).captured.single
+              as CallOptions;
 
       final metadata = <String, String>{};
       for (final provider in captured.metadataProviders) {
@@ -73,9 +81,11 @@ void main() {
         mockInvoker.call,
       );
 
-      final captured = verify(
-        () => mockInvoker.call(mockMethod, 'requisicao', captureAny()),
-      ).captured.single as CallOptions;
+      final captured =
+          verify(
+                () => mockInvoker.call(mockMethod, 'requisicao', captureAny()),
+              ).captured.single
+              as CallOptions;
 
       final metadata = <String, String>{};
       for (final provider in captured.metadataProviders) {
@@ -95,9 +105,11 @@ void main() {
         mockInvoker.call,
       );
 
-      final captured = verify(
-        () => mockInvoker.call(mockMethod, 'requisicao', captureAny()),
-      ).captured.single as CallOptions;
+      final captured =
+          verify(
+                () => mockInvoker.call(mockMethod, 'requisicao', captureAny()),
+              ).captured.single
+              as CallOptions;
 
       final metadata = <String, String>{};
       for (final provider in captured.metadataProviders) {
@@ -112,8 +124,9 @@ void main() {
       final mockRequests = Stream<String>.value('req');
       final mockInvokerStreaming = MockInvokerStreaming();
 
-      when(() => mockInvokerStreaming.call<String, String>(any(), any(), any()))
-          .thenAnswer((_) => FakeResponseStream<String>());
+      when(
+        () => mockInvokerStreaming.call<String, String>(any(), any(), any()),
+      ).thenAnswer((_) => FakeResponseStream<String>());
 
       interceptor.interceptStreaming<String, String>(
         mockMethod,
@@ -122,7 +135,9 @@ void main() {
         mockInvokerStreaming.call,
       );
 
-      verify(() => mockInvokerStreaming.call(mockMethod, mockRequests, any())).called(1);
+      verify(
+        () => mockInvokerStreaming.call(mockMethod, mockRequests, any()),
+      ).called(1);
     });
   });
 }

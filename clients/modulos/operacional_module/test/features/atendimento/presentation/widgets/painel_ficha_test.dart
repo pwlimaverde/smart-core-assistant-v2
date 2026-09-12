@@ -49,6 +49,11 @@ void main() {
             datasource: DefinirBotDaConversaDatasource(gateway: gateway),
           ),
         ),
+        definirValorCampo: DefinirValorCampoUsecase(
+          repository: DefinirValorCampoRepository(
+            datasource: DefinirValorCampoDatasource(gateway: gateway),
+          ),
+        ),
       );
 
   Future<FichaController> montar(

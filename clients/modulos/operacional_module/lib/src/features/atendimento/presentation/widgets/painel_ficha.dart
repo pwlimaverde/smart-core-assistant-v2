@@ -5,6 +5,7 @@ import 'package:presentation_module/presentation_module.dart';
 
 import '../../domain/model/ficha.dart';
 import '../controllers/ficha_controller.dart';
+import 'dialogo_valor_campo.dart';
 
 /// Cor a partir do hex do catálogo. Hex inválido cai no padrão em vez de
 /// derrubar o painel — uma cor errada não justifica perder a ficha inteira.
@@ -72,6 +73,19 @@ class _Conteudo extends StatelessWidget {
         // aqui quando o bot parou de responder só nesta thread.
         _BotDaConversa(ficha: ficha, controller: controller),
         const Divider(height: AppSpacing.xl),
+        // N9 E13 — os campos que o tenant desenhou para o cartão. Antes das
+        // etiquetas porque são o conteúdo da conversa (número do pedido, data
+        // de retorno), enquanto etiqueta é classificação.
+        if (ficha.campos.isNotEmpty) ...[
+          Text(
+            'Dados do atendimento',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          for (final campo in ficha.campos)
+            _LinhaDeCampo(campo: campo, controller: controller),
+          const Divider(height: AppSpacing.xl),
+        ],
         Row(
           children: [
             Expanded(
@@ -530,5 +544,109 @@ class _Chip extends StatelessWidget {
       onDeleted: aoRemover,
       deleteButtonTooltipMessage: 'Tirar desta conversa',
     );
+  }
+}
+
+/// Um campo do cartão na ficha: valor, origem e o caminho para editar.
+class _LinhaDeCampo extends StatelessWidget {
+  final ValorCampo campo;
+  final FichaController controller;
+
+  const _LinhaDeCampo({required this.campo, required this.controller});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: InkWell(
+        onTap: () => abrirEdicaoDeValor(context, campo, controller),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          campo.nome,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: colors.fgMuted),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (campo.obrigatorio && !campo.preenchido) ...[
+                        const SizedBox(width: AppSpacing.xs),
+                        Icon(
+                          Icons.error_outline,
+                          size: 13,
+                          color: colors.warning,
+                        ),
+                      ],
+                      // De onde veio o valor muda o quanto se confia nele: um
+                      // número que a IA deduziu de "acho que foi o 12345"
+                      // merece um olhar antes de virar decisão.
+                      if (campo.veioDaIa && campo.preenchido) ...[
+                        const SizedBox(width: AppSpacing.xs),
+                        Tooltip(
+                          message:
+                              'Preenchido pela IA '
+                              '(confiança ${(campo.confianca * 100).round()}%)',
+                          child: Icon(
+                            Icons.auto_awesome,
+                            size: 13,
+                            color: colors.accent,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                  Text(
+                    campo.preenchido ? _legivel(campo) : 'Não informado',
+                    style: TextStyle(
+                      fontWeight: campo.preenchido
+                          ? FontWeight.w500
+                          : FontWeight.normal,
+                      color: campo.preenchido ? null : colors.fgMuted,
+                      fontStyle: campo.preenchido
+                          ? FontStyle.normal
+                          : FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.edit_outlined, size: 16, color: colors.fgMuted),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// O valor como gente lê.
+  ///
+  /// O JSON cru serve à máquina: `"cartao"` com aspas, `true` em inglês, e o
+  /// id de uma opção em vez do rótulo que a pessoa escolheu.
+  String _legivel(ValorCampo c) {
+    final bruto = c.valorJson;
+    final semAspas =
+        bruto.startsWith('"') && bruto.endsWith('"') && bruto.length >= 2
+        ? bruto.substring(1, bruto.length - 1)
+        : bruto;
+
+    return switch (c.tipo) {
+      'booleano' => semAspas == 'true' ? 'Sim' : 'Não',
+      'lista' =>
+        c.opcoes.where((o) => o.id == semAspas).map((o) => o.rotulo).firstOrNull
+            // Opção que saiu do catálogo depois de preenchida: mostra o id, que
+            // é o que está gravado, em vez de esconder o valor.
+            ??
+            semAspas,
+      _ => semAspas,
+    };
   }
 }

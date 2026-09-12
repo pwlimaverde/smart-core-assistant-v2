@@ -1,6 +1,7 @@
 import 'package:presentation_module/presentation_module.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
 
+import '../../domain/parameters/definir_valor_campo_parameters.dart';
 import '../../domain/errors/atendimento_errors.dart';
 import '../../domain/model/ficha.dart';
 import '../../domain/parameters/ficha_parameters.dart';
@@ -19,6 +20,7 @@ final class FichaController extends BaseController<FichaAtendimento> {
   final AlternarEtiquetaUsecase _alternar;
   final CriarNotaUsecase _criarNota;
   final DefinirBotDaConversaUsecase _definirBot;
+  final DefinirValorCampoUsecase _definirValorCampo;
 
   int _atendimentoId = 0;
 
@@ -28,11 +30,13 @@ final class FichaController extends BaseController<FichaAtendimento> {
     required AlternarEtiquetaUsecase alternar,
     required CriarNotaUsecase criarNota,
     required DefinirBotDaConversaUsecase definirBot,
+    required DefinirValorCampoUsecase definirValorCampo,
   }) : _carregar = carregar,
        _criarEtiqueta = criarEtiqueta,
        _alternar = alternar,
        _criarNota = criarNota,
-       _definirBot = definirBot;
+       _definirBot = definirBot,
+       _definirValorCampo = definirValorCampo;
 
   int get atendimentoId => _atendimentoId;
 
@@ -81,6 +85,27 @@ final class FichaController extends BaseController<FichaAtendimento> {
       DefinirBotDaConversaParameters(
         atendimentoId: _atendimentoId,
         habilitado: habilitado,
+      ),
+    );
+    if (res case Failure(:final error)) return error;
+    await abrir(_atendimentoId);
+    return null;
+  }
+
+  /// N9 E13 — preenche (ou apaga) um campo do cartão.
+  ///
+  /// Devolve o erro do **preenchimento**, que tem repertório próprio: um valor
+  /// que não serve para o tipo do campo não é a mesma coisa que uma falha ao
+  /// carregar a ficha, e a tela precisa dizer qual foi.
+  Future<DefinirValorCampoError?> definirValorCampo({
+    required int campoId,
+    required String valorJson,
+  }) async {
+    final res = await _definirValorCampo(
+      DefinirValorCampoParameters(
+        atendimentoId: _atendimentoId,
+        campoId: campoId,
+        valorJson: valorJson,
       ),
     );
     if (res case Failure(:final error)) return error;

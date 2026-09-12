@@ -28,12 +28,11 @@ final class KanbanRoute extends GetItModule {
   String get path => '/atendimentos';
 
   @override
-  Widget get page =>
-      KanbanPage(
-        drawer: drawerBuilder?.call(),
-        aviso: avisoBuilder?.call(),
-        buscarContatos: buscarContatos,
-      );
+  Widget get page => KanbanPage(
+    drawer: drawerBuilder?.call(),
+    aviso: avisoBuilder?.call(),
+    buscarContatos: buscarContatos,
+  );
 
   @override
   void binds(Injector i) {

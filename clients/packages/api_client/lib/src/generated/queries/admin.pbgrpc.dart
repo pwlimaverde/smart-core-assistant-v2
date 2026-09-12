@@ -695,6 +695,43 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$listMyContatos, request, options: options);
   }
 
+  /// N9 E13 — o catalogo de campos do cartao, por tenant.
+  $grpc.ResponseFuture<$0.ListMyCamposResponse> listMyCampos(
+    $0.ListMyCamposRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyCampos, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.MyCampoResponse> createMyCampo(
+    $0.CreateMyCampoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$createMyCampo, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> updateMyCampo(
+    $0.UpdateMyCampoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$updateMyCampo, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> desativarMyCampo(
+    $0.MyCampoIdRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$desativarMyCampo, request, options: options);
+  }
+
+  /// Preenchimento manual na ficha do atendimento.
+  $grpc.ResponseFuture<$0.SimpleOkResponse> setMyValorCampo(
+    $0.SetMyValorCampoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$setMyValorCampo, request, options: options);
+  }
+
   /// Fluxos de atendimento e suas etapas — o quadro por onde a conversa anda.
   $grpc.ResponseFuture<$0.ListMyFluxosResponse> listMyFluxos(
     $0.ListMyFluxosRequest request, {
@@ -1199,6 +1236,31 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/ListMyContatos',
           ($0.ListMyContatosRequest value) => value.writeToBuffer(),
           $0.ListMyContatosResponse.fromBuffer);
+  static final _$listMyCampos =
+      $grpc.ClientMethod<$0.ListMyCamposRequest, $0.ListMyCamposResponse>(
+          '/smartcore.contracts.queries.AdminService/ListMyCampos',
+          ($0.ListMyCamposRequest value) => value.writeToBuffer(),
+          $0.ListMyCamposResponse.fromBuffer);
+  static final _$createMyCampo =
+      $grpc.ClientMethod<$0.CreateMyCampoRequest, $0.MyCampoResponse>(
+          '/smartcore.contracts.queries.AdminService/CreateMyCampo',
+          ($0.CreateMyCampoRequest value) => value.writeToBuffer(),
+          $0.MyCampoResponse.fromBuffer);
+  static final _$updateMyCampo =
+      $grpc.ClientMethod<$0.UpdateMyCampoRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/UpdateMyCampo',
+          ($0.UpdateMyCampoRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$desativarMyCampo =
+      $grpc.ClientMethod<$0.MyCampoIdRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/DesativarMyCampo',
+          ($0.MyCampoIdRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$setMyValorCampo =
+      $grpc.ClientMethod<$0.SetMyValorCampoRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/SetMyValorCampo',
+          ($0.SetMyValorCampoRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
   static final _$listMyFluxos =
       $grpc.ClientMethod<$0.ListMyFluxosRequest, $0.ListMyFluxosResponse>(
           '/smartcore.contracts.queries.AdminService/ListMyFluxos',
@@ -2011,6 +2073,48 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.ListMyContatosRequest.fromBuffer(value),
         ($0.ListMyContatosResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.ListMyCamposRequest, $0.ListMyCamposResponse>(
+            'ListMyCampos',
+            listMyCampos_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.ListMyCamposRequest.fromBuffer(value),
+            ($0.ListMyCamposResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.CreateMyCampoRequest, $0.MyCampoResponse>(
+        'CreateMyCampo',
+        createMyCampo_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.CreateMyCampoRequest.fromBuffer(value),
+        ($0.MyCampoResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.UpdateMyCampoRequest, $0.SimpleOkResponse>(
+            'UpdateMyCampo',
+            updateMyCampo_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.UpdateMyCampoRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.MyCampoIdRequest, $0.SimpleOkResponse>(
+        'DesativarMyCampo',
+        desativarMyCampo_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) => $0.MyCampoIdRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.SetMyValorCampoRequest, $0.SimpleOkResponse>(
+            'SetMyValorCampo',
+            setMyValorCampo_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.SetMyValorCampoRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
     $addMethod(
         $grpc.ServiceMethod<$0.ListMyFluxosRequest, $0.ListMyFluxosResponse>(
             'ListMyFluxos',
@@ -2853,6 +2957,49 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.ListMyContatosResponse> listMyContatos(
       $grpc.ServiceCall call, $0.ListMyContatosRequest request);
+
+  $async.Future<$0.ListMyCamposResponse> listMyCampos_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListMyCamposRequest> $request) async {
+    return listMyCampos($call, await $request);
+  }
+
+  $async.Future<$0.ListMyCamposResponse> listMyCampos(
+      $grpc.ServiceCall call, $0.ListMyCamposRequest request);
+
+  $async.Future<$0.MyCampoResponse> createMyCampo_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.CreateMyCampoRequest> $request) async {
+    return createMyCampo($call, await $request);
+  }
+
+  $async.Future<$0.MyCampoResponse> createMyCampo(
+      $grpc.ServiceCall call, $0.CreateMyCampoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> updateMyCampo_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.UpdateMyCampoRequest> $request) async {
+    return updateMyCampo($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> updateMyCampo(
+      $grpc.ServiceCall call, $0.UpdateMyCampoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> desativarMyCampo_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MyCampoIdRequest> $request) async {
+    return desativarMyCampo($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> desativarMyCampo(
+      $grpc.ServiceCall call, $0.MyCampoIdRequest request);
+
+  $async.Future<$0.SimpleOkResponse> setMyValorCampo_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.SetMyValorCampoRequest> $request) async {
+    return setMyValorCampo($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> setMyValorCampo(
+      $grpc.ServiceCall call, $0.SetMyValorCampoRequest request);
 
   $async.Future<$0.ListMyFluxosResponse> listMyFluxos_Pre(
       $grpc.ServiceCall $call,

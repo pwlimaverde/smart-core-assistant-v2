@@ -9,6 +9,10 @@ use sqlx::{PgPool, Row};
 use std::sync::Arc;
 use uuid::Uuid;
 
+use infrastructure_postgres::atendimentos::campos::{
+    CampoPersonalizadoRepository, PostgresCampoPersonalizadoRepository,
+    PostgresValorCampoRepository, ValorCampoRepository,
+};
 use infrastructure_postgres::crypto::CipherManager;
 use infrastructure_postgres::operacional::atendentes::{
     AtendenteRepository, PostgresAtendenteRepository,
@@ -1096,6 +1100,218 @@ impl OperacionalStore for PgOperacionalStore {
         .await
     }
 
+    // --- N9 E13: campos do cartão -------------------------------------
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_campos(&self, ctx: &RequestContext) -> Result<Vec<serde_json::Value>, DbError> {
+        let repo = PostgresCampoPersonalizadoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let campos = repo.listar_todos(&mut tx, &ctx).await?;
+            let json = campos.iter().map(campo_para_json).collect();
+            Ok((json, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn criar_campo(
+        &self,
+        ctx: &RequestContext,
+        campo: serde_json::Value,
+    ) -> Result<serde_json::Value, DbError> {
+        use infrastructure_postgres::operacional::departamentos::slug_do_nome;
+
+        let repo = PostgresCampoPersonalizadoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+
+        let texto = |k: &str| {
+            campo
+                .get(k)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        };
+        let flag = |k: &str, padrao: bool| campo.get(k).and_then(|v| v.as_bool()).unwrap_or(padrao);
+
+        // Nome e tipo já vieram conferidos pelo handler — validar de novo aqui
+        // criaria duas opiniões sobre a mesma regra.
+        let nome = texto("nome");
+        // O slug sai do nome, e não da tela: é identificador, vai gravado
+        // dentro de cada valor que a IA extrai, e deixá-lo à mão convidaria a
+        // espaços, acentos e duplicidade.
+        let slug = slug_do_nome(&nome);
+
+        let escopo = match texto("escopo").as_str() {
+            "FLUXO" => "FLUXO".to_string(),
+            _ => "GLOBAL".to_string(),
+        };
+        let fluxo_id = campo
+            .get("fluxo_id")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32);
+
+        let tipo = match texto("tipo").as_str() {
+            t @ ("numero" | "data" | "booleano" | "lista") => t.to_string(),
+            _ => "texto".to_string(),
+        };
+        let opcoes = campo
+            .get("opcoes")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        let descricao = texto("descricao");
+        let hint = texto("extrair_hint");
+        let obrigatorio = flag("obrigatorio", false);
+        let extrair = flag("extrair_automaticamente", true);
+        let mostrar = flag("mostrar_no_card", true);
+        let ordem = campo.get("ordem").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let criado = repo
+                .criar_completo(
+                    &mut tx,
+                    &ctx,
+                    infrastructure_postgres::atendimentos::campos::NovoCampoPersonalizado {
+                        slug: &slug,
+                        nome: &nome,
+                        descricao: &descricao,
+                        escopo: &escopo,
+                        fluxo_id,
+                        tipo: &tipo,
+                        opcoes,
+                        obrigatorio,
+                        extrair_automaticamente: extrair,
+                        extrair_hint: &hint,
+                        mostrar_no_card: mostrar,
+                        ordem,
+                    },
+                )
+                .await?;
+            Ok((campo_para_json(&criado), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn atualizar_campo(
+        &self,
+        ctx: &RequestContext,
+        id: i64,
+        campo: serde_json::Value,
+    ) -> Result<bool, DbError> {
+        let repo = PostgresCampoPersonalizadoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+
+        let texto = |k: &str| {
+            campo
+                .get(k)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        };
+        let flag = |k: &str, padrao: bool| campo.get(k).and_then(|v| v.as_bool()).unwrap_or(padrao);
+
+        let nome = texto("nome");
+        let tipo = match texto("tipo").as_str() {
+            t @ ("numero" | "data" | "booleano" | "lista") => t.to_string(),
+            _ => "texto".to_string(),
+        };
+        let opcoes = campo
+            .get("opcoes")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        let descricao = texto("descricao");
+        let hint = texto("extrair_hint");
+        let obrigatorio = flag("obrigatorio", false);
+        let extrair = flag("extrair_automaticamente", true);
+        let mostrar = flag("mostrar_no_card", true);
+        let ativo = flag("ativo", true);
+        let ordem = campo.get("ordem").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let ok = repo
+                .atualizar(
+                    &mut tx,
+                    &ctx,
+                    id,
+                    infrastructure_postgres::atendimentos::campos::EdicaoCampoPersonalizado {
+                        nome: &nome,
+                        descricao: &descricao,
+                        tipo: &tipo,
+                        opcoes,
+                        obrigatorio,
+                        extrair_automaticamente: extrair,
+                        extrair_hint: &hint,
+                        mostrar_no_card: mostrar,
+                        ordem,
+                        ativo,
+                    },
+                )
+                .await?;
+            Ok((ok, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn desativar_campo(&self, ctx: &RequestContext, id: i64) -> Result<bool, DbError> {
+        let repo = PostgresCampoPersonalizadoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let ok = repo.desativar(&mut tx, &ctx, id).await?;
+            Ok((ok, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn definir_valor_campo(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        campo_id: i64,
+        valor: serde_json::Value,
+    ) -> Result<bool, DbError> {
+        let repo = PostgresValorCampoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let autor = ctx.user_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            repo.upsert(
+                &mut tx,
+                &ctx,
+                atendimento_id,
+                campo_id,
+                valor,
+                "MANUAL",
+                None,
+            )
+            .await?;
+            // `editado_por_id` é a marca que impede a IA de sobrescrever. Ela
+            // existia na tabela e nunca era gravada — o write-back do C1
+            // depende dela para saber que ali tem dono.
+            sqlx::query!(
+                r#"UPDATE atu_valor_campo
+                      SET editado_por_id = $1
+                    WHERE tenant_id = $2 AND atendimento_id = $3 AND campo_id = $4"#,
+                autor,
+                tenant_id,
+                atendimento_id,
+                campo_id
+            )
+            .execute(&mut *tx)
+            .await?;
+            Ok((true, tx))
+        })
+        .await
+    }
+
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, fluxo_id = fluxo_id))]
     async fn listar_etapas(
         &self,
@@ -1372,4 +1588,30 @@ impl OperacionalStore for PgOperacionalStore {
         })
         .await
     }
+}
+
+/// Um campo do catálogo como a tela o lê.
+///
+/// Serialização à mão, e não `serde` na struct do repositório: o que sai daqui
+/// é contrato de RPC, e derivar do modelo de banco faria uma coluna nova vazar
+/// para o cliente no dia em que fosse criada.
+fn campo_para_json(
+    c: &infrastructure_postgres::atendimentos::campos::CampoPersonalizado,
+) -> serde_json::Value {
+    serde_json::json!({
+        "id": c.id,
+        "slug": c.slug,
+        "nome": c.nome,
+        "descricao": c.descricao,
+        "escopo": c.escopo,
+        "fluxo_id": c.fluxo_id,
+        "tipo": c.tipo,
+        "opcoes": c.opcoes,
+        "obrigatorio": c.obrigatorio,
+        "extrair_automaticamente": c.extrair_automaticamente,
+        "extrair_hint": c.extrair_hint,
+        "mostrar_no_card": c.mostrar_no_card,
+        "ordem": c.ordem,
+        "ativo": c.ativo,
+    })
 }

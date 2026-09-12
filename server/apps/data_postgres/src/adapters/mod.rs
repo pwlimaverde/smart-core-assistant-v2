@@ -1,6 +1,7 @@
 pub mod atendimento;
 pub mod audit;
 pub mod auth;
+pub mod campos_extraidos;
 pub mod cliente;
 pub mod mcp;
 pub mod operacional;

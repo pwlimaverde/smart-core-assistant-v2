@@ -105,11 +105,18 @@ table ResponderRequest {
   campos_pendentes:[smartcore.contracts.ai.CampoPendente];
 }
 
+table CampoExtraido {
+  slug:string;
+  valor_json:string;
+  confianca:double;
+}
+
 table ResponderResponse {
   resposta_texto:string;
   transferir_atendimento:bool;
   fluxo_transferencia:string;
   confiabilidade:double;
+  campos_extraidos:[smartcore.contracts.ai.CampoExtraido];
 }
 
 table SentimentoRequest {

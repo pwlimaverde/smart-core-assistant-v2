@@ -28,6 +28,9 @@ dependencies:
   # conhece tenant_module, e e o app que compoe os dois.
   operacional_module:
     path: ../operacional_module
+  # `Int64` do protobuf — o id do campo personalizado é int64, e o datasource
+  # o constrói. Era dev-dependency, de quando só os testes precisavam.
+  fixnum: ^1.1.0
   api_client:
     path: ../../packages/api_client
   app_config:
@@ -52,7 +55,5 @@ dev_dependencies:
   mocktail: ^1.0.5
   go_router: ^17.2.1
   get_it: ^9.2.1
-  # Int64 dos timestamps do protobuf nos testes.
-  fixnum: ^1.1.0
 
 resolution: workspace

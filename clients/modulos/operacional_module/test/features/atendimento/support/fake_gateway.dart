@@ -197,6 +197,20 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
     );
   }
 
+  /// N9 E13 — o que `definirValorCampo` recebeu.
+  ({int campoId, String valorJson})? valorCampoRecebido;
+  Object? erroValorCampo;
+
+  @override
+  Future<void> definirValorCampo({
+    required int atendimentoId,
+    required int campoId,
+    required String valorJson,
+  }) async {
+    valorCampoRecebido = (campoId: campoId, valorJson: valorJson);
+    if (erroValorCampo != null) throw erroValorCampo!;
+  }
+
   @override
   Future<List<FluxoDoQuadro>> listFluxos() async => fluxos;
 

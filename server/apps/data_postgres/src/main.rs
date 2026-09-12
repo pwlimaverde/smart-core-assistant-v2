@@ -517,6 +517,11 @@ async fn main() -> anyhow::Result<()> {
     let s_painel = state_clone.clone();
     let s_contatos = state_clone.clone();
     let s_fluxo_listar = state_clone.clone();
+    let s_campo_listar = state_clone.clone();
+    let s_campo_criar = state_clone.clone();
+    let s_campo_update = state_clone.clone();
+    let s_campo_desativar = state_clone.clone();
+    let s_valor_campo = state_clone.clone();
     let s_fluxo_criar = state_clone.clone();
     let s_fluxo_update = state_clone.clone();
     let s_fluxo_desativar = state_clone.clone();
@@ -591,6 +596,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_listar_fluxos_tenant = state_clone.clone();
     let state_for_transferir_fluxo = state_clone.clone();
     let state_for_resolver_campos_atendimento = state_clone.clone();
+    let state_for_gravar_campos_extraidos = state_clone.clone();
     let state_for_atualizar_sentimento = state_clone.clone();
     let state_for_query_compose = state_clone.clone();
     let s_trn_criar = state_clone.clone();
@@ -823,6 +829,17 @@ async fn main() -> anyhow::Result<()> {
             let state = state_for_transferir_fluxo.clone();
             Box::pin(async move {
                 handler_transferir_atendimento_para_fluxo(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("GravarCamposExtraidos", move |env| {
+            let state = state_for_gravar_campos_extraidos.clone();
+            Box::pin(async move {
+                handler_gravar_campos_extraidos(
+                    state.atendimento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
             })
         })
         .route("ResolverCamposAtendimento", move |env| {
@@ -1153,6 +1170,33 @@ async fn main() -> anyhow::Result<()> {
                 handler_desativar_atendente(state.operacional.as_ref(), state.audit.as_ref(), env)
                     .await
             })
+        })
+        // N9 E13 — catálogo de campos do cartão.
+        .route("ListCamposPersonalizados", move |env| {
+            let state = s_campo_listar.clone();
+            Box::pin(async move { handler_list_campos(state.operacional.as_ref(), env).await })
+        })
+        .route("CreateCampoPersonalizado", move |env| {
+            let state = s_campo_criar.clone();
+            Box::pin(async move {
+                handler_create_campo(state.operacional.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("UpdateCampoPersonalizado", move |env| {
+            let state = s_campo_update.clone();
+            Box::pin(async move {
+                handler_update_campo(state.operacional.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("DesativarCampoPersonalizado", move |env| {
+            let state = s_campo_desativar.clone();
+            Box::pin(async move {
+                handler_desativar_campo(state.operacional.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("SetValorCampo", move |env| {
+            let state = s_valor_campo.clone();
+            Box::pin(async move { handler_set_valor_campo(state.operacional.as_ref(), env).await })
         })
         .route("ListFluxos", move |env| {
             let state = s_fluxo_listar.clone();
@@ -4028,6 +4072,93 @@ async fn handler_atualizar_sentimento(
 
 /// Resolve campos personalizados (coletados + pendentes obrigatórios) do
 /// atendimento para o Responder — input-only, sem write-back (N6.3).
+/// C1 — write-back do que a IA extraiu.
+///
+/// Chamado pelo worker depois de responder. As guardas ficam no adaptador; o
+/// que este handler faz é traduzir o envelope e **registrar o desfecho** — que
+/// é metade do valor da funcionalidade: sem o detalhamento por motivo, "a IA
+/// não preenche" é indistinguível de "a IA preenche errado".
+async fn handler_gravar_campos_extraidos(
+    store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let atendimento_id = match payload.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let campos: Vec<ports::CampoExtraidoDto> = payload
+        .get("campos")
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+    let mensagem_origem_id = payload
+        .get("mensagem_origem_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32);
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .gravar_campos_extraidos(&ctx, atendimento_id, campos, mensagem_origem_id)
+        .await
+    {
+        Ok(resumo) => {
+            // Só audita o que MUDOU a ficha. Um tick em que a IA não extraiu
+            // nada é o caso comum, e registrá-lo encheria a trilha de ruído
+            // justamente onde ela serve para responder "quem pôs isso aqui?".
+            if resumo.gravados > 0 {
+                audit
+                    .publish(
+                        &env,
+                        "campo_personalizado.preenchido_pela_ia",
+                        format!(
+                            "{} campo(s) preenchido(s) pela IA no atendimento #{}",
+                            resumo.gravados, atendimento_id
+                        ),
+                        // Nunca o valor: é livre, e pode ser CPF, endereço ou
+                        // diagnóstico. Quantidade e atendimento bastam para a
+                        // trilha; o conteúdo está na ficha, com controle de
+                        // acesso próprio.
+                        serde_json::json!({
+                            "atendimento_id": atendimento_id,
+                            "gravados": resumo.gravados,
+                        }),
+                    )
+                    .await;
+            }
+
+            // O span leva os descartes por motivo — é com ele que se calibra o
+            // piso de confiança depois. Nunca o `valor_json`.
+            tracing::info!(
+                atendimento_id,
+                recebidos = resumo.recebidos,
+                gravados = resumo.gravados,
+                slug_desconhecido = resumo.slug_desconhecido,
+                extracao_desligada = resumo.extracao_desligada,
+                tipo_invalido = resumo.tipo_invalido,
+                abaixo_do_piso = resumo.abaixo_do_piso,
+                humano_no_caminho = resumo.humano_no_caminho,
+                "ia.campos_extraidos"
+            );
+
+            ok_reply(
+                &env,
+                "GravarCamposExtraidosReply",
+                serde_json::to_value(&resumo).unwrap_or_default(),
+            )
+        }
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
 async fn handler_resolver_campos_atendimento(
     store: &dyn ports::AtendimentoStore,
     env: Envelope,
@@ -4632,6 +4763,234 @@ async fn handler_list_contatos(store: &dyn ports::ClienteStore, env: Envelope) -
 /// e a finalização fecha o atendimento. Um tipo inventado passaria pelo
 /// `VARCHAR(20)` e sumiria da lógica sem erro nenhum.
 const TIPOS_DE_ETAPA: [&str; 4] = ["fila", "trabalho", "espera", "finalizacao"];
+
+// --- N9 E13: campos do cartão --------------------------------------------
+
+/// O que impede um campo de nascer inútil.
+///
+/// Na borda, e não no adaptador: aqui existe `AppError::Validation`, e a
+/// mensagem chega à tela dizendo o que corrigir. No adaptador viraria erro de
+/// banco, que é outra coisa.
+fn conferir_campo(p: &serde_json::Value, criando: bool) -> Result<(), String> {
+    let texto = |k: &str| {
+        p.get(k)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+
+    if texto("nome").is_empty() {
+        return Err("o campo precisa de um nome".into());
+    }
+    // Nome só com pontuação não gera slug, e o slug é a identidade do campo —
+    // é ele que vai gravado dentro de cada valor extraído.
+    if !texto("nome").chars().any(|c| c.is_alphanumeric()) {
+        return Err("o nome precisa ter ao menos uma letra ou número".into());
+    }
+
+    // Escopo e fluxo são a identidade do campo e só entram na criação; editar
+    // não os move (ver `atualizar` no repositório).
+    if criando && texto("escopo") == "FLUXO" && p.get("fluxo_id").and_then(|v| v.as_i64()).is_none()
+    {
+        return Err("campo de escopo FLUXO precisa dizer de qual quadro".into());
+    }
+
+    // Lista sem opções não é lista: quem preenche não teria o que escolher, e
+    // a IA não teria contra o que validar o que extraiu.
+    if texto("tipo") == "lista" {
+        let vazia = p
+            .get("opcoes")
+            .and_then(|v| v.as_array())
+            .is_none_or(|a| a.is_empty());
+        if vazia {
+            return Err("um campo de lista precisa de ao menos uma opção".into());
+        }
+    }
+
+    Ok(())
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "ListCamposPersonalizados", tenant_id = %env.tenant_id))]
+async fn handler_list_campos(store: &dyn ports::OperacionalStore, env: Envelope) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_campos(&ctx).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListCamposPersonalizadosReply",
+            serde_json::json!({ "campos": itens }),
+        ),
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "CreateCampoPersonalizado", tenant_id = %env.tenant_id))]
+async fn handler_create_campo(
+    store: &dyn ports::OperacionalStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    if let Err(motivo) = conferir_campo(&payload, true) {
+        return erro(error_core::AppError::Validation(motivo), &env);
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store.criar_campo(&ctx, payload).await {
+        Ok(campo) => {
+            audit
+                .publish(
+                    &env,
+                    "campo_personalizado.criado",
+                    format!(
+                        "Campo '{}' criado no cartão de atendimento",
+                        campo.get("nome").and_then(|v| v.as_str()).unwrap_or("?")
+                    ),
+                    serde_json::json!({
+                        "id": campo.get("id"),
+                        "slug": campo.get("slug"),
+                        "tipo": campo.get("tipo"),
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "CreateCampoPersonalizadoReply",
+                serde_json::json!({ "campo": campo }),
+            )
+        }
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "UpdateCampoPersonalizado", tenant_id = %env.tenant_id))]
+async fn handler_update_campo(
+    store: &dyn ports::OperacionalStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let id = match payload.get("id").and_then(|v| v.as_i64()) {
+        Some(v) => v,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+    if let Err(motivo) = conferir_campo(&payload, false) {
+        return erro(error_core::AppError::Validation(motivo), &env);
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store.atualizar_campo(&ctx, id, payload).await {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "campo_personalizado.atualizado",
+                    format!("Campo #{id} do cartão atualizado"),
+                    serde_json::json!({ "id": id }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "UpdateCampoPersonalizadoReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Database("não encontrado: campo".into()),
+            &env,
+        ),
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "DesativarCampoPersonalizado", tenant_id = %env.tenant_id))]
+async fn handler_desativar_campo(
+    store: &dyn ports::OperacionalStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = match payload.get("id").and_then(|v| v.as_i64()) {
+        Some(v) => v,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+    let ctx = contexto_do_envelope(&env);
+    match store.desativar_campo(&ctx, id).await {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "campo_personalizado.desativado",
+                    format!("Campo #{id} do cartão desativado"),
+                    serde_json::json!({ "id": id }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "DesativarCampoPersonalizadoReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Database("não encontrado: campo".into()),
+            &env,
+        ),
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+/// Preenchimento manual de um campo na ficha.
+///
+/// Sem auditoria de negócio: o valor é do atendimento e a ficha já registra
+/// autor e horário. Auditar cada digitação encheria a trilha de segurança de
+/// coisa que não é segurança — e o valor não pode ir para lá de qualquer
+/// forma (é livre, pode ser CPF ou diagnóstico).
+#[tracing::instrument(skip_all, fields(rpc = "SetValorCampo", tenant_id = %env.tenant_id))]
+async fn handler_set_valor_campo(store: &dyn ports::OperacionalStore, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let (Some(atendimento_id), Some(campo_id)) = (
+        payload.get("atendimento_id").and_then(|v| v.as_i64()),
+        payload.get("campo_id").and_then(|v| v.as_i64()),
+    ) else {
+        return erro(
+            error_core::AppError::Validation("atendimento_id e campo_id são obrigatórios".into()),
+            &env,
+        );
+    };
+    // `valor` ausente é diferente de `null`: ausente é erro de chamada, `null`
+    // é o apagamento deliberado que a IA precisa respeitar.
+    let valor = match payload.get("valor") {
+        Some(v) => v.clone(),
+        None => {
+            return erro(
+                error_core::AppError::Validation("valor ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .definir_valor_campo(&ctx, atendimento_id as i32, campo_id, valor)
+        .await
+    {
+        Ok(_) => ok_reply(
+            &env,
+            "SetValorCampoReply",
+            serde_json::json!({ "sucesso": true }),
+        ),
+        Err(e) => erro(e.into(), &env),
+    }
+}
 
 #[tracing::instrument(skip_all, fields(rpc = "ListFluxos", tenant_id = %env.tenant_id))]
 async fn handler_list_fluxos(store: &dyn ports::OperacionalStore, env: Envelope) -> Envelope {

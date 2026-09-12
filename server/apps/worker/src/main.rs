@@ -470,9 +470,13 @@ async fn responder_via_ia(
         .map(|f| (f.chave.clone(), f.fluxo_id.to_string()))
         .collect();
 
-    // 4c. Campos personalizados do atendimento (N6.3): input-only para o Responder —
-    // o contrato do Responder não devolve campos extraídos, então não há write-back
-    // aqui (ver decisão registrada no plano). Best-effort: falha = seguir sem campos.
+    // 4c. Campos personalizados do atendimento (N6.3). Já foi input-only,
+    // porque o `ResponderResponse` não tinha por onde devolver o extraído — a
+    // IA perguntava, o cliente respondia, e o valor sumia. O write-back existe
+    // desde o C1 e acontece depois da resposta, mais abaixo.
+    //
+    // Best-effort na leitura também: falhar aqui é seguir sem campos, não
+    // deixar o cliente sem resposta.
     let (campos_coletados, campos_pendentes) = match chamar_rpc(
         &state.pg_client,
         &tenant_id_str,
@@ -560,6 +564,45 @@ async fn responder_via_ia(
             traceparent,
         )
         .await;
+    }
+
+    // C1 — fecha o laço: o que a IA extraiu vira valor na ficha.
+    //
+    // Depois de responder, e best-effort: se a gravação falhar, o cliente já
+    // recebeu a resposta e o campo volta a ser perguntado adiante. Derrubar a
+    // conversa por causa da ficha inverteria as prioridades.
+    //
+    // As guardas (slug do catálogo, tipo, piso de confiança, humano no
+    // caminho) estão no `data_postgres`: aqui só se repassa o que o modelo
+    // devolveu, sem filtrar — filtrar em dois lugares faria os contadores do
+    // log mentirem sobre o que a IA de fato mandou.
+    if !resposta.campos_extraidos.is_empty() {
+        let campos: Vec<serde_json::Value> = resposta
+            .campos_extraidos
+            .iter()
+            .map(|c| {
+                serde_json::json!({
+                    "slug": c.slug,
+                    "valor_json": c.valor_json,
+                    "confianca": c.confianca,
+                })
+            })
+            .collect();
+        if let Err(e) = chamar_rpc(
+            &state.pg_client,
+            &tenant_id_str,
+            "GravarCamposExtraidos",
+            serde_json::json!({
+                "atendimento_id": atendimento_id,
+                "campos": campos,
+            }),
+            causation_id,
+            traceparent,
+        )
+        .await
+        {
+            tracing::warn!(erro = %e, "GravarCamposExtraidos falhou; a ficha segue sem o valor");
+        }
     }
 
     // A confiança entra no span: é número, não revela conteúdo, e é o que

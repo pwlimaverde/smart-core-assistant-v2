@@ -26,11 +26,11 @@ final class GrpcApiClient implements GrpcTransport {
     required String endpoint,
     required Future<String?> Function() readAccessToken,
     bool enableLogging = false,
-  })  : _uri = _normalizarEndpoint(endpoint),
-        // Campo privado em parâmetro nomeado: o initializing formal não é permitido
-        // porque parâmetros nomeados não podem começar com "_".
-        // ignore: prefer_initializing_formals
-        _enableLogging = enableLogging {
+  }) : _uri = _normalizarEndpoint(endpoint),
+       // Campo privado em parâmetro nomeado: o initializing formal não é permitido
+       // porque parâmetros nomeados não podem começar com "_".
+       // ignore: prefer_initializing_formals
+       _enableLogging = enableLogging {
     _channel = GrpcWebClientChannel.xhr(_uri);
     _auth = AuthServiceClient(
       _channel,

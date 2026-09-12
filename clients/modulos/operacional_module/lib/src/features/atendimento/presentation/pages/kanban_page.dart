@@ -52,12 +52,7 @@ class KanbanPage extends StatefulWidget {
   /// não sabe listar clientes não deve oferecer o caminho.
   final BuscarContatos? buscarContatos;
 
-  const KanbanPage({
-    this.drawer,
-    this.aviso,
-    this.buscarContatos,
-    super.key,
-  });
+  const KanbanPage({this.drawer, this.aviso, this.buscarContatos, super.key});
 
   @override
   State<KanbanPage> createState() => _KanbanPageState();

@@ -1131,6 +1131,14 @@ service AdminService {
   rpc GetMyPainel(GetMyPainelRequest) returns (GetMyPainelResponse);
   rpc ListMyContatos(ListMyContatosRequest) returns (ListMyContatosResponse);
 
+  // N9 E13 — o catalogo de campos do cartao, por tenant.
+  rpc ListMyCampos(ListMyCamposRequest) returns (ListMyCamposResponse);
+  rpc CreateMyCampo(CreateMyCampoRequest) returns (MyCampoResponse);
+  rpc UpdateMyCampo(UpdateMyCampoRequest) returns (SimpleOkResponse);
+  rpc DesativarMyCampo(MyCampoIdRequest) returns (SimpleOkResponse);
+  // Preenchimento manual na ficha do atendimento.
+  rpc SetMyValorCampo(SetMyValorCampoRequest) returns (SimpleOkResponse);
+
   // Fluxos de atendimento e suas etapas — o quadro por onde a conversa anda.
   rpc ListMyFluxos(ListMyFluxosRequest) returns (ListMyFluxosResponse);
   rpc CreateMyFluxo(CreateMyFluxoRequest) returns (MyFluxoResponse);
@@ -1251,6 +1259,90 @@ message MyContato {
   bool ativo = 6;
   int64 ultima_interacao = 7;
   int64 cadastrado_em = 8;
+}
+
+// --- N9 E13: campos do cartao de atendimento -----------------------------
+//
+// Cada tenant desenha a ficha que faz sentido para o negocio dele: numero do
+// pedido, data de retorno, tipo de produto. O modelo e o do Trello — nome,
+// tipo de dado, e uma descricao que serve de instrucao para a IA preencher.
+
+message OpcaoCampo {
+  // Id estavel: e ele que fica gravado no valor. Renomear o rotulo depois nao
+  // pode invalidar o que ja foi preenchido.
+  string id = 1;
+  string rotulo = 2;
+}
+
+message MyCampoPersonalizado {
+  int64  id = 1;
+  string slug = 2;
+  string nome = 3;
+  // Serve a duas leituras: explica o campo para quem preenche a mao e diz a
+  // IA o que procurar. E a "descricao completa" do pedido original.
+  string descricao = 4;
+  // GLOBAL (todo atendimento) ou FLUXO (so o quadro escolhido).
+  string escopo = 5;
+  optional int32 fluxo_id = 6;
+  // texto | numero | data | booleano | lista
+  string tipo = 7;
+  repeated OpcaoCampo opcoes = 8;
+  // Regra de TELA: impede concluir o atendimento sem o campo.
+  bool obrigatorio = 9;
+  // Regra de PROMPT: a IA tenta obter no meio da conversa. Sao coisas
+  // diferentes, e trata-las como uma so foi um defeito real (C2).
+  bool extrair_automaticamente = 10;
+  // Como perguntar sem soar interrogatorio.
+  string extrair_hint = 11;
+  bool mostrar_no_card = 12;
+  int32 ordem = 13;
+  bool ativo = 14;
+}
+
+message ListMyCamposRequest {
+  // Vazio = todos. Com fluxo, devolve os GLOBAL mais os daquele quadro.
+  optional int32 fluxo_id = 1;
+}
+message ListMyCamposResponse { repeated MyCampoPersonalizado campos = 1; }
+
+message CreateMyCampoRequest {
+  string nome = 1;
+  string descricao = 2;
+  string escopo = 3;
+  optional int32 fluxo_id = 4;
+  string tipo = 5;
+  repeated OpcaoCampo opcoes = 6;
+  bool obrigatorio = 7;
+  bool extrair_automaticamente = 8;
+  string extrair_hint = 9;
+  bool mostrar_no_card = 10;
+  int32 ordem = 11;
+}
+message MyCampoResponse { MyCampoPersonalizado campo = 1; }
+
+message UpdateMyCampoRequest {
+  int64  id = 1;
+  string nome = 2;
+  string descricao = 3;
+  string tipo = 4;
+  repeated OpcaoCampo opcoes = 5;
+  bool obrigatorio = 6;
+  bool extrair_automaticamente = 7;
+  string extrair_hint = 8;
+  bool mostrar_no_card = 9;
+  int32 ordem = 10;
+  bool ativo = 11;
+}
+message MyCampoIdRequest { int64 id = 1; }
+
+// Preenchimento manual, pelo operador. A origem fica registrada: um valor
+// escrito por gente nao pode ser sobrescrito pela IA depois.
+message SetMyValorCampoRequest {
+  int32  atendimento_id = 1;
+  int64  campo_id = 2;
+  // JSON na forma do `tipo`. `null` = apagar de proposito, que e diferente de
+  // nunca ter sido preenchido: a IA nao repreenche o que alguem apagou.
+  string valor_json = 3;
 }
 
 message ListMyContatosRequest {
@@ -1588,6 +1680,30 @@ message DetalheAtendimentoResponse {
   // controle da ficha religa. Sem este campo a tela nao teria como saber em
   // que estado esta o interruptor que ela mesma desenha.
   bool bot_pode_atender = 4;
+  // N9 E13 — os campos do cartao aplicaveis a este atendimento, ja com o
+  // valor quando ha. Vem juntos com o resto da ficha porque a tela os desenha
+  // no mesmo painel: buscar em duas chamadas faria metade da ficha aparecer
+  // antes da outra.
+  repeated ValorCampoDoAtendimento campos = 5;
+}
+
+// Um campo do cartao na ficha de UM atendimento: a definicao mais o valor.
+message ValorCampoDoAtendimento {
+  int64  campo_id = 1;
+  string slug = 2;
+  string nome = 3;
+  string descricao = 4;
+  string tipo = 5;
+  repeated OpcaoCampo opcoes = 6;
+  bool   obrigatorio = 7;
+  // Vazio = nunca preenchido. `"null"` = apagado de proposito, e a IA nao
+  // repreenche o que alguem apagou.
+  string valor_json = 8;
+  // MANUAL | IA — a tela mostra de onde veio, e a confianca quando foi a IA.
+  string origem = 9;
+  double confianca = 10;
+  // TRUE quando uma pessoa escreveu ou apagou: a IA nao sobrescreve.
+  bool   editado_por_humano = 11;
 }
 
 message CreateEtiquetaRequest {

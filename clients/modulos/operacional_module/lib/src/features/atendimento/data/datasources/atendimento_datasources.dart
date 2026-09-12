@@ -1,5 +1,6 @@
 import 'package:return_success_or_error/return_success_or_error.dart';
 
+import '../../domain/parameters/definir_valor_campo_parameters.dart';
 import '../../domain/parameters/iniciar_atendimento_parameters.dart';
 import '../../domain/model/atendimento_iniciado.dart';
 import '../../domain/gateways/atendimento_gateway.dart';
@@ -74,6 +75,24 @@ final class IniciarAtendimentoDatasource
       departamentoId: parameters.departamentoId,
       assunto: parameters.assunto,
     );
+  }
+}
+
+/// N9 E13 — preenche um campo do cartão nesta conversa.
+final class DefinirValorCampoDatasource
+    implements Datasource<Unit, DefinirValorCampoParameters> {
+  final AtendimentoGateway _gateway;
+
+  const DefinirValorCampoDatasource({required this._gateway});
+
+  @override
+  Future<Unit> call(DefinirValorCampoParameters parameters) async {
+    await _gateway.definirValorCampo(
+      atendimentoId: parameters.atendimentoId,
+      campoId: parameters.campoId,
+      valorJson: parameters.valorJson,
+    );
+    return unit;
   }
 }
 

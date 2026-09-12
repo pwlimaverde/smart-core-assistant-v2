@@ -81,6 +81,12 @@ class TenantDrawer extends StatelessWidget {
                     atual: location,
                   ),
                   _Item(
+                    icone: Icons.dashboard_customize_outlined,
+                    titulo: 'Campos do atendimento',
+                    rota: '/tenant/campos',
+                    atual: location,
+                  ),
+                  _Item(
                     icone: Icons.qr_code_2_outlined,
                     titulo: 'Conexões de WhatsApp',
                     rota: '/tenant/conexoes',

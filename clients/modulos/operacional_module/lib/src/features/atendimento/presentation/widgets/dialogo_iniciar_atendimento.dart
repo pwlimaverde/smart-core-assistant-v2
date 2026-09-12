@@ -231,7 +231,10 @@ class _DialogoState extends State<_Dialogo> {
                 decoration: const InputDecoration(labelText: 'Quadro'),
                 items: [
                   for (final fluxo in widget.quadro.fluxos)
-                    DropdownMenuItem(value: fluxo.id, child: Text(fluxo.rotulo)),
+                    DropdownMenuItem(
+                      value: fluxo.id,
+                      child: Text(fluxo.rotulo),
+                    ),
                 ],
                 onChanged: (v) => setState(() => _fluxoId = v),
               ),

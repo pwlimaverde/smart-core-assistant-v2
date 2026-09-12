@@ -75,6 +75,15 @@ pub const MAPA: &[(&str, &[&str])] = &[
     ("DefinirBotDaConversa", &["atendimentos:write"]),
     // C3: abrir conversa é escrever no atendimento, não configurar o tenant.
     ("IniciarAtendimentoManual", &["atendimentos:write"]),
+    // N9 E13 — desenhar a ficha é configurar o tenant, não atender.
+    ("ListMyCampos", &["configuracoes:read"]),
+    ("CreateMyCampo", &["configuracoes:write"]),
+    ("UpdateMyCampo", &["configuracoes:write"]),
+    ("DesativarMyCampo", &["configuracoes:write"]),
+    // Já PREENCHER é atender: quem está na conversa é quem sabe o valor, e
+    // exigir escopo de configuração para digitar na ficha travaria o
+    // atendente no meio do atendimento.
+    ("SetMyValorCampo", &["atendimentos:write"]),
     // --- Base de conhecimento do assistente.
     ("ListTreinamentos", &["treinamento:read"]),
     ("GetTreinamento", &["treinamento:read"]),

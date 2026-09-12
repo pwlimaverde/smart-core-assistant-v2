@@ -28,8 +28,8 @@ void main() {
     final r = await u.iniciar(pedido);
 
     expect(r, isA<Success<AtendimentoIniciado, IniciarAtendimentoError>>());
-    final valor = (r as Success<AtendimentoIniciado, IniciarAtendimentoError>)
-        .value;
+    final valor =
+        (r as Success<AtendimentoIniciado, IniciarAtendimentoError>).value;
     expect(valor.atendimentoId, 501);
     expect(valor.jaExistia, isFalse);
     expect(gateway.iniciarRecebido?.assunto, 'Renovação do contrato');
@@ -50,8 +50,8 @@ void main() {
 
     final r = await u.iniciar(pedido);
 
-    final valor = (r as Success<AtendimentoIniciado, IniciarAtendimentoError>)
-        .value;
+    final valor =
+        (r as Success<AtendimentoIniciado, IniciarAtendimentoError>).value;
     expect(valor.atendimentoId, 42);
     expect(valor.jaExistia, isTrue);
   });

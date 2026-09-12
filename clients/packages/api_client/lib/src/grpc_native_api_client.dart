@@ -34,10 +34,10 @@ final class GrpcNativeApiClient implements GrpcTransport {
     required String endpoint,
     required Future<String?> Function() readAccessToken,
     bool enableLogging = false,
-  })  : _host = _extrairHost(endpoint),
-        _port = _extrairPorta(endpoint),
-        // ignore: prefer_initializing_formals
-        _enableLogging = enableLogging {
+  }) : _host = _extrairHost(endpoint),
+       _port = _extrairPorta(endpoint),
+       // ignore: prefer_initializing_formals
+       _enableLogging = enableLogging {
     _channel = ClientChannel(
       _host,
       port: _port,
@@ -73,7 +73,9 @@ final class GrpcNativeApiClient implements GrpcTransport {
     // gRPC não tem handshake explícito; o canal conecta sob demanda.
     if (_enableLogging) {
       // ignore: avoid_print
-      print('GrpcNativeApiClient.connect → host=$_host port=$_port status=ready');
+      print(
+        'GrpcNativeApiClient.connect → host=$_host port=$_port status=ready',
+      );
     }
   }
 

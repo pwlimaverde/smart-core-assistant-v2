@@ -452,9 +452,7 @@ void atualizaSozinhaEnquantoProcessa() {
     tester.view.physicalSize = const Size(1400, 1600);
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
-    await tester.pumpWidget(
-      const MaterialApp(home: TreinamentoPage()),
-    );
+    await tester.pumpWidget(const MaterialApp(home: TreinamentoPage()));
     await tester.pumpAndSettle();
 
     expect(find.text('Processando'), findsOneWidget);
