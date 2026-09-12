@@ -20,12 +20,6 @@
 --
 -- Revogação é SOFT (`revoked_at`): a trilha de auditoria referencia `grant_id`,
 -- e apagar a linha deixaria o audit_log apontando para o nada.
---
--- Sem `GRANT` explícito, de propósito: a migration 0018 configurou
--- `ALTER DEFAULT PRIVILEGES IN SCHEMA public` para a `smartcore_app_rt`, então
--- toda tabela criada depois dela pela mesma role já nasce com DML concedido.
--- Verificado contra o banco de dev: `tenants_voucher` (criada na 0027, também
--- sem GRANT) tem SELECT/INSERT/UPDATE/DELETE para a role de runtime.
 
 CREATE TABLE mcp_oauth_grant (
     id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
