@@ -75,16 +75,40 @@ class _ConexoesPageState extends State<ConexoesPage> {
                     ),
                   ],
                 )
-              : ListView.separated(
-                  itemCount: itens.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
-                  // O context do item não abre diálogos: ele é desmontado
-                  // quando a lista recarrega.
-                  itemBuilder: (_, i) => _Linha(
-                    conexao: itens[i],
-                    controller: _controller,
-                    abrirPareamento: _abrirPareamento,
-                  ),
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Não há "editar", e a ausência precisa ser explicada.
+                    //
+                    // O nome é o identificador da instância no provedor:
+                    // renomeá-lo desfaria o vínculo e exigiria parear de novo.
+                    // Sem esta linha, quem procura o botão conclui que ele
+                    // sumiu — e é só o botão que nunca deveria existir.
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      child: Text(
+                        'O nome identifica a conexão no provedor e por isso não '
+                        'muda. Para usar outro, remova esta e conecte de novo '
+                        '— com QR novo.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: context.colors.fgMuted,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: ListView.separated(
+                        itemCount: itens.length,
+                        separatorBuilder: (_, _) => const SizedBox(height: 12),
+                        // O context do item não abre diálogos: ele é desmontado
+                        // quando a lista recarrega.
+                        itemBuilder: (_, i) => _Linha(
+                          conexao: itens[i],
+                          controller: _controller,
+                          abrirPareamento: _abrirPareamento,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
         ),
       ),
