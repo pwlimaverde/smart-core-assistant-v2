@@ -9,6 +9,7 @@ void main() {
         flavor: AppFlavor.dev,
         apiEndpoint: 'http://localhost:50051',
         mcpEndpoint: 'https://mcp.example/mcp',
+        appPublicUrl: 'https://exemplo.com.br/v2/tenant',
         enableLogging: false,
       );
 
@@ -21,6 +22,7 @@ void main() {
         flavor: AppFlavor.dev,
         apiEndpoint: 'http://localhost:50051',
         mcpEndpoint: 'https://mcp.example/mcp',
+        appPublicUrl: 'https://exemplo.com.br/v2/tenant',
         enableLogging: true,
       );
 

@@ -190,3 +190,49 @@ API. Iniciar conversa é tecnicamente trivial — e é o caminho mais curto para
 número do tenant ser denunciado. **Ainda falta**: teto diário por tenant e
 recusa clara quando a instância não está conectada. A auditoria
 (`atendimento.iniciado_manualmente`, com autor e contato, sem o texto) já está.
+
+---
+
+## Segunda rodada de teste (12/09, tarde)
+
+### O treinamento que a IA não via
+
+Três bloqueios em série, e cada um escondia o seguinte:
+
+1. **A chave da OpenAI** (`…mIYA`) fazia o `Embed` falhar com 401. Isso
+   travava as **intenções** — que a partir da chave nova passaram a vetorizar.
+2. **O material estava em Rascunho.** A fila de vetorização só pega
+   `treinamento_finalizado = true`, e a busca RAG exige isso **e** embedding.
+   O texto ficou cadastrado desde as 13:48 sem nunca entrar na fila.
+3. **A tela não contava isso.** Rascunho era um selo cinza de 10px com a
+   explicação num tooltip. Cinza lê como "tudo certo"; o estado é o oposto.
+
+Corrigido: selo em cor de aviso, a frase "A IA ainda não usa este material" na
+linha, e a ação rotulada ("Enviar para a IA") no lugar de um ícone de revisar.
+
+**E o cartão não saía de "Processando"**: quem vetoriza é o worker, minutos
+depois. A lista passa a se reler a cada 15s enquanto houver pendência, e para
+quando não houver.
+
+### O link do convite ia para fora do app
+
+O e-mail chegou e a página deu HTTP 400. O link era montado sobre o
+`apiEndpoint` — mas o gRPC atende no domínio raiz e o app do tenant é servido
+sob `/v2/tenant/`. Corrigido nos dois lugares onde o link nasce (servidor e
+cliente), com `appPublicUrl` por flavor e verificação dentro do binário no
+script de build.
+
+### Conexões
+
+O QR só era oferecido ao **criar** a conexão; agora o cartão traz "Ler QR code"
+sempre que ela não está no ar. "Conectando" virou "Aguardando QR" — o provedor
+não está tentando nada, ele espera uma ação humana.
+
+**Uma regressão registrada**: fazer o servidor recusar a reconexão de aparelho
+desvinculado tirou a tela do caminho que resolve (o sucesso já abria o QR, de
+propósito). O desfecho voltou para o corpo da resposta. A tentativa de
+distinguir por `failedPrecondition` foi barrada por um teste existente — no
+reconectar essa condição também cobre "instância já está conectada".
+
+**Editar conexão**: decidido não construir. O nome é o identificador da
+instância no provedor; renomear desfaria o vínculo. A tela passa a explicar.

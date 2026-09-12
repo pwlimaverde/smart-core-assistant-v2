@@ -21,6 +21,7 @@ void main() {
       flavor: AppFlavor.dev,
       apiEndpoint: 'http://localhost',
       mcpEndpoint: 'https://mcp.example/mcp',
+      appPublicUrl: 'https://exemplo.com.br/v2/tenant',
     );
 
     tearDown(() {
@@ -46,6 +47,7 @@ void main() {
       flavor: AppFlavor.dev,
       apiEndpoint: 'http://localhost',
       mcpEndpoint: 'https://mcp.example/mcp',
+      appPublicUrl: 'https://exemplo.com.br/v2/tenant',
     );
 
     late MockLocalStorageService mockStorage;
