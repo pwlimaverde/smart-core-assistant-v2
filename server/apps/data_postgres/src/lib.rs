@@ -112,8 +112,8 @@ pub async fn processar_eventos_auditoria_lote(
             for (stream_id, entry) in &globais {
                 let row = sqlx::query(
                     r#"
-                    INSERT INTO audit_log (tenant_id, level, service, trace_id, event, message, context, user_id, ip_address, user_agent)
-                    VALUES (NULL, $1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    INSERT INTO audit_log (tenant_id, level, service, trace_id, event, message, context, user_id, ip_address, user_agent, timestamp)
+                    VALUES (NULL, $1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, now()))
                     RETURNING id
                     "#
                 )
@@ -126,6 +126,11 @@ pub async fn processar_eventos_auditoria_lote(
                 .bind(entry.user_id)
                 .bind(&entry.ip_address)
                 .bind(&entry.user_agent)
+                // Este caminho tem INSERT proprio, separado do
+                // `inserir_audit_log_global` da infrastructure_postgres. Descobri
+                // isso da pior forma: corrigi la, publiquei, e o evento de teste
+                // continuou entrando com a hora da gravacao.
+                .bind(entry.timestamp)
                 .fetch_one(&mut *tx)
                 .await?;
 
