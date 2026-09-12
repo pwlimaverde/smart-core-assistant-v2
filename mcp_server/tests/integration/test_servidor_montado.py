@@ -98,8 +98,12 @@ def test_o_sdk_publica_o_documento_da_rfc_9728(servidor):
 
     assert r.status_code == 200
     corpo = r.json()
-    assert corpo["resource"].rstrip("/") == RESOURCE
-    assert any(ISSUER in a for a in corpo["authorization_servers"])
+    # Igualdade exata, de propósito: era `.rstrip("/")` e `ISSUER in a`, e por
+    # isso o teste passava com o documento anunciando `".../"` enquanto o AS
+    # anunciava `"..."`. O cliente compara string (RFC 8414 §3) — se afrouxamos
+    # aqui, o teste passa e a conexão não conecta.
+    assert corpo["resource"] == RESOURCE
+    assert corpo["authorization_servers"] == [ISSUER]
 
 
 def test_sem_token_responde_401_com_o_caminho_da_autorizacao(servidor):

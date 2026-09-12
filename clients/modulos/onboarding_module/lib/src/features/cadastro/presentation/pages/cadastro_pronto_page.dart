@@ -183,10 +183,9 @@ class _Aguardando extends StatelessWidget {
           'Aguardando a confirmação do pagamento. Isto pode levar alguns '
           'instantes — deixe esta tela aberta.',
           textAlign: TextAlign.center,
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: colors.fgMuted),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: colors.fgMuted),
         ),
       ],
     );
@@ -223,29 +222,26 @@ class _Impasse extends StatelessWidget {
         Text(
           'Não conseguimos confirmar o estado da sua conta.',
           textAlign: TextAlign.center,
-          style: Theme.of(context)
-              .textTheme
-              .titleMedium
-              ?.copyWith(fontWeight: FontWeight.bold),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
           detalhe,
           textAlign: TextAlign.center,
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: colors.fgMuted),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colors.fgMuted),
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
           'Se o pagamento já foi aceito, sua conta pode estar pronta mesmo '
           'assim — vale tentar entrar.',
           textAlign: TextAlign.center,
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: colors.fgMuted),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: colors.fgMuted),
         ),
         if (erroLogin case final msg?) ...[
           const SizedBox(height: AppSpacing.md),
@@ -294,10 +290,9 @@ class _Liberada extends StatelessWidget {
           'Conta liberada. Vamos deixar seu atendimento funcionando — '
           'são mais quatro passos rápidos.',
           textAlign: TextAlign.center,
-          style: Theme.of(context)
-              .textTheme
-              .bodyMedium
-              ?.copyWith(color: colors.fgMuted),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: colors.fgMuted),
         ),
         if (erro case final msg?) ...[
           const SizedBox(height: AppSpacing.md),

@@ -73,7 +73,8 @@ class _EtapasFluxoPageState extends State<EtapasFluxoPage> {
                 onSuccess: (context, etapas) => etapas.isEmpty
                     ? const AppEmptyView(
                         title: 'Nenhuma coluna',
-                        subtitle: 'Sem uma coluna de entrada, conversa nova não '
+                        subtitle:
+                            'Sem uma coluna de entrada, conversa nova não '
                             'tem onde cair neste fluxo.',
                       )
                     : ListView.separated(
@@ -139,10 +140,9 @@ class _LinhaEtapa extends StatelessWidget {
                     item.tipo.rotulo,
                     if (item.descricao.isNotEmpty) item.descricao,
                   ].join(' · '),
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: muted),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: muted),
                 ),
               ],
             ),

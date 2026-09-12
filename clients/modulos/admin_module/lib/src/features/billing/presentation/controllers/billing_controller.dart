@@ -98,8 +98,7 @@ final class BillingController extends BaseController<BillingState> {
               (subsRes as Success<List<Subscription>, BillingError>).value,
           payments:
               (paymentsRes as Success<List<PaymentRecord>, BillingError>).value,
-          vouchers:
-              (vouchersRes as Success<List<Voucher>, BillingError>).value,
+          vouchers: (vouchersRes as Success<List<Voucher>, BillingError>).value,
         ),
       );
     });

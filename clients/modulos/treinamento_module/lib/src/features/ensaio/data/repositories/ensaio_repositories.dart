@@ -20,11 +20,14 @@ final class TestarPerguntaRepository
       error: e,
     );
     return switch (kind) {
-      GrpcFailureKind.unauthenticated ||
+      // Separados de propósito: sessão expirada não é falta de
+      // permissão, e juntar as duas manda a pessoa caçar um acesso
+      // que ela já tem.
+      GrpcFailureKind.unauthenticated => const EnsaioSessaoExpirada(),
       GrpcFailureKind.permissionDenied => const EnsaioAcessoNegado(),
       GrpcFailureKind.invalidArgument => EnsaioPerguntaInvalida(
-          e is GrpcError ? e.message : null,
-        ),
+        e is GrpcError ? e.message : null,
+      ),
       // O servidor devolve `unavailable` quando o provedor de IA não respondeu:
       // esperar é a ação certa, não mexer no treinamento.
       GrpcFailureKind.unavailable ||

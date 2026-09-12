@@ -14,7 +14,7 @@ sealed class ConfiguracaoError extends AppError {
 final class ConfiguracaoDadosInvalidos extends ConfiguracaoError
     with ValidationFailure {
   const ConfiguracaoDadosInvalidos([String? mensagem])
-      : super(mensagem ?? 'Verifique os dados informados.');
+    : super(mensagem ?? 'Verifique os dados informados.');
 }
 
 /// Limite do plano atingido — criar outra conexão exige mudar de plano.
@@ -23,28 +23,40 @@ final class ConfiguracaoDadosInvalidos extends ConfiguracaoError
 /// de um número fixo no código.
 final class LimiteDoPlanoAtingido extends ConfiguracaoError {
   const LimiteDoPlanoAtingido()
-      : super(
-          'Você atingiu o limite de conexões do seu plano. '
-          'Fale com o suporte para ampliar.',
-        );
+    : super(
+        'Você atingiu o limite de conexões do seu plano. '
+        'Fale com o suporte para ampliar.',
+      );
 }
 
 /// A sessão perdeu a validade ou falta escopo de administração do tenant.
 final class ConfiguracaoNaoAutorizada extends ConfiguracaoError {
   const ConfiguracaoNaoAutorizada()
-      : super('Sua sessão expirou. Entre novamente.');
+    : super('Sua sessão expirou. Entre novamente.');
+}
+
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [ConfiguracaoNaoAutorizada]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class ConfiguracaoSessaoExpirada extends ConfiguracaoError
+    with UnauthorizedFailure {
+  const ConfiguracaoSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
 }
 
 /// Servidor fora do ar, ou o provedor de WhatsApp não respondeu.
 final class ConfiguracaoIndisponivel extends ConfiguracaoError
     with NetworkFailure {
   const ConfiguracaoIndisponivel()
-      : super('Serviço indisponível no momento. Tente novamente.');
+    : super('Serviço indisponível no momento. Tente novamente.');
 }
 
 /// Falha não modelada.
 final class ConfiguracaoInesperada extends ConfiguracaoError
     with UnexpectedFailure {
   const ConfiguracaoInesperada()
-      : super('Não foi possível concluir. Tente novamente.');
+    : super('Não foi possível concluir. Tente novamente.');
 }

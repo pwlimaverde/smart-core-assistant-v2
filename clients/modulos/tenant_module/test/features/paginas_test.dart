@@ -189,9 +189,9 @@ void main() {
       // nenhum onde o código aparecesse. Agora reconectar abre a caixa que
       // mostra o QR e acompanha o pareamento.
       respondeCom('disconnected');
-      when(() => client.reconnectMyWhatsappInstance(any())).thenAnswer(
-        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
-      );
+      when(
+        () => client.reconnectMyWhatsappInstance(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
       // Desconectada ao abrir a tela (para o botão aparecer) e conectada da
       // segunda consulta em diante: o pareamento conclui, a caixa anuncia e o
       // ciclo de espera para — sem isso o teste não estabiliza.
@@ -264,9 +264,9 @@ void main() {
       tester,
     ) async {
       respondeCom('connected');
-      when(() => client.deleteMyWhatsappInstance(any())).thenAnswer(
-        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
-      );
+      when(
+        () => client.deleteMyWhatsappInstance(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
       registrar();
 
       await montar(tester, const ConexoesPage());
@@ -313,9 +313,9 @@ void main() {
     testWidgets('erro do servidor vira tela de erro com retentar', (
       tester,
     ) async {
-      when(() => client.listMyWhatsappInstances(any())).thenAnswer(
-        (_) => falhaGrpc(proto.GrpcError.unavailable('fora do ar')),
-      );
+      when(
+        () => client.listMyWhatsappInstances(any()),
+      ).thenAnswer((_) => falhaGrpc(proto.GrpcError.unavailable('fora do ar')));
       registrar();
 
       await montar(tester, const ConexoesPage());
@@ -406,13 +406,13 @@ void main() {
     }
 
     proto.MyDepartamento depto({bool ativo = true}) => proto.MyDepartamento(
-          id: 1,
-          nome: 'Suporte',
-          slug: 'suporte',
-          descricao: 'Dúvidas de pedidos',
-          ativo: ativo,
-          criadoEm: Int64(DateTime(2026, 8, 1).millisecondsSinceEpoch),
-        );
+      id: 1,
+      nome: 'Suporte',
+      slug: 'suporte',
+      descricao: 'Dúvidas de pedidos',
+      ativo: ativo,
+      criadoEm: Int64(DateTime(2026, 8, 1).millisecondsSinceEpoch),
+    );
 
     testWidgets('mostra os departamentos', (tester) async {
       respondeListas(departamentos: [depto()]);
@@ -482,49 +482,49 @@ void main() {
       expect(find.textContaining('Suporte'), findsWidgets);
     });
 
-
-    testWidgets('criar atendente exige o fluxo, que o banco torna obrigatorio', (
-      tester,
-    ) async {
-      // `oraculo_atendente.fluxo_id` e NOT NULL: sem fluxo o INSERT falharia
-      // com erro de constraint, que nao diz nada a quem cadastra.
-      respondeListas(departamentos: [depto()]);
-      when(() => client.createMyAtendente(any())).thenAnswer(
-        (_) => respostaGrpc(
-          proto.MyAtendenteResponse(
-            atendente: proto.MyAtendente(id: 9, nome: 'Ana'),
+    testWidgets(
+      'criar atendente exige o fluxo, que o banco torna obrigatorio',
+      (tester) async {
+        // `oraculo_atendente.fluxo_id` e NOT NULL: sem fluxo o INSERT falharia
+        // com erro de constraint, que nao diz nada a quem cadastra.
+        respondeListas(departamentos: [depto()]);
+        when(() => client.createMyAtendente(any())).thenAnswer(
+          (_) => respostaGrpc(
+            proto.MyAtendenteResponse(
+              atendente: proto.MyAtendente(id: 9, nome: 'Ana'),
+            ),
           ),
-        ),
-      );
-      registrar();
+        );
+        registrar();
 
-      await montar(tester, const EquipePage());
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Atendentes'));
-      await tester.pumpAndSettle();
+        await montar(tester, const EquipePage());
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Atendentes'));
+        await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Novo atendente'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('Novo atendente'));
+        await tester.pumpAndSettle();
 
-      await tester.enterText(
-        find.widgetWithText(TextField, 'ex: Ana Souza'),
-        'Ana Souza',
-      );
-      await tester.enterText(
-        find.widgetWithText(TextField, 'ex: ana@empresa.com.br'),
-        'ana@empresa.com.br',
-      );
-      await tester.tap(find.text('Salvar'));
-      await tester.pumpAndSettle();
+        await tester.enterText(
+          find.widgetWithText(TextField, 'ex: Ana Souza'),
+          'Ana Souza',
+        );
+        await tester.enterText(
+          find.widgetWithText(TextField, 'ex: ana@empresa.com.br'),
+          'ana@empresa.com.br',
+        );
+        await tester.tap(find.text('Salvar'));
+        await tester.pumpAndSettle();
 
-      final enviado = verify(() => client.createMyAtendente(captureAny()))
-          .captured
-          .single as proto.CreateMyAtendenteRequest;
-      expect(enviado.nome, 'Ana Souza');
-      expect(enviado.fluxoId, 7);
-      // Sem departamento escolhido, vai 0 -- a coluna aceita NULL.
-      expect(enviado.departamentoId, 0);
-    });
+        final enviado =
+            verify(() => client.createMyAtendente(captureAny())).captured.single
+                as proto.CreateMyAtendenteRequest;
+        expect(enviado.nome, 'Ana Souza');
+        expect(enviado.fluxoId, 7);
+        // Sem departamento escolhido, vai 0 -- a coluna aceita NULL.
+        expect(enviado.departamentoId, 0);
+      },
+    );
 
     testWidgets('sem e-mail, a criacao e barrada dentro da janela', (
       tester,
@@ -554,9 +554,9 @@ void main() {
       tester,
     ) async {
       respondeListas(departamentos: [depto()]);
-      when(() => client.listMyFluxos(any())).thenAnswer(
-        (_) => respostaGrpc(proto.ListMyFluxosResponse()),
-      );
+      when(
+        () => client.listMyFluxos(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.ListMyFluxosResponse()));
       registrar();
 
       await montar(tester, const EquipePage());
@@ -585,9 +585,9 @@ void main() {
           ),
         ],
       );
-      when(() => client.updateMyAtendente(any())).thenAnswer(
-        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
-      );
+      when(
+        () => client.updateMyAtendente(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
       registrar();
 
       await montar(tester, const EquipePage());
@@ -607,9 +607,9 @@ void main() {
       await tester.tap(find.text('Salvar'));
       await tester.pumpAndSettle();
 
-      final enviado = verify(() => client.updateMyAtendente(captureAny()))
-          .captured
-          .single as proto.UpdateMyAtendenteRequest;
+      final enviado =
+          verify(() => client.updateMyAtendente(captureAny())).captured.single
+              as proto.UpdateMyAtendenteRequest;
       expect(enviado.maxAtendimentosSimultaneos, 6);
       expect(enviado.fluxoId, 7);
     });
@@ -632,9 +632,9 @@ void main() {
           ),
         ],
       );
-      when(() => client.updateMyAtendente(any())).thenAnswer(
-        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
-      );
+      when(
+        () => client.updateMyAtendente(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
       registrar();
 
       await montar(tester, const EquipePage());
@@ -649,9 +649,9 @@ void main() {
       await tester.tap(find.text('Salvar'));
       await tester.pumpAndSettle();
 
-      final enviado = verify(() => client.updateMyAtendente(captureAny()))
-          .captured
-          .single as proto.UpdateMyAtendenteRequest;
+      final enviado =
+          verify(() => client.updateMyAtendente(captureAny())).captured.single
+              as proto.UpdateMyAtendenteRequest;
       expect(enviado.ativo, isFalse);
       expect(enviado.disponivel, isFalse);
     });
@@ -718,9 +718,9 @@ void main() {
 
     testWidgets('editar abre o formulário preenchido e salva', (tester) async {
       respondeListas(departamentos: [depto()]);
-      when(() => client.updateMyDepartamento(any())).thenAnswer(
-        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
-      );
+      when(
+        () => client.updateMyDepartamento(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
       registrar();
 
       await montar(tester, const EquipePage());
@@ -740,9 +740,11 @@ void main() {
       await tester.tap(find.text('Salvar'));
       await tester.pumpAndSettle();
 
-      final enviado = verify(() => client.updateMyDepartamento(captureAny()))
-          .captured
-          .single as proto.UpdateMyDepartamentoRequest;
+      final enviado =
+          verify(
+                () => client.updateMyDepartamento(captureAny()),
+              ).captured.single
+              as proto.UpdateMyDepartamentoRequest;
       expect(enviado.nome, 'Suporte N1');
       expect(enviado.id, 1);
     });
@@ -774,9 +776,9 @@ void main() {
       tester,
     ) async {
       respondeListas(departamentos: [depto()]);
-      when(() => client.desativarMyDepartamento(any())).thenAnswer(
-        (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
-      );
+      when(
+        () => client.desativarMyDepartamento(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
       registrar();
 
       await montar(tester, const EquipePage());

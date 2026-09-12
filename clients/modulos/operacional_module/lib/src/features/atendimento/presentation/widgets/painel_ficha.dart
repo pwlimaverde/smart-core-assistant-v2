@@ -91,10 +91,9 @@ class _Conteudo extends StatelessWidget {
         if (ficha.aplicadas.isEmpty)
           Text(
             'Nenhuma etiqueta nesta conversa.',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: muted),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: muted),
           )
         else
           Wrap(
@@ -119,10 +118,9 @@ class _Conteudo extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           Text(
             'Colar nesta conversa',
-            style: Theme.of(context)
-                .textTheme
-                .labelSmall
-                ?.copyWith(color: muted),
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: muted),
           ),
           const SizedBox(height: AppSpacing.xs),
           Wrap(
@@ -171,10 +169,9 @@ class _Conteudo extends StatelessWidget {
         if (ficha.notas.isEmpty)
           Text(
             'Nada anotado ainda.',
-            style: Theme.of(context)
-                .textTheme
-                .bodySmall
-                ?.copyWith(color: muted),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: muted),
           )
         else
           for (final nota in ficha.notas) ...[
@@ -185,10 +182,9 @@ class _Conteudo extends StatelessWidget {
                 children: [
                   Text(
                     _quando(nota.criadoEm),
-                    style: Theme.of(context)
-                        .textTheme
-                        .labelSmall
-                        ?.copyWith(color: muted),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelSmall?.copyWith(color: muted),
                   ),
                   const SizedBox(height: AppSpacing.xs),
                   Text(nota.texto),
@@ -383,8 +379,9 @@ Future<void> _abrirCriacaoEtiqueta(
           ),
           actions: [
             TextButton(
-              onPressed:
-                  salvando ? null : () => Navigator.of(dialogContext).pop(),
+              onPressed: salvando
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancelar'),
             ),
             PrimaryButton(
@@ -475,8 +472,9 @@ Future<void> _abrirNota(
           ),
           actions: [
             TextButton(
-              onPressed:
-                  salvando ? null : () => Navigator.of(dialogContext).pop(),
+              onPressed: salvando
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancelar'),
             ),
             PrimaryButton(

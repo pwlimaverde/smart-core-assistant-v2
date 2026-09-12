@@ -91,7 +91,7 @@ class _ContatosPageState extends State<ContatosPage> {
                           : 'Nada encontrado',
                       subtitle: _controller.busca.isEmpty
                           ? 'Os contatos aparecem sozinhos quando alguém manda '
-                              'mensagem para o seu WhatsApp.'
+                                'mensagem para o seu WhatsApp.'
                           : 'Nenhum contato casa com "${_controller.busca}".',
                     );
                   }
@@ -151,7 +151,10 @@ class _LinhaContato extends StatelessWidget {
                       const SizedBox(width: AppSpacing.sm),
                       // Contato sem nome nenhum é o que o operador precisa
                       // completar — marcar evita que ele se perca na lista.
-                      const _Etiqueta(texto: 'Sem cadastro', cor: Colors.orange),
+                      const _Etiqueta(
+                        texto: 'Sem cadastro',
+                        cor: Colors.orange,
+                      ),
                     ],
                   ],
                 ),
@@ -161,10 +164,9 @@ class _LinhaContato extends StatelessWidget {
                     if (item.telefone.isNotEmpty) item.telefone,
                     if (item.email.isNotEmpty) item.email,
                   ].join(' · '),
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: muted),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: muted),
                 ),
               ],
             ),
@@ -172,8 +174,9 @@ class _LinhaContato extends StatelessWidget {
           const SizedBox(width: AppSpacing.md),
           Text(
             _quando(item.ultimaInteracao),
-            style:
-                Theme.of(context).textTheme.bodySmall?.copyWith(color: muted),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: muted),
           ),
         ],
       ),
@@ -209,11 +212,7 @@ class _Etiqueta extends StatelessWidget {
       ),
       child: Text(
         texto,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: cor,
-        ),
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: cor),
       ),
     );
   }

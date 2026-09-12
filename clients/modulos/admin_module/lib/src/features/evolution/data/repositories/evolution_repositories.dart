@@ -27,7 +27,10 @@ EvolutionError _mapEvolution(
     stackTrace: stackTrace,
   );
   return switch (kind) {
-    GrpcFailureKind.unauthenticated ||
+    // Separados de propósito: sessão expirada não é falta de
+    // permissão, e juntar as duas manda a pessoa caçar um acesso
+    // que ela já tem.
+    GrpcFailureKind.unauthenticated => const EvolutionSessaoExpirada(),
     GrpcFailureKind.permissionDenied => const EvolutionAcessoNegado(),
     GrpcFailureKind.notFound => const EvolutionNaoEncontrado(),
     GrpcFailureKind.alreadyExists => const EvolutionConflito(),

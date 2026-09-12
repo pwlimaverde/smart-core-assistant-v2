@@ -21,10 +21,7 @@ final class CriarDepartamentoParameters extends Parameters {
   final String nome;
   final String descricao;
 
-  const CriarDepartamentoParameters({
-    required this.nome,
-    this.descricao = '',
-  });
+  const CriarDepartamentoParameters({required this.nome, this.descricao = ''});
 }
 
 /// Registra o progresso no servidor.

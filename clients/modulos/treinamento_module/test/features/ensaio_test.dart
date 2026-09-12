@@ -25,10 +25,10 @@ void main() {
   tearDown(() => getIt.reset());
 
   TestarPerguntaUsecase usecase() => TestarPerguntaUsecase(
-        repository: TestarPerguntaRepository(
-          datasource: TestarPerguntaDatasource(client: client),
-        ),
-      );
+    repository: TestarPerguntaRepository(
+      datasource: TestarPerguntaDatasource(client: client),
+    ),
+  );
 
   void registrar() {
     getIt.registerSingleton<EnsaioController>(
@@ -148,7 +148,10 @@ void main() {
       await montar(tester);
       await perguntar(tester, 'entregam em marte?');
 
-      expect(find.textContaining('não saiu do seu treinamento'), findsOneWidget);
+      expect(
+        find.textContaining('não saiu do seu treinamento'),
+        findsOneWidget,
+      );
     });
 
     testWidgets('com material casado, não acusa falta de contexto', (
@@ -156,7 +159,10 @@ void main() {
     ) async {
       responde(
         trechos: [
-          proto.TrechoUsado(conteudo: 'Entregamos aos sábados.', distancia: 0.2),
+          proto.TrechoUsado(
+            conteudo: 'Entregamos aos sábados.',
+            distancia: 0.2,
+          ),
         ],
       );
       registrar();
@@ -224,31 +230,27 @@ void main() {
       ),
     );
 
-    final res = await usecase()(
-      const TestarPerguntaParameters(pergunta: 'x'),
-    );
+    final res = await usecase()(const TestarPerguntaParameters(pergunta: 'x'));
 
     final ensaio = (res as Success<Ensaio, EnsaioError>).value;
-    expect(
-      ensaio.trechos.map((t) => t.conteudo),
-      ['perto', 'meio', 'longe'],
-    );
+    expect(ensaio.trechos.map((t) => t.conteudo), ['perto', 'meio', 'longe']);
   });
 
   test('sessão expirada é distinguida da IA fora do ar', () async {
-    when(() => client.testarPergunta(any())).thenAnswer(
-      (_) => falhaGrpc(proto.GrpcError.unauthenticated('expirou')),
-    );
+    when(
+      () => client.testarPergunta(any()),
+    ).thenAnswer((_) => falhaGrpc(proto.GrpcError.unauthenticated('expirou')));
 
     final res = await usecase()(const TestarPerguntaParameters(pergunta: 'x'));
 
-    expect((res as Failure).error, isA<EnsaioAcessoNegado>());
+    expect((res as Failure).error, isA<EnsaioSessaoExpirada>());
   });
 
   test('pergunta recusada pelo servidor volta com a mensagem dele', () async {
     when(() => client.testarPergunta(any())).thenAnswer(
-      (_) =>
-          falhaGrpc(proto.GrpcError.invalidArgument('escreva a pergunta a testar')),
+      (_) => falhaGrpc(
+        proto.GrpcError.invalidArgument('escreva a pergunta a testar'),
+      ),
     );
 
     final res = await usecase()(const TestarPerguntaParameters(pergunta: ' '));

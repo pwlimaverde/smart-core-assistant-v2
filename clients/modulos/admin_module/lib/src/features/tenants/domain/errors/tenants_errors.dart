@@ -18,6 +18,18 @@ final class TenantsAcessoNegado extends TenantsError with UnauthorizedFailure {
     : super('Somente o superusuário pode administrar tenants.');
 }
 
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [TenantsAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class TenantsSessaoExpirada extends TenantsError
+    with UnauthorizedFailure {
+  const TenantsSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
 final class TenantsNaoEncontrado extends TenantsError {
   const TenantsNaoEncontrado() : super('Tenant não encontrado.');
 }

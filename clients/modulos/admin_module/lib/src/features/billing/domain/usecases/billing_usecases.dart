@@ -195,7 +195,8 @@ final class ListVouchersUsecase
 
   @override
   ProcessData<List<Voucher>, List<Voucher>, NoParams, BillingError>
-  get process => (data, _) => Success(data);
+  get process =>
+      (data, _) => Success(data);
 
   @override
   BillingError onUnexpected(Object exception, StackTrace stackTrace) {
@@ -221,7 +222,8 @@ final class CreateVoucherUsecase
 
   @override
   ProcessData<Voucher, Voucher, CreateVoucherParameters, BillingError>
-  get process => (data, _) => Success(data);
+  get process =>
+      (data, _) => Success(data);
 
   @override
   BillingError onUnexpected(Object exception, StackTrace stackTrace) {
@@ -265,7 +267,8 @@ final class ListVoucherRedemptionsUsecase
     VoucherRedemptionsParameters,
     BillingError
   >
-  get process => (data, _) => Success(data);
+  get process =>
+      (data, _) => Success(data);
 
   @override
   BillingError onUnexpected(Object exception, StackTrace stackTrace) {

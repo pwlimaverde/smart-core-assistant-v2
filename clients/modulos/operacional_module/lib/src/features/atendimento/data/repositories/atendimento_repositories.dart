@@ -66,7 +66,10 @@ final class ListAtendimentosRepository
     _log('listAtendimentos', exception, stackTrace);
     return switch (_kindDeTransporte(exception)) {
       null => const ListAtendimentosFalhaLocal(),
-      GrpcFailureKind.unauthenticated ||
+      // Separados de propósito: sessão expirada não é falta de
+      // permissão, e juntar as duas manda a pessoa caçar um acesso
+      // que ela já tem.
+      GrpcFailureKind.unauthenticated => const ListAtendimentosSessaoExpirada(),
       GrpcFailureKind.permissionDenied => const ListAtendimentosAcessoNegado(),
       GrpcFailureKind.unavailable ||
       GrpcFailureKind.rateLimited => const ListAtendimentosIndisponivel(),
@@ -98,7 +101,10 @@ final class GetThreadRepository
     );
     return switch (_kindDeTransporte(exception)) {
       null => const GetThreadFalhaLocal(),
-      GrpcFailureKind.unauthenticated ||
+      // Separados de propósito: sessão expirada não é falta de
+      // permissão, e juntar as duas manda a pessoa caçar um acesso
+      // que ela já tem.
+      GrpcFailureKind.unauthenticated => const GetThreadSessaoExpirada(),
       GrpcFailureKind.permissionDenied => const GetThreadAcessoNegado(),
       GrpcFailureKind.notFound => const GetThreadNaoEncontrado(),
       GrpcFailureKind.unavailable ||
@@ -132,7 +138,10 @@ final class MoveAtendimentoEtapaRepository
     return switch (_kindDeTransporte(exception)) {
       null => const MoveEtapaFalhaLocal(),
       // O RBAC fino por fluxo é resolvido no servidor; aqui só se exibe.
-      GrpcFailureKind.unauthenticated ||
+      // Separados de propósito: sessão expirada não é falta de
+      // permissão, e juntar as duas manda a pessoa caçar um acesso
+      // que ela já tem.
+      GrpcFailureKind.unauthenticated => const MoveEtapaSessaoExpirada(),
       GrpcFailureKind.permissionDenied => const MoveEtapaAcessoNegado(),
       GrpcFailureKind.notFound => const MoveEtapaNaoEncontrado(),
       GrpcFailureKind.invalidArgument ||
@@ -168,7 +177,10 @@ final class SendOutboundMessageRepository
     );
     return switch (_kindDeTransporte(exception)) {
       null => const SendMessageFalhaLocal(),
-      GrpcFailureKind.unauthenticated ||
+      // Separados de propósito: sessão expirada não é falta de
+      // permissão, e juntar as duas manda a pessoa caçar um acesso
+      // que ela já tem.
+      GrpcFailureKind.unauthenticated => const SendMessageSessaoExpirada(),
       GrpcFailureKind.permissionDenied => const SendMessageAcessoNegado(),
       GrpcFailureKind.notFound => const SendMessageNaoEncontrado(),
       GrpcFailureKind.invalidArgument => const SendMessageConteudoInvalido(),
@@ -184,7 +196,10 @@ QuadroError _erroDeQuadro(Object exception, StackTrace stackTrace) {
   _log('quadro', exception, stackTrace);
   return switch (_kindDeTransporte(exception)) {
     null => const QuadroFalhaLocal(),
-    GrpcFailureKind.unauthenticated ||
+    // Separados de propósito: sessão expirada não é falta de
+    // permissão, e juntar as duas manda a pessoa caçar um acesso
+    // que ela já tem.
+    GrpcFailureKind.unauthenticated => const QuadroSessaoExpirada(),
     GrpcFailureKind.permissionDenied => const QuadroAcessoNegado(),
     GrpcFailureKind.unavailable ||
     GrpcFailureKind.rateLimited => const QuadroIndisponivel(),
@@ -234,7 +249,10 @@ final class SetAtendimentoStatusRepository
     );
     return switch (_kindDeTransporte(exception)) {
       null => const SetStatusFalhaLocal(),
-      GrpcFailureKind.unauthenticated ||
+      // Separados de propósito: sessão expirada não é falta de
+      // permissão, e juntar as duas manda a pessoa caçar um acesso
+      // que ela já tem.
+      GrpcFailureKind.unauthenticated => const SetStatusSessaoExpirada(),
       GrpcFailureKind.permissionDenied => const SetStatusAcessoNegado(),
       GrpcFailureKind.notFound => const SetStatusNaoEncontrado(),
       GrpcFailureKind.invalidArgument ||
@@ -250,7 +268,10 @@ FichaError _erroDeFicha(Object exception, StackTrace stackTrace, int? id) {
   _log('ficha', exception, stackTrace, atendimentoId: id);
   return switch (_kindDeTransporte(exception)) {
     null => const FichaFalhaLocal(),
-    GrpcFailureKind.unauthenticated ||
+    // Separados de propósito: sessão expirada não é falta de
+    // permissão, e juntar as duas manda a pessoa caçar um acesso
+    // que ela já tem.
+    GrpcFailureKind.unauthenticated => const FichaSessaoExpirada(),
     GrpcFailureKind.permissionDenied => const FichaAcessoNegado(),
     // `alreadyExists` é a UNIQUE (tenant, nome) da etiqueta: a mensagem do
     // servidor diz qual nome colidiu.

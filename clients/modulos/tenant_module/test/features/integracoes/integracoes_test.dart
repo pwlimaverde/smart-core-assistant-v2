@@ -202,8 +202,9 @@ void main() {
     });
 
     test('servidor fora do ar vira falha de rede', () async {
-      when(() => client.listMcpGrants(any()))
-          .thenAnswer((_) => falhaGrpc(proto.GrpcError.unavailable('offline')));
+      when(
+        () => client.listMcpGrants(any()),
+      ).thenAnswer((_) => falhaGrpc(proto.GrpcError.unavailable('offline')));
 
       final r = await _usecases(client).list(noParams);
 
@@ -221,8 +222,9 @@ void main() {
         ),
       );
 
-      final r = await _usecases(client)
-          .revoke(const RevokeMcpGrantParameters(grantId: 'g-1'));
+      final r = await _usecases(
+        client,
+      ).revoke(const RevokeMcpGrantParameters(grantId: 'g-1'));
 
       expect((r as Success<int, IntegracoesError>).value, 15);
     });
@@ -237,8 +239,9 @@ void main() {
           (_) => falhaGrpc(proto.GrpcError.invalidArgument('inexistente')),
         );
 
-        final r = await _usecases(client)
-            .revoke(const RevokeMcpGrantParameters(grantId: 'g-de-outro'));
+        final r = await _usecases(
+          client,
+        ).revoke(const RevokeMcpGrantParameters(grantId: 'g-de-outro'));
 
         expect((r as Failure).error, isA<ConexaoNaoEncontrada>());
       },

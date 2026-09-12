@@ -43,12 +43,13 @@ final class ListarUsuariosUsecase
     ListarUsuariosParameters,
     UsuariosError
   >
-  get process => (data, _) => Success(
-    List.of(data)..sort((a, b) {
-      if (a.ativo != b.ativo) return a.ativo ? 1 : -1;
-      return a.exibicao.toLowerCase().compareTo(b.exibicao.toLowerCase());
-    }),
-  );
+  get process =>
+      (data, _) => Success(
+        List.of(data)..sort((a, b) {
+          if (a.ativo != b.ativo) return a.ativo ? 1 : -1;
+          return a.exibicao.toLowerCase().compareTo(b.exibicao.toLowerCase());
+        }),
+      );
 
   @override
   UsuariosError onUnexpected(Object exception, StackTrace stackTrace) {
@@ -70,7 +71,8 @@ final class DefinirUsuarioAtivoUsecase
 
   @override
   ProcessData<Unit, Unit, DefinirUsuarioAtivoParameters, UsuariosError>
-  get process => (data, _) => Success(data);
+  get process =>
+      (data, _) => Success(data);
 
   @override
   UsuariosError onUnexpected(Object exception, StackTrace stackTrace) {

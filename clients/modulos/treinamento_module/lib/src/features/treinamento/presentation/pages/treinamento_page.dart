@@ -103,48 +103,48 @@ class _AbaMaterial extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    'O que o assistente sabe',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                ),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.add),
-                  label: const Text('Ensinar algo novo'),
-                  onPressed: () => abrirCriacao(context, controller),
-                ),
-              ],
-            ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              'Cada material vira contexto para as respostas. '
-              'Depois de aceito, a IA leva alguns instantes para processá-lo.',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: context.colors.fgMuted),
-            ),
-            const SizedBox(height: AppSpacing.lg),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
             Expanded(
-              child: ViewStateBuilder<TreinamentoController, List<Treinamento>>(
-                controller: controller,
-                onError: (context, error) => AppErrorView(
-                  message: error.message,
-                  onRetry: controller.carregar,
-                ),
-                onSuccess: (context, itens) => itens.isEmpty
-                    ? const AppEmptyView(
-                        title: 'A IA ainda não foi treinada',
-                        subtitle: 'Comece ensinando algo que seus clientes '
-                            'perguntam com frequência.',
-                      )
-                    : _Lista(itens: itens, controller: controller),
+              child: Text(
+                'O que o assistente sabe',
+                style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.add),
+              label: const Text('Ensinar algo novo'),
+              onPressed: () => abrirCriacao(context, controller),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.xs),
+        Text(
+          'Cada material vira contexto para as respostas. '
+          'Depois de aceito, a IA leva alguns instantes para processá-lo.',
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: context.colors.fgMuted),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+        Expanded(
+          child: ViewStateBuilder<TreinamentoController, List<Treinamento>>(
+            controller: controller,
+            onError: (context, error) => AppErrorView(
+              message: error.message,
+              onRetry: controller.carregar,
+            ),
+            onSuccess: (context, itens) => itens.isEmpty
+                ? const AppEmptyView(
+                    title: 'A IA ainda não foi treinada',
+                    subtitle:
+                        'Comece ensinando algo que seus clientes '
+                        'perguntam com frequência.',
+                  )
+                : _Lista(itens: itens, controller: controller),
+          ),
+        ),
       ],
     );
   }
@@ -207,10 +207,9 @@ class _Linha extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xs),
                 Text(
                   resumo,
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: context.colors.fgMuted),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: context.colors.fgMuted,
+                  ),
                 ),
               ],
             ),

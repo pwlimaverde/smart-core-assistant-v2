@@ -12,25 +12,23 @@ Future<void> abrirCriacaoAtendente(
   BuildContext context,
   EquipeController controller,
   List<Departamento> departamentos,
-) =>
-    _abrirFormulario(
-      context: context,
-      controller: controller,
-      departamentos: departamentos,
-    );
+) => _abrirFormulario(
+  context: context,
+  controller: controller,
+  departamentos: departamentos,
+);
 
 Future<void> abrirEdicaoAtendente(
   BuildContext context,
   Atendente item,
   EquipeController controller,
   List<Departamento> departamentos,
-) =>
-    _abrirFormulario(
-      context: context,
-      controller: controller,
-      departamentos: departamentos,
-      item: item,
-    );
+) => _abrirFormulario(
+  context: context,
+  controller: controller,
+  departamentos: departamentos,
+  item: item,
+);
 
 Future<void> _abrirFormulario({
   required BuildContext context,
@@ -115,10 +113,9 @@ Future<void> _abrirFormulario({
                     ),
                   const SizedBox(height: AppSpacing.md),
                   DropdownButtonFormField<int>(
-                    initialValue:
-                        ativos.any((d) => d.id == departamentoId)
-                            ? departamentoId
-                            : 0,
+                    initialValue: ativos.any((d) => d.id == departamentoId)
+                        ? departamentoId
+                        : 0,
                     decoration: const InputDecoration(
                       labelText: 'Departamento',
                       border: OutlineInputBorder(),
@@ -148,16 +145,14 @@ Future<void> _abrirFormulario({
                           // elegível — inativa por acidente.
                           onPressed: maxSimultaneos <= 1
                               ? null
-                              : () =>
-                                  setStateDialog(() => maxSimultaneos -= 1),
+                              : () => setStateDialog(() => maxSimultaneos -= 1),
                         ),
                         IconButton(
                           icon: const Icon(Icons.add),
                           tooltip: 'Mais',
                           onPressed: maxSimultaneos >= 100
                               ? null
-                              : () =>
-                                  setStateDialog(() => maxSimultaneos += 1),
+                              : () => setStateDialog(() => maxSimultaneos += 1),
                         ),
                       ],
                     ),
@@ -181,8 +176,8 @@ Future<void> _abrirFormulario({
                       // rodízio de atribuição sem estar trabalhando.
                       onChanged: ativo
                           ? (v) => setStateDialog(
-                                () => disponivel = v ?? disponivel,
-                              )
+                              () => disponivel = v ?? disponivel,
+                            )
                           : null,
                     ),
                   ],
@@ -196,8 +191,9 @@ Future<void> _abrirFormulario({
           ),
           actions: [
             TextButton(
-              onPressed:
-                  salvando ? null : () => Navigator.of(dialogContext).pop(),
+              onPressed: salvando
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancelar'),
             ),
             PrimaryButton(
@@ -304,14 +300,12 @@ Future<void> abrirDesativacaoAtendente(
 
   messenger.showSnackBar(
     SnackBar(
-      content: Text(
-        switch (res) {
-          Success() => 'Atendente desativado.',
-          // A recusa por conversa em andamento vem do servidor com o motivo
-          // escrito — inclusive quantas.
-          Failure(:final error) => error.message,
-        },
-      ),
+      content: Text(switch (res) {
+        Success() => 'Atendente desativado.',
+        // A recusa por conversa em andamento vem do servidor com o motivo
+        // escrito — inclusive quantas.
+        Failure(:final error) => error.message,
+      }),
     ),
   );
 }
@@ -329,7 +323,9 @@ class _Erro extends StatelessWidget {
       children: [
         Icon(Icons.error_outline, size: 18, color: cor),
         const SizedBox(width: AppSpacing.xs),
-        Expanded(child: Text(mensagem, style: TextStyle(color: cor))),
+        Expanded(
+          child: Text(mensagem, style: TextStyle(color: cor)),
+        ),
       ],
     );
   }

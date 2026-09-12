@@ -9,8 +9,8 @@ final class TestarPerguntaDatasource
   final proto.AdminServiceClient _client;
 
   const TestarPerguntaDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Ensaio> call(TestarPerguntaParameters parameters) async {
@@ -21,9 +21,7 @@ final class TestarPerguntaDatasource
       resposta: resp.resposta,
       comportamentoAplicado: resp.comportamentoAplicado,
       trechos: resp.trechos
-          .map(
-            (t) => TrechoUsado(conteudo: t.conteudo, distancia: t.distancia),
-          )
+          .map((t) => TrechoUsado(conteudo: t.conteudo, distancia: t.distancia))
           .toList(),
       confiabilidade: resp.confiabilidade,
       transferiria: resp.transferiria,

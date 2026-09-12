@@ -61,16 +61,15 @@ void main() {
     String tag = 'falar-com-humano',
     String grupo = 'atendimento',
     bool vetorizada = true,
-  }) =>
-      proto.MyIntent(
-        id: id,
-        tag: tag,
-        grupo: grupo,
-        descricao: 'o cliente pede para falar com uma pessoa',
-        exemplo: 'quero falar com um atendente',
-        comportamento: 'transfira ao setor responsável',
-        vetorizada: vetorizada,
-      );
+  }) => proto.MyIntent(
+    id: id,
+    tag: tag,
+    grupo: grupo,
+    descricao: 'o cliente pede para falar com uma pessoa',
+    exemplo: 'quero falar com um atendente',
+    comportamento: 'transfira ao setor responsável',
+    vetorizada: vetorizada,
+  );
 
   void responde(List<proto.MyIntent> intents) {
     when(() => client.listMyIntents(any())).thenAnswer(
@@ -142,9 +141,9 @@ void main() {
   });
 
   testWidgets('erro do servidor vira tela de erro', (tester) async {
-    when(() => client.listMyIntents(any())).thenAnswer(
-      (_) => falhaGrpc(proto.GrpcError.unavailable('fora do ar')),
-    );
+    when(
+      () => client.listMyIntents(any()),
+    ).thenAnswer((_) => falhaGrpc(proto.GrpcError.unavailable('fora do ar')));
     registrar();
 
     await montar(tester);
@@ -172,7 +171,10 @@ void main() {
       'saudacao',
     );
     await tester.enterText(
-      find.widgetWithText(TextField, 'ex: o cliente pede para falar com uma pessoa'),
+      find.widgetWithText(
+        TextField,
+        'ex: o cliente pede para falar com uma pessoa',
+      ),
       'o cliente cumprimenta',
     );
     await tester.tap(find.text('Salvar'));
@@ -203,9 +205,9 @@ void main() {
 
   testWidgets('criar manda os cinco campos e recarrega', (tester) async {
     responde([]);
-    when(() => client.createMyIntent(any())).thenAnswer(
-      (_) => respostaGrpc(proto.MyIntentResponse(intent: pb())),
-    );
+    when(
+      () => client.createMyIntent(any()),
+    ).thenAnswer((_) => respostaGrpc(proto.MyIntentResponse(intent: pb())));
     registrar();
 
     await montar(tester);
@@ -222,7 +224,10 @@ void main() {
       'geral',
     );
     await tester.enterText(
-      find.widgetWithText(TextField, 'ex: o cliente pede para falar com uma pessoa'),
+      find.widgetWithText(
+        TextField,
+        'ex: o cliente pede para falar com uma pessoa',
+      ),
       'o cliente cumprimenta',
     );
     await tester.enterText(
@@ -236,9 +241,9 @@ void main() {
     await tester.tap(find.text('Salvar'));
     await tester.pumpAndSettle();
 
-    final enviado = verify(() => client.createMyIntent(captureAny()))
-        .captured
-        .single as proto.MyIntentDados;
+    final enviado =
+        verify(() => client.createMyIntent(captureAny())).captured.single
+            as proto.MyIntentDados;
     expect(enviado.tag, 'saudacao');
     expect(enviado.grupo, 'geral');
     expect(enviado.descricao, 'o cliente cumprimenta');
@@ -254,9 +259,9 @@ void main() {
     // Salvar zera o vetor no servidor: o texto mudou, e o vetor antigo faria a
     // busca casar pelo que a intenção era.
     responde([pb()]);
-    when(() => client.updateMyIntent(any())).thenAnswer(
-      (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
-    );
+    when(
+      () => client.updateMyIntent(any()),
+    ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
     registrar();
 
     await montar(tester);
@@ -274,9 +279,9 @@ void main() {
     await tester.tap(find.text('Salvar'));
     await tester.pumpAndSettle();
 
-    final enviado = verify(() => client.updateMyIntent(captureAny()))
-        .captured
-        .single as proto.UpdateMyIntentRequest;
+    final enviado =
+        verify(() => client.updateMyIntent(captureAny())).captured.single
+            as proto.UpdateMyIntentRequest;
     expect(enviado.id, 1);
     expect(enviado.dados.comportamento, 'transfira ao suporte');
   });
@@ -285,9 +290,9 @@ void main() {
     tester,
   ) async {
     responde([pb()]);
-    when(() => client.removeMyIntent(any())).thenAnswer(
-      (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
-    );
+    when(
+      () => client.removeMyIntent(any()),
+    ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
     registrar();
 
     await montar(tester);
@@ -295,7 +300,10 @@ void main() {
 
     await tester.tap(find.byTooltip('Remover'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('material treinado não é afetado'), findsOneWidget);
+    expect(
+      find.textContaining('material treinado não é afetado'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.widgetWithText(FilledButton, 'Remover'));
     await tester.pumpAndSettle();
@@ -328,21 +336,22 @@ void main() {
       ),
     );
 
-    final res = await CriarIntentUsecase(
-      repository: CriarIntentRepository(
-        datasource: CriarIntentDatasource(client: client),
-      ),
-    )(
-      const CriarIntentParameters(
-        dados: DadosIntent(
-          tag: 'saudacao',
-          grupo: '',
-          descricao: 'x',
-          exemplo: '',
-          comportamento: 'y',
-        ),
-      ),
-    );
+    final res =
+        await CriarIntentUsecase(
+          repository: CriarIntentRepository(
+            datasource: CriarIntentDatasource(client: client),
+          ),
+        )(
+          const CriarIntentParameters(
+            dados: DadosIntent(
+              tag: 'saudacao',
+              grupo: '',
+              descricao: 'x',
+              exemplo: '',
+              comportamento: 'y',
+            ),
+          ),
+        );
 
     final erro = (res as Failure).error;
     expect(erro, isA<IntentsRecusado>());
@@ -354,9 +363,9 @@ void main() {
     // um dono de conta com o token vencido lia "você não tem permissão para
     // editar as intenções" e ia investigar as próprias permissões, enquanto o
     // servidor jamais havia recusado nada.
-    when(() => client.listMyIntents(any())).thenAnswer(
-      (_) => falhaGrpc(proto.GrpcError.unauthenticated('expirou')),
-    );
+    when(
+      () => client.listMyIntents(any()),
+    ).thenAnswer((_) => falhaGrpc(proto.GrpcError.unauthenticated('expirou')));
 
     final res = await ListarIntentsUsecase(
       repository: ListarIntentsRepository(

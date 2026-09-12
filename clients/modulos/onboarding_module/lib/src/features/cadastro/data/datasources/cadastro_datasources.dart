@@ -13,12 +13,11 @@ import '../../domain/parameters/cadastro_parameters.dart';
 /// Traduz o enum do proto para o do domínio. Um modo desconhecido (proto novo,
 /// cliente antigo) cai em `assincrona`: a tela então espera confirmação em vez
 /// de assumir que já pagou.
-ModoConfirmacaoPagamento _modoDoProto(ModoConfirmacao modo) =>
-    switch (modo) {
-      ModoConfirmacao.MODO_CONFIRMACAO_IMEDIATA =>
-        ModoConfirmacaoPagamento.imediata,
-      _ => ModoConfirmacaoPagamento.assincrona,
-    };
+ModoConfirmacaoPagamento _modoDoProto(ModoConfirmacao modo) => switch (modo) {
+  ModoConfirmacao.MODO_CONFIRMACAO_IMEDIATA =>
+    ModoConfirmacaoPagamento.imediata,
+  _ => ModoConfirmacaoPagamento.assincrona,
+};
 
 final class VerificarSlugDatasource
     implements Datasource<SlugDisponibilidade, SlugParameters> {

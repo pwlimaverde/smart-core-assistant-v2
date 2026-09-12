@@ -58,8 +58,9 @@ class KanbanDropColumn<T extends Object> extends StatelessWidget {
                     Expanded(
                       child: Text(
                         title,
-                        style: Theme.of(context).textTheme.titleSmall
-                            ?.copyWith(color: colors.fgStrong),
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          color: colors.fgStrong,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -74,8 +75,9 @@ class KanbanDropColumn<T extends Object> extends StatelessWidget {
                       ),
                       child: Text(
                         '$itemCount',
-                        style: Theme.of(context).textTheme.labelSmall
-                            ?.copyWith(color: colors.fgMuted),
+                        style: Theme.of(
+                          context,
+                        ).textTheme.labelSmall?.copyWith(color: colors.fgMuted),
                       ),
                     ),
                   ],

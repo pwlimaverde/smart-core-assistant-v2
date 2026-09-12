@@ -586,184 +586,186 @@ class _BillingPageState extends State<BillingPage>
           fluxosController,
         ],
         builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (stateCtx, setStateDialog) {
-            return AlertDialog(
-              title: Text(isNew ? 'Criar Novo Plano' : 'Editar Plano'),
-              content: SizedBox(
-                width: 500,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      AppTextField(
-                        label: 'Nome do Plano',
-                        hint: 'ex: Plano Pro',
-                        controller: nameController,
-                      ),
-                      const SizedBox(height: 16),
-                      AppTextField(
-                        label: 'Descrição',
-                        hint: 'ex: Acesso total para equipes médias',
-                        controller: descController,
-                      ),
-                      const SizedBox(height: 16),
-                      AppTextField(
-                        label: 'Preço (R\$ / mês)',
-                        hint: 'ex: 199.90',
-                        controller: priceController,
-                        keyboardType: TextInputType.number,
-                      ),
-                      const SizedBox(height: 16),
-                      AppTextField(
-                        label: 'Instâncias Máximas',
-                        hint: 'ex: 5',
-                        controller: instancesController,
-                        keyboardType: TextInputType.number,
-                      ),
-                      const SizedBox(height: 16),
-                      AppTextField(
-                        label: 'Departamentos Máximos',
-                        hint: 'ex: 10',
-                        controller: departmentsController,
-                        keyboardType: TextInputType.number,
-                      ),
-                      const SizedBox(height: 16),
-                      AppTextField(
-                        label: 'Fluxos de Atendimento Máximos',
-                        hint: 'ex: 5',
-                        controller: fluxosController,
-                        keyboardType: TextInputType.number,
-                      ),
-                      const SizedBox(height: 16),
-                      CheckboxListTile(
-                        title: const Text('Plano Ativo para Novas Assinaturas'),
-                        value: active,
-                        onChanged: (val) =>
-                            setStateDialog(() => active = val ?? false),
-                      ),
-                      if (erro != null) ...[
-                        const SizedBox(height: 12),
-                        Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Icon(
-                              Icons.error_outline,
-                              size: 18,
-                              color: Theme.of(stateCtx).colorScheme.error,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                erro!,
-                                style: TextStyle(
-                                  color: Theme.of(stateCtx).colorScheme.error,
+          return StatefulBuilder(
+            builder: (stateCtx, setStateDialog) {
+              return AlertDialog(
+                title: Text(isNew ? 'Criar Novo Plano' : 'Editar Plano'),
+                content: SizedBox(
+                  width: 500,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        AppTextField(
+                          label: 'Nome do Plano',
+                          hint: 'ex: Plano Pro',
+                          controller: nameController,
+                        ),
+                        const SizedBox(height: 16),
+                        AppTextField(
+                          label: 'Descrição',
+                          hint: 'ex: Acesso total para equipes médias',
+                          controller: descController,
+                        ),
+                        const SizedBox(height: 16),
+                        AppTextField(
+                          label: 'Preço (R\$ / mês)',
+                          hint: 'ex: 199.90',
+                          controller: priceController,
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 16),
+                        AppTextField(
+                          label: 'Instâncias Máximas',
+                          hint: 'ex: 5',
+                          controller: instancesController,
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 16),
+                        AppTextField(
+                          label: 'Departamentos Máximos',
+                          hint: 'ex: 10',
+                          controller: departmentsController,
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 16),
+                        AppTextField(
+                          label: 'Fluxos de Atendimento Máximos',
+                          hint: 'ex: 5',
+                          controller: fluxosController,
+                          keyboardType: TextInputType.number,
+                        ),
+                        const SizedBox(height: 16),
+                        CheckboxListTile(
+                          title: const Text(
+                            'Plano Ativo para Novas Assinaturas',
+                          ),
+                          value: active,
+                          onChanged: (val) =>
+                              setStateDialog(() => active = val ?? false),
+                        ),
+                        if (erro != null) ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.error_outline,
+                                size: 18,
+                                color: Theme.of(stateCtx).colorScheme.error,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  erro!,
+                                  style: TextStyle(
+                                    color: Theme.of(stateCtx).colorScheme.error,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Cancelar'),
-                ),
-                PrimaryButton(
-                  label: salvando ? 'Salvando...' : 'Salvar',
-                  expand: false,
-                  onPressed: salvando
-                      ? null
-                      : () async {
-                          final name = nameController.text.trim();
-                          final desc = descController.text.trim();
-                          final price = priceController.text.trim();
-                          final instStr = instancesController.text.trim();
-                          final deptStr = departmentsController.text.trim();
-                          final fluxStr = fluxosController.text.trim();
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('Cancelar'),
+                  ),
+                  PrimaryButton(
+                    label: salvando ? 'Salvando...' : 'Salvar',
+                    expand: false,
+                    onPressed: salvando
+                        ? null
+                        : () async {
+                            final name = nameController.text.trim();
+                            final desc = descController.text.trim();
+                            final price = priceController.text.trim();
+                            final instStr = instancesController.text.trim();
+                            final deptStr = departmentsController.text.trim();
+                            final fluxStr = fluxosController.text.trim();
 
-                          if (name.isEmpty ||
-                              desc.isEmpty ||
-                              price.isEmpty ||
-                              instStr.isEmpty ||
-                              deptStr.isEmpty ||
-                              fluxStr.isEmpty) {
-                            setStateDialog(
-                              () => erro = 'Preencha todos os campos.',
-                            );
-                            return;
-                          }
-
-                          final instances = int.tryParse(instStr);
-                          final departments = int.tryParse(deptStr);
-                          final fluxos = int.tryParse(fluxStr);
-
-                          if (instances == null ||
-                              departments == null ||
-                              fluxos == null) {
-                            setStateDialog(
-                              () => erro =
-                                  'Instâncias, departamentos e fluxos devem '
-                                  'ser números inteiros.',
-                            );
-                            return;
-                          }
-
-                          // O Navigator é resolvido ANTES do await: depois dele
-                          // a lista já recarregou e o context de origem pode
-                          // não existir mais.
-                          final navigator = Navigator.of(dialogContext);
-                          setStateDialog(() {
-                            salvando = true;
-                            erro = null;
-                          });
-
-                          final ReturnSuccessOrError res;
-                          if (isNew) {
-                            res = await _controller.createPlan(
-                              name: name,
-                              description: desc,
-                              price: price,
-                              maxInstances: instances,
-                              maxDepartments: departments,
-                              maxFluxos: fluxos,
-                            );
-                          } else {
-                            res = await _controller.updatePlan(
-                              id: plan.id,
-                              name: name,
-                              description: desc,
-                              price: price,
-                              maxInstances: instances,
-                              maxDepartments: departments,
-                              maxFluxos: fluxos,
-                              active: active,
-                            );
-                          }
-
-                          if (res case Failure(:final error)) {
-                            if (stateCtx.mounted) {
-                              setStateDialog(() {
-                                salvando = false;
-                                erro =
-                                    'Erro ao salvar: '
-                                    '${ErrorMessageMapper.map(error)}';
-                              });
+                            if (name.isEmpty ||
+                                desc.isEmpty ||
+                                price.isEmpty ||
+                                instStr.isEmpty ||
+                                deptStr.isEmpty ||
+                                fluxStr.isEmpty) {
+                              setStateDialog(
+                                () => erro = 'Preencha todos os campos.',
+                              );
+                              return;
                             }
-                            return;
-                          }
-                          navigator.pop();
-                        },
-                ),
-              ],
-            );
-          },
-        );
-      },
+
+                            final instances = int.tryParse(instStr);
+                            final departments = int.tryParse(deptStr);
+                            final fluxos = int.tryParse(fluxStr);
+
+                            if (instances == null ||
+                                departments == null ||
+                                fluxos == null) {
+                              setStateDialog(
+                                () => erro =
+                                    'Instâncias, departamentos e fluxos devem '
+                                    'ser números inteiros.',
+                              );
+                              return;
+                            }
+
+                            // O Navigator é resolvido ANTES do await: depois dele
+                            // a lista já recarregou e o context de origem pode
+                            // não existir mais.
+                            final navigator = Navigator.of(dialogContext);
+                            setStateDialog(() {
+                              salvando = true;
+                              erro = null;
+                            });
+
+                            final ReturnSuccessOrError res;
+                            if (isNew) {
+                              res = await _controller.createPlan(
+                                name: name,
+                                description: desc,
+                                price: price,
+                                maxInstances: instances,
+                                maxDepartments: departments,
+                                maxFluxos: fluxos,
+                              );
+                            } else {
+                              res = await _controller.updatePlan(
+                                id: plan.id,
+                                name: name,
+                                description: desc,
+                                price: price,
+                                maxInstances: instances,
+                                maxDepartments: departments,
+                                maxFluxos: fluxos,
+                                active: active,
+                              );
+                            }
+
+                            if (res case Failure(:final error)) {
+                              if (stateCtx.mounted) {
+                                setStateDialog(() {
+                                  salvando = false;
+                                  erro =
+                                      'Erro ao salvar: '
+                                      '${ErrorMessageMapper.map(error)}';
+                                });
+                              }
+                              return;
+                            }
+                            navigator.pop();
+                          },
+                  ),
+                ],
+              );
+            },
+          );
+        },
       ),
     );
   }
@@ -799,164 +801,165 @@ class _BillingPageState extends State<BillingPage>
           notesController,
         ],
         builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Registrar Pagamento Manual'),
-          content: SizedBox(
-            width: 500,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (prefilledTenantId != null) ...[
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.grey[900]
-                            : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(
-                          color: Theme.of(context).dividerColor,
+          return AlertDialog(
+            title: const Text('Registrar Pagamento Manual'),
+            content: SizedBox(
+              width: 500,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (prefilledTenantId != null) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.grey[900]
+                              : Colors.grey[100],
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: Theme.of(context).dividerColor,
+                          ),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Tenant Destinatário',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Theme.of(context).hintColor,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            SelectableText(
+                              prefilledTenantId,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontFamily: 'monospace',
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Tenant Destinatário',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Theme.of(context).hintColor,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          SelectableText(
-                            prefilledTenantId,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontFamily: 'monospace',
-                            ),
-                          ),
-                        ],
+                      const SizedBox(height: 16),
+                    ] else ...[
+                      AppTextField(
+                        label: 'ID do Tenant',
+                        hint: 'ex: 9a781b1c-c760-4966-bf3a-cd4f1efb43cc',
+                        controller: tenantController,
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                  ] else ...[
+                      const SizedBox(height: 16),
+                    ],
                     AppTextField(
-                      label: 'ID do Tenant',
-                      hint: 'ex: 9a781b1c-c760-4966-bf3a-cd4f1efb43cc',
-                      controller: tenantController,
+                      label: 'Valor do Pagamento (R\$)',
+                      hint: 'ex: 199.90',
+                      controller: amountController,
+                      keyboardType: TextInputType.number,
                     ),
                     const SizedBox(height: 16),
+                    AppTextField(
+                      label: 'Método de Pagamento',
+                      hint: 'ex: PIX, Cartão, Boleto, Depósito',
+                      controller: methodController,
+                    ),
+                    const SizedBox(height: 16),
+                    AppTextField(
+                      label: 'Data do Pagamento (YYYY-MM-DD)',
+                      hint: 'ex: 2026-06-19',
+                      controller: dateController,
+                    ),
+                    const SizedBox(height: 16),
+                    AppTextField(
+                      label: 'Início da Cobertura (YYYY-MM-DD)',
+                      hint: 'ex: 2026-06-19',
+                      controller: startController,
+                    ),
+                    const SizedBox(height: 16),
+                    AppTextField(
+                      label: 'Fim da Cobertura (YYYY-MM-DD)',
+                      hint: 'ex: 2026-07-19',
+                      controller: endController,
+                    ),
+                    const SizedBox(height: 16),
+                    AppTextField(
+                      label: 'Notas / Observações',
+                      hint:
+                          'ex: Pagamento identificado por comprovante whatsapp',
+                      controller: notesController,
+                    ),
                   ],
-                  AppTextField(
-                    label: 'Valor do Pagamento (R\$)',
-                    hint: 'ex: 199.90',
-                    controller: amountController,
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 16),
-                  AppTextField(
-                    label: 'Método de Pagamento',
-                    hint: 'ex: PIX, Cartão, Boleto, Depósito',
-                    controller: methodController,
-                  ),
-                  const SizedBox(height: 16),
-                  AppTextField(
-                    label: 'Data do Pagamento (YYYY-MM-DD)',
-                    hint: 'ex: 2026-06-19',
-                    controller: dateController,
-                  ),
-                  const SizedBox(height: 16),
-                  AppTextField(
-                    label: 'Início da Cobertura (YYYY-MM-DD)',
-                    hint: 'ex: 2026-06-19',
-                    controller: startController,
-                  ),
-                  const SizedBox(height: 16),
-                  AppTextField(
-                    label: 'Fim da Cobertura (YYYY-MM-DD)',
-                    hint: 'ex: 2026-07-19',
-                    controller: endController,
-                  ),
-                  const SizedBox(height: 16),
-                  AppTextField(
-                    label: 'Notas / Observações',
-                    hint: 'ex: Pagamento identificado por comprovante whatsapp',
-                    controller: notesController,
-                  ),
-                ],
+                ),
               ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Cancelar'),
-            ),
-            PrimaryButton(
-              label: 'Registrar',
-              expand: false,
-              onPressed: () async {
-                final tenantId = tenantController.text.trim();
-                final amount = amountController.text.trim();
-                final method = methodController.text.trim();
-                final date = dateController.text.trim();
-                final start = startController.text.trim();
-                final end = endController.text.trim();
-                final notes = notesController.text.trim();
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Cancelar'),
+              ),
+              PrimaryButton(
+                label: 'Registrar',
+                expand: false,
+                onPressed: () async {
+                  final tenantId = tenantController.text.trim();
+                  final amount = amountController.text.trim();
+                  final method = methodController.text.trim();
+                  final date = dateController.text.trim();
+                  final start = startController.text.trim();
+                  final end = endController.text.trim();
+                  final notes = notesController.text.trim();
 
-                if (tenantId.isEmpty ||
-                    amount.isEmpty ||
-                    method.isEmpty ||
-                    date.isEmpty ||
-                    start.isEmpty ||
-                    end.isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text(
-                        'Por favor, preencha todos os campos obrigatórios.',
-                      ),
-                    ),
-                  );
-                  return;
-                }
-
-                final res = await _controller.registerPayment(
-                  tenantId: tenantId,
-                  amount: amount,
-                  paymentMethod: method,
-                  paymentDate: date,
-                  periodStart: start,
-                  periodEnd: end,
-                  notes: notes,
-                );
-
-                if (context.mounted) {
-                  if (res case Failure(:final error)) {
+                  if (tenantId.isEmpty ||
+                      amount.isEmpty ||
+                      method.isEmpty ||
+                      date.isEmpty ||
+                      start.isEmpty ||
+                      end.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
+                      const SnackBar(
                         content: Text(
-                          'Erro ao registrar: '
-                          '${ErrorMessageMapper.map(error)}',
+                          'Por favor, preencha todos os campos obrigatórios.',
                         ),
                       ),
                     );
-                  } else {
-                    Navigator.pop(dialogContext);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Pagamento registrado com sucesso!'),
-                      ),
-                    );
+                    return;
                   }
-                }
-              },
-            ),
-          ],
-        );
-      },
+
+                  final res = await _controller.registerPayment(
+                    tenantId: tenantId,
+                    amount: amount,
+                    paymentMethod: method,
+                    paymentDate: date,
+                    periodStart: start,
+                    periodEnd: end,
+                    notes: notes,
+                  );
+
+                  if (context.mounted) {
+                    if (res case Failure(:final error)) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Erro ao registrar: '
+                            '${ErrorMessageMapper.map(error)}',
+                          ),
+                        ),
+                      );
+                    } else {
+                      Navigator.pop(dialogContext);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Pagamento registrado com sucesso!'),
+                        ),
+                      );
+                    }
+                  }
+                },
+              ),
+            ],
+          );
+        },
       ),
     );
   }

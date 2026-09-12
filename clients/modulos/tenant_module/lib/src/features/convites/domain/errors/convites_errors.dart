@@ -20,6 +20,18 @@ final class ConvitesAcessoNegado extends ConvitesError
     : super('Você não tem permissão para gerenciar convites.');
 }
 
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [ConvitesAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class ConvitesSessaoExpirada extends ConvitesError
+    with UnauthorizedFailure {
+  const ConvitesSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
 /// O convite não existe ou já foi consumido/revogado.
 final class ConviteNaoEncontrado extends ConvitesError {
   const ConviteNaoEncontrado() : super('Convite não encontrado.');

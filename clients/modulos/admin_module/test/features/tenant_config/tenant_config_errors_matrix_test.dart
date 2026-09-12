@@ -47,7 +47,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> TenantConfigAcessoNegado', () async {
+    test('unauthenticated -> TenantConfigSessaoExpirada', () async {
       when(
         () => client.getTenantConfig(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -60,7 +60,7 @@ void main() {
       final r = await usecase(const GetTenantConfigParameters(tenantId: 't1'));
 
       final erro = (r as Failure).error;
-      expect(erro, isA<TenantConfigAcessoNegado>());
+      expect(erro, isA<TenantConfigSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as TenantConfigError).message,
@@ -272,7 +272,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> TenantConfigAcessoNegado', () async {
+    test('unauthenticated -> TenantConfigSessaoExpirada', () async {
       when(
         () => client.updateTenantConfig(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -290,7 +290,7 @@ void main() {
       );
 
       final erro = (r as Failure).error;
-      expect(erro, isA<TenantConfigAcessoNegado>());
+      expect(erro, isA<TenantConfigSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as TenantConfigError).message,

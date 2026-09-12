@@ -19,13 +19,12 @@ final class TreinamentoController extends BaseController<List<Treinamento>> {
     required CriarTreinamentoUsecase criar,
     required FinalizarTreinamentoUsecase finalizar,
     required RemoverTreinamentoUsecase remover,
-  })  : _listar = listar,
-        _criar = criar,
-        _finalizar = finalizar,
-        _remover = remover;
+  }) : _listar = listar,
+       _criar = criar,
+       _finalizar = finalizar,
+       _remover = remover;
 
-  Future<void> carregar() =>
-      execute<TreinamentoError>(() => _listar(noParams));
+  Future<void> carregar() => execute<TreinamentoError>(() => _listar(noParams));
 
   /// As mutações devolvem o resultado para a tela decidir o que dizer, e só
   /// recarregam quando deram certo — recarregar depois de uma falha apagaria

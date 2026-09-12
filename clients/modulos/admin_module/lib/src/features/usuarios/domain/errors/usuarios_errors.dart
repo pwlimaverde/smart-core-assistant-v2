@@ -15,6 +15,18 @@ final class UsuariosAcessoNegado extends UsuariosError
     : super('Somente o superusuário pode administrar usuários.');
 }
 
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [UsuariosAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class UsuariosSessaoExpirada extends UsuariosError
+    with UnauthorizedFailure {
+  const UsuariosSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
 final class UsuariosNaoEncontrado extends UsuariosError {
   const UsuariosNaoEncontrado() : super('Usuário não encontrado.');
 }

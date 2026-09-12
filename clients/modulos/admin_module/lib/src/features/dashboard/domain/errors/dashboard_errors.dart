@@ -19,6 +19,18 @@ final class DashboardAcessoNegado extends DashboardError
     : super('Somente o superusuário pode ver o painel.');
 }
 
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [DashboardAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class DashboardSessaoExpirada extends DashboardError
+    with UnauthorizedFailure {
+  const DashboardSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
 final class DashboardNaoEncontrado extends DashboardError {
   const DashboardNaoEncontrado() : super('Dados do painel indisponíveis.');
 }

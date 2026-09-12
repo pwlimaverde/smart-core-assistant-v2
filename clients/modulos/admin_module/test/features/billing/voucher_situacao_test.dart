@@ -67,8 +67,10 @@ void main() {
     });
 
     test('sem valido_ate não expira sozinho', () {
-      expect(_voucher().expiradoEm(_agora.add(const Duration(days: 3650))),
-          isFalse);
+      expect(
+        _voucher().expiradoEm(_agora.add(const Duration(days: 3650))),
+        isFalse,
+      );
     });
   });
 }

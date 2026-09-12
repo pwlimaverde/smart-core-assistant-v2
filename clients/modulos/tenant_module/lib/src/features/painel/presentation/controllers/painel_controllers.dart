@@ -11,7 +11,7 @@ final class PainelController extends BaseController<Painel> {
   final CarregarPainelUsecase _carregar;
 
   PainelController({required CarregarPainelUsecase carregar})
-      : _carregar = carregar;
+    : _carregar = carregar;
 
   Future<void> carregar() => execute<PainelError>(() => _carregar(noParams));
 }

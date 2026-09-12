@@ -207,167 +207,167 @@ class _InvitesPageState extends State<InvitesPage> {
       builder: (dialogContext) => DialogoComCampos(
         campos: [emailController, nameController, flowsController],
         builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (dialogContext, setDialogState) {
-            return AlertDialog(
-              title: const Text('Novo Convite'),
-              content: SizedBox(
-                width: 500,
-                child: SingleChildScrollView(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AppTextField(
-                        label: 'Nome',
-                        hint: 'ex: Maria Silva',
-                        controller: nameController,
-                      ),
-                      const SizedBox(height: 16),
-                      AppTextField(
-                        label: 'E-mail',
-                        hint: 'ex: maria@empresa.com',
-                        controller: emailController,
-                        keyboardType: TextInputType.emailAddress,
-                      ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        initialValue: role,
-                        decoration: const InputDecoration(labelText: 'Papel'),
-                        items: const [
-                          DropdownMenuItem(
-                            value: 'admin',
-                            child: Text('Admin'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'staff',
-                            child: Text('Atendente (staff)'),
-                          ),
-                        ],
-                        onChanged: (v) =>
-                            setDialogState(() => role = v ?? 'staff'),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Escopos iniciais',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      ...escoposDisponiveis.map(
-                        (s) => CheckboxListTile(
-                          dense: true,
-                          title: Text(s),
-                          value: scopesEscolhidos.contains(s),
-                          onChanged: (checked) => setDialogState(() {
-                            if (checked ?? false) {
-                              scopesEscolhidos.add(s);
-                            } else {
-                              scopesEscolhidos.remove(s);
-                            }
-                          }),
+          return StatefulBuilder(
+            builder: (dialogContext, setDialogState) {
+              return AlertDialog(
+                title: const Text('Novo Convite'),
+                content: SizedBox(
+                  width: 500,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        AppTextField(
+                          label: 'Nome',
+                          hint: 'ex: Maria Silva',
+                          controller: nameController,
                         ),
-                      ),
-                      const SizedBox(height: 8),
-                      AppTextField(
-                        label:
-                            'IDs dos fluxos permitidos (separados por vírgula)',
-                        hint: 'ex: 1,2,3',
-                        controller: flowsController,
-                      ),
-                    ],
+                        const SizedBox(height: 16),
+                        AppTextField(
+                          label: 'E-mail',
+                          hint: 'ex: maria@empresa.com',
+                          controller: emailController,
+                          keyboardType: TextInputType.emailAddress,
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButtonFormField<String>(
+                          initialValue: role,
+                          decoration: const InputDecoration(labelText: 'Papel'),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'admin',
+                              child: Text('Admin'),
+                            ),
+                            DropdownMenuItem(
+                              value: 'staff',
+                              child: Text('Atendente (staff)'),
+                            ),
+                          ],
+                          onChanged: (v) =>
+                              setDialogState(() => role = v ?? 'staff'),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Escopos iniciais',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        ...escoposDisponiveis.map(
+                          (s) => CheckboxListTile(
+                            dense: true,
+                            title: Text(s),
+                            value: scopesEscolhidos.contains(s),
+                            onChanged: (checked) => setDialogState(() {
+                              if (checked ?? false) {
+                                scopesEscolhidos.add(s);
+                              } else {
+                                scopesEscolhidos.remove(s);
+                              }
+                            }),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        AppTextField(
+                          label:
+                              'IDs dos fluxos permitidos (separados por vírgula)',
+                          hint: 'ex: 1,2,3',
+                          controller: flowsController,
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Cancelar'),
-                ),
-                PrimaryButton(
-                  label: 'Enviar Convite',
-                  expand: false,
-                  onPressed: () async {
-                    final email = emailController.text.trim();
-                    final name = nameController.text.trim();
-                    if (email.isEmpty || name.isEmpty) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Preencha nome e e-mail.'),
-                        ),
-                      );
-                      return;
-                    }
-                    final modulePermissions = role == 'admin'
-                        ? const [
-                            'tenant:admin',
-                            'atendimentos:read',
-                            'atendimentos:write',
-                            'clientes:write',
-                          ]
-                        : scopesEscolhidos.toList();
-                    final flowPermissions = flowsController.text
-                        .split(',')
-                        .map((s) => int.tryParse(s.trim()))
-                        .whereType<int>()
-                        .toList();
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(dialogContext),
+                    child: const Text('Cancelar'),
+                  ),
+                  PrimaryButton(
+                    label: 'Enviar Convite',
+                    expand: false,
+                    onPressed: () async {
+                      final email = emailController.text.trim();
+                      final name = nameController.text.trim();
+                      if (email.isEmpty || name.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Preencha nome e e-mail.'),
+                          ),
+                        );
+                        return;
+                      }
+                      final modulePermissions = role == 'admin'
+                          ? const [
+                              'tenant:admin',
+                              'atendimentos:read',
+                              'atendimentos:write',
+                              'clientes:write',
+                            ]
+                          : scopesEscolhidos.toList();
+                      final flowPermissions = flowsController.text
+                          .split(',')
+                          .map((s) => int.tryParse(s.trim()))
+                          .whereType<int>()
+                          .toList();
 
-                    final res = await _controller.createInvite(
-                      email: email,
-                      name: name,
-                      role: role,
-                      modulePermissions: modulePermissions,
-                      flowPermissions: flowPermissions,
-                    );
-                    if (dialogContext.mounted) {
-                      if (res case Success(value: final convite)) {
-                        Navigator.pop(dialogContext);
-                        if (context.mounted) {
-                          showDialog(
-                            context: context,
-                            builder: (ctx) => AlertDialog(
-                              title: const Text('Convite Criado'),
-                              content: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Compartilhe este link com o convidado:',
-                                  ),
-                                  const SizedBox(height: 12),
-                                  SelectableText(
-                                    '/aceitar-convite?token=${convite.token}',
-                                    style: const TextStyle(
-                                      fontFamily: 'monospace',
+                      final res = await _controller.createInvite(
+                        email: email,
+                        name: name,
+                        role: role,
+                        modulePermissions: modulePermissions,
+                        flowPermissions: flowPermissions,
+                      );
+                      if (dialogContext.mounted) {
+                        if (res case Success(value: final convite)) {
+                          Navigator.pop(dialogContext);
+                          if (context.mounted) {
+                            showDialog(
+                              context: context,
+                              builder: (ctx) => AlertDialog(
+                                title: const Text('Convite Criado'),
+                                content: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Compartilhe este link com o convidado:',
                                     ),
+                                    const SizedBox(height: 12),
+                                    SelectableText(
+                                      '/aceitar-convite?token=${convite.token}',
+                                      style: const TextStyle(
+                                        fontFamily: 'monospace',
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(ctx),
+                                    child: const Text('Fechar'),
                                   ),
                                 ],
                               ),
-                              actions: [
-                                TextButton(
-                                  onPressed: () => Navigator.pop(ctx),
-                                  child: const Text('Fechar'),
-                                ),
-                              ],
+                            );
+                          }
+                        } else if (res case Failure(:final error)) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Erro ao criar convite: '
+                                '${ErrorMessageMapper.map(error)}',
+                              ),
                             ),
                           );
                         }
-                      } else if (res case Failure(:final error)) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'Erro ao criar convite: '
-                              '${ErrorMessageMapper.map(error)}',
-                            ),
-                          ),
-                        );
                       }
-                    }
-                  },
-                ),
-              ],
-            );
-          },
-        );
-      },
+                    },
+                  ),
+                ],
+              );
+            },
+          );
+        },
       ),
     );
   }

@@ -195,7 +195,8 @@ final class ListFluxosUsecase
 
   @override
   ProcessData<List<FluxoDoQuadro>, List<FluxoDoQuadro>, NoParams, QuadroError>
-  get process => (data, _) => Success(data);
+  get process =>
+      (data, _) => Success(data);
 
   @override
   QuadroError onUnexpected(Object exception, StackTrace stackTrace) {
@@ -245,7 +246,8 @@ final class SetAtendimentoStatusUsecase
 
   @override
   ProcessData<Unit, Unit, SetAtendimentoStatusParameters, SetStatusError>
-  get process => (data, _) => Success(data);
+  get process =>
+      (data, _) => Success(data);
 
   @override
   SetStatusError onUnexpected(Object exception, StackTrace stackTrace) {
@@ -308,7 +310,12 @@ final class CriarEtiquetaUsecase
 
 final class AlternarEtiquetaUsecase
     extends
-        UsecaseBaseCallData<Unit, Unit, AlternarEtiquetaParameters, FichaError> {
+        UsecaseBaseCallData<
+          Unit,
+          Unit,
+          AlternarEtiquetaParameters,
+          FichaError
+        > {
   const AlternarEtiquetaUsecase({required super.repository});
 
   @override
@@ -334,7 +341,8 @@ final class DefinirBotDaConversaUsecase
 
   @override
   ProcessData<Unit, Unit, DefinirBotDaConversaParameters, FichaError>
-  get process => (data, _) => Success(data);
+  get process =>
+      (data, _) => Success(data);
 
   @override
   FichaError onUnexpected(Object exception, StackTrace stackTrace) {

@@ -51,9 +51,9 @@ void main() {
     });
 
     testWidgets('renderiza onError', (tester) async {
-      when(() => mockController.state).thenReturn(
-        const ErrorState<String>(ErrorGeneric('Erro inesperado')),
-      );
+      when(
+        () => mockController.state,
+      ).thenReturn(const ErrorState<String>(ErrorGeneric('Erro inesperado')));
 
       await tester.pumpWidget(
         MaterialApp(
@@ -70,7 +70,9 @@ void main() {
     });
 
     testWidgets('renderiza onSuccess', (tester) async {
-      when(() => mockController.state).thenReturn(const SuccessState<String>('carregou'));
+      when(
+        () => mockController.state,
+      ).thenReturn(const SuccessState<String>('carregou'));
 
       await tester.pumpWidget(
         MaterialApp(

@@ -23,9 +23,12 @@ EquipeError _traduzir(Object exception, String operacao) {
     GrpcFailureKind.invalidArgument ||
     GrpcFailureKind.alreadyExists ||
     GrpcFailureKind.failedPrecondition => EquipeDadosInvalidos(
-        exception is GrpcError ? exception.message : null,
-      ),
-    GrpcFailureKind.unauthenticated ||
+      exception is GrpcError ? exception.message : null,
+    ),
+    // Separados de propósito: sessão expirada não é falta de
+    // permissão, e juntar as duas manda a pessoa caçar um acesso
+    // que ela já tem.
+    GrpcFailureKind.unauthenticated => const EquipeSessaoExpirada(),
     GrpcFailureKind.permissionDenied => const EquipeAcessoNegado(),
     GrpcFailureKind.unavailable => const EquipeIndisponivel(),
     GrpcFailureKind.unknown => const EquipeInesperado(),
@@ -59,8 +62,7 @@ final class AtualizarDepartamentoRepository
     Object e,
     StackTrace s,
     AtualizarDepartamentoParameters p,
-  ) =>
-      _traduzir(e, 'atualizar departamento');
+  ) => _traduzir(e, 'atualizar departamento');
 }
 
 final class DesativarDepartamentoRepository
@@ -86,8 +88,11 @@ final class AtualizarAtendenteRepository
   const AtualizarAtendenteRepository({required super.datasource});
 
   @override
-  EquipeError mapError(Object e, StackTrace s, AtualizarAtendenteParameters p) =>
-      _traduzir(e, 'atualizar atendente');
+  EquipeError mapError(
+    Object e,
+    StackTrace s,
+    AtualizarAtendenteParameters p,
+  ) => _traduzir(e, 'atualizar atendente');
 }
 
 final class DesativarAtendenteRepository

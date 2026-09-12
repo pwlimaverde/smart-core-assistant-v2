@@ -18,6 +18,18 @@ final class PagamentoAcessoNegado extends PagamentoError
     : super('Só o responsável pela conta pode resolver o pagamento.');
 }
 
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [PagamentoAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class PagamentoSessaoExpirada extends PagamentoError
+    with UnauthorizedFailure {
+  const PagamentoSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
 /// Provedor desconhecido ou dados recusados na borda.
 final class PagamentoDadosInvalidos extends PagamentoError
     with ValidationFailure {

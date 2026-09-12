@@ -21,8 +21,8 @@ bool ehRotaDeConfiguracao(String location) =>
 /// tela: é o começo do roteiro e repeti-la não perde nada — melhor do que
 /// deixar o cliente num limbo por causa de um número inesperado.
 String rotaDeConfiguracaoDoPasso(int passo) => switch (passo) {
-      6 => '/configuracao/departamento',
-      7 => '/configuracao/assistente',
-      8 => '/configuracao/pronto',
-      _ => '/configuracao/whatsapp',
-    };
+  6 => '/configuracao/departamento',
+  7 => '/configuracao/assistente',
+  8 => '/configuracao/pronto',
+  _ => '/configuracao/whatsapp',
+};

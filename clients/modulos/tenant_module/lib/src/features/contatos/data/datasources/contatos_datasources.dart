@@ -5,25 +5,25 @@ import '../../domain/model/contato.dart';
 import '../../domain/parameters/contatos_parameters.dart';
 
 Contato _contato(proto.MyContato c) => Contato(
-      id: c.id,
-      telefone: c.telefone,
-      nomeContato: c.nomeContato,
-      nomePerfilWhatsapp: c.nomePerfilWhatsapp,
-      email: c.email,
-      ativo: c.ativo,
-      ultimaInteracao:
-          DateTime.fromMillisecondsSinceEpoch(c.ultimaInteracao.toInt()),
-      cadastradoEm:
-          DateTime.fromMillisecondsSinceEpoch(c.cadastradoEm.toInt()),
-    );
+  id: c.id,
+  telefone: c.telefone,
+  nomeContato: c.nomeContato,
+  nomePerfilWhatsapp: c.nomePerfilWhatsapp,
+  email: c.email,
+  ativo: c.ativo,
+  ultimaInteracao: DateTime.fromMillisecondsSinceEpoch(
+    c.ultimaInteracao.toInt(),
+  ),
+  cadastradoEm: DateTime.fromMillisecondsSinceEpoch(c.cadastradoEm.toInt()),
+);
 
 final class ListarContatosDatasource
     implements Datasource<List<Contato>, ListarContatosParameters> {
   final proto.AdminServiceClient _client;
 
   const ListarContatosDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<List<Contato>> call(ListarContatosParameters parameters) async {

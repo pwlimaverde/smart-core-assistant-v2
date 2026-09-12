@@ -11,15 +11,13 @@ import '../controllers/fluxos_controllers.dart';
 Future<void> abrirCriacaoFluxo(
   BuildContext context,
   FluxosController controller,
-) =>
-    _abrirFormulario(context: context, controller: controller);
+) => _abrirFormulario(context: context, controller: controller);
 
 Future<void> abrirEdicaoFluxo(
   BuildContext context,
   Fluxo item,
   FluxosController controller,
-) =>
-    _abrirFormulario(context: context, controller: controller, item: item);
+) => _abrirFormulario(context: context, controller: controller, item: item);
 
 Future<void> _abrirFormulario({
   required BuildContext context,
@@ -29,7 +27,8 @@ Future<void> _abrirFormulario({
   final nome = TextEditingController(text: item?.nome);
   final descricao = TextEditingController(text: item?.descricao);
   final departamentos = controller.departamentos;
-  var departamentoId = item?.departamentoId ??
+  var departamentoId =
+      item?.departamentoId ??
       (departamentos.isNotEmpty ? departamentos.first.id : 0);
   var ativo = item?.ativo ?? true;
   String? erro;
@@ -93,10 +92,9 @@ Future<void> _abrirFormulario({
                       'O fluxo nasce com as quatro colunas padrão (fila, '
                       'atendimento, aguardando e finalização). Dá para '
                       'renomear e acrescentar depois.',
-                      style: Theme.of(stateCtx)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: stateCtx.colors.fgMuted),
+                      style: Theme.of(stateCtx).textTheme.bodySmall?.copyWith(
+                        color: stateCtx.colors.fgMuted,
+                      ),
                     ),
                   ],
                   if (editando) ...[
@@ -122,8 +120,9 @@ Future<void> _abrirFormulario({
           ),
           actions: [
             TextButton(
-              onPressed:
-                  salvando ? null : () => Navigator.of(dialogContext).pop(),
+              onPressed: salvando
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancelar'),
             ),
             PrimaryButton(
@@ -134,9 +133,7 @@ Future<void> _abrirFormulario({
                   ? null
                   : () async {
                       if (nome.text.trim().isEmpty) {
-                        setStateDialog(
-                          () => erro = 'Informe o nome do fluxo.',
-                        );
+                        setStateDialog(() => erro = 'Informe o nome do fluxo.');
                         return;
                       }
                       if (!editando && departamentoId <= 0) {
@@ -217,12 +214,10 @@ Future<void> abrirDesativacaoFluxo(
 
   messenger.showSnackBar(
     SnackBar(
-      content: Text(
-        switch (res) {
-          Success() => 'Fluxo desativado.',
-          Failure(:final error) => error.message,
-        },
-      ),
+      content: Text(switch (res) {
+        Success() => 'Fluxo desativado.',
+        Failure(:final error) => error.message,
+      }),
     ),
   );
 }
@@ -240,7 +235,9 @@ class _Erro extends StatelessWidget {
       children: [
         Icon(Icons.error_outline, size: 18, color: cor),
         const SizedBox(width: AppSpacing.xs),
-        Expanded(child: Text(mensagem, style: TextStyle(color: cor))),
+        Expanded(
+          child: Text(mensagem, style: TextStyle(color: cor)),
+        ),
       ],
     );
   }

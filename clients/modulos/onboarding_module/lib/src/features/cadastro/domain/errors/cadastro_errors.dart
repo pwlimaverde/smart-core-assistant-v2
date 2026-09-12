@@ -22,7 +22,7 @@ sealed class CadastroError extends AppError {
 final class CadastroDadosInvalidos extends CadastroError
     with ValidationFailure {
   const CadastroDadosInvalidos([String? mensagem])
-      : super(mensagem ?? 'Verifique os dados informados.');
+    : super(mensagem ?? 'Verifique os dados informados.');
 }
 
 /// O `signup_token` não confere, ou o cadastro já foi concluído.
@@ -31,30 +31,30 @@ final class CadastroDadosInvalidos extends CadastroError
 /// cadastro não descobre sequer se ele existe.
 final class CadastroNaoAutorizado extends CadastroError {
   const CadastroNaoAutorizado()
-      : super('Este cadastro não está mais disponível. Comece de novo.');
+    : super('Este cadastro não está mais disponível. Comece de novo.');
 }
 
 /// Um passo foi pedido fora de ordem (pagar antes de escolher o plano).
 final class CadastroForaDeOrdem extends CadastroError {
   const CadastroForaDeOrdem()
-      : super('Conclua o passo anterior antes de seguir.');
+    : super('Conclua o passo anterior antes de seguir.');
 }
 
 /// Rate limit por IP das rotas públicas.
 final class CadastroBloqueadoPorTentativas extends CadastroError {
   const CadastroBloqueadoPorTentativas()
-      : super('Muitas tentativas. Aguarde alguns minutos.');
+    : super('Muitas tentativas. Aguarde alguns minutos.');
 }
 
 /// Servidor fora do ar ou prazo esgotado.
 final class CadastroIndisponivel extends CadastroError with NetworkFailure {
   const CadastroIndisponivel()
-      : super('Servidor indisponível. Tente novamente.');
+    : super('Servidor indisponível. Tente novamente.');
 }
 
 /// Falha não modelada. Mensagem genérica: o texto da exceção vai para o log,
 /// nunca para a tela.
 final class CadastroInesperado extends CadastroError with UnexpectedFailure {
   const CadastroInesperado()
-      : super('Não foi possível concluir. Tente novamente.');
+    : super('Não foi possível concluir. Tente novamente.');
 }

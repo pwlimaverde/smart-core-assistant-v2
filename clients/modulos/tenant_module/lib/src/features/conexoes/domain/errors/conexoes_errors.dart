@@ -9,23 +9,35 @@ sealed class ConexoesError extends AppError {
 final class ConexoesAcessoNegado extends ConexoesError
     with UnauthorizedFailure {
   const ConexoesAcessoNegado()
-      : super('Você não tem permissão para gerenciar as conexões.');
+    : super('Você não tem permissão para gerenciar as conexões.');
+}
+
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [ConexoesAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class ConexoesSessaoExpirada extends ConexoesError
+    with UnauthorizedFailure {
+  const ConexoesSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
 }
 
 final class ConexaoNaoEncontrada extends ConexoesError {
   const ConexaoNaoEncontrada()
-      : super('Esta conexão não existe mais. Atualize a lista.');
+    : super('Esta conexão não existe mais. Atualize a lista.');
 }
 
 /// O provedor recusou — mensagem dele, que é quem sabe o motivo.
 final class ConexaoRecusada extends ConexoesError with ValidationFailure {
   const ConexaoRecusada([String? mensagem])
-      : super(mensagem ?? 'O provedor recusou a operação.');
+    : super(mensagem ?? 'O provedor recusou a operação.');
 }
 
 final class ConexoesIndisponivel extends ConexoesError with NetworkFailure {
   const ConexoesIndisponivel()
-      : super('Não foi possível falar com o servidor. Tente de novo.');
+    : super('Não foi possível falar com o servidor. Tente de novo.');
 }
 
 final class ConexoesInesperado extends ConexoesError {

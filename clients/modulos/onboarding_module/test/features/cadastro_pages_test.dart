@@ -417,7 +417,9 @@ void main() {
         ..registrarCredenciais(email: 'a@b.com', senha: 'senhaforte8');
       when(() => client.getSignupStatus(any())).thenAnswer(
         (_) => falhaGrpc(
-          proto.GrpcError.permissionDenied('cadastro não encontrado ou já concluído'),
+          proto.GrpcError.permissionDenied(
+            'cadastro não encontrado ou já concluído',
+          ),
         ),
       );
       registrar();
@@ -438,28 +440,29 @@ void main() {
       expect(find.text('Verificar de novo'), findsOneWidget);
     });
 
-    testWidgets('"continuar de onde parei" entra mesmo com a consulta quebrada', (
-      tester,
-    ) async {
-      // O status é só um informante: as credenciais existem e a conta pode
-      // estar pronta. Esta é a saída que tira o cliente do limbo.
-      sessao
-        ..registrarInicio(tenantId: 't-1', signupToken: 'TOK')
-        ..registrarCredenciais(email: 'a@b.com', senha: 'senhaforte8');
-      when(() => client.getSignupStatus(any())).thenAnswer(
-        (_) => falhaGrpc(proto.GrpcError.permissionDenied('token morto')),
-      );
-      registrar();
-      await montar(tester, const CadastroProntoPage());
-      await tester.pump(const Duration(minutes: 3));
-      await tester.pumpAndSettle();
+    testWidgets(
+      '"continuar de onde parei" entra mesmo com a consulta quebrada',
+      (tester) async {
+        // O status é só um informante: as credenciais existem e a conta pode
+        // estar pronta. Esta é a saída que tira o cliente do limbo.
+        sessao
+          ..registrarInicio(tenantId: 't-1', signupToken: 'TOK')
+          ..registrarCredenciais(email: 'a@b.com', senha: 'senhaforte8');
+        when(() => client.getSignupStatus(any())).thenAnswer(
+          (_) => falhaGrpc(proto.GrpcError.permissionDenied('token morto')),
+        );
+        registrar();
+        await montar(tester, const CadastroProntoPage());
+        await tester.pump(const Duration(minutes: 3));
+        await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Continuar de onde parei'));
-      await tester.pumpAndSettle();
+        await tester.tap(find.text('Continuar de onde parei'));
+        await tester.pumpAndSettle();
 
-      // Entrou: saiu do wizard para a configuração guiada.
-      expect(find.textContaining('Não conseguimos confirmar'), findsNothing);
-    });
+        // Entrou: saiu do wizard para a configuração guiada.
+        expect(find.textContaining('Não conseguimos confirmar'), findsNothing);
+      },
+    );
   });
 
   group('slugSugerido', () {

@@ -67,25 +67,26 @@ class _ChatPageState extends State<ChatPage> {
       title: 'Atendimento #${widget.atendimentoId}',
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final conversa = BlocBuilder<ChatController, ViewState<ChatViewModel>>(
-            bloc: _controller,
-            builder: (context, state) {
-              return switch (state) {
-                InitialState() || LoadingState() => const Center(
-                  child: CircularProgressIndicator(),
-                ),
-                ErrorState(:final error) => AppErrorView(
-                  message: error.message,
-                  onRetry: () => _controller.abrir(widget.atendimentoId),
-                ),
-                SuccessState(:final data) => _ChatBody(
-                  viewModel: data,
-                  inputController: _inputController,
-                  onEnviar: _enviar,
-                ),
-              };
-            },
-          );
+          final conversa =
+              BlocBuilder<ChatController, ViewState<ChatViewModel>>(
+                bloc: _controller,
+                builder: (context, state) {
+                  return switch (state) {
+                    InitialState() || LoadingState() => const Center(
+                      child: CircularProgressIndicator(),
+                    ),
+                    ErrorState(:final error) => AppErrorView(
+                      message: error.message,
+                      onRetry: () => _controller.abrir(widget.atendimentoId),
+                    ),
+                    SuccessState(:final data) => _ChatBody(
+                      viewModel: data,
+                      inputController: _inputController,
+                      onEnviar: _enviar,
+                    ),
+                  };
+                },
+              );
 
           // Em janela estreita a ficha some em vez de espremer a conversa: ler
           // e responder é o que não pode ficar sem espaço. As etiquetas

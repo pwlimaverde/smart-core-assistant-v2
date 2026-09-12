@@ -18,6 +18,17 @@ final class AuditAcessoNegado extends AuditError with UnauthorizedFailure {
     : super('Somente o superusuário pode consultar a auditoria.');
 }
 
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [AuditAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class AuditSessaoExpirada extends AuditError with UnauthorizedFailure {
+  const AuditSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
 final class AuditNaoEncontrado extends AuditError {
   const AuditNaoEncontrado() : super('Nenhum registro corresponde ao filtro.');
 }

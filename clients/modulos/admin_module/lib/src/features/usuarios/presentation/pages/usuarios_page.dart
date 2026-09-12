@@ -160,9 +160,7 @@ class _LinhaUsuario extends StatelessWidget {
     return ListTile(
       leading: CircleAvatar(
         child: Icon(
-          usuario.superusuario
-              ? Icons.shield_outlined
-              : Icons.person_outline,
+          usuario.superusuario ? Icons.shield_outlined : Icons.person_outline,
           size: 20,
         ),
       ),

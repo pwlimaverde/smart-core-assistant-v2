@@ -28,8 +28,8 @@ final class PortaoConfiguracao extends ChangeNotifier {
   final ConsultarProgressoUsecase _consultar;
 
   PortaoConfiguracao({required ConsultarProgressoUsecase consultar})
-      // ignore: prefer_initializing_formals
-      : _consultar = consultar;
+    // ignore: prefer_initializing_formals
+    : _consultar = consultar;
 
   bool? _pendente;
   int _passo = 5;

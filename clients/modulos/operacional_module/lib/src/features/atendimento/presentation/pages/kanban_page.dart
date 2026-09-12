@@ -115,7 +115,8 @@ class _Quadro extends StatelessWidget {
       return const AppEmptyView(
         icon: Icons.account_tree_outlined,
         title: 'Nenhum quadro configurado',
-        subtitle: 'Crie um fluxo de atendimento em "Fluxos de atendimento" '
+        subtitle:
+            'Crie um fluxo de atendimento em "Fluxos de atendimento" '
             'para que as conversas tenham por onde andar.',
       );
     }
@@ -243,10 +244,7 @@ class _Coluna extends StatelessWidget {
                 // existe para o quadro que não tem coluna daquele tipo — sem
                 // ele, não haveria como marcar uma conversa como pendente num
                 // quadro de três colunas.
-                _MenuDeEstado(
-                  atendimento: atendimento,
-                  controller: controller,
-                ),
+                _MenuDeEstado(atendimento: atendimento, controller: controller),
               ],
             ),
           ),

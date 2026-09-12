@@ -51,10 +51,9 @@ class _FluxosPageState extends State<FluxosPage> {
                   child: Text(
                     'Cada fluxo é um quadro de colunas por onde as conversas '
                     'de um departamento andam.',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: context.colors.fgMuted),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: context.colors.fgMuted,
+                    ),
                   ),
                 ),
                 ElevatedButton.icon(
@@ -75,7 +74,8 @@ class _FluxosPageState extends State<FluxosPage> {
                 onSuccess: (context, fluxos) => fluxos.isEmpty
                     ? const AppEmptyView(
                         title: 'Nenhum fluxo ainda',
-                        subtitle: 'Sem fluxo, as conversas que chegam não têm '
+                        subtitle:
+                            'Sem fluxo, as conversas que chegam não têm '
                             'quadro onde entrar.',
                       )
                     : ListView.separated(
@@ -140,10 +140,9 @@ class _LinhaFluxo extends StatelessWidget {
                       '${item.atendimentosAbertos} em aberto',
                     if (item.descricao.isNotEmpty) item.descricao,
                   ].join(' · '),
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: muted),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: muted),
                 ),
               ],
             ),
@@ -193,11 +192,7 @@ class _Etiqueta extends StatelessWidget {
       ),
       child: Text(
         texto,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: cor,
-        ),
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: cor),
       ),
     );
   }

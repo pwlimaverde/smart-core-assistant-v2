@@ -28,9 +28,10 @@ class AppLogo extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final asset = switch (variant) {
       AppLogoVariant.mark => 'assets/brand/logo_mark.png',
-      AppLogoVariant.full => isDark
-          ? 'assets/brand/logo_full_white.png'
-          : 'assets/brand/logo_full.png',
+      AppLogoVariant.full =>
+        isDark
+            ? 'assets/brand/logo_full_white.png'
+            : 'assets/brand/logo_full.png',
     };
 
     return Image.asset(

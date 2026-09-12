@@ -28,6 +28,18 @@ final class ListAtendimentosAcessoNegado extends ListAtendimentosError
     : super('Você não tem acesso a esta fila de atendimentos.');
 }
 
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [ListAtendimentosAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class ListAtendimentosSessaoExpirada extends ListAtendimentosError
+    with UnauthorizedFailure {
+  const ListAtendimentosSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
 final class ListAtendimentosIndisponivel extends ListAtendimentosError
     with NetworkFailure {
   const ListAtendimentosIndisponivel()
@@ -56,6 +68,18 @@ final class GetThreadAcessoNegado extends GetThreadError
     with UnauthorizedFailure {
   const GetThreadAcessoNegado()
     : super('Você não tem acesso a este atendimento.');
+}
+
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [GetThreadAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class GetThreadSessaoExpirada extends GetThreadError
+    with UnauthorizedFailure {
+  const GetThreadSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
 }
 
 final class GetThreadNaoEncontrado extends GetThreadError {
@@ -90,6 +114,18 @@ final class MoveEtapaAcessoNegado extends MoveAtendimentoEtapaError
     with UnauthorizedFailure {
   const MoveEtapaAcessoNegado()
     : super('Você não tem permissão para mover atendimentos neste fluxo.');
+}
+
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [MoveEtapaAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class MoveEtapaSessaoExpirada extends MoveAtendimentoEtapaError
+    with UnauthorizedFailure {
+  const MoveEtapaSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
 }
 
 final class MoveEtapaNaoEncontrado extends MoveAtendimentoEtapaError {
@@ -133,6 +169,18 @@ final class SendMessageAcessoNegado extends SendOutboundMessageError
     with UnauthorizedFailure {
   const SendMessageAcessoNegado()
     : super('Você não tem permissão para responder neste atendimento.');
+}
+
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [SendMessageAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class SendMessageSessaoExpirada extends SendOutboundMessageError
+    with UnauthorizedFailure {
+  const SendMessageSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
 }
 
 final class SendMessageNaoEncontrado extends SendOutboundMessageError {
@@ -187,6 +235,17 @@ final class QuadroAcessoNegado extends QuadroError with UnauthorizedFailure {
     : super('Você não tem acesso à configuração deste quadro.');
 }
 
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [QuadroAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class QuadroSessaoExpirada extends QuadroError with UnauthorizedFailure {
+  const QuadroSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
 final class QuadroIndisponivel extends QuadroError with NetworkFailure {
   const QuadroIndisponivel()
     : super('Não foi possível carregar o quadro. Tente novamente.');
@@ -215,6 +274,18 @@ final class SetStatusAcessoNegado extends SetStatusError
     with UnauthorizedFailure {
   const SetStatusAcessoNegado()
     : super('Você não tem permissão para mudar o estado deste atendimento.');
+}
+
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [SetStatusAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class SetStatusSessaoExpirada extends SetStatusError
+    with UnauthorizedFailure {
+  const SetStatusSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
 }
 
 final class SetStatusNaoEncontrado extends SetStatusError {
@@ -255,6 +326,17 @@ sealed class FichaError extends AppError {
 final class FichaAcessoNegado extends FichaError with UnauthorizedFailure {
   const FichaAcessoNegado()
     : super('Você não tem acesso à ficha deste atendimento.');
+}
+
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [FichaAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class FichaSessaoExpirada extends FichaError with UnauthorizedFailure {
+  const FichaSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
 }
 
 /// Recusa do servidor — a mensagem vem dele. É por aqui que chega a etiqueta

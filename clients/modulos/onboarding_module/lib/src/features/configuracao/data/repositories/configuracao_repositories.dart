@@ -24,12 +24,15 @@ ConfiguracaoError _traduzir(Object exception, String operacao) {
   return switch (kind) {
     GrpcFailureKind.rateLimited => const LimiteDoPlanoAtingido(),
     GrpcFailureKind.invalidArgument => ConfiguracaoDadosInvalidos(
-        exception is GrpcError ? exception.message : null,
-      ),
+      exception is GrpcError ? exception.message : null,
+    ),
     GrpcFailureKind.alreadyExists => const ConfiguracaoDadosInvalidos(
-        'Já existe uma conexão com esse nome. Escolha outro.',
-      ),
-    GrpcFailureKind.unauthenticated ||
+      'Já existe uma conexão com esse nome. Escolha outro.',
+    ),
+    // Separados de propósito: sessão expirada não é falta de
+    // permissão, e juntar as duas manda a pessoa caçar um acesso
+    // que ela já tem.
+    GrpcFailureKind.unauthenticated => const ConfiguracaoSessaoExpirada(),
     GrpcFailureKind.permissionDenied => const ConfiguracaoNaoAutorizada(),
     GrpcFailureKind.unavailable ||
     GrpcFailureKind.notFound ||
@@ -38,17 +41,30 @@ ConfiguracaoError _traduzir(Object exception, String operacao) {
   };
 }
 
-final class CriarConexaoRepository extends RepositoryBase<ConexaoWhatsapp,
-    CriarConexaoParameters, ConfiguracaoError> {
+final class CriarConexaoRepository
+    extends
+        RepositoryBase<
+          ConexaoWhatsapp,
+          CriarConexaoParameters,
+          ConfiguracaoError
+        > {
   const CriarConexaoRepository({required super.datasource});
 
   @override
-  ConfiguracaoError mapError(Object e, StackTrace s, CriarConexaoParameters p) =>
-      _traduzir(e, 'criar conexão');
+  ConfiguracaoError mapError(
+    Object e,
+    StackTrace s,
+    CriarConexaoParameters p,
+  ) => _traduzir(e, 'criar conexão');
 }
 
-final class EstadoConexaoRepository extends RepositoryBase<EstadoConexao,
-    EstadoConexaoParameters, ConfiguracaoError> {
+final class EstadoConexaoRepository
+    extends
+        RepositoryBase<
+          EstadoConexao,
+          EstadoConexaoParameters,
+          ConfiguracaoError
+        > {
   const EstadoConexaoRepository({required super.datasource});
 
   @override
@@ -56,12 +72,16 @@ final class EstadoConexaoRepository extends RepositoryBase<EstadoConexao,
     Object e,
     StackTrace s,
     EstadoConexaoParameters p,
-  ) =>
-      _traduzir(e, 'consultar conexão');
+  ) => _traduzir(e, 'consultar conexão');
 }
 
-final class CriarDepartamentoRepository extends RepositoryBase<Departamento,
-    CriarDepartamentoParameters, ConfiguracaoError> {
+final class CriarDepartamentoRepository
+    extends
+        RepositoryBase<
+          Departamento,
+          CriarDepartamentoParameters,
+          ConfiguracaoError
+        > {
   const CriarDepartamentoRepository({required super.datasource});
 
   @override
@@ -69,8 +89,7 @@ final class CriarDepartamentoRepository extends RepositoryBase<Departamento,
     Object e,
     StackTrace s,
     CriarDepartamentoParameters p,
-  ) =>
-      _traduzir(e, 'criar departamento');
+  ) => _traduzir(e, 'criar departamento');
 }
 
 final class DefinirPersonaRepository
@@ -82,8 +101,13 @@ final class DefinirPersonaRepository
       _traduzir(e, 'definir persona');
 }
 
-final class ProgressoRepository extends RepositoryBase<ProgressoOnboarding,
-    ProgressoParameters, ConfiguracaoError> {
+final class ProgressoRepository
+    extends
+        RepositoryBase<
+          ProgressoOnboarding,
+          ProgressoParameters,
+          ConfiguracaoError
+        > {
   const ProgressoRepository({required super.datasource});
 
   @override

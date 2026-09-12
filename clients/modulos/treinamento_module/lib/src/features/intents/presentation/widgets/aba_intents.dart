@@ -38,10 +38,9 @@ class _AbaIntentsState extends State<AbaIntents> {
               child: Text(
                 'Quando a pergunta se parecer com o exemplo, a IA passa a '
                 'seguir o comportamento descrito.',
-                style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: context.colors.fgMuted),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodySmall?.copyWith(color: context.colors.fgMuted),
               ),
             ),
             ElevatedButton.icon(
@@ -62,7 +61,8 @@ class _AbaIntentsState extends State<AbaIntents> {
             onSuccess: (context, itens) => itens.isEmpty
                 ? const AppEmptyView(
                     title: 'Nenhuma intenção cadastrada',
-                    subtitle: 'Use uma intenção quando a IA precisar AGIR de '
+                    subtitle:
+                        'Use uma intenção quando a IA precisar AGIR de '
                         'um jeito específico — transferir, pedir um dado, '
                         'recusar — e não apenas saber uma informação.',
                   )
@@ -117,10 +117,7 @@ class _Linha extends StatelessWidget {
                     if (item.vetorizada)
                       const _Etiqueta(texto: 'Ativa', cor: Colors.green)
                     else
-                      const _Etiqueta(
-                        texto: 'Processando',
-                        cor: Colors.orange,
-                      ),
+                      const _Etiqueta(texto: 'Processando', cor: Colors.orange),
                     if (item.grupo.isNotEmpty) ...[
                       const SizedBox(width: AppSpacing.sm),
                       _Etiqueta(texto: item.grupo, cor: muted),
@@ -136,10 +133,10 @@ class _Linha extends StatelessWidget {
                   const SizedBox(height: AppSpacing.xs),
                   Text(
                     'ex: "${item.exemplo}"',
-                    style: Theme.of(context)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: muted, fontStyle: FontStyle.italic),
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: muted,
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
                 ],
               ],
@@ -178,11 +175,7 @@ class _Etiqueta extends StatelessWidget {
       ),
       child: Text(
         texto,
-        style: TextStyle(
-          fontSize: 10,
-          fontWeight: FontWeight.bold,
-          color: cor,
-        ),
+        style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: cor),
       ),
     );
   }

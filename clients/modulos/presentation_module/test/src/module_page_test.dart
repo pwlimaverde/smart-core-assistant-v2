@@ -37,16 +37,18 @@ void main() {
       getIt.reset();
     });
 
-    testWidgets('chama onInit na montagem e renderiza estado de sucesso', (tester) async {
+    testWidgets('chama onInit na montagem e renderiza estado de sucesso', (
+      tester,
+    ) async {
       var onInitChamado = false;
-      when(() => mockController.state).thenReturn(const SuccessState<String>('ok'));
+      when(
+        () => mockController.state,
+      ).thenReturn(const SuccessState<String>('ok'));
 
       await tester.pumpWidget(
         MaterialApp(
           home: Scaffold(
-            body: TestModulePage(
-              onInitCallback: () => onInitChamado = true,
-            ),
+            body: TestModulePage(onInitCallback: () => onInitChamado = true),
           ),
         ),
       );
@@ -58,9 +60,7 @@ void main() {
     });
 
     testWidgets('estado inicial renderiza vazio por padrão', (tester) async {
-      when(
-        () => mockController.state,
-      ).thenReturn(const InitialState<String>());
+      when(() => mockController.state).thenReturn(const InitialState<String>());
 
       await tester.pumpWidget(
         const MaterialApp(home: Scaffold(body: TestModulePage())),
@@ -73,9 +73,7 @@ void main() {
     testWidgets('estado de carregamento renderiza spinner por padrão', (
       tester,
     ) async {
-      when(
-        () => mockController.state,
-      ).thenReturn(const LoadingState<String>());
+      when(() => mockController.state).thenReturn(const LoadingState<String>());
 
       await tester.pumpWidget(
         const MaterialApp(home: Scaffold(body: TestModulePage())),
@@ -87,9 +85,9 @@ void main() {
     testWidgets('estado de erro renderiza a mensagem do AppError por padrão', (
       tester,
     ) async {
-      when(() => mockController.state).thenReturn(
-        const ErrorState<String>(ErrorGeneric('falhou de verdade')),
-      );
+      when(
+        () => mockController.state,
+      ).thenReturn(const ErrorState<String>(ErrorGeneric('falhou de verdade')));
 
       await tester.pumpWidget(
         const MaterialApp(home: Scaffold(body: TestModulePage())),

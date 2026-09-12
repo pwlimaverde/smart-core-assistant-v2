@@ -77,9 +77,8 @@ void main() {
               context: context,
               builder: (_) => DialogoComCampos(
                 campos: [campo],
-                builder: (_) => AlertDialog(
-                  content: TextField(controller: campo),
-                ),
+                builder: (_) =>
+                    AlertDialog(content: TextField(controller: campo)),
               ),
             ),
             child: const Text('Abrir'),

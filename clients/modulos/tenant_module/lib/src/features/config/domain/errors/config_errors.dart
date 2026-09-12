@@ -13,6 +13,18 @@ final class ConfigAcessoNegado extends TenantConfigError
     : super('Você não tem permissão para alterar a configuração do tenant.');
 }
 
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [ConfigAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class ConfigSessaoExpirada extends TenantConfigError
+    with UnauthorizedFailure {
+  const ConfigSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
 /// Valor recusado pelo servidor (temperatura fora da faixa, modelo inexistente,
 /// limiar inválido).
 final class ConfigDadosInvalidos extends TenantConfigError

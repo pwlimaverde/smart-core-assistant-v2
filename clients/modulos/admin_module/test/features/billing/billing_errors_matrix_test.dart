@@ -46,7 +46,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> BillingAcessoNegado', () async {
+    test('unauthenticated -> BillingSessaoExpirada', () async {
       when(
         () => client.listPlans(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -59,7 +59,7 @@ void main() {
       final r = await usecase(noParams);
 
       final erro = (r as Failure).error;
-      expect(erro, isA<BillingAcessoNegado>());
+      expect(erro, isA<BillingSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as BillingError).message,
@@ -275,7 +275,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> BillingAcessoNegado', () async {
+    test('unauthenticated -> BillingSessaoExpirada', () async {
       when(
         () => client.createPlan(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -297,7 +297,7 @@ void main() {
       );
 
       final erro = (r as Failure).error;
-      expect(erro, isA<BillingAcessoNegado>());
+      expect(erro, isA<BillingSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as BillingError).message,
@@ -587,7 +587,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> BillingAcessoNegado', () async {
+    test('unauthenticated -> BillingSessaoExpirada', () async {
       when(
         () => client.updatePlan(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -611,7 +611,7 @@ void main() {
       );
 
       final erro = (r as Failure).error;
-      expect(erro, isA<BillingAcessoNegado>());
+      expect(erro, isA<BillingSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as BillingError).message,
@@ -906,7 +906,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> BillingAcessoNegado', () async {
+    test('unauthenticated -> BillingSessaoExpirada', () async {
       when(
         () => client.listSubscriptions(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -919,7 +919,7 @@ void main() {
       final r = await usecase(noParams);
 
       final erro = (r as Failure).error;
-      expect(erro, isA<BillingAcessoNegado>());
+      expect(erro, isA<BillingSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as BillingError).message,
@@ -1136,7 +1136,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> BillingAcessoNegado', () async {
+    test('unauthenticated -> BillingSessaoExpirada', () async {
       when(
         () => client.registerPayment(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -1159,7 +1159,7 @@ void main() {
       );
 
       final erro = (r as Failure).error;
-      expect(erro, isA<BillingAcessoNegado>());
+      expect(erro, isA<BillingSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as BillingError).message,
@@ -1446,7 +1446,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> BillingAcessoNegado', () async {
+    test('unauthenticated -> BillingSessaoExpirada', () async {
       when(
         () => client.listPayments(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -1459,7 +1459,7 @@ void main() {
       final r = await usecase(const ListPaymentsParameters());
 
       final erro = (r as Failure).error;
-      expect(erro, isA<BillingAcessoNegado>());
+      expect(erro, isA<BillingSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as BillingError).message,

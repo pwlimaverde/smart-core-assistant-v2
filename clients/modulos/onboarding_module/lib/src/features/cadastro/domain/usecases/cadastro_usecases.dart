@@ -23,79 +23,123 @@ CadastroError _inesperado(String operacao, Object e, StackTrace s) {
   return const CadastroInesperado();
 }
 
-final class VerificarSlugUsecase extends UsecaseBaseCallData<
-    SlugDisponibilidade, SlugDisponibilidade, SlugParameters, CadastroError> {
+final class VerificarSlugUsecase
+    extends
+        UsecaseBaseCallData<
+          SlugDisponibilidade,
+          SlugDisponibilidade,
+          SlugParameters,
+          CadastroError
+        > {
   const VerificarSlugUsecase({required super.repository});
 
   @override
-  ProcessData<SlugDisponibilidade, SlugDisponibilidade, SlugParameters,
-      CadastroError> get process => (data, _) => Success(data);
+  ProcessData<
+    SlugDisponibilidade,
+    SlugDisponibilidade,
+    SlugParameters,
+    CadastroError
+  >
+  get process =>
+      (data, _) => Success(data);
 
   @override
   CadastroError onUnexpected(Object e, StackTrace s) =>
       _inesperado('verificar slug', e, s);
 }
 
-final class ListarPlanosUsecase extends UsecaseBaseCallData<List<PlanoPublico>,
-    List<PlanoPublico>, SemParametros, CadastroError> {
+final class ListarPlanosUsecase
+    extends
+        UsecaseBaseCallData<
+          List<PlanoPublico>,
+          List<PlanoPublico>,
+          SemParametros,
+          CadastroError
+        > {
   const ListarPlanosUsecase({required super.repository});
 
   @override
-  ProcessData<List<PlanoPublico>, List<PlanoPublico>, SemParametros,
-      CadastroError> get process => (data, _) => Success(data);
+  ProcessData<
+    List<PlanoPublico>,
+    List<PlanoPublico>,
+    SemParametros,
+    CadastroError
+  >
+  get process =>
+      (data, _) => Success(data);
 
   @override
   CadastroError onUnexpected(Object e, StackTrace s) =>
       _inesperado('listar planos', e, s);
 }
 
-final class ListarProvedoresUsecase extends UsecaseBaseCallData<
-    List<ProvedorPagamento>,
-    List<ProvedorPagamento>,
-    SemParametros,
-    CadastroError> {
+final class ListarProvedoresUsecase
+    extends
+        UsecaseBaseCallData<
+          List<ProvedorPagamento>,
+          List<ProvedorPagamento>,
+          SemParametros,
+          CadastroError
+        > {
   const ListarProvedoresUsecase({required super.repository});
 
   /// Nenhuma forma de pagamento habilitada é falha de configuração do servidor,
   /// não uma lista vazia a exibir: sem provedor, ninguém conclui o cadastro, e a
   /// tela precisa dizer isso em vez de mostrar um espaço em branco.
   @override
-  ProcessData<List<ProvedorPagamento>, List<ProvedorPagamento>, SemParametros,
-          CadastroError>
-      get process => (data, _) => data.isEmpty
-          ? const Failure(CadastroIndisponivel())
-          : Success(data);
+  ProcessData<
+    List<ProvedorPagamento>,
+    List<ProvedorPagamento>,
+    SemParametros,
+    CadastroError
+  >
+  get process =>
+      (data, _) =>
+          data.isEmpty ? const Failure(CadastroIndisponivel()) : Success(data);
 
   @override
   CadastroError onUnexpected(Object e, StackTrace s) =>
       _inesperado('listar provedores', e, s);
 }
 
-final class IniciarCadastroUsecase extends UsecaseBaseCallData<
-    CadastroIniciado,
-    CadastroIniciado,
-    IniciarCadastroParameters,
-    CadastroError> {
+final class IniciarCadastroUsecase
+    extends
+        UsecaseBaseCallData<
+          CadastroIniciado,
+          CadastroIniciado,
+          IniciarCadastroParameters,
+          CadastroError
+        > {
   const IniciarCadastroUsecase({required super.repository});
 
   /// Sem `signup_token` os passos seguintes são inalcançáveis. Um servidor que
   /// responde 200 sem o token deixaria o usuário preso numa tela que não avança;
   /// falhar aqui pelo menos dá a ele o botão de tentar de novo.
   @override
-  ProcessData<CadastroIniciado, CadastroIniciado, IniciarCadastroParameters,
-          CadastroError>
-      get process => (data, _) =>
-          data.signupToken.isEmpty || data.tenantId.isEmpty
-              ? const Failure(CadastroInesperado())
-              : Success(data);
+  ProcessData<
+    CadastroIniciado,
+    CadastroIniciado,
+    IniciarCadastroParameters,
+    CadastroError
+  >
+  get process =>
+      (data, _) => data.signupToken.isEmpty || data.tenantId.isEmpty
+      ? const Failure(CadastroInesperado())
+      : Success(data);
 
   @override
   CadastroError onUnexpected(Object e, StackTrace s) =>
       _inesperado('iniciar cadastro', e, s);
 }
 
-final class SelecionarPlanoUsecase extends UsecaseBaseCallData<int, int,
-    SelecionarPlanoParameters, CadastroError> {
+final class SelecionarPlanoUsecase
+    extends
+        UsecaseBaseCallData<
+          int,
+          int,
+          SelecionarPlanoParameters,
+          CadastroError
+        > {
   const SelecionarPlanoUsecase({required super.repository});
 
   @override
@@ -107,11 +151,14 @@ final class SelecionarPlanoUsecase extends UsecaseBaseCallData<int, int,
       _inesperado('selecionar plano', e, s);
 }
 
-final class ConfirmarPagamentoUsecase extends UsecaseBaseCallData<
-    ResultadoPagamento,
-    ResultadoPagamento,
-    ConfirmarPagamentoParameters,
-    CadastroError> {
+final class ConfirmarPagamentoUsecase
+    extends
+        UsecaseBaseCallData<
+          ResultadoPagamento,
+          ResultadoPagamento,
+          ConfirmarPagamentoParameters,
+          CadastroError
+        > {
   const ConfirmarPagamentoUsecase({required super.repository});
 
   /// **A recusa passa como `Success`.** Código expirado ou revogado não é falha
@@ -123,27 +170,44 @@ final class ConfirmarPagamentoUsecase extends UsecaseBaseCallData<
   /// O que este `process` barra é a resposta incoerente: não confirmou, não
   /// mandou redirecionar e não explicou por quê. Aí não há o que mostrar.
   @override
-  ProcessData<ResultadoPagamento, ResultadoPagamento,
-          ConfirmarPagamentoParameters, CadastroError>
-      get process => (data, _) =>
+  ProcessData<
+    ResultadoPagamento,
+    ResultadoPagamento,
+    ConfirmarPagamentoParameters,
+    CadastroError
+  >
+  get process =>
+      (data, _) =>
           !data.confirmado &&
-                  !data.exigeRedirecionamento &&
-                  data.mensagem.trim().isEmpty
-              ? const Failure(CadastroInesperado())
-              : Success(data);
+              !data.exigeRedirecionamento &&
+              data.mensagem.trim().isEmpty
+          ? const Failure(CadastroInesperado())
+          : Success(data);
 
   @override
   CadastroError onUnexpected(Object e, StackTrace s) =>
       _inesperado('confirmar pagamento', e, s);
 }
 
-final class StatusCadastroUsecase extends UsecaseBaseCallData<StatusCadastro,
-    StatusCadastro, StatusCadastroParameters, CadastroError> {
+final class StatusCadastroUsecase
+    extends
+        UsecaseBaseCallData<
+          StatusCadastro,
+          StatusCadastro,
+          StatusCadastroParameters,
+          CadastroError
+        > {
   const StatusCadastroUsecase({required super.repository});
 
   @override
-  ProcessData<StatusCadastro, StatusCadastro, StatusCadastroParameters,
-      CadastroError> get process => (data, _) => Success(data);
+  ProcessData<
+    StatusCadastro,
+    StatusCadastro,
+    StatusCadastroParameters,
+    CadastroError
+  >
+  get process =>
+      (data, _) => Success(data);
 
   @override
   CadastroError onUnexpected(Object e, StackTrace s) =>

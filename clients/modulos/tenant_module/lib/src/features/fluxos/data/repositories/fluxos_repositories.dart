@@ -24,9 +24,12 @@ FluxosError _traduzir(Object exception, String operacao) {
     GrpcFailureKind.invalidArgument ||
     GrpcFailureKind.alreadyExists ||
     GrpcFailureKind.failedPrecondition => FluxosRecusado(
-        exception is GrpcError ? exception.message : null,
-      ),
-    GrpcFailureKind.unauthenticated ||
+      exception is GrpcError ? exception.message : null,
+    ),
+    // Separados de propósito: sessão expirada não é falta de
+    // permissão, e juntar as duas manda a pessoa caçar um acesso
+    // que ela já tem.
+    GrpcFailureKind.unauthenticated => const FluxosSessaoExpirada(),
     GrpcFailureKind.permissionDenied => const FluxosAcessoNegado(),
     GrpcFailureKind.unavailable => const FluxosIndisponivel(),
     GrpcFailureKind.unknown => const FluxosInesperado(),

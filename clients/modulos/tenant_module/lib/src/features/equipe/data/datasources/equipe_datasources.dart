@@ -5,25 +5,25 @@ import '../../domain/model/equipe.dart';
 import '../../domain/parameters/equipe_parameters.dart';
 
 Departamento _dep(proto.MyDepartamento d) => Departamento(
-      id: d.id,
-      nome: d.nome,
-      slug: d.slug,
-      descricao: d.descricao,
-      ativo: d.ativo,
-      criadoEm: DateTime.fromMillisecondsSinceEpoch(d.criadoEm.toInt()),
-    );
+  id: d.id,
+  nome: d.nome,
+  slug: d.slug,
+  descricao: d.descricao,
+  ativo: d.ativo,
+  criadoEm: DateTime.fromMillisecondsSinceEpoch(d.criadoEm.toInt()),
+);
 
 Atendente _at(proto.MyAtendente a) => Atendente(
-      id: a.id,
-      nome: a.nome,
-      email: a.email,
-      cargo: a.cargo,
-      departamentoId: a.departamentoId,
-      fluxoId: a.fluxoId,
-      ativo: a.ativo,
-      disponivel: a.disponivel,
-      maxSimultaneos: a.maxAtendimentosSimultaneos,
-    );
+  id: a.id,
+  nome: a.nome,
+  email: a.email,
+  cargo: a.cargo,
+  departamentoId: a.departamentoId,
+  fluxoId: a.fluxoId,
+  ativo: a.ativo,
+  disponivel: a.disponivel,
+  maxSimultaneos: a.maxAtendimentosSimultaneos,
+);
 
 /// Busca as duas listas numa passada.
 ///
@@ -33,8 +33,8 @@ final class CarregarEquipeDatasource implements Datasource<Equipe, NoParams> {
   final proto.AdminServiceClient _client;
 
   const CarregarEquipeDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Equipe> call(NoParams parameters) async {
@@ -54,8 +54,8 @@ final class CriarDepartamentoDatasource
   final proto.AdminServiceClient _client;
 
   const CriarDepartamentoDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Unit> call(CriarDepartamentoParameters parameters) async {
@@ -115,8 +115,8 @@ final class CriarAtendenteDatasource
   final proto.AdminServiceClient _client;
 
   const CriarAtendenteDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Unit> call(CriarAtendenteParameters parameters) async {

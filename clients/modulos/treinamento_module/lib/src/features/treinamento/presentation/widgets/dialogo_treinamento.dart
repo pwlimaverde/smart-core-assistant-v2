@@ -56,7 +56,8 @@ Future<void> abrirCriacao(
                       labelText: 'O que a IA precisa saber',
                       alignLabelWithHint: true,
                       border: OutlineInputBorder(),
-                      helperText: 'Escreva como explicaria a um atendente novo.',
+                      helperText:
+                          'Escreva como explicaria a um atendente novo.',
                     ),
                   ),
                   if (erro case final msg?) ...[
@@ -69,8 +70,9 @@ Future<void> abrirCriacao(
           ),
           actions: [
             TextButton(
-              onPressed:
-                  salvando ? null : () => Navigator.of(dialogContext).pop(),
+              onPressed: salvando
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancelar'),
             ),
             PrimaryButton(
@@ -155,10 +157,9 @@ Future<void> abrirRevisao(
                   Text(
                     'Ajuste o texto se precisar. Ao aceitar, a IA processa este '
                     'material e passa a usá-lo nas respostas.',
-                    style: Theme.of(stateCtx)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: stateCtx.colors.fgMuted),
+                    style: Theme.of(stateCtx).textTheme.bodySmall?.copyWith(
+                      color: stateCtx.colors.fgMuted,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   TextField(
@@ -179,8 +180,9 @@ Future<void> abrirRevisao(
           ),
           actions: [
             TextButton(
-              onPressed:
-                  salvando ? null : () => Navigator.of(dialogContext).pop(),
+              onPressed: salvando
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancelar'),
             ),
             PrimaryButton(
@@ -264,12 +266,10 @@ Future<void> abrirRemocao(
 
   messenger.showSnackBar(
     SnackBar(
-      content: Text(
-        switch (res) {
-          Success() => 'Material removido.',
-          Failure(:final error) => error.message,
-        },
-      ),
+      content: Text(switch (res) {
+        Success() => 'Material removido.',
+        Failure(:final error) => error.message,
+      }),
     ),
   );
 }
@@ -287,7 +287,9 @@ class _Erro extends StatelessWidget {
       children: [
         Icon(Icons.error_outline, size: 18, color: cor),
         const SizedBox(width: AppSpacing.xs),
-        Expanded(child: Text(mensagem, style: TextStyle(color: cor))),
+        Expanded(
+          child: Text(mensagem, style: TextStyle(color: cor)),
+        ),
       ],
     );
   }

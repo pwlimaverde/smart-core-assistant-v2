@@ -26,7 +26,10 @@ ConvitesError _mapConvites(
     stackTrace: stackTrace,
   );
   return switch (kind) {
-    GrpcFailureKind.unauthenticated ||
+    // Separados de propósito: sessão expirada não é falta de
+    // permissão, e juntar as duas manda a pessoa caçar um acesso
+    // que ela já tem.
+    GrpcFailureKind.unauthenticated => const ConvitesSessaoExpirada(),
     GrpcFailureKind.permissionDenied => const ConvitesAcessoNegado(),
     GrpcFailureKind.notFound => const ConviteNaoEncontrado(),
     GrpcFailureKind.alreadyExists => const EmailJaConvidado(),

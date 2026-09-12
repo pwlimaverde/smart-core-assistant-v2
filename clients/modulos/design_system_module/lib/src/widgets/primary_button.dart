@@ -39,10 +39,7 @@ class PrimaryButton extends StatelessWidget {
             icon: Icon(icon, size: 18),
             label: child,
           )
-        : FilledButton(
-            onPressed: isLoading ? null : onPressed,
-            child: child,
-          );
+        : FilledButton(onPressed: isLoading ? null : onPressed, child: child);
 
     return expand ? SizedBox(width: double.infinity, child: button) : button;
   }

@@ -18,11 +18,7 @@ final class LoginForm extends StatefulWidget {
   /// saída.
   final String? rotaDeCadastro;
 
-  const LoginForm({
-    super.key,
-    required this.controller,
-    this.rotaDeCadastro,
-  });
+  const LoginForm({super.key, required this.controller, this.rotaDeCadastro});
 
   @override
   State<LoginForm> createState() => _LoginFormState();

@@ -33,36 +33,36 @@ class Conexao {
   /// Mesma conexão com o estado trocado — usado para substituir o valor
   /// guardado no banco pelo que o provedor respondeu agora.
   Conexao comEstado(String novoEstado) => Conexao(
-        id: id,
-        nome: nome,
-        telefone: telefone,
-        estado: novoEstado,
-        ativa: ativa,
-        criadaEm: criadaEm,
-        respostaBot: respostaBot,
-      );
+    id: id,
+    nome: nome,
+    telefone: telefone,
+    estado: novoEstado,
+    ativa: ativa,
+    criadaEm: criadaEm,
+    respostaBot: respostaBot,
+  );
 
   /// Mesma conexão com o bot ligado/desligado — para a tela refletir o toggle
   /// sem recarregar a lista inteira do servidor.
   Conexao comRespostaBot(bool valor) => Conexao(
-        id: id,
-        nome: nome,
-        telefone: telefone,
-        estado: estado,
-        ativa: ativa,
-        criadaEm: criadaEm,
-        respostaBot: valor,
-      );
+    id: id,
+    nome: nome,
+    telefone: telefone,
+    estado: estado,
+    ativa: ativa,
+    criadaEm: criadaEm,
+    respostaBot: valor,
+  );
 
   /// Vocabulário de `whatsapp_instance.connection_state`. `unknown` existe
   /// porque o provedor pode não responder — e não saber é diferente de estar
   /// desconectado: um pede espera, o outro pede ação.
   SituacaoConexao get situacao => switch (estado) {
-        'connected' => SituacaoConexao.conectada,
-        'connecting' => SituacaoConexao.conectando,
-        'disconnected' => SituacaoConexao.desconectada,
-        _ => SituacaoConexao.desconhecida,
-      };
+    'connected' => SituacaoConexao.conectada,
+    'connecting' => SituacaoConexao.conectando,
+    'disconnected' => SituacaoConexao.desconectada,
+    _ => SituacaoConexao.desconhecida,
+  };
 }
 
 enum SituacaoConexao {

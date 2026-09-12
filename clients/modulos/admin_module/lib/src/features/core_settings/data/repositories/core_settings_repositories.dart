@@ -27,7 +27,10 @@ CoreSettingsError _mapCoreSettings(
     stackTrace: stackTrace,
   );
   return switch (kind) {
-    GrpcFailureKind.unauthenticated ||
+    // Separados de propósito: sessão expirada não é falta de
+    // permissão, e juntar as duas manda a pessoa caçar um acesso
+    // que ela já tem.
+    GrpcFailureKind.unauthenticated => const CoreSettingsSessaoExpirada(),
     GrpcFailureKind.permissionDenied => const CoreSettingsAcessoNegado(),
     GrpcFailureKind.notFound => const CoreSettingsNaoEncontrado(),
     GrpcFailureKind.alreadyExists => const CoreSettingsConflito(),

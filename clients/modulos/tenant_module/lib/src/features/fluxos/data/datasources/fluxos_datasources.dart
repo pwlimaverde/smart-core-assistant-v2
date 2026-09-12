@@ -5,33 +5,34 @@ import '../../domain/model/fluxo.dart';
 import '../../domain/parameters/fluxos_parameters.dart';
 
 Fluxo _fluxo(proto.MyFluxo f) => Fluxo(
-      id: f.id,
-      departamentoId: f.departamentoId,
-      departamentoNome: f.departamentoNome,
-      nome: f.nome,
-      descricao: f.descricao,
-      ativo: f.ativo,
-      etapas: f.etapas,
-      atendimentosAbertos: f.atendimentosAbertos,
-    );
+  id: f.id,
+  departamentoId: f.departamentoId,
+  departamentoNome: f.departamentoNome,
+  nome: f.nome,
+  descricao: f.descricao,
+  ativo: f.ativo,
+  etapas: f.etapas,
+  atendimentosAbertos: f.atendimentosAbertos,
+);
 
 EtapaFluxo _etapa(proto.MyEtapaFluxo e) => EtapaFluxo(
-      id: e.id,
-      fluxoId: e.fluxoId,
-      nome: e.nome,
-      descricao: e.descricao,
-      ordem: e.ordem,
-      cor: e.cor,
-      tipo: TipoEtapa.doCodigo(e.tipoEtapa),
-      ativo: e.ativo,
-    );
+  id: e.id,
+  fluxoId: e.fluxoId,
+  nome: e.nome,
+  descricao: e.descricao,
+  ordem: e.ordem,
+  cor: e.cor,
+  tipo: TipoEtapa.doCodigo(e.tipoEtapa),
+  ativo: e.ativo,
+);
 
-final class ListarFluxosDatasource implements Datasource<List<Fluxo>, NoParams> {
+final class ListarFluxosDatasource
+    implements Datasource<List<Fluxo>, NoParams> {
   final proto.AdminServiceClient _client;
 
   const ListarFluxosDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<List<Fluxo>> call(NoParams parameters) async {
@@ -45,8 +46,8 @@ final class CriarFluxoDatasource
   final proto.AdminServiceClient _client;
 
   const CriarFluxoDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Unit> call(CriarFluxoParameters parameters) async {
@@ -66,8 +67,8 @@ final class AtualizarFluxoDatasource
   final proto.AdminServiceClient _client;
 
   const AtualizarFluxoDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Unit> call(AtualizarFluxoParameters parameters) async {
@@ -88,8 +89,8 @@ final class DesativarFluxoDatasource
   final proto.AdminServiceClient _client;
 
   const DesativarFluxoDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Unit> call(FluxoIdParameters parameters) async {
@@ -103,8 +104,8 @@ final class ListarEtapasDatasource
   final proto.AdminServiceClient _client;
 
   const ListarEtapasDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<List<EtapaFluxo>> call(FluxoIdParameters parameters) async {
@@ -120,8 +121,8 @@ final class CriarEtapaDatasource
   final proto.AdminServiceClient _client;
 
   const CriarEtapaDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Unit> call(CriarEtapaParameters parameters) async {
@@ -142,8 +143,8 @@ final class AtualizarEtapaDatasource
   final proto.AdminServiceClient _client;
 
   const AtualizarEtapaDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Unit> call(AtualizarEtapaParameters parameters) async {
@@ -165,8 +166,8 @@ final class DesativarEtapaDatasource
   final proto.AdminServiceClient _client;
 
   const DesativarEtapaDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<Unit> call(EtapaIdParameters parameters) async {
@@ -182,8 +183,8 @@ final class MoverEtapaDatasource
   final proto.AdminServiceClient _client;
 
   const MoverEtapaDatasource({required proto.AdminServiceClient client})
-      // ignore: prefer_initializing_formals
-      : _client = client;
+    // ignore: prefer_initializing_formals
+    : _client = client;
 
   @override
   Future<bool> call(MoverEtapaParameters parameters) async {

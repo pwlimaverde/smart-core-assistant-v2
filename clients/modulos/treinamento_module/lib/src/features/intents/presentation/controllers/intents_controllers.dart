@@ -20,10 +20,10 @@ final class IntentsController extends BaseController<List<IntentIa>> {
     required CriarIntentUsecase criar,
     required AtualizarIntentUsecase atualizar,
     required RemoverIntentUsecase remover,
-  })  : _listar = listar,
-        _criar = criar,
-        _atualizar = atualizar,
-        _remover = remover;
+  }) : _listar = listar,
+       _criar = criar,
+       _atualizar = atualizar,
+       _remover = remover;
 
   Future<void> carregar() => execute<IntentsError>(() => _listar(noParams));
 

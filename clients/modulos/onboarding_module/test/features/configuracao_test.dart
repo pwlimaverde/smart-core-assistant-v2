@@ -43,9 +43,9 @@ void main() {
   /// O progresso é registrado ao fim de cada passo; sem este stub, avançar
   /// quebraria em todos os testes.
   void progressoResponde() {
-    when(() => client.setOnboardingProgress(any())).thenAnswer(
-      (_) => respostaGrpc(proto.SetOnboardingProgressResponse()),
-    );
+    when(
+      () => client.setOnboardingProgress(any()),
+    ).thenAnswer((_) => respostaGrpc(proto.SetOnboardingProgressResponse()));
   }
 
   CriarConexaoUsecase criarConexao() => CriarConexaoUsecase(
@@ -92,26 +92,28 @@ void main() {
   }
 
   group('limite do plano', () {
-    test('recusa por quota vira LimiteDoPlanoAtingido, não indisponibilidade',
-        () async {
-      // O teto vem do plano do tenant (`tenants_plan.max_instances`), não de um
-      // número no código. A tela precisa dizer que o caminho é mudar de plano —
-      // insistir não resolve.
-      when(() => client.createMyWhatsappInstance(any())).thenAnswer(
-        (_) => falhaGrpc<proto.CreateMyWhatsappInstanceResponse>(
-          proto.GrpcError.resourceExhausted(),
-        ),
-      );
+    test(
+      'recusa por quota vira LimiteDoPlanoAtingido, não indisponibilidade',
+      () async {
+        // O teto vem do plano do tenant (`tenants_plan.max_instances`), não de um
+        // número no código. A tela precisa dizer que o caminho é mudar de plano —
+        // insistir não resolve.
+        when(() => client.createMyWhatsappInstance(any())).thenAnswer(
+          (_) => falhaGrpc<proto.CreateMyWhatsappInstanceResponse>(
+            proto.GrpcError.resourceExhausted(),
+          ),
+        );
 
-      final res = await criarConexao()(
-        const CriarConexaoParameters(nome: 'Comercial'),
-      );
+        final res = await criarConexao()(
+          const CriarConexaoParameters(nome: 'Comercial'),
+        );
 
-      expect(
-        (res as Failure<ConexaoWhatsapp, ConfiguracaoError>).error,
-        isA<LimiteDoPlanoAtingido>(),
-      );
-    });
+        expect(
+          (res as Failure<ConexaoWhatsapp, ConfiguracaoError>).error,
+          isA<LimiteDoPlanoAtingido>(),
+        );
+      },
+    );
 
     test('nome duplicado explica o que fazer', () async {
       when(() => client.createMyWhatsappInstance(any())).thenAnswer(
@@ -138,9 +140,7 @@ void main() {
         ),
       );
 
-      final res = await criarConexao()(
-        const CriarConexaoParameters(nome: 'x'),
-      );
+      final res = await criarConexao()(const CriarConexaoParameters(nome: 'x'));
 
       expect(res, isA<Failure<ConexaoWhatsapp, ConfiguracaoError>>());
     });

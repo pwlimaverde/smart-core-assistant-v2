@@ -27,10 +27,10 @@ void main() {
   setUp(() => client = _MockAdminClient());
 
   CarregarEquipeUsecase carregar() => CarregarEquipeUsecase(
-        repository: CarregarEquipeRepository(
-          datasource: CarregarEquipeDatasource(client: client),
-        ),
-      );
+    repository: CarregarEquipeRepository(
+      datasource: CarregarEquipeDatasource(client: client),
+    ),
+  );
 
   void respondeListas({
     List<proto.MyDepartamento> departamentos = const [],
@@ -42,9 +42,8 @@ void main() {
       ),
     );
     when(() => client.listMyAtendentes(any())).thenAnswer(
-      (_) => respostaGrpc(
-        proto.ListMyAtendentesResponse(atendentes: atendentes),
-      ),
+      (_) =>
+          respostaGrpc(proto.ListMyAtendentesResponse(atendentes: atendentes)),
     );
   }
 
@@ -101,9 +100,9 @@ void main() {
   });
 
   test('atualizar envia id, nome e o estado ativo', () async {
-    when(() => client.updateMyDepartamento(any())).thenAnswer(
-      (_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)),
-    );
+    when(
+      () => client.updateMyDepartamento(any()),
+    ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
     respondeListas();
 
     final usecase = AtualizarDepartamentoUsecase(
@@ -120,9 +119,9 @@ void main() {
       ),
     );
 
-    final enviado = verify(() => client.updateMyDepartamento(captureAny()))
-        .captured
-        .single as proto.UpdateMyDepartamentoRequest;
+    final enviado =
+        verify(() => client.updateMyDepartamento(captureAny())).captured.single
+            as proto.UpdateMyDepartamentoRequest;
     expect(enviado.id, 4);
     expect(enviado.nome, 'Vendas');
     expect(enviado.ativo, isFalse);
@@ -153,9 +152,9 @@ void main() {
       when(() => client.listMyDepartamentos(any())).thenAnswer(
         (_) => falhaGrpc(proto.GrpcError.permissionDenied('sem escopo')),
       );
-      when(() => client.listMyAtendentes(any())).thenAnswer(
-        (_) => respostaGrpc(proto.ListMyAtendentesResponse()),
-      );
+      when(
+        () => client.listMyAtendentes(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.ListMyAtendentesResponse()));
 
       final res = await carregar()(noParams);
       expect((res as Failure).error, isA<EquipeAcessoNegado>());

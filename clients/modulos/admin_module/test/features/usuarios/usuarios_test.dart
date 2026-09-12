@@ -101,8 +101,13 @@ void main() {
         ),
       )(const ListarUsuariosParameters());
 
-      expect((r as Success<List<UsuarioGlobal>, UsuariosError>).value.single.ultimoLogin,
-          isNull);
+      expect(
+        (r as Success<List<UsuarioGlobal>, UsuariosError>)
+            .value
+            .single
+            .ultimoLogin,
+        isNull,
+      );
     });
 
     test('vínculo prioriza dono sobre funcionário', () async {
@@ -166,9 +171,9 @@ void main() {
     });
 
     test('sem escopo de superusuário vira acesso negado', () async {
-      when(() => client.adminSetUserActive(any())).thenAnswer(
-        (_) => falhaGrpc(GrpcError.permissionDenied('sem escopo')),
-      );
+      when(
+        () => client.adminSetUserActive(any()),
+      ).thenAnswer((_) => falhaGrpc(GrpcError.permissionDenied('sem escopo')));
 
       final r = await DefinirUsuarioAtivoUsecase(
         repository: DefinirUsuarioAtivoRepository(

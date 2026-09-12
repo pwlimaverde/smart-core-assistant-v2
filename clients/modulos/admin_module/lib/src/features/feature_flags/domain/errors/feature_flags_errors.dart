@@ -19,6 +19,18 @@ final class FeatureFlagsAcessoNegado extends FeatureFlagsError
     : super('Somente o superusuário pode alterar feature flags.');
 }
 
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [FeatureFlagsAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class FeatureFlagsSessaoExpirada extends FeatureFlagsError
+    with UnauthorizedFailure {
+  const FeatureFlagsSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
 final class FeatureFlagsNaoEncontrado extends FeatureFlagsError {
   const FeatureFlagsNaoEncontrado() : super('Flag ou tenant não encontrado.');
 }

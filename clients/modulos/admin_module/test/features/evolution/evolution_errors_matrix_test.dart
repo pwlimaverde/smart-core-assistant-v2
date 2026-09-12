@@ -48,7 +48,7 @@ void main() {
       );
     });
 
-    test('unauthenticated -> EvolutionAcessoNegado', () async {
+    test('unauthenticated -> EvolutionSessaoExpirada', () async {
       when(
         () => client.testEvolutionConnection(any()),
       ).thenAnswer((_) => falhaGrpc(GrpcError.unauthenticated('sem sessao')));
@@ -63,7 +63,7 @@ void main() {
       );
 
       final erro = (r as Failure).error;
-      expect(erro, isA<EvolutionAcessoNegado>());
+      expect(erro, isA<EvolutionSessaoExpirada>());
       expect(erro, isA<UnauthorizedFailure>());
       expect(
         (erro as EvolutionError).message,

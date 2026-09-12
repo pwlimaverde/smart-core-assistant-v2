@@ -18,7 +18,9 @@ KanbanController _controller(
 }) {
   // Todo controller de teste comeca com um quadro montado: e o estado normal
   // de quem opera, e sem colunas o arrasto nao teria destino.
-  gateway.colunas = gateway.colunas.isEmpty ? colunasDeTeste() : gateway.colunas;
+  gateway.colunas = gateway.colunas.isEmpty
+      ? colunasDeTeste()
+      : gateway.colunas;
   gateway.fluxos = gateway.fluxos.isEmpty ? fluxosDeTeste() : gateway.fluxos;
   final u = usecasesSobre(gateway);
   return KanbanController(
@@ -444,24 +446,26 @@ void main() {
     testWidgets('arrastar para "Cancelado" marca o cartao como cancelado', (
       tester,
     ) async {
-      final gateway = FakeAtendimentoGateway(
-        fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
-      )..colunas = const [
-          ColunaDoQuadro(
-            id: 10,
-            nome: 'Fila de Atendimento',
-            cor: '#B0C4DE',
-            ordem: 1,
-            tipo: 'fila',
-          ),
-          ColunaDoQuadro(
-            id: 40,
-            nome: 'Cancelado',
-            cor: '#FA8072',
-            ordem: 5,
-            tipo: 'finalizacao',
-          ),
-        ];
+      final gateway =
+          FakeAtendimentoGateway(
+              fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
+            )
+            ..colunas = const [
+              ColunaDoQuadro(
+                id: 10,
+                nome: 'Fila de Atendimento',
+                cor: '#B0C4DE',
+                ordem: 1,
+                tipo: 'fila',
+              ),
+              ColunaDoQuadro(
+                id: 40,
+                nome: 'Cancelado',
+                cor: '#FA8072',
+                ordem: 5,
+                tipo: 'finalizacao',
+              ),
+            ];
       final controller = _controller(gateway);
       await controller.carregar();
 

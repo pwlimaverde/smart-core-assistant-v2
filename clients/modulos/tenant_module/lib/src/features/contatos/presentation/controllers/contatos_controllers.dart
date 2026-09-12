@@ -16,7 +16,7 @@ final class ContatosController extends BaseController<List<Contato>> {
   String _busca = '';
 
   ContatosController({required ListarContatosUsecase listar})
-      : _listar = listar;
+    : _listar = listar;
 
   String get busca => _busca;
 

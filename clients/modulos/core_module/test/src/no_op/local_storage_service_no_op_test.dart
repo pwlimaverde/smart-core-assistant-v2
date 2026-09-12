@@ -6,10 +6,10 @@ void main() {
     test('salva e recupera dados localmente em memória', () async {
       final storage = LocalStorageServiceNoOp();
       expect(storage.init(), completes);
-      
+
       await storage.write('k', 'v');
       expect(storage.read('k'), equals('v'));
-      
+
       await storage.delete('k');
       expect(storage.read('k'), isNull);
     });

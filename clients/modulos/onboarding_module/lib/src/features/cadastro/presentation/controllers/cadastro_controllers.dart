@@ -30,7 +30,7 @@ final class DadosController extends BaseController<CadastroIniciado> {
   /// Checagem de disponibilidade enquanto o usuário digita. Fora do `ViewState`
   /// de propósito: é feedback de um campo, não o estado da tela.
   Future<ReturnSuccessOrError<SlugDisponibilidade, CadastroError>>
-      verificarSlug(String slug) => _verificarSlug(SlugParameters(slug: slug));
+  verificarSlug(String slug) => _verificarSlug(SlugParameters(slug: slug));
 
   Future<void> iniciar({
     required String nome,
@@ -79,7 +79,9 @@ final class PlanoController extends BaseController<List<PlanoPublico>> {
   Future<void> carregar() =>
       execute<CadastroError>(() => _listar(const SemParametros()));
 
-  Future<ReturnSuccessOrError<int, CadastroError>> selecionar(int planoId) async {
+  Future<ReturnSuccessOrError<int, CadastroError>> selecionar(
+    int planoId,
+  ) async {
     final res = await _selecionar(
       SelecionarPlanoParameters(
         tenantId: _sessao.tenantId,
@@ -93,7 +95,8 @@ final class PlanoController extends BaseController<List<PlanoPublico>> {
 }
 
 /// Passo 3 — pagamento.
-final class PagamentoController extends BaseController<List<ProvedorPagamento>> {
+final class PagamentoController
+    extends BaseController<List<ProvedorPagamento>> {
   final ListarProvedoresUsecase _listar;
   final ConfirmarPagamentoUsecase _confirmar;
   final CadastroSessao _sessao;
@@ -112,15 +115,14 @@ final class PagamentoController extends BaseController<List<ProvedorPagamento>> 
   Future<ReturnSuccessOrError<ResultadoPagamento, CadastroError>> confirmar({
     required String provedorId,
     String credencial = '',
-  }) =>
-      _confirmar(
-        ConfirmarPagamentoParameters(
-          tenantId: _sessao.tenantId,
-          signupToken: _sessao.signupToken,
-          provedorId: provedorId,
-          credencial: credencial,
-        ),
-      );
+  }) => _confirmar(
+    ConfirmarPagamentoParameters(
+      tenantId: _sessao.tenantId,
+      signupToken: _sessao.signupToken,
+      provedorId: provedorId,
+      credencial: credencial,
+    ),
+  );
 }
 
 /// Passo 4 — conclusão: acompanha o estado e entra na conta.
@@ -138,13 +140,13 @@ final class ConclusaoController extends BaseController<StatusCadastro> {
   /// Consulta o estado. Com pagamento imediato (voucher) já vem ativo; com
   /// gateway, é o que a tela repete até a confirmação chegar pelo webhook.
   Future<void> consultar() => execute<CadastroError>(
-        () => _status(
-          StatusCadastroParameters(
-            tenantId: _sessao.tenantId,
-            signupToken: _sessao.signupToken,
-          ),
-        ),
-      );
+    () => _status(
+      StatusCadastroParameters(
+        tenantId: _sessao.tenantId,
+        signupToken: _sessao.signupToken,
+      ),
+    ),
+  );
 
   /// Entra com as credenciais que o usuário acabou de definir e encerra a
   /// sessão do wizard (apagando a senha da memória).
@@ -152,7 +154,10 @@ final class ConclusaoController extends BaseController<StatusCadastro> {
   /// A navegação para a configuração inicial é da tela: o guard do app só sabe
   /// que há sessão, não que o roteiro continua.
   Future<ReturnSuccessOrError<login.Session, login.LoginError>> entrar() async {
-    final res = await _auth.login(email: _sessao.email, password: _sessao.senha);
+    final res = await _auth.login(
+      email: _sessao.email,
+      password: _sessao.senha,
+    );
     if (res is Success) _sessao.encerrar();
     return res;
   }

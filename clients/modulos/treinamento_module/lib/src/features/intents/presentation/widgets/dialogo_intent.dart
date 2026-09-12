@@ -12,15 +12,13 @@ import '../controllers/intents_controllers.dart';
 Future<void> abrirCriacaoIntent(
   BuildContext context,
   IntentsController controller,
-) =>
-    _abrirFormulario(context: context, controller: controller);
+) => _abrirFormulario(context: context, controller: controller);
 
 Future<void> abrirEdicaoIntent(
   BuildContext context,
   IntentIa item,
   IntentsController controller,
-) =>
-    _abrirFormulario(context: context, controller: controller, item: item);
+) => _abrirFormulario(context: context, controller: controller, item: item);
 
 Future<void> _abrirFormulario({
   required BuildContext context,
@@ -79,10 +77,9 @@ Future<void> _abrirFormulario({
                   Text(
                     'A comparação usa "quando se aplica" e o exemplo. Quanto '
                     'mais parecidos com o jeito real de perguntar, melhor.',
-                    style: Theme.of(stateCtx)
-                        .textTheme
-                        .bodySmall
-                        ?.copyWith(color: stateCtx.colors.fgMuted),
+                    style: Theme.of(stateCtx).textTheme.bodySmall?.copyWith(
+                      color: stateCtx.colors.fgMuted,
+                    ),
                   ),
                   const SizedBox(height: AppSpacing.md),
                   TextField(
@@ -93,8 +90,7 @@ Future<void> _abrirFormulario({
                       labelText: 'O que a IA deve fazer',
                       alignLabelWithHint: true,
                       border: OutlineInputBorder(),
-                      helperText:
-                          'ex: encerre a conversa e transfira ao setor',
+                      helperText: 'ex: encerre a conversa e transfira ao setor',
                     ),
                   ),
                   if (editando) ...[
@@ -104,10 +100,9 @@ Future<void> _abrirFormulario({
                     Text(
                       'Ao salvar, a intenção volta para processamento e fica '
                       'alguns instantes fora do ar.',
-                      style: Theme.of(stateCtx)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: stateCtx.colors.fgMuted),
+                      style: Theme.of(stateCtx).textTheme.bodySmall?.copyWith(
+                        color: stateCtx.colors.fgMuted,
+                      ),
                     ),
                   ],
                   if (erro case final msg?) ...[
@@ -120,8 +115,9 @@ Future<void> _abrirFormulario({
           ),
           actions: [
             TextButton(
-              onPressed:
-                  salvando ? null : () => Navigator.of(dialogContext).pop(),
+              onPressed: salvando
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
               child: const Text('Cancelar'),
             ),
             PrimaryButton(
@@ -137,7 +133,8 @@ Future<void> _abrirFormulario({
                       }
                       if (descricao.text.trim().isEmpty) {
                         setStateDialog(
-                          () => erro = 'Descreva quando esta intenção se '
+                          () => erro =
+                              'Descreva quando esta intenção se '
                               'aplica.',
                         );
                         return;
@@ -223,12 +220,10 @@ Future<void> abrirRemocaoIntent(
 
   messenger.showSnackBar(
     SnackBar(
-      content: Text(
-        switch (res) {
-          Success() => 'Intenção removida.',
-          Failure(:final error) => error.message,
-        },
-      ),
+      content: Text(switch (res) {
+        Success() => 'Intenção removida.',
+        Failure(:final error) => error.message,
+      }),
     ),
   );
 }
@@ -246,7 +241,9 @@ class _Erro extends StatelessWidget {
       children: [
         Icon(Icons.error_outline, size: 18, color: cor),
         const SizedBox(width: AppSpacing.xs),
-        Expanded(child: Text(mensagem, style: TextStyle(color: cor))),
+        Expanded(
+          child: Text(mensagem, style: TextStyle(color: cor)),
+        ),
       ],
     );
   }

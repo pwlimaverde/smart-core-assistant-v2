@@ -132,15 +132,15 @@ final class OnboardingModule extends AppModule {
 
   @override
   List<GetItModule> routes() => [
-        CadastroDadosRoute(),
-        CadastroPlanoRoute(),
-        CadastroPagamentoRoute(),
-        CadastroProntoRoute(),
-        ConexaoWhatsappRoute(),
-        DepartamentoRoute(),
-        AssistenteRoute(),
-        ConfiguracaoProntaRoute(),
-      ];
+    CadastroDadosRoute(),
+    CadastroPlanoRoute(),
+    CadastroPagamentoRoute(),
+    CadastroProntoRoute(),
+    ConexaoWhatsappRoute(),
+    DepartamentoRoute(),
+    AssistenteRoute(),
+    ConfiguracaoProntaRoute(),
+  ];
 
   /// Stub gRPC do cadastro, extraído do `ApiClient` global da plataforma.
   /// Diferente dos demais, este **não** leva interceptor de token: o cadastro

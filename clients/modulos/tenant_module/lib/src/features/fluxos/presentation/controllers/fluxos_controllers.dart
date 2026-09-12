@@ -28,11 +28,11 @@ final class FluxosController extends BaseController<List<Fluxo>> {
     required AtualizarFluxoUsecase atualizar,
     required DesativarFluxoUsecase desativar,
     required CarregarEquipeUsecase equipe,
-  })  : _listar = listar,
-        _criar = criar,
-        _atualizar = atualizar,
-        _desativar = desativar,
-        _equipe = equipe;
+  }) : _listar = listar,
+       _criar = criar,
+       _atualizar = atualizar,
+       _desativar = desativar,
+       _equipe = equipe;
 
   List<Departamento> get departamentos => _departamentos;
 
@@ -104,19 +104,17 @@ final class EtapasFluxoController extends BaseController<List<EtapaFluxo>> {
     required AtualizarEtapaUsecase atualizar,
     required DesativarEtapaUsecase desativar,
     required MoverEtapaUsecase mover,
-  })  : _listar = listar,
-        _criar = criar,
-        _atualizar = atualizar,
-        _desativar = desativar,
-        _mover = mover;
+  }) : _listar = listar,
+       _criar = criar,
+       _atualizar = atualizar,
+       _desativar = desativar,
+       _mover = mover;
 
   int get fluxoId => _fluxoId;
 
   Future<void> carregar(int fluxoId) {
     _fluxoId = fluxoId;
-    return execute<FluxosError>(
-      () => _listar(FluxoIdParameters(id: fluxoId)),
-    );
+    return execute<FluxosError>(() => _listar(FluxoIdParameters(id: fluxoId)));
   }
 
   Future<ReturnSuccessOrError<Unit, FluxosError>> criarEtapa({
@@ -125,12 +123,7 @@ final class EtapasFluxoController extends BaseController<List<EtapaFluxo>> {
     required String cor,
   }) async {
     final res = await _criar(
-      CriarEtapaParameters(
-        fluxoId: _fluxoId,
-        nome: nome,
-        tipo: tipo,
-        cor: cor,
-      ),
+      CriarEtapaParameters(fluxoId: _fluxoId, nome: nome, tipo: tipo, cor: cor),
     );
     if (res is Success) await carregar(_fluxoId);
     return res;
@@ -169,9 +162,7 @@ final class EtapasFluxoController extends BaseController<List<EtapaFluxo>> {
     required int id,
     required bool paraCima,
   }) async {
-    final res = await _mover(
-      MoverEtapaParameters(id: id, paraCima: paraCima),
-    );
+    final res = await _mover(MoverEtapaParameters(id: id, paraCima: paraCima));
     if (res case Success(value: true)) await carregar(_fluxoId);
     return res;
   }

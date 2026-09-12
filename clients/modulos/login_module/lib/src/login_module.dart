@@ -98,9 +98,7 @@ final class LoginModule extends AppModule {
   }
 
   @override
-  List<GetItModule> routes() => [
-    LoginRoute(rotaDeCadastro: rotaDeCadastro),
-  ];
+  List<GetItModule> routes() => [LoginRoute(rotaDeCadastro: rotaDeCadastro)];
 
   /// Stub gRPC de auth, extraído do `ApiClient` global da plataforma.
   static AuthServiceClient _authClient() =>

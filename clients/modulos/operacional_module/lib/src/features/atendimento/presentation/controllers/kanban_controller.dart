@@ -97,14 +97,18 @@ final class KanbanController extends BaseController<KanbanViewModel> {
     }
 
     final escolhido =
-        fluxoId ?? _fluxoAtual ?? (_fluxos.isNotEmpty ? _fluxos.first.id : null);
+        fluxoId ??
+        _fluxoAtual ??
+        (_fluxos.isNotEmpty ? _fluxos.first.id : null);
     if (escolhido != _fluxoAtual) {
       _fluxoAtual = escolhido;
       _colunas = const [];
     }
 
     if (escolhido != null && _colunas.isEmpty) {
-      final res = await _colunasUsecase(ListColunasParameters(fluxoId: escolhido));
+      final res = await _colunasUsecase(
+        ListColunasParameters(fluxoId: escolhido),
+      );
       if (res case Success(:final value)) _colunas = value;
     }
 
@@ -119,7 +123,9 @@ final class KanbanController extends BaseController<KanbanViewModel> {
   ) async {
     // Sem filtro de status: o quadro mostra a conversa em qualquer coluna, e
     // filtrar por "fila" deixaria as colunas de trabalho e finalização vazias.
-    final res = await _listUsecase(const ListAtendimentosParameters(status: ''));
+    final res = await _listUsecase(
+      const ListAtendimentosParameters(status: ''),
+    );
     return switch (res) {
       Success(:final value) => Success(
         KanbanViewModel(
@@ -164,14 +170,15 @@ final class KanbanController extends BaseController<KanbanViewModel> {
     // evita uma ida extra só para reler o que se sabe -- e evita o cartão
     // aparecer na coluna de finalização ainda marcado como "na fila".
     final destino = vm.colunas.where((c) => c.id == etapaDestinoId).firstOrNull;
-    final destinoLista = List<AtendimentoResumo>.of(
-      vm.porEtapa[etapaDestinoId] ?? const <AtendimentoResumo>[],
-    )..add(
-        atendimento.copyWith(
-          etapaAtualId: etapaDestinoId,
-          status: destino?.statusResultante,
-        ),
-      );
+    final destinoLista =
+        List<AtendimentoResumo>.of(
+          vm.porEtapa[etapaDestinoId] ?? const <AtendimentoResumo>[],
+        )..add(
+          atendimento.copyWith(
+            etapaAtualId: etapaDestinoId,
+            status: destino?.statusResultante,
+          ),
+        );
 
     final novoMapa = Map<int, List<AtendimentoResumo>>.of(vm.porEtapa)
       ..[etapaOrigemId] = origemLista

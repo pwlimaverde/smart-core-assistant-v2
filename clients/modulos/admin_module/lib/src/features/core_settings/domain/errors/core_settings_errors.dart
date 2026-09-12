@@ -19,6 +19,18 @@ final class CoreSettingsAcessoNegado extends CoreSettingsError
     : super('Somente o superusuário pode alterar configurações globais.');
 }
 
+/// Sessão morta — e NÃO falta de permissão.
+///
+/// As duas chegavam como [CoreSettingsAcessoNegado]. O resultado foi um dono de conta
+/// lendo "você não tem permissão" enquanto o servidor jamais tinha
+/// recusado nada: o token havia expirado, e a mensagem o mandou
+/// investigar permissões que ele já tinha.
+final class CoreSettingsSessaoExpirada extends CoreSettingsError
+    with UnauthorizedFailure {
+  const CoreSettingsSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
 final class CoreSettingsNaoEncontrado extends CoreSettingsError {
   const CoreSettingsNaoEncontrado() : super('Configuração não encontrada.');
 }

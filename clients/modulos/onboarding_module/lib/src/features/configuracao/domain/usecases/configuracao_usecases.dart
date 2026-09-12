@@ -18,52 +18,88 @@ ConfiguracaoError _inesperado(String operacao, Object e, StackTrace s) {
   return const ConfiguracaoInesperada();
 }
 
-final class CriarConexaoUsecase extends UsecaseBaseCallData<ConexaoWhatsapp,
-    ConexaoWhatsapp, CriarConexaoParameters, ConfiguracaoError> {
+final class CriarConexaoUsecase
+    extends
+        UsecaseBaseCallData<
+          ConexaoWhatsapp,
+          ConexaoWhatsapp,
+          CriarConexaoParameters,
+          ConfiguracaoError
+        > {
   const CriarConexaoUsecase({required super.repository});
 
   /// Sem `id` não há como consultar o pareamento — a tela ficaria esperando um
   /// QR que nunca chega.
   @override
-  ProcessData<ConexaoWhatsapp, ConexaoWhatsapp, CriarConexaoParameters,
-          ConfiguracaoError>
-      get process => (data, _) => data.id <= 0
-          ? const Failure(ConfiguracaoInesperada())
-          : Success(data);
+  ProcessData<
+    ConexaoWhatsapp,
+    ConexaoWhatsapp,
+    CriarConexaoParameters,
+    ConfiguracaoError
+  >
+  get process =>
+      (data, _) => data.id <= 0
+      ? const Failure(ConfiguracaoInesperada())
+      : Success(data);
 
   @override
   ConfiguracaoError onUnexpected(Object e, StackTrace s) =>
       _inesperado('criar conexão', e, s);
 }
 
-final class EstadoConexaoUsecase extends UsecaseBaseCallData<EstadoConexao,
-    EstadoConexao, EstadoConexaoParameters, ConfiguracaoError> {
+final class EstadoConexaoUsecase
+    extends
+        UsecaseBaseCallData<
+          EstadoConexao,
+          EstadoConexao,
+          EstadoConexaoParameters,
+          ConfiguracaoError
+        > {
   const EstadoConexaoUsecase({required super.repository});
 
   @override
-  ProcessData<EstadoConexao, EstadoConexao, EstadoConexaoParameters,
-      ConfiguracaoError> get process => (data, _) => Success(data);
+  ProcessData<
+    EstadoConexao,
+    EstadoConexao,
+    EstadoConexaoParameters,
+    ConfiguracaoError
+  >
+  get process =>
+      (data, _) => Success(data);
 
   @override
   ConfiguracaoError onUnexpected(Object e, StackTrace s) =>
       _inesperado('consultar conexão', e, s);
 }
 
-final class CriarDepartamentoUsecase extends UsecaseBaseCallData<Departamento,
-    Departamento, CriarDepartamentoParameters, ConfiguracaoError> {
+final class CriarDepartamentoUsecase
+    extends
+        UsecaseBaseCallData<
+          Departamento,
+          Departamento,
+          CriarDepartamentoParameters,
+          ConfiguracaoError
+        > {
   const CriarDepartamentoUsecase({required super.repository});
 
   @override
-  ProcessData<Departamento, Departamento, CriarDepartamentoParameters,
-      ConfiguracaoError> get process => (data, _) => Success(data);
+  ProcessData<
+    Departamento,
+    Departamento,
+    CriarDepartamentoParameters,
+    ConfiguracaoError
+  >
+  get process =>
+      (data, _) => Success(data);
 
   @override
   ConfiguracaoError onUnexpected(Object e, StackTrace s) =>
       _inesperado('criar departamento', e, s);
 }
 
-final class DefinirPersonaUsecase extends UsecaseBaseCallData<Unit, Unit,
-    PersonaParameters, ConfiguracaoError> {
+final class DefinirPersonaUsecase
+    extends
+        UsecaseBaseCallData<Unit, Unit, PersonaParameters, ConfiguracaoError> {
   const DefinirPersonaUsecase({required super.repository});
 
   @override
@@ -75,26 +111,50 @@ final class DefinirPersonaUsecase extends UsecaseBaseCallData<Unit, Unit,
       _inesperado('definir persona', e, s);
 }
 
-final class ProgressoUsecase extends UsecaseBaseCallData<ProgressoOnboarding,
-    ProgressoOnboarding, ProgressoParameters, ConfiguracaoError> {
+final class ProgressoUsecase
+    extends
+        UsecaseBaseCallData<
+          ProgressoOnboarding,
+          ProgressoOnboarding,
+          ProgressoParameters,
+          ConfiguracaoError
+        > {
   const ProgressoUsecase({required super.repository});
 
   @override
-  ProcessData<ProgressoOnboarding, ProgressoOnboarding, ProgressoParameters,
-      ConfiguracaoError> get process => (data, _) => Success(data);
+  ProcessData<
+    ProgressoOnboarding,
+    ProgressoOnboarding,
+    ProgressoParameters,
+    ConfiguracaoError
+  >
+  get process =>
+      (data, _) => Success(data);
 
   @override
   ConfiguracaoError onUnexpected(Object e, StackTrace s) =>
       _inesperado('registrar progresso', e, s);
 }
 
-final class ConsultarProgressoUsecase extends UsecaseBaseCallData<
-    ProgressoOnboarding, ProgressoOnboarding, NoParams, ConfiguracaoError> {
+final class ConsultarProgressoUsecase
+    extends
+        UsecaseBaseCallData<
+          ProgressoOnboarding,
+          ProgressoOnboarding,
+          NoParams,
+          ConfiguracaoError
+        > {
   const ConsultarProgressoUsecase({required super.repository});
 
   @override
-  ProcessData<ProgressoOnboarding, ProgressoOnboarding, NoParams,
-      ConfiguracaoError> get process => (data, _) => Success(data);
+  ProcessData<
+    ProgressoOnboarding,
+    ProgressoOnboarding,
+    NoParams,
+    ConfiguracaoError
+  >
+  get process =>
+      (data, _) => Success(data);
 
   @override
   ConfiguracaoError onUnexpected(Object e, StackTrace s) =>
