@@ -929,6 +929,151 @@ impl AdminFacade {
         }
     }
 
+    /// Recusa abrir conversa com o WhatsApp fora do ar.
+    ///
+    /// Sem isto o atendimento nasce, o operador escreve, e a mensagem fica
+    /// numa fila que não vai sair — ele descobre pela ausência de resposta,
+    /// horas depois, e o cliente nunca soube que alguém tentou falar com ele.
+    /// Recusar na hora, dizendo o motivo, é a única resposta honesta.
+    ///
+    /// Lê o estado do BANCO, que pode estar velho por até um ciclo de
+    /// reconciliação. Consultar o provedor aqui custaria segundos em cada
+    /// clique, e o estado velho erra para o lado seguro: uma instância que
+    /// caiu agora ainda consta conectada e a conversa abre — o mesmo que
+    /// acontece quando ela cai um segundo depois.
+    async fn exigir_whatsapp_no_ar(
+        &self,
+        tenant_id: &Uuid,
+        claims: &application::jwt::Claims,
+        traceparent: &str,
+    ) -> Result<(), Status> {
+        let env_req = Envelope {
+            tenant_id: tenant_id.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            traceparent: traceparent.to_string(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "ListWhatsappInstances".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({})).unwrap(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        let resp = match self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(r) if r.kind != MessageKind::Error as i32 => r,
+            // Fail-open, como o teto: não saber se o WhatsApp está no ar não é
+            // razão para impedir de atender.
+            outro => {
+                tracing::warn!(%tenant_id, "estado do WhatsApp indisponível: {outro:?}");
+                return Ok(());
+            }
+        };
+
+        let corpo: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap_or_default();
+        let instancias = corpo
+            .get("instances")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        // Nenhuma instância cadastrada é outro problema (a conta nem conectou
+        // o WhatsApp ainda) e tem outra mensagem — mandar "reconecte" para
+        // quem nunca conectou não ajuda ninguém.
+        if instancias.is_empty() {
+            return Err(Status::failed_precondition(
+                "Conecte um WhatsApp antes de iniciar conversas.",
+            ));
+        }
+
+        let alguma_no_ar = instancias.iter().any(|i| {
+            i.get("active").and_then(|v| v.as_bool()).unwrap_or(false)
+                && i.get("connection_state").and_then(|v| v.as_str()) == Some("connected")
+        });
+
+        if !alguma_no_ar {
+            tracing::warn!(%tenant_id, "atendimento ativo recusado: WhatsApp fora do ar");
+            return Err(Status::failed_precondition(
+                "O WhatsApp está fora do ar: a mensagem não sairia.                  Reconecte em Conexões e tente de novo.",
+            ));
+        }
+
+        Ok(())
+    }
+
+    /// Quantas conversas o tenant ainda pode abrir hoje.
+    ///
+    /// **Fail-open**: Redis fora do ar não impede de atender. O limite existe
+    /// para conter disparo em massa, não para ser mais um ponto de falha entre
+    /// o operador e o cliente — e um tenant que não consegue abrir conversa
+    /// nenhuma porque o cache caiu é um problema maior do que o que se está
+    /// prevenindo.
+    async fn conferir_teto_de_atendimento_ativo(
+        &self,
+        tenant_id: &Uuid,
+        traceparent: &str,
+    ) -> Result<(), Status> {
+        const JANELA_S: u64 = 24 * 60 * 60;
+        let teto = std::env::var("ATENDIMENTO_ATIVO_MAX_DIA")
+            .ok()
+            .and_then(|v| v.parse::<u64>().ok())
+            .unwrap_or(50);
+
+        let req = application::auth::login::montar_envelope_request(
+            Uuid::nil(),
+            traceparent,
+            "RegisterRateLimitAttempt",
+            &serde_json::json!({
+                // O id é o tenant, não o usuário: o número de WhatsApp é do
+                // tenant, e é ele que leva a denúncia. Cinco atendentes
+                // disparando vinte cada dá cem, e o limite por pessoa não veria
+                // nada de errado.
+                "recurso": "atendimento_ativo",
+                "id": tenant_id.to_string(),
+                "window_s": JANELA_S,
+            }),
+        );
+
+        match self
+            .deps
+            .redis
+            .call(req, std::time::Duration::from_secs(3))
+            .await
+        {
+            Ok(resp) if resp.kind != MessageKind::Error as i32 => {
+                let corpo: serde_json::Value =
+                    serde_json::from_slice(&resp.payload).unwrap_or_default();
+                let tentativas = corpo
+                    .get("attempts")
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(0);
+                if tentativas > teto {
+                    tracing::warn!(
+                        %tenant_id,
+                        tentativas,
+                        teto,
+                        "teto diário de atendimentos ativos excedido"
+                    );
+                    return Err(Status::resource_exhausted(
+                        "Limite diário de conversas iniciadas atingido.                          Iniciar muitas conversas em pouco tempo faz o WhatsApp                          bloquear o número.",
+                    ));
+                }
+                Ok(())
+            }
+            outro => {
+                tracing::warn!(%tenant_id, "teto indisponível (fail-open): {outro:?}");
+                Ok(())
+            }
+        }
+    }
+
     /// Manda o e-mail do convite. **Nunca falha para o chamador.**
     ///
     /// O convite já está gravado quando isto roda: o link é válido e está na
@@ -5359,6 +5504,18 @@ impl AdminService for AdminFacade {
         let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
             .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
         let inner = req.into_inner();
+
+        // Teto diário por tenant, antes de qualquer coisa.
+        //
+        // A evolution-go é whatsmeow: aceita qualquer número, sem a janela de
+        // 24 h da Cloud API. Abrir conversa é tecnicamente trivial — e é o
+        // caminho mais curto para o número do tenant ser denunciado e
+        // bloqueado pelo WhatsApp, o que derruba TODO o atendimento dele, não
+        // só o disparo. O limite protege o tenant de si mesmo.
+        self.conferir_teto_de_atendimento_ativo(&tenant_uuid, &traceparent)
+            .await?;
+        self.exigir_whatsapp_no_ar(&tenant_uuid, &claims, &traceparent)
+            .await?;
 
         let payload = serde_json::json!({
             "contato_id": inner.contato_id,

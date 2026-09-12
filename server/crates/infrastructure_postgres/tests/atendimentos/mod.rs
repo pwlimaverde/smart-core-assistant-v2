@@ -562,7 +562,10 @@ async fn atendimento_iniciado_pelo_painel_nasce_visivel_e_sem_bot() {
         Some(ctx.user_id),
         "quem inicia, atende"
     );
-    assert_eq!(atendimento.assunto.as_deref(), Some("Renovação do contrato"));
+    assert_eq!(
+        atendimento.assunto.as_deref(),
+        Some("Renovação do contrato")
+    );
 
     tx.rollback().await.unwrap();
 }
