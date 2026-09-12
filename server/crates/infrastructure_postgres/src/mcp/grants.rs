@@ -146,6 +146,19 @@ pub async fn registrar_consentimento(
 /// Lista os consentimentos **do próprio usuário**. Não existe variante que liste
 /// os de outra pessoa: a tela é pessoal, e um `tenant:admin` curioso não tem
 /// motivo para ver com que agente o colega conectou.
+///
+/// Só entram os que de fato conectaram. O consentimento grava o grant e devolve
+/// o code; quem o converte em conexão é o cliente, ao trocá-lo no
+/// `/oauth/token` — e é lá que `refresh_token_hash` e `last_used_at` são
+/// preenchidos, sempre juntos. Um grant sem hash é uma autorização que o
+/// cliente abandonou no meio: a pessoa clicou "autorizar", e nada do outro lado
+/// completou.
+///
+/// Mostrar isso como "aplicativo conectado" foi o que confundiu o diagnóstico
+/// em 12/09/2026: o Claude descartava o code por outro motivo, a tela do
+/// produto listava a conexão assim mesmo, e a leitura do banco parecia dizer
+/// que o vínculo existia. A tela precisa afirmar o que aconteceu, não o que se
+/// tentou.
 #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, user_id = ctx.user_id))]
 pub async fn listar_do_usuario(
     tx: &mut Transaction<'_, Postgres>,
@@ -156,6 +169,7 @@ pub async fn listar_do_usuario(
                 scopes, last_used_at, revoked_at, created_at
            FROM mcp_oauth_grant
           WHERE tenant_id = $1 AND user_id = $2 AND revoked_at IS NULL
+                AND refresh_token_hash IS NOT NULL
           ORDER BY created_at DESC",
     )
     .bind(ctx.tenant_id)
