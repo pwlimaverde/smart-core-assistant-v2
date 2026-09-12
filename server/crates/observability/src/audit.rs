@@ -216,6 +216,10 @@ impl AuditLogger {
                             user_id,
                             ip_address,
                             user_agent,
+                            // Caminho síncrono: grava aqui mesmo, sem passar pela
+                            // fila. `None` deixa o `now()` do Postgres responder,
+                            // e ele é a hora do evento.
+                            timestamp: None,
                         };
 
                         let result = infrastructure_postgres::run_in_tenant_transaction(
@@ -353,6 +357,10 @@ impl AuditLogger {
                             user_id,
                             ip_address,
                             user_agent,
+                            // Caminho síncrono: grava aqui mesmo, sem passar pela
+                            // fila. `None` deixa o `now()` do Postgres responder,
+                            // e ele é a hora do evento.
+                            timestamp: None,
                         };
 
                         let result =

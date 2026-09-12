@@ -37,6 +37,17 @@ pub struct NewAuditLogEntry {
     pub user_id: Option<i32>,
     pub ip_address: Option<String>,
     pub user_agent: Option<String>,
+    /// Quando o evento ACONTECEU, não quando foi gravado.
+    ///
+    /// A trilha chega por `transport::bus` de forma assíncrona; entre o fato e a
+    /// linha no banco pode haver segundos — ou dias, se o consumidor estiver
+    /// parado. Em 09/2026 ele ficou três dias sem consumir, e sem este campo a
+    /// consolidação carimbaria todos os eventos com a hora em que a fila foi
+    /// drenada: uma trilha de auditoria que mente sobre a cronologia dos fatos.
+    ///
+    /// `None` para quem grava direto no banco, sem passar pela fila — aí o
+    /// `now()` do Postgres é a hora do evento, e é o COALESCE que resolve.
+    pub timestamp: Option<DateTime<Utc>>,
 }
 
 // ============================================================
@@ -58,8 +69,8 @@ pub async fn inserir_audit_log(
 ) -> Result<Uuid, DbError> {
     let row = sqlx::query(
         r#"
-        INSERT INTO audit_log (tenant_id, level, service, trace_id, event, message, context, user_id, ip_address, user_agent)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        INSERT INTO audit_log (tenant_id, level, service, trace_id, event, message, context, user_id, ip_address, user_agent, timestamp)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, COALESCE($11, now()))
         RETURNING id
         "#
     )
@@ -73,6 +84,7 @@ pub async fn inserir_audit_log(
     .bind(entry.user_id)
     .bind(&entry.ip_address)
     .bind(&entry.user_agent)
+    .bind(entry.timestamp)
     .fetch_one(&mut **tx)
     .await?;
 
@@ -93,8 +105,8 @@ pub async fn inserir_audit_log_global(
 ) -> Result<Uuid, DbError> {
     let row = sqlx::query(
         r#"
-        INSERT INTO audit_log (tenant_id, level, service, trace_id, event, message, context, user_id, ip_address, user_agent)
-        VALUES (NULL, $1, $2, $3, $4, $5, $6, $7, $8, $9)
+        INSERT INTO audit_log (tenant_id, level, service, trace_id, event, message, context, user_id, ip_address, user_agent, timestamp)
+        VALUES (NULL, $1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10, now()))
         RETURNING id
         "#
     )
@@ -107,6 +119,7 @@ pub async fn inserir_audit_log_global(
     .bind(entry.user_id)
     .bind(&entry.ip_address)
     .bind(&entry.user_agent)
+    .bind(entry.timestamp)
     .fetch_one(admin_pool)
     .await?;
 

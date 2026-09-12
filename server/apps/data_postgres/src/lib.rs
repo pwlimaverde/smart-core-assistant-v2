@@ -54,6 +54,9 @@ pub async fn processar_eventos_auditoria_lote(
             user_id: envelope.payload.user_id.filter(|id| *id != 0),
             ip_address: envelope.payload.ip_address,
             user_agent: envelope.payload.user_agent,
+            // A hora do FATO, tirada do envelope — não a hora em que esta
+            // transação roda. Entre uma e outra houve três dias em 09/2026.
+            timestamp: Some(envelope.timestamp),
         };
 
         if let Some(tenant_id) = envelope.payload.tenant_id {
