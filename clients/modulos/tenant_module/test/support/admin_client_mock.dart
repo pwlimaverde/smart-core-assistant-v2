@@ -42,12 +42,17 @@ proto.TenantInviteCreated conviteCriadoProto({
 );
 
 /// Item da listagem de convites.
+///
+/// [expiresAt] é relativo ao relógio de propósito: "pendente" é um convite que
+/// ainda não venceu, e uma data fixa no helper faria o teste passar até a data
+/// chegar e falhar sozinho depois.
 proto.TenantInviteItem conviteItemProto({
   String id = 'inv-1',
   String email = 'convidado@exemplo.com',
   bool used = false,
   bool revoked = false,
   DateTime? createdAt,
+  DateTime? expiresAt,
   List<String> modulePermissions = const [],
   List<int> flowPermissions = const [],
 }) => proto.TenantInviteItem(
@@ -60,7 +65,7 @@ proto.TenantInviteItem conviteItemProto({
   modulePermissions: modulePermissions,
   flowPermissions: flowPermissions,
   createdAt: ms(createdAt ?? DateTime(2026, 1, 1)),
-  expiresAt: ms(DateTime(2026, 2, 1)),
+  expiresAt: ms(expiresAt ?? DateTime.now().add(const Duration(days: 30))),
 );
 
 /// Item da listagem de usuários do tenant.

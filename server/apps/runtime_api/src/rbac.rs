@@ -76,14 +76,18 @@ pub const MAPA: &[(&str, &[&str])] = &[
     // C3: abrir conversa é escrever no atendimento, não configurar o tenant.
     ("IniciarAtendimentoManual", &["atendimentos:write"]),
     // N9 E13 — desenhar a ficha é configurar o tenant, não atender.
-    ("ListMyCampos", &["configuracoes:read"]),
-    ("CreateMyCampo", &["configuracoes:write"]),
-    ("UpdateMyCampo", &["configuracoes:write"]),
-    ("DesativarMyCampo", &["configuracoes:write"]),
+    //
+    // A chave é o método do ENVELOPE, não o nome do RPC: é ele que o
+    // `encaminhar_tenant` manda ao data_postgres, e é ele que o teste de
+    // cobertura deste mapa lê do `grpc_web.rs`.
+    ("ListCamposPersonalizados", &["configuracoes:read"]),
+    ("CreateCampoPersonalizado", &["configuracoes:write"]),
+    ("UpdateCampoPersonalizado", &["configuracoes:write"]),
+    ("DesativarCampoPersonalizado", &["configuracoes:write"]),
     // Já PREENCHER é atender: quem está na conversa é quem sabe o valor, e
     // exigir escopo de configuração para digitar na ficha travaria o
     // atendente no meio do atendimento.
-    ("SetMyValorCampo", &["atendimentos:write"]),
+    ("SetValorCampo", &["atendimentos:write"]),
     // --- Base de conhecimento do assistente.
     ("ListTreinamentos", &["treinamento:read"]),
     ("GetTreinamento", &["treinamento:read"]),
@@ -102,6 +106,11 @@ pub const MAPA: &[(&str, &[&str])] = &[
     ("CreateNota", &["atendimentos:write"]),
     // --- Contatos.
     ("ListContatos", &["clientes:read"]),
+    // C4 — cadastrar e corrigir o cliente é mexer no cadastro dele, não
+    // configurar o tenant nem atender.
+    ("CreateContato", &["clientes:write"]),
+    ("UpdateContato", &["clientes:write"]),
+    ("DefinirContatoAtivo", &["clientes:write"]),
     // --- Painel e configuração.
     ("GetPainelTenant", &["atendimentos:read"]),
     ("UpdateTenantConfig", &["configuracoes:write"]),
