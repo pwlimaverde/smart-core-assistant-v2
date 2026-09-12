@@ -178,6 +178,43 @@ jobs:
           cache-from: type=gha,scope=web-tenant
           cache-to: type=gha,mode=max,scope=web-tenant
 
+  # Cliente Windows (Flutter desktop). NAO vai para o VPS — o desktop e baixado
+  # pelo usuario. O job existe porque este artefato era feito a mao e ficava
+  # velho sem ninguem notar: em 12/09/2026 o zip marcava a data de um build
+  # antigo enquanto as imagens web ja tinham sido refeitas.
+  #
+  # Chama o MESMO script que se usa na maquina local, de proposito: duas
+  # receitas para o mesmo artefato divergem, e a que roda menos e a que quebra.
+  build-windows-tenant:
+    name: Build Windows Tenant (DEV)
+    needs: changes
+    if: needs.changes.outputs.web == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: stable
+          cache: true
+
+      # O script confere, dentro do snapshot AOT, que os enderecos entraram —
+      # e falha se o endereco do outro ambiente vazou. Um `--dart-define`
+      # esquecido nao quebra o build sozinho: gera um app que aponta para o
+      # lugar errado e so falha na mao do usuario.
+      - name: Build e empacota
+        shell: pwsh
+        run: .\infra\build-windows.ps1 -Env dev -App tenant
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: smart-core-tenant-windows-dev
+          path: clients/build/smart-core-tenant-windows-dev.zip
+          retention-days: 30
+          if-no-files-found: error
+
   build-edge:
     name: Build Edge (borda)
     needs: changes
