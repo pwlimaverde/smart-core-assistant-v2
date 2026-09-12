@@ -111,7 +111,14 @@ pub fn valor_para_o_tipo(valor_json: &str, tipo: &str, opcoes: &Value) -> Option
         // Tipo que não conhecemos: guarda como texto em vez de descartar. O
         // catálogo pode ganhar tipos novos antes desta função, e perder o dado
         // por isso seria pior que guardá-lo cru.
-        _ => Some(Value::String(bruto.to_string())),
+        //
+        // Guarda o valor **desserializado**, não `bruto`: o LLM manda
+        // `"algo"` com as aspas do JSON, e gravá-las literalmente poria na
+        // ficha do cliente um texto com aspas que ninguém escreveu.
+        _ => match &v {
+            Value::String(s) => Some(Value::String(s.trim().to_string())),
+            _ => Some(Value::String(bruto.to_string())),
+        },
     }
 }
 
