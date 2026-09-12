@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/controllers/kanban_controller.dart';
+import 'package:operacional_module/src/features/atendimento/domain/streams/atendimento_evento_stream.dart';
+import 'package:operacional_module/src/features/atendimento/domain/usecases/atendimento_usecases.dart';
+import 'package:operacional_module/src/features/atendimento/presentation/pages/chat_page.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/pages/kanban_page.dart';
 
 import '../../support/fake_gateway.dart';
@@ -11,6 +14,7 @@ import '../../support/fake_gateway.dart';
 /// numa conta nova, e uma tela sem menu, de onde não se chega a configuração
 /// nenhuma.
 void main() {
+  conversaAoLadoDoQuadro();
   final getIt = GetIt.instance;
 
   tearDown(() => getIt.reset());
@@ -191,5 +195,107 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(gateway.statusRecebido, 'resolvido');
+  });
+}
+
+/// A conversa ao lado do quadro.
+///
+/// Era só página cheia: clicar num cartão empurrava outra tela por cima, e o
+/// operador perdia de vista a fila que estava trabalhando. Na v1 a conversa
+/// abria à direita, sem sair do quadro — é o que estes testes fixam.
+void conversaAoLadoDoQuadro() {
+  final getIt = GetIt.instance;
+
+  tearDown(() => getIt.reset());
+
+  void registrarTudo(FakeAtendimentoGateway gateway) {
+    final u = usecasesSobre(gateway);
+    getIt
+      ..registerSingleton<KanbanController>(
+        KanbanController(
+          listUsecase: u.list,
+          moveUsecase: u.move,
+          fluxosUsecase: u.fluxos,
+          colunasUsecase: u.colunas,
+          statusUsecase: u.status,
+        ),
+      )
+      ..registerSingleton<GetThreadUsecase>(u.thread)
+      ..registerSingleton<SendOutboundMessageUsecase>(u.send)
+      ..registerSingleton<AtendimentoEventoStream>(u.eventos)
+      ..registerSingleton<GetFichaUsecase>(u.ficha)
+      ..registerSingleton<CriarEtiquetaUsecase>(u.criarEtiqueta)
+      ..registerSingleton<AlternarEtiquetaUsecase>(u.alternarEtiqueta)
+      ..registerSingleton<CriarNotaUsecase>(u.criarNota)
+      ..registerSingleton<DefinirBotDaConversaUsecase>(u.definirBot);
+  }
+
+  Future<void> abrirOQuadro(WidgetTester tester, {required double largura}) async {
+    final gateway = FakeAtendimentoGateway()
+      ..colunas = colunasDeTeste()
+      ..fluxos = fluxosDeTeste()
+      ..fila = [atendimentoDeTeste(id: 7, etapaAtualId: 1)];
+    registrarTudo(gateway);
+
+    tester.view.physicalSize = Size(largura, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    await tester.pumpWidget(const MaterialApp(home: KanbanPage()));
+    await tester.pumpAndSettle();
+  }
+
+  testWidgets('em janela larga a conversa abre ao lado, sem sair do quadro', (
+    tester,
+  ) async {
+    await abrirOQuadro(tester, largura: 1600);
+
+    // O quadro está lá antes de clicar, e a conversa não.
+    expect(find.text('Entrada'), findsOneWidget);
+    expect(find.byType(PainelDeConversa), findsNothing);
+
+    await tester.tap(find.text('Assunto 7'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PainelDeConversa), findsOneWidget);
+    expect(
+      find.text('Entrada'),
+      findsOneWidget,
+      reason: 'o quadro sumiu: a conversa tomou a tela em vez de dividir',
+    );
+  });
+
+  testWidgets('fechar a conversa devolve o quadro inteiro', (tester) async {
+    await abrirOQuadro(tester, largura: 1600);
+    await tester.tap(find.text('Assunto 7'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Fechar a conversa'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(PainelDeConversa), findsNothing);
+    expect(find.text('Entrada'), findsOneWidget);
+  });
+
+  testWidgets('em janela estreita continua sendo tela cheia', (tester) async {
+    // Espremer quadro e conversa numa janela pequena deixa os dois ilegíveis,
+    // que é pior que escolher um.
+    await abrirOQuadro(tester, largura: 800);
+
+    // Numa janela de 800px a coluna do cartão fica fora da vista: o quadro
+    // rola na horizontal. Sem isto o toque cairia no vazio e o teste passaria
+    // por não ter acontecido nada.
+    await tester.ensureVisible(find.text('Assunto 7'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Assunto 7'));
+    await tester.pumpAndSettle();
+
+    expect(find.byType(ChatPage), findsOneWidget);
+    // O botão de fechar só existe no painel embutido; como tela cheia quem
+    // volta é a `AppBar`. É ele que distingue os dois modos.
+    expect(
+      find.byTooltip('Fechar a conversa'),
+      findsNothing,
+      reason: 'abriu como painel embutido numa janela que não comporta os dois',
+    );
   });
 }

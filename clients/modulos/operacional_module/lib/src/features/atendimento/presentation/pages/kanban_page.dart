@@ -49,10 +49,33 @@ class KanbanPage extends StatefulWidget {
 }
 
 class _KanbanPageState extends State<KanbanPage> {
+  /// Largura a partir da qual a conversa cabe ao lado do quadro.
+  ///
+  /// Abaixo disso ela vira tela cheia: espremer as duas deixaria o quadro
+  /// ilegível e a conversa também, que é o pior dos dois mundos.
+  static const _larguraParaOsDois = 1100.0;
+
+  /// Conversa aberta no painel da direita. `null` = só o quadro.
+  int? _conversaAberta;
+
   @override
   void initState() {
     super.initState();
     inject<KanbanController>().carregar();
+  }
+
+  /// Abre a conversa onde ela couber.
+  ///
+  /// Ao lado do quadro quando há largura: era assim na v1, e é o que permite
+  /// atender sem perder de vista a fila. Numa janela estreita, tela cheia.
+  void _abrir(int atendimentoId) {
+    if (MediaQuery.sizeOf(context).width >= _larguraParaOsDois) {
+      setState(() => _conversaAberta = atendimentoId);
+      return;
+    }
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => ChatPage(atendimentoId: atendimentoId)),
+    );
   }
 
   @override
@@ -76,22 +99,61 @@ class _KanbanPageState extends State<KanbanPage> {
         children: [
           if (widget.aviso != null) widget.aviso!,
           Expanded(
-            child: BlocBuilder<KanbanController, ViewState<KanbanViewModel>>(
-              bloc: controller,
-              builder: (context, state) {
-                return switch (state) {
-                  InitialState() || LoadingState() => const Center(
-                    child: CircularProgressIndicator(),
-                  ),
-                  ErrorState(:final error) => AppErrorView(
-                    message: error.message,
-                    onRetry: () => controller.carregar(),
-                  ),
-                  SuccessState(:final data) => _Quadro(
-                    viewModel: data,
-                    controller: controller,
-                  ),
-                };
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final quadro =
+                    BlocBuilder<KanbanController, ViewState<KanbanViewModel>>(
+                      bloc: controller,
+                      builder: (context, state) {
+                        return switch (state) {
+                          InitialState() || LoadingState() => const Center(
+                            child: CircularProgressIndicator(),
+                          ),
+                          ErrorState(:final error) => AppErrorView(
+                            message: error.message,
+                            onRetry: () => controller.carregar(),
+                          ),
+                          SuccessState(:final data) => _Quadro(
+                            viewModel: data,
+                            controller: controller,
+                            aoAbrir: _abrir,
+                          ),
+                        };
+                      },
+                    );
+
+                final aberta = _conversaAberta;
+                // A janela pode encolher com uma conversa aberta (alguém
+                // arrasta a borda, ou vira o tablet). Aí o painel não cabe
+                // mais, e o quadro sozinho é melhor que os dois espremidos.
+                if (aberta == null ||
+                    constraints.maxWidth < _larguraParaOsDois) {
+                  return quadro;
+                }
+
+                return Row(
+                  children: [
+                    Expanded(child: quadro),
+                    Container(
+                      width: 460,
+                      decoration: BoxDecoration(
+                        border: Border(
+                          left: BorderSide(color: context.colors.border),
+                        ),
+                      ),
+                      // `ValueKey` no id: trocar de atendimento tem de
+                      // **recriar** o painel. Sem ela o Flutter reaproveita o
+                      // State, e o `initState` — que é onde o stream abre —
+                      // não roda de novo: a tela mudaria de título e
+                      // continuaria mostrando a conversa anterior.
+                      child: PainelDeConversa(
+                        key: ValueKey(aberta),
+                        atendimentoId: aberta,
+                        aoFechar: () => setState(() => _conversaAberta = null),
+                      ),
+                    ),
+                  ],
+                );
               },
             ),
           ),
@@ -105,7 +167,15 @@ class _Quadro extends StatelessWidget {
   final KanbanViewModel viewModel;
   final KanbanController controller;
 
-  const _Quadro({required this.viewModel, required this.controller});
+  /// O que fazer quando alguém abre um atendimento — quem decide *onde* a
+  /// conversa aparece é a página, que conhece a largura da janela.
+  final void Function(int atendimentoId) aoAbrir;
+
+  const _Quadro({
+    required this.viewModel,
+    required this.controller,
+    required this.aoAbrir,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -168,6 +238,7 @@ class _Quadro extends StatelessWidget {
                           const <AtendimentoResumo>[],
                       viewModel: viewModel,
                       controller: controller,
+                      aoAbrir: aoAbrir,
                     ),
                   // Conversas fora de qualquer coluna do quadro: chegaram antes
                   // do fluxo existir, ou apontam para uma coluna já removida.
@@ -184,6 +255,7 @@ class _Quadro extends StatelessWidget {
                       itens: soltas,
                       viewModel: viewModel,
                       controller: controller,
+                      aoAbrir: aoAbrir,
                     ),
                 ],
               ),
@@ -200,12 +272,14 @@ class _Coluna extends StatelessWidget {
   final List<AtendimentoResumo> itens;
   final KanbanViewModel viewModel;
   final KanbanController controller;
+  final void Function(int atendimentoId) aoAbrir;
 
   const _Coluna({
     required this.coluna,
     required this.itens,
     required this.viewModel,
     required this.controller,
+    required this.aoAbrir,
   });
 
   @override
@@ -232,11 +306,7 @@ class _Coluna extends StatelessWidget {
               children: [
                 Expanded(
                   child: InkWell(
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => ChatPage(atendimentoId: atendimento.id),
-                      ),
-                    ),
+                    onTap: () => aoAbrir(atendimento.id),
                     child: AtendimentoCardContent(atendimento: atendimento),
                   ),
                 ),

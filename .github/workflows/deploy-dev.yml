@@ -193,7 +193,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Duas tentativas de propósito. O `setup.sh` da action baixa o SDK e já
+      # falhou com exit 35 do curl (erro de TLS) em 242ms — nada a ver com o
+      # código, e um build de desktop perdido por engasgo de rede custa o
+      # deploy inteiro. A primeira tentativa não derruba o job; a segunda sim.
       - name: Setup Flutter
+        id: flutter
+        continue-on-error: true
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.x'
+          channel: stable
+          cache: true
+
+      - name: Setup Flutter (segunda tentativa)
+        if: steps.flutter.outcome == 'failure'
         uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.x'

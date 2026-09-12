@@ -14,7 +14,7 @@ incomoda.
 | D3 | Convite: não envia e-mail | **nunca existiu na v2** | **construído** |
 | E | "Sessão expirada" o tempo todo | defeito | **causa achada e corrigida** |
 | F | Ícone do MCP mostra "S" em vez da logo | defeito | **corrigido** |
-| G | Chat do WhatsApp dentro do painel | **funcionalidade nova** (N9) | planejada, não feita |
+| G | Chat do WhatsApp dentro do painel | em parte **consequência de A** | **entregue** |
 
 ## A — a faixa de aviso engoliu a página *(corrigido)*
 
@@ -44,11 +44,25 @@ Log do `ia_engine` em dev, 12/09 17:12 e 17:13:
 A chave da OpenAI configurada em dev não é aceita. Nenhuma mudança de código
 resolve; a chave precisa ser trocada no ambiente.
 
-## G — chat do WhatsApp no painel
+## G — chat do WhatsApp no painel *(entregue)*
 
-Não é regressão: é a paridade v1→v2 já planejada em N9 (documento 33/34 desta
-pasta). O painel hoje lista atendimentos; o cartão de conversa à direita, com a
-troca de mensagens sem sair do app, é trabalho a fazer.
+Metade do problema era o item A: com a faixa ocupando a página, não havia
+cartão para clicar. A outra metade era de apresentação — o chat existia
+inteiro (`ChatPage`, `ChatController`, bolhas, badge de conexão, ficha), mas só
+como página cheia empurrada por cima do quadro. Clicar num cartão fazia perder
+de vista a fila que se estava trabalhando; na v1 a conversa abria à direita.
+
+O miolo virou `PainelDeConversa`, sem moldura de tela, e passa a viver em dois
+lugares: ao lado do quadro em janela larga (≥1100px) e como tela cheia no
+estreito, onde espremer os dois deixaria ambos ilegíveis.
+
+Um detalhe que merece nota: a `ValueKey` no id do atendimento. Sem ela o
+Flutter reaproveita o `State` ao trocar de conversa, o `initState` — que é onde
+o stream abre — não roda de novo, e o painel mudaria de título continuando a
+mostrar a conversa anterior.
+
+O que **falta** de N9: criar atendimento a partir de um cliente cadastrado e os
+campos personalizados do cartão (documentos 33 e 34).
 
 ## B — "Reconectar" chamava a rota que não podia funcionar *(corrigido)*
 

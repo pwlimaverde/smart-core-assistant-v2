@@ -2356,12 +2356,28 @@ mod tests {
     }
 
     #[tokio::test]
+    /// O botão religa por `connect` e confere o desfecho.
+    ///
+    /// Antes ele chamava `/instance/reconnect`, que responde "no active
+    /// session found" quando o socket já caiu — ou seja, falhava exatamente no
+    /// caso em que alguém aperta o botão. A reconciliação periódica já usava
+    /// `connect` pelo mesmo motivo, documentado lá.
+    ///
+    /// O mock **não** oferece `/instance/reconnect`: se o handler voltar a
+    /// chamá-la, o wiremock não casa e o teste cai.
     async fn test_handler_reconnect_whatsapp_instance() {
         let (server, state, pg_handle) = setup_test_env().await;
 
         Mock::given(method("POST"))
-            .and(path("/instance/reconnect"))
+            .and(path("/instance/connect"))
             .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/instance/status"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "state": "open"
+            })))
             .mount(&server)
             .await;
 
@@ -2383,6 +2399,53 @@ mod tests {
         assert_eq!(
             res_payload.get("status").unwrap().as_str().unwrap(),
             "success"
+        );
+        assert_eq!(res_payload.get("state").unwrap().as_str().unwrap(), "connected");
+
+        pg_handle.abort();
+    }
+
+    /// Aparelho desvinculado: o botão precisa dizer isso, não "pronto".
+    ///
+    /// O socket abre e a sessão é recusada — o provedor fica em `connecting`
+    /// para sempre. Nenhuma reconexão resolve; é QR na mão do usuário. Enquanto
+    /// isto respondia `status: success`, quem apertava o botão via a tela
+    /// dizer que deu certo e nada mudar, várias vezes seguidas.
+    #[tokio::test]
+    async fn reconectar_aparelho_desvinculado_devolve_erro_com_o_motivo() {
+        let (server, state, pg_handle) = setup_test_env().await;
+
+        Mock::given(method("POST"))
+            .and(path("/instance/connect"))
+            .respond_with(ResponseTemplate::new(200))
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/instance/status"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "state": "connecting"
+            })))
+            .mount(&server)
+            .await;
+
+        let env = Envelope {
+            kind: MessageKind::Request as i32,
+            method: "ReconnectWhatsappInstance".to_string(),
+            tenant_id: "00000000-0000-0000-0000-000000000001".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({ "id": 42 })).unwrap(),
+            ..Default::default()
+        };
+
+        let res = handler_reconnect_whatsapp_instance(state, env).await;
+        assert_eq!(
+            res.kind,
+            MessageKind::Error as i32,
+            "reconexão que não reconectou não pode responder sucesso"
+        );
+        let mensagem = res.error.map(|e| e.message).unwrap_or_default();
+        assert!(
+            mensagem.contains("QR"),
+            "a mensagem tem de dizer o que fazer; veio: {mensagem}"
         );
 
         pg_handle.abort();
