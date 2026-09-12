@@ -256,11 +256,13 @@ impl AuthFacade {
 /// um `Host` confiável (há um proxy na frente). Configuração explícita é a
 /// única resposta honesta.
 ///
-/// O padrão aponta para produção: um convite com o link errado é pior calado
-/// do que barulhento, e em dev a variável está no `.env`.
+/// **Inclui o caminho base.** O app do tenant é servido sob `/v2/tenant/`, não
+/// na raiz — o domínio sozinho responde HTTP 400, que foi o que o primeiro
+/// convidado recebeu por e-mail. O padrão aqui já traz o caminho, e é o de
+/// produção: um convite com link errado é pior calado do que barulhento.
 fn base_publica_do_app() -> String {
     std::env::var("APP_PUBLIC_URL")
-        .unwrap_or_else(|_| "https://smartcoreassistant.com.br".to_string())
+        .unwrap_or_else(|_| "https://smartcoreassistant.com.br/v2/tenant".to_string())
         .trim_end_matches('/')
         .to_string()
 }
@@ -7426,7 +7428,9 @@ mod tests {
         std::env::remove_var("APP_PUBLIC_URL");
         assert_eq!(
             base_publica_do_app(),
-            "https://smartcoreassistant.com.br",
+            // Com o caminho base: o app não vive na raiz, e o domínio sozinho
+            // devolve 400.
+            "https://smartcoreassistant.com.br/v2/tenant",
             "sem configuração o padrão tem de ser produção: um convite com link              errado é pior calado do que barulhento"
         );
 

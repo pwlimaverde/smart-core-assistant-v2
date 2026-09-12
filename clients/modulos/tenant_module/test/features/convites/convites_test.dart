@@ -498,8 +498,11 @@ void _linkDoConvite() {
       getIt.registerSingleton<AppConfig>(
         AppConfig(
           flavor: AppFlavor.dev,
-          apiEndpoint: endpoint,
+          // De propósito diferente do `appPublicUrl`: o gRPC atende na raiz e o
+          // app vive sob um caminho. Se o link voltar a sair daqui, o teste cai.
+          apiEndpoint: 'https://dev.smartcoreassistant.com.br',
           mcpEndpoint: 'https://mcp.exemplo.com.br/mcp',
+          appPublicUrl: endpoint,
         ),
       );
     }
@@ -522,6 +525,20 @@ void _linkDoConvite() {
       expect(
         linkDoConvite('abc123'),
         'https://dev.smartcoreassistant.com.br/aceitar-convite?token=abc123',
+      );
+    });
+
+    /// O defeito que mandou o convidado para um HTTP 400.
+    ///
+    /// O gRPC atende em `dev.smartcoreassistant.com.br`; o app web vive sob
+    /// `/v2/tenant/`. Montar o link sobre o endpoint da API produz um endereço
+    /// que existe, responde, e não é o app.
+    test('sai da base do app, não do endpoint da API', () {
+      configurar('https://dev.smartcoreassistant.com.br/v2/tenant');
+      expect(
+        linkDoConvite('abc'),
+        'https://dev.smartcoreassistant.com.br/v2/tenant'
+            '/aceitar-convite?token=abc',
       );
     });
 

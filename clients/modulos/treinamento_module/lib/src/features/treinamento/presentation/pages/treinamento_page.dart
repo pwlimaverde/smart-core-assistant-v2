@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dependencies_module/dependencies_module.dart';
 
 import '../../../ensaio/presentation/widgets/aba_ensaio.dart';
@@ -28,16 +30,48 @@ class _TreinamentoPageState extends State<TreinamentoPage>
   late final TreinamentoController _controller;
   late final TabController _abas;
 
+  /// Releitura enquanto houver material em processamento.
+  ///
+  /// Quem vetoriza é o worker, minutos depois de aceitar — o estado muda no
+  /// servidor e a tela não fica sabendo. O cartão seguia "Processando" em
+  /// amarelo mesmo depois de o material já estar ativo, e a única saída era
+  /// recarregar no chute.
+  ///
+  /// Só enquanto há pendência: quando a lista não tem mais nada na fila, o
+  /// timer é cancelado. Uma tela aberta o dia todo não fica consultando à toa.
+  Timer? _poll;
+
+  /// Perto do ciclo do worker (~2 min), sem virar enxurrada de consultas.
+  static const _intervalo = Duration(seconds: 15);
+
   @override
   void initState() {
     super.initState();
     _controller = inject<TreinamentoController>();
     _abas = TabController(length: 3, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _controller.carregar());
+    _controller.stream.listen((_) => _ajustarPoll());
+  }
+
+  /// Liga o timer quando aparece pendência e desliga quando ela acaba.
+  void _ajustarPoll() {
+    if (!mounted) return;
+    final estado = _controller.state;
+    final processando =
+        estado is SuccessState<List<Treinamento>> &&
+        estado.data.any((t) => t.situacao == SituacaoTreinamento.naFila);
+
+    if (processando && _poll == null) {
+      _poll = Timer.periodic(_intervalo, (_) => _controller.carregar());
+    } else if (!processando) {
+      _poll?.cancel();
+      _poll = null;
+    }
   }
 
   @override
   void dispose() {
+    _poll?.cancel();
     _abas.dispose();
     super.dispose();
   }
@@ -211,10 +245,49 @@ class _Linha extends StatelessWidget {
                     color: context.colors.fgMuted,
                   ),
                 ),
+                // Rascunho é PENDÊNCIA, e a tela precisa dizer isso na cara.
+                //
+                // O material fica cadastrado, a lista o mostra, e a IA não o
+                // usa em resposta nenhuma — só que a única pista disso era um
+                // selo cinza de 10px com a explicação escondida num tooltip.
+                // O resultado previsível: perguntar ao assistente sobre o que
+                // se acabou de "cadastrar" e ouvir que ele não sabe.
+                if (item.situacao == SituacaoTreinamento.rascunho) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.warning_amber_rounded,
+                        size: 16,
+                        color: context.colors.warning,
+                      ),
+                      const SizedBox(width: AppSpacing.xs),
+                      Expanded(
+                        child: Text(
+                          'A IA ainda não usa este material. '
+                          'Revise e envie para treinar.',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: context.colors.warning,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
-          if (!item.vetorizado)
+          // Rotulado, e não só um ícone: é a ação que falta para o material
+          // valer alguma coisa, e um ícone de "revisar" não diz isso.
+          if (item.situacao == SituacaoTreinamento.rascunho)
+            TextButton.icon(
+              icon: const Icon(Icons.rate_review_outlined, size: 18),
+              label: const Text('Enviar para a IA'),
+              onPressed: () => abrirRevisao(context, item, controller),
+            )
+          else if (!item.vetorizado)
             IconButton(
               icon: const Icon(Icons.rate_review_outlined),
               tooltip: 'Revisar e enviar para a IA',
@@ -241,7 +314,9 @@ class _Selo extends StatelessWidget {
     final cor = switch (situacao) {
       SituacaoTreinamento.ativo => context.colors.success,
       SituacaoTreinamento.naFila => Colors.orange,
-      SituacaoTreinamento.rascunho => context.colors.fgMuted,
+      // Aviso, não neutro: cinza lê como "tudo certo", e este é o estado em
+      // que o material existe mas não chega à IA.
+      SituacaoTreinamento.rascunho => context.colors.warning,
     };
 
     return Tooltip(

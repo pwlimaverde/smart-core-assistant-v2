@@ -69,21 +69,28 @@ $config = @{
     dev  = @{
         api = "https://dev.smartcoreassistant.com.br"
         mcp = "https://mcp.dev.smartcoreassistant.com.br/mcp"
+        # COM o caminho base: o app e servido sob /v2/tenant/, e o dominio
+        # sozinho devolve HTTP 400. E a base dos links que saem do app (hoje o
+        # convite) — nao confundir com `api`, que atende na raiz.
+        app = "https://dev.smartcoreassistant.com.br/v2/tenant"
     }
     # Produção atende no ápice do domínio (`docker/edge/Caddyfile`), não num
     # subdomínio `app.` — que não existe.
     prod = @{
         api = "https://smartcoreassistant.com.br"
         mcp = "https://mcp.smartcoreassistant.com.br/mcp"
+        app = "https://smartcoreassistant.com.br/v2/tenant"
     }
 }
 $api = $config[$Env].api
 $mcp = $config[$Env].mcp
+$app = $config[$Env].app
 $zip = Join-Path $saidaDir "smart-core-$App-windows-$Env.zip"
 
 Write-Host "app=$App  ambiente=$Env" -ForegroundColor Green
 Write-Host "  API = $api"
 Write-Host "  MCP = $mcp"
+Write-Host "  APP = $app"
 
 Push-Location $appDir
 try {
@@ -98,7 +105,8 @@ try {
     & flutter build windows --release `
         --target "lib/main_$Env.dart" `
         --dart-define=SMARTCORE_API_ENDPOINT=$api `
-        --dart-define=SMARTCORE_MCP_ENDPOINT=$mcp
+        --dart-define=SMARTCORE_MCP_ENDPOINT=$mcp `
+        --dart-define=SMARTCORE_APP_PUBLIC_URL=$app
     if ($LASTEXITCODE -ne 0) {
         Write-Host "`nBuild falhou." -ForegroundColor Red
         Write-Host "Se o erro citar 'could not find specified instance of Visual Studio', rode de novo com -LimparCache." -ForegroundColor Yellow
@@ -122,7 +130,7 @@ try {
     $texto = [System.Text.Encoding]::ASCII.GetString([System.IO.File]::ReadAllBytes($snap))
 
     $falhas = @()
-    foreach ($esperado in @($api, $mcp)) {
+    foreach ($esperado in @($api, $mcp, $app)) {
         if ($texto.Contains($esperado)) {
             Write-Host "  ok      $esperado" -ForegroundColor Green
         } else {
@@ -134,7 +142,7 @@ try {
     # E o inverso: o endereço do OUTRO ambiente não pode ter vazado para dentro.
     # Pega o caso em que o define foi ignorado e o default do `main_` assumiu.
     $outro = if ($Env -eq "dev") { "prod" } else { "dev" }
-    foreach ($indevido in @($config[$outro].api, $config[$outro].mcp)) {
+    foreach ($indevido in @($config[$outro].api, $config[$outro].mcp, $config[$outro].app)) {
         if ($texto.Contains($indevido)) {
             Write-Host "  VAZOU   $indevido (endereço de $outro)" -ForegroundColor Red
             $falhas += $indevido

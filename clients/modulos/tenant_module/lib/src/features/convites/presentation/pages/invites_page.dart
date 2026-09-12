@@ -12,10 +12,14 @@ import '../controllers/invites_controller.dart';
 ///
 /// A tela mostrava `/aceitar-convite?token=…` — um caminho, não um endereço.
 /// Colado num WhatsApp ele não abre nada, e não havia como saber qual host
-/// prefixar: dev e produção são domínios diferentes. Sai do `AppConfig`, que é
-/// onde o flavor já define o ambiente.
+/// prefixar: dev e produção são domínios diferentes.
+///
+/// Sai de `appPublicUrl`, e **não** do `apiEndpoint`: o gRPC atende no domínio
+/// raiz, mas o app é servido sob `/v2/tenant/`. Montado sobre o endpoint da
+/// API, o link aponta para fora do app e devolve HTTP 400 — que foi o que o
+/// convidado recebeu por e-mail.
 String linkDoConvite(String token) {
-  final base = inject<AppConfig>().apiEndpoint.replaceAll(RegExp(r'/+$'), '');
+  final base = inject<AppConfig>().appPublicUrl.replaceAll(RegExp(r'/+$'), '');
   return '$base/aceitar-convite?token=$token';
 }
 

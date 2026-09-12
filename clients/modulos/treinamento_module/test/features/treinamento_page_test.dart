@@ -15,6 +15,7 @@ import 'package:treinamento_module/src/features/treinamento/presentation/pages/t
 class _MockAdminClient extends Mock implements proto.AdminServiceClient {}
 
 void main() {
+  atualizaSozinhaEnquantoProcessa();
   late _MockAdminClient client;
   final getIt = GetIt.instance;
 
@@ -113,7 +114,15 @@ void main() {
     expect(find.byTooltip('Remover'), findsOneWidget);
   });
 
-  testWidgets('rascunho oferece revisão', (tester) async {
+  /// Rascunho tem de gritar, não sussurrar.
+  ///
+  /// O material fica cadastrado, a lista o mostra, e a IA não o usa em resposta
+  /// nenhuma. A única pista disso era um selo cinza de 10px com a explicação
+  /// escondida num tooltip — e o desfecho previsível foi perguntar ao
+  /// assistente sobre o que se acabou de cadastrar e ouvir que ele não sabe.
+  testWidgets('rascunho avisa, em texto, que a IA ainda não usa o material', (
+    tester,
+  ) async {
     respondeCom();
     registrar();
 
@@ -121,7 +130,25 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Rascunho'), findsOneWidget);
-    expect(find.byTooltip('Revisar e enviar para a IA'), findsOneWidget);
+    expect(
+      find.textContaining('A IA ainda não usa este material'),
+      findsOneWidget,
+      reason: 'o aviso não pode viver só num tooltip',
+    );
+    // A ação que falta vem rotulada: um ícone de "revisar" não diz que sem
+    // isso o material não vale nada.
+    expect(find.text('Enviar para a IA'), findsOneWidget);
+  });
+
+  testWidgets('material já na IA não repete o aviso', (tester) async {
+    respondeCom(finalizado: true, vetorizado: true);
+    registrar();
+
+    await montar(tester);
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('A IA ainda não usa'), findsNothing);
+    expect(find.text('Enviar para a IA'), findsNothing);
   });
 
   testWidgets('sem material, convida a ensinar algo', (tester) async {
@@ -282,7 +309,7 @@ void main() {
     await montar(tester);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Revisar e enviar para a IA'));
+    await tester.tap(find.text('Enviar para a IA'));
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -307,7 +334,7 @@ void main() {
     await montar(tester);
     await tester.pumpAndSettle();
 
-    await tester.tap(find.byTooltip('Revisar e enviar para a IA'));
+    await tester.tap(find.text('Enviar para a IA'));
     await tester.pumpAndSettle();
 
     await tester.enterText(
@@ -356,5 +383,97 @@ void main() {
     await tester.pumpAndSettle();
 
     verifyNever(() => client.removerMyTreinamento(any()));
+  });
+}
+
+/// A tela não sabia que o material tinha ficado pronto.
+///
+/// Quem vetoriza é o worker, minutos depois de aceitar. O cartão seguia
+/// "Processando" em amarelo mesmo com o material já ativo no servidor, e a
+/// única saída era recarregar no chute — foi exatamente o que aconteceu no
+/// primeiro treinamento real.
+void atualizaSozinhaEnquantoProcessa() {
+  final getIt = GetIt.instance;
+  late _MockAdminClient client;
+
+  setUp(() => client = _MockAdminClient());
+  tearDown(() => getIt.reset());
+
+  proto.MyTreinamento item({required bool vetorizado}) => proto.MyTreinamento(
+    id: 1,
+    tag: 'panfleto',
+    grupo: 'produtos',
+    conteudo: 'O panfleto tem 15x21 cm.',
+    finalizado: true,
+    vetorizado: vetorizado,
+    criadoEm: Int64(DateTime(2026, 9, 12).millisecondsSinceEpoch),
+    atualizadoEm: Int64(DateTime(2026, 9, 12).millisecondsSinceEpoch),
+  );
+
+  testWidgets('material que fica pronto aparece sem recarregar na mão', (
+    tester,
+  ) async {
+    var chamadas = 0;
+    when(() => client.listMyTreinamentos(any())).thenAnswer((_) {
+      chamadas++;
+      // Da segunda consulta em diante o worker já terminou.
+      return respostaGrpc(
+        proto.ListMyTreinamentosResponse(
+          treinamentos: [item(vetorizado: chamadas > 1)],
+        ),
+      );
+    });
+
+    getIt.registerSingleton<TreinamentoController>(
+      TreinamentoController(
+        listar: ListarTreinamentosUsecase(
+          repository: ListarTreinamentosRepository(
+            datasource: ListarTreinamentosDatasource(client: client),
+          ),
+        ),
+        criar: CriarTreinamentoUsecase(
+          repository: CriarTreinamentoRepository(
+            datasource: CriarTreinamentoDatasource(client: client),
+          ),
+        ),
+        finalizar: FinalizarTreinamentoUsecase(
+          repository: FinalizarTreinamentoRepository(
+            datasource: FinalizarTreinamentoDatasource(client: client),
+          ),
+        ),
+        remover: RemoverTreinamentoUsecase(
+          repository: RemoverTreinamentoRepository(
+            datasource: RemoverTreinamentoDatasource(client: client),
+          ),
+        ),
+      ),
+    );
+
+    tester.view.physicalSize = const Size(1400, 1600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    await tester.pumpWidget(
+      const MaterialApp(home: TreinamentoPage()),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Processando'), findsOneWidget);
+
+    // Passa o intervalo do poll: a tela consulta de novo sozinha.
+    await tester.pump(const Duration(seconds: 16));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ativo'), findsOneWidget);
+    expect(find.text('Processando'), findsNothing);
+
+    // E para de consultar: sem pendência, o timer é cancelado.
+    final depois = chamadas;
+    await tester.pump(const Duration(seconds: 40));
+    await tester.pumpAndSettle();
+    expect(
+      chamadas,
+      depois,
+      reason: 'seguiu consultando sem nada em processamento',
+    );
   });
 }

@@ -15,12 +15,23 @@ final class AppConfig {
   /// respondem, mas a descoberta anunciava `mcp.dev.` e a conexão não fecharia.
   final String mcpEndpoint;
 
+  /// Onde este app é servido, para montar links que saem dele.
+  ///
+  /// **Não é o `apiEndpoint`.** O gRPC atende no domínio raiz, mas o app web do
+  /// tenant é servido sob `/v2/tenant/` — e um link montado sobre o endpoint da
+  /// API aponta para fora do app: foi o que fez o convite chegar por e-mail com
+  /// um endereço que devolvia HTTP 400.
+  ///
+  /// Inclui o caminho base quando há um, e nunca termina em barra.
+  final String appPublicUrl;
+
   final bool enableLogging;
 
   const AppConfig({
     required this.flavor,
     required this.apiEndpoint,
     required this.mcpEndpoint,
+    required this.appPublicUrl,
     this.enableLogging = false,
   });
 

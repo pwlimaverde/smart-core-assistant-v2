@@ -10,6 +10,13 @@ void main() => bootstrap(
       'SMARTCORE_MCP_ENDPOINT',
       defaultValue: 'https://mcp.smartcoreassistant.com.br/mcp',
     ),
+    // O caminho base entra aqui: o app é servido sob `/v2/…`, e não na raiz.
+    // Um link montado sobre o `apiEndpoint` (que atende no domínio raiz) sai
+    // do app e devolve HTTP 400 — foi o que aconteceu com o convite.
+    appPublicUrl: String.fromEnvironment(
+      'SMARTCORE_APP_PUBLIC_URL',
+      defaultValue: 'https://smartcoreassistant.com.br/v2/tenant',
+    ),
     enableLogging: false,
   ),
 );
