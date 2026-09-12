@@ -2400,7 +2400,10 @@ mod tests {
             res_payload.get("status").unwrap().as_str().unwrap(),
             "success"
         );
-        assert_eq!(res_payload.get("state").unwrap().as_str().unwrap(), "connected");
+        assert_eq!(
+            res_payload.get("state").unwrap().as_str().unwrap(),
+            "connected"
+        );
 
         pg_handle.abort();
     }
