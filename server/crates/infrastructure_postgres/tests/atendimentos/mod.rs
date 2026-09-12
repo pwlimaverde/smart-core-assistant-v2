@@ -508,7 +508,10 @@ async fn test_listar_por_status_filtra_por_flow_permission() {
 ///   algo que alguém acabou de abrir, nascer invisível é o pior desfecho.
 /// - **`bot_pode_atender = false`.** Alguém decidiu falar com esse cliente; o
 ///   robô não entra no meio de uma conversa que uma pessoa começou.
-/// - **`atendente_humano_id` = quem criou.** Quem inicia, atende.
+/// - **`atendente_humano_id` = quem criou, quando quem criou atende.** A
+///   coluna aponta para `oraculo_atendente`, e nem todo usuário do tenant é
+///   atendente — um admin que abre a conversa não vira dono dela. Aqui o
+///   usuário de teste não tem vínculo, então a conversa nasce na fila.
 #[tokio::test]
 async fn atendimento_iniciado_pelo_painel_nasce_visivel_e_sem_bot() {
     let pool = obter_pool_teste().await;
@@ -543,6 +546,8 @@ async fn atendimento_iniciado_pelo_painel_nasce_visivel_e_sem_bot() {
             fluxo.id,
             etapa.id,
             Some(depto.id),
+            // Sem atendente vinculado: é o caso do admin que abre a conversa.
+            None,
             Some("Renovação do contrato"),
         )
         .await
@@ -558,9 +563,8 @@ async fn atendimento_iniciado_pelo_painel_nasce_visivel_e_sem_bot() {
         "a IA entraria numa conversa que uma pessoa começou"
     );
     assert_eq!(
-        atendimento.atendente_humano_id,
-        Some(ctx.user_id),
-        "quem inicia, atende"
+        atendimento.atendente_humano_id, None,
+        "sem vínculo de atendente a conversa tem de nascer na fila, não presa          a um id de `auth_user` que a FK aponta para outra tabela"
     );
     assert_eq!(
         atendimento.assunto.as_deref(),
@@ -601,7 +605,9 @@ async fn painel_nao_abre_segundo_atendimento_para_o_mesmo_contato() {
         .unwrap();
 
     let primeiro = PostgresAtendimentoRepository
-        .criar_manual(&mut tx, &ctx, contato.id, fluxo.id, etapa.id, None, None)
+        .criar_manual(
+            &mut tx, &ctx, contato.id, fluxo.id, etapa.id, None, None, None,
+        )
         .await
         .unwrap();
 

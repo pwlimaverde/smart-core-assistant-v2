@@ -127,7 +127,12 @@ pub trait AtendimentoRepository: Send + Sync {
     ///   cliente; o robô não entra no meio de uma conversa que uma pessoa
     ///   começou. O caminho de volta existe e é um clique
     ///   (`definir_bot_da_conversa`).
-    /// - **`atendente_humano_id` = quem criou.** Quem inicia, atende.
+    /// - **`atendente_humano_id` = quem criou, quando quem criou atende.** A
+    ///   coluna aponta para `oraculo_atendente`, não para `auth_user`, e nem
+    ///   todo usuário do tenant é atendente: um admin que abre a conversa não
+    ///   vira dono dela por isso. Quem resolve o vínculo é o chamador, que tem
+    ///   a transação na mão; `None` deixa a conversa na fila, para a
+    ///   distribuição normal cuidar.
     async fn criar_manual(
         &self,
         tx: &mut Transaction<'_, Postgres>,
@@ -136,6 +141,7 @@ pub trait AtendimentoRepository: Send + Sync {
         fluxo_id: i32,
         etapa_inicial_id: i32,
         departamento_id: Option<i32>,
+        atendente_id: Option<i32>,
         assunto: Option<&str>,
     ) -> Result<Atendimento, DbError>;
 
@@ -438,6 +444,7 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         fluxo_id: i32,
         etapa_inicial_id: i32,
         departamento_id: Option<i32>,
+        atendente_id: Option<i32>,
         assunto: Option<&str>,
     ) -> Result<Atendimento, DbError> {
         ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
@@ -458,7 +465,7 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
             departamento_id,
             fluxo_id,
             etapa_inicial_id,
-            ctx.user_id,
+            atendente_id,
             assunto
         )
         .fetch_one(&mut **tx)

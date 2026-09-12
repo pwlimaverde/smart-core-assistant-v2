@@ -672,6 +672,15 @@ impl AtendimentoStore for PgAtendimentoStore {
                 return Ok(((existente, true), tx));
             }
 
+            // Quem inicia, atende — **quando quem inicia é atendente**. A
+            // coluna aponta para `oraculo_atendente`, não para `auth_user`, e
+            // um admin que abre a conversa não vira dono dela. Sem vínculo, a
+            // conversa nasce na fila e a distribuição normal cuida dela.
+            let atendente_id = PostgresAtendenteRepository
+                .buscar_por_usuario(&mut tx, &ctx, ctx.user_id)
+                .await?
+                .map(|a| a.id);
+
             let novo = repo
                 .criar_manual(
                     &mut tx,
@@ -680,6 +689,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                     fluxo_id,
                     etapa_inicial_id,
                     departamento_id,
+                    atendente_id,
                     assunto.as_deref(),
                 )
                 .await?;
