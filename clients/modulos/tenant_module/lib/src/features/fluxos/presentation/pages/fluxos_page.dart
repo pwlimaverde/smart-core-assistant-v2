@@ -1,5 +1,6 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
+import '../../../../shared/permissoes.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/fluxo.dart';
 import '../controllers/fluxos_controllers.dart';
@@ -56,11 +57,14 @@ class _FluxosPageState extends State<FluxosPage> {
                     ),
                   ),
                 ),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.add),
-                  label: const Text('Novo fluxo'),
-                  onPressed: () => abrirCriacaoFluxo(context, _controller),
-                ),
+                // Ver o quadro é leitura de atendimento; mudar a estrutura
+                // dele é `kanban:admin` (B2).
+                if (sessaoPodeAlterar('/tenant/fluxos'))
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: const Text('Novo fluxo'),
+                    onPressed: () => abrirCriacaoFluxo(context, _controller),
+                  ),
               ],
             ),
             const SizedBox(height: AppSpacing.md),
@@ -152,12 +156,13 @@ class _LinhaFluxo extends StatelessWidget {
             label: const Text('Colunas'),
             onPressed: () => context.go('/tenant/fluxos/${item.id}/etapas'),
           ),
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Editar',
-            onPressed: () => abrirEdicaoFluxo(context, item, controller),
-          ),
-          if (item.ativo)
+          if (sessaoPodeAlterar('/tenant/fluxos'))
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Editar',
+              onPressed: () => abrirEdicaoFluxo(context, item, controller),
+            ),
+          if (item.ativo && sessaoPodeAlterar('/tenant/fluxos'))
             IconButton(
               icon: const Icon(Icons.block),
               tooltip: item.podeDesativar

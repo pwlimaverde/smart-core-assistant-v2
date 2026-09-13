@@ -1,5 +1,6 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
+import '../../../../shared/permissoes.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/fluxo.dart';
 import '../controllers/fluxos_controllers.dart';
@@ -55,11 +56,12 @@ class _EtapasFluxoPageState extends State<EtapasFluxoPage> {
                   onPressed: () => context.go('/tenant/fluxos'),
                 ),
                 const Spacer(),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.add),
-                  label: const Text('Nova coluna'),
-                  onPressed: () => abrirCriacaoEtapa(context, _controller),
-                ),
+                if (sessaoPodeAlterar('/tenant/fluxos'))
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: const Text('Nova coluna'),
+                    onPressed: () => abrirCriacaoEtapa(context, _controller),
+                  ),
               ],
             ),
             const SizedBox(height: AppSpacing.md),
@@ -147,30 +149,32 @@ class _LinhaEtapa extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.arrow_upward),
-            tooltip: 'Mover para cima',
-            onPressed: primeira
-                ? null
-                : () => controller.mover(id: item.id, paraCima: true),
-          ),
-          IconButton(
-            icon: const Icon(Icons.arrow_downward),
-            tooltip: 'Mover para baixo',
-            onPressed: ultima
-                ? null
-                : () => controller.mover(id: item.id, paraCima: false),
-          ),
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Editar',
-            onPressed: () => abrirEdicaoEtapa(context, item, controller),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            tooltip: 'Remover',
-            onPressed: () => abrirRemocaoEtapa(context, item, controller),
-          ),
+          if (sessaoPodeAlterar('/tenant/fluxos')) ...[
+            IconButton(
+              icon: const Icon(Icons.arrow_upward),
+              tooltip: 'Mover para cima',
+              onPressed: primeira
+                  ? null
+                  : () => controller.mover(id: item.id, paraCima: true),
+            ),
+            IconButton(
+              icon: const Icon(Icons.arrow_downward),
+              tooltip: 'Mover para baixo',
+              onPressed: ultima
+                  ? null
+                  : () => controller.mover(id: item.id, paraCima: false),
+            ),
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Editar',
+              onPressed: () => abrirEdicaoEtapa(context, item, controller),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              tooltip: 'Remover',
+              onPressed: () => abrirRemocaoEtapa(context, item, controller),
+            ),
+          ],
         ],
       ),
     );

@@ -165,6 +165,51 @@ void main() {
       );
     });
 
+    group('telas por escopo (B2)', () {
+      String? alvo(List<String> escopos, String rota) =>
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: true,
+            isSuperuser: false,
+            scopes: escopos,
+            location: rota,
+            onboardingPendente: false,
+          );
+
+      test('manager com kanban:admin abre fluxos e as colunas', () {
+        // Era o defeito: o servidor autorizava, e o guard devolvia ao quadro.
+        const manager = ['atendimentos:read', 'kanban:admin'];
+        expect(alvo(manager, '/tenant/fluxos'), isNull);
+        expect(alvo(manager, '/tenant/fluxos/3/etapas'), isNull);
+      });
+
+      test('staff abre contatos, mas não equipe nem usuários', () {
+        const staff = [
+          'atendimentos:read',
+          'atendimentos:write',
+          'clientes:write',
+        ];
+        expect(alvo(staff, '/tenant/contatos'), isNull);
+        expect(alvo(staff, '/tenant/equipe'), '/atendimentos');
+        expect(alvo(staff, '/tenant/usuarios'), '/atendimentos');
+      });
+
+      test('aplicativos conectados abrem para qualquer sessão', () {
+        expect(
+          alvo(const ['atendimentos:read'], '/tenant/integracoes'),
+          isNull,
+        );
+      });
+
+      test('tela nova sob /tenant/ que ninguém declarou é só do admin', () {
+        expect(
+          alvo(const ['atendimentos:read'], '/tenant/qualquer-coisa'),
+          '/atendimentos',
+        );
+        expect(alvo(const ['tenant:admin'], '/tenant/qualquer-coisa'), isNull);
+      });
+    });
+
     test('pós-boot deslogado: a recuperação de senha é pública', () {
       for (final rota in ['/recuperar-senha', '/redefinir-senha']) {
         expect(

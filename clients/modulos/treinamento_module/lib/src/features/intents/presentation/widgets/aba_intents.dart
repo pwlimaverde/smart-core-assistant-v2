@@ -2,6 +2,7 @@ import 'package:dependencies_module/dependencies_module.dart';
 
 import '../../domain/model/intent.dart';
 import '../controllers/intents_controllers.dart';
+import '../../../../permissao_do_treinamento.dart';
 import 'dialogo_intent.dart';
 
 /// Intenções cadastradas — o que a IA **faz** quando a pergunta se parece com
@@ -43,11 +44,12 @@ class _AbaIntentsState extends State<AbaIntents> {
                 ).textTheme.bodySmall?.copyWith(color: context.colors.fgMuted),
               ),
             ),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.add),
-              label: const Text('Nova intenção'),
-              onPressed: () => abrirCriacaoIntent(context, _controller),
-            ),
+            if (PermissaoDoTreinamento.podeAlterar())
+              ElevatedButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text('Nova intenção'),
+                onPressed: () => abrirCriacaoIntent(context, _controller),
+              ),
           ],
         ),
         const SizedBox(height: AppSpacing.md),
@@ -142,16 +144,18 @@ class _Linha extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Editar',
-            onPressed: () => abrirEdicaoIntent(context, item, controller),
-          ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            tooltip: 'Remover',
-            onPressed: () => abrirRemocaoIntent(context, item, controller),
-          ),
+          if (PermissaoDoTreinamento.podeAlterar()) ...[
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Editar',
+              onPressed: () => abrirEdicaoIntent(context, item, controller),
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              tooltip: 'Remover',
+              onPressed: () => abrirRemocaoIntent(context, item, controller),
+            ),
+          ],
         ],
       ),
     );

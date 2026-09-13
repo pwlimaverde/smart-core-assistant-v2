@@ -1,5 +1,6 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
+import '../../../../shared/permissoes.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/campo_personalizado.dart';
 import '../controllers/campos_controller.dart';
@@ -53,11 +54,12 @@ class _CamposPageState extends State<CamposPage> {
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                 ),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.add),
-                  label: const Text('Novo campo'),
-                  onPressed: () => abrirCriacaoDeCampo(context, _controller),
-                ),
+                if (sessaoPodeAlterar('/tenant/campos'))
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: const Text('Novo campo'),
+                    onPressed: () => abrirCriacaoDeCampo(context, _controller),
+                  ),
               ],
             ),
             const SizedBox(height: AppSpacing.xs),
@@ -199,12 +201,13 @@ class _Linha extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Editar',
-            onPressed: () => abrirEdicaoDeCampo(context, campo, controller),
-          ),
-          if (campo.ativo)
+          if (sessaoPodeAlterar('/tenant/campos'))
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Editar',
+              onPressed: () => abrirEdicaoDeCampo(context, campo, controller),
+            ),
+          if (campo.ativo && sessaoPodeAlterar('/tenant/campos'))
             IconButton(
               icon: const Icon(Icons.visibility_off_outlined),
               tooltip: 'Desativar',

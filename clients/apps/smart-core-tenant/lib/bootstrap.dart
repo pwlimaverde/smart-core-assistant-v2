@@ -51,7 +51,11 @@ Future<void> bootstrap(AppConfig config) async {
       buscarContatos: buscarContatosDoTenant,
     ),
     TenantModule(),
-    TreinamentoModule(drawerBuilder: TenantDrawer.new),
+    TreinamentoModule(
+      drawerBuilder: TenantDrawer.new,
+      // B2: o módulo não conhece a sessão; a pergunta vem pronta daqui.
+      podeAlterar: () => sessaoPodeAlterar('/tenant/treinamento'),
+    ),
     InitialLoadingModule(),
   ];
 

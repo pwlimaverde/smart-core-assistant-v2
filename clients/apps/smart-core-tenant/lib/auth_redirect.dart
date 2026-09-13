@@ -1,5 +1,8 @@
 import 'package:onboarding_module/onboarding_module.dart'
     show ehRotaDeCadastro, ehRotaDeConfiguracao, rotaDeConfiguracaoDoPasso;
+// O arquivo, e não o barrel do módulo: o mapa não importa nada, e o guard
+// continua testável na VM sem arrastar o transporte gRPC.
+import 'package:tenant_module/permissoes_de_tela.dart' show podeAbrirTela;
 
 /// Decisão pura do guard de rota (boot + autenticação + persona de tenant),
 /// isolada de qualquer dependência de UI/DI/transporte para ser testável na VM:
@@ -132,7 +135,9 @@ String? tenantAuthRedirectTarget({
   if (location == '/login' || location == '/' || location == '/home') {
     return '/atendimentos';
   }
-  if (location.startsWith('/tenant/') && !isTenantAdmin) {
+  // RBAC de UI por escopo (B2), com o mesmo mapa que monta o menu: nada que o
+  // menu mostra leva a um redirect, e nada que ele esconde abre pela URL.
+  if (!podeAbrirTela(scopes, location)) {
     return '/atendimentos';
   }
   // Cobrança é assunto do dono. Um colaborador não vê valor, plano nem campo de

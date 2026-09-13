@@ -1,5 +1,6 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
+import '../../../../shared/permissoes.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/conexao.dart';
 import '../controllers/conexoes_controllers.dart';
@@ -33,11 +34,12 @@ class _ConexoesPageState extends State<ConexoesPage> {
       title: 'Conexões de WhatsApp',
       drawer: const TenantDrawer(),
       actions: [
-        IconButton(
-          icon: const Icon(Icons.add_link),
-          tooltip: 'Nova conexão',
-          onPressed: () => _novaConexao(context),
-        ),
+        if (sessaoPodeAlterar('/tenant/conexoes'))
+          IconButton(
+            icon: const Icon(Icons.add_link),
+            tooltip: 'Nova conexão',
+            onPressed: () => _novaConexao(context),
+          ),
         IconButton(
           icon: const Icon(Icons.refresh),
           tooltip: 'Atualizar',
@@ -66,13 +68,14 @@ class _ConexoesPageState extends State<ConexoesPage> {
                     // Sem este botão o tenant que remove a última conexão fica
                     // sem saída: o roteiro inicial, que criava a primeira, só
                     // roda uma vez.
-                    SizedBox(
-                      width: 260,
-                      child: PrimaryButton(
-                        label: 'Conectar WhatsApp',
-                        onPressed: () => _novaConexao(context),
+                    if (sessaoPodeAlterar('/tenant/conexoes'))
+                      SizedBox(
+                        width: 260,
+                        child: PrimaryButton(
+                          label: 'Conectar WhatsApp',
+                          onPressed: () => _novaConexao(context),
+                        ),
                       ),
-                    ),
                   ],
                 )
               : Column(
@@ -261,7 +264,11 @@ class _Linha extends StatelessWidget {
                 : 'A IA não responde nesta conexão',
             child: Switch(
               value: conexao.respostaBot,
-              onChanged: (v) => _alternarBot(context, v),
+              // Visível para todos, porque diz como a conexão está; mudar é do
+              // admin — calar a IA da conexão vale para o tenant inteiro.
+              onChanged: sessaoEhAdmin()
+                  ? (v) => _alternarBot(context, v)
+                  : null,
             ),
           ),
           // O QR é a saída quando a sessão foi desfeita do lado do WhatsApp —
@@ -271,8 +278,9 @@ class _Linha extends StatelessWidget {
           //
           // Aparece primeiro, e rotulado, quando a conexão está aguardando
           // leitura: é a ação que de fato conserta.
-          if (situacao == SituacaoConexao.conectando ||
-              situacao == SituacaoConexao.desconectada)
+          if (sessaoPodeAlterar('/tenant/conexoes') &&
+              (situacao == SituacaoConexao.conectando ||
+                  situacao == SituacaoConexao.desconectada))
             TextButton.icon(
               icon: const Icon(Icons.qr_code_2, size: 18),
               label: const Text('Ler QR code'),
@@ -280,17 +288,19 @@ class _Linha extends StatelessWidget {
             ),
           // Reconectar só faz sentido quando não está conectada — oferecer no
           // estado bom convidaria a derrubar uma conexão que funciona.
-          if (situacao != SituacaoConexao.conectada)
+          if (sessaoPodeAlterar('/tenant/conexoes') &&
+              situacao != SituacaoConexao.conectada)
             IconButton(
               icon: const Icon(Icons.refresh),
               tooltip: 'Reconectar',
               onPressed: () => _reconectar(context),
             ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            tooltip: 'Remover conexão',
-            onPressed: () => _remover(context),
-          ),
+          if (sessaoPodeAlterar('/tenant/conexoes'))
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              tooltip: 'Remover conexão',
+              onPressed: () => _remover(context),
+            ),
         ],
       ),
     );

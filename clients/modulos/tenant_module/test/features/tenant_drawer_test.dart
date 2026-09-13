@@ -18,7 +18,7 @@ void main() {
 
   /// Session de verdade, não mock: `isTenantAdmin` é derivado dos escopos, e
   /// mockar o getter esconderia justamente a regra que se quer exercitar.
-  void registrarSessao({required bool admin}) {
+  void registrarSessao({bool admin = false, List<String>? escopos}) {
     final auth = _MockAuthService();
     when(() => auth.currentSession).thenReturn(
       Session(
@@ -26,7 +26,9 @@ void main() {
         refreshToken: 'r',
         expiresAt: DateTime(2030),
         tenantId: 't-1',
-        scopes: admin ? const ['tenant:admin'] : const ['atendimentos:read'],
+        scopes:
+            escopos ??
+            (admin ? const ['tenant:admin'] : const ['atendimentos:read']),
         isSuperuser: false,
       ),
     );
@@ -107,16 +109,108 @@ void main() {
     expect(find.text('Configuração do Tenant'), findsOneWidget);
   });
 
-  testWidgets('sem tenant:admin, só o workspace aparece', (tester) async {
-    registrarSessao(admin: false);
-    await montar(tester);
+  // B2 — um teste por papel, com os escopos da tabela do plano. Antes o menu
+  // era "admin ou nada", e três destes quatro papéis viam só o quadro.
+  group('menu por papel', () {
+    void confere(Map<String, bool> esperado) {
+      esperado.forEach((titulo, visivel) {
+        expect(
+          find.text(titulo),
+          visivel ? findsOneWidget : findsNothing,
+          reason: '"$titulo" deveria ${visivel ? '' : 'não '}aparecer',
+        );
+      });
+    }
 
-    expect(find.text('Atendimento (Kanban)'), findsOneWidget);
-    expect(find.text('Contatos'), findsNothing);
-    expect(find.text('Equipe'), findsNothing);
-    expect(find.text('Fluxos de atendimento'), findsNothing);
-    expect(find.text('Conexões de WhatsApp'), findsNothing);
-    expect(find.text('Treinamento da IA'), findsNothing);
+    testWidgets('manager: operação inteira, sem administração', (tester) async {
+      registrarSessao(
+        escopos: const [
+          'atendimentos:read',
+          'atendimentos:write',
+          'clientes:read',
+          'clientes:write',
+          'operacional:read',
+          'kanban:admin',
+          'treinamento:read',
+          'treinamento:write',
+          'configuracoes:read',
+        ],
+      );
+      await montar(tester);
+
+      confere({
+        'Painel': true,
+        'Contatos': true,
+        'Equipe': true,
+        'Fluxos de atendimento': true,
+        'Campos do atendimento': true,
+        'Conexões de WhatsApp': true,
+        'Treinamento da IA': true,
+        'Configuração do Tenant': true,
+        'Convites': false,
+        'Usuários': false,
+      });
+    });
+
+    testWidgets('staff: o que o atendimento usa', (tester) async {
+      // Os escopos que um convite de atendente recebe por padrão.
+      registrarSessao(
+        escopos: const [
+          'atendimentos:read',
+          'atendimentos:write',
+          'clientes:write',
+        ],
+      );
+      await montar(tester);
+
+      confere({
+        'Atendimento (Kanban)': true,
+        'Aplicativos conectados': true,
+        'Painel': true,
+        'Contatos': true,
+        'Fluxos de atendimento': true,
+        'Equipe': false,
+        'Campos do atendimento': false,
+        'Conexões de WhatsApp': false,
+        'Treinamento da IA': false,
+        'Convites': false,
+        'Usuários': false,
+        'Configuração do Tenant': false,
+      });
+    });
+
+    testWidgets('viewer: só as telas de leitura do atendimento', (
+      tester,
+    ) async {
+      registrarSessao(escopos: const ['atendimentos:read']);
+      await montar(tester);
+
+      confere({
+        'Atendimento (Kanban)': true,
+        'Aplicativos conectados': true,
+        'Painel': true,
+        'Fluxos de atendimento': true,
+        'Equipe': false,
+        'Conexões de WhatsApp': false,
+        'Treinamento da IA': false,
+        'Convites': false,
+        'Usuários': false,
+      });
+    });
+
+    testWidgets('sem sessão: só o quadro e os aplicativos', (tester) async {
+      final auth = _MockAuthService();
+      when(() => auth.currentSession).thenReturn(null);
+      getIt.registerSingleton<AuthService>(auth);
+      await montar(tester);
+
+      confere({
+        'Atendimento (Kanban)': true,
+        'Painel': false,
+        'Contatos': false,
+        'Convites': false,
+      });
+    });
   });
 
   testWidgets('o menu rola quando a janela é baixa', (tester) async {

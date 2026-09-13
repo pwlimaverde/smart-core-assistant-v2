@@ -1,6 +1,7 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
 import '../../domain/model/tenant_config.dart';
+import '../../../../shared/permissoes.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../controllers/tenant_own_config_controller.dart';
 
@@ -166,34 +167,37 @@ class _ConfigFormState extends State<_ConfigForm> {
               ),
             ),
             const SizedBox(height: 24),
-            PrimaryButton(
-              label: 'Salvar',
-              onPressed: () => widget.onSave(
-                TenantConfig(
-                  dadosEmpresa: _dadosEmpresa.text,
-                  personaBot: _personaBot.text,
-                  botAgentName: _botAgentName.text,
-                  msgFallback: _msgFallback.text,
-                  msgSemInfo: _msgSemInfo.text,
-                  msgTransferencia: _msgTransferencia.text,
-                  llmClass: widget.config.llmClass,
-                  model: widget.config.model,
-                  llmTemperature: widget.config.llmTemperature,
-                  transcriptionProvider: widget.config.transcriptionProvider,
-                  transcriptionModel: widget.config.transcriptionModel,
-                  visionProvider: widget.config.visionProvider,
-                  visionModel: widget.config.visionModel,
-                  embeddingsClass: widget.config.embeddingsClass,
-                  embeddingsModel: widget.config.embeddingsModel,
-                  chunkSize: widget.config.chunkSize,
-                  chunkOverlap: widget.config.chunkOverlap,
-                  similarityThreshold: widget.config.similarityThreshold,
-                  vectorDistanceThreshold:
-                      widget.config.vectorDistanceThreshold,
-                  apiKeys: widget.config.apiKeys,
+            // Com `configuracoes:read` a pessoa consulta a persona do bot, mas
+            // não salva (B2).
+            if (sessaoPodeAlterar('/tenant/config'))
+              PrimaryButton(
+                label: 'Salvar',
+                onPressed: () => widget.onSave(
+                  TenantConfig(
+                    dadosEmpresa: _dadosEmpresa.text,
+                    personaBot: _personaBot.text,
+                    botAgentName: _botAgentName.text,
+                    msgFallback: _msgFallback.text,
+                    msgSemInfo: _msgSemInfo.text,
+                    msgTransferencia: _msgTransferencia.text,
+                    llmClass: widget.config.llmClass,
+                    model: widget.config.model,
+                    llmTemperature: widget.config.llmTemperature,
+                    transcriptionProvider: widget.config.transcriptionProvider,
+                    transcriptionModel: widget.config.transcriptionModel,
+                    visionProvider: widget.config.visionProvider,
+                    visionModel: widget.config.visionModel,
+                    embeddingsClass: widget.config.embeddingsClass,
+                    embeddingsModel: widget.config.embeddingsModel,
+                    chunkSize: widget.config.chunkSize,
+                    chunkOverlap: widget.config.chunkOverlap,
+                    similarityThreshold: widget.config.similarityThreshold,
+                    vectorDistanceThreshold:
+                        widget.config.vectorDistanceThreshold,
+                    apiKeys: widget.config.apiKeys,
+                  ),
                 ),
               ),
-            ),
           ],
         ),
       ),

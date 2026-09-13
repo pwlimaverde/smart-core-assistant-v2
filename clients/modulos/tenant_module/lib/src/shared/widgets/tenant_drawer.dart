@@ -1,17 +1,58 @@
 import 'package:dependencies_module/dependencies_module.dart' hide AuthService;
 import 'package:login_module/login_module.dart';
 
-/// Menu do app do tenant. As telas administrativas (convites/usuários/config)
-/// só aparecem para sessões com escopo `tenant:admin` — RBAC de UI (defesa em
-/// profundidade; o backend já barra por escopo mesmo se alguém forçar a URL).
+import '../../../permissoes_de_tela.dart';
+
+/// Menu do app do tenant, **por escopo** (B2).
+///
+/// Era um `if (isTenantAdmin)` envolvendo nove itens: um `manager` autorizado
+/// pelo servidor a editar fluxos não via o item de fluxos, e o papel
+/// somente-leitura da D4 existia no backend e não na tela. Agora cada item
+/// aparece para quem pode abrir a tela, pela mesma regra que o guard de rota usa
+/// (`permissoes_de_tela.dart`) — nada visível leva a um redirect.
 class TenantDrawer extends StatelessWidget {
   const TenantDrawer({super.key});
 
   @override
   Widget build(BuildContext context) {
     final location = GoRouterState.of(context).matchedLocation;
-    final isTenantAdmin =
-        inject<AuthService>().currentSession?.isTenantAdmin ?? false;
+    // Sem sessão, nenhuma tela além do quadro: o menu não tem motivo para
+    // presumir permissão.
+    final escopos =
+        inject<AuthService>().currentSession?.scopes ?? const <String>[];
+
+    _Item? item(IconData icone, String titulo, String rota) =>
+        podeAbrirTela(escopos, rota)
+        ? _Item(icone: icone, titulo: titulo, rota: rota, atual: location)
+        : null;
+
+    final operacao = [
+      item(Icons.insights_outlined, 'Painel', '/tenant/painel'),
+      item(Icons.contacts_outlined, 'Contatos', '/tenant/contatos'),
+      item(Icons.groups_outlined, 'Equipe', '/tenant/equipe'),
+      item(
+        Icons.account_tree_outlined,
+        'Fluxos de atendimento',
+        '/tenant/fluxos',
+      ),
+      item(
+        Icons.dashboard_customize_outlined,
+        'Campos do atendimento',
+        '/tenant/campos',
+      ),
+      item(
+        Icons.qr_code_2_outlined,
+        'Conexões de WhatsApp',
+        '/tenant/conexoes',
+      ),
+      item(Icons.school_outlined, 'Treinamento da IA', '/tenant/treinamento'),
+    ].nonNulls.toList();
+
+    final administracao = [
+      item(Icons.mail_outline, 'Convites', '/tenant/convites'),
+      item(Icons.people_outline, 'Usuários', '/tenant/usuarios'),
+      item(Icons.settings_outlined, 'Configuração do Tenant', '/tenant/config'),
+    ].nonNulls.toList();
 
     return Drawer(
       child: Column(
@@ -44,79 +85,21 @@ class TenantDrawer extends StatelessWidget {
                   rota: '/atendimentos',
                   atual: location,
                 ),
-                // FORA do bloco de admin, de propósito: os aplicativos de IA
-                // conectados são de cada pessoa (N13.8). Esconder esta tela de
-                // quem não é admin deixaria um `staff` sem meio de desconectar
-                // um agente que ele mesmo autorizou.
+                // Para qualquer sessão: os aplicativos de IA conectados são de
+                // cada pessoa (N13.8). Esconder esta tela deixaria um `staff`
+                // sem meio de desconectar um agente que ele mesmo autorizou.
                 _Item(
                   icone: Icons.smart_toy_outlined,
                   titulo: 'Aplicativos conectados',
                   rota: '/tenant/integracoes',
                   atual: location,
                 ),
-                if (isTenantAdmin) ...[
+                // Divisória só com o que dividir: um separador sobre grupo
+                // vazio sugere que há algo escondido ali.
+                if (operacao.isNotEmpty) ...[const Divider(), ...operacao],
+                if (administracao.isNotEmpty) ...[
                   const Divider(),
-                  _Item(
-                    icone: Icons.insights_outlined,
-                    titulo: 'Painel',
-                    rota: '/tenant/painel',
-                    atual: location,
-                  ),
-                  _Item(
-                    icone: Icons.contacts_outlined,
-                    titulo: 'Contatos',
-                    rota: '/tenant/contatos',
-                    atual: location,
-                  ),
-                  _Item(
-                    icone: Icons.groups_outlined,
-                    titulo: 'Equipe',
-                    rota: '/tenant/equipe',
-                    atual: location,
-                  ),
-                  _Item(
-                    icone: Icons.account_tree_outlined,
-                    titulo: 'Fluxos de atendimento',
-                    rota: '/tenant/fluxos',
-                    atual: location,
-                  ),
-                  _Item(
-                    icone: Icons.dashboard_customize_outlined,
-                    titulo: 'Campos do atendimento',
-                    rota: '/tenant/campos',
-                    atual: location,
-                  ),
-                  _Item(
-                    icone: Icons.qr_code_2_outlined,
-                    titulo: 'Conexões de WhatsApp',
-                    rota: '/tenant/conexoes',
-                    atual: location,
-                  ),
-                  _Item(
-                    icone: Icons.school_outlined,
-                    titulo: 'Treinamento da IA',
-                    rota: '/tenant/treinamento',
-                    atual: location,
-                  ),
-                  const Divider(),
-                  _Item(
-                    icone: Icons.mail_outline,
-                    titulo: 'Convites',
-                    rota: '/tenant/convites',
-                    atual: location,
-                  ),
-                  _Item(
-                    icone: Icons.people_outline,
-                    titulo: 'Usuários',
-                    rota: '/tenant/usuarios',
-                    atual: location,
-                  ),
-                  _Item(
-                    icone: Icons.settings_outlined,
-                    titulo: 'Configuração do Tenant',
-                    rota: '/tenant/config',
-                    atual: location,
-                  ),
+                  ...administracao,
                 ],
               ],
             ),

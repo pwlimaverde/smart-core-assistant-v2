@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dependencies_module/dependencies_module.dart';
 
+import '../../../../shared/permissoes.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/contato.dart';
 import '../controllers/contatos_controllers.dart';
@@ -64,11 +65,15 @@ class _ContatosPageState extends State<ContatosPage> {
           onPressed: () => _controller.carregar(),
         ),
       ],
-      floatingActionButton: FloatingActionButton.extended(
-        icon: const Icon(Icons.person_add_alt),
-        label: const Text('Novo contato'),
-        onPressed: () => abrirCadastroDeContato(context, _controller),
-      ),
+      // Sem `clientes:write` não há botão (B2): oferecer e o servidor recusar é
+      // a pior forma de dizer que a pessoa só pode consultar.
+      floatingActionButton: sessaoPodeAlterar('/tenant/contatos')
+          ? FloatingActionButton.extended(
+              icon: const Icon(Icons.person_add_alt),
+              label: const Text('Novo contato'),
+              onPressed: () => abrirCadastroDeContato(context, _controller),
+            )
+          : null,
       body: Padding(
         padding: const EdgeInsets.all(AppSpacing.lg),
         child: Column(
@@ -195,25 +200,27 @@ class _LinhaContato extends StatelessWidget {
               context,
             ).textTheme.bodySmall?.copyWith(color: muted),
           ),
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Editar',
-            onPressed: () => abrirEdicaoDeContato(context, item, controller),
-          ),
-          if (item.ativo)
+          if (sessaoPodeAlterar('/tenant/contatos')) ...[
             IconButton(
-              icon: const Icon(Icons.visibility_off_outlined),
-              tooltip: 'Tirar da lista',
-              onPressed: () =>
-                  abrirDesativacaoDeContato(context, item, controller),
-            )
-          else
-            IconButton(
-              icon: const Icon(Icons.restore_from_trash_outlined),
-              tooltip: 'Devolver à lista',
-              onPressed: () =>
-                  controller.definirAtivo(id: item.id, ativo: true),
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Editar',
+              onPressed: () => abrirEdicaoDeContato(context, item, controller),
             ),
+            if (item.ativo)
+              IconButton(
+                icon: const Icon(Icons.visibility_off_outlined),
+                tooltip: 'Tirar da lista',
+                onPressed: () =>
+                    abrirDesativacaoDeContato(context, item, controller),
+              )
+            else
+              IconButton(
+                icon: const Icon(Icons.restore_from_trash_outlined),
+                tooltip: 'Devolver à lista',
+                onPressed: () =>
+                    controller.definirAtivo(id: item.id, ativo: true),
+              ),
+          ],
         ],
       ),
     );

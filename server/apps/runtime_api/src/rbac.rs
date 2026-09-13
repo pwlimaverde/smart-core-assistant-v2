@@ -105,7 +105,11 @@ pub const MAPA: &[(&str, &[&str])] = &[
     ("AlternarEtiqueta", &["atendimentos:write"]),
     ("CreateNota", &["atendimentos:write"]),
     // --- Contatos.
-    ("ListContatos", &["clientes:read"]),
+    // Quem atende também procura o cliente — para abrir conversa (C3) e para
+    // saber com quem fala. O `data_postgres` já aceitava `atendimentos:read`
+    // aqui; só a borda barrava, e um `staff` convidado com os escopos padrão
+    // não achava ninguém no "iniciar atendimento".
+    ("ListContatos", &["clientes:read", "atendimentos:read"]),
     // C4 — cadastrar e corrigir o cliente é mexer no cadastro dele, não
     // configurar o tenant nem atender.
     ("CreateContato", &["clientes:write"]),

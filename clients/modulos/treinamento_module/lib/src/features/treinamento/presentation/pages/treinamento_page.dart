@@ -6,6 +6,7 @@ import '../../../ensaio/presentation/widgets/aba_ensaio.dart';
 import '../../../intents/presentation/widgets/aba_intents.dart';
 import '../../domain/model/treinamento.dart';
 import '../controllers/treinamento_controllers.dart';
+import '../../../../permissao_do_treinamento.dart';
 import '../widgets/dialogo_treinamento.dart';
 
 /// Treinamento da IA — o material que o assistente usa para responder.
@@ -146,11 +147,12 @@ class _AbaMaterial extends StatelessWidget {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.add),
-              label: const Text('Ensinar algo novo'),
-              onPressed: () => abrirCriacao(context, controller),
-            ),
+            if (PermissaoDoTreinamento.podeAlterar())
+              ElevatedButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text('Ensinar algo novo'),
+                onPressed: () => abrirCriacao(context, controller),
+              ),
           ],
         ),
         const SizedBox(height: AppSpacing.xs),
@@ -281,23 +283,25 @@ class _Linha extends StatelessWidget {
           ),
           // Rotulado, e não só um ícone: é a ação que falta para o material
           // valer alguma coisa, e um ícone de "revisar" não diz isso.
-          if (item.situacao == SituacaoTreinamento.rascunho)
-            TextButton.icon(
-              icon: const Icon(Icons.rate_review_outlined, size: 18),
-              label: const Text('Enviar para a IA'),
-              onPressed: () => abrirRevisao(context, item, controller),
-            )
-          else if (!item.vetorizado)
+          if (PermissaoDoTreinamento.podeAlterar()) ...[
+            if (item.situacao == SituacaoTreinamento.rascunho)
+              TextButton.icon(
+                icon: const Icon(Icons.rate_review_outlined, size: 18),
+                label: const Text('Enviar para a IA'),
+                onPressed: () => abrirRevisao(context, item, controller),
+              )
+            else if (!item.vetorizado)
+              IconButton(
+                icon: const Icon(Icons.rate_review_outlined),
+                tooltip: 'Revisar e enviar para a IA',
+                onPressed: () => abrirRevisao(context, item, controller),
+              ),
             IconButton(
-              icon: const Icon(Icons.rate_review_outlined),
-              tooltip: 'Revisar e enviar para a IA',
-              onPressed: () => abrirRevisao(context, item, controller),
+              icon: const Icon(Icons.delete_outline),
+              tooltip: 'Remover',
+              onPressed: () => abrirRemocao(context, item, controller),
             ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            tooltip: 'Remover',
-            onPressed: () => abrirRemocao(context, item, controller),
-          ),
+          ],
         ],
       ),
     );

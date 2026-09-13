@@ -72,3 +72,41 @@ reenvio de convite não existiam em lugar nenhum.
 **Fica de fora:** sessões abertas antes deste deploy não estão no índice por
 usuário — expiram sozinhas no TTL do refresh. O access token já emitido segue
 válido até expirar (minutos), como no logout.
+
+### B2 — Menu por escopo, não por `isTenantAdmin`
+
+**Confirmado antes de construir:** `tenant_drawer.dart` ainda envolvia nove itens
+num `if (isTenantAdmin)`, e o guard devolvia qualquer `/tenant/*` ao quadro sem
+`tenant:admin`. Cruzar tela a tela com as chamadas de abertura achou **duas
+divergências no próprio servidor**, que entraram no bloco:
+
+- **Fluxos:** a borda exigia `kanban:admin` para escrever em fluxo e coluna, e o
+  banco exigia `operacional:admin`. Um `manager` com `kanban:admin` passava na
+  borda e era recusado no banco — exatamente o caso que a N13.3 quis liberar.
+  O banco passou a aceitar `kanban:admin` também.
+- **Contatos:** a borda exigia `clientes:read` para listar, e o banco já aceitava
+  `atendimentos:read`. Um `staff` convidado com os escopos padrão
+  (`atendimentos:*`, `clientes:write`) não achava ninguém no "iniciar
+  atendimento". A borda passou a aceitar `atendimentos:read`.
+
+**Entregue:**
+
+- `tenant_module/lib/permissoes_de_tela.dart`: o mapa tela → escopos para abrir
+  e para alterar, espelho do `rbac::MAPA`, sem import nenhum (o guard o importa
+  e continua testável na VM). Lista vazia é só admin; `/tenant/*` não declarado
+  é só admin (fail-closed, como no servidor); subtela herda a seção.
+- Menu montado pelo mapa; guard do app usando o mesmo mapa — nada visível leva a
+  redirect, nada escondido abre pela URL.
+- Botões de escrita escondidos sem o escopo de escrita em contatos, equipe,
+  fluxos, colunas, campos, conexões, configuração e treinamento (material e
+  intenções). O interruptor da IA por conexão fica visível e só o admin muda.
+  O treinamento, que mora noutro módulo e não conhece a sessão, recebe a
+  pergunta pronta do app.
+- Testes: um por papel no menu (manager, staff, viewer, sem sessão), regras do
+  mapa, guard por escopo, e `permissoes_de_tela_test.dart`, que **lê o
+  `rbac.rs`** e falha se a tela e o servidor divergirem.
+
+**Fica de fora:** o quadro de atendimento (`operacional_module`) continua
+oferecendo enviar/mover para um `viewer` — o servidor recusa (N13.3), mas a tela
+não esconde. É do quadro, não do menu, e fica anotado para quando o quadro for
+revisto.

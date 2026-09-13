@@ -12,6 +12,7 @@ import 'features/treinamento/data/datasources/treinamento_datasources.dart';
 import 'features/treinamento/data/repositories/treinamento_repositories.dart';
 import 'features/treinamento/domain/usecases/treinamento_usecases.dart';
 import 'features/treinamento/presentation/routes/treinamento_routes.dart';
+import 'permissao_do_treinamento.dart';
 
 /// Treinamento da IA: o material que o assistente usa para responder.
 ///
@@ -25,7 +26,11 @@ final class TreinamentoModule extends AppModule {
   /// Menu lateral do app hospedeiro, repassado à tela.
   final Widget Function()? drawerBuilder;
 
-  TreinamentoModule({this.drawerBuilder});
+  /// [podeAlterar]: se a sessão pode ensinar, revisar e remover. Ver
+  /// [PermissaoDoTreinamento].
+  TreinamentoModule({this.drawerBuilder, bool Function()? podeAlterar}) {
+    if (podeAlterar != null) PermissaoDoTreinamento.podeAlterar = podeAlterar;
+  }
 
   @override
   void globalBinds(Injector i) {

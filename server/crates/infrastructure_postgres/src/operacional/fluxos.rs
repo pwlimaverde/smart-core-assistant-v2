@@ -271,7 +271,7 @@ impl FluxoAtendimentoRepository for PostgresFluxoAtendimentoRepository {
         nome: &str,
         descricao: Option<&str>,
     ) -> Result<FluxoAtendimento, DbError> {
-        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
+        ctx.exigir_qualquer(&["kanban:admin", "operacional:admin", "tenant:admin"])?;
         let row = sqlx::query_as!(
             FluxoAtendimento,
             r#"INSERT INTO oraculo_fluxo_atendimento (tenant_id, departamento_id, nome, descricao)
@@ -329,7 +329,7 @@ impl FluxoAtendimentoRepository for PostgresFluxoAtendimentoRepository {
         descricao: Option<&str>,
         ativo: bool,
     ) -> Result<bool, DbError> {
-        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
+        ctx.exigir_qualquer(&["kanban:admin", "operacional:admin", "tenant:admin"])?;
         let res = sqlx::query!(
             r#"UPDATE oraculo_fluxo_atendimento
                   SET nome = $3, descricao = $4, ativo = $5, data_atualizacao = NOW()
@@ -352,7 +352,7 @@ impl FluxoAtendimentoRepository for PostgresFluxoAtendimentoRepository {
         ctx: &RequestContext,
         id: i32,
     ) -> Result<bool, DbError> {
-        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
+        ctx.exigir_qualquer(&["kanban:admin", "operacional:admin", "tenant:admin"])?;
         let res = sqlx::query!(
             r#"UPDATE oraculo_fluxo_atendimento
                   SET ativo = false, data_atualizacao = NOW()
@@ -484,7 +484,7 @@ impl EtapaFluxoRepository for PostgresEtapaFluxoRepository {
         tipo_etapa: &str,
         cor: Option<&str>,
     ) -> Result<EtapaFluxo, DbError> {
-        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
+        ctx.exigir_qualquer(&["kanban:admin", "operacional:admin", "tenant:admin"])?;
         let cor_val = cor.unwrap_or("#6B7280");
         let row = sqlx::query_as!(
             EtapaFluxo,
@@ -611,7 +611,7 @@ impl EtapaFluxoRepository for PostgresEtapaFluxoRepository {
         cor: &str,
         tipo_etapa: &str,
     ) -> Result<bool, DbError> {
-        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
+        ctx.exigir_qualquer(&["kanban:admin", "operacional:admin", "tenant:admin"])?;
         let res = sqlx::query!(
             r#"UPDATE oraculo_etapa_fluxo
                   SET nome = $3, descricao = $4, cor = $5, tipo_etapa = $6
@@ -635,7 +635,7 @@ impl EtapaFluxoRepository for PostgresEtapaFluxoRepository {
         ctx: &RequestContext,
         id: i32,
     ) -> Result<bool, DbError> {
-        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
+        ctx.exigir_qualquer(&["kanban:admin", "operacional:admin", "tenant:admin"])?;
         let res = sqlx::query!(
             r#"UPDATE oraculo_etapa_fluxo
                   SET ativo = false
@@ -656,7 +656,7 @@ impl EtapaFluxoRepository for PostgresEtapaFluxoRepository {
         id: i32,
         para_cima: bool,
     ) -> Result<bool, DbError> {
-        ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
+        ctx.exigir_qualquer(&["kanban:admin", "operacional:admin", "tenant:admin"])?;
 
         let atual = sqlx::query!(
             r#"SELECT fluxo_id, ordem FROM oraculo_etapa_fluxo

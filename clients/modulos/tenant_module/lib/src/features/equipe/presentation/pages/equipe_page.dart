@@ -1,5 +1,6 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
+import '../../../../shared/permissoes.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/equipe.dart';
 import '../controllers/equipe_controllers.dart';
@@ -117,11 +118,12 @@ class _AbaDepartamentos extends StatelessWidget {
                 ).textTheme.bodySmall?.copyWith(color: context.colors.fgMuted),
               ),
             ),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.add),
-              label: const Text('Novo departamento'),
-              onPressed: () => abrirCriacaoDepartamento(context, controller),
-            ),
+            if (sessaoPodeAlterar('/tenant/equipe'))
+              ElevatedButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text('Novo departamento'),
+                onPressed: () => abrirCriacaoDepartamento(context, controller),
+              ),
           ],
         ),
         const SizedBox(height: AppSpacing.md),
@@ -187,12 +189,14 @@ class _LinhaDepartamento extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Editar',
-            onPressed: () => abrirEdicaoDepartamento(context, item, controller),
-          ),
-          if (item.ativo)
+          if (sessaoPodeAlterar('/tenant/equipe'))
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Editar',
+              onPressed: () =>
+                  abrirEdicaoDepartamento(context, item, controller),
+            ),
+          if (item.ativo && sessaoPodeAlterar('/tenant/equipe'))
             IconButton(
               icon: const Icon(Icons.block),
               tooltip: 'Desativar',
@@ -235,12 +239,13 @@ class _AbaAtendentes extends StatelessWidget {
                 ).textTheme.bodySmall?.copyWith(color: context.colors.fgMuted),
               ),
             ),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.add),
-              label: const Text('Novo atendente'),
-              onPressed: () =>
-                  abrirCriacaoAtendente(context, controller, departamentos),
-            ),
+            if (sessaoPodeAlterar('/tenant/equipe'))
+              ElevatedButton.icon(
+                icon: const Icon(Icons.add),
+                label: const Text('Novo atendente'),
+                onPressed: () =>
+                    abrirCriacaoAtendente(context, controller, departamentos),
+              ),
           ],
         ),
         const SizedBox(height: AppSpacing.md),
@@ -327,13 +332,14 @@ class _LinhaAtendente extends StatelessWidget {
               ],
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Editar',
-            onPressed: () =>
-                abrirEdicaoAtendente(context, a, controller, departamentos),
-          ),
-          if (a.ativo)
+          if (sessaoPodeAlterar('/tenant/equipe'))
+            IconButton(
+              icon: const Icon(Icons.edit_outlined),
+              tooltip: 'Editar',
+              onPressed: () =>
+                  abrirEdicaoAtendente(context, a, controller, departamentos),
+            ),
+          if (a.ativo && sessaoPodeAlterar('/tenant/equipe'))
             IconButton(
               icon: const Icon(Icons.block),
               tooltip: 'Desativar',
