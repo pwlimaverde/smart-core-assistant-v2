@@ -47,3 +47,31 @@ final class TestarPerguntaUsecase
     return const EnsaioInesperado();
   }
 }
+
+/// B9 (N10 E6) — registra a avaliação de um ensaio. Passthrough do id.
+final class RegistrarFeedbackTesteUsecase
+    extends
+        UsecaseBaseCallData<
+          int,
+          int,
+          RegistrarFeedbackTesteParameters,
+          EnsaioError
+        > {
+  const RegistrarFeedbackTesteUsecase({required super.repository});
+
+  @override
+  ProcessData<int, int, RegistrarFeedbackTesteParameters, EnsaioError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  EnsaioError onUnexpected(Object e, StackTrace s) {
+    developer.log(
+      'registrar avaliação do teste: exceção fora da fronteira',
+      name: 'treinamento_module.ensaio.usecase',
+      error: e,
+      stackTrace: s,
+    );
+    return const EnsaioInesperado();
+  }
+}

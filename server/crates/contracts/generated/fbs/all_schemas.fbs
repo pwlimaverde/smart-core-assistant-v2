@@ -1342,6 +1342,19 @@ table TestarPerguntaResponse {
   fluxo_transferencia:string;
 }
 
+table RegistrarFeedbackTesteRequest {
+  pergunta:string;
+  resposta_obtida:string;
+  resposta_correta:string;
+  avaliacao:string;
+  comportamento_aplicado:string;
+  confiabilidade:double;
+}
+
+table RegistrarFeedbackTesteResponse {
+  id:int;
+}
+
 table AtendimentoIdRequest {
   atendimento_id:int;
 }

@@ -93,6 +93,7 @@ pub const MAPA: &[(&str, &[&str])] = &[
     ("GetTreinamento", &["treinamento:read"]),
     ("QueryCompose", &["treinamento:read"]),
     ("CreateTreinamento", &["treinamento:write"]),
+    ("RegistrarFeedbackTeste", &["treinamento:write"]),
     ("FinalizarTreinamento", &["treinamento:write"]),
     ("RemoverTreinamento", &["treinamento:write"]),
     ("ListIntents", &["treinamento:read"]),

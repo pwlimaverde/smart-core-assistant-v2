@@ -17795,6 +17795,185 @@ class TestarPerguntaResponse extends $pb.GeneratedMessage {
   void clearFluxoTransferencia() => $_clearField(6);
 }
 
+/// B9 (N10 E6) - a avaliacao de um ensaio, com a resposta correta. E correcao
+/// supervisionada: insumo de curadoria, nao um joinha.
+class RegistrarFeedbackTesteRequest extends $pb.GeneratedMessage {
+  factory RegistrarFeedbackTesteRequest({
+    $core.String? pergunta,
+    $core.String? respostaObtida,
+    $core.String? respostaCorreta,
+    $core.String? avaliacao,
+    $core.String? comportamentoAplicado,
+    $core.double? confiabilidade,
+  }) {
+    final result = create();
+    if (pergunta != null) result.pergunta = pergunta;
+    if (respostaObtida != null) result.respostaObtida = respostaObtida;
+    if (respostaCorreta != null) result.respostaCorreta = respostaCorreta;
+    if (avaliacao != null) result.avaliacao = avaliacao;
+    if (comportamentoAplicado != null)
+      result.comportamentoAplicado = comportamentoAplicado;
+    if (confiabilidade != null) result.confiabilidade = confiabilidade;
+    return result;
+  }
+
+  RegistrarFeedbackTesteRequest._();
+
+  factory RegistrarFeedbackTesteRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory RegistrarFeedbackTesteRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'RegistrarFeedbackTesteRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'pergunta')
+    ..aOS(2, _omitFieldNames ? '' : 'respostaObtida')
+    ..aOS(3, _omitFieldNames ? '' : 'respostaCorreta')
+    ..aOS(4, _omitFieldNames ? '' : 'avaliacao')
+    ..aOS(5, _omitFieldNames ? '' : 'comportamentoAplicado')
+    ..aD(6, _omitFieldNames ? '' : 'confiabilidade')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RegistrarFeedbackTesteRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RegistrarFeedbackTesteRequest copyWith(
+          void Function(RegistrarFeedbackTesteRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as RegistrarFeedbackTesteRequest))
+          as RegistrarFeedbackTesteRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static RegistrarFeedbackTesteRequest create() =>
+      RegistrarFeedbackTesteRequest._();
+  @$core.override
+  RegistrarFeedbackTesteRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static RegistrarFeedbackTesteRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<RegistrarFeedbackTesteRequest>(create);
+  static RegistrarFeedbackTesteRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get pergunta => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set pergunta($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasPergunta() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearPergunta() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get respostaObtida => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set respostaObtida($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasRespostaObtida() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearRespostaObtida() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get respostaCorreta => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set respostaCorreta($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasRespostaCorreta() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearRespostaCorreta() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get avaliacao => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set avaliacao($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasAvaliacao() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearAvaliacao() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get comportamentoAplicado => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set comportamentoAplicado($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasComportamentoAplicado() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearComportamentoAplicado() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.double get confiabilidade => $_getN(5);
+  @$pb.TagNumber(6)
+  set confiabilidade($core.double value) => $_setDouble(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasConfiabilidade() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearConfiabilidade() => $_clearField(6);
+}
+
+class RegistrarFeedbackTesteResponse extends $pb.GeneratedMessage {
+  factory RegistrarFeedbackTesteResponse({
+    $core.int? id,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    return result;
+  }
+
+  RegistrarFeedbackTesteResponse._();
+
+  factory RegistrarFeedbackTesteResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory RegistrarFeedbackTesteResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'RegistrarFeedbackTesteResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RegistrarFeedbackTesteResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RegistrarFeedbackTesteResponse copyWith(
+          void Function(RegistrarFeedbackTesteResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as RegistrarFeedbackTesteResponse))
+          as RegistrarFeedbackTesteResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static RegistrarFeedbackTesteResponse create() =>
+      RegistrarFeedbackTesteResponse._();
+  @$core.override
+  RegistrarFeedbackTesteResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static RegistrarFeedbackTesteResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<RegistrarFeedbackTesteResponse>(create);
+  static RegistrarFeedbackTesteResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+}
+
 class AtendimentoIdRequest extends $pb.GeneratedMessage {
   factory AtendimentoIdRequest({
     $core.int? atendimentoId,

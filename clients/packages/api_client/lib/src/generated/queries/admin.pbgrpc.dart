@@ -586,6 +586,15 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$testarPergunta, request, options: options);
   }
 
+  $grpc.ResponseFuture<$0.RegistrarFeedbackTesteResponse>
+      registrarFeedbackTeste(
+    $0.RegistrarFeedbackTesteRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$registrarFeedbackTeste, request,
+        options: options);
+  }
+
   $grpc.ResponseFuture<$0.MyTreinamentoResponse> getMyTreinamento(
     $0.GetMyTreinamentoRequest request, {
     $grpc.CallOptions? options,
@@ -1219,6 +1228,11 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/TestarPergunta',
           ($0.TestarPerguntaRequest value) => value.writeToBuffer(),
           $0.TestarPerguntaResponse.fromBuffer);
+  static final _$registrarFeedbackTeste = $grpc.ClientMethod<
+          $0.RegistrarFeedbackTesteRequest, $0.RegistrarFeedbackTesteResponse>(
+      '/smartcore.contracts.queries.AdminService/RegistrarFeedbackTeste',
+      ($0.RegistrarFeedbackTesteRequest value) => value.writeToBuffer(),
+      $0.RegistrarFeedbackTesteResponse.fromBuffer);
   static final _$getMyTreinamento =
       $grpc.ClientMethod<$0.GetMyTreinamentoRequest, $0.MyTreinamentoResponse>(
           '/smartcore.contracts.queries.AdminService/GetMyTreinamento',
@@ -2036,6 +2050,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.TestarPerguntaRequest.fromBuffer(value),
         ($0.TestarPerguntaResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.RegistrarFeedbackTesteRequest,
+            $0.RegistrarFeedbackTesteResponse>(
+        'RegistrarFeedbackTeste',
+        registrarFeedbackTeste_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.RegistrarFeedbackTesteRequest.fromBuffer(value),
+        ($0.RegistrarFeedbackTesteResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.GetMyTreinamentoRequest,
             $0.MyTreinamentoResponse>(
         'GetMyTreinamento',
@@ -2984,6 +3007,15 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.TestarPerguntaResponse> testarPergunta(
       $grpc.ServiceCall call, $0.TestarPerguntaRequest request);
+
+  $async.Future<$0.RegistrarFeedbackTesteResponse> registrarFeedbackTeste_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.RegistrarFeedbackTesteRequest> $request) async {
+    return registrarFeedbackTeste($call, await $request);
+  }
+
+  $async.Future<$0.RegistrarFeedbackTesteResponse> registrarFeedbackTeste(
+      $grpc.ServiceCall call, $0.RegistrarFeedbackTesteRequest request);
 
   $async.Future<$0.MyTreinamentoResponse> getMyTreinamento_Pre(
       $grpc.ServiceCall $call,

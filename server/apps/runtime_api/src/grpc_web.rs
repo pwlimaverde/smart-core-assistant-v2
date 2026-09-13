@@ -195,6 +195,8 @@ use contracts::grpc::queries::{
     RefreshRequest,
     RegisterPaymentRequest,
     RegisterPaymentResponse,
+    RegistrarFeedbackTesteRequest,
+    RegistrarFeedbackTesteResponse,
     RemoverMyTreinamentoRequest,
     RevokeInviteRequest,
     RevokeInviteResponse,
@@ -3605,6 +3607,40 @@ impl AdminService for AdminFacade {
             confiabilidade: saida.confiabilidade,
             transferiria: saida.transferir_atendimento,
             fluxo_transferencia: saida.fluxo_transferencia,
+        }))
+    }
+
+    /// B9 (N10 E6) — registra a avaliação de um ensaio, com a resposta correta.
+    ///
+    /// Escopo `treinamento:write` (via `encaminhar_tenant`): testar é leitura,
+    /// mas avaliar alimenta a curadoria do que o bot vai dizer.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "RegistrarFeedbackTeste", traceparent)
+    )]
+    async fn registrar_feedback_teste(
+        &self,
+        req: Request<RegistrarFeedbackTesteRequest>,
+    ) -> Result<Response<RegistrarFeedbackTesteResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "RegistrarFeedbackTeste",
+                serde_json::json!({
+                    "pergunta": inner.pergunta,
+                    "resposta_obtida": inner.resposta_obtida,
+                    "resposta_correta": inner.resposta_correta,
+                    "avaliacao": inner.avaliacao,
+                    "comportamento_aplicado": inner.comportamento_aplicado,
+                    "confiabilidade": inner.confiabilidade,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(RegistrarFeedbackTesteResponse {
+            id: corpo.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
         }))
     }
 
@@ -8822,6 +8858,7 @@ mod tests {
             "DefinirBotDaConversa" => facade.definir_bot_da_conversa(Request::new(DefinirBotDaConversaRequest { atendimento_id: 1, habilitado: true })).await,
             "MarcarAtendimentoLido" => facade.marcar_atendimento_lido(Request::new(MarcarAtendimentoLidoRequest { atendimento_id: 1 })).await,
             "AjustarEscoposMcpGrant" => facade.ajustar_escopos_mcp_grant(Request::new(AjustarEscoposMcpGrantRequest { grant_id: String::new(), scopes: vec![] })).await,
+            "RegistrarFeedbackTeste" => facade.registrar_feedback_teste(Request::new(RegistrarFeedbackTesteRequest::default())).await,
         }
     }
 

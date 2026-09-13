@@ -101,6 +101,13 @@ final class TreinamentoModule extends AppModule {
     );
 
     // ── ensaio de pergunta ────────────────────────────────────────────────
+    i.lazySingleton<RegistrarFeedbackTesteUsecase>(
+      () => RegistrarFeedbackTesteUsecase(
+        repository: RegistrarFeedbackTesteRepository(
+          datasource: RegistrarFeedbackTesteDatasource(client: _admin()),
+        ),
+      ),
+    );
     i.lazySingleton<TestarPerguntaUsecase>(
       () => TestarPerguntaUsecase(
         repository: TestarPerguntaRepository(

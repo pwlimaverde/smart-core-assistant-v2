@@ -1,5 +1,6 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
+import '../../../../permissao_do_treinamento.dart';
 import '../../domain/model/ensaio.dart';
 import '../controllers/ensaio_controllers.dart';
 
@@ -93,6 +94,7 @@ class _AbaEnsaioState extends State<AbaEnsaio> {
             onSuccess: (context, ensaio) => _Resultado(
               pergunta: _controller.ultimaPergunta,
               ensaio: ensaio,
+              controller: _controller,
             ),
           ),
         ),
@@ -104,8 +106,13 @@ class _AbaEnsaioState extends State<AbaEnsaio> {
 class _Resultado extends StatelessWidget {
   final String pergunta;
   final Ensaio ensaio;
+  final EnsaioController controller;
 
-  const _Resultado({required this.pergunta, required this.ensaio});
+  const _Resultado({
+    required this.pergunta,
+    required this.ensaio,
+    required this.controller,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -141,6 +148,17 @@ class _Resultado extends StatelessWidget {
             ],
           ),
         ),
+        // B9 (N10 E6): avaliar é curadoria — escreve —, então segue a mesma
+        // permissão de ensinar. A `key` zera a avaliação a cada teste novo.
+        if (controller.aceitaAvaliacao &&
+            PermissaoDoTreinamento.podeAlterar()) ...[
+          const SizedBox(height: AppSpacing.md),
+          _AvaliacaoDoEnsaio(
+            key: ValueKey('$pergunta\u0000${ensaio.resposta}'),
+            ensaio: ensaio,
+            controller: controller,
+          ),
+        ],
         if (ensaio.transferiria) ...[
           const SizedBox(height: AppSpacing.md),
           // Transferir é uma decisão diferente de responder: a conversa sairia
@@ -233,6 +251,109 @@ class _Aviso extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// B9 (N10 E6) — "a resposta ficou boa?", com a resposta correta quando não.
+///
+/// A correção é o que dá valor ao registro: um "ruim" sozinho diz que algo está
+/// errado, a correção diz o quê. Por isso o campo abre ao escolher "Ruim", em vez
+/// de ficar escondido atrás de outro clique.
+class _AvaliacaoDoEnsaio extends StatefulWidget {
+  final Ensaio ensaio;
+  final EnsaioController controller;
+
+  const _AvaliacaoDoEnsaio({
+    super.key,
+    required this.ensaio,
+    required this.controller,
+  });
+
+  @override
+  State<_AvaliacaoDoEnsaio> createState() => _AvaliacaoDoEnsaioState();
+}
+
+class _AvaliacaoDoEnsaioState extends State<_AvaliacaoDoEnsaio> {
+  final _correcao = TextEditingController();
+  bool _ruim = false;
+  bool _enviando = false;
+  bool _registrada = false;
+
+  @override
+  void dispose() {
+    _correcao.dispose();
+    super.dispose();
+  }
+
+  Future<void> _enviar({required bool boa}) async {
+    setState(() => _enviando = true);
+    final erro = await widget.controller.avaliar(
+      ensaio: widget.ensaio,
+      boa: boa,
+      correcao: boa ? '' : _correcao.text,
+    );
+    if (!mounted) return;
+    if (erro == null) {
+      setState(() => _registrada = true);
+      return;
+    }
+    setState(() => _enviando = false);
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(erro.message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_registrada) {
+      return Text(
+        'Avaliação registrada. Ela orienta o que ajustar no treinamento.',
+        style: Theme.of(
+          context,
+        ).textTheme.bodySmall?.copyWith(color: context.colors.fgMuted),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Wrap(
+          spacing: AppSpacing.sm,
+          runSpacing: AppSpacing.sm,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            const Text('A resposta ficou boa?'),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.thumb_up_outlined, size: 18),
+              label: const Text('Boa'),
+              onPressed: _enviando ? null : () => _enviar(boa: true),
+            ),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.thumb_down_outlined, size: 18),
+              label: const Text('Ruim'),
+              onPressed: _enviando ? null : () => setState(() => _ruim = true),
+            ),
+          ],
+        ),
+        if (_ruim) ...[
+          const SizedBox(height: AppSpacing.sm),
+          TextField(
+            controller: _correcao,
+            minLines: 2,
+            maxLines: 5,
+            decoration: const InputDecoration(
+              labelText: 'Resposta correta',
+              hintText: 'Como a IA deveria ter respondido?',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          FilledButton(
+            onPressed: _enviando ? null : () => _enviar(boa: false),
+            child: const Text('Enviar avaliação'),
+          ),
+        ],
+      ],
     );
   }
 }

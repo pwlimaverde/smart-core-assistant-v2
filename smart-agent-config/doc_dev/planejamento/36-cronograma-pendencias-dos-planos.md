@@ -27,8 +27,8 @@
 | B5 | Notificar o atendente da atribuição | regras D6 | Rodízio (D2) atribui em silêncio | ✅ CI verde (`8757195`) |
 | B6 | Marcar como lida e contador de não lidas | N9 E4 | Sem isso o quadro não diz o que falta responder | ✅ CI verde (`72c79bd`) |
 | B7 | Ajustar permissões de um agente sem desconectar | doc 35-agentes F4 | Hoje a única saída é revogar e reconectar | ✅ CI verde (`3b9f13f`) |
-| B8 | Descoberta dos aplicativos conectados | doc 35-agentes F5 | Recurso que precisa ser explicado por fora não foi entregue | ⏳ no CI |
-| B9 | IA analítica: assunto automático, feedback do teste, treinamento por arquivo | N10 E2, E6, E5 | Maior e mais caro; depende de nada acima | ⬜ |
+| B8 | Descoberta dos aplicativos conectados | doc 35-agentes F5 | Recurso que precisa ser explicado por fora não foi entregue | ✅ CI verde (`e14a993`) |
+| B9 | IA analítica: assunto automático, feedback do teste, treinamento por arquivo | N10 E2, E6, E5 | Maior e mais caro; depende de nada acima | 🔄 E6 no CI; E1+E2 e E5 a seguir |
 | B10 | Clientes PJ e vínculo contato ↔ cliente | N11 E5 / doc 34 C4 | Entidade nova com tela própria | ⬜ |
 
 **Fora deste cronograma:** N12 (cutover de produção) — é operação com janela
@@ -330,3 +330,31 @@ juntas.
 
 **DoD do F5:** chega à tela sem ser instruído ✅ (cartão, configuração e menu);
 dispensado não volta ✅ (no mesmo aparelho); quem tem agente não vê ✅.
+
+### B9 — IA analítica (N10 E2, E6, E5)
+
+**Confirmado antes de construir:** o `ia_engine` sabe analisar, mas o worker nunca
+chama o `Analyse` — `intent_detectado` e `entidades_extraidas` estão vazios desde
+sempre. O assunto automático (E2) depende disso, então o bloco inclui a E1 (ligar
+o `Analyse`), que o cronograma não listava à parte. Ordem seguida, a do plano:
+**E6** (barata, entrega valor sozinha) → **E1+E2** → **E5** (a maior).
+
+#### E6 — Avaliação do teste de resposta
+
+- A aba **Testar** pergunta "a resposta ficou boa?". **Ruim** abre o campo
+  **Resposta correta** — é a correção que dá valor ao registro; um "ruim" sozinho
+  só diz que algo está errado.
+- Grava em `treinamento_query_test_feedback` (tabela da migration 0007, que
+  existia sem rota): pergunta, resposta obtida, correção, avaliação, confiança e
+  a intenção aplicada. Os trechos do RAG não têm id no resultado, então
+  `documentos_ids` fica vazio.
+- Escopo `treinamento:write`: testar é leitura, avaliar é curadoria. Quem só lê o
+  treinamento testa e não vê os botões.
+- Auditado como `treinamento.feedback_registrado` só com a avaliação e se houve
+  correção — pergunta e correção podem citar cliente e não vão para log nem
+  trilha.
+- Testes: handler grava a correção e audita sem o texto; avaliação desconhecida
+  recusada; tela envia a correção, "boa" vai sem correção, leitura não avalia.
+
+**Fica de fora:** a tela de revisão do acumulado (o plano a deixa opcional — o
+valor está em coletar primeiro) e o teste com mídia (E6.1, opcional).

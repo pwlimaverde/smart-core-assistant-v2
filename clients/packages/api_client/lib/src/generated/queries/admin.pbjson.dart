@@ -4376,6 +4376,46 @@ final $typed_data.Uint8List testarPerguntaResponseDescriptor = $convert.base64De
     'bnNmZXJpcmlhGAUgASgIUgx0cmFuc2ZlcmlyaWESLwoTZmx1eG9fdHJhbnNmZXJlbmNpYRgGIA'
     'EoCVISZmx1eG9UcmFuc2ZlcmVuY2lh');
 
+@$core.Deprecated('Use registrarFeedbackTesteRequestDescriptor instead')
+const RegistrarFeedbackTesteRequest$json = {
+  '1': 'RegistrarFeedbackTesteRequest',
+  '2': [
+    {'1': 'pergunta', '3': 1, '4': 1, '5': 9, '10': 'pergunta'},
+    {'1': 'resposta_obtida', '3': 2, '4': 1, '5': 9, '10': 'respostaObtida'},
+    {'1': 'resposta_correta', '3': 3, '4': 1, '5': 9, '10': 'respostaCorreta'},
+    {'1': 'avaliacao', '3': 4, '4': 1, '5': 9, '10': 'avaliacao'},
+    {
+      '1': 'comportamento_aplicado',
+      '3': 5,
+      '4': 1,
+      '5': 9,
+      '10': 'comportamentoAplicado'
+    },
+    {'1': 'confiabilidade', '3': 6, '4': 1, '5': 1, '10': 'confiabilidade'},
+  ],
+};
+
+/// Descriptor for `RegistrarFeedbackTesteRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List registrarFeedbackTesteRequestDescriptor = $convert.base64Decode(
+    'Ch1SZWdpc3RyYXJGZWVkYmFja1Rlc3RlUmVxdWVzdBIaCghwZXJndW50YRgBIAEoCVIIcGVyZ3'
+    'VudGESJwoPcmVzcG9zdGFfb2J0aWRhGAIgASgJUg5yZXNwb3N0YU9idGlkYRIpChByZXNwb3N0'
+    'YV9jb3JyZXRhGAMgASgJUg9yZXNwb3N0YUNvcnJldGESHAoJYXZhbGlhY2FvGAQgASgJUglhdm'
+    'FsaWFjYW8SNQoWY29tcG9ydGFtZW50b19hcGxpY2FkbxgFIAEoCVIVY29tcG9ydGFtZW50b0Fw'
+    'bGljYWRvEiYKDmNvbmZpYWJpbGlkYWRlGAYgASgBUg5jb25maWFiaWxpZGFkZQ==');
+
+@$core.Deprecated('Use registrarFeedbackTesteResponseDescriptor instead')
+const RegistrarFeedbackTesteResponse$json = {
+  '1': 'RegistrarFeedbackTesteResponse',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+  ],
+};
+
+/// Descriptor for `RegistrarFeedbackTesteResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List registrarFeedbackTesteResponseDescriptor =
+    $convert.base64Decode(
+        'Ch5SZWdpc3RyYXJGZWVkYmFja1Rlc3RlUmVzcG9uc2USDgoCaWQYASABKAVSAmlk');
+
 @$core.Deprecated('Use atendimentoIdRequestDescriptor instead')
 const AtendimentoIdRequest$json = {
   '1': 'AtendimentoIdRequest',

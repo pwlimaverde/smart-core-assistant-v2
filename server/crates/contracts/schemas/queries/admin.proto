@@ -1182,6 +1182,7 @@ service AdminService {
   // RAG -> LLM), sem gravar atendimento nenhum. Validar o treinamento pelo
   // WhatsApp de verdade obrigaria a usar um numero real e sujar o historico.
   rpc TestarPergunta(TestarPerguntaRequest) returns (TestarPerguntaResponse);
+  rpc RegistrarFeedbackTeste(RegistrarFeedbackTesteRequest) returns (RegistrarFeedbackTesteResponse);
   rpc GetMyTreinamento(GetMyTreinamentoRequest) returns (MyTreinamentoResponse);
   rpc FinalizarMyTreinamento(FinalizarMyTreinamentoRequest) returns (SimpleOkResponse);
   rpc RemoverMyTreinamento(RemoverMyTreinamentoRequest) returns (SimpleOkResponse);
@@ -1765,6 +1766,21 @@ message TestarPerguntaResponse {
   // `true` quando a IA decidiu transferir em vez de responder.
   bool transferiria = 5;
   string fluxo_transferencia = 6;
+}
+
+// B9 (N10 E6) - a avaliacao de um ensaio, com a resposta correta. E correcao
+// supervisionada: insumo de curadoria, nao um joinha.
+message RegistrarFeedbackTesteRequest {
+  string pergunta = 1;
+  string resposta_obtida = 2;
+  string resposta_correta = 3;       // vazio = sem correcao
+  string avaliacao = 4;              // "boa" | "ruim"
+  string comportamento_aplicado = 5;
+  double confiabilidade = 6;
+}
+
+message RegistrarFeedbackTesteResponse {
+  int32 id = 1;
 }
 
 // --- Ficha do atendimento ---

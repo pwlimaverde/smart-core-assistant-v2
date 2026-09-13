@@ -132,6 +132,13 @@ pub trait TreinamentoStore: Send + Sync {
 
     // ── curadoria de intenções (tela de treinamento) ──────────────────────
 
+    /// B9 (N10 E6) — grava a avaliação de um ensaio, com a correção.
+    async fn registrar_feedback_teste(
+        &self,
+        ctx: &RequestContext,
+        novo: infrastructure_postgres::treinamento::treinamentos::NovoFeedbackTeste,
+    ) -> Result<i32, DbError>;
+
     async fn listar_intents(&self, ctx: &RequestContext) -> Result<Vec<Intent>, DbError>;
 
     async fn criar_intent(

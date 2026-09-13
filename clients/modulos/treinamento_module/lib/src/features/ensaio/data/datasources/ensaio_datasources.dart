@@ -29,3 +29,30 @@ final class TestarPerguntaDatasource
     );
   }
 }
+
+/// B9 (N10 E6) — envia a avaliação e devolve o id gravado.
+final class RegistrarFeedbackTesteDatasource
+    implements Datasource<int, RegistrarFeedbackTesteParameters> {
+  final proto.AdminServiceClient _client;
+
+  const RegistrarFeedbackTesteDatasource({
+    required proto.AdminServiceClient client,
+  })
+    // ignore: prefer_initializing_formals
+    : _client = client;
+
+  @override
+  Future<int> call(RegistrarFeedbackTesteParameters parameters) async {
+    final resp = await _client.registrarFeedbackTeste(
+      proto.RegistrarFeedbackTesteRequest(
+        pergunta: parameters.pergunta,
+        respostaObtida: parameters.respostaObtida,
+        respostaCorreta: parameters.respostaCorreta,
+        avaliacao: parameters.boa ? 'boa' : 'ruim',
+        comportamentoAplicado: parameters.comportamentoAplicado,
+        confiabilidade: parameters.confiabilidade,
+      ),
+    );
+    return resp.id;
+  }
+}

@@ -45,7 +45,10 @@ final class TreinamentoRoute extends GetItModule {
       ),
     );
     i.controller<EnsaioController>(
-      () => EnsaioController(testar: inject<TestarPerguntaUsecase>()),
+      () => EnsaioController(
+        testar: inject<TestarPerguntaUsecase>(),
+        registrarFeedback: inject<RegistrarFeedbackTesteUsecase>(),
+      ),
     );
   }
 }

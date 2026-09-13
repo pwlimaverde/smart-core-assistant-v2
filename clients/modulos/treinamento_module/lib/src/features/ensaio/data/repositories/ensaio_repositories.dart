@@ -36,3 +36,34 @@ final class TestarPerguntaRepository
     };
   }
 }
+
+/// B9 (N10 E6) — mesma tradução de falhas do ensaio; o que muda é o texto do
+/// servidor para avaliação recusada.
+final class RegistrarFeedbackTesteRepository
+    extends RepositoryBase<int, RegistrarFeedbackTesteParameters, EnsaioError> {
+  const RegistrarFeedbackTesteRepository({required super.datasource});
+
+  @override
+  EnsaioError mapError(
+    Object e,
+    StackTrace s,
+    RegistrarFeedbackTesteParameters p,
+  ) {
+    final kind = classificarFalhaGrpc(e);
+    developer.log(
+      'registrar avaliação do teste falhou: $kind',
+      name: 'treinamento_module.ensaio',
+      error: e,
+    );
+    return switch (kind) {
+      GrpcFailureKind.unauthenticated => const EnsaioSessaoExpirada(),
+      GrpcFailureKind.permissionDenied => const EnsaioAcessoNegado(),
+      GrpcFailureKind.invalidArgument => EnsaioPerguntaInvalida(
+        e is GrpcError ? e.message : null,
+      ),
+      GrpcFailureKind.unavailable ||
+      GrpcFailureKind.rateLimited => const EnsaioIaIndisponivel(),
+      _ => const EnsaioInesperado(),
+    };
+  }
+}

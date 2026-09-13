@@ -607,6 +607,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_atualizar_sentimento = state_clone.clone();
     let state_for_query_compose = state_clone.clone();
     let s_trn_criar = state_clone.clone();
+    let s_trn_feedback = state_clone.clone();
     let s_trn_listar = state_clone.clone();
     let s_trn_obter = state_clone.clone();
     let s_trn_finalizar = state_clone.clone();
@@ -889,6 +890,17 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(async move {
                 handler_create_treinamento(state.treinamento.as_ref(), state.audit.as_ref(), env)
                     .await
+            })
+        })
+        .route("RegistrarFeedbackTeste", move |env| {
+            let state = s_trn_feedback.clone();
+            Box::pin(async move {
+                handler_registrar_feedback_teste(
+                    state.treinamento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
             })
         })
         .route("ListarTreinamentosPendentes", move |env| {
@@ -6451,6 +6463,98 @@ async fn handler_create_treinamento(
     }
 }
 
+/// B9 (N10 E6) — a avaliação de um ensaio de pergunta, com a resposta correta.
+///
+/// Auditada (`treinamento.feedback_registrado`): é insumo de curadoria com efeito
+/// futuro no comportamento do bot. A auditoria e o span levam só a avaliação e se
+/// houve correção — pergunta e correção são texto livre do operador e podem
+/// citar dado de cliente.
+#[tracing::instrument(
+    skip_all,
+    fields(
+        rpc = "RegistrarFeedbackTeste",
+        avaliacao = tracing::field::Empty,
+        houve_correcao = tracing::field::Empty
+    )
+)]
+async fn handler_registrar_feedback_teste(
+    store: &dyn ports::TreinamentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let texto = |chave: &str| {
+        payload
+            .get(chave)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    let pergunta = texto("pergunta");
+    let resposta = texto("resposta_obtida");
+    let correcao = texto("resposta_correta");
+    let avaliacao = texto("avaliacao");
+
+    if pergunta.is_empty() || resposta.is_empty() {
+        return erro(
+            error_core::AppError::Validation(
+                "o feedback precisa da pergunta e da resposta avaliada".into(),
+            ),
+            &env,
+        );
+    }
+    if avaliacao != "boa" && avaliacao != "ruim" {
+        return erro(
+            error_core::AppError::Validation("a avaliação deve ser boa ou ruim".into()),
+            &env,
+        );
+    }
+    let houve_correcao = !correcao.is_empty();
+    let span = tracing::Span::current();
+    span.record("avaliacao", avaliacao.as_str());
+    span.record("houve_correcao", houve_correcao);
+
+    let novo = infrastructure_postgres::treinamento::treinamentos::NovoFeedbackTeste {
+        pergunta,
+        resposta_bot: resposta,
+        resposta_corrigida: houve_correcao.then_some(correcao),
+        avaliacao: avaliacao.clone(),
+        confiabilidade: payload
+            .get("confiabilidade")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0),
+        comportamento_aplicado: texto("comportamento_aplicado"),
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.registrar_feedback_teste(&ctx, novo).await {
+        Ok(id) => {
+            audit
+                .publish(
+                    &env,
+                    "treinamento.feedback_registrado",
+                    format!("Avaliação de teste registrada ({avaliacao})"),
+                    serde_json::json!({
+                        "id": id,
+                        "avaliacao": avaliacao,
+                        "houve_correcao": houve_correcao,
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "RegistrarFeedbackTesteReply",
+                serde_json::json!({ "id": id }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
 // --- Vetorização (scheduler do worker) e curadoria de intenções ---
 //
 // Sem a fila de vetorização, o material treinado nunca vira vetor e o RAG
@@ -10169,6 +10273,63 @@ mod tests_atendimento_cliente_unit {
         let env = envelope_com_payload("MarcarAtendimentoLido", serde_json::json!({}));
 
         let resp = handler_marcar_atendimento_lido(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    /// B9 (N10 E6): a correção vai para o banco; a auditoria só sabe que houve.
+    #[tokio::test]
+    async fn feedback_de_teste_grava_a_correcao_e_audita_sem_o_texto() {
+        let mut store = crate::ports::MockTreinamentoStore::new();
+        store
+            .expect_registrar_feedback_teste()
+            .times(1)
+            .withf(|_, novo| {
+                novo.avaliacao == "ruim"
+                    && novo.resposta_corrigida.as_deref() == Some("Não entregamos aos domingos.")
+            })
+            .returning(|_, _| Ok(11));
+        let mut audit = crate::ports::MockAuditPort::new();
+        audit
+            .expect_publish()
+            .times(1)
+            .withf(|_, _, _, contexto| {
+                contexto["houve_correcao"] == true
+                    && contexto.get("resposta_correta").is_none()
+                    && contexto.get("pergunta").is_none()
+            })
+            .returning(|_, _, _, _| ());
+        let env = envelope_com_payload(
+            "RegistrarFeedbackTeste",
+            serde_json::json!({
+                "pergunta": "entregam domingo?",
+                "resposta_obtida": "Sim, todos os dias.",
+                "resposta_correta": "Não entregamos aos domingos.",
+                "avaliacao": "ruim",
+            }),
+        );
+
+        let resp = handler_registrar_feedback_teste(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["id"], 11);
+    }
+
+    #[tokio::test]
+    async fn feedback_de_teste_recusa_avaliacao_desconhecida() {
+        let store = crate::ports::MockTreinamentoStore::new();
+        let audit = crate::ports::MockAuditPort::new();
+        let env = envelope_com_payload(
+            "RegistrarFeedbackTeste",
+            serde_json::json!({
+                "pergunta": "p",
+                "resposta_obtida": "r",
+                "avaliacao": "mais_ou_menos",
+            }),
+        );
+
+        let resp = handler_registrar_feedback_teste(&store, &audit, env).await;
 
         assert_eq!(resp.kind, MessageKind::Error as i32);
     }

@@ -13,6 +13,7 @@ import 'package:treinamento_module/src/features/ensaio/domain/parameters/ensaio_
 import 'package:treinamento_module/src/features/ensaio/domain/usecases/ensaio_usecases.dart';
 import 'package:treinamento_module/src/features/ensaio/presentation/controllers/ensaio_controllers.dart';
 import 'package:treinamento_module/src/features/ensaio/presentation/widgets/aba_ensaio.dart';
+import 'package:treinamento_module/src/permissao_do_treinamento.dart';
 
 class _MockAdminClient extends Mock implements proto.AdminServiceClient {}
 
@@ -20,7 +21,10 @@ void main() {
   late _MockAdminClient client;
   final getIt = GetIt.instance;
 
-  setUpAll(() => registerFallbackValue(proto.TestarPerguntaRequest()));
+  setUpAll(() {
+    registerFallbackValue(proto.TestarPerguntaRequest());
+    registerFallbackValue(proto.RegistrarFeedbackTesteRequest());
+  });
   setUp(() => client = _MockAdminClient());
   tearDown(() => getIt.reset());
 
@@ -32,7 +36,14 @@ void main() {
 
   void registrar() {
     getIt.registerSingleton<EnsaioController>(
-      EnsaioController(testar: usecase()),
+      EnsaioController(
+        testar: usecase(),
+        registrarFeedback: RegistrarFeedbackTesteUsecase(
+          repository: RegistrarFeedbackTesteRepository(
+            datasource: RegistrarFeedbackTesteDatasource(client: client),
+          ),
+        ),
+      ),
     );
   }
 
@@ -196,6 +207,75 @@ void main() {
       await perguntar(tester, 'meu pedido sumiu');
 
       expect(find.textContaining('Suporte · Padrão'), findsOneWidget);
+    });
+
+    group('avaliação (B9)', () {
+      proto.RegistrarFeedbackTesteRequest pedidoEnviado() =>
+          verify(
+                () => client.registrarFeedbackTeste(captureAny()),
+              ).captured.single
+              as proto.RegistrarFeedbackTesteRequest;
+
+      void aceitaAvaliacao() =>
+          when(() => client.registrarFeedbackTeste(any())).thenAnswer(
+            (_) => respostaGrpc(proto.RegistrarFeedbackTesteResponse(id: 3)),
+          );
+
+      testWidgets('resposta ruim vai com a correção para a curadoria', (
+        tester,
+      ) async {
+        responde(resposta: 'Sim, todos os dias.');
+        aceitaAvaliacao();
+        registrar();
+
+        await montar(tester);
+        await perguntar(tester, 'entregam domingo?');
+        await tester.tap(find.text('Ruim'));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Resposta correta'),
+          'Não entregamos aos domingos.',
+        );
+        await tester.tap(find.text('Enviar avaliação'));
+        await tester.pumpAndSettle();
+
+        final pedido = pedidoEnviado();
+        expect(pedido.avaliacao, 'ruim');
+        expect(pedido.pergunta, 'entregam domingo?');
+        expect(pedido.respostaObtida, 'Sim, todos os dias.');
+        expect(pedido.respostaCorreta, 'Não entregamos aos domingos.');
+        expect(find.textContaining('Avaliação registrada'), findsOneWidget);
+      });
+
+      testWidgets('resposta boa registra sem correção', (tester) async {
+        responde();
+        aceitaAvaliacao();
+        registrar();
+
+        await montar(tester);
+        await perguntar(tester, 'entregam sábado?');
+        await tester.tap(find.text('Boa'));
+        await tester.pumpAndSettle();
+
+        final pedido = pedidoEnviado();
+        expect(pedido.avaliacao, 'boa');
+        expect(pedido.respostaCorreta, isEmpty);
+      });
+
+      testWidgets('quem só lê o treinamento testa, mas não avalia', (
+        tester,
+      ) async {
+        PermissaoDoTreinamento.podeAlterar = () => false;
+        addTearDown(PermissaoDoTreinamento.restaurar);
+        responde();
+        registrar();
+
+        await montar(tester);
+        await perguntar(tester, 'entregam sábado?');
+
+        expect(find.text('Sim, entregamos aos sábados.'), findsOneWidget);
+        expect(find.text('Ruim'), findsNothing);
+      });
     });
 
     testWidgets('IA fora do ar é distinguida de erro de treinamento', (

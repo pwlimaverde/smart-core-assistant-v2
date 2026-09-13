@@ -126,6 +126,23 @@ impl TreinamentoStore for PgTreinamentoStore {
         .await
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, avaliacao = %novo.avaliacao))]
+    async fn registrar_feedback_teste(
+        &self,
+        ctx: &RequestContext,
+        novo: infrastructure_postgres::treinamento::treinamentos::NovoFeedbackTeste,
+    ) -> Result<i32, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let id = infrastructure_postgres::treinamento::treinamentos::registrar_feedback_teste(
+                &mut tx, &ctx, &novo,
+            )
+            .await?;
+            Ok((id, tx))
+        })
+        .await
+    }
+
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
     async fn listar_treinamentos(
         &self,

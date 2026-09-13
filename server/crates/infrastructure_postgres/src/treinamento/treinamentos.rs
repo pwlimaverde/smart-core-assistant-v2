@@ -338,3 +338,48 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
         Ok(res.rows_affected() > 0)
     }
 }
+
+/// B9 (N10 E6) — a avaliação de um ensaio de pergunta.
+///
+/// Não é um joinha: `resposta_corrigida` é a correção supervisionada de quem
+/// treina. Pergunta e correção são texto livre do operador e podem citar dado de
+/// cliente — por isso existem só aqui, nunca em log ou auditoria.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct NovoFeedbackTeste {
+    pub pergunta: String,
+    pub resposta_bot: String,
+    /// `None` quando a pessoa só avaliou, sem escrever a resposta certa.
+    pub resposta_corrigida: Option<String>,
+    /// `boa` | `ruim`.
+    pub avaliacao: String,
+    pub confiabilidade: f64,
+    pub comportamento_aplicado: String,
+}
+
+/// Grava a avaliação. Os trechos consultados não têm id no resultado do RAG, então
+/// `documentos_ids` fica vazio; o comportamento aplicado vai em `intents_json`.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, avaliacao = %novo.avaliacao))]
+pub async fn registrar_feedback_teste(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    novo: &NovoFeedbackTeste,
+) -> Result<i32, DbError> {
+    ctx.exigir_qualquer(&["treinamento:write", "tenant:admin"])?;
+    let (id,): (i32,) = sqlx::query_as(
+        r#"INSERT INTO treinamento_query_test_feedback
+             (tenant_id, mensagem_original, resposta_bot, resposta_corrigida,
+              avaliacao, confiabilidade, intents_json)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           RETURNING id"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(&novo.pergunta)
+    .bind(&novo.resposta_bot)
+    .bind(&novo.resposta_corrigida)
+    .bind(&novo.avaliacao)
+    .bind(novo.confiabilidade)
+    .bind(serde_json::json!({ "comportamento_aplicado": novo.comportamento_aplicado }))
+    .fetch_one(&mut **tx)
+    .await?;
+    Ok(id)
+}
