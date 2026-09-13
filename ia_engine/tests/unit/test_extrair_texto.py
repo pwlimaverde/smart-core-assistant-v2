@@ -119,6 +119,8 @@ def test_formato_pelo_mimetype_ou_pela_extensao() -> None:
     assert formato_de("", "Tabela.XLSX") == "xlsx"
     assert formato_de("application/octet-stream", "notas.txt") == "txt"
     assert formato_de("application/msword", "antigo.doc") is None
+    # Tipo conhecido e fora da lista não é salvo pela extensão do nome.
+    assert formato_de("application/msword", "renomeado.txt") is None
 
 
 def test_le_pdf() -> None:

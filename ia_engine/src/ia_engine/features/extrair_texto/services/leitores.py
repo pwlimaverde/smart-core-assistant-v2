@@ -37,6 +37,8 @@ _POR_EXTENSAO = {
     ".csv": "csv",
 }
 
+_MIMETYPES_GENERICOS = {"", "application/octet-stream", "binary/octet-stream"}
+
 MAX_PAGINAS_PADRAO = 300
 MAX_CARACTERES_PADRAO = 500_000
 
@@ -54,6 +56,11 @@ def formato_de(mimetype: str, nome_arquivo: str) -> str | None:
     base = (mimetype or "").split(";")[0].strip().lower()
     if base in _POR_MIMETYPE:
         return _POR_MIMETYPE[base]
+    # A extensão só desempata quando o mimetype não diz nada. Um tipo conhecido
+    # e fora da lista (`application/msword`) é recusado mesmo que o arquivo se
+    # chame `.txt`: senão um .doc renomeado seria lido como texto e viraria lixo.
+    if base not in _MIMETYPES_GENERICOS:
+        return None
     nome = (nome_arquivo or "").lower()
     for extensao, formato in _POR_EXTENSAO.items():
         if nome.endswith(extensao):
