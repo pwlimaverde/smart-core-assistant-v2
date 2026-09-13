@@ -31,6 +31,15 @@ pub trait McpGrantStore: Send + Sync {
     /// `false` quando o grant não existe, é de outro usuário ou já foi revogado.
     async fn revogar(&self, ctx: &RequestContext, grant_id: Uuid) -> Result<bool, DbError>;
 
+    /// B7 — reduz os escopos de um grant do próprio usuário. Ampliar não passa
+    /// por aqui: volta `AmpliaAcesso`.
+    async fn reduzir_escopos(
+        &self,
+        ctx: &RequestContext,
+        grant_id: Uuid,
+        escopos: Vec<String>,
+    ) -> Result<infrastructure_postgres::mcp::grants::AjusteDeEscopos, DbError>;
+
     /// Grava o SHA-256 do segredo do refresh corrente (emissão ou rotação).
     async fn definir_refresh_hash(
         &self,

@@ -56,6 +56,7 @@ void main() {
     registrarFallbacksDoTenant();
     registerFallbackValue(proto.ListMcpGrantsRequest());
     registerFallbackValue(proto.RevokeMcpGrantRequest());
+    registerFallbackValue(proto.AjustarEscoposMcpGrantRequest());
   });
   setUp(() => client = MockAdminClient());
 
@@ -209,6 +210,68 @@ void main() {
       final r = await _usecases(client).list(noParams);
 
       expect((r as Failure).error, isA<IntegracoesIndisponivel>());
+    });
+  });
+
+  group('AjustarEscoposMcpGrant (B7)', () {
+    AjustarEscoposMcpGrantUsecase ajustar() => AjustarEscoposMcpGrantUsecase(
+      repository: AjustarEscoposMcpGrantRepository(
+        datasource: AjustarEscoposMcpGrantDatasource(client: client),
+      ),
+    );
+
+    test('manda o que deve ficar e devolve a janela do servidor', () async {
+      when(() => client.ajustarEscoposMcpGrant(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.AjustarEscoposMcpGrantResponse(
+            scopes: ['atendimentos:read'],
+            janelaMin: 15,
+          ),
+        ),
+      );
+
+      final r = await ajustar()(
+        const AjustarEscoposMcpGrantParameters(
+          grantId: 'g-1',
+          scopes: ['atendimentos:read'],
+        ),
+      );
+
+      expect((r as Success<int, IntegracoesError>).value, 15);
+      final pedido =
+          verify(
+                () => client.ajustarEscoposMcpGrant(captureAny()),
+              ).captured.single
+              as proto.AjustarEscoposMcpGrantRequest;
+      expect(pedido.grantId, 'g-1');
+      expect(pedido.scopes, ['atendimentos:read']);
+    });
+
+    test('ampliar recusado pelo servidor diz para reconectar', () async {
+      when(() => client.ajustarEscoposMcpGrant(any())).thenAnswer(
+        (_) => falhaGrpc(proto.GrpcError.failedPrecondition('ampliar')),
+      );
+
+      final r = await ajustar()(
+        const AjustarEscoposMcpGrantParameters(
+          grantId: 'g-1',
+          scopes: ['tenant:admin'],
+        ),
+      );
+
+      expect((r as Failure).error, isA<AmpliarExigeReconectar>());
+    });
+
+    test('grant sumido continua sendo "já não está conectado"', () async {
+      when(() => client.ajustarEscoposMcpGrant(any())).thenAnswer(
+        (_) => falhaGrpc(proto.GrpcError.invalidArgument('inexistente')),
+      );
+
+      final r = await ajustar()(
+        const AjustarEscoposMcpGrantParameters(grantId: 'g-x', scopes: ['a']),
+      );
+
+      expect((r as Failure).error, isA<ConexaoNaoEncontrada>());
     });
   });
 

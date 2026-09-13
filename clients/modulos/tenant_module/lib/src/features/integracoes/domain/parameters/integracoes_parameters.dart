@@ -13,6 +13,19 @@ final class RevokeMcpGrantParameters extends Parameters {
   const RevokeMcpGrantParameters({required this.grantId});
 }
 
+/// B7 — o que um aplicativo conectado deve **continuar** podendo fazer.
+///
+/// Só reduz: o servidor recusa escopo que o aplicativo ainda não tem.
+final class AjustarEscoposMcpGrantParameters extends Parameters {
+  final String grantId;
+  final List<String> scopes;
+
+  const AjustarEscoposMcpGrantParameters({
+    required this.grantId,
+    required this.scopes,
+  });
+}
+
 /// Recorte da aba "Atividade" (B3).
 ///
 /// Não carrega usuário nem tenant: quem não é admin vê só o que os próprios

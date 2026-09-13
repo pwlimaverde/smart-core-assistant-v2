@@ -98,6 +98,21 @@ impl McpGrantStore for PgMcpGrantStore {
         .await
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, user_id = ctx.user_id, grant_id = %grant_id))]
+    async fn reduzir_escopos(
+        &self,
+        ctx: &RequestContext,
+        grant_id: Uuid,
+        escopos: Vec<String>,
+    ) -> Result<grants::AjusteDeEscopos, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let ajuste = grants::reduzir_escopos(&mut tx, &ctx, grant_id, &escopos).await?;
+            Ok((ajuste, tx))
+        })
+        .await
+    }
+
     // `hash` fica fora do span: é derivado de segredo, e hash não muda isso.
     #[tracing::instrument(skip_all, fields(tenant_id = %tenant_id, grant_id = %grant_id))]
     async fn definir_refresh_hash(

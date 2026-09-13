@@ -734,6 +734,16 @@ table RevokeMcpGrantResponse {
   janela_revogacao_min:int;
 }
 
+table AjustarEscoposMcpGrantRequest {
+  grant_id:string;
+  scopes:[string];
+}
+
+table AjustarEscoposMcpGrantResponse {
+  scopes:[string];
+  janela_min:int;
+}
+
 table ListMyAuditLogRequest {
   origem:string;
   grant_id:string;

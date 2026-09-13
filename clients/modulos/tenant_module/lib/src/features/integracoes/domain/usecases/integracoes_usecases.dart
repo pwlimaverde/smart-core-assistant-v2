@@ -90,6 +90,30 @@ final class RevokeMcpGrantUsecase
   ) => Success(data);
 }
 
+/// B7 — reduz as permissões de um aplicativo conectado sem desconectá-lo. O
+/// sucesso devolve, em minutos, quando o agente passa a sentir a mudança.
+final class AjustarEscoposMcpGrantUsecase
+    extends
+        UsecaseBaseCallData<
+          int,
+          int,
+          AjustarEscoposMcpGrantParameters,
+          IntegracoesError
+        > {
+  const AjustarEscoposMcpGrantUsecase({required super.repository});
+
+  @override
+  ProcessData<int, int, AjustarEscoposMcpGrantParameters, IntegracoesError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  IntegracoesError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('ajustarEscoposMcpGrant', exception, stackTrace);
+    return const IntegracoesInesperado();
+  }
+}
+
 /// A atividade do tenant (B3). Passthrough: a ordem (mais recente primeiro) já
 /// vem do servidor, que é quem pagina.
 final class ListarAtividadeUsecase

@@ -366,6 +366,13 @@ final class TenantModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<AjustarEscoposMcpGrantUsecase>(
+      () => AjustarEscoposMcpGrantUsecase(
+        repository: AjustarEscoposMcpGrantRepository(
+          datasource: AjustarEscoposMcpGrantDatasource(client: _adminClient()),
+        ),
+      ),
+    );
     i.lazySingleton<RevokeMcpGrantUsecase>(
       () => RevokeMcpGrantUsecase(
         repository: RevokeMcpGrantRepository(

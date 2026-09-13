@@ -459,6 +459,15 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$revokeMcpGrant, request, options: options);
   }
 
+  $grpc.ResponseFuture<$0.AjustarEscoposMcpGrantResponse>
+      ajustarEscoposMcpGrant(
+    $0.AjustarEscoposMcpGrantRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$ajustarEscoposMcpGrant, request,
+        options: options);
+  }
+
   $grpc.ResponseFuture<$0.ListMyAuditLogResponse> listMyAuditLog(
     $0.ListMyAuditLogRequest request, {
     $grpc.CallOptions? options,
@@ -1127,6 +1136,11 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/RevokeMcpGrant',
           ($0.RevokeMcpGrantRequest value) => value.writeToBuffer(),
           $0.RevokeMcpGrantResponse.fromBuffer);
+  static final _$ajustarEscoposMcpGrant = $grpc.ClientMethod<
+          $0.AjustarEscoposMcpGrantRequest, $0.AjustarEscoposMcpGrantResponse>(
+      '/smartcore.contracts.queries.AdminService/AjustarEscoposMcpGrant',
+      ($0.AjustarEscoposMcpGrantRequest value) => value.writeToBuffer(),
+      $0.AjustarEscoposMcpGrantResponse.fromBuffer);
   static final _$listMyAuditLog =
       $grpc.ClientMethod<$0.ListMyAuditLogRequest, $0.ListMyAuditLogResponse>(
           '/smartcore.contracts.queries.AdminService/ListMyAuditLog',
@@ -1881,6 +1895,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.RevokeMcpGrantRequest.fromBuffer(value),
         ($0.RevokeMcpGrantResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.AjustarEscoposMcpGrantRequest,
+            $0.AjustarEscoposMcpGrantResponse>(
+        'AjustarEscoposMcpGrant',
+        ajustarEscoposMcpGrant_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.AjustarEscoposMcpGrantRequest.fromBuffer(value),
+        ($0.AjustarEscoposMcpGrantResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.ListMyAuditLogRequest,
             $0.ListMyAuditLogResponse>(
         'ListMyAuditLog',
@@ -2819,6 +2842,15 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.RevokeMcpGrantResponse> revokeMcpGrant(
       $grpc.ServiceCall call, $0.RevokeMcpGrantRequest request);
+
+  $async.Future<$0.AjustarEscoposMcpGrantResponse> ajustarEscoposMcpGrant_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.AjustarEscoposMcpGrantRequest> $request) async {
+    return ajustarEscoposMcpGrant($call, await $request);
+  }
+
+  $async.Future<$0.AjustarEscoposMcpGrantResponse> ajustarEscoposMcpGrant(
+      $grpc.ServiceCall call, $0.AjustarEscoposMcpGrantRequest request);
 
   $async.Future<$0.ListMyAuditLogResponse> listMyAuditLog_Pre(
       $grpc.ServiceCall $call,

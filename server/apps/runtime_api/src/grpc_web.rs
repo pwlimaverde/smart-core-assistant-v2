@@ -21,6 +21,8 @@ use contracts::grpc::queries::{
     AdminSetUserActiveRequest,
     AdminSetUserActiveResponse,
     AdminUserItem,
+    AjustarEscoposMcpGrantRequest,
+    AjustarEscoposMcpGrantResponse,
     AlternarEtiquetaRequest,
     ApiKeyEntry as ProtoApiKeyEntry,
     AtendimentoEvent,
@@ -7440,6 +7442,65 @@ impl AdminService for AdminFacade {
         }
     }
 
+    /// B7 (doc 35-agentes F4) — reduz as permissões de um aplicativo conectado
+    /// sem desconectá-lo.
+    ///
+    /// Como a revogação, só pede sessão: o grant é do próprio usuário, e o
+    /// `data_postgres` filtra por ele. A resposta devolve em quantos minutos o
+    /// agente sente a mudança — a do access token em curso, a mesma janela da
+    /// revogação.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "AjustarEscoposMcpGrant", traceparent)
+    )]
+    async fn ajustar_escopos_mcp_grant(
+        &self,
+        req: Request<AjustarEscoposMcpGrantRequest>,
+    ) -> Result<Response<AjustarEscoposMcpGrantResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent,
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "AjustarEscoposMcpGrant".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({
+                "grant_id": inner.grant_id,
+                "scopes": inner.scopes,
+            }))
+            .unwrap_or_default(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        let resp = self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço interno: {e}")))?;
+        if resp.kind == MessageKind::Error as i32 {
+            return Err(status_do_erro_interno(resp.error));
+        }
+        let corpo: serde_json::Value =
+            serde_json::from_slice(&resp.payload).unwrap_or_else(|_| serde_json::json!({}));
+
+        Ok(Response::new(AjustarEscoposMcpGrantResponse {
+            scopes: json_strings(corpo.get("scopes")),
+            janela_min: janela_revogacao_min(),
+        }))
+    }
+
     #[tracing::instrument(
         skip_all,
         fields(service = "runtime_api", rpc = "ListTenantUsers", traceparent)
@@ -8760,6 +8821,7 @@ mod tests {
             "DefinirRespostaBotInstancia" => facade.definir_resposta_bot_instancia(Request::new(DefinirRespostaBotInstanciaRequest { id: 1, habilitado: false })).await,
             "DefinirBotDaConversa" => facade.definir_bot_da_conversa(Request::new(DefinirBotDaConversaRequest { atendimento_id: 1, habilitado: true })).await,
             "MarcarAtendimentoLido" => facade.marcar_atendimento_lido(Request::new(MarcarAtendimentoLidoRequest { atendimento_id: 1 })).await,
+            "AjustarEscoposMcpGrant" => facade.ajustar_escopos_mcp_grant(Request::new(AjustarEscoposMcpGrantRequest { grant_id: String::new(), scopes: vec![] })).await,
         }
     }
 

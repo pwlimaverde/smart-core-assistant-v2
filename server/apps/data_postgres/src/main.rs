@@ -1520,6 +1520,7 @@ fn registrar_rotas_mcp(server: Server, state: AppState) -> Server {
     let s_registrar = state.clone();
     let s_listar = state.clone();
     let s_revogar = state.clone();
+    let s_ajustar = state.clone();
     let s_atividade = state.clone();
     let s_hash = state.clone();
     let s_buscar = state.clone();
@@ -1558,6 +1559,17 @@ fn registrar_rotas_mcp(server: Server, state: AppState) -> Server {
             let state = s_revogar.clone();
             Box::pin(async move {
                 mcp_grants::handler_revoke_mcp_grant(
+                    state.mcp_grants.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("AjustarEscoposMcpGrant", move |env| {
+            let state = s_ajustar.clone();
+            Box::pin(async move {
+                mcp_grants::handler_ajustar_escopos_mcp_grant(
                     state.mcp_grants.as_ref(),
                     state.audit.as_ref(),
                     env,

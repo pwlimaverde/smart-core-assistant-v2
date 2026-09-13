@@ -25,6 +25,7 @@ final class IntegracoesRoute extends GetItModule {
       () => IntegracoesController(
         listUsecase: inject<ListMcpGrantsUsecase>(),
         revokeUsecase: inject<RevokeMcpGrantUsecase>(),
+        ajustarUsecase: inject<AjustarEscoposMcpGrantUsecase>(),
       ),
     );
     // B3 — aba "Atividade".

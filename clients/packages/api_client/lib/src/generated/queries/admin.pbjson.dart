@@ -2425,6 +2425,36 @@ final $typed_data.Uint8List revokeMcpGrantResponseDescriptor =
         'ChZSZXZva2VNY3BHcmFudFJlc3BvbnNlEhgKB3N1Y2Nlc3MYASABKAhSB3N1Y2Nlc3MSMAoUam'
         'FuZWxhX3Jldm9nYWNhb19taW4YAiABKAVSEmphbmVsYVJldm9nYWNhb01pbg==');
 
+@$core.Deprecated('Use ajustarEscoposMcpGrantRequestDescriptor instead')
+const AjustarEscoposMcpGrantRequest$json = {
+  '1': 'AjustarEscoposMcpGrantRequest',
+  '2': [
+    {'1': 'grant_id', '3': 1, '4': 1, '5': 9, '10': 'grantId'},
+    {'1': 'scopes', '3': 2, '4': 3, '5': 9, '10': 'scopes'},
+  ],
+};
+
+/// Descriptor for `AjustarEscoposMcpGrantRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List ajustarEscoposMcpGrantRequestDescriptor =
+    $convert.base64Decode(
+        'Ch1BanVzdGFyRXNjb3Bvc01jcEdyYW50UmVxdWVzdBIZCghncmFudF9pZBgBIAEoCVIHZ3Jhbn'
+        'RJZBIWCgZzY29wZXMYAiADKAlSBnNjb3Blcw==');
+
+@$core.Deprecated('Use ajustarEscoposMcpGrantResponseDescriptor instead')
+const AjustarEscoposMcpGrantResponse$json = {
+  '1': 'AjustarEscoposMcpGrantResponse',
+  '2': [
+    {'1': 'scopes', '3': 1, '4': 3, '5': 9, '10': 'scopes'},
+    {'1': 'janela_min', '3': 2, '4': 1, '5': 5, '10': 'janelaMin'},
+  ],
+};
+
+/// Descriptor for `AjustarEscoposMcpGrantResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List ajustarEscoposMcpGrantResponseDescriptor =
+    $convert.base64Decode(
+        'Ch5BanVzdGFyRXNjb3Bvc01jcEdyYW50UmVzcG9uc2USFgoGc2NvcGVzGAEgAygJUgZzY29wZX'
+        'MSHQoKamFuZWxhX21pbhgCIAEoBVIJamFuZWxhTWlu');
+
 @$core.Deprecated('Use listMyAuditLogRequestDescriptor instead')
 const ListMyAuditLogRequest$json = {
   '1': 'ListMyAuditLogRequest',

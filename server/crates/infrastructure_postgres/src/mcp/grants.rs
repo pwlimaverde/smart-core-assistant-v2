@@ -355,3 +355,103 @@ mod tests {
         assert!(!json.contains("hash"));
     }
 }
+
+/// B7 (doc 35-agentes F4) — resultado de ajustar as permissões de um grant.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AjusteDeEscopos {
+    /// Escopos gravados, na ordem em que o grant já os tinha.
+    Ajustado(Vec<String>),
+    /// Grant inexistente, de outra pessoa ou já revogado — indistinguíveis de
+    /// propósito, como em [`revogar`].
+    NaoEncontrado,
+    /// O pedido inclui permissão que o grant não tem.
+    AmpliaAcesso,
+}
+
+/// A regra do ajuste: **só reduz**. `None` quando o pedido inclui algo que o
+/// grant não tem — ampliar acesso tem de passar pela tela de consentimento, onde
+/// quem aprova vê o que está dando.
+pub fn escopos_reduzidos(atuais: &[String], pedidos: &[String]) -> Option<Vec<String>> {
+    if pedidos.iter().any(|p| !atuais.contains(p)) {
+        return None;
+    }
+    Some(
+        atuais
+            .iter()
+            .filter(|a| pedidos.contains(a))
+            .cloned()
+            .collect(),
+    )
+}
+
+/// Reduz os escopos de um grant do próprio usuário, sem tocar no refresh token.
+///
+/// O agente continua conectado e sente a mudança na renovação seguinte: o
+/// `control_plane` reintersecta os escopos do grant a cada refresh.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, user_id = ctx.user_id, grant_id = %grant_id))]
+pub async fn reduzir_escopos(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    grant_id: Uuid,
+    pedidos: &[String],
+) -> Result<AjusteDeEscopos, DbError> {
+    let row = sqlx::query(
+        "SELECT scopes
+           FROM mcp_oauth_grant
+          WHERE id = $1 AND tenant_id = $2 AND user_id = $3 AND revoked_at IS NULL
+                AND refresh_token_hash IS NOT NULL
+          FOR UPDATE",
+    )
+    .bind(grant_id)
+    .bind(ctx.tenant_id)
+    .bind(ctx.user_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some(row) = row else {
+        return Ok(AjusteDeEscopos::NaoEncontrado);
+    };
+    let atuais: serde_json::Value = row.try_get("scopes")?;
+    let Some(novos) = escopos_reduzidos(&escopos_do_json(&atuais), pedidos) else {
+        return Ok(AjusteDeEscopos::AmpliaAcesso);
+    };
+
+    sqlx::query("UPDATE mcp_oauth_grant SET scopes = $1 WHERE id = $2 AND tenant_id = $3")
+        .bind(serde_json::json!(novos))
+        .bind(grant_id)
+        .bind(ctx.tenant_id)
+        .execute(&mut **tx)
+        .await?;
+    Ok(AjusteDeEscopos::Ajustado(novos))
+}
+
+#[cfg(test)]
+mod tests_ajuste_de_escopos {
+    use super::escopos_reduzidos;
+
+    fn v(itens: &[&str]) -> Vec<String> {
+        itens.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn reduz_mantendo_a_ordem_do_grant() {
+        let atuais = v(&["atendimentos:read", "atendimentos:write", "clientes:read"]);
+        let pedidos = v(&["clientes:read", "atendimentos:read"]);
+        assert_eq!(
+            escopos_reduzidos(&atuais, &pedidos),
+            Some(v(&["atendimentos:read", "clientes:read"]))
+        );
+    }
+
+    #[test]
+    fn pedido_com_permissao_nova_nao_passa() {
+        let atuais = v(&["atendimentos:read"]);
+        assert_eq!(
+            escopos_reduzidos(&atuais, &v(&["atendimentos:write"])),
+            None
+        );
+        assert_eq!(
+            escopos_reduzidos(&atuais, &v(&["atendimentos:read", "tenant:admin"])),
+            None
+        );
+    }
+}

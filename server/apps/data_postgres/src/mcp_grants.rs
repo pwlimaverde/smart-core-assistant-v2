@@ -2,7 +2,7 @@
 //!
 //! Seis rotas, dois públicos distintos:
 //!
-//! * `ListMcpGrants` / `RevokeMcpGrant` vêm da **borda** (`runtime_api`), a
+//! * `ListMcpGrants` / `RevokeMcpGrant` / `AjustarEscoposMcpGrant` (B7) vêm da **borda** (`runtime_api`), a
 //!   pedido do usuário na tela "Aplicativos conectados";
 //! * `RegisterMcpGrant`, `SetMcpGrantRefreshHash`, `GetMcpGrantComSegredo` e
 //!   `RevokeMcpGrantPorReuso` vêm do **authorization server** (`control_plane`),
@@ -19,6 +19,7 @@ use uuid::Uuid;
 
 use crate::ports;
 use crate::{contexto_do_envelope, erro, ok_reply};
+use infrastructure_postgres::mcp::grants::AjusteDeEscopos;
 
 fn payload_de(env: &Envelope) -> serde_json::Value {
     serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}))
@@ -208,6 +209,90 @@ pub async fn handler_revoke_mcp_grant(
         Ok(false) => erro(
             error_core::AppError::Validation(
                 "consentimento inexistente ou já revogado".to_string(),
+            ),
+            &env,
+        ),
+        Err(err) => erro(err.into(), &env),
+    }
+}
+
+/// B7 (doc 35-agentes F4) — reduz as permissões de um aplicativo conectado sem
+/// desconectá-lo.
+///
+/// **Só reduz.** Reconsentir pelo `/oauth/authorize` a partir do painel não
+/// serve: o código novo iria para o `redirect_uri` do cliente sem o `state` e o
+/// PKCE que ele espera — ninguém o trocaria por token — e `registrar_consentimento`
+/// já teria revogado o grant antigo, desconectando o agente, que é justamente o
+/// que este ajuste existe para evitar. Ampliar continua exigindo reconectar e
+/// aprovar na tela de consentimento; aqui é recusado.
+///
+/// Vale na renovação seguinte do token: o `control_plane` reintersecta os escopos
+/// do grant a cada refresh. Auditado — é mudança de permissão.
+pub async fn handler_ajustar_escopos_mcp_grant(
+    store: &dyn ports::McpGrantStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload = payload_de(&env);
+    let ctx = contexto_do_envelope(&env);
+
+    let Some(grant_id) = uuid_do_payload(&payload, "grant_id") else {
+        return erro(
+            error_core::AppError::Validation("grant_id inválido ou ausente".to_string()),
+            &env,
+        );
+    };
+    let escopos: Vec<String> = payload
+        .get("scopes")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    if escopos.is_empty() {
+        return erro(
+            error_core::AppError::Validation(
+                "mantenha ao menos uma permissão; para tirar todas, desconecte o aplicativo"
+                    .to_string(),
+            ),
+            &env,
+        );
+    }
+
+    match store.reduzir_escopos(&ctx, grant_id, escopos).await {
+        Ok(AjusteDeEscopos::Ajustado(novos)) => {
+            audit
+                .publish_security(
+                    &env.traceparent,
+                    Some(ctx.tenant_id),
+                    "INFO",
+                    "oauth.escopos_reduzidos",
+                    "Permissões de aplicativo conectado reduzidas pelo usuário".to_string(),
+                    serde_json::json!({
+                        "grant_id": grant_id.to_string(),
+                        "scopes": novos,
+                        "source": "mcp",
+                    }),
+                    Some(ctx.user_id),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "AjustarEscoposMcpGrantReply",
+                serde_json::json!({ "scopes": novos }),
+            )
+        }
+        Ok(AjusteDeEscopos::NaoEncontrado) => erro(
+            error_core::AppError::Validation(
+                "consentimento inexistente ou já revogado".to_string(),
+            ),
+            &env,
+        ),
+        Ok(AjusteDeEscopos::AmpliaAcesso) => erro(
+            error_core::AppError::Conflict(
+                "ampliar permissões exige reconectar o aplicativo e aprovar de novo".to_string(),
             ),
             &env,
         ),
@@ -449,6 +534,64 @@ mod tests {
         let msg = resp.error.unwrap().message;
         assert!(msg.contains("inexistente ou já revogado"));
         assert!(!msg.contains("outro"));
+    }
+
+    #[tokio::test]
+    async fn ajustar_escopos_reduz_e_devolve_o_que_ficou() {
+        let mut store = MockMcpGrantStore::new();
+        store
+            .expect_reduzir_escopos()
+            .times(1)
+            .withf(|_, _, escopos| escopos == &vec!["atendimentos:read".to_string()])
+            .returning(|_, _, _| {
+                Ok(AjusteDeEscopos::Ajustado(vec![
+                    "atendimentos:read".to_string()
+                ]))
+            });
+        let env = envelope(
+            "AjustarEscoposMcpGrant",
+            serde_json::json!({
+                "grant_id": Uuid::now_v7().to_string(),
+                "scopes": ["atendimentos:read"],
+            }),
+            7,
+        );
+
+        let resp = handler_ajustar_escopos_mcp_grant(&store, &AuditNulo, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let corpo: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(corpo["scopes"], serde_json::json!(["atendimentos:read"]));
+    }
+
+    #[tokio::test]
+    async fn ajustar_escopos_recusa_ampliar_e_lista_vazia() {
+        let mut store = MockMcpGrantStore::new();
+        store
+            .expect_reduzir_escopos()
+            .times(1)
+            .returning(|_, _, _| Ok(AjusteDeEscopos::AmpliaAcesso));
+
+        let amplia = envelope(
+            "AjustarEscoposMcpGrant",
+            serde_json::json!({
+                "grant_id": Uuid::now_v7().to_string(),
+                "scopes": ["clientes:write"],
+            }),
+            7,
+        );
+        let resp = handler_ajustar_escopos_mcp_grant(&store, &AuditNulo, amplia).await;
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        assert!(resp.error.unwrap().message.contains("reconectar"));
+
+        // Lista vazia nem chega ao banco: tirar tudo é desconectar.
+        let vazio = envelope(
+            "AjustarEscoposMcpGrant",
+            serde_json::json!({ "grant_id": Uuid::now_v7().to_string(), "scopes": [] }),
+            7,
+        );
+        let resp = handler_ajustar_escopos_mcp_grant(&store, &AuditNulo, vazio).await;
+        assert_eq!(resp.kind, MessageKind::Error as i32);
     }
 
     #[tokio::test]

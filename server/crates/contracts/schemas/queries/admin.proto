@@ -821,6 +821,19 @@ message RevokeMcpGrantResponse {
   int32 janela_revogacao_min = 2;
 }
 
+// B7 (doc 35-agentes F4) — reduz as permissões de um aplicativo conectado sem
+// desconectá-lo. Só reduz: ampliar exige reconectar e aprovar no consentimento.
+message AjustarEscoposMcpGrantRequest {
+  string grant_id = 1;
+  repeated string scopes = 2; // o que deve FICAR; subconjunto do que o grant tem
+}
+
+message AjustarEscoposMcpGrantResponse {
+  repeated string scopes = 1;
+  // Minutos até o agente sentir a mudança: vale na renovação seguinte do token.
+  int32 janela_min = 2;
+}
+
 // B3 (doc 35-agentes F1) — "o que o agente fez": a trilha do PRÓPRIO tenant.
 // Distinta de QueryAuditLog (superusuário, cross-tenant): aqui o tenant vem da
 // sessão, e quem não é tenant:admin só vê o que os próprios agentes fizeram.
@@ -1142,6 +1155,7 @@ service AdminService {
   // `tenant:admin` vê o do colega. Por isso não há variante administrativa.
   rpc ListMcpGrants(ListMcpGrantsRequest) returns (ListMcpGrantsResponse);
   rpc RevokeMcpGrant(RevokeMcpGrantRequest) returns (RevokeMcpGrantResponse);
+  rpc AjustarEscoposMcpGrant(AjustarEscoposMcpGrantRequest) returns (AjustarEscoposMcpGrantResponse);
   rpc ListMyAuditLog(ListMyAuditLogRequest) returns (ListMyAuditLogResponse);
 
   // Configuração inicial guiada (passos 5 a 8)

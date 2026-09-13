@@ -56,6 +56,27 @@ final class ListMcpGrantsRepository
   ) => _mapIntegracoes('listMcpGrants', exception, stackTrace);
 }
 
+final class AjustarEscoposMcpGrantRepository
+    extends
+        RepositoryBase<
+          int,
+          AjustarEscoposMcpGrantParameters,
+          IntegracoesError
+        > {
+  const AjustarEscoposMcpGrantRepository({required super.datasource});
+
+  /// `failedPrecondition` aqui é o servidor recusando **ampliar** — e não o
+  /// grant sumido, que chega como `invalidArgument`.
+  @override
+  IntegracoesError mapError(
+    Object exception,
+    StackTrace stackTrace,
+    AjustarEscoposMcpGrantParameters parameters,
+  ) => classificarFalhaGrpc(exception) == GrpcFailureKind.failedPrecondition
+      ? const AmpliarExigeReconectar()
+      : _mapIntegracoes('ajustarEscoposMcpGrant', exception, stackTrace);
+}
+
 final class RevokeMcpGrantRepository
     extends RepositoryBase<int, RevokeMcpGrantParameters, IntegracoesError> {
   const RevokeMcpGrantRepository({required super.datasource});

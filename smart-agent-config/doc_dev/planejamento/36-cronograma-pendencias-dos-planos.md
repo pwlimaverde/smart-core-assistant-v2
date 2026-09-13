@@ -26,7 +26,7 @@
 | B4 | Limiar de confiança com veto, por tenant | regras D1 | Hoje o C1 usa 0,8 fixo; um número por tenant para "quando confio na IA" | ✅ CI verde (`79bdecf`) |
 | B5 | Notificar o atendente da atribuição | regras D6 | Rodízio (D2) atribui em silêncio | ✅ CI verde (`8757195`) |
 | B6 | Marcar como lida e contador de não lidas | N9 E4 | Sem isso o quadro não diz o que falta responder | ⏳ no CI |
-| B7 | Ajustar permissões de um agente sem desconectar | doc 35-agentes F4 | Hoje a única saída é revogar e reconectar | ⬜ |
+| B7 | Ajustar permissões de um agente sem desconectar | doc 35-agentes F4 | Hoje a única saída é revogar e reconectar | ⏳ no CI |
 | B8 | Descoberta dos aplicativos conectados | doc 35-agentes F5 | Recurso que precisa ser explicado por fora não foi entregue | ⬜ |
 | B9 | IA analítica: assunto automático, feedback do teste, treinamento por arquivo | N10 E2, E6, E5 | Maior e mais caro; depende de nada acima | ⬜ |
 | B10 | Clientes PJ e vínculo contato ↔ cliente | N11 E5 / doc 34 C4 | Entidade nova com tela própria | ⬜ |
@@ -257,6 +257,49 @@ número por conversa e o gatilho na tela.
 - Testes: não lidas na listagem; espelho só quando há o que espelhar; payload
   inválido; controller marca uma vez e ignora conversa só de atendente/bot.
 
+**CI:** a primeira rodada (`2453141`) quebrou em testes de tela do quadro: a
+conversa pedia o usecase de leitura ao GetIt, e esses testes não o registram.
+O usecase já era opcional no controller; a tela passou a pedi-lo só quando
+registrado.
+
 **Fica de fora:** os ticks de leitura das mensagens **enviadas** (N9 E7) e a
 presença "digitando" (E5) — são os próximos passos da mesma fase, não deste
 bloco.
+
+### B7 — Ajustar permissões de um agente sem desconectar (doc 35-agentes F4)
+
+**O plano estava errado num ponto, e o bloco corrige:** ele dizia que o backend
+não precisava de nada — bastava um link do painel para `/oauth/authorize` com o
+`client_id` e o `redirect_uri` do grant. Não funciona. O código novo iria para o
+`redirect_uri` do aplicativo de IA sem o `state` e o PKCE que ele espera, então
+ninguém o trocaria por token; e `registrar_consentimento` já teria revogado o
+grant antigo. Resultado: o agente **desconectado** — o defeito que o F4 existe
+para eliminar.
+
+**O que foi feito no lugar:** o grant é ajustado **no próprio registro**, sem
+tocar no refresh token. O `control_plane` já reintersecta os escopos do grant a
+cada renovação (é o que faz rebaixar alguém no painel encolher o agente), então a
+redução vale na renovação seguinte — até 15 minutos, o mesmo número da
+revogação, vindo do servidor.
+
+**Só reduz.** Pedido com permissão que o grant não tem é recusado (`Conflict`), e
+a tela nem oferece a caixa: dar mais acesso continua exigindo reconectar e
+aprovar na tela de consentimento, onde quem aprova vê o que concede.
+
+**Entregue:**
+
+- `infrastructure_postgres`: regra pura `escopos_reduzidos` (mantém a ordem do
+  grant, recusa ampliar) e `reduzir_escopos` com `FOR UPDATE`, filtrando pelo
+  próprio usuário como a revogação.
+- `data_postgres`: rota `AjustarEscoposMcpGrant`; lista vazia recusada (tirar
+  tudo é desconectar); auditada como `oauth.escopos_reduzidos`.
+- `runtime_api` e proto: `AjustarEscoposMcpGrant` devolve os escopos que ficaram
+  e a janela em minutos.
+- Flutter: **Ajustar permissões** no cartão do aplicativo (só com mais de uma
+  permissão), diálogo com as que ele tem hoje, aviso honesto do prazo; recusa de
+  ampliar vira "desconecte e conecte de novo".
+- Testes: regra pura; handler reduz, recusa ampliar e lista vazia; cadeia do
+  Flutter com pedido, janela e os dois erros.
+
+**DoD do F4:** reduzir sem tocar no cliente de IA ✅; a tela diz o prazo real ✅;
+ampliar passa pelo consentimento, nunca em silêncio ✅.

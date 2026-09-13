@@ -55,6 +55,26 @@ final class RevokeMcpGrantDatasource
   }
 }
 
+/// B7 — reduz as permissões e devolve em quantos minutos o agente sente a
+/// mudança.
+final class AjustarEscoposMcpGrantDatasource
+    implements Datasource<int, AjustarEscoposMcpGrantParameters> {
+  final proto.AdminServiceClient _client;
+
+  const AjustarEscoposMcpGrantDatasource({required this._client});
+
+  @override
+  Future<int> call(AjustarEscoposMcpGrantParameters parameters) async {
+    final resp = await _client.ajustarEscoposMcpGrant(
+      proto.AjustarEscoposMcpGrantRequest(
+        grantId: parameters.grantId,
+        scopes: parameters.scopes,
+      ),
+    );
+    return resp.janelaMin;
+  }
+}
+
 /// A atividade do tenant (B3), já no formato do domínio.
 final class ListarAtividadeDatasource
     implements Datasource<List<Atividade>, ListarAtividadeParameters> {

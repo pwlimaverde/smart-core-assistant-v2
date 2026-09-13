@@ -15,10 +15,16 @@ final class IntegracoesController extends BaseController<List<McpGrant>> {
   final ListMcpGrantsUsecase _listUsecase;
   final RevokeMcpGrantUsecase _revokeUsecase;
 
+  /// B7 — opcional: sem ele a tela só não oferece o ajuste.
+  final AjustarEscoposMcpGrantUsecase? _ajustarUsecase;
+
   IntegracoesController({
     required this._listUsecase,
     required this._revokeUsecase,
+    this._ajustarUsecase,
   });
+
+  bool get podeAjustar => _ajustarUsecase != null;
 
   Future<void> fetchGrants() => execute(() => _listUsecase(noParams));
 
@@ -30,6 +36,21 @@ final class IntegracoesController extends BaseController<List<McpGrant>> {
   ) async {
     final res = await _revokeUsecase(
       RevokeMcpGrantParameters(grantId: grantId),
+    );
+    if (res is Success) await fetchGrants();
+    return res;
+  }
+
+  /// B7 — deixa o aplicativo só com [scopes]. No sucesso devolve em quantos
+  /// minutos o agente sente a mudança, e recarrega a lista.
+  Future<ReturnSuccessOrError<int, IntegracoesError>> ajustarEscopos(
+    String grantId,
+    List<String> scopes,
+  ) async {
+    final usecase = _ajustarUsecase;
+    if (usecase == null) return const Failure(IntegracoesInesperado());
+    final res = await usecase(
+      AjustarEscoposMcpGrantParameters(grantId: grantId, scopes: scopes),
     );
     if (res is Success) await fetchGrants();
     return res;

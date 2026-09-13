@@ -9626,6 +9626,137 @@ class RevokeMcpGrantResponse extends $pb.GeneratedMessage {
   void clearJanelaRevogacaoMin() => $_clearField(2);
 }
 
+/// B7 (doc 35-agentes F4) — reduz as permissões de um aplicativo conectado sem
+/// desconectá-lo. Só reduz: ampliar exige reconectar e aprovar no consentimento.
+class AjustarEscoposMcpGrantRequest extends $pb.GeneratedMessage {
+  factory AjustarEscoposMcpGrantRequest({
+    $core.String? grantId,
+    $core.Iterable<$core.String>? scopes,
+  }) {
+    final result = create();
+    if (grantId != null) result.grantId = grantId;
+    if (scopes != null) result.scopes.addAll(scopes);
+    return result;
+  }
+
+  AjustarEscoposMcpGrantRequest._();
+
+  factory AjustarEscoposMcpGrantRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory AjustarEscoposMcpGrantRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'AjustarEscoposMcpGrantRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'grantId')
+    ..pPS(2, _omitFieldNames ? '' : 'scopes')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AjustarEscoposMcpGrantRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AjustarEscoposMcpGrantRequest copyWith(
+          void Function(AjustarEscoposMcpGrantRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as AjustarEscoposMcpGrantRequest))
+          as AjustarEscoposMcpGrantRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static AjustarEscoposMcpGrantRequest create() =>
+      AjustarEscoposMcpGrantRequest._();
+  @$core.override
+  AjustarEscoposMcpGrantRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static AjustarEscoposMcpGrantRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<AjustarEscoposMcpGrantRequest>(create);
+  static AjustarEscoposMcpGrantRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get grantId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set grantId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasGrantId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearGrantId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $pb.PbList<$core.String> get scopes => $_getList(1);
+}
+
+class AjustarEscoposMcpGrantResponse extends $pb.GeneratedMessage {
+  factory AjustarEscoposMcpGrantResponse({
+    $core.Iterable<$core.String>? scopes,
+    $core.int? janelaMin,
+  }) {
+    final result = create();
+    if (scopes != null) result.scopes.addAll(scopes);
+    if (janelaMin != null) result.janelaMin = janelaMin;
+    return result;
+  }
+
+  AjustarEscoposMcpGrantResponse._();
+
+  factory AjustarEscoposMcpGrantResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory AjustarEscoposMcpGrantResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'AjustarEscoposMcpGrantResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPS(1, _omitFieldNames ? '' : 'scopes')
+    ..aI(2, _omitFieldNames ? '' : 'janelaMin')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AjustarEscoposMcpGrantResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AjustarEscoposMcpGrantResponse copyWith(
+          void Function(AjustarEscoposMcpGrantResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as AjustarEscoposMcpGrantResponse))
+          as AjustarEscoposMcpGrantResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static AjustarEscoposMcpGrantResponse create() =>
+      AjustarEscoposMcpGrantResponse._();
+  @$core.override
+  AjustarEscoposMcpGrantResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static AjustarEscoposMcpGrantResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<AjustarEscoposMcpGrantResponse>(create);
+  static AjustarEscoposMcpGrantResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<$core.String> get scopes => $_getList(0);
+
+  /// Minutos até o agente sentir a mudança: vale na renovação seguinte do token.
+  @$pb.TagNumber(2)
+  $core.int get janelaMin => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set janelaMin($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasJanelaMin() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearJanelaMin() => $_clearField(2);
+}
+
 /// B3 (doc 35-agentes F1) — "o que o agente fez": a trilha do PRÓPRIO tenant.
 /// Distinta de QueryAuditLog (superusuário, cross-tenant): aqui o tenant vem da
 /// sessão, e quem não é tenant:admin só vê o que os próprios agentes fizeram.

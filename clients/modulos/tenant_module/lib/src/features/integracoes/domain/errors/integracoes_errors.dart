@@ -36,6 +36,17 @@ final class ConexaoNaoEncontrada extends IntegracoesError {
     : super('Este aplicativo já não está conectado.');
 }
 
+/// B7 — o ajuste pedia permissão que o aplicativo não tem.
+///
+/// Dar mais acesso nunca acontece em silêncio: exige reconectar e aprovar na
+/// tela de consentimento, onde quem aprova vê o que está concedendo.
+final class AmpliarExigeReconectar extends IntegracoesError {
+  const AmpliarExigeReconectar()
+    : super(
+        'Para dar mais permissões, desconecte e conecte o aplicativo de novo.',
+      );
+}
+
 final class IntegracoesIndisponivel extends IntegracoesError
     with NetworkFailure {
   const IntegracoesIndisponivel()

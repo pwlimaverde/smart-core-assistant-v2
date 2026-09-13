@@ -361,6 +361,17 @@ class _IntegracoesPageState extends State<IntegracoesPage> {
                 )
                 .toList(growable: false),
           ),
+          // B7: com uma permissão só, reduzir é desconectar — o botão de
+          // cima já faz isso.
+          if (_controller.podeAjustar && grant.scopes.length > 1)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                icon: const Icon(Icons.tune, size: 18),
+                label: const Text('Ajustar permissões'),
+                onPressed: () => _ajustarPermissoes(grant),
+              ),
+            ),
           const SizedBox(height: 8),
           Text(
             grant.lastUsedAt == null
@@ -379,6 +390,40 @@ class _IntegracoesPageState extends State<IntegracoesPage> {
   static String _data(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/'
       '${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  /// B7 — reduz as permissões sem desconectar.
+  ///
+  /// A lista só traz o que o aplicativo **já tem**: dar mais acesso não passa
+  /// por aqui, e a tela diz o caminho em vez de oferecer uma caixa que o
+  /// servidor recusaria.
+  Future<void> _ajustarPermissoes(McpGrant grant) async {
+    final escolhidos = await showDialog<List<String>>(
+      context: context,
+      builder: (dialogContext) => _DialogoDePermissoes(grant: grant),
+    );
+    if (escolhidos == null || !mounted) return;
+
+    final resultado = await _controller.ajustarEscopos(grant.id, escolhidos);
+    if (!mounted) return;
+
+    switch (resultado) {
+      case Success(:final value):
+        // Honestidade sobre o prazo: o grant muda agora, mas o agente só
+        // sente na renovação do acesso dele.
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Permissões ajustadas. O aplicativo passa a respeitar a mudança '
+              'na próxima renovação do acesso, em até $value minutos.',
+            ),
+          ),
+        );
+      case Failure(:final error):
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(ErrorMessageMapper.map(error))));
+    }
+  }
 
   Future<void> _confirmarDesconexao(
     BuildContext context,
@@ -442,5 +487,78 @@ class _IntegracoesPageState extends State<IntegracoesPage> {
           this.context,
         ).showSnackBar(SnackBar(content: Text(ErrorMessageMapper.map(error))));
     }
+  }
+}
+
+/// B7 — as permissões que o aplicativo tem hoje, para desmarcar o que não deve
+/// mais existir. Devolve a lista que deve **ficar**, ou `null` se cancelar.
+class _DialogoDePermissoes extends StatefulWidget {
+  final McpGrant grant;
+
+  const _DialogoDePermissoes({required this.grant});
+
+  @override
+  State<_DialogoDePermissoes> createState() => _DialogoDePermissoesState();
+}
+
+class _DialogoDePermissoesState extends State<_DialogoDePermissoes> {
+  late final Set<String> _marcados = {...widget.grant.scopes};
+
+  @override
+  Widget build(BuildContext context) {
+    final escopos = widget.grant.scopes;
+    // Salvar só faz sentido reduzindo algo e mantendo ao menos uma permissão:
+    // tirar todas é desconectar, e há botão para isso.
+    final podeSalvar =
+        _marcados.isNotEmpty && _marcados.length < escopos.length;
+    return AlertDialog(
+      title: const Text('Ajustar permissões'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Desmarque o que "${widget.grant.clientName}" não deve mais fazer. '
+              'O aplicativo continua conectado.',
+            ),
+            const SizedBox(height: 8),
+            for (final escopo in escopos)
+              CheckboxListTile(
+                value: _marcados.contains(escopo),
+                title: Text(_rotuloDe(escopo)),
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                onChanged: (marcado) => setState(
+                  () => marcado == true
+                      ? _marcados.add(escopo)
+                      : _marcados.remove(escopo),
+                ),
+              ),
+            const SizedBox(height: 8),
+            Text(
+              'Para dar mais permissões, desconecte e conecte de novo: dar '
+              'acesso sempre passa pela sua aprovação no aplicativo.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: podeSalvar
+              ? () => Navigator.of(context).pop([
+                  for (final e in escopos)
+                    if (_marcados.contains(e)) e,
+                ])
+              : null,
+          child: const Text('Salvar'),
+        ),
+      ],
+    );
   }
 }
