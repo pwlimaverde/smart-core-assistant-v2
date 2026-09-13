@@ -244,6 +244,28 @@ class _ConfigFormState extends State<_ConfigForm> {
                   ),
                 ),
               ),
+            // B8 (doc 35-agentes F5): quem está configurando o negócio já está
+            // olhando para cá — é o lugar de dizer que dá para ligar um agente.
+            const Divider(height: 48),
+            Text(
+              'Assistentes de IA',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Claude, ChatGPT ou Cursor podem trabalhar na sua conta com as '
+              'permissões que você escolher.',
+            ),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                icon: const Icon(Icons.smart_toy_outlined, size: 18),
+                label: const Text('Ver aplicativos conectados'),
+                onPressed: () => context.go('/tenant/integracoes'),
+              ),
+            ),
           ],
         ),
       ),

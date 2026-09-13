@@ -25,9 +25,9 @@
 | B3 | "O que o agente fez" — auditoria do próprio tenant | doc 35-agentes F1 | Fecha o DoD da N13: agente só é aceitável se auditável por quem o autorizou | ✅ CI verde (`a2de364`) |
 | B4 | Limiar de confiança com veto, por tenant | regras D1 | Hoje o C1 usa 0,8 fixo; um número por tenant para "quando confio na IA" | ✅ CI verde (`79bdecf`) |
 | B5 | Notificar o atendente da atribuição | regras D6 | Rodízio (D2) atribui em silêncio | ✅ CI verde (`8757195`) |
-| B6 | Marcar como lida e contador de não lidas | N9 E4 | Sem isso o quadro não diz o que falta responder | ⏳ no CI |
-| B7 | Ajustar permissões de um agente sem desconectar | doc 35-agentes F4 | Hoje a única saída é revogar e reconectar | ⏳ no CI |
-| B8 | Descoberta dos aplicativos conectados | doc 35-agentes F5 | Recurso que precisa ser explicado por fora não foi entregue | ⬜ |
+| B6 | Marcar como lida e contador de não lidas | N9 E4 | Sem isso o quadro não diz o que falta responder | ✅ CI verde (`72c79bd`) |
+| B7 | Ajustar permissões de um agente sem desconectar | doc 35-agentes F4 | Hoje a única saída é revogar e reconectar | ✅ CI verde (`3b9f13f`) |
+| B8 | Descoberta dos aplicativos conectados | doc 35-agentes F5 | Recurso que precisa ser explicado por fora não foi entregue | ⏳ no CI |
 | B9 | IA analítica: assunto automático, feedback do teste, treinamento por arquivo | N10 E2, E6, E5 | Maior e mais caro; depende de nada acima | ⬜ |
 | B10 | Clientes PJ e vínculo contato ↔ cliente | N11 E5 / doc 34 C4 | Entidade nova com tela própria | ⬜ |
 
@@ -303,3 +303,30 @@ aprovar na tela de consentimento, onde quem aprova vê o que concede.
 
 **DoD do F4:** reduzir sem tocar no cliente de IA ✅; a tela diz o prazo real ✅;
 ampliar passa pelo consentimento, nunca em silêncio ✅.
+
+### B8 — Descoberta dos aplicativos conectados (doc 35-agentes F5)
+
+**Confirmado antes de construir:** o estado vazio da tela já explicava o que
+fazer, e o menu já tinha "Aplicativos conectados" para qualquer sessão. O
+defeito era chegar lá: nada no caminho de quem usa o painel dizia que o recurso
+existia.
+
+**Entregue — os pontos 2 e 3 do plano (o 1 já estava pronto):**
+
+- **Cartão dispensável no Painel**, por último na tela (depois do que exige
+  ação): uma linha do que o recurso faz e **Ver como conectar**. Aparece só para
+  quem tem zero aplicativos conectados; se a lista não carregar, não aparece —
+  na dúvida, não insiste. Sem modal nem tour, como o plano manda.
+- **Link no fim da Configuração**, onde quem configura o negócio já está.
+- Testes: a regra (zero conectados e não dispensado), a chave por usuário, e na
+  tela — convida, dispensar some e não volta ao reabrir, quem tem agente não vê.
+
+**Decisão registrada — onde fica o "dispensado":** no armazenamento local do app,
+com a chave do **usuário** (não do tenant, porque a conexão é pessoal). O limite
+é o aparelho: dispensar neste computador não esconde o cartão em outro. Guardar
+no servidor pediria tabela e rota de preferência por usuário para um cartão de
+uma linha; se aparecer uma segunda preferência desse tipo, vale fazer as duas
+juntas.
+
+**DoD do F5:** chega à tela sem ser instruído ✅ (cartão, configuração e menu);
+dispensado não volta ✅ (no mesmo aparelho); quem tem agente não vê ✅.

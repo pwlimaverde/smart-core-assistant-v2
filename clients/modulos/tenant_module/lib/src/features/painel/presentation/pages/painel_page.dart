@@ -1,6 +1,7 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
 import '../../../../shared/widgets/tenant_drawer.dart';
+import '../../../integracoes/presentation/widgets/convite_agentes.dart';
 import '../../domain/model/painel.dart';
 import '../controllers/painel_controllers.dart';
 
@@ -131,6 +132,10 @@ class _PainelPageState extends State<PainelPage> {
                   ),
                 ],
               ),
+              // B8: por último, depois do que exige ação. Some sozinho para
+              // quem já tem agente conectado ou dispensou.
+              const SizedBox(height: AppSpacing.lg),
+              const ConviteAgentes(),
             ],
           ),
         ),

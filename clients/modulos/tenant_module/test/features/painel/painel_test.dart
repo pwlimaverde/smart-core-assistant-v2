@@ -1,4 +1,6 @@
 import 'package:api_client/api_client.dart' as proto;
+import 'package:dependencies_module/dependencies_module.dart'
+    show LocalStorageService;
 import 'package:api_client/testing.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -7,6 +9,10 @@ import 'package:go_router/go_router.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:login_module/login_module.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
+import 'package:tenant_module/src/features/integracoes/data/datasources/integracoes_datasources.dart';
+import 'package:tenant_module/src/features/integracoes/data/repositories/integracoes_repositories.dart';
+import 'package:tenant_module/src/features/integracoes/domain/usecases/integracoes_usecases.dart';
+import 'package:tenant_module/src/features/integracoes/presentation/widgets/convite_agentes.dart';
 import 'package:tenant_module/src/features/painel/data/datasources/painel_datasources.dart';
 import 'package:tenant_module/src/features/painel/data/repositories/painel_repositories.dart';
 import 'package:tenant_module/src/features/painel/domain/errors/painel_errors.dart';
@@ -19,11 +25,31 @@ class _MockAdminClient extends Mock implements proto.AdminServiceClient {}
 
 class _MockAuthService extends Mock implements AuthService {}
 
+/// Armazenamento em memória: o real é o secure storage do login.
+final class _Memoria implements LocalStorageService {
+  final dados = <String, String>{};
+
+  @override
+  Future<void> init() async {}
+
+  @override
+  String? read(String key) => dados[key];
+
+  @override
+  Future<void> write(String key, String value) async => dados[key] = value;
+
+  @override
+  Future<void> delete(String key) async => dados.remove(key);
+}
+
 void main() {
   late _MockAdminClient client;
   final getIt = GetIt.instance;
 
-  setUpAll(() => registerFallbackValue(proto.GetMyPainelRequest()));
+  setUpAll(() {
+    registerFallbackValue(proto.GetMyPainelRequest());
+    registerFallbackValue(proto.ListMcpGrantsRequest());
+  });
   setUp(() => client = _MockAdminClient());
   tearDown(() => getIt.reset());
 
@@ -71,6 +97,30 @@ void main() {
     test('departamento faltando também é falta de estrutura', () {
       expect(painelCom(departamentos: 0).faltaEstrutura, isTrue);
       expect(painelCom().faltaEstrutura, isFalse);
+    });
+  });
+
+  group('convite para agentes (B8)', () {
+    test('só convida quem tem zero conectados e não dispensou', () {
+      expect(deveConvidarParaAgentes(dispensado: false, conectados: 0), isTrue);
+      expect(deveConvidarParaAgentes(dispensado: true, conectados: 0), isFalse);
+      // Quem já tem agente conectado nunca vê o cartão.
+      expect(
+        deveConvidarParaAgentes(dispensado: false, conectados: 1),
+        isFalse,
+      );
+      // Lista que não carregou não é "zero": na dúvida, não insiste.
+      expect(
+        deveConvidarParaAgentes(dispensado: false, conectados: null),
+        isFalse,
+      );
+    });
+
+    test('o dispensado é por usuário, não por tenant', () {
+      expect(
+        chaveConviteAgentesDispensado(7),
+        isNot(chaveConviteAgentesDispensado(8)),
+      );
     });
   });
 
@@ -202,6 +252,85 @@ void main() {
         router.routerDelegate.currentConfiguration.matches.last.matchedLocation,
         '/tenant/equipe',
       );
+    });
+
+    /// B8 — registra o que o cartão de agentes precisa, com a sessão do
+    /// usuário 7.
+    _Memoria registrarConvite(List<proto.McpGrantItem> grants) {
+      when(() => client.listMcpGrants(any())).thenAnswer(
+        (_) => respostaGrpc(proto.ListMcpGrantsResponse(grants: grants)),
+      );
+      getIt.registerSingleton<ListMcpGrantsUsecase>(
+        ListMcpGrantsUsecase(
+          repository: ListMcpGrantsRepository(
+            datasource: ListMcpGrantsDatasource(client: client),
+          ),
+        ),
+      );
+      final memoria = _Memoria();
+      getIt.registerSingleton<LocalStorageService>(memoria);
+      final auth = getIt<AuthService>();
+      when(() => auth.currentSession).thenReturn(
+        Session(
+          accessToken: 'a',
+          refreshToken: 'r',
+          expiresAt: DateTime.now().add(const Duration(hours: 1)),
+          tenantId: 't',
+          scopes: const ['atendimentos:read'],
+          isSuperuser: false,
+          userId: 7,
+        ),
+      );
+      return memoria;
+    }
+
+    void respondeSaudavel() => responde(
+      proto.GetMyPainelResponse(
+        conexoesAtivas: 1,
+        conexoesTotal: 1,
+        departamentos: 1,
+      ),
+    );
+
+    testWidgets('sem agente conectado, convida; dispensado, não volta', (
+      tester,
+    ) async {
+      respondeSaudavel();
+      registrar();
+      final memoria = registrarConvite(const []);
+
+      await montar(tester);
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Ligue um assistente de IA à sua conta'),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.byTooltip('Dispensar'));
+      await tester.pumpAndSettle();
+      expect(find.text('Ligue um assistente de IA à sua conta'), findsNothing);
+      expect(memoria.dados[chaveConviteAgentesDispensado(7)], '1');
+
+      // Reabrir o painel: o cartão dispensado não volta.
+      await tester.pumpWidget(const SizedBox.shrink());
+      await montar(tester);
+      await tester.pumpAndSettle();
+      expect(find.text('Ligue um assistente de IA à sua conta'), findsNothing);
+    });
+
+    testWidgets('quem já tem agente conectado não vê o convite', (
+      tester,
+    ) async {
+      respondeSaudavel();
+      registrar();
+      registrarConvite([
+        proto.McpGrantItem(id: 'g-1', clientName: 'Claude', scopes: ['a']),
+      ]);
+
+      await montar(tester);
+      await tester.pumpAndSettle();
+
+      expect(find.text('Ligue um assistente de IA à sua conta'), findsNothing);
     });
 
     testWidgets('operação saudável não mostra aviso nenhum', (tester) async {
