@@ -73,7 +73,11 @@ void main() {
       await tester.tap(find.text('Enviar link'));
       await tester.pumpAndSettle();
 
-      expect(find.textContaining('Informe o e-mail'), findsOneWidget);
+      // Texto exato: a explicação da tela começa com a mesma frase.
+      expect(
+        find.text('Informe o e-mail ou o usuário da sua conta.'),
+        findsOneWidget,
+      );
       verifyNever(() => client.solicitarRedefinicaoSenha(any()));
     });
 
@@ -154,7 +158,11 @@ void main() {
 
       await preencher(tester, '123', '123');
 
-      expect(find.textContaining('8 caracteres'), findsOneWidget);
+      // Texto exato: a dica do campo também fala em 8 caracteres.
+      expect(
+        find.text('A senha precisa ter ao menos 8 caracteres.'),
+        findsOneWidget,
+      );
       verifyNever(() => client.redefinirSenha(any()));
     });
 
