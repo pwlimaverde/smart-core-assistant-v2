@@ -1376,6 +1376,32 @@ async fn processar_mensagem_recebida(
         });
     }
 
+    // 2e. Análise prévia (B9 / N10 E1): intenções e entidades da mensagem do
+    // contato, em background — não soma latência à resposta, e falhar só deixa a
+    // mensagem sem análise. É dela que sai o assunto automático (E2).
+    if let (false, Some(texto_contato), Some(mensagem_id)) =
+        (de_mim, msg_normalized.texto_para_ia(), mensagem_id)
+    {
+        let state_analise = state.clone();
+        let texto = texto_contato.to_string();
+        let tenant_str = envelope.tenant_id.to_string();
+        let causation = envelope.event_id.to_string();
+        let traceparent = envelope.traceparent.clone();
+        tokio::spawn(async move {
+            analisar_mensagem_best_effort(
+                &state_analise,
+                tenant_uuid,
+                &tenant_str,
+                atendimento_id,
+                mensagem_id,
+                &texto,
+                &causation,
+                &traceparent,
+            )
+            .await;
+        });
+    }
+
     // 3. Se o atendimento foi acabado de criar (is_new == true), audita a abertura
     let is_new = resolve_body
         .get("is_new")
@@ -2517,6 +2543,168 @@ async fn avaliar_sentimento_best_effort(
     .await
     {
         tracing::warn!(erro = %e, "falha ao persistir sentimento do atendimento");
+    }
+}
+
+/// B9 (N10 E1+E2) — análise prévia de uma mensagem do contato.
+///
+/// Best-effort em todas as pontas: kill-switch do tenant desligado, `ListIntents`
+/// fora, `Analyse` fora ou gravação recusada — em qualquer caso a mensagem só
+/// fica sem análise, e a conversa segue igual. `skip_all`: a mensagem e os
+/// valores de entidade são PII; o span leva só contagens.
+///
+/// Sem o histórico da conversa, por ora: a análise é da mensagem que chegou, e o
+/// assunto sai da primeira que casar uma intenção.
+#[allow(clippy::too_many_arguments)]
+#[tracing::instrument(
+    skip_all,
+    name = "ia.analise",
+    fields(
+        tenant_id = %tenant_uuid,
+        atendimento_id = atendimento_id,
+        intents_count = tracing::field::Empty,
+        entidades_count = tracing::field::Empty,
+        assunto_definido = tracing::field::Empty,
+        duracao_ms = tracing::field::Empty
+    )
+)]
+async fn analisar_mensagem_best_effort(
+    state: &AppState,
+    tenant_uuid: Uuid,
+    tenant_str: &str,
+    atendimento_id: i32,
+    mensagem_id: i32,
+    texto: &str,
+    causation_id: &str,
+    traceparent: &str,
+) {
+    let inicio = std::time::Instant::now();
+    let (habilitada, tipos_entidade) =
+        config_tenant::analise_previa(state.redis_conn.as_ref(), tenant_uuid)
+            .await
+            .unwrap_or((true, Vec::new()));
+    if !habilitada {
+        tracing::debug!("análise prévia desligada para o tenant");
+        return;
+    }
+
+    let tipos_intencao = match chamar_rpc(
+        &state.pg_client,
+        tenant_str,
+        "ListIntents",
+        serde_json::json!({}),
+        causation_id,
+        traceparent,
+    )
+    .await
+    {
+        Ok(resp) => tipos_de_intencao(&resp),
+        Err(e) => {
+            tracing::warn!(erro = %e, "ListIntents falhou; analisando sem tipos de intenção");
+            String::new()
+        }
+    };
+
+    let saida = match state
+        .ia_client
+        .analyse(
+            ia_engine::client::AnalyseInput {
+                tenant_id: tenant_str.to_string(),
+                mensagem: texto.to_string(),
+                historico: Vec::new(),
+                valid_intent_types: tipos_intencao,
+                valid_entity_types: tipos_entidade,
+            },
+            traceparent,
+        )
+        .await
+    {
+        Ok(s) => s,
+        Err(e) => {
+            tracing::warn!(erro = %e, "ia_engine.Analyse falhou; mensagem fica sem análise");
+            return;
+        }
+    };
+
+    let span = tracing::Span::current();
+    span.record("intents_count", saida.intents.len());
+    span.record("entidades_count", saida.entidades.len());
+
+    let intents: Vec<serde_json::Value> = saida
+        .intents
+        .iter()
+        .map(|i| serde_json::json!({ "tipo": i.tipo, "confianca": i.confianca }))
+        .collect();
+    let entidades: Vec<serde_json::Value> = saida
+        .entidades
+        .iter()
+        .map(|e| serde_json::json!({ "tipo": e.tipo, "valor": e.valor, "confianca": e.confianca }))
+        .collect();
+
+    match chamar_rpc(
+        &state.pg_client,
+        tenant_str,
+        "AnexarAnaliseMensagem",
+        serde_json::json!({
+            "mensagem_id": mensagem_id,
+            "atendimento_id": atendimento_id,
+            "intents": intents,
+            "entidades": entidades,
+        }),
+        causation_id,
+        traceparent,
+    )
+    .await
+    {
+        Ok(resp) => {
+            span.record(
+                "assunto_definido",
+                resp.get("assunto_definido")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false),
+            );
+        }
+        Err(e) => tracing::warn!(erro = %e, "falha ao gravar a análise da mensagem"),
+    }
+    span.record("duracao_ms", inicio.elapsed().as_millis() as u64);
+}
+
+/// B9 — as tags das intenções cadastradas, no formato que o `Analyse` espera:
+/// separadas por vírgula. Vazio quando não há intenção nenhuma.
+fn tipos_de_intencao(resposta: &serde_json::Value) -> String {
+    resposta
+        .get("intents")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|i| i.get("tag").and_then(|t| t.as_str()))
+                .map(str::trim)
+                .filter(|t| !t.is_empty())
+                .collect::<Vec<_>>()
+                .join(",")
+        })
+        .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests_analise {
+    use super::tipos_de_intencao;
+
+    #[test]
+    fn junta_as_tags_das_intencoes_cadastradas() {
+        let resp = serde_json::json!({
+            "intents": [
+                { "tag": "segunda_via_boleto", "grupo": "financeiro" },
+                { "tag": " duvida_entrega " },
+                { "tag": "" },
+                { "grupo": "sem_tag" },
+            ]
+        });
+        assert_eq!(
+            tipos_de_intencao(&resp),
+            "segunda_via_boleto,duvida_entrega"
+        );
+        assert_eq!(tipos_de_intencao(&serde_json::json!({})), "");
     }
 }
 

@@ -1491,6 +1491,44 @@ impl AtendimentoStore for PgAtendimentoStore {
     }
 
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, mensagem_id = mensagem_id))]
+    async fn anexar_analise_mensagem(
+        &self,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+        atendimento_id: i32,
+        intents: serde_json::Value,
+        entidades: serde_json::Value,
+        assunto: Option<String>,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            // Mesma transação: análise e assunto chegam juntos ou nenhum dos dois.
+            infrastructure_postgres::atendimentos::mensagens::anexar_analise_mensagem(
+                &mut tx,
+                &ctx,
+                mensagem_id,
+                &intents,
+                &entidades,
+            )
+            .await?;
+            let definiu = match assunto.as_deref() {
+                Some(a) if atendimento_id > 0 => {
+                    infrastructure_postgres::atendimentos::atendimentos::definir_assunto_se_vazio(
+                        &mut tx,
+                        &ctx,
+                        atendimento_id,
+                        a,
+                    )
+                    .await?
+                }
+                _ => false,
+            };
+            Ok((definiu, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, mensagem_id = mensagem_id))]
     async fn anexar_analise_midia(
         &self,
         ctx: &RequestContext,

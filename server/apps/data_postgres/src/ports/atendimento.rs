@@ -512,6 +512,19 @@ pub trait AtendimentoStore: Send + Sync {
         resumo_midia: &str,
     ) -> Result<(), DbError>;
 
+    /// B9 (N10 E1+E2) — grava a análise prévia de uma mensagem e, se o
+    /// atendimento ainda não tem assunto, o assunto sugerido. `true` quando o
+    /// assunto foi definido agora.
+    async fn anexar_analise_mensagem(
+        &self,
+        ctx: &RequestContext,
+        mensagem_id: i32,
+        atendimento_id: i32,
+        intents: serde_json::Value,
+        entidades: serde_json::Value,
+        assunto: Option<String>,
+    ) -> Result<bool, DbError>;
+
     /// Lista os fluxos ativos do tenant (setor/nome/descrição) para o Responder (N6.3).
     async fn listar_fluxos_do_tenant(
         &self,

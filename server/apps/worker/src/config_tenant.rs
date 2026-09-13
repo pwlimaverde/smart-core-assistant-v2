@@ -134,6 +134,30 @@ pub(crate) async fn numero(
     cfg.get(chave).and_then(|v| v.as_f64())
 }
 
+/// B9 (N10 E1) — se a análise prévia está ligada para o tenant, e com quais
+/// tipos de entidade. `None` quando a config não pôde ser lida: quem chama decide
+/// o default (analisar, como a v1).
+pub(crate) async fn analise_previa(
+    conn: Option<&ConnectionManager>,
+    tenant: Uuid,
+) -> Option<(bool, Vec<String>)> {
+    let cfg = obter(conn, tenant).await?;
+    let habilitada = cfg
+        .get("analise_previa_habilitada")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    let tipos = cfg
+        .get("entity_types")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|t| t.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    Some((habilitada, tipos))
+}
+
 /// Assina `tenant:config:invalidate` e descarta a cópia em RAM do tenant avisado.
 ///
 /// Roda em background e se reconecta sozinho: se a assinatura cair e ninguém

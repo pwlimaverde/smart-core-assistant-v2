@@ -600,6 +600,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_marcar_mensagem_enviada = state_clone.clone();
     let state_for_marcar_mensagem_falha_envio = state_clone.clone();
     let state_for_anexar_analise_midia = state_clone.clone();
+    let state_for_anexar_analise_mensagem = state_clone.clone();
     let state_for_listar_fluxos_tenant = state_clone.clone();
     let state_for_transferir_fluxo = state_clone.clone();
     let state_for_resolver_campos_atendimento = state_clone.clone();
@@ -825,6 +826,12 @@ async fn main() -> anyhow::Result<()> {
                     env,
                 )
                 .await
+            })
+        })
+        .route("AnexarAnaliseMensagem", move |env| {
+            let state = state_for_anexar_analise_mensagem.clone();
+            Box::pin(async move {
+                handler_anexar_analise_mensagem(state.atendimento.as_ref(), env).await
             })
         })
         .route("AnexarAnaliseMidia", move |env| {
@@ -4406,6 +4413,86 @@ async fn handler_anexar_analise_midia(
             &env,
             "AnexarAnaliseMidiaReply",
             serde_json::json!({ "status": "ok" }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// B9 (N10 E2) — o assunto que a análise sugere: a intenção de maior confiança.
+///
+/// A v1 faz o mesmo e não inventa resumo por LLM — mais barato e previsível.
+/// É rótulo de intenção, vocabulário fechado do tenant, e não texto do cliente:
+/// por isso não é PII. Se um dia o assunto virar resumo gerado, passa a ser.
+/// Nunca vazio; truncado nos 200 caracteres da coluna.
+fn assunto_da_analise(intents: &serde_json::Value) -> Option<String> {
+    intents
+        .as_array()?
+        .iter()
+        .filter_map(|i| {
+            let tipo = i.get("tipo")?.as_str()?.trim();
+            let confianca = i.get("confianca").and_then(|c| c.as_f64()).unwrap_or(0.0);
+            Some((tipo, confianca))
+        })
+        .filter(|(tipo, _)| !tipo.is_empty())
+        .max_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(tipo, _)| tipo.chars().take(200).collect())
+}
+
+/// B9 (N10 E1+E2) — grava a análise prévia de uma mensagem do contato e, na
+/// primeira de um atendimento sem assunto, o assunto.
+///
+/// Sem auditoria, de propósito (plano N10): anotar análise numa mensagem não é
+/// mutação sensível, e o assunto é enriquecimento derivado — editar à mão, sim,
+/// seria auditável. Os valores de entidade podem ser PII e não entram em log.
+async fn handler_anexar_analise_mensagem(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let Some(mensagem_id) = payload_json
+        .get("mensagem_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32)
+    else {
+        return erro(
+            error_core::AppError::Validation("mensagem_id ausente".into()),
+            &env,
+        );
+    };
+    let atendimento_id = payload_json
+        .get("atendimento_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let lista = |chave: &str| {
+        payload_json
+            .get(chave)
+            .filter(|v| v.is_array())
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]))
+    };
+    let intents = lista("intents");
+    let entidades = lista("entidades");
+    let assunto = assunto_da_analise(&intents);
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .anexar_analise_mensagem(
+            &ctx,
+            mensagem_id,
+            atendimento_id,
+            intents,
+            entidades,
+            assunto,
+        )
+        .await
+    {
+        Ok(assunto_definido) => ok_reply(
+            &env,
+            "AnexarAnaliseMensagemReply",
+            serde_json::json!({ "assunto_definido": assunto_definido }),
         ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
@@ -10332,6 +10419,60 @@ mod tests_atendimento_cliente_unit {
         let resp = handler_registrar_feedback_teste(&store, &audit, env).await;
 
         assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    /// B9 (N10 E2): o assunto é a intenção mais confiante, nunca vazio nem longo.
+    #[test]
+    fn assunto_da_analise_usa_a_intencao_mais_confiante() {
+        let intents = serde_json::json!([
+            { "tipo": "duvida_entrega", "confianca": 0.4 },
+            { "tipo": "segunda_via_boleto", "confianca": 0.9 },
+            { "tipo": "   ", "confianca": 1.0 },
+        ]);
+        assert_eq!(
+            assunto_da_analise(&intents).as_deref(),
+            Some("segunda_via_boleto")
+        );
+        assert_eq!(assunto_da_analise(&serde_json::json!([])), None);
+        let longo = "x".repeat(250);
+        assert_eq!(
+            assunto_da_analise(&serde_json::json!([{ "tipo": longo, "confianca": 1 }]))
+                .map(|a| a.chars().count()),
+            Some(200)
+        );
+    }
+
+    #[tokio::test]
+    async fn anexar_analise_mensagem_repassa_o_assunto_sugerido() {
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_anexar_analise_mensagem()
+            .times(1)
+            .withf(
+                |_, mensagem_id, atendimento_id, intents, entidades, assunto| {
+                    *mensagem_id == 5
+                        && *atendimento_id == 9
+                        && intents.as_array().map(|a| a.len()) == Some(1)
+                        && entidades.as_array().map(|a| a.len()) == Some(1)
+                        && assunto.as_deref() == Some("segunda_via_boleto")
+                },
+            )
+            .returning(|_, _, _, _, _, _| Ok(true));
+        let env = envelope_com_payload(
+            "AnexarAnaliseMensagem",
+            serde_json::json!({
+                "mensagem_id": 5,
+                "atendimento_id": 9,
+                "intents": [{ "tipo": "segunda_via_boleto", "confianca": 0.9 }],
+                "entidades": [{ "tipo": "cidade", "valor": "Recife", "confianca": 0.8 }],
+            }),
+        );
+
+        let resp = handler_anexar_analise_mensagem(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["assunto_definido"], true);
     }
 
     /// HAPPY PATH: upsert_contact devolve o contato salvo.

@@ -841,3 +841,29 @@ pub async fn marcar_lidas_do_contato(
         telefone: destino.map(|d| d.1),
     })
 }
+
+/// B9 (N10 E1) — grava as intenções e entidades detectadas numa mensagem.
+///
+/// O **valor** de uma entidade pode ser PII (nome, e-mail, CPF): fica só aqui,
+/// na coluna, e nunca em log ou span.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, mensagem_id = mensagem_id))]
+pub async fn anexar_analise_mensagem(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    mensagem_id: i32,
+    intents: &serde_json::Value,
+    entidades: &serde_json::Value,
+) -> Result<(), DbError> {
+    sqlx::query(
+        r#"UPDATE oraculo_mensagem
+           SET intent_detectado = $3, entidades_extraidas = $4
+           WHERE tenant_id = $1 AND id = $2"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(mensagem_id)
+    .bind(intents.clone())
+    .bind(entidades.clone())
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}

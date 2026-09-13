@@ -53,6 +53,9 @@ pub struct RuntimeConfigDto {
     pub transcription_provider: String,
     pub transcription_model: String,
     pub transcription_enabled: bool,
+    /// B9 (N10 E1) — lidos pelo **worker**, que decide chamar o `Analyse`.
+    pub analise_previa_habilitada: bool,
+    pub entity_types: Vec<String>,
     // Visão computacional
     pub vision_provider: String,
     pub vision_model: String,
@@ -95,6 +98,8 @@ impl From<&RuntimeConfig> for RuntimeConfigDto {
             transcription_provider: cfg.transcription_provider.clone(),
             transcription_model: cfg.transcription_model.clone(),
             transcription_enabled: cfg.transcription_enabled,
+            analise_previa_habilitada: cfg.analise_previa_habilitada,
+            entity_types: cfg.entity_types.clone(),
             vision_provider: cfg.vision_provider.clone(),
             vision_model: cfg.vision_model.clone(),
             embeddings_class: cfg.embeddings_class.clone(),

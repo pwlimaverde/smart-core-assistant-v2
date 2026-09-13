@@ -119,6 +119,16 @@ pub async fn resolve_runtime_config(
     // B4 — lidas à parte, com query de tempo de execução: o SELECT acima é
     // `query_as!`, e acrescentar colunas nele exigiria regenerar o cache
     // offline do sqlx por duas colunas.
+    // B9 (N10 E1) — pelo mesmo motivo das colunas do B4: query de tempo de
+    // execução, sem regenerar o cache offline do sqlx.
+    let analise: Option<(Option<bool>, serde_json::Value)> = sqlx::query_as(
+        "SELECT analise_previa_habilitada, entity_types \
+         FROM tenants_tenantconfig WHERE tenant_id = $1",
+    )
+    .bind(tenant_id)
+    .fetch_optional(&mut *tx)
+    .await?;
+
     let confianca: Option<(Option<rust_decimal::Decimal>, Option<rust_decimal::Decimal>)> =
         sqlx::query_as(
             "SELECT confianca_minima_transferencia, confianca_minima_automatica \
@@ -245,6 +255,11 @@ pub async fn resolve_runtime_config(
         transcription_provider: fallback(tc.transcription_provider, "TRANSCRIPTION_PROVIDER"),
         transcription_model: fallback(tc.transcription_model, "TRANSCRIPTION_MODEL"),
         transcription_enabled: fallback_bool(tc.transcription_enabled, "TRANSCRIPTION_ENABLED"),
+        analise_previa_habilitada: fallback_bool(
+            analise.as_ref().and_then(|a| a.0),
+            "ANALISE_PREVIA_HABILITADA",
+        ),
+        entity_types: tipos_de_entidade(analise.as_ref().map(|a| &a.1)),
         vision_provider: fallback(tc.vision_provider, "VISION_PROVIDER"),
         vision_model: fallback(tc.vision_model, "VISION_MODEL"),
         embeddings_class: fallback(tc.embeddings_class, "EMBEDDINGS_CLASS"),
@@ -273,6 +288,45 @@ pub async fn resolve_runtime_config(
         google_api_key: resolve_api_key("google_api_key", "GOOGLE_API_KEY")?,
         prompts,
     })
+}
+
+/// B9 (N10 E1) — os tipos de entidade configurados, como lista.
+///
+/// A coluna nasceu `JSONB DEFAULT '{}'` sem tela que a escrevesse, então aceita
+/// as duas formas razoáveis: lista de nomes, ou objeto cujas chaves são os tipos
+/// (com a descrição como valor). Qualquer outra coisa vale "sem tipos".
+pub fn tipos_de_entidade(valor: Option<&serde_json::Value>) -> Vec<String> {
+    let nomes: Vec<String> = match valor {
+        Some(serde_json::Value::Array(itens)) => itens
+            .iter()
+            .filter_map(|v| v.as_str().map(str::to_string))
+            .collect(),
+        Some(serde_json::Value::Object(mapa)) => mapa.keys().cloned().collect(),
+        _ => Vec::new(),
+    };
+    nomes
+        .into_iter()
+        .map(|n| n.trim().to_string())
+        .filter(|n| !n.is_empty())
+        .collect()
+}
+
+#[cfg(test)]
+mod tests_tipos_de_entidade {
+    use super::tipos_de_entidade;
+
+    #[test]
+    fn aceita_lista_ou_objeto_e_ignora_o_resto() {
+        let lista = serde_json::json!(["cpf", " cidade ", ""]);
+        assert_eq!(tipos_de_entidade(Some(&lista)), vec!["cpf", "cidade"]);
+
+        let objeto = serde_json::json!({ "email": "e-mail do contato" });
+        assert_eq!(tipos_de_entidade(Some(&objeto)), vec!["email"]);
+
+        assert!(tipos_de_entidade(Some(&serde_json::json!({}))).is_empty());
+        assert!(tipos_de_entidade(Some(&serde_json::json!(42))).is_empty());
+        assert!(tipos_de_entidade(None).is_empty());
+    }
 }
 
 #[cfg(test)]

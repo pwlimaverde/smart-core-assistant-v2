@@ -28,7 +28,7 @@
 | B6 | Marcar como lida e contador de não lidas | N9 E4 | Sem isso o quadro não diz o que falta responder | ✅ CI verde (`72c79bd`) |
 | B7 | Ajustar permissões de um agente sem desconectar | doc 35-agentes F4 | Hoje a única saída é revogar e reconectar | ✅ CI verde (`3b9f13f`) |
 | B8 | Descoberta dos aplicativos conectados | doc 35-agentes F5 | Recurso que precisa ser explicado por fora não foi entregue | ✅ CI verde (`e14a993`) |
-| B9 | IA analítica: assunto automático, feedback do teste, treinamento por arquivo | N10 E2, E6, E5 | Maior e mais caro; depende de nada acima | 🔄 E6 no CI; E1+E2 e E5 a seguir |
+| B9 | IA analítica: assunto automático, feedback do teste, treinamento por arquivo | N10 E2, E6, E5 | Maior e mais caro; depende de nada acima | 🔄 E6 ✅ (`4df0c83`); E1+E2 no CI; E5 a seguir |
 | B10 | Clientes PJ e vínculo contato ↔ cliente | N11 E5 / doc 34 C4 | Entidade nova com tela própria | ⬜ |
 
 **Fora deste cronograma:** N12 (cutover de produção) — é operação com janela
@@ -358,3 +358,31 @@ o `Analyse`), que o cronograma não listava à parte. Ordem seguida, a do plano:
 
 **Fica de fora:** a tela de revisão do acumulado (o plano a deixa opcional — o
 valor está em coletar primeiro) e o teste com mídia (E6.1, opcional).
+
+#### E1+E2 — Análise prévia ligada, e o assunto automático
+
+**Confirmado antes de construir:** o plano dizia que `entity_types` já viajava no
+`RuntimeConfig` do Redis. Não viajava — nem ele nem nenhum kill-switch da
+análise. Os dois entraram na cascata e na publicação.
+
+- **Migration 0035:** `analise_previa_habilitada` por tenant, com
+  `ANALISE_PREVIA_HABILITADA = true` no global (a v1 sempre analisava). Sem tela
+  por ora: desligar é por configuração do tenant no banco.
+- **Worker:** cada mensagem de texto do contato é analisada **em background**, ao
+  lado do sentimento — não soma latência à resposta, e falhar só deixa a mensagem
+  sem análise. Os tipos de intenção são as tags cadastradas (`ListIntents`); os de
+  entidade, os da config. Span `ia.analise` com contagens e duração, nunca texto
+  nem valor de entidade.
+- **`data_postgres`:** rota `AnexarAnaliseMensagem` grava `intent_detectado` e
+  `entidades_extraidas` e, na mesma transação, o **assunto** — a intenção de maior
+  confiança, só quando o atendimento ainda não tem assunto (nunca sobrescreve o
+  que um humano escreveu), nunca vazio, até 200 caracteres. Sem auditoria, como o
+  plano manda: é enriquecimento derivado.
+- Testes: assunto pela intenção mais confiante (vazio ignorado, truncamento);
+  handler repassa análise e assunto; tipos de entidade como lista ou objeto; tags
+  das intenções.
+
+**Decisão registrada:** a análise é da mensagem que chegou, sem o histórico da
+conversa. O assunto sai da primeira mensagem que casar uma intenção, e para isso
+o histórico não muda nada; passar histórico fica para quando E3/E4 (etiquetas e
+enriquecimento do contato) precisarem dele.

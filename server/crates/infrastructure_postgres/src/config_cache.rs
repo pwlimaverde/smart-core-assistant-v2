@@ -37,6 +37,12 @@ pub struct RuntimeConfig {
     /// IA. Resolvido pela cascata `tenants_tenantconfig` > CoreSetting
     /// `TRANSCRIPTION_ENABLED` (default global `false` — custo/latência por áudio).
     pub transcription_enabled: bool,
+    /// B9 (N10 E1) — kill-switch da análise prévia (intenções e entidades) por
+    /// tenant. Default global `true`: a v1 sempre analisava.
+    pub analise_previa_habilitada: bool,
+    /// B9 — tipos de entidade que a análise procura
+    /// (`tenants_tenantconfig.entity_types`). Vazio = sem restrição de tipo.
+    pub entity_types: Vec<String>,
     // Visão computacional
     pub vision_provider: String,
     pub vision_model: String,

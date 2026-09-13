@@ -1088,6 +1088,30 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
     }
 }
 
+/// B9 (N10 E2) — preenche o assunto do atendimento **só quando está vazio**.
+///
+/// Nunca sobrescreve o que um humano escreveu. `true` quando gravou.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+pub async fn definir_assunto_se_vazio(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+    assunto: &str,
+) -> Result<bool, DbError> {
+    let res = sqlx::query(
+        r#"UPDATE oraculo_atendimento
+           SET assunto = $3
+           WHERE tenant_id = $1 AND id = $2
+             AND (assunto IS NULL OR btrim(assunto) = '')"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .bind(assunto)
+    .execute(&mut **tx)
+    .await?;
+    Ok(res.rows_affected() > 0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
