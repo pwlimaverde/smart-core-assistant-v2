@@ -729,6 +729,29 @@ table RevokeMcpGrantResponse {
   janela_revogacao_min:int;
 }
 
+table ListMyAuditLogRequest {
+  origem:string;
+  grant_id:string;
+  desde:long;
+  limit:int;
+  offset:int;
+}
+
+table MyAuditLogEntry {
+  timestamp:long;
+  event_type:string;
+  origem:string;
+  client_name:string;
+  tool:string;
+  user_id:int;
+  user_nome:string;
+  grant_id:string;
+}
+
+table ListMyAuditLogResponse {
+  entries:[MyAuditLogEntry];
+}
+
 table ListTenantUsersRequest {
 }
 

@@ -1,6 +1,7 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
 import '../../domain/usecases/integracoes_usecases.dart';
+import '../controllers/atividade_controller.dart';
 import '../controllers/integracoes_controller.dart';
 import '../pages/integracoes_page.dart';
 
@@ -25,6 +26,10 @@ final class IntegracoesRoute extends GetItModule {
         listUsecase: inject<ListMcpGrantsUsecase>(),
         revokeUsecase: inject<RevokeMcpGrantUsecase>(),
       ),
+    );
+    // B3 — aba "Atividade".
+    i.controller<AtividadeController>(
+      () => AtividadeController(listar: inject<ListarAtividadeUsecase>()),
     );
   }
 }

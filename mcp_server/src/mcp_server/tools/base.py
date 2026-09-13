@@ -104,7 +104,14 @@ class Executor:
             raise ToolError(str(exc)) from None
 
         try:
-            resposta = await self.cliente.chamar(metodo_grpc, requisicao, interno)
+            # O grant segue para a trilha de auditoria (B3): é o que liga a
+            # linha do `audit_log` ao aplicativo que agiu.
+            resposta = await self.cliente.chamar(
+                metodo_grpc,
+                requisicao,
+                interno,
+                grant_id=identidade.grant_id or None,
+            )
         except ErroDoBackend as exc:
             self.metricas.tool_executada(tool.nome, "erro", time.monotonic() - inicio)
             raise ToolError(str(exc)) from None

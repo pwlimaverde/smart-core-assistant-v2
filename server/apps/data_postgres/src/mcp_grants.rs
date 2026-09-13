@@ -463,3 +463,213 @@ mod tests {
         assert_eq!(resp.kind, MessageKind::Error as i32);
     }
 }
+
+/// B3 — "o que o agente fez": a trilha do próprio tenant, para a aba
+/// "Atividade" dos aplicativos conectados.
+///
+/// Quem é `tenant:admin` vê o tenant inteiro e escolhe a origem. Quem não é vê
+/// **só o que os próprios agentes fizeram** — origem forçada para `mcp` e
+/// `user_id` forçado para o da sessão, seja qual for o pedido. É o princípio da
+/// tela de aplicativos conectados: o agente é meu, o rastro dele é meu; o dos
+/// colegas, não.
+pub async fn handler_list_my_audit_log(
+    store: &dyn ports::McpGrantStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    use infrastructure_postgres::auditoria::audit_log::FiltroAtividade;
+
+    let payload = payload_de(&env);
+    let ctx = contexto_do_envelope(&env);
+    let admin = env.auth_is_superuser
+        || env
+            .auth_scopes
+            .iter()
+            .any(|s| s == "tenant:admin" || s == "*");
+
+    let origem = payload.get("origem").and_then(|v| v.as_str()).unwrap_or("");
+    if !matches!(origem, "" | "mcp" | "painel") {
+        return erro(
+            error_core::AppError::Validation("origem inválida".to_string()),
+            &env,
+        );
+    }
+    // Validado como UUID antes de chegar à consulta: o id entra num LIKE, e um
+    // `%` vindo de fora alargaria o filtro em vez de estreitá-lo.
+    let grant_id = match payload
+        .get("grant_id")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        Some(bruto) => match Uuid::parse_str(bruto) {
+            Ok(id) => Some(id),
+            Err(_) => {
+                return erro(
+                    error_core::AppError::Validation("grant_id inválido".to_string()),
+                    &env,
+                )
+            }
+        },
+        None => None,
+    };
+    let desde = payload
+        .get("desde")
+        .and_then(|v| v.as_i64())
+        .filter(|ms| *ms > 0)
+        .and_then(chrono::DateTime::from_timestamp_millis);
+    let limit = payload
+        .get("limit")
+        .and_then(|v| v.as_i64())
+        .filter(|l| *l > 0)
+        .unwrap_or(50)
+        .min(200);
+    let offset = payload
+        .get("offset")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0)
+        .max(0);
+
+    let filtro = if admin {
+        FiltroAtividade {
+            origem: origem.to_string(),
+            user_id: None,
+            grant_id,
+            desde,
+            limit,
+            offset,
+        }
+    } else {
+        FiltroAtividade {
+            origem: "mcp".to_string(),
+            user_id: Some(ctx.user_id),
+            grant_id,
+            desde,
+            limit,
+            offset,
+        }
+    };
+
+    match store.listar_atividade(&ctx, filtro).await {
+        Ok(itens) => {
+            // Ler a trilha é auditável como no QueryAuditLog do superusuário —
+            // e a própria consulta não volta nesta lista (ver o repositório).
+            audit
+                .publish(
+                    &env,
+                    "audit_log_consultado",
+                    "Atividade do tenant consultada".to_string(),
+                    serde_json::json!({
+                        "origem": origem,
+                        "alcance": if admin { "tenant" } else { "proprios_agentes" },
+                        "retornadas": itens.len(),
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "ListMyAuditLogReply",
+                serde_json::json!({ "entries": itens }),
+            )
+        }
+        Err(err) => erro(err.into(), &env),
+    }
+}
+
+#[cfg(test)]
+mod tests_atividade {
+    use super::*;
+    use crate::ports::{MockAuditPort, MockMcpGrantStore};
+    use contracts::MessageKind;
+
+    fn envelope(escopos: &[&str], payload: serde_json::Value) -> Envelope {
+        Envelope {
+            kind: MessageKind::Request as i32,
+            method: "ListMyAuditLog".to_string(),
+            tenant_id: Uuid::now_v7().to_string(),
+            traceparent: "00-trace-span-01".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            auth_user_id: 7,
+            auth_scopes: escopos.iter().map(|s| s.to_string()).collect(),
+            ..Default::default()
+        }
+    }
+
+    fn audit_que_aceita() -> MockAuditPort {
+        let mut audit = MockAuditPort::new();
+        audit.expect_publish().returning(|_, _, _, _| ());
+        audit
+    }
+
+    #[tokio::test]
+    async fn quem_nao_e_admin_ve_so_os_proprios_agentes() {
+        let mut store = MockMcpGrantStore::new();
+        store
+            .expect_listar_atividade()
+            .withf(|_, f| f.origem == "mcp" && f.user_id == Some(7))
+            .times(1)
+            .returning(|_, _| Ok(vec![]));
+        // Pede "painel" e "tudo" de propósito: o pedido não alarga o alcance.
+        let env = envelope(
+            &["atendimentos:read"],
+            serde_json::json!({ "origem": "painel" }),
+        );
+
+        let resp = handler_list_my_audit_log(&store, &audit_que_aceita(), env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    #[tokio::test]
+    async fn admin_ve_o_tenant_inteiro_e_escolhe_a_origem() {
+        let mut store = MockMcpGrantStore::new();
+        store
+            .expect_listar_atividade()
+            .withf(|_, f| f.origem == "painel" && f.user_id.is_none())
+            .times(1)
+            .returning(|_, _| Ok(vec![]));
+        let env = envelope(&["tenant:admin"], serde_json::json!({ "origem": "painel" }));
+
+        let resp = handler_list_my_audit_log(&store, &audit_que_aceita(), env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    #[tokio::test]
+    async fn limite_pedido_tem_teto() {
+        let mut store = MockMcpGrantStore::new();
+        store
+            .expect_listar_atividade()
+            .withf(|_, f| f.limit == 200 && f.offset == 0)
+            .times(1)
+            .returning(|_, _| Ok(vec![]));
+        let env = envelope(
+            &["tenant:admin"],
+            serde_json::json!({ "limit": 5000, "offset": -3 }),
+        );
+
+        handler_list_my_audit_log(&store, &audit_que_aceita(), env).await;
+    }
+
+    #[tokio::test]
+    async fn grant_id_malformado_nao_chega_a_consulta() {
+        // O id entra num LIKE: um `%` vindo de fora alargaria o filtro.
+        let mut store = MockMcpGrantStore::new();
+        store.expect_listar_atividade().never();
+        let env = envelope(&["tenant:admin"], serde_json::json!({ "grant_id": "%" }));
+
+        let resp = handler_list_my_audit_log(&store, &MockAuditPort::new(), env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    #[tokio::test]
+    async fn origem_desconhecida_e_recusada() {
+        let mut store = MockMcpGrantStore::new();
+        store.expect_listar_atividade().never();
+        let env = envelope(&["tenant:admin"], serde_json::json!({ "origem": "todos" }));
+
+        let resp = handler_list_my_audit_log(&store, &MockAuditPort::new(), env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+}

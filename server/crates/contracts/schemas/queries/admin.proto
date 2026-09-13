@@ -812,6 +812,42 @@ message RevokeMcpGrantResponse {
   int32 janela_revogacao_min = 2;
 }
 
+// B3 (doc 35-agentes F1) — "o que o agente fez": a trilha do PRÓPRIO tenant.
+// Distinta de QueryAuditLog (superusuário, cross-tenant): aqui o tenant vem da
+// sessão, e quem não é tenant:admin só vê o que os próprios agentes fizeram.
+message ListMyAuditLogRequest {
+  // "" = tudo | "mcp" = só agentes | "painel" = só pessoas. Para quem não é
+  // admin o servidor usa sempre "mcp".
+  string origem = 1;
+  // Restringe a um aplicativo conectado (o `id` de McpGrantItem).
+  string grant_id = 2;
+  // Só o que aconteceu a partir deste instante (ms desde a época). 0 = tudo.
+  int64 desde = 3;
+  // Teto de 200 no servidor.
+  int32 limit = 4;
+  int32 offset = 5;
+}
+
+// Sem a mensagem do evento, de propósito: alguns eventos guardam nome ou
+// e-mail na mensagem, e esta tela não mostra dado pessoal.
+message MyAuditLogEntry {
+  int64 timestamp = 1;
+  string event_type = 2;
+  // "mcp" | "painel" — derivada do user_agent, não um campo da tabela.
+  string origem = 3;
+  // Nome do aplicativo, quando a origem é mcp. TEXTO DE TERCEIRO: escapar.
+  string client_name = 4;
+  // Operação chamada pelo agente, quando a origem é mcp.
+  string tool = 5;
+  int32 user_id = 6;
+  string user_nome = 7;
+  string grant_id = 8;
+}
+
+message ListMyAuditLogResponse {
+  repeated MyAuditLogEntry entries = 1;
+}
+
 message ListTenantUsersRequest {}
 
 message TenantUserItem {
@@ -1093,6 +1129,7 @@ service AdminService {
   // `tenant:admin` vê o do colega. Por isso não há variante administrativa.
   rpc ListMcpGrants(ListMcpGrantsRequest) returns (ListMcpGrantsResponse);
   rpc RevokeMcpGrant(RevokeMcpGrantRequest) returns (RevokeMcpGrantResponse);
+  rpc ListMyAuditLog(ListMyAuditLogRequest) returns (ListMyAuditLogResponse);
 
   // Configuração inicial guiada (passos 5 a 8)
   rpc CreateMyWhatsappInstance(CreateMyWhatsappInstanceRequest) returns (CreateMyWhatsappInstanceResponse);

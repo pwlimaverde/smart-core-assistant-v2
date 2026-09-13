@@ -71,10 +71,12 @@ class RuntimeApiClient:
         requisicao: Any,
         token_interno: str,
         traceparent: str | None = None,
+        grant_id: str | None = None,
     ) -> Any:
         """Executa um RPC do `AdminService`.
 
-        `token_interno` é o JWT trocado; nunca o token do cliente.
+        `token_interno` é o JWT trocado; nunca o token do cliente. `grant_id` é
+        o consentimento em nome do qual o agente age (B3).
         """
         stub = await self._garantir_canal()
         rpc = getattr(stub, metodo, None)
@@ -88,9 +90,18 @@ class RuntimeApiClient:
         # fez ontem" ser uma consulta de um filtro só, sem tabela nova e sem
         # campo novo no contrato — o prefixo `SmartCoreAssistant-MCP` distingue
         # ação de agente de ação humana, e o nome da tool diz qual foi.
+        #
+        # O grant vai junto, entre parênteses (B3): sem ele a trilha sabia QUE
+        # foi um agente, mas não QUAL aplicativo — e a pergunta do dono é "o que
+        # o Claude fez", não "o que algum agente fez". O token interno não
+        # carrega o grant, e o user-agent já chega ao `audit_log` sem mudança
+        # nenhuma no contrato. É um identificador, não segredo.
+        user_agent = f"SmartCoreAssistant-MCP/{metodo}"
+        if grant_id:
+            user_agent = f"{user_agent} (grant {grant_id})"
         metadata = [
             ("authorization", f"Bearer {token_interno}"),
-            ("user-agent", f"SmartCoreAssistant-MCP/{metodo}"),
+            ("user-agent", user_agent),
         ]
         if traceparent:
             # Continua o trace do cliente MCP até o Postgres — é o que permite

@@ -20,9 +20,9 @@
 
 | # | Bloco | Origem | Por que nesta posição | Estado |
 |---|-------|--------|-----------------------|--------|
-| B1 | Recuperação de senha e reenvio de convite | N11 E8 | Convidado ou usuário que perde o e-mail/senha hoje não tem saída | ⏳ em andamento |
-| B2 | Menu por escopo, não por `isTenantAdmin` | doc 35-agentes F2 | O papel somente-leitura (D4) existe no servidor e não na tela; pré-requisito do B3 | ⬜ |
-| B3 | "O que o agente fez" — auditoria do próprio tenant | doc 35-agentes F1 | Fecha o DoD da N13: agente só é aceitável se auditável por quem o autorizou | ⬜ |
+| B1 | Recuperação de senha e reenvio de convite | N11 E8 | Convidado ou usuário que perde o e-mail/senha hoje não tem saída | ✅ CI verde (`0a5ac1d`) |
+| B2 | Menu por escopo, não por `isTenantAdmin` | doc 35-agentes F2 | O papel somente-leitura (D4) existe no servidor e não na tela; pré-requisito do B3 | ✅ CI verde (`e853e19`) |
+| B3 | "O que o agente fez" — auditoria do próprio tenant | doc 35-agentes F1 | Fecha o DoD da N13: agente só é aceitável se auditável por quem o autorizou | ⏳ no CI |
 | B4 | Limiar de confiança com veto, por tenant | regras D1 | Hoje o C1 usa 0,8 fixo; um número por tenant para "quando confio na IA" | ⬜ |
 | B5 | Notificar o atendente da atribuição | regras D6 | Rodízio (D2) atribui em silêncio | ⬜ |
 | B6 | Marcar como lida e contador de não lidas | N9 E4 | Sem isso o quadro não diz o que falta responder | ⬜ |
@@ -110,3 +110,38 @@ divergências no próprio servidor**, que entraram no bloco:
 oferecendo enviar/mover para um `viewer` — o servidor recusa (N13.3), mas a tela
 não esconde. É do quadro, não do menu, e fica anotado para quando o quadro for
 revisto.
+
+### B3 — "O que o agente fez": auditoria do próprio tenant
+
+**Confirmado antes de construir:** `QueryAuditLog` exigia superusuário, e o
+painel do tenant não tinha tela de auditoria. E um achado que o plano não previa:
+**a trilha não sabia qual aplicativo agiu.** O `user_agent`
+`SmartCoreAssistant-MCP/<tool>` distinguia agente de pessoa, mas o token interno
+com que o agente chama o runtime não carrega o grant — "o que o Claude fez"
+era impossível de responder, só "o que algum agente fez".
+
+**Entregue:**
+
+- `mcp_server`: o `user-agent` passa a levar o grant —
+  `SmartCoreAssistant-MCP/<tool> (grant <uuid>)`. Sem migration, sem campo novo
+  no contrato: o `user_agent` já chegava ao `audit_log` desde a N13.7. Linhas
+  antigas continuam sendo de agente, só sem o nome do aplicativo.
+- `AdminService.ListMyAuditLog`: tenant da sessão; `tenant:admin` vê o tenant
+  inteiro e escolhe a origem (agentes, pessoas, tudo); **qualquer outra sessão
+  vê só o que os próprios agentes fizeram** — origem e usuário forçados no
+  `data_postgres`, seja qual for o pedido. Filtros por aplicativo e período;
+  teto de 200 por página; `grant_id` validado como UUID antes do `LIKE`.
+- **Sem a mensagem do evento no contrato.** Alguns eventos guardam nome ou
+  e-mail na mensagem (o de convite, por exemplo); a aba mostra operação,
+  aplicativo, quem autorizou e quando — nunca o conteúdo. A garantia é
+  estrutural: o dado não chega à tela.
+- Ler a trilha é auditado (`audit_log_consultado`), e essa própria linha não
+  volta na lista.
+- Tela: aba **Atividade** dentro de Aplicativos conectados (não item de menu):
+  filtro de aplicativo, período e — só para o admin — "Só agentes" como um
+  controle. Operações em linguagem de negócio ("Cadastrou um contato", "Enviou
+  uma mensagem a um cliente"), com o código humanizado como última saída.
+- Testes: recorte forçado para não-admin, admin escolhendo a origem, teto,
+  filtros malformados recusados, derivação de origem/tool do `user_agent`,
+  formato do `user-agent` no `mcp_server`, e a aba (vazio sem parecer erro,
+  linha de agente, linha de painel, filtro).

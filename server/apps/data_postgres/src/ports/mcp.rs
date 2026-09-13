@@ -48,4 +48,15 @@ pub trait McpGrantStore: Send + Sync {
 
     /// Derruba o grant por reuso de refresh já rotacionado (suspeita de roubo).
     async fn revogar_por_reuso(&self, tenant_id: Uuid, grant_id: Uuid) -> Result<(), DbError>;
+
+    /// B3 — a atividade do tenant do `ctx`, já recortada pelo filtro.
+    ///
+    /// Aqui, ao contrário das operações acima, o recorte por usuário **não** é
+    /// automático: quem decide se a pessoa vê o tenant inteiro ou só os próprios
+    /// agentes é o handler, pelo escopo. O adapter só executa o filtro.
+    async fn listar_atividade(
+        &self,
+        ctx: &RequestContext,
+        filtro: infrastructure_postgres::auditoria::audit_log::FiltroAtividade,
+    ) -> Result<Vec<serde_json::Value>, DbError>;
 }

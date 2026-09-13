@@ -1,6 +1,8 @@
 import 'package:api_client/api_client.dart' as proto;
+import 'package:fixnum/fixnum.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
 
+import '../../domain/model/atividade.dart';
 import '../../domain/model/mcp_grant.dart';
 import '../../domain/parameters/integracoes_parameters.dart';
 
@@ -50,5 +52,38 @@ final class RevokeMcpGrantDatasource
       proto.RevokeMcpGrantRequest(grantId: parameters.grantId),
     );
     return resp.janelaRevogacaoMin;
+  }
+}
+
+/// A atividade do tenant (B3), já no formato do domínio.
+final class ListarAtividadeDatasource
+    implements Datasource<List<Atividade>, ListarAtividadeParameters> {
+  final proto.AdminServiceClient _client;
+
+  const ListarAtividadeDatasource({required this._client});
+
+  @override
+  Future<List<Atividade>> call(ListarAtividadeParameters parameters) async {
+    final resp = await _client.listMyAuditLog(
+      proto.ListMyAuditLogRequest(
+        origem: parameters.soAgentes ? 'mcp' : '',
+        grantId: parameters.grantId ?? '',
+        desde: Int64(parameters.desde?.millisecondsSinceEpoch ?? 0),
+        limit: 100,
+      ),
+    );
+    return resp.entries
+        .map(
+          (e) => Atividade(
+            quando: DateTime.fromMillisecondsSinceEpoch(e.timestamp.toInt()),
+            evento: e.eventType,
+            porAgente: e.origem == 'mcp',
+            aplicativo: e.clientName,
+            operacao: e.tool,
+            quem: e.userNome,
+            grantId: e.grantId,
+          ),
+        )
+        .toList(growable: false);
   }
 }

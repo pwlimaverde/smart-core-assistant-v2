@@ -60,6 +60,25 @@ impl McpGrantStore for PgMcpGrantStore {
     }
 
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, user_id = ctx.user_id))]
+    async fn listar_atividade(
+        &self,
+        ctx: &RequestContext,
+        filtro: infrastructure_postgres::auditoria::audit_log::FiltroAtividade,
+    ) -> Result<Vec<serde_json::Value>, DbError> {
+        let tenant_id = ctx.tenant_id;
+        // `audit_log` e `mcp_oauth_grant` têm RLS: a transação do tenant é a
+        // segunda barreira, abaixo do `tenant_id` que a consulta já filtra.
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let itens = infrastructure_postgres::auditoria::audit_log::buscar_atividade_do_tenant(
+                &mut tx, tenant_id, &filtro,
+            )
+            .await?;
+            Ok((itens, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, user_id = ctx.user_id))]
     async fn listar(&self, ctx: &RequestContext) -> Result<Vec<McpGrant>, DbError> {
         let ctx = ctx.clone();
         run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {

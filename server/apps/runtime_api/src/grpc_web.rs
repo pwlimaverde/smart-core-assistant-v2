@@ -105,6 +105,8 @@ use contracts::grpc::queries::{
     ListMcpGrantsResponse,
     ListMyAtendentesRequest,
     ListMyAtendentesResponse,
+    ListMyAuditLogRequest,
+    ListMyAuditLogResponse,
     ListMyCamposRequest,
     ListMyCamposResponse,
     ListMyContatosRequest,
@@ -150,6 +152,7 @@ use contracts::grpc::queries::{
     MyAtendente,
     MyAtendenteIdRequest,
     MyAtendenteResponse,
+    MyAuditLogEntry,
     MyCampoIdRequest,
     MyCampoPersonalizado,
     MyCampoResponse,
@@ -7105,6 +7108,98 @@ impl AdminService for AdminFacade {
                 .and_then(serde_json::Value::as_i64)
                 .unwrap_or_default(),
         }))
+    }
+
+    /// B3 — "o que o agente fez": a atividade do próprio tenant.
+    ///
+    /// Só sessão válida aqui, sem escopo: o recorte entre "o tenant inteiro"
+    /// (`tenant:admin`) e "só os meus agentes" (qualquer outra sessão) é do
+    /// `data_postgres`, que força o filtro pelo escopo do envelope. Barrar na
+    /// borda deixaria um `staff` sem ver o rastro do agente que ele mesmo
+    /// autorizou.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyAuditLog", traceparent)
+    )]
+    async fn list_my_audit_log(
+        &self,
+        req: Request<ListMyAuditLogRequest>,
+    ) -> Result<Response<ListMyAuditLogResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent,
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "ListMyAuditLog".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({
+                "origem": inner.origem,
+                "grant_id": inner.grant_id,
+                "desde": inner.desde,
+                "limit": inner.limit,
+                "offset": inner.offset,
+            }))
+            .unwrap_or_default(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        let resp = self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço interno: {e}")))?;
+        if resp.kind == MessageKind::Error as i32 {
+            return Err(status_do_erro_interno(resp.error));
+        }
+        let val: serde_json::Value =
+            serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))?;
+
+        let entries = val
+            .get("entries")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .map(|item| {
+                        let texto = |campo: &str| {
+                            item.get(campo)
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_string()
+                        };
+                        MyAuditLogEntry {
+                            timestamp: item
+                                .get("timestamp")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or_default(),
+                            event_type: texto("event_type"),
+                            origem: texto("origem"),
+                            client_name: texto("client_name"),
+                            tool: texto("tool"),
+                            user_id: item
+                                .get("user_id")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or_default() as i32,
+                            user_nome: texto("user_nome"),
+                            grant_id: texto("grant_id"),
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(Response::new(ListMyAuditLogResponse { entries }))
     }
 
     /// Lista os aplicativos de IA que **este** usuário conectou por OAuth (N13.2).

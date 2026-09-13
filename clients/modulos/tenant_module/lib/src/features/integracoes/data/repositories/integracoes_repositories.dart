@@ -5,6 +5,7 @@ import 'package:api_client/api_client.dart'
 import 'package:return_success_or_error/return_success_or_error.dart';
 
 import '../../domain/errors/integracoes_errors.dart';
+import '../../domain/model/atividade.dart';
 import '../../domain/model/mcp_grant.dart';
 import '../../domain/parameters/integracoes_parameters.dart';
 
@@ -65,4 +66,21 @@ final class RevokeMcpGrantRepository
     StackTrace stackTrace,
     RevokeMcpGrantParameters parameters,
   ) => _mapIntegracoes('revokeMcpGrant', exception, stackTrace);
+}
+
+final class ListarAtividadeRepository
+    extends
+        RepositoryBase<
+          List<Atividade>,
+          ListarAtividadeParameters,
+          IntegracoesError
+        > {
+  const ListarAtividadeRepository({required super.datasource});
+
+  @override
+  IntegracoesError mapError(
+    Object exception,
+    StackTrace stackTrace,
+    ListarAtividadeParameters parameters,
+  ) => _mapIntegracoes('listarAtividade', exception, stackTrace);
 }

@@ -251,3 +251,160 @@ pub async fn buscar_audit_logs_globais(
 
     Ok(rows)
 }
+
+// ============================================================
+// B3 — atividade do próprio tenant ("o que o agente fez")
+// ============================================================
+
+/// Recorte da trilha que a aba "Atividade" pede.
+#[derive(Debug, Clone, Default)]
+pub struct FiltroAtividade {
+    /// `""` = tudo, `"mcp"` = só agentes, `"painel"` = só pessoas.
+    pub origem: String,
+    /// `Some` restringe ao que foi feito em nome de um usuário.
+    pub user_id: Option<i32>,
+    /// `Some` restringe a um aplicativo conectado.
+    pub grant_id: Option<Uuid>,
+    pub desde: Option<chrono::DateTime<chrono::Utc>>,
+    pub limit: i64,
+    pub offset: i64,
+}
+
+/// Prefixo que o `mcp_server` põe no `user-agent` de toda chamada de agente.
+pub const PREFIXO_USER_AGENT_MCP: &str = "SmartCoreAssistant-MCP/";
+
+/// Origem e operação a partir do `user_agent` gravado.
+///
+/// O formato é `SmartCoreAssistant-MCP/<tool> (grant <uuid>)`. Derivar daqui, e
+/// não de uma coluna nova, é o que a N13.7 decidiu: o `user_agent` já é gravado
+/// desde então exatamente para isso, e duas colunas dizendo a mesma coisa
+/// acabariam discordando.
+pub fn origem_e_tool(user_agent: Option<&str>) -> (&'static str, String) {
+    match user_agent.and_then(|ua| ua.strip_prefix(PREFIXO_USER_AGENT_MCP)) {
+        Some(resto) => (
+            "mcp",
+            resto
+                .split_whitespace()
+                .next()
+                .unwrap_or_default()
+                .to_string(),
+        ),
+        None => ("painel", String::new()),
+    }
+}
+
+/// A trilha do tenant, do mais recente para o mais antigo, já traduzida para o
+/// que a tela mostra.
+///
+/// **Sem `message` nem `context`.** Alguns eventos guardam nome ou e-mail na
+/// mensagem (o de convite, por exemplo), e a aba de atividade não mostra dado
+/// pessoal — não é a tela que deve decidir o que esconder, é o que chega a ela.
+///
+/// A consulta de leitura da própria trilha (`audit_log_consultado`) fica de
+/// fora: abrir a aba geraria uma linha nova a cada vez, e a lista viraria o
+/// registro de quem olhou a lista.
+#[tracing::instrument(level = "debug", skip(tx, filtro), fields(tenant_id = %tenant_id), err)]
+pub async fn buscar_atividade_do_tenant(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    filtro: &FiltroAtividade,
+) -> Result<Vec<serde_json::Value>, DbError> {
+    use sqlx::Row;
+
+    let linhas = sqlx::query(
+        r#"
+        SELECT a.timestamp, a.event, a.user_agent, a.user_id,
+               COALESCE(NULLIF(u.first_name, ''), u.username) AS user_nome,
+               g.client_name,
+               g.id AS grant_id
+        FROM audit_log a
+        LEFT JOIN auth_user u ON u.id = a.user_id
+        LEFT JOIN mcp_oauth_grant g
+               ON g.id::text = substring(a.user_agent from '\(grant ([0-9a-fA-F-]{36})\)')
+        WHERE a.tenant_id = $1
+          AND a.event <> 'audit_log_consultado'
+          AND ($2::text = ''
+               OR ($2::text = 'mcp' AND a.user_agent LIKE 'SmartCoreAssistant-MCP/%')
+               OR ($2::text = 'painel'
+                   AND COALESCE(a.user_agent, '') NOT LIKE 'SmartCoreAssistant-MCP/%'))
+          AND ($3::int IS NULL OR a.user_id = $3)
+          AND ($4::uuid IS NULL OR g.id = $4)
+          AND ($5::timestamptz IS NULL OR a.timestamp >= $5)
+        ORDER BY a.timestamp DESC
+        LIMIT $6 OFFSET $7
+        "#,
+    )
+    .bind(tenant_id)
+    .bind(&filtro.origem)
+    .bind(filtro.user_id)
+    .bind(filtro.grant_id)
+    .bind(filtro.desde)
+    .bind(filtro.limit)
+    .bind(filtro.offset)
+    .fetch_all(&mut **tx)
+    .await?;
+
+    Ok(linhas
+        .iter()
+        .map(|r| {
+            let user_agent: Option<String> = r.try_get("user_agent").ok().flatten();
+            let (origem, tool) = origem_e_tool(user_agent.as_deref());
+            serde_json::json!({
+                "timestamp": r
+                    .try_get::<chrono::DateTime<chrono::Utc>, _>("timestamp")
+                    .map(|t| t.timestamp_millis())
+                    .unwrap_or(0),
+                "event_type": r.try_get::<String, _>("event").unwrap_or_default(),
+                "origem": origem,
+                "tool": tool,
+                "user_id": r.try_get::<Option<i32>, _>("user_id").ok().flatten().unwrap_or(0),
+                "user_nome": r
+                    .try_get::<Option<String>, _>("user_nome")
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default(),
+                "client_name": r
+                    .try_get::<Option<String>, _>("client_name")
+                    .ok()
+                    .flatten()
+                    .unwrap_or_default(),
+                "grant_id": r
+                    .try_get::<Option<Uuid>, _>("grant_id")
+                    .ok()
+                    .flatten()
+                    .map(|g| g.to_string())
+                    .unwrap_or_default(),
+            })
+        })
+        .collect())
+}
+
+#[cfg(test)]
+mod tests_atividade {
+    use super::*;
+
+    #[test]
+    fn chamada_de_agente_da_a_origem_e_a_tool() {
+        let ua = "SmartCoreAssistant-MCP/SendOutboundMessage (grant 3f2504e0-4f89-11d3-9a0c-0305e82c3301)";
+        assert_eq!(
+            origem_e_tool(Some(ua)),
+            ("mcp", "SendOutboundMessage".to_string())
+        );
+    }
+
+    #[test]
+    fn user_agent_antigo_sem_grant_ainda_e_agente() {
+        // Linhas gravadas antes de o grant entrar no user-agent continuam
+        // sendo de agente — só não dizem de qual aplicativo.
+        assert_eq!(
+            origem_e_tool(Some("SmartCoreAssistant-MCP/GetMyPainel")),
+            ("mcp", "GetMyPainel".to_string())
+        );
+    }
+
+    #[test]
+    fn navegador_ou_sem_user_agent_e_painel() {
+        assert_eq!(origem_e_tool(Some("Mozilla/5.0")).0, "painel");
+        assert_eq!(origem_e_tool(None).0, "painel");
+    }
+}

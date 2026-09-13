@@ -147,6 +147,37 @@ async def test_metadata_leva_token_interno_e_marca_a_origem():
     assert metadata["traceparent"] == "00-abc-def-01"
 
 
+async def test_user_agent_diz_qual_aplicativo_agiu():
+    """B3: a trilha precisa responder "o que o Claude fez", não só "um agente".
+
+    O grant entra no user-agent depois do nome da tool, entre parênteses — é o
+    formato que o `data_postgres` lê para ligar a linha ao aplicativo.
+    """
+    capturado: dict[str, object] = {}
+
+    class StubQueCaptura:
+        async def GetMyPainel(self, requisicao, metadata=None, timeout=None):
+            capturado["metadata"] = metadata
+            return "ok"
+
+    cliente = RuntimeApiClient("localhost:1")
+    cliente._stub = StubQueCaptura()
+
+    await cliente.chamar(
+        "GetMyPainel",
+        object(),
+        "JWT",
+        grant_id="3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+    )
+
+    metadata = dict(capturado["metadata"])  # type: ignore[arg-type]
+    esperado = (
+        "SmartCoreAssistant-MCP/GetMyPainel "
+        "(grant 3f2504e0-4f89-11d3-9a0c-0305e82c3301)"
+    )
+    assert metadata["user-agent"] == esperado
+
+
 async def test_sem_traceparent_o_metadata_nao_leva_a_chave_vazia():
     capturado: dict[str, object] = {}
 

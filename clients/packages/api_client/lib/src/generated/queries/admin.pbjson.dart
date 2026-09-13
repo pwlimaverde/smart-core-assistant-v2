@@ -2390,6 +2390,68 @@ final $typed_data.Uint8List revokeMcpGrantResponseDescriptor =
         'ChZSZXZva2VNY3BHcmFudFJlc3BvbnNlEhgKB3N1Y2Nlc3MYASABKAhSB3N1Y2Nlc3MSMAoUam'
         'FuZWxhX3Jldm9nYWNhb19taW4YAiABKAVSEmphbmVsYVJldm9nYWNhb01pbg==');
 
+@$core.Deprecated('Use listMyAuditLogRequestDescriptor instead')
+const ListMyAuditLogRequest$json = {
+  '1': 'ListMyAuditLogRequest',
+  '2': [
+    {'1': 'origem', '3': 1, '4': 1, '5': 9, '10': 'origem'},
+    {'1': 'grant_id', '3': 2, '4': 1, '5': 9, '10': 'grantId'},
+    {'1': 'desde', '3': 3, '4': 1, '5': 3, '10': 'desde'},
+    {'1': 'limit', '3': 4, '4': 1, '5': 5, '10': 'limit'},
+    {'1': 'offset', '3': 5, '4': 1, '5': 5, '10': 'offset'},
+  ],
+};
+
+/// Descriptor for `ListMyAuditLogRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyAuditLogRequestDescriptor = $convert.base64Decode(
+    'ChVMaXN0TXlBdWRpdExvZ1JlcXVlc3QSFgoGb3JpZ2VtGAEgASgJUgZvcmlnZW0SGQoIZ3Jhbn'
+    'RfaWQYAiABKAlSB2dyYW50SWQSFAoFZGVzZGUYAyABKANSBWRlc2RlEhQKBWxpbWl0GAQgASgF'
+    'UgVsaW1pdBIWCgZvZmZzZXQYBSABKAVSBm9mZnNldA==');
+
+@$core.Deprecated('Use myAuditLogEntryDescriptor instead')
+const MyAuditLogEntry$json = {
+  '1': 'MyAuditLogEntry',
+  '2': [
+    {'1': 'timestamp', '3': 1, '4': 1, '5': 3, '10': 'timestamp'},
+    {'1': 'event_type', '3': 2, '4': 1, '5': 9, '10': 'eventType'},
+    {'1': 'origem', '3': 3, '4': 1, '5': 9, '10': 'origem'},
+    {'1': 'client_name', '3': 4, '4': 1, '5': 9, '10': 'clientName'},
+    {'1': 'tool', '3': 5, '4': 1, '5': 9, '10': 'tool'},
+    {'1': 'user_id', '3': 6, '4': 1, '5': 5, '10': 'userId'},
+    {'1': 'user_nome', '3': 7, '4': 1, '5': 9, '10': 'userNome'},
+    {'1': 'grant_id', '3': 8, '4': 1, '5': 9, '10': 'grantId'},
+  ],
+};
+
+/// Descriptor for `MyAuditLogEntry`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myAuditLogEntryDescriptor = $convert.base64Decode(
+    'Cg9NeUF1ZGl0TG9nRW50cnkSHAoJdGltZXN0YW1wGAEgASgDUgl0aW1lc3RhbXASHQoKZXZlbn'
+    'RfdHlwZRgCIAEoCVIJZXZlbnRUeXBlEhYKBm9yaWdlbRgDIAEoCVIGb3JpZ2VtEh8KC2NsaWVu'
+    'dF9uYW1lGAQgASgJUgpjbGllbnROYW1lEhIKBHRvb2wYBSABKAlSBHRvb2wSFwoHdXNlcl9pZB'
+    'gGIAEoBVIGdXNlcklkEhsKCXVzZXJfbm9tZRgHIAEoCVIIdXNlck5vbWUSGQoIZ3JhbnRfaWQY'
+    'CCABKAlSB2dyYW50SWQ=');
+
+@$core.Deprecated('Use listMyAuditLogResponseDescriptor instead')
+const ListMyAuditLogResponse$json = {
+  '1': 'ListMyAuditLogResponse',
+  '2': [
+    {
+      '1': 'entries',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyAuditLogEntry',
+      '10': 'entries'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyAuditLogResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyAuditLogResponseDescriptor =
+    $convert.base64Decode(
+        'ChZMaXN0TXlBdWRpdExvZ1Jlc3BvbnNlEkYKB2VudHJpZXMYASADKAsyLC5zbWFydGNvcmUuY2'
+        '9udHJhY3RzLnF1ZXJpZXMuTXlBdWRpdExvZ0VudHJ5UgdlbnRyaWVz');
+
 @$core.Deprecated('Use listTenantUsersRequestDescriptor instead')
 const ListTenantUsersRequest$json = {
   '1': 'ListTenantUsersRequest',

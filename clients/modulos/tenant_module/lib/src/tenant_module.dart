@@ -359,6 +359,13 @@ final class TenantModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<ListarAtividadeUsecase>(
+      () => ListarAtividadeUsecase(
+        repository: ListarAtividadeRepository(
+          datasource: ListarAtividadeDatasource(client: _adminClient()),
+        ),
+      ),
+    );
     i.lazySingleton<RevokeMcpGrantUsecase>(
       () => RevokeMcpGrantUsecase(
         repository: RevokeMcpGrantRepository(

@@ -62,6 +62,8 @@ class ClienteFalso:
 
     def __init__(self, respostas: dict[str, Any] | None = None) -> None:
         self.chamadas: list[tuple[str, Any, str]] = []
+        # B3: o grant em nome do qual cada chamada foi feita.
+        self.grants_recebidos: list[str | None] = []
         self.respostas = respostas or {}
 
     async def chamar(
@@ -70,7 +72,9 @@ class ClienteFalso:
         requisicao: Any,
         token_interno: str,
         traceparent: str | None = None,
+        grant_id: str | None = None,
     ) -> Any:
+        self.grants_recebidos.append(grant_id)
         self.chamadas.append((metodo, requisicao, token_interno))
         if metodo in self.respostas:
             return self.respostas[metodo]

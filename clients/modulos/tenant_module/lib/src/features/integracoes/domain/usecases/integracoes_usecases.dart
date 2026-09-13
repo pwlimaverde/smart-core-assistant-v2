@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:return_success_or_error/return_success_or_error.dart';
 
 import '../errors/integracoes_errors.dart';
+import '../model/atividade.dart';
 import '../model/mcp_grant.dart';
 import '../parameters/integracoes_parameters.dart';
 
@@ -87,4 +88,37 @@ final class RevokeMcpGrantUsecase
     int data,
     RevokeMcpGrantParameters parameters,
   ) => Success(data);
+}
+
+/// A atividade do tenant (B3). Passthrough: a ordem (mais recente primeiro) já
+/// vem do servidor, que é quem pagina.
+final class ListarAtividadeUsecase
+    extends
+        UsecaseBaseCallData<
+          List<Atividade>,
+          List<Atividade>,
+          ListarAtividadeParameters,
+          IntegracoesError
+        > {
+  const ListarAtividadeUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    List<Atividade>,
+    List<Atividade>,
+    ListarAtividadeParameters,
+    IntegracoesError
+  >
+  get process => _process;
+
+  @override
+  IntegracoesError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('listarAtividade', exception, stackTrace);
+    return const IntegracoesInesperado();
+  }
+
+  static ReturnSuccessOrError<List<Atividade>, IntegracoesError> _process(
+    List<Atividade> data,
+    ListarAtividadeParameters parameters,
+  ) => Success(List.unmodifiable(data));
 }

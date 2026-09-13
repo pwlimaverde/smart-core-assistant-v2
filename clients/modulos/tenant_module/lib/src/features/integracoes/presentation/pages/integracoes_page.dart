@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import '../../../../shared/widgets/tenant_drawer.dart';
 import '../../domain/model/mcp_grant.dart';
 import '../controllers/integracoes_controller.dart';
+import '../widgets/aba_atividade.dart';
 
 /// URL do servidor MCP que o usuário cola no conector do cliente de IA.
 ///
@@ -90,55 +91,82 @@ class _IntegracoesPageState extends State<IntegracoesPage> {
           onPressed: _controller.fetchGrants,
         ),
       ],
-      body: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Aplicativos de IA conectados',
-              style: Theme.of(
-                context,
-              ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Estes aplicativos agem na sua conta com as permissões que você '
-              'concedeu, e nunca além do que você mesmo pode fazer aqui.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 24),
-            _blocoComoConectar(context),
-            const SizedBox(height: 24),
-            Expanded(
-              child: ViewStateBuilder<IntegracoesController, List<McpGrant>>(
-                controller: _controller,
-                onError: (context, error) => AppErrorView(
-                  message: error.message,
-                  onRetry: _controller.fetchGrants,
+      body: DefaultTabController(
+        length: 2,
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Aplicativos de IA conectados',
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
                 ),
-                onSuccess: (context, grants) {
-                  if (grants.isEmpty) {
-                    return const AppEmptyView(
-                      icon: Icons.smart_toy_outlined,
-                      title: 'Nenhum aplicativo conectado',
-                      subtitle:
-                          'Siga os passos acima no Claude, no ChatGPT ou no '
-                          'Cursor para conectar um assistente de IA à sua conta.',
-                    );
-                  }
-                  return ListView.separated(
-                    itemCount: grants.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 12),
-                    itemBuilder: (context, i) =>
-                        _cartaoDoApp(context, grants[i]),
-                  );
-                },
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                'Estes aplicativos agem na sua conta com as permissões que você '
+                'concedeu, e nunca além do que você mesmo pode fazer aqui.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 16),
+              // B3: um agente que age sozinho só é aceitável se quem o
+              // autorizou puder ver o que ele fez — e a pergunta nasce olhando
+              // esta lista, por isso a aba mora aqui e não no menu.
+              const TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                tabs: [
+                  Tab(text: 'Conectados'),
+                  Tab(text: 'Atividade'),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Expanded(
+                child: TabBarView(
+                  children: [_abaConectados(context), const AbaAtividade()],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _abaConectados(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _blocoComoConectar(context),
+        const SizedBox(height: 24),
+        Expanded(
+          child: ViewStateBuilder<IntegracoesController, List<McpGrant>>(
+            controller: _controller,
+            onError: (context, error) => AppErrorView(
+              message: error.message,
+              onRetry: _controller.fetchGrants,
+            ),
+            onSuccess: (context, grants) {
+              if (grants.isEmpty) {
+                return const AppEmptyView(
+                  icon: Icons.smart_toy_outlined,
+                  title: 'Nenhum aplicativo conectado',
+                  subtitle:
+                      'Siga os passos acima no Claude, no ChatGPT ou no '
+                      'Cursor para conectar um assistente de IA à sua conta.',
+                );
+              }
+              return ListView.separated(
+                itemCount: grants.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                itemBuilder: (context, i) => _cartaoDoApp(context, grants[i]),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 

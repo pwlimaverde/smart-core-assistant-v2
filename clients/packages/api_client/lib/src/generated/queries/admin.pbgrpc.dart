@@ -459,6 +459,13 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$revokeMcpGrant, request, options: options);
   }
 
+  $grpc.ResponseFuture<$0.ListMyAuditLogResponse> listMyAuditLog(
+    $0.ListMyAuditLogRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyAuditLog, request, options: options);
+  }
+
   /// Configuração inicial guiada (passos 5 a 8)
   $grpc.ResponseFuture<$0.CreateMyWhatsappInstanceResponse>
       createMyWhatsappInstance(
@@ -1112,6 +1119,11 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/RevokeMcpGrant',
           ($0.RevokeMcpGrantRequest value) => value.writeToBuffer(),
           $0.RevokeMcpGrantResponse.fromBuffer);
+  static final _$listMyAuditLog =
+      $grpc.ClientMethod<$0.ListMyAuditLogRequest, $0.ListMyAuditLogResponse>(
+          '/smartcore.contracts.queries.AdminService/ListMyAuditLog',
+          ($0.ListMyAuditLogRequest value) => value.writeToBuffer(),
+          $0.ListMyAuditLogResponse.fromBuffer);
   static final _$createMyWhatsappInstance = $grpc.ClientMethod<
           $0.CreateMyWhatsappInstanceRequest,
           $0.CreateMyWhatsappInstanceResponse>(
@@ -1856,6 +1868,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.RevokeMcpGrantRequest.fromBuffer(value),
         ($0.RevokeMcpGrantResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListMyAuditLogRequest,
+            $0.ListMyAuditLogResponse>(
+        'ListMyAuditLog',
+        listMyAuditLog_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListMyAuditLogRequest.fromBuffer(value),
+        ($0.ListMyAuditLogResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.CreateMyWhatsappInstanceRequest,
             $0.CreateMyWhatsappInstanceResponse>(
         'CreateMyWhatsappInstance',
@@ -2776,6 +2797,15 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.RevokeMcpGrantResponse> revokeMcpGrant(
       $grpc.ServiceCall call, $0.RevokeMcpGrantRequest request);
+
+  $async.Future<$0.ListMyAuditLogResponse> listMyAuditLog_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListMyAuditLogRequest> $request) async {
+    return listMyAuditLog($call, await $request);
+  }
+
+  $async.Future<$0.ListMyAuditLogResponse> listMyAuditLog(
+      $grpc.ServiceCall call, $0.ListMyAuditLogRequest request);
 
   $async.Future<$0.CreateMyWhatsappInstanceResponse>
       createMyWhatsappInstance_Pre($grpc.ServiceCall $call,

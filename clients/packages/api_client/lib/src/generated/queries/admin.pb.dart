@@ -9556,6 +9556,313 @@ class RevokeMcpGrantResponse extends $pb.GeneratedMessage {
   void clearJanelaRevogacaoMin() => $_clearField(2);
 }
 
+/// B3 (doc 35-agentes F1) — "o que o agente fez": a trilha do PRÓPRIO tenant.
+/// Distinta de QueryAuditLog (superusuário, cross-tenant): aqui o tenant vem da
+/// sessão, e quem não é tenant:admin só vê o que os próprios agentes fizeram.
+class ListMyAuditLogRequest extends $pb.GeneratedMessage {
+  factory ListMyAuditLogRequest({
+    $core.String? origem,
+    $core.String? grantId,
+    $fixnum.Int64? desde,
+    $core.int? limit,
+    $core.int? offset,
+  }) {
+    final result = create();
+    if (origem != null) result.origem = origem;
+    if (grantId != null) result.grantId = grantId;
+    if (desde != null) result.desde = desde;
+    if (limit != null) result.limit = limit;
+    if (offset != null) result.offset = offset;
+    return result;
+  }
+
+  ListMyAuditLogRequest._();
+
+  factory ListMyAuditLogRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyAuditLogRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyAuditLogRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'origem')
+    ..aOS(2, _omitFieldNames ? '' : 'grantId')
+    ..aInt64(3, _omitFieldNames ? '' : 'desde')
+    ..aI(4, _omitFieldNames ? '' : 'limit')
+    ..aI(5, _omitFieldNames ? '' : 'offset')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyAuditLogRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyAuditLogRequest copyWith(
+          void Function(ListMyAuditLogRequest) updates) =>
+      super.copyWith((message) => updates(message as ListMyAuditLogRequest))
+          as ListMyAuditLogRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyAuditLogRequest create() => ListMyAuditLogRequest._();
+  @$core.override
+  ListMyAuditLogRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyAuditLogRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyAuditLogRequest>(create);
+  static ListMyAuditLogRequest? _defaultInstance;
+
+  /// "" = tudo | "mcp" = só agentes | "painel" = só pessoas. Para quem não é
+  /// admin o servidor usa sempre "mcp".
+  @$pb.TagNumber(1)
+  $core.String get origem => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set origem($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasOrigem() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearOrigem() => $_clearField(1);
+
+  /// Restringe a um aplicativo conectado (o `id` de McpGrantItem).
+  @$pb.TagNumber(2)
+  $core.String get grantId => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set grantId($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasGrantId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearGrantId() => $_clearField(2);
+
+  /// Só o que aconteceu a partir deste instante (ms desde a época). 0 = tudo.
+  @$pb.TagNumber(3)
+  $fixnum.Int64 get desde => $_getI64(2);
+  @$pb.TagNumber(3)
+  set desde($fixnum.Int64 value) => $_setInt64(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDesde() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDesde() => $_clearField(3);
+
+  /// Teto de 200 no servidor.
+  @$pb.TagNumber(4)
+  $core.int get limit => $_getIZ(3);
+  @$pb.TagNumber(4)
+  set limit($core.int value) => $_setSignedInt32(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasLimit() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearLimit() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.int get offset => $_getIZ(4);
+  @$pb.TagNumber(5)
+  set offset($core.int value) => $_setSignedInt32(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasOffset() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearOffset() => $_clearField(5);
+}
+
+/// Sem a mensagem do evento, de propósito: alguns eventos guardam nome ou
+/// e-mail na mensagem, e esta tela não mostra dado pessoal.
+class MyAuditLogEntry extends $pb.GeneratedMessage {
+  factory MyAuditLogEntry({
+    $fixnum.Int64? timestamp,
+    $core.String? eventType,
+    $core.String? origem,
+    $core.String? clientName,
+    $core.String? tool,
+    $core.int? userId,
+    $core.String? userNome,
+    $core.String? grantId,
+  }) {
+    final result = create();
+    if (timestamp != null) result.timestamp = timestamp;
+    if (eventType != null) result.eventType = eventType;
+    if (origem != null) result.origem = origem;
+    if (clientName != null) result.clientName = clientName;
+    if (tool != null) result.tool = tool;
+    if (userId != null) result.userId = userId;
+    if (userNome != null) result.userNome = userNome;
+    if (grantId != null) result.grantId = grantId;
+    return result;
+  }
+
+  MyAuditLogEntry._();
+
+  factory MyAuditLogEntry.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MyAuditLogEntry.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MyAuditLogEntry',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'timestamp')
+    ..aOS(2, _omitFieldNames ? '' : 'eventType')
+    ..aOS(3, _omitFieldNames ? '' : 'origem')
+    ..aOS(4, _omitFieldNames ? '' : 'clientName')
+    ..aOS(5, _omitFieldNames ? '' : 'tool')
+    ..aI(6, _omitFieldNames ? '' : 'userId')
+    ..aOS(7, _omitFieldNames ? '' : 'userNome')
+    ..aOS(8, _omitFieldNames ? '' : 'grantId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyAuditLogEntry clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MyAuditLogEntry copyWith(void Function(MyAuditLogEntry) updates) =>
+      super.copyWith((message) => updates(message as MyAuditLogEntry))
+          as MyAuditLogEntry;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MyAuditLogEntry create() => MyAuditLogEntry._();
+  @$core.override
+  MyAuditLogEntry createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MyAuditLogEntry getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MyAuditLogEntry>(create);
+  static MyAuditLogEntry? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get timestamp => $_getI64(0);
+  @$pb.TagNumber(1)
+  set timestamp($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTimestamp() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTimestamp() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get eventType => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set eventType($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasEventType() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearEventType() => $_clearField(2);
+
+  /// "mcp" | "painel" — derivada do user_agent, não um campo da tabela.
+  @$pb.TagNumber(3)
+  $core.String get origem => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set origem($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasOrigem() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearOrigem() => $_clearField(3);
+
+  /// Nome do aplicativo, quando a origem é mcp. TEXTO DE TERCEIRO: escapar.
+  @$pb.TagNumber(4)
+  $core.String get clientName => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set clientName($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasClientName() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearClientName() => $_clearField(4);
+
+  /// Operação chamada pelo agente, quando a origem é mcp.
+  @$pb.TagNumber(5)
+  $core.String get tool => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set tool($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasTool() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearTool() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.int get userId => $_getIZ(5);
+  @$pb.TagNumber(6)
+  set userId($core.int value) => $_setSignedInt32(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasUserId() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearUserId() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $core.String get userNome => $_getSZ(6);
+  @$pb.TagNumber(7)
+  set userNome($core.String value) => $_setString(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasUserNome() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearUserNome() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.String get grantId => $_getSZ(7);
+  @$pb.TagNumber(8)
+  set grantId($core.String value) => $_setString(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasGrantId() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearGrantId() => $_clearField(8);
+}
+
+class ListMyAuditLogResponse extends $pb.GeneratedMessage {
+  factory ListMyAuditLogResponse({
+    $core.Iterable<MyAuditLogEntry>? entries,
+  }) {
+    final result = create();
+    if (entries != null) result.entries.addAll(entries);
+    return result;
+  }
+
+  ListMyAuditLogResponse._();
+
+  factory ListMyAuditLogResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyAuditLogResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyAuditLogResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<MyAuditLogEntry>(1, _omitFieldNames ? '' : 'entries',
+        subBuilder: MyAuditLogEntry.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyAuditLogResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyAuditLogResponse copyWith(
+          void Function(ListMyAuditLogResponse) updates) =>
+      super.copyWith((message) => updates(message as ListMyAuditLogResponse))
+          as ListMyAuditLogResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyAuditLogResponse create() => ListMyAuditLogResponse._();
+  @$core.override
+  ListMyAuditLogResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyAuditLogResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyAuditLogResponse>(create);
+  static ListMyAuditLogResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<MyAuditLogEntry> get entries => $_getList(0);
+}
+
 class ListTenantUsersRequest extends $pb.GeneratedMessage {
   factory ListTenantUsersRequest() => create();
 
