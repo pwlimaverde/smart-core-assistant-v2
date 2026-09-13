@@ -325,3 +325,62 @@ Não é uma correção do teste: é uma entidade nova no produto, com tela
 própria, e o cadastro de contato entregue aqui já resolve o que travava o C3
 (não havia quem escolher no diálogo). Fica registrado como o próximo bloco,
 não como pendência desta rodada.
+
+## Terceira rodada de teste (12/09, noite)
+
+### "Vincular" o MCP parava em "Aplicativo não reconhecido"
+
+O log do `control_plane` dizia `documento de metadados do cliente MCP
+recusado`, `motivo: falha_de_rede`, para `client_id=https://claude.ai/mcp-client`.
+Não era rede: o `claude.ai` responde **403 com desafio do Cloudflare** ao IP do
+VPS — com qualquer `User-Agent`, de dentro e de fora do Docker. O CIMD do Claude
+nunca foi legível daqui, e nenhuma correção anterior do fluxo OAuth chegaria a
+ser exercitada.
+
+Correção: `cimd::documento_conhecido` — documento embutido para o Claude e o
+Claude Code, usado **só quando o fetch falha**, com os `redirect_uris` da
+documentação de conectores da Anthropic. Não abre brecha: quem se passar pelo
+`client_id` só consegue devolver o código ao próprio Claude. De brinde, o
+loopback passou a casar sem a porta (RFC 8252 §7.3), sem o que o Claude Code
+também seria recusado.
+
+### O link do convite caía no login
+
+O guard mandava toda rota para a splash `'/'` durante o boot — e o destino se
+perdia. Para quem não tem sessão, `'/'` ao fim do boot é `'/login'`. A tela de
+criar senha nunca aparecia. Agora a ida para a splash leva `?retomar=<endereço
+com a query>`, retomado ao fim do boot sob as mesmas regras de sessão; só
+caminhos internos (nada de `//outro.site`).
+
+### "Abrir conversa" dava erro
+
+`IniciarAtendimentoUsecase` nunca foi registrado no `operacional_module`. Os
+testes do diálogo o registravam direto no GetIt, então passavam — e o app
+estourava no `inject` antes de sair qualquer requisição (por isso nenhum log,
+trace ou linha no banco). Registrado, e com um teste que lê `lib/` e cobra
+registro de todo `inject<…Usecase>()`. O campo "Quadro" do diálogo virou o
+quadro aberto: as colunas oferecidas são dele, e trocar só o quadro mandaria a
+etapa de um fluxo com o id de outro.
+
+## Levantamento de pendências dos planos (12/09)
+
+Leitura cruzada dos planos canônicos com o código (RPCs no contrato e
+marcadores no fonte). "Sem sinal" = nada no código que indique início.
+
+| Plano | Pendente | Observação |
+|---|---|---|
+| **35-agentes F1** | Auditoria "o que o agente fez" para o dono | `QueryAuditLog` ainda só superusuário |
+| **35-agentes F2** | Menu por escopo | `tenant_drawer` ainda `if (isTenantAdmin)` — o papel somente-leitura da D4 não aparece |
+| **35-agentes F4** | Ajustar permissões sem desconectar | só `List`/`RevokeMcpGrant` |
+| **35-agentes F5** | Descoberta do recurso | só a tela; sem cartão no painel |
+| **regras D1** | Limiar de confiança com veto por tenant | C1 usa 0,8 constante |
+| **regras D6** | Notificar o atendente da atribuição | sem sinal |
+| **N9 E4** | Marcar como lida / não lidas | sem sinal |
+| **N10 E2, E5, E6** | Assunto automático; treinamento por upload de arquivo; feedback do teste | sem sinal |
+| **N11 E5** | Clientes PJ e vínculo contato ↔ cliente | tabelas existem, sem RPC |
+| **N11 E8** | Recuperação de senha e reenvio de convite | sem sinal — um convidado que perdeu o e-mail não tem saída |
+| **N12** | Cutover de produção | operação, não código |
+
+Ordem sugerida: **N11 E8** (é o que faltará no próximo teste do convite) →
+**35-agentes F2 + F1** (primeiro corte que torna o agente auditável) → **D1** →
+o resto.
