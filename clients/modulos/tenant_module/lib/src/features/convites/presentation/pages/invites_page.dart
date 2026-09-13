@@ -178,13 +178,26 @@ class _InvitesPageState extends State<InvitesPage> {
                     ),
                   ),
                   DataCell(
-                    invite.pendente
-                        ? IconButton(
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Vencido ainda pode ser reenviado — é o caso de quem
+                        // não abriu o e-mail a tempo, e reenviar renova a
+                        // validade. Aceito ou revogado já terminou.
+                        if (!invite.used && !invite.revoked)
+                          IconButton(
+                            icon: const Icon(Icons.forward_to_inbox),
+                            tooltip: 'Reenviar',
+                            onPressed: () => _reenviar(invite),
+                          ),
+                        if (invite.pendente)
+                          IconButton(
                             icon: const Icon(Icons.block, color: Colors.red),
                             tooltip: 'Revogar',
                             onPressed: () => _revoke(invite),
-                          )
-                        : const SizedBox.shrink(),
+                          ),
+                      ],
+                    ),
                   ),
                 ],
               );
@@ -193,6 +206,26 @@ class _InvitesPageState extends State<InvitesPage> {
         ),
       ),
     );
+  }
+
+  void _reenviar(TenantInvite invite) async {
+    final res = await _controller.reenviarConvite(invite.id);
+    if (!mounted) return;
+    final String mensagem;
+    if (res case Success(value: final validade)) {
+      final dia = validade.day.toString().padLeft(2, '0');
+      final mes = validade.month.toString().padLeft(2, '0');
+      mensagem =
+          'Convite reenviado para ${invite.email}. '
+          'Vale até $dia/$mes/${validade.year}.';
+    } else if (res case Failure(:final error)) {
+      mensagem = 'Erro ao reenviar: ${ErrorMessageMapper.map(error)}';
+    } else {
+      return;
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(mensagem)));
   }
 
   void _revoke(TenantInvite invite) async {

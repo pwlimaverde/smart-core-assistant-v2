@@ -66,7 +66,29 @@ impl RefreshTokenStore {
         let chave_fam = keys::chave_refresh_familia(family_id);
         let _: i64 = self.con.sadd(&chave_fam, token_hash).await?;
         let _: bool = self.con.expire(&chave_fam, ttl_segundos as i64).await?;
+
+        // E a família no usuário, para "encerrar todas as sessões" (N11 E8).
+        // O TTL acompanha o token mais novo: a família mais longeva do usuário
+        // nunca vive mais que o próprio conjunto.
+        let chave_usr = keys::chave_refresh_usuario(user_id);
+        let _: i64 = self.con.sadd(&chave_usr, family_id).await?;
+        let _: bool = self.con.expire(&chave_usr, ttl_segundos as i64).await?;
         Ok(())
+    }
+
+    /// Revoga todas as famílias de refresh de um usuário (troca de senha).
+    ///
+    /// Devolve quantas famílias caíram. Sessões criadas antes do índice por
+    /// usuário existir não aparecem aqui — expiram sozinhas no TTL do refresh.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn revogar_todas_do_usuario(&mut self, user_id: i32) -> Result<usize, RedisError> {
+        let chave_usr = keys::chave_refresh_usuario(user_id);
+        let familias: Vec<String> = self.con.smembers(&chave_usr).await?;
+        for familia in &familias {
+            self.revogar_familia(familia).await?;
+        }
+        let _: i64 = self.con.del(&chave_usr).await?;
+        Ok(familias.len())
     }
 
     /// Valida e marca o token como rotacionado (uso único). Retorna o registro original

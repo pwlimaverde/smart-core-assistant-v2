@@ -116,3 +116,19 @@ final class AcceptInviteDatasource
     );
   }
 }
+
+/// Reenvia o e-mail do convite e devolve a nova validade (N11 E8).
+final class ReenviarConviteDatasource
+    implements Datasource<DateTime, ReenviarConviteParameters> {
+  final proto.AdminServiceClient _client;
+
+  const ReenviarConviteDatasource({required this._client});
+
+  @override
+  Future<DateTime> call(ReenviarConviteParameters parameters) async {
+    final resp = await _client.reenviarConvite(
+      proto.ReenviarConviteRequest(inviteId: parameters.inviteId),
+    );
+    return DateTime.fromMillisecondsSinceEpoch(resp.expiresAt.toInt());
+  }
+}

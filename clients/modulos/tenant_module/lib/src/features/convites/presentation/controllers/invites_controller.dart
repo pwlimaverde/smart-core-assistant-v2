@@ -15,11 +15,13 @@ final class InvitesController extends BaseController<List<TenantInvite>> {
   final ListInvitesUsecase _listUsecase;
   final CreateInviteUsecase _createUsecase;
   final RevokeInviteUsecase _revokeUsecase;
+  final ReenviarConviteUsecase _resendUsecase;
 
   InvitesController({
     required this._listUsecase,
     required this._createUsecase,
     required this._revokeUsecase,
+    required this._resendUsecase,
   });
 
   Future<void> fetchInvites() => execute(() => _listUsecase(noParams));
@@ -50,6 +52,18 @@ final class InvitesController extends BaseController<List<TenantInvite>> {
   ) async {
     final res = await _revokeUsecase(
       RevokeInviteParameters(inviteId: inviteId),
+    );
+    if (res is Success) await fetchInvites();
+    return res;
+  }
+
+  /// Reenvia o e-mail e devolve a nova validade. Recarrega a lista no sucesso:
+  /// um convite vencido volta a aparecer como pendente.
+  Future<ReturnSuccessOrError<DateTime, ConvitesError>> reenviarConvite(
+    String inviteId,
+  ) async {
+    final res = await _resendUsecase(
+      ReenviarConviteParameters(inviteId: inviteId),
     );
     if (res is Success) await fetchInvites();
     return res;

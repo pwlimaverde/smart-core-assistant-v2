@@ -327,6 +327,13 @@ final class TenantModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<ReenviarConviteUsecase>(
+      () => ReenviarConviteUsecase(
+        repository: ReenviarConviteRepository(
+          datasource: ReenviarConviteDatasource(client: _adminClient()),
+        ),
+      ),
+    );
 
     // ── usuarios ──────────────────────────────────────────────────────────
     i.lazySingleton<ListTenantUsersUsecase>(

@@ -53,4 +53,20 @@ pub trait AuthStore: Send + Sync {
 
     /// Remove fisicamente um superusuário; retorna linhas afetadas (0 = inexistente).
     async fn deletar_superuser(&self, user_id: i32) -> Result<u64, DbError>;
+
+    /// N11 E8 — guarda o hash de um pedido de redefinição de senha.
+    async fn registrar_redefinicao_senha(
+        &self,
+        user_id: i32,
+        token_hash: &str,
+        expira_em: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), DbError>;
+
+    /// N11 E8 — consome o token e grava a senha nova (hash já calculado).
+    /// `Some(user_id)` quando trocou; `None` quando o link não vale.
+    async fn redefinir_senha(
+        &self,
+        token_hash: &str,
+        password_hash: &str,
+    ) -> Result<Option<i32>, DbError>;
 }

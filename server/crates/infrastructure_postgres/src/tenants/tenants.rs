@@ -210,6 +210,17 @@ pub trait TenantInviteRepository: Send + Sync {
         ctx: &RequestContext,
     ) -> Result<Vec<TenantInviteListItem>, DbError>;
 
+    /// Dá nova validade a um convite ainda não aceito nem revogado — vencido
+    /// inclusive, que é justamente o caso de quem não abriu o e-mail a tempo.
+    /// Exige `tenant:admin`. `None` = não havia convite reenviável com esse id.
+    async fn renovar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        invite_id: Uuid,
+        expires_at: DateTime<Utc>,
+    ) -> Result<Option<TenantInvite>, DbError>;
+
     /// Revoga um convite ainda não usado/revogado/expirado do tenant do `ctx`.
     /// Exige `tenant:admin`. Retorna `true` se afetou alguma linha (convite válido).
     async fn marcar_revogado(
@@ -580,5 +591,31 @@ impl TenantInviteRepository for PostgresTenantInviteRepository {
         .execute(&mut **tx)
         .await?;
         Ok(res.rows_affected() > 0)
+    }
+
+    // O retorno carrega o `token`: `skip_all`.
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, invite_id = %invite_id))]
+    async fn renovar(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        invite_id: Uuid,
+        expires_at: DateTime<Utc>,
+    ) -> Result<Option<TenantInvite>, DbError> {
+        ctx.exigir_qualquer(&["tenant:admin"])?;
+        // O token continua o mesmo: o link do primeiro e-mail passa a valer de
+        // novo, e quem já o tinha salvo não fica com um endereço morto.
+        let row = sqlx::query_as::<_, TenantInvite>(
+            "UPDATE tenants_tenantinvite SET expires_at = $3 \
+             WHERE id = $1 AND tenant_id = $2 AND used = FALSE AND revoked = FALSE \
+             RETURNING id, tenant_id, email, name, role, module_permissions, \
+                       flow_permissions, token, expires_at, used, created_at, created_by_id",
+        )
+        .bind(invite_id)
+        .bind(ctx.tenant_id)
+        .bind(expires_at)
+        .fetch_optional(&mut **tx)
+        .await?;
+        Ok(row)
     }
 }

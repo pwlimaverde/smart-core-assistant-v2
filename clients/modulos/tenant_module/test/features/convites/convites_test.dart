@@ -57,6 +57,11 @@ InvitesController _invitesController(MockAdminClient client) {
     listUsecase: u.list,
     createUsecase: u.create,
     revokeUsecase: u.revoke,
+    resendUsecase: ReenviarConviteUsecase(
+      repository: ReenviarConviteRepository(
+        datasource: ReenviarConviteDatasource(client: client),
+      ),
+    ),
   );
 }
 

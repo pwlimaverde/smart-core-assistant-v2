@@ -662,6 +662,14 @@ table RevokeInviteResponse {
   success:bool;
 }
 
+table ReenviarConviteRequest {
+  invite_id:string;
+}
+
+table ReenviarConviteResponse {
+  expires_at:long;
+}
+
 table AdminListUsersRequest {
   busca:string;
   limite:int;
@@ -1513,6 +1521,23 @@ table LogoutRequest {
 
 table LogoutResponse {
   revoked:bool;
+}
+
+table SolicitarRedefinicaoSenhaRequest {
+  login:string;
+}
+
+table SolicitarRedefinicaoSenhaResponse {
+  aceito:bool;
+}
+
+table RedefinirSenhaRequest {
+  token:string;
+  nova_senha:string;
+}
+
+table RedefinirSenhaResponse {
+  sucesso:bool;
 }
 
 

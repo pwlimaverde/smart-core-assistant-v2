@@ -133,4 +133,32 @@ impl AuthStore for PgAuthStore {
             .deletar_superuser(&self.pool, user_id)
             .await
     }
+
+    // O hash do token fica fora do span: `skip_all`.
+    #[tracing::instrument(skip_all, fields(user_id = user_id))]
+    async fn registrar_redefinicao_senha(
+        &self,
+        user_id: i32,
+        token_hash: &str,
+        expira_em: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), DbError> {
+        infrastructure_postgres::auth::password_reset::registrar(
+            &self.pool, user_id, token_hash, expira_em,
+        )
+        .await
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn redefinir_senha(
+        &self,
+        token_hash: &str,
+        password_hash: &str,
+    ) -> Result<Option<i32>, DbError> {
+        infrastructure_postgres::auth::password_reset::consumir_e_trocar_senha(
+            &self.pool,
+            token_hash,
+            password_hash,
+        )
+        .await
+    }
 }

@@ -2188,6 +2188,33 @@ final $typed_data.Uint8List revokeInviteResponseDescriptor =
     $convert.base64Decode(
         'ChRSZXZva2VJbnZpdGVSZXNwb25zZRIYCgdzdWNjZXNzGAEgASgIUgdzdWNjZXNz');
 
+@$core.Deprecated('Use reenviarConviteRequestDescriptor instead')
+const ReenviarConviteRequest$json = {
+  '1': 'ReenviarConviteRequest',
+  '2': [
+    {'1': 'invite_id', '3': 1, '4': 1, '5': 9, '10': 'inviteId'},
+  ],
+};
+
+/// Descriptor for `ReenviarConviteRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List reenviarConviteRequestDescriptor =
+    $convert.base64Decode(
+        'ChZSZWVudmlhckNvbnZpdGVSZXF1ZXN0EhsKCWludml0ZV9pZBgBIAEoCVIIaW52aXRlSWQ=');
+
+@$core.Deprecated('Use reenviarConviteResponseDescriptor instead')
+const ReenviarConviteResponse$json = {
+  '1': 'ReenviarConviteResponse',
+  '2': [
+    {'1': 'expires_at', '3': 1, '4': 1, '5': 3, '10': 'expiresAt'},
+  ],
+};
+
+/// Descriptor for `ReenviarConviteResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List reenviarConviteResponseDescriptor =
+    $convert.base64Decode(
+        'ChdSZWVudmlhckNvbnZpdGVSZXNwb25zZRIdCgpleHBpcmVzX2F0GAEgASgDUglleHBpcmVzQX'
+        'Q=');
+
 @$core.Deprecated('Use adminListUsersRequestDescriptor instead')
 const AdminListUsersRequest$json = {
   '1': 'AdminListUsersRequest',

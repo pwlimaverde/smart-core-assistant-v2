@@ -33,10 +33,31 @@ message LogoutResponse {
   bool revoked = 1;
 }
 
-// Fachada de borda gRPC-Web. Login/Refresh são públicas; Logout exige access token
-// no metadata `authorization: Bearer <access>`.
+// N11 E8 — recuperação de senha. `login` aceita e-mail ou nome de usuário, como
+// a tela de login. A resposta é a mesma exista a conta ou não.
+message SolicitarRedefinicaoSenhaRequest {
+  string login = 1;
+}
+
+message SolicitarRedefinicaoSenhaResponse {
+  bool aceito = 1;
+}
+
+message RedefinirSenhaRequest {
+  string token = 1;
+  string nova_senha = 2;
+}
+
+message RedefinirSenhaResponse {
+  bool sucesso = 1;
+}
+
+// Fachada de borda gRPC-Web. Login/Refresh e a recuperação de senha são
+// públicas; Logout exige access token no metadata `authorization: Bearer <access>`.
 service AuthService {
   rpc Login   (LoginRequest)   returns (AuthResponse);
   rpc Refresh (RefreshRequest) returns (AuthResponse);
   rpc Logout  (LogoutRequest)  returns (LogoutResponse);
+  rpc SolicitarRedefinicaoSenha (SolicitarRedefinicaoSenhaRequest) returns (SolicitarRedefinicaoSenhaResponse);
+  rpc RedefinirSenha (RedefinirSenhaRequest) returns (RedefinirSenhaResponse);
 }

@@ -21,6 +21,7 @@ final class InvitesRoute extends GetItModule {
         listUsecase: inject<ListInvitesUsecase>(),
         createUsecase: inject<CreateInviteUsecase>(),
         revokeUsecase: inject<RevokeInviteUsecase>(),
+        resendUsecase: inject<ReenviarConviteUsecase>(),
       ),
     );
   }

@@ -24,6 +24,14 @@ pub fn chave_refresh_familia(family_id: &str) -> String {
     format!("auth:refresh_family:{family_id}")
 }
 
+/// Conjunto (Set) com as famílias de refresh de um usuário.
+///
+/// É o que permite encerrar **todas** as sessões de alguém de uma vez — depois
+/// de uma troca de senha, quem tinha a senha antiga não pode continuar logado.
+pub fn chave_refresh_usuario(user_id: i32) -> String {
+    format!("auth:refresh_user:{user_id}")
+}
+
 /// Blocklist de access tokens revogados (logout), indexada pelo `jti` do JWT.
 pub fn chave_blocklist(jti: &str) -> String {
     format!("auth:blocklist:{jti}")

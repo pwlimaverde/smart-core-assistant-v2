@@ -62,6 +62,10 @@ void main() {
           ),
         ),
         GoRoute(path: '/cadastro', builder: (_, _) => const Text('wizard')),
+        GoRoute(
+          path: '/recuperar-senha',
+          builder: (_, _) => const Text('recuperar'),
+        ),
       ],
     );
     addTearDown(router.dispose);
@@ -95,5 +99,16 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('wizard'), findsOneWidget);
+  });
+
+  testWidgets('os dois apps oferecem recuperar a senha', (tester) async {
+    // Sem este caminho, quem esquecia a senha dependia de alguém mexer no
+    // banco — inclusive o superusuário.
+    await montar(tester);
+
+    await tester.tap(find.text('Esqueci minha senha'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('recuperar'), findsOneWidget);
   });
 }

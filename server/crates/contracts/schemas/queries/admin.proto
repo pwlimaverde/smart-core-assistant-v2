@@ -724,6 +724,17 @@ message RevokeInviteResponse {
   bool success = 1;
 }
 
+// N11 E8 — reenviar o e-mail de um convite pendente ou vencido. Renova a
+// validade e mantém o mesmo link.
+message ReenviarConviteRequest {
+  string invite_id = 1;
+}
+
+message ReenviarConviteResponse {
+  // Nova validade, em milissegundos desde a época.
+  int64 expires_at = 1;
+}
+
 // D7 — usuarios de TODOS os tenants, para o painel do superusuario.
 //
 // `ListTenantUsers` resolve o tenant a partir das claims de quem chama e nunca
@@ -1071,6 +1082,7 @@ service AdminService {
   rpc AcceptInvite(AcceptInviteRequest) returns (AcceptInviteResponse);
   rpc ListInvites(ListInvitesRequest) returns (ListInvitesResponse);
   rpc RevokeInvite(RevokeInviteRequest) returns (RevokeInviteResponse);
+  rpc ReenviarConvite(ReenviarConviteRequest) returns (ReenviarConviteResponse);
   rpc ListTenantUsers(ListTenantUsersRequest) returns (ListTenantUsersResponse);
   rpc UpdateTenantUser(UpdateTenantUserRequest) returns (UpdateTenantUserResponse);
   rpc GetMyTenantConfig(GetMyTenantConfigRequest) returns (GetTenantConfigResponse);

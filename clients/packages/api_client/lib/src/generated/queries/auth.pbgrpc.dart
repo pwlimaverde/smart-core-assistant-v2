@@ -1,6 +1,6 @@
 // This is a generated file - do not edit.
 //
-// Generated from auth.proto.
+// Generated from queries/auth.proto.
 
 // @dart = 3.3
 
@@ -20,8 +20,8 @@ import 'auth.pb.dart' as $0;
 
 export 'auth.pb.dart';
 
-/// Fachada de borda gRPC-Web. Login/Refresh são públicas; Logout exige access token
-/// no metadata `authorization: Bearer <access>`.
+/// Fachada de borda gRPC-Web. Login/Refresh e a recuperação de senha são
+/// públicas; Logout exige access token no metadata `authorization: Bearer <access>`.
 @$pb.GrpcServiceName('smartcore.contracts.queries.AuthService')
 class AuthServiceClient extends $grpc.Client {
   /// The hostname for this service.
@@ -55,6 +55,22 @@ class AuthServiceClient extends $grpc.Client {
     return $createUnaryCall(_$logout, request, options: options);
   }
 
+  $grpc.ResponseFuture<$0.SolicitarRedefinicaoSenhaResponse>
+      solicitarRedefinicaoSenha(
+    $0.SolicitarRedefinicaoSenhaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$solicitarRedefinicaoSenha, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.RedefinirSenhaResponse> redefinirSenha(
+    $0.RedefinirSenhaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$redefinirSenha, request, options: options);
+  }
+
   // method descriptors
 
   static final _$login = $grpc.ClientMethod<$0.LoginRequest, $0.AuthResponse>(
@@ -71,6 +87,17 @@ class AuthServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AuthService/Logout',
           ($0.LogoutRequest value) => value.writeToBuffer(),
           $0.LogoutResponse.fromBuffer);
+  static final _$solicitarRedefinicaoSenha = $grpc.ClientMethod<
+          $0.SolicitarRedefinicaoSenhaRequest,
+          $0.SolicitarRedefinicaoSenhaResponse>(
+      '/smartcore.contracts.queries.AuthService/SolicitarRedefinicaoSenha',
+      ($0.SolicitarRedefinicaoSenhaRequest value) => value.writeToBuffer(),
+      $0.SolicitarRedefinicaoSenhaResponse.fromBuffer);
+  static final _$redefinirSenha =
+      $grpc.ClientMethod<$0.RedefinirSenhaRequest, $0.RedefinirSenhaResponse>(
+          '/smartcore.contracts.queries.AuthService/RedefinirSenha',
+          ($0.RedefinirSenhaRequest value) => value.writeToBuffer(),
+          $0.RedefinirSenhaResponse.fromBuffer);
 }
 
 @$pb.GrpcServiceName('smartcore.contracts.queries.AuthService')
@@ -99,6 +126,24 @@ abstract class AuthServiceBase extends $grpc.Service {
         false,
         ($core.List<$core.int> value) => $0.LogoutRequest.fromBuffer(value),
         ($0.LogoutResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.SolicitarRedefinicaoSenhaRequest,
+            $0.SolicitarRedefinicaoSenhaResponse>(
+        'SolicitarRedefinicaoSenha',
+        solicitarRedefinicaoSenha_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.SolicitarRedefinicaoSenhaRequest.fromBuffer(value),
+        ($0.SolicitarRedefinicaoSenhaResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.RedefinirSenhaRequest,
+            $0.RedefinirSenhaResponse>(
+        'RedefinirSenha',
+        redefinirSenha_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.RedefinirSenhaRequest.fromBuffer(value),
+        ($0.RedefinirSenhaResponse value) => value.writeToBuffer()));
   }
 
   $async.Future<$0.AuthResponse> login_Pre(
@@ -124,4 +169,22 @@ abstract class AuthServiceBase extends $grpc.Service {
 
   $async.Future<$0.LogoutResponse> logout(
       $grpc.ServiceCall call, $0.LogoutRequest request);
+
+  $async.Future<$0.SolicitarRedefinicaoSenhaResponse>
+      solicitarRedefinicaoSenha_Pre($grpc.ServiceCall $call,
+          $async.Future<$0.SolicitarRedefinicaoSenhaRequest> $request) async {
+    return solicitarRedefinicaoSenha($call, await $request);
+  }
+
+  $async.Future<$0.SolicitarRedefinicaoSenhaResponse> solicitarRedefinicaoSenha(
+      $grpc.ServiceCall call, $0.SolicitarRedefinicaoSenhaRequest request);
+
+  $async.Future<$0.RedefinirSenhaResponse> redefinirSenha_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.RedefinirSenhaRequest> $request) async {
+    return redefinirSenha($call, await $request);
+  }
+
+  $async.Future<$0.RedefinirSenhaResponse> redefinirSenha(
+      $grpc.ServiceCall call, $0.RedefinirSenhaRequest request);
 }

@@ -50,4 +50,10 @@ impl RefreshTokenPort for RedisRefreshTokenStore {
         let mut store = infrastructure_redis::RefreshTokenStore::new(self.conn.clone());
         store.revogar_familia(family_id).await
     }
+
+    #[tracing::instrument(skip_all, fields(user_id = user_id))]
+    async fn revoke_user(&self, user_id: i32) -> Result<usize, RedisError> {
+        let mut store = infrastructure_redis::RefreshTokenStore::new(self.conn.clone());
+        store.revogar_todas_do_usuario(user_id).await
+    }
 }

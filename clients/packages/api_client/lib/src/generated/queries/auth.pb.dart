@@ -1,6 +1,6 @@
 // This is a generated file - do not edit.
 //
-// Generated from auth.proto.
+// Generated from queries/auth.proto.
 
 // @dart = 3.3
 
@@ -429,6 +429,252 @@ class LogoutResponse extends $pb.GeneratedMessage {
   $core.bool hasRevoked() => $_has(0);
   @$pb.TagNumber(1)
   void clearRevoked() => $_clearField(1);
+}
+
+/// N11 E8 — recuperação de senha. `login` aceita e-mail ou nome de usuário, como
+/// a tela de login. A resposta é a mesma exista a conta ou não.
+class SolicitarRedefinicaoSenhaRequest extends $pb.GeneratedMessage {
+  factory SolicitarRedefinicaoSenhaRequest({
+    $core.String? login,
+  }) {
+    final result = create();
+    if (login != null) result.login = login;
+    return result;
+  }
+
+  SolicitarRedefinicaoSenhaRequest._();
+
+  factory SolicitarRedefinicaoSenhaRequest.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SolicitarRedefinicaoSenhaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SolicitarRedefinicaoSenhaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'login')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SolicitarRedefinicaoSenhaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SolicitarRedefinicaoSenhaRequest copyWith(
+          void Function(SolicitarRedefinicaoSenhaRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as SolicitarRedefinicaoSenhaRequest))
+          as SolicitarRedefinicaoSenhaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SolicitarRedefinicaoSenhaRequest create() =>
+      SolicitarRedefinicaoSenhaRequest._();
+  @$core.override
+  SolicitarRedefinicaoSenhaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SolicitarRedefinicaoSenhaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SolicitarRedefinicaoSenhaRequest>(
+          create);
+  static SolicitarRedefinicaoSenhaRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get login => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set login($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasLogin() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearLogin() => $_clearField(1);
+}
+
+class SolicitarRedefinicaoSenhaResponse extends $pb.GeneratedMessage {
+  factory SolicitarRedefinicaoSenhaResponse({
+    $core.bool? aceito,
+  }) {
+    final result = create();
+    if (aceito != null) result.aceito = aceito;
+    return result;
+  }
+
+  SolicitarRedefinicaoSenhaResponse._();
+
+  factory SolicitarRedefinicaoSenhaResponse.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SolicitarRedefinicaoSenhaResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SolicitarRedefinicaoSenhaResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOB(1, _omitFieldNames ? '' : 'aceito')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SolicitarRedefinicaoSenhaResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SolicitarRedefinicaoSenhaResponse copyWith(
+          void Function(SolicitarRedefinicaoSenhaResponse) updates) =>
+      super.copyWith((message) =>
+              updates(message as SolicitarRedefinicaoSenhaResponse))
+          as SolicitarRedefinicaoSenhaResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SolicitarRedefinicaoSenhaResponse create() =>
+      SolicitarRedefinicaoSenhaResponse._();
+  @$core.override
+  SolicitarRedefinicaoSenhaResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SolicitarRedefinicaoSenhaResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SolicitarRedefinicaoSenhaResponse>(
+          create);
+  static SolicitarRedefinicaoSenhaResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.bool get aceito => $_getBF(0);
+  @$pb.TagNumber(1)
+  set aceito($core.bool value) => $_setBool(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAceito() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAceito() => $_clearField(1);
+}
+
+class RedefinirSenhaRequest extends $pb.GeneratedMessage {
+  factory RedefinirSenhaRequest({
+    $core.String? token,
+    $core.String? novaSenha,
+  }) {
+    final result = create();
+    if (token != null) result.token = token;
+    if (novaSenha != null) result.novaSenha = novaSenha;
+    return result;
+  }
+
+  RedefinirSenhaRequest._();
+
+  factory RedefinirSenhaRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory RedefinirSenhaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'RedefinirSenhaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'token')
+    ..aOS(2, _omitFieldNames ? '' : 'novaSenha')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RedefinirSenhaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RedefinirSenhaRequest copyWith(
+          void Function(RedefinirSenhaRequest) updates) =>
+      super.copyWith((message) => updates(message as RedefinirSenhaRequest))
+          as RedefinirSenhaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static RedefinirSenhaRequest create() => RedefinirSenhaRequest._();
+  @$core.override
+  RedefinirSenhaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static RedefinirSenhaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<RedefinirSenhaRequest>(create);
+  static RedefinirSenhaRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get token => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set token($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasToken() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearToken() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get novaSenha => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set novaSenha($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNovaSenha() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNovaSenha() => $_clearField(2);
+}
+
+class RedefinirSenhaResponse extends $pb.GeneratedMessage {
+  factory RedefinirSenhaResponse({
+    $core.bool? sucesso,
+  }) {
+    final result = create();
+    if (sucesso != null) result.sucesso = sucesso;
+    return result;
+  }
+
+  RedefinirSenhaResponse._();
+
+  factory RedefinirSenhaResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory RedefinirSenhaResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'RedefinirSenhaResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOB(1, _omitFieldNames ? '' : 'sucesso')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RedefinirSenhaResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RedefinirSenhaResponse copyWith(
+          void Function(RedefinirSenhaResponse) updates) =>
+      super.copyWith((message) => updates(message as RedefinirSenhaResponse))
+          as RedefinirSenhaResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static RedefinirSenhaResponse create() => RedefinirSenhaResponse._();
+  @$core.override
+  RedefinirSenhaResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static RedefinirSenhaResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<RedefinirSenhaResponse>(create);
+  static RedefinirSenhaResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.bool get sucesso => $_getBF(0);
+  @$pb.TagNumber(1)
+  set sucesso($core.bool value) => $_setBool(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasSucesso() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearSucesso() => $_clearField(1);
 }
 
 const $core.bool _omitFieldNames =

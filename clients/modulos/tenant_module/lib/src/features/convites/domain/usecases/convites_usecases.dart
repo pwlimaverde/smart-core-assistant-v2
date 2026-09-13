@@ -137,3 +137,29 @@ final class AcceptInviteUsecase
     AcceptInviteParameters parameters,
   ) => Success(data);
 }
+
+final class ReenviarConviteUsecase
+    extends
+        UsecaseBaseCallData<
+          DateTime,
+          DateTime,
+          ReenviarConviteParameters,
+          ConvitesError
+        > {
+  const ReenviarConviteUsecase({required super.repository});
+
+  @override
+  ProcessData<DateTime, DateTime, ReenviarConviteParameters, ConvitesError>
+  get process => _process;
+
+  @override
+  ConvitesError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('reenviarConvite', exception, stackTrace);
+    return const ConvitesInesperado();
+  }
+
+  static ReturnSuccessOrError<DateTime, ConvitesError> _process(
+    DateTime data,
+    ReenviarConviteParameters parameters,
+  ) => Success(data);
+}

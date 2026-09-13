@@ -181,6 +181,10 @@ use contracts::grpc::queries::{
     QueryAuditLogResponse,
     QuitarMinhaAssinaturaRequest,
     QuitarMinhaAssinaturaResponse,
+    RedefinirSenhaRequest,
+    RedefinirSenhaResponse,
+    ReenviarConviteRequest,
+    ReenviarConviteResponse,
     RefreshRequest,
     RegisterPaymentRequest,
     RegisterPaymentResponse,
@@ -208,6 +212,8 @@ use contracts::grpc::queries::{
     SetTenantActiveRequest,
     SetTenantActiveResponse,
     SimpleOkResponse,
+    SolicitarRedefinicaoSenhaRequest,
+    SolicitarRedefinicaoSenhaResponse,
     SolicitarUploadMidiaRequest,
     SolicitarUploadMidiaResponse,
     StreamAtendimentosRequest,
@@ -255,11 +261,17 @@ use crate::audit::{publicar_auditoria_borda, publicar_reuso_detectado};
 pub struct AuthFacade {
     deps: Arc<AuthDeps>,
     bus: redis::aio::ConnectionManager,
+    /// E-mail da recuperação de senha (N11 E8). Ver a nota em `AdminFacade::email`.
+    email: infrastructure_email::Enviador,
 }
 
 impl AuthFacade {
     pub fn new(deps: Arc<AuthDeps>, bus: redis::aio::ConnectionManager) -> Self {
-        Self { deps, bus }
+        Self {
+            deps,
+            bus,
+            email: infrastructure_email::Enviador::do_ambiente(),
+        }
     }
 }
 
@@ -279,6 +291,39 @@ fn base_publica_do_app() -> String {
         .unwrap_or_else(|_| "https://smartcoreassistant.com.br/v2/tenant".to_string())
         .trim_end_matches('/')
         .to_string()
+}
+
+/// Quantas vezes `recurso`/`id` foi usado na janela, contando esta.
+///
+/// `None` quando o Redis não respondeu. Quem chama decide o que fazer com isso;
+/// nos usos de hoje, falha aberto — pelo mesmo motivo do teto de atendimento
+/// ativo: o limite contém abuso, e não deve virar um ponto de falha a mais entre
+/// o usuário e a própria conta.
+async fn tentativas_na_janela(
+    deps: &AuthDeps,
+    traceparent: &str,
+    recurso: &str,
+    id: &str,
+    janela_s: u64,
+) -> Option<u64> {
+    let req = application::auth::login::montar_envelope_request(
+        Uuid::nil(),
+        traceparent,
+        "RegisterRateLimitAttempt",
+        &serde_json::json!({ "recurso": recurso, "id": id, "window_s": janela_s }),
+    );
+    match deps
+        .redis
+        .call(req, std::time::Duration::from_secs(3))
+        .await
+    {
+        Ok(resp) if resp.kind != MessageKind::Error as i32 => {
+            serde_json::from_slice::<serde_json::Value>(&resp.payload)
+                .ok()
+                .and_then(|c| c.get("attempts").and_then(serde_json::Value::as_u64))
+        }
+        _ => None,
+    }
 }
 
 /// Converte o `AppError` interno num `tonic::Status` sem vazar detalhe sensível.
@@ -831,6 +876,207 @@ impl AuthService for AuthFacade {
                 Err(app_err_para_status(&err))
             }
         }
+    }
+
+    /// N11 E8 — pedido de redefinição de senha. Pública.
+    ///
+    /// Responde `aceito` para qualquer login bem formado, exista a conta ou
+    /// não: responder diferente seria um oráculo de "quais e-mails têm conta
+    /// aqui". Pelo mesmo motivo o e-mail sai em segundo plano — esperar o SMTP
+    /// só quando a conta existe faria o tempo de resposta contar o segredo.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "SolicitarRedefinicaoSenha",
+            traceparent
+        )
+    )]
+    async fn solicitar_redefinicao_senha(
+        &self,
+        req: Request<SolicitarRedefinicaoSenhaRequest>,
+    ) -> Result<Response<SolicitarRedefinicaoSenhaResponse>, Status> {
+        let traceparent = traceparent_do_metadata(&req);
+        let ip = ip_do_metadata(&req);
+        // NUNCA logar o login: é o e-mail de alguém.
+        let login = req.into_inner().login.trim().to_string();
+        if login.is_empty() {
+            return Err(Status::invalid_argument("errors.validation"));
+        }
+
+        // Por IP, e dito ao cliente: varrer endereços a partir de uma máquina é
+        // o abuso, e recusar não revela nada sobre conta nenhuma.
+        if let Some(ip) = ip.as_deref() {
+            if tentativas_na_janela(
+                &self.deps,
+                &traceparent,
+                "redefinicao_senha_ip",
+                ip,
+                15 * 60,
+            )
+            .await
+            .is_some_and(|n| n > 10)
+            {
+                return Err(Status::resource_exhausted("errors.auth.rate_limited"));
+            }
+        }
+
+        let aceito = || Response::new(SolicitarRedefinicaoSenhaResponse { aceito: true });
+
+        // Por conta, em silêncio: avisar "muitos pedidos para esta conta"
+        // confirmaria que ela existe. O limite só impede de encher a caixa de
+        // entrada de alguém com links.
+        let id_conta = application::tokens::hash_sha256_hex(&login.to_lowercase());
+        if tentativas_na_janela(
+            &self.deps,
+            &traceparent,
+            "redefinicao_senha_conta",
+            &id_conta,
+            60 * 60,
+        )
+        .await
+        .is_some_and(|n| n > 3)
+        {
+            tracing::warn!("pedidos de redefinição acima do limite para uma conta; ignorado");
+            return Ok(aceito());
+        }
+
+        // O token nasce aqui e só o hash desce: o banco nunca vê o token.
+        let token = application::tokens::gerar_refresh_token();
+        let env_req = application::auth::login::montar_envelope_request(
+            Uuid::nil(),
+            &traceparent,
+            "SolicitarRedefinicaoSenha",
+            &serde_json::json!({
+                "login": login,
+                "token_hash": application::tokens::hash_sha256_hex(&token),
+            }),
+        );
+        let resp = self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+            .map_err(|e| Status::unavailable(format!("Falha no serviço interno: {e}")))?;
+        if resp.kind == MessageKind::Error as i32 {
+            return Err(status_do_erro_interno(resp.error));
+        }
+
+        let corpo: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap_or_default();
+        if corpo.get("enviar").and_then(serde_json::Value::as_bool) == Some(true) {
+            let texto = |k: &str| {
+                corpo
+                    .get(k)
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string()
+            };
+            let (para, nome) = (texto("email"), texto("nome"));
+            let validade_min = corpo
+                .get("validade_min")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or(60);
+            let link = format!("{}/redefinir-senha?token={}", base_publica_do_app(), token);
+            let email = self.email.clone();
+            tokio::spawn(async move {
+                let envio = infrastructure_email::redefinicao_senha::enviar(
+                    &email,
+                    infrastructure_email::redefinicao_senha::DadosDaRedefinicao {
+                        para: &para,
+                        nome: &nome,
+                        link: &link,
+                        validade_min,
+                    },
+                )
+                .await;
+                if let Err(erro) = envio {
+                    tracing::error!(%erro, "pedido de redefinição registrado, mas o e-mail não saiu");
+                }
+            });
+        }
+
+        Ok(aceito())
+    }
+
+    /// N11 E8 — troca a senha com o token do e-mail. Pública.
+    ///
+    /// Depois de trocar, derruba as sessões abertas: quem redefine por suspeita
+    /// quer justamente tirar o acesso de quem tinha a senha antiga, e ele não
+    /// pode continuar logado com o refresh que já tem. O access token em mãos
+    /// segue válido até expirar (minutos); o refresh, não.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "RedefinirSenha", traceparent)
+    )]
+    async fn redefinir_senha(
+        &self,
+        req: Request<RedefinirSenhaRequest>,
+    ) -> Result<Response<RedefinirSenhaResponse>, Status> {
+        let traceparent = traceparent_do_metadata(&req);
+        let ip = ip_do_metadata(&req);
+        // Nem o token nem a senha entram em log.
+        let RedefinirSenhaRequest { token, nova_senha } = req.into_inner();
+
+        if let Some(ip) = ip.as_deref() {
+            if tentativas_na_janela(&self.deps, &traceparent, "redefinir_senha_ip", ip, 15 * 60)
+                .await
+                .is_some_and(|n| n > 20)
+            {
+                return Err(Status::resource_exhausted("errors.auth.rate_limited"));
+            }
+        }
+        if token.trim().is_empty() {
+            return Err(Status::failed_precondition("link de redefinição inválido"));
+        }
+
+        let env_req = application::auth::login::montar_envelope_request(
+            Uuid::nil(),
+            &traceparent,
+            "RedefinirSenha",
+            &serde_json::json!({
+                "token_hash": application::tokens::hash_sha256_hex(token.trim()),
+                "password": nova_senha,
+            }),
+        );
+        let resp = self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(10))
+            .await
+            .map_err(|e| Status::unavailable(format!("Falha no serviço interno: {e}")))?;
+        if resp.kind == MessageKind::Error as i32 {
+            return Err(status_do_erro_interno(resp.error));
+        }
+
+        let corpo: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap_or_default();
+        if let Some(user_id) = corpo
+            .get("user_id")
+            .and_then(serde_json::Value::as_i64)
+            .map(|v| v as i32)
+        {
+            let revogar = application::auth::login::montar_envelope_request(
+                Uuid::nil(),
+                &traceparent,
+                "RevokeUserSessions",
+                &serde_json::json!({ "user_id": user_id }),
+            );
+            // A senha já foi trocada: não desfazê-la por causa do Redis. O
+            // aviso fica no log, e os refresh antigos expiram no próprio TTL.
+            match self
+                .deps
+                .redis
+                .call(revogar, std::time::Duration::from_secs(3))
+                .await
+            {
+                Ok(r) if r.kind != MessageKind::Error as i32 => {}
+                outro => tracing::warn!(
+                    user_id,
+                    "senha trocada, mas as sessões antigas não foram encerradas: {outro:?}"
+                ),
+            }
+        }
+
+        Ok(Response::new(RedefinirSenhaResponse { sucesso: true }))
     }
 
     /// Logout: exige access token no metadata; delega para `application::auth::logout::logout`.
@@ -6777,6 +7023,88 @@ impl AdminService for AdminFacade {
             }
             Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
         }
+    }
+
+    /// N11 E8 — manda de novo o e-mail de um convite que não foi aceito.
+    ///
+    /// Renova a validade e reaproveita o link: quem perdeu o e-mail, deixou
+    /// vencer ou achou no spam tarde demais recebe um convite que funciona, sem
+    /// o admin ter de revogar, criar outro e reescolher as permissões.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ReenviarConvite", traceparent)
+    )]
+    async fn reenviar_convite(
+        &self,
+        req: Request<ReenviarConviteRequest>,
+    ) -> Result<Response<ReenviarConviteResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(&claims, crate::rbac::SOMENTE_ADMIN, "ReenviarConvite")?;
+        let traceparent = traceparent_do_metadata(&req);
+        let user_agent = user_agent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let invite_id = req.into_inner().invite_id;
+
+        // Três por hora por convite: basta para quem errou de caixa de entrada,
+        // e é pouco para transformar o botão num disparador contra alguém.
+        if tentativas_na_janela(
+            &self.deps,
+            &traceparent,
+            "reenviar_convite",
+            &invite_id,
+            60 * 60,
+        )
+        .await
+        .is_some_and(|n| n > 3)
+        {
+            return Err(Status::resource_exhausted(
+                "errors.convite.reenvio_limitado",
+            ));
+        }
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "ReenviarConvite".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({ "invite_id": invite_id }))
+                .unwrap_or_default(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            user_agent,
+            ..Default::default()
+        };
+
+        let resp = self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço interno: {e}")))?;
+        if resp.kind == MessageKind::Error as i32 {
+            return Err(status_do_erro_interno(resp.error));
+        }
+        let val: serde_json::Value =
+            serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))?;
+        let invite = val.get("invite").cloned().unwrap_or_default();
+
+        // Mesmo caminho do convite novo — e a mesma falha aberta: o convite já
+        // foi renovado, e o link continua valendo mesmo se o SMTP engasgar.
+        self.enviar_convite_por_email(&invite, &claims.tenant_id)
+            .await;
+
+        Ok(Response::new(ReenviarConviteResponse {
+            expires_at: invite
+                .get("expires_at")
+                .and_then(serde_json::Value::as_i64)
+                .unwrap_or_default(),
+        }))
     }
 
     /// Lista os aplicativos de IA que **este** usuário conectou por OAuth (N13.2).

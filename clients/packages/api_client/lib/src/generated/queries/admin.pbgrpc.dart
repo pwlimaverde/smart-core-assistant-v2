@@ -407,6 +407,13 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$revokeInvite, request, options: options);
   }
 
+  $grpc.ResponseFuture<$0.ReenviarConviteResponse> reenviarConvite(
+    $0.ReenviarConviteRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$reenviarConvite, request, options: options);
+  }
+
   $grpc.ResponseFuture<$0.ListTenantUsersResponse> listTenantUsers(
     $0.ListTenantUsersRequest request, {
     $grpc.CallOptions? options,
@@ -1070,6 +1077,11 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/RevokeInvite',
           ($0.RevokeInviteRequest value) => value.writeToBuffer(),
           $0.RevokeInviteResponse.fromBuffer);
+  static final _$reenviarConvite =
+      $grpc.ClientMethod<$0.ReenviarConviteRequest, $0.ReenviarConviteResponse>(
+          '/smartcore.contracts.queries.AdminService/ReenviarConvite',
+          ($0.ReenviarConviteRequest value) => value.writeToBuffer(),
+          $0.ReenviarConviteResponse.fromBuffer);
   static final _$listTenantUsers =
       $grpc.ClientMethod<$0.ListTenantUsersRequest, $0.ListTenantUsersResponse>(
           '/smartcore.contracts.queries.AdminService/ListTenantUsers',
@@ -1781,6 +1793,15 @@ abstract class AdminServiceBase extends $grpc.Service {
             ($core.List<$core.int> value) =>
                 $0.RevokeInviteRequest.fromBuffer(value),
             ($0.RevokeInviteResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ReenviarConviteRequest,
+            $0.ReenviarConviteResponse>(
+        'ReenviarConvite',
+        reenviarConvite_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ReenviarConviteRequest.fromBuffer(value),
+        ($0.ReenviarConviteResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.ListTenantUsersRequest,
             $0.ListTenantUsersResponse>(
         'ListTenantUsers',
@@ -2692,6 +2713,15 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.RevokeInviteResponse> revokeInvite(
       $grpc.ServiceCall call, $0.RevokeInviteRequest request);
+
+  $async.Future<$0.ReenviarConviteResponse> reenviarConvite_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ReenviarConviteRequest> $request) async {
+    return reenviarConvite($call, await $request);
+  }
+
+  $async.Future<$0.ReenviarConviteResponse> reenviarConvite(
+      $grpc.ServiceCall call, $0.ReenviarConviteRequest request);
 
   $async.Future<$0.ListTenantUsersResponse> listTenantUsers_Pre(
       $grpc.ServiceCall $call,

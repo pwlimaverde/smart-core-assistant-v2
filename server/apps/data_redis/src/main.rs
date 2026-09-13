@@ -85,6 +85,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_store = state_clone.clone();
     let state_for_validate = state_clone.clone();
     let state_for_revoke = state_clone.clone();
+    let state_for_revoke_user = state_clone.clone();
     let state_for_block = state_clone.clone();
     let state_for_is_blocked = state_clone.clone();
     let state_for_login_attempt = state_clone.clone();
@@ -114,6 +115,12 @@ async fn main() -> anyhow::Result<()> {
         .route("RevokeFamily", move |env| {
             let state = state_for_revoke.clone();
             Box::pin(async move { handler_revoke_family(state.refresh_token.as_ref(), env).await })
+        })
+        .route("RevokeUserSessions", move |env| {
+            let state = state_for_revoke_user.clone();
+            Box::pin(async move {
+                handler_revoke_user_sessions(state.refresh_token.as_ref(), env).await
+            })
         })
         .route("BlockToken", move |env| {
             let state = state_for_block.clone();
@@ -311,6 +318,39 @@ async fn handler_revoke_family(store: &dyn ports::RefreshTokenPort, env: Envelop
         Err(e) => erro(
             &env,
             "RevokeFamilyReply",
+            error_core::AppError::Cache(e.to_string()),
+        ),
+    }
+}
+
+/// N11 E8 — encerra todas as sessões de um usuário depois de uma troca de senha.
+async fn handler_revoke_user_sessions(
+    store: &dyn ports::RefreshTokenPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let user_id = payload_json
+        .get("user_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    if user_id <= 0 {
+        return erro(
+            &env,
+            "RevokeUserSessionsReply",
+            error_core::AppError::Validation("user_id ausente".to_string()),
+        );
+    }
+
+    match store.revoke_user(user_id).await {
+        Ok(familias) => ok_reply(
+            &env,
+            "RevokeUserSessionsReply",
+            serde_json::json!({ "status": "success", "familias_revogadas": familias }),
+        ),
+        Err(e) => erro(
+            &env,
+            "RevokeUserSessionsReply",
             error_core::AppError::Cache(e.to_string()),
         ),
     }
@@ -779,6 +819,52 @@ mod tests {
 
         assert_eq!(resp.kind, MessageKind::Error as i32);
         assert!(resp.error.is_some());
+    }
+
+    // -- handler_revoke_user_sessions -----------------------------------------
+
+    #[tokio::test]
+    async fn revoke_user_sessions_devolve_quantas_familias_cairam() {
+        let mut store = MockRefreshTokenPort::new();
+        store
+            .expect_revoke_user()
+            .withf(|uid| *uid == 42)
+            .times(1)
+            .returning(|_| Ok(3));
+        let env = envelope_com_payload("RevokeUserSessions", serde_json::json!({ "user_id": 42 }));
+
+        let resp = handler_revoke_user_sessions(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["familias_revogadas"], 3);
+    }
+
+    #[tokio::test]
+    async fn revoke_user_sessions_sem_user_id_nem_chega_ao_redis() {
+        // `user_id` 0 revogaria o conjunto de um usuário que não existe — e
+        // mascararia um chamador quebrado como sucesso.
+        let mut store = MockRefreshTokenPort::new();
+        store.expect_revoke_user().never();
+        let env = envelope_com_payload("RevokeUserSessions", serde_json::json!({}));
+
+        let resp = handler_revoke_user_sessions(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    #[tokio::test]
+    async fn revoke_user_sessions_falha_do_redis_vira_erro() {
+        let mut store = MockRefreshTokenPort::new();
+        store
+            .expect_revoke_user()
+            .times(1)
+            .returning(|_| Err(RedisError::NotFound));
+        let env = envelope_com_payload("RevokeUserSessions", serde_json::json!({ "user_id": 7 }));
+
+        let resp = handler_revoke_user_sessions(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
     }
 
     // -- handler_block_token / handler_is_token_blocked ------------------------

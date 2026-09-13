@@ -8659,6 +8659,121 @@ class RevokeInviteResponse extends $pb.GeneratedMessage {
   void clearSuccess() => $_clearField(1);
 }
 
+/// N11 E8 — reenviar o e-mail de um convite pendente ou vencido. Renova a
+/// validade e mantém o mesmo link.
+class ReenviarConviteRequest extends $pb.GeneratedMessage {
+  factory ReenviarConviteRequest({
+    $core.String? inviteId,
+  }) {
+    final result = create();
+    if (inviteId != null) result.inviteId = inviteId;
+    return result;
+  }
+
+  ReenviarConviteRequest._();
+
+  factory ReenviarConviteRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ReenviarConviteRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ReenviarConviteRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'inviteId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ReenviarConviteRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ReenviarConviteRequest copyWith(
+          void Function(ReenviarConviteRequest) updates) =>
+      super.copyWith((message) => updates(message as ReenviarConviteRequest))
+          as ReenviarConviteRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ReenviarConviteRequest create() => ReenviarConviteRequest._();
+  @$core.override
+  ReenviarConviteRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ReenviarConviteRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ReenviarConviteRequest>(create);
+  static ReenviarConviteRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get inviteId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set inviteId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasInviteId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearInviteId() => $_clearField(1);
+}
+
+class ReenviarConviteResponse extends $pb.GeneratedMessage {
+  factory ReenviarConviteResponse({
+    $fixnum.Int64? expiresAt,
+  }) {
+    final result = create();
+    if (expiresAt != null) result.expiresAt = expiresAt;
+    return result;
+  }
+
+  ReenviarConviteResponse._();
+
+  factory ReenviarConviteResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ReenviarConviteResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ReenviarConviteResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'expiresAt')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ReenviarConviteResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ReenviarConviteResponse copyWith(
+          void Function(ReenviarConviteResponse) updates) =>
+      super.copyWith((message) => updates(message as ReenviarConviteResponse))
+          as ReenviarConviteResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ReenviarConviteResponse create() => ReenviarConviteResponse._();
+  @$core.override
+  ReenviarConviteResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ReenviarConviteResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ReenviarConviteResponse>(create);
+  static ReenviarConviteResponse? _defaultInstance;
+
+  /// Nova validade, em milissegundos desde a época.
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get expiresAt => $_getI64(0);
+  @$pb.TagNumber(1)
+  set expiresAt($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasExpiresAt() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearExpiresAt() => $_clearField(1);
+}
+
 /// D7 — usuarios de TODOS os tenants, para o painel do superusuario.
 ///
 /// `ListTenantUsers` resolve o tenant a partir das claims de quem chama e nunca

@@ -30,6 +30,13 @@ final class RevokeInviteParameters extends Parameters {
   const RevokeInviteParameters({required this.inviteId});
 }
 
+/// Reenvio do e-mail de um convite não aceito (N11 E8).
+final class ReenviarConviteParameters extends Parameters {
+  final String inviteId;
+
+  const ReenviarConviteParameters({required this.inviteId});
+}
+
 /// Aceite do convite pelo convidado (rota pública).
 ///
 /// Carrega a senha escolhida: como o [LoginParameters] do `login_module`, nunca

@@ -16,8 +16,16 @@ String? authRedirectTarget({
   if (!booted) return location == '/' ? null : '/';
 
   final indoParaLogin = location == '/login';
+  // A recuperação de senha vem pelo `LoginModule` e é pública aqui também: o
+  // superusuário esquece a senha como qualquer um.
+  final rotaPublica =
+      indoParaLogin ||
+      location == '/recuperar-senha' ||
+      location == '/redefinir-senha';
   // Sem sessão OU sem privilégio de superusuário → fora do painel admin.
-  if (!isAuthenticated || !isSuperuser) return indoParaLogin ? null : '/login';
-  if (indoParaLogin || location == '/' || location == '/home') return '/admin/core-settings';
+  if (!isAuthenticated || !isSuperuser) return rotaPublica ? null : '/login';
+  if (indoParaLogin || location == '/' || location == '/home') {
+    return '/admin/core-settings';
+  }
   return null;
 }

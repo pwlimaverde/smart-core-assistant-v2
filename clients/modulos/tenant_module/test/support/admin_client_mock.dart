@@ -16,6 +16,7 @@ void registrarFallbacksDoTenant() {
   registerFallbackValue(proto.CreateInviteRequest());
   registerFallbackValue(proto.ListInvitesRequest());
   registerFallbackValue(proto.RevokeInviteRequest());
+  registerFallbackValue(proto.ReenviarConviteRequest());
   registerFallbackValue(proto.AcceptInviteRequest());
   registerFallbackValue(proto.ListTenantUsersRequest());
   registerFallbackValue(proto.UpdateTenantUserRequest());

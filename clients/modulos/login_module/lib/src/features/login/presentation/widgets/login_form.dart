@@ -99,6 +99,15 @@ class _LoginFormState extends State<LoginForm> {
                       isLoading: loading,
                       onPressed: loading ? null : _submit,
                     ),
+                    const SizedBox(height: AppSpacing.sm),
+                    // Nos dois apps: o superusuário também esquece a senha, e
+                    // sem este caminho a única saída era alguém mexer no banco.
+                    TextButton(
+                      onPressed: loading
+                          ? null
+                          : () => context.go('/recuperar-senha'),
+                      child: const Text('Esqueci minha senha'),
+                    ),
                     if (widget.rotaDeCadastro case final rota?) ...[
                       const SizedBox(height: AppSpacing.lg),
                       Divider(color: colors.divider),

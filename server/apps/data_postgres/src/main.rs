@@ -489,6 +489,9 @@ async fn main() -> anyhow::Result<()> {
     let state_for_list_tenant_users = state_clone.clone();
     let state_for_list_invites = state_clone.clone();
     let state_for_revoke_invite = state_clone.clone();
+    let state_for_reenviar_convite = state_clone.clone();
+    let state_for_solicitar_redefinicao = state_clone.clone();
+    let state_for_redefinir_senha = state_clone.clone();
     let state_for_update_tenant_user = state_clone.clone();
     let state_for_create_superuser = state_clone.clone();
     let state_for_list_superusers = state_clone.clone();
@@ -998,6 +1001,25 @@ async fn main() -> anyhow::Result<()> {
             let state = state_for_revoke_invite.clone();
             Box::pin(async move {
                 handler_revoke_invite(state.tenant.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("ReenviarConvite", move |env| {
+            let state = state_for_reenviar_convite.clone();
+            Box::pin(async move {
+                handler_reenviar_convite(state.tenant.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("SolicitarRedefinicaoSenha", move |env| {
+            let state = state_for_solicitar_redefinicao.clone();
+            Box::pin(async move {
+                handler_solicitar_redefinicao_senha(state.auth.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
+        })
+        .route("RedefinirSenha", move |env| {
+            let state = state_for_redefinir_senha.clone();
+            Box::pin(async move {
+                handler_redefinir_senha(state.auth.as_ref(), state.audit.as_ref(), env).await
             })
         })
         .route("UpdateTenantUser", move |env| {
@@ -2231,6 +2253,251 @@ async fn handler_revoke_invite(
         Ok(false) => erro(
             error_core::AppError::Validation(
                 "convite inexistente, já usado, revogado ou expirado".to_string(),
+            ),
+            &env,
+        ),
+        Err(err) => erro(err.into(), &env),
+    }
+}
+
+/// N11 E8 — manda de novo um convite que não foi aceito.
+///
+/// Renova a validade (o vencido inclusive: é o caso de quem não abriu o e-mail
+/// a tempo) e devolve o convite com o token, para a borda reenviar o mesmo
+/// link. Aceito ou revogado não volta — revogar é uma decisão, e reenviar por
+/// cima dela a desfaria sem ninguém perceber.
+async fn handler_reenviar_convite(
+    store: &dyn ports::TenantStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let invite_id = match payload_json
+        .get("invite_id")
+        .and_then(|v| v.as_str())
+        .and_then(|s| Uuid::parse_str(s).ok())
+    {
+        Some(id) => id,
+        None => {
+            return erro(
+                error_core::AppError::Validation("invite_id inválido ou ausente".to_string()),
+                &env,
+            )
+        }
+    };
+    let ctx = contexto_do_envelope(&env);
+    // Espelha a validade da criação (`handler_create_invite`).
+    let expira_em = chrono::Utc::now() + chrono::Duration::days(7);
+
+    match store.renovar_convite(&ctx, invite_id, expira_em).await {
+        Ok(Some(invite)) => {
+            audit
+                .publish(
+                    &env,
+                    "tenant_invite_resent",
+                    "Convite reenviado".to_string(),
+                    serde_json::json!({ "invite_id": invite_id.to_string() }),
+                )
+                .await;
+
+            // O nome da empresa vai junto pelo mesmo motivo da criação: sem ele
+            // o e-mail diz "alguém criou um acesso para você", que é a cara de
+            // golpe.
+            let empresa = store
+                .buscar_por_id(invite.tenant_id)
+                .await
+                .ok()
+                .flatten()
+                .map(|t| t.name)
+                .unwrap_or_default();
+
+            ok_reply(
+                &env,
+                "ReenviarConviteReply",
+                serde_json::json!({
+                    "invite": {
+                        "id": invite.id.to_string(),
+                        "tenant_name": empresa,
+                        "email": invite.email,
+                        "name": invite.name,
+                        "token": invite.token,
+                        "expires_at": invite.expires_at.timestamp_millis(),
+                    }
+                }),
+            )
+        }
+        Ok(None) => erro(
+            error_core::AppError::Conflict(
+                "convite inexistente, já aceito ou revogado".to_string(),
+            ),
+            &env,
+        ),
+        Err(err) => erro(err.into(), &env),
+    }
+}
+
+/// Validade do link de redefinição de senha.
+///
+/// Curta de propósito: o link é uma senha temporária que mora numa caixa de
+/// entrada, e caixa de entrada vaza. Uma hora cobre quem pediu e foi abrir o
+/// e-mail em seguida, que é praticamente todo mundo.
+const VALIDADE_REDEFINICAO_MIN: i64 = 60;
+
+/// O hash que a borda manda: SHA-256 em hexadecimal. Qualquer outra coisa é
+/// chamador quebrado, e aceitar gravaria um token que ninguém conseguiria usar.
+fn hash_de_token_valido(hash: &str) -> bool {
+    hash.len() == 64 && hash.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// N11 E8 — alguém esqueceu a senha.
+///
+/// **Nunca diz ao cliente se a conta existe.** O `enviar` da resposta é lido só
+/// pela borda, que responde "aceito" nos dois casos e decide se manda o e-mail.
+/// O token nasce na borda e chega aqui já como hash: o banco nunca vê o token.
+async fn handler_solicitar_redefinicao_senha(
+    store: &dyn ports::AuthStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let login = payload
+        .get("login")
+        .and_then(|v| v.as_str())
+        .unwrap_or("")
+        .trim();
+    let token_hash = payload
+        .get("token_hash")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if login.is_empty() || !hash_de_token_valido(token_hash) {
+        return erro(
+            error_core::AppError::Validation("login e token_hash obrigatórios".to_string()),
+            &env,
+        );
+    }
+
+    let nao_enviar = || {
+        ok_reply(
+            &env,
+            "SolicitarRedefinicaoSenhaReply",
+            serde_json::json!({ "enviar": false }),
+        )
+    };
+
+    // Conta desativada não recebe link: trocar a senha de quem foi bloqueado
+    // não pode ser o caminho de volta para dentro.
+    let usuario = match store.buscar_por_login(login).await {
+        Ok(Some(u)) if u.is_active && !u.email.trim().is_empty() => u,
+        Ok(_) => return nao_enviar(),
+        Err(err) => return erro(err.into(), &env),
+    };
+
+    let expira_em = chrono::Utc::now() + chrono::Duration::minutes(VALIDADE_REDEFINICAO_MIN);
+    if let Err(err) = store
+        .registrar_redefinicao_senha(usuario.id, token_hash, expira_em)
+        .await
+    {
+        return erro(err.into(), &env);
+    }
+
+    audit
+        .publish_security(
+            &env.traceparent,
+            None,
+            "INFO",
+            "password_reset_requested",
+            "Redefinição de senha solicitada".to_string(),
+            serde_json::json!({ "user_id": usuario.id }),
+            Some(usuario.id),
+        )
+        .await;
+
+    let nome = if usuario.first_name.trim().is_empty() {
+        usuario.username.clone()
+    } else {
+        usuario.first_name.clone()
+    };
+    ok_reply(
+        &env,
+        "SolicitarRedefinicaoSenhaReply",
+        serde_json::json!({
+            "enviar": true,
+            "email": usuario.email,
+            "nome": nome,
+            "validade_min": VALIDADE_REDEFINICAO_MIN,
+        }),
+    )
+}
+
+/// N11 E8 — troca a senha com o token do e-mail.
+///
+/// Senha fraca é `Validation` e link que não vale é `Conflict`: a tela precisa
+/// dizer coisas diferentes nos dois casos ("escolha outra senha" contra "peça
+/// um link novo").
+async fn handler_redefinir_senha(
+    store: &dyn ports::AuthStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let token_hash = payload
+        .get("token_hash")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let senha = payload
+        .get("password")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    if !hash_de_token_valido(token_hash) {
+        return erro(
+            error_core::AppError::Conflict("link de redefinição inválido".to_string()),
+            &env,
+        );
+    }
+    // A mesma regra do cadastro e do superusuário.
+    if senha.chars().count() < 8 {
+        return erro(
+            error_core::AppError::Validation(
+                "a senha precisa ter ao menos 8 caracteres".to_string(),
+            ),
+            &env,
+        );
+    }
+
+    // O hash vem antes de consumir o token: se o argon2 falhasse depois, o
+    // link já estaria gasto e a senha, intacta.
+    let password_hash = match infrastructure_postgres::hash_password_async(senha.to_string()).await
+    {
+        Ok(h) => h,
+        Err(err) => return erro(error_core::AppError::Internal(err.to_string()), &env),
+    };
+
+    match store.redefinir_senha(token_hash, &password_hash).await {
+        Ok(Some(user_id)) => {
+            audit
+                .publish_security(
+                    &env.traceparent,
+                    None,
+                    "INFO",
+                    "password_reset_completed",
+                    "Senha redefinida pelo link de recuperação".to_string(),
+                    serde_json::json!({ "user_id": user_id }),
+                    Some(user_id),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "RedefinirSenhaReply",
+                serde_json::json!({ "user_id": user_id }),
+            )
+        }
+        Ok(None) => erro(
+            error_core::AppError::Conflict(
+                "Este link de redefinição não vale mais. Peça um novo.".to_string(),
             ),
             &env,
         ),
@@ -8747,6 +9014,243 @@ mod tests_whatsapp_unit {
 
 /// Testes unitários do domínio Tenant (handlers via ports, SEM banco). A cobertura
 /// de SQL/RLS real vive em `crates/infrastructure_postgres/tests/integracoes/`.
+#[cfg(test)]
+mod tests_redefinicao_unit {
+    use super::*;
+    use crate::ports::{MockAuditPort, MockAuthStore, MockTenantStore};
+    use contracts::{Envelope, MessageKind};
+    use infrastructure_postgres::auth::users::AuthUser;
+    use infrastructure_postgres::tenants::tenants::TenantInvite;
+
+    const HASH: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+    fn envelope_com_payload(method: &str, payload: serde_json::Value) -> Envelope {
+        Envelope {
+            kind: MessageKind::Request as i32,
+            method: method.to_string(),
+            tenant_id: uuid::Uuid::nil().to_string(),
+            traceparent: "00-trace-span-01".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            auth_scopes: vec!["tenant:admin".to_string()],
+            ..Default::default()
+        }
+    }
+
+    fn usuario(ativo: bool) -> AuthUser {
+        AuthUser {
+            id: 7,
+            username: "maria".to_string(),
+            email: "maria@exemplo.com".to_string(),
+            password_hash: String::new(),
+            first_name: "Maria".to_string(),
+            last_name: String::new(),
+            is_active: ativo,
+            is_staff: false,
+            is_superuser: false,
+            last_login: None,
+            date_joined: chrono::Utc::now(),
+        }
+    }
+
+    fn corpo(resp: &Envelope) -> serde_json::Value {
+        serde_json::from_slice(&resp.payload).unwrap()
+    }
+
+    // -- solicitar ------------------------------------------------------------
+
+    #[tokio::test]
+    async fn conta_inexistente_nao_registra_nem_audita() {
+        let mut store = MockAuthStore::new();
+        store.expect_buscar_por_login().returning(|_| Ok(None));
+        store.expect_registrar_redefinicao_senha().never();
+        let mut audit = MockAuditPort::new();
+        audit.expect_publish_security().never();
+        let env = envelope_com_payload(
+            "SolicitarRedefinicaoSenha",
+            serde_json::json!({ "login": "ninguem@x.com", "token_hash": HASH }),
+        );
+
+        let resp = handler_solicitar_redefinicao_senha(&store, &audit, env).await;
+
+        // Resposta de sucesso: quem decide o que o cliente vê é a borda, e ela
+        // responde "aceito" nos dois casos.
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        assert_eq!(corpo(&resp)["enviar"], false);
+    }
+
+    #[tokio::test]
+    async fn conta_desativada_nao_recebe_link() {
+        let mut store = MockAuthStore::new();
+        store
+            .expect_buscar_por_login()
+            .returning(|_| Ok(Some(usuario(false))));
+        store.expect_registrar_redefinicao_senha().never();
+        let audit = MockAuditPort::new();
+        let env = envelope_com_payload(
+            "SolicitarRedefinicaoSenha",
+            serde_json::json!({ "login": "maria", "token_hash": HASH }),
+        );
+
+        let resp = handler_solicitar_redefinicao_senha(&store, &audit, env).await;
+
+        assert_eq!(corpo(&resp)["enviar"], false);
+    }
+
+    #[tokio::test]
+    async fn conta_ativa_registra_o_hash_e_pede_o_envio() {
+        let mut store = MockAuthStore::new();
+        store
+            .expect_buscar_por_login()
+            .returning(|_| Ok(Some(usuario(true))));
+        store
+            .expect_registrar_redefinicao_senha()
+            .withf(|uid, hash, _| *uid == 7 && hash == HASH)
+            .times(1)
+            .returning(|_, _, _| Ok(()));
+        let mut audit = MockAuditPort::new();
+        audit
+            .expect_publish_security()
+            .times(1)
+            .returning(|_, _, _, _, _, _, _| ());
+        let env = envelope_com_payload(
+            "SolicitarRedefinicaoSenha",
+            serde_json::json!({ "login": "maria", "token_hash": HASH }),
+        );
+
+        let resp = handler_solicitar_redefinicao_senha(&store, &audit, env).await;
+
+        let c = corpo(&resp);
+        assert_eq!(c["enviar"], true);
+        assert_eq!(c["email"], "maria@exemplo.com");
+        assert_eq!(c["nome"], "Maria");
+    }
+
+    #[tokio::test]
+    async fn hash_malformado_nem_consulta_a_conta() {
+        let mut store = MockAuthStore::new();
+        store.expect_buscar_por_login().never();
+        let audit = MockAuditPort::new();
+        let env = envelope_com_payload(
+            "SolicitarRedefinicaoSenha",
+            serde_json::json!({ "login": "maria", "token_hash": "token-em-claro" }),
+        );
+
+        let resp = handler_solicitar_redefinicao_senha(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    // -- redefinir ------------------------------------------------------------
+
+    #[tokio::test]
+    async fn senha_curta_e_recusada_sem_gastar_o_link() {
+        let mut store = MockAuthStore::new();
+        store.expect_redefinir_senha().never();
+        let audit = MockAuditPort::new();
+        let env = envelope_com_payload(
+            "RedefinirSenha",
+            serde_json::json!({ "token_hash": HASH, "password": "123" }),
+        );
+
+        let resp = handler_redefinir_senha(&store, &audit, env).await;
+
+        assert_eq!(resp.error.unwrap().code, "VALIDATION_FAILED");
+    }
+
+    #[tokio::test]
+    async fn link_que_nao_vale_e_conflito_nao_validacao() {
+        // A tela diz "peça um link novo" para este e "escolha outra senha"
+        // para a senha fraca: os códigos precisam ser diferentes.
+        let mut store = MockAuthStore::new();
+        store.expect_redefinir_senha().returning(|_, _| Ok(None));
+        let mut audit = MockAuditPort::new();
+        audit.expect_publish_security().never();
+        let env = envelope_com_payload(
+            "RedefinirSenha",
+            serde_json::json!({ "token_hash": HASH, "password": "senha-nova-boa" }),
+        );
+
+        let resp = handler_redefinir_senha(&store, &audit, env).await;
+
+        assert_eq!(resp.error.unwrap().code, "CONFLICT");
+    }
+
+    #[tokio::test]
+    async fn senha_trocada_devolve_o_usuario_e_audita() {
+        let mut store = MockAuthStore::new();
+        store
+            .expect_redefinir_senha()
+            .withf(|hash, senha_hash| hash == HASH && senha_hash.starts_with("$argon2"))
+            .times(1)
+            .returning(|_, _| Ok(Some(7)));
+        let mut audit = MockAuditPort::new();
+        audit
+            .expect_publish_security()
+            .times(1)
+            .returning(|_, _, _, _, _, _, _| ());
+        let env = envelope_com_payload(
+            "RedefinirSenha",
+            serde_json::json!({ "token_hash": HASH, "password": "senha-nova-boa" }),
+        );
+
+        let resp = handler_redefinir_senha(&store, &audit, env).await;
+
+        assert_eq!(corpo(&resp)["user_id"], 7);
+    }
+
+    // -- reenviar convite -----------------------------------------------------
+
+    #[tokio::test]
+    async fn convite_aceito_ou_revogado_nao_volta() {
+        let mut store = MockTenantStore::new();
+        store.expect_renovar_convite().returning(|_, _, _| Ok(None));
+        let mut audit = MockAuditPort::new();
+        audit.expect_publish().never();
+        let env = envelope_com_payload(
+            "ReenviarConvite",
+            serde_json::json!({ "invite_id": uuid::Uuid::now_v7().to_string() }),
+        );
+
+        let resp = handler_reenviar_convite(&store, &audit, env).await;
+
+        assert_eq!(resp.error.unwrap().code, "CONFLICT");
+    }
+
+    #[tokio::test]
+    async fn convite_renovado_volta_com_o_token_para_o_email() {
+        let mut store = MockTenantStore::new();
+        store.expect_renovar_convite().returning(|_, id, expira| {
+            Ok(Some(TenantInvite {
+                id,
+                tenant_id: uuid::Uuid::nil(),
+                email: "convidado@x.com".to_string(),
+                name: "Convidado".to_string(),
+                role: "staff".to_string(),
+                module_permissions: serde_json::json!([]),
+                flow_permissions: serde_json::json!([]),
+                token: "tok".to_string(),
+                expires_at: expira,
+                used: false,
+                created_at: chrono::Utc::now(),
+                created_by_id: None,
+            }))
+        });
+        store.expect_buscar_por_id().returning(|_| Ok(None));
+        let mut audit = MockAuditPort::new();
+        audit.expect_publish().times(1).returning(|_, _, _, _| ());
+        let env = envelope_com_payload(
+            "ReenviarConvite",
+            serde_json::json!({ "invite_id": uuid::Uuid::now_v7().to_string() }),
+        );
+
+        let resp = handler_reenviar_convite(&store, &audit, env).await;
+
+        let c = corpo(&resp);
+        assert_eq!(c["invite"]["token"], "tok");
+        assert_eq!(c["invite"]["email"], "convidado@x.com");
+    }
+}
+
 #[cfg(test)]
 mod tests_tenant_unit {
     use super::*;

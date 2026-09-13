@@ -378,6 +378,23 @@ impl TenantStore for PgTenantStore {
         .await
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, invite_id = %invite_id))]
+    async fn renovar_convite(
+        &self,
+        ctx: &RequestContext,
+        invite_id: Uuid,
+        expira_em: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Option<TenantInvite>, DbError> {
+        let repo = PostgresTenantInviteRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let invite = repo.renovar(&mut tx, &ctx, invite_id, expira_em).await?;
+            Ok((invite, tx))
+        })
+        .await
+    }
+
     #[tracing::instrument(skip_all, fields(tenant_id = %tenant_id, owner_id = owner_id))]
     async fn criar_primeiro_admin(
         &self,

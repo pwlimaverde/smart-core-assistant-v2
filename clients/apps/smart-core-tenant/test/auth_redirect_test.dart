@@ -165,6 +165,36 @@ void main() {
       );
     });
 
+    test('pós-boot deslogado: a recuperação de senha é pública', () {
+      for (final rota in ['/recuperar-senha', '/redefinir-senha']) {
+        expect(
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: false,
+            isSuperuser: false,
+            scopes: const [],
+            location: rota,
+          ),
+          isNull,
+          reason: '$rota deveria ser pública',
+        );
+      }
+    });
+
+    test('o link do e-mail de redefinição sobrevive ao boot', () {
+      expect(
+        tenantAuthRedirectTarget(
+          booted: true,
+          isAuthenticated: false,
+          isSuperuser: false,
+          scopes: const [],
+          location: '/',
+          retomar: '/redefinir-senha?token=abc',
+        ),
+        '/redefinir-senha?token=abc',
+      );
+    });
+
     test('pós-boot deslogado: o wizard de cadastro é público', () {
       // Quem vai criar uma conta ainda não tem sessão; sem isto o guard
       // devolveria todo mundo para /login e o cadastro seria inalcançável.

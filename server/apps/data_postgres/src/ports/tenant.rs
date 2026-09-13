@@ -164,6 +164,15 @@ pub trait TenantStore: Send + Sync {
         ctx: &RequestContext,
     ) -> Result<Vec<TenantInviteListItem>, DbError>;
 
+    /// N11 E8 — renova a validade de um convite pendente (ou vencido) para
+    /// reenviá-lo. `None` = convite inexistente, já aceito ou revogado.
+    async fn renovar_convite(
+        &self,
+        ctx: &RequestContext,
+        invite_id: Uuid,
+        expira_em: chrono::DateTime<chrono::Utc>,
+    ) -> Result<Option<TenantInvite>, DbError>;
+
     /// Revoga um convite do tenant do `ctx`; retorna `true` se o convite era válido.
     async fn revogar_convite(&self, ctx: &RequestContext, invite_id: Uuid)
         -> Result<bool, DbError>;

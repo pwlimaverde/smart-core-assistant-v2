@@ -198,3 +198,4 @@ impl Enviador {
 }
 
 pub mod convite;
+pub mod redefinicao_senha;

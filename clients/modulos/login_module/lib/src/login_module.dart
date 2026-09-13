@@ -18,6 +18,10 @@ import 'features/login/domain/usecases/login_usecase.dart';
 import 'features/login/domain/usecases/logout_usecase.dart';
 import 'features/login/domain/usecases/refresh_token_usecase.dart';
 import 'features/login/presentation/routes/login_route.dart';
+import 'features/recuperacao_senha/data/datasources/recuperacao_datasources.dart';
+import 'features/recuperacao_senha/data/repositories/recuperacao_repositories.dart';
+import 'features/recuperacao_senha/domain/usecases/recuperacao_usecases.dart';
+import 'features/recuperacao_senha/presentation/routes/recuperacao_routes.dart';
 
 /// Módulo de login: registra as implementações reais de auth/storage no escopo
 /// global (substituindo os NoOps que o InfraModule deixou de registrar) e
@@ -92,6 +96,23 @@ final class LoginModule extends AppModule {
       ),
     );
 
+    // N11 E8 — recuperação de senha. Globais, e não no escopo das rotas,
+    // porque as duas telas não têm controller: cada uma chama o seu usecase.
+    i.lazySingleton<SolicitarRedefinicaoUsecase>(
+      () => SolicitarRedefinicaoUsecase(
+        repository: SolicitarRedefinicaoRepository(
+          datasource: SolicitarRedefinicaoDatasource(client: _authClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<RedefinirSenhaUsecase>(
+      () => RedefinirSenhaUsecase(
+        repository: RedefinirSenhaRepository(
+          datasource: RedefinirSenhaDatasource(client: _authClient()),
+        ),
+      ),
+    );
+
     // Serviço de auth real (instância única para os dois contratos).
     i.lazySingleton<AuthServiceImpl>(
       () => AuthServiceImpl(
@@ -107,7 +128,11 @@ final class LoginModule extends AppModule {
   }
 
   @override
-  List<GetItModule> routes() => [LoginRoute(rotaDeCadastro: rotaDeCadastro)];
+  List<GetItModule> routes() => [
+    LoginRoute(rotaDeCadastro: rotaDeCadastro),
+    RecuperarSenhaRoute(),
+    RedefinirSenhaRoute(),
+  ];
 
   /// Stub gRPC de auth, extraído do `ApiClient` global da plataforma.
   static AuthServiceClient _authClient() =>

@@ -123,3 +123,25 @@ final class AcceptInviteRepository
     };
   }
 }
+
+/// Reenviar tem dois desfechos que as outras operações não têm — o limite por
+/// hora e o convite que já terminou —, e cada um merece a própria frase.
+final class ReenviarConviteRepository
+    extends RepositoryBase<DateTime, ReenviarConviteParameters, ConvitesError> {
+  const ReenviarConviteRepository({required super.datasource});
+
+  @override
+  ConvitesError mapError(
+    Object exception,
+    StackTrace stackTrace,
+    ReenviarConviteParameters parameters,
+  ) {
+    // `_mapConvites` registra no log; o resultado dele vale para o resto.
+    final padrao = _mapConvites('reenviarConvite', exception, stackTrace);
+    return switch (classificarFalhaGrpc(exception)) {
+      GrpcFailureKind.rateLimited => const ConviteReenviadoRecentemente(),
+      GrpcFailureKind.failedPrecondition => const ConviteNaoReenviavel(),
+      _ => padrao,
+    };
+  }
+}

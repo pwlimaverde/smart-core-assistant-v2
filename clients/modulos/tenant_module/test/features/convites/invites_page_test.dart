@@ -44,6 +44,11 @@ void main() {
             datasource: RevokeInviteDatasource(client: client),
           ),
         ),
+        resendUsecase: ReenviarConviteUsecase(
+          repository: ReenviarConviteRepository(
+            datasource: ReenviarConviteDatasource(client: client),
+          ),
+        ),
       ),
     );
     getIt.registerSingleton<AppConfig>(
@@ -102,6 +107,65 @@ void main() {
     expect(find.text('Pendente'), findsOneWidget);
     // Só o pendente pode ser revogado: os outros dois já terminaram.
     expect(find.byTooltip('Revogar'), findsOneWidget);
+    // Nem reenviado: aceito e revogado não voltam.
+    expect(find.byTooltip('Reenviar'), findsOneWidget);
+  });
+
+  testWidgets('convite vencido pode ser reenviado, mas não revogado', (
+    tester,
+  ) async {
+    // É o caso de quem não abriu o e-mail a tempo: reenviar renova a
+    // validade, e revogar algo que já não vale não faz sentido.
+    listaResponde([
+      conviteItemProto(
+        expiresAt: DateTime.now().subtract(const Duration(days: 1)),
+      ),
+    ]);
+    registrar();
+
+    await montar(tester);
+
+    expect(find.text('Expirado'), findsOneWidget);
+    expect(find.byTooltip('Reenviar'), findsOneWidget);
+    expect(find.byTooltip('Revogar'), findsNothing);
+  });
+
+  testWidgets('reenviar manda o convite certo e diz até quando vale', (
+    tester,
+  ) async {
+    listaResponde([conviteItemProto(id: 'inv-7', email: 'maria@x.com')]);
+    when(() => client.reenviarConvite(any())).thenAnswer(
+      (_) => respostaGrpc(
+        proto.ReenviarConviteResponse(expiresAt: ms(DateTime(2026, 9, 20))),
+      ),
+    );
+    registrar();
+
+    await montar(tester);
+    await tester.tap(find.byTooltip('Reenviar'));
+    await tester.pumpAndSettle();
+
+    final enviado =
+        verify(() => client.reenviarConvite(captureAny())).captured.single
+            as proto.ReenviarConviteRequest;
+    expect(enviado.inviteId, 'inv-7');
+    expect(find.textContaining('20/09/2026'), findsOneWidget);
+  });
+
+  testWidgets('reenvio barrado pelo limite diz isso, não "indisponível"', (
+    tester,
+  ) async {
+    listaResponde([conviteItemProto()]);
+    when(
+      () => client.reenviarConvite(any()),
+    ).thenAnswer((_) => falhaGrpc(proto.GrpcError.resourceExhausted('limite')));
+    registrar();
+
+    await montar(tester);
+    await tester.tap(find.byTooltip('Reenviar'));
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('reenviado várias vezes'), findsOneWidget);
   });
 
   testWidgets('erro do servidor vira tela de erro com nova tentativa', (

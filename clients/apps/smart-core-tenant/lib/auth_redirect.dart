@@ -79,6 +79,10 @@ String? tenantAuthRedirectTarget({
   final rotaPublica =
       location == '/login' ||
       location == '/aceitar-convite' ||
+      // Recuperação de senha: quem esqueceu a senha, por definição, não está
+      // logado.
+      location == '/recuperar-senha' ||
+      location == '/redefinir-senha' ||
       ehRotaDeCadastro(location);
   // Sem sessão OU superusuário puro (sem tenant) → fora do painel do tenant.
   if (!isAuthenticated || isSuperuser) {

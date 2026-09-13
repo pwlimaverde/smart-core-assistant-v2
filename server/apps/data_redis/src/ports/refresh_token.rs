@@ -27,4 +27,7 @@ pub trait RefreshTokenPort: Send + Sync {
 
     /// Revoga toda a família (em caso de reuso detectado).
     async fn revoke_family(&self, family_id: &str) -> Result<(), RedisError>;
+
+    /// Revoga todas as famílias do usuário (troca de senha); devolve quantas.
+    async fn revoke_user(&self, user_id: i32) -> Result<usize, RedisError>;
 }

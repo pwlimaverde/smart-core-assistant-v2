@@ -60,6 +60,26 @@ final class ConvitesInesperado extends ConvitesError with UnexpectedFailure {
     : super('Não foi possível concluir a operação. Tente novamente.');
 }
 
+/// O mesmo convite foi reenviado várias vezes na última hora.
+///
+/// Frase própria, e não "servidor indisponível": o servidor está bem, e dizer
+/// o contrário mandaria a pessoa tentar de novo — que é o que o limite barra.
+final class ConviteReenviadoRecentemente extends ConvitesError {
+  const ConviteReenviadoRecentemente()
+    : super(
+        'Este convite já foi reenviado várias vezes na última hora. '
+        'Espere um pouco antes de tentar de novo.',
+      );
+}
+
+/// Já aceito ou revogado: não há o que reenviar.
+final class ConviteNaoReenviavel extends ConvitesError {
+  const ConviteNaoReenviavel()
+    : super(
+        'Este convite já foi aceito ou revogado. Crie um novo, se precisar.',
+      );
+}
+
 // ─── aceite do convite (rota pública) ─────────────────────────────────────────
 
 /// Erros de `acceptInvite`.

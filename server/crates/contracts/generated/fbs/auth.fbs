@@ -33,3 +33,20 @@ table LogoutResponse {
   revoked:bool;
 }
 
+table SolicitarRedefinicaoSenhaRequest {
+  login:string;
+}
+
+table SolicitarRedefinicaoSenhaResponse {
+  aceito:bool;
+}
+
+table RedefinirSenhaRequest {
+  token:string;
+  nova_senha:string;
+}
+
+table RedefinirSenhaResponse {
+  sucesso:bool;
+}
+

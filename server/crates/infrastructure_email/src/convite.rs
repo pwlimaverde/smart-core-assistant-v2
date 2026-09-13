@@ -11,7 +11,7 @@ use crate::{EmailError, Enviador};
 /// O nome de quem convida e o nome da empresa vêm do banco, escritos por
 /// gente: um `&` num nome de empresa já quebraria a marcação, e um `<script>`
 /// faria pior. O corpo em texto puro não precisa disso.
-fn escapar(bruto: &str) -> String {
+pub(crate) fn escapar(bruto: &str) -> String {
     bruto
         .replace('&', "&amp;")
         .replace('<', "&lt;")

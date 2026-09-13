@@ -660,6 +660,14 @@ table RevokeInviteResponse {
   success:bool;
 }
 
+table ReenviarConviteRequest {
+  invite_id:string;
+}
+
+table ReenviarConviteResponse {
+  expires_at:long;
+}
+
 table AdminListUsersRequest {
   busca:string;
   limite:int;
