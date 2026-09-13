@@ -1,9 +1,11 @@
+import 'package:dependencies_module/dependencies_module.dart' show GetIt;
 import 'package:design_system_module/design_system_module.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it_module/get_it_module.dart';
 import 'package:presentation_module/presentation_module.dart';
 
+import '../../domain/usecases/atendimento_usecases.dart';
 import '../controllers/chat_controller.dart';
 import '../controllers/chat_state.dart';
 import '../controllers/ficha_controller.dart';
@@ -59,7 +61,12 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
       getThreadUsecase: inject(),
       sendUsecase: inject(),
       eventos: inject(),
-      marcarLidoUsecase: inject(),
+      // B6 — opcional: onde o usecase não foi registrado (testes de tela, app
+      // sem a rota), a conversa abre e só não marca a leitura.
+      marcarLidoUsecase:
+          GetIt.instance.isRegistered<MarcarAtendimentoLidoUsecase>()
+          ? inject<MarcarAtendimentoLidoUsecase>()
+          : null,
     );
     // Controller próprio: a ficha pode falhar sem derrubar a conversa, e um
     // estado só levaria as mensagens junto com o painel.
