@@ -1,4 +1,5 @@
 import 'package:dependencies_module/dependencies_module.dart';
+import 'package:file_picker/file_picker.dart';
 
 import '../../domain/model/treinamento.dart';
 import '../controllers/treinamento_controllers.dart';
@@ -112,6 +113,172 @@ Future<void> abrirCriacao(
                         if (stateCtx.mounted) {
                           setStateDialog(() {
                             salvando = false;
+                            erro = error.message;
+                          });
+                        }
+                        return;
+                      }
+                      navigator.pop();
+                    },
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+/// B9 (N10 E5) — os formatos que o servidor lê.
+const extensoesDeTreinamento = ['pdf', 'docx', 'xlsx', 'txt', 'csv'];
+
+/// O mimetype de um arquivo de treinamento pelo nome, ou `null` se o formato
+/// não é aceito. O servidor confere de novo — pelo conteúdo.
+String? mimetypeDoArquivo(String nome) {
+  final extensao = nome.contains('.')
+      ? nome.substring(nome.lastIndexOf('.') + 1).toLowerCase()
+      : '';
+  return switch (extensao) {
+    'pdf' => 'application/pdf',
+    'docx' =>
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xlsx' =>
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'txt' => 'text/plain',
+    'csv' => 'text/csv',
+    _ => null,
+  };
+}
+
+/// B9 (N10 E5) — ensinar a partir de um arquivo.
+///
+/// O texto não aparece aqui: o servidor o lê depois, e o material chega à lista
+/// como rascunho para revisar — o mesmo passo do texto colado.
+Future<void> abrirEnvioDeArquivo(
+  BuildContext context,
+  TreinamentoController controller,
+) async {
+  final tag = TextEditingController();
+  final grupo = TextEditingController();
+  PlatformFile? arquivo;
+  String? erro;
+  var enviando = false;
+
+  await showDialog<void>(
+    context: context,
+    builder: (dialogContext) => DialogoComCampos(
+      campos: [tag, grupo],
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (stateCtx, setStateDialog) => AlertDialog(
+          title: const Text('Ensinar a partir de um arquivo'),
+          content: SizedBox(
+            width: 520,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AppTextField(
+                    label: 'Assunto',
+                    hint: 'ex: tabela-de-precos',
+                    controller: tag,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  AppTextField(
+                    label: 'Grupo',
+                    hint: 'ex: vendas',
+                    controller: grupo,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.attach_file),
+                    label: Text(
+                      arquivo == null ? 'Escolher arquivo' : arquivo!.name,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onPressed: enviando
+                        ? null
+                        : () async {
+                            final escolha = await FilePicker.pickFiles(
+                              type: FileType.custom,
+                              allowedExtensions: extensoesDeTreinamento,
+                              withData: true,
+                            );
+                            final escolhido = escolha?.files.firstOrNull;
+                            if (escolhido == null) return;
+                            setStateDialog(() {
+                              arquivo = escolhido;
+                              erro = null;
+                            });
+                          },
+                  ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'PDF, Word (.docx), Excel (.xlsx), texto ou CSV. Arquivos '
+                    '.doc e .xls: salve como .docx ou .xlsx antes.',
+                    style: Theme.of(stateCtx).textTheme.bodySmall,
+                  ),
+                  if (erro case final msg?) ...[
+                    const SizedBox(height: AppSpacing.md),
+                    _Erro(mensagem: msg),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: enviando
+                  ? null
+                  : () => Navigator.of(dialogContext).pop(),
+              child: const Text('Cancelar'),
+            ),
+            PrimaryButton(
+              label: 'Enviar',
+              expand: false,
+              isLoading: enviando,
+              onPressed: enviando
+                  ? null
+                  : () async {
+                      if (tag.text.trim().isEmpty ||
+                          grupo.text.trim().isEmpty) {
+                        setStateDialog(
+                          () => erro = 'Informe o assunto e o grupo.',
+                        );
+                        return;
+                      }
+                      final escolhido = arquivo;
+                      final bytes = escolhido?.bytes;
+                      final mimetype = escolhido == null
+                          ? null
+                          : mimetypeDoArquivo(escolhido.name);
+                      if (escolhido == null || bytes == null) {
+                        setStateDialog(() => erro = 'Escolha o arquivo.');
+                        return;
+                      }
+                      if (mimetype == null) {
+                        setStateDialog(
+                          () => erro =
+                              'Formato não aceito. Envie PDF, DOCX, XLSX, TXT ou CSV.',
+                        );
+                        return;
+                      }
+
+                      final navigator = Navigator.of(dialogContext);
+                      setStateDialog(() {
+                        enviando = true;
+                        erro = null;
+                      });
+                      final res = await controller.enviarArquivo(
+                        tag: tag.text.trim(),
+                        grupo: grupo.text.trim(),
+                        nomeArquivo: escolhido.name,
+                        mimetype: mimetype,
+                        bytes: bytes,
+                      );
+                      if (res case Failure(:final error)) {
+                        if (stateCtx.mounted) {
+                          setStateDialog(() {
+                            enviando = false;
                             erro = error.message;
                           });
                         }

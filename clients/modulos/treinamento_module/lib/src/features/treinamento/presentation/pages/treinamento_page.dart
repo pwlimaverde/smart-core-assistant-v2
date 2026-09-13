@@ -60,7 +60,9 @@ class _TreinamentoPageState extends State<TreinamentoPage>
     final estado = _controller.state;
     final processando =
         estado is SuccessState<List<Treinamento>> &&
-        estado.data.any((t) => t.situacao == SituacaoTreinamento.naFila);
+        estado.data.any(
+          (t) => t.situacao == SituacaoTreinamento.naFila || t.extraindo,
+        );
 
     if (processando && _poll == null) {
       _poll = Timer.periodic(_intervalo, (_) => _controller.carregar());
@@ -148,10 +150,24 @@ class _AbaMaterial extends StatelessWidget {
               ),
             ),
             if (PermissaoDoTreinamento.podeAlterar())
-              ElevatedButton.icon(
-                icon: const Icon(Icons.add),
-                label: const Text('Ensinar algo novo'),
-                onPressed: () => abrirCriacao(context, controller),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  // B9 (N10 E5): o material que já existe num documento não
+                  // precisa ser redigitado.
+                  if (controller.aceitaArquivo)
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.upload_file),
+                      label: const Text('Enviar arquivo'),
+                      onPressed: () => abrirEnvioDeArquivo(context, controller),
+                    ),
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: const Text('Ensinar algo novo'),
+                    onPressed: () => abrirCriacao(context, controller),
+                  ),
+                ],
               ),
           ],
         ),
@@ -247,6 +263,7 @@ class _Linha extends StatelessWidget {
                     color: context.colors.fgMuted,
                   ),
                 ),
+                if (item.veioDeArquivo) _SituacaoDoArquivo(item: item),
                 // Rascunho é PENDÊNCIA, e a tela precisa dizer isso na cara.
                 //
                 // O material fica cadastrado, a lista o mostra, e a IA não o
@@ -284,7 +301,9 @@ class _Linha extends StatelessWidget {
           // Rotulado, e não só um ícone: é a ação que falta para o material
           // valer alguma coisa, e um ícone de "revisar" não diz isso.
           if (PermissaoDoTreinamento.podeAlterar()) ...[
-            if (item.situacao == SituacaoTreinamento.rascunho)
+            // Enquanto o arquivo é lido não há texto a revisar.
+            if (item.situacao == SituacaoTreinamento.rascunho &&
+                !item.extraindo)
               TextButton.icon(
                 icon: const Icon(Icons.rate_review_outlined, size: 18),
                 label: const Text('Enviar para a IA'),
@@ -340,6 +359,53 @@ class _Selo extends StatelessWidget {
             color: cor,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// B9 (N10 E5) — de qual arquivo o material veio, e em que pé está a leitura.
+class _SituacaoDoArquivo extends StatelessWidget {
+  final Treinamento item;
+
+  const _SituacaoDoArquivo({required this.item});
+
+  @override
+  Widget build(BuildContext context) {
+    final estilo = Theme.of(context).textTheme.bodySmall;
+    final erro = Theme.of(context).colorScheme.error;
+    return Padding(
+      padding: const EdgeInsets.only(top: AppSpacing.xs),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.attach_file, size: 14),
+              const SizedBox(width: AppSpacing.xs),
+              Flexible(
+                child: Text(
+                  item.arquivoNome,
+                  style: estilo,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          if (item.extraindo)
+            Text(
+              'Lendo o arquivo. O texto aparece aqui em alguns minutos, '
+              'para você revisar.',
+              style: estilo?.copyWith(color: context.colors.fgMuted),
+            ),
+          if (item.extracaoFalhou)
+            Text(
+              item.extracaoErro.isEmpty
+                  ? 'Não foi possível ler o arquivo.'
+                  : item.extracaoErro,
+              style: estilo?.copyWith(color: erro),
+            ),
+        ],
       ),
     );
   }

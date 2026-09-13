@@ -6,6 +6,7 @@ import 'package:return_success_or_error/return_success_or_error.dart';
 import '../../domain/errors/treinamento_errors.dart';
 import '../../domain/model/treinamento.dart';
 import '../../domain/parameters/treinamento_parameters.dart';
+import '../datasources/treinamento_datasources.dart' show FalhaEnvioArquivo;
 
 /// Fronteira do treinamento: traduz falha de transporte em erro de domínio.
 TreinamentoError _traduzir(Object exception, String operacao) {
@@ -102,4 +103,27 @@ final class RemoverTreinamentoRepository
     StackTrace s,
     TreinamentoIdParameters p,
   ) => _traduzir(e, 'remover treinamento');
+}
+
+/// B9 (N10 E5) — o PUT que não terminou vira mensagem de tentar de novo; o resto
+/// segue a tradução do treinamento (a recusa do servidor já vem explicada).
+final class EnviarArquivoTreinamentoRepository
+    extends
+        RepositoryBase<
+          Treinamento,
+          EnviarArquivoTreinamentoParameters,
+          TreinamentoError
+        > {
+  const EnviarArquivoTreinamentoRepository({required super.datasource});
+
+  @override
+  TreinamentoError mapError(
+    Object e,
+    StackTrace s,
+    EnviarArquivoTreinamentoParameters p,
+  ) => e is FalhaEnvioArquivo
+      ? const TreinamentoDadosInvalidos(
+          'O envio do arquivo não terminou. Tente de novo.',
+        )
+      : _traduzir(e, 'enviar arquivo de treinamento');
 }

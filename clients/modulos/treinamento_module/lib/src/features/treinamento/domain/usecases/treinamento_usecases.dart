@@ -125,3 +125,29 @@ final class RemoverTreinamentoUsecase
   TreinamentoError onUnexpected(Object e, StackTrace s) =>
       _inesperado('remover treinamento', e, s);
 }
+
+/// B9 (N10 E5) — envia um arquivo de treinamento. Passthrough do criado.
+final class EnviarArquivoTreinamentoUsecase
+    extends
+        UsecaseBaseCallData<
+          Treinamento,
+          Treinamento,
+          EnviarArquivoTreinamentoParameters,
+          TreinamentoError
+        > {
+  const EnviarArquivoTreinamentoUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    Treinamento,
+    Treinamento,
+    EnviarArquivoTreinamentoParameters,
+    TreinamentoError
+  >
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  TreinamentoError onUnexpected(Object e, StackTrace s) =>
+      _inesperado('enviar arquivo de treinamento', e, s);
+}

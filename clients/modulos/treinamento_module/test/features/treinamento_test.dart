@@ -2,6 +2,8 @@ import 'package:api_client/api_client.dart' as proto;
 import 'package:fixnum/fixnum.dart';
 import 'package:api_client/testing.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
 import 'package:treinamento_module/src/features/treinamento/data/datasources/treinamento_datasources.dart';
@@ -10,6 +12,7 @@ import 'package:treinamento_module/src/features/treinamento/domain/errors/treina
 import 'package:treinamento_module/src/features/treinamento/domain/model/treinamento.dart';
 import 'package:treinamento_module/src/features/treinamento/domain/parameters/treinamento_parameters.dart';
 import 'package:treinamento_module/src/features/treinamento/domain/usecases/treinamento_usecases.dart';
+import 'package:treinamento_module/src/features/treinamento/presentation/widgets/dialogo_treinamento.dart';
 
 class MockAdminClient extends Mock implements proto.AdminServiceClient {}
 
@@ -37,6 +40,8 @@ void main() {
     registerFallbackValue(proto.GetMyTreinamentoRequest());
     registerFallbackValue(proto.FinalizarMyTreinamentoRequest());
     registerFallbackValue(proto.RemoverMyTreinamentoRequest());
+    registerFallbackValue(proto.SolicitarUploadTreinamentoRequest());
+    registerFallbackValue(proto.CreateMyTreinamentoComArquivoRequest());
   });
 
   setUp(() => client = MockAdminClient());
@@ -46,6 +51,105 @@ void main() {
       datasource: ListarTreinamentosDatasource(client: client),
     ),
   );
+
+  group('enviar arquivo (B9)', () {
+    EnviarArquivoTreinamentoUsecase enviar(http.Client httpClient) =>
+        EnviarArquivoTreinamentoUsecase(
+          repository: EnviarArquivoTreinamentoRepository(
+            datasource: EnviarArquivoTreinamentoDatasource(
+              client: client,
+              httpClient: httpClient,
+            ),
+          ),
+        );
+
+    const parametros = EnviarArquivoTreinamentoParameters(
+      tag: 'precos',
+      grupo: 'vendas',
+      nomeArquivo: 'precos.pdf',
+      mimetype: 'application/pdf',
+      bytes: [37, 80, 68, 70],
+    );
+
+    void autorizaUpload() =>
+        when(() => client.solicitarUploadTreinamento(any())).thenAnswer(
+          (_) => respostaGrpc(
+            proto.SolicitarUploadTreinamentoResponse(
+              urlUpload: 'https://r2/put',
+              chave: 'treinamento/abc',
+              contentType: 'application/pdf',
+            ),
+          ),
+        );
+
+    test('sobe ao bucket e cria com a chave que o servidor deu', () async {
+      autorizaUpload();
+      when(() => client.createMyTreinamentoComArquivo(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.MyTreinamentoResponse(
+            treinamento: protoTreinamento()
+              ..arquivoNome = 'precos.pdf'
+              ..extracaoStatus = 'pendente'
+              ..conteudo = '',
+          ),
+        ),
+      );
+      final puts = <http.Request>[];
+      final httpClient = MockClient((req) async {
+        puts.add(req);
+        return http.Response('', 200);
+      });
+
+      final res = await enviar(httpClient)(parametros);
+
+      final criado = (res as Success<Treinamento, TreinamentoError>).value;
+      expect(criado.veioDeArquivo, isTrue);
+      expect(criado.extraindo, isTrue);
+      expect(puts.single.headers['Content-Type'], 'application/pdf');
+      final pedido =
+          verify(
+                () => client.createMyTreinamentoComArquivo(captureAny()),
+              ).captured.single
+              as proto.CreateMyTreinamentoComArquivoRequest;
+      expect(pedido.chave, 'treinamento/abc');
+      expect(pedido.nomeArquivo, 'precos.pdf');
+    });
+
+    test('PUT recusado não cria o treinamento', () async {
+      autorizaUpload();
+      final httpClient = MockClient((_) async => http.Response('', 403));
+
+      final res = await enviar(httpClient)(parametros);
+
+      expect((res as Failure).error, isA<TreinamentoDadosInvalidos>());
+      verifyNever(() => client.createMyTreinamentoComArquivo(any()));
+    });
+
+    test('formato fora da lista não tem mimetype', () {
+      expect(mimetypeDoArquivo('Tabela.XLSX'), contains('spreadsheetml'));
+      expect(mimetypeDoArquivo('notas.txt'), 'text/plain');
+      expect(mimetypeDoArquivo('antigo.doc'), isNull);
+      expect(mimetypeDoArquivo('sem-extensao'), isNull);
+    });
+
+    test('a falha da leitura chega com o motivo', () {
+      final t = Treinamento(
+        id: 1,
+        tag: 't',
+        grupo: 'g',
+        conteudo: '',
+        finalizado: false,
+        vetorizado: false,
+        criadoEm: DateTime(2026),
+        atualizadoEm: DateTime(2026),
+        arquivoNome: 'x.pdf',
+        extracaoStatus: 'falhou',
+        extracaoErro: 'o PDF está protegido por senha',
+      );
+      expect(t.extracaoFalhou, isTrue);
+      expect(t.extraindo, isFalse);
+    });
+  });
 
   group('situação derivada dos dois booleanos', () {
     // A tela mostra os três estados do ciclo; eles não vêm prontos do servidor,

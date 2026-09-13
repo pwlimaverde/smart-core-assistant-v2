@@ -62,6 +62,13 @@ final class TreinamentoModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<EnviarArquivoTreinamentoUsecase>(
+      () => EnviarArquivoTreinamentoUsecase(
+        repository: EnviarArquivoTreinamentoRepository(
+          datasource: EnviarArquivoTreinamentoDatasource(client: _admin()),
+        ),
+      ),
+    );
     i.lazySingleton<RemoverTreinamentoUsecase>(
       () => RemoverTreinamentoUsecase(
         repository: RemoverTreinamentoRepository(

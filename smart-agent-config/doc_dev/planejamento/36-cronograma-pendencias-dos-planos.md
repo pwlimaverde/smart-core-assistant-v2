@@ -28,7 +28,7 @@
 | B6 | Marcar como lida e contador de não lidas | N9 E4 | Sem isso o quadro não diz o que falta responder | ✅ CI verde (`72c79bd`) |
 | B7 | Ajustar permissões de um agente sem desconectar | doc 35-agentes F4 | Hoje a única saída é revogar e reconectar | ✅ CI verde (`3b9f13f`) |
 | B8 | Descoberta dos aplicativos conectados | doc 35-agentes F5 | Recurso que precisa ser explicado por fora não foi entregue | ✅ CI verde (`e14a993`) |
-| B9 | IA analítica: assunto automático, feedback do teste, treinamento por arquivo | N10 E2, E6, E5 | Maior e mais caro; depende de nada acima | 🔄 E6 ✅ (`4df0c83`); E1+E2 ✅ (`b60dd14`); E5 em construção |
+| B9 | IA analítica: assunto automático, feedback do teste, treinamento por arquivo | N10 E2, E6, E5 | Maior e mais caro; depende de nada acima | ⏳ E6 ✅, E1+E2 ✅; E5 no CI |
 | B10 | Clientes PJ e vínculo contato ↔ cliente | N11 E5 / doc 34 C4 | Entidade nova com tela própria | ⬜ |
 
 **Fora deste cronograma:** N12 (cutover de produção) — é operação com janela
@@ -424,5 +424,19 @@ enriquecimento do contato) precisarem dele.
   real; handlers recusam chave de fora do prefixo, auditam o envio e só a falha
   da extração.
 
-**Parte 2 (a seguir):** a tela — botão **Enviar arquivo**, situação da extração
-em cada material.
+#### E5 — parte 2: a tela
+
+- **Enviar arquivo** ao lado de "Ensinar algo novo" (mesma permissão de ensinar):
+  assunto, grupo e o arquivo, com o seletor já restrito aos cinco formatos e o
+  aviso de salvar `.doc`/`.xls` como `.docx`/`.xlsx`.
+- Upload em três passos no próprio datasource: pede onde subir, faz o PUT com o
+  `Content-Type` assinado e só então cria. PUT recusado não cria nada.
+- Cada material vindo de arquivo mostra o nome e a situação da leitura —
+  "lendo o arquivo…" ou o motivo da falha. Enquanto lê, não oferece "Revisar"
+  (não há texto) e a lista continua se atualizando sozinha, como já fazia com o
+  que está na fila da IA.
+- Testes: envio com a chave dada pelo servidor e o `Content-Type` assinado; PUT
+  recusado não cria; mimetype por extensão; falha de leitura com o motivo.
+
+**Fica de fora:** o teste com mídia da E6.1 (opcional no plano) e a tela de
+revisão do acumulado de avaliações.

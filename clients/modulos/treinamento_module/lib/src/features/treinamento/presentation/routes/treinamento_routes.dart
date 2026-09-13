@@ -34,6 +34,7 @@ final class TreinamentoRoute extends GetItModule {
         criar: inject<CriarTreinamentoUsecase>(),
         finalizar: inject<FinalizarTreinamentoUsecase>(),
         remover: inject<RemoverTreinamentoUsecase>(),
+        enviarArquivo: inject<EnviarArquivoTreinamentoUsecase>(),
       ),
     );
     i.controller<IntentsController>(

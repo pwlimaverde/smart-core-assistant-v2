@@ -21,6 +21,15 @@ class Treinamento {
   final DateTime criadoEm;
   final DateTime atualizadoEm;
 
+  /// B9 (N10 E5) — vazio quando o material é texto colado.
+  final String arquivoNome;
+
+  /// `pendente` | `extraido` | `falhou` | vazio.
+  final String extracaoStatus;
+
+  /// Motivo da falha da extração, pronto para ler.
+  final String extracaoErro;
+
   const Treinamento({
     required this.id,
     required this.tag,
@@ -30,7 +39,17 @@ class Treinamento {
     required this.vetorizado,
     required this.criadoEm,
     required this.atualizadoEm,
+    this.arquivoNome = '',
+    this.extracaoStatus = '',
+    this.extracaoErro = '',
   });
+
+  bool get veioDeArquivo => arquivoNome.isNotEmpty;
+
+  /// O texto do arquivo ainda está sendo lido: não há o que revisar.
+  bool get extraindo => extracaoStatus == 'pendente';
+
+  bool get extracaoFalhou => extracaoStatus == 'falhou';
 
   SituacaoTreinamento get situacao {
     if (vetorizado) return SituacaoTreinamento.ativo;

@@ -30,3 +30,20 @@ final class FinalizarTreinamentoParameters extends Parameters {
     required this.conteudo,
   });
 }
+
+/// B9 (N10 E5) — um material de treinamento a partir de um arquivo.
+final class EnviarArquivoTreinamentoParameters extends Parameters {
+  final String tag;
+  final String grupo;
+  final String nomeArquivo;
+  final String mimetype;
+  final List<int> bytes;
+
+  const EnviarArquivoTreinamentoParameters({
+    required this.tag,
+    required this.grupo,
+    required this.nomeArquivo,
+    required this.mimetype,
+    required this.bytes,
+  });
+}

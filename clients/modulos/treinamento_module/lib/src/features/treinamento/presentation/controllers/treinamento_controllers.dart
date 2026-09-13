@@ -14,15 +14,22 @@ final class TreinamentoController extends BaseController<List<Treinamento>> {
   final FinalizarTreinamentoUsecase _finalizar;
   final RemoverTreinamentoUsecase _remover;
 
+  /// B9 (N10 E5) — opcional: sem ele a tela não oferece o envio de arquivo.
+  final EnviarArquivoTreinamentoUsecase? _enviarArquivo;
+
   TreinamentoController({
     required ListarTreinamentosUsecase listar,
     required CriarTreinamentoUsecase criar,
     required FinalizarTreinamentoUsecase finalizar,
     required RemoverTreinamentoUsecase remover,
+    EnviarArquivoTreinamentoUsecase? enviarArquivo,
   }) : _listar = listar,
        _criar = criar,
        _finalizar = finalizar,
-       _remover = remover;
+       _remover = remover,
+       _enviarArquivo = enviarArquivo;
+
+  bool get aceitaArquivo => _enviarArquivo != null;
 
   Future<void> carregar() => execute<TreinamentoError>(() => _listar(noParams));
 
@@ -47,6 +54,33 @@ final class TreinamentoController extends BaseController<List<Treinamento>> {
   }) async {
     final res = await _finalizar(
       FinalizarTreinamentoParameters(id: id, conteudo: conteudo),
+    );
+    if (res is Success) await carregar();
+    return res;
+  }
+
+  /// B9 (N10 E5) — envia um arquivo; o texto chega depois, lido pelo servidor.
+  Future<ReturnSuccessOrError<Treinamento, TreinamentoError>> enviarArquivo({
+    required String tag,
+    required String grupo,
+    required String nomeArquivo,
+    required String mimetype,
+    required List<int> bytes,
+  }) async {
+    final usecase = _enviarArquivo;
+    if (usecase == null) {
+      return const Failure(
+        TreinamentoDadosInvalidos('O envio de arquivo não está disponível.'),
+      );
+    }
+    final res = await usecase(
+      EnviarArquivoTreinamentoParameters(
+        tag: tag,
+        grupo: grupo,
+        nomeArquivo: nomeArquivo,
+        mimetype: mimetype,
+        bytes: bytes,
+      ),
     );
     if (res is Success) await carregar();
     return res;
