@@ -48,6 +48,13 @@ pub struct RuntimeConfig {
     // Thresholds
     pub similarity_threshold: f64,
     pub vector_distance_threshold: f64,
+    /// B4 — abaixo disto a resposta da IA vira transferência, mesmo com o
+    /// modelo dizendo que sabe responder. `None` ou 0 = veto desligado, que é
+    /// o padrão: ligar sem histórico é calibrar no escuro.
+    pub confianca_minima_transferencia: Option<f64>,
+    /// B4 — a partir disto a IA responde sem revisão, e é também o piso para um
+    /// valor extraído entrar na ficha (C1). Padrão 0.8.
+    pub confianca_minima_automatica: f64,
     // Chaves de API descriptografadas (SecretString: Debug = [REDACTED], zeroize no Drop)
     pub openai_api_key: SecretString,
     pub groq_api_key: SecretString,

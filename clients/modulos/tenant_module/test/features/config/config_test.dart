@@ -57,6 +57,8 @@ const _config = TenantConfig(
   similarityThreshold: '0.75',
   vectorDistanceThreshold: '0.3',
   apiKeys: {'groq': 'gsk-secreta'},
+  confiancaMinimaAutomatica: '0.85',
+  confiancaMinimaTransferencia: '0.4',
 );
 
 void main() {
@@ -148,6 +150,9 @@ void main() {
       expect(enviado.dadosEmpresa, 'Empresa X');
       expect(enviado.chunkSize, 800);
       expect(enviado.similarityThreshold, '0.75');
+      // B4 — os limiares de confiança vão junto com os outros.
+      expect(enviado.confiancaMinimaAutomatica, '0.85');
+      expect(enviado.confiancaMinimaTransferencia, '0.4');
       expect(enviado.apiKeys.single.key, 'groq');
       expect(r, isA<Success<Unit, TenantConfigError>>());
     });

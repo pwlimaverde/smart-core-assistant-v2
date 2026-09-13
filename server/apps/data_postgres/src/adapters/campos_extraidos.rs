@@ -11,11 +11,12 @@
 
 use serde_json::Value;
 
-/// Confiança mínima para um valor da IA entrar na ficha.
+/// Confiança mínima para um valor da IA entrar na ficha, quando a config do
+/// tenant não pôde ser lida.
 ///
-/// Constante por ora. O **D1** (regras do bot) entrega o limiar configurável
-/// por tenant, e é ele que deve valer quando chegar — um número por tenant
-/// para "quando confio na IA"; dois seriam duas verdades sobre a mesma coisa.
+/// Desde o B4 o piso de verdade é a `confianca_minima_automatica` do tenant —
+/// um número por tenant para "quando confio na IA"; dois seriam duas verdades
+/// sobre a mesma coisa. Esta constante é só a rede de segurança.
 pub const PISO_CONFIANCA_PADRAO: f64 = 0.8;
 
 /// Converte o `valor_json` do LLM na forma tipada do campo.

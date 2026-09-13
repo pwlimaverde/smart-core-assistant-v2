@@ -205,6 +205,20 @@ const GetTenantConfigResponse$json = {
       '6': '.smartcore.contracts.queries.ApiKeyEntry',
       '10': 'apiKeys'
     },
+    {
+      '1': 'confianca_minima_transferencia',
+      '3': 21,
+      '4': 1,
+      '5': 9,
+      '10': 'confiancaMinimaTransferencia'
+    },
+    {
+      '1': 'confianca_minima_automatica',
+      '3': 22,
+      '4': 1,
+      '5': 9,
+      '10': 'confiancaMinimaAutomatica'
+    },
   ],
 };
 
@@ -225,7 +239,9 @@ final $typed_data.Uint8List getTenantConfigResponseDescriptor = $convert.base64D
     'T3ZlcmxhcBIxChRzaW1pbGFyaXR5X3RocmVzaG9sZBgSIAEoCVITc2ltaWxhcml0eVRocmVzaG'
     '9sZBI6Chl2ZWN0b3JfZGlzdGFuY2VfdGhyZXNob2xkGBMgASgJUhd2ZWN0b3JEaXN0YW5jZVRo'
     'cmVzaG9sZBJDCghhcGlfa2V5cxgUIAMoCzIoLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy'
-    '5BcGlLZXlFbnRyeVIHYXBpS2V5cw==');
+    '5BcGlLZXlFbnRyeVIHYXBpS2V5cxJECh5jb25maWFuY2FfbWluaW1hX3RyYW5zZmVyZW5jaWEY'
+    'FSABKAlSHGNvbmZpYW5jYU1pbmltYVRyYW5zZmVyZW5jaWESPgobY29uZmlhbmNhX21pbmltYV'
+    '9hdXRvbWF0aWNhGBYgASgJUhljb25maWFuY2FNaW5pbWFBdXRvbWF0aWNh');
 
 @$core.Deprecated('Use updateTenantConfigRequestDescriptor instead')
 const UpdateTenantConfigRequest$json = {
@@ -289,6 +305,20 @@ const UpdateTenantConfigRequest$json = {
       '6': '.smartcore.contracts.queries.ApiKeyEntry',
       '10': 'apiKeys'
     },
+    {
+      '1': 'confianca_minima_transferencia',
+      '3': 22,
+      '4': 1,
+      '5': 9,
+      '10': 'confiancaMinimaTransferencia'
+    },
+    {
+      '1': 'confianca_minima_automatica',
+      '3': 23,
+      '4': 1,
+      '5': 9,
+      '10': 'confiancaMinimaAutomatica'
+    },
   ],
 };
 
@@ -309,7 +339,10 @@ final $typed_data.Uint8List updateTenantConfigRequestDescriptor = $convert.base6
     'ZRIjCg1jaHVua19vdmVybGFwGBIgASgFUgxjaHVua092ZXJsYXASMQoUc2ltaWxhcml0eV90aH'
     'Jlc2hvbGQYEyABKAlSE3NpbWlsYXJpdHlUaHJlc2hvbGQSOgoZdmVjdG9yX2Rpc3RhbmNlX3Ro'
     'cmVzaG9sZBgUIAEoCVIXdmVjdG9yRGlzdGFuY2VUaHJlc2hvbGQSQwoIYXBpX2tleXMYFSADKA'
-    'syKC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuQXBpS2V5RW50cnlSB2FwaUtleXM=');
+    'syKC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuQXBpS2V5RW50cnlSB2FwaUtleXMSRAoe'
+    'Y29uZmlhbmNhX21pbmltYV90cmFuc2ZlcmVuY2lhGBYgASgJUhxjb25maWFuY2FNaW5pbWFUcm'
+    'Fuc2ZlcmVuY2lhEj4KG2NvbmZpYW5jYV9taW5pbWFfYXV0b21hdGljYRgXIAEoCVIZY29uZmlh'
+    'bmNhTWluaW1hQXV0b21hdGljYQ==');
 
 @$core.Deprecated('Use updateTenantConfigResponseDescriptor instead')
 const UpdateTenantConfigResponse$json = {
@@ -2863,6 +2896,20 @@ const UpdateMyTenantConfigRequest$json = {
       '6': '.smartcore.contracts.queries.ApiKeyEntry',
       '10': 'apiKeys'
     },
+    {
+      '1': 'confianca_minima_transferencia',
+      '3': 21,
+      '4': 1,
+      '5': 9,
+      '10': 'confiancaMinimaTransferencia'
+    },
+    {
+      '1': 'confianca_minima_automatica',
+      '3': 22,
+      '4': 1,
+      '5': 9,
+      '10': 'confiancaMinimaAutomatica'
+    },
   ],
 };
 
@@ -2883,7 +2930,9 @@ final $typed_data.Uint8List updateMyTenantConfigRequestDescriptor = $convert.bas
     'aHVua092ZXJsYXASMQoUc2ltaWxhcml0eV90aHJlc2hvbGQYEiABKAlSE3NpbWlsYXJpdHlUaH'
     'Jlc2hvbGQSOgoZdmVjdG9yX2Rpc3RhbmNlX3RocmVzaG9sZBgTIAEoCVIXdmVjdG9yRGlzdGFu'
     'Y2VUaHJlc2hvbGQSQwoIYXBpX2tleXMYFCADKAsyKC5zbWFydGNvcmUuY29udHJhY3RzLnF1ZX'
-    'JpZXMuQXBpS2V5RW50cnlSB2FwaUtleXM=');
+    'JpZXMuQXBpS2V5RW50cnlSB2FwaUtleXMSRAoeY29uZmlhbmNhX21pbmltYV90cmFuc2ZlcmVu'
+    'Y2lhGBUgASgJUhxjb25maWFuY2FNaW5pbWFUcmFuc2ZlcmVuY2lhEj4KG2NvbmZpYW5jYV9taW'
+    '5pbWFfYXV0b21hdGljYRgWIAEoCVIZY29uZmlhbmNhTWluaW1hQXV0b21hdGljYQ==');
 
 @$core.Deprecated('Use myFluxoDescriptor instead')
 const MyFluxo$json = {

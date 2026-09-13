@@ -843,6 +843,7 @@ async fn main() -> anyhow::Result<()> {
                 handler_gravar_campos_extraidos(
                     state.atendimento.as_ref(),
                     state.audit.as_ref(),
+                    state.config_cache.as_ref(),
                     env,
                 )
                 .await
@@ -4414,6 +4415,7 @@ async fn handler_atualizar_sentimento(
 async fn handler_gravar_campos_extraidos(
     store: &dyn ports::AtendimentoStore,
     audit: &dyn ports::AuditPort,
+    config_cache: &infrastructure_postgres::TenantConfigCache,
     env: Envelope,
 ) -> Envelope {
     let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
@@ -4439,8 +4441,17 @@ async fn handler_gravar_campos_extraidos(
         .map(|v| v as i32);
 
     let ctx = contexto_do_envelope(&env);
+    // B4 — o piso é o do tenant. Sem conseguir ler a config, vale o padrão de
+    // antes: ficar sem gravar nada seria pior, e gravar sem piso, muito pior.
+    let piso = match config_cache.get_config(ctx.tenant_id).await {
+        Ok(cfg) => cfg.confianca_minima_automatica,
+        Err(e) => {
+            tracing::warn!(erro = %e, "config do tenant indisponível; piso de extração padrão");
+            crate::adapters::campos_extraidos::PISO_CONFIANCA_PADRAO
+        }
+    };
     match store
-        .gravar_campos_extraidos(&ctx, atendimento_id, campos, mensagem_origem_id)
+        .gravar_campos_extraidos(&ctx, atendimento_id, campos, mensagem_origem_id, piso)
         .await
     {
         Ok(resumo) => {

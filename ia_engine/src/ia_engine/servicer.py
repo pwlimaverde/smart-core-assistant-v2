@@ -283,6 +283,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
                 msg_sem_info=config.msg_sem_info,
                 dados_treinamento=request.dados_treinamento,
                 similarity_threshold=config.similarity_threshold,
+                confianca_minima_transferencia=config.confianca_minima_transferencia,
                 llm=config.spec_llm(),
                 embeddings_provider=config.spec_embeddings(),
                 prompts=dict(config.prompts),

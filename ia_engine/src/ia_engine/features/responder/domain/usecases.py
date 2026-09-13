@@ -136,6 +136,7 @@ def resolve_resposta(
     msg_transferencia: str = "",
     msg_sem_info: str = "",
     sem_treinamento: bool = False,
+    confianca_minima_transferencia: float | None = None,
 ) -> RespostaFinal:
     """Decide transferência a partir do structured output + score triádico.
 
@@ -171,7 +172,19 @@ def resolve_resposta(
     if transfer_attendance and acao:
         fluxo_transferencia = mapear_acao_para_fluxo(acao, fluxos_disponiveis)
 
-    should_force_transfer = (
+    # B4 — veto do tenant: abaixo do piso configurado, transfere mesmo com o
+    # LLM dizendo que sabe responder. O número comparado é o `final_score`, que
+    # é o que volta como `confiabilidade` e o worker grava — calibrar e decidir
+    # precisam olhar para a mesma medida. Acima do piso, a indicação de
+    # transferência do LLM continua valendo: ele conhece o roteamento por
+    # fluxo, e o número não.
+    veto_do_tenant = (
+        confianca_minima_transferencia is not None
+        and confianca_minima_transferencia > 0
+        and final_score < confianca_minima_transferencia
+        and not transfer_attendance
+    )
+    should_force_transfer = veto_do_tenant or (
         final_score < similarity_threshold
         and confianca_llm < _LLM_CONFIDENCE_THRESHOLD
         and not transfer_attendance
@@ -233,6 +246,7 @@ class ResponderUsecase(
                 # `training_vec` ausente é o sinal de que o RAG não trouxe nada:
                 # o datasource só o calcula com `dados_treinamento` preenchido.
                 sem_treinamento=data.training_vec is None,
+                confianca_minima_transferencia=parameters.confianca_minima_transferencia,
             )
         )
 

@@ -36,6 +36,10 @@ struct TenantConfigRow {
     prompts: serde_json::Value,
 }
 
+/// Confiança a partir da qual a IA responde sem revisão, quando nem o tenant
+/// nem o CoreSetting dizem outra coisa. É o mesmo 0.8 que o C1 usava fixo.
+pub const CONFIANCA_MINIMA_AUTOMATICA_PADRAO: f64 = 0.8;
+
 /// Prefixo das CoreSettings que carregam prompt de sistema. Só estas entram no
 /// `RuntimeConfig.prompts` — o resto das settings globais não tem por que
 /// trafegar até o `ia_engine`.
@@ -112,6 +116,18 @@ pub async fn resolve_runtime_config(
     .fetch_optional(&mut *tx)
     .await?;
 
+    // B4 — lidas à parte, com query de tempo de execução: o SELECT acima é
+    // `query_as!`, e acrescentar colunas nele exigiria regenerar o cache
+    // offline do sqlx por duas colunas.
+    let confianca: Option<(Option<rust_decimal::Decimal>, Option<rust_decimal::Decimal>)> =
+        sqlx::query_as(
+            "SELECT confianca_minima_transferencia, confianca_minima_automatica \
+             FROM tenants_tenantconfig WHERE tenant_id = $1",
+        )
+        .bind(tenant_id)
+        .fetch_optional(&mut *tx)
+        .await?;
+
     tx.commit().await?;
 
     // Helper: usa campo do tenant se não nulo/vazio; senão usa o global
@@ -119,6 +135,15 @@ pub async fn resolve_runtime_config(
         tenant_val
             .filter(|s| !s.is_empty())
             .unwrap_or_else(|| core.get(core_key).cloned().unwrap_or_default())
+    };
+
+    // B4 — os dois limiares de confiança, com a mesma cascata mas sem cair em
+    // zero quando falta tudo (ver o comentário no preenchimento, abaixo).
+    let (confianca_transferencia_tenant, confianca_automatica_tenant) =
+        confianca.unwrap_or((None, None));
+    let global_f64 = |core_key: &str| -> Option<f64> {
+        core.get(core_key)
+            .and_then(|s| s.trim().parse::<f64>().ok())
     };
 
     let fallback_dec = |tenant_val: Option<rust_decimal::Decimal>, core_key: &str| -> f64 {
@@ -231,6 +256,18 @@ pub async fn resolve_runtime_config(
             tc.vector_distance_threshold,
             "VECTOR_DISTANCE_THRESHOLD",
         ),
+        // B4. Sem o `fallback_dec`, de propósito: ele cai em 0.0 quando falta a
+        // setting, e 0.0 aqui teria sentidos opostos nos dois campos — veto
+        // desligado (certo) e piso zero, aceitando qualquer palpite (errado).
+        confianca_minima_transferencia: confianca_transferencia_tenant
+            .and_then(|d| d.to_f64())
+            .or_else(|| global_f64("CONFIANCA_MINIMA_TRANSFERENCIA"))
+            .map(|v| v.clamp(0.0, 1.0)),
+        confianca_minima_automatica: confianca_automatica_tenant
+            .and_then(|d| d.to_f64())
+            .or_else(|| global_f64("CONFIANCA_MINIMA_AUTOMATICA"))
+            .unwrap_or(CONFIANCA_MINIMA_AUTOMATICA_PADRAO)
+            .clamp(0.0, 1.0),
         openai_api_key: resolve_api_key("openai_api_key", "OPENAI_API_KEY")?,
         groq_api_key: resolve_api_key("groq_api_key", "GROQ_API_KEY")?,
         google_api_key: resolve_api_key("google_api_key", "GOOGLE_API_KEY")?,

@@ -66,6 +66,10 @@ message GetTenantConfigResponse {
   string similarity_threshold = 18;
   string vector_distance_threshold = 19;
   repeated ApiKeyEntry api_keys = 20;
+  // B4 — limiares de confiança da IA, como string decimal ("0.80").
+  // Vazio = não mexer. "0" em confianca_minima_transferencia desliga o veto.
+  string confianca_minima_transferencia = 21;
+  string confianca_minima_automatica = 22;
 }
 
 message UpdateTenantConfigRequest {
@@ -90,6 +94,10 @@ message UpdateTenantConfigRequest {
   string similarity_threshold = 19;
   string vector_distance_threshold = 20;
   repeated ApiKeyEntry api_keys = 21;
+  // B4 — limiares de confiança da IA, como string decimal ("0.80").
+  // Vazio = não mexer. "0" em confianca_minima_transferencia desliga o veto.
+  string confianca_minima_transferencia = 22;
+  string confianca_minima_automatica = 23;
 }
 
 message UpdateTenantConfigResponse {
@@ -1039,6 +1047,10 @@ message UpdateMyTenantConfigRequest {
   string similarity_threshold = 18;
   string vector_distance_threshold = 19;
   repeated ApiKeyEntry api_keys = 20;
+  // B4 — limiares de confiança da IA, como string decimal ("0.80").
+  // Vazio = não mexer. "0" em confianca_minima_transferencia desliga o veto.
+  string confianca_minima_transferencia = 21;
+  string confianca_minima_automatica = 22;
 }
 
 // --- Serviço Admin ---

@@ -1631,8 +1631,9 @@ impl AtendimentoStore for PgAtendimentoStore {
         atendimento_id: i32,
         campos: Vec<CampoExtraidoDto>,
         mensagem_origem_id: Option<i32>,
+        piso_confianca: f64,
     ) -> Result<ResumoCamposExtraidos, DbError> {
-        use crate::adapters::campos_extraidos::{valor_para_o_tipo, PISO_CONFIANCA_PADRAO};
+        use crate::adapters::campos_extraidos::valor_para_o_tipo;
 
         let repo_atendimento = PostgresAtendimentoRepository;
         let repo_campo = PostgresCampoPersonalizadoRepository;
@@ -1690,7 +1691,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                 };
 
                 // 4. Abaixo do piso é palpite, e palpite não entra na ficha.
-                if extraido.confianca < PISO_CONFIANCA_PADRAO {
+                if extraido.confianca < piso_confianca {
                     resumo.abaixo_do_piso += 1;
                     continue;
                 }

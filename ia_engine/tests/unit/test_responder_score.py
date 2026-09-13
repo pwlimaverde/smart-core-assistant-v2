@@ -153,3 +153,66 @@ def test_safety_net_regex_forca_transferencia_sem_acao():
     )
     assert result.transferir_atendimento is True
     assert result.fluxo_transferencia == "Financeiro - cobranças"
+
+
+# --- B4: veto de confiança do tenant --------------------------------------- #
+def _confiante() -> RespostaBot:
+    # O LLM se diz seguro e não pediu transferência: sem o veto, respondia.
+    return RespostaBot(
+        resposta_texto="O prazo é de 3 dias.", acao_transferencia=None, confianca=0.95
+    )
+
+
+def test_veto_transfere_abaixo_do_piso_mesmo_com_o_llm_confiante():
+    result = resolve_resposta(
+        resposta=_confiante(),
+        fluxos_disponiveis=FLUXOS,
+        final_score=0.4,
+        similarity_threshold=0.3,
+        confianca_minima_transferencia=0.6,
+    )
+    assert result.transferir_atendimento is True
+    assert result.fluxo_transferencia == "Financeiro - cobranças"
+
+
+def test_veto_nao_age_acima_do_piso():
+    result = resolve_resposta(
+        resposta=_confiante(),
+        fluxos_disponiveis=FLUXOS,
+        final_score=0.7,
+        similarity_threshold=0.3,
+        confianca_minima_transferencia=0.6,
+    )
+    assert result.transferir_atendimento is False
+
+
+def test_sem_piso_configurado_vale_a_regra_de_antes():
+    # Veto desligado (None ou 0) é o padrão: o comportamento de quem não mexeu
+    # na configuração não pode mudar com este deploy.
+    for piso in (None, 0.0):
+        result = resolve_resposta(
+            resposta=_confiante(),
+            fluxos_disponiveis=FLUXOS,
+            final_score=0.1,
+            similarity_threshold=0.5,
+            confianca_minima_transferencia=piso,
+        )
+        assert result.transferir_atendimento is False
+
+
+def test_veto_nao_apaga_a_transferencia_que_o_llm_ja_pediu():
+    resposta = RespostaBot(
+        resposta_texto="Vou te encaminhar.",
+        acao_transferencia="Financeiro",
+        confianca=0.9,
+    )
+    result = resolve_resposta(
+        resposta=resposta,
+        fluxos_disponiveis=FLUXOS,
+        final_score=0.1,
+        similarity_threshold=0.5,
+        confianca_minima_transferencia=0.6,
+    )
+    assert result.transferir_atendimento is True
+    # O aviso genérico não é anexado de novo: o LLM já disse que encaminha.
+    assert result.resposta_texto == "Vou te encaminhar."

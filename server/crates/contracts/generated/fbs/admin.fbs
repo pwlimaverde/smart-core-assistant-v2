@@ -65,6 +65,8 @@ table GetTenantConfigResponse {
   similarity_threshold:string;
   vector_distance_threshold:string;
   api_keys:[smartcore.contracts.queries.ApiKeyEntry];
+  confianca_minima_transferencia:string;
+  confianca_minima_automatica:string;
 }
 
 table UpdateTenantConfigRequest {
@@ -89,6 +91,8 @@ table UpdateTenantConfigRequest {
   similarity_threshold:string;
   vector_distance_threshold:string;
   api_keys:[smartcore.contracts.queries.ApiKeyEntry];
+  confianca_minima_transferencia:string;
+  confianca_minima_automatica:string;
 }
 
 table UpdateTenantConfigResponse {
@@ -878,6 +882,8 @@ table UpdateMyTenantConfigRequest {
   similarity_threshold:string;
   vector_distance_threshold:string;
   api_keys:[smartcore.contracts.queries.ApiKeyEntry];
+  confianca_minima_transferencia:string;
+  confianca_minima_automatica:string;
 }
 
 table MyFluxo {

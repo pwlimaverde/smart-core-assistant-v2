@@ -540,12 +540,17 @@ pub trait AtendimentoStore: Send + Sync {
     /// Devolve o resumo (recebidos, gravados, descartados por motivo). O
     /// detalhamento é o que permite calibrar o piso: sem ele, "a IA não
     /// preenche" é indistinguível de "a IA preenche errado".
+    ///
+    /// `piso_confianca` vem da config do tenant (B4): é a mesma
+    /// `confianca_minima_automatica` que decide se a resposta precisa de
+    /// revisão — um número só para "quando confio na IA".
     async fn gravar_campos_extraidos(
         &self,
         ctx: &RequestContext,
         atendimento_id: i32,
         campos: Vec<CampoExtraidoDto>,
         mensagem_origem_id: Option<i32>,
+        piso_confianca: f64,
     ) -> Result<ResumoCamposExtraidos, DbError>;
 
     /// Atualiza a última leitura de sentimento do atendimento, calculada pela IA

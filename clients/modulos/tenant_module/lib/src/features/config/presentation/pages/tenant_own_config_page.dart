@@ -88,6 +88,8 @@ class _ConfigFormState extends State<_ConfigForm> {
   late final TextEditingController _msgFallback;
   late final TextEditingController _msgSemInfo;
   late final TextEditingController _msgTransferencia;
+  late final TextEditingController _confiancaAutomatica;
+  late final TextEditingController _confiancaTransferencia;
 
   @override
   void initState() {
@@ -99,6 +101,12 @@ class _ConfigFormState extends State<_ConfigForm> {
     _msgSemInfo = TextEditingController(text: widget.config.msgSemInfo);
     _msgTransferencia = TextEditingController(
       text: widget.config.msgTransferencia,
+    );
+    _confiancaAutomatica = TextEditingController(
+      text: widget.config.confiancaMinimaAutomatica,
+    );
+    _confiancaTransferencia = TextEditingController(
+      text: widget.config.confiancaMinimaTransferencia,
     );
   }
 
@@ -136,6 +144,41 @@ class _ConfigFormState extends State<_ConfigForm> {
             AppTextField(
               label: 'Mensagem de Transferência',
               controller: _msgTransferencia,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Confiança da IA',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            // B4 — os dois números que decidem quando a IA age sozinha.
+            // Explicados na própria tela: sem isso, "0.8" é um número
+            // mágico, e mexer nele às cegas muda o atendimento inteiro.
+            Text(
+              'De 0 a 1. Deixe em branco para usar o padrão. Cada resposta '
+              'da IA fica registrada com a confiança dela — olhe esse '
+              'histórico antes de ligar a transferência automática.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 12),
+            AppTextField(
+              label: 'Responder sem revisão a partir de',
+              hint: 'padrão 0.8 — também é o piso para preencher a ficha',
+              controller: _confiancaAutomatica,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+            ),
+            const SizedBox(height: 16),
+            AppTextField(
+              label: 'Transferir para um atendente abaixo de',
+              hint: '0 ou em branco = desligado',
+              controller: _confiancaTransferencia,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
             ),
             const SizedBox(height: 24),
             Text(
@@ -195,6 +238,9 @@ class _ConfigFormState extends State<_ConfigForm> {
                     vectorDistanceThreshold:
                         widget.config.vectorDistanceThreshold,
                     apiKeys: widget.config.apiKeys,
+                    confiancaMinimaAutomatica: _confiancaAutomatica.text.trim(),
+                    confiancaMinimaTransferencia: _confiancaTransferencia.text
+                        .trim(),
                   ),
                 ),
               ),

@@ -64,6 +64,10 @@ pub struct RuntimeConfigDto {
     // Thresholds
     pub similarity_threshold: f64,
     pub vector_distance_threshold: f64,
+    /// B4 — lido pelo `ia_engine` (veto). `null` = desligado.
+    pub confianca_minima_transferencia: Option<f64>,
+    /// B4 — lido pelo **worker**, para registrar a decisão de cada resposta.
+    pub confianca_minima_automatica: f64,
     // Chaves de API já decifradas (ver nota de segurança no módulo)
     pub openai_api_key: String,
     pub groq_api_key: String,
@@ -99,6 +103,8 @@ impl From<&RuntimeConfig> for RuntimeConfigDto {
             chunk_overlap: cfg.chunk_overlap,
             similarity_threshold: cfg.similarity_threshold,
             vector_distance_threshold: cfg.vector_distance_threshold,
+            confianca_minima_transferencia: cfg.confianca_minima_transferencia,
+            confianca_minima_automatica: cfg.confianca_minima_automatica,
             openai_api_key: cfg.openai_api_key.expose_secret().to_string(),
             groq_api_key: cfg.groq_api_key.expose_secret().to_string(),
             google_api_key: cfg.google_api_key.expose_secret().to_string(),

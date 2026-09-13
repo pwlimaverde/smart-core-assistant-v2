@@ -59,3 +59,6 @@ class ResponderParameters(Parameters):
     # Overrides de prompt resolvidos pelo Rust (chave ausente => default do
     # datasource). Dict em vez de tupla porque a busca aqui e' por chave.
     prompts: dict[str, str] = field(default_factory=dict)
+    # B4 — piso do tenant abaixo do qual a resposta vira transferência mesmo
+    # com o modelo confiante. `None`/0 = veto desligado.
+    confianca_minima_transferencia: float | None = None

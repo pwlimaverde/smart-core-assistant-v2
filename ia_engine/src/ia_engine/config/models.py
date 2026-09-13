@@ -83,6 +83,11 @@ class RuntimeConfig(BaseModel):
     # Thresholds
     similarity_threshold: float = 0.0
     vector_distance_threshold: float = 0.0
+    # B4 — veto de confiança. `None` ou 0 = desligado (o padrão: ligar sem
+    # histórico é calibrar no escuro).
+    confianca_minima_transferencia: float | None = None
+    # B4 — lido pelo worker para registrar a decisão; aqui só viaja junto.
+    confianca_minima_automatica: float = 0.8
 
     # Chaves de API (decifradas pelo Rust antes de publicar)
     openai_api_key: str = ""

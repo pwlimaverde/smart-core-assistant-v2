@@ -22,8 +22,8 @@
 |---|-------|--------|-----------------------|--------|
 | B1 | Recuperação de senha e reenvio de convite | N11 E8 | Convidado ou usuário que perde o e-mail/senha hoje não tem saída | ✅ CI verde (`0a5ac1d`) |
 | B2 | Menu por escopo, não por `isTenantAdmin` | doc 35-agentes F2 | O papel somente-leitura (D4) existe no servidor e não na tela; pré-requisito do B3 | ✅ CI verde (`e853e19`) |
-| B3 | "O que o agente fez" — auditoria do próprio tenant | doc 35-agentes F1 | Fecha o DoD da N13: agente só é aceitável se auditável por quem o autorizou | ⏳ no CI |
-| B4 | Limiar de confiança com veto, por tenant | regras D1 | Hoje o C1 usa 0,8 fixo; um número por tenant para "quando confio na IA" | ⬜ |
+| B3 | "O que o agente fez" — auditoria do próprio tenant | doc 35-agentes F1 | Fecha o DoD da N13: agente só é aceitável se auditável por quem o autorizou | ✅ CI verde (`a2de364`) |
+| B4 | Limiar de confiança com veto, por tenant | regras D1 | Hoje o C1 usa 0,8 fixo; um número por tenant para "quando confio na IA" | ⏳ no CI |
 | B5 | Notificar o atendente da atribuição | regras D6 | Rodízio (D2) atribui em silêncio | ⬜ |
 | B6 | Marcar como lida e contador de não lidas | N9 E4 | Sem isso o quadro não diz o que falta responder | ⬜ |
 | B7 | Ajustar permissões de um agente sem desconectar | doc 35-agentes F4 | Hoje a única saída é revogar e reconectar | ⬜ |
@@ -145,3 +145,43 @@ era impossível de responder, só "o que algum agente fez".
   filtros malformados recusados, derivação de origem/tool do `user_agent`,
   formato do `user-agent` no `mcp_server`, e a aba (vazio sem parecer erro,
   linha de agente, linha de painel, filtro).
+
+### B4 — Limiar de confiança com veto, por tenant (D1, passo 2)
+
+**Confirmado antes de construir:** o passo 1 (medir) já estava no ar — o worker
+grava a confiança de cada resposta. Faltava decidir com ela: o único veto era um
+`0.5` fixo no `ia_engine`, e o C1 usava `0.8` fixo para a ficha.
+
+**Decisão de produto registrada:** o plano manda não ligar o veto sem histórico,
+e o histórico só começa a existir agora. Por isso o veto nasce **desligado** —
+quem não mexer na configuração continua com o comportamento de antes.
+
+**Entregue:**
+
+- Migration 0034: `confianca_minima_transferencia` e
+  `confianca_minima_automatica` em `tenants_tenantconfig`, na cascata Tenant >
+  CoreSettings (`CONFIANCA_MINIMA_TRANSFERENCIA` vazio = desligado;
+  `CONFIANCA_MINIMA_AUTOMATICA` = 0.8).
+- `RuntimeConfig` e o DTO publicado no Redis levam os dois; a cascata não usa o
+  `fallback_dec`, que cairia em 0.0 — veto desligado estaria certo, mas piso zero
+  aceitaria qualquer palpite.
+- `ia_engine`: **veto** — abaixo do piso do tenant, transfere mesmo com o LLM
+  confiante; acima, a transferência pedida pelo LLM continua valendo (ele conhece
+  o roteamento por fluxo). O número comparado é o `final_score`, o mesmo que o
+  worker grava: calibrar e decidir olham a mesma medida.
+- Worker: cada resposta ganha **decisão** — `automatica`, `revisao` (entre o veto
+  e a confiança automática), `transferida` ou `degradada` (fallback, não veio da
+  IA) —, no evento `bot.respondeu` e no log, ao lado da confiança. Número, nunca
+  conteúdo.
+- C1: o piso para gravar valor extraído na ficha passa a ser a
+  `confianca_minima_automatica` do tenant — um número só para "quando confio na
+  IA". Sem config legível, vale o 0.8 de antes.
+- Tela de configuração do tenant: seção **Confiança da IA**, com os dois campos
+  explicados. Valor fora de 0..1 é descartado, não gravado cortado.
+- Testes: veto abaixo/acima do piso, veto desligado preserva a regra antiga, veto
+  não duplica aviso quando o LLM já transferiu; decisão por faixa no worker;
+  limiares no request da tela.
+
+**Fica de fora:** a marca visual de "revisar" no quadro. A decisão fica
+registrada na trilha (`bot.respondeu`), que é o que a calibração precisa; mostrar
+no cartão é do quadro, junto do resto que o B2 anotou para ele.

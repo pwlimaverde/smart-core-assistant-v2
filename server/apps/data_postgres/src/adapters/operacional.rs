@@ -295,7 +295,7 @@ impl OperacionalStore for PgOperacionalStore {
              msg_transferencia, llm_class, model, llm_temperature, transcription_provider, \
              transcription_model, vision_provider, vision_model, embeddings_class, \
              embeddings_model, chunk_size, chunk_overlap, similarity_threshold, \
-             vector_distance_threshold, api_keys \
+             vector_distance_threshold, confianca_minima_transferencia, confianca_minima_automatica, api_keys \
              FROM tenants_tenantconfig WHERE tenant_id = $1",
         )
         .bind(tenant_id)
@@ -326,6 +326,13 @@ impl OperacionalStore for PgOperacionalStore {
         }
 
         let s = |col: &str| row.get::<Option<String>, _>(col).unwrap_or_default();
+        // B4: vazio quando o tenant não configurou — "0" no piso automático
+        // pareceria "aceitar qualquer palpite", e não é o que vale.
+        let dec_opcional = |col: &str| {
+            row.get::<Option<rust_decimal::Decimal>, _>(col)
+                .map(|d| d.to_string())
+                .unwrap_or_default()
+        };
         let dec = |col: &str| {
             row.get::<Option<rust_decimal::Decimal>, _>(col)
                 .unwrap_or_default()
@@ -350,6 +357,8 @@ impl OperacionalStore for PgOperacionalStore {
             "chunk_overlap": row.get::<Option<i32>, _>("chunk_overlap").unwrap_or(0),
             "similarity_threshold": dec("similarity_threshold"),
             "vector_distance_threshold": dec("vector_distance_threshold"),
+            "confianca_minima_transferencia": dec_opcional("confianca_minima_transferencia"),
+            "confianca_minima_automatica": dec_opcional("confianca_minima_automatica"),
             "api_keys": serde_json::Value::Object(api_keys_masked),
         })))
     }
@@ -454,6 +463,24 @@ impl OperacionalStore for PgOperacionalStore {
             .and_then(|v| v.as_str())
             .and_then(|s| s.parse::<rust_decimal::Decimal>().ok());
 
+        // B4 — mesma leitura dos outros limiares: string decimal, vazio = não
+        // mexer. Fora de 0..1 é descartado em vez de gravado cortado: um "8"
+        // digitado por engano não pode virar "sempre transferir".
+        let confianca = |chave: &str| {
+            payload_json
+                .get(chave)
+                .and_then(|v| v.as_str())
+                .and_then(|s| {
+                    s.trim()
+                        .replace(',', ".")
+                        .parse::<rust_decimal::Decimal>()
+                        .ok()
+                })
+                .filter(|d| *d >= rust_decimal::Decimal::ZERO && *d <= rust_decimal::Decimal::ONE)
+        };
+        let confianca_minima_transferencia = confianca("confianca_minima_transferencia");
+        let confianca_minima_automatica = confianca("confianca_minima_automatica");
+
         let api_keys_json = serde_json::Value::Object(novas_keys);
 
         // Query runtime (sem macro): independe do cache .sqlx. Mesmo SQL/UPSERT de antes.
@@ -467,8 +494,8 @@ impl OperacionalStore for PgOperacionalStore {
                 embeddings_class, embeddings_model, \
                 chunk_size, chunk_overlap, \
                 similarity_threshold, vector_distance_threshold, \
-                api_keys, updated_at \
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, NOW()) \
+                api_keys, confianca_minima_transferencia, confianca_minima_automatica, updated_at \
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, NOW()) \
             ON CONFLICT (tenant_id) DO UPDATE SET \
                 dados_empresa = COALESCE(EXCLUDED.dados_empresa, tenants_tenantconfig.dados_empresa), \
                 persona_bot = COALESCE(EXCLUDED.persona_bot, tenants_tenantconfig.persona_bot), \
@@ -490,6 +517,8 @@ impl OperacionalStore for PgOperacionalStore {
                 similarity_threshold = COALESCE(EXCLUDED.similarity_threshold, tenants_tenantconfig.similarity_threshold), \
                 vector_distance_threshold = COALESCE(EXCLUDED.vector_distance_threshold, tenants_tenantconfig.vector_distance_threshold), \
                 api_keys = EXCLUDED.api_keys, \
+                confianca_minima_transferencia = COALESCE(EXCLUDED.confianca_minima_transferencia, tenants_tenantconfig.confianca_minima_transferencia), \
+                confianca_minima_automatica = COALESCE(EXCLUDED.confianca_minima_automatica, tenants_tenantconfig.confianca_minima_automatica), \
                 updated_at = NOW()",
         )
         .bind(tenant_id)
@@ -513,6 +542,8 @@ impl OperacionalStore for PgOperacionalStore {
         .bind(similarity_threshold)
         .bind(vector_distance_threshold)
         .bind(api_keys_json)
+        .bind(confianca_minima_transferencia)
+        .bind(confianca_minima_automatica)
         .execute(&mut *tx)
         .await;
 

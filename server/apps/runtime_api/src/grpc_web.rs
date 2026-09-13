@@ -757,6 +757,8 @@ fn mapear_tenant_config_response(val: &serde_json::Value) -> GetTenantConfigResp
             .unwrap_or_default() as i32,
         similarity_threshold: campo_str("similarity_threshold"),
         vector_distance_threshold: campo_str("vector_distance_threshold"),
+        confianca_minima_transferencia: campo_str("confianca_minima_transferencia"),
+        confianca_minima_automatica: campo_str("confianca_minima_automatica"),
         api_keys: api_keys_proto,
     }
 }
@@ -1756,6 +1758,8 @@ impl AdminService for AdminFacade {
             "chunk_overlap": inner.chunk_overlap,
             "similarity_threshold": inner.similarity_threshold,
             "vector_distance_threshold": inner.vector_distance_threshold,
+            "confianca_minima_transferencia": inner.confianca_minima_transferencia,
+            "confianca_minima_automatica": inner.confianca_minima_automatica,
             "api_keys": serde_json::Value::Object(api_keys_map),
         });
 
@@ -7586,6 +7590,8 @@ impl AdminService for AdminFacade {
             "chunk_overlap": inner.chunk_overlap,
             "similarity_threshold": inner.similarity_threshold,
             "vector_distance_threshold": inner.vector_distance_threshold,
+            "confianca_minima_transferencia": inner.confianca_minima_transferencia,
+            "confianca_minima_automatica": inner.confianca_minima_automatica,
             "api_keys": serde_json::Value::Object(api_keys_map),
         });
 

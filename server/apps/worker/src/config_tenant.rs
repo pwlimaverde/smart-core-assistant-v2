@@ -116,6 +116,24 @@ pub(crate) async fn texto(
         .map(str::to_string)
 }
 
+/// Devolve um **limiar de confiança** da config do tenant (B4), ou `None`.
+///
+/// Mesmo cuidado de [`texto`]: só serve os campos `confianca_*` — número de
+/// negócio, sem segredo. O default é de quem chama, porque o sentido de "não
+/// sei" muda de um limiar para o outro.
+pub(crate) async fn numero(
+    conn: Option<&ConnectionManager>,
+    tenant: Uuid,
+    chave: &str,
+) -> Option<f64> {
+    debug_assert!(
+        chave.starts_with("confianca_"),
+        "config_tenant::numero só serve os limiares de confiança (confianca_*)"
+    );
+    let cfg = obter(conn, tenant).await?;
+    cfg.get(chave).and_then(|v| v.as_f64())
+}
+
 /// Assina `tenant:config:invalidate` e descarta a cópia em RAM do tenant avisado.
 ///
 /// Roda em background e se reconecta sozinho: se a assinatura cair e ninguém

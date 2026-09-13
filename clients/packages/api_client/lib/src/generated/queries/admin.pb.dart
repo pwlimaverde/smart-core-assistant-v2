@@ -607,6 +607,8 @@ class GetTenantConfigResponse extends $pb.GeneratedMessage {
     $core.String? similarityThreshold,
     $core.String? vectorDistanceThreshold,
     $core.Iterable<ApiKeyEntry>? apiKeys,
+    $core.String? confiancaMinimaTransferencia,
+    $core.String? confiancaMinimaAutomatica,
   }) {
     final result = create();
     if (dadosEmpresa != null) result.dadosEmpresa = dadosEmpresa;
@@ -633,6 +635,10 @@ class GetTenantConfigResponse extends $pb.GeneratedMessage {
     if (vectorDistanceThreshold != null)
       result.vectorDistanceThreshold = vectorDistanceThreshold;
     if (apiKeys != null) result.apiKeys.addAll(apiKeys);
+    if (confiancaMinimaTransferencia != null)
+      result.confiancaMinimaTransferencia = confiancaMinimaTransferencia;
+    if (confiancaMinimaAutomatica != null)
+      result.confiancaMinimaAutomatica = confiancaMinimaAutomatica;
     return result;
   }
 
@@ -671,6 +677,8 @@ class GetTenantConfigResponse extends $pb.GeneratedMessage {
     ..aOS(19, _omitFieldNames ? '' : 'vectorDistanceThreshold')
     ..pPM<ApiKeyEntry>(20, _omitFieldNames ? '' : 'apiKeys',
         subBuilder: ApiKeyEntry.create)
+    ..aOS(21, _omitFieldNames ? '' : 'confiancaMinimaTransferencia')
+    ..aOS(22, _omitFieldNames ? '' : 'confiancaMinimaAutomatica')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -866,6 +874,27 @@ class GetTenantConfigResponse extends $pb.GeneratedMessage {
 
   @$pb.TagNumber(20)
   $pb.PbList<ApiKeyEntry> get apiKeys => $_getList(19);
+
+  /// B4 — limiares de confiança da IA, como string decimal ("0.80").
+  /// Vazio = não mexer. "0" em confianca_minima_transferencia desliga o veto.
+  @$pb.TagNumber(21)
+  $core.String get confiancaMinimaTransferencia => $_getSZ(20);
+  @$pb.TagNumber(21)
+  set confiancaMinimaTransferencia($core.String value) =>
+      $_setString(20, value);
+  @$pb.TagNumber(21)
+  $core.bool hasConfiancaMinimaTransferencia() => $_has(20);
+  @$pb.TagNumber(21)
+  void clearConfiancaMinimaTransferencia() => $_clearField(21);
+
+  @$pb.TagNumber(22)
+  $core.String get confiancaMinimaAutomatica => $_getSZ(21);
+  @$pb.TagNumber(22)
+  set confiancaMinimaAutomatica($core.String value) => $_setString(21, value);
+  @$pb.TagNumber(22)
+  $core.bool hasConfiancaMinimaAutomatica() => $_has(21);
+  @$pb.TagNumber(22)
+  void clearConfiancaMinimaAutomatica() => $_clearField(22);
 }
 
 class UpdateTenantConfigRequest extends $pb.GeneratedMessage {
@@ -891,6 +920,8 @@ class UpdateTenantConfigRequest extends $pb.GeneratedMessage {
     $core.String? similarityThreshold,
     $core.String? vectorDistanceThreshold,
     $core.Iterable<ApiKeyEntry>? apiKeys,
+    $core.String? confiancaMinimaTransferencia,
+    $core.String? confiancaMinimaAutomatica,
   }) {
     final result = create();
     if (tenantId != null) result.tenantId = tenantId;
@@ -918,6 +949,10 @@ class UpdateTenantConfigRequest extends $pb.GeneratedMessage {
     if (vectorDistanceThreshold != null)
       result.vectorDistanceThreshold = vectorDistanceThreshold;
     if (apiKeys != null) result.apiKeys.addAll(apiKeys);
+    if (confiancaMinimaTransferencia != null)
+      result.confiancaMinimaTransferencia = confiancaMinimaTransferencia;
+    if (confiancaMinimaAutomatica != null)
+      result.confiancaMinimaAutomatica = confiancaMinimaAutomatica;
     return result;
   }
 
@@ -957,6 +992,8 @@ class UpdateTenantConfigRequest extends $pb.GeneratedMessage {
     ..aOS(20, _omitFieldNames ? '' : 'vectorDistanceThreshold')
     ..pPM<ApiKeyEntry>(21, _omitFieldNames ? '' : 'apiKeys',
         subBuilder: ApiKeyEntry.create)
+    ..aOS(22, _omitFieldNames ? '' : 'confiancaMinimaTransferencia')
+    ..aOS(23, _omitFieldNames ? '' : 'confiancaMinimaAutomatica')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -1161,6 +1198,27 @@ class UpdateTenantConfigRequest extends $pb.GeneratedMessage {
 
   @$pb.TagNumber(21)
   $pb.PbList<ApiKeyEntry> get apiKeys => $_getList(20);
+
+  /// B4 — limiares de confiança da IA, como string decimal ("0.80").
+  /// Vazio = não mexer. "0" em confianca_minima_transferencia desliga o veto.
+  @$pb.TagNumber(22)
+  $core.String get confiancaMinimaTransferencia => $_getSZ(21);
+  @$pb.TagNumber(22)
+  set confiancaMinimaTransferencia($core.String value) =>
+      $_setString(21, value);
+  @$pb.TagNumber(22)
+  $core.bool hasConfiancaMinimaTransferencia() => $_has(21);
+  @$pb.TagNumber(22)
+  void clearConfiancaMinimaTransferencia() => $_clearField(22);
+
+  @$pb.TagNumber(23)
+  $core.String get confiancaMinimaAutomatica => $_getSZ(22);
+  @$pb.TagNumber(23)
+  set confiancaMinimaAutomatica($core.String value) => $_setString(22, value);
+  @$pb.TagNumber(23)
+  $core.bool hasConfiancaMinimaAutomatica() => $_has(22);
+  @$pb.TagNumber(23)
+  void clearConfiancaMinimaAutomatica() => $_clearField(23);
 }
 
 class UpdateTenantConfigResponse extends $pb.GeneratedMessage {
@@ -11382,6 +11440,8 @@ class UpdateMyTenantConfigRequest extends $pb.GeneratedMessage {
     $core.String? similarityThreshold,
     $core.String? vectorDistanceThreshold,
     $core.Iterable<ApiKeyEntry>? apiKeys,
+    $core.String? confiancaMinimaTransferencia,
+    $core.String? confiancaMinimaAutomatica,
   }) {
     final result = create();
     if (dadosEmpresa != null) result.dadosEmpresa = dadosEmpresa;
@@ -11408,6 +11468,10 @@ class UpdateMyTenantConfigRequest extends $pb.GeneratedMessage {
     if (vectorDistanceThreshold != null)
       result.vectorDistanceThreshold = vectorDistanceThreshold;
     if (apiKeys != null) result.apiKeys.addAll(apiKeys);
+    if (confiancaMinimaTransferencia != null)
+      result.confiancaMinimaTransferencia = confiancaMinimaTransferencia;
+    if (confiancaMinimaAutomatica != null)
+      result.confiancaMinimaAutomatica = confiancaMinimaAutomatica;
     return result;
   }
 
@@ -11446,6 +11510,8 @@ class UpdateMyTenantConfigRequest extends $pb.GeneratedMessage {
     ..aOS(19, _omitFieldNames ? '' : 'vectorDistanceThreshold')
     ..pPM<ApiKeyEntry>(20, _omitFieldNames ? '' : 'apiKeys',
         subBuilder: ApiKeyEntry.create)
+    ..aOS(21, _omitFieldNames ? '' : 'confiancaMinimaTransferencia')
+    ..aOS(22, _omitFieldNames ? '' : 'confiancaMinimaAutomatica')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -11643,6 +11709,27 @@ class UpdateMyTenantConfigRequest extends $pb.GeneratedMessage {
 
   @$pb.TagNumber(20)
   $pb.PbList<ApiKeyEntry> get apiKeys => $_getList(19);
+
+  /// B4 — limiares de confiança da IA, como string decimal ("0.80").
+  /// Vazio = não mexer. "0" em confianca_minima_transferencia desliga o veto.
+  @$pb.TagNumber(21)
+  $core.String get confiancaMinimaTransferencia => $_getSZ(20);
+  @$pb.TagNumber(21)
+  set confiancaMinimaTransferencia($core.String value) =>
+      $_setString(20, value);
+  @$pb.TagNumber(21)
+  $core.bool hasConfiancaMinimaTransferencia() => $_has(20);
+  @$pb.TagNumber(21)
+  void clearConfiancaMinimaTransferencia() => $_clearField(21);
+
+  @$pb.TagNumber(22)
+  $core.String get confiancaMinimaAutomatica => $_getSZ(21);
+  @$pb.TagNumber(22)
+  set confiancaMinimaAutomatica($core.String value) => $_setString(21, value);
+  @$pb.TagNumber(22)
+  $core.bool hasConfiancaMinimaAutomatica() => $_has(21);
+  @$pb.TagNumber(22)
+  void clearConfiancaMinimaAutomatica() => $_clearField(22);
 }
 
 class MyFluxo extends $pb.GeneratedMessage {

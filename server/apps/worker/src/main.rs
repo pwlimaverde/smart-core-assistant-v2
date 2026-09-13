@@ -325,6 +325,49 @@ struct RespostaIa {
     texto: String,
     /// 0..1. O `ia_engine` sempre a devolve; guardamos como veio.
     confianca: f64,
+    /// B4 — a resposta terminou em transferência (pedida pelo LLM ou pelo
+    /// veto do tenant).
+    transferida: bool,
+}
+
+/// B4 (D1, passo 2) — como a resposta do bot foi decidida.
+///
+/// Não muda o que o contato recebe: é o registro que falta para calibrar os
+/// limiares com dado real. `degradada` é o texto de fallback, que não veio da
+/// IA; `revisao` é a faixa entre o veto e a confiança automática — a resposta
+/// saiu, mas vale alguém olhar.
+fn decisao_da_resposta(
+    confianca: Option<f64>,
+    transferida: bool,
+    minima_automatica: f64,
+) -> &'static str {
+    match confianca {
+        None => "degradada",
+        Some(_) if transferida => "transferida",
+        Some(c) if c < minima_automatica => "revisao",
+        Some(_) => "automatica",
+    }
+}
+
+#[cfg(test)]
+mod tests_decisao {
+    use super::decisao_da_resposta;
+
+    #[test]
+    fn fallback_nao_se_passa_por_resposta_da_ia() {
+        assert_eq!(decisao_da_resposta(None, false, 0.8), "degradada");
+    }
+
+    #[test]
+    fn transferencia_vence_a_faixa_de_confianca() {
+        assert_eq!(decisao_da_resposta(Some(0.95), true, 0.8), "transferida");
+    }
+
+    #[test]
+    fn abaixo_da_automatica_e_revisao_e_acima_e_automatica() {
+        assert_eq!(decisao_da_resposta(Some(0.6), false, 0.8), "revisao");
+        assert_eq!(decisao_da_resposta(Some(0.8), false, 0.8), "automatica");
+    }
 }
 
 /// Orquestra a resposta via IA (fase N2.5): resolve a config do tenant, embeda a
@@ -612,6 +655,7 @@ async fn responder_via_ia(
     Ok(RespostaIa {
         texto: resposta.resposta_texto,
         confianca: resposta.confiabilidade,
+        transferida: resposta.transferir_atendimento,
     })
 }
 
@@ -1714,6 +1758,7 @@ async fn acionar_bot(
         // qualquer falha (timeout/indisponibilidade/erro do provedor) — a barreira
         // de bot NUNCA trava o atendimento por causa da IA.
         let pergunta = texto_do_contato.clone().unwrap_or_default();
+        let mut transferida_pela_ia = false;
         let (bot_text, confianca_bot) = match responder_via_ia(
             state,
             tenant_uuid,
@@ -1724,7 +1769,10 @@ async fn acionar_bot(
         )
         .await
         {
-            Ok(r) if !r.texto.trim().is_empty() => (r.texto, Some(r.confianca)),
+            Ok(r) if !r.texto.trim().is_empty() => {
+                transferida_pela_ia = r.transferida;
+                (r.texto, Some(r.confianca))
+            }
             Ok(_) => {
                 tracing::warn!(
                     atendimento_id = atendimento_id,
@@ -1885,6 +1933,24 @@ async fn acionar_bot(
             }
 
             // Auditoria de barreira de bot (respondeu) e do envio outbound.
+            // B4 — a decisão fica registrada ao lado da confiança: é o par que
+            // permite calibrar os limiares depois. Número, não conteúdo — a
+            // pergunta e a resposta continuam só no banco.
+            let minima_automatica = config_tenant::numero(
+                state.redis_conn.as_ref(),
+                tenant_uuid,
+                "confianca_minima_automatica",
+            )
+            .await
+            .unwrap_or(0.8);
+            let decisao =
+                decisao_da_resposta(confianca_bot, transferida_pela_ia, minima_automatica);
+            tracing::info!(
+                atendimento_id,
+                confianca = confianca_bot,
+                decisao,
+                "resposta do bot decidida"
+            );
             state.audit_logger.info(
                 tenant_uuid,
                 "bot.respondeu",
@@ -1892,6 +1958,8 @@ async fn acionar_bot(
                 serde_json::json!({
                     "atendimento_id": atendimento_id,
                     "recipient": mascarar_telefone(&ctx.sender),
+                    "confianca": confianca_bot,
+                    "decisao": decisao,
                 }),
                 None,
                 None,

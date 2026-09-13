@@ -24,6 +24,15 @@ class TenantConfig {
   final String vectorDistanceThreshold;
   final Map<String, String> apiKeys;
 
+  /// B4 — abaixo disto a resposta da IA vira transferência, mesmo com o
+  /// modelo confiante. Decimal em string ("0.5"); vazio = herda o global;
+  /// "0" = veto desligado.
+  final String confiancaMinimaTransferencia;
+
+  /// B4 — a partir disto a IA responde sem revisão, e é também o piso para
+  /// um valor extraído entrar na ficha. Vazio = herda o global (0.8).
+  final String confiancaMinimaAutomatica;
+
   const TenantConfig({
     required this.dadosEmpresa,
     required this.personaBot,
@@ -45,5 +54,7 @@ class TenantConfig {
     required this.similarityThreshold,
     required this.vectorDistanceThreshold,
     required this.apiKeys,
+    this.confiancaMinimaTransferencia = '',
+    this.confiancaMinimaAutomatica = '',
   });
 }

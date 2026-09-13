@@ -36,6 +36,8 @@ final class GetMyTenantConfigDatasource
       chunkOverlap: resp.chunkOverlap,
       similarityThreshold: resp.similarityThreshold,
       vectorDistanceThreshold: resp.vectorDistanceThreshold,
+      confiancaMinimaTransferencia: resp.confiancaMinimaTransferencia,
+      confiancaMinimaAutomatica: resp.confiancaMinimaAutomatica,
       apiKeys: {for (final e in resp.apiKeys) e.key: e.value},
     );
   }
@@ -72,6 +74,8 @@ final class UpdateMyTenantConfigDatasource
         chunkOverlap: config.chunkOverlap,
         similarityThreshold: config.similarityThreshold,
         vectorDistanceThreshold: config.vectorDistanceThreshold,
+        confiancaMinimaTransferencia: config.confiancaMinimaTransferencia,
+        confiancaMinimaAutomatica: config.confiancaMinimaAutomatica,
         // As chaves de API são cifradas no servidor (AES-256-GCM); daqui saem em
         // claro pelo canal TLS e nunca são logadas.
         apiKeys: [
