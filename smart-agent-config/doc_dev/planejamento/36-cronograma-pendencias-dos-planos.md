@@ -28,8 +28,8 @@
 | B6 | Marcar como lida e contador de não lidas | N9 E4 | Sem isso o quadro não diz o que falta responder | ✅ CI verde (`72c79bd`) |
 | B7 | Ajustar permissões de um agente sem desconectar | doc 35-agentes F4 | Hoje a única saída é revogar e reconectar | ✅ CI verde (`3b9f13f`) |
 | B8 | Descoberta dos aplicativos conectados | doc 35-agentes F5 | Recurso que precisa ser explicado por fora não foi entregue | ✅ CI verde (`e14a993`) |
-| B9 | IA analítica: assunto automático, feedback do teste, treinamento por arquivo | N10 E2, E6, E5 | Maior e mais caro; depende de nada acima | ⏳ E6 ✅, E1+E2 ✅; E5 no CI |
-| B10 | Clientes PJ e vínculo contato ↔ cliente | N11 E5 / doc 34 C4 | Entidade nova com tela própria | ⏳ aguardando CI do B9 |
+| B9 | IA analítica: assunto automático, feedback do teste, treinamento por arquivo | N10 E2, E6, E5 | Maior e mais caro; depende de nada acima | ✅ CI verde (`6c5967a`) |
+| B10 | Clientes PJ e vínculo contato ↔ cliente | N11 E5 / doc 34 C4 | Entidade nova com tela própria | ⏳ no CI |
 
 **Fora deste cronograma:** N12 (cutover de produção) — é operação com janela
 combinada, dump de produção e go/no-go; não é código a executar sozinho.
