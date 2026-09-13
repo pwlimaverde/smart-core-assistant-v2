@@ -1584,6 +1584,7 @@ impl AtendimentoStore for PgAtendimentoStore {
             // fila do destino, que ainda é melhor que devolvê-lo à IA.
             let mut atendente_id = None;
             let mut atendente_nome = None;
+            let mut atendente_usuario_id = None;
             if let Some(candidato) = repo_atendente
                 .buscar_disponivel_round_robin(&mut tx, &ctx, None, Some(fluxo.id))
                 .await?
@@ -1599,6 +1600,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                         .atualizar_ultima_atribuicao(&mut tx, &ctx, candidato.id)
                         .await?;
                     atendente_id = Some(candidato.id);
+                    atendente_usuario_id = candidato.usuario_id;
                     atendente_nome = Some(candidato.nome);
                 }
             }
@@ -1612,6 +1614,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                 reason: None,
                 atendente_id,
                 atendente_nome,
+                atendente_usuario_id,
             };
             Ok((outcome, tx))
         })

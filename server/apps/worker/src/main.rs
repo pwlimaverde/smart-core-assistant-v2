@@ -312,6 +312,69 @@ async fn aplicar_transferencia_ia(
             .query_async(&mut conn)
             .await;
     }
+
+    // B5 (D6) — e avisa quem recebeu. Sem isso a atribuição do rodízio era
+    // silenciosa: a conversa mudava de dono e o dono novo só descobria olhando
+    // o quadro.
+    if let Some(payload) = payload_da_atribuicao(atendimento_id, &resp) {
+        publicar_realtime(state, tenant_uuid, "atendimento.atribuido", payload).await;
+    }
+}
+
+/// B5 (D6) — o aviso de "esta conversa agora é sua".
+///
+/// Vai no canal do tenant, e não num canal por atendente: o cartão do quadro já
+/// mostra a quem cada conversa está atribuída para todo mundo que vê o quadro,
+/// então quem recebeu não é segredo entre colegas — e um canal por atendente
+/// mudaria o `RealtimeManager` inteiro para proteger o que já é público. O
+/// cliente filtra pelo `usuario_id`.
+///
+/// `None` quando não houve atribuição, ou quando o atendente não tem login: sem
+/// sessão, não há quem avisar. Sem auditoria, de propósito — o evento auditável
+/// é a atribuição, já registrada em `atendimento.transferido_por_ia`. Sem
+/// conteúdo da conversa.
+fn payload_da_atribuicao(
+    atendimento_id: i32,
+    resp: &serde_json::Value,
+) -> Option<serde_json::Value> {
+    let atendente_id = resp.get("atendente_id").and_then(|v| v.as_i64())?;
+    let usuario_id = resp.get("atendente_usuario_id").and_then(|v| v.as_i64())?;
+    tracing::info!(
+        atendimento_id,
+        atendente_id,
+        "avisando o atendente da atribuição"
+    );
+    Some(serde_json::json!({
+        "atendimento_id": atendimento_id,
+        "atendente_id": atendente_id,
+        "usuario_id": usuario_id,
+        "fluxo_nome": resp.get("fluxo_nome"),
+    }))
+}
+
+#[cfg(test)]
+mod tests_atribuicao {
+    use super::payload_da_atribuicao;
+
+    #[test]
+    fn avisa_o_usuario_de_quem_recebeu() {
+        let resp = serde_json::json!({
+            "atendente_id": 4,
+            "atendente_usuario_id": 17,
+            "fluxo_nome": "Financeiro",
+        });
+        let payload = payload_da_atribuicao(99, &resp).unwrap();
+        assert_eq!(payload["usuario_id"], 17);
+        assert_eq!(payload["atendimento_id"], 99);
+        assert_eq!(payload["fluxo_nome"], "Financeiro");
+    }
+
+    #[test]
+    fn sem_atribuicao_ou_sem_login_nao_ha_quem_avisar() {
+        assert!(payload_da_atribuicao(1, &serde_json::json!({})).is_none());
+        let sem_login = serde_json::json!({ "atendente_id": 4, "atendente_usuario_id": null });
+        assert!(payload_da_atribuicao(1, &sem_login).is_none());
+    }
 }
 
 /// O que a IA devolveu, com o número que decide.

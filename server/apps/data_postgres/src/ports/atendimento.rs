@@ -81,6 +81,9 @@ pub struct TransferenciaFluxoOutcome {
     /// a uma IA que já declarou não dar conta.
     pub atendente_id: Option<i32>,
     pub atendente_nome: Option<String>,
+    /// B5 (D6) — usuário do sistema de quem recebeu, para o aviso chegar à
+    /// sessão certa. `None` quando o atendente não tem login.
+    pub atendente_usuario_id: Option<i32>,
 }
 
 /// Resultado da aplicação da política de ticket/Kanban sobre um atendimento (WS-2.4).

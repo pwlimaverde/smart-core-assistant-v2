@@ -15,6 +15,7 @@ import '../../support/fake_gateway.dart';
 KanbanController _controller(
   FakeAtendimentoGateway gateway, {
   bool comStream = false,
+  int? usuarioAtual,
 }) {
   // Todo controller de teste comeca com um quadro montado: e o estado normal
   // de quem opera, e sem colunas o arrasto nao teria destino.
@@ -30,6 +31,7 @@ KanbanController _controller(
     colunasUsecase: u.colunas,
     statusUsecase: u.status,
     eventos: comStream ? u.eventos : null,
+    usuarioAtual: () => usuarioAtual,
   );
 }
 
@@ -195,6 +197,63 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 500));
 
       expect(gateway.chamadasList, greaterThan(antes));
+      await controller.close();
+    });
+
+    test(
+      'conversa atribuída a quem está logado gera aviso; a do colega não',
+      () async {
+        // B5: o quadro recarrega para todos, mas o aviso é só de quem recebeu.
+        final gateway = FakeAtendimentoGateway(
+          fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
+        );
+        final controller = _controller(
+          gateway,
+          comStream: true,
+          usuarioAtual: 17,
+        );
+        final avisos = <AtribuicaoRecebida>[];
+        final sub = controller.atribuicoes.listen(avisos.add);
+
+        AtendimentoEvento atribuido(int usuario, int atendimento) =>
+            AtendimentoEvento(
+              tipo: 'atendimento.atribuido',
+              tenantId: 'tenant-1',
+              payload: {
+                'atendimento_id': atendimento,
+                'usuario_id': usuario,
+                'fluxo_nome': 'Financeiro',
+              },
+            );
+        gateway.eventos
+          ..add(atribuido(17, 5))
+          ..add(atribuido(99, 6));
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+
+        expect(avisos, hasLength(1));
+        expect(avisos.single.atendimentoId, 5);
+        expect(avisos.single.fluxo, 'Financeiro');
+        await sub.cancel();
+        await controller.close();
+      },
+    );
+
+    test('sem usuário conhecido, nenhum aviso', () async {
+      final gateway = FakeAtendimentoGateway();
+      final controller = _controller(gateway, comStream: true);
+      final avisos = <AtribuicaoRecebida>[];
+      final sub = controller.atribuicoes.listen(avisos.add);
+      gateway.eventos.add(
+        const AtendimentoEvento(
+          tipo: 'atendimento.atribuido',
+          tenantId: 'tenant-1',
+          payload: {'atendimento_id': 5, 'usuario_id': 17},
+        ),
+      );
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      expect(avisos, isEmpty);
+      await sub.cancel();
       await controller.close();
     });
 

@@ -22,7 +22,15 @@ final class KanbanRoute extends GetItModule {
   /// C3 — ver `KanbanPage.buscarContatos`.
   final BuscarContatos? buscarContatos;
 
-  KanbanRoute({this.drawerBuilder, this.avisoBuilder, this.buscarContatos});
+  /// B5 — ver `KanbanController.usuarioAtual`.
+  final int? Function()? usuarioAtual;
+
+  KanbanRoute({
+    this.drawerBuilder,
+    this.avisoBuilder,
+    this.buscarContatos,
+    this.usuarioAtual,
+  });
 
   @override
   String get path => '/atendimentos';
@@ -44,6 +52,7 @@ final class KanbanRoute extends GetItModule {
         colunasUsecase: inject<ListColunasUsecase>(),
         statusUsecase: inject<SetAtendimentoStatusUsecase>(),
         eventos: inject<AtendimentoEventoStream>(),
+        usuarioAtual: usuarioAtual,
       ),
     );
   }

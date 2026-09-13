@@ -23,8 +23,8 @@
 | B1 | Recuperação de senha e reenvio de convite | N11 E8 | Convidado ou usuário que perde o e-mail/senha hoje não tem saída | ✅ CI verde (`0a5ac1d`) |
 | B2 | Menu por escopo, não por `isTenantAdmin` | doc 35-agentes F2 | O papel somente-leitura (D4) existe no servidor e não na tela; pré-requisito do B3 | ✅ CI verde (`e853e19`) |
 | B3 | "O que o agente fez" — auditoria do próprio tenant | doc 35-agentes F1 | Fecha o DoD da N13: agente só é aceitável se auditável por quem o autorizou | ✅ CI verde (`a2de364`) |
-| B4 | Limiar de confiança com veto, por tenant | regras D1 | Hoje o C1 usa 0,8 fixo; um número por tenant para "quando confio na IA" | ⏳ no CI |
-| B5 | Notificar o atendente da atribuição | regras D6 | Rodízio (D2) atribui em silêncio | ⬜ |
+| B4 | Limiar de confiança com veto, por tenant | regras D1 | Hoje o C1 usa 0,8 fixo; um número por tenant para "quando confio na IA" | ✅ CI verde (`79bdecf`) |
+| B5 | Notificar o atendente da atribuição | regras D6 | Rodízio (D2) atribui em silêncio | ⏳ no CI |
 | B6 | Marcar como lida e contador de não lidas | N9 E4 | Sem isso o quadro não diz o que falta responder | ⬜ |
 | B7 | Ajustar permissões de um agente sem desconectar | doc 35-agentes F4 | Hoje a única saída é revogar e reconectar | ⬜ |
 | B8 | Descoberta dos aplicativos conectados | doc 35-agentes F5 | Recurso que precisa ser explicado por fora não foi entregue | ⬜ |
@@ -185,3 +185,35 @@ quem não mexer na configuração continua com o comportamento de antes.
 **Fica de fora:** a marca visual de "revisar" no quadro. A decisão fica
 registrada na trilha (`bot.respondeu`), que é o que a calibração precisa; mostrar
 no cartão é do quadro, junto do resto que o B2 anotou para ele.
+
+### B5 — Notificar o atendente da atribuição (D6)
+
+**Confirmado antes de construir:** a atribuição acontece no rodízio da
+transferência por IA (`transferir_atendimento_para_fluxo`), e o worker já
+publicava `kanban.movido` com o atendente — o quadro recarregava para todos, mas
+ninguém era avisado de que a conversa passou a ser sua. A sessão do Flutter não
+sabia nem quem era o usuário: o JWT trazia `sub` e o cliente o descartava.
+
+**Decisão registrada:** o aviso vai no canal realtime **do tenant**, e o cliente
+filtra pelo `usuario_id`. O cartão do quadro já mostra a todos quem atende cada
+conversa; um canal por atendente mudaria o `RealtimeManager` inteiro para
+proteger o que já é público. O evento não leva conteúdo da conversa e não é
+auditado — a atribuição em si já está em `atendimento.transferido_por_ia`.
+
+**Entregue:**
+
+- `data_postgres`: o resultado da transferência leva `atendente_usuario_id` (o
+  login de quem recebeu; nulo quando o atendente não tem login).
+- Worker: depois do `kanban.movido`, publica `atendimento.atribuido` com
+  `atendimento_id`, `atendente_id`, `usuario_id` e `fluxo_nome` — só quando houve
+  atribuição a alguém com login.
+- Flutter: `Session.userId` vem do `sub` do JWT; o `OperacionalModule` recebe
+  `usuarioAtual` por parâmetro (o módulo não conhece a sessão), e o
+  `KanbanController` expõe `atribuicoes` só com as conversas de quem está
+  logado. O quadro mostra um aviso com **Abrir**, que leva direto à conversa.
+- Testes: payload do evento (com e sem atribuição/login) no worker; `sub` → id na
+  sessão; o controller avisa quem recebeu e ignora a do colega e a sessão sem id.
+
+**Fica de fora:** aviso fora do quadro (notificação do sistema operacional, som,
+e-mail). Quem está com o app aberto em outra tela vê o aviso ao voltar para o
+quadro; a conversa já estará na coluna dela.

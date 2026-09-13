@@ -11,12 +11,14 @@ final class JwtPayload {
   final String tenantId;
   final List<String> scopes;
   final bool isSuperuser;
+  final int? userId;
 
   const JwtPayload({
     required this.expiresAt,
     required this.tenantId,
     required this.scopes,
     required this.isSuperuser,
+    this.userId,
   });
 
   /// Decodifica o segmento de payload (`header.payload.signature`). Em qualquer
@@ -45,6 +47,8 @@ final class JwtPayload {
         tenantId: (json['tenant_id'] as String?) ?? '',
         scopes: scopes,
         isSuperuser: (json['is_superuser'] as bool?) ?? false,
+        // O servidor manda `sub` como string ("42").
+        userId: int.tryParse('${json['sub'] ?? ''}'),
       );
     } catch (_) {
       return JwtPayload._vazio();
@@ -69,5 +73,6 @@ final class JwtPayload {
     tenantId: tenantId,
     scopes: scopes,
     isSuperuser: isSuperuser,
+    userId: userId,
   );
 }

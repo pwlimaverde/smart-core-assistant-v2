@@ -26,6 +26,9 @@ import 'kanban_state.dart';
 /// uma rajada de RPCs quando vários eventos chegam juntos).
 // ignore_for_file: prefer_initializing_formals
 
+/// B5 — uma conversa que o rodízio atribuiu a quem está logado.
+typedef AtribuicaoRecebida = ({int atendimentoId, String fluxo});
+
 final class KanbanController extends BaseController<KanbanViewModel> {
   final ListAtendimentosUsecase _listUsecase;
   final MoveAtendimentoEtapaUsecase _moveUsecase;
@@ -37,8 +40,22 @@ final class KanbanController extends BaseController<KanbanViewModel> {
   /// precisam abrir stream).
   final AtendimentoEventoStream? eventos;
 
+  /// B5 — quem é o usuário da sessão, para reconhecer a conversa atribuída a
+  /// ele. Entra por função, como o menu: a sessão é do `login_module`, que
+  /// este módulo não conhece.
+  final int? Function()? usuarioAtual;
+
+  final _atribuicoes = StreamController<AtribuicaoRecebida>.broadcast();
+
+  /// Conversas que o rodízio acabou de atribuir **a quem está logado**.
+  ///
+  /// As dos colegas não aparecem aqui: o quadro recarrega para todo mundo, mas
+  /// o aviso é só para quem recebeu.
+  Stream<AtribuicaoRecebida> get atribuicoes => _atribuicoes.stream;
+
   KanbanController({
     this.eventos,
+    this.usuarioAtual,
     required ListAtendimentosUsecase listUsecase,
     required MoveAtendimentoEtapaUsecase moveUsecase,
     required ListFluxosUsecase fluxosUsecase,
@@ -61,7 +78,8 @@ final class KanbanController extends BaseController<KanbanViewModel> {
 
   void _assinarStream(AtendimentoEventoStream eventos) {
     _streamSubscription = eventos.abrir().listen(
-      (_) {
+      (evento) {
+        _avisarSeForMinha(evento);
         // Debounce curto: agrupa eventos que chegam em rajada (ex.: várias
         // mensagens seguidas) num único recarregamento da fila.
         _debounce?.cancel();
@@ -78,10 +96,26 @@ final class KanbanController extends BaseController<KanbanViewModel> {
     );
   }
 
+  /// B5 — repassa o aviso de atribuição quando o destinatário é a sessão atual.
+  void _avisarSeForMinha(AtendimentoEvento evento) {
+    if (evento.tipo != 'atendimento.atribuido') return;
+    final eu = usuarioAtual?.call();
+    final destinatario = evento.payload['usuario_id'];
+    final atendimentoId = evento.atendimentoId;
+    if (eu == null || atendimentoId == null) return;
+    if (destinatario is! num || destinatario.toInt() != eu) return;
+    final AtribuicaoRecebida atribuicao = (
+      atendimentoId: atendimentoId,
+      fluxo: '${evento.payload['fluxo_nome'] ?? ''}',
+    );
+    _atribuicoes.add(atribuicao);
+  }
+
   @override
   Future<void> close() {
     _debounce?.cancel();
     _streamSubscription?.cancel();
+    _atribuicoes.close();
     return super.close();
   }
 

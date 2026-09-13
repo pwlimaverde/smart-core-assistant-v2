@@ -39,10 +39,17 @@ final class OperacionalModule extends AppModule {
   /// `tenant_module`, e este módulo não o conhece.
   final BuscarContatos? buscarContatos;
 
+  /// B5 — id do usuário logado, para o quadro avisar quando o rodízio lhe
+  /// atribui uma conversa. Por parâmetro pelo mesmo motivo dos outros: a
+  /// sessão é do `login_module`, e este módulo não o conhece. Sem ele, o
+  /// quadro só não avisa.
+  final int? Function()? usuarioAtual;
+
   OperacionalModule({
     this.drawerBuilder,
     this.avisoBuilder,
     this.buscarContatos,
+    this.usuarioAtual,
   });
 
   @override
@@ -205,6 +212,7 @@ final class OperacionalModule extends AppModule {
       drawerBuilder: drawerBuilder,
       avisoBuilder: avisoBuilder,
       buscarContatos: buscarContatos,
+      usuarioAtual: usuarioAtual,
     ),
   ];
 }

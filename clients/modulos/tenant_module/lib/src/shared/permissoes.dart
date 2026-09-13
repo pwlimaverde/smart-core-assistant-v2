@@ -20,6 +20,12 @@ bool sessaoPodeAlterar(String rota) {
   return escopos == null || podeAlterarTela(escopos, rota);
 }
 
+/// Id do usuário da sessão atual (B5); `null` sem sessão ou em token antigo.
+int? usuarioDaSessao() {
+  if (!GetIt.instance.isRegistered<AuthService>()) return null;
+  return inject<AuthService>().currentSession?.userId;
+}
+
 /// A sessão é do administrador do tenant? Mesma ressalva de [sessaoPodeAlterar].
 bool sessaoEhAdmin() {
   final escopos = _escoposDaSessao();

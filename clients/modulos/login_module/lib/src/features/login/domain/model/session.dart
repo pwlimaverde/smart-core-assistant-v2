@@ -20,6 +20,11 @@ final class Session {
   final List<String> scopes;
   final bool isSuperuser;
 
+  /// Id do usuário (`sub` do JWT). `null` em sessões antigas ou token sem a
+  /// claim. Serve para a interface reconhecer o que é "meu" — por exemplo,
+  /// o aviso de conversa atribuída (B5) —, nunca para decidir permissão.
+  final int? userId;
+
   const Session({
     required this.accessToken,
     required this.refreshToken,
@@ -27,6 +32,7 @@ final class Session {
     required this.tenantId,
     required this.scopes,
     required this.isSuperuser,
+    this.userId,
   });
 
   /// `true` quando o access token já passou da expiração.

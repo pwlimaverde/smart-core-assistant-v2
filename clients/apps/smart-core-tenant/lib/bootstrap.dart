@@ -49,6 +49,9 @@ Future<void> bootstrap(AppConfig config) async {
       // C3: sem isto o quadro não oferece "iniciar atendimento" — um app que
       // não sabe listar clientes não deve abrir esse caminho.
       buscarContatos: buscarContatosDoTenant,
+      // B5: para o quadro reconhecer a conversa que o rodízio atribuiu a quem
+      // está logado e avisar só essa pessoa.
+      usuarioAtual: usuarioDaSessao,
     ),
     TenantModule(),
     TreinamentoModule(

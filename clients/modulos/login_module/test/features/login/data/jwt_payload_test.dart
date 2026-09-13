@@ -36,6 +36,23 @@ void main() {
       expect(s.isExpired, isFalse);
     });
 
+    test('sub vira o id do usuário; sem sub, fica nulo', () {
+      // O servidor manda `sub` como texto ("42").
+      final comSub = _fakeJwt({
+        'exp': _epoch(const Duration(minutes: 15)),
+        'sub': '42',
+      });
+      expect(
+        JwtPayload.decode(
+          comSub,
+        ).paraSession(accessToken: comSub, refreshToken: 'r').userId,
+        42,
+      );
+
+      final semSub = _fakeJwt({'exp': _epoch(const Duration(minutes: 15))});
+      expect(JwtPayload.decode(semSub).userId, isNull);
+    });
+
     test('token malformado → payload conservador (expirado, sem escopo)', () {
       final s = JwtPayload.decode(
         'lixo',

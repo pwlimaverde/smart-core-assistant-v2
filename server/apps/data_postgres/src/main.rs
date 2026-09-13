@@ -4357,6 +4357,7 @@ async fn handler_transferir_atendimento_para_fluxo(
                 "reason": outcome.reason,
                 "atendente_id": outcome.atendente_id,
                 "atendente_nome": outcome.atendente_nome,
+                "atendente_usuario_id": outcome.atendente_usuario_id,
             }),
         ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
@@ -9827,6 +9828,7 @@ mod tests_atendimento_cliente_unit {
                     reason: None,
                     atendente_id: Some(3),
                     atendente_nome: Some("Ana".to_string()),
+                    atendente_usuario_id: None,
                 })
             });
         let env = envelope_com_payload(

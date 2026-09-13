@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:design_system_module/design_system_module.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -68,10 +70,39 @@ class _KanbanPageState extends State<KanbanPage> {
   /// Conversa aberta no painel da direita. `null` = só o quadro.
   int? _conversaAberta;
 
+  /// B5 — avisos de conversa atribuída a quem está logado.
+  StreamSubscription<AtribuicaoRecebida>? _atribuicoes;
+
   @override
   void initState() {
     super.initState();
-    inject<KanbanController>().carregar();
+    final controller = inject<KanbanController>();
+    controller.carregar();
+    _atribuicoes = controller.atribuicoes.listen(_avisarAtribuicao);
+  }
+
+  @override
+  void dispose() {
+    _atribuicoes?.cancel();
+    super.dispose();
+  }
+
+  /// A conversa já apareceu no quadro (o evento também o recarrega); o aviso
+  /// existe porque aparecer num quadro cheio não é o mesmo que ser notado. O
+  /// "Abrir" leva direto a ela.
+  void _avisarAtribuicao(AtribuicaoRecebida atribuicao) {
+    if (!mounted) return;
+    final onde = atribuicao.fluxo.isEmpty ? '' : ' em ${atribuicao.fluxo}';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Uma conversa$onde foi atribuída a você.'),
+        duration: const Duration(seconds: 8),
+        action: SnackBarAction(
+          label: 'Abrir',
+          onPressed: () => _abrir(atribuicao.atendimentoId),
+        ),
+      ),
+    );
   }
 
   /// C3 — abre a conversa com um cliente que ainda não escreveu.
