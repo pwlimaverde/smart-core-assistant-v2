@@ -586,6 +586,23 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$testarPergunta, request, options: options);
   }
 
+  $grpc.ResponseFuture<$0.SolicitarUploadTreinamentoResponse>
+      solicitarUploadTreinamento(
+    $0.SolicitarUploadTreinamentoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$solicitarUploadTreinamento, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.MyTreinamentoResponse> createMyTreinamentoComArquivo(
+    $0.CreateMyTreinamentoComArquivoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$createMyTreinamentoComArquivo, request,
+        options: options);
+  }
+
   $grpc.ResponseFuture<$0.RegistrarFeedbackTesteResponse>
       registrarFeedbackTeste(
     $0.RegistrarFeedbackTesteRequest request, {
@@ -1228,6 +1245,17 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/TestarPergunta',
           ($0.TestarPerguntaRequest value) => value.writeToBuffer(),
           $0.TestarPerguntaResponse.fromBuffer);
+  static final _$solicitarUploadTreinamento = $grpc.ClientMethod<
+          $0.SolicitarUploadTreinamentoRequest,
+          $0.SolicitarUploadTreinamentoResponse>(
+      '/smartcore.contracts.queries.AdminService/SolicitarUploadTreinamento',
+      ($0.SolicitarUploadTreinamentoRequest value) => value.writeToBuffer(),
+      $0.SolicitarUploadTreinamentoResponse.fromBuffer);
+  static final _$createMyTreinamentoComArquivo = $grpc.ClientMethod<
+          $0.CreateMyTreinamentoComArquivoRequest, $0.MyTreinamentoResponse>(
+      '/smartcore.contracts.queries.AdminService/CreateMyTreinamentoComArquivo',
+      ($0.CreateMyTreinamentoComArquivoRequest value) => value.writeToBuffer(),
+      $0.MyTreinamentoResponse.fromBuffer);
   static final _$registrarFeedbackTeste = $grpc.ClientMethod<
           $0.RegistrarFeedbackTesteRequest, $0.RegistrarFeedbackTesteResponse>(
       '/smartcore.contracts.queries.AdminService/RegistrarFeedbackTeste',
@@ -2050,6 +2078,25 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.TestarPerguntaRequest.fromBuffer(value),
         ($0.TestarPerguntaResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.SolicitarUploadTreinamentoRequest,
+            $0.SolicitarUploadTreinamentoResponse>(
+        'SolicitarUploadTreinamento',
+        solicitarUploadTreinamento_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.SolicitarUploadTreinamentoRequest.fromBuffer(value),
+        ($0.SolicitarUploadTreinamentoResponse value) =>
+            value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.CreateMyTreinamentoComArquivoRequest,
+            $0.MyTreinamentoResponse>(
+        'CreateMyTreinamentoComArquivo',
+        createMyTreinamentoComArquivo_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.CreateMyTreinamentoComArquivoRequest.fromBuffer(value),
+        ($0.MyTreinamentoResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.RegistrarFeedbackTesteRequest,
             $0.RegistrarFeedbackTesteResponse>(
         'RegistrarFeedbackTeste',
@@ -3007,6 +3054,25 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.TestarPerguntaResponse> testarPergunta(
       $grpc.ServiceCall call, $0.TestarPerguntaRequest request);
+
+  $async.Future<$0.SolicitarUploadTreinamentoResponse>
+      solicitarUploadTreinamento_Pre($grpc.ServiceCall $call,
+          $async.Future<$0.SolicitarUploadTreinamentoRequest> $request) async {
+    return solicitarUploadTreinamento($call, await $request);
+  }
+
+  $async.Future<$0.SolicitarUploadTreinamentoResponse>
+      solicitarUploadTreinamento(
+          $grpc.ServiceCall call, $0.SolicitarUploadTreinamentoRequest request);
+
+  $async.Future<$0.MyTreinamentoResponse> createMyTreinamentoComArquivo_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.CreateMyTreinamentoComArquivoRequest> $request) async {
+    return createMyTreinamentoComArquivo($call, await $request);
+  }
+
+  $async.Future<$0.MyTreinamentoResponse> createMyTreinamentoComArquivo(
+      $grpc.ServiceCall call, $0.CreateMyTreinamentoComArquivoRequest request);
 
   $async.Future<$0.RegistrarFeedbackTesteResponse> registrarFeedbackTeste_Pre(
       $grpc.ServiceCall $call,

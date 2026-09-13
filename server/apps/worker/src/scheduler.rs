@@ -105,6 +105,26 @@ async fn executar_tick(state: &AppState, clock: &dyn Clock) {
             }
         }
 
+        // B9 (N10 E5): extrair é baixar e ler arquivo — lento, e cada item é um
+        // documento inteiro. Lote pequeno e lock próprio, para não segurar a
+        // vetorização.
+        let mut conn = redis_conn.clone();
+        if tentar_lock(&mut conn, "scheduler:lock:extracao_treinamento", 120_000).await {
+            match processar_extracao_pendente(state).await {
+                Ok(n) if n > 0 => {
+                    tracing::info!(
+                        extraidos = n,
+                        "scheduler: texto de arquivos de treinamento extraído"
+                    )
+                }
+                Ok(_) => {}
+                Err(e) => tracing::error!(
+                    "scheduler: falha ao extrair arquivos de treinamento: {:?}",
+                    e
+                ),
+            }
+        }
+
         // O TTL de 5 min faz as vezes de intervalo: com o tick de 60s, os quatro
         // ticks seguintes encontram o lock de pé e pulam. É de propósito —
         // conferir conexão de minuto em minuto não acrescenta nada (o webhook
@@ -527,6 +547,144 @@ fn dividir_em_trechos(conteudo: &str, teto: usize) -> Vec<String> {
         trechos.push(atual);
     }
     trechos
+}
+
+/// B9 (N10 E5) — extrai o texto dos treinamentos enviados como arquivo.
+///
+/// Para cada pendente: URL de leitura curta no `data_storage`, leitura no
+/// `ia_engine` e o resultado de volta ao `data_postgres`. Falha **transitória**
+/// (IA fora, timeout, storage) deixa o item na fila para o próximo tick; falha
+/// **do arquivo** (formato, senha, sem texto) é gravada com o motivo, para quem
+/// treinou ler. O texto extraído nunca vai para log — só formato e contagem.
+async fn processar_extracao_pendente(state: &AppState) -> anyhow::Result<usize> {
+    let limite = env_u64("SMARTCORE_EXTRACAO_LOTE", 5);
+    let resp = chamar_rpc(
+        &state.pg_client,
+        SISTEMA_TENANT_PLACEHOLDER,
+        "ListarExtracoesPendentes",
+        serde_json::json!({ "limite": limite }),
+        "scheduler.tick",
+        "",
+    )
+    .await?;
+    let pendentes = resp
+        .get("pendentes")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let mut processados = 0usize;
+    for item in pendentes {
+        let texto_de = |chave: &str| {
+            item.get(chave)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string()
+        };
+        let Some(id) = item.get("id").and_then(|v| v.as_i64()) else {
+            continue;
+        };
+        let (tenant_id, chave) = (texto_de("tenant_id"), texto_de("chave"));
+        if tenant_id.is_empty() || chave.is_empty() {
+            continue;
+        }
+        let inicio = std::time::Instant::now();
+
+        let url = match chamar_rpc(
+            &state.storage_client,
+            &tenant_id,
+            "PresignFile",
+            serde_json::json!({ "file_name": chave, "expires_in": 900 }),
+            "scheduler.tick",
+            "",
+        )
+        .await
+        {
+            Ok(v) => v
+                .get("url")
+                .and_then(|u| u.as_str())
+                .unwrap_or_default()
+                .to_string(),
+            Err(e) => {
+                tracing::warn!(
+                    treinamento_id = id,
+                    "presign do arquivo falhou; segue na fila: {e}"
+                );
+                continue;
+            }
+        };
+
+        let resultado = state
+            .ia_client
+            .extrair_texto_documento(
+                ia_engine::client::ExtrairTextoInput {
+                    tenant_id: tenant_id.clone(),
+                    media: ia_engine::client::MediaRefInput {
+                        url,
+                        mimetype: texto_de("mimetype"),
+                        file_name: texto_de("nome"),
+                    },
+                },
+                "",
+            )
+            .await;
+
+        let payload = match resultado {
+            Ok(out) => {
+                tracing::info!(
+                    treinamento_id = id,
+                    formato = %out.formato,
+                    caracteres = out.caracteres,
+                    duracao_ms = inicio.elapsed().as_millis() as u64,
+                    "treinamento.extracao concluída"
+                );
+                serde_json::json!({ "treinamento_id": id, "texto": out.texto })
+            }
+            Err(e) => match motivo_da_falha_de_extracao(&e) {
+                None => {
+                    tracing::warn!(
+                        treinamento_id = id,
+                        "extração indisponível; segue na fila: {e}"
+                    );
+                    continue;
+                }
+                Some(motivo) => {
+                    tracing::warn!(treinamento_id = id, "extração do arquivo falhou: {e}");
+                    serde_json::json!({ "treinamento_id": id, "erro": motivo })
+                }
+            },
+        };
+
+        match chamar_rpc(
+            &state.pg_client,
+            &tenant_id,
+            "RegistrarExtracaoTreinamento",
+            payload,
+            "scheduler.tick",
+            "",
+        )
+        .await
+        {
+            Ok(_) => processados += 1,
+            Err(e) => tracing::warn!(treinamento_id = id, "falha ao gravar a extração: {e}"),
+        }
+    }
+    Ok(processados)
+}
+
+/// B9 — o que dizer a quem treinou quando a extração falha. `None` = falha
+/// transitória, que não é culpa do arquivo e deve voltar a ser tentada.
+fn motivo_da_falha_de_extracao(erro: &ia_engine::client::IaEngineError) -> Option<String> {
+    use ia_engine::client::IaEngineError;
+    match erro {
+        IaEngineError::Timeout | IaEngineError::Unavailable(_) => None,
+        // `Invalid` traz a mensagem de domínio do ia_engine, já pronta para ler
+        // ("formato não suportado…", "protegido por senha…").
+        IaEngineError::Invalid(msg) if !msg.trim().is_empty() => Some(msg.clone()),
+        IaEngineError::Invalid(_) | IaEngineError::Internal(_) => {
+            Some("não foi possível ler o arquivo".to_string())
+        }
+    }
 }
 
 /// Vetoriza o material treinado que está esperando na fila.

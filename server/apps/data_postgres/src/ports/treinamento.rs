@@ -36,6 +36,14 @@ pub struct TreinamentoResumo {
     pub vetorizado: bool,
     pub criado_em: i64,
     pub atualizado_em: i64,
+    /// B9 (N10 E5) — vazios quando o treinamento é de texto colado.
+    #[serde(default)]
+    pub arquivo_nome: String,
+    /// `pendente` | `extraido` | `falhou` | vazio.
+    #[serde(default)]
+    pub extracao_status: String,
+    #[serde(default)]
+    pub extracao_erro: String,
 }
 
 /// Operações de RAG (busca vetorial pgvector) expostas ao handler RPC `QueryCompose`,
@@ -138,6 +146,35 @@ pub trait TreinamentoStore: Send + Sync {
         ctx: &RequestContext,
         novo: infrastructure_postgres::treinamento::treinamentos::NovoFeedbackTeste,
     ) -> Result<i32, DbError>;
+
+    /// B9 (N10 E5) — confere a quota e devolve a chave onde subir o arquivo.
+    async fn autorizar_upload_treinamento(
+        &self,
+        ctx: &RequestContext,
+        bytes: i64,
+    ) -> Result<String, DbError>;
+
+    /// B9 — cria o treinamento a partir do arquivo já conferido no bucket.
+    async fn criar_treinamento_com_arquivo(
+        &self,
+        ctx: &RequestContext,
+        novo: infrastructure_postgres::treinamento::treinamentos::NovoTreinamentoComArquivo,
+    ) -> Result<TreinamentoResumo, DbError>;
+
+    /// B9 — a fila da extração, de toda a base (exige `admin_pool`).
+    async fn listar_extracoes_pendentes(
+        &self,
+        ctx: &RequestContext,
+        limite: i64,
+    ) -> Result<Vec<infrastructure_postgres::treinamento::treinamentos::ExtracaoPendente>, DbError>;
+
+    /// B9 — grava o texto extraído ou o motivo da falha.
+    async fn registrar_extracao_treinamento(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        resultado: infrastructure_postgres::treinamento::treinamentos::ResultadoExtracao,
+    ) -> Result<bool, DbError>;
 
     async fn listar_intents(&self, ctx: &RequestContext) -> Result<Vec<Intent>, DbError>;
 

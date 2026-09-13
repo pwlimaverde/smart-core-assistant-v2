@@ -16299,6 +16299,9 @@ class MyTreinamento extends $pb.GeneratedMessage {
     $core.bool? vetorizado,
     $fixnum.Int64? criadoEm,
     $fixnum.Int64? atualizadoEm,
+    $core.String? arquivoNome,
+    $core.String? extracaoStatus,
+    $core.String? extracaoErro,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -16309,6 +16312,9 @@ class MyTreinamento extends $pb.GeneratedMessage {
     if (vetorizado != null) result.vetorizado = vetorizado;
     if (criadoEm != null) result.criadoEm = criadoEm;
     if (atualizadoEm != null) result.atualizadoEm = atualizadoEm;
+    if (arquivoNome != null) result.arquivoNome = arquivoNome;
+    if (extracaoStatus != null) result.extracaoStatus = extracaoStatus;
+    if (extracaoErro != null) result.extracaoErro = extracaoErro;
     return result;
   }
 
@@ -16334,6 +16340,9 @@ class MyTreinamento extends $pb.GeneratedMessage {
     ..aOB(6, _omitFieldNames ? '' : 'vetorizado')
     ..aInt64(7, _omitFieldNames ? '' : 'criadoEm')
     ..aInt64(8, _omitFieldNames ? '' : 'atualizadoEm')
+    ..aOS(9, _omitFieldNames ? '' : 'arquivoNome')
+    ..aOS(10, _omitFieldNames ? '' : 'extracaoStatus')
+    ..aOS(11, _omitFieldNames ? '' : 'extracaoErro')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -16429,6 +16438,324 @@ class MyTreinamento extends $pb.GeneratedMessage {
   $core.bool hasAtualizadoEm() => $_has(7);
   @$pb.TagNumber(8)
   void clearAtualizadoEm() => $_clearField(8);
+
+  /// B9 (N10 E5) - vazios quando o treinamento e de texto colado.
+  @$pb.TagNumber(9)
+  $core.String get arquivoNome => $_getSZ(8);
+  @$pb.TagNumber(9)
+  set arquivoNome($core.String value) => $_setString(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasArquivoNome() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearArquivoNome() => $_clearField(9);
+
+  @$pb.TagNumber(10)
+  $core.String get extracaoStatus => $_getSZ(9);
+  @$pb.TagNumber(10)
+  set extracaoStatus($core.String value) => $_setString(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasExtracaoStatus() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearExtracaoStatus() => $_clearField(10);
+
+  @$pb.TagNumber(11)
+  $core.String get extracaoErro => $_getSZ(10);
+  @$pb.TagNumber(11)
+  set extracaoErro($core.String value) => $_setString(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasExtracaoErro() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearExtracaoErro() => $_clearField(11);
+}
+
+/// B9 (N10 E5) - passo 1 do treinamento por arquivo: onde subir.
+class SolicitarUploadTreinamentoRequest extends $pb.GeneratedMessage {
+  factory SolicitarUploadTreinamentoRequest({
+    $core.String? nomeArquivo,
+    $core.String? mimetype,
+    $fixnum.Int64? bytes,
+  }) {
+    final result = create();
+    if (nomeArquivo != null) result.nomeArquivo = nomeArquivo;
+    if (mimetype != null) result.mimetype = mimetype;
+    if (bytes != null) result.bytes = bytes;
+    return result;
+  }
+
+  SolicitarUploadTreinamentoRequest._();
+
+  factory SolicitarUploadTreinamentoRequest.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SolicitarUploadTreinamentoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SolicitarUploadTreinamentoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'nomeArquivo')
+    ..aOS(2, _omitFieldNames ? '' : 'mimetype')
+    ..aInt64(3, _omitFieldNames ? '' : 'bytes')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SolicitarUploadTreinamentoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SolicitarUploadTreinamentoRequest copyWith(
+          void Function(SolicitarUploadTreinamentoRequest) updates) =>
+      super.copyWith((message) =>
+              updates(message as SolicitarUploadTreinamentoRequest))
+          as SolicitarUploadTreinamentoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SolicitarUploadTreinamentoRequest create() =>
+      SolicitarUploadTreinamentoRequest._();
+  @$core.override
+  SolicitarUploadTreinamentoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SolicitarUploadTreinamentoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SolicitarUploadTreinamentoRequest>(
+          create);
+  static SolicitarUploadTreinamentoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get nomeArquivo => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set nomeArquivo($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasNomeArquivo() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearNomeArquivo() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get mimetype => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set mimetype($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasMimetype() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearMimetype() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $fixnum.Int64 get bytes => $_getI64(2);
+  @$pb.TagNumber(3)
+  set bytes($fixnum.Int64 value) => $_setInt64(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasBytes() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearBytes() => $_clearField(3);
+}
+
+class SolicitarUploadTreinamentoResponse extends $pb.GeneratedMessage {
+  factory SolicitarUploadTreinamentoResponse({
+    $core.String? urlUpload,
+    $core.String? chave,
+    $core.String? contentType,
+    $fixnum.Int64? expiraEmSegundos,
+  }) {
+    final result = create();
+    if (urlUpload != null) result.urlUpload = urlUpload;
+    if (chave != null) result.chave = chave;
+    if (contentType != null) result.contentType = contentType;
+    if (expiraEmSegundos != null) result.expiraEmSegundos = expiraEmSegundos;
+    return result;
+  }
+
+  SolicitarUploadTreinamentoResponse._();
+
+  factory SolicitarUploadTreinamentoResponse.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory SolicitarUploadTreinamentoResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'SolicitarUploadTreinamentoResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'urlUpload')
+    ..aOS(2, _omitFieldNames ? '' : 'chave')
+    ..aOS(3, _omitFieldNames ? '' : 'contentType')
+    ..aInt64(4, _omitFieldNames ? '' : 'expiraEmSegundos')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SolicitarUploadTreinamentoResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  SolicitarUploadTreinamentoResponse copyWith(
+          void Function(SolicitarUploadTreinamentoResponse) updates) =>
+      super.copyWith((message) =>
+              updates(message as SolicitarUploadTreinamentoResponse))
+          as SolicitarUploadTreinamentoResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static SolicitarUploadTreinamentoResponse create() =>
+      SolicitarUploadTreinamentoResponse._();
+  @$core.override
+  SolicitarUploadTreinamentoResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static SolicitarUploadTreinamentoResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<SolicitarUploadTreinamentoResponse>(
+          create);
+  static SolicitarUploadTreinamentoResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get urlUpload => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set urlUpload($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasUrlUpload() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearUrlUpload() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get chave => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set chave($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasChave() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearChave() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get contentType => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set contentType($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasContentType() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearContentType() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $fixnum.Int64 get expiraEmSegundos => $_getI64(3);
+  @$pb.TagNumber(4)
+  set expiraEmSegundos($fixnum.Int64 value) => $_setInt64(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasExpiraEmSegundos() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearExpiraEmSegundos() => $_clearField(4);
+}
+
+/// B9 (N10 E5) - passo 3: o arquivo subiu; cria o treinamento.
+class CreateMyTreinamentoComArquivoRequest extends $pb.GeneratedMessage {
+  factory CreateMyTreinamentoComArquivoRequest({
+    $core.String? tag,
+    $core.String? grupo,
+    $core.String? chave,
+    $core.String? nomeArquivo,
+    $core.String? mimetype,
+  }) {
+    final result = create();
+    if (tag != null) result.tag = tag;
+    if (grupo != null) result.grupo = grupo;
+    if (chave != null) result.chave = chave;
+    if (nomeArquivo != null) result.nomeArquivo = nomeArquivo;
+    if (mimetype != null) result.mimetype = mimetype;
+    return result;
+  }
+
+  CreateMyTreinamentoComArquivoRequest._();
+
+  factory CreateMyTreinamentoComArquivoRequest.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory CreateMyTreinamentoComArquivoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'CreateMyTreinamentoComArquivoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'tag')
+    ..aOS(2, _omitFieldNames ? '' : 'grupo')
+    ..aOS(3, _omitFieldNames ? '' : 'chave')
+    ..aOS(4, _omitFieldNames ? '' : 'nomeArquivo')
+    ..aOS(5, _omitFieldNames ? '' : 'mimetype')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyTreinamentoComArquivoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  CreateMyTreinamentoComArquivoRequest copyWith(
+          void Function(CreateMyTreinamentoComArquivoRequest) updates) =>
+      super.copyWith((message) =>
+              updates(message as CreateMyTreinamentoComArquivoRequest))
+          as CreateMyTreinamentoComArquivoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static CreateMyTreinamentoComArquivoRequest create() =>
+      CreateMyTreinamentoComArquivoRequest._();
+  @$core.override
+  CreateMyTreinamentoComArquivoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static CreateMyTreinamentoComArquivoRequest getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<
+          CreateMyTreinamentoComArquivoRequest>(create);
+  static CreateMyTreinamentoComArquivoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get tag => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set tag($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTag() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTag() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get grupo => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set grupo($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasGrupo() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearGrupo() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get chave => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set chave($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasChave() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearChave() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get nomeArquivo => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set nomeArquivo($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasNomeArquivo() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearNomeArquivo() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get mimetype => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set mimetype($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasMimetype() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearMimetype() => $_clearField(5);
 }
 
 class CreateMyTreinamentoRequest extends $pb.GeneratedMessage {

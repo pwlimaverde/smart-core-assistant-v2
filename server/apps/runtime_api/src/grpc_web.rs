@@ -42,6 +42,7 @@ use contracts::grpc::queries::{
     CreateMyDepartamentoResponse,
     CreateMyEtapaFluxoRequest,
     CreateMyFluxoRequest,
+    CreateMyTreinamentoComArquivoRequest,
     CreateMyTreinamentoRequest,
     // Configuração inicial guiada (passos 5 a 8)
     CreateMyWhatsappInstanceRequest,
@@ -225,6 +226,8 @@ use contracts::grpc::queries::{
     SolicitarRedefinicaoSenhaResponse,
     SolicitarUploadMidiaRequest,
     SolicitarUploadMidiaResponse,
+    SolicitarUploadTreinamentoRequest,
+    SolicitarUploadTreinamentoResponse,
     StreamAtendimentosRequest,
     Subscription as ProtoSubscription,
     Tenant as ProtoTenant,
@@ -3641,6 +3644,222 @@ impl AdminService for AdminFacade {
 
         Ok(Response::new(RegistrarFeedbackTesteResponse {
             id: corpo.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+        }))
+    }
+
+    /// B9 (N10 E5) — passo 1 do treinamento por arquivo: confere formato,
+    /// tamanho e quota, e devolve a URL de PUT direto no bucket.
+    ///
+    /// `skip_all`: o nome do arquivo pode citar cliente, e a URL é credencial.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "SolicitarUploadTreinamento", bytes = tracing::field::Empty, traceparent)
+    )]
+    async fn solicitar_upload_treinamento(
+        &self,
+        req: Request<SolicitarUploadTreinamentoRequest>,
+    ) -> Result<Response<SolicitarUploadTreinamentoResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(
+            &claims,
+            &["treinamento:write"],
+            "SolicitarUploadTreinamento",
+        )?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+        tracing::Span::current().record("bytes", inner.bytes);
+
+        let Some(storage) = self.deps.storage.as_ref() else {
+            return Err(Status::unavailable("errors.midia.storage_indisponivel"));
+        };
+        formato_de_treinamento(&inner.mimetype, &inner.nome_arquivo)
+            .map_err(Status::invalid_argument)?;
+        if inner.bytes <= 0 {
+            return Err(Status::invalid_argument("arquivo vazio"));
+        }
+        let limite = infrastructure_storage::midia::CategoriaMidia::Documento.limite_bytes();
+        if inner.bytes > limite {
+            return Err(Status::invalid_argument(
+                "arquivo acima do tamanho permitido",
+            ));
+        }
+
+        let envelope = |metodo: &str, payload: serde_json::Value| Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: metodo.to_string(),
+            payload: serde_json::to_vec(&payload).unwrap_or_default(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        let autorizacao = self
+            .deps
+            .pg
+            .call(
+                envelope(
+                    "AutorizarUploadTreinamento",
+                    serde_json::json!({ "bytes": inner.bytes }),
+                ),
+                std::time::Duration::from_secs(5),
+            )
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço interno: {e}")))?;
+        if autorizacao.kind == MessageKind::Error as i32 {
+            let msg = autorizacao.error.map(|e| e.message).unwrap_or_default();
+            return Err(Status::failed_precondition(msg));
+        }
+        let corpo: serde_json::Value = serde_json::from_slice(&autorizacao.payload)
+            .map_err(|e| Status::internal(e.to_string()))?;
+        let chave = corpo
+            .get("chave")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| Status::internal("autorização de upload sem chave"))?
+            .to_string();
+
+        let presign = storage
+            .call(
+                envelope(
+                    "PresignUpload",
+                    serde_json::json!({ "file_name": chave, "content_type": inner.mimetype }),
+                ),
+                std::time::Duration::from_secs(5),
+            )
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço de storage: {e}")))?;
+        if presign.kind == MessageKind::Error as i32 {
+            tracing::warn!("falha ao assinar upload de arquivo de treinamento");
+            return Err(Status::internal("errors.midia.presign_falhou"));
+        }
+        let corpo_presign: serde_json::Value = serde_json::from_slice(&presign.payload)
+            .map_err(|e| Status::internal(e.to_string()))?;
+
+        Ok(Response::new(SolicitarUploadTreinamentoResponse {
+            url_upload: corpo_presign
+                .get("url")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string(),
+            chave,
+            content_type: inner.mimetype,
+            expira_em_segundos: corpo_presign
+                .get("expires_in")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(900),
+        }))
+    }
+
+    /// B9 (N10 E5) — passo 3: o arquivo subiu. Confere o **conteúdo** no bucket
+    /// (a validação que vale) e cria o treinamento com a extração pendente.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "CreateMyTreinamentoComArquivo",
+            traceparent
+        )
+    )]
+    async fn create_my_treinamento_com_arquivo(
+        &self,
+        req: Request<CreateMyTreinamentoComArquivoRequest>,
+    ) -> Result<Response<MyTreinamentoResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(
+            &claims,
+            &["treinamento:write"],
+            "CreateMyTreinamentoComArquivo",
+        )?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+        if inner.tag.trim().is_empty() || inner.grupo.trim().is_empty() {
+            return Err(Status::invalid_argument("informe a tag e o grupo"));
+        }
+        formato_de_treinamento(&inner.mimetype, &inner.nome_arquivo)
+            .map_err(Status::invalid_argument)?;
+        let Some(storage) = self.deps.storage.as_ref() else {
+            return Err(Status::unavailable("errors.midia.storage_indisponivel"));
+        };
+
+        let envelope = |metodo: &str, payload: serde_json::Value| Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: metodo.to_string(),
+            payload: serde_json::to_vec(&payload).unwrap_or_default(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        let inspecao = storage
+            .call(
+                envelope(
+                    "InspecionarMidia",
+                    serde_json::json!({ "file_name": inner.chave, "mimetype": inner.mimetype }),
+                ),
+                std::time::Duration::from_secs(10),
+            )
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço de storage: {e}")))?;
+        if inspecao.kind == MessageKind::Error as i32 {
+            let msg = inspecao.error.map(|e| e.message).unwrap_or_default();
+            return Err(Status::failed_precondition(msg));
+        }
+        let veredito: serde_json::Value = serde_json::from_slice(&inspecao.payload)
+            .map_err(|e| Status::internal(e.to_string()))?;
+        if veredito.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+            let motivo = veredito
+                .get("motivo")
+                .and_then(|v| v.as_str())
+                .unwrap_or("arquivo recusada na conferência")
+                .to_string();
+            return Err(Status::invalid_argument(motivo));
+        }
+        let bytes = veredito.get("bytes").and_then(|v| v.as_i64()).unwrap_or(0);
+
+        let resp = self
+            .deps
+            .pg
+            .call(
+                envelope(
+                    "CriarTreinamentoComArquivo",
+                    serde_json::json!({
+                        "tag": inner.tag.trim(),
+                        "grupo": inner.grupo.trim(),
+                        "chave": inner.chave,
+                        "nome_arquivo": inner.nome_arquivo,
+                        "mimetype": inner.mimetype,
+                        "bytes": bytes,
+                    }),
+                ),
+                std::time::Duration::from_secs(5),
+            )
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço interno: {e}")))?;
+        if resp.kind == MessageKind::Error as i32 {
+            return Err(status_do_erro_interno(resp.error));
+        }
+        let corpo: serde_json::Value =
+            serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))?;
+
+        Ok(Response::new(MyTreinamentoResponse {
+            treinamento: Some(treinamento_do_json(&corpo)),
         }))
     }
 
@@ -8095,7 +8314,41 @@ fn treinamento_do_json(v: &serde_json::Value) -> MyTreinamento {
         vetorizado: logico("vetorizado"),
         criado_em: inteiro("criado_em"),
         atualizado_em: inteiro("atualizado_em"),
+        arquivo_nome: texto("arquivo_nome"),
+        extracao_status: texto("extracao_status"),
+        extracao_erro: texto("extracao_erro"),
     }
+}
+
+/// B9 (N10 E5) — o formato do arquivo de treinamento, se é um dos que a extração
+/// lê. Os binários antigos do Office ficam de fora com uma saída explícita.
+fn formato_de_treinamento(mimetype: &str, nome: &str) -> Result<&'static str, &'static str> {
+    let base = mimetype
+        .split(';')
+        .next()
+        .unwrap_or_default()
+        .trim()
+        .to_ascii_lowercase();
+    let nome = nome.to_ascii_lowercase();
+    let por_mimetype = match base.as_str() {
+        "application/pdf" => Some("pdf"),
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => Some("docx"),
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" => Some("xlsx"),
+        "text/plain" => Some("txt"),
+        "text/csv" => Some("csv"),
+        _ => None,
+    };
+    if let Some(formato) = por_mimetype {
+        return Ok(formato);
+    }
+    if base == "application/msword"
+        || base == "application/vnd.ms-excel"
+        || nome.ends_with(".doc")
+        || nome.ends_with(".xls")
+    {
+        return Err("arquivos .doc e .xls não são lidos; salve como .docx ou .xlsx");
+    }
+    Err("formato não suportado; envie pdf, docx, xlsx, txt ou csv")
 }
 
 /// Sobe a fachada gRPC-Web numa porta HTTP própria (browser usa HTTP/1.1).
@@ -8859,6 +9112,8 @@ mod tests {
             "MarcarAtendimentoLido" => facade.marcar_atendimento_lido(Request::new(MarcarAtendimentoLidoRequest { atendimento_id: 1 })).await,
             "AjustarEscoposMcpGrant" => facade.ajustar_escopos_mcp_grant(Request::new(AjustarEscoposMcpGrantRequest { grant_id: String::new(), scopes: vec![] })).await,
             "RegistrarFeedbackTeste" => facade.registrar_feedback_teste(Request::new(RegistrarFeedbackTesteRequest::default())).await,
+            "SolicitarUploadTreinamento" => facade.solicitar_upload_treinamento(Request::new(SolicitarUploadTreinamentoRequest::default())).await,
+            "CreateMyTreinamentoComArquivo" => facade.create_my_treinamento_com_arquivo(Request::new(CreateMyTreinamentoComArquivoRequest::default())).await,
         }
     }
 

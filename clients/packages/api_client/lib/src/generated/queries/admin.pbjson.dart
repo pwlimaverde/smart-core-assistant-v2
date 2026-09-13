@@ -4031,6 +4031,9 @@ const MyTreinamento$json = {
     {'1': 'vetorizado', '3': 6, '4': 1, '5': 8, '10': 'vetorizado'},
     {'1': 'criado_em', '3': 7, '4': 1, '5': 3, '10': 'criadoEm'},
     {'1': 'atualizado_em', '3': 8, '4': 1, '5': 3, '10': 'atualizadoEm'},
+    {'1': 'arquivo_nome', '3': 9, '4': 1, '5': 9, '10': 'arquivoNome'},
+    {'1': 'extracao_status', '3': 10, '4': 1, '5': 9, '10': 'extracaoStatus'},
+    {'1': 'extracao_erro', '3': 11, '4': 1, '5': 9, '10': 'extracaoErro'},
   ],
 };
 
@@ -4040,7 +4043,70 @@ final $typed_data.Uint8List myTreinamentoDescriptor = $convert.base64Decode(
     'VwbxgDIAEoCVIFZ3J1cG8SGgoIY29udGV1ZG8YBCABKAlSCGNvbnRldWRvEh4KCmZpbmFsaXph'
     'ZG8YBSABKAhSCmZpbmFsaXphZG8SHgoKdmV0b3JpemFkbxgGIAEoCFIKdmV0b3JpemFkbxIbCg'
     'ljcmlhZG9fZW0YByABKANSCGNyaWFkb0VtEiMKDWF0dWFsaXphZG9fZW0YCCABKANSDGF0dWFs'
-    'aXphZG9FbQ==');
+    'aXphZG9FbRIhCgxhcnF1aXZvX25vbWUYCSABKAlSC2FycXVpdm9Ob21lEicKD2V4dHJhY2FvX3'
+    'N0YXR1cxgKIAEoCVIOZXh0cmFjYW9TdGF0dXMSIwoNZXh0cmFjYW9fZXJybxgLIAEoCVIMZXh0'
+    'cmFjYW9FcnJv');
+
+@$core.Deprecated('Use solicitarUploadTreinamentoRequestDescriptor instead')
+const SolicitarUploadTreinamentoRequest$json = {
+  '1': 'SolicitarUploadTreinamentoRequest',
+  '2': [
+    {'1': 'nome_arquivo', '3': 1, '4': 1, '5': 9, '10': 'nomeArquivo'},
+    {'1': 'mimetype', '3': 2, '4': 1, '5': 9, '10': 'mimetype'},
+    {'1': 'bytes', '3': 3, '4': 1, '5': 3, '10': 'bytes'},
+  ],
+};
+
+/// Descriptor for `SolicitarUploadTreinamentoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List solicitarUploadTreinamentoRequestDescriptor =
+    $convert.base64Decode(
+        'CiFTb2xpY2l0YXJVcGxvYWRUcmVpbmFtZW50b1JlcXVlc3QSIQoMbm9tZV9hcnF1aXZvGAEgAS'
+        'gJUgtub21lQXJxdWl2bxIaCghtaW1ldHlwZRgCIAEoCVIIbWltZXR5cGUSFAoFYnl0ZXMYAyAB'
+        'KANSBWJ5dGVz');
+
+@$core.Deprecated('Use solicitarUploadTreinamentoResponseDescriptor instead')
+const SolicitarUploadTreinamentoResponse$json = {
+  '1': 'SolicitarUploadTreinamentoResponse',
+  '2': [
+    {'1': 'url_upload', '3': 1, '4': 1, '5': 9, '10': 'urlUpload'},
+    {'1': 'chave', '3': 2, '4': 1, '5': 9, '10': 'chave'},
+    {'1': 'content_type', '3': 3, '4': 1, '5': 9, '10': 'contentType'},
+    {
+      '1': 'expira_em_segundos',
+      '3': 4,
+      '4': 1,
+      '5': 3,
+      '10': 'expiraEmSegundos'
+    },
+  ],
+};
+
+/// Descriptor for `SolicitarUploadTreinamentoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List solicitarUploadTreinamentoResponseDescriptor =
+    $convert.base64Decode(
+        'CiJTb2xpY2l0YXJVcGxvYWRUcmVpbmFtZW50b1Jlc3BvbnNlEh0KCnVybF91cGxvYWQYASABKA'
+        'lSCXVybFVwbG9hZBIUCgVjaGF2ZRgCIAEoCVIFY2hhdmUSIQoMY29udGVudF90eXBlGAMgASgJ'
+        'Ugtjb250ZW50VHlwZRIsChJleHBpcmFfZW1fc2VndW5kb3MYBCABKANSEGV4cGlyYUVtU2VndW'
+        '5kb3M=');
+
+@$core.Deprecated('Use createMyTreinamentoComArquivoRequestDescriptor instead')
+const CreateMyTreinamentoComArquivoRequest$json = {
+  '1': 'CreateMyTreinamentoComArquivoRequest',
+  '2': [
+    {'1': 'tag', '3': 1, '4': 1, '5': 9, '10': 'tag'},
+    {'1': 'grupo', '3': 2, '4': 1, '5': 9, '10': 'grupo'},
+    {'1': 'chave', '3': 3, '4': 1, '5': 9, '10': 'chave'},
+    {'1': 'nome_arquivo', '3': 4, '4': 1, '5': 9, '10': 'nomeArquivo'},
+    {'1': 'mimetype', '3': 5, '4': 1, '5': 9, '10': 'mimetype'},
+  ],
+};
+
+/// Descriptor for `CreateMyTreinamentoComArquivoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createMyTreinamentoComArquivoRequestDescriptor =
+    $convert.base64Decode(
+        'CiRDcmVhdGVNeVRyZWluYW1lbnRvQ29tQXJxdWl2b1JlcXVlc3QSEAoDdGFnGAEgASgJUgN0YW'
+        'cSFAoFZ3J1cG8YAiABKAlSBWdydXBvEhQKBWNoYXZlGAMgASgJUgVjaGF2ZRIhCgxub21lX2Fy'
+        'cXVpdm8YBCABKAlSC25vbWVBcnF1aXZvEhoKCG1pbWV0eXBlGAUgASgJUghtaW1ldHlwZQ==');
 
 @$core.Deprecated('Use createMyTreinamentoRequestDescriptor instead')
 const CreateMyTreinamentoRequest$json = {

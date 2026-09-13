@@ -28,7 +28,7 @@
 | B6 | Marcar como lida e contador de não lidas | N9 E4 | Sem isso o quadro não diz o que falta responder | ✅ CI verde (`72c79bd`) |
 | B7 | Ajustar permissões de um agente sem desconectar | doc 35-agentes F4 | Hoje a única saída é revogar e reconectar | ✅ CI verde (`3b9f13f`) |
 | B8 | Descoberta dos aplicativos conectados | doc 35-agentes F5 | Recurso que precisa ser explicado por fora não foi entregue | ✅ CI verde (`e14a993`) |
-| B9 | IA analítica: assunto automático, feedback do teste, treinamento por arquivo | N10 E2, E6, E5 | Maior e mais caro; depende de nada acima | 🔄 E6 ✅ (`4df0c83`); E1+E2 no CI; E5 a seguir |
+| B9 | IA analítica: assunto automático, feedback do teste, treinamento por arquivo | N10 E2, E6, E5 | Maior e mais caro; depende de nada acima | 🔄 E6 ✅ (`4df0c83`); E1+E2 ✅ (`b60dd14`); E5 em construção |
 | B10 | Clientes PJ e vínculo contato ↔ cliente | N11 E5 / doc 34 C4 | Entidade nova com tela própria | ⬜ |
 
 **Fora deste cronograma:** N12 (cutover de produção) — é operação com janela
@@ -386,3 +386,43 @@ análise. Os dois entraram na cascata e na publicação.
 conversa. O assunto sai da primeira mensagem que casar uma intenção, e para isso
 o histórico não muda nada; passar histórico fica para quando E3/E4 (etiquetas e
 enriquecimento do contato) precisarem dele.
+
+#### E5 — Treinamento por upload de arquivo (parte 1: servidor e IA)
+
+**Duas decisões registradas:**
+
+- **Cinco formatos, não sete.** PDF, DOCX, XLSX, TXT e CSV. Os binários antigos
+  do Office (`.doc`, `.xls`) exigiriam conversores externos (LibreOffice,
+  antiword) que não cabem na imagem do `ia_engine`; a tela e o servidor dizem
+  "salve como .docx ou .xlsx" em vez de aceitar e falhar depois.
+- **Mesma dupla tag+grupo substitui.** Enviar arquivo para um assunto que já
+  existe troca o material (volta a rascunho, extração pendente) — o mesmo "cria
+  ou reaproveita" do treinamento por texto.
+
+**Fluxo, reusando o caminho da mídia da N9:**
+
+1. `SolicitarUploadTreinamento`: formato e tamanho conferidos na borda, quota no
+   `data_postgres` (`AutorizarUploadTreinamento`), chave gerada pelo servidor
+   (`treinamento/…`) e URL de PUT assinada no `data_storage`.
+2. O cliente sobe direto ao R2.
+3. `CreateMyTreinamentoComArquivo`: o `data_storage` confere o **conteúdo** real
+   (`InspecionarMidia`, assinatura e tamanho); o `data_postgres` cria o
+   treinamento sem conteúdo, extração `pendente`, e soma os bytes na quota na
+   mesma transação. Auditado: `treinamento.arquivo_enviado`, com nome e tamanho.
+4. Job do scheduler (lock próprio, lote de 5): URL de leitura curta, RPC novo
+   `ExtrairTextoDocumento` no `ia_engine` (sem LLM — é leitura), e o resultado
+   volta por `RegistrarExtracaoTreinamento`. Falha transitória fica na fila;
+   falha do arquivo (senha, corrompido, PDF escaneado sem texto) é gravada com o
+   motivo e auditada como `treinamento.extracao_falhou`. Daí em diante é o ciclo
+   de sempre: revisar, finalizar, vetorizar.
+
+- Migration 0036: colunas do arquivo e `extracao_status`/`extracao_erro` em
+  `oraculo_treinamento`, com índice parcial da fila.
+- Log e span levam formato, bytes e contagem de caracteres — nunca o texto.
+- Testes: leitores dos cinco formatos com documentos gerados em memória (PDF
+  com senha e corrompido incluídos), cadeia RSOE e o RPC contra servidor gRPC
+  real; handlers recusam chave de fora do prefixo, auditam o envio e só a falha
+  da extração.
+
+**Parte 2 (a seguir):** a tela — botão **Enviar arquivo**, situação da extração
+em cada material.

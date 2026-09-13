@@ -49,6 +49,15 @@ from ia_engine.features.embed import (
     EmbedRepository,
     EmbedUsecase,
 )
+from ia_engine.features.extrair_texto import (
+    DocumentoIlegivelError,
+    ExtrairTextoDataSource,
+    ExtrairTextoParameters,
+    ExtrairTextoRepository,
+    ExtrairTextoUsecase,
+    FormatoNaoSuportadoError,
+    TextoVazioError,
+)
 from ia_engine.features.interpret_media import (
     InterpretMediaDataSource,
     InterpretMediaParameters,
@@ -365,6 +374,52 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
             case _:  # pragma: no cover - provado pelo mypy
                 assert_never(result)
 
+    async def ExtrairTextoDocumento(
+        self,
+        request: pb.ExtrairTextoDocumentoRequest,
+        context: grpc.aio.ServicerContext,
+    ) -> pb.ExtrairTextoDocumentoResponse:
+        """B9 (N10 E5) — texto de um documento de treinamento.
+
+        Sem LLM: não precisa de chave de provedor nem da config do tenant, por
+        isso não passa por `_config`. O tenant só identifica o log.
+        """
+        await self._require(
+            context,
+            request.media.url,
+            "media.url",
+            "ExtrairTextoDocumento",
+            request.tenant_id,
+        )
+        usecase = ExtrairTextoUsecase(ExtrairTextoRepository(ExtrairTextoDataSource()))
+        result = await usecase(
+            ExtrairTextoParameters(
+                url=request.media.url,
+                mimetype=request.media.mimetype,
+                nome_arquivo=request.media.file_name,
+            )
+        )
+        match result:
+            case Success(extraido):
+                # Só a contagem vai para o log: o texto pode ter dado sensível.
+                logger.info(
+                    "ExtrairTextoDocumento ok (tenant={}): formato={} caracteres={}",
+                    request.tenant_id,
+                    extraido.formato,
+                    len(extraido.texto),
+                )
+                return pb.ExtrairTextoDocumentoResponse(
+                    texto=extraido.texto,
+                    formato=extraido.formato,
+                    caracteres=len(extraido.texto),
+                )
+            case Failure(error):
+                await self._abort(
+                    context, error, "ExtrairTextoDocumento", request.tenant_id
+                )
+            case _:  # pragma: no cover - provado pelo mypy
+                assert_never(result)
+
     # ------------------------------------------------------------- helpers
     async def _config(
         self, context: grpc.aio.ServicerContext, rpc: str, tenant_id: str
@@ -450,6 +505,9 @@ def _status_for(error: AppError) -> grpc.StatusCode:
             return grpc.StatusCode.INVALID_ARGUMENT
         case MediaDownloadError() | ConfigTenantAusenteError():
             return grpc.StatusCode.FAILED_PRECONDITION
+        # B9: o arquivo é o problema, não o serviço — quem enviou pode corrigir.
+        case FormatoNaoSuportadoError() | DocumentoIlegivelError() | TextoVazioError():
+            return grpc.StatusCode.INVALID_ARGUMENT
         case _:
             return grpc.StatusCode.INTERNAL
 

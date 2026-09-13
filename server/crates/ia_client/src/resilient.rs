@@ -95,6 +95,19 @@ impl<C: IaEngineClient> IaEngineClient for ResilientIaEngine<C> {
         .await
     }
 
+    /// B9 (N10 E5) — mesmo teto da mídia: baixar e ler um arquivo grande
+    /// demora como transcrever.
+    async fn extrair_texto_documento(
+        &self,
+        req: crate::client::ExtrairTextoInput,
+        traceparent: &str,
+    ) -> Result<crate::client::ExtrairTextoOutput, IaEngineError> {
+        self.com_resiliencia(self.timeout_media, || {
+            self.inner.extrair_texto_documento(req.clone(), traceparent)
+        })
+        .await
+    }
+
     async fn interpret_media(
         &self,
         req: InterpretMediaInput,

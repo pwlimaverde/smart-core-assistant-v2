@@ -383,3 +383,207 @@ pub async fn registrar_feedback_teste(
     .await?;
     Ok(id)
 }
+
+/// B9 (N10 E5) — um treinamento enviado como arquivo, já conferido no bucket.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct NovoTreinamentoComArquivo {
+    pub tag: String,
+    pub grupo: String,
+    /// Chave do objeto no bucket, gerada pelo servidor em
+    /// [`chave_de_treinamento`]. Nunca vem do cliente sem essa origem.
+    pub chave: String,
+    pub nome_arquivo: String,
+    pub mimetype: String,
+    /// Tamanho real, lido do bucket — não o que o cliente declarou.
+    pub bytes: i64,
+}
+
+/// B9 — um arquivo esperando a extração de texto (fila do scheduler).
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct ExtracaoPendente {
+    pub id: i32,
+    pub tenant_id: String,
+    pub chave: String,
+    pub nome: String,
+    pub mimetype: String,
+}
+
+/// B9 — o que a extração devolveu.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ResultadoExtracao {
+    Texto(String),
+    /// Motivo pronto para quem treinou ler.
+    Falha(String),
+}
+
+/// Onde o arquivo de treinamento mora no bucket. O `data_storage` prefixa o
+/// tenant, então ele não repete aqui.
+pub fn chave_de_treinamento() -> String {
+    format!("treinamento/{}", Uuid::now_v7())
+}
+
+/// A quota do plano comporta mais `bytes`? Mesma regra do upload de mídia: limite
+/// 0 é plano sem teto, e esquema antigo sem a coluna conta como "sem limite".
+pub async fn quota_comporta(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    bytes: i64,
+) -> Result<bool, DbError> {
+    let uso: Option<(i64, i64)> = sqlx::query_as(
+        r#"SELECT COALESCE(u.total_bytes, 0), COALESCE(p.max_storage_bytes, 0)
+           FROM tenants_tenant t
+           LEFT JOIN tenants_storage_usage u ON u.tenant_id = t.id
+           LEFT JOIN tenants_subscription s ON s.tenant_id = t.id
+           LEFT JOIN tenants_plan p ON p.id = s.plan_id
+           WHERE t.id = $1"#,
+    )
+    .bind(tenant_id)
+    .fetch_optional(&mut **tx)
+    .await
+    .unwrap_or(None);
+    Ok(match uso {
+        Some((usado, limite)) => limite <= 0 || usado + bytes <= limite,
+        None => true,
+    })
+}
+
+/// Cria (ou substitui, na mesma dupla tag+grupo) um treinamento por arquivo.
+///
+/// Nasce sem conteúdo e com a extração **pendente**: o texto chega pelo job do
+/// scheduler, e daí o ciclo é o de sempre (revisar → finalizar → vetorizar). Os
+/// bytes entram na contabilidade de armazenamento na mesma transação.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, bytes = novo.bytes))]
+pub async fn criar_com_arquivo(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    novo: &NovoTreinamentoComArquivo,
+) -> Result<i32, DbError> {
+    ctx.exigir_qualquer(&["treinamento:write", "tenant:admin"])?;
+    let (id,): (i32,) = sqlx::query_as(
+        r#"INSERT INTO oraculo_treinamento
+             (tenant_id, tag, grupo, conteudo, treinamento_finalizado,
+              treinamento_vetorizado, arquivo_chave, arquivo_nome,
+              arquivo_mimetype, arquivo_bytes, extracao_status)
+           VALUES ($1, $2, $3, NULL, false, false, $4, $5, $6, $7, 'pendente')
+           ON CONFLICT (tenant_id, tag, grupo) DO UPDATE
+             SET conteudo = NULL,
+                 treinamento_finalizado = false,
+                 treinamento_vetorizado = false,
+                 arquivo_chave = EXCLUDED.arquivo_chave,
+                 arquivo_nome = EXCLUDED.arquivo_nome,
+                 arquivo_mimetype = EXCLUDED.arquivo_mimetype,
+                 arquivo_bytes = EXCLUDED.arquivo_bytes,
+                 extracao_status = 'pendente',
+                 extracao_erro = NULL,
+                 data_atualizacao = NOW()
+           RETURNING id"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(&novo.tag)
+    .bind(&novo.grupo)
+    .bind(&novo.chave)
+    .bind(&novo.nome_arquivo)
+    .bind(&novo.mimetype)
+    .bind(novo.bytes)
+    .fetch_one(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        r#"INSERT INTO tenants_storage_usage (tenant_id, total_bytes)
+           VALUES ($1, $2)
+           ON CONFLICT (tenant_id)
+           DO UPDATE SET total_bytes = tenants_storage_usage.total_bytes + $2,
+                         updated_at = NOW()"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(novo.bytes)
+    .execute(&mut **tx)
+    .await?;
+    Ok(id)
+}
+
+/// A fila da extração, de toda a base. Exige o pool com BYPASSRLS, como a fila
+/// de vetorização.
+pub async fn listar_extracoes_pendentes(
+    tx: &mut Transaction<'_, Postgres>,
+    limite: i64,
+) -> Result<Vec<ExtracaoPendente>, DbError> {
+    let linhas: Vec<(i32, Uuid, String, String, String)> = sqlx::query_as(
+        r#"SELECT id, tenant_id, arquivo_chave,
+                  COALESCE(arquivo_nome, ''), COALESCE(arquivo_mimetype, '')
+           FROM oraculo_treinamento
+           WHERE extracao_status = 'pendente' AND arquivo_chave IS NOT NULL
+           ORDER BY data_criacao ASC
+           LIMIT $1"#,
+    )
+    .bind(limite)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(linhas
+        .into_iter()
+        .map(|(id, tenant_id, chave, nome, mimetype)| ExtracaoPendente {
+            id,
+            tenant_id: tenant_id.to_string(),
+            chave,
+            nome,
+            mimetype,
+        })
+        .collect())
+}
+
+/// Grava o resultado da extração. Só age sobre o que ainda está pendente: um
+/// arquivo substituído no meio do caminho não recebe o texto do anterior.
+#[tracing::instrument(skip_all, fields(tenant_id = %tenant_id, treinamento_id = id))]
+pub async fn registrar_extracao(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    id: i32,
+    resultado: &ResultadoExtracao,
+) -> Result<bool, DbError> {
+    let (conteudo, status, erro) = match resultado {
+        ResultadoExtracao::Texto(texto) => (Some(texto.as_str()), "extraido", None),
+        ResultadoExtracao::Falha(motivo) => (None, "falhou", Some(motivo.as_str())),
+    };
+    let res = sqlx::query(
+        r#"UPDATE oraculo_treinamento
+           SET conteudo = COALESCE($3, conteudo),
+               extracao_status = $4,
+               extracao_erro = $5,
+               data_atualizacao = NOW()
+           WHERE tenant_id = $1 AND id = $2 AND extracao_status = 'pendente'"#,
+    )
+    .bind(tenant_id)
+    .bind(id)
+    .bind(conteudo)
+    .bind(status)
+    .bind(erro)
+    .execute(&mut **tx)
+    .await?;
+    Ok(res.rows_affected() > 0)
+}
+
+/// Nome do arquivo, situação e erro da extração, por treinamento. Só aparecem
+/// os que vieram de arquivo.
+pub async fn situacao_dos_arquivos(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    ids: &[i32],
+) -> Result<std::collections::HashMap<i32, (String, String, String)>, DbError> {
+    if ids.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+    let linhas: Vec<(i32, String, String, String)> = sqlx::query_as(
+        r#"SELECT id, COALESCE(arquivo_nome, ''), COALESCE(extracao_status, ''),
+                  COALESCE(extracao_erro, '')
+           FROM oraculo_treinamento
+           WHERE tenant_id = $1 AND id = ANY($2) AND arquivo_chave IS NOT NULL"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(ids)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(linhas
+        .into_iter()
+        .map(|(id, nome, status, erro)| (id, (nome, status, erro)))
+        .collect())
+}

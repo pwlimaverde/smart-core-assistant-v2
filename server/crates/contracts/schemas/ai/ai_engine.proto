@@ -87,6 +87,19 @@ message AnalyseResponse {
   repeated Entidade entidades = 2;
 }
 
+// --- ExtrairTextoDocumento (B9 / N10 E5) ---
+// Texto de um documento de treinamento (pdf, docx, xlsx, txt, csv). Sem LLM:
+// e leitura do arquivo. O texto nunca vai para log - so a contagem.
+message ExtrairTextoDocumentoRequest {
+  string tenant_id = 1;
+  MediaRef media = 2; // URL pre-assinada de leitura + mimetype + nome
+}
+message ExtrairTextoDocumentoResponse {
+  string texto = 1;
+  string formato = 2;  // pdf | docx | xlsx | txt | csv
+  int32 caracteres = 3;
+}
+
 // --- Embed ---
 message EmbedRequest {
   string tenant_id = 1;
@@ -171,4 +184,5 @@ service IaEngineService {
   rpc Embed(EmbedRequest) returns (EmbedResponse);
   rpc Responder(ResponderRequest) returns (ResponderResponse);
   rpc Sentimento(SentimentoRequest) returns (SentimentoResponse);
+  rpc ExtrairTextoDocumento(ExtrairTextoDocumentoRequest) returns (ExtrairTextoDocumentoResponse);
 }

@@ -68,6 +68,17 @@ table AnalyseResponse {
   entidades:[smartcore.contracts.ai.Entidade];
 }
 
+table ExtrairTextoDocumentoRequest {
+  tenant_id:string;
+  media:smartcore.contracts.ai.MediaRef;
+}
+
+table ExtrairTextoDocumentoResponse {
+  texto:string;
+  formato:string;
+  caracteres:int;
+}
+
 table EmbedRequest {
   tenant_id:string;
   textos:[string];

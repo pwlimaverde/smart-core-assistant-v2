@@ -609,6 +609,10 @@ async fn main() -> anyhow::Result<()> {
     let state_for_query_compose = state_clone.clone();
     let s_trn_criar = state_clone.clone();
     let s_trn_feedback = state_clone.clone();
+    let s_trn_autorizar_arquivo = state_clone.clone();
+    let s_trn_criar_arquivo = state_clone.clone();
+    let s_trn_extracoes = state_clone.clone();
+    let s_trn_registrar_extracao = state_clone.clone();
     let s_trn_listar = state_clone.clone();
     let s_trn_obter = state_clone.clone();
     let s_trn_finalizar = state_clone.clone();
@@ -897,6 +901,40 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(async move {
                 handler_create_treinamento(state.treinamento.as_ref(), state.audit.as_ref(), env)
                     .await
+            })
+        })
+        .route("AutorizarUploadTreinamento", move |env| {
+            let state = s_trn_autorizar_arquivo.clone();
+            Box::pin(async move {
+                handler_autorizar_upload_treinamento(state.treinamento.as_ref(), env).await
+            })
+        })
+        .route("CriarTreinamentoComArquivo", move |env| {
+            let state = s_trn_criar_arquivo.clone();
+            Box::pin(async move {
+                handler_criar_treinamento_com_arquivo(
+                    state.treinamento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("ListarExtracoesPendentes", move |env| {
+            let state = s_trn_extracoes.clone();
+            Box::pin(async move {
+                handler_listar_extracoes_pendentes(state.treinamento.as_ref(), env).await
+            })
+        })
+        .route("RegistrarExtracaoTreinamento", move |env| {
+            let state = s_trn_registrar_extracao.clone();
+            Box::pin(async move {
+                handler_registrar_extracao_treinamento(
+                    state.treinamento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
             })
         })
         .route("RegistrarFeedbackTeste", move |env| {
@@ -6642,6 +6680,196 @@ async fn handler_registrar_feedback_teste(
     }
 }
 
+/// B9 (N10 E5) — passo 1 do upload de arquivo de treinamento: quota e chave.
+async fn handler_autorizar_upload_treinamento(
+    store: &dyn ports::TreinamentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let bytes = payload.get("bytes").and_then(|v| v.as_i64()).unwrap_or(0);
+    if bytes <= 0 {
+        return erro(
+            error_core::AppError::Validation("arquivo vazio".into()),
+            &env,
+        );
+    }
+    let ctx = contexto_do_envelope(&env);
+    match store.autorizar_upload_treinamento(&ctx, bytes).await {
+        Ok(chave) => ok_reply(
+            &env,
+            "AutorizarUploadTreinamentoReply",
+            serde_json::json!({ "chave": chave }),
+        ),
+        Err(err) => erro(err.into(), &env),
+    }
+}
+
+/// B9 (N10 E5) — passo 3: o arquivo já foi conferido no bucket pelo runtime;
+/// cria o treinamento com a extração pendente.
+///
+/// Auditado (`treinamento.arquivo_enviado`): material de treinamento vira
+/// comportamento do bot, e a trilha precisa responder "de onde saiu essa
+/// resposta". O nome do arquivo vai para a trilha (é escolha de quem enviou); o
+/// conteúdo, nunca.
+#[tracing::instrument(skip_all, fields(rpc = "CriarTreinamentoComArquivo", tenant_id = %env.tenant_id))]
+async fn handler_criar_treinamento_com_arquivo(
+    store: &dyn ports::TreinamentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let texto = |chave: &str| {
+        payload
+            .get(chave)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    let novo = infrastructure_postgres::treinamento::treinamentos::NovoTreinamentoComArquivo {
+        tag: texto("tag"),
+        grupo: texto("grupo"),
+        chave: texto("chave"),
+        nome_arquivo: texto("nome_arquivo"),
+        mimetype: texto("mimetype"),
+        bytes: payload.get("bytes").and_then(|v| v.as_i64()).unwrap_or(0),
+    };
+    if novo.tag.is_empty() || novo.grupo.is_empty() {
+        return erro(
+            error_core::AppError::Validation("informe a tag e o grupo".into()),
+            &env,
+        );
+    }
+    // A chave tem de ser das que o servidor gera: aceitar qualquer uma deixaria
+    // o cliente apontar o treinamento para a mídia de uma conversa.
+    if !novo.chave.starts_with("treinamento/") || novo.bytes <= 0 {
+        return erro(
+            error_core::AppError::Validation("arquivo de treinamento inválido".into()),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    let (nome, bytes, mimetype) = (novo.nome_arquivo.clone(), novo.bytes, novo.mimetype.clone());
+    match store.criar_treinamento_com_arquivo(&ctx, novo).await {
+        Ok(t) => {
+            audit
+                .publish(
+                    &env,
+                    "treinamento.arquivo_enviado",
+                    format!("Arquivo de treinamento '{}/{}' enviado", t.grupo, t.tag),
+                    serde_json::json!({
+                        "id": t.id,
+                        "tag": t.tag,
+                        "grupo": t.grupo,
+                        "nome_arquivo": nome,
+                        "bytes": bytes,
+                        "mimetype": mimetype,
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "CriarTreinamentoComArquivoReply",
+                serde_json::json!(t),
+            )
+        }
+        Err(err) => erro(err.into(), &env),
+    }
+}
+
+/// B9 (N10 E5) — a fila da extração, para o scheduler. Teto de 50 por lote: cada
+/// item é um documento inteiro a baixar e ler.
+async fn handler_listar_extracoes_pendentes(
+    store: &dyn ports::TreinamentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let limite = payload
+        .get("limite")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(5)
+        .clamp(1, 50);
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_extracoes_pendentes(&ctx, limite).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListarExtracoesPendentesReply",
+            serde_json::json!({ "pendentes": itens }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// B9 (N10 E5) — grava o que a extração devolveu. A falha é auditada
+/// (`treinamento.extracao_falhou`) com o motivo; o texto extraído, nunca.
+async fn handler_registrar_extracao_treinamento(
+    store: &dyn ports::TreinamentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    use infrastructure_postgres::treinamento::treinamentos::ResultadoExtracao;
+
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let Some(id) = payload
+        .get("treinamento_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32)
+    else {
+        return erro(
+            error_core::AppError::Validation("treinamento_id ausente".into()),
+            &env,
+        );
+    };
+    let resultado = match (
+        payload.get("texto").and_then(|v| v.as_str()),
+        payload.get("erro").and_then(|v| v.as_str()),
+    ) {
+        (Some(texto), _) if !texto.trim().is_empty() => ResultadoExtracao::Texto(texto.to_string()),
+        (_, Some(motivo)) if !motivo.trim().is_empty() => {
+            ResultadoExtracao::Falha(motivo.trim().to_string())
+        }
+        _ => {
+            return erro(
+                error_core::AppError::Validation("informe o texto ou o erro".into()),
+                &env,
+            )
+        }
+    };
+    let falhou = match &resultado {
+        ResultadoExtracao::Falha(motivo) => Some(motivo.clone()),
+        ResultadoExtracao::Texto(_) => None,
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .registrar_extracao_treinamento(&ctx, id, resultado)
+        .await
+    {
+        Ok(gravou) => {
+            if let (true, Some(motivo)) = (gravou, falhou) {
+                audit
+                    .publish(
+                        &env,
+                        "treinamento.extracao_falhou",
+                        "Não foi possível extrair o texto do arquivo de treinamento".to_string(),
+                        serde_json::json!({ "id": id, "motivo": motivo }),
+                    )
+                    .await;
+            }
+            ok_reply(
+                &env,
+                "RegistrarExtracaoTreinamentoReply",
+                serde_json::json!({ "registrado": gravou }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
 // --- Vetorização (scheduler do worker) e curadoria de intenções ---
 //
 // Sem a fila de vetorização, o material treinado nunca vira vetor e o RAG
@@ -10473,6 +10701,111 @@ mod tests_atendimento_cliente_unit {
         assert_eq!(resp.kind, MessageKind::Reply as i32);
         let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
         assert_eq!(body["assunto_definido"], true);
+    }
+
+    /// B9 (N10 E5): a chave tem de ser das que o servidor gera.
+    #[tokio::test]
+    async fn criar_treinamento_com_arquivo_recusa_chave_de_fora() {
+        let store = crate::ports::MockTreinamentoStore::new();
+        let audit = crate::ports::MockAuditPort::new();
+        let env = envelope_com_payload(
+            "CriarTreinamentoComArquivo",
+            serde_json::json!({
+                "tag": "horarios",
+                "grupo": "atendimento",
+                "chave": "outbound/12/abc",
+                "nome_arquivo": "horarios.pdf",
+                "mimetype": "application/pdf",
+                "bytes": 2048,
+            }),
+        );
+
+        let resp = handler_criar_treinamento_com_arquivo(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    #[tokio::test]
+    async fn criar_treinamento_com_arquivo_audita_o_envio() {
+        let mut store = crate::ports::MockTreinamentoStore::new();
+        store
+            .expect_criar_treinamento_com_arquivo()
+            .times(1)
+            .withf(|_, novo| novo.chave == "treinamento/xyz" && novo.bytes == 2048)
+            .returning(|_, novo| {
+                Ok(crate::ports::TreinamentoResumo {
+                    id: 3,
+                    tag: novo.tag,
+                    grupo: novo.grupo,
+                    arquivo_nome: novo.nome_arquivo,
+                    extracao_status: "pendente".to_string(),
+                    ..Default::default()
+                })
+            });
+        let mut audit = crate::ports::MockAuditPort::new();
+        audit
+            .expect_publish()
+            .times(1)
+            .withf(|_, _, _, contexto| {
+                contexto["nome_arquivo"] == "horarios.pdf" && contexto["bytes"] == 2048
+            })
+            .returning(|_, _, _, _| ());
+        let env = envelope_com_payload(
+            "CriarTreinamentoComArquivo",
+            serde_json::json!({
+                "tag": "horarios",
+                "grupo": "atendimento",
+                "chave": "treinamento/xyz",
+                "nome_arquivo": "horarios.pdf",
+                "mimetype": "application/pdf",
+                "bytes": 2048,
+            }),
+        );
+
+        let resp = handler_criar_treinamento_com_arquivo(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["extracao_status"], "pendente");
+    }
+
+    /// B9 (N10 E5): falha de extração vai para a trilha com o motivo; sucesso não.
+    #[tokio::test]
+    async fn registrar_extracao_audita_so_a_falha() {
+        use infrastructure_postgres::treinamento::treinamentos::ResultadoExtracao;
+        let mut store = crate::ports::MockTreinamentoStore::new();
+        store
+            .expect_registrar_extracao_treinamento()
+            .times(2)
+            .returning(|_, _, _| Ok(true));
+        let mut audit = crate::ports::MockAuditPort::new();
+        audit
+            .expect_publish()
+            .times(1)
+            .withf(|_, _, _, contexto| contexto["motivo"] == "o PDF está protegido por senha")
+            .returning(|_, _, _, _| ());
+
+        let falha = envelope_com_payload(
+            "RegistrarExtracaoTreinamento",
+            serde_json::json!({ "treinamento_id": 3, "erro": "o PDF está protegido por senha" }),
+        );
+        let resp = handler_registrar_extracao_treinamento(&store, &audit, falha).await;
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+
+        let sucesso = envelope_com_payload(
+            "RegistrarExtracaoTreinamento",
+            serde_json::json!({ "treinamento_id": 3, "texto": "Abrimos às 8h." }),
+        );
+        let resp = handler_registrar_extracao_treinamento(&store, &audit, sucesso).await;
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+
+        let vazio = envelope_com_payload(
+            "RegistrarExtracaoTreinamento",
+            serde_json::json!({ "treinamento_id": 3 }),
+        );
+        let resp = handler_registrar_extracao_treinamento(&store, &audit, vazio).await;
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+        let _ = ResultadoExtracao::Texto(String::new());
     }
 
     /// HAPPY PATH: upsert_contact devolve o contato salvo.

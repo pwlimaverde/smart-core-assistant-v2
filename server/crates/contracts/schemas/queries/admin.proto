@@ -1182,6 +1182,8 @@ service AdminService {
   // RAG -> LLM), sem gravar atendimento nenhum. Validar o treinamento pelo
   // WhatsApp de verdade obrigaria a usar um numero real e sujar o historico.
   rpc TestarPergunta(TestarPerguntaRequest) returns (TestarPerguntaResponse);
+  rpc SolicitarUploadTreinamento(SolicitarUploadTreinamentoRequest) returns (SolicitarUploadTreinamentoResponse);
+  rpc CreateMyTreinamentoComArquivo(CreateMyTreinamentoComArquivoRequest) returns (MyTreinamentoResponse);
   rpc RegistrarFeedbackTeste(RegistrarFeedbackTesteRequest) returns (RegistrarFeedbackTesteResponse);
   rpc GetMyTreinamento(GetMyTreinamentoRequest) returns (MyTreinamentoResponse);
   rpc FinalizarMyTreinamento(FinalizarMyTreinamentoRequest) returns (SimpleOkResponse);
@@ -1650,6 +1652,33 @@ message MyTreinamento {
   bool vetorizado = 6;
   int64 criado_em = 7;
   int64 atualizado_em = 8;
+  // B9 (N10 E5) - vazios quando o treinamento e de texto colado.
+  string arquivo_nome = 9;
+  string extracao_status = 10; // pendente | extraido | falhou | vazio
+  string extracao_erro = 11;   // motivo pronto para ler
+}
+
+// B9 (N10 E5) - passo 1 do treinamento por arquivo: onde subir.
+message SolicitarUploadTreinamentoRequest {
+  string nome_arquivo = 1;
+  string mimetype = 2;
+  int64 bytes = 3;
+}
+
+message SolicitarUploadTreinamentoResponse {
+  string url_upload = 1;          // credencial temporaria - nunca logar
+  string chave = 2;
+  string content_type = 3;        // o PUT tem de mandar exatamente este valor
+  int64 expira_em_segundos = 4;
+}
+
+// B9 (N10 E5) - passo 3: o arquivo subiu; cria o treinamento.
+message CreateMyTreinamentoComArquivoRequest {
+  string tag = 1;
+  string grupo = 2;
+  string chave = 3;
+  string nome_arquivo = 4;
+  string mimetype = 5;
 }
 
 message CreateMyTreinamentoRequest {

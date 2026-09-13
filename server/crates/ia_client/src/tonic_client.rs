@@ -72,6 +72,28 @@ fn historico_para_proto(turnos: Vec<ChatTurnInput>) -> pb::ChatHistory {
 
 #[async_trait]
 impl IaEngineClient for TonicIaEngineClient {
+    async fn extrair_texto_documento(
+        &self,
+        req: crate::client::ExtrairTextoInput,
+        traceparent: &str,
+    ) -> Result<crate::client::ExtrairTextoOutput, IaEngineError> {
+        let payload = pb::ExtrairTextoDocumentoRequest {
+            tenant_id: req.tenant_id,
+            media: Some(media_para_proto(req.media)),
+        };
+        let mut client = self.client.clone();
+        let resp = client
+            .extrair_texto_documento(com_traceparent(payload, traceparent))
+            .await
+            .map_err(mapear_status)?
+            .into_inner();
+        Ok(crate::client::ExtrairTextoOutput {
+            texto: resp.texto,
+            formato: resp.formato,
+            caracteres: resp.caracteres,
+        })
+    }
+
     async fn transcribe(
         &self,
         req: TranscribeInput,

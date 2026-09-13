@@ -36,7 +36,30 @@ fn resumo(t: Treinamento) -> TreinamentoResumo {
         vetorizado: t.treinamento_vetorizado,
         criado_em: t.data_criacao.timestamp_millis(),
         atualizado_em: t.data_atualizacao.timestamp_millis(),
+        arquivo_nome: String::new(),
+        extracao_status: String::new(),
+        extracao_erro: String::new(),
     }
+}
+
+/// B9 (N10 E5) — completa os resumos com a situação dos que vieram de arquivo.
+async fn anexar_arquivos(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    ctx: &RequestContext,
+    resumos: &mut [TreinamentoResumo],
+) -> Result<(), DbError> {
+    let ids: Vec<i32> = resumos.iter().map(|r| r.id).collect();
+    let situacao =
+        infrastructure_postgres::treinamento::treinamentos::situacao_dos_arquivos(tx, ctx, &ids)
+            .await?;
+    for r in resumos.iter_mut() {
+        if let Some((nome, status, erro)) = situacao.get(&r.id) {
+            r.arquivo_nome = nome.clone();
+            r.extracao_status = status.clone();
+            r.extracao_erro = erro.clone();
+        }
+    }
+    Ok(())
 }
 
 /// Implementação Postgres da port Treinamento/RAG. Tenant-scoped (RLS ativa via
@@ -143,6 +166,99 @@ impl TreinamentoStore for PgTreinamentoStore {
         .await
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, bytes = bytes))]
+    async fn autorizar_upload_treinamento(
+        &self,
+        ctx: &RequestContext,
+        bytes: i64,
+    ) -> Result<String, DbError> {
+        ctx.exigir_qualquer(&["treinamento:write", "tenant:admin"])?;
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            if !infrastructure_postgres::treinamento::treinamentos::quota_comporta(
+                &mut tx,
+                ctx.tenant_id,
+                bytes,
+            )
+            .await?
+            {
+                return Err(DbError::ConfigError(
+                    "limite de armazenamento do plano atingido".to_string(),
+                ));
+            }
+            let chave = infrastructure_postgres::treinamento::treinamentos::chave_de_treinamento();
+            Ok((chave, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, bytes = novo.bytes))]
+    async fn criar_treinamento_com_arquivo(
+        &self,
+        ctx: &RequestContext,
+        novo: infrastructure_postgres::treinamento::treinamentos::NovoTreinamentoComArquivo,
+    ) -> Result<TreinamentoResumo, DbError> {
+        let repo = PostgresTreinamentoRepository;
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let id = infrastructure_postgres::treinamento::treinamentos::criar_com_arquivo(
+                &mut tx, &ctx, &novo,
+            )
+            .await?;
+            let mut criado: Vec<TreinamentoResumo> = repo
+                .buscar_por_id(&mut tx, &ctx, id)
+                .await?
+                .map(resumo)
+                .into_iter()
+                .collect();
+            anexar_arquivos(&mut tx, &ctx, &mut criado).await?;
+            let resumo = criado.pop().ok_or(DbError::NotFound)?;
+            Ok((resumo, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(limite = limite))]
+    async fn listar_extracoes_pendentes(
+        &self,
+        _ctx: &RequestContext,
+        limite: i64,
+    ) -> Result<Vec<infrastructure_postgres::treinamento::treinamentos::ExtracaoPendente>, DbError>
+    {
+        if self.admin_pool.is_none() {
+            tracing::warn!(
+                "listar_extracoes_pendentes sem DATABASE_ADMIN_URL: a RLS bloqueará a \
+                 varredura cross-tenant e a fila virá sempre vazia"
+            );
+        }
+        let pool = self.admin_pool.as_ref().unwrap_or(&self.pool);
+        let mut tx = pool.begin().await?;
+        let itens = infrastructure_postgres::treinamento::treinamentos::listar_extracoes_pendentes(
+            &mut tx, limite,
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(itens)
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn registrar_extracao_treinamento(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        resultado: infrastructure_postgres::treinamento::treinamentos::ResultadoExtracao,
+    ) -> Result<bool, DbError> {
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let gravou = infrastructure_postgres::treinamento::treinamentos::registrar_extracao(
+                &mut tx, tenant_id, id, &resultado,
+            )
+            .await?;
+            Ok((gravou, tx))
+        })
+        .await
+    }
+
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
     async fn listar_treinamentos(
         &self,
@@ -153,7 +269,9 @@ impl TreinamentoStore for PgTreinamentoStore {
 
         run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
             let linhas = repo.listar_por_tenant(&mut tx, &ctx).await?;
-            Ok((linhas.into_iter().map(resumo).collect(), tx))
+            let mut resumos: Vec<TreinamentoResumo> = linhas.into_iter().map(resumo).collect();
+            anexar_arquivos(&mut tx, &ctx, &mut resumos).await?;
+            Ok((resumos, tx))
         })
         .await
     }
@@ -168,8 +286,14 @@ impl TreinamentoStore for PgTreinamentoStore {
         let ctx = ctx.clone();
 
         run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
-            let achado = repo.buscar_por_id(&mut tx, &ctx, id).await?;
-            Ok((achado.map(resumo), tx))
+            let mut achado: Vec<TreinamentoResumo> = repo
+                .buscar_por_id(&mut tx, &ctx, id)
+                .await?
+                .map(resumo)
+                .into_iter()
+                .collect();
+            anexar_arquivos(&mut tx, &ctx, &mut achado).await?;
+            Ok((achado.pop(), tx))
         })
         .await
     }

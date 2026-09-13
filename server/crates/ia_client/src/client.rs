@@ -141,6 +141,19 @@ pub struct SentimentoOutput {
     pub feedback: String,
 }
 
+/// B9 (N10 E5) — documento de treinamento a ler, por URL pré-assinada.
+#[derive(Debug, Clone)]
+pub struct ExtrairTextoInput {
+    pub tenant_id: String,
+    pub media: MediaRefInput,
+}
+#[derive(Debug, Clone, Default)]
+pub struct ExtrairTextoOutput {
+    pub texto: String,
+    pub formato: String,
+    pub caracteres: i32,
+}
+
 /// Erro do cliente `ia_engine`, já classificado por retentabilidade (usado pelo
 /// decorator `ResilientIaEngine`). `Timeout`/`Unavailable` são transitórios
 /// (retry vale a pena); `Invalid`/`Internal` são definitivos.
@@ -212,4 +225,11 @@ pub trait IaEngineClient: Send + Sync {
         req: SentimentoInput,
         traceparent: &str,
     ) -> Result<SentimentoOutput, IaEngineError>;
+
+    /// B9 (N10 E5) — texto de um documento de treinamento. Sem LLM.
+    async fn extrair_texto_documento(
+        &self,
+        req: ExtrairTextoInput,
+        traceparent: &str,
+    ) -> Result<ExtrairTextoOutput, IaEngineError>;
 }

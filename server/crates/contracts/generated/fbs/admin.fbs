@@ -1237,6 +1237,30 @@ table MyTreinamento {
   vetorizado:bool;
   criado_em:long;
   atualizado_em:long;
+  arquivo_nome:string;
+  extracao_status:string;
+  extracao_erro:string;
+}
+
+table SolicitarUploadTreinamentoRequest {
+  nome_arquivo:string;
+  mimetype:string;
+  bytes:long;
+}
+
+table SolicitarUploadTreinamentoResponse {
+  url_upload:string;
+  chave:string;
+  content_type:string;
+  expira_em_segundos:long;
+}
+
+table CreateMyTreinamentoComArquivoRequest {
+  tag:string;
+  grupo:string;
+  chave:string;
+  nome_arquivo:string;
+  mimetype:string;
 }
 
 table CreateMyTreinamentoRequest {
