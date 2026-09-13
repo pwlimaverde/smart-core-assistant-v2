@@ -213,6 +213,61 @@ fn erro_de_pagina(titulo: &str, detalhe: &str) -> Response {
 /// O `iss` também vai nas respostas de erro de propósito: sem ele, um cliente
 /// que fale com vários AS não sabe **qual** deles recusou, e a mitigação de
 /// mix-up deixa de valer justamente no caminho de erro, que é o mais explorado.
+/// A origem do endereço de retorno, no formato que o `form-action` do CSP aceita.
+///
+/// `None` quando não dá para montar uma origem segura — e aí a tela fica só com
+/// `'self'`, que é o comportamento antigo.
+fn origem_de_retorno(redirect_uri: &str) -> Option<String> {
+    let url = url::Url::parse(redirect_uri).ok()?;
+    let origem = match url.scheme() {
+        "http" | "https" => {
+            let host = url.host_str()?;
+            match url.port() {
+                Some(porta) => format!("{}://{}:{}", url.scheme(), host, porta),
+                None => format!("{}://{}", url.scheme(), host),
+            }
+        }
+        // Esquema próprio de app de desktop (ex.: `cursor://`).
+        outro => format!("{outro}:"),
+    };
+    // Nada que feche a diretiva ou abra outra: o valor vai para um header.
+    if origem
+        .chars()
+        .any(|c| c.is_whitespace() || matches!(c, ';' | ',' | '\'' | '"'))
+    {
+        return None;
+    }
+    Some(origem)
+}
+
+/// CSP das telas do fluxo de autorização.
+///
+/// O `form-action` também vale para o **redirecionamento** que responde ao
+/// formulário: com só `'self'`, o navegador bloqueava o 303 de volta ao cliente
+/// (`https://claude.ai/api/mcp/auth_callback`, `http://localhost:…/callback`)
+/// depois de "Aprovar", e a tela ficava parada sem erro nenhum. A origem exata do
+/// retorno deste pedido entra na lista — só ela, não "qualquer https".
+fn csp_do_fluxo(redirect_uri: &str) -> String {
+    let retorno = origem_de_retorno(redirect_uri)
+        .map(|o| format!(" {o}"))
+        .unwrap_or_default();
+    format!(
+        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'{retorno};          base-uri 'none'; frame-ancestors 'none'"
+    )
+}
+
+/// Uma tela do fluxo (login ou consentimento) com a CSP que deixa o formulário
+/// voltar ao cliente.
+fn tela_do_fluxo(status: StatusCode, corpo: String, redirect_uri: &str) -> Response {
+    let mut resposta = (status, Html(corpo)).into_response();
+    if let Ok(valor) = header::HeaderValue::from_str(&csp_do_fluxo(redirect_uri)) {
+        resposta
+            .headers_mut()
+            .insert(header::CONTENT_SECURITY_POLICY, valor);
+    }
+    resposta
+}
+
 fn erro_por_redirect(
     redirect_uri: &str,
     issuer: &str,
@@ -378,7 +433,11 @@ async fn authorize(
         );
     }
 
-    Html(html::tela_login(&ticket, &metadata.client_name, None)).into_response()
+    tela_do_fluxo(
+        StatusCode::OK,
+        html::tela_login(&ticket, &metadata.client_name, None),
+        redirect_uri,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -424,15 +483,11 @@ async fn authorize_login(
             } else {
                 "E-mail ou senha incorretos."
             };
-            return (
+            return tela_do_fluxo(
                 StatusCode::UNAUTHORIZED,
-                Html(html::tela_login(
-                    &form.ticket,
-                    &requisicao.client_name,
-                    Some(msg),
-                )),
-            )
-                .into_response();
+                html::tela_login(&form.ticket, &requisicao.client_name, Some(msg)),
+                &requisicao.redirect_uri,
+            );
         }
     };
 
@@ -484,16 +539,19 @@ async fn authorize_login(
         client_uri: None,
     };
 
-    Html(html::tela_consentimento(
-        &ticket_autenticado,
-        &metadata,
+    tela_do_fluxo(
+        StatusCode::OK,
+        html::tela_consentimento(
+            &ticket_autenticado,
+            &metadata,
+            &requisicao.redirect_uri,
+            &escopos_ofertaveis,
+            &requisicao.escopos_pedidos,
+            requisicao.somente_localhost,
+            estado.config.janela_revogacao_min(),
+        ),
         &requisicao.redirect_uri,
-        &escopos_ofertaveis,
-        &requisicao.escopos_pedidos,
-        requisicao.somente_localhost,
-        estado.config.janela_revogacao_min(),
-    ))
-    .into_response()
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -1344,5 +1402,39 @@ mod tests {
         assert_eq!(partes[0], "00");
         assert_eq!(partes[1].len(), 32);
         assert_eq!(partes[2].len(), 16);
+    }
+}
+
+#[cfg(test)]
+mod tests_csp_do_fluxo {
+    use super::{csp_do_fluxo, origem_de_retorno};
+
+    #[test]
+    fn libera_a_origem_exata_do_retorno() {
+        let csp = csp_do_fluxo("https://claude.ai/api/mcp/auth_callback");
+        assert!(
+            csp.contains("form-action 'self' https://claude.ai;"),
+            "{csp}"
+        );
+        assert!(csp.contains("default-src 'none'"));
+        assert_eq!(
+            origem_de_retorno("http://localhost:33418/callback").as_deref(),
+            Some("http://localhost:33418")
+        );
+        assert_eq!(
+            origem_de_retorno("http://127.0.0.1/callback").as_deref(),
+            Some("http://127.0.0.1")
+        );
+        assert_eq!(
+            origem_de_retorno("cursor://anysphere/mcp").as_deref(),
+            Some("cursor:")
+        );
+    }
+
+    #[test]
+    fn endereco_invalido_fica_so_com_self() {
+        assert_eq!(origem_de_retorno("nao e url"), None);
+        let csp = csp_do_fluxo("nao e url");
+        assert!(csp.contains("form-action 'self';"), "{csp}");
     }
 }

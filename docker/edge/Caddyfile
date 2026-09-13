@@ -175,7 +175,10 @@ auth.smartcoreassistant.com.br {
 	# uma pagina que exibe `client_name` vindo de terceiro — mesmo que o escape
 	# do lado Rust falhasse, nao haveria como executar nada.
 	header {
-		Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+		# `?` = só quando o control_plane não mandou a sua. As telas do fluxo mandam,
+		# com a origem do retorno no form-action; sem isso o navegador bloqueia o
+		# redirecionamento de volta ao cliente depois de "Aprovar".
+		?Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
@@ -203,7 +206,10 @@ auth.dev.smartcoreassistant.com.br {
 	encode gzip zstd
 
 	header {
-		Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
+		# `?` = só quando o control_plane não mandou a sua. As telas do fluxo mandam,
+		# com a origem do retorno no form-action; sem isso o navegador bloqueia o
+		# redirecionamento de volta ao cliente depois de "Aprovar".
+		?Content-Security-Policy "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
