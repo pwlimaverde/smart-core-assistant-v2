@@ -475,6 +475,7 @@ message AtendimentoResumo {
   int64 data_ultima_mensagem = 11;
   optional int32 sentimento_nota = 12;    // última leitura de sentimento da IA (N6.5)
   optional string sentimento_label = 13; // ex.: positivo/neutro/negativo
+  int32 nao_lidas = 14;                  // B6 (N9/E4): mensagens do contato ainda não lidas
 }
 
 message ListAtendimentosRequest {
@@ -1178,6 +1179,8 @@ service AdminService {
   rpc ListMyWhatsappInstances(ListMyWhatsappInstancesRequest) returns (ListMyWhatsappInstancesResponse);
   rpc DefinirRespostaBotInstancia(DefinirRespostaBotInstanciaRequest) returns (DefinirRespostaBotInstanciaResponse);
   rpc DefinirBotDaConversa(DefinirBotDaConversaRequest) returns (DefinirBotDaConversaResponse);
+  // B6 (N9/E4): abrir a conversa e chegar ao fim dela marca o que o contato mandou.
+  rpc MarcarAtendimentoLido(MarcarAtendimentoLidoRequest) returns (MarcarAtendimentoLidoResponse);
   rpc ReconnectMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
   rpc DeleteMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
 
@@ -1594,6 +1597,14 @@ message DefinirBotDaConversaRequest {
 
 message DefinirBotDaConversaResponse {
   bool habilitado = 1;
+}
+
+message MarcarAtendimentoLidoRequest {
+  int32 atendimento_id = 1;
+}
+
+message MarcarAtendimentoLidoResponse {
+  int32 marcadas = 1; // quantas mensagens deixaram de estar não lidas agora
 }
 
 message ListMyWhatsappInstancesRequest {}

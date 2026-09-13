@@ -15,10 +15,70 @@ ChatController _controller(FakeAtendimentoGateway gateway) {
     getThreadUsecase: u.thread,
     sendUsecase: u.send,
     eventos: u.eventos,
+    marcarLidoUsecase: u.marcarLido,
   );
 }
 
 void main() {
+  group('marcarComoLida (B6)', () {
+    test(
+      'marca a leitura uma vez; sem mensagem nova, não volta ao servidor',
+      () async {
+        final gateway = FakeAtendimentoGateway(
+          thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
+        );
+        final controller = _controller(gateway);
+        await controller.abrir(5);
+
+        await controller.marcarComoLida();
+        await controller.marcarComoLida();
+
+        expect(gateway.lidosMarcados, [5]);
+        await controller.close();
+      },
+    );
+
+    test('conversa só com atendente e bot não tem o que marcar', () async {
+      final gateway = FakeAtendimentoGateway(
+        thread: [
+          mensagemDeTeste(
+            id: 1,
+            timestamp: DateTime(2026, 1, 1),
+            remetente: 'atendente',
+          ),
+          mensagemDeTeste(
+            id: 2,
+            timestamp: DateTime(2026, 1, 1),
+            remetente: 'bot',
+          ),
+        ],
+      );
+      final controller = _controller(gateway);
+      await controller.abrir(5);
+
+      await controller.marcarComoLida();
+
+      expect(gateway.lidosMarcados, isEmpty);
+      await controller.close();
+    });
+
+    test('sem usecase, abrir e rolar não quebram', () async {
+      final gateway = FakeAtendimentoGateway(
+        thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
+      );
+      final u = usecasesSobre(gateway);
+      final controller = ChatController(
+        getThreadUsecase: u.thread,
+        sendUsecase: u.send,
+        eventos: u.eventos,
+      );
+      await controller.abrir(5);
+      await controller.marcarComoLida();
+      expect(gateway.lidosMarcados, isEmpty);
+      await controller.close();
+    });
+  });
+
   group('abrir', () {
     blocTest<ChatController, ViewState<ChatViewModel>>(
       'carrega o histórico e sinaliza "conectando" ao abrir o stream',

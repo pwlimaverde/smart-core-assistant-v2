@@ -21,13 +21,24 @@ class AtendimentoCardContent extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          assunto,
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: colors.fgStrong),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: Text(
+                assunto,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(color: colors.fgStrong),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (atendimento.naoLidas > 0) ...[
+              const SizedBox(width: AppSpacing.xs),
+              _NaoLidas(quantidade: atendimento.naoLidas),
+            ],
+          ],
         ),
         const SizedBox(height: AppSpacing.xs),
         Row(
@@ -51,6 +62,37 @@ class AtendimentoCardContent extends StatelessWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// B6 (N9 E4) — quantas mensagens do contato ninguém leu ainda.
+class _NaoLidas extends StatelessWidget {
+  final int quantidade;
+
+  const _NaoLidas({required this.quantidade});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final rotulo = quantidade > 99 ? '99+' : '$quantidade';
+    return Semantics(
+      label: '$quantidade mensagens não lidas',
+      excludeSemantics: true,
+      child: Container(
+        key: const ValueKey('nao-lidas'),
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+        decoration: BoxDecoration(
+          color: colors.danger,
+          borderRadius: AppRadius.sm,
+        ),
+        child: Text(
+          rotulo,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+            color: Theme.of(context).colorScheme.onError,
+          ),
+        ),
+      ),
     );
   }
 }

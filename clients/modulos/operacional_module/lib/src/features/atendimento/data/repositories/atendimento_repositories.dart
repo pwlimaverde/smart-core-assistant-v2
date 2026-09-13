@@ -403,6 +403,18 @@ final class DefinirBotDaConversaRepository
   ) => _erroDeFicha(e, s, p.atendimentoId);
 }
 
+final class MarcarAtendimentoLidoRepository
+    extends RepositoryBase<int, MarcarAtendimentoLidoParameters, FichaError> {
+  const MarcarAtendimentoLidoRepository({required super.datasource});
+
+  @override
+  FichaError mapError(
+    Object e,
+    StackTrace s,
+    MarcarAtendimentoLidoParameters p,
+  ) => _erroDeFicha(e, s, p.atendimentoId);
+}
+
 final class CriarNotaRepository
     extends RepositoryBase<Unit, CriarNotaParameters, FichaError> {
   const CriarNotaRepository({required super.datasource});

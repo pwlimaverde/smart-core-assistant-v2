@@ -455,6 +455,7 @@ table AtendimentoResumo {
   data_ultima_mensagem:long;
   sentimento_nota:int;
   sentimento_label:string;
+  nao_lidas:int;
 }
 
 table ListAtendimentosRequest {
@@ -1196,6 +1197,14 @@ table DefinirBotDaConversaRequest {
 
 table DefinirBotDaConversaResponse {
   habilitado:bool;
+}
+
+table MarcarAtendimentoLidoRequest {
+  atendimento_id:int;
+}
+
+table MarcarAtendimentoLidoResponse {
+  marcadas:int;
 }
 
 table ListMyWhatsappInstancesRequest {

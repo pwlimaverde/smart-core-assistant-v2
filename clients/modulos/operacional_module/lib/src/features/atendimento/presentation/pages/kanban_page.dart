@@ -144,6 +144,7 @@ class _KanbanPageState extends State<KanbanPage> {
   /// Ao lado do quadro quando há largura: era assim na v1, e é o que permite
   /// atender sem perder de vista a fila. Numa janela estreita, tela cheia.
   void _abrir(int atendimentoId) {
+    inject<KanbanController>().zerarNaoLidas(atendimentoId);
     if (MediaQuery.sizeOf(context).width >= _larguraParaOsDois) {
       setState(() => _conversaAberta = atendimentoId);
       return;

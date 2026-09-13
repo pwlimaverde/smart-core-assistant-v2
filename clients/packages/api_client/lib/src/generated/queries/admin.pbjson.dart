@@ -1458,6 +1458,7 @@ const AtendimentoResumo$json = {
       '10': 'sentimentoLabel',
       '17': true
     },
+    {'1': 'nao_lidas', '3': 14, '4': 1, '5': 5, '10': 'naoLidas'},
   ],
   '8': [
     {'1': '_sentimento_nota'},
@@ -1476,7 +1477,8 @@ final $typed_data.Uint8List atendimentoResumoDescriptor = $convert.base64Decode(
     'X2luaWNpbxgKIAEoA1IKZGF0YUluaWNpbxIwChRkYXRhX3VsdGltYV9tZW5zYWdlbRgLIAEoA1'
     'ISZGF0YVVsdGltYU1lbnNhZ2VtEiwKD3NlbnRpbWVudG9fbm90YRgMIAEoBUgAUg5zZW50aW1l'
     'bnRvTm90YYgBARIuChBzZW50aW1lbnRvX2xhYmVsGA0gASgJSAFSD3NlbnRpbWVudG9MYWJlbI'
-    'gBAUISChBfc2VudGltZW50b19ub3RhQhMKEV9zZW50aW1lbnRvX2xhYmVs');
+    'gBARIbCgluYW9fbGlkYXMYDiABKAVSCG5hb0xpZGFzQhIKEF9zZW50aW1lbnRvX25vdGFCEwoR'
+    'X3NlbnRpbWVudG9fbGFiZWw=');
 
 @$core.Deprecated('Use listAtendimentosRequestDescriptor instead')
 const ListAtendimentosRequest$json = {
@@ -3914,6 +3916,34 @@ final $typed_data.Uint8List definirBotDaConversaResponseDescriptor =
     $convert.base64Decode(
         'ChxEZWZpbmlyQm90RGFDb252ZXJzYVJlc3BvbnNlEh4KCmhhYmlsaXRhZG8YASABKAhSCmhhYm'
         'lsaXRhZG8=');
+
+@$core.Deprecated('Use marcarAtendimentoLidoRequestDescriptor instead')
+const MarcarAtendimentoLidoRequest$json = {
+  '1': 'MarcarAtendimentoLidoRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+  ],
+};
+
+/// Descriptor for `MarcarAtendimentoLidoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List marcarAtendimentoLidoRequestDescriptor =
+    $convert.base64Decode(
+        'ChxNYXJjYXJBdGVuZGltZW50b0xpZG9SZXF1ZXN0EiUKDmF0ZW5kaW1lbnRvX2lkGAEgASgFUg'
+        '1hdGVuZGltZW50b0lk');
+
+@$core.Deprecated('Use marcarAtendimentoLidoResponseDescriptor instead')
+const MarcarAtendimentoLidoResponse$json = {
+  '1': 'MarcarAtendimentoLidoResponse',
+  '2': [
+    {'1': 'marcadas', '3': 1, '4': 1, '5': 5, '10': 'marcadas'},
+  ],
+};
+
+/// Descriptor for `MarcarAtendimentoLidoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List marcarAtendimentoLidoResponseDescriptor =
+    $convert.base64Decode(
+        'Ch1NYXJjYXJBdGVuZGltZW50b0xpZG9SZXNwb25zZRIaCghtYXJjYWRhcxgBIAEoBVIIbWFyY2'
+        'FkYXM=');
 
 @$core.Deprecated('Use listMyWhatsappInstancesRequestDescriptor instead')
 const ListMyWhatsappInstancesRequest$json = {

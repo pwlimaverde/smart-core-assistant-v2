@@ -628,6 +628,14 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$definirBotDaConversa, request, options: options);
   }
 
+  /// B6 (N9/E4): abrir a conversa e chegar ao fim dela marca o que o contato mandou.
+  $grpc.ResponseFuture<$0.MarcarAtendimentoLidoResponse> marcarAtendimentoLido(
+    $0.MarcarAtendimentoLidoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$marcarAtendimentoLido, request, options: options);
+  }
+
   $grpc.ResponseFuture<$0.SimpleOkResponse> reconnectMyWhatsappInstance(
     $0.MyWhatsappInstanceIdRequest request, {
     $grpc.CallOptions? options,
@@ -1229,6 +1237,11 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/DefinirBotDaConversa',
       ($0.DefinirBotDaConversaRequest value) => value.writeToBuffer(),
       $0.DefinirBotDaConversaResponse.fromBuffer);
+  static final _$marcarAtendimentoLido = $grpc.ClientMethod<
+          $0.MarcarAtendimentoLidoRequest, $0.MarcarAtendimentoLidoResponse>(
+      '/smartcore.contracts.queries.AdminService/MarcarAtendimentoLido',
+      ($0.MarcarAtendimentoLidoRequest value) => value.writeToBuffer(),
+      $0.MarcarAtendimentoLidoResponse.fromBuffer);
   static final _$reconnectMyWhatsappInstance = $grpc.ClientMethod<
           $0.MyWhatsappInstanceIdRequest, $0.SimpleOkResponse>(
       '/smartcore.contracts.queries.AdminService/ReconnectMyWhatsappInstance',
@@ -2055,6 +2068,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.DefinirBotDaConversaRequest.fromBuffer(value),
         ($0.DefinirBotDaConversaResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.MarcarAtendimentoLidoRequest,
+            $0.MarcarAtendimentoLidoResponse>(
+        'MarcarAtendimentoLido',
+        marcarAtendimentoLido_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.MarcarAtendimentoLidoRequest.fromBuffer(value),
+        ($0.MarcarAtendimentoLidoResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.MyWhatsappInstanceIdRequest,
             $0.SimpleOkResponse>(
         'ReconnectMyWhatsappInstance',
@@ -2985,6 +3007,15 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.DefinirBotDaConversaResponse> definirBotDaConversa(
       $grpc.ServiceCall call, $0.DefinirBotDaConversaRequest request);
+
+  $async.Future<$0.MarcarAtendimentoLidoResponse> marcarAtendimentoLido_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MarcarAtendimentoLidoRequest> $request) async {
+    return marcarAtendimentoLido($call, await $request);
+  }
+
+  $async.Future<$0.MarcarAtendimentoLidoResponse> marcarAtendimentoLido(
+      $grpc.ServiceCall call, $0.MarcarAtendimentoLidoRequest request);
 
   $async.Future<$0.SimpleOkResponse> reconnectMyWhatsappInstance_Pre(
       $grpc.ServiceCall $call,

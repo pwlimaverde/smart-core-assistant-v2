@@ -726,3 +726,118 @@ impl MensagemRepository for PostgresMensagemRepository {
         Ok(())
     }
 }
+
+/// B6 (N9 E4) — mensagens do contato ainda não lidas, por atendimento.
+///
+/// Só as do contato: o que o atendente ou o bot mandou não é "falta responder".
+/// "Do contato" é tudo que não veio de `atendente` nem de `bot` — a mesma regra
+/// com que a conversa decide de que lado desenhar o balão.
+/// Consulta sem macro, para não depender do cache offline do sqlx.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimentos = ids.len()))]
+pub async fn contar_nao_lidas_por_atendimento(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    ids: &[i32],
+) -> Result<std::collections::HashMap<i32, i64>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    if ids.is_empty() {
+        return Ok(std::collections::HashMap::new());
+    }
+    let linhas: Vec<(i32, i64)> = sqlx::query_as(
+        r#"SELECT atendimento_id, COUNT(*)
+           FROM oraculo_mensagem
+           WHERE tenant_id = $1 AND atendimento_id = ANY($2)
+             AND remetente NOT IN ('atendente', 'bot') AND lido = false
+           GROUP BY atendimento_id"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(ids)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(linhas.into_iter().collect())
+}
+
+/// B6 — o que a leitura mudou, e para onde espelhá-la no WhatsApp.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct LeituraMarcada {
+    pub marcadas: i64,
+    /// Ids do WhatsApp só das mensagens marcadas agora: as já lidas antes não
+    /// voltam a ser avisadas ao contato.
+    pub message_ids_whatsapp: Vec<String>,
+    /// Instância (id no banco) e telefone do contato; `None` quando a conversa
+    /// não tem WhatsApp ativo — aí a leitura fica só aqui.
+    pub instance_id: Option<i32>,
+    pub telefone: Option<String>,
+}
+
+/// B6 — marca como lidas as mensagens do contato numa conversa.
+///
+/// Mesmo RBAC fino do quadro: quem não enxerga o fluxo da conversa não a marca.
+/// `data_lida` guarda o primeiro momento da leitura e não é sobrescrito.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+pub async fn marcar_lidas_do_contato(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+) -> Result<LeituraMarcada, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let fluxo: Option<(Option<i32>,)> = sqlx::query_as(
+        "SELECT fluxo_atendimento_id FROM oraculo_atendimento WHERE tenant_id = $1 AND id = $2",
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    let Some((fluxo_id,)) = fluxo else {
+        return Err(DbError::NotFound);
+    };
+    if let Some(fluxo_id) = fluxo_id {
+        ctx.exigir_fluxo(fluxo_id)?;
+    }
+
+    let marcadas: Vec<(Option<String>,)> = sqlx::query_as(
+        r#"UPDATE oraculo_mensagem
+           SET lido = true, data_lida = COALESCE(data_lida, NOW())
+           WHERE tenant_id = $1 AND atendimento_id = $2
+             AND remetente NOT IN ('atendente', 'bot') AND lido = false
+           RETURNING message_id_whatsapp"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .fetch_all(&mut **tx)
+    .await?;
+    let total = marcadas.len() as i64;
+    let message_ids_whatsapp: Vec<String> = marcadas
+        .into_iter()
+        .filter_map(|(id,)| id)
+        .filter(|id| !id.is_empty())
+        .collect();
+    if message_ids_whatsapp.is_empty() {
+        return Ok(LeituraMarcada {
+            marcadas: total,
+            ..Default::default()
+        });
+    }
+
+    let destino: Option<(i32, String)> = sqlx::query_as(
+        r#"SELECT wc.instance_id, oc.telefone
+           FROM oraculo_atendimento oa
+           JOIN oraculo_contato oc
+             ON oc.id = oa.contato_id AND oc.tenant_id = oa.tenant_id
+           JOIN whatsapp_contact wc
+             ON wc.contact_id = oc.id AND wc.tenant_id = oc.tenant_id AND wc.active = true
+           WHERE oa.tenant_id = $1 AND oa.id = $2 AND oc.telefone IS NOT NULL
+           ORDER BY wc.updated_at DESC
+           LIMIT 1"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(LeituraMarcada {
+        marcadas: total,
+        message_ids_whatsapp,
+        instance_id: destino.as_ref().map(|d| d.0),
+        telefone: destino.map(|d| d.1),
+    })
+}

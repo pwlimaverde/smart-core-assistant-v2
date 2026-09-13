@@ -24,8 +24,8 @@
 | B2 | Menu por escopo, não por `isTenantAdmin` | doc 35-agentes F2 | O papel somente-leitura (D4) existe no servidor e não na tela; pré-requisito do B3 | ✅ CI verde (`e853e19`) |
 | B3 | "O que o agente fez" — auditoria do próprio tenant | doc 35-agentes F1 | Fecha o DoD da N13: agente só é aceitável se auditável por quem o autorizou | ✅ CI verde (`a2de364`) |
 | B4 | Limiar de confiança com veto, por tenant | regras D1 | Hoje o C1 usa 0,8 fixo; um número por tenant para "quando confio na IA" | ✅ CI verde (`79bdecf`) |
-| B5 | Notificar o atendente da atribuição | regras D6 | Rodízio (D2) atribui em silêncio | ⏳ no CI |
-| B6 | Marcar como lida e contador de não lidas | N9 E4 | Sem isso o quadro não diz o que falta responder | ⬜ |
+| B5 | Notificar o atendente da atribuição | regras D6 | Rodízio (D2) atribui em silêncio | ✅ CI verde (`8757195`) |
+| B6 | Marcar como lida e contador de não lidas | N9 E4 | Sem isso o quadro não diz o que falta responder | ⏳ no CI |
 | B7 | Ajustar permissões de um agente sem desconectar | doc 35-agentes F4 | Hoje a única saída é revogar e reconectar | ⬜ |
 | B8 | Descoberta dos aplicativos conectados | doc 35-agentes F5 | Recurso que precisa ser explicado por fora não foi entregue | ⬜ |
 | B9 | IA analítica: assunto automático, feedback do teste, treinamento por arquivo | N10 E2, E6, E5 | Maior e mais caro; depende de nada acima | ⬜ |
@@ -217,3 +217,46 @@ auditado — a atribuição em si já está em `atendimento.transferido_por_ia`.
 **Fica de fora:** aviso fora do quadro (notificação do sistema operacional, som,
 e-mail). Quem está com o app aberto em outra tela vê o aviso ao voltar para o
 quadro; a conversa já estará na coluna dela.
+
+### B6 — Marcar como lida e contador de não lidas (N9 E4)
+
+**Confirmado antes de construir:** o banco já tinha `lido`/`data_lida` em
+`oraculo_mensagem`, e o `data_whatsapp` já sabia espelhar a leitura
+(`MarkWhatsappMessageRead` → `POST /message/markread`). Faltavam a rota, o
+número por conversa e o gatilho na tela.
+
+**Decisões registradas:**
+
+- **"Do contato" = nem `atendente` nem `bot`** — a mesma regra com que o balão
+  da conversa escolhe o lado. Não depende do valor exato gravado na entrada.
+- **Sem `GetNaoLidas` separado.** O quadro já lista todas as conversas visíveis,
+  com o RBAC por fluxo aplicado; um contador global em outra rota teria de
+  repetir esse filtro, e divergir dele mostraria número de conversa que a pessoa
+  não pode abrir. O sino da topbar fica para quando houver topbar fora do quadro.
+- **Gatilho:** a lista da conversa é invertida, então o fim (a mensagem mais
+  nova) é o início da rolagem. Marca quando o fim está à vista — ao abrir, ao
+  chegar mensagem e ao parar de rolar perto dele. Aberta rolada para cima, não
+  marca. Só vai ao servidor quando há mensagem do contato mais nova que a última
+  marcada.
+- **Sem auditoria** (plano N9): estado trivial e de alto volume; `data_lida` é o
+  registro, e guarda o primeiro momento da leitura.
+
+**Entregue:**
+
+- `infrastructure_postgres`: contagem de não lidas por atendimento e marcação
+  (com RBAC por fluxo), devolvendo os ids do WhatsApp das mensagens marcadas
+  agora e a instância/telefone da conversa.
+- `data_postgres`: rota `MarcarAtendimentoLido`; `ListAtendimentos` leva
+  `nao_lidas` em cada item (falhar a contagem não esconde o quadro).
+- `runtime_api`: `MarcarAtendimentoLido` com as permissões de fluxo resolvidas
+  (não passa por `encaminhar_tenant`, que as mandaria vazias) e espelho
+  best-effort no WhatsApp; `AtendimentoResumo.nao_lidas`.
+- Flutter: número no cartão do quadro (some ao abrir a conversa, sem esperar a
+  recarga); cadeia `MarcarAtendimentoLido` completa, também no gateway do desktop
+  (direto ao servidor, fora da fila offline).
+- Testes: não lidas na listagem; espelho só quando há o que espelhar; payload
+  inválido; controller marca uma vez e ignora conversa só de atendente/bot.
+
+**Fica de fora:** os ticks de leitura das mensagens **enviadas** (N9 E7) e a
+presença "digitando" (E5) — são os próximos passos da mesma fase, não deste
+bloco.

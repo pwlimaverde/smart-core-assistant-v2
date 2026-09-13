@@ -231,6 +231,17 @@ final class DefinirBotDaConversaDatasource
   }
 }
 
+final class MarcarAtendimentoLidoDatasource
+    implements Datasource<int, MarcarAtendimentoLidoParameters> {
+  final AtendimentoGateway _gateway;
+
+  const MarcarAtendimentoLidoDatasource({required this._gateway});
+
+  @override
+  Future<int> call(MarcarAtendimentoLidoParameters parameters) =>
+      _gateway.marcarAtendimentoLido(parameters.atendimentoId);
+}
+
 final class CriarNotaDatasource
     implements Datasource<Unit, CriarNotaParameters> {
   final AtendimentoGateway _gateway;

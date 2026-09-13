@@ -580,6 +580,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_iniciar_manual = state_clone.clone();
     let state_for_toggle_bot = state_clone.clone();
     let state_for_toggle_bot_conversa = state_clone.clone();
+    let state_for_marcar_lido = state_clone.clone();
     let state_for_aplicar_politica = state_clone.clone();
     let state_for_move_atendimento_etapa = state_clone.clone();
     let state_for_send_outbound_message = state_clone.clone();
@@ -653,6 +654,12 @@ async fn main() -> anyhow::Result<()> {
                     env,
                 )
                 .await
+            })
+        })
+        .route("MarcarAtendimentoLido", move |env| {
+            let state = state_for_marcar_lido.clone();
+            Box::pin(async move {
+                handler_marcar_atendimento_lido(state.atendimento.as_ref(), env).await
             })
         })
         .route("DefinirRespostaBotInstancia", move |env| {
@@ -1780,12 +1787,97 @@ async fn handler_list_atendimentos(store: &dyn ports::AtendimentoStore, env: Env
         .listar_atendimentos(&ctx, &status, departamento_id, limit)
         .await
     {
-        Ok(atendimentos) => ok_reply(
+        Ok(atendimentos) => {
+            // B6 (N9 E4) — não lidas por conversa. A contagem falhar não esconde
+            // o quadro: o cartão só fica sem o número.
+            let ids: Vec<i32> = atendimentos.iter().map(|a| a.id).collect();
+            let contagem = if ids.is_empty() {
+                std::collections::HashMap::new()
+            } else {
+                store.contar_nao_lidas(&ctx, ids).await.unwrap_or_else(|e| {
+                    tracing::warn!(erro = %e, "falha ao contar mensagens não lidas");
+                    std::collections::HashMap::new()
+                })
+            };
+            let itens: Vec<serde_json::Value> = atendimentos
+                .iter()
+                .map(|a| {
+                    let mut item = serde_json::to_value(a).unwrap_or_default();
+                    if let Some(obj) = item.as_object_mut() {
+                        obj.insert(
+                            "nao_lidas".to_string(),
+                            serde_json::json!(contagem.get(&a.id).copied().unwrap_or(0)),
+                        );
+                    }
+                    item
+                })
+                .collect();
+            ok_reply(
+                &env,
+                "ListAtendimentosReply",
+                serde_json::json!({ "atendimentos": itens }),
+            )
+        }
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// B6 (N9 E4) — marca como lidas as mensagens do contato numa conversa.
+///
+/// Sem auditoria, de propósito (plano N9): estado operacional trivial e de
+/// altíssimo volume; o `data_lida` na mensagem já é o registro. Devolve o que
+/// espelhar no WhatsApp — quem fala com o provedor é o runtime, não o banco.
+async fn handler_marcar_atendimento_lido(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(i) if i > 0 => i as i32,
+        _ => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.marcar_atendimento_lido(&ctx, atendimento_id).await {
+        Ok(leitura) => ok_reply(
             &env,
-            "ListAtendimentosReply",
-            serde_json::json!({ "atendimentos": atendimentos }),
+            "MarcarAtendimentoLidoReply",
+            serde_json::json!({
+                "marcadas": leitura.marcadas,
+                "whatsapp": espelho_da_leitura(&leitura),
+            }),
+        ),
+        Err(infrastructure_postgres::DbError::NotFound) => erro(
+            error_core::AppError::Validation("atendimento não encontrado".into()),
+            &env,
         ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// B6 — o pedido para o WhatsApp, no formato do `MarkWhatsappMessageRead`;
+/// `null` quando não há o que espelhar (nada novo lido, ou conversa sem
+/// WhatsApp ativo).
+fn espelho_da_leitura(
+    leitura: &infrastructure_postgres::atendimentos::mensagens::LeituraMarcada,
+) -> serde_json::Value {
+    match (&leitura.instance_id, &leitura.telefone) {
+        (Some(instancia), Some(telefone)) if !leitura.message_ids_whatsapp.is_empty() => {
+            serde_json::json!({
+                "id": instancia,
+                "chat": telefone,
+                "message_ids": leitura.message_ids_whatsapp,
+            })
+        }
+        _ => serde_json::Value::Null,
     }
 }
 
@@ -9981,6 +10073,92 @@ mod tests_atendimento_cliente_unit {
         assert_eq!(resp.kind, MessageKind::Reply as i32);
         let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
         assert!(body["atendimentos"].is_array());
+    }
+
+    /// B6: a listagem leva as não lidas de cada conversa.
+    #[tokio::test]
+    async fn list_atendimentos_leva_as_nao_lidas() {
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_listar_atendimentos()
+            .times(1)
+            .returning(|_, _, _, _| {
+                let a: infrastructure_postgres::atendimentos::atendimentos::Atendimento =
+                    serde_json::from_value(serde_json::json!({
+                        "id": 7, "tenant_id": uuid::Uuid::nil(), "contato_id": 1,
+                        "departamento_id": null, "fluxo_atendimento_id": null,
+                        "status": "fila", "etapa_atual_id": null,
+                        "data_inicio": "2026-09-13T10:00:00Z", "data_fim": null,
+                        "data_ultima_mensagem": null, "assunto": null, "prioridade": "normal",
+                        "atendente_humano_id": null, "contexto_conversa": {},
+                        "historico_status": [], "tags": [], "avaliacao": null, "feedback": null,
+                        "data_primeira_resposta": null, "bot_pode_atender": true,
+                        "sentimento_nota": null, "sentimento_label": null
+                    }))
+                    .expect("atendimento de teste");
+                Ok(vec![a])
+            });
+        store
+            .expect_contar_nao_lidas()
+            .times(1)
+            .withf(|_, ids| ids == &vec![7])
+            .returning(|_, _| Ok(std::collections::HashMap::from([(7, 3)])));
+        let env = envelope_com_payload("ListAtendimentos", serde_json::json!({}));
+
+        let resp = handler_list_atendimentos(&store, env).await;
+
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["atendimentos"][0]["nao_lidas"], 3);
+    }
+
+    /// B6: marcar como lida devolve o espelho para o WhatsApp só quando há o
+    /// que espelhar.
+    #[tokio::test]
+    async fn marcar_lido_devolve_o_espelho_do_whatsapp() {
+        use infrastructure_postgres::atendimentos::mensagens::LeituraMarcada;
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_marcar_atendimento_lido()
+            .times(1)
+            .withf(|_, id| *id == 9)
+            .returning(|_, _| {
+                Ok(LeituraMarcada {
+                    marcadas: 2,
+                    message_ids_whatsapp: vec!["ABC".into(), "DEF".into()],
+                    instance_id: Some(4),
+                    telefone: Some("5511999990000".into()),
+                })
+            });
+        let env = envelope_com_payload(
+            "MarcarAtendimentoLido",
+            serde_json::json!({ "atendimento_id": 9 }),
+        );
+
+        let resp = handler_marcar_atendimento_lido(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["marcadas"], 2);
+        assert_eq!(body["whatsapp"]["id"], 4);
+        assert_eq!(body["whatsapp"]["message_ids"][1], "DEF");
+
+        let sem_whatsapp = LeituraMarcada {
+            marcadas: 1,
+            message_ids_whatsapp: vec!["ABC".into()],
+            ..Default::default()
+        };
+        assert!(espelho_da_leitura(&sem_whatsapp).is_null());
+        assert!(espelho_da_leitura(&LeituraMarcada::default()).is_null());
+    }
+
+    #[tokio::test]
+    async fn marcar_lido_sem_atendimento_e_validacao() {
+        let store = MockAtendimentoStore::new();
+        let env = envelope_com_payload("MarcarAtendimentoLido", serde_json::json!({}));
+
+        let resp = handler_marcar_atendimento_lido(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
     }
 
     /// HAPPY PATH: upsert_contact devolve o contato salvo.

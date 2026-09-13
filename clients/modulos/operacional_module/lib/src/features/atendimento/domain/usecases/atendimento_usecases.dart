@@ -404,6 +404,29 @@ final class AlternarEtiquetaUsecase
   }
 }
 
+/// B6 (N9 E4) — marca como lidas as mensagens do contato; devolve quantas.
+final class MarcarAtendimentoLidoUsecase
+    extends
+        UsecaseBaseCallData<
+          int,
+          int,
+          MarcarAtendimentoLidoParameters,
+          FichaError
+        > {
+  const MarcarAtendimentoLidoUsecase({required super.repository});
+
+  @override
+  ProcessData<int, int, MarcarAtendimentoLidoParameters, FichaError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('marcarAtendimentoLido', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
 final class DefinirBotDaConversaUsecase
     extends
         UsecaseBaseCallData<

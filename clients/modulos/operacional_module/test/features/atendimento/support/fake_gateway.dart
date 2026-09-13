@@ -66,6 +66,9 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
 
   /// Último valor recebido por [definirBotDaConversa] — para verificar o repasse.
   bool? botDefinido;
+
+  /// B6 — conversas marcadas como lidas, na ordem das chamadas.
+  final List<int> lidosMarcados = [];
   (int, bool)? etiquetaAlternada;
   String? etiquetaCriada;
 
@@ -237,6 +240,13 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   }
 
   @override
+  Future<int> marcarAtendimentoLido(int atendimentoId) async {
+    lidosMarcados.add(atendimentoId);
+    if (erroFicha != null) throw erroFicha!;
+    return 1;
+  }
+
+  @override
   Future<void> definirBotDaConversa({
     required int atendimentoId,
     required bool habilitado,
@@ -285,6 +295,7 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   AlternarEtiquetaUsecase alternarEtiqueta,
   CriarNotaUsecase criarNota,
   DefinirBotDaConversaUsecase definirBot,
+  MarcarAtendimentoLidoUsecase marcarLido,
   AtendimentoEventoStream eventos,
 })
 usecasesSobre(FakeAtendimentoGateway gateway) => (
@@ -331,6 +342,11 @@ usecasesSobre(FakeAtendimentoGateway gateway) => (
   status: SetAtendimentoStatusUsecase(
     repository: SetAtendimentoStatusRepository(
       datasource: SetAtendimentoStatusDatasource(gateway: gateway),
+    ),
+  ),
+  marcarLido: MarcarAtendimentoLidoUsecase(
+    repository: MarcarAtendimentoLidoRepository(
+      datasource: MarcarAtendimentoLidoDatasource(gateway: gateway),
     ),
   ),
   ficha: GetFichaUsecase(

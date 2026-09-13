@@ -151,6 +151,15 @@ final class OperacionalModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<MarcarAtendimentoLidoUsecase>(
+      () => MarcarAtendimentoLidoUsecase(
+        repository: MarcarAtendimentoLidoRepository(
+          datasource: MarcarAtendimentoLidoDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
     i.lazySingleton<DefinirBotDaConversaUsecase>(
       () => DefinirBotDaConversaUsecase(
         repository: DefinirBotDaConversaRepository(

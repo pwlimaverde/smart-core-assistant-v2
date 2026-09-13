@@ -116,6 +116,9 @@ abstract interface class AtendimentoGateway {
     required bool habilitado,
   });
 
+  /// B6 — marca como lidas as mensagens do contato; devolve quantas mudaram.
+  Future<int> marcarAtendimentoLido(int atendimentoId);
+
   /// Anota algo na conversa. A nota é interna: o contato nunca a vê.
   Future<void> criarNota({required int atendimentoId, required String texto});
 

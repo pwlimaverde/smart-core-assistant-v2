@@ -38,6 +38,13 @@ final class DefinirBotDaConversaParameters extends Parameters {
   });
 }
 
+/// B6 (N9 E4) — marca como lidas as mensagens do contato numa conversa.
+final class MarcarAtendimentoLidoParameters extends Parameters {
+  final int atendimentoId;
+
+  const MarcarAtendimentoLidoParameters({required this.atendimentoId});
+}
+
 final class CriarNotaParameters extends Parameters {
   final int atendimentoId;
   final String texto;

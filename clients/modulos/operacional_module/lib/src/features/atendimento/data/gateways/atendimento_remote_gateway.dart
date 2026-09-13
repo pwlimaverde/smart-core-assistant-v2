@@ -239,6 +239,7 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
             : null,
         sentimentoNota: a.hasSentimentoNota() ? a.sentimentoNota : null,
         sentimentoLabel: a.hasSentimentoLabel() ? a.sentimentoLabel : null,
+        naoLidas: a.naoLidas,
       );
 
   static MensagemThread _paraMensagemThread(proto.MensagemThread m) =>
@@ -388,6 +389,14 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
         aplicar: aplicar,
       ),
     );
+  }
+
+  @override
+  Future<int> marcarAtendimentoLido(int atendimentoId) async {
+    final resp = await _client.marcarAtendimentoLido(
+      proto.MarcarAtendimentoLidoRequest(atendimentoId: atendimentoId),
+    );
+    return resp.marcadas;
   }
 
   @override

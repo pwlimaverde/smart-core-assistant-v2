@@ -405,6 +405,46 @@ impl AtendimentoStore for PgAtendimentoStore {
         .await
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimentos = ids.len()))]
+    async fn contar_nao_lidas(
+        &self,
+        ctx: &RequestContext,
+        ids: Vec<i32>,
+    ) -> Result<std::collections::HashMap<i32, i64>, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let contagem =
+                infrastructure_postgres::atendimentos::mensagens::contar_nao_lidas_por_atendimento(
+                    &mut tx, &ctx, &ids,
+                )
+                .await?;
+            Ok((contagem, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn marcar_atendimento_lido(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<infrastructure_postgres::atendimentos::mensagens::LeituraMarcada, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let leitura =
+                infrastructure_postgres::atendimentos::mensagens::marcar_lidas_do_contato(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                )
+                .await?;
+            Ok((leitura, tx))
+        })
+        .await
+    }
+
     #[tracing::instrument(
         skip_all,
         fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, bytes = bytes)

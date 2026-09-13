@@ -531,6 +531,12 @@ final class LocalEngineGateway implements AtendimentoGateway {
     );
   }
 
+  /// B6 — leitura é estado do servidor (e do WhatsApp); não entra na fila
+  /// offline: marcar lida depois, fora de ordem, não ajuda ninguém.
+  @override
+  Future<int> marcarAtendimentoLido(int atendimentoId) =>
+      _remoto.marcarAtendimentoLido(atendimentoId);
+
   @override
   Future<void> definirBotDaConversa({
     required int atendimentoId,

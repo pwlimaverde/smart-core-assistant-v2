@@ -49,6 +49,9 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
   late final FichaController _ficha;
   final _inputController = TextEditingController();
 
+  /// B6 — para saber se o fim da conversa está à vista.
+  final _rolagem = ScrollController();
+
   @override
   void initState() {
     super.initState();
@@ -56,6 +59,7 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
       getThreadUsecase: inject(),
       sendUsecase: inject(),
       eventos: inject(),
+      marcarLidoUsecase: inject(),
     );
     // Controller próprio: a ficha pode falhar sem derrubar a conversa, e um
     // estado só levaria as mensagens junto com o painel.
@@ -76,6 +80,7 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
     _controller.close();
     _ficha.close();
     _inputController.dispose();
+    _rolagem.dispose();
     super.dispose();
   }
 
@@ -83,8 +88,14 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final conversa = BlocBuilder<ChatController, ViewState<ChatViewModel>>(
+        final conversa = BlocConsumer<ChatController, ViewState<ChatViewModel>>(
           bloc: _controller,
+          // Chegou histórico ou mensagem nova: depois de desenhar, confere se o
+          // fim está à vista.
+          listenWhen: (_, atual) => atual is SuccessState<ChatViewModel>,
+          listener: (_, _) => WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _marcarSeNoFim(),
+          ),
           builder: (context, state) {
             return switch (state) {
               InitialState() || LoadingState() => const Center(
@@ -98,6 +109,8 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
                 viewModel: data,
                 inputController: _inputController,
                 onEnviar: _enviar,
+                rolagem: _rolagem,
+                aoPararDeRolar: _marcarSeNoFim,
               ),
             };
           },
@@ -131,6 +144,14 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
         );
       },
     );
+  }
+
+  /// B6 — a lista é invertida: o fim da conversa (a mensagem mais nova) é o
+  /// início da rolagem. Perto dele, a pessoa está lendo o que chegou.
+  void _marcarSeNoFim() {
+    if (!mounted) return;
+    final noFim = !_rolagem.hasClients || _rolagem.offset <= 48;
+    if (noFim) _controller.marcarComoLida();
   }
 
   Future<void> _enviar() async {
@@ -216,11 +237,15 @@ class _ChatBody extends StatelessWidget {
   final ChatViewModel viewModel;
   final TextEditingController inputController;
   final VoidCallback onEnviar;
+  final ScrollController rolagem;
+  final VoidCallback aoPararDeRolar;
 
   const _ChatBody({
     required this.viewModel,
     required this.inputController,
     required this.onEnviar,
+    required this.rolagem,
+    required this.aoPararDeRolar,
   });
 
   @override
@@ -236,15 +261,22 @@ class _ChatBody extends StatelessWidget {
                   subtitle:
                       'Envie a primeira mensagem para iniciar a conversa.',
                 )
-              : ListView.builder(
-                  reverse: true,
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  itemCount: viewModel.mensagens.length,
-                  itemBuilder: (context, index) {
-                    final mensagem = viewModel
-                        .mensagens[viewModel.mensagens.length - 1 - index];
-                    return ChatMessageBubble(mensagem: mensagem);
+              : NotificationListener<ScrollEndNotification>(
+                  onNotification: (_) {
+                    aoPararDeRolar();
+                    return false;
                   },
+                  child: ListView.builder(
+                    controller: rolagem,
+                    reverse: true,
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    itemCount: viewModel.mensagens.length,
+                    itemBuilder: (context, index) {
+                      final mensagem = viewModel
+                          .mensagens[viewModel.mensagens.length - 1 - index];
+                      return ChatMessageBubble(mensagem: mensagem);
+                    },
+                  ),
                 ),
         ),
         Padding(

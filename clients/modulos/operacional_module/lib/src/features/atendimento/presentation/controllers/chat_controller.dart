@@ -7,6 +7,7 @@ import 'package:return_success_or_error/return_success_or_error.dart';
 
 import '../../domain/errors/atendimento_errors.dart';
 import '../../domain/model/atendimento_evento.dart';
+import '../../domain/parameters/ficha_parameters.dart';
 import '../../domain/parameters/get_thread_parameters.dart';
 import '../../domain/parameters/send_outbound_message_parameters.dart';
 import '../../domain/streams/atendimento_evento_stream.dart';
@@ -26,13 +27,17 @@ final class ChatController extends BaseController<ChatViewModel> {
   final SendOutboundMessageUsecase _sendUsecase;
   final AtendimentoEventoStream _eventos;
 
+  /// B6 — opcional: sem ele a conversa abre e só não marca a leitura.
+  final MarcarAtendimentoLidoUsecase? _marcarLido;
+
   /// Dependências como private named parameters (Dart 3.12): o chamador usa
   /// `getThreadUsecase`/`sendUsecase`/`eventos`, os campos ficam privados.
   ChatController({
     required this._getThreadUsecase,
     required this._sendUsecase,
     required this._eventos,
-  });
+    MarcarAtendimentoLidoUsecase? marcarLidoUsecase,
+  }) : _marcarLido = marcarLidoUsecase;
 
   static const _backoffBase = Duration(seconds: 1);
   static const _backoffMax = Duration(seconds: 30);
@@ -44,10 +49,15 @@ final class ChatController extends BaseController<ChatViewModel> {
   bool _encerrado = false;
   int? _atendimentoId;
 
+  /// Id da mensagem do contato mais recente já marcada como lida: evita ir
+  /// ao servidor a cada rolagem quando nada novo chegou.
+  int? _ultimaMarcada;
+
   /// Abre o chat de um atendimento: carrega o histórico e conecta o stream.
   Future<void> abrir(int atendimentoId) async {
     _atendimentoId = atendimentoId;
     _tentativa = 0;
+    _ultimaMarcada = null;
     await execute(() async {
       final res = await _getThreadUsecase(
         GetThreadParameters(atendimentoId: atendimentoId),
@@ -82,6 +92,38 @@ final class ChatController extends BaseController<ChatViewModel> {
     if (res case Failure(:final error)) return error;
     await _recarregarThread();
     return null;
+  }
+
+  /// B6 (N9 E4) — a pessoa está vendo o fim da conversa: marca como lido o
+  /// que o contato mandou.
+  ///
+  /// Quem chama é a tela, que sabe se o fim está à vista — abrir a conversa
+  /// rolada para cima não conta como leitura. Só vai ao servidor quando há
+  /// mensagem do contato mais nova que a última marcada. Falha é silenciosa:
+  /// a conversa continua utilizável, e a próxima leitura tenta de novo.
+  Future<void> marcarComoLida() async {
+    final usecase = _marcarLido;
+    final atendimentoId = _atendimentoId;
+    final atual = state;
+    if (usecase == null ||
+        atendimentoId == null ||
+        atual is! SuccessState<ChatViewModel>) {
+      return;
+    }
+    final doContato = atual.data.mensagens
+        // "Do contato" = nem atendente nem bot, a mesma regra do balão e do
+        // servidor.
+        .where((m) => m.remetente != 'atendente' && m.remetente != 'bot')
+        .map((m) => m.id);
+    if (doContato.isEmpty) return;
+    final maisRecente = doContato.reduce(max);
+    final anterior = _ultimaMarcada;
+    if (anterior != null && maisRecente <= anterior) return;
+    _ultimaMarcada = maisRecente;
+    final res = await usecase(
+      MarcarAtendimentoLidoParameters(atendimentoId: atendimentoId),
+    );
+    if (res is Failure) _ultimaMarcada = anterior;
   }
 
   void _conectarStream() {

@@ -5786,6 +5786,7 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
     $fixnum.Int64? dataUltimaMensagem,
     $core.int? sentimentoNota,
     $core.String? sentimentoLabel,
+    $core.int? naoLidas,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -5803,6 +5804,7 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
       result.dataUltimaMensagem = dataUltimaMensagem;
     if (sentimentoNota != null) result.sentimentoNota = sentimentoNota;
     if (sentimentoLabel != null) result.sentimentoLabel = sentimentoLabel;
+    if (naoLidas != null) result.naoLidas = naoLidas;
     return result;
   }
 
@@ -5833,6 +5835,7 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
     ..aInt64(11, _omitFieldNames ? '' : 'dataUltimaMensagem')
     ..aI(12, _omitFieldNames ? '' : 'sentimentoNota')
     ..aOS(13, _omitFieldNames ? '' : 'sentimentoLabel')
+    ..aI(14, _omitFieldNames ? '' : 'naoLidas')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5970,6 +5973,15 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
   $core.bool hasSentimentoLabel() => $_has(12);
   @$pb.TagNumber(13)
   void clearSentimentoLabel() => $_clearField(13);
+
+  @$pb.TagNumber(14)
+  $core.int get naoLidas => $_getIZ(13);
+  @$pb.TagNumber(14)
+  set naoLidas($core.int value) => $_setSignedInt32(13, value);
+  @$pb.TagNumber(14)
+  $core.bool hasNaoLidas() => $_has(13);
+  @$pb.TagNumber(14)
+  void clearNaoLidas() => $_clearField(14);
 }
 
 class ListAtendimentosRequest extends $pb.GeneratedMessage {
@@ -15874,6 +15886,122 @@ class DefinirBotDaConversaResponse extends $pb.GeneratedMessage {
   $core.bool hasHabilitado() => $_has(0);
   @$pb.TagNumber(1)
   void clearHabilitado() => $_clearField(1);
+}
+
+class MarcarAtendimentoLidoRequest extends $pb.GeneratedMessage {
+  factory MarcarAtendimentoLidoRequest({
+    $core.int? atendimentoId,
+  }) {
+    final result = create();
+    if (atendimentoId != null) result.atendimentoId = atendimentoId;
+    return result;
+  }
+
+  MarcarAtendimentoLidoRequest._();
+
+  factory MarcarAtendimentoLidoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MarcarAtendimentoLidoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MarcarAtendimentoLidoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'atendimentoId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MarcarAtendimentoLidoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MarcarAtendimentoLidoRequest copyWith(
+          void Function(MarcarAtendimentoLidoRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as MarcarAtendimentoLidoRequest))
+          as MarcarAtendimentoLidoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MarcarAtendimentoLidoRequest create() =>
+      MarcarAtendimentoLidoRequest._();
+  @$core.override
+  MarcarAtendimentoLidoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MarcarAtendimentoLidoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MarcarAtendimentoLidoRequest>(create);
+  static MarcarAtendimentoLidoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get atendimentoId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set atendimentoId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAtendimentoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAtendimentoId() => $_clearField(1);
+}
+
+class MarcarAtendimentoLidoResponse extends $pb.GeneratedMessage {
+  factory MarcarAtendimentoLidoResponse({
+    $core.int? marcadas,
+  }) {
+    final result = create();
+    if (marcadas != null) result.marcadas = marcadas;
+    return result;
+  }
+
+  MarcarAtendimentoLidoResponse._();
+
+  factory MarcarAtendimentoLidoResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MarcarAtendimentoLidoResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MarcarAtendimentoLidoResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'marcadas')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MarcarAtendimentoLidoResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MarcarAtendimentoLidoResponse copyWith(
+          void Function(MarcarAtendimentoLidoResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as MarcarAtendimentoLidoResponse))
+          as MarcarAtendimentoLidoResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MarcarAtendimentoLidoResponse create() =>
+      MarcarAtendimentoLidoResponse._();
+  @$core.override
+  MarcarAtendimentoLidoResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MarcarAtendimentoLidoResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MarcarAtendimentoLidoResponse>(create);
+  static MarcarAtendimentoLidoResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get marcadas => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set marcadas($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasMarcadas() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearMarcadas() => $_clearField(1);
 }
 
 class ListMyWhatsappInstancesRequest extends $pb.GeneratedMessage {

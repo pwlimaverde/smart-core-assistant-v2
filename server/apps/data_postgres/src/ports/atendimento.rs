@@ -210,6 +210,21 @@ pub trait AtendimentoStore: Send + Sync {
         habilitado: bool,
     ) -> Result<bool, DbError>;
 
+    /// B6 (N9 E4) — mensagens do contato ainda não lidas, por atendimento.
+    async fn contar_nao_lidas(
+        &self,
+        ctx: &RequestContext,
+        ids: Vec<i32>,
+    ) -> Result<std::collections::HashMap<i32, i64>, DbError>;
+
+    /// B6 — marca como lidas as mensagens do contato numa conversa e devolve o
+    /// que espelhar no WhatsApp.
+    async fn marcar_atendimento_lido(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<infrastructure_postgres::atendimentos::mensagens::LeituraMarcada, DbError>;
+
     /// N9/E1 — autoriza um upload de mídia e devolve a **chave** do objeto.
     ///
     /// Responde às perguntas que só o banco sabe: o atendimento é deste tenant?

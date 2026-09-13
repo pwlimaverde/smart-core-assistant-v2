@@ -143,6 +143,8 @@ use contracts::grpc::queries::{
     LoginRequest,
     LogoutRequest,
     LogoutResponse,
+    MarcarAtendimentoLidoRequest,
+    MarcarAtendimentoLidoResponse,
     McpGrantItem,
     MensagemThread as ProtoMensagemThread,
     MidiaMensagem as ProtoMidiaMensagem,
@@ -4529,6 +4531,92 @@ impl AdminService for AdminFacade {
         }))
     }
 
+    /// B6 (N9 E4) — marca como lidas as mensagens do contato numa conversa e
+    /// espelha a leitura no WhatsApp (o contato vê que foi lido).
+    ///
+    /// Não passa por `encaminhar_tenant`: a marcação respeita o RBAC fino por
+    /// fluxo, e aquele caminho sai com `flow_permissions` vazio — o atendente
+    /// legítimo seria barrado. O espelho é best-effort: provedor fora do ar não
+    /// desfaz a leitura, que já está gravada. Sem auditoria, de propósito.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "MarcarAtendimentoLido", traceparent)
+    )]
+    async fn marcar_atendimento_lido(
+        &self,
+        req: Request<MarcarAtendimentoLidoRequest>,
+    ) -> Result<Response<MarcarAtendimentoLidoResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(&claims, &["atendimentos:read"], "MarcarAtendimentoLido")?;
+        let atendimento_id = req.get_ref().atendimento_id;
+        if atendimento_id <= 0 {
+            return Err(Status::invalid_argument("atendimento inválido"));
+        }
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let auth_user_id = claims.sub.parse::<i32>().unwrap_or(0);
+        let flow_permissions = if claims.is_superuser {
+            Vec::new()
+        } else {
+            resolver_flow_permissions_web(&self.deps, &claims.tenant_id, auth_user_id, &traceparent)
+                .await
+        };
+        let envelope = |metodo: &str, payload: &serde_json::Value, fluxos: Vec<i32>| Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: metodo.to_string(),
+            payload: serde_json::to_vec(payload).unwrap_or_default(),
+            auth_user_id,
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            flow_permissions: fluxos,
+            ..Default::default()
+        };
+
+        let resp = self
+            .deps
+            .pg
+            .call(
+                envelope(
+                    "MarcarAtendimentoLido",
+                    &serde_json::json!({ "atendimento_id": atendimento_id }),
+                    flow_permissions,
+                ),
+                std::time::Duration::from_secs(5),
+            )
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço interno: {e}")))?;
+        if resp.kind == MessageKind::Error as i32 {
+            let msg = resp.error.map(|e| e.message).unwrap_or_default();
+            return Err(Status::internal(format!("Erro no banco: {msg}")));
+        }
+        let corpo: serde_json::Value =
+            serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))?;
+
+        if let Some(espelho) = corpo.get("whatsapp").filter(|v| v.is_object()) {
+            let pedido = envelope("MarkWhatsappMessageRead", espelho, Vec::new());
+            match self
+                .whatsapp
+                .call(pedido, std::time::Duration::from_secs(5))
+                .await
+            {
+                Ok(r) if r.kind != MessageKind::Error as i32 => {}
+                // Só o fato: o id da conversa, nunca telefone nem ids de mensagem.
+                _ => tracing::warn!(atendimento_id, "leitura não espelhada no WhatsApp"),
+            }
+        }
+
+        Ok(Response::new(MarcarAtendimentoLidoResponse {
+            marcadas: corpo.get("marcadas").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+        }))
+    }
+
     /// D3 — liga/desliga a resposta automática da IA para a conexão inteira.
     ///
     /// Equivale ao `instances/<pk>/toggle-bot/` da v1. `tenant_id` das claims e
@@ -5445,6 +5533,10 @@ impl AdminService for AdminFacade {
                                 .get("sentimento_label")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string()),
+                            nao_lidas: item
+                                .get("nao_lidas")
+                                .and_then(|v| v.as_i64())
+                                .unwrap_or_default() as i32,
                         });
                     }
                 }
@@ -8667,6 +8759,7 @@ mod tests {
             "QuitarMinhaAssinatura" => facade.quitar_minha_assinatura(Request::new(QuitarMinhaAssinaturaRequest::default())).await,
             "DefinirRespostaBotInstancia" => facade.definir_resposta_bot_instancia(Request::new(DefinirRespostaBotInstanciaRequest { id: 1, habilitado: false })).await,
             "DefinirBotDaConversa" => facade.definir_bot_da_conversa(Request::new(DefinirBotDaConversaRequest { atendimento_id: 1, habilitado: true })).await,
+            "MarcarAtendimentoLido" => facade.marcar_atendimento_lido(Request::new(MarcarAtendimentoLidoRequest { atendimento_id: 1 })).await,
         }
     }
 

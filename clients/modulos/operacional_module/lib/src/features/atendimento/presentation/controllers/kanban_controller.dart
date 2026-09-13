@@ -173,6 +173,27 @@ final class KanbanController extends BaseController<KanbanViewModel> {
     };
   }
 
+  /// B6 — a conversa foi aberta: o número do cartão some na hora, sem esperar
+  /// a próxima recarga. O servidor marca a leitura quando o fim da conversa
+  /// aparece; se a marcação falhar, a próxima recarga devolve o número.
+  void zerarNaoLidas(int atendimentoId) {
+    final atual = state;
+    if (atual is! SuccessState<KanbanViewModel>) return;
+    final porEtapa = atual.data.porEtapa;
+    final temNaoLidas = porEtapa.values.any(
+      (lista) => lista.any((a) => a.id == atendimentoId && a.naoLidas > 0),
+    );
+    if (!temNaoLidas) return;
+    final mapa = {
+      for (final MapEntry(key: etapa, value: lista) in porEtapa.entries)
+        etapa: [
+          for (final a in lista)
+            a.id == atendimentoId ? a.copyWith(naoLidas: 0) : a,
+        ],
+    };
+    emit(SuccessState(atual.data.copyWith(porEtapa: mapa)));
+  }
+
   /// Aplica um evento realtime recarregando a fila — reaproveita [carregar] em
   /// vez de reconciliar localmente, mantendo o quadro sempre consistente com o
   /// servidor.

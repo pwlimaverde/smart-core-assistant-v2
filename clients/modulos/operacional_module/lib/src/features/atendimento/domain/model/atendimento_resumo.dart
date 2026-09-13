@@ -22,6 +22,10 @@ final class AtendimentoResumo {
   final int? sentimentoNota;
   final String? sentimentoLabel;
 
+  /// B6 (N9 E4) — mensagens do contato ainda não lidas. É o que diz, no
+  /// quadro, o que falta responder.
+  final int naoLidas;
+
   const AtendimentoResumo({
     required this.id,
     required this.contatoId,
@@ -36,27 +40,32 @@ final class AtendimentoResumo {
     this.dataUltimaMensagem,
     this.sentimentoNota,
     this.sentimentoLabel,
+    this.naoLidas = 0,
   });
 
   /// Cópia com a etapa (e opcionalmente o status) alterados — usada para
   /// aplicar otimisticamente o resultado de um drag-and-drop no Kanban antes
   /// da confirmação do servidor (revertida no erro).
-  AtendimentoResumo copyWith({int? etapaAtualId, String? status}) =>
-      AtendimentoResumo(
-        id: id,
-        contatoId: contatoId,
-        status: status ?? this.status,
-        departamentoId: departamentoId,
-        fluxoAtendimentoId: fluxoAtendimentoId,
-        etapaAtualId: etapaAtualId ?? this.etapaAtualId,
-        assunto: assunto,
-        prioridade: prioridade,
-        atendenteHumanoId: atendenteHumanoId,
-        dataInicio: dataInicio,
-        dataUltimaMensagem: dataUltimaMensagem,
-        sentimentoNota: sentimentoNota,
-        sentimentoLabel: sentimentoLabel,
-      );
+  AtendimentoResumo copyWith({
+    int? etapaAtualId,
+    String? status,
+    int? naoLidas,
+  }) => AtendimentoResumo(
+    id: id,
+    contatoId: contatoId,
+    status: status ?? this.status,
+    departamentoId: departamentoId,
+    fluxoAtendimentoId: fluxoAtendimentoId,
+    etapaAtualId: etapaAtualId ?? this.etapaAtualId,
+    assunto: assunto,
+    prioridade: prioridade,
+    atendenteHumanoId: atendenteHumanoId,
+    dataInicio: dataInicio,
+    dataUltimaMensagem: dataUltimaMensagem,
+    sentimentoNota: sentimentoNota,
+    sentimentoLabel: sentimentoLabel,
+    naoLidas: naoLidas ?? this.naoLidas,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -64,8 +73,9 @@ final class AtendimentoResumo {
       other is AtendimentoResumo &&
           other.id == id &&
           other.etapaAtualId == etapaAtualId &&
-          other.status == status;
+          other.status == status &&
+          other.naoLidas == naoLidas;
 
   @override
-  int get hashCode => Object.hash(id, etapaAtualId, status);
+  int get hashCode => Object.hash(id, etapaAtualId, status, naoLidas);
 }
