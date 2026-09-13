@@ -184,6 +184,19 @@ final class OperacionalModule extends AppModule {
         ),
       ),
     );
+
+    // C3 — abrir conversa a partir de um cliente cadastrado. Faltava aqui: os
+    // testes do diálogo registram o usecase direto no GetIt, e por isso
+    // passavam enquanto o app estourava no primeiro clique em "Abrir conversa".
+    i.lazySingleton<IniciarAtendimentoUsecase>(
+      () => IniciarAtendimentoUsecase(
+        repository: IniciarAtendimentoRepository(
+          datasource: IniciarAtendimentoDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
   }
 
   @override

@@ -267,15 +267,28 @@ async fn authorize(
                 store::cachear_cimd(&mut redis, client_id, &m).await;
                 m
             }
-            Err(e) => {
-                tracing::warn!(
-                    motivo = e.motivo(),
-                    "documento de metadados do cliente MCP recusado"
-                );
-                // Sem CIMD válido não há `redirect_uri` confiável: página, não
-                // redirect.
-                return erro_de_pagina("Aplicativo não reconhecido", &e.to_string());
-            }
+            // Cliente conhecido cujo documento não se alcança daqui (o Claude,
+            // atrás do Cloudflare): vale o documento embutido. Ver
+            // `cimd::documento_conhecido`.
+            Err(e) => match cimd::documento_conhecido(client_id) {
+                Some(m) => {
+                    tracing::warn!(
+                        motivo = e.motivo(),
+                        "documento do cliente MCP inalcançável; usando o conhecido"
+                    );
+                    store::cachear_cimd(&mut redis, client_id, &m).await;
+                    m
+                }
+                None => {
+                    tracing::warn!(
+                        motivo = e.motivo(),
+                        "documento de metadados do cliente MCP recusado"
+                    );
+                    // Sem CIMD válido não há `redirect_uri` confiável: página,
+                    // não redirect.
+                    return erro_de_pagina("Aplicativo não reconhecido", &e.to_string());
+                }
+            },
         },
     };
 

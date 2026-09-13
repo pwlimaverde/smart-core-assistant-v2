@@ -6,41 +6,148 @@ void main() {
     test('durante o boot: mantém na splash e redireciona o resto para /', () {
       expect(
         tenantAuthRedirectTarget(
-            booted: false,
-            isAuthenticated: false,
-            isSuperuser: false,
-            scopes: const [],
-            location: '/'),
+          booted: false,
+          isAuthenticated: false,
+          isSuperuser: false,
+          scopes: const [],
+          location: '/',
+        ),
         isNull,
       );
-      expect(
+      final alvo = Uri.parse(
         tenantAuthRedirectTarget(
+          booted: false,
+          isAuthenticated: false,
+          isSuperuser: false,
+          scopes: const [],
+          location: '/atendimentos',
+        )!,
+      );
+      expect(alvo.path, '/');
+      expect(alvo.queryParameters['retomar'], '/atendimentos');
+    });
+
+    group('link aberto antes do boot terminar', () {
+      // Regressão do teste de 12/09: o link do convite passava pela splash,
+      // perdia o endereço e caía no login — a tela de criar senha nunca
+      // aparecia para o convidado.
+      test('a ida para a splash guarda o endereço com a query', () {
+        final alvo = Uri.parse(
+          tenantAuthRedirectTarget(
             booted: false,
             isAuthenticated: false,
             isSuperuser: false,
             scopes: const [],
-            location: '/atendimentos'),
-        '/',
+            location: '/aceitar-convite',
+            enderecoPedido: '/aceitar-convite?token=abc123',
+          )!,
+        );
+        expect(alvo.path, '/');
+        expect(
+          alvo.queryParameters['retomar'],
+          '/aceitar-convite?token=abc123',
+        );
+      });
+
+      test('ao fim do boot, deslogado, volta ao convite com o token', () {
+        expect(
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: false,
+            isSuperuser: false,
+            scopes: const [],
+            location: '/',
+            retomar: '/aceitar-convite?token=abc123',
+          ),
+          '/aceitar-convite?token=abc123',
+        );
+      });
+
+      test('destino guardado continua sujeito à sessão', () {
+        expect(
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: false,
+            isSuperuser: false,
+            scopes: const [],
+            location: '/',
+            retomar: '/atendimentos',
+          ),
+          '/login',
+        );
+      });
+
+      test('logado, segue para o destino guardado', () {
+        expect(
+          tenantAuthRedirectTarget(
+            booted: true,
+            isAuthenticated: true,
+            isSuperuser: false,
+            scopes: const ['tenant:admin'],
+            location: '/',
+            retomar: '/tenant/usuarios',
+            onboardingPendente: false,
+          ),
+          '/tenant/usuarios',
+        );
+      });
+
+      test(
+        'enquanto o roteiro não responde, segura na splash com o destino',
+        () {
+          expect(
+            tenantAuthRedirectTarget(
+              booted: true,
+              isAuthenticated: true,
+              isSuperuser: false,
+              scopes: const ['tenant:admin'],
+              location: '/',
+              retomar: '/tenant/usuarios',
+            ),
+            isNull,
+          );
+        },
       );
+
+      test('endereço de fora do app é ignorado', () {
+        // `retomar` vem da URL: aceitar outro site faria do guard um
+        // redirecionador aberto.
+        for (final externo in ['//evil.example', 'https://evil.example/x']) {
+          expect(
+            tenantAuthRedirectTarget(
+              booted: true,
+              isAuthenticated: false,
+              isSuperuser: false,
+              scopes: const [],
+              location: '/',
+              retomar: externo,
+            ),
+            '/login',
+            reason: externo,
+          );
+        }
+      });
     });
 
     test('pós-boot deslogado: vai para /login (e fica nele)', () {
       expect(
         tenantAuthRedirectTarget(
-            booted: true,
-            isAuthenticated: false,
-            isSuperuser: false,
-            scopes: const [],
-            location: '/atendimentos'),
+          booted: true,
+          isAuthenticated: false,
+          isSuperuser: false,
+          scopes: const [],
+          location: '/atendimentos',
+        ),
         '/login',
       );
       expect(
         tenantAuthRedirectTarget(
-            booted: true,
-            isAuthenticated: false,
-            isSuperuser: false,
-            scopes: const [],
-            location: '/login'),
+          booted: true,
+          isAuthenticated: false,
+          isSuperuser: false,
+          scopes: const [],
+          location: '/login',
+        ),
         isNull,
       );
     });
@@ -48,11 +155,12 @@ void main() {
     test('pós-boot deslogado: /aceitar-convite é rota pública', () {
       expect(
         tenantAuthRedirectTarget(
-            booted: true,
-            isAuthenticated: false,
-            isSuperuser: false,
-            scopes: const [],
-            location: '/aceitar-convite'),
+          booted: true,
+          isAuthenticated: false,
+          isSuperuser: false,
+          scopes: const [],
+          location: '/aceitar-convite',
+        ),
         isNull,
       );
     });
@@ -68,11 +176,12 @@ void main() {
       ]) {
         expect(
           tenantAuthRedirectTarget(
-              booted: true,
-              isAuthenticated: false,
-              isSuperuser: false,
-              scopes: const [],
-              location: rota),
+            booted: true,
+            isAuthenticated: false,
+            isSuperuser: false,
+            scopes: const [],
+            location: rota,
+          ),
           isNull,
           reason: '$rota deveria ser pública',
         );
@@ -82,11 +191,12 @@ void main() {
     test('pós-boot superusuário puro: é barrado e vai para /login', () {
       expect(
         tenantAuthRedirectTarget(
-            booted: true,
-            isAuthenticated: true,
-            isSuperuser: true,
-            scopes: const ['*'],
-            location: '/atendimentos'),
+          booted: true,
+          isAuthenticated: true,
+          isSuperuser: true,
+          scopes: const ['*'],
+          location: '/atendimentos',
+        ),
         '/login',
       );
     });
@@ -94,64 +204,78 @@ void main() {
     test('pós-boot sessão de tenant: sai do login/splash para o workspace', () {
       expect(
         tenantAuthRedirectTarget(
-            booted: true,
-            isAuthenticated: true,
-            isSuperuser: false,
-            scopes: const ['atendimentos:read'],
-            location: '/login',
-            onboardingPendente: false),
+          booted: true,
+          isAuthenticated: true,
+          isSuperuser: false,
+          scopes: const ['atendimentos:read'],
+          location: '/login',
+          onboardingPendente: false,
+        ),
         '/atendimentos',
       );
       expect(
         tenantAuthRedirectTarget(
-            booted: true,
-            isAuthenticated: true,
-            isSuperuser: false,
-            scopes: const ['atendimentos:read'],
-            location: '/',
-            onboardingPendente: false),
+          booted: true,
+          isAuthenticated: true,
+          isSuperuser: false,
+          scopes: const ['atendimentos:read'],
+          location: '/',
+          onboardingPendente: false,
+        ),
         '/atendimentos',
       );
     });
 
-    test('pós-boot sessão de tenant sem tenant:admin: rotas /tenant/* voltam para o workspace', () {
-      expect(
-        tenantAuthRedirectTarget(
+    test(
+      'pós-boot sessão de tenant sem tenant:admin: rotas /tenant/* voltam para o workspace',
+      () {
+        expect(
+          tenantAuthRedirectTarget(
             booted: true,
             isAuthenticated: true,
             isSuperuser: false,
             scopes: const ['atendimentos:read'],
             location: '/tenant/usuarios',
-            onboardingPendente: false),
-        '/atendimentos',
-      );
-    });
+            onboardingPendente: false,
+          ),
+          '/atendimentos',
+        );
+      },
+    );
 
-    test('pós-boot sessão de tenant COM tenant:admin: acessa rotas /tenant/*', () {
-      expect(
-        tenantAuthRedirectTarget(
+    test(
+      'pós-boot sessão de tenant COM tenant:admin: acessa rotas /tenant/*',
+      () {
+        expect(
+          tenantAuthRedirectTarget(
             booted: true,
             isAuthenticated: true,
             isSuperuser: false,
             scopes: const ['tenant:admin'],
             location: '/tenant/usuarios',
-            onboardingPendente: false),
-        isNull,
-      );
-    });
+            onboardingPendente: false,
+          ),
+          isNull,
+        );
+      },
+    );
 
-    test('pós-boot sessão de tenant: rotas normais (não-/tenant/) seguem sem redirecionar', () {
-      expect(
-        tenantAuthRedirectTarget(
+    test(
+      'pós-boot sessão de tenant: rotas normais (não-/tenant/) seguem sem redirecionar',
+      () {
+        expect(
+          tenantAuthRedirectTarget(
             booted: true,
             isAuthenticated: true,
             isSuperuser: false,
             scopes: const ['atendimentos:read'],
             location: '/atendimentos',
-            onboardingPendente: false),
-        isNull,
-      );
-    });
+            onboardingPendente: false,
+          ),
+          isNull,
+        );
+      },
+    );
 
     group('configuração inicial pendente', () {
       // Regressão: quem fechava o app no meio do roteiro reabria em
@@ -237,21 +361,24 @@ void main() {
       // direto para '/configuracao/pronto' — a tela que diz "tudo certo" para
       // quem não conseguia cadastrar nada.
 
-      test('vence o roteiro: dono pendente vai para o pagamento, não para o roteiro', () {
-        expect(
-          tenantAuthRedirectTarget(
-            booted: true,
-            isAuthenticated: true,
-            isSuperuser: false,
-            scopes: const ['tenant:admin'],
-            location: '/atendimentos',
-            onboardingPendente: true,
-            onboardingPasso: 8,
-            pagamentoPendente: true,
-          ),
-          '/conta/pagamento',
-        );
-      });
+      test(
+        'vence o roteiro: dono pendente vai para o pagamento, não para o roteiro',
+        () {
+          expect(
+            tenantAuthRedirectTarget(
+              booted: true,
+              isAuthenticated: true,
+              isSuperuser: false,
+              scopes: const ['tenant:admin'],
+              location: '/atendimentos',
+              onboardingPendente: true,
+              onboardingPasso: 8,
+              pagamentoPendente: true,
+            ),
+            '/conta/pagamento',
+          );
+        },
+      );
 
       test('vence até quando o roteiro já terminou', () {
         // Este é o caso exato do defeito: onboarding_step = 8, concluído, e a
@@ -285,23 +412,26 @@ void main() {
         );
       });
 
-      test('colaborador pendente NÃO é mandado para a cobrança (evita laço)', () {
-        // Sem esta exceção o guard oscilaria: pagamento manda para
-        // '/conta/pagamento', o RBAC devolve para '/atendimentos', e repete.
-        // Para o colaborador o caminho é o aviso no quadro.
-        expect(
-          tenantAuthRedirectTarget(
-            booted: true,
-            isAuthenticated: true,
-            isSuperuser: false,
-            scopes: const ['atendimentos:read'],
-            location: '/atendimentos',
-            onboardingPendente: false,
-            pagamentoPendente: true,
-          ),
-          isNull,
-        );
-      });
+      test(
+        'colaborador pendente NÃO é mandado para a cobrança (evita laço)',
+        () {
+          // Sem esta exceção o guard oscilaria: pagamento manda para
+          // '/conta/pagamento', o RBAC devolve para '/atendimentos', e repete.
+          // Para o colaborador o caminho é o aviso no quadro.
+          expect(
+            tenantAuthRedirectTarget(
+              booted: true,
+              isAuthenticated: true,
+              isSuperuser: false,
+              scopes: const ['atendimentos:read'],
+              location: '/atendimentos',
+              onboardingPendente: false,
+              pagamentoPendente: true,
+            ),
+            isNull,
+          );
+        },
+      );
 
       test('colaborador que tenta a rota de cobrança volta ao quadro', () {
         expect(

@@ -2797,7 +2797,10 @@ async fn handler_iniciar_atendimento_manual(
         if abertas >= TETO_DIARIO_CONVERSAS_MANUAIS {
             return erro(
                 error_core::AppError::Conflict(format!(
-                    "Você já abriu {abertas} conversas hoje sem trocar mensagem                      (o limite é {TETO_DIARIO_CONVERSAS_MANUAIS}). O limite existe                      para o WhatsApp não denunciar o seu número por disparo em                      massa. Amanhã ele reinicia."
+                    "Você já abriu {abertas} conversas hoje sem trocar mensagem \
+                     (o limite é {TETO_DIARIO_CONVERSAS_MANUAIS}). O limite existe \
+                     para o WhatsApp não denunciar o seu número por disparo em \
+                     massa. Amanhã ele reinicia."
                 )),
                 &env,
             );
@@ -5167,7 +5170,9 @@ async fn handler_create_campo(
         if ativos >= TETO_CAMPOS_ATIVOS {
             return erro(
                 error_core::AppError::Conflict(format!(
-                    "Você já tem {ativos} campos ativos, que é o limite. Cada                      campo entra no que a IA lê em toda mensagem, então a conta                      sobe junto. Desative um que não use para abrir espaço."
+                    "Você já tem {ativos} campos ativos, que é o limite. Cada \
+                     campo entra no que a IA lê em toda mensagem, então a conta \
+                     sobe junto. Desative um que não use para abrir espaço."
                 )),
                 &env,
             );

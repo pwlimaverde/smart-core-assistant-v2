@@ -103,6 +103,13 @@ class _DialogoState extends State<_Dialogo> {
     }
   }
 
+  String get _rotuloDoQuadro {
+    for (final fluxo in widget.quadro.fluxos) {
+      if (fluxo.id == _fluxoId) return fluxo.rotulo;
+    }
+    return '—';
+  }
+
   bool get _podeAbrir =>
       _escolhido != null && _fluxoId != null && _etapaId != null && !_enviando;
 
@@ -226,17 +233,12 @@ class _DialogoState extends State<_Dialogo> {
                   ),
                 ),
               const SizedBox(height: AppSpacing.md),
-              DropdownButtonFormField<int>(
-                initialValue: _fluxoId,
+              // O quadro é o que está aberto, e não uma escolha: as colunas
+              // logo abaixo são dele. Deixar trocar só o quadro mandaria ao
+              // servidor a etapa de um fluxo junto com o id de outro.
+              InputDecorator(
                 decoration: const InputDecoration(labelText: 'Quadro'),
-                items: [
-                  for (final fluxo in widget.quadro.fluxos)
-                    DropdownMenuItem(
-                      value: fluxo.id,
-                      child: Text(fluxo.rotulo),
-                    ),
-                ],
-                onChanged: (v) => setState(() => _fluxoId = v),
+                child: Text(_rotuloDoQuadro),
               ),
               const SizedBox(height: AppSpacing.md),
               DropdownButtonFormField<int>(

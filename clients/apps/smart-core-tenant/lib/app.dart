@@ -54,8 +54,8 @@ class SmartCoreTenantApp extends StatelessWidget {
   static String? _authRedirect(BuildContext context, GoRouterState state) {
     final auth = inject<login.AuthService>();
     final portao = inject<PortaoConfiguracao>();
-    final ehTenant = auth.isAuthenticated &&
-        !(auth.currentSession?.isSuperuser ?? false);
+    final ehTenant =
+        auth.isAuthenticated && !(auth.currentSession?.isSuperuser ?? false);
 
     // Dispara a consulta do progresso na primeira navegação com sessão de
     // tenant; o `PortaoConfiguracao` ignora chamadas repetidas e notifica o
@@ -73,6 +73,8 @@ class SmartCoreTenantApp extends StatelessWidget {
       isSuperuser: auth.currentSession?.isSuperuser ?? false,
       scopes: auth.currentSession?.scopes ?? const [],
       location: state.matchedLocation,
+      enderecoPedido: state.uri.toString(),
+      retomar: state.uri.queryParameters['retomar'],
       onboardingPendente: portao.pendente,
       onboardingPasso: portao.passo,
       // Vem da mesma consulta do progresso — sem ida extra ao servidor.

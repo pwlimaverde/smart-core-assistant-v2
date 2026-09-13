@@ -30,6 +30,12 @@ String? tenantAuthRedirectTarget({
   required bool isSuperuser,
   required List<String> scopes,
   required String location,
+  // Endereço pedido por inteiro, com a query. Só serve para ser guardado na ida
+  // para a splash — `location` não tem a query, e é nela que o convite leva o
+  // token.
+  String? enderecoPedido,
+  // Destino guardado na ida para a splash (`/?retomar=…`).
+  String? retomar,
   // `null` = ainda não se sabe se a configuração inicial terminou. Ver
   // `PortaoConfiguracao`: o guard é síncrono e a verdade está no servidor.
   bool? onboardingPendente,
@@ -37,9 +43,41 @@ String? tenantAuthRedirectTarget({
   // Tri-estado, igual ao acima: `null` = ainda não se sabe.
   bool? pagamentoPendente,
 }) {
-  if (!booted) return location == '/' ? null : '/';
+  // Durante o boot tudo espera na splash — mas o endereço pedido vai junto.
+  //
+  // Antes ia só '/', e o destino se perdia: quem abria o link do convite
+  // (`/aceitar-convite?token=…`) terminava o boot em '/', que para quem não
+  // tem sessão é '/login'. A tela de criar a senha nunca aparecia.
+  if (!booted) {
+    if (location == '/') return null;
+    return Uri(
+      path: '/',
+      queryParameters: {'retomar': enderecoPedido ?? location},
+    ).toString();
+  }
 
-  final rotaPublica = location == '/login' ||
+  // Boot concluído com um destino guardado: decide por ele, como se tivesse
+  // sido pedido agora — e as regras de sessão continuam valendo para ele.
+  final destino = _destinoInterno(retomar);
+  if (location == '/' && destino != null) {
+    final alvo = tenantAuthRedirectTarget(
+      booted: true,
+      isAuthenticated: isAuthenticated,
+      isSuperuser: isSuperuser,
+      scopes: scopes,
+      location: Uri.parse(destino).path,
+      onboardingPendente: onboardingPendente,
+      onboardingPasso: onboardingPasso,
+      pagamentoPendente: pagamentoPendente,
+    );
+    // '/' é "ainda não sei" (a consulta do roteiro não voltou): fica na
+    // splash com o destino guardado, em vez de soltá-lo.
+    if (alvo == '/') return null;
+    return alvo ?? destino;
+  }
+
+  final rotaPublica =
+      location == '/login' ||
       location == '/aceitar-convite' ||
       ehRotaDeCadastro(location);
   // Sem sessão OU superusuário puro (sem tenant) → fora do painel do tenant.
@@ -101,4 +139,12 @@ String? tenantAuthRedirectTarget({
     return '/atendimentos';
   }
   return null;
+}
+
+/// Só caminhos deste app: `retomar` vem da URL, e aceitar `//outro.site` ou um
+/// endereço absoluto faria do guard um redirecionador aberto.
+String? _destinoInterno(String? retomar) {
+  if (retomar == null || retomar == '/') return null;
+  if (!retomar.startsWith('/') || retomar.startsWith('//')) return null;
+  return retomar;
 }

@@ -999,7 +999,9 @@ impl AdminFacade {
                         "teto diário de atendimentos ativos excedido"
                     );
                     return Err(Status::resource_exhausted(
-                        "Limite diário de conversas iniciadas atingido.                          Iniciar muitas conversas em pouco tempo faz o WhatsApp                          bloquear o número.",
+                        "Limite diário de conversas iniciadas atingido. \
+                         Iniciar muitas conversas em pouco tempo faz o WhatsApp \
+                         bloquear o número.",
                     ));
                 }
                 Ok(())
@@ -7706,7 +7708,8 @@ mod tests {
             // Com o caminho base: o app não vive na raiz, e o domínio sozinho
             // devolve 400.
             "https://smartcoreassistant.com.br/v2/tenant",
-            "sem configuração o padrão tem de ser produção: um convite com link              errado é pior calado do que barulhento"
+            "sem configuração o padrão tem de ser produção: um convite com link \
+             errado é pior calado do que barulhento"
         );
 
         if let Some(v) = anterior {

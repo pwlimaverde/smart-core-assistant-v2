@@ -282,12 +282,76 @@ pub fn somente_localhost(metadata: &ClientMetadata) -> bool {
     })
 }
 
+/// Documento de um cliente conhecido, para quando o público não é alcançável.
+///
+/// O `claude.ai` fica atrás de um desafio do Cloudflare que responde 403 a
+/// qualquer requisição sem navegador vinda de IP de datacenter — o do nosso
+/// servidor inclusive, com qualquer `User-Agent`. O fetch do CIMD do Claude
+/// falha sempre, e "vincular" nunca passava da tela de erro.
+///
+/// Só entra quando o fetch falha, e só para os `client_id` listados: o
+/// documento publicado continua valendo quando alcançável, e nenhum outro
+/// cliente ganha atalho. Não abre brecha porque o `client_id` não escolhe o
+/// destino — os `redirect_uris` daqui são os oficiais do Claude, então quem se
+/// passar por ele só consegue mandar o código de volta para o Claude.
+///
+/// Os endereços são os da documentação de conectores da Anthropic:
+/// `claude.ai/api/mcp/auth_callback` para as superfícies hospedadas, e o
+/// loopback sem porta fixa do Claude Code.
+pub fn documento_conhecido(client_id: &str) -> Option<ClientMetadata> {
+    let (nome, redirects): (&str, &[&str]) = match client_id {
+        "https://claude.ai/mcp-client" => (
+            "Claude",
+            &[
+                "https://claude.ai/api/mcp/auth_callback",
+                "https://claude.com/api/mcp/auth_callback",
+            ],
+        ),
+        "https://claude.ai/oauth/claude-code-client-metadata" => (
+            "Claude Code",
+            &["http://localhost/callback", "http://127.0.0.1/callback"],
+        ),
+        _ => return None,
+    };
+    Some(ClientMetadata {
+        client_id: client_id.to_string(),
+        client_name: nome.to_string(),
+        redirect_uris: redirects.iter().map(|s| s.to_string()).collect(),
+        client_uri: Some("https://claude.ai".to_string()),
+    })
+}
+
 /// Comparação por **igualdade exata**, como a spec exige. Nunca prefixo, nunca
 /// curinga: `https://claude.ai/cb` e `https://claude.ai/cb/` são URIs
 /// diferentes, e tratá-las como iguais abriria a porta para redirecionar o
 /// código de autorização para um caminho que o cliente não declarou.
+///
+/// A única folga é a porta do loopback (RFC 8252 §7.3): um programa na máquina
+/// do usuário escuta numa porta que muda a cada sessão, e o Claude Code declara
+/// `http://localhost/callback` para receber em `http://localhost:3118/callback`.
+/// Esquema, host e caminho continuam exatos.
 pub fn redirect_uri_declarado(metadata: &ClientMetadata, redirect_uri: &str) -> bool {
-    metadata.redirect_uris.iter().any(|uri| uri == redirect_uri)
+    metadata
+        .redirect_uris
+        .iter()
+        .any(|uri| uri == redirect_uri || mesmo_loopback_sem_porta(uri, redirect_uri))
+}
+
+fn mesmo_loopback_sem_porta(declarado: &str, pedido: &str) -> bool {
+    let (Ok(mut declarado), Ok(mut pedido)) = (url::Url::parse(declarado), url::Url::parse(pedido))
+    else {
+        return false;
+    };
+    let loopback = |u: &url::Url| {
+        u.scheme() == "http" && matches!(u.host_str(), Some("localhost" | "127.0.0.1" | "[::1]"))
+    };
+    if !loopback(&declarado) || !loopback(&pedido) {
+        return false;
+    }
+    // `set_port` só falha para URL sem host, e as duas acabaram de provar ter.
+    let _ = declarado.set_port(None);
+    let _ = pedido.set_port(None);
+    declarado == pedido
 }
 
 #[cfg(test)]
@@ -438,6 +502,65 @@ mod tests {
         assert!(!redirect_uri_declarado(&d, "https://claude.ai/cb/"));
         assert!(!redirect_uri_declarado(&d, "https://claude.ai/cb?x=1"));
         assert!(!redirect_uri_declarado(&d, "https://claude.ai/cbb"));
+    }
+
+    #[test]
+    fn loopback_aceita_qualquer_porta_mas_nada_alem_dela() {
+        let d = doc(
+            "https://claude.ai/oauth/claude-code-client-metadata",
+            &["http://localhost/callback", "http://127.0.0.1/callback"],
+        );
+        assert!(redirect_uri_declarado(&d, "http://localhost:3118/callback"));
+        assert!(redirect_uri_declarado(
+            &d,
+            "http://127.0.0.1:50123/callback"
+        ));
+        // O caminho continua exato.
+        assert!(!redirect_uri_declarado(&d, "http://localhost:3118/outro"));
+        // Declarar `localhost` não libera `127.0.0.1`, nem o contrário.
+        let so_localhost = doc("https://x/y", &["http://localhost/callback"]);
+        assert!(!redirect_uri_declarado(
+            &so_localhost,
+            "http://127.0.0.1:1/callback"
+        ));
+    }
+
+    #[test]
+    fn folga_de_porta_nao_vale_fora_do_loopback() {
+        let d = doc("https://x/y", &["https://claude.ai/api/mcp/auth_callback"]);
+        assert!(!redirect_uri_declarado(
+            &d,
+            "https://claude.ai:8443/api/mcp/auth_callback"
+        ));
+    }
+
+    #[test]
+    fn documento_conhecido_do_claude_usa_o_callback_oficial() {
+        let d = documento_conhecido("https://claude.ai/mcp-client").unwrap();
+        assert!(redirect_uri_declarado(
+            &d,
+            "https://claude.ai/api/mcp/auth_callback"
+        ));
+        assert!(!redirect_uri_declarado(&d, "https://atacante.example/cb"));
+    }
+
+    #[test]
+    fn documentos_conhecidos_passam_pela_mesma_validacao() {
+        // O atalho não pode ser mais frouxo que o documento publicado.
+        for id in [
+            "https://claude.ai/mcp-client",
+            "https://claude.ai/oauth/claude-code-client-metadata",
+        ] {
+            let mut d = documento_conhecido(id).unwrap();
+            validar_documento(&mut d, id).unwrap();
+        }
+    }
+
+    #[test]
+    fn cliente_desconhecido_nao_ganha_documento_embutido() {
+        assert!(documento_conhecido("https://outro.example/mcp-client").is_none());
+        // Nem por semelhança de prefixo.
+        assert!(documento_conhecido("https://claude.ai/mcp-client/").is_none());
     }
 
     #[test]
