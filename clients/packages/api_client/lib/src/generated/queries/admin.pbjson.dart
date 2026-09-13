@@ -3608,6 +3608,243 @@ final $typed_data.Uint8List definirMyContatoAtivoRequestDescriptor =
         'ChxEZWZpbmlyTXlDb250YXRvQXRpdm9SZXF1ZXN0Eg4KAmlkGAEgASgFUgJpZBIUCgVhdGl2bx'
         'gCIAEoCFIFYXRpdm8=');
 
+@$core.Deprecated('Use dadosMyClienteDescriptor instead')
+const DadosMyCliente$json = {
+  '1': 'DadosMyCliente',
+  '2': [
+    {'1': 'nome_fantasia', '3': 1, '4': 1, '5': 9, '10': 'nomeFantasia'},
+    {'1': 'razao_social', '3': 2, '4': 1, '5': 9, '10': 'razaoSocial'},
+    {'1': 'tipo', '3': 3, '4': 1, '5': 9, '10': 'tipo'},
+    {'1': 'cnpj', '3': 4, '4': 1, '5': 9, '10': 'cnpj'},
+    {'1': 'cpf', '3': 5, '4': 1, '5': 9, '10': 'cpf'},
+    {'1': 'telefone', '3': 6, '4': 1, '5': 9, '10': 'telefone'},
+    {'1': 'site', '3': 7, '4': 1, '5': 9, '10': 'site'},
+    {'1': 'ramo_atividade', '3': 8, '4': 1, '5': 9, '10': 'ramoAtividade'},
+    {'1': 'observacoes', '3': 9, '4': 1, '5': 9, '10': 'observacoes'},
+    {'1': 'cep', '3': 10, '4': 1, '5': 9, '10': 'cep'},
+    {'1': 'logradouro', '3': 11, '4': 1, '5': 9, '10': 'logradouro'},
+    {'1': 'numero', '3': 12, '4': 1, '5': 9, '10': 'numero'},
+    {'1': 'complemento', '3': 13, '4': 1, '5': 9, '10': 'complemento'},
+    {'1': 'bairro', '3': 14, '4': 1, '5': 9, '10': 'bairro'},
+    {'1': 'cidade', '3': 15, '4': 1, '5': 9, '10': 'cidade'},
+    {'1': 'uf', '3': 16, '4': 1, '5': 9, '10': 'uf'},
+  ],
+};
+
+/// Descriptor for `DadosMyCliente`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List dadosMyClienteDescriptor = $convert.base64Decode(
+    'Cg5EYWRvc015Q2xpZW50ZRIjCg1ub21lX2ZhbnRhc2lhGAEgASgJUgxub21lRmFudGFzaWESIQ'
+    'oMcmF6YW9fc29jaWFsGAIgASgJUgtyYXphb1NvY2lhbBISCgR0aXBvGAMgASgJUgR0aXBvEhIK'
+    'BGNucGoYBCABKAlSBGNucGoSEAoDY3BmGAUgASgJUgNjcGYSGgoIdGVsZWZvbmUYBiABKAlSCH'
+    'RlbGVmb25lEhIKBHNpdGUYByABKAlSBHNpdGUSJQoOcmFtb19hdGl2aWRhZGUYCCABKAlSDXJh'
+    'bW9BdGl2aWRhZGUSIAoLb2JzZXJ2YWNvZXMYCSABKAlSC29ic2VydmFjb2VzEhAKA2NlcBgKIA'
+    'EoCVIDY2VwEh4KCmxvZ3JhZG91cm8YCyABKAlSCmxvZ3JhZG91cm8SFgoGbnVtZXJvGAwgASgJ'
+    'UgZudW1lcm8SIAoLY29tcGxlbWVudG8YDSABKAlSC2NvbXBsZW1lbnRvEhYKBmJhaXJybxgOIA'
+    'EoCVIGYmFpcnJvEhYKBmNpZGFkZRgPIAEoCVIGY2lkYWRlEg4KAnVmGBAgASgJUgJ1Zg==');
+
+@$core.Deprecated('Use myClienteDescriptor instead')
+const MyCliente$json = {
+  '1': 'MyCliente',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {
+      '1': 'dados',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.DadosMyCliente',
+      '10': 'dados'
+    },
+    {'1': 'ativo', '3': 3, '4': 1, '5': 8, '10': 'ativo'},
+    {'1': 'contatos', '3': 4, '4': 1, '5': 5, '10': 'contatos'},
+  ],
+};
+
+/// Descriptor for `MyCliente`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myClienteDescriptor = $convert.base64Decode(
+    'CglNeUNsaWVudGUSDgoCaWQYASABKAVSAmlkEkEKBWRhZG9zGAIgASgLMisuc21hcnRjb3JlLm'
+    'NvbnRyYWN0cy5xdWVyaWVzLkRhZG9zTXlDbGllbnRlUgVkYWRvcxIUCgVhdGl2bxgDIAEoCFIF'
+    'YXRpdm8SGgoIY29udGF0b3MYBCABKAVSCGNvbnRhdG9z');
+
+@$core.Deprecated('Use listMyClientesRequestDescriptor instead')
+const ListMyClientesRequest$json = {
+  '1': 'ListMyClientesRequest',
+  '2': [
+    {'1': 'busca', '3': 1, '4': 1, '5': 9, '10': 'busca'},
+    {'1': 'incluir_inativos', '3': 2, '4': 1, '5': 8, '10': 'incluirInativos'},
+    {'1': 'limite', '3': 3, '4': 1, '5': 5, '10': 'limite'},
+  ],
+};
+
+/// Descriptor for `ListMyClientesRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyClientesRequestDescriptor = $convert.base64Decode(
+    'ChVMaXN0TXlDbGllbnRlc1JlcXVlc3QSFAoFYnVzY2EYASABKAlSBWJ1c2NhEikKEGluY2x1aX'
+    'JfaW5hdGl2b3MYAiABKAhSD2luY2x1aXJJbmF0aXZvcxIWCgZsaW1pdGUYAyABKAVSBmxpbWl0'
+    'ZQ==');
+
+@$core.Deprecated('Use listMyClientesResponseDescriptor instead')
+const ListMyClientesResponse$json = {
+  '1': 'ListMyClientesResponse',
+  '2': [
+    {
+      '1': 'clientes',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyCliente',
+      '10': 'clientes'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyClientesResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyClientesResponseDescriptor =
+    $convert.base64Decode(
+        'ChZMaXN0TXlDbGllbnRlc1Jlc3BvbnNlEkIKCGNsaWVudGVzGAEgAygLMiYuc21hcnRjb3JlLm'
+        'NvbnRyYWN0cy5xdWVyaWVzLk15Q2xpZW50ZVIIY2xpZW50ZXM=');
+
+@$core.Deprecated('Use createMyClienteRequestDescriptor instead')
+const CreateMyClienteRequest$json = {
+  '1': 'CreateMyClienteRequest',
+  '2': [
+    {
+      '1': 'dados',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.DadosMyCliente',
+      '10': 'dados'
+    },
+  ],
+};
+
+/// Descriptor for `CreateMyClienteRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List createMyClienteRequestDescriptor =
+    $convert.base64Decode(
+        'ChZDcmVhdGVNeUNsaWVudGVSZXF1ZXN0EkEKBWRhZG9zGAEgASgLMisuc21hcnRjb3JlLmNvbn'
+        'RyYWN0cy5xdWVyaWVzLkRhZG9zTXlDbGllbnRlUgVkYWRvcw==');
+
+@$core.Deprecated('Use myClienteResponseDescriptor instead')
+const MyClienteResponse$json = {
+  '1': 'MyClienteResponse',
+  '2': [
+    {
+      '1': 'cliente',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyCliente',
+      '10': 'cliente'
+    },
+  ],
+};
+
+/// Descriptor for `MyClienteResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myClienteResponseDescriptor = $convert.base64Decode(
+    'ChFNeUNsaWVudGVSZXNwb25zZRJACgdjbGllbnRlGAEgASgLMiYuc21hcnRjb3JlLmNvbnRyYW'
+    'N0cy5xdWVyaWVzLk15Q2xpZW50ZVIHY2xpZW50ZQ==');
+
+@$core.Deprecated('Use updateMyClienteRequestDescriptor instead')
+const UpdateMyClienteRequest$json = {
+  '1': 'UpdateMyClienteRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {
+      '1': 'dados',
+      '3': 2,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.DadosMyCliente',
+      '10': 'dados'
+    },
+  ],
+};
+
+/// Descriptor for `UpdateMyClienteRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List updateMyClienteRequestDescriptor = $convert.base64Decode(
+    'ChZVcGRhdGVNeUNsaWVudGVSZXF1ZXN0Eg4KAmlkGAEgASgFUgJpZBJBCgVkYWRvcxgCIAEoCz'
+    'IrLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5EYWRvc015Q2xpZW50ZVIFZGFkb3M=');
+
+@$core.Deprecated('Use definirMyClienteAtivoRequestDescriptor instead')
+const DefinirMyClienteAtivoRequest$json = {
+  '1': 'DefinirMyClienteAtivoRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'ativo', '3': 2, '4': 1, '5': 8, '10': 'ativo'},
+  ],
+};
+
+/// Descriptor for `DefinirMyClienteAtivoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List definirMyClienteAtivoRequestDescriptor =
+    $convert.base64Decode(
+        'ChxEZWZpbmlyTXlDbGllbnRlQXRpdm9SZXF1ZXN0Eg4KAmlkGAEgASgFUgJpZBIUCgVhdGl2bx'
+        'gCIAEoCFIFYXRpdm8=');
+
+@$core.Deprecated('Use myClienteIdRequestDescriptor instead')
+const MyClienteIdRequest$json = {
+  '1': 'MyClienteIdRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+  ],
+};
+
+/// Descriptor for `MyClienteIdRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myClienteIdRequestDescriptor =
+    $convert.base64Decode('ChJNeUNsaWVudGVJZFJlcXVlc3QSDgoCaWQYASABKAVSAmlk');
+
+@$core.Deprecated('Use contatoDoClienteDescriptor instead')
+const ContatoDoCliente$json = {
+  '1': 'ContatoDoCliente',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'telefone', '3': 3, '4': 1, '5': 9, '10': 'telefone'},
+  ],
+};
+
+/// Descriptor for `ContatoDoCliente`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List contatoDoClienteDescriptor = $convert.base64Decode(
+    'ChBDb250YXRvRG9DbGllbnRlEg4KAmlkGAEgASgFUgJpZBISCgRub21lGAIgASgJUgRub21lEh'
+    'oKCHRlbGVmb25lGAMgASgJUgh0ZWxlZm9uZQ==');
+
+@$core.Deprecated('Use listMyContatosDoClienteResponseDescriptor instead')
+const ListMyContatosDoClienteResponse$json = {
+  '1': 'ListMyContatosDoClienteResponse',
+  '2': [
+    {
+      '1': 'contatos',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.ContatoDoCliente',
+      '10': 'contatos'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyContatosDoClienteResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyContatosDoClienteResponseDescriptor =
+    $convert.base64Decode(
+        'Ch9MaXN0TXlDb250YXRvc0RvQ2xpZW50ZVJlc3BvbnNlEkkKCGNvbnRhdG9zGAEgAygLMi0uc2'
+        '1hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkNvbnRhdG9Eb0NsaWVudGVSCGNvbnRhdG9z');
+
+@$core.Deprecated('Use vincularMyContatoClienteRequestDescriptor instead')
+const VincularMyContatoClienteRequest$json = {
+  '1': 'VincularMyContatoClienteRequest',
+  '2': [
+    {'1': 'cliente_id', '3': 1, '4': 1, '5': 5, '10': 'clienteId'},
+    {'1': 'contato_id', '3': 2, '4': 1, '5': 5, '10': 'contatoId'},
+    {'1': 'vincular', '3': 3, '4': 1, '5': 8, '10': 'vincular'},
+  ],
+};
+
+/// Descriptor for `VincularMyContatoClienteRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List vincularMyContatoClienteRequestDescriptor =
+    $convert.base64Decode(
+        'Ch9WaW5jdWxhck15Q29udGF0b0NsaWVudGVSZXF1ZXN0Eh0KCmNsaWVudGVfaWQYASABKAVSCW'
+        'NsaWVudGVJZBIdCgpjb250YXRvX2lkGAIgASgFUgljb250YXRvSWQSGgoIdmluY3VsYXIYAyAB'
+        'KAhSCHZpbmN1bGFy');
+
 @$core.Deprecated('Use getMyPainelRequestDescriptor instead')
 const GetMyPainelRequest$json = {
   '1': 'GetMyPainelRequest',

@@ -522,6 +522,12 @@ async fn main() -> anyhow::Result<()> {
     let s_contato_criar = state_clone.clone();
     let s_contato_update = state_clone.clone();
     let s_contato_ativo = state_clone.clone();
+    let s_clientes_listar = state_clone.clone();
+    let s_cliente_criar = state_clone.clone();
+    let s_cliente_atualizar = state_clone.clone();
+    let s_cliente_ativo = state_clone.clone();
+    let s_cliente_contatos = state_clone.clone();
+    let s_cliente_vincular = state_clone.clone();
     let s_fluxo_listar = state_clone.clone();
     let s_campo_listar = state_clone.clone();
     let s_campo_criar = state_clone.clone();
@@ -1253,6 +1259,43 @@ async fn main() -> anyhow::Result<()> {
             let state = s_contato_ativo.clone();
             Box::pin(async move {
                 handler_definir_contato_ativo(state.cliente.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
+        })
+        // B10 (N11 E5) — clientes (PJ/PF) e o vínculo com os contatos.
+        .route("ListClientes", move |env| {
+            let state = s_clientes_listar.clone();
+            Box::pin(async move { handler_list_clientes(state.cliente.as_ref(), env).await })
+        })
+        .route("CreateCliente", move |env| {
+            let state = s_cliente_criar.clone();
+            Box::pin(async move {
+                handler_create_cliente(state.cliente.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("UpdateCliente", move |env| {
+            let state = s_cliente_atualizar.clone();
+            Box::pin(async move {
+                handler_update_cliente(state.cliente.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("DefinirClienteAtivo", move |env| {
+            let state = s_cliente_ativo.clone();
+            Box::pin(async move {
+                handler_definir_cliente_ativo(state.cliente.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
+        })
+        .route("ListContatosDoCliente", move |env| {
+            let state = s_cliente_contatos.clone();
+            Box::pin(
+                async move { handler_list_contatos_do_cliente(state.cliente.as_ref(), env).await },
+            )
+        })
+        .route("VincularContatoCliente", move |env| {
+            let state = s_cliente_vincular.clone();
+            Box::pin(async move {
+                handler_vincular_contato_cliente(state.cliente.as_ref(), state.audit.as_ref(), env)
                     .await
             })
         })
@@ -5444,6 +5487,321 @@ async fn handler_create_contato(
             error_core::AppError::Conflict(
                 "já existe um contato com este telefone — procure por ele na lista".into(),
             ),
+            &env,
+        ),
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+/// B10 (N11 E5) — lê e confere os campos de um cliente.
+///
+/// Documento vira só dígitos e precisa ter o tamanho certo (CNPJ 14, CPF 11);
+/// UF vira maiúscula de duas letras; CEP, oito dígitos. Nada disso vai para log:
+/// CNPJ/CPF e endereço são dado protegido.
+fn dados_do_cliente(
+    payload: &serde_json::Value,
+) -> Result<infrastructure_postgres::clientes::clientes::DadosCliente, String> {
+    let texto = |chave: &str| {
+        payload
+            .get(chave)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    let opcional = |chave: &str, limite: usize, rotulo: &str| -> Result<Option<String>, String> {
+        let valor = texto(chave);
+        if valor.is_empty() {
+            return Ok(None);
+        }
+        if valor.chars().count() > limite {
+            return Err(format!("{rotulo}: no máximo {limite} caracteres"));
+        }
+        Ok(Some(valor))
+    };
+    let digitos = |chave: &str, tamanho: usize, rotulo: &str| -> Result<Option<String>, String> {
+        let so_digitos: String = texto(chave)
+            .chars()
+            .filter(|c| c.is_ascii_digit())
+            .collect();
+        match so_digitos.len() {
+            0 => Ok(None),
+            n if n == tamanho => Ok(Some(so_digitos)),
+            _ => Err(format!("{rotulo} precisa ter {tamanho} dígitos")),
+        }
+    };
+
+    let nome_fantasia = texto("nome_fantasia");
+    if nome_fantasia.is_empty() {
+        return Err("informe o nome do cliente".into());
+    }
+    if nome_fantasia.chars().count() > 200 {
+        return Err("nome: no máximo 200 caracteres".into());
+    }
+    let tipo = match texto("tipo").to_ascii_lowercase().as_str() {
+        "" => None,
+        t @ ("pj" | "pf") => Some(t.to_string()),
+        _ => return Err("tipo deve ser pessoa jurídica (pj) ou física (pf)".into()),
+    };
+    let uf = match texto("uf").to_ascii_uppercase() {
+        u if u.is_empty() => None,
+        u if u.len() == 2 && u.chars().all(|c| c.is_ascii_alphabetic()) => Some(u),
+        _ => return Err("UF deve ter duas letras".into()),
+    };
+
+    Ok(infrastructure_postgres::clientes::clientes::DadosCliente {
+        nome_fantasia,
+        razao_social: opcional("razao_social", 200, "razão social")?,
+        tipo,
+        cnpj: digitos("cnpj", 14, "CNPJ")?,
+        cpf: digitos("cpf", 11, "CPF")?,
+        telefone: opcional("telefone", 20, "telefone")?,
+        site: opcional("site", 200, "site")?,
+        ramo_atividade: opcional("ramo_atividade", 200, "ramo de atividade")?,
+        observacoes: opcional("observacoes", 5000, "observações")?,
+        cep: digitos("cep", 8, "CEP")?,
+        logradouro: opcional("logradouro", 200, "logradouro")?,
+        numero: opcional("numero", 10, "número")?,
+        complemento: opcional("complemento", 100, "complemento")?,
+        bairro: opcional("bairro", 100, "bairro")?,
+        cidade: opcional("cidade", 100, "cidade")?,
+        uf,
+    })
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "ListClientes", tenant_id = %env.tenant_id))]
+async fn handler_list_clientes(store: &dyn ports::ClienteStore, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let busca = payload
+        .get("busca")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+    let incluir_inativos = payload
+        .get("incluir_inativos")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let limite = payload.get("limite").and_then(|v| v.as_i64()).unwrap_or(50);
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .listar_clientes(&ctx, busca, incluir_inativos, limite)
+        .await
+    {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListClientesReply",
+            serde_json::json!({ "clientes": itens }),
+        ),
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+/// Auditado (`cliente.criado`) só com o id e o tipo: nome, documento e endereço
+/// são dado protegido.
+#[tracing::instrument(skip_all, fields(rpc = "CreateCliente", tenant_id = %env.tenant_id))]
+async fn handler_create_cliente(
+    store: &dyn ports::ClienteStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let dados = match dados_do_cliente(&payload) {
+        Ok(d) => d,
+        Err(msg) => return erro(error_core::AppError::Validation(msg), &env),
+    };
+    let ctx = contexto_do_envelope(&env);
+    match store.criar_cliente(&ctx, dados).await {
+        Ok(cliente) => {
+            audit
+                .publish(
+                    &env,
+                    "cliente.criado",
+                    "Cliente cadastrado".to_string(),
+                    serde_json::json!({ "id": cliente.id, "tipo": cliente.tipo }),
+                )
+                .await;
+            ok_reply(&env, "CreateClienteReply", serde_json::json!(cliente))
+        }
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+/// Auditado (`cliente.alterado`) com os **campos** que mudaram — o valor, nunca.
+#[tracing::instrument(skip_all, fields(rpc = "UpdateCliente", tenant_id = %env.tenant_id))]
+async fn handler_update_cliente(
+    store: &dyn ports::ClienteStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    if id <= 0 {
+        return erro(
+            error_core::AppError::Validation("cliente não informado".into()),
+            &env,
+        );
+    }
+    let dados = match dados_do_cliente(&payload) {
+        Ok(d) => d,
+        Err(msg) => return erro(error_core::AppError::Validation(msg), &env),
+    };
+    let ctx = contexto_do_envelope(&env);
+    match store.atualizar_cliente(&ctx, id, dados).await {
+        Ok(Some(campos)) => {
+            if !campos.is_empty() {
+                audit
+                    .publish(
+                        &env,
+                        "cliente.alterado",
+                        format!("Cliente {id} alterado"),
+                        serde_json::json!({ "id": id, "campos": campos }),
+                    )
+                    .await;
+            }
+            ok_reply(
+                &env,
+                "UpdateClienteReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(None) => erro(
+            error_core::AppError::Validation("cliente não encontrado".into()),
+            &env,
+        ),
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "DefinirClienteAtivo", tenant_id = %env.tenant_id))]
+async fn handler_definir_cliente_ativo(
+    store: &dyn ports::ClienteStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let ativo = payload
+        .get("ativo")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    if id <= 0 {
+        return erro(
+            error_core::AppError::Validation("cliente não informado".into()),
+            &env,
+        );
+    }
+    let ctx = contexto_do_envelope(&env);
+    match store.definir_cliente_ativo(&ctx, id, ativo).await {
+        Ok(true) => {
+            let evento = if ativo {
+                "cliente.reativado"
+            } else {
+                "cliente.desativado"
+            };
+            audit
+                .publish(
+                    &env,
+                    evento,
+                    format!(
+                        "Cliente {id} {}",
+                        if ativo { "reativado" } else { "desativado" }
+                    ),
+                    serde_json::json!({ "id": id, "ativo": ativo }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "DefinirClienteAtivoReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Validation("cliente não encontrado".into()),
+            &env,
+        ),
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "ListContatosDoCliente", tenant_id = %env.tenant_id))]
+async fn handler_list_contatos_do_cliente(
+    store: &dyn ports::ClienteStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+    let ctx = contexto_do_envelope(&env);
+    match store.contatos_do_cliente(&ctx, id).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListContatosDoClienteReply",
+            serde_json::json!({ "contatos": itens }),
+        ),
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+/// Auditado (`contato.vinculado_cliente` / `.desvinculado_cliente`) com os dois
+/// ids.
+#[tracing::instrument(skip_all, fields(rpc = "VincularContatoCliente", tenant_id = %env.tenant_id))]
+async fn handler_vincular_contato_cliente(
+    store: &dyn ports::ClienteStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let cliente_id = payload
+        .get("cliente_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let contato_id = payload
+        .get("contato_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let vincular = payload
+        .get("vincular")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    if cliente_id <= 0 || contato_id <= 0 {
+        return erro(
+            error_core::AppError::Validation("informe o cliente e o contato".into()),
+            &env,
+        );
+    }
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .vincular_contato_cliente(&ctx, cliente_id, contato_id, vincular)
+        .await
+    {
+        Ok(true) => {
+            let evento = if vincular {
+                "contato.vinculado_cliente"
+            } else {
+                "contato.desvinculado_cliente"
+            };
+            audit
+                .publish(
+                    &env,
+                    evento,
+                    format!(
+                        "Contato {contato_id} {} cliente {cliente_id}",
+                        if vincular {
+                            "ligado ao"
+                        } else {
+                            "desligado do"
+                        }
+                    ),
+                    serde_json::json!({ "cliente_id": cliente_id, "contato_id": contato_id }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "VincularContatoClienteReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Validation("cliente ou contato não encontrado".into()),
             &env,
         ),
         Err(e) => erro(e.into(), &env),
@@ -10806,6 +11164,93 @@ mod tests_atendimento_cliente_unit {
         let resp = handler_registrar_extracao_treinamento(&store, &audit, vazio).await;
         assert_eq!(resp.kind, MessageKind::Error as i32);
         let _ = ResultadoExtracao::Texto(String::new());
+    }
+
+    /// B10 (N11 E5): documento vira dígitos com tamanho certo; UF, duas letras.
+    #[test]
+    fn dados_do_cliente_normaliza_e_recusa() {
+        let ok = dados_do_cliente(&serde_json::json!({
+            "nome_fantasia": " Padaria Sol ",
+            "tipo": "PJ",
+            "cnpj": "12.345.678/0001-90",
+            "uf": "pe",
+            "cep": "50000-000",
+            "site": "",
+        }))
+        .expect("cliente válido");
+        assert_eq!(ok.nome_fantasia, "Padaria Sol");
+        assert_eq!(ok.tipo.as_deref(), Some("pj"));
+        assert_eq!(ok.cnpj.as_deref(), Some("12345678000190"));
+        assert_eq!(ok.uf.as_deref(), Some("PE"));
+        assert_eq!(ok.cep.as_deref(), Some("50000000"));
+        assert_eq!(ok.site, None);
+
+        assert!(dados_do_cliente(&serde_json::json!({ "nome_fantasia": "" })).is_err());
+        assert!(
+            dados_do_cliente(&serde_json::json!({ "nome_fantasia": "x", "cnpj": "123" })).is_err()
+        );
+        assert!(
+            dados_do_cliente(&serde_json::json!({ "nome_fantasia": "x", "uf": "Pernambuco" }))
+                .is_err()
+        );
+        assert!(
+            dados_do_cliente(&serde_json::json!({ "nome_fantasia": "x", "tipo": "ong" })).is_err()
+        );
+    }
+
+    /// B10: a trilha do cadastro não leva documento nem nome.
+    #[tokio::test]
+    async fn create_cliente_audita_sem_dado_protegido() {
+        let mut store = MockClienteStore::new();
+        store.expect_criar_cliente().times(1).returning(|_, dados| {
+            Ok(infrastructure_postgres::clientes::clientes::ClienteResumo {
+                id: 8,
+                nome_fantasia: dados.nome_fantasia,
+                tipo: dados.tipo.unwrap_or_default(),
+                cnpj: dados.cnpj.unwrap_or_default(),
+                ativo: true,
+                ..Default::default()
+            })
+        });
+        let mut audit = crate::ports::MockAuditPort::new();
+        audit
+            .expect_publish()
+            .times(1)
+            .withf(|_, _, _, contexto| {
+                contexto["id"] == 8
+                    && contexto.get("cnpj").is_none()
+                    && contexto.get("nome").is_none()
+            })
+            .returning(|_, _, _, _| ());
+        let env = envelope_com_payload(
+            "CreateCliente",
+            serde_json::json!({ "nome_fantasia": "Padaria Sol", "tipo": "pj", "cnpj": "12345678000190" }),
+        );
+
+        let resp = handler_create_cliente(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["cnpj"], "12345678000190");
+    }
+
+    /// B10: vínculo com contato de outro tenant é "não encontrado" e não audita.
+    #[tokio::test]
+    async fn vincular_contato_de_fora_nao_audita() {
+        let mut store = MockClienteStore::new();
+        store
+            .expect_vincular_contato_cliente()
+            .times(1)
+            .returning(|_, _, _, _| Ok(false));
+        let audit = crate::ports::MockAuditPort::new();
+        let env = envelope_com_payload(
+            "VincularContatoCliente",
+            serde_json::json!({ "cliente_id": 1, "contato_id": 999, "vincular": true }),
+        );
+
+        let resp = handler_vincular_contato_cliente(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
     }
 
     /// HAPPY PATH: upsert_contact devolve o contato salvo.

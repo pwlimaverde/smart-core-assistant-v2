@@ -26,6 +26,127 @@ impl PgClienteStore {
 #[async_trait]
 impl ClienteStore for PgClienteStore {
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_clientes(
+        &self,
+        ctx: &RequestContext,
+        busca: String,
+        incluir_inativos: bool,
+        limite: i64,
+    ) -> Result<Vec<infrastructure_postgres::clientes::clientes::ClienteResumo>, DbError> {
+        let ctx = ctx.clone();
+        let limite = limite.clamp(1, 200);
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let itens = infrastructure_postgres::clientes::clientes::listar_clientes(
+                &mut tx,
+                &ctx,
+                busca.trim(),
+                incluir_inativos,
+                limite,
+            )
+            .await?;
+            Ok((itens, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn criar_cliente(
+        &self,
+        ctx: &RequestContext,
+        dados: infrastructure_postgres::clientes::clientes::DadosCliente,
+    ) -> Result<infrastructure_postgres::clientes::clientes::ClienteResumo, DbError> {
+        use infrastructure_postgres::clientes::clientes as repo;
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let id = repo::criar_cliente(&mut tx, &ctx, &dados).await?;
+            let criado = repo::buscar_cliente(&mut tx, &ctx, id)
+                .await?
+                .ok_or(DbError::NotFound)?;
+            Ok((criado, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn atualizar_cliente(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        dados: infrastructure_postgres::clientes::clientes::DadosCliente,
+    ) -> Result<Option<Vec<String>>, DbError> {
+        use infrastructure_postgres::clientes::clientes as repo;
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let Some(antes) = repo::buscar_cliente(&mut tx, &ctx, id).await? else {
+                return Ok((None, tx));
+            };
+            let campos: Vec<String> = repo::campos_alterados(&antes, &dados)
+                .into_iter()
+                .map(str::to_string)
+                .collect();
+            if !campos.is_empty() {
+                repo::atualizar_cliente(&mut tx, &ctx, id, &dados).await?;
+            }
+            Ok((Some(campos), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn definir_cliente_ativo(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        ativo: bool,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let feito = infrastructure_postgres::clientes::clientes::definir_cliente_ativo(
+                &mut tx, &ctx, id, ativo,
+            )
+            .await?;
+            Ok((feito, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, cliente_id = cliente_id))]
+    async fn contatos_do_cliente(
+        &self,
+        ctx: &RequestContext,
+        cliente_id: i32,
+    ) -> Result<Vec<infrastructure_postgres::clientes::clientes::ContatoVinculado>, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let itens = infrastructure_postgres::clientes::clientes::contatos_do_cliente(
+                &mut tx, &ctx, cliente_id,
+            )
+            .await?;
+            Ok((itens, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, cliente_id = cliente_id, contato_id = contato_id))]
+    async fn vincular_contato_cliente(
+        &self,
+        ctx: &RequestContext,
+        cliente_id: i32,
+        contato_id: i32,
+        vincular: bool,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let feito = infrastructure_postgres::clientes::clientes::vincular_contato(
+                &mut tx, &ctx, cliente_id, contato_id, vincular,
+            )
+            .await?;
+            Ok((feito, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
     async fn salvar_contato(
         &self,
         ctx: &RequestContext,

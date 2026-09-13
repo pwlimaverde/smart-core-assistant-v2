@@ -61,6 +61,7 @@ void main() {
     const aoAbrir = <String, List<String>>{
       '/tenant/painel': ['GetPainelTenant'],
       '/tenant/contatos': ['ListContatos'],
+      '/tenant/clientes': ['ListClientes'],
       '/tenant/equipe': ['ListDepartamentos', 'ListAtendentes'],
       '/tenant/fluxos': ['ListFluxos'],
       '/tenant/campos': ['ListCamposPersonalizados'],
@@ -71,6 +72,7 @@ void main() {
     /// A chamada do botão principal de cada tela.
     const aoAlterar = <String, String>{
       '/tenant/contatos': 'CreateContato',
+      '/tenant/clientes': 'CreateCliente',
       '/tenant/equipe': 'CreateDepartamento',
       '/tenant/fluxos': 'CreateFluxo',
       '/tenant/campos': 'CreateCampoPersonalizado',

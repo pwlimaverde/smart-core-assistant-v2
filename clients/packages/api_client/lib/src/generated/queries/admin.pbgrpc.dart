@@ -776,6 +776,52 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$definirMyContatoAtivo, request, options: options);
   }
 
+  /// B10 (N11 E5): clientes (PJ/PF) e o vinculo com os contatos.
+  $grpc.ResponseFuture<$0.ListMyClientesResponse> listMyClientes(
+    $0.ListMyClientesRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyClientes, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.MyClienteResponse> createMyCliente(
+    $0.CreateMyClienteRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$createMyCliente, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> updateMyCliente(
+    $0.UpdateMyClienteRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$updateMyCliente, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> definirMyClienteAtivo(
+    $0.DefinirMyClienteAtivoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$definirMyClienteAtivo, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ListMyContatosDoClienteResponse>
+      listMyContatosDoCliente(
+    $0.MyClienteIdRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyContatosDoCliente, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> vincularMyContatoCliente(
+    $0.VincularMyContatoClienteRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$vincularMyContatoCliente, request,
+        options: options);
+  }
+
   /// N9 E13 — o catalogo de campos do cartao, por tenant.
   $grpc.ResponseFuture<$0.ListMyCamposResponse> listMyCampos(
     $0.ListMyCamposRequest request, {
@@ -1368,6 +1414,36 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/DefinirMyContatoAtivo',
           ($0.DefinirMyContatoAtivoRequest value) => value.writeToBuffer(),
           $0.SimpleOkResponse.fromBuffer);
+  static final _$listMyClientes =
+      $grpc.ClientMethod<$0.ListMyClientesRequest, $0.ListMyClientesResponse>(
+          '/smartcore.contracts.queries.AdminService/ListMyClientes',
+          ($0.ListMyClientesRequest value) => value.writeToBuffer(),
+          $0.ListMyClientesResponse.fromBuffer);
+  static final _$createMyCliente =
+      $grpc.ClientMethod<$0.CreateMyClienteRequest, $0.MyClienteResponse>(
+          '/smartcore.contracts.queries.AdminService/CreateMyCliente',
+          ($0.CreateMyClienteRequest value) => value.writeToBuffer(),
+          $0.MyClienteResponse.fromBuffer);
+  static final _$updateMyCliente =
+      $grpc.ClientMethod<$0.UpdateMyClienteRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/UpdateMyCliente',
+          ($0.UpdateMyClienteRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$definirMyClienteAtivo =
+      $grpc.ClientMethod<$0.DefinirMyClienteAtivoRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/DefinirMyClienteAtivo',
+          ($0.DefinirMyClienteAtivoRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$listMyContatosDoCliente = $grpc.ClientMethod<
+          $0.MyClienteIdRequest, $0.ListMyContatosDoClienteResponse>(
+      '/smartcore.contracts.queries.AdminService/ListMyContatosDoCliente',
+      ($0.MyClienteIdRequest value) => value.writeToBuffer(),
+      $0.ListMyContatosDoClienteResponse.fromBuffer);
+  static final _$vincularMyContatoCliente = $grpc.ClientMethod<
+          $0.VincularMyContatoClienteRequest, $0.SimpleOkResponse>(
+      '/smartcore.contracts.queries.AdminService/VincularMyContatoCliente',
+      ($0.VincularMyContatoClienteRequest value) => value.writeToBuffer(),
+      $0.SimpleOkResponse.fromBuffer);
   static final _$listMyCampos =
       $grpc.ClientMethod<$0.ListMyCamposRequest, $0.ListMyCamposResponse>(
           '/smartcore.contracts.queries.AdminService/ListMyCampos',
@@ -2295,6 +2371,60 @@ abstract class AdminServiceBase extends $grpc.Service {
         false,
         ($core.List<$core.int> value) =>
             $0.DefinirMyContatoAtivoRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListMyClientesRequest,
+            $0.ListMyClientesResponse>(
+        'ListMyClientes',
+        listMyClientes_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListMyClientesRequest.fromBuffer(value),
+        ($0.ListMyClientesResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.CreateMyClienteRequest, $0.MyClienteResponse>(
+            'CreateMyCliente',
+            createMyCliente_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.CreateMyClienteRequest.fromBuffer(value),
+            ($0.MyClienteResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.UpdateMyClienteRequest, $0.SimpleOkResponse>(
+            'UpdateMyCliente',
+            updateMyCliente_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.UpdateMyClienteRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.DefinirMyClienteAtivoRequest,
+            $0.SimpleOkResponse>(
+        'DefinirMyClienteAtivo',
+        definirMyClienteAtivo_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.DefinirMyClienteAtivoRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.MyClienteIdRequest,
+            $0.ListMyContatosDoClienteResponse>(
+        'ListMyContatosDoCliente',
+        listMyContatosDoCliente_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.MyClienteIdRequest.fromBuffer(value),
+        ($0.ListMyContatosDoClienteResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.VincularMyContatoClienteRequest,
+            $0.SimpleOkResponse>(
+        'VincularMyContatoCliente',
+        vincularMyContatoCliente_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.VincularMyContatoClienteRequest.fromBuffer(value),
         ($0.SimpleOkResponse value) => value.writeToBuffer()));
     $addMethod(
         $grpc.ServiceMethod<$0.ListMyCamposRequest, $0.ListMyCamposResponse>(
@@ -3271,6 +3401,60 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.SimpleOkResponse> definirMyContatoAtivo(
       $grpc.ServiceCall call, $0.DefinirMyContatoAtivoRequest request);
+
+  $async.Future<$0.ListMyClientesResponse> listMyClientes_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListMyClientesRequest> $request) async {
+    return listMyClientes($call, await $request);
+  }
+
+  $async.Future<$0.ListMyClientesResponse> listMyClientes(
+      $grpc.ServiceCall call, $0.ListMyClientesRequest request);
+
+  $async.Future<$0.MyClienteResponse> createMyCliente_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.CreateMyClienteRequest> $request) async {
+    return createMyCliente($call, await $request);
+  }
+
+  $async.Future<$0.MyClienteResponse> createMyCliente(
+      $grpc.ServiceCall call, $0.CreateMyClienteRequest request);
+
+  $async.Future<$0.SimpleOkResponse> updateMyCliente_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.UpdateMyClienteRequest> $request) async {
+    return updateMyCliente($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> updateMyCliente(
+      $grpc.ServiceCall call, $0.UpdateMyClienteRequest request);
+
+  $async.Future<$0.SimpleOkResponse> definirMyClienteAtivo_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.DefinirMyClienteAtivoRequest> $request) async {
+    return definirMyClienteAtivo($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> definirMyClienteAtivo(
+      $grpc.ServiceCall call, $0.DefinirMyClienteAtivoRequest request);
+
+  $async.Future<$0.ListMyContatosDoClienteResponse> listMyContatosDoCliente_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MyClienteIdRequest> $request) async {
+    return listMyContatosDoCliente($call, await $request);
+  }
+
+  $async.Future<$0.ListMyContatosDoClienteResponse> listMyContatosDoCliente(
+      $grpc.ServiceCall call, $0.MyClienteIdRequest request);
+
+  $async.Future<$0.SimpleOkResponse> vincularMyContatoCliente_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.VincularMyContatoClienteRequest> $request) async {
+    return vincularMyContatoCliente($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> vincularMyContatoCliente(
+      $grpc.ServiceCall call, $0.VincularMyContatoClienteRequest request);
 
   $async.Future<$0.ListMyCamposResponse> listMyCampos_Pre(
       $grpc.ServiceCall $call,

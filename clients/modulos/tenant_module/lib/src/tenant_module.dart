@@ -1,3 +1,7 @@
+import 'features/clientes/data/datasources/clientes_datasources.dart';
+import 'features/clientes/data/repositories/clientes_repositories.dart';
+import 'features/clientes/domain/usecases/clientes_usecases.dart';
+import 'features/clientes/presentation/routes/clientes_routes.dart';
 import 'package:dependencies_module/dependencies_module.dart';
 
 import 'features/campos/presentation/routes/campos_routes.dart';
@@ -260,6 +264,42 @@ final class TenantModule extends AppModule {
     );
 
     // ── contatos ──────────────────────────────────────────────────────────
+    // ── clientes (B10 / N11 E5) ────────────────────────────────────────────
+    i.lazySingleton<ListarClientesUsecase>(
+      () => ListarClientesUsecase(
+        repository: ListarClientesRepository(
+          datasource: ListarClientesDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<SalvarClienteUsecase>(
+      () => SalvarClienteUsecase(
+        repository: SalvarClienteRepository(
+          datasource: SalvarClienteDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<DefinirClienteAtivoUsecase>(
+      () => DefinirClienteAtivoUsecase(
+        repository: DefinirClienteAtivoRepository(
+          datasource: DefinirClienteAtivoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<ListarContatosDoClienteUsecase>(
+      () => ListarContatosDoClienteUsecase(
+        repository: ListarContatosDoClienteRepository(
+          datasource: ListarContatosDoClienteDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<VincularContatoUsecase>(
+      () => VincularContatoUsecase(
+        repository: VincularContatoRepository(
+          datasource: VincularContatoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
     i.lazySingleton<ListarContatosUsecase>(
       () => ListarContatosUsecase(
         repository: ListarContatosRepository(
@@ -407,6 +447,7 @@ final class TenantModule extends AppModule {
     IntegracoesRoute(),
     ConexoesRoute(),
     ContatosRoute(),
+    ClientesRoute(),
     EquipeRoute(),
     CamposRoute(),
     FluxosRoute(),

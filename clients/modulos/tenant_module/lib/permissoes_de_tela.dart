@@ -25,6 +25,8 @@ const Map<String, List<String>?> escoposParaAbrir = {
   '/tenant/painel': ['atendimentos:read'],
   // ListContatos — quem atende também procura o cliente para abrir conversa.
   '/tenant/contatos': ['clientes:read', 'atendimentos:read'],
+  // ListClientes — o cadastro de negócio por trás dos contatos (B10).
+  '/tenant/clientes': ['clientes:read'],
   // ListDepartamentos e ListAtendentes
   '/tenant/equipe': ['operacional:read'],
   // ListFluxos
@@ -50,6 +52,7 @@ const Map<String, List<String>?> escoposParaAbrir = {
 /// usuários já são só do admin; aplicativos conectados são da própria pessoa).
 const Map<String, List<String>> escoposParaAlterar = {
   '/tenant/contatos': ['clientes:write'],
+  '/tenant/clientes': ['clientes:write'],
   '/tenant/equipe': ['operacional:admin'],
   '/tenant/fluxos': ['kanban:admin'],
   '/tenant/campos': ['configuracoes:write'],

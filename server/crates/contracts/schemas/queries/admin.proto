@@ -1217,6 +1217,13 @@ service AdminService {
   rpc CreateMyContato(CreateMyContatoRequest) returns (MyContatoResponse);
   rpc UpdateMyContato(UpdateMyContatoRequest) returns (SimpleOkResponse);
   rpc DefinirMyContatoAtivo(DefinirMyContatoAtivoRequest) returns (SimpleOkResponse);
+  // B10 (N11 E5): clientes (PJ/PF) e o vinculo com os contatos.
+  rpc ListMyClientes(ListMyClientesRequest) returns (ListMyClientesResponse);
+  rpc CreateMyCliente(CreateMyClienteRequest) returns (MyClienteResponse);
+  rpc UpdateMyCliente(UpdateMyClienteRequest) returns (SimpleOkResponse);
+  rpc DefinirMyClienteAtivo(DefinirMyClienteAtivoRequest) returns (SimpleOkResponse);
+  rpc ListMyContatosDoCliente(MyClienteIdRequest) returns (ListMyContatosDoClienteResponse);
+  rpc VincularMyContatoCliente(VincularMyContatoClienteRequest) returns (SimpleOkResponse);
 
   // N9 E13 — o catalogo de campos do cartao, por tenant.
   rpc ListMyCampos(ListMyCamposRequest) returns (ListMyCamposResponse);
@@ -1469,6 +1476,82 @@ message UpdateMyContatoRequest {
 message DefinirMyContatoAtivoRequest {
   int32 id = 1;
   bool ativo = 2;
+}
+
+// --- B10 (N11 E5): clientes (PJ/PF) ---
+// CNPJ/CPF e endereco sao dado protegido: nunca em log.
+message DadosMyCliente {
+  string nome_fantasia = 1;
+  string razao_social = 2;
+  string tipo = 3;          // pj | pf | vazio
+  string cnpj = 4;          // como digitado; o servidor guarda so digitos
+  string cpf = 5;
+  string telefone = 6;
+  string site = 7;
+  string ramo_atividade = 8;
+  string observacoes = 9;
+  string cep = 10;
+  string logradouro = 11;
+  string numero = 12;
+  string complemento = 13;
+  string bairro = 14;
+  string cidade = 15;
+  string uf = 16;
+}
+
+message MyCliente {
+  int32 id = 1;
+  DadosMyCliente dados = 2;
+  bool ativo = 3;
+  int32 contatos = 4;       // quantos contatos estao ligados a ele
+}
+
+message ListMyClientesRequest {
+  string busca = 1;           // nome, razao social ou documento
+  bool incluir_inativos = 2;
+  int32 limite = 3;           // 0 = padrao do servidor (50); teto 200
+}
+
+message ListMyClientesResponse {
+  repeated MyCliente clientes = 1;
+}
+
+message CreateMyClienteRequest {
+  DadosMyCliente dados = 1;
+}
+
+message MyClienteResponse {
+  MyCliente cliente = 1;
+}
+
+message UpdateMyClienteRequest {
+  int32 id = 1;
+  DadosMyCliente dados = 2;
+}
+
+message DefinirMyClienteAtivoRequest {
+  int32 id = 1;
+  bool ativo = 2;
+}
+
+message MyClienteIdRequest {
+  int32 id = 1;
+}
+
+message ContatoDoCliente {
+  int32 id = 1;
+  string nome = 2;
+  string telefone = 3;
+}
+
+message ListMyContatosDoClienteResponse {
+  repeated ContatoDoCliente contatos = 1;
+}
+
+message VincularMyContatoClienteRequest {
+  int32 cliente_id = 1;
+  int32 contato_id = 2;
+  bool vincular = 3;          // false = desligar
 }
 
 // --- Painel do tenant ---

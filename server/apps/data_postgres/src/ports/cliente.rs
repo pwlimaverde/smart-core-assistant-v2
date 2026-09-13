@@ -68,6 +68,55 @@ pub trait ClienteStore: Send + Sync {
         edicao: EdicaoContato,
     ) -> Result<DesfechoEdicaoContato, DbError>;
 
+    /// B10 (N11 E5) — clientes do tenant, ativos primeiro.
+    async fn listar_clientes(
+        &self,
+        ctx: &RequestContext,
+        busca: String,
+        incluir_inativos: bool,
+        limite: i64,
+    ) -> Result<Vec<infrastructure_postgres::clientes::clientes::ClienteResumo>, DbError>;
+
+    /// B10 — cadastra um cliente.
+    async fn criar_cliente(
+        &self,
+        ctx: &RequestContext,
+        dados: infrastructure_postgres::clientes::clientes::DadosCliente,
+    ) -> Result<infrastructure_postgres::clientes::clientes::ClienteResumo, DbError>;
+
+    /// B10 — edita; devolve os **campos** alterados (`None` = não encontrado).
+    async fn atualizar_cliente(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        dados: infrastructure_postgres::clientes::clientes::DadosCliente,
+    ) -> Result<Option<Vec<String>>, DbError>;
+
+    /// B10 — tira (ou devolve) o cliente da lista.
+    async fn definir_cliente_ativo(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        ativo: bool,
+    ) -> Result<bool, DbError>;
+
+    /// B10 — os contatos ligados a um cliente.
+    async fn contatos_do_cliente(
+        &self,
+        ctx: &RequestContext,
+        cliente_id: i32,
+    ) -> Result<Vec<infrastructure_postgres::clientes::clientes::ContatoVinculado>, DbError>;
+
+    /// B10 — liga (ou desliga) um contato de um cliente. `false` = um dos dois
+    /// não é deste tenant.
+    async fn vincular_contato_cliente(
+        &self,
+        ctx: &RequestContext,
+        cliente_id: i32,
+        contato_id: i32,
+        vincular: bool,
+    ) -> Result<bool, DbError>;
+
     /// Tira (ou devolve) o contato da lista sem apagar o histórico.
     async fn definir_contato_ativo(
         &self,

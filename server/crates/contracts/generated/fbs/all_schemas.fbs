@@ -1096,6 +1096,80 @@ table DefinirMyContatoAtivoRequest {
   ativo:bool;
 }
 
+table DadosMyCliente {
+  nome_fantasia:string;
+  razao_social:string;
+  tipo:string;
+  cnpj:string;
+  cpf:string;
+  telefone:string;
+  site:string;
+  ramo_atividade:string;
+  observacoes:string;
+  cep:string;
+  logradouro:string;
+  numero:string;
+  complemento:string;
+  bairro:string;
+  cidade:string;
+  uf:string;
+}
+
+table MyCliente {
+  id:int;
+  dados:DadosMyCliente;
+  ativo:bool;
+  contatos:int;
+}
+
+table ListMyClientesRequest {
+  busca:string;
+  incluir_inativos:bool;
+  limite:int;
+}
+
+table ListMyClientesResponse {
+  clientes:[MyCliente];
+}
+
+table CreateMyClienteRequest {
+  dados:DadosMyCliente;
+}
+
+table MyClienteResponse {
+  cliente:MyCliente;
+}
+
+table UpdateMyClienteRequest {
+  id:int;
+  dados:DadosMyCliente;
+}
+
+table DefinirMyClienteAtivoRequest {
+  id:int;
+  ativo:bool;
+}
+
+table MyClienteIdRequest {
+  id:int;
+}
+
+table ContatoDoCliente {
+  id:int;
+  nome:string;
+  telefone:string;
+}
+
+table ListMyContatosDoClienteResponse {
+  contatos:[ContatoDoCliente];
+}
+
+table VincularMyContatoClienteRequest {
+  cliente_id:int;
+  contato_id:int;
+  vincular:bool;
+}
+
 table GetMyPainelRequest {
 }
 

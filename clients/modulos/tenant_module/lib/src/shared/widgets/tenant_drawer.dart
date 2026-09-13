@@ -29,6 +29,7 @@ class TenantDrawer extends StatelessWidget {
     final operacao = [
       item(Icons.insights_outlined, 'Painel', '/tenant/painel'),
       item(Icons.contacts_outlined, 'Contatos', '/tenant/contatos'),
+      item(Icons.business_outlined, 'Clientes', '/tenant/clientes'),
       item(Icons.groups_outlined, 'Equipe', '/tenant/equipe'),
       item(
         Icons.account_tree_outlined,

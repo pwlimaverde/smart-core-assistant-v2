@@ -31,12 +31,14 @@ use contracts::grpc::queries::{
     AtendimentoResumo as ProtoAtendimentoResumo,
     AuditLogEntry as ProtoAuditLogEntry,
     AuthResponse,
+    ContatoDoCliente,
     CoreSetting as ProtoCoreSetting,
     CreateEtiquetaRequest,
     CreateInviteRequest,
     CreateInviteResponse,
     CreateMyAtendenteRequest,
     CreateMyCampoRequest,
+    CreateMyClienteRequest,
     CreateMyContatoRequest,
     CreateMyDepartamentoRequest,
     CreateMyDepartamentoResponse,
@@ -55,8 +57,10 @@ use contracts::grpc::queries::{
     // Vouchers de ativação
     CreateVoucherRequest,
     CreateVoucherResponse,
+    DadosMyCliente,
     DefinirBotDaConversaRequest,
     DefinirBotDaConversaResponse,
+    DefinirMyClienteAtivoRequest,
     DefinirMyContatoAtivoRequest,
     DefinirRespostaBotInstanciaRequest,
     DefinirRespostaBotInstanciaResponse,
@@ -112,6 +116,9 @@ use contracts::grpc::queries::{
     ListMyAuditLogResponse,
     ListMyCamposRequest,
     ListMyCamposResponse,
+    ListMyClientesRequest,
+    ListMyClientesResponse,
+    ListMyContatosDoClienteResponse,
     ListMyContatosRequest,
     ListMyContatosResponse,
     ListMyDepartamentosRequest,
@@ -161,6 +168,9 @@ use contracts::grpc::queries::{
     MyCampoIdRequest,
     MyCampoPersonalizado,
     MyCampoResponse,
+    MyCliente,
+    MyClienteIdRequest,
+    MyClienteResponse,
     MyContato,
     MyContatoResponse,
     MyDepartamento,
@@ -242,6 +252,7 @@ use contracts::grpc::queries::{
     TrechoUsado,
     UpdateMyAtendenteRequest,
     UpdateMyCampoRequest,
+    UpdateMyClienteRequest,
     UpdateMyContatoRequest,
     UpdateMyDepartamentoRequest,
     UpdateMyEtapaFluxoRequest,
@@ -259,6 +270,7 @@ use contracts::grpc::queries::{
     UpsertCoreSettingRequest,
     UpsertCoreSettingResponse,
     ValorCampoDoAtendimento,
+    VincularMyContatoClienteRequest,
     Voucher as ProtoVoucher,
     VoucherRedemption as ProtoVoucherRedemption,
 };
@@ -3861,6 +3873,158 @@ impl AdminService for AdminFacade {
         Ok(Response::new(MyTreinamentoResponse {
             treinamento: Some(treinamento_do_json(&corpo)),
         }))
+    }
+
+    // --- B10 (N11 E5): clientes (PJ/PF) ---
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyClientes", traceparent)
+    )]
+    async fn list_my_clientes(
+        &self,
+        req: Request<ListMyClientesRequest>,
+    ) -> Result<Response<ListMyClientesResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "ListClientes",
+                serde_json::json!({
+                    "busca": inner.busca,
+                    "incluir_inativos": inner.incluir_inativos,
+                    "limite": if inner.limite > 0 { inner.limite } else { 50 },
+                }),
+            )
+            .await?;
+        let clientes = corpo
+            .get("clientes")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().map(cliente_do_json).collect())
+            .unwrap_or_default();
+        Ok(Response::new(ListMyClientesResponse { clientes }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "CreateMyCliente", traceparent)
+    )]
+    async fn create_my_cliente(
+        &self,
+        req: Request<CreateMyClienteRequest>,
+    ) -> Result<Response<MyClienteResponse>, Status> {
+        let dados = req.get_ref().dados.clone().unwrap_or_default();
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "CreateCliente",
+                dados_cliente_para_json(&dados),
+            )
+            .await?;
+        Ok(Response::new(MyClienteResponse {
+            cliente: Some(cliente_do_json(&corpo)),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "UpdateMyCliente", traceparent)
+    )]
+    async fn update_my_cliente(
+        &self,
+        req: Request<UpdateMyClienteRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let mut payload = dados_cliente_para_json(&inner.dados.unwrap_or_default());
+        payload["id"] = serde_json::json!(inner.id);
+        self.encaminhar_tenant(&req, &self.deps.pg, "UpdateCliente", payload)
+            .await?;
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DefinirMyClienteAtivo", traceparent)
+    )]
+    async fn definir_my_cliente_ativo(
+        &self,
+        req: Request<DefinirMyClienteAtivoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = *req.get_ref();
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "DefinirClienteAtivo",
+            serde_json::json!({ "id": inner.id, "ativo": inner.ativo }),
+        )
+        .await?;
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyContatosDoCliente", traceparent)
+    )]
+    async fn list_my_contatos_do_cliente(
+        &self,
+        req: Request<MyClienteIdRequest>,
+    ) -> Result<Response<ListMyContatosDoClienteResponse>, Status> {
+        let id = req.get_ref().id;
+        let corpo = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "ListContatosDoCliente",
+                serde_json::json!({ "id": id }),
+            )
+            .await?;
+        let contatos = corpo
+            .get("contatos")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .map(|c| ContatoDoCliente {
+                        id: c.get("id").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+                        nome: c
+                            .get("nome")
+                            .and_then(|x| x.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        telefone: c
+                            .get("telefone")
+                            .and_then(|x| x.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(Response::new(ListMyContatosDoClienteResponse { contatos }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "VincularMyContatoCliente", traceparent)
+    )]
+    async fn vincular_my_contato_cliente(
+        &self,
+        req: Request<VincularMyContatoClienteRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = *req.get_ref();
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "VincularContatoCliente",
+            serde_json::json!({
+                "cliente_id": inner.cliente_id,
+                "contato_id": inner.contato_id,
+                "vincular": inner.vincular,
+            }),
+        )
+        .await?;
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
     }
 
     // --- Curadoria de intenções ---
@@ -8128,6 +8292,60 @@ fn payload_intent(dados: &MyIntentDados) -> serde_json::Value {
 }
 
 /// Converte o contato do JSON interno no tipo do contrato.
+/// B10 (N11 E5) — os campos de um cliente como o `data_postgres` os lê.
+fn dados_cliente_para_json(d: &DadosMyCliente) -> serde_json::Value {
+    serde_json::json!({
+        "nome_fantasia": d.nome_fantasia,
+        "razao_social": d.razao_social,
+        "tipo": d.tipo,
+        "cnpj": d.cnpj,
+        "cpf": d.cpf,
+        "telefone": d.telefone,
+        "site": d.site,
+        "ramo_atividade": d.ramo_atividade,
+        "observacoes": d.observacoes,
+        "cep": d.cep,
+        "logradouro": d.logradouro,
+        "numero": d.numero,
+        "complemento": d.complemento,
+        "bairro": d.bairro,
+        "cidade": d.cidade,
+        "uf": d.uf,
+    })
+}
+
+fn cliente_do_json(v: &serde_json::Value) -> MyCliente {
+    let texto = |chave: &str| {
+        v.get(chave)
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    MyCliente {
+        id: v.get("id").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+        dados: Some(DadosMyCliente {
+            nome_fantasia: texto("nome_fantasia"),
+            razao_social: texto("razao_social"),
+            tipo: texto("tipo"),
+            cnpj: texto("cnpj"),
+            cpf: texto("cpf"),
+            telefone: texto("telefone"),
+            site: texto("site"),
+            ramo_atividade: texto("ramo_atividade"),
+            observacoes: texto("observacoes"),
+            cep: texto("cep"),
+            logradouro: texto("logradouro"),
+            numero: texto("numero"),
+            complemento: texto("complemento"),
+            bairro: texto("bairro"),
+            cidade: texto("cidade"),
+            uf: texto("uf"),
+        }),
+        ativo: v.get("ativo").and_then(|x| x.as_bool()).unwrap_or(false),
+        contatos: v.get("contatos").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+    }
+}
+
 fn contato_do_json(v: &serde_json::Value) -> MyContato {
     let texto = |chave: &str| {
         v.get(chave)
@@ -9114,6 +9332,12 @@ mod tests {
             "RegistrarFeedbackTeste" => facade.registrar_feedback_teste(Request::new(RegistrarFeedbackTesteRequest::default())).await,
             "SolicitarUploadTreinamento" => facade.solicitar_upload_treinamento(Request::new(SolicitarUploadTreinamentoRequest::default())).await,
             "CreateMyTreinamentoComArquivo" => facade.create_my_treinamento_com_arquivo(Request::new(CreateMyTreinamentoComArquivoRequest::default())).await,
+            "ListMyClientes" => facade.list_my_clientes(Request::new(ListMyClientesRequest::default())).await,
+            "CreateMyCliente" => facade.create_my_cliente(Request::new(CreateMyClienteRequest::default())).await,
+            "UpdateMyCliente" => facade.update_my_cliente(Request::new(UpdateMyClienteRequest::default())).await,
+            "DefinirMyClienteAtivo" => facade.definir_my_cliente_ativo(Request::new(DefinirMyClienteAtivoRequest::default())).await,
+            "ListMyContatosDoCliente" => facade.list_my_contatos_do_cliente(Request::new(MyClienteIdRequest::default())).await,
+            "VincularMyContatoCliente" => facade.vincular_my_contato_cliente(Request::new(VincularMyContatoClienteRequest::default())).await,
         }
     }
 

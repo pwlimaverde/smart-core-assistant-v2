@@ -29,7 +29,7 @@
 | B7 | Ajustar permissões de um agente sem desconectar | doc 35-agentes F4 | Hoje a única saída é revogar e reconectar | ✅ CI verde (`3b9f13f`) |
 | B8 | Descoberta dos aplicativos conectados | doc 35-agentes F5 | Recurso que precisa ser explicado por fora não foi entregue | ✅ CI verde (`e14a993`) |
 | B9 | IA analítica: assunto automático, feedback do teste, treinamento por arquivo | N10 E2, E6, E5 | Maior e mais caro; depende de nada acima | ⏳ E6 ✅, E1+E2 ✅; E5 no CI |
-| B10 | Clientes PJ e vínculo contato ↔ cliente | N11 E5 / doc 34 C4 | Entidade nova com tela própria | ⬜ |
+| B10 | Clientes PJ e vínculo contato ↔ cliente | N11 E5 / doc 34 C4 | Entidade nova com tela própria | ⏳ aguardando CI do B9 |
 
 **Fora deste cronograma:** N12 (cutover de produção) — é operação com janela
 combinada, dump de produção e go/no-go; não é código a executar sozinho.
@@ -440,3 +440,38 @@ enriquecimento do contato) precisarem dele.
 
 **Fica de fora:** o teste com mídia da E6.1 (opcional no plano) e a tela de
 revisão do acumulado de avaliações.
+
+### B10 — Clientes PJ e vínculo contato ↔ cliente (N11 E5 / doc 34 C4)
+
+**Confirmado antes de construir:** a metade "contato" do C4 já estava entregue
+(criar, editar e desativar contato, com o telefone normalizado). Faltava o
+cliente: as tabelas existiam desde a migration 0004, e o `ClienteRepository`
+estava completo e sem consumidor.
+
+**Uma falha de isolamento evitada:** a chave estrangeira de
+`oraculo_cliente_contatos` aceita o id de um contato de **outro tenant** — a RLS
+não vale para a checagem de FK. O vínculo confere na mesma transação que o
+cliente e o contato são do tenant, e responde "não encontrado" se não forem.
+
+**Entregue:**
+
+- Servidor: listar (com busca por nome, razão social ou documento, e quantos
+  contatos cada um tem), cadastrar, editar, tirar/devolver à lista, contatos do
+  cliente e ligar/desligar contato. Consultas sem macro.
+- Conferência no servidor: nome obrigatório; CNPJ vira 14 dígitos e CPF 11
+  (formatado ou não); UF, duas letras; CEP, oito dígitos; limites das colunas.
+- Auditoria só com o que não é dado protegido: `cliente.criado` (id e tipo),
+  `cliente.alterado` com os **campos** que mudaram, `cliente.desativado` /
+  `.reativado`, `contato.vinculado_cliente` / `.desvinculado_cliente`. CNPJ, CPF
+  e endereço nunca vão para log nem para a trilha.
+- Tela **Clientes** no menu (`clientes:read` abre, `clientes:write` altera — o
+  teste de espelho do `rbac::MAPA` cobre as duas): busca, "mostrar inativos",
+  cadastro em seções (identificação com empresa/pessoa, contato, endereço,
+  observações), e o diálogo de contatos do cliente, que liga procurando entre os
+  contatos existentes.
+- Testes: normalização e recusas do cadastro; campos alterados; auditoria sem
+  documento; vínculo com contato de fora não audita; cadeia do Flutter
+  (listar, cadastrar vs editar, recusa com a mensagem do servidor, vínculo).
+
+**Fica de fora:** `ListAtendimentosDoContato` (o histórico do contato), que o
+plano amarra à linha do tempo da N9d.
