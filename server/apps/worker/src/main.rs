@@ -1125,6 +1125,11 @@ async fn processar_mensagem_recebida(
     let resolve_payload = serde_json::json!({
         "phone": msg_normalized.sender,
         "push_name": msg_normalized.push_name,
+        // D3 — sem o `instance_id` o `data_postgres` não tem como ler o
+        // `resposta_bot` da conexão e responde "a instância responde". Resultado:
+        // desligar a resposta automática no painel não calava o bot, e a única
+        // saída era remover a conexão.
+        "instance_id": instance_id,
     });
 
     let resolve_envelope = Envelope {

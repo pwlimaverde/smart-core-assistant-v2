@@ -1112,6 +1112,41 @@ pub async fn definir_assunto_se_vazio(
     Ok(res.rows_affected() > 0)
 }
 
+/// Todos os atendimentos **ativos** do tenant (tudo menos `arquivado`).
+///
+/// É o que o quadro pede quando não filtra por status: as colunas vão de "fila"
+/// a "finalização", e listar só `fila` deixava o quadro vazio assim que a
+/// conversa andava — que é o estado normal de quem está atendendo. Arquivado
+/// fica de fora porque o quadro é o trabalho de agora, não o histórico.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, limit = limit))]
+pub async fn listar_ativos_do_tenant(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    departamento_id: Option<i32>,
+    limit: i64,
+) -> Result<Vec<Atendimento>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let rows = sqlx::query_as::<_, Atendimento>(
+        r#"SELECT id, tenant_id, contato_id, departamento_id, fluxo_atendimento_id,
+                  status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
+                  assunto, prioridade, atendente_humano_id, contexto_conversa,
+                  historico_status, tags, avaliacao, feedback,
+                  data_primeira_resposta, bot_pode_atender,
+                  sentimento_nota, sentimento_label
+           FROM oraculo_atendimento
+           WHERE tenant_id = $1 AND status <> 'arquivado'
+             AND ($2::int IS NULL OR departamento_id = $2)
+           ORDER BY data_inicio DESC
+           LIMIT $3"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(departamento_id)
+    .bind(limit)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

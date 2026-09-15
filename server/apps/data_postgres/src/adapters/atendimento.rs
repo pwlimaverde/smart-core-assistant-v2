@@ -258,9 +258,29 @@ impl AtendimentoStore for PgAtendimentoStore {
         let tenant_id = ctx.tenant_id;
         let status = status.to_string();
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
-            let atendimentos = repo
-                .listar_por_status(&mut tx, &ctx, &status, departamento_id, limit)
-                .await?;
+            // Status vazio = o quadro inteiro (tudo que não foi arquivado).
+            let atendimentos = if status.trim().is_empty() {
+                let todos =
+                    infrastructure_postgres::atendimentos::atendimentos::listar_ativos_do_tenant(
+                        &mut tx,
+                        &ctx,
+                        departamento_id,
+                        limit,
+                    )
+                    .await?;
+                // O mesmo recorte por fluxo do `listar_por_status`: quem não
+                // enxerga o fluxo não vê o cartão.
+                todos
+                    .into_iter()
+                    .filter(|a| match a.fluxo_atendimento_id {
+                        Some(fluxo_id) => ctx.has_flow_permission(fluxo_id),
+                        None => true,
+                    })
+                    .collect()
+            } else {
+                repo.listar_por_status(&mut tx, &ctx, &status, departamento_id, limit)
+                    .await?
+            };
             Ok((atendimentos, tx))
         })
         .await

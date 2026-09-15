@@ -5841,7 +5841,9 @@ impl AdminService for AdminFacade {
         let inner = req.into_inner();
 
         let payload = serde_json::json!({
-            "status": if inner.status.is_empty() { "fila" } else { &inner.status },
+            // Vazio viaja como vazio: é "o quadro inteiro". Trocar por "fila"
+            // aqui escondia toda conversa que já tinha andado de coluna.
+            "status": inner.status,
             "departamento_id": if inner.departamento_id > 0 { Some(inner.departamento_id) } else { None },
             "limit": if inner.limit > 0 { inner.limit } else { 50 },
         });
