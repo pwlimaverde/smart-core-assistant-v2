@@ -9,9 +9,13 @@ final class SendOutboundMessageParameters extends Parameters {
   final String conteudo;
   final String tipo;
 
+  /// P2 — responder citando outra mensagem da mesma conversa.
+  final int? mensagemCitadaId;
+
   const SendOutboundMessageParameters({
     required this.atendimentoId,
     required this.conteudo,
     this.tipo = 'texto',
+    this.mensagemCitadaId,
   });
 }

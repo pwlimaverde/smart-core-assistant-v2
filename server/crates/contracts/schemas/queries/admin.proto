@@ -541,6 +541,11 @@ message GetThreadRequest {
   int32 atendimento_id = 1;
   int32 limit = 2;
   int32 offset = 3;
+  // P2 — rolar para cima carrega o que veio ANTES desta mensagem, como o
+  // `get_messages(before_id=...)` da v1. Paginar por offset numa conversa que
+  // recebe mensagem enquanto se rola repete ou pula bolha; o cursor nao.
+  // Quando presente, `offset` e ignorado.
+  optional int32 before_id = 4;
 }
 
 message GetThreadResponse {

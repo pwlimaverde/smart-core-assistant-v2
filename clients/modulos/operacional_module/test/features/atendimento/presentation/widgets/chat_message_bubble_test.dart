@@ -68,4 +68,74 @@ void main() {
       );
     });
   });
+  // ─── P2: ticks e citação ──────────────────────────────────────────────────
+  group('ticks e citação (P2)', () {
+    testWidgets('mensagem que saiu mostra tick; a do contato, não', (
+      tester,
+    ) async {
+      await _pump(tester, _mensagem(remetente: 'atendente'));
+      expect(find.byIcon(Icons.done), findsOneWidget);
+
+      await _pump(tester, _mensagem(remetente: 'cliente'));
+      expect(find.byIcon(Icons.done), findsNothing);
+      expect(find.byIcon(Icons.done_all), findsNothing);
+    });
+
+    testWidgets('lida desenha o tick duplo azul', (tester) async {
+      final lida = MensagemThread(
+        id: 1,
+        atendimentoId: 1,
+        tipo: 'texto',
+        conteudo: 'Olá',
+        remetente: 'atendente',
+        timestamp: DateTime(2026, 1, 1, 10, 30),
+        statusEnvio: 'sent',
+        lidaEm: DateTime(2026, 1, 1, 10, 31),
+      );
+      await _pump(tester, lida);
+
+      final icone = tester.widget<Icon>(find.byIcon(Icons.done_all));
+      expect(icone.color, const Color(0xFF2563EB));
+    });
+
+    testWidgets('a citação aparece acima do texto', (tester) async {
+      final comCitacao = MensagemThread(
+        id: 2,
+        atendimentoId: 1,
+        tipo: 'texto',
+        conteudo: 'Já vou verificar',
+        remetente: 'atendente',
+        timestamp: DateTime(2026, 1, 1, 10, 30),
+        statusEnvio: 'sent',
+        citacao: const CitacaoMensagem(
+          mensagemId: 1,
+          remetente: 'cliente',
+          preview: 'Meu pedido atrasou',
+        ),
+      );
+      await _pump(tester, comCitacao);
+
+      expect(find.text('Meu pedido atrasou'), findsOneWidget);
+      expect(find.text('Contato'), findsOneWidget);
+    });
+
+    testWidgets('clique longo pede para citar quando a tela aceita', (
+      tester,
+    ) async {
+      var citou = false;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ChatMessageBubble(
+              mensagem: _mensagem(),
+              aoCitar: () => citou = true,
+            ),
+          ),
+        ),
+      );
+
+      await tester.longPress(find.text('Olá, como posso ajudar?'));
+      expect(citou, isTrue);
+    });
+  });
 }

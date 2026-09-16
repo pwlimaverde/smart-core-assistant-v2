@@ -6560,11 +6560,13 @@ class GetThreadRequest extends $pb.GeneratedMessage {
     $core.int? atendimentoId,
     $core.int? limit,
     $core.int? offset,
+    $core.int? beforeId,
   }) {
     final result = create();
     if (atendimentoId != null) result.atendimentoId = atendimentoId;
     if (limit != null) result.limit = limit;
     if (offset != null) result.offset = offset;
+    if (beforeId != null) result.beforeId = beforeId;
     return result;
   }
 
@@ -6585,6 +6587,7 @@ class GetThreadRequest extends $pb.GeneratedMessage {
     ..aI(1, _omitFieldNames ? '' : 'atendimentoId')
     ..aI(2, _omitFieldNames ? '' : 'limit')
     ..aI(3, _omitFieldNames ? '' : 'offset')
+    ..aI(4, _omitFieldNames ? '' : 'beforeId')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -6632,6 +6635,19 @@ class GetThreadRequest extends $pb.GeneratedMessage {
   $core.bool hasOffset() => $_has(2);
   @$pb.TagNumber(3)
   void clearOffset() => $_clearField(3);
+
+  /// P2 — rolar para cima carrega o que veio ANTES desta mensagem, como o
+  /// `get_messages(before_id=...)` da v1. Paginar por offset numa conversa que
+  /// recebe mensagem enquanto se rola repete ou pula bolha; o cursor nao.
+  /// Quando presente, `offset` e ignorado.
+  @$pb.TagNumber(4)
+  $core.int get beforeId => $_getIZ(3);
+  @$pb.TagNumber(4)
+  set beforeId($core.int value) => $_setSignedInt32(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasBeforeId() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearBeforeId() => $_clearField(4);
 }
 
 class GetThreadResponse extends $pb.GeneratedMessage {

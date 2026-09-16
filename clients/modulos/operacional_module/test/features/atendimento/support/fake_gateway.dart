@@ -39,6 +39,13 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   bool ultimoSomenteMeus = false;
   bool ultimoSomenteNaoLidos = false;
   int chamadasThread = 0;
+
+  /// P2 — cursor recebido na última chamada e a página antiga a devolver.
+  int? ultimoBeforeId;
+  List<MensagemThread> anteriores = const [];
+
+  /// P2 — a citação que a última mensagem enviada levava.
+  int? ultimaCitacaoEnviada;
   int chamadasMove = 0;
   int chamadasSend = 0;
   int chamadasStatus = 0;
@@ -112,9 +119,14 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
     required int atendimentoId,
     int limit = 50,
     int offset = 0,
+    int? beforeId,
   }) async {
     chamadasThread++;
+    // P2 — guarda o cursor pedido e responde a página antiga combinada, se o
+    // teste tiver preparado uma.
+    ultimoBeforeId = beforeId;
     if (erroThread != null) throw erroThread!;
+    if (beforeId != null) return anteriores;
     return thread;
   }
 
@@ -134,8 +146,10 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
     required int atendimentoId,
     required String conteudo,
     String tipo = 'texto',
+    int? mensagemCitadaId,
   }) async {
     chamadasSend++;
+    ultimaCitacaoEnviada = mensagemCitadaId;
     if (erroSend != null) throw erroSend!;
     return messageId;
   }

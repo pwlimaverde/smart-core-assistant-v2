@@ -232,14 +232,24 @@ impl AtendimentoStore for PgAtendimentoStore {
         atendimento_id: i32,
         limit: i64,
         offset: i64,
+        before_id: Option<i32>,
     ) -> Result<Vec<Mensagem>, DbError> {
         let repo = PostgresMensagemRepository;
         let ctx = ctx.clone();
         let tenant_id = ctx.tenant_id;
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
-            let mensagens = repo
-                .listar_por_atendimento(&mut tx, &ctx, atendimento_id, limit, offset)
-                .await?;
+            let mensagens = match before_id {
+                Some(cursor) => {
+                    infrastructure_postgres::atendimentos::mensagens::listar_anteriores_a(
+                        &mut tx, &ctx, atendimento_id, cursor, limit,
+                    )
+                    .await?
+                }
+                None => {
+                    repo.listar_por_atendimento(&mut tx, &ctx, atendimento_id, limit, offset)
+                        .await?
+                }
+            };
             Ok((mensagens, tx))
         })
         .await

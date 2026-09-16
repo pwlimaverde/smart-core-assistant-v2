@@ -165,6 +165,8 @@ pub trait AtendimentoStore: Send + Sync {
         atendimento_id: i32,
         limit: i64,
         offset: i64,
+        // P2 — cursor da rolagem para trás. `Some(id)` ignora o `offset`.
+        before_id: Option<i32>,
     ) -> Result<Vec<Mensagem>, DbError>;
 
     /// Lista atendimentos por status (snapshot), opcionalmente filtrando departamento.

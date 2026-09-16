@@ -867,3 +867,42 @@ pub async fn anexar_analise_mensagem(
     .await?;
     Ok(())
 }
+
+/// P2 — as `limit` mensagens imediatamente **anteriores** a `before_id`.
+///
+/// Devolve em ordem crescente, como a tela desenha. O cursor é o id (não o
+/// offset) porque a conversa continua recebendo mensagem enquanto se rola o
+/// histórico: com offset, cada chegada empurra a janela e a pessoa vê a mesma
+/// bolha duas vezes — ou pula uma.
+#[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, before_id = before_id))]
+pub async fn listar_anteriores_a(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+    before_id: i32,
+    limit: i64,
+) -> Result<Vec<Mensagem>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let rows = sqlx::query_as::<_, Mensagem>(
+        r#"SELECT * FROM (
+               SELECT id, tenant_id, atendimento_id, tipo, conteudo, remetente,
+                      timestamp, message_id_whatsapp, metadados, respondida, lido,
+                      resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
+                      arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,
+                      quoted_preview, status_envio, data_entregue, data_lida,
+                      mimetype_midia, nome_arquivo_midia, tamanho_midia
+                 FROM oraculo_mensagem
+                WHERE tenant_id = $1 AND atendimento_id = $2 AND id < $3
+                ORDER BY timestamp DESC, id DESC
+                LIMIT $4
+           ) AS anteriores
+           ORDER BY timestamp ASC, id ASC"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .bind(before_id)
+    .bind(limit)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows)
+}

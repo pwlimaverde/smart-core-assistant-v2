@@ -5997,6 +5997,8 @@ impl AdminService for AdminFacade {
             "atendimento_id": inner.atendimento_id,
             "limit": if inner.limit > 0 { inner.limit } else { 50 },
             "offset": inner.offset,
+            // P2 — cursor da rolagem para trás (ausente na primeira carga).
+            "before_id": inner.before_id,
         });
 
         let env_req = Envelope {

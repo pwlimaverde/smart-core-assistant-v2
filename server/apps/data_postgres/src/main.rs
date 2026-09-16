@@ -1861,10 +1861,16 @@ async fn handler_get_thread(store: &dyn ports::AtendimentoStore, env: Envelope) 
         .get("offset")
         .and_then(|v| v.as_i64())
         .unwrap_or(0);
+    // P2 — cursor da rolagem para trás; quando vem, manda no `offset`.
+    let before_id = payload_json
+        .get("before_id")
+        .and_then(|v| v.as_i64())
+        .filter(|v| *v > 0)
+        .map(|v| v as i32);
 
     let ctx = contexto_do_envelope(&env);
     match store
-        .listar_mensagens(&ctx, atendimento_id, limit, offset)
+        .listar_mensagens(&ctx, atendimento_id, limit, offset, before_id)
         .await
     {
         Ok(mensagens) => ok_reply(
@@ -10533,6 +10539,27 @@ mod tests_atendimento_cliente_unit {
     }
 
     /// HAPPY PATH: get_thread devolve as mensagens da thread.
+    /// P2: rolar para cima pede o que veio ANTES da bolha mais antiga da tela.
+    #[tokio::test]
+    async fn get_thread_repassa_o_cursor_da_rolagem() {
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_listar_mensagens()
+            .times(1)
+            .returning(|_, _, _, _, before_id| {
+                assert_eq!(before_id, Some(42));
+                Ok(vec![])
+            });
+        let env = envelope_com_payload(
+            "GetThread",
+            serde_json::json!({ "atendimento_id": 1, "before_id": 42 }),
+        );
+
+        let resp = handler_get_thread(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
     #[tokio::test]
     async fn get_thread_returns_messages() {
         // Arrange
@@ -10540,7 +10567,7 @@ mod tests_atendimento_cliente_unit {
         store
             .expect_listar_mensagens()
             .times(1)
-            .returning(|_, _, _, _| Ok(vec![mensagem_fake(1)]));
+            .returning(|_, _, _, _, _| Ok(vec![mensagem_fake(1)]));
         let env = envelope_com_payload("GetThread", serde_json::json!({ "atendimento_id": 1 }));
 
         // Act

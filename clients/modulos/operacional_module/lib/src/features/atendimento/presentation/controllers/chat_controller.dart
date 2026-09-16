@@ -7,6 +7,7 @@ import 'package:return_success_or_error/return_success_or_error.dart';
 
 import '../../domain/errors/atendimento_errors.dart';
 import '../../domain/model/atendimento_evento.dart';
+import '../../domain/model/mensagem_thread.dart';
 import '../../domain/parameters/ficha_parameters.dart';
 import '../../domain/parameters/get_thread_parameters.dart';
 import '../../domain/parameters/send_outbound_message_parameters.dart';
@@ -83,15 +84,80 @@ final class ChatController extends BaseController<ChatViewModel> {
   Future<SendOutboundMessageError?> enviar(String conteudo) async {
     final atendimentoId = _atendimentoId;
     if (atendimentoId == null) return null;
+    final atual = state;
+    final citada = atual is SuccessState<ChatViewModel>
+        ? atual.data.citando
+        : null;
     final res = await _sendUsecase(
       SendOutboundMessageParameters(
         atendimentoId: atendimentoId,
         conteudo: conteudo,
+        mensagemCitadaId: citada?.id,
       ),
     );
     if (res case Failure(:final error)) return error;
+    // A citação vale para UMA resposta: mantê-la faria a próxima mensagem
+    // responder a mesma bolha sem que ninguém tenha pedido.
+    cancelarCitacao();
     await _recarregarThread();
     return null;
+  }
+
+  /// P2 — a próxima resposta vai citar [mensagem].
+  void citar(MensagemThread mensagem) {
+    final atual = state;
+    if (atual is! SuccessState<ChatViewModel>) return;
+    emit(SuccessState(atual.data.copyWith(citando: mensagem)));
+  }
+
+  /// P2 — desiste de citar.
+  void cancelarCitacao() {
+    final atual = state;
+    if (atual is! SuccessState<ChatViewModel>) return;
+    if (atual.data.citando == null) return;
+    emit(SuccessState(atual.data.copyWith(limparCitacao: true)));
+  }
+
+  /// P2 — a pessoa rolou até o topo: carrega o trecho anterior do histórico.
+  ///
+  /// Usa o id da bolha mais antiga como cursor, e não o total já carregado:
+  /// enquanto se lê o histórico a conversa continua recebendo, e um offset
+  /// mudaria de significado a cada mensagem que chega.
+  Future<void> carregarAntigas() async {
+    final atendimentoId = _atendimentoId;
+    final atual = state;
+    if (atendimentoId == null || atual is! SuccessState<ChatViewModel>) return;
+    final vm = atual.data;
+    if (vm.carregandoAntigas || vm.fimDoHistorico || vm.mensagens.isEmpty) {
+      return;
+    }
+    emit(SuccessState(vm.copyWith(carregandoAntigas: true)));
+
+    final res = await _getThreadUsecase(
+      GetThreadParameters(
+        atendimentoId: atendimentoId,
+        beforeId: vm.mensagens.first.id,
+      ),
+    );
+    final depois = state;
+    if (depois is! SuccessState<ChatViewModel>) return;
+    switch (res) {
+      case Success(:final value):
+        emit(
+          SuccessState(
+            depois.data.copyWith(
+              mensagens: [...value, ...depois.data.mensagens],
+              carregandoAntigas: false,
+              // Página vazia = chegou ao começo da conversa.
+              fimDoHistorico: value.isEmpty,
+            ),
+          ),
+        );
+      case Failure():
+        // Falhar ao buscar histórico não derruba a conversa aberta: a pessoa
+        // continua lendo e respondendo o que já está na tela.
+        emit(SuccessState(depois.data.copyWith(carregandoAntigas: false)));
+    }
   }
 
   /// B6 (N9 E4) — a pessoa está vendo o fim da conversa: marca como lido o
@@ -193,7 +259,13 @@ final class ChatController extends BaseController<ChatViewModel> {
     if (res case Success(:final value)) {
       final atual = state;
       if (atual is SuccessState<ChatViewModel>) {
-        emit(SuccessState(atual.data.copyWith(mensagens: value)));
+        // A recarga traz só a última página. Quem já tinha rolado para cima
+        // perderia o histórico carregado se a lista fosse trocada inteira.
+        final novos = {for (final m in value) m.id};
+        final antigas = atual.data.mensagens.where((m) => !novos.contains(m.id));
+        final unidas = [...antigas, ...value]
+          ..sort((a, b) => a.id.compareTo(b.id));
+        emit(SuccessState(atual.data.copyWith(mensagens: unidas)));
       }
     }
   }

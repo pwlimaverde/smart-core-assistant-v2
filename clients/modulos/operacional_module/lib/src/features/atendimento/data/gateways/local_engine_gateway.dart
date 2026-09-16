@@ -244,6 +244,7 @@ final class LocalEngineGateway implements AtendimentoGateway {
     required int atendimentoId,
     int limit = 50,
     int offset = 0,
+    int? beforeId,
   }) async {
     try {
       final engine = await _engine();
@@ -252,6 +253,12 @@ final class LocalEngineGateway implements AtendimentoGateway {
         limit: limit,
         offset: offset,
       );
+      // P2 — o índice local não tem cursor: corta pelo id aqui, para a rolagem
+      // para cima devolver o trecho certo também offline.
+      if (beforeId != null) {
+        final anteriores = rows.where((m) => m.id < beforeId).toList();
+        return anteriores.map(_paraMensagem).toList();
+      }
       return rows.map(_paraMensagem).toList();
     } catch (e) {
       throw _mapErro(e);
@@ -296,6 +303,9 @@ final class LocalEngineGateway implements AtendimentoGateway {
     required int atendimentoId,
     required String conteudo,
     String tipo = 'texto',
+    // P2 — a fila offline guarda a intenção de enviar, não a citação: o motor
+    // local não conhece `mensagem_citada_id`. Citar exige estar online.
+    int? mensagemCitadaId,
   }) async {
     try {
       // NUNCA logar `conteudo` (PII) — só trafega no corpo da chamada FFI.

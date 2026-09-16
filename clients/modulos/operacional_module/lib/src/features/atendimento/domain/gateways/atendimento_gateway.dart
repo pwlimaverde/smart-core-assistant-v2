@@ -42,6 +42,7 @@ abstract interface class AtendimentoGateway {
     required int atendimentoId,
     int limit,
     int offset,
+    int? beforeId,
   });
 
   /// C3 — abre um atendimento a partir de um cliente já cadastrado.
@@ -130,6 +131,7 @@ abstract interface class AtendimentoGateway {
     required int atendimentoId,
     required String conteudo,
     String tipo,
+    int? mensagemCitadaId,
   });
 
   /// N9/E1 — sobe um anexo e o põe na conversa.

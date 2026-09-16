@@ -55,6 +55,7 @@ final class GetThreadDatasource
         atendimentoId: parameters.atendimentoId,
         limit: parameters.limit,
         offset: parameters.offset,
+        beforeId: parameters.beforeId,
       );
 }
 
@@ -131,6 +132,7 @@ final class SendOutboundMessageDatasource
         atendimentoId: parameters.atendimentoId,
         conteudo: parameters.conteudo,
         tipo: parameters.tipo,
+        mensagemCitadaId: parameters.mensagemCitadaId,
       );
 }
 

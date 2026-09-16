@@ -12,7 +12,11 @@ import '../../domain/model/mensagem_thread.dart';
 class ChatMessageBubble extends StatelessWidget {
   final MensagemThread mensagem;
 
-  const ChatMessageBubble({super.key, required this.mensagem});
+  /// P2 — "responder": o menu só aparece quando a tela sabe o que fazer com
+  /// ele (a conversa embutida na ficha, por exemplo, não cita).
+  final VoidCallback? aoCitar;
+
+  const ChatMessageBubble({super.key, required this.mensagem, this.aoCitar});
 
   bool get _isOutbound =>
       mensagem.remetente == 'atendente' || mensagem.remetente == 'bot';
@@ -29,7 +33,7 @@ class ChatMessageBubble extends StatelessWidget {
         ? AppPalette.chatBubOutFgDark
         : (_isOutbound ? AppPalette.chatBubOutFgLight : colors.fgStrong);
 
-    return Align(
+    final bolha = Align(
       alignment: _isOutbound ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         constraints: const BoxConstraints(maxWidth: 380),
@@ -47,21 +51,133 @@ class ChatMessageBubble extends StatelessWidget {
               _IndicadorIa(colors: colors),
               const SizedBox(height: 4),
             ],
+            if (mensagem.citacao case final citacao?) ...[
+              _TrechoCitado(citacao: citacao, fg: fg),
+              const SizedBox(height: 4),
+            ],
             Text(mensagem.conteudo, style: TextStyle(color: fg)),
             if (mensagem.resumoMidia case final resumo?) ...[
               const SizedBox(height: AppSpacing.xs),
               _ResumoMidia(resumo: resumo, colors: colors, fg: fg),
             ],
             const SizedBox(height: 2),
-            Text(
-              DateFormat('HH:mm').format(mensagem.timestamp),
-              style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                color: fg.withValues(alpha: 0.7),
-              ),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  DateFormat('HH:mm').format(mensagem.timestamp),
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: fg.withValues(alpha: 0.7),
+                  ),
+                ),
+                // Tick só no que SAIU: na mensagem do contato não há entrega
+                // a confirmar, e o ícone ali significaria outra coisa.
+                if (_isOutbound) ...[
+                  const SizedBox(width: 4),
+                  _Ticks(status: mensagem.statusEntrega, fg: fg),
+                ],
+              ],
             ),
           ],
         ),
       ),
+    );
+
+    if (aoCitar == null) return bolha;
+    // Clique longo é o gesto do WhatsApp para responder; no desktop o botão
+    // direito chega como `onSecondaryTap`.
+    return GestureDetector(
+      onLongPress: aoCitar,
+      onSecondaryTap: aoCitar,
+      child: bolha,
+    );
+  }
+}
+
+/// P2 — o retângulo do trecho respondido, acima do texto da bolha.
+class _TrechoCitado extends StatelessWidget {
+  final CitacaoMensagem citacao;
+  final Color fg;
+
+  const _TrechoCitado({required this.citacao, required this.fg});
+
+  @override
+  Widget build(BuildContext context) {
+    final quemFalou = switch (citacao.remetente) {
+      'atendente' => 'Você',
+      'bot' => 'Assistente',
+      _ => 'Contato',
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: fg.withValues(alpha: 0.08),
+        borderRadius: AppRadius.card,
+        border: Border(left: BorderSide(color: fg.withValues(alpha: 0.5), width: 3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            quemFalou,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: fg.withValues(alpha: 0.9),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          // O trecho é PII, como qualquer conteúdo de mensagem: exibe, não loga.
+          Text(
+            citacao.preview,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: fg.withValues(alpha: 0.75),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// P2 — os ticks de entrega/leitura, com o mesmo vocabulário do WhatsApp.
+class _Ticks extends StatelessWidget {
+  final StatusEntrega status;
+  final Color fg;
+
+  const _Ticks({required this.status, required this.fg});
+
+  @override
+  Widget build(BuildContext context) {
+    final (icone, cor, rotulo) = switch (status) {
+      StatusEntrega.pendente => (
+        Icons.schedule,
+        fg.withValues(alpha: 0.6),
+        'Na fila de envio',
+      ),
+      StatusEntrega.enviada => (
+        Icons.done,
+        fg.withValues(alpha: 0.7),
+        'Enviada',
+      ),
+      StatusEntrega.entregue => (
+        Icons.done_all,
+        fg.withValues(alpha: 0.7),
+        'Entregue',
+      ),
+      // Azul é a única cor com significado aqui: é o que distingue "chegou" de
+      // "leram" num relance.
+      StatusEntrega.lida => (Icons.done_all, AppPalette.info, 'Lida'),
+      StatusEntrega.falhou => (
+        Icons.error_outline,
+        AppPalette.danger,
+        'Falhou no envio',
+      ),
+    };
+    return Tooltip(
+      message: rotulo,
+      child: Icon(icone, size: 14, color: cor),
     );
   }
 }

@@ -265,4 +265,84 @@ void main() {
       expect(controller.isClosed, isTrue);
     });
   });
+  // ─── P2: histórico para trás e citação ───────────────────────────────────
+  group('conversa fiel (P2)', () {
+    test('rolar para o topo carrega o trecho anterior e o mantém', () async {
+      final gateway = FakeAtendimentoGateway(
+        thread: [
+          mensagemDeTeste(id: 10, timestamp: DateTime(2026, 1, 2)),
+          mensagemDeTeste(id: 11, timestamp: DateTime(2026, 1, 2, 1)),
+        ],
+      )..anteriores = [
+        mensagemDeTeste(id: 8, timestamp: DateTime(2026, 1, 1)),
+        mensagemDeTeste(id: 9, timestamp: DateTime(2026, 1, 1, 1)),
+      ];
+      final controller = _controller(gateway);
+      await controller.abrir(5);
+
+      await controller.carregarAntigas();
+
+      // O cursor é o id da bolha mais antiga que estava na tela.
+      expect(gateway.ultimoBeforeId, 10);
+      final vm = (controller.state as SuccessState<ChatViewModel>).data;
+      expect(vm.mensagens.map((m) => m.id), [8, 9, 10, 11]);
+      expect(vm.carregandoAntigas, isFalse);
+      await controller.close();
+    });
+
+    test('página vazia marca o fim do histórico e não pede de novo', () async {
+      final gateway = FakeAtendimentoGateway(
+        thread: [mensagemDeTeste(id: 10, timestamp: DateTime(2026, 1, 2))],
+      );
+      final controller = _controller(gateway);
+      await controller.abrir(5);
+      final antes = gateway.chamadasThread;
+
+      await controller.carregarAntigas();
+      await controller.carregarAntigas();
+
+      expect(gateway.chamadasThread, antes + 1);
+      final vm = (controller.state as SuccessState<ChatViewModel>).data;
+      expect(vm.fimDoHistorico, isTrue);
+      await controller.close();
+    });
+
+    test('citar acompanha o envio e some depois dele', () async {
+      final citada = mensagemDeTeste(id: 7, timestamp: DateTime(2026, 1, 1));
+      final gateway = FakeAtendimentoGateway(thread: [citada]);
+      final controller = _controller(gateway);
+      await controller.abrir(5);
+
+      controller.citar(citada);
+      expect(
+        (controller.state as SuccessState<ChatViewModel>).data.citando?.id,
+        7,
+      );
+
+      await controller.enviar('respondendo');
+
+      expect(gateway.ultimaCitacaoEnviada, 7);
+      // A citação vale para uma resposta só.
+      expect(
+        (controller.state as SuccessState<ChatViewModel>).data.citando,
+        isNull,
+      );
+      await controller.close();
+    });
+
+    test('a recarga do envio não apaga o histórico já puxado', () async {
+      final gateway = FakeAtendimentoGateway(
+        thread: [mensagemDeTeste(id: 10, timestamp: DateTime(2026, 1, 2))],
+      )..anteriores = [mensagemDeTeste(id: 9, timestamp: DateTime(2026, 1, 1))];
+      final controller = _controller(gateway);
+      await controller.abrir(5);
+      await controller.carregarAntigas();
+
+      await controller.enviar('oi');
+
+      final vm = (controller.state as SuccessState<ChatViewModel>).data;
+      expect(vm.mensagens.map((m) => m.id), containsAll([9, 10]));
+      await controller.close();
+    });
+  });
 }

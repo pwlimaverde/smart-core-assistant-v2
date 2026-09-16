@@ -2,9 +2,11 @@ import 'package:dependencies_module/dependencies_module.dart' show GetIt;
 import 'package:design_system_module/design_system_module.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:intl/intl.dart';
 import 'package:get_it_module/get_it_module.dart';
 import 'package:presentation_module/presentation_module.dart';
 
+import '../../domain/model/mensagem_thread.dart';
 import '../../domain/usecases/atendimento_usecases.dart';
 import '../controllers/chat_controller.dart';
 import '../controllers/chat_state.dart';
@@ -118,6 +120,8 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
                 onEnviar: _enviar,
                 rolagem: _rolagem,
                 aoPararDeRolar: _marcarSeNoFim,
+                aoCitar: _controller.citar,
+                aoCancelarCitacao: _controller.cancelarCitacao,
               ),
             };
           },
@@ -155,10 +159,17 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
 
   /// B6 — a lista é invertida: o fim da conversa (a mensagem mais nova) é o
   /// início da rolagem. Perto dele, a pessoa está lendo o que chegou.
+  ///
+  /// P2 — e no outro extremo (o topo, que na lista invertida é o fim da
+  /// extensão) está o histórico antigo: chegar lá pede a página anterior.
   void _marcarSeNoFim() {
     if (!mounted) return;
     final noFim = !_rolagem.hasClients || _rolagem.offset <= 48;
     if (noFim) _controller.marcarComoLida();
+    if (_rolagem.hasClients &&
+        _rolagem.offset >= _rolagem.position.maxScrollExtent - 200) {
+      _controller.carregarAntigas();
+    }
   }
 
   Future<void> _enviar() async {
@@ -246,6 +257,8 @@ class _ChatBody extends StatelessWidget {
   final VoidCallback onEnviar;
   final ScrollController rolagem;
   final VoidCallback aoPararDeRolar;
+  final void Function(MensagemThread) aoCitar;
+  final VoidCallback aoCancelarCitacao;
 
   const _ChatBody({
     required this.viewModel,
@@ -253,6 +266,8 @@ class _ChatBody extends StatelessWidget {
     required this.onEnviar,
     required this.rolagem,
     required this.aoPararDeRolar,
+    required this.aoCitar,
+    required this.aoCancelarCitacao,
   });
 
   @override
@@ -277,15 +292,48 @@ class _ChatBody extends StatelessWidget {
                     controller: rolagem,
                     reverse: true,
                     padding: const EdgeInsets.all(AppSpacing.md),
-                    itemCount: viewModel.mensagens.length,
+                    // O item extra é o topo da rolagem: spinner enquanto o
+                    // histórico antigo vem, ou nada quando acabou.
+                    itemCount: viewModel.mensagens.length + 1,
                     itemBuilder: (context, index) {
-                      final mensagem = viewModel
-                          .mensagens[viewModel.mensagens.length - 1 - index];
-                      return ChatMessageBubble(mensagem: mensagem);
+                      if (index == viewModel.mensagens.length) {
+                        return viewModel.carregandoAntigas
+                            ? const Padding(
+                                padding: EdgeInsets.all(AppSpacing.md),
+                                child: Center(
+                                  child: SizedBox(
+                                    height: 18,
+                                    width: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  ),
+                                ),
+                              )
+                            : const SizedBox.shrink();
+                      }
+                      final posicao = viewModel.mensagens.length - 1 - index;
+                      final mensagem = viewModel.mensagens[posicao];
+                      final anterior = posicao == 0
+                          ? null
+                          : viewModel.mensagens[posicao - 1];
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (mudouODia(anterior, mensagem))
+                            _SeparadorDeDia(dia: mensagem.timestamp),
+                          ChatMessageBubble(
+                            mensagem: mensagem,
+                            aoCitar: () => aoCitar(mensagem),
+                          ),
+                        ],
+                      );
                     },
                   ),
                 ),
         ),
+        if (viewModel.citando case final citada?)
+          _BarraDeCitacao(mensagem: citada, aoCancelar: aoCancelarCitacao),
         Padding(
           padding: const EdgeInsets.all(AppSpacing.sm),
           child: Row(
@@ -308,6 +356,100 @@ class _ChatBody extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// P2 — a conversa separa os dias, como o WhatsApp: sem isso, uma resposta de
+/// ontem e uma de hoje ficam coladas e a pessoa lê fora de contexto.
+bool mudouODia(MensagemThread? anterior, MensagemThread atual) {
+  if (anterior == null) return true;
+  final a = anterior.timestamp;
+  final b = atual.timestamp;
+  return a.year != b.year || a.month != b.month || a.day != b.day;
+}
+
+/// A etiqueta de data entre as bolhas ("Hoje", "Ontem" ou a data).
+class _SeparadorDeDia extends StatelessWidget {
+  final DateTime dia;
+
+  const _SeparadorDeDia({required this.dia});
+
+  String _rotulo() {
+    final hoje = DateTime.now();
+    final ontem = hoje.subtract(const Duration(days: 1));
+    bool mesmoDia(DateTime a, DateTime b) =>
+        a.year == b.year && a.month == b.month && a.day == b.day;
+    if (mesmoDia(dia, hoje)) return 'Hoje';
+    if (mesmoDia(dia, ontem)) return 'Ontem';
+    return DateFormat('dd/MM/yyyy').format(dia);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: colors.chip,
+            borderRadius: AppRadius.pill,
+          ),
+          child: Text(
+            _rotulo(),
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// P2 — o trecho que a próxima mensagem vai citar, com o X para desistir.
+class _BarraDeCitacao extends StatelessWidget {
+  final MensagemThread mensagem;
+  final VoidCallback aoCancelar;
+
+  const _BarraDeCitacao({required this.mensagem, required this.aoCancelar});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return Container(
+      margin: const EdgeInsets.fromLTRB(
+        AppSpacing.sm,
+        0,
+        AppSpacing.sm,
+        AppSpacing.xs,
+      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: colors.chip,
+        borderRadius: AppRadius.card,
+        border: Border(left: BorderSide(color: colors.accent, width: 3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.reply, size: 16),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            // Conteúdo de mensagem é PII: aqui só aparece na tela.
+            child: Text(
+              mensagem.conteudo,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.close, size: 18),
+            tooltip: 'Cancelar resposta',
+            onPressed: aoCancelar,
+          ),
+        ],
+      ),
     );
   }
 }

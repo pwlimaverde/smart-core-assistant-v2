@@ -64,12 +64,14 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
     required int atendimentoId,
     int limit = 50,
     int offset = 0,
+    int? beforeId,
   }) async {
     final resp = await _client.getThread(
       proto.GetThreadRequest(
         atendimentoId: atendimentoId,
         limit: limit,
         offset: offset,
+        beforeId: beforeId,
       ),
     );
     return resp.mensagens.map(_paraMensagemThread).toList();
@@ -133,6 +135,7 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
     required int atendimentoId,
     required String conteudo,
     String tipo = 'texto',
+    int? mensagemCitadaId,
   }) async {
     // NUNCA logar `conteudo` (PII) — só trafega no corpo da chamada RPC.
     final resp = await _client.sendOutboundMessage(
@@ -140,6 +143,7 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
         atendimentoId: atendimentoId,
         conteudo: conteudo,
         tipo: tipo,
+        mensagemCitadaId: mensagemCitadaId,
       ),
     );
     return resp.messageId;

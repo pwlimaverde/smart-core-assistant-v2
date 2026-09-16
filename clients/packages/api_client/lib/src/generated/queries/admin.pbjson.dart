@@ -1670,13 +1670,26 @@ const GetThreadRequest$json = {
     {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
     {'1': 'limit', '3': 2, '4': 1, '5': 5, '10': 'limit'},
     {'1': 'offset', '3': 3, '4': 1, '5': 5, '10': 'offset'},
+    {
+      '1': 'before_id',
+      '3': 4,
+      '4': 1,
+      '5': 5,
+      '9': 0,
+      '10': 'beforeId',
+      '17': true
+    },
+  ],
+  '8': [
+    {'1': '_before_id'},
   ],
 };
 
 /// Descriptor for `GetThreadRequest`. Decode as a `google.protobuf.DescriptorProto`.
 final $typed_data.Uint8List getThreadRequestDescriptor = $convert.base64Decode(
     'ChBHZXRUaHJlYWRSZXF1ZXN0EiUKDmF0ZW5kaW1lbnRvX2lkGAEgASgFUg1hdGVuZGltZW50b0'
-    'lkEhQKBWxpbWl0GAIgASgFUgVsaW1pdBIWCgZvZmZzZXQYAyABKAVSBm9mZnNldA==');
+    'lkEhQKBWxpbWl0GAIgASgFUgVsaW1pdBIWCgZvZmZzZXQYAyABKAVSBm9mZnNldBIgCgliZWZv'
+    'cmVfaWQYBCABKAVIAFIIYmVmb3JlSWSIAQFCDAoKX2JlZm9yZV9pZA==');
 
 @$core.Deprecated('Use getThreadResponseDescriptor instead')
 const GetThreadResponse$json = {
