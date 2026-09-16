@@ -5844,6 +5844,14 @@ impl AdminService for AdminFacade {
             // Vazio viaja como vazio: é "o quadro inteiro". Trocar por "fila"
             // aqui escondia toda conversa que já tinha andado de coluna.
             "status": inner.status,
+            // P1 — o recorte da v1: busca por texto, dono, não lidas, prioridade
+            // e etiqueta.
+            "busca": inner.busca,
+            "atendente_id": inner.atendente_id,
+            "somente_nao_lidos": inner.somente_nao_lidos,
+            "prioridade": inner.prioridade,
+            "etiqueta_id": inner.etiqueta_id,
+            "somente_meus": inner.somente_meus,
             "departamento_id": if inner.departamento_id > 0 { Some(inner.departamento_id) } else { None },
             "limit": if inner.limit > 0 { inner.limit } else { 50 },
         });

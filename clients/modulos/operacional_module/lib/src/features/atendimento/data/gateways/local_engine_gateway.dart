@@ -142,6 +142,12 @@ final class LocalEngineGateway implements AtendimentoGateway {
     String status = 'fila',
     int? departamentoId,
     int limit = 50,
+    // P1 — o índice local guarda o atendimento, não o contato nem o vínculo
+    // do atendente com o usuário: dá para filtrar por assunto e por não lidas,
+    // e "minhas" fica só no modo online, onde o servidor resolve quem sou eu.
+    String busca = '',
+    bool somenteMeus = false,
+    bool somenteNaoLidos = false,
   }) async {
     try {
       final engine = await _engine();
@@ -153,7 +159,15 @@ final class LocalEngineGateway implements AtendimentoGateway {
       // Ao abrir a fila, tenta escoar as ações offline pendentes (best-effort):
       // se estiver offline, as ações permanecem enfileiradas para nova tentativa.
       unawaited(_sincronizarBestEffort());
-      return rows.map(_paraResumo).toList();
+      final termo = busca.trim().toLowerCase();
+      return rows
+          .map(_paraResumo)
+          .where(
+            (a) =>
+                (termo.isEmpty || a.assunto.toLowerCase().contains(termo)) &&
+                (!somenteNaoLidos || a.naoLidas > 0),
+          )
+          .toList();
     } catch (e) {
       throw _mapErro(e);
     }

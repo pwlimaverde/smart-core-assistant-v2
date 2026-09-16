@@ -42,12 +42,18 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
     String status = 'fila',
     int? departamentoId,
     int limit = 50,
+    String busca = '',
+    bool somenteMeus = false,
+    bool somenteNaoLidos = false,
   }) async {
     final resp = await _client.listAtendimentos(
       proto.ListAtendimentosRequest(
         status: status,
         departamentoId: departamentoId ?? 0,
         limit: limit,
+        busca: busca,
+        somenteMeus: somenteMeus,
+        somenteNaoLidos: somenteNaoLidos,
       ),
     );
     return resp.atendimentos.map(_paraAtendimentoResumo).toList();

@@ -54,6 +54,9 @@ void main() {
         status: 'em_atendimento',
         departamentoId: 3,
         limit: 10,
+        busca: '5531',
+        somenteMeus: true,
+        somenteNaoLidos: true,
       );
 
       final enviado =
@@ -62,6 +65,11 @@ void main() {
       expect(enviado.status, 'em_atendimento');
       expect(enviado.departamentoId, 3);
       expect(enviado.limit, 10);
+      // P1 — o recorte da v1 tem de chegar ao servidor; filtrar no cliente
+      // esconderia justamente a conversa que não foi baixada.
+      expect(enviado.busca, '5531');
+      expect(enviado.somenteMeus, isTrue);
+      expect(enviado.somenteNaoLidos, isTrue);
 
       final a = fila.single;
       expect(a.id, 1);

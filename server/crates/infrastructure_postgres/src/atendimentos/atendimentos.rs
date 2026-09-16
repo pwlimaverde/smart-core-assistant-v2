@@ -1112,36 +1112,85 @@ pub async fn definir_assunto_se_vazio(
     Ok(res.rows_affected() > 0)
 }
 
+/// P1 — o recorte da lista do quadro, igual ao da v1 (`list_conversations`).
+///
+/// Campo vazio/zero = sem filtro. `atendente_id = Some(-1)` é "sem dono": a
+/// fila que ninguém assumiu, que na v1 era o filtro mais usado do supervisor.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct FiltroDoQuadro {
+    pub busca: String,
+    pub atendente_id: Option<i32>,
+    pub somente_nao_lidos: bool,
+    pub prioridade: String,
+    pub etiqueta_id: Option<i64>,
+    /// "minhas conversas": resolvido aqui pelo `user_id` do contexto.
+    pub somente_meus: bool,
+}
+
 /// Todos os atendimentos **ativos** do tenant (tudo menos `arquivado`).
 ///
 /// É o que o quadro pede quando não filtra por status: as colunas vão de "fila"
 /// a "finalização", e listar só `fila` deixava o quadro vazio assim que a
 /// conversa andava — que é o estado normal de quem está atendendo. Arquivado
 /// fica de fora porque o quadro é o trabalho de agora, não o histórico.
+///
+/// Ordena pela **última mensagem**, como a v1: o quadro é a fila de quem está
+/// esperando resposta, e ordenar pela abertura empurra para baixo justamente a
+/// conversa que acabou de receber mensagem.
 #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, limit = limit))]
 pub async fn listar_ativos_do_tenant(
     tx: &mut Transaction<'_, Postgres>,
     ctx: &RequestContext,
     departamento_id: Option<i32>,
+    filtro: &FiltroDoQuadro,
     limit: i64,
 ) -> Result<Vec<Atendimento>, DbError> {
     ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let busca = filtro.busca.trim();
     let rows = sqlx::query_as::<_, Atendimento>(
-        r#"SELECT id, tenant_id, contato_id, departamento_id, fluxo_atendimento_id,
-                  status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
-                  assunto, prioridade, atendente_humano_id, contexto_conversa,
-                  historico_status, tags, avaliacao, feedback,
-                  data_primeira_resposta, bot_pode_atender,
-                  sentimento_nota, sentimento_label
-           FROM oraculo_atendimento
-           WHERE tenant_id = $1 AND status <> 'arquivado'
-             AND ($2::int IS NULL OR departamento_id = $2)
-           ORDER BY data_inicio DESC
-           LIMIT $3"#,
+        r#"SELECT a.id, a.tenant_id, a.contato_id, a.departamento_id, a.fluxo_atendimento_id,
+                  a.status, a.etapa_atual_id, a.data_inicio, a.data_fim, a.data_ultima_mensagem,
+                  a.assunto, a.prioridade, a.atendente_humano_id, a.contexto_conversa,
+                  a.historico_status, a.tags, a.avaliacao, a.feedback,
+                  a.data_primeira_resposta, a.bot_pode_atender,
+                  a.sentimento_nota, a.sentimento_label
+           FROM oraculo_atendimento a
+           LEFT JOIN oraculo_contato c
+             ON c.id = a.contato_id AND c.tenant_id = a.tenant_id
+           WHERE a.tenant_id = $1 AND a.status <> 'arquivado'
+             AND ($2::int IS NULL OR a.departamento_id = $2)
+             AND ($3 = '' OR COALESCE(c.nome_contato, '') ILIKE '%' || $3 || '%'
+                  OR COALESCE(c.nome_perfil_whatsapp, '') ILIKE '%' || $3 || '%'
+                  OR COALESCE(c.telefone, '') LIKE '%' || $3 || '%'
+                  OR COALESCE(a.assunto, '') ILIKE '%' || $3 || '%')
+             AND ($4::int IS NULL
+                  OR ($4 = -1 AND a.atendente_humano_id IS NULL)
+                  OR a.atendente_humano_id = $4)
+             AND ($5 = '' OR a.prioridade = $5)
+             AND (NOT $9 OR a.atendente_humano_id IN (
+                   SELECT at.id FROM oraculo_atendente at
+                    WHERE at.tenant_id = a.tenant_id AND at.usuario_id = $10))
+             AND ($6::int IS NULL OR EXISTS (
+                   SELECT 1 FROM atu_etiqueta_atendimento ea
+                    WHERE ea.tenant_id = a.tenant_id AND ea.atendimento_id = a.id
+                      AND ea.etiqueta_id = $6))
+             AND (NOT $7 OR EXISTS (
+                   SELECT 1 FROM oraculo_mensagem m
+                    WHERE m.tenant_id = a.tenant_id AND m.atendimento_id = a.id
+                      AND m.lido = false AND m.remetente = 'contato'))
+           ORDER BY COALESCE(a.data_ultima_mensagem, a.data_inicio) DESC
+           LIMIT $8"#,
     )
     .bind(ctx.tenant_id)
     .bind(departamento_id)
+    .bind(busca)
+    .bind(filtro.atendente_id)
+    .bind(filtro.prioridade.trim())
+    .bind(filtro.etiqueta_id)
+    .bind(filtro.somente_nao_lidos)
     .bind(limit)
+    .bind(filtro.somente_meus)
+    .bind(ctx.user_id)
     .fetch_all(&mut **tx)
     .await?;
     Ok(rows)

@@ -33,6 +33,11 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   Object? erroColunas;
 
   int chamadasList = 0;
+
+  /// P1 — último recorte pedido ao gateway.
+  String ultimaBusca = '';
+  bool ultimoSomenteMeus = false;
+  bool ultimoSomenteNaoLidos = false;
   int chamadasThread = 0;
   int chamadasMove = 0;
   int chamadasSend = 0;
@@ -89,8 +94,15 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
     String status = 'fila',
     int? departamentoId,
     int limit = 50,
+    String busca = '',
+    bool somenteMeus = false,
+    bool somenteNaoLidos = false,
   }) async {
     chamadasList++;
+    // P1 — guarda o recorte pedido para os testes de busca e filtros.
+    ultimaBusca = busca;
+    ultimoSomenteMeus = somenteMeus;
+    ultimoSomenteNaoLidos = somenteNaoLidos;
     if (erroList != null) throw erroList!;
     return fila;
   }

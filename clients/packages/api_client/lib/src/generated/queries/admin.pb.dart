@@ -5989,11 +5989,23 @@ class ListAtendimentosRequest extends $pb.GeneratedMessage {
     $core.String? status,
     $core.int? departamentoId,
     $core.int? limit,
+    $core.String? busca,
+    $core.int? atendenteId,
+    $core.bool? somenteNaoLidos,
+    $core.String? prioridade,
+    $fixnum.Int64? etiquetaId,
+    $core.bool? somenteMeus,
   }) {
     final result = create();
     if (status != null) result.status = status;
     if (departamentoId != null) result.departamentoId = departamentoId;
     if (limit != null) result.limit = limit;
+    if (busca != null) result.busca = busca;
+    if (atendenteId != null) result.atendenteId = atendenteId;
+    if (somenteNaoLidos != null) result.somenteNaoLidos = somenteNaoLidos;
+    if (prioridade != null) result.prioridade = prioridade;
+    if (etiquetaId != null) result.etiquetaId = etiquetaId;
+    if (somenteMeus != null) result.somenteMeus = somenteMeus;
     return result;
   }
 
@@ -6014,6 +6026,12 @@ class ListAtendimentosRequest extends $pb.GeneratedMessage {
     ..aOS(1, _omitFieldNames ? '' : 'status')
     ..aI(2, _omitFieldNames ? '' : 'departamentoId')
     ..aI(3, _omitFieldNames ? '' : 'limit')
+    ..aOS(4, _omitFieldNames ? '' : 'busca')
+    ..aI(5, _omitFieldNames ? '' : 'atendenteId')
+    ..aOB(6, _omitFieldNames ? '' : 'somenteNaoLidos')
+    ..aOS(7, _omitFieldNames ? '' : 'prioridade')
+    ..aInt64(8, _omitFieldNames ? '' : 'etiquetaId')
+    ..aOB(9, _omitFieldNames ? '' : 'somenteMeus')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -6036,6 +6054,7 @@ class ListAtendimentosRequest extends $pb.GeneratedMessage {
       $pb.GeneratedMessage.$_defaultFor<ListAtendimentosRequest>(create);
   static ListAtendimentosRequest? _defaultInstance;
 
+  /// Vazio = o quadro inteiro (tudo que nao foi arquivado).
   @$pb.TagNumber(1)
   $core.String get status => $_getSZ(0);
   @$pb.TagNumber(1)
@@ -6062,6 +6081,65 @@ class ListAtendimentosRequest extends $pb.GeneratedMessage {
   $core.bool hasLimit() => $_has(2);
   @$pb.TagNumber(3)
   void clearLimit() => $_clearField(3);
+
+  /// P1 (paridade v1 `list_conversations`): o mesmo recorte que a v1 fazia.
+  /// Casa nome do contato, nome do perfil do WhatsApp, telefone e assunto.
+  @$pb.TagNumber(4)
+  $core.String get busca => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set busca($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasBusca() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearBusca() => $_clearField(4);
+
+  /// 0 = todos. Use -1 para "sem dono" (a fila que ninguem assumiu).
+  @$pb.TagNumber(5)
+  $core.int get atendenteId => $_getIZ(4);
+  @$pb.TagNumber(5)
+  set atendenteId($core.int value) => $_setSignedInt32(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasAtendenteId() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearAtendenteId() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.bool get somenteNaoLidos => $_getBF(5);
+  @$pb.TagNumber(6)
+  set somenteNaoLidos($core.bool value) => $_setBool(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasSomenteNaoLidos() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearSomenteNaoLidos() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $core.String get prioridade => $_getSZ(6);
+  @$pb.TagNumber(7)
+  set prioridade($core.String value) => $_setString(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasPrioridade() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearPrioridade() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $fixnum.Int64 get etiquetaId => $_getI64(7);
+  @$pb.TagNumber(8)
+  set etiquetaId($fixnum.Int64 value) => $_setInt64(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasEtiquetaId() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearEtiquetaId() => $_clearField(8);
+
+  /// "minhas conversas": o servidor resolve o atendente pelo usuario logado,
+  /// como a v1 fazia — o cliente nao conhece o id do atendente.
+  @$pb.TagNumber(9)
+  $core.bool get somenteMeus => $_getBF(8);
+  @$pb.TagNumber(9)
+  set somenteMeus($core.bool value) => $_setBool(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasSomenteMeus() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearSomenteMeus() => $_clearField(9);
 }
 
 class ListAtendimentosResponse extends $pb.GeneratedMessage {

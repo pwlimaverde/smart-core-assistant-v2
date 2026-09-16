@@ -1487,6 +1487,12 @@ const ListAtendimentosRequest$json = {
     {'1': 'status', '3': 1, '4': 1, '5': 9, '10': 'status'},
     {'1': 'departamento_id', '3': 2, '4': 1, '5': 5, '10': 'departamentoId'},
     {'1': 'limit', '3': 3, '4': 1, '5': 5, '10': 'limit'},
+    {'1': 'busca', '3': 4, '4': 1, '5': 9, '10': 'busca'},
+    {'1': 'atendente_id', '3': 5, '4': 1, '5': 5, '10': 'atendenteId'},
+    {'1': 'somente_nao_lidos', '3': 6, '4': 1, '5': 8, '10': 'somenteNaoLidos'},
+    {'1': 'prioridade', '3': 7, '4': 1, '5': 9, '10': 'prioridade'},
+    {'1': 'etiqueta_id', '3': 8, '4': 1, '5': 3, '10': 'etiquetaId'},
+    {'1': 'somente_meus', '3': 9, '4': 1, '5': 8, '10': 'somenteMeus'},
   ],
 };
 
@@ -1494,7 +1500,10 @@ const ListAtendimentosRequest$json = {
 final $typed_data.Uint8List listAtendimentosRequestDescriptor = $convert.base64Decode(
     'ChdMaXN0QXRlbmRpbWVudG9zUmVxdWVzdBIWCgZzdGF0dXMYASABKAlSBnN0YXR1cxInCg9kZX'
     'BhcnRhbWVudG9faWQYAiABKAVSDmRlcGFydGFtZW50b0lkEhQKBWxpbWl0GAMgASgFUgVsaW1p'
-    'dA==');
+    'dBIUCgVidXNjYRgEIAEoCVIFYnVzY2ESIQoMYXRlbmRlbnRlX2lkGAUgASgFUgthdGVuZGVudG'
+    'VJZBIqChFzb21lbnRlX25hb19saWRvcxgGIAEoCFIPc29tZW50ZU5hb0xpZG9zEh4KCnByaW9y'
+    'aWRhZGUYByABKAlSCnByaW9yaWRhZGUSHwoLZXRpcXVldGFfaWQYCCABKANSCmV0aXF1ZXRhSW'
+    'QSIQoMc29tZW50ZV9tZXVzGAkgASgIUgtzb21lbnRlTWV1cw==');
 
 @$core.Deprecated('Use listAtendimentosResponseDescriptor instead')
 const ListAtendimentosResponse$json = {

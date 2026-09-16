@@ -479,9 +479,21 @@ message AtendimentoResumo {
 }
 
 message ListAtendimentosRequest {
-  string status = 1;         // default "fila" no cliente quando vazio
+  // Vazio = o quadro inteiro (tudo que nao foi arquivado).
+  string status = 1;
   int32 departamento_id = 2; // 0 = todos os departamentos
   int32 limit = 3;
+  // P1 (paridade v1 `list_conversations`): o mesmo recorte que a v1 fazia.
+  // Casa nome do contato, nome do perfil do WhatsApp, telefone e assunto.
+  string busca = 4;
+  // 0 = todos. Use -1 para "sem dono" (a fila que ninguem assumiu).
+  int32 atendente_id = 5;
+  bool somente_nao_lidos = 6;
+  string prioridade = 7;     // vazio = todas
+  int64 etiqueta_id = 8;     // 0 = todas
+  // "minhas conversas": o servidor resolve o atendente pelo usuario logado,
+  // como a v1 fazia — o cliente nao conhece o id do atendente.
+  bool somente_meus = 9;
 }
 
 message ListAtendimentosResponse {

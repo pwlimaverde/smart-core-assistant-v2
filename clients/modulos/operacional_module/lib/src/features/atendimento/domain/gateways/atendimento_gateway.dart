@@ -32,6 +32,9 @@ abstract interface class AtendimentoGateway {
     String status,
     int? departamentoId,
     int limit,
+    String busca,
+    bool somenteMeus,
+    bool somenteNaoLidos,
   });
 
   /// Carrega o thread (histórico de mensagens) de um atendimento.

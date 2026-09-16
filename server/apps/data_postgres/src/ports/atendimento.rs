@@ -173,6 +173,7 @@ pub trait AtendimentoStore: Send + Sync {
         ctx: &RequestContext,
         status: &str,
         departamento_id: Option<i32>,
+        filtro: infrastructure_postgres::atendimentos::atendimentos::FiltroDoQuadro,
         limit: i64,
     ) -> Result<Vec<Atendimento>, DbError>;
 

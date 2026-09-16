@@ -251,6 +251,7 @@ impl AtendimentoStore for PgAtendimentoStore {
         ctx: &RequestContext,
         status: &str,
         departamento_id: Option<i32>,
+        filtro: infrastructure_postgres::atendimentos::atendimentos::FiltroDoQuadro,
         limit: i64,
     ) -> Result<Vec<Atendimento>, DbError> {
         let repo = PostgresAtendimentoRepository;
@@ -265,6 +266,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                         &mut tx,
                         &ctx,
                         departamento_id,
+                        &filtro,
                         limit,
                     )
                     .await?;

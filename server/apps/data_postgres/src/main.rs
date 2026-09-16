@@ -1893,10 +1893,40 @@ async fn handler_list_atendimentos(store: &dyn ports::AtendimentoStore, env: Env
         .get("limit")
         .and_then(|v| v.as_i64())
         .unwrap_or(50);
+    // P1 — o mesmo recorte da v1. Campo ausente = sem filtro.
+    let texto = |chave: &str| {
+        payload_json
+            .get(chave)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    let filtro = infrastructure_postgres::atendimentos::atendimentos::FiltroDoQuadro {
+        busca: texto("busca"),
+        atendente_id: payload_json
+            .get("atendente_id")
+            .and_then(|v| v.as_i64())
+            .filter(|v| *v != 0)
+            .map(|v| v as i32),
+        somente_nao_lidos: payload_json
+            .get("somente_nao_lidos")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        prioridade: texto("prioridade"),
+        somente_meus: payload_json
+            .get("somente_meus")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        etiqueta_id: payload_json
+            .get("etiqueta_id")
+            .and_then(|v| v.as_i64())
+            .filter(|v| *v > 0),
+    };
 
     let ctx = contexto_do_envelope(&env);
     match store
-        .listar_atendimentos(&ctx, &status, departamento_id, limit)
+        .listar_atendimentos(&ctx, &status, departamento_id, filtro, limit)
         .await
     {
         Ok(atendimentos) => {
@@ -10844,6 +10874,40 @@ mod tests_atendimento_cliente_unit {
         assert_eq!(err.category, contracts::ErrorCategory::Internal as i32);
     }
 
+    /// P1: o recorte pedido pelo app (busca, "minhas", não lidas) chega inteiro
+    /// ao repositório — filtrar no cliente esconderia a conversa não baixada.
+    #[tokio::test]
+    async fn list_atendimentos_repassa_o_recorte_da_busca() {
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_listar_atendimentos()
+            .times(1)
+            .returning(|_, _, _, filtro, _| {
+                assert_eq!(filtro.busca, "5531");
+                assert!(filtro.somente_meus);
+                assert!(filtro.somente_nao_lidos);
+                assert_eq!(filtro.prioridade, "alta");
+                assert_eq!(filtro.etiqueta_id, Some(9));
+                assert_eq!(filtro.atendente_id, Some(-1));
+                Ok(vec![])
+            });
+        let env = envelope_com_payload(
+            "ListAtendimentos",
+            serde_json::json!({
+                "busca": "  5531  ",
+                "somente_meus": true,
+                "somente_nao_lidos": true,
+                "prioridade": "alta",
+                "etiqueta_id": 9,
+                "atendente_id": -1,
+            }),
+        );
+
+        let resp = handler_list_atendimentos(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
     /// HAPPY PATH: list_atendimentos devolve Reply com o array de atendimentos.
     #[tokio::test]
     async fn list_atendimentos_returns_reply() {
@@ -10852,7 +10916,7 @@ mod tests_atendimento_cliente_unit {
         store
             .expect_listar_atendimentos()
             .times(1)
-            .returning(|_, _, _, _| Ok(vec![]));
+            .returning(|_, _, _, _, _| Ok(vec![]));
         let env = envelope_com_payload("ListAtendimentos", serde_json::json!({}));
 
         // Act
@@ -10871,7 +10935,7 @@ mod tests_atendimento_cliente_unit {
         store
             .expect_listar_atendimentos()
             .times(1)
-            .returning(|_, _, _, _| {
+            .returning(|_, _, _, _, _| {
                 let a: infrastructure_postgres::atendimentos::atendimentos::Atendimento =
                     serde_json::from_value(serde_json::json!({
                         "id": 7, "tenant_id": uuid::Uuid::nil(), "contato_id": 1,

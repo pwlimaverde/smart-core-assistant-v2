@@ -539,4 +539,60 @@ void main() {
       await controller.close();
     });
   });
+
+
+  // ─── P1: busca e filtros ───────────────────────────────────────────────────
+  group('busca e filtros (P1)', () {
+    test('a busca vai para o gateway depois da pausa de digitação', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
+      );
+      final c = _controller(gateway);
+      await c.carregar();
+      final antes = gateway.chamadasList;
+
+      c.digitarBusca('5531');
+      c.digitarBusca('55319');
+      // Enquanto o dedo está no teclado, ninguém consulta o servidor.
+      expect(gateway.chamadasList, antes);
+
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      expect(gateway.chamadasList, antes + 1);
+      expect(gateway.ultimaBusca, '55319');
+      await c.close();
+    });
+
+    test('"minhas" e "não lidas" combinam e recarregam na hora', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
+      );
+      final c = _controller(gateway);
+      await c.carregar();
+
+      await c.alternarFiltro(meus: true);
+      await c.alternarFiltro(naoLidas: true);
+
+      expect(gateway.ultimoSomenteMeus, isTrue);
+      expect(gateway.ultimoSomenteNaoLidos, isTrue);
+      expect(c.temFiltro, isTrue);
+      await c.close();
+    });
+
+    test('limpar devolve o quadro inteiro', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
+      );
+      final c = _controller(gateway);
+      await c.carregar();
+      await c.alternarFiltro(meus: true, naoLidas: true);
+
+      await c.limparFiltros();
+
+      expect(c.temFiltro, isFalse);
+      expect(gateway.ultimaBusca, '');
+      expect(gateway.ultimoSomenteMeus, isFalse);
+      expect(gateway.ultimoSomenteNaoLidos, isFalse);
+      await c.close();
+    });
+  });
 }

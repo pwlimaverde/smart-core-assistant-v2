@@ -47,6 +47,20 @@ final class KanbanController extends BaseController<KanbanViewModel> {
 
   final _atribuicoes = StreamController<AtribuicaoRecebida>.broadcast();
 
+  /// P1 — o recorte da lista, como na v1: texto livre, "minhas" e "não lidas".
+  String _busca = '';
+  bool _somenteMeus = false;
+  bool _somenteNaoLidas = false;
+  Timer? _debounceBusca;
+
+  String get busca => _busca;
+  bool get somenteMeus => _somenteMeus;
+  bool get somenteNaoLidas => _somenteNaoLidas;
+
+  /// Há algum filtro ativo — a tela usa para oferecer o "limpar".
+  bool get temFiltro =>
+      _busca.isNotEmpty || _somenteMeus || _somenteNaoLidas;
+
   /// Conversas que o rodízio acabou de atribuir **a quem está logado**.
   ///
   /// As dos colegas não aparecem aqui: o quadro recarrega para todo mundo, mas
@@ -114,6 +128,7 @@ final class KanbanController extends BaseController<KanbanViewModel> {
   @override
   Future<void> close() {
     _debounce?.cancel();
+    _debounceBusca?.cancel();
     _streamSubscription?.cancel();
     _atribuicoes.close();
     return super.close();
@@ -152,13 +167,46 @@ final class KanbanController extends BaseController<KanbanViewModel> {
   /// Troca o quadro aberto.
   Future<void> abrirQuadro(int fluxoId) => carregar(fluxoId: fluxoId);
 
+  /// P1 — digitar na busca. Recarrega depois de uma pausa: sem isso, uma
+  /// palavra de oito letras viraria oito consultas ao servidor.
+  void digitarBusca(String texto) {
+    _busca = texto;
+    _debounceBusca?.cancel();
+    _debounceBusca = Timer(
+      const Duration(milliseconds: 350),
+      () => carregar(),
+    );
+  }
+
+  /// P1 — liga/desliga os filtros combináveis. Recarrega na hora: é um clique,
+  /// não uma rajada.
+  Future<void> alternarFiltro({bool? meus, bool? naoLidas}) {
+    if (meus != null) _somenteMeus = meus;
+    if (naoLidas != null) _somenteNaoLidas = naoLidas;
+    return carregar();
+  }
+
+  /// P1 — volta ao quadro inteiro.
+  Future<void> limparFiltros() {
+    _debounceBusca?.cancel();
+    _busca = '';
+    _somenteMeus = false;
+    _somenteNaoLidas = false;
+    return carregar();
+  }
+
   Future<ReturnSuccessOrError<KanbanViewModel, ListAtendimentosError>> _montar(
     int? fluxoId,
   ) async {
     // Sem filtro de status: o quadro mostra a conversa em qualquer coluna, e
     // filtrar por "fila" deixaria as colunas de trabalho e finalização vazias.
     final res = await _listUsecase(
-      const ListAtendimentosParameters(status: ''),
+      ListAtendimentosParameters(
+        status: '',
+        busca: _busca.trim(),
+        somenteMeus: _somenteMeus,
+        somenteNaoLidos: _somenteNaoLidas,
+      ),
     );
     return switch (res) {
       Success(:final value) => Success(

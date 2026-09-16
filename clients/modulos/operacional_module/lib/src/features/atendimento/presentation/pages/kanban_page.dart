@@ -180,6 +180,7 @@ class _KanbanPageState extends State<KanbanPage> {
       body: Column(
         children: [
           if (widget.aviso != null) widget.aviso!,
+          _BarraDeFiltros(controller: controller),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -460,6 +461,102 @@ class _MenuDeEstado extends StatelessWidget {
           messenger.showSnackBar(SnackBar(content: Text(erro.message)));
         }
       },
+    );
+  }
+}
+
+/// P1 — o recorte da lista, como na v1: buscar por nome, telefone ou assunto,
+/// e combinar com "minhas" e "não lidas".
+class _BarraDeFiltros extends StatefulWidget {
+  final KanbanController controller;
+
+  const _BarraDeFiltros({required this.controller});
+
+  @override
+  State<_BarraDeFiltros> createState() => _BarraDeFiltrosState();
+}
+
+class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
+  late final TextEditingController _texto = TextEditingController(
+    text: widget.controller.busca,
+  );
+
+  @override
+  void dispose() {
+    _texto.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.controller;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.md,
+        0,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _texto,
+              decoration: InputDecoration(
+                isDense: true,
+                prefixIcon: const Icon(Icons.search, size: 20),
+                hintText: 'Buscar por nome, telefone ou assunto',
+                border: const OutlineInputBorder(),
+                suffixIcon: _texto.text.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        tooltip: 'Limpar busca',
+                        onPressed: () {
+                          _texto.clear();
+                          setState(() {});
+                          c.digitarBusca('');
+                        },
+                      ),
+              ),
+              onChanged: (v) {
+                // O setState é só pelo botão de limpar; a consulta em si é
+                // adiada pelo debounce do controller.
+                setState(() {});
+                c.digitarBusca(v);
+              },
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          FilterChip(
+            label: const Text('Minhas'),
+            selected: c.somenteMeus,
+            onSelected: (v) async {
+              await c.alternarFiltro(meus: v);
+              if (mounted) setState(() {});
+            },
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          FilterChip(
+            label: const Text('Não lidas'),
+            selected: c.somenteNaoLidas,
+            onSelected: (v) async {
+              await c.alternarFiltro(naoLidas: v);
+              if (mounted) setState(() {});
+            },
+          ),
+          if (c.temFiltro)
+            IconButton(
+              icon: const Icon(Icons.filter_alt_off_outlined),
+              tooltip: 'Limpar filtros',
+              onPressed: () async {
+                _texto.clear();
+                await c.limparFiltros();
+                if (mounted) setState(() {});
+              },
+            ),
+        ],
+      ),
     );
   }
 }

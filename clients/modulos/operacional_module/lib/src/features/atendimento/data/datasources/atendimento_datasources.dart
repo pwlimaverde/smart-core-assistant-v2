@@ -36,6 +36,9 @@ final class ListAtendimentosDatasource
         status: parameters.status,
         departamentoId: parameters.departamentoId,
         limit: parameters.limit,
+        busca: parameters.busca,
+        somenteMeus: parameters.somenteMeus,
+        somenteNaoLidos: parameters.somenteNaoLidos,
       );
 }
 
