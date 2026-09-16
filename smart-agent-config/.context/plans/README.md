@@ -10,7 +10,8 @@ This directory contains plans for coordinating work across documentation and pla
 5. [N13 Mcp Agentes](./n13-mcp-agentes.md)
 6. [N9 Conversa Completa](./n9-conversa-completa.md)
 7. [Painel Crm E Campos Do Cartao](./painel-crm-e-campos-do-cartao.md)
-8. [Regras Do Bot E Permissoes](./regras-do-bot-e-permissoes.md)
+8. [Paridade V1 Fechamento](./paridade-v1-fechamento.md)
+9. [Regras Do Bot E Permissoes](./regras-do-bot-e-permissoes.md)
 
 ## How To Create Or Update Plans
 - Run "dotcontext plan <name>" to scaffold a new plan template.
