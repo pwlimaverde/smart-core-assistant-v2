@@ -9453,23 +9453,56 @@ async fn handler_atualizar_estado_instancia(
         .unwrap_or("consulta");
 
     let ctx = contexto_do_envelope(&env);
+
+    // O estado ANTERIOR, para auditar transição e não repetição. A reconciliação
+    // chama este RPC a cada poucos minutos por instância, com o estado que leu do
+    // provedor — igual ao que já estava gravado, na esmagadora maioria das vezes.
+    //
+    // Sem esta comparação, cada consulta virava uma linha WARN dizendo "estado
+    // atualizado para 'connecting'" quando nada tinha mudado. Medido em
+    // 2026-09-16: 944 linhas, 640 delas repetindo `connecting` da mesma instância
+    // travada no pareamento. Uma trilha que repete o que não mudou não deixa
+    // ninguém ver o que mudou.
+    //
+    // `None` (instância inexistente ou de outro tenant, já filtrada pela RLS) conta
+    // como diferente: na dúvida sobre o estado anterior, registrar é o lado certo
+    // do erro.
+    let anterior = store
+        .buscar_instancia(&ctx, id)
+        .await
+        .ok()
+        .flatten()
+        .map(|i| i.connection_state);
+
     match store.atualizar_estado(&ctx, id, connection_state).await {
         Ok(_) => {
-            audit
-                .publish(
-                    &env,
-                    "whatsapp_instance.state_updated",
-                    format!(
-                        "estado da instância '{}' atualizado para '{}'",
-                        id, connection_state
-                    ),
-                    serde_json::json!({
-                        "instance_id": id,
-                        "connection_state": connection_state,
-                        "origem": origem,
-                    }),
-                )
-                .await;
+            // O UPDATE acontece sempre — `last_state_check` é a evidência de que a
+            // verificação ocorreu, e a tela depende dela. O que passa a ser
+            // condicional é a linha de AUDITORIA.
+            if anterior.as_deref() != Some(connection_state) {
+                audit
+                    .publish(
+                        &env,
+                        "whatsapp_instance.state_updated",
+                        match anterior.as_deref() {
+                            Some(de) => format!(
+                                "estado da instância '{}' mudou de '{}' para '{}'",
+                                id, de, connection_state
+                            ),
+                            None => format!(
+                                "estado da instância '{}' registrado como '{}'",
+                                id, connection_state
+                            ),
+                        },
+                        serde_json::json!({
+                            "instance_id": id,
+                            "connection_state": connection_state,
+                            "estado_anterior": anterior,
+                            "origem": origem,
+                        }),
+                    )
+                    .await;
+            }
             ok_reply(
                 &env,
                 "AtualizarEstadoInstanciaReply",
