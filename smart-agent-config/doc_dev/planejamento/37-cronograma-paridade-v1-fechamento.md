@@ -35,9 +35,9 @@ O inventário da v1 que serve de gabarito:
 
 | # | Bloco | Origem na v1 | Por que nesta posição | Estado |
 |---|-------|--------------|-----------------------|--------|
-| P1 | Busca e filtros da conversa | `conversations/?q=`, filtros do workspace | Sem busca, uma conta com 500 conversas é inoperável | ⬜ |
-| P2 | Conversa fiel: citação, ticks, dia, paginação | `chat_alpine.js` (setReplyTo, statusEnvioIcon, enrichedMessages, onChatScroll) | É o que faz a tela "parecer WhatsApp" | ⬜ |
-| P3 | Presença, áudio PTT e galeria | `presence/`, `startRecording`, `medias/`, lightbox | Fecha a conversa; depende de P2 (mesma tela) | ⬜ |
+| P1 | ✅ Busca e filtros da conversa | `conversations/?q=`, filtros do workspace | Sem busca, uma conta com 500 conversas é inoperável | ⬜ |
+| P2 | ✅ Conversa fiel: citação, ticks, dia, paginação | `chat_alpine.js` (setReplyTo, statusEnvioIcon, enrichedMessages, onChatScroll) | É o que faz a tela "parecer WhatsApp" | ⬜ |
+| P3 | ✅ Presença, áudio PTT e galeria | `presence/`, `startRecording`, `medias/`, lightbox | Fecha a conversa; depende de P2 (mesma tela) | ⬜ |
 | P4 | Quadro: atribuir, transferir, prioridade, exportar | `board/assign`, `board/transfer-fluxo`, `export/` | Operação diária do supervisor | ⬜ |
 | P5 | Ficha: timeline, excluir nota, catálogo de etiquetas | `timeline/`, `notas/<id>` DELETE, `etiquetas/` CRUD | Completa o CRM do cartão | ⬜ |
 | P6 | SLA: `data_primeira_resposta` | Coluna da v1, viva | Coluna lida em 5 consultas e nunca escrita | ⬜ |
@@ -144,4 +144,18 @@ portar, e fechar o documento de paridade.
 
 ## Andamento
 
-_(preenchido a cada bloco concluído, com o commit e a CI)_
+| Bloco | Commit | CI | O que entrou |
+|---|---|---|---|
+| P1 | `6448eb3` | ✅ 35040800069 | Busca (contato, telefone, assunto), "minhas", "não lidas", prioridade e etiqueta; ordenação pela última mensagem; dois índices; barra de busca no quadro. |
+| P2 | `d947c55` | ✅ 35159979923 | `before_id` no `GetThread`; ticks de entrega/leitura na bolha; citar mensagem; separador de dia; a recarga deixou de apagar o histórico puxado. |
+| P3 | `73a283c` | ✅ 35159979923 | `EnviarPresenca` na borda e presença do contato com `atendimento_id`; áudio de voz (PTT); anexo de arquivo (o gateway existia sem botão); galeria com imagem ampliada. |
+
+### Achados fora do inventário inicial
+
+- **`enviarMidia` existia no gateway desde a N9 e nenhuma tela o chamava**:
+  anexar arquivo simplesmente não existia no app. Entrou no P3.
+- **`statusEnvio` nos testes usava `'enviado'`**, valor que o servidor nunca
+  produz — o teste media outra coisa. Corrigido para o vocabulário real
+  (`sent`/`delivered`/`read`).
+- **`dart:io` no módulo operacional quebra o smoke build web do painel admin**;
+  o caminho do áudio usa `path_provider`.
