@@ -279,6 +279,20 @@ fn remetente_deve_ser_ignorado(resposta_whitelist: Option<bool>) -> bool {
 /// já era o comportamento vigente desde a N4.4 e desligá-lo por omissão abriria a
 /// ingestão a rajadas; a flag existe para calibrar `MAX` numa janela de observação.
 /// Só o literal `"false"` (case-insensitive) desliga o enforce.
+/// Esta requisição barrada merece uma linha na trilha de auditoria?
+///
+/// Só a **travessia** do teto: a primeira requisição que passou do limite dentro
+/// da janela. As outras vão para o log, onde volume não custa.
+///
+/// Sem isto, a proteção virava amplificação: em 15/09/2026 uma única instância
+/// travada no pareamento bateu ~500 vezes por minuto contra um teto de 120, e
+/// cada recusa virou uma escrita no Postgres — 185 271 linhas de auditoria em um
+/// dia. A informação útil ("esta instância estourou o limite") é uma linha por
+/// janela; o resto é a mesma frase repetida.
+fn auditar_rate_limit(total: u64, max: u64) -> bool {
+    total == max + 1
+}
+
 fn enforce_rate_limit_ligado(valor: Option<&str>) -> bool {
     match valor {
         Some(v) => !v.eq_ignore_ascii_case("false"),
@@ -442,26 +456,50 @@ async fn handle_webhook(
         let id = format!("{}:{}", params.tenant_id, params.instance_id);
         match registrar_rate_limit_unificado(&state.redis_client, "webhook", &id, window_s).await {
             Ok(total) if total > max => {
-                state.audit_logger.warn(
-                    params.tenant_id,
-                    "webhook.rejected",
-                    if enforce {
-                        "Rate limit do webhook excedido"
-                    } else {
-                        "Rate limit do webhook excedido (log-only; ingestão seguiu)"
-                    },
-                    serde_json::json!({
-                        "provider": params.provider,
-                        "instance_id": params.instance_id,
-                        "reason": "rate_limited",
-                        "attempts": total,
-                        "max": max,
-                        "enforce": enforce
-                    }),
-                    None,
-                    None,
-                    None,
+                // Todas as requisições barradas aparecem no log; na AUDITORIA
+                // entra só a TRAVESSIA do teto — a primeira que passou do limite
+                // nesta janela.
+                //
+                // Auditar cada uma transformava a proteção em amplificação: em
+                // 15/09 foram 185 271 linhas de `webhook.rejected` em um dia,
+                // porque uma instância batia 500 vezes por minuto contra um teto
+                // de 120 e cada recusa virava uma escrita no Postgres. O que o
+                // dono da conta precisa saber é "esta instância estourou o
+                // limite", não a contagem individual das tentativas.
+                tracing::warn!(
+                    provider = %params.provider,
+                    instance_id = params.instance_id,
+                    attempts = total,
+                    max,
+                    enforce,
+                    "Rate limit do webhook excedido"
                 );
+                if auditar_rate_limit(total, max) {
+                    state.audit_logger.warn(
+                        params.tenant_id,
+                        "webhook.rejected",
+                        if enforce {
+                            "Rate limit do webhook excedido"
+                        } else {
+                            "Rate limit do webhook excedido (log-only; ingestão seguiu)"
+                        },
+                        serde_json::json!({
+                            "provider": params.provider,
+                            "instance_id": params.instance_id,
+                            "reason": "rate_limited",
+                            "attempts": total,
+                            "max": max,
+                            "enforce": enforce,
+                            // Deixa explícito para quem lê a trilha que esta linha
+                            // representa a janela inteira, não uma requisição.
+                            "janela_s": window_s,
+                            "evento": "travessia_do_teto"
+                        }),
+                        None,
+                        None,
+                        None,
+                    );
+                }
                 if enforce {
                     return Err(StatusCode::TOO_MANY_REQUESTS);
                 }
@@ -663,18 +701,26 @@ async fn handle_webhook(
         );
     }
 
-    state.audit_logger.info(
-        params.tenant_id,
-        "webhook.received",
-        "Webhook recebido e processado com sucesso",
-        serde_json::json!({
-            "provider": params.provider,
-            "instance_id": params.instance_id,
-            "event_type": event_type
-        }),
-        None,
-        None,
-        None,
+    // Recebimento de webhook NÃO é evento de auditoria — é telemetria, e vai para
+    // o log estruturado, onde o volume não custa nada.
+    //
+    // Auditar cada chegada custou caro: uma instância travada no pareamento faz a
+    // Evolution regenerar o QR e disparar um webhook a cada poucos segundos, sem
+    // fim. Medido em 2026-09-16 no banco de dev: 381 363 das 382 670 linhas do
+    // `audit_log` eram `webhook.received`/`webhook.rejected` de QR code — 212 MB
+    // de 225 MB do banco, 99,7% da trilha. Os 1 306 eventos que a auditoria existe
+    // para guardar (convite, permissão, chave de API, assinatura) ficaram
+    // soterrados, impossíveis de ler.
+    //
+    // É a mesma política que o caminho de inadimplência acima já aplicava, com a
+    // mesma justificativa escrita lá: não auditar por-mensagem, senão a trilha
+    // inunda. O critério do 08 §4.2 é estado sensível ou crítico; a chegada de um
+    // webhook não é nenhum dos dois.
+    tracing::info!(
+        provider = %params.provider,
+        instance_id = params.instance_id,
+        event_type = event_type,
+        "Webhook recebido e processado com sucesso"
     );
 
     Ok(StatusCode::ACCEPTED)
@@ -1282,5 +1328,18 @@ mod tests {
             .unwrap();
 
         assert_eq!(response.status(), StatusCode::ACCEPTED);
+    }
+
+    #[test]
+    fn auditoria_de_rate_limit_so_na_travessia_do_teto() {
+        // Abaixo e no teto: nem barra, nem audita.
+        assert!(!auditar_rate_limit(119, 120));
+        assert!(!auditar_rate_limit(120, 120));
+        // A primeira que passou: esta é a linha que o dono da conta precisa ver.
+        assert!(auditar_rate_limit(121, 120));
+        // As 500 seguintes da mesma janela vão só para o log. Era isso que
+        // enchia 185 mil linhas por dia.
+        assert!(!auditar_rate_limit(122, 120));
+        assert!(!auditar_rate_limit(506, 120));
     }
 }
