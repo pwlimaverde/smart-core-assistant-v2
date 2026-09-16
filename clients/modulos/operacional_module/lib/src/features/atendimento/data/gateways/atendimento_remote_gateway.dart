@@ -206,6 +206,20 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
   }
 
   @override
+  Future<bool> enviarPresenca({
+    required int atendimentoId,
+    String situacao = 'composing',
+  }) async {
+    final resp = await _client.enviarPresenca(
+      proto.EnviarPresencaRequest(
+        atendimentoId: atendimentoId,
+        situacao: situacao,
+      ),
+    );
+    return resp.enviado;
+  }
+
+  @override
   Future<List<MidiaMensagem>> listarMidias({
     required int atendimentoId,
     int limit = 50,

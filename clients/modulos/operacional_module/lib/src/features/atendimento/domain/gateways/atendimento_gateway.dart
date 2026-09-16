@@ -161,6 +161,15 @@ abstract interface class AtendimentoGateway {
   ///
   /// As URLs vêm assinadas com TTL curto: a lista é para exibir agora, não para
   /// guardar.
+  /// P3 — avisa o contato que o atendente está digitando/gravando.
+  ///
+  /// Devolve `false` quando não há conexão ativa para o contato. Não lança:
+  /// presença é enfeite, e quem digita não deve ser interrompido por ela.
+  Future<bool> enviarPresenca({
+    required int atendimentoId,
+    String situacao,
+  });
+
   Future<List<MidiaMensagem>> listarMidias({
     required int atendimentoId,
     int limit,

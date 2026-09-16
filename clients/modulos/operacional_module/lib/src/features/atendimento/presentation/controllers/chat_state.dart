@@ -24,6 +24,10 @@ final class ChatViewModel {
   /// P2 — a mensagem que a próxima resposta vai citar, se houver.
   final MensagemThread? citando;
 
+  /// P3 — o que o contato está fazendo agora: `composing`, `recording` ou
+  /// vazio. Vale por alguns segundos e não é histórico.
+  final String presencaDoContato;
+
   const ChatViewModel({
     required this.atendimentoId,
     required this.mensagens,
@@ -31,6 +35,7 @@ final class ChatViewModel {
     this.carregandoAntigas = false,
     this.fimDoHistorico = false,
     this.citando,
+    this.presencaDoContato = '',
   });
 
   ChatViewModel copyWith({
@@ -39,6 +44,7 @@ final class ChatViewModel {
     bool? carregandoAntigas,
     bool? fimDoHistorico,
     MensagemThread? citando,
+    String? presencaDoContato,
     // `citando: null` no copyWith seria indistinguível de "não mexer"; este
     // sinalizador é como se cancela a citação.
     bool limparCitacao = false,
@@ -49,5 +55,6 @@ final class ChatViewModel {
     carregandoAntigas: carregandoAntigas ?? this.carregandoAntigas,
     fimDoHistorico: fimDoHistorico ?? this.fimDoHistorico,
     citando: limparCitacao ? null : (citando ?? this.citando),
+    presencaDoContato: presencaDoContato ?? this.presencaDoContato,
   );
 }

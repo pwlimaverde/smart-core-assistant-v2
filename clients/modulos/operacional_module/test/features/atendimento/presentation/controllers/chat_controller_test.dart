@@ -16,6 +16,7 @@ ChatController _controller(FakeAtendimentoGateway gateway) {
     sendUsecase: u.send,
     eventos: u.eventos,
     marcarLidoUsecase: u.marcarLido,
+    presencaUsecase: u.presenca,
   );
 }
 
@@ -342,6 +343,76 @@ void main() {
 
       final vm = (controller.state as SuccessState<ChatViewModel>).data;
       expect(vm.mensagens.map((m) => m.id), containsAll([9, 10]));
+      await controller.close();
+    });
+  });
+  // ─── P3: presença ─────────────────────────────────────────────────────────
+  group('presença (P3)', () {
+    test('digitar avisa uma vez só dentro da janela de renovação', () async {
+      final gateway = FakeAtendimentoGateway(
+        thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
+      );
+      final controller = _controller(gateway);
+      await controller.abrir(5);
+
+      await controller.avisarQueEstaDigitando();
+      await controller.avisarQueEstaDigitando();
+      await controller.avisarQueEstaDigitando();
+
+      // Uma chamada por pausa, não uma por tecla.
+      expect(gateway.presencasEnviadas, ['composing']);
+      await controller.close();
+    });
+
+    test('gravar áudio avisa "recording" mesmo dentro da janela', () async {
+      final gateway = FakeAtendimentoGateway(
+        thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
+      );
+      final controller = _controller(gateway);
+      await controller.abrir(5);
+
+      await controller.avisarQueEstaDigitando();
+      await controller.avisarQueEstaDigitando(gravandoAudio: true);
+
+      expect(gateway.presencasEnviadas, ['composing', 'recording']);
+      await controller.close();
+    });
+
+    test('enviar encerra a digitação', () async {
+      final gateway = FakeAtendimentoGateway(
+        thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
+      );
+      final controller = _controller(gateway);
+      await controller.abrir(5);
+      await controller.avisarQueEstaDigitando();
+
+      await controller.enviar('pronto');
+      await Future<void>.delayed(Duration.zero);
+
+      expect(gateway.presencasEnviadas, ['composing', 'paused']);
+      await controller.close();
+    });
+
+    test('a presença do contato aparece e não recarrega a conversa', () async {
+      final gateway = FakeAtendimentoGateway(
+        thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
+      );
+      final controller = _controller(gateway);
+      await controller.abrir(5);
+      final recargas = gateway.chamadasThread;
+
+      gateway.eventos.add(
+        const AtendimentoEvento(
+          tipo: 'whatsapp.presenca',
+          tenantId: 't',
+          payload: {'atendimento_id': 5, 'situacao': 'composing'},
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      final vm = (controller.state as SuccessState<ChatViewModel>).data;
+      expect(vm.presencaDoContato, 'composing');
+      expect(gateway.chamadasThread, recargas);
       await controller.close();
     });
   });

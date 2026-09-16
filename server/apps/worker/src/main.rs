@@ -1047,11 +1047,35 @@ async fn processar_presenca_contato(
         "presença do contato recebida"
     );
 
+    // P3 — o cliente precisa casar a presença com a conversa aberta, e o evento
+    // da Evolution só traz o número. A busca NÃO cria nada: quem não tem
+    // conversa ativa simplesmente não gera presença na tela.
+    let atendimento_id = match chamar_rpc(
+        &state.pg_client,
+        &envelope.tenant_id.to_string(),
+        "BuscarAtendimentoAtivoPorTelefone",
+        serde_json::json!({ "telefone": contato }),
+        &envelope.event_id.to_string(),
+        &envelope.traceparent,
+    )
+    .await
+    {
+        Ok(resp) => resp.get("atendimento_id").and_then(|v| v.as_i64()),
+        Err(e) => {
+            tracing::debug!(erro = %e, "não deu para casar a presença com um atendimento");
+            None
+        }
+    };
+
     publicar_realtime(
         state,
         envelope.tenant_id,
         "whatsapp.presenca",
-        serde_json::json!({ "contato": contato, "situacao": situacao }),
+        serde_json::json!({
+            "contato": contato,
+            "situacao": situacao,
+            "atendimento_id": atendimento_id,
+        }),
     )
     .await;
 

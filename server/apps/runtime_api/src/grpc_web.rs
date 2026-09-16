@@ -5825,6 +5825,120 @@ impl AdminService for AdminFacade {
     // superuser); o RBAC fino por fluxo (flow_permissions, WS-5a) é aplicado no
     // data_postgres sobre cada atendimento/fluxo. ---
 
+    /// P3 — "digitando..." do atendente chega ao contato.
+    ///
+    /// Duas pernas: o `data_postgres` diz por qual conexão e para qual número
+    /// (aplicando a RLS do tenant), e o `data_whatsapp` manda. Sem conexão
+    /// ativa para o contato, devolve `enviado = false` em vez de erro: presença
+    /// é enfeite, e derrubar a digitação por causa dela seria desproporcional.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "EnviarPresenca", traceparent)
+    )]
+    async fn enviar_presenca(
+        &self,
+        req: Request<EnviarPresencaRequest>,
+    ) -> Result<Response<EnviarPresencaResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(&claims, &["atendimentos:write"], "EnviarPresenca")?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+
+        let situacao = match inner.situacao.trim() {
+            "" => "composing".to_string(),
+            outro @ ("composing" | "recording" | "paused") => outro.to_string(),
+            _ => return Err(Status::invalid_argument("situação de presença inválida")),
+        };
+
+        let auth_user_id = claims.sub.parse::<i32>().unwrap_or(0);
+        let flow_permissions = if claims.is_superuser {
+            Vec::new()
+        } else {
+            resolver_flow_permissions_web(&self.deps, &claims.tenant_id, auth_user_id, &traceparent)
+                .await
+        };
+
+        let env_destino = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "ResolverDestinoDoAtendimento".to_string(),
+            payload: serde_json::to_vec(
+                &serde_json::json!({ "atendimento_id": inner.atendimento_id }),
+            )
+            .unwrap(),
+            auth_user_id,
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            flow_permissions,
+            ..Default::default()
+        };
+
+        let resp = self
+            .deps
+            .pg
+            .call(env_destino, std::time::Duration::from_secs(5))
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço interno: {}", e)))?;
+        if resp.kind == MessageKind::Error as i32 {
+            let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
+            return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
+        }
+        let destino: serde_json::Value =
+            serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))?;
+
+        let (Some(instance_id), Some(to_number)) = (
+            destino.get("instance_id").and_then(|v| v.as_i64()),
+            destino.get("to_number").and_then(|v| v.as_str()),
+        ) else {
+            return Ok(Response::new(EnviarPresencaResponse { enviado: false }));
+        };
+
+        let env_presenca = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent,
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "SetWhatsappPresence".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({
+                "id": instance_id,
+                "chat": to_number,
+                "state": situacao,
+                "is_audio": situacao == "recording",
+            }))
+            .unwrap(),
+            auth_user_id,
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        let enviado = match self
+            .deps
+            .whatsapp
+            .call(env_presenca, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(r) => r.kind != MessageKind::Error as i32,
+            // O provedor fora do ar não pode interromper quem está digitando.
+            Err(e) => {
+                tracing::debug!(erro = %e, "presença não entregue ao provedor");
+                false
+            }
+        };
+
+        Ok(Response::new(EnviarPresencaResponse { enviado }))
+    }
+
     #[tracing::instrument(
         skip_all,
         fields(service = "runtime_api", rpc = "ListAtendimentos", traceparent)

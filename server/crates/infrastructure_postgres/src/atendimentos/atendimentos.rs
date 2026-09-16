@@ -1196,6 +1196,36 @@ pub async fn listar_ativos_do_tenant(
     Ok(rows)
 }
 
+/// P3 — o atendimento ativo de um telefone, sem criar nada.
+///
+/// Serve à presença ("digitando..."), que chega da Evolution identificada só
+/// pelo número. Diferente do `ResolveAtendimentoParaContato` da ingestão, aqui
+/// **não** se cria contato nem atendimento: ninguém abre uma conversa porque o
+/// outro lado encostou no teclado.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+pub async fn buscar_ativo_por_telefone(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    telefone: &str,
+) -> Result<Option<i32>, DbError> {
+    let row = sqlx::query_as::<_, (i32,)>(
+        r#"SELECT a.id
+             FROM oraculo_atendimento a
+             JOIN oraculo_contato c
+               ON c.id = a.contato_id AND c.tenant_id = a.tenant_id
+            WHERE a.tenant_id = $1
+              AND c.telefone = $2
+              AND a.status NOT IN ('resolvido', 'cancelado', 'arquivado')
+            ORDER BY a.data_inicio DESC
+            LIMIT 1"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(telefone)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row.map(|(id,)| id))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

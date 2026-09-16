@@ -1,18 +1,25 @@
+import 'package:cross_file/cross_file.dart';
 import 'package:dependencies_module/dependencies_module.dart' show GetIt;
 import 'package:design_system_module/design_system_module.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
 import 'package:get_it_module/get_it_module.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:presentation_module/presentation_module.dart';
+import 'package:record/record.dart';
 
 import '../../domain/model/mensagem_thread.dart';
+import '../../domain/parameters/presenca_parameters.dart';
 import '../../domain/usecases/atendimento_usecases.dart';
 import '../controllers/chat_controller.dart';
 import '../controllers/chat_state.dart';
 import '../controllers/ficha_controller.dart';
 import '../widgets/chat_connection_badge.dart';
 import '../widgets/chat_message_bubble.dart';
+import '../widgets/galeria_do_atendimento.dart';
 import '../widgets/painel_ficha.dart';
 
 /// A conversa de um atendimento, **sem moldura de tela**.
@@ -69,6 +76,11 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
           GetIt.instance.isRegistered<MarcarAtendimentoLidoUsecase>()
           ? inject<MarcarAtendimentoLidoUsecase>()
           : null,
+      // P3 — mesmo critério: nos testes de tela o usecase não está registrado,
+      // e a conversa tem de abrir assim mesmo.
+      presencaUsecase: GetIt.instance.isRegistered<EnviarPresencaUsecase>()
+          ? inject<EnviarPresencaUsecase>()
+          : null,
     );
     // Controller próprio: a ficha pode falhar sem derrubar a conversa, e um
     // estado só levaria as mensagens junto com o painel.
@@ -122,6 +134,12 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
                 aoPararDeRolar: _marcarSeNoFim,
                 aoCitar: _controller.citar,
                 aoCancelarCitacao: _controller.cancelarCitacao,
+                aoDigitar: _controller.avisarQueEstaDigitando,
+                aoAnexar: _anexar,
+                aoGravar: _alternarGravacao,
+                gravando: _gravando,
+                aoAbrirGaleria: () =>
+                    GaleriaDoAtendimento.abrir(context, widget.atendimentoId),
               ),
             };
           },
@@ -171,6 +189,113 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
       _controller.carregarAntigas();
     }
   }
+
+  /// P3 — o gravador do áudio de voz. Só existe enquanto se grava.
+  final _gravador = AudioRecorder();
+  bool _gravando = false;
+
+  /// P3 — escolhe um arquivo e o manda para a conversa.
+  Future<void> _anexar() async {
+    if (!GetIt.instance.isRegistered<EnviarMidiaUsecase>()) return;
+    final escolha = await FilePicker.platform.pickFiles(withData: true);
+    final arquivo = escolha?.files.singleOrNull;
+    if (arquivo == null) return;
+    // No desktop o picker devolve `path`; na Web, `bytes`. O gateway espera
+    // bytes, e ler o arquivo aqui evita espalhar essa diferença pela tela.
+    final bytes = arquivo.bytes;
+    if (bytes == null) return;
+    await _enviarMidia(
+      nomeArquivo: arquivo.name,
+      mimetype: _mimetypePorExtensao(arquivo.extension),
+      bytes: bytes,
+    );
+  }
+
+  /// P3 — grava um áudio de voz (PTT) e o envia ao soltar.
+  Future<void> _alternarGravacao() async {
+    if (!GetIt.instance.isRegistered<EnviarMidiaUsecase>()) return;
+    if (_gravando) {
+      final caminho = await _gravador.stop();
+      setState(() => _gravando = false);
+      await _controller.pararDeDigitar();
+      if (caminho == null) return;
+      final bytes = await XFile(caminho).readAsBytes();
+      await _enviarMidia(
+        nomeArquivo: 'audio.m4a',
+        mimetype: 'audio/mp4',
+        bytes: bytes,
+        ehPtt: true,
+      );
+      return;
+    }
+    if (!await _gravador.hasPermission()) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Sem permissão para usar o microfone.')),
+      );
+      return;
+    }
+    await _gravador.start(const RecordConfig(), path: await _caminhoDoAudio());
+    setState(() => _gravando = true);
+    // Enquanto grava, o contato vê "gravando áudio...", como no WhatsApp.
+    await _controller.avisarQueEstaDigitando(gravandoAudio: true);
+  }
+
+  /// Onde o gravador escreve. Na Web não há sistema de arquivos: o `record`
+  /// devolve um blob e ignora o caminho.
+  Future<String> _caminhoDoAudio() async {
+    if (kIsWeb) return '';
+    final dir = await getTemporaryDirectory();
+    final agora = DateTime.now().millisecondsSinceEpoch;
+    return '${dir.path}/ptt_$agora.m4a';
+  }
+
+  Future<void> _enviarMidia({
+    required String nomeArquivo,
+    required String mimetype,
+    required List<int> bytes,
+    bool ehPtt = false,
+  }) async {
+    final res = await inject<EnviarMidiaUsecase>()(
+      EnviarMidiaParameters(
+        atendimentoId: widget.atendimentoId,
+        nomeArquivo: nomeArquivo,
+        mimetype: mimetype,
+        bytes: bytes,
+        ehPtt: ehPtt,
+      ),
+    );
+    if (!mounted) return;
+    if (res case Failure(:final error)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.message)));
+      return;
+    }
+    await _controller.abrir(widget.atendimentoId);
+  }
+
+  /// O servidor decide o que aceita pelo mimetype; o picker devolve só a
+  /// extensão. Desconhecido vai como binário, e o servidor recusa se não puder.
+  static String _mimetypePorExtensao(String? extensao) =>
+      switch (extensao?.toLowerCase()) {
+        'jpg' || 'jpeg' => 'image/jpeg',
+        'png' => 'image/png',
+        'gif' => 'image/gif',
+        'webp' => 'image/webp',
+        'pdf' => 'application/pdf',
+        'mp3' => 'audio/mpeg',
+        'ogg' => 'audio/ogg',
+        'm4a' => 'audio/mp4',
+        'mp4' => 'video/mp4',
+        'doc' => 'application/msword',
+        'docx' =>
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        'xls' => 'application/vnd.ms-excel',
+        'xlsx' =>
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        _ => 'application/octet-stream',
+      };
 
   Future<void> _enviar() async {
     final texto = _inputController.text.trim();
@@ -259,6 +384,11 @@ class _ChatBody extends StatelessWidget {
   final VoidCallback aoPararDeRolar;
   final void Function(MensagemThread) aoCitar;
   final VoidCallback aoCancelarCitacao;
+  final VoidCallback aoDigitar;
+  final VoidCallback aoAnexar;
+  final VoidCallback aoGravar;
+  final bool gravando;
+  final VoidCallback aoAbrirGaleria;
 
   const _ChatBody({
     required this.viewModel,
@@ -268,13 +398,31 @@ class _ChatBody extends StatelessWidget {
     required this.aoPararDeRolar,
     required this.aoCitar,
     required this.aoCancelarCitacao,
+    required this.aoDigitar,
+    required this.aoAnexar,
+    required this.aoGravar,
+    required this.gravando,
+    required this.aoAbrirGaleria,
   });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        ChatConnectionBadge(status: viewModel.connectionStatus),
+        Row(
+          children: [
+            Expanded(
+              child: ChatConnectionBadge(status: viewModel.connectionStatus),
+            ),
+            IconButton(
+              icon: const Icon(Icons.perm_media_outlined),
+              tooltip: 'Arquivos da conversa',
+              onPressed: aoAbrirGaleria,
+            ),
+          ],
+        ),
+        if (viewModel.presencaDoContato.isNotEmpty)
+          _AvisoDePresenca(situacao: viewModel.presencaDoContato),
         Expanded(
           child: viewModel.mensagens.isEmpty
               ? const AppEmptyView(
@@ -338,11 +486,23 @@ class _ChatBody extends StatelessWidget {
           padding: const EdgeInsets.all(AppSpacing.sm),
           child: Row(
             children: [
+              IconButton(
+                icon: const Icon(Icons.attach_file),
+                tooltip: 'Anexar arquivo',
+                onPressed: aoAnexar,
+              ),
+              IconButton(
+                icon: Icon(gravando ? Icons.stop_circle : Icons.mic_none),
+                color: gravando ? AppPalette.danger : null,
+                tooltip: gravando ? 'Parar e enviar' : 'Gravar áudio',
+                onPressed: aoGravar,
+              ),
               Expanded(
                 child: AppTextField(
                   label: 'Mensagem',
                   hint: 'Digite uma mensagem…',
                   controller: inputController,
+                  onChanged: (_) => aoDigitar(),
                   onSubmitted: (_) => onEnviar(),
                 ),
               ),
@@ -447,6 +607,45 @@ class _BarraDeCitacao extends StatelessWidget {
             icon: const Icon(Icons.close, size: 18),
             tooltip: 'Cancelar resposta',
             onPressed: aoCancelar,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// P3 — "digitando..." / "gravando áudio..." do contato.
+class _AvisoDePresenca extends StatelessWidget {
+  final String situacao;
+
+  const _AvisoDePresenca({required this.situacao});
+
+  @override
+  Widget build(BuildContext context) {
+    final texto = situacao == 'recording'
+        ? 'gravando áudio…'
+        : 'digitando…';
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.xs,
+        AppSpacing.md,
+        0,
+      ),
+      child: Row(
+        children: [
+          Icon(
+            situacao == 'recording' ? Icons.mic : Icons.more_horiz,
+            size: 14,
+            color: context.colors.fgMuted,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          Text(
+            texto,
+            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              color: context.colors.fgMuted,
+              fontStyle: FontStyle.italic,
+            ),
           ),
         ],
       ),

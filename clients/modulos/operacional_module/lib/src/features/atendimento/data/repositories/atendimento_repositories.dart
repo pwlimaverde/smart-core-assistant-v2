@@ -21,6 +21,8 @@ import '../../domain/model/quadro.dart';
 import '../../domain/parameters/ficha_parameters.dart';
 import '../../domain/parameters/quadro_parameters.dart';
 import '../../domain/parameters/send_outbound_message_parameters.dart';
+import '../../domain/model/midia_mensagem.dart';
+import '../../domain/parameters/presenca_parameters.dart';
 
 /// As quatro fronteiras da feature. Cada `mapError` traduz a natureza da falha
 /// (transporte gRPC no Web, [LocalEngineFalha] no desktop) para o conjunto
@@ -422,4 +424,70 @@ final class CriarNotaRepository
   @override
   FichaError mapError(Object e, StackTrace s, CriarNotaParameters p) =>
       _erroDeFicha(e, s, p.atendimentoId);
+}
+
+/// P3 — presença: qualquer falha vira "não entregue". Não há o que a pessoa
+/// possa fazer com o detalhe, e a conversa continua normalmente.
+final class EnviarPresencaRepository
+    extends RepositoryBase<bool, EnviarPresencaParameters, PresencaError> {
+  const EnviarPresencaRepository({required super.datasource});
+
+  @override
+  PresencaError mapError(Object e, StackTrace s, EnviarPresencaParameters p) {
+    _log('enviarPresenca', e, s, atendimentoId: p.atendimentoId);
+    return switch (_kindDeTransporte(e)) {
+      GrpcFailureKind.unavailable ||
+      GrpcFailureKind.rateLimited => const PresencaNaoEntregue(),
+      _ => const PresencaInesperado(),
+    };
+  }
+}
+
+final class ListarMidiasRepository
+    extends
+        RepositoryBase<
+          List<MidiaMensagem>,
+          ListarMidiasParameters,
+          MidiasError
+        > {
+  const ListarMidiasRepository({required super.datasource});
+
+  @override
+  MidiasError mapError(Object e, StackTrace s, ListarMidiasParameters p) {
+    _log('listarMidias', e, s, atendimentoId: p.atendimentoId);
+    return switch (_kindDeTransporte(e)) {
+      null => const MidiasFalhaLocal(),
+      GrpcFailureKind.unauthenticated => const MidiasSessaoExpirada(),
+      GrpcFailureKind.permissionDenied => const MidiasAcessoNegado(),
+      GrpcFailureKind.unavailable ||
+      GrpcFailureKind.rateLimited => const MidiasIndisponivel(),
+      _ => const MidiasInesperado(),
+    };
+  }
+}
+
+final class EnviarMidiaRepository
+    extends RepositoryBase<int, EnviarMidiaParameters, EnviarMidiaError> {
+  const EnviarMidiaRepository({required super.datasource});
+
+  @override
+  EnviarMidiaError mapError(Object e, StackTrace s, EnviarMidiaParameters p) {
+    // Nunca os bytes nem o nome do arquivo: os dois são do cliente.
+    _log('enviarMidia', e, s, atendimentoId: p.atendimentoId);
+    return switch (_kindDeTransporte(e)) {
+      GrpcFailureKind.unauthenticated => const EnviarMidiaSessaoExpirada(),
+      GrpcFailureKind.permissionDenied => const EnviarMidiaAcessoNegado(),
+      GrpcFailureKind.invalidArgument ||
+      GrpcFailureKind.failedPrecondition => EnviarMidiaRecusado(
+        e is GrpcError ? e.message : null,
+      ),
+      // `rateLimited` é o `resourceExhausted` do gRPC, que aqui significa cota
+      // de armazenamento estourada: é recusa, não instabilidade.
+      GrpcFailureKind.rateLimited => EnviarMidiaRecusado(
+        e is GrpcError ? e.message : null,
+      ),
+      GrpcFailureKind.unavailable => const EnviarMidiaIndisponivel(),
+      _ => const EnviarMidiaInesperado(),
+    };
+  }
 }

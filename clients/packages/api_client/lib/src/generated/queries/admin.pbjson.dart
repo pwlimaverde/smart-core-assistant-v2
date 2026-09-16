@@ -1986,6 +1986,33 @@ final $typed_data.Uint8List enviarMidiaAtendimentoResponseDescriptor =
         'Ch5FbnZpYXJNaWRpYUF0ZW5kaW1lbnRvUmVzcG9uc2USHQoKbWVzc2FnZV9pZBgBIAEoBVIJbW'
         'Vzc2FnZUlk');
 
+@$core.Deprecated('Use enviarPresencaRequestDescriptor instead')
+const EnviarPresencaRequest$json = {
+  '1': 'EnviarPresencaRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'situacao', '3': 2, '4': 1, '5': 9, '10': 'situacao'},
+  ],
+};
+
+/// Descriptor for `EnviarPresencaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List enviarPresencaRequestDescriptor = $convert.base64Decode(
+    'ChVFbnZpYXJQcmVzZW5jYVJlcXVlc3QSJQoOYXRlbmRpbWVudG9faWQYASABKAVSDWF0ZW5kaW'
+    '1lbnRvSWQSGgoIc2l0dWFjYW8YAiABKAlSCHNpdHVhY2Fv');
+
+@$core.Deprecated('Use enviarPresencaResponseDescriptor instead')
+const EnviarPresencaResponse$json = {
+  '1': 'EnviarPresencaResponse',
+  '2': [
+    {'1': 'enviado', '3': 1, '4': 1, '5': 8, '10': 'enviado'},
+  ],
+};
+
+/// Descriptor for `EnviarPresencaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List enviarPresencaResponseDescriptor =
+    $convert.base64Decode(
+        'ChZFbnZpYXJQcmVzZW5jYVJlc3BvbnNlEhgKB2VudmlhZG8YASABKAhSB2VudmlhZG8=');
+
 @$core.Deprecated('Use listarMidiasAtendimentoRequestDescriptor instead')
 const ListarMidiasAtendimentoRequest$json = {
   '1': 'ListarMidiasAtendimentoRequest',

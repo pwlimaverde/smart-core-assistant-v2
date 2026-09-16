@@ -906,3 +906,34 @@ pub async fn listar_anteriores_a(
     .await?;
     Ok(rows)
 }
+
+/// P3 — para onde mandar a presença de um atendimento: instância e telefone.
+///
+/// Espelha o destino do envio outbound, mas parte do **atendimento**: presença
+/// não tem mensagem à qual se pendurar. Sem destino resolvível devolve `None`
+/// — e quem chama simplesmente não manda nada, porque "digitando" que não
+/// chega não é erro que valha interromper a conversa.
+#[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
+pub async fn resolver_destino_do_atendimento(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+) -> Result<Option<(i64, String)>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let row = sqlx::query_as::<_, (i64, String)>(
+        r#"SELECT wc.instance_id, oc.telefone
+             FROM oraculo_atendimento oa
+             JOIN oraculo_contato oc
+               ON oc.id = oa.contato_id AND oc.tenant_id = oa.tenant_id
+             JOIN whatsapp_contact wc
+               ON wc.contact_id = oc.id AND wc.tenant_id = oc.tenant_id AND wc.active = true
+            WHERE oa.tenant_id = $1 AND oa.id = $2 AND oc.telefone IS NOT NULL
+            ORDER BY wc.updated_at DESC
+            LIMIT 1"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row)
+}

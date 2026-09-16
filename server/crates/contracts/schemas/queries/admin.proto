@@ -660,6 +660,20 @@ message EnviarMidiaAtendimentoResponse {
   int32 message_id = 1;
 }
 
+// P3 — "digitando..." / "gravando audio..." do atendente para o contato.
+//
+// E efemero: nao grava nada, nao entra na thread. O `data_whatsapp` ja sabia
+// mandar (`SetWhatsappPresence`); faltava caminho da borda ate ele.
+message EnviarPresencaRequest {
+  int32 atendimento_id = 1;
+  // "composing", "recording" ou "paused".
+  string situacao = 2;
+}
+
+message EnviarPresencaResponse {
+  bool enviado = 1;
+}
+
 message ListarMidiasAtendimentoRequest {
   int32 atendimento_id = 1;
   int32 limit = 2;
@@ -1154,6 +1168,8 @@ service AdminService {
   rpc SolicitarUploadMidia(SolicitarUploadMidiaRequest) returns (SolicitarUploadMidiaResponse);
   rpc EnviarMidiaAtendimento(EnviarMidiaAtendimentoRequest) returns (EnviarMidiaAtendimentoResponse);
   rpc ListarMidiasAtendimento(ListarMidiasAtendimentoRequest) returns (ListarMidiasAtendimentoResponse);
+  // P3 — presenca do atendente na conversa (efemera).
+  rpc EnviarPresenca(EnviarPresencaRequest) returns (EnviarPresencaResponse);
 
   // Fase N3: Painel do Tenant. Exigem só autenticação (não superuser); o RBAC fino
   // `tenant:admin` é aplicado no data_postgres. AcceptInvite é rota pública (sem sessão).

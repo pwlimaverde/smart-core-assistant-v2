@@ -169,6 +169,20 @@ pub trait AtendimentoStore: Send + Sync {
         before_id: Option<i32>,
     ) -> Result<Vec<Mensagem>, DbError>;
 
+    /// P3 — o atendimento ativo de um telefone (sem criar nada).
+    async fn buscar_atendimento_ativo_por_telefone(
+        &self,
+        ctx: &RequestContext,
+        telefone: &str,
+    ) -> Result<Option<i32>, DbError>;
+
+    /// P3 — instância e telefone para onde mandar a presença do atendente.
+    async fn resolver_destino_do_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<Option<(i64, String)>, DbError>;
+
     /// Lista atendimentos por status (snapshot), opcionalmente filtrando departamento.
     async fn listar_atendimentos(
         &self,

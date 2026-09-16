@@ -241,7 +241,11 @@ impl AtendimentoStore for PgAtendimentoStore {
             let mensagens = match before_id {
                 Some(cursor) => {
                     infrastructure_postgres::atendimentos::mensagens::listar_anteriores_a(
-                        &mut tx, &ctx, atendimento_id, cursor, limit,
+                        &mut tx,
+                        &ctx,
+                        atendimento_id,
+                        cursor,
+                        limit,
                     )
                     .await?
                 }
@@ -251,6 +255,47 @@ impl AtendimentoStore for PgAtendimentoStore {
                 }
             };
             Ok((mensagens, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn buscar_atendimento_ativo_por_telefone(
+        &self,
+        ctx: &RequestContext,
+        telefone: &str,
+    ) -> Result<Option<i32>, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let telefone = telefone.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let id =
+                infrastructure_postgres::atendimentos::atendimentos::buscar_ativo_por_telefone(
+                    &mut tx, &ctx, &telefone,
+                )
+                .await?;
+            Ok((id, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn resolver_destino_do_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<Option<(i64, String)>, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let destino =
+                infrastructure_postgres::atendimentos::mensagens::resolver_destino_do_atendimento(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                )
+                .await?;
+            Ok((destino, tx))
         })
         .await
     }

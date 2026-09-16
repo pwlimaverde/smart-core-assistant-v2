@@ -14,7 +14,10 @@ MensagemThread _mensagem({
   conteudo: 'Olá, como posso ajudar?',
   remetente: remetente,
   timestamp: DateTime(2026, 1, 1, 10, 30),
-  statusEnvio: 'enviado',
+  // O vocabulário é o do provedor, o mesmo que o banco guarda: 'sent',
+  // 'delivered', 'read'. Um valor inventado aqui derivaria para "pendente" e
+  // o teste passaria a medir outra coisa.
+  statusEnvio: 'sent',
   geradoPorIa: geradoPorIa,
   resumoMidia: resumoMidia,
 );

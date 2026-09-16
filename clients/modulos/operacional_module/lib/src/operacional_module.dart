@@ -126,6 +126,33 @@ final class OperacionalModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<EnviarMidiaUsecase>(
+      () => EnviarMidiaUsecase(
+        repository: EnviarMidiaRepository(
+          datasource: EnviarMidiaDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<EnviarPresencaUsecase>(
+      () => EnviarPresencaUsecase(
+        repository: EnviarPresencaRepository(
+          datasource: EnviarPresencaDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<ListarMidiasUsecase>(
+      () => ListarMidiasUsecase(
+        repository: ListarMidiasRepository(
+          datasource: ListarMidiasDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
     i.lazySingleton<GetFichaUsecase>(
       () => GetFichaUsecase(
         repository: GetFichaRepository(

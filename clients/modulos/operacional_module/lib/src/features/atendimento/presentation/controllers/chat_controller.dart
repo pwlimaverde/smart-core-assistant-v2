@@ -10,6 +10,7 @@ import '../../domain/model/atendimento_evento.dart';
 import '../../domain/model/mensagem_thread.dart';
 import '../../domain/parameters/ficha_parameters.dart';
 import '../../domain/parameters/get_thread_parameters.dart';
+import '../../domain/parameters/presenca_parameters.dart';
 import '../../domain/parameters/send_outbound_message_parameters.dart';
 import '../../domain/streams/atendimento_evento_stream.dart';
 import '../../domain/usecases/atendimento_usecases.dart';
@@ -31,6 +32,10 @@ final class ChatController extends BaseController<ChatViewModel> {
   /// B6 — opcional: sem ele a conversa abre e só não marca a leitura.
   final MarcarAtendimentoLidoUsecase? _marcarLido;
 
+  /// P3 — opcional pelo mesmo motivo: sem ele a conversa funciona e o contato
+  /// apenas não vê o "digitando...".
+  final EnviarPresencaUsecase? _presenca;
+
   /// Dependências como private named parameters (Dart 3.12): o chamador usa
   /// `getThreadUsecase`/`sendUsecase`/`eventos`, os campos ficam privados.
   ChatController({
@@ -38,7 +43,9 @@ final class ChatController extends BaseController<ChatViewModel> {
     required this._sendUsecase,
     required this._eventos,
     MarcarAtendimentoLidoUsecase? marcarLidoUsecase,
-  }) : _marcarLido = marcarLidoUsecase;
+    EnviarPresencaUsecase? presencaUsecase,
+  }) : _marcarLido = marcarLidoUsecase,
+       _presenca = presencaUsecase;
 
   static const _backoffBase = Duration(seconds: 1);
   static const _backoffMax = Duration(seconds: 30);
@@ -53,6 +60,19 @@ final class ChatController extends BaseController<ChatViewModel> {
   /// Id da mensagem do contato mais recente já marcada como lida: evita ir
   /// ao servidor a cada rolagem quando nada novo chegou.
   int? _ultimaMarcada;
+
+  /// P3 — quando a última presença do atendente foi enviada, e o timer que
+  /// apaga a presença do contato quando ela para de ser renovada.
+  DateTime? _ultimaPresencaEnviada;
+  Timer? _limpezaDaPresenca;
+
+  /// O provedor mantém "digitando" por poucos segundos; renovar a cada tecla
+  /// seria uma chamada por caractere, e renovar de menos faz o aviso piscar.
+  static const _intervaloDePresenca = Duration(seconds: 4);
+
+  /// Depois disso sem notícia, o "digitando..." some sozinho: o provedor nem
+  /// sempre manda o evento de parada.
+  static const _validadeDaPresenca = Duration(seconds: 8);
 
   /// Abre o chat de um atendimento: carrega o histórico e conecta o stream.
   Future<void> abrir(int atendimentoId) async {
@@ -95,12 +115,54 @@ final class ChatController extends BaseController<ChatViewModel> {
         mensagemCitadaId: citada?.id,
       ),
     );
+    // Mandou: não está mais digitando.
+    unawaited(pararDeDigitar());
     if (res case Failure(:final error)) return error;
     // A citação vale para UMA resposta: mantê-la faria a próxima mensagem
     // responder a mesma bolha sem que ninguém tenha pedido.
     cancelarCitacao();
     await _recarregarThread();
     return null;
+  }
+
+  /// P3 — a pessoa está escrevendo: avisa o contato, no máximo uma vez a
+  /// cada [_intervaloDePresenca].
+  ///
+  /// Falha em silêncio de propósito: quem está digitando não pode receber um
+  /// erro porque o "digitando..." não chegou.
+  Future<void> avisarQueEstaDigitando({bool gravandoAudio = false}) async {
+    final usecase = _presenca;
+    final atendimentoId = _atendimentoId;
+    if (usecase == null || atendimentoId == null) return;
+    final agora = DateTime.now();
+    final ultima = _ultimaPresencaEnviada;
+    if (!gravandoAudio &&
+        ultima != null &&
+        agora.difference(ultima) < _intervaloDePresenca) {
+      return;
+    }
+    _ultimaPresencaEnviada = agora;
+    await usecase(
+      EnviarPresencaParameters(
+        atendimentoId: atendimentoId,
+        situacao: gravandoAudio ? 'recording' : 'composing',
+      ),
+    );
+  }
+
+  /// P3 — parou de escrever (enviou ou desistiu).
+  Future<void> pararDeDigitar() async {
+    final usecase = _presenca;
+    final atendimentoId = _atendimentoId;
+    if (usecase == null || atendimentoId == null) return;
+    if (_ultimaPresencaEnviada == null) return;
+    _ultimaPresencaEnviada = null;
+    await usecase(
+      EnviarPresencaParameters(
+        atendimentoId: atendimentoId,
+        situacao: 'paused',
+      ),
+    );
   }
 
   /// P2 — a próxima resposta vai citar [mensagem].
@@ -206,11 +268,41 @@ final class ChatController extends BaseController<ChatViewModel> {
   void _aoReceberEvento(AtendimentoEvento evento) {
     _tentativa = 0;
     _atualizarStatus(ChatConnectionStatus.conectado);
+    // P3 — presença não é mensagem: muda uma linha do cabeçalho e não custa
+    // uma recarga da conversa inteira.
+    if (evento.tipo == 'whatsapp.presenca') {
+      if (evento.atendimentoId == _atendimentoId) {
+        _aplicarPresencaDoContato('${evento.payload['situacao'] ?? ''}');
+      }
+      return;
+    }
     // Só recarrega o thread quando o evento é do atendimento aberto — evita
     // I/O desnecessário para eventos de outros atendimentos da fila.
     if (evento.atendimentoId == _atendimentoId) {
       unawaited(_recarregarThread());
     }
+  }
+
+  void _aplicarPresencaDoContato(String situacao) {
+    final atual = state;
+    if (atual is! SuccessState<ChatViewModel>) return;
+    // "available"/"unavailable" são estado de conexão do contato, não de
+    // digitação: para a conversa, valem como "nada acontecendo".
+    final exibivel = situacao == 'composing' || situacao == 'recording'
+        ? situacao
+        : '';
+    if (atual.data.presencaDoContato != exibivel) {
+      emit(SuccessState(atual.data.copyWith(presencaDoContato: exibivel)));
+    }
+    _limpezaDaPresenca?.cancel();
+    if (exibivel.isEmpty) return;
+    _limpezaDaPresenca = Timer(_validadeDaPresenca, () {
+      final agora = state;
+      if (agora is SuccessState<ChatViewModel> &&
+          agora.data.presencaDoContato.isNotEmpty) {
+        emit(SuccessState(agora.data.copyWith(presencaDoContato: '')));
+      }
+    });
   }
 
   void _aoFalharStream(Object error, StackTrace stackTrace) {
@@ -280,6 +372,7 @@ final class ChatController extends BaseController<ChatViewModel> {
   @override
   Future<void> close() {
     _encerrado = true;
+    _limpezaDaPresenca?.cancel();
     _reconnectTimer?.cancel();
     _subscription?.cancel();
     return super.close();

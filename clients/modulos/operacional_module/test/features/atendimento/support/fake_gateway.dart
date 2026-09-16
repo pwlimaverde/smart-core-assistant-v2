@@ -11,6 +11,7 @@ import 'package:operacional_module/src/features/atendimento/domain/model/atendim
 import 'package:operacional_module/src/features/atendimento/domain/model/mensagem_thread.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/ficha.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/midia_mensagem.dart';
+import 'package:operacional_module/src/features/atendimento/domain/parameters/presenca_parameters.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/quadro.dart';
 import 'package:operacional_module/src/features/atendimento/domain/streams/atendimento_evento_stream.dart';
 import 'package:operacional_module/src/features/atendimento/domain/usecases/atendimento_usecases.dart';
@@ -185,6 +186,19 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
     return messageId;
   }
 
+  /// P3 — presenças pedidas pela tela, na ordem.
+  final List<String> presencasEnviadas = [];
+  bool presencaEntregue = true;
+
+  @override
+  Future<bool> enviarPresenca({
+    required int atendimentoId,
+    String situacao = 'composing',
+  }) async {
+    presencasEnviadas.add(situacao);
+    return presencaEntregue;
+  }
+
   @override
   Future<List<MidiaMensagem>> listarMidias({
     required int atendimentoId,
@@ -311,6 +325,8 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   DefinirValorCampoUsecase definirValorCampo,
   ListAtendimentosUsecase list,
   GetThreadUsecase thread,
+  EnviarPresencaUsecase presenca,
+  ListarMidiasUsecase midias,
   MoveAtendimentoEtapaUsecase move,
   SendOutboundMessageUsecase send,
   ListFluxosUsecase fluxos,
@@ -343,6 +359,16 @@ usecasesSobre(FakeAtendimentoGateway gateway) => (
   thread: GetThreadUsecase(
     repository: GetThreadRepository(
       datasource: GetThreadDatasource(gateway: gateway),
+    ),
+  ),
+  presenca: EnviarPresencaUsecase(
+    repository: EnviarPresencaRepository(
+      datasource: EnviarPresencaDatasource(gateway: gateway),
+    ),
+  ),
+  midias: ListarMidiasUsecase(
+    repository: ListarMidiasRepository(
+      datasource: ListarMidiasDatasource(gateway: gateway),
     ),
   ),
   move: MoveAtendimentoEtapaUsecase(

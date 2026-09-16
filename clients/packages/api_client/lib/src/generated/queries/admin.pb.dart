@@ -7764,6 +7764,135 @@ class EnviarMidiaAtendimentoResponse extends $pb.GeneratedMessage {
   void clearMessageId() => $_clearField(1);
 }
 
+/// P3 — "digitando..." / "gravando audio..." do atendente para o contato.
+///
+/// E efemero: nao grava nada, nao entra na thread. O `data_whatsapp` ja sabia
+/// mandar (`SetWhatsappPresence`); faltava caminho da borda ate ele.
+class EnviarPresencaRequest extends $pb.GeneratedMessage {
+  factory EnviarPresencaRequest({
+    $core.int? atendimentoId,
+    $core.String? situacao,
+  }) {
+    final result = create();
+    if (atendimentoId != null) result.atendimentoId = atendimentoId;
+    if (situacao != null) result.situacao = situacao;
+    return result;
+  }
+
+  EnviarPresencaRequest._();
+
+  factory EnviarPresencaRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory EnviarPresencaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'EnviarPresencaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'atendimentoId')
+    ..aOS(2, _omitFieldNames ? '' : 'situacao')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EnviarPresencaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EnviarPresencaRequest copyWith(
+          void Function(EnviarPresencaRequest) updates) =>
+      super.copyWith((message) => updates(message as EnviarPresencaRequest))
+          as EnviarPresencaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static EnviarPresencaRequest create() => EnviarPresencaRequest._();
+  @$core.override
+  EnviarPresencaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static EnviarPresencaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<EnviarPresencaRequest>(create);
+  static EnviarPresencaRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get atendimentoId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set atendimentoId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAtendimentoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAtendimentoId() => $_clearField(1);
+
+  /// "composing", "recording" ou "paused".
+  @$pb.TagNumber(2)
+  $core.String get situacao => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set situacao($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasSituacao() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearSituacao() => $_clearField(2);
+}
+
+class EnviarPresencaResponse extends $pb.GeneratedMessage {
+  factory EnviarPresencaResponse({
+    $core.bool? enviado,
+  }) {
+    final result = create();
+    if (enviado != null) result.enviado = enviado;
+    return result;
+  }
+
+  EnviarPresencaResponse._();
+
+  factory EnviarPresencaResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory EnviarPresencaResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'EnviarPresencaResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOB(1, _omitFieldNames ? '' : 'enviado')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EnviarPresencaResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EnviarPresencaResponse copyWith(
+          void Function(EnviarPresencaResponse) updates) =>
+      super.copyWith((message) => updates(message as EnviarPresencaResponse))
+          as EnviarPresencaResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static EnviarPresencaResponse create() => EnviarPresencaResponse._();
+  @$core.override
+  EnviarPresencaResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static EnviarPresencaResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<EnviarPresencaResponse>(create);
+  static EnviarPresencaResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.bool get enviado => $_getBF(0);
+  @$pb.TagNumber(1)
+  set enviado($core.bool value) => $_setBool(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasEnviado() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearEnviado() => $_clearField(1);
+}
+
 class ListarMidiasAtendimentoRequest extends $pb.GeneratedMessage {
   factory ListarMidiasAtendimentoRequest({
     $core.int? atendimentoId,

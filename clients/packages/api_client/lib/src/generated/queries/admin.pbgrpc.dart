@@ -377,6 +377,14 @@ class AdminServiceClient extends $grpc.Client {
         options: options);
   }
 
+  /// P3 — presenca do atendente na conversa (efemera).
+  $grpc.ResponseFuture<$0.EnviarPresencaResponse> enviarPresenca(
+    $0.EnviarPresencaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$enviarPresenca, request, options: options);
+  }
+
   /// Fase N3: Painel do Tenant. Exigem só autenticação (não superuser); o RBAC fino
   /// `tenant:admin` é aplicado no data_postgres. AcceptInvite é rota pública (sem sessão).
   $grpc.ResponseFuture<$0.CreateInviteResponse> createInvite(
@@ -1153,6 +1161,11 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/ListarMidiasAtendimento',
       ($0.ListarMidiasAtendimentoRequest value) => value.writeToBuffer(),
       $0.ListarMidiasAtendimentoResponse.fromBuffer);
+  static final _$enviarPresenca =
+      $grpc.ClientMethod<$0.EnviarPresencaRequest, $0.EnviarPresencaResponse>(
+          '/smartcore.contracts.queries.AdminService/EnviarPresenca',
+          ($0.EnviarPresencaRequest value) => value.writeToBuffer(),
+          $0.EnviarPresencaResponse.fromBuffer);
   static final _$createInvite =
       $grpc.ClientMethod<$0.CreateInviteRequest, $0.CreateInviteResponse>(
           '/smartcore.contracts.queries.AdminService/CreateInvite',
@@ -1914,6 +1927,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.ListarMidiasAtendimentoRequest.fromBuffer(value),
         ($0.ListarMidiasAtendimentoResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.EnviarPresencaRequest,
+            $0.EnviarPresencaResponse>(
+        'EnviarPresenca',
+        enviarPresenca_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.EnviarPresencaRequest.fromBuffer(value),
+        ($0.EnviarPresencaResponse value) => value.writeToBuffer()));
     $addMethod(
         $grpc.ServiceMethod<$0.CreateInviteRequest, $0.CreateInviteResponse>(
             'CreateInvite',
@@ -2944,6 +2966,15 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.ListarMidiasAtendimentoResponse> listarMidiasAtendimento(
       $grpc.ServiceCall call, $0.ListarMidiasAtendimentoRequest request);
+
+  $async.Future<$0.EnviarPresencaResponse> enviarPresenca_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.EnviarPresencaRequest> $request) async {
+    return enviarPresenca($call, await $request);
+  }
+
+  $async.Future<$0.EnviarPresencaResponse> enviarPresenca(
+      $grpc.ServiceCall call, $0.EnviarPresencaRequest request);
 
   $async.Future<$0.CreateInviteResponse> createInvite_Pre(
       $grpc.ServiceCall $call,

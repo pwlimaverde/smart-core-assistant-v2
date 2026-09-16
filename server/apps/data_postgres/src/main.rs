@@ -602,6 +602,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_listar_midias_expiradas = state_clone.clone();
     let state_for_marcar_midia_purgada = state_clone.clone();
     let state_for_resolver_destino_envio = state_clone.clone();
+    let state_for_resolver_destino_atendimento = state_clone.clone();
+    let state_for_ativo_por_telefone = state_clone.clone();
     let state_for_reprocessar_dead_letter = state_clone.clone();
     let state_for_marcar_mensagem_enviada = state_clone.clone();
     let state_for_marcar_mensagem_falha_envio = state_clone.clone();
@@ -815,6 +817,18 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(
                 async move { handler_marcar_midia_purgada(state.atendimento.as_ref(), env).await },
             )
+        })
+        .route("BuscarAtendimentoAtivoPorTelefone", move |env| {
+            let state = state_for_ativo_por_telefone.clone();
+            Box::pin(async move {
+                handler_buscar_atendimento_ativo_por_telefone(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("ResolverDestinoDoAtendimento", move |env| {
+            let state = state_for_resolver_destino_atendimento.clone();
+            Box::pin(async move {
+                handler_resolver_destino_do_atendimento(state.atendimento.as_ref(), env).await
+            })
         })
         .route("ResolverDestinoEnvioOutbound", move |env| {
             let state = state_for_resolver_destino_envio.clone();
@@ -4861,6 +4875,84 @@ async fn handler_resolver_campos_atendimento(
 
 /// Resolve instância/telefone de destino para o envio outbound de uma mensagem do
 /// atendente (elo outbox->outbound, N1.3).
+/// P3 — o atendimento ativo de um telefone, para casar a presença que chega.
+#[tracing::instrument(skip_all, fields(rpc = "BuscarAtendimentoAtivoPorTelefone", tenant_id = %env.tenant_id))]
+async fn handler_buscar_atendimento_ativo_por_telefone(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    // O telefone é PII: entra no payload, nunca no span nem no log.
+    let telefone = payload_json
+        .get("telefone")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if telefone.is_empty() {
+        return erro(
+            error_core::AppError::Validation("telefone ausente".into()),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .buscar_atendimento_ativo_por_telefone(&ctx, &telefone)
+        .await
+    {
+        Ok(id) => ok_reply(
+            &env,
+            "BuscarAtendimentoAtivoPorTelefoneReply",
+            serde_json::json!({ "atendimento_id": id }),
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// P3 — para onde mandar a presença do atendente nesta conversa.
+#[tracing::instrument(skip_all, fields(rpc = "ResolverDestinoDoAtendimento", tenant_id = %env.tenant_id))]
+async fn handler_resolver_destino_do_atendimento(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .resolver_destino_do_atendimento(&ctx, atendimento_id)
+        .await
+    {
+        Ok(Some((instance_id, telefone))) => ok_reply(
+            &env,
+            "ResolverDestinoDoAtendimentoReply",
+            serde_json::json!({ "instance_id": instance_id, "to_number": telefone }),
+        ),
+        // Sem conexão ativa para o contato: quem chama decide o que fazer.
+        Ok(None) => ok_reply(
+            &env,
+            "ResolverDestinoDoAtendimentoReply",
+            serde_json::json!({}),
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
 async fn handler_resolver_destino_envio_outbound(
     store: &dyn ports::AtendimentoStore,
     audit: &dyn ports::AuditPort,

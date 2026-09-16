@@ -351,6 +351,19 @@ final class LocalEngineGateway implements AtendimentoGateway {
     );
   }
 
+  @override
+  Future<bool> enviarPresenca({
+    required int atendimentoId,
+    String situacao = 'composing',
+  }) {
+    // P3 — presença é efêmera e só faz sentido com o provedor alcançável:
+    // delega ao remoto, como a galeria.
+    return _remoto.enviarPresenca(
+      atendimentoId: atendimentoId,
+      situacao: situacao,
+    );
+  }
+
   /// A galeria é leitura de URLs assinadas com TTL curto: cacheá-las no índice
   /// offline entregaria links vencidos na próxima abertura.
   @override

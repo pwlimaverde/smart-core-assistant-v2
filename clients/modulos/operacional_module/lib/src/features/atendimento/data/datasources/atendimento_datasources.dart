@@ -14,6 +14,8 @@ import '../../domain/model/quadro.dart';
 import '../../domain/parameters/ficha_parameters.dart';
 import '../../domain/parameters/quadro_parameters.dart';
 import '../../domain/parameters/send_outbound_message_parameters.dart';
+import '../../domain/model/midia_mensagem.dart';
+import '../../domain/parameters/presenca_parameters.dart';
 
 /// Os quatro `Datasource` da feature: adaptadores finos entre o `Parameters` de
 /// uma operação e o [AtendimentoGateway] da plataforma ativa.
@@ -261,4 +263,53 @@ final class CriarNotaDatasource
     );
     return unit;
   }
+}
+
+/// P3 — avisa o contato que o atendente está digitando/gravando.
+final class EnviarPresencaDatasource
+    implements Datasource<bool, EnviarPresencaParameters> {
+  final AtendimentoGateway _gateway;
+
+  const EnviarPresencaDatasource({required this._gateway});
+
+  @override
+  Future<bool> call(EnviarPresencaParameters parameters) =>
+      _gateway.enviarPresenca(
+        atendimentoId: parameters.atendimentoId,
+        situacao: parameters.situacao,
+      );
+}
+
+/// P3 — os arquivos trocados na conversa (galeria).
+final class ListarMidiasDatasource
+    implements Datasource<List<MidiaMensagem>, ListarMidiasParameters> {
+  final AtendimentoGateway _gateway;
+
+  const ListarMidiasDatasource({required this._gateway});
+
+  @override
+  Future<List<MidiaMensagem>> call(ListarMidiasParameters parameters) =>
+      _gateway.listarMidias(
+        atendimentoId: parameters.atendimentoId,
+        limit: parameters.limit,
+        offset: parameters.offset,
+      );
+}
+
+/// P3 — sobe o anexo e o põe na conversa. Devolve o id da mensagem criada.
+final class EnviarMidiaDatasource
+    implements Datasource<int, EnviarMidiaParameters> {
+  final AtendimentoGateway _gateway;
+
+  const EnviarMidiaDatasource({required this._gateway});
+
+  @override
+  Future<int> call(EnviarMidiaParameters parameters) => _gateway.enviarMidia(
+    atendimentoId: parameters.atendimentoId,
+    nomeArquivo: parameters.nomeArquivo,
+    mimetype: parameters.mimetype,
+    bytes: parameters.bytes,
+    legenda: parameters.legenda,
+    ehPtt: parameters.ehPtt,
+  );
 }

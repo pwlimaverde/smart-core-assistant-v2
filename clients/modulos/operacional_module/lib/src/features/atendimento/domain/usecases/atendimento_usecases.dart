@@ -16,6 +16,8 @@ import '../model/quadro.dart';
 import '../parameters/ficha_parameters.dart';
 import '../parameters/quadro_parameters.dart';
 import '../parameters/send_outbound_message_parameters.dart';
+import '../model/midia_mensagem.dart';
+import '../parameters/presenca_parameters.dart';
 
 /// Os quatro casos de uso do atendimento.
 ///
@@ -461,5 +463,68 @@ final class CriarNotaUsecase
   FichaError onUnexpected(Object exception, StackTrace stackTrace) {
     _logBug('criarNota', exception, stackTrace);
     return const FichaInesperado();
+  }
+}
+
+/// P3 — "digitando..." do atendente.
+final class EnviarPresencaUsecase
+    extends
+        UsecaseBaseCallData<bool, bool, EnviarPresencaParameters, PresencaError> {
+  const EnviarPresencaUsecase({required super.repository});
+
+  @override
+  ProcessData<bool, bool, EnviarPresencaParameters, PresencaError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  PresencaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('enviarPresenca', exception, stackTrace);
+    return const PresencaInesperado();
+  }
+}
+
+/// P3 — galeria de arquivos da conversa.
+final class ListarMidiasUsecase
+    extends
+        UsecaseBaseCallData<
+          List<MidiaMensagem>,
+          List<MidiaMensagem>,
+          ListarMidiasParameters,
+          MidiasError
+        > {
+  const ListarMidiasUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    List<MidiaMensagem>,
+    List<MidiaMensagem>,
+    ListarMidiasParameters,
+    MidiasError
+  >
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  MidiasError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('listarMidias', exception, stackTrace);
+    return const MidiasInesperado();
+  }
+}
+
+/// P3 — anexo e áudio na conversa.
+final class EnviarMidiaUsecase
+    extends
+        UsecaseBaseCallData<int, int, EnviarMidiaParameters, EnviarMidiaError> {
+  const EnviarMidiaUsecase({required super.repository});
+
+  @override
+  ProcessData<int, int, EnviarMidiaParameters, EnviarMidiaError> get process =>
+      (data, _) => Success(data);
+
+  @override
+  EnviarMidiaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('enviarMidia', exception, stackTrace);
+    return const EnviarMidiaInesperado();
   }
 }
