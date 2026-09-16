@@ -11,7 +11,6 @@ import 'package:operacional_module/src/features/atendimento/domain/model/atendim
 import 'package:operacional_module/src/features/atendimento/domain/model/mensagem_thread.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/ficha.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/midia_mensagem.dart';
-import 'package:operacional_module/src/features/atendimento/domain/parameters/presenca_parameters.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/quadro.dart';
 import 'package:operacional_module/src/features/atendimento/domain/streams/atendimento_evento_stream.dart';
 import 'package:operacional_module/src/features/atendimento/domain/usecases/atendimento_usecases.dart';
