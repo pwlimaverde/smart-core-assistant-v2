@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:get_it_module/get_it_module.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:presentation_module/presentation_module.dart';
+import 'package:return_success_or_error/return_success_or_error.dart';
 import 'package:record/record.dart';
 
 import '../../domain/model/mensagem_thread.dart';
@@ -197,7 +198,7 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
   /// P3 — escolhe um arquivo e o manda para a conversa.
   Future<void> _anexar() async {
     if (!GetIt.instance.isRegistered<EnviarMidiaUsecase>()) return;
-    final escolha = await FilePicker.platform.pickFiles(withData: true);
+    final escolha = await FilePicker.pickFiles(withData: true);
     final arquivo = escolha?.files.singleOrNull;
     if (arquivo == null) return;
     // No desktop o picker devolve `path`; na Web, `bytes`. O gateway espera

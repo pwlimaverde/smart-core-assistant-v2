@@ -148,6 +148,8 @@ use contracts::grpc::queries::{
     ListVoucherRedemptionsResponse,
     ListVouchersRequest,
     ListVouchersResponse,
+    EnviarPresencaRequest,
+    EnviarPresencaResponse,
     ListarMidiasAtendimentoRequest,
     ListarMidiasAtendimentoResponse,
     LoginRequest,
@@ -5923,7 +5925,6 @@ impl AdminService for AdminFacade {
         };
 
         let enviado = match self
-            .deps
             .whatsapp
             .call(env_presenca, std::time::Duration::from_secs(5))
             .await
