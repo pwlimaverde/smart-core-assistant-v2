@@ -29,6 +29,8 @@ use contracts::grpc::queries::{
     AtendimentoIdRequest,
     // Fase 6 - Operacional (fila/Kanban/chat)
     AtendimentoResumo as ProtoAtendimentoResumo,
+    AtribuirAtendimentoRequest,
+    AtribuirAtendimentoResponse,
     AuditLogEntry as ProtoAuditLogEntry,
     AuthResponse,
     ContatoDoCliente,
@@ -62,6 +64,8 @@ use contracts::grpc::queries::{
     DefinirBotDaConversaResponse,
     DefinirMyClienteAtivoRequest,
     DefinirMyContatoAtivoRequest,
+    DefinirPrioridadeRequest,
+    DefinirPrioridadeResponse,
     DefinirRespostaBotInstanciaRequest,
     DefinirRespostaBotInstanciaResponse,
     DeleteCoreSettingRequest,
@@ -75,6 +79,8 @@ use contracts::grpc::queries::{
     EtiquetaResponse,
     ExportTenantsCsvRequest,
     ExportTenantsCsvResponse,
+    ExportarQuadroRequest,
+    ExportarQuadroResponse,
     FeatureFlag as ProtoFeatureFlag,
     FeatureFlagOverride as ProtoFeatureFlagOverride,
     FinalizarMyTreinamentoRequest,
@@ -251,6 +257,8 @@ use contracts::grpc::queries::{
     TestEvolutionConnectionResponse,
     TestarPerguntaRequest,
     TestarPerguntaResponse,
+    TransferirParaFluxoRequest,
+    TransferirParaFluxoResponse,
     TrechoUsado,
     UpdateMyAtendenteRequest,
     UpdateMyCampoRequest,
@@ -1454,6 +1462,68 @@ impl AdminFacade {
             return Err(status_do_erro_interno(resp.error));
         }
 
+        serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))
+    }
+
+    /// P4 — envelope das rotas operacionais: escopo exigido na borda e
+    /// `flow_permissions` resolvidas, que é o que o `data_postgres` usa para o
+    /// RBAC fino por fluxo. O `encaminhar_tenant` manda a lista vazia, e com
+    /// ela um atendente comum não enxergaria os próprios cartões.
+    async fn encaminhar_operacional<T>(
+        &self,
+        req: &Request<T>,
+        metodo: &str,
+        escopos: &[&str],
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, req).await?;
+        exigir_escopo(&claims, escopos, metodo)?;
+        let traceparent = traceparent_do_metadata(req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let auth_user_id = claims.sub.parse::<i32>().unwrap_or(0);
+        let flow_permissions = if claims.is_superuser {
+            Vec::new()
+        } else {
+            resolver_flow_permissions_web(&self.deps, &claims.tenant_id, auth_user_id, &traceparent)
+                .await
+        };
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent,
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: metodo.to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            auth_user_id,
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            flow_permissions,
+            ..Default::default()
+        };
+
+        let resp = self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(15))
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço interno: {}", e)))?;
+        if resp.kind == MessageKind::Error as i32 {
+            let err = resp.error.unwrap_or_default();
+            // Validação do servidor vira `invalid_argument` na borda: a tela
+            // precisa distinguir "você errou" de "o banco caiu".
+            return Err(
+                if err.category == contracts::ErrorCategory::Validation as i32 {
+                    Status::invalid_argument(err.message)
+                } else {
+                    Status::internal(format!("Erro no banco: {}", err.message))
+                },
+            );
+        }
         serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))
     }
 }
@@ -5826,6 +5896,157 @@ impl AdminService for AdminFacade {
     // --- Fase 6: Operacional (fila/Kanban/chat — WS-6). Exige só autenticação (não
     // superuser); o RBAC fino por fluxo (flow_permissions, WS-5a) é aplicado no
     // data_postgres sobre cada atendimento/fluxo. ---
+
+    /// P4 — quem cuida da conversa.
+    ///
+    /// O rodízio (B5) já fazia isso sozinho; aqui é a mão do supervisor. A
+    /// regra é a mesma dos dois lados: atribuir **não** tira conversa de quem
+    /// já a assumiu — devolver para a fila é uma ação explícita.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "AtribuirAtendimento", traceparent)
+    )]
+    async fn atribuir_atendimento(
+        &self,
+        req: Request<AtribuirAtendimentoRequest>,
+    ) -> Result<Response<AtribuirAtendimentoResponse>, Status> {
+        let inner_ref = req.get_ref().clone();
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "AtribuirAtendimento",
+                &["atendimentos:write"],
+                serde_json::json!({
+                    "atendimento_id": inner_ref.atendimento_id,
+                    "atendente_id": inner_ref.atendente_id,
+                    "devolver_para_fila": inner_ref.devolver_para_fila,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(AtribuirAtendimentoResponse {
+            atribuido: corpo
+                .get("atribuido")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            motivo: corpo
+                .get("motivo")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string(),
+        }))
+    }
+
+    /// P4 — urgência do cartão. A coluna existia desde a 0006 e ninguém
+    /// escrevia nela.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DefinirPrioridade", traceparent)
+    )]
+    async fn definir_prioridade(
+        &self,
+        req: Request<DefinirPrioridadeRequest>,
+    ) -> Result<Response<DefinirPrioridadeResponse>, Status> {
+        let inner_ref = req.get_ref().clone();
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "DefinirPrioridade",
+                &["atendimentos:write"],
+                serde_json::json!({
+                    "atendimento_id": inner_ref.atendimento_id,
+                    "prioridade": inner_ref.prioridade,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(DefinirPrioridadeResponse {
+            definida: corpo
+                .get("definida")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        }))
+    }
+
+    /// P4 — transferir a conversa de fluxo pela tela.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "TransferirParaFluxo", traceparent)
+    )]
+    async fn transferir_para_fluxo(
+        &self,
+        req: Request<TransferirParaFluxoRequest>,
+    ) -> Result<Response<TransferirParaFluxoResponse>, Status> {
+        let inner_ref = req.get_ref().clone();
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "TransferirAtendimentoParaFluxo",
+                &["atendimentos:write"],
+                serde_json::json!({
+                    "atendimento_id": inner_ref.atendimento_id,
+                    "fluxo_id": inner_ref.fluxo_id,
+                }),
+            )
+            .await?;
+
+        let texto = |chave: &str| {
+            corpo
+                .get(chave)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string()
+        };
+        Ok(Response::new(TransferirParaFluxoResponse {
+            transferido: corpo
+                .get("transferido")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            fluxo_id: corpo.get("fluxo_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+            fluxo_nome: texto("fluxo_nome"),
+            etapa_id: corpo.get("etapa_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+            etapa_nome: texto("etapa_nome"),
+            motivo: texto("reason"),
+        }))
+    }
+
+    /// P4 — o quadro em CSV, para quem precisa fechar o dia numa planilha.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ExportarQuadro", traceparent)
+    )]
+    async fn exportar_quadro(
+        &self,
+        req: Request<ExportarQuadroRequest>,
+    ) -> Result<Response<ExportarQuadroResponse>, Status> {
+        let inner_ref = req.get_ref().clone();
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "ExportarQuadro",
+                // Exportar é leitura, mas em massa e com PII: exige o escopo de
+                // administração do tenant, não o de operar a fila.
+                &["tenant:admin"],
+                serde_json::json!({
+                    "status": inner_ref.status,
+                    "departamento_id": inner_ref.departamento_id,
+                    "busca": inner_ref.busca,
+                    "somente_meus": inner_ref.somente_meus,
+                    "somente_nao_lidos": inner_ref.somente_nao_lidos,
+                }),
+            )
+            .await?;
+
+        let csv = corpo
+            .get("csv")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+        Ok(Response::new(ExportarQuadroResponse {
+            linhas: corpo.get("linhas").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+            csv: csv.into_bytes(),
+        }))
+    }
 
     /// P3 — "digitando..." do atendente chega ao contato.
     ///

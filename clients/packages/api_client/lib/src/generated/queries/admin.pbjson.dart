@@ -1986,6 +1986,142 @@ final $typed_data.Uint8List enviarMidiaAtendimentoResponseDescriptor =
         'Ch5FbnZpYXJNaWRpYUF0ZW5kaW1lbnRvUmVzcG9uc2USHQoKbWVzc2FnZV9pZBgBIAEoBVIJbW'
         'Vzc2FnZUlk');
 
+@$core.Deprecated('Use atribuirAtendimentoRequestDescriptor instead')
+const AtribuirAtendimentoRequest$json = {
+  '1': 'AtribuirAtendimentoRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'atendente_id', '3': 2, '4': 1, '5': 5, '10': 'atendenteId'},
+    {
+      '1': 'devolver_para_fila',
+      '3': 3,
+      '4': 1,
+      '5': 8,
+      '10': 'devolverParaFila'
+    },
+  ],
+};
+
+/// Descriptor for `AtribuirAtendimentoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List atribuirAtendimentoRequestDescriptor =
+    $convert.base64Decode(
+        'ChpBdHJpYnVpckF0ZW5kaW1lbnRvUmVxdWVzdBIlCg5hdGVuZGltZW50b19pZBgBIAEoBVINYX'
+        'RlbmRpbWVudG9JZBIhCgxhdGVuZGVudGVfaWQYAiABKAVSC2F0ZW5kZW50ZUlkEiwKEmRldm9s'
+        'dmVyX3BhcmFfZmlsYRgDIAEoCFIQZGV2b2x2ZXJQYXJhRmlsYQ==');
+
+@$core.Deprecated('Use atribuirAtendimentoResponseDescriptor instead')
+const AtribuirAtendimentoResponse$json = {
+  '1': 'AtribuirAtendimentoResponse',
+  '2': [
+    {'1': 'atribuido', '3': 1, '4': 1, '5': 8, '10': 'atribuido'},
+    {'1': 'motivo', '3': 2, '4': 1, '5': 9, '10': 'motivo'},
+  ],
+};
+
+/// Descriptor for `AtribuirAtendimentoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List atribuirAtendimentoResponseDescriptor =
+    $convert.base64Decode(
+        'ChtBdHJpYnVpckF0ZW5kaW1lbnRvUmVzcG9uc2USHAoJYXRyaWJ1aWRvGAEgASgIUglhdHJpYn'
+        'VpZG8SFgoGbW90aXZvGAIgASgJUgZtb3Rpdm8=');
+
+@$core.Deprecated('Use definirPrioridadeRequestDescriptor instead')
+const DefinirPrioridadeRequest$json = {
+  '1': 'DefinirPrioridadeRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'prioridade', '3': 2, '4': 1, '5': 9, '10': 'prioridade'},
+  ],
+};
+
+/// Descriptor for `DefinirPrioridadeRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List definirPrioridadeRequestDescriptor =
+    $convert.base64Decode(
+        'ChhEZWZpbmlyUHJpb3JpZGFkZVJlcXVlc3QSJQoOYXRlbmRpbWVudG9faWQYASABKAVSDWF0ZW'
+        '5kaW1lbnRvSWQSHgoKcHJpb3JpZGFkZRgCIAEoCVIKcHJpb3JpZGFkZQ==');
+
+@$core.Deprecated('Use definirPrioridadeResponseDescriptor instead')
+const DefinirPrioridadeResponse$json = {
+  '1': 'DefinirPrioridadeResponse',
+  '2': [
+    {'1': 'definida', '3': 1, '4': 1, '5': 8, '10': 'definida'},
+  ],
+};
+
+/// Descriptor for `DefinirPrioridadeResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List definirPrioridadeResponseDescriptor =
+    $convert.base64Decode(
+        'ChlEZWZpbmlyUHJpb3JpZGFkZVJlc3BvbnNlEhoKCGRlZmluaWRhGAEgASgIUghkZWZpbmlkYQ'
+        '==');
+
+@$core.Deprecated('Use transferirParaFluxoRequestDescriptor instead')
+const TransferirParaFluxoRequest$json = {
+  '1': 'TransferirParaFluxoRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'fluxo_id', '3': 2, '4': 1, '5': 5, '10': 'fluxoId'},
+  ],
+};
+
+/// Descriptor for `TransferirParaFluxoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List transferirParaFluxoRequestDescriptor =
+    $convert.base64Decode(
+        'ChpUcmFuc2ZlcmlyUGFyYUZsdXhvUmVxdWVzdBIlCg5hdGVuZGltZW50b19pZBgBIAEoBVINYX'
+        'RlbmRpbWVudG9JZBIZCghmbHV4b19pZBgCIAEoBVIHZmx1eG9JZA==');
+
+@$core.Deprecated('Use transferirParaFluxoResponseDescriptor instead')
+const TransferirParaFluxoResponse$json = {
+  '1': 'TransferirParaFluxoResponse',
+  '2': [
+    {'1': 'transferido', '3': 1, '4': 1, '5': 8, '10': 'transferido'},
+    {'1': 'fluxo_id', '3': 2, '4': 1, '5': 5, '10': 'fluxoId'},
+    {'1': 'fluxo_nome', '3': 3, '4': 1, '5': 9, '10': 'fluxoNome'},
+    {'1': 'etapa_id', '3': 4, '4': 1, '5': 5, '10': 'etapaId'},
+    {'1': 'etapa_nome', '3': 5, '4': 1, '5': 9, '10': 'etapaNome'},
+    {'1': 'motivo', '3': 6, '4': 1, '5': 9, '10': 'motivo'},
+  ],
+};
+
+/// Descriptor for `TransferirParaFluxoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List transferirParaFluxoResponseDescriptor = $convert.base64Decode(
+    'ChtUcmFuc2ZlcmlyUGFyYUZsdXhvUmVzcG9uc2USIAoLdHJhbnNmZXJpZG8YASABKAhSC3RyYW'
+    '5zZmVyaWRvEhkKCGZsdXhvX2lkGAIgASgFUgdmbHV4b0lkEh0KCmZsdXhvX25vbWUYAyABKAlS'
+    'CWZsdXhvTm9tZRIZCghldGFwYV9pZBgEIAEoBVIHZXRhcGFJZBIdCgpldGFwYV9ub21lGAUgAS'
+    'gJUglldGFwYU5vbWUSFgoGbW90aXZvGAYgASgJUgZtb3Rpdm8=');
+
+@$core.Deprecated('Use exportarQuadroRequestDescriptor instead')
+const ExportarQuadroRequest$json = {
+  '1': 'ExportarQuadroRequest',
+  '2': [
+    {'1': 'status', '3': 1, '4': 1, '5': 9, '10': 'status'},
+    {'1': 'departamento_id', '3': 2, '4': 1, '5': 5, '10': 'departamentoId'},
+    {'1': 'busca', '3': 3, '4': 1, '5': 9, '10': 'busca'},
+    {'1': 'somente_meus', '3': 4, '4': 1, '5': 8, '10': 'somenteMeus'},
+    {'1': 'somente_nao_lidos', '3': 5, '4': 1, '5': 8, '10': 'somenteNaoLidos'},
+  ],
+};
+
+/// Descriptor for `ExportarQuadroRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List exportarQuadroRequestDescriptor = $convert.base64Decode(
+    'ChVFeHBvcnRhclF1YWRyb1JlcXVlc3QSFgoGc3RhdHVzGAEgASgJUgZzdGF0dXMSJwoPZGVwYX'
+    'J0YW1lbnRvX2lkGAIgASgFUg5kZXBhcnRhbWVudG9JZBIUCgVidXNjYRgDIAEoCVIFYnVzY2ES'
+    'IQoMc29tZW50ZV9tZXVzGAQgASgIUgtzb21lbnRlTWV1cxIqChFzb21lbnRlX25hb19saWRvcx'
+    'gFIAEoCFIPc29tZW50ZU5hb0xpZG9z');
+
+@$core.Deprecated('Use exportarQuadroResponseDescriptor instead')
+const ExportarQuadroResponse$json = {
+  '1': 'ExportarQuadroResponse',
+  '2': [
+    {'1': 'csv', '3': 1, '4': 1, '5': 12, '10': 'csv'},
+    {'1': 'linhas', '3': 2, '4': 1, '5': 5, '10': 'linhas'},
+  ],
+};
+
+/// Descriptor for `ExportarQuadroResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List exportarQuadroResponseDescriptor =
+    $convert.base64Decode(
+        'ChZFeHBvcnRhclF1YWRyb1Jlc3BvbnNlEhAKA2NzdhgBIAEoDFIDY3N2EhYKBmxpbmhhcxgCIA'
+        'EoBVIGbGluaGFz');
+
 @$core.Deprecated('Use enviarPresencaRequestDescriptor instead')
 const EnviarPresencaRequest$json = {
   '1': 'EnviarPresencaRequest',

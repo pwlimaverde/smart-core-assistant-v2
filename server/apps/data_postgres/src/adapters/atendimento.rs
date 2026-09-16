@@ -259,6 +259,96 @@ impl AtendimentoStore for PgAtendimentoStore {
         .await
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn atribuir_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        atendente_id: Option<i32>,
+    ) -> Result<bool, DbError> {
+        let repo = PostgresAtendimentoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let resultado = match atendente_id {
+                // `atribuir_se_livre` já existia para o rodízio (B5) e tem a
+                // regra que interessa aqui: não tira conversa de quem a pegou.
+                Some(id) => {
+                    repo.atribuir_se_livre(&mut tx, &ctx, atendimento_id, id)
+                        .await?
+                }
+                None => {
+                    repo.desatribuir(&mut tx, &ctx, atendimento_id).await?;
+                    true
+                }
+            };
+            Ok((resultado, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn exportar_quadro(
+        &self,
+        ctx: &RequestContext,
+        departamento_id: Option<i32>,
+        filtro: infrastructure_postgres::atendimentos::atendimentos::FiltroDoQuadro,
+        limit: i64,
+    ) -> Result<Vec<infrastructure_postgres::atendimentos::atendimentos::LinhaDoQuadro>, DbError>
+    {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let linhas = infrastructure_postgres::atendimentos::atendimentos::exportar_quadro(
+                &mut tx,
+                &ctx,
+                departamento_id,
+                &filtro,
+                limit,
+            )
+            .await?;
+            Ok((linhas, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn definir_prioridade(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        prioridade: &str,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let prioridade = prioridade.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let ok = infrastructure_postgres::atendimentos::atendimentos::definir_prioridade(
+                &mut tx,
+                &ctx,
+                atendimento_id,
+                &prioridade,
+            )
+            .await?;
+            Ok((ok, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn atendente_do_usuario(&self, ctx: &RequestContext) -> Result<Option<i32>, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let id = infrastructure_postgres::atendimentos::atendimentos::atendente_do_usuario(
+                &mut tx, &ctx,
+            )
+            .await?;
+            Ok((id, tx))
+        })
+        .await
+    }
+
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
     async fn buscar_atendimento_ativo_por_telefone(
         &self,

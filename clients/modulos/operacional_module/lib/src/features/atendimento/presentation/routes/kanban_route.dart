@@ -1,6 +1,6 @@
-import '../../domain/model/contato_para_atendimento.dart';
 import 'package:dependencies_module/dependencies_module.dart';
 
+import '../../domain/model/contato_para_atendimento.dart';
 import '../../domain/streams/atendimento_evento_stream.dart';
 import '../../domain/usecases/atendimento_usecases.dart';
 import '../controllers/kanban_controller.dart';
@@ -53,7 +53,18 @@ final class KanbanRoute extends GetItModule {
         statusUsecase: inject<SetAtendimentoStatusUsecase>(),
         eventos: inject<AtendimentoEventoStream>(),
         usuarioAtual: usuarioAtual,
+        // P4 — as ações do supervisor. Opcionais na rota pelo mesmo motivo do
+        // controller: um app que não registrou o módulo inteiro ainda abre o
+        // quadro, só sem o menu completo.
+        atribuirUsecase: _seRegistrado<AtribuirAtendimentoUsecase>(),
+        prioridadeUsecase: _seRegistrado<DefinirPrioridadeUsecase>(),
+        transferirUsecase: _seRegistrado<TransferirParaFluxoUsecase>(),
+        exportarUsecase: _seRegistrado<ExportarQuadroUsecase>(),
       ),
     );
   }
 }
+
+/// Só injeta o que o app registrou — `inject` de um tipo ausente lança.
+T? _seRegistrado<T extends Object>() =>
+    GetIt.instance.isRegistered<T>() ? inject<T>() : null;

@@ -169,6 +169,37 @@ pub trait AtendimentoStore: Send + Sync {
         before_id: Option<i32>,
     ) -> Result<Vec<Mensagem>, DbError>;
 
+    /// P4 — dono da conversa. `atendente_id = None` devolve para a fila.
+    ///
+    /// Devolve `false` quando a conversa já tem outro dono: atribuir não rouba
+    /// conversa de quem está no meio de um atendimento.
+    async fn atribuir_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        atendente_id: Option<i32>,
+    ) -> Result<bool, DbError>;
+
+    /// P4 — o quadro em linhas, para exportação (leva nome e telefone).
+    async fn exportar_quadro(
+        &self,
+        ctx: &RequestContext,
+        departamento_id: Option<i32>,
+        filtro: infrastructure_postgres::atendimentos::atendimentos::FiltroDoQuadro,
+        limit: i64,
+    ) -> Result<Vec<infrastructure_postgres::atendimentos::atendimentos::LinhaDoQuadro>, DbError>;
+
+    /// P4 — urgência do cartão.
+    async fn definir_prioridade(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        prioridade: &str,
+    ) -> Result<bool, DbError>;
+
+    /// P4 — o atendente ligado ao usuário logado ("atribuir a mim").
+    async fn atendente_do_usuario(&self, ctx: &RequestContext) -> Result<Option<i32>, DbError>;
+
     /// P3 — o atendimento ativo de um telefone (sem criar nada).
     async fn buscar_atendimento_ativo_por_telefone(
         &self,

@@ -604,6 +604,9 @@ async fn main() -> anyhow::Result<()> {
     let state_for_resolver_destino_envio = state_clone.clone();
     let state_for_resolver_destino_atendimento = state_clone.clone();
     let state_for_ativo_por_telefone = state_clone.clone();
+    let state_for_atribuir = state_clone.clone();
+    let state_for_exportar_quadro = state_clone.clone();
+    let state_for_prioridade = state_clone.clone();
     let state_for_reprocessar_dead_letter = state_clone.clone();
     let state_for_marcar_mensagem_enviada = state_clone.clone();
     let state_for_marcar_mensagem_falha_envio = state_clone.clone();
@@ -816,6 +819,25 @@ async fn main() -> anyhow::Result<()> {
             let state = state_for_marcar_midia_purgada.clone();
             Box::pin(
                 async move { handler_marcar_midia_purgada(state.atendimento.as_ref(), env).await },
+            )
+        })
+        .route("ExportarQuadro", move |env| {
+            let state = state_for_exportar_quadro.clone();
+            Box::pin(async move {
+                handler_exportar_quadro(state.atendimento.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("AtribuirAtendimento", move |env| {
+            let state = state_for_atribuir.clone();
+            Box::pin(async move {
+                handler_atribuir_atendimento(state.atendimento.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
+        })
+        .route("DefinirPrioridade", move |env| {
+            let state = state_for_prioridade.clone();
+            Box::pin(
+                async move { handler_definir_prioridade(state.atendimento.as_ref(), env).await },
             )
         })
         .route("BuscarAtendimentoAtivoPorTelefone", move |env| {
@@ -4875,6 +4897,236 @@ async fn handler_resolver_campos_atendimento(
 
 /// Resolve instância/telefone de destino para o envio outbound de uma mensagem do
 /// atendente (elo outbox->outbound, N1.3).
+/// P4 — o quadro em CSV.
+///
+/// Sai com nome e telefone de cliente: é exportação de PII em massa, e por isso
+/// é auditada com a contagem de linhas — a auditoria registra que saiu e
+/// quanto saiu, nunca o conteúdo.
+#[tracing::instrument(skip_all, fields(rpc = "ExportarQuadro", tenant_id = %env.tenant_id))]
+async fn handler_exportar_quadro(
+    store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let departamento_id = payload_json
+        .get("departamento_id")
+        .and_then(|v| v.as_i64())
+        .filter(|v| *v > 0)
+        .map(|v| v as i32);
+    let filtro = infrastructure_postgres::atendimentos::atendimentos::FiltroDoQuadro {
+        busca: payload_json
+            .get("busca")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim()
+            .to_string(),
+        atendente_id: None,
+        somente_nao_lidos: payload_json
+            .get("somente_nao_lidos")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        prioridade: String::new(),
+        etiqueta_id: None,
+        somente_meus: payload_json
+            .get("somente_meus")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    // Teto alto o bastante para a operação de um dia e baixo o bastante para a
+    // exportação não virar um dump do banco inteiro.
+    match store
+        .exportar_quadro(&ctx, departamento_id, filtro, 5000)
+        .await
+    {
+        Ok(linhas) => {
+            let mut csv = String::from(
+                "id;contato;telefone;assunto;status;prioridade;atendente;fluxo;etapa;                 aberto_em;ultima_mensagem;nao_lidas\n",
+            );
+            for l in &linhas {
+                csv.push_str(&format!(
+                    "{};{};{};{};{};{};{};{};{};{};{};{}\n",
+                    l.id,
+                    campo_csv(l.contato.as_deref()),
+                    campo_csv(l.telefone.as_deref()),
+                    campo_csv(l.assunto.as_deref()),
+                    campo_csv(Some(&l.status)),
+                    campo_csv(Some(&l.prioridade)),
+                    campo_csv(l.atendente.as_deref()),
+                    campo_csv(l.fluxo.as_deref()),
+                    campo_csv(l.etapa.as_deref()),
+                    l.data_inicio.to_rfc3339(),
+                    l.data_ultima_mensagem
+                        .map(|d| d.to_rfc3339())
+                        .unwrap_or_default(),
+                    l.nao_lidas,
+                ));
+            }
+            audit
+                .publish(
+                    &env,
+                    "atendimento.quadro_exportado",
+                    format!("Quadro exportado: {} conversas", linhas.len()),
+                    serde_json::json!({ "linhas": linhas.len() }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "ExportarQuadroReply",
+                serde_json::json!({ "csv": csv, "linhas": linhas.len() }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// Escapa um campo do CSV: o separador é `;` e o conteúdo é texto de cliente,
+/// que tem ponto e vírgula, aspas e quebra de linha à vontade.
+fn campo_csv(valor: Option<&str>) -> String {
+    let bruto = valor.unwrap_or_default();
+    if bruto.contains([';', '"', '\n', '\r']) {
+        format!("\"{}\"", bruto.replace('"', "\"\""))
+    } else {
+        bruto.to_string()
+    }
+}
+
+/// P4 — define (ou tira) o dono da conversa.
+///
+/// A atribuição é auditada: saber quem pôs uma conversa na mão de quem é o que
+/// permite explicar, depois, por que um cliente ficou esperando.
+#[tracing::instrument(skip_all, fields(rpc = "AtribuirAtendimento", tenant_id = %env.tenant_id))]
+async fn handler_atribuir_atendimento(
+    store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let devolver = payload_json
+        .get("devolver_para_fila")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let ctx = contexto_do_envelope(&env);
+    let alvo = if devolver {
+        None
+    } else {
+        match payload_json
+            .get("atendente_id")
+            .and_then(|v| v.as_i64())
+            .filter(|v| *v > 0)
+        {
+            Some(id) => Some(id as i32),
+            // Sem atendente explícito, é "atribuir a mim".
+            None => match store.atendente_do_usuario(&ctx).await {
+                Ok(Some(id)) => Some(id),
+                Ok(None) => {
+                    return erro(
+                        error_core::AppError::Validation(
+                            "seu usuário não está cadastrado como atendente".into(),
+                        ),
+                        &env,
+                    )
+                }
+                Err(e) => return erro(error_core::AppError::Database(e.to_string()), &env),
+            },
+        }
+    };
+
+    match store.atribuir_atendimento(&ctx, atendimento_id, alvo).await {
+        Ok(atribuido) => {
+            audit
+                .publish(
+                    &env,
+                    if devolver {
+                        "atendimento.devolvido_para_fila"
+                    } else {
+                        "atendimento.atribuido"
+                    },
+                    format!("Atendimento {atendimento_id}: dono alterado"),
+                    serde_json::json!({
+                        "atendimento_id": atendimento_id,
+                        "atendente_id": alvo,
+                        "aplicado": atribuido,
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "AtribuirAtendimentoReply",
+                serde_json::json!({
+                    "atribuido": atribuido,
+                    "motivo": if atribuido { "" } else { "a conversa já tem outro atendente" },
+                }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P4 — urgência do cartão.
+#[tracing::instrument(skip_all, fields(rpc = "DefinirPrioridade", tenant_id = %env.tenant_id))]
+async fn handler_definir_prioridade(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let prioridade = payload_json
+        .get("prioridade")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_lowercase();
+    if !infrastructure_postgres::atendimentos::atendimentos::PRIORIDADES
+        .contains(&prioridade.as_str())
+    {
+        return erro(
+            error_core::AppError::Validation(format!("prioridade '{prioridade}' inválida")),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .definir_prioridade(&ctx, atendimento_id, &prioridade)
+        .await
+    {
+        Ok(definida) => ok_reply(
+            &env,
+            "DefinirPrioridadeReply",
+            serde_json::json!({ "definida": definida }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
 /// P3 — o atendimento ativo de um telefone, para casar a presença que chega.
 #[tracing::instrument(skip_all, fields(rpc = "BuscarAtendimentoAtivoPorTelefone", tenant_id = %env.tenant_id))]
 async fn handler_buscar_atendimento_ativo_por_telefone(

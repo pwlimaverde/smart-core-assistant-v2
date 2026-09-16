@@ -1324,3 +1324,135 @@ mod tests {
         assert!(!status_e_fim_de_linha("fila"));
     }
 }
+
+/// P4 — a urgência do cartão.
+///
+/// O conjunto é fechado de propósito: a coluna é texto livre no banco, e um
+/// valor fora da lista viraria um cartão que nenhum filtro encontra.
+pub const PRIORIDADES: [&str; 4] = ["baixa", "normal", "alta", "urgente"];
+
+#[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, prioridade = prioridade))]
+pub async fn definir_prioridade(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+    prioridade: &str,
+) -> Result<bool, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+    // A validação do conjunto fechado é do handler, que sabe devolver
+    // `Validation` ao cliente; aqui um valor estranho não deve chegar.
+    debug_assert!(PRIORIDADES.contains(&prioridade));
+    let r = sqlx::query(
+        "UPDATE oraculo_atendimento SET prioridade = $1 WHERE tenant_id = $2 AND id = $3",
+    )
+    .bind(prioridade)
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(r.rows_affected() > 0)
+}
+
+/// P4 — o atendente ligado ao usuário logado, quando existe.
+///
+/// É o que traduz "atribuir a mim" para um id de atendente: a tela conhece o
+/// usuário da sessão, nunca o cadastro de atendentes.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+pub async fn atendente_do_usuario(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+) -> Result<Option<i32>, DbError> {
+    let row = sqlx::query_as::<_, (i32,)>(
+        "SELECT id FROM oraculo_atendente \
+         WHERE tenant_id = $1 AND usuario_id = $2 AND ativo = true LIMIT 1",
+    )
+    .bind(ctx.tenant_id)
+    .bind(ctx.user_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row.map(|(id,)| id))
+}
+
+/// P4 — uma linha do quadro exportado.
+///
+/// Traz o nome e o telefone do contato porque um CSV de ids não serve para
+/// nada a quem vai abrir a planilha — e é justamente por trazer isso que a
+/// exportação é auditada na camada de cima.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct LinhaDoQuadro {
+    pub id: i32,
+    pub contato: Option<String>,
+    pub telefone: Option<String>,
+    pub assunto: Option<String>,
+    pub status: String,
+    pub prioridade: String,
+    pub atendente: Option<String>,
+    pub fluxo: Option<String>,
+    pub etapa: Option<String>,
+    pub data_inicio: chrono::DateTime<chrono::Utc>,
+    pub data_ultima_mensagem: Option<chrono::DateTime<chrono::Utc>>,
+    pub nao_lidas: i64,
+}
+
+/// P4 — o quadro inteiro (no recorte pedido) para exportação.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+pub async fn exportar_quadro(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    departamento_id: Option<i32>,
+    filtro: &FiltroDoQuadro,
+    limit: i64,
+) -> Result<Vec<LinhaDoQuadro>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let busca = filtro.busca.trim();
+    let rows = sqlx::query_as::<_, LinhaDoQuadro>(
+        r#"SELECT a.id,
+                  c.nome_contato AS contato,
+                  c.telefone,
+                  a.assunto,
+                  a.status,
+                  a.prioridade,
+                  at.nome AS atendente,
+                  f.nome AS fluxo,
+                  e.nome AS etapa,
+                  a.data_inicio,
+                  a.data_ultima_mensagem,
+                  (SELECT COUNT(*) FROM oraculo_mensagem m
+                    WHERE m.tenant_id = a.tenant_id AND m.atendimento_id = a.id
+                      AND m.lido = false AND m.remetente = 'contato') AS nao_lidas
+           FROM oraculo_atendimento a
+           LEFT JOIN oraculo_contato c
+             ON c.id = a.contato_id AND c.tenant_id = a.tenant_id
+           LEFT JOIN oraculo_atendente at
+             ON at.id = a.atendente_humano_id AND at.tenant_id = a.tenant_id
+           LEFT JOIN oraculo_fluxo_atendimento f
+             ON f.id = a.fluxo_atendimento_id AND f.tenant_id = a.tenant_id
+           LEFT JOIN oraculo_etapa_fluxo e
+             ON e.id = a.etapa_atual_id AND e.tenant_id = a.tenant_id
+           WHERE a.tenant_id = $1 AND a.status <> 'arquivado'
+             AND ($2::int IS NULL OR a.departamento_id = $2)
+             AND ($3 = '' OR COALESCE(c.nome_contato, '') ILIKE '%' || $3 || '%'
+                  OR COALESCE(c.nome_perfil_whatsapp, '') ILIKE '%' || $3 || '%'
+                  OR COALESCE(c.telefone, '') LIKE '%' || $3 || '%'
+                  OR COALESCE(a.assunto, '') ILIKE '%' || $3 || '%')
+             AND (NOT $4 OR a.atendente_humano_id IN (
+                   SELECT x.id FROM oraculo_atendente x
+                    WHERE x.tenant_id = a.tenant_id AND x.usuario_id = $5))
+             AND (NOT $6 OR EXISTS (
+                   SELECT 1 FROM oraculo_mensagem m
+                    WHERE m.tenant_id = a.tenant_id AND m.atendimento_id = a.id
+                      AND m.lido = false AND m.remetente = 'contato'))
+           ORDER BY COALESCE(a.data_ultima_mensagem, a.data_inicio) DESC
+           LIMIT $7"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(departamento_id)
+    .bind(busca)
+    .bind(filtro.somente_meus)
+    .bind(ctx.user_id)
+    .bind(filtro.somente_nao_lidos)
+    .bind(limit)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows)
+}

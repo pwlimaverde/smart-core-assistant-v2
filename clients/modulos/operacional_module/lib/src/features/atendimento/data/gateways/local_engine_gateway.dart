@@ -351,6 +351,52 @@ final class LocalEngineGateway implements AtendimentoGateway {
     );
   }
 
+  // P4 — operação do quadro: o índice local não decide dono, prioridade nem
+  // fluxo, e resolver isso offline criaria conflito com o rodízio do servidor.
+  @override
+  Future<bool> atribuirAtendimento({
+    required int atendimentoId,
+    int? atendenteId,
+    bool devolverParaFila = false,
+  }) => _remoto.atribuirAtendimento(
+    atendimentoId: atendimentoId,
+    atendenteId: atendenteId,
+    devolverParaFila: devolverParaFila,
+  );
+
+  @override
+  Future<void> definirPrioridade({
+    required int atendimentoId,
+    required String prioridade,
+  }) => _remoto.definirPrioridade(
+    atendimentoId: atendimentoId,
+    prioridade: prioridade,
+  );
+
+  @override
+  Future<String> transferirParaFluxo({
+    required int atendimentoId,
+    required int fluxoId,
+  }) => _remoto.transferirParaFluxo(
+    atendimentoId: atendimentoId,
+    fluxoId: fluxoId,
+  );
+
+  @override
+  Future<List<int>> exportarQuadro({
+    String status = '',
+    int? departamentoId,
+    String busca = '',
+    bool somenteMeus = false,
+    bool somenteNaoLidos = false,
+  }) => _remoto.exportarQuadro(
+    status: status,
+    departamentoId: departamentoId,
+    busca: busca,
+    somenteMeus: somenteMeus,
+    somenteNaoLidos: somenteNaoLidos,
+  );
+
   @override
   Future<bool> enviarPresenca({
     required int atendimentoId,

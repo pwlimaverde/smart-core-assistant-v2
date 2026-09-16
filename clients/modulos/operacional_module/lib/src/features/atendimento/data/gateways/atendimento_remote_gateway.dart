@@ -206,6 +206,71 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
   }
 
   @override
+  Future<bool> atribuirAtendimento({
+    required int atendimentoId,
+    int? atendenteId,
+    bool devolverParaFila = false,
+  }) async {
+    final resp = await _client.atribuirAtendimento(
+      proto.AtribuirAtendimentoRequest(
+        atendimentoId: atendimentoId,
+        // 0 no protobuf é "ausente", e é justamente o que significa "a mim".
+        atendenteId: atendenteId ?? 0,
+        devolverParaFila: devolverParaFila,
+      ),
+    );
+    return resp.atribuido;
+  }
+
+  @override
+  Future<void> definirPrioridade({
+    required int atendimentoId,
+    required String prioridade,
+  }) async {
+    await _client.definirPrioridade(
+      proto.DefinirPrioridadeRequest(
+        atendimentoId: atendimentoId,
+        prioridade: prioridade,
+      ),
+    );
+  }
+
+  @override
+  Future<String> transferirParaFluxo({
+    required int atendimentoId,
+    required int fluxoId,
+  }) async {
+    final resp = await _client.transferirParaFluxo(
+      proto.TransferirParaFluxoRequest(
+        atendimentoId: atendimentoId,
+        fluxoId: fluxoId,
+      ),
+    );
+    // O nome do fluxo de destino é o que a tela mostra na confirmação.
+    return resp.transferido ? resp.fluxoNome : '';
+  }
+
+  @override
+  Future<List<int>> exportarQuadro({
+    String status = '',
+    int? departamentoId,
+    String busca = '',
+    bool somenteMeus = false,
+    bool somenteNaoLidos = false,
+  }) async {
+    final resp = await _client.exportarQuadro(
+      proto.ExportarQuadroRequest(
+        status: status,
+        departamentoId: departamentoId ?? 0,
+        busca: busca,
+        somenteMeus: somenteMeus,
+        somenteNaoLidos: somenteNaoLidos,
+      ),
+    );
+    return resp.csv;
+  }
+
+  @override
   Future<bool> enviarPresenca({
     required int atendimentoId,
     String situacao = 'composing',

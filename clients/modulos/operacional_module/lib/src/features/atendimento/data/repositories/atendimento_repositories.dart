@@ -23,6 +23,7 @@ import '../../domain/parameters/quadro_parameters.dart';
 import '../../domain/parameters/send_outbound_message_parameters.dart';
 import '../../domain/model/midia_mensagem.dart';
 import '../../domain/parameters/presenca_parameters.dart';
+import '../../domain/parameters/quadro_operacao_parameters.dart';
 
 /// As quatro fronteiras da feature. Cada `mapError` traduz a natureza da falha
 /// (transporte gRPC no Web, [LocalEngineFalha] no desktop) para o conjunto
@@ -490,4 +491,93 @@ final class EnviarMidiaRepository
       _ => const EnviarMidiaInesperado(),
     };
   }
+}
+
+/// P4 — as quatro operações do quadro classificam a falha do mesmo jeito.
+QuadroOperacaoError _erroDeOperacaoDoQuadro(
+  Object e,
+  StackTrace s,
+  int? atendimentoId,
+) {
+  _log('quadroOperacao', e, s, atendimentoId: atendimentoId);
+  return switch (_kindDeTransporte(e)) {
+    GrpcFailureKind.unauthenticated => const QuadroOperacaoSessaoExpirada(),
+    GrpcFailureKind.permissionDenied => const QuadroOperacaoAcessoNegado(),
+    GrpcFailureKind.invalidArgument ||
+    GrpcFailureKind.failedPrecondition ||
+    GrpcFailureKind.notFound => QuadroOperacaoRecusada(
+      e is GrpcError ? e.message : null,
+    ),
+    GrpcFailureKind.unavailable ||
+    GrpcFailureKind.rateLimited => const QuadroOperacaoIndisponivel(),
+    _ => const QuadroOperacaoInesperado(),
+  };
+}
+
+final class AtribuirAtendimentoRepository
+    extends
+        RepositoryBase<
+          bool,
+          AtribuirAtendimentoParameters,
+          QuadroOperacaoError
+        > {
+  const AtribuirAtendimentoRepository({required super.datasource});
+
+  @override
+  QuadroOperacaoError mapError(
+    Object e,
+    StackTrace s,
+    AtribuirAtendimentoParameters p,
+  ) => _erroDeOperacaoDoQuadro(e, s, p.atendimentoId);
+}
+
+final class DefinirPrioridadeRepository
+    extends
+        RepositoryBase<
+          Unit,
+          DefinirPrioridadeParameters,
+          QuadroOperacaoError
+        > {
+  const DefinirPrioridadeRepository({required super.datasource});
+
+  @override
+  QuadroOperacaoError mapError(
+    Object e,
+    StackTrace s,
+    DefinirPrioridadeParameters p,
+  ) => _erroDeOperacaoDoQuadro(e, s, p.atendimentoId);
+}
+
+final class TransferirParaFluxoRepository
+    extends
+        RepositoryBase<
+          String,
+          TransferirParaFluxoParameters,
+          QuadroOperacaoError
+        > {
+  const TransferirParaFluxoRepository({required super.datasource});
+
+  @override
+  QuadroOperacaoError mapError(
+    Object e,
+    StackTrace s,
+    TransferirParaFluxoParameters p,
+  ) => _erroDeOperacaoDoQuadro(e, s, p.atendimentoId);
+}
+
+final class ExportarQuadroRepository
+    extends
+        RepositoryBase<
+          List<int>,
+          ExportarQuadroParameters,
+          QuadroOperacaoError
+        > {
+  const ExportarQuadroRepository({required super.datasource});
+
+  @override
+  QuadroOperacaoError mapError(
+    Object e,
+    StackTrace s,
+    ExportarQuadroParameters p,
+  ) => _erroDeOperacaoDoQuadro(e, s, null);
 }

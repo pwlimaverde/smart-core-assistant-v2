@@ -660,6 +660,69 @@ message EnviarMidiaAtendimentoResponse {
   int32 message_id = 1;
 }
 
+// P4 — quem cuida da conversa.
+//
+// `atendente_id = 0` significa "eu": o servidor resolve o atendente pelo
+// usuario do token, como a v1 fazia no "assumir".
+message AtribuirAtendimentoRequest {
+  int32 atendimento_id = 1;
+  int32 atendente_id = 2;
+  // true devolve a conversa para a fila (tira o dono).
+  bool devolver_para_fila = 3;
+}
+
+message AtribuirAtendimentoResponse {
+  bool atribuido = 1;
+  // Preenchido quando a conversa ja tinha dono: atribuir nao rouba conversa.
+  string motivo = 2;
+}
+
+// P4 — urgencia do cartao: "baixa", "normal", "alta" ou "urgente".
+message DefinirPrioridadeRequest {
+  int32 atendimento_id = 1;
+  string prioridade = 2;
+}
+
+message DefinirPrioridadeResponse {
+  bool definida = 1;
+}
+
+// P4 — transferir a conversa para outro fluxo, pela tela.
+//
+// A IA ja fazia isso desde a N6.3; o RPC existia no `data_postgres` e nunca
+// teve caminho da borda, entao o supervisor nao conseguia corrigir a mao.
+message TransferirParaFluxoRequest {
+  int32 atendimento_id = 1;
+  int32 fluxo_id = 2;
+}
+
+message TransferirParaFluxoResponse {
+  bool transferido = 1;
+  int32 fluxo_id = 2;
+  string fluxo_nome = 3;
+  int32 etapa_id = 4;
+  string etapa_nome = 5;
+  string motivo = 6;
+}
+
+// P4 — o quadro em CSV.
+//
+// Exportacao de PII em massa: e auditada no servidor, como a de tenants.
+message ExportarQuadroRequest {
+  // Mesmo recorte do ListAtendimentos: exporta-se o que esta na tela.
+  string status = 1;
+  int32 departamento_id = 2;
+  string busca = 3;
+  bool somente_meus = 4;
+  bool somente_nao_lidos = 5;
+}
+
+message ExportarQuadroResponse {
+  // CSV em UTF-8, com cabecalho.
+  bytes csv = 1;
+  int32 linhas = 2;
+}
+
 // P3 — "digitando..." / "gravando audio..." do atendente para o contato.
 //
 // E efemero: nao grava nada, nao entra na thread. O `data_whatsapp` ja sabia
@@ -1170,6 +1233,11 @@ service AdminService {
   rpc ListarMidiasAtendimento(ListarMidiasAtendimentoRequest) returns (ListarMidiasAtendimentoResponse);
   // P3 — presenca do atendente na conversa (efemera).
   rpc EnviarPresenca(EnviarPresencaRequest) returns (EnviarPresencaResponse);
+  // P4 — operacao do quadro pelo supervisor.
+  rpc AtribuirAtendimento(AtribuirAtendimentoRequest) returns (AtribuirAtendimentoResponse);
+  rpc DefinirPrioridade(DefinirPrioridadeRequest) returns (DefinirPrioridadeResponse);
+  rpc TransferirParaFluxo(TransferirParaFluxoRequest) returns (TransferirParaFluxoResponse);
+  rpc ExportarQuadro(ExportarQuadroRequest) returns (ExportarQuadroResponse);
 
   // Fase N3: Painel do Tenant. Exigem só autenticação (não superuser); o RBAC fino
   // `tenant:admin` é aplicado no data_postgres. AcceptInvite é rota pública (sem sessão).

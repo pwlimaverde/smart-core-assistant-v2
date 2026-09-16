@@ -18,6 +18,7 @@ import '../parameters/quadro_parameters.dart';
 import '../parameters/send_outbound_message_parameters.dart';
 import '../model/midia_mensagem.dart';
 import '../parameters/presenca_parameters.dart';
+import '../parameters/quadro_operacao_parameters.dart';
 
 /// Os quatro casos de uso do atendimento.
 ///
@@ -526,5 +527,97 @@ final class EnviarMidiaUsecase
   EnviarMidiaError onUnexpected(Object exception, StackTrace stackTrace) {
     _logBug('enviarMidia', exception, stackTrace);
     return const EnviarMidiaInesperado();
+  }
+}
+
+/// P4 — dono da conversa.
+final class AtribuirAtendimentoUsecase
+    extends
+        UsecaseBaseCallData<
+          bool,
+          bool,
+          AtribuirAtendimentoParameters,
+          QuadroOperacaoError
+        > {
+  const AtribuirAtendimentoUsecase({required super.repository});
+
+  @override
+  ProcessData<bool, bool, AtribuirAtendimentoParameters, QuadroOperacaoError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  QuadroOperacaoError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('atribuirAtendimento', exception, stackTrace);
+    return const QuadroOperacaoInesperado();
+  }
+}
+
+/// P4 — urgência do cartão.
+final class DefinirPrioridadeUsecase
+    extends
+        UsecaseBaseCallData<
+          Unit,
+          Unit,
+          DefinirPrioridadeParameters,
+          QuadroOperacaoError
+        > {
+  const DefinirPrioridadeUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, DefinirPrioridadeParameters, QuadroOperacaoError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  QuadroOperacaoError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('definirPrioridade', exception, stackTrace);
+    return const QuadroOperacaoInesperado();
+  }
+}
+
+/// P4 — transferência de fluxo feita a mão.
+final class TransferirParaFluxoUsecase
+    extends
+        UsecaseBaseCallData<
+          String,
+          String,
+          TransferirParaFluxoParameters,
+          QuadroOperacaoError
+        > {
+  const TransferirParaFluxoUsecase({required super.repository});
+
+  @override
+  ProcessData<String, String, TransferirParaFluxoParameters, QuadroOperacaoError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  QuadroOperacaoError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('transferirParaFluxo', exception, stackTrace);
+    return const QuadroOperacaoInesperado();
+  }
+}
+
+/// P4 — o quadro em CSV.
+final class ExportarQuadroUsecase
+    extends
+        UsecaseBaseCallData<
+          List<int>,
+          List<int>,
+          ExportarQuadroParameters,
+          QuadroOperacaoError
+        > {
+  const ExportarQuadroUsecase({required super.repository});
+
+  @override
+  ProcessData<List<int>, List<int>, ExportarQuadroParameters, QuadroOperacaoError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  QuadroOperacaoError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('exportarQuadro', exception, stackTrace);
+    return const QuadroOperacaoInesperado();
   }
 }

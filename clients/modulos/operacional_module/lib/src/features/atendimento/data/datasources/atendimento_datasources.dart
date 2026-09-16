@@ -16,6 +16,7 @@ import '../../domain/parameters/quadro_parameters.dart';
 import '../../domain/parameters/send_outbound_message_parameters.dart';
 import '../../domain/model/midia_mensagem.dart';
 import '../../domain/parameters/presenca_parameters.dart';
+import '../../domain/parameters/quadro_operacao_parameters.dart';
 
 /// Os quatro `Datasource` da feature: adaptadores finos entre o `Parameters` de
 /// uma operação e o [AtendimentoGateway] da plataforma ativa.
@@ -312,4 +313,70 @@ final class EnviarMidiaDatasource
     legenda: parameters.legenda,
     ehPtt: parameters.ehPtt,
   );
+}
+
+/// P4 — dono da conversa.
+final class AtribuirAtendimentoDatasource
+    implements Datasource<bool, AtribuirAtendimentoParameters> {
+  final AtendimentoGateway _gateway;
+
+  const AtribuirAtendimentoDatasource({required this._gateway});
+
+  @override
+  Future<bool> call(AtribuirAtendimentoParameters parameters) =>
+      _gateway.atribuirAtendimento(
+        atendimentoId: parameters.atendimentoId,
+        atendenteId: parameters.atendenteId,
+        devolverParaFila: parameters.devolverParaFila,
+      );
+}
+
+/// P4 — urgência do cartão.
+final class DefinirPrioridadeDatasource
+    implements Datasource<Unit, DefinirPrioridadeParameters> {
+  final AtendimentoGateway _gateway;
+
+  const DefinirPrioridadeDatasource({required this._gateway});
+
+  @override
+  Future<Unit> call(DefinirPrioridadeParameters parameters) async {
+    await _gateway.definirPrioridade(
+      atendimentoId: parameters.atendimentoId,
+      prioridade: parameters.prioridade,
+    );
+    return unit;
+  }
+}
+
+/// P4 — transferência de fluxo. Devolve o nome do fluxo de destino.
+final class TransferirParaFluxoDatasource
+    implements Datasource<String, TransferirParaFluxoParameters> {
+  final AtendimentoGateway _gateway;
+
+  const TransferirParaFluxoDatasource({required this._gateway});
+
+  @override
+  Future<String> call(TransferirParaFluxoParameters parameters) =>
+      _gateway.transferirParaFluxo(
+        atendimentoId: parameters.atendimentoId,
+        fluxoId: parameters.fluxoId,
+      );
+}
+
+/// P4 — o quadro em CSV.
+final class ExportarQuadroDatasource
+    implements Datasource<List<int>, ExportarQuadroParameters> {
+  final AtendimentoGateway _gateway;
+
+  const ExportarQuadroDatasource({required this._gateway});
+
+  @override
+  Future<List<int>> call(ExportarQuadroParameters parameters) =>
+      _gateway.exportarQuadro(
+        status: parameters.status,
+        departamentoId: parameters.departamentoId,
+        busca: parameters.busca,
+        somenteMeus: parameters.somenteMeus,
+        somenteNaoLidos: parameters.somenteNaoLidos,
+      );
 }

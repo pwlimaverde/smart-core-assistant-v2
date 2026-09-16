@@ -32,6 +32,10 @@ KanbanController _controller(
     statusUsecase: u.status,
     eventos: comStream ? u.eventos : null,
     usuarioAtual: () => usuarioAtual,
+    atribuirUsecase: u.atribuir,
+    prioridadeUsecase: u.prioridade,
+    transferirUsecase: u.transferir,
+    exportarUsecase: u.exportar,
   );
 }
 
@@ -592,6 +596,79 @@ void main() {
       expect(gateway.ultimaBusca, '');
       expect(gateway.ultimoSomenteMeus, isFalse);
       expect(gateway.ultimoSomenteNaoLidos, isFalse);
+      await c.close();
+    });
+  });
+  // ─── P4: operação do quadro ───────────────────────────────────────────────
+  group('operação do quadro (P4)', () {
+    test('atribuir a mim recarrega o quadro', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 7, etapaAtualId: 10)],
+      );
+      final c = _controller(gateway);
+      await c.carregar();
+      final recargas = gateway.chamadasList;
+
+      final erro = await c.atribuir(atendimentoId: 7);
+
+      expect(erro, isNull);
+      expect(gateway.operacoesDoQuadro, ['atribuir:7:0']);
+      expect(gateway.chamadasList, recargas + 1);
+      await c.close();
+    });
+
+    test('conversa que já tem dono devolve recusa explicada', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 7, etapaAtualId: 10)],
+      )..atribuicaoAceita = false;
+      final c = _controller(gateway);
+      await c.carregar();
+
+      final erro = await c.atribuir(atendimentoId: 7);
+
+      // Sem isso a tela ficaria muda e pareceria que o clique não pegou.
+      expect(erro, isA<QuadroOperacaoRecusada>());
+      expect(erro!.message, contains('outro atendente'));
+      await c.close();
+    });
+
+    test('prioridade e transferência chegam ao servidor', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 7, etapaAtualId: 10)],
+      );
+      final c = _controller(gateway);
+      await c.carregar();
+
+      await c.definirPrioridade(atendimentoId: 7, prioridade: 'urgente');
+      final (destino, erro) = await c.transferirParaFluxo(
+        atendimentoId: 7,
+        fluxoId: 2,
+      );
+
+      expect(gateway.operacoesDoQuadro, [
+        'prioridade:7:urgente',
+        'fluxo:7:2',
+      ]);
+      expect(destino, 'Suporte');
+      expect(erro, isNull);
+      await c.close();
+    });
+
+    test('exportar leva o mesmo recorte que está na tela', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 7, etapaAtualId: 10)],
+      )..csvDoQuadro = [1, 2, 3];
+      final c = _controller(gateway);
+      await c.carregar();
+      await c.alternarFiltro(meus: true);
+      c.digitarBusca('maria');
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+
+      final (csv, erro) = await c.exportar();
+
+      expect(erro, isNull);
+      expect(csv, [1, 2, 3]);
+      expect(gateway.operacoesDoQuadro.last, 'exportar:maria:true:false');
       await c.close();
     });
   });

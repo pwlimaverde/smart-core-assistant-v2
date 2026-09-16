@@ -385,6 +385,35 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$enviarPresenca, request, options: options);
   }
 
+  /// P4 — operacao do quadro pelo supervisor.
+  $grpc.ResponseFuture<$0.AtribuirAtendimentoResponse> atribuirAtendimento(
+    $0.AtribuirAtendimentoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$atribuirAtendimento, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.DefinirPrioridadeResponse> definirPrioridade(
+    $0.DefinirPrioridadeRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$definirPrioridade, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.TransferirParaFluxoResponse> transferirParaFluxo(
+    $0.TransferirParaFluxoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$transferirParaFluxo, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ExportarQuadroResponse> exportarQuadro(
+    $0.ExportarQuadroRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$exportarQuadro, request, options: options);
+  }
+
   /// Fase N3: Painel do Tenant. Exigem só autenticação (não superuser); o RBAC fino
   /// `tenant:admin` é aplicado no data_postgres. AcceptInvite é rota pública (sem sessão).
   $grpc.ResponseFuture<$0.CreateInviteResponse> createInvite(
@@ -1166,6 +1195,26 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/EnviarPresenca',
           ($0.EnviarPresencaRequest value) => value.writeToBuffer(),
           $0.EnviarPresencaResponse.fromBuffer);
+  static final _$atribuirAtendimento = $grpc.ClientMethod<
+          $0.AtribuirAtendimentoRequest, $0.AtribuirAtendimentoResponse>(
+      '/smartcore.contracts.queries.AdminService/AtribuirAtendimento',
+      ($0.AtribuirAtendimentoRequest value) => value.writeToBuffer(),
+      $0.AtribuirAtendimentoResponse.fromBuffer);
+  static final _$definirPrioridade = $grpc.ClientMethod<
+          $0.DefinirPrioridadeRequest, $0.DefinirPrioridadeResponse>(
+      '/smartcore.contracts.queries.AdminService/DefinirPrioridade',
+      ($0.DefinirPrioridadeRequest value) => value.writeToBuffer(),
+      $0.DefinirPrioridadeResponse.fromBuffer);
+  static final _$transferirParaFluxo = $grpc.ClientMethod<
+          $0.TransferirParaFluxoRequest, $0.TransferirParaFluxoResponse>(
+      '/smartcore.contracts.queries.AdminService/TransferirParaFluxo',
+      ($0.TransferirParaFluxoRequest value) => value.writeToBuffer(),
+      $0.TransferirParaFluxoResponse.fromBuffer);
+  static final _$exportarQuadro =
+      $grpc.ClientMethod<$0.ExportarQuadroRequest, $0.ExportarQuadroResponse>(
+          '/smartcore.contracts.queries.AdminService/ExportarQuadro',
+          ($0.ExportarQuadroRequest value) => value.writeToBuffer(),
+          $0.ExportarQuadroResponse.fromBuffer);
   static final _$createInvite =
       $grpc.ClientMethod<$0.CreateInviteRequest, $0.CreateInviteResponse>(
           '/smartcore.contracts.queries.AdminService/CreateInvite',
@@ -1936,6 +1985,42 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.EnviarPresencaRequest.fromBuffer(value),
         ($0.EnviarPresencaResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.AtribuirAtendimentoRequest,
+            $0.AtribuirAtendimentoResponse>(
+        'AtribuirAtendimento',
+        atribuirAtendimento_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.AtribuirAtendimentoRequest.fromBuffer(value),
+        ($0.AtribuirAtendimentoResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.DefinirPrioridadeRequest,
+            $0.DefinirPrioridadeResponse>(
+        'DefinirPrioridade',
+        definirPrioridade_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.DefinirPrioridadeRequest.fromBuffer(value),
+        ($0.DefinirPrioridadeResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.TransferirParaFluxoRequest,
+            $0.TransferirParaFluxoResponse>(
+        'TransferirParaFluxo',
+        transferirParaFluxo_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.TransferirParaFluxoRequest.fromBuffer(value),
+        ($0.TransferirParaFluxoResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ExportarQuadroRequest,
+            $0.ExportarQuadroResponse>(
+        'ExportarQuadro',
+        exportarQuadro_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ExportarQuadroRequest.fromBuffer(value),
+        ($0.ExportarQuadroResponse value) => value.writeToBuffer()));
     $addMethod(
         $grpc.ServiceMethod<$0.CreateInviteRequest, $0.CreateInviteResponse>(
             'CreateInvite',
@@ -2975,6 +3060,42 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.EnviarPresencaResponse> enviarPresenca(
       $grpc.ServiceCall call, $0.EnviarPresencaRequest request);
+
+  $async.Future<$0.AtribuirAtendimentoResponse> atribuirAtendimento_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.AtribuirAtendimentoRequest> $request) async {
+    return atribuirAtendimento($call, await $request);
+  }
+
+  $async.Future<$0.AtribuirAtendimentoResponse> atribuirAtendimento(
+      $grpc.ServiceCall call, $0.AtribuirAtendimentoRequest request);
+
+  $async.Future<$0.DefinirPrioridadeResponse> definirPrioridade_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.DefinirPrioridadeRequest> $request) async {
+    return definirPrioridade($call, await $request);
+  }
+
+  $async.Future<$0.DefinirPrioridadeResponse> definirPrioridade(
+      $grpc.ServiceCall call, $0.DefinirPrioridadeRequest request);
+
+  $async.Future<$0.TransferirParaFluxoResponse> transferirParaFluxo_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.TransferirParaFluxoRequest> $request) async {
+    return transferirParaFluxo($call, await $request);
+  }
+
+  $async.Future<$0.TransferirParaFluxoResponse> transferirParaFluxo(
+      $grpc.ServiceCall call, $0.TransferirParaFluxoRequest request);
+
+  $async.Future<$0.ExportarQuadroResponse> exportarQuadro_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ExportarQuadroRequest> $request) async {
+    return exportarQuadro($call, await $request);
+  }
+
+  $async.Future<$0.ExportarQuadroResponse> exportarQuadro(
+      $grpc.ServiceCall call, $0.ExportarQuadroRequest request);
 
   $async.Future<$0.CreateInviteResponse> createInvite_Pre(
       $grpc.ServiceCall $call,

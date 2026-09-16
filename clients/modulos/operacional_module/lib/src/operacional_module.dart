@@ -126,6 +126,42 @@ final class OperacionalModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<AtribuirAtendimentoUsecase>(
+      () => AtribuirAtendimentoUsecase(
+        repository: AtribuirAtendimentoRepository(
+          datasource: AtribuirAtendimentoDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<DefinirPrioridadeUsecase>(
+      () => DefinirPrioridadeUsecase(
+        repository: DefinirPrioridadeRepository(
+          datasource: DefinirPrioridadeDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<TransferirParaFluxoUsecase>(
+      () => TransferirParaFluxoUsecase(
+        repository: TransferirParaFluxoRepository(
+          datasource: TransferirParaFluxoDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<ExportarQuadroUsecase>(
+      () => ExportarQuadroUsecase(
+        repository: ExportarQuadroRepository(
+          datasource: ExportarQuadroDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
     i.lazySingleton<EnviarMidiaUsecase>(
       () => EnviarMidiaUsecase(
         repository: EnviarMidiaRepository(

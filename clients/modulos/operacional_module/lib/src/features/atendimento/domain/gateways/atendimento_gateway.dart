@@ -161,6 +161,37 @@ abstract interface class AtendimentoGateway {
   ///
   /// As URLs vêm assinadas com TTL curto: a lista é para exibir agora, não para
   /// guardar.
+  /// P4 — define o dono da conversa.
+  ///
+  /// `false` quando a conversa já tem outro atendente: atribuir não rouba
+  /// conversa de quem está no meio dela.
+  Future<bool> atribuirAtendimento({
+    required int atendimentoId,
+    int? atendenteId,
+    bool devolverParaFila,
+  });
+
+  /// P4 — urgência do cartão.
+  Future<void> definirPrioridade({
+    required int atendimentoId,
+    required String prioridade,
+  });
+
+  /// P4 — leva a conversa para outro fluxo.
+  Future<String> transferirParaFluxo({
+    required int atendimentoId,
+    required int fluxoId,
+  });
+
+  /// P4 — o quadro em CSV (bytes prontos para gravar em arquivo).
+  Future<List<int>> exportarQuadro({
+    String status,
+    int? departamentoId,
+    String busca,
+    bool somenteMeus,
+    bool somenteNaoLidos,
+  });
+
   /// P3 — avisa o contato que o atendente está digitando/gravando.
   ///
   /// Devolve `false` quando não há conexão ativa para o contato. Não lança:

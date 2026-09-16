@@ -185,6 +185,54 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
     return messageId;
   }
 
+  /// P4 — o que a tela pediu ao quadro.
+  final List<String> operacoesDoQuadro = [];
+  bool atribuicaoAceita = true;
+  List<int> csvDoQuadro = const [];
+
+  @override
+  Future<bool> atribuirAtendimento({
+    required int atendimentoId,
+    int? atendenteId,
+    bool devolverParaFila = false,
+  }) async {
+    operacoesDoQuadro.add(
+      devolverParaFila
+          ? 'devolver:$atendimentoId'
+          : 'atribuir:$atendimentoId:${atendenteId ?? 0}',
+    );
+    return atribuicaoAceita;
+  }
+
+  @override
+  Future<void> definirPrioridade({
+    required int atendimentoId,
+    required String prioridade,
+  }) async {
+    operacoesDoQuadro.add('prioridade:$atendimentoId:$prioridade');
+  }
+
+  @override
+  Future<String> transferirParaFluxo({
+    required int atendimentoId,
+    required int fluxoId,
+  }) async {
+    operacoesDoQuadro.add('fluxo:$atendimentoId:$fluxoId');
+    return 'Suporte';
+  }
+
+  @override
+  Future<List<int>> exportarQuadro({
+    String status = '',
+    int? departamentoId,
+    String busca = '',
+    bool somenteMeus = false,
+    bool somenteNaoLidos = false,
+  }) async {
+    operacoesDoQuadro.add('exportar:$busca:$somenteMeus:$somenteNaoLidos');
+    return csvDoQuadro;
+  }
+
   /// P3 — presenças pedidas pela tela, na ordem.
   final List<String> presencasEnviadas = [];
   bool presencaEntregue = true;
@@ -325,6 +373,10 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   ListAtendimentosUsecase list,
   GetThreadUsecase thread,
   EnviarPresencaUsecase presenca,
+  AtribuirAtendimentoUsecase atribuir,
+  DefinirPrioridadeUsecase prioridade,
+  TransferirParaFluxoUsecase transferir,
+  ExportarQuadroUsecase exportar,
   ListarMidiasUsecase midias,
   MoveAtendimentoEtapaUsecase move,
   SendOutboundMessageUsecase send,
@@ -358,6 +410,26 @@ usecasesSobre(FakeAtendimentoGateway gateway) => (
   thread: GetThreadUsecase(
     repository: GetThreadRepository(
       datasource: GetThreadDatasource(gateway: gateway),
+    ),
+  ),
+  atribuir: AtribuirAtendimentoUsecase(
+    repository: AtribuirAtendimentoRepository(
+      datasource: AtribuirAtendimentoDatasource(gateway: gateway),
+    ),
+  ),
+  prioridade: DefinirPrioridadeUsecase(
+    repository: DefinirPrioridadeRepository(
+      datasource: DefinirPrioridadeDatasource(gateway: gateway),
+    ),
+  ),
+  transferir: TransferirParaFluxoUsecase(
+    repository: TransferirParaFluxoRepository(
+      datasource: TransferirParaFluxoDatasource(gateway: gateway),
+    ),
+  ),
+  exportar: ExportarQuadroUsecase(
+    repository: ExportarQuadroRepository(
+      datasource: ExportarQuadroDatasource(gateway: gateway),
     ),
   ),
   presenca: EnviarPresencaUsecase(

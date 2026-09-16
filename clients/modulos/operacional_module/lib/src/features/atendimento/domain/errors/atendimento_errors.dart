@@ -538,3 +538,41 @@ final class EnviarMidiaInesperado extends EnviarMidiaError
   const EnviarMidiaInesperado()
     : super('Não foi possível enviar o arquivo. Tente novamente.');
 }
+
+/// Erros das operações do quadro (P4): atribuir, prioridade, transferir e
+/// exportar. Um conjunto só porque as quatro falham pelos mesmos motivos e são
+/// tratadas no mesmo lugar — o menu do cartão.
+sealed class QuadroOperacaoError extends AppError {
+  const QuadroOperacaoError(super.message);
+}
+
+final class QuadroOperacaoAcessoNegado extends QuadroOperacaoError
+    with UnauthorizedFailure {
+  const QuadroOperacaoAcessoNegado()
+    : super('Você não tem permissão para esta ação no quadro.');
+}
+
+final class QuadroOperacaoSessaoExpirada extends QuadroOperacaoError
+    with UnauthorizedFailure {
+  const QuadroOperacaoSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
+/// O servidor recusou: prioridade fora da lista, fluxo inexistente, usuário sem
+/// cadastro de atendente. A mensagem dele diz qual dos casos é.
+final class QuadroOperacaoRecusada extends QuadroOperacaoError {
+  const QuadroOperacaoRecusada(String? detalhe)
+    : super(detalhe ?? 'A ação não foi aceita.');
+}
+
+final class QuadroOperacaoIndisponivel extends QuadroOperacaoError
+    with NetworkFailure {
+  const QuadroOperacaoIndisponivel()
+    : super('Não foi possível concluir a ação. Tente novamente.');
+}
+
+final class QuadroOperacaoInesperado extends QuadroOperacaoError
+    with UnexpectedFailure {
+  const QuadroOperacaoInesperado()
+    : super('Não foi possível concluir a ação. Tente novamente.');
+}

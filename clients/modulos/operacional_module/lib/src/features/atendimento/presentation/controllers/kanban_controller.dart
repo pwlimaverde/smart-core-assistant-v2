@@ -9,6 +9,7 @@ import '../../domain/model/atendimento_resumo.dart';
 import '../../domain/model/quadro.dart';
 import '../../domain/parameters/list_atendimentos_parameters.dart';
 import '../../domain/parameters/move_atendimento_etapa_parameters.dart';
+import '../../domain/parameters/quadro_operacao_parameters.dart';
 import '../../domain/parameters/quadro_parameters.dart';
 import '../../domain/streams/atendimento_evento_stream.dart';
 import '../../domain/usecases/atendimento_usecases.dart';
@@ -35,6 +36,13 @@ final class KanbanController extends BaseController<KanbanViewModel> {
   final ListFluxosUsecase _fluxosUsecase;
   final ListColunasUsecase _colunasUsecase;
   final SetAtendimentoStatusUsecase _statusUsecase;
+
+  /// P4 — as operações do supervisor sobre o cartão. Opcionais: nos testes de
+  /// tela nem todas estão registradas, e o quadro tem de abrir assim mesmo.
+  final AtribuirAtendimentoUsecase? _atribuirUsecase;
+  final DefinirPrioridadeUsecase? _prioridadeUsecase;
+  final TransferirParaFluxoUsecase? _transferirUsecase;
+  final ExportarQuadroUsecase? _exportarUsecase;
 
   /// Fonte de eventos realtime (opcional — testes de unidade do controller não
   /// precisam abrir stream).
@@ -75,7 +83,15 @@ final class KanbanController extends BaseController<KanbanViewModel> {
     required ListFluxosUsecase fluxosUsecase,
     required ListColunasUsecase colunasUsecase,
     required SetAtendimentoStatusUsecase statusUsecase,
-  }) : _listUsecase = listUsecase,
+    AtribuirAtendimentoUsecase? atribuirUsecase,
+    DefinirPrioridadeUsecase? prioridadeUsecase,
+    TransferirParaFluxoUsecase? transferirUsecase,
+    ExportarQuadroUsecase? exportarUsecase,
+  }) : _atribuirUsecase = atribuirUsecase,
+       _prioridadeUsecase = prioridadeUsecase,
+       _transferirUsecase = transferirUsecase,
+       _exportarUsecase = exportarUsecase,
+       _listUsecase = listUsecase,
        _moveUsecase = moveUsecase,
        _fluxosUsecase = fluxosUsecase,
        _colunasUsecase = colunasUsecase,
@@ -184,6 +200,96 @@ final class KanbanController extends BaseController<KanbanViewModel> {
     if (meus != null) _somenteMeus = meus;
     if (naoLidas != null) _somenteNaoLidas = naoLidas;
     return carregar();
+  }
+
+  /// P4 — põe a conversa na mão de alguém (ou devolve para a fila).
+  ///
+  /// Recarrega o quadro no sucesso: o cartão muda de dono e, com o filtro
+  /// "minhas" ligado, pode até sair da tela — é o comportamento certo.
+  Future<QuadroOperacaoError?> atribuir({
+    required int atendimentoId,
+    int? atendenteId,
+    bool devolverParaFila = false,
+  }) async {
+    final usecase = _atribuirUsecase;
+    if (usecase == null) return null;
+    final res = await usecase(
+      AtribuirAtendimentoParameters(
+        atendimentoId: atendimentoId,
+        atendenteId: atendenteId,
+        devolverParaFila: devolverParaFila,
+      ),
+    );
+    return switch (res) {
+      Success(:final value) => value
+          ? await _recarregarERetornar()
+          // O servidor não roubou a conversa de quem já a tinha; a tela
+          // precisa dizer isso, senão parece que o clique não funcionou.
+          : const QuadroOperacaoRecusada(
+              'A conversa já está com outro atendente.',
+            ),
+      Failure(:final error) => error,
+    };
+  }
+
+  /// P4 — urgência do cartão.
+  Future<QuadroOperacaoError?> definirPrioridade({
+    required int atendimentoId,
+    required String prioridade,
+  }) async {
+    final usecase = _prioridadeUsecase;
+    if (usecase == null) return null;
+    final res = await usecase(
+      DefinirPrioridadeParameters(
+        atendimentoId: atendimentoId,
+        prioridade: prioridade,
+      ),
+    );
+    return switch (res) {
+      Success() => await _recarregarERetornar(),
+      Failure(:final error) => error,
+    };
+  }
+
+  /// P4 — leva a conversa para outro fluxo. Devolve o nome do destino.
+  Future<(String?, QuadroOperacaoError?)> transferirParaFluxo({
+    required int atendimentoId,
+    required int fluxoId,
+  }) async {
+    final usecase = _transferirUsecase;
+    if (usecase == null) return (null, null);
+    final res = await usecase(
+      TransferirParaFluxoParameters(
+        atendimentoId: atendimentoId,
+        fluxoId: fluxoId,
+      ),
+    );
+    return switch (res) {
+      Success(:final value) => (value, await _recarregarERetornar()),
+      Failure(:final error) => (null, error),
+    };
+  }
+
+  /// P4 — o quadro em CSV, no recorte que está na tela.
+  Future<(List<int>?, QuadroOperacaoError?)> exportar() async {
+    final usecase = _exportarUsecase;
+    if (usecase == null) return (null, null);
+    final res = await usecase(
+      ExportarQuadroParameters(
+        busca: _busca.trim(),
+        somenteMeus: _somenteMeus,
+        somenteNaoLidos: _somenteNaoLidas,
+      ),
+    );
+    return switch (res) {
+      Success(:final value) => (value, null),
+      Failure(:final error) => (null, error),
+    };
+  }
+
+  Future<QuadroOperacaoError?> _recarregarERetornar() async {
+    await carregar();
+    return null;
   }
 
   /// P1 — volta ao quadro inteiro.
