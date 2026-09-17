@@ -38,9 +38,9 @@ O inventário da v1 que serve de gabarito:
 | P1 | ✅ Busca e filtros da conversa | `conversations/?q=`, filtros do workspace | Sem busca, uma conta com 500 conversas é inoperável | ⬜ |
 | P2 | ✅ Conversa fiel: citação, ticks, dia, paginação | `chat_alpine.js` (setReplyTo, statusEnvioIcon, enrichedMessages, onChatScroll) | É o que faz a tela "parecer WhatsApp" | ⬜ |
 | P3 | ✅ Presença, áudio PTT e galeria | `presence/`, `startRecording`, `medias/`, lightbox | Fecha a conversa; depende de P2 (mesma tela) | ⬜ |
-| P4 | Quadro: atribuir, transferir, prioridade, exportar | `board/assign`, `board/transfer-fluxo`, `export/` | Operação diária do supervisor | ⬜ |
-| P5 | Ficha: timeline, excluir nota, catálogo de etiquetas | `timeline/`, `notas/<id>` DELETE, `etiquetas/` CRUD | Completa o CRM do cartão | ⬜ |
-| P6 | SLA: `data_primeira_resposta` | Coluna da v1, viva | Coluna lida em 5 consultas e nunca escrita | ⬜ |
+| P4 | ✅ Quadro: atribuir, transferir, prioridade, exportar | `board/assign`, `board/transfer-fluxo`, `export/` | Operação diária do supervisor | ⬜ |
+| P5 | ✅ Ficha: timeline, excluir nota, catálogo de etiquetas | `timeline/`, `notas/<id>` DELETE, `etiquetas/` CRUD | Completa o CRM do cartão | ⬜ |
+| P6 | ✅ SLA: `data_primeira_resposta` | Coluna da v1, viva | Coluna lida em 5 consultas e nunca escrita | ⬜ |
 | P7 | Whitelist, conexão→departamento, detalhe da conexão | `WhiteList`, `AppInstance.departamento`, `logout/` | Três cadastros sem tela | ⬜ |
 | P8 | Mensageria fiel: enquete, lista, botões, reação, contatos | Normalização da v1 + evento `CONTACTS` | Hoje cai tudo em "Other" | ⬜ |
 | P9 | Admin do superusuário: pagamento, usuários, dead-letter, settings | `PaymentRecord`, `User`, `CoreSettings` export/import, `test-connection` | Backoffice incompleto | ⬜ |
@@ -150,6 +150,10 @@ portar, e fechar o documento de paridade.
 | P2 | `d947c55` | ✅ 35159979923 | `before_id` no `GetThread`; ticks de entrega/leitura na bolha; citar mensagem; separador de dia; a recarga deixou de apagar o histórico puxado. |
 | P3 | `73a283c` | ✅ 35159979923 | `EnviarPresenca` na borda e presença do contato com `atendimento_id`; áudio de voz (PTT); anexo de arquivo (o gateway existia sem botão); galeria com imagem ampliada. |
 
+| P4 | `e21458f` | ✅ 35282650965 | Atribuir/devolver à fila (auditado), prioridade com conjunto fechado, transferência de fluxo na borda e exportação CSV com `tenant:admin`. |
+| P5 | `a8adf73` | ✅ 35284883697 | Timeline (UNION de movimentos, notas e etiquetas), histórico do contato, excluir nota e manutenção do catálogo de etiquetas. |
+| P6 | `c7e2c3d` | ✅ 35285652733 | `data_primeira_resposta` gravada uma vez (atendente ou bot) e mediana de 24h no painel. |
+
 ### Achados fora do inventário inicial
 
 - **`enviarMidia` existia no gateway desde a N9 e nenhuma tela o chamava**:
@@ -159,3 +163,8 @@ portar, e fechar o documento de paridade.
   (`sent`/`delivered`/`read`).
 - **`dart:io` no módulo operacional quebra o smoke build web do painel admin**;
   o caminho do áudio usa `path_provider`.
+- **`encaminhar_tenant` manda `flow_permissions` vazias**: toda rota operacional
+  nova passa pelo `encaminhar_operacional`, senão um atendente comum não
+  enxergaria os próprios cartões.
+- **O piso de cobertura Flutter (78%) é um gate real**: um bloco com muita tela
+  e pouco teste derruba a CI mesmo com tudo compilando.
