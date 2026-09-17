@@ -6017,7 +6017,7 @@ impl AdminService for AdminFacade {
         )
         .await?;
 
-        Ok(Response::new(SimpleOkResponse { ok: true }))
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
     }
 
     /// P5 — renomeia/recolore uma etiqueta do catálogo.
@@ -6067,7 +6067,7 @@ impl AdminService for AdminFacade {
         )
         .await?;
 
-        Ok(Response::new(SimpleOkResponse { ok: true }))
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
     }
 
     /// P4 — quem cuida da conversa.
