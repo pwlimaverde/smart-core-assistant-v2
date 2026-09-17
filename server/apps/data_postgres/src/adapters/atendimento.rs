@@ -357,7 +357,8 @@ impl AtendimentoStore for PgAtendimentoStore {
         nome: &str,
         cor: &str,
         descricao: &str,
-    ) -> Result<Option<(i64, String, String, String, bool)>, DbError> {
+    ) -> Result<Option<infrastructure_postgres::atendimentos::etiquetas::EtiquetaAtualizada>, DbError>
+    {
         let ctx = ctx.clone();
         let tenant_id = ctx.tenant_id;
         let (nome, cor, descricao) = (nome.to_string(), cor.to_string(), descricao.to_string());

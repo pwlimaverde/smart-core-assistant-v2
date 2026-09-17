@@ -5066,12 +5066,12 @@ async fn handler_update_etiqueta(store: &dyn ports::AtendimentoStore, env: Envel
         .atualizar_etiqueta(&ctx, id, &nome, &cor, &texto("descricao"))
         .await
     {
-        Ok(Some((id, nome, cor, descricao, ativo))) => ok_reply(
+        Ok(Some(e)) => ok_reply(
             &env,
             "UpdateEtiquetaReply",
             serde_json::json!({
-                "id": id, "nome": nome, "cor": cor,
-                "descricao": descricao, "ativo": ativo,
+                "id": e.id, "nome": e.nome, "cor": e.cor,
+                "descricao": e.descricao, "ativo": e.ativo,
             }),
         ),
         // Não existe (ou é de outro tenant): validação, não falha de banco.

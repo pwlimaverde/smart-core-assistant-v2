@@ -211,7 +211,7 @@ pub trait AtendimentoStore: Send + Sync {
         nome: &str,
         cor: &str,
         descricao: &str,
-    ) -> Result<Option<(i64, String, String, String, bool)>, DbError>;
+    ) -> Result<Option<infrastructure_postgres::atendimentos::etiquetas::EtiquetaAtualizada>, DbError>;
 
     /// P5 — tira a etiqueta do catálogo sem apagá-la das conversas.
     async fn desativar_etiqueta(&self, ctx: &RequestContext, id: i64) -> Result<bool, DbError>;

@@ -279,6 +279,19 @@ pub async fn remover_nota(
     Ok(r.rows_affected() > 0)
 }
 
+/// P5 — o que volta de uma edição de etiqueta.
+///
+/// Struct em vez de tupla de cinco: o `clippy` recusa o tipo composto, e com
+/// razão — quem lê a assinatura não adivinha a ordem de três `String`s.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct EtiquetaAtualizada {
+    pub id: i64,
+    pub nome: String,
+    pub cor: String,
+    pub descricao: String,
+    pub ativo: bool,
+}
+
 /// P5 — renomeia/recolore uma etiqueta do catálogo.
 #[tracing::instrument(skip_all, fields(etiqueta_id = id))]
 pub async fn atualizar_etiqueta(
@@ -288,9 +301,9 @@ pub async fn atualizar_etiqueta(
     nome: &str,
     cor: &str,
     descricao: &str,
-) -> Result<Option<(i64, String, String, String, bool)>, DbError> {
+) -> Result<Option<EtiquetaAtualizada>, DbError> {
     ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
-    let row = sqlx::query_as::<_, (i64, String, String, String, bool)>(
+    let row = sqlx::query_as::<_, EtiquetaAtualizada>(
         r#"UPDATE atu_etiqueta
               SET nome = $1, cor = $2, descricao = $3
             WHERE tenant_id = $4 AND id = $5
