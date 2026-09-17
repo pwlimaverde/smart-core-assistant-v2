@@ -105,6 +105,15 @@ class _PainelPageState extends State<PainelPage> {
                     valor: p.mensagens24h,
                     icone: Icons.mark_chat_read_outlined,
                   ),
+                  // P6 — quanto tempo o cliente espera pela primeira resposta.
+                  // Só aparece quando houve alguém para medir: um "0s" numa
+                  // conta parada seria mentira confortável.
+                  if (p.temSla)
+                    _Texto(
+                      rotulo: '1ª resposta (mediana)',
+                      valor: p.slaFormatado,
+                      icone: Icons.timer_outlined,
+                    ),
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),
@@ -191,6 +200,50 @@ class _Aviso extends StatelessWidget {
           // O aviso leva à tela que resolve: dizer o problema sem oferecer o
           // caminho deixaria a pessoa procurando no menu.
           TextButton(onPressed: aoAgir, child: Text(rotuloAcao)),
+        ],
+      ),
+    );
+  }
+}
+
+/// P6 — o mesmo cartão do [_Numero], para um valor que já vem formatado.
+///
+/// Existe porque tempo não é contagem: "95" segundos no lugar de "1min 35s"
+/// obrigaria quem lê a fazer a conta de cabeça.
+class _Texto extends StatelessWidget {
+  final String rotulo;
+  final String valor;
+  final IconData icone;
+
+  const _Texto({
+    required this.rotulo,
+    required this.valor,
+    required this.icone,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cor = context.colors.fgMuted;
+    return AppCard(
+      padding: const EdgeInsets.all(AppSpacing.md),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Row(
+            children: [
+              Icon(icone, size: 16, color: cor),
+              const SizedBox(width: AppSpacing.xs),
+              Text(
+                rotulo,
+                style: Theme.of(
+                  context,
+                ).textTheme.labelMedium?.copyWith(color: cor),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          Text(valor, style: Theme.of(context).textTheme.headlineSmall),
         ],
       ),
     );

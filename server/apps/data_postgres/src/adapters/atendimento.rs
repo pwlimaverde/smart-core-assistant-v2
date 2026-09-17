@@ -182,6 +182,14 @@ async fn solicitar_pesquisa_satisfacao(
         )
         .await?;
     repo.touch_last_message(tx, ctx, atendimento_id).await?;
+    // P6 — esta é uma resposta do bot: se for a primeira do atendimento,
+    // carimba o SLA.
+    infrastructure_postgres::atendimentos::atendimentos::marcar_primeira_resposta(
+        tx,
+        ctx,
+        atendimento_id,
+    )
+    .await?;
 
     let evento = serde_json::json!({
         "message_id": msg.id.to_string(),
@@ -613,7 +621,19 @@ impl AtendimentoStore for PgAtendimentoStore {
                 .await?;
 
             let repo_atendimento = PostgresAtendimentoRepository;
-            repo_atendimento.touch_last_message(&mut tx, &ctx, atendimento_id).await?;
+            repo_atendimento
+                .touch_last_message(&mut tx, &ctx, atendimento_id)
+                .await?;
+            // P6 — só o que SAI conta como resposta; mensagem do contato é o
+            // relógio começando, não parando.
+            if remetente != "contato" {
+                infrastructure_postgres::atendimentos::atendimentos::marcar_primeira_resposta(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                )
+                .await?;
+            }
 
             // Padrão OUTBOX: insere o evento de domínio na MESMA transação ACID.
             let event_payload = serde_json::json!({

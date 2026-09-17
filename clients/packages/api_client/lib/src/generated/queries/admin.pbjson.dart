@@ -4187,6 +4187,13 @@ const GetMyPainelResponse$json = {
       '5': 5,
       '10': 'treinamentosAtivos'
     },
+    {
+      '1': 'primeira_resposta_mediana_s',
+      '3': 8,
+      '4': 1,
+      '5': 5,
+      '10': 'primeiraRespostaMedianaS'
+    },
   ],
 };
 
@@ -4197,7 +4204,8 @@ final $typed_data.Uint8List getMyPainelResponseDescriptor = $convert.base64Decod
     'UgxtZW5zYWdlbnMyNGgSJwoPY29uZXhvZXNfYXRpdmFzGAQgASgFUg5jb25leG9lc0F0aXZhcx'
     'IlCg5jb25leG9lc190b3RhbBgFIAEoBVINY29uZXhvZXNUb3RhbBIkCg1kZXBhcnRhbWVudG9z'
     'GAYgASgFUg1kZXBhcnRhbWVudG9zEi8KE3RyZWluYW1lbnRvc19hdGl2b3MYByABKAVSEnRyZW'
-    'luYW1lbnRvc0F0aXZvcw==');
+    'luYW1lbnRvc0F0aXZvcxI9ChtwcmltZWlyYV9yZXNwb3N0YV9tZWRpYW5hX3MYCCABKAVSGHBy'
+    'aW1laXJhUmVzcG9zdGFNZWRpYW5hUw==');
 
 @$core.Deprecated('Use myDepartamentoDescriptor instead')
 const MyDepartamento$json = {

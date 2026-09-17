@@ -1001,6 +1001,14 @@ impl OperacionalStore for PgOperacionalStore {
             .fetch_one(&mut *tx)
             .await?;
 
+            // P6 — o SLA fica fora do `FILTER` acima porque é percentil, não
+            // contagem: misturá-lo ali obrigaria a agrupar o resto.
+            let mediana =
+                infrastructure_postgres::atendimentos::atendimentos::mediana_primeira_resposta_24h(
+                    &mut tx, &ctx,
+                )
+                .await?;
+
             let json = serde_json::json!({
                 "em_andamento": linha.em_andamento,
                 "aguardando": linha.aguardando,
@@ -1009,6 +1017,9 @@ impl OperacionalStore for PgOperacionalStore {
                 "conexoes_total": linha.conexoes_total,
                 "departamentos": linha.departamentos,
                 "treinamentos_ativos": linha.treinamentos_ativos,
+                // -1 = ninguém respondido nas últimas 24h; 0 seria "respondido
+                // instantaneamente", que é outra coisa.
+                "primeira_resposta_mediana_s": mediana.unwrap_or(-1),
             });
             Ok((json, tx))
         })

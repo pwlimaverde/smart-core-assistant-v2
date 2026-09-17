@@ -1569,3 +1569,55 @@ pub async fn listar_do_contato(
     .await?;
     Ok(rows)
 }
+
+/// P6 — carimba a primeira resposta do atendimento, uma vez só.
+///
+/// A coluna `data_primeira_resposta` existe desde a 0006, é lida em cinco
+/// consultas e nunca foi escrita: o SLA do painel media o vazio. O `WHERE ...
+/// IS NULL` é o que garante "uma vez": a segunda resposta do mesmo atendimento
+/// não move o carimbo, e a conta do tempo continua sendo do primeiro retorno.
+///
+/// Vale para atendente **e** bot, como na v1: para quem está esperando, quem
+/// respondeu primeiro importa menos do que ter sido respondido.
+#[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
+pub async fn marcar_primeira_resposta(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+) -> Result<bool, DbError> {
+    let r = sqlx::query(
+        r#"UPDATE oraculo_atendimento
+              SET data_primeira_resposta = NOW()
+            WHERE tenant_id = $1 AND id = $2 AND data_primeira_resposta IS NULL"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(r.rows_affected() > 0)
+}
+
+/// P6 — a mediana do tempo de primeira resposta, em segundos, nas últimas
+/// 24 horas.
+///
+/// Mediana e não média: uma conversa esquecida no fim de semana levaria a
+/// média para as alturas e esconderia o atendimento normal do dia.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+pub async fn mediana_primeira_resposta_24h(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+) -> Result<Option<i32>, DbError> {
+    let row = sqlx::query_as::<_, (Option<f64>,)>(
+        r#"SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (
+                    ORDER BY EXTRACT(EPOCH FROM (data_primeira_resposta - data_inicio))
+                  )
+             FROM oraculo_atendimento
+            WHERE tenant_id = $1
+              AND data_primeira_resposta IS NOT NULL
+              AND data_inicio > NOW() - INTERVAL '24 hours'"#,
+    )
+    .bind(ctx.tenant_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row.and_then(|(v,)| v).map(|v| v.round() as i32))
+}

@@ -4369,6 +4369,11 @@ impl AdminService for AdminFacade {
             conexoes_total: n("conexoes_total"),
             departamentos: n("departamentos"),
             treinamentos_ativos: n("treinamentos_ativos"),
+            // P6 — ausente (painel antigo) vale como "sem medida", não zero.
+            primeira_resposta_mediana_s: corpo
+                .get("primeira_resposta_mediana_s")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(-1) as i32,
         }))
     }
 

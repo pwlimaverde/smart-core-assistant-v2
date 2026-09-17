@@ -16942,6 +16942,7 @@ class GetMyPainelResponse extends $pb.GeneratedMessage {
     $core.int? conexoesTotal,
     $core.int? departamentos,
     $core.int? treinamentosAtivos,
+    $core.int? primeiraRespostaMedianaS,
   }) {
     final result = create();
     if (emAndamento != null) result.emAndamento = emAndamento;
@@ -16952,6 +16953,8 @@ class GetMyPainelResponse extends $pb.GeneratedMessage {
     if (departamentos != null) result.departamentos = departamentos;
     if (treinamentosAtivos != null)
       result.treinamentosAtivos = treinamentosAtivos;
+    if (primeiraRespostaMedianaS != null)
+      result.primeiraRespostaMedianaS = primeiraRespostaMedianaS;
     return result;
   }
 
@@ -16976,6 +16979,7 @@ class GetMyPainelResponse extends $pb.GeneratedMessage {
     ..aI(5, _omitFieldNames ? '' : 'conexoesTotal')
     ..aI(6, _omitFieldNames ? '' : 'departamentos')
     ..aI(7, _omitFieldNames ? '' : 'treinamentosAtivos')
+    ..aI(8, _omitFieldNames ? '' : 'primeiraRespostaMedianaS')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -17059,6 +17063,18 @@ class GetMyPainelResponse extends $pb.GeneratedMessage {
   $core.bool hasTreinamentosAtivos() => $_has(6);
   @$pb.TagNumber(7)
   void clearTreinamentosAtivos() => $_clearField(7);
+
+  /// P6 — mediana do tempo ate a primeira resposta nas ultimas 24h, em
+  /// segundos. -1 = ninguem foi respondido ainda nessa janela (diferente de
+  /// "respondido em zero segundo").
+  @$pb.TagNumber(8)
+  $core.int get primeiraRespostaMedianaS => $_getIZ(7);
+  @$pb.TagNumber(8)
+  set primeiraRespostaMedianaS($core.int value) => $_setSignedInt32(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasPrimeiraRespostaMedianaS() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearPrimeiraRespostaMedianaS() => $_clearField(8);
 }
 
 class MyDepartamento extends $pb.GeneratedMessage {

@@ -21,6 +21,7 @@ final class CarregarPainelDatasource implements Datasource<Painel, NoParams> {
       conexoesTotal: r.conexoesTotal,
       departamentos: r.departamentos,
       treinamentosAtivos: r.treinamentosAtivos,
+      primeiraRespostaMedianaS: r.primeiraRespostaMedianaS,
     );
   }
 }

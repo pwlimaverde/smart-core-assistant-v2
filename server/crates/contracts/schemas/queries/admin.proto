@@ -1726,6 +1726,10 @@ message GetMyPainelResponse {
   int32 conexoes_total = 5;
   int32 departamentos = 6;
   int32 treinamentos_ativos = 7;
+  // P6 — mediana do tempo ate a primeira resposta nas ultimas 24h, em
+  // segundos. -1 = ninguem foi respondido ainda nessa janela (diferente de
+  // "respondido em zero segundo").
+  int32 primeira_resposta_mediana_s = 8;
 }
 
 // --- Departamentos e atendentes ---
