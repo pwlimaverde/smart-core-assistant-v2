@@ -64,6 +64,19 @@ pub const MAPA: &[(&str, &[&str])] = &[
     ("CreateWhatsappInstance", &["operacional:admin"]),
     ("ReconnectWhatsappInstance", &["operacional:admin"]),
     ("DeleteWhatsappInstance", &["operacional:admin"]),
+    // P7 — encerrar a sessão é do administrador pelo mesmo motivo que remover:
+    // derruba o número do tenant inteiro. Ver o detalhe é leitura.
+    ("DisconnectWhatsappInstance", &["operacional:admin"]),
+    ("DetalheDaConexao", &["operacional:read"]),
+    ("ListDepartamentosDasConexoes", &["operacional:read"]),
+    ("DefinirDepartamentoDaConexao", &["operacional:admin"]),
+    // P7 — os números ignorados. Ler é `operacional:read` porque a lista explica
+    // por que uma conversa nunca aparece; mexer nela é do administrador, já que
+    // ignorar um número cala o atendimento daquela pessoa para todo mundo.
+    ("ListNumerosIgnorados", &["operacional:read"]),
+    ("CriarNumeroIgnorado", &["operacional:admin"]),
+    ("AtualizarNumeroIgnorado", &["operacional:admin"]),
+    ("RemoverNumeroIgnorado", &["operacional:admin"]),
     // D3 (plano `regras-do-bot-e-permissoes`). Os escopos abaixo são os que a
     // própria fase D3 documentou nos handlers — não escolhi por conta própria:
     //

@@ -4439,6 +4439,14 @@ const MyWhatsappInstance$json = {
     {'1': 'provider', '3': 6, '4': 1, '5': 9, '10': 'provider'},
     {'1': 'created_at', '3': 7, '4': 1, '5': 3, '10': 'createdAt'},
     {'1': 'resposta_bot', '3': 8, '4': 1, '5': 8, '10': 'respostaBot'},
+    {'1': 'departamento_id', '3': 9, '4': 1, '5': 5, '10': 'departamentoId'},
+    {
+      '1': 'departamento_nome',
+      '3': 10,
+      '4': 1,
+      '5': 9,
+      '10': 'departamentoNome'
+    },
   ],
 };
 
@@ -4448,7 +4456,9 @@ final $typed_data.Uint8List myWhatsappInstanceDescriptor = $convert.base64Decode
     'USIQoMcGhvbmVfbnVtYmVyGAMgASgJUgtwaG9uZU51bWJlchIpChBjb25uZWN0aW9uX3N0YXRl'
     'GAQgASgJUg9jb25uZWN0aW9uU3RhdGUSFgoGYWN0aXZlGAUgASgIUgZhY3RpdmUSGgoIcHJvdm'
     'lkZXIYBiABKAlSCHByb3ZpZGVyEh0KCmNyZWF0ZWRfYXQYByABKANSCWNyZWF0ZWRBdBIhCgxy'
-    'ZXNwb3N0YV9ib3QYCCABKAhSC3Jlc3Bvc3RhQm90');
+    'ZXNwb3N0YV9ib3QYCCABKAhSC3Jlc3Bvc3RhQm90EicKD2RlcGFydGFtZW50b19pZBgJIAEoBV'
+    'IOZGVwYXJ0YW1lbnRvSWQSKwoRZGVwYXJ0YW1lbnRvX25vbWUYCiABKAlSEGRlcGFydGFtZW50'
+    'b05vbWU=');
 
 @$core.Deprecated('Use definirRespostaBotInstanciaRequestDescriptor instead')
 const DefinirRespostaBotInstanciaRequest$json = {
@@ -4579,6 +4589,187 @@ const MyWhatsappInstanceIdRequest$json = {
 final $typed_data.Uint8List myWhatsappInstanceIdRequestDescriptor =
     $convert.base64Decode(
         'ChtNeVdoYXRzYXBwSW5zdGFuY2VJZFJlcXVlc3QSDgoCaWQYASABKAVSAmlk');
+
+@$core.Deprecated('Use definirDepartamentoDaConexaoRequestDescriptor instead')
+const DefinirDepartamentoDaConexaoRequest$json = {
+  '1': 'DefinirDepartamentoDaConexaoRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'departamento_id', '3': 2, '4': 1, '5': 5, '10': 'departamentoId'},
+  ],
+};
+
+/// Descriptor for `DefinirDepartamentoDaConexaoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List definirDepartamentoDaConexaoRequestDescriptor =
+    $convert.base64Decode(
+        'CiNEZWZpbmlyRGVwYXJ0YW1lbnRvRGFDb25leGFvUmVxdWVzdBIOCgJpZBgBIAEoBVICaWQSJw'
+        'oPZGVwYXJ0YW1lbnRvX2lkGAIgASgFUg5kZXBhcnRhbWVudG9JZA==');
+
+@$core.Deprecated('Use detalheDaConexaoRequestDescriptor instead')
+const DetalheDaConexaoRequest$json = {
+  '1': 'DetalheDaConexaoRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+  ],
+};
+
+/// Descriptor for `DetalheDaConexaoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List detalheDaConexaoRequestDescriptor = $convert
+    .base64Decode('ChdEZXRhbGhlRGFDb25leGFvUmVxdWVzdBIOCgJpZBgBIAEoBVICaWQ=');
+
+@$core.Deprecated('Use detalheDaConexaoResponseDescriptor instead')
+const DetalheDaConexaoResponse$json = {
+  '1': 'DetalheDaConexaoResponse',
+  '2': [
+    {
+      '1': 'conexao',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyWhatsappInstance',
+      '10': 'conexao'
+    },
+    {'1': 'ultima_checagem', '3': 2, '4': 1, '5': 3, '10': 'ultimaChecagem'},
+    {
+      '1': 'instancia_no_provedor',
+      '3': 3,
+      '4': 1,
+      '5': 9,
+      '10': 'instanciaNoProvedor'
+    },
+    {
+      '1': 'atendimentos_abertos',
+      '3': 4,
+      '4': 1,
+      '5': 5,
+      '10': 'atendimentosAbertos'
+    },
+    {'1': 'mensagens_24h', '3': 5, '4': 1, '5': 5, '10': 'mensagens24h'},
+  ],
+};
+
+/// Descriptor for `DetalheDaConexaoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List detalheDaConexaoResponseDescriptor = $convert.base64Decode(
+    'ChhEZXRhbGhlRGFDb25leGFvUmVzcG9uc2USSQoHY29uZXhhbxgBIAEoCzIvLnNtYXJ0Y29yZS'
+    '5jb250cmFjdHMucXVlcmllcy5NeVdoYXRzYXBwSW5zdGFuY2VSB2NvbmV4YW8SJwoPdWx0aW1h'
+    'X2NoZWNhZ2VtGAIgASgDUg51bHRpbWFDaGVjYWdlbRIyChVpbnN0YW5jaWFfbm9fcHJvdmVkb3'
+    'IYAyABKAlSE2luc3RhbmNpYU5vUHJvdmVkb3ISMQoUYXRlbmRpbWVudG9zX2FiZXJ0b3MYBCAB'
+    'KAVSE2F0ZW5kaW1lbnRvc0FiZXJ0b3MSIwoNbWVuc2FnZW5zXzI0aBgFIAEoBVIMbWVuc2FnZW'
+    '5zMjRo');
+
+@$core.Deprecated('Use myNumeroIgnoradoDescriptor instead')
+const MyNumeroIgnorado$json = {
+  '1': 'MyNumeroIgnorado',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'telefone', '3': 3, '4': 1, '5': 9, '10': 'telefone'},
+    {'1': 'ativo', '3': 4, '4': 1, '5': 8, '10': 'ativo'},
+    {'1': 'criado_em', '3': 5, '4': 1, '5': 3, '10': 'criadoEm'},
+  ],
+};
+
+/// Descriptor for `MyNumeroIgnorado`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myNumeroIgnoradoDescriptor = $convert.base64Decode(
+    'ChBNeU51bWVyb0lnbm9yYWRvEg4KAmlkGAEgASgFUgJpZBISCgRub21lGAIgASgJUgRub21lEh'
+    'oKCHRlbGVmb25lGAMgASgJUgh0ZWxlZm9uZRIUCgVhdGl2bxgEIAEoCFIFYXRpdm8SGwoJY3Jp'
+    'YWRvX2VtGAUgASgDUghjcmlhZG9FbQ==');
+
+@$core.Deprecated('Use listMyNumerosIgnoradosRequestDescriptor instead')
+const ListMyNumerosIgnoradosRequest$json = {
+  '1': 'ListMyNumerosIgnoradosRequest',
+};
+
+/// Descriptor for `ListMyNumerosIgnoradosRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyNumerosIgnoradosRequestDescriptor =
+    $convert.base64Decode('Ch1MaXN0TXlOdW1lcm9zSWdub3JhZG9zUmVxdWVzdA==');
+
+@$core.Deprecated('Use listMyNumerosIgnoradosResponseDescriptor instead')
+const ListMyNumerosIgnoradosResponse$json = {
+  '1': 'ListMyNumerosIgnoradosResponse',
+  '2': [
+    {
+      '1': 'itens',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyNumeroIgnorado',
+      '10': 'itens'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyNumerosIgnoradosResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyNumerosIgnoradosResponseDescriptor =
+    $convert.base64Decode(
+        'Ch5MaXN0TXlOdW1lcm9zSWdub3JhZG9zUmVzcG9uc2USQwoFaXRlbnMYASADKAsyLS5zbWFydG'
+        'NvcmUuY29udHJhY3RzLnF1ZXJpZXMuTXlOdW1lcm9JZ25vcmFkb1IFaXRlbnM=');
+
+@$core.Deprecated('Use criarNumeroIgnoradoRequestDescriptor instead')
+const CriarNumeroIgnoradoRequest$json = {
+  '1': 'CriarNumeroIgnoradoRequest',
+  '2': [
+    {'1': 'nome', '3': 1, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'telefone', '3': 2, '4': 1, '5': 9, '10': 'telefone'},
+  ],
+};
+
+/// Descriptor for `CriarNumeroIgnoradoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List criarNumeroIgnoradoRequestDescriptor =
+    $convert.base64Decode(
+        'ChpDcmlhck51bWVyb0lnbm9yYWRvUmVxdWVzdBISCgRub21lGAEgASgJUgRub21lEhoKCHRlbG'
+        'Vmb25lGAIgASgJUgh0ZWxlZm9uZQ==');
+
+@$core.Deprecated('Use myNumeroIgnoradoResponseDescriptor instead')
+const MyNumeroIgnoradoResponse$json = {
+  '1': 'MyNumeroIgnoradoResponse',
+  '2': [
+    {
+      '1': 'item',
+      '3': 1,
+      '4': 1,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MyNumeroIgnorado',
+      '10': 'item'
+    },
+  ],
+};
+
+/// Descriptor for `MyNumeroIgnoradoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List myNumeroIgnoradoResponseDescriptor =
+    $convert.base64Decode(
+        'ChhNeU51bWVyb0lnbm9yYWRvUmVzcG9uc2USQQoEaXRlbRgBIAEoCzItLnNtYXJ0Y29yZS5jb2'
+        '50cmFjdHMucXVlcmllcy5NeU51bWVyb0lnbm9yYWRvUgRpdGVt');
+
+@$core.Deprecated('Use atualizarNumeroIgnoradoRequestDescriptor instead')
+const AtualizarNumeroIgnoradoRequest$json = {
+  '1': 'AtualizarNumeroIgnoradoRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'telefone', '3': 3, '4': 1, '5': 9, '10': 'telefone'},
+    {'1': 'ativo', '3': 4, '4': 1, '5': 8, '10': 'ativo'},
+  ],
+};
+
+/// Descriptor for `AtualizarNumeroIgnoradoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List atualizarNumeroIgnoradoRequestDescriptor =
+    $convert.base64Decode(
+        'Ch5BdHVhbGl6YXJOdW1lcm9JZ25vcmFkb1JlcXVlc3QSDgoCaWQYASABKAVSAmlkEhIKBG5vbW'
+        'UYAiABKAlSBG5vbWUSGgoIdGVsZWZvbmUYAyABKAlSCHRlbGVmb25lEhQKBWF0aXZvGAQgASgI'
+        'UgVhdGl2bw==');
+
+@$core.Deprecated('Use numeroIgnoradoIdRequestDescriptor instead')
+const NumeroIgnoradoIdRequest$json = {
+  '1': 'NumeroIgnoradoIdRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+  ],
+};
+
+/// Descriptor for `NumeroIgnoradoIdRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List numeroIgnoradoIdRequestDescriptor = $convert
+    .base64Decode('ChdOdW1lcm9JZ25vcmFkb0lkUmVxdWVzdBIOCgJpZBgBIAEoBVICaWQ=');
 
 @$core.Deprecated('Use myTreinamentoDescriptor instead')
 const MyTreinamento$json = {

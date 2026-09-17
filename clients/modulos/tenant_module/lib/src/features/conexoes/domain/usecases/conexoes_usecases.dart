@@ -127,3 +127,60 @@ final class DefinirRespostaBotUsecase
   ConexoesError onUnexpected(Object e, StackTrace s) =>
       _inesperado('definirRespostaBot', e, s);
 }
+
+/// P7 — encerra a sessão sem apagar a conexão.
+final class DesconectarConexaoUsecase
+    extends
+        UsecaseBaseCallData<Unit, Unit, ConexaoIdParameters, ConexoesError> {
+  const DesconectarConexaoUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, ConexaoIdParameters, ConexoesError> get process =>
+      (data, _) => Success(data);
+
+  @override
+  ConexoesError onUnexpected(Object e, StackTrace s) =>
+      _inesperado('desconectar', e, s);
+}
+
+/// P7 — roteamento por conexão.
+final class DefinirDepartamentoDaConexaoUsecase
+    extends
+        UsecaseBaseCallData<
+          Unit,
+          Unit,
+          DepartamentoDaConexaoParameters,
+          ConexoesError
+        > {
+  const DefinirDepartamentoDaConexaoUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, DepartamentoDaConexaoParameters, ConexoesError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  ConexoesError onUnexpected(Object e, StackTrace s) =>
+      _inesperado('definir departamento da conexão', e, s);
+}
+
+/// P7 — o detalhe da conexão.
+final class DetalheDaConexaoUsecase
+    extends
+        UsecaseBaseCallData<
+          DetalheConexao,
+          DetalheConexao,
+          ConexaoIdParameters,
+          ConexoesError
+        > {
+  const DetalheDaConexaoUsecase({required super.repository});
+
+  @override
+  ProcessData<DetalheConexao, DetalheConexao, ConexaoIdParameters, ConexoesError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  ConexoesError onUnexpected(Object e, StackTrace s) =>
+      _inesperado('detalhe da conexão', e, s);
+}

@@ -392,10 +392,16 @@ pub trait AtendimentoStore: Send + Sync {
     /// Aplica a política de ticket/Kanban: para um atendimento ainda não posicionado,
     /// resolve o fluxo padrão, coloca-o na etapa inicial ('fila'), registra o
     /// `MovimentoFluxo` automático e devolve o resultado para auditoria/realtime (WS-2.4).
+    ///
+    /// P7 — `instance_id` é a conexão por onde a conversa entrou (0 = não
+    /// informado, clientes antigos). É o roteamento por número da v1: a conversa
+    /// vai para o fluxo do departamento daquela conexão; sem departamento, ou
+    /// sem fluxo ativo nele, cai no primeiro fluxo ativo do tenant como antes.
     async fn aplicar_politica_ticket_kanban(
         &self,
         ctx: &RequestContext,
         atendimento_id: i32,
+        instance_id: i32,
     ) -> Result<TicketKanbanOutcome, DbError>;
 
     /// Move manualmente um atendimento para outra etapa do Kanban (drag-and-drop na

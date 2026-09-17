@@ -1459,6 +1459,7 @@ async fn processar_mensagem_recebida(
             &envelope.event_id.to_string(),
             &envelope.traceparent,
             atendimento_id,
+            instance_id,
         )
         .await
         {
@@ -2746,8 +2747,15 @@ async fn aplicar_politica_ticket_kanban(
     causation_id: &str,
     traceparent: &str,
     atendimento_id: i32,
+    instance_id: i32,
 ) -> anyhow::Result<()> {
-    let payload = serde_json::json!({ "atendimento_id": atendimento_id });
+    // P7 — a conexão por onde a conversa entrou decide o departamento, e o
+    // departamento decide o fluxo. Era o roteamento por número da v1: quem tem
+    // um número de vendas e outro de suporte via os dois caírem na mesma fila.
+    let payload = serde_json::json!({
+        "atendimento_id": atendimento_id,
+        "instance_id": instance_id,
+    });
 
     let req_envelope = Envelope {
         tenant_id: tenant_uuid.to_string(),

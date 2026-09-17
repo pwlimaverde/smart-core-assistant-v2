@@ -66,6 +66,7 @@ void main() {
       '/tenant/fluxos': ['ListFluxos'],
       '/tenant/campos': ['ListCamposPersonalizados'],
       '/tenant/conexoes': ['ListWhatsappInstances'],
+      '/tenant/ignorados': ['ListNumerosIgnorados'],
       '/tenant/treinamento': ['ListTreinamentos'],
     };
 
@@ -77,6 +78,7 @@ void main() {
       '/tenant/fluxos': 'CreateFluxo',
       '/tenant/campos': 'CreateCampoPersonalizado',
       '/tenant/conexoes': 'CreateWhatsappInstance',
+      '/tenant/ignorados': 'CriarNumeroIgnorado',
       '/tenant/treinamento': 'CreateTreinamento',
     };
 

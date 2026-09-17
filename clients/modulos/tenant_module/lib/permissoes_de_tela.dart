@@ -35,6 +35,9 @@ const Map<String, List<String>?> escoposParaAbrir = {
   '/tenant/campos': ['configuracoes:read'],
   // ListWhatsappInstances
   '/tenant/conexoes': ['operacional:read'],
+  // ListNumerosIgnorados — quem lê o quadro precisa poder descobrir por que uma
+  // conversa nunca aparece nele.
+  '/tenant/ignorados': ['operacional:read'],
   // ListTreinamentos
   '/tenant/treinamento': ['treinamento:read'],
   '/tenant/convites': somenteAdmin,
@@ -57,6 +60,7 @@ const Map<String, List<String>> escoposParaAlterar = {
   '/tenant/fluxos': ['kanban:admin'],
   '/tenant/campos': ['configuracoes:write'],
   '/tenant/conexoes': ['operacional:admin'],
+  '/tenant/ignorados': ['operacional:admin'],
   '/tenant/treinamento': ['treinamento:write'],
   '/tenant/config': ['configuracoes:write'],
 };

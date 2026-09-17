@@ -22,6 +22,11 @@ final class ConexoesRoute extends GetItModule {
         criar: inject<CriarConexaoUsecase>(),
         pareamento: inject<EstadoPareamentoUsecase>(),
         respostaBot: inject<DefinirRespostaBotUsecase>(),
+        // P7 — só existem onde o módulo inteiro está registrado; o quadro
+        // embute o controller só para a faixa de aviso de conexão caída.
+        desconectar: inject<DesconectarConexaoUsecase>(),
+        definirDepartamento: inject<DefinirDepartamentoDaConexaoUsecase>(),
+        detalhe: inject<DetalheDaConexaoUsecase>(),
       ),
     );
   }

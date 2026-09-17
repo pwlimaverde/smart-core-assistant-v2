@@ -136,6 +136,19 @@ pub trait FluxoAtendimentoRepository: Send + Sync {
         ctx: &RequestContext,
     ) -> Result<Option<FluxoAtendimento>, DbError>;
 
+    /// P7 — o primeiro fluxo ativo DE UM DEPARTAMENTO.
+    ///
+    /// É o roteamento por conexão da v1: a conversa que chega num número entra
+    /// no fluxo do departamento daquele número. `None` quando o departamento não
+    /// tem fluxo ativo — e aí quem chama recai no fluxo padrão do tenant, que é
+    /// melhor do que deixar a conversa fora do quadro.
+    async fn buscar_primeiro_ativo_do_departamento(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        departamento_id: i32,
+    ) -> Result<Option<FluxoAtendimento>, DbError>;
+
     /// Lista todos os fluxos ativos do tenant (com o nome do setor/departamento),
     /// para o worker montar `fluxos_disponiveis` do Responder (N6.3).
     async fn listar_ativos_do_tenant(
@@ -444,6 +457,31 @@ impl FluxoAtendimentoRepository for PostgresFluxoAtendimentoRepository {
                LIMIT 1"#,
         )
         .bind(ctx.tenant_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+        Ok(row)
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(tenant_id = %ctx.tenant_id, departamento_id = departamento_id)
+    )]
+    async fn buscar_primeiro_ativo_do_departamento(
+        &self,
+        tx: &mut Transaction<'_, Postgres>,
+        ctx: &RequestContext,
+        departamento_id: i32,
+    ) -> Result<Option<FluxoAtendimento>, DbError> {
+        let row = sqlx::query_as::<_, FluxoAtendimento>(
+            r#"SELECT id, tenant_id, departamento_id, nome, descricao, ativo,
+                      data_criacao, data_atualizacao
+               FROM oraculo_fluxo_atendimento
+               WHERE tenant_id = $1 AND ativo = true AND departamento_id = $2
+               ORDER BY id ASC
+               LIMIT 1"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(departamento_id)
         .fetch_optional(&mut **tx)
         .await?;
         Ok(row)

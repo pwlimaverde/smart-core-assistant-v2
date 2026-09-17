@@ -763,6 +763,64 @@ class AdminServiceClient extends $grpc.Client {
         options: options);
   }
 
+  /// P7 — encerra a SESSÃO sem apagar a conexão: o histórico e o cadastro ficam,
+  /// e o mesmo registro volta com um QR novo. Remover era a única saída, e ela
+  /// custava o cadastro inteiro para trocar de aparelho.
+  $grpc.ResponseFuture<$0.SimpleOkResponse> desconectarMyWhatsappInstance(
+    $0.MyWhatsappInstanceIdRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$desconectarMyWhatsappInstance, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> definirDepartamentoDaConexao(
+    $0.DefinirDepartamentoDaConexaoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$definirDepartamentoDaConexao, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.DetalheDaConexaoResponse> detalheDaConexao(
+    $0.DetalheDaConexaoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$detalheDaConexao, request, options: options);
+  }
+
+  /// P7 — os números que o sistema ignora (a "whitelist" da v1).
+  $grpc.ResponseFuture<$0.ListMyNumerosIgnoradosResponse>
+      listMyNumerosIgnorados(
+    $0.ListMyNumerosIgnoradosRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyNumerosIgnorados, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.MyNumeroIgnoradoResponse> criarNumeroIgnorado(
+    $0.CriarNumeroIgnoradoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$criarNumeroIgnorado, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> atualizarNumeroIgnorado(
+    $0.AtualizarNumeroIgnoradoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$atualizarNumeroIgnorado, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> removerNumeroIgnorado(
+    $0.NumeroIgnoradoIdRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$removerNumeroIgnorado, request, options: options);
+  }
+
   /// Departamentos e atendentes — a estrutura para onde a fila manda conversa.
   $grpc.ResponseFuture<$0.ListMyDepartamentosResponse> listMyDepartamentos(
     $0.ListMyDepartamentosRequest request, {
@@ -1480,6 +1538,41 @@ class AdminServiceClient extends $grpc.Client {
       $grpc.ClientMethod<$0.MyWhatsappInstanceIdRequest, $0.SimpleOkResponse>(
           '/smartcore.contracts.queries.AdminService/DeleteMyWhatsappInstance',
           ($0.MyWhatsappInstanceIdRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$desconectarMyWhatsappInstance = $grpc.ClientMethod<
+          $0.MyWhatsappInstanceIdRequest, $0.SimpleOkResponse>(
+      '/smartcore.contracts.queries.AdminService/DesconectarMyWhatsappInstance',
+      ($0.MyWhatsappInstanceIdRequest value) => value.writeToBuffer(),
+      $0.SimpleOkResponse.fromBuffer);
+  static final _$definirDepartamentoDaConexao = $grpc.ClientMethod<
+          $0.DefinirDepartamentoDaConexaoRequest, $0.SimpleOkResponse>(
+      '/smartcore.contracts.queries.AdminService/DefinirDepartamentoDaConexao',
+      ($0.DefinirDepartamentoDaConexaoRequest value) => value.writeToBuffer(),
+      $0.SimpleOkResponse.fromBuffer);
+  static final _$detalheDaConexao = $grpc.ClientMethod<
+          $0.DetalheDaConexaoRequest, $0.DetalheDaConexaoResponse>(
+      '/smartcore.contracts.queries.AdminService/DetalheDaConexao',
+      ($0.DetalheDaConexaoRequest value) => value.writeToBuffer(),
+      $0.DetalheDaConexaoResponse.fromBuffer);
+  static final _$listMyNumerosIgnorados = $grpc.ClientMethod<
+          $0.ListMyNumerosIgnoradosRequest, $0.ListMyNumerosIgnoradosResponse>(
+      '/smartcore.contracts.queries.AdminService/ListMyNumerosIgnorados',
+      ($0.ListMyNumerosIgnoradosRequest value) => value.writeToBuffer(),
+      $0.ListMyNumerosIgnoradosResponse.fromBuffer);
+  static final _$criarNumeroIgnorado = $grpc.ClientMethod<
+          $0.CriarNumeroIgnoradoRequest, $0.MyNumeroIgnoradoResponse>(
+      '/smartcore.contracts.queries.AdminService/CriarNumeroIgnorado',
+      ($0.CriarNumeroIgnoradoRequest value) => value.writeToBuffer(),
+      $0.MyNumeroIgnoradoResponse.fromBuffer);
+  static final _$atualizarNumeroIgnorado = $grpc.ClientMethod<
+          $0.AtualizarNumeroIgnoradoRequest, $0.SimpleOkResponse>(
+      '/smartcore.contracts.queries.AdminService/AtualizarNumeroIgnorado',
+      ($0.AtualizarNumeroIgnoradoRequest value) => value.writeToBuffer(),
+      $0.SimpleOkResponse.fromBuffer);
+  static final _$removerNumeroIgnorado =
+      $grpc.ClientMethod<$0.NumeroIgnoradoIdRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/RemoverNumeroIgnorado',
+          ($0.NumeroIgnoradoIdRequest value) => value.writeToBuffer(),
           $0.SimpleOkResponse.fromBuffer);
   static final _$listMyDepartamentos = $grpc.ClientMethod<
           $0.ListMyDepartamentosRequest, $0.ListMyDepartamentosResponse>(
@@ -2481,6 +2574,69 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.MyWhatsappInstanceIdRequest.fromBuffer(value),
         ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.MyWhatsappInstanceIdRequest,
+            $0.SimpleOkResponse>(
+        'DesconectarMyWhatsappInstance',
+        desconectarMyWhatsappInstance_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.MyWhatsappInstanceIdRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.DefinirDepartamentoDaConexaoRequest,
+            $0.SimpleOkResponse>(
+        'DefinirDepartamentoDaConexao',
+        definirDepartamentoDaConexao_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.DefinirDepartamentoDaConexaoRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.DetalheDaConexaoRequest,
+            $0.DetalheDaConexaoResponse>(
+        'DetalheDaConexao',
+        detalheDaConexao_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.DetalheDaConexaoRequest.fromBuffer(value),
+        ($0.DetalheDaConexaoResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListMyNumerosIgnoradosRequest,
+            $0.ListMyNumerosIgnoradosResponse>(
+        'ListMyNumerosIgnorados',
+        listMyNumerosIgnorados_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListMyNumerosIgnoradosRequest.fromBuffer(value),
+        ($0.ListMyNumerosIgnoradosResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.CriarNumeroIgnoradoRequest,
+            $0.MyNumeroIgnoradoResponse>(
+        'CriarNumeroIgnorado',
+        criarNumeroIgnorado_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.CriarNumeroIgnoradoRequest.fromBuffer(value),
+        ($0.MyNumeroIgnoradoResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.AtualizarNumeroIgnoradoRequest,
+            $0.SimpleOkResponse>(
+        'AtualizarNumeroIgnorado',
+        atualizarNumeroIgnorado_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.AtualizarNumeroIgnoradoRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.NumeroIgnoradoIdRequest, $0.SimpleOkResponse>(
+            'RemoverNumeroIgnorado',
+            removerNumeroIgnorado_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.NumeroIgnoradoIdRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.ListMyDepartamentosRequest,
             $0.ListMyDepartamentosResponse>(
         'ListMyDepartamentos',
@@ -3600,6 +3756,69 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.SimpleOkResponse> deleteMyWhatsappInstance(
       $grpc.ServiceCall call, $0.MyWhatsappInstanceIdRequest request);
+
+  $async.Future<$0.SimpleOkResponse> desconectarMyWhatsappInstance_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MyWhatsappInstanceIdRequest> $request) async {
+    return desconectarMyWhatsappInstance($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> desconectarMyWhatsappInstance(
+      $grpc.ServiceCall call, $0.MyWhatsappInstanceIdRequest request);
+
+  $async.Future<$0.SimpleOkResponse> definirDepartamentoDaConexao_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.DefinirDepartamentoDaConexaoRequest> $request) async {
+    return definirDepartamentoDaConexao($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> definirDepartamentoDaConexao(
+      $grpc.ServiceCall call, $0.DefinirDepartamentoDaConexaoRequest request);
+
+  $async.Future<$0.DetalheDaConexaoResponse> detalheDaConexao_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.DetalheDaConexaoRequest> $request) async {
+    return detalheDaConexao($call, await $request);
+  }
+
+  $async.Future<$0.DetalheDaConexaoResponse> detalheDaConexao(
+      $grpc.ServiceCall call, $0.DetalheDaConexaoRequest request);
+
+  $async.Future<$0.ListMyNumerosIgnoradosResponse> listMyNumerosIgnorados_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListMyNumerosIgnoradosRequest> $request) async {
+    return listMyNumerosIgnorados($call, await $request);
+  }
+
+  $async.Future<$0.ListMyNumerosIgnoradosResponse> listMyNumerosIgnorados(
+      $grpc.ServiceCall call, $0.ListMyNumerosIgnoradosRequest request);
+
+  $async.Future<$0.MyNumeroIgnoradoResponse> criarNumeroIgnorado_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.CriarNumeroIgnoradoRequest> $request) async {
+    return criarNumeroIgnorado($call, await $request);
+  }
+
+  $async.Future<$0.MyNumeroIgnoradoResponse> criarNumeroIgnorado(
+      $grpc.ServiceCall call, $0.CriarNumeroIgnoradoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> atualizarNumeroIgnorado_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.AtualizarNumeroIgnoradoRequest> $request) async {
+    return atualizarNumeroIgnorado($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> atualizarNumeroIgnorado(
+      $grpc.ServiceCall call, $0.AtualizarNumeroIgnoradoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> removerNumeroIgnorado_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.NumeroIgnoradoIdRequest> $request) async {
+    return removerNumeroIgnorado($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> removerNumeroIgnorado(
+      $grpc.ServiceCall call, $0.NumeroIgnoradoIdRequest request);
 
   $async.Future<$0.ListMyDepartamentosResponse> listMyDepartamentos_Pre(
       $grpc.ServiceCall $call,

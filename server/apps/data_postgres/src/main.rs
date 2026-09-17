@@ -582,6 +582,13 @@ async fn main() -> anyhow::Result<()> {
     let state_for_atualizar_instancia_provider_id = state_clone.clone();
     let state_for_verify_whatsapp_instance_token = state_clone.clone();
     let state_for_is_phone_whitelisted = state_clone.clone();
+    let state_for_listar_numeros_ignorados = state_clone.clone();
+    let state_for_criar_numero_ignorado = state_clone.clone();
+    let state_for_atualizar_numero_ignorado = state_clone.clone();
+    let state_for_remover_numero_ignorado = state_clone.clone();
+    let state_for_definir_departamento_conexao = state_clone.clone();
+    let state_for_detalhe_conexao = state_clone.clone();
+    let state_for_departamentos_das_conexoes = state_clone.clone();
     let state_for_resolve_atendimento = state_clone.clone();
     let state_for_iniciar_manual = state_clone.clone();
     let state_for_toggle_bot = state_clone.clone();
@@ -1597,6 +1604,58 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(
                 async move { handler_list_whatsapp_instances(state.whatsapp.as_ref(), env).await },
             )
+        })
+        .route("ListNumerosIgnorados", move |env| {
+            let state = state_for_listar_numeros_ignorados.clone();
+            Box::pin(
+                async move { handler_listar_numeros_ignorados(state.whatsapp.as_ref(), env).await },
+            )
+        })
+        .route("CriarNumeroIgnorado", move |env| {
+            let state = state_for_criar_numero_ignorado.clone();
+            Box::pin(async move {
+                handler_criar_numero_ignorado(state.whatsapp.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
+        })
+        .route("AtualizarNumeroIgnorado", move |env| {
+            let state = state_for_atualizar_numero_ignorado.clone();
+            Box::pin(async move {
+                handler_atualizar_numero_ignorado(
+                    state.whatsapp.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("RemoverNumeroIgnorado", move |env| {
+            let state = state_for_remover_numero_ignorado.clone();
+            Box::pin(async move {
+                handler_remover_numero_ignorado(state.whatsapp.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
+        })
+        .route("DefinirDepartamentoDaConexao", move |env| {
+            let state = state_for_definir_departamento_conexao.clone();
+            Box::pin(async move {
+                handler_definir_departamento_conexao(
+                    state.whatsapp.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("DetalheDaConexao", move |env| {
+            let state = state_for_detalhe_conexao.clone();
+            Box::pin(async move { handler_detalhe_da_conexao(state.whatsapp.as_ref(), env).await })
+        })
+        .route("ListDepartamentosDasConexoes", move |env| {
+            let state = state_for_departamentos_das_conexoes.clone();
+            Box::pin(async move {
+                handler_departamentos_das_conexoes(state.whatsapp.as_ref(), env).await
+            })
         })
         .route("AdminListAllConnectedInstances", move |env| {
             let state = state_for_admin_list_all_connected_instances.clone();
@@ -3707,9 +3766,18 @@ async fn handler_aplicar_politica_ticket_kanban(
         }
     };
 
+    // P7 — a conexão por onde a conversa entrou decide o departamento, e com
+    // ele o fluxo. Ausente (0) preserva o comportamento anterior: primeiro fluxo
+    // ativo do tenant. Um worker defasado não pode deixar a conversa fora do
+    // quadro só por não mandar o campo novo.
+    let instance_id = payload_json
+        .get("instance_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+
     let ctx = contexto_do_envelope(&env);
     match store
-        .aplicar_politica_ticket_kanban(&ctx, atendimento_id)
+        .aplicar_politica_ticket_kanban(&ctx, atendimento_id, instance_id)
         .await
     {
         Ok(outcome) => ok_reply(
@@ -9952,6 +10020,308 @@ async fn handler_list_whatsapp_instances(
             &env,
             "ListWhatsappInstancesReply",
             serde_json::json!({ "instances": list }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P7 — a lista de números ignorados, inclusive os desligados.
+///
+/// A regra da "whitelist" (que ignora, não libera — ver o contrato) já valia na
+/// ingestão desde o começo. O que não existia era meio de ver ou mexer nela sem
+/// abrir o banco.
+async fn handler_listar_numeros_ignorados(
+    store: &dyn ports::WhatsappStore,
+    env: Envelope,
+) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_numeros_ignorados(&ctx).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListNumerosIgnoradosReply",
+            serde_json::json!({ "itens": itens }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P7 — acrescenta um número à lista.
+///
+/// Auditado: ignorar um número faz o sistema parar de atender alguém, e a
+/// pergunta "por que este cliente nunca é respondido?" precisa ter resposta.
+async fn handler_criar_numero_ignorado(
+    store: &dyn ports::WhatsappStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let nome = payload
+        .get("nome")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let telefone = payload
+        .get("telefone")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if telefone.is_empty() {
+        return erro(
+            error_core::AppError::Validation("telefone ausente".into()),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store.criar_numero_ignorado(&ctx, &nome, &telefone).await {
+        Ok(item) => {
+            audit
+                .publish(
+                    &env,
+                    "whatsapp.numero_ignorado.criado",
+                    format!("número '{}' passou a ser ignorado", item.phone_number),
+                    serde_json::json!({ "id": item.id, "nome": item.name }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "CriarNumeroIgnoradoReply",
+                serde_json::json!({ "item": item }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P7 — corrige o cadastro ou liga/desliga a regra.
+async fn handler_atualizar_numero_ignorado(
+    store: &dyn ports::WhatsappStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let id = match payload.get("id").and_then(|v| v.as_i64()) {
+        Some(i) => i as i32,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+    let nome = payload
+        .get("nome")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let telefone = payload
+        .get("telefone")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if telefone.is_empty() {
+        return erro(
+            error_core::AppError::Validation("telefone ausente".into()),
+            &env,
+        );
+    }
+    // Sem default: "não mandou" é erro de contrato, não "desligue a regra".
+    let ativo = match payload.get("ativo").and_then(|v| v.as_bool()) {
+        Some(v) => v,
+        None => {
+            return erro(
+                error_core::AppError::Validation("ativo ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .atualizar_numero_ignorado(&ctx, id, &nome, &telefone, ativo)
+        .await
+    {
+        Ok(Some(item)) => {
+            audit
+                .publish(
+                    &env,
+                    "whatsapp.numero_ignorado.alterado",
+                    format!(
+                        "número '{}' {}",
+                        item.phone_number,
+                        if item.active {
+                            "voltou a ser ignorado"
+                        } else {
+                            "voltou a ser atendido"
+                        }
+                    ),
+                    serde_json::json!({ "id": item.id, "ativo": item.active }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "AtualizarNumeroIgnoradoReply",
+                serde_json::json!({ "sucesso": true, "item": item }),
+            )
+        }
+        // Inexistente ou de outro tenant: a RLS já o escondeu, e responder
+        // "sucesso" faria a tela sumir com uma linha que continua lá.
+        Ok(None) => erro(
+            error_core::AppError::Database("número ignorado não encontrado".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P7 — apaga a entrada de vez.
+async fn handler_remover_numero_ignorado(
+    store: &dyn ports::WhatsappStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let id = match payload.get("id").and_then(|v| v.as_i64()) {
+        Some(i) => i as i32,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.remover_numero_ignorado(&ctx, id).await {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "whatsapp.numero_ignorado.removido",
+                    format!("entrada {id} removida da lista de números ignorados"),
+                    serde_json::json!({ "id": id }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "RemoverNumeroIgnoradoReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Database("número ignorado não encontrado".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P7 — liga a conexão a um departamento; `departamento_id = 0` desfaz.
+async fn handler_definir_departamento_conexao(
+    store: &dyn ports::WhatsappStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let id = match payload.get("id").and_then(|v| v.as_i64()) {
+        Some(i) => i as i32,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+    // 0 é "sem departamento", não "departamento zero": é assim que a tela
+    // desfaz o vínculo sem precisar de um campo a mais.
+    let departamento_id = payload
+        .get("departamento_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let departamento_id = (departamento_id > 0).then_some(departamento_id);
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .definir_departamento_da_conexao(&ctx, id, departamento_id)
+        .await
+    {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "whatsapp_instance.departamento_definido",
+                    match departamento_id {
+                        Some(d) => format!("conexão {id} passou a rotear para o departamento {d}"),
+                        None => format!("conexão {id} deixou de rotear por departamento"),
+                    },
+                    serde_json::json!({ "instance_id": id, "departamento_id": departamento_id }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "DefinirDepartamentoDaConexaoReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Database("conexão não encontrada".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P7 — o departamento de cada conexão do tenant.
+///
+/// Rota separada da listagem porque `ListWhatsappInstances` usa `query_as!`
+/// (macro), cujo cache `.sqlx` não conhece a coluna nova. Juntar as duas
+/// exigiria regravar o cache contra um banco vivo, e o build offline da CI
+/// quebraria antes de qualquer teste rodar.
+async fn handler_departamentos_das_conexoes(
+    store: &dyn ports::WhatsappStore,
+    env: Envelope,
+) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    match store.departamentos_das_conexoes(&ctx).await {
+        Ok(linhas) => {
+            let itens: Vec<serde_json::Value> = linhas
+                .into_iter()
+                .map(|(id, dep, nome)| {
+                    serde_json::json!({
+                        "id": id,
+                        "departamento_id": dep.unwrap_or(0),
+                        "departamento_nome": nome,
+                    })
+                })
+                .collect();
+            ok_reply(
+                &env,
+                "ListDepartamentosDasConexoesReply",
+                serde_json::json!({ "itens": itens }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P7 — o detalhe da conexão.
+async fn handler_detalhe_da_conexao(store: &dyn ports::WhatsappStore, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let id = match payload.get("id").and_then(|v| v.as_i64()) {
+        Some(i) => i as i32,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.detalhe_da_conexao(&ctx, id).await {
+        Ok(Some(d)) => ok_reply(&env, "DetalheDaConexaoReply", serde_json::json!(d)),
+        Ok(None) => erro(
+            error_core::AppError::Database("conexão não encontrada".into()),
+            &env,
         ),
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }

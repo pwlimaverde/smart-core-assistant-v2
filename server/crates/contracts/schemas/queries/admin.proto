@@ -1357,6 +1357,18 @@ service AdminService {
   rpc MarcarAtendimentoLido(MarcarAtendimentoLidoRequest) returns (MarcarAtendimentoLidoResponse);
   rpc ReconnectMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
   rpc DeleteMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
+  // P7 — encerra a SESSÃO sem apagar a conexão: o histórico e o cadastro ficam,
+  // e o mesmo registro volta com um QR novo. Remover era a única saída, e ela
+  // custava o cadastro inteiro para trocar de aparelho.
+  rpc DesconectarMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
+  rpc DefinirDepartamentoDaConexao(DefinirDepartamentoDaConexaoRequest) returns (SimpleOkResponse);
+  rpc DetalheDaConexao(DetalheDaConexaoRequest) returns (DetalheDaConexaoResponse);
+
+  // P7 — os números que o sistema ignora (a "whitelist" da v1).
+  rpc ListMyNumerosIgnorados(ListMyNumerosIgnoradosRequest) returns (ListMyNumerosIgnoradosResponse);
+  rpc CriarNumeroIgnorado(CriarNumeroIgnoradoRequest) returns (MyNumeroIgnoradoResponse);
+  rpc AtualizarNumeroIgnorado(AtualizarNumeroIgnoradoRequest) returns (SimpleOkResponse);
+  rpc RemoverNumeroIgnorado(NumeroIgnoradoIdRequest) returns (SimpleOkResponse);
 
   // Departamentos e atendentes — a estrutura para onde a fila manda conversa.
   rpc ListMyDepartamentos(ListMyDepartamentosRequest) returns (ListMyDepartamentosResponse);
@@ -1830,6 +1842,11 @@ message MyWhatsappInstance {
   // Aditivo: cliente antigo o le como `false` por omissao, mas nunca o mostra,
   // entao segue no comportamento de hoje.
   bool resposta_bot = 8;
+  // P7 — a v1 roteava por número: a conversa que chega nesta conexão entra no
+  // fluxo do departamento dela. 0 = sem departamento, e o roteamento cai no
+  // primeiro fluxo ativo do tenant, como era até aqui.
+  int32 departamento_id = 9;
+  string departamento_nome = 10;
 }
 
 // D3 — liga/desliga a resposta automatica da IA para a conexao inteira.
@@ -1875,6 +1892,78 @@ message ListMyWhatsappInstancesResponse {
 }
 
 message MyWhatsappInstanceIdRequest {
+  int32 id = 1;
+}
+
+// P7 — roteamento por conexão. `departamento_id = 0` desfaz o vínculo.
+message DefinirDepartamentoDaConexaoRequest {
+  int32 id = 1;
+  int32 departamento_id = 2;
+}
+
+// P7 — o detalhe da conexão: o que não cabe na lista e quem investiga precisa.
+message DetalheDaConexaoRequest {
+  int32 id = 1;
+}
+
+message DetalheDaConexaoResponse {
+  MyWhatsappInstance conexao = 1;
+  // Quando o estado foi conferido com o provedor pela última vez. 0 = nunca.
+  int64 ultima_checagem = 2;
+  // O identificador da instância NO PROVEDOR — o que aparece no log da
+  // evolution-go e o que se manda para o suporte.
+  string instancia_no_provedor = 3;
+  // Do TENANT, não desta conexão: o atendimento não guarda por qual conexão
+  // entrou. Vale como "desligar agora deixa gente no meio do caminho?", que é
+  // a pergunta de quem está prestes a encerrar a sessão — e, com uma conexão
+  // só, é exatamente o número dela.
+  int32 atendimentos_abertos = 4;
+  int32 mensagens_24h = 5;
+}
+
+// --- P7: numeros ignorados ---
+//
+// A v1 chamava de "whitelist", e o nome mentia: a lista não libera ninguém, ela
+// IGNORA. Número que está nela não abre atendimento, não aciona a IA e não
+// recebe pesquisa de satisfação. Serve para o número da própria equipe, o do
+// contador, o do fornecedor que só manda boleto — conversas que não são
+// atendimento e que sujavam o quadro.
+//
+// A regra já era aplicada na ingestão desde o começo; o que não existia era
+// meio de ver ou mexer na lista sem SQL.
+message MyNumeroIgnorado {
+  int32 id = 1;
+  string nome = 2;
+  string telefone = 3;
+  bool ativo = 4;
+  int64 criado_em = 5;
+}
+
+// Traz também os inativos: desligar um número é a forma de voltar a atender
+// alguém sem perder o registro de que ele já esteve fora.
+message ListMyNumerosIgnoradosRequest {}
+
+message ListMyNumerosIgnoradosResponse {
+  repeated MyNumeroIgnorado itens = 1;
+}
+
+message CriarNumeroIgnoradoRequest {
+  string nome = 1;
+  string telefone = 2;
+}
+
+message MyNumeroIgnoradoResponse {
+  MyNumeroIgnorado item = 1;
+}
+
+message AtualizarNumeroIgnoradoRequest {
+  int32 id = 1;
+  string nome = 2;
+  string telefone = 3;
+  bool ativo = 4;
+}
+
+message NumeroIgnoradoIdRequest {
   int32 id = 1;
 }
 

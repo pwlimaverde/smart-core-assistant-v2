@@ -1108,6 +1108,7 @@ impl AtendimentoStore for PgAtendimentoStore {
         &self,
         ctx: &RequestContext,
         atendimento_id: i32,
+        instance_id: i32,
     ) -> Result<TicketKanbanOutcome, DbError> {
         let repo_atendimento = PostgresAtendimentoRepository;
         let repo_fluxo = PostgresFluxoAtendimentoRepository;
@@ -1143,10 +1144,39 @@ impl AtendimentoStore for PgAtendimentoStore {
                 return Ok((outcome, tx));
             }
 
-            // Resolve o fluxo: o do atendimento (se houver) ou o primeiro ativo do tenant.
+            // Resolve o fluxo: o do atendimento (se houver), senão o do
+            // DEPARTAMENTO DA CONEXÃO (P7 — o roteamento por número da v1) e,
+            // em último caso, o primeiro fluxo ativo do tenant.
+            //
+            // A ordem importa: a conexão só decide quando o atendimento ainda
+            // não tem fluxo. Um atendimento já roteado não é rerroteado porque
+            // a mensagem seguinte chegou por outro número.
             let fluxo = match atendimento.fluxo_atendimento_id {
                 Some(fid) => repo_fluxo.buscar_por_id(&mut tx, &ctx, fid).await?,
-                None => repo_fluxo.buscar_primeiro_ativo(&mut tx, &ctx).await?,
+                None => {
+                    let do_departamento = if instance_id > 0 {
+                        match infrastructure_postgres::integracoes::conexoes::departamento_da_conexao(
+                            &mut tx,
+                            &ctx,
+                            instance_id,
+                        )
+                        .await?
+                        {
+                            Some(dep) => {
+                                repo_fluxo
+                                    .buscar_primeiro_ativo_do_departamento(&mut tx, &ctx, dep)
+                                    .await?
+                            }
+                            None => None,
+                        }
+                    } else {
+                        None
+                    };
+                    match do_departamento {
+                        Some(f) => Some(f),
+                        None => repo_fluxo.buscar_primeiro_ativo(&mut tx, &ctx).await?,
+                    }
+                }
             };
             let fluxo = match fluxo {
                 Some(f) => f,

@@ -17,6 +17,12 @@ final class ConexoesController extends BaseController<List<Conexao>> {
   final EstadoPareamentoUsecase _pareamento;
   final DefinirRespostaBotUsecase _respostaBot;
 
+  /// P7 — opcionais porque o quadro embute este controller só para a faixa de
+  /// aviso de conexão fora do ar, e aquele app não registra o módulo inteiro.
+  final DesconectarConexaoUsecase? _desconectar;
+  final DefinirDepartamentoDaConexaoUsecase? _definirDepartamento;
+  final DetalheDaConexaoUsecase? _detalhe;
+
   ConexoesController({
     required ListarConexoesUsecase listar,
     required ReconectarConexaoUsecase reconectar,
@@ -24,7 +30,13 @@ final class ConexoesController extends BaseController<List<Conexao>> {
     required CriarConexaoUsecase criar,
     required EstadoPareamentoUsecase pareamento,
     required DefinirRespostaBotUsecase respostaBot,
-  }) : _listar = listar,
+    DesconectarConexaoUsecase? desconectar,
+    DefinirDepartamentoDaConexaoUsecase? definirDepartamento,
+    DetalheDaConexaoUsecase? detalhe,
+  }) : _desconectar = desconectar,
+       _definirDepartamento = definirDepartamento,
+       _detalhe = detalhe,
+       _listar = listar,
        _reconectar = reconectar,
        _remover = remover,
        _criar = criar,
@@ -97,6 +109,61 @@ final class ConexoesController extends BaseController<List<Conexao>> {
       }
     }
     return res;
+  }
+
+  /// P7 — encerra a SESSÃO sem apagar a conexão.
+  ///
+  /// Recarrega no sucesso, como as outras mutações: o estado muda para
+  /// desconectada e a tela precisa oferecer o QR em seguida.
+  Future<ReturnSuccessOrError<Unit, ConexoesError>> desconectar(int id) async {
+    final usecase = _desconectar;
+    if (usecase == null) return Success(unit);
+    final res = await usecase(ConexaoIdParameters(id: id));
+    if (res is Success) await carregar();
+    return res;
+  }
+
+  /// P7 — para qual departamento este número roteia. 0 desfaz o vínculo.
+  ///
+  /// Não chama [carregar]: aquele método consulta o provedor conexão por
+  /// conexão, e gastar a varredura para refletir um rótulo deixaria a troca
+  /// lenta sem necessidade. Troca só o item na lista já carregada.
+  Future<ReturnSuccessOrError<Unit, ConexoesError>> definirDepartamento({
+    required int id,
+    required int departamentoId,
+    required String departamentoNome,
+  }) async {
+    final usecase = _definirDepartamento;
+    if (usecase == null) return Success(unit);
+    final res = await usecase(
+      DepartamentoDaConexaoParameters(id: id, departamentoId: departamentoId),
+    );
+    if (res is Success) {
+      if (state case SuccessState<List<Conexao>>(:final data)) {
+        emit(
+          SuccessState<List<Conexao>>([
+            for (final c in data)
+              if (c.id == id)
+                c.comDepartamento(departamentoId, departamentoNome)
+              else
+                c,
+          ]),
+        );
+      }
+    }
+    return res;
+  }
+
+  /// P7 — o detalhe da conexão. NÃO recarrega a lista: quem chama está abrindo
+  /// uma caixa sobre ela.
+  Future<ReturnSuccessOrError<DetalheConexao, ConexoesError>> detalhe(
+    int id,
+  ) async {
+    final usecase = _detalhe;
+    if (usecase == null) {
+      return const Failure(ConexoesInesperado());
+    }
+    return usecase(ConexaoIdParameters(id: id));
   }
 
   Future<ReturnSuccessOrError<ConexaoCriada, ConexoesError>> criar(

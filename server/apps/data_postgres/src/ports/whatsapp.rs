@@ -2,7 +2,9 @@
 //! O handler depende SOMENTE desta trait; a transação vive no adapter (DIP).
 
 use async_trait::async_trait;
+use infrastructure_postgres::integracoes::conexoes::DetalheDaConexao;
 use infrastructure_postgres::integracoes::whatsapp::WhatsappInstance;
+use infrastructure_postgres::integracoes::whitelist::WhiteList;
 use infrastructure_postgres::{DbError, RequestContext};
 
 /// Operações de persistência do domínio WhatsApp expostas aos handlers RPC.
@@ -80,4 +82,53 @@ pub trait WhatsappStore: Send + Sync {
         ctx: &RequestContext,
         phone_number: &str,
     ) -> Result<bool, DbError>;
+
+    /// P7 — os números ignorados do tenant, inclusive os desligados.
+    async fn listar_numeros_ignorados(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<WhiteList>, DbError>;
+
+    /// P7 — acrescenta um número à lista.
+    async fn criar_numero_ignorado(
+        &self,
+        ctx: &RequestContext,
+        nome: &str,
+        telefone: &str,
+    ) -> Result<WhiteList, DbError>;
+
+    /// P7 — corrige ou liga/desliga um número da lista.
+    async fn atualizar_numero_ignorado(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        nome: &str,
+        telefone: &str,
+        ativo: bool,
+    ) -> Result<Option<WhiteList>, DbError>;
+
+    /// P7 — apaga a entrada.
+    async fn remover_numero_ignorado(&self, ctx: &RequestContext, id: i32)
+        -> Result<bool, DbError>;
+
+    /// P7 — liga a conexão a um departamento (`None` desfaz o vínculo).
+    async fn definir_departamento_da_conexao(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        departamento_id: Option<i32>,
+    ) -> Result<bool, DbError>;
+
+    /// P7 — o detalhe da conexão, com o departamento e os contadores.
+    async fn detalhe_da_conexao(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<Option<DetalheDaConexao>, DbError>;
+
+    /// P7 — o departamento de cada conexão, para a lista não precisar de N+1.
+    async fn departamentos_das_conexoes(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<(i32, Option<i32>, String)>, DbError>;
 }

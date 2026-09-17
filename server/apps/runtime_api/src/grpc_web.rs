@@ -31,6 +31,7 @@ use contracts::grpc::queries::{
     AtendimentoResumo as ProtoAtendimentoResumo,
     AtribuirAtendimentoRequest,
     AtribuirAtendimentoResponse,
+    AtualizarNumeroIgnoradoRequest,
     AuditLogEntry as ProtoAuditLogEntry,
     AuthResponse,
     ContatoDoCliente,
@@ -59,9 +60,11 @@ use contracts::grpc::queries::{
     // Vouchers de ativação
     CreateVoucherRequest,
     CreateVoucherResponse,
+    CriarNumeroIgnoradoRequest,
     DadosMyCliente,
     DefinirBotDaConversaRequest,
     DefinirBotDaConversaResponse,
+    DefinirDepartamentoDaConexaoRequest,
     DefinirMyClienteAtivoRequest,
     DefinirMyContatoAtivoRequest,
     DefinirPrioridadeRequest,
@@ -72,6 +75,8 @@ use contracts::grpc::queries::{
     DeleteCoreSettingResponse,
     DesativarEtiquetaRequest,
     DetalheAtendimentoResponse,
+    DetalheDaConexaoRequest,
+    DetalheDaConexaoResponse,
     EnviarMidiaAtendimentoRequest,
     EnviarMidiaAtendimentoResponse,
     EnviarPresencaRequest,
@@ -138,6 +143,8 @@ use contracts::grpc::queries::{
     ListMyFluxosResponse,
     ListMyIntentsRequest,
     ListMyIntentsResponse,
+    ListMyNumerosIgnoradosRequest,
+    ListMyNumerosIgnoradosResponse,
     ListMyTreinamentosRequest,
     ListMyTreinamentosResponse,
     ListMyWhatsappInstancesRequest,
@@ -199,12 +206,15 @@ use contracts::grpc::queries::{
     MyIntentDados,
     MyIntentIdRequest,
     MyIntentResponse,
+    MyNumeroIgnorado,
+    MyNumeroIgnoradoResponse,
     MyTreinamento,
     MyTreinamentoResponse,
     MyWhatsappInstance,
     MyWhatsappInstanceIdRequest,
     Nota as ProtoNota,
     NotaResponse,
+    NumeroIgnoradoIdRequest,
     OpcaoCampo,
     PaymentRecord as ProtoPaymentRecord,
     Plan as ProtoPlan,
@@ -4989,11 +4999,43 @@ impl AdminService for AdminFacade {
             )
             .await?;
 
-        let instancias = corpo
+        let mut instancias: Vec<MyWhatsappInstance> = corpo
             .get("instances")
             .and_then(|v| v.as_array())
             .map(|arr| arr.iter().map(instancia_do_json).collect())
             .unwrap_or_default();
+
+        // P7 — o departamento de cada conexão vem numa segunda chamada porque a
+        // listagem usa `query_as!` (macro, cache `.sqlx`) e a coluna é nova.
+        // Best-effort: falhar aqui deixaria a tela sem a lista inteira por causa
+        // de um rótulo. Sem departamento, a conexão aparece como antes.
+        if let Ok(deps) = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "ListDepartamentosDasConexoes",
+                serde_json::json!({}),
+            )
+            .await
+        {
+            if let Some(arr) = deps.get("itens").and_then(|v| v.as_array()) {
+                for item in arr {
+                    let id = item.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                    let Some(alvo) = instancias.iter_mut().find(|i| i.id == id) else {
+                        continue;
+                    };
+                    alvo.departamento_id = item
+                        .get("departamento_id")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0) as i32;
+                    alvo.departamento_nome = item
+                        .get("departamento_nome")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                }
+            }
+        }
 
         Ok(Response::new(ListMyWhatsappInstancesResponse {
             instancias,
@@ -5179,6 +5221,252 @@ impl AdminService for AdminFacade {
             &req,
             &self.whatsapp,
             "ReconnectWhatsappInstance",
+            serde_json::json!({ "id": id }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    /// P7 — encerra a sessão sem apagar a conexão.
+    ///
+    /// Remover era a única saída para trocar de aparelho, e ela custava o
+    /// cadastro inteiro: nome da instância, vínculo de departamento, tudo. Aqui
+    /// o registro fica e volta com um QR novo.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "DesconectarMyWhatsappInstance",
+            traceparent
+        )
+    )]
+    async fn desconectar_my_whatsapp_instance(
+        &self,
+        req: Request<MyWhatsappInstanceIdRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let id = req.get_ref().id;
+        self.encaminhar_tenant(
+            &req,
+            &self.whatsapp,
+            "DisconnectWhatsappInstance",
+            serde_json::json!({ "id": id }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    /// P7 — roteamento por conexão: a conversa que chega neste número entra no
+    /// fluxo do departamento dele. `departamento_id = 0` desfaz o vínculo.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "DefinirDepartamentoDaConexao",
+            traceparent
+        )
+    )]
+    async fn definir_departamento_da_conexao(
+        &self,
+        req: Request<DefinirDepartamentoDaConexaoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = *req.get_ref();
+        if inner.id <= 0 {
+            return Err(Status::invalid_argument("conexão inválida"));
+        }
+        self.encaminhar_operacional(
+            &req,
+            "DefinirDepartamentoDaConexao",
+            &["operacional:admin"],
+            serde_json::json!({
+                "id": inner.id,
+                "departamento_id": inner.departamento_id,
+            }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    /// P7 — o detalhe da conexão: estado, número pareado, departamento e o que
+    /// se perde ao desconectar agora.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DetalheDaConexao", traceparent)
+    )]
+    async fn detalhe_da_conexao(
+        &self,
+        req: Request<DetalheDaConexaoRequest>,
+    ) -> Result<Response<DetalheDaConexaoResponse>, Status> {
+        let id = req.get_ref().id;
+        if id <= 0 {
+            return Err(Status::invalid_argument("conexão inválida"));
+        }
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "DetalheDaConexao",
+                &["operacional:read"],
+                serde_json::json!({ "id": id }),
+            )
+            .await?;
+
+        let texto = |chave: &str| {
+            corpo
+                .get(chave)
+                .and_then(|x| x.as_str())
+                .unwrap_or_default()
+                .to_string()
+        };
+        let inteiro = |chave: &str| corpo.get(chave).and_then(|x| x.as_i64()).unwrap_or(0);
+
+        let conexao = MyWhatsappInstance {
+            id: inteiro("id") as i32,
+            name: texto("name"),
+            phone_number: texto("phone_number"),
+            connection_state: texto("connection_state"),
+            active: corpo
+                .get("active")
+                .and_then(|x| x.as_bool())
+                .unwrap_or(false),
+            provider: texto("provider"),
+            created_at: corpo
+                .get("created_at")
+                .and_then(|x| x.as_str())
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|d| d.timestamp_millis())
+                .unwrap_or(0),
+            resposta_bot: corpo
+                .get("resposta_bot")
+                .and_then(|x| x.as_bool())
+                .unwrap_or(true),
+            departamento_id: inteiro("departamento_id") as i32,
+            departamento_nome: texto("departamento_nome"),
+        };
+
+        Ok(Response::new(DetalheDaConexaoResponse {
+            conexao: Some(conexao),
+            ultima_checagem: corpo
+                .get("last_state_check")
+                .and_then(|x| x.as_str())
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|d| d.timestamp_millis())
+                .unwrap_or(0),
+            instancia_no_provedor: texto("instance_id"),
+            atendimentos_abertos: inteiro("atendimentos_abertos") as i32,
+            mensagens_24h: inteiro("mensagens_24h") as i32,
+        }))
+    }
+
+    /// P7 — os números que o sistema ignora (a "whitelist" da v1).
+    ///
+    /// A regra já era aplicada na ingestão; o que não existia era meio de ver ou
+    /// mexer na lista sem abrir o banco.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyNumerosIgnorados", traceparent)
+    )]
+    async fn list_my_numeros_ignorados(
+        &self,
+        req: Request<ListMyNumerosIgnoradosRequest>,
+    ) -> Result<Response<ListMyNumerosIgnoradosResponse>, Status> {
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "ListNumerosIgnorados",
+                &["operacional:read"],
+                serde_json::json!({}),
+            )
+            .await?;
+
+        let itens = corpo
+            .get("itens")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().map(numero_ignorado_do_json).collect())
+            .unwrap_or_default();
+
+        Ok(Response::new(ListMyNumerosIgnoradosResponse { itens }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "CriarNumeroIgnorado", traceparent)
+    )]
+    async fn criar_numero_ignorado(
+        &self,
+        req: Request<CriarNumeroIgnoradoRequest>,
+    ) -> Result<Response<MyNumeroIgnoradoResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let telefone = inner.telefone.trim().to_string();
+        if telefone.is_empty() {
+            return Err(Status::invalid_argument("informe o número"));
+        }
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "CriarNumeroIgnorado",
+                &["operacional:admin"],
+                serde_json::json!({
+                    "nome": inner.nome.trim(),
+                    "telefone": telefone,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(MyNumeroIgnoradoResponse {
+            item: corpo.get("item").map(numero_ignorado_do_json),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "AtualizarNumeroIgnorado", traceparent)
+    )]
+    async fn atualizar_numero_ignorado(
+        &self,
+        req: Request<AtualizarNumeroIgnoradoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = req.get_ref().clone();
+        if inner.id <= 0 {
+            return Err(Status::invalid_argument("registro inválido"));
+        }
+        let telefone = inner.telefone.trim().to_string();
+        if telefone.is_empty() {
+            return Err(Status::invalid_argument("informe o número"));
+        }
+        self.encaminhar_operacional(
+            &req,
+            "AtualizarNumeroIgnorado",
+            &["operacional:admin"],
+            serde_json::json!({
+                "id": inner.id,
+                "nome": inner.nome.trim(),
+                "telefone": telefone,
+                "ativo": inner.ativo,
+            }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "RemoverNumeroIgnorado", traceparent)
+    )]
+    async fn remover_numero_ignorado(
+        &self,
+        req: Request<NumeroIgnoradoIdRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let id = req.get_ref().id;
+        if id <= 0 {
+            return Err(Status::invalid_argument("registro inválido"));
+        }
+        self.encaminhar_operacional(
+            &req,
+            "RemoverNumeroIgnorado",
+            &["operacional:admin"],
             serde_json::json!({ "id": id }),
         )
         .await?;
@@ -9037,6 +9325,44 @@ fn instancia_do_json(v: &serde_json::Value) -> MyWhatsappInstance {
             .get("resposta_bot")
             .and_then(|x| x.as_bool())
             .unwrap_or(true),
+        // P7 — preenchidos depois, pela consulta do departamento: a listagem do
+        // banco não os traz. 0/"" = sem departamento, que é o padrão.
+        departamento_id: v
+            .get("departamento_id")
+            .and_then(|x| x.as_i64())
+            .unwrap_or(0) as i32,
+        departamento_nome: v
+            .get("departamento_nome")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string(),
+    }
+}
+
+/// P7 — a linha do banco (`whatsapp_whitelist`) no tipo do contrato.
+///
+/// Os nomes divergem de propósito: no banco a tabela ainda se chama
+/// `whitelist`, herança da v1; no contrato ela é o que faz — número ignorado.
+fn numero_ignorado_do_json(v: &serde_json::Value) -> MyNumeroIgnorado {
+    MyNumeroIgnorado {
+        id: v.get("id").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+        nome: v
+            .get("name")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        telefone: v
+            .get("phone_number")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        ativo: v.get("active").and_then(|x| x.as_bool()).unwrap_or(false),
+        criado_em: v
+            .get("created_at")
+            .and_then(|x| x.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.timestamp_millis())
+            .unwrap_or(0),
     }
 }
 
