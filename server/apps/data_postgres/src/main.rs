@@ -594,6 +594,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_toggle_bot = state_clone.clone();
     let state_for_toggle_bot_conversa = state_clone.clone();
     let state_for_marcar_lido = state_clone.clone();
+    let state_for_aplicar_reacao = state_clone.clone();
+    let state_for_atualizar_perfil_contato = state_clone.clone();
     let state_for_aplicar_politica = state_clone.clone();
     let state_for_move_atendimento_etapa = state_clone.clone();
     let state_for_send_outbound_message = state_clone.clone();
@@ -707,6 +709,16 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(
                 async move { handler_update_message_status(state.atendimento.as_ref(), env).await },
             )
+        })
+        .route("AplicarReacaoMensagem", move |env| {
+            let state = state_for_aplicar_reacao.clone();
+            Box::pin(async move { handler_aplicar_reacao(state.atendimento.as_ref(), env).await })
+        })
+        .route("AtualizarPerfilDoContato", move |env| {
+            let state = state_for_atualizar_perfil_contato.clone();
+            Box::pin(async move {
+                handler_atualizar_perfil_do_contato(state.atendimento.as_ref(), env).await
+            })
         })
         .route("AplicarPoliticaTicketKanban", move |env| {
             let state = state_for_aplicar_politica.clone();
@@ -3341,6 +3353,13 @@ async fn handler_persist_message(store: &dyn ports::AtendimentoStore, env: Envel
             .get("confianca")
             .and_then(|v| v.as_f64())
             .filter(|c| c.is_finite()),
+        // P8 — opções da enquete, itens da lista, rótulos dos botões, vCard.
+        // Objeto vazio não é gravado: sujar toda linha do thread com `{}` de
+        // chaves seria desperdício, e a coluna já tem esse default.
+        metadados: payload_json
+            .get("metadados")
+            .filter(|v| v.as_object().is_some_and(|o| !o.is_empty()))
+            .cloned(),
     };
 
     // O traceparent é persistido no outbox para manter o trace distribuído vivo
@@ -3744,6 +3763,97 @@ async fn handler_update_message_status(
             serde_json::json!({ "status": "success" }),
         ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// P8 — grava (ou apaga) a reação de alguém numa mensagem.
+///
+/// Alvo desconhecido responde `aplicou: false`, e não erro: reagir a uma
+/// conversa anterior à integração é comum, e transformar isso em falha faria o
+/// worker reprocessar o evento para sempre.
+async fn handler_aplicar_reacao(store: &dyn ports::AtendimentoStore, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let alvo = match payload
+        .get("message_id_whatsapp")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        Some(a) => a,
+        None => {
+            return erro(
+                error_core::AppError::Validation("message_id_whatsapp ausente".into()),
+                &env,
+            )
+        }
+    };
+    // Vazio é remoção, e por isso não há validação de "emoji obrigatório".
+    let emoji = payload
+        .get("emoji")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    let de = payload
+        .get("de")
+        .and_then(|v| v.as_str())
+        .unwrap_or("contato");
+
+    let ctx = contexto_do_envelope(&env);
+    match store.aplicar_reacao(&ctx, alvo, emoji, de).await {
+        Ok(aplicou) => ok_reply(
+            &env,
+            "AplicarReacaoMensagemReply",
+            serde_json::json!({ "aplicou": aplicou }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P8 — nome de perfil e foto do evento `CONTACTS`.
+async fn handler_atualizar_perfil_do_contato(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let telefone = match payload
+        .get("telefone")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        Some(t) => t,
+        None => {
+            return erro(
+                error_core::AppError::Validation("telefone ausente".into()),
+                &env,
+            )
+        }
+    };
+    let nome = payload
+        .get("nome_perfil")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    let foto = payload
+        .get("foto_url")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .atualizar_perfil_do_contato(&ctx, telefone, nome, foto)
+        .await
+    {
+        // `false` = ninguém com esse telefone no tenant. É o caso comum quando o
+        // provedor manda a agenda inteira do aparelho, e não é erro.
+        Ok(atualizou) => ok_reply(
+            &env,
+            "AtualizarPerfilDoContatoReply",
+            serde_json::json!({ "atualizou": atualizou }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }
 

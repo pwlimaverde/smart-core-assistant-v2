@@ -6342,6 +6342,8 @@ class MensagemThread extends $pb.GeneratedMessage {
     $core.int? mensagemCitadaId,
     $core.String? citadaRemetente,
     $core.String? citadaPreview,
+    $core.Iterable<ReacaoDaMensagem>? reacoes,
+    $core.String? metadadosJson,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -6359,6 +6361,8 @@ class MensagemThread extends $pb.GeneratedMessage {
     if (mensagemCitadaId != null) result.mensagemCitadaId = mensagemCitadaId;
     if (citadaRemetente != null) result.citadaRemetente = citadaRemetente;
     if (citadaPreview != null) result.citadaPreview = citadaPreview;
+    if (reacoes != null) result.reacoes.addAll(reacoes);
+    if (metadadosJson != null) result.metadadosJson = metadadosJson;
     return result;
   }
 
@@ -6392,6 +6396,9 @@ class MensagemThread extends $pb.GeneratedMessage {
     ..aI(13, _omitFieldNames ? '' : 'mensagemCitadaId')
     ..aOS(14, _omitFieldNames ? '' : 'citadaRemetente')
     ..aOS(15, _omitFieldNames ? '' : 'citadaPreview')
+    ..pPM<ReacaoDaMensagem>(16, _omitFieldNames ? '' : 'reacoes',
+        subBuilder: ReacaoDaMensagem.create)
+    ..aOS(17, _omitFieldNames ? '' : 'metadadosJson')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -6553,6 +6560,94 @@ class MensagemThread extends $pb.GeneratedMessage {
   $core.bool hasCitadaPreview() => $_has(14);
   @$pb.TagNumber(15)
   void clearCitadaPreview() => $_clearField(15);
+
+  /// P8 — reação (emoji) a esta mensagem. Não é bolha nova: é atributo da
+  /// mensagem reagida, como no WhatsApp Web. Vazio na imensa maioria delas.
+  @$pb.TagNumber(16)
+  $pb.PbList<ReacaoDaMensagem> get reacoes => $_getList(15);
+
+  /// P8 — o que não cabe em `conteudo`: alternativas da enquete, itens da lista,
+  /// rótulos dos botões, vCard do contato. JSON cru porque o formato varia com o
+  /// tipo, e um campo por tipo engessaria o contrato no que o WhatsApp oferece
+  /// hoje.
+  @$pb.TagNumber(17)
+  $core.String get metadadosJson => $_getSZ(16);
+  @$pb.TagNumber(17)
+  set metadadosJson($core.String value) => $_setString(16, value);
+  @$pb.TagNumber(17)
+  $core.bool hasMetadadosJson() => $_has(16);
+  @$pb.TagNumber(17)
+  void clearMetadadosJson() => $_clearField(17);
+}
+
+/// P8 — quem reagiu e com quê.
+class ReacaoDaMensagem extends $pb.GeneratedMessage {
+  factory ReacaoDaMensagem({
+    $core.String? emoji,
+    $core.String? de,
+  }) {
+    final result = create();
+    if (emoji != null) result.emoji = emoji;
+    if (de != null) result.de = de;
+    return result;
+  }
+
+  ReacaoDaMensagem._();
+
+  factory ReacaoDaMensagem.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ReacaoDaMensagem.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ReacaoDaMensagem',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'emoji')
+    ..aOS(2, _omitFieldNames ? '' : 'de')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ReacaoDaMensagem clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ReacaoDaMensagem copyWith(void Function(ReacaoDaMensagem) updates) =>
+      super.copyWith((message) => updates(message as ReacaoDaMensagem))
+          as ReacaoDaMensagem;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ReacaoDaMensagem create() => ReacaoDaMensagem._();
+  @$core.override
+  ReacaoDaMensagem createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ReacaoDaMensagem getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ReacaoDaMensagem>(create);
+  static ReacaoDaMensagem? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get emoji => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set emoji($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasEmoji() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearEmoji() => $_clearField(1);
+
+  /// Vocabulário do `remetente` da mensagem: "contato" ou "atendente". É o que
+  /// diz de que lado da bolha desenhar.
+  @$pb.TagNumber(2)
+  $core.String get de => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set de($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasDe() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearDe() => $_clearField(2);
 }
 
 class GetThreadRequest extends $pb.GeneratedMessage {

@@ -76,6 +76,12 @@ pub struct NovaMensagem<'a> {
     /// Fica na linha da **resposta**, não na da pergunta como fazia a v1: a v2
     /// responde a uma rajada agregada, e não existe "a mensagem respondida".
     pub confianca_resposta: Option<f64>,
+    /// P8 — o que não cabe em `conteudo`: opções da enquete, itens da lista,
+    /// rótulos dos botões, vCard do contato.
+    ///
+    /// A coluna existe desde a 0006 e a ingestão nunca escreveu nela: enquete e
+    /// lista chegavam ao chat só com o título, sem as alternativas.
+    pub metadados: Option<serde_json::Value>,
 }
 
 impl<'a> NovaMensagem<'a> {
@@ -90,6 +96,7 @@ impl<'a> NovaMensagem<'a> {
             mensagem_citada_id: None,
             ja_entregue: false,
             confianca_resposta: None,
+            metadados: None,
         }
     }
 }
@@ -268,8 +275,9 @@ impl MensagemRepository for PostgresMensagemRepository {
             r#"INSERT INTO oraculo_mensagem
                    (tenant_id, atendimento_id, tipo, conteudo, remetente,
                     message_id_whatsapp, mensagem_citada_id, gerado_por_ia, status_envio,
-                    confianca_resposta)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    confianca_resposta, metadados)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                       COALESCE($11, '{}'::jsonb))
                RETURNING id, tenant_id, atendimento_id, tipo, conteudo, remetente,
                          timestamp, message_id_whatsapp, metadados, respondida, lido,
                          resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
@@ -287,6 +295,7 @@ impl MensagemRepository for PostgresMensagemRepository {
         .bind(gerado_por_ia)
         .bind(status_envio)
         .bind(nova.confianca_resposta)
+        .bind(nova.metadados)
         .fetch_one(&mut **tx)
         .await
         .map_err(DbError::from_sqlx_unique)?;
@@ -936,4 +945,56 @@ pub async fn resolver_destino_do_atendimento(
     .fetch_optional(&mut **tx)
     .await?;
     Ok(row)
+}
+
+/// P8 — grava (ou apaga) a reação de alguém numa mensagem.
+///
+/// Reação não é bolha nova: é atributo da mensagem reagida, como no WhatsApp
+/// Web. Fica em `metadados.reacoes`, uma lista de `{emoji, de}`.
+///
+/// Uma pessoa tem **uma** reação por mensagem: reagir de novo troca a anterior,
+/// que é o comportamento do WhatsApp. `emoji` vazio é remoção — o provedor manda
+/// `text: ""` quando a pessoa desfaz, e guardar isso deixaria um rastro
+/// invisível na bolha para sempre.
+///
+/// `false` no retorno = mensagem alvo desconhecida. Acontece de verdade: reagir
+/// a uma conversa anterior à integração é comum, e não é erro.
+#[tracing::instrument(skip_all, fields(alvo = %message_id_whatsapp))]
+pub async fn aplicar_reacao(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    message_id_whatsapp: &str,
+    emoji: &str,
+    de: &str,
+) -> Result<bool, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+    // Tudo numa consulta só: ler, filtrar e regravar em três idas ao banco
+    // abriria janela para duas reações simultâneas se perderem.
+    let r = sqlx::query(
+        r#"UPDATE oraculo_mensagem
+              SET metadados = jsonb_set(
+                    COALESCE(metadados, '{}'::jsonb),
+                    '{reacoes}',
+                    COALESCE(
+                      (SELECT jsonb_agg(r)
+                         FROM jsonb_array_elements(
+                                COALESCE(metadados->'reacoes', '[]'::jsonb)
+                              ) AS r
+                        WHERE r->>'de' IS DISTINCT FROM $4),
+                      '[]'::jsonb
+                    ) || CASE WHEN $3 = '' THEN '[]'::jsonb
+                              ELSE jsonb_build_array(
+                                     jsonb_build_object('emoji', $3::text, 'de', $4::text)
+                                   )
+                         END
+                  )
+            WHERE tenant_id = $1 AND message_id_whatsapp = $2"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(message_id_whatsapp)
+    .bind(emoji)
+    .bind(de)
+    .execute(&mut **tx)
+    .await?;
+    Ok(r.rows_affected() > 0)
 }

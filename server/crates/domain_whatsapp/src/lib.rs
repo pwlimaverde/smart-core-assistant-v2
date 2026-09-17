@@ -12,7 +12,33 @@ pub enum MediaType {
     Location,
     Sticker,
     Contact,
+    /// P8 — enquete, lista e botões: as três mensagens interativas do WhatsApp.
+    ///
+    /// Caíam em [`MediaType::Other`] e chegavam ao chat VAZIAS: o ramo genérico
+    /// procura `url`/`caption`, e nenhuma das três tem os dois. A pergunta da
+    /// enquete e o texto do botão estão em campos próprios.
+    Poll,
+    List,
+    Buttons,
+    /// P8 — reação (emoji) a uma mensagem existente.
+    ///
+    /// Não é uma mensagem do thread: é um atributo da mensagem reagida, como no
+    /// WhatsApp Web. Quem consome decide o que fazer — o worker aplica na
+    /// mensagem alvo em vez de criar bolha nova.
+    Reaction,
     Other(String),
+}
+
+/// P8 — uma reação: o emoji e a mensagem a que ele se refere.
+///
+/// `emoji` vazio é remoção: o WhatsApp manda `text: ""` quando a pessoa desfaz
+/// a reação, e tratar isso como emoji vazio deixaria um rastro invisível na
+/// bolha para sempre.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Reacao {
+    pub emoji: String,
+    /// stanzaId da mensagem reagida.
+    pub alvo_message_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +71,15 @@ pub struct NormalizedMessage {
     /// cliente produz resposta sem sentido (e gasta token). Quem fala com a IA usa
     /// [`Self::texto_para_ia`]; quem grava o histórico segue usando `content`.
     pub legenda: Option<String>,
+    /// P8 — o que não cabe em `content`: opções da enquete, itens da lista,
+    /// rótulos dos botões, vCard do contato.
+    ///
+    /// Vai para `oraculo_mensagem.metadados` (a coluna existe desde a 0006 e a
+    /// ingestão nunca escreveu nela). Sem isso a bolha de enquete mostra a
+    /// pergunta e some com as alternativas.
+    pub metadados: serde_json::Value,
+    /// P8 — presente só quando a mensagem É uma reação.
+    pub reacao: Option<Reacao>,
 }
 
 /// Extrai `mimetype` e `fileLength` do sub-objeto de mídia. O `fileLength` do
@@ -148,6 +183,9 @@ impl NormalizedMessage {
         // Preenchido só nos ramos em que `content` vem de um campo textual escrito
         // pela pessoa (corpo do texto ou legenda) — nunca de URL/nome de arquivo.
         let mut legenda: Option<String> = None;
+        // P8 — o que não cabe em `content`. Fica `{}` no caso comum.
+        let mut metadados = serde_json::Map::new();
+        let mut reacao: Option<Reacao> = None;
 
         if let Some(msg_obj) = data.get("message").and_then(|m| m.as_object()) {
             if let Some(text) = msg_obj.get("conversation").and_then(|t| t.as_str()) {
@@ -259,6 +297,146 @@ impl NormalizedMessage {
                     .and_then(|n| n.as_str())
                     .unwrap_or("")
                     .to_string();
+                // P8 — o vCard é o conteúdo útil: sem ele a bolha mostra um nome
+                // e nenhum telefone, e o atendente não tem como ligar para quem
+                // o cliente acabou de indicar.
+                if let Some(vcard) = contact.get("vcard").and_then(|v| v.as_str()) {
+                    metadados.insert("vcard".into(), serde_json::json!(vcard));
+                }
+            } else if let Some(contatos) = msg_obj
+                .get("contactsArrayMessage")
+                .and_then(|c| c.get("contacts"))
+                .and_then(|c| c.as_array())
+            {
+                // Vários contatos de uma vez: o WhatsApp manda outro tipo, e ele
+                // caía no ramo genérico com conteúdo vazio.
+                media_type = MediaType::Contact;
+                let nomes: Vec<&str> = contatos
+                    .iter()
+                    .filter_map(|c| c.get("displayName").and_then(|n| n.as_str()))
+                    .collect();
+                content = nomes.join(", ");
+                metadados.insert("contatos".into(), serde_json::json!(contatos));
+            } else if let Some(enquete) = msg_obj
+                .get("pollCreationMessage")
+                .or_else(|| msg_obj.get("pollCreationMessageV2"))
+                .or_else(|| msg_obj.get("pollCreationMessageV3"))
+            {
+                // P8 — a pergunta da enquete está em `name`; as alternativas, em
+                // `options[].optionName`. O ramo genérico procurava `url`/
+                // `caption` e a bolha chegava vazia.
+                media_type = MediaType::Poll;
+                content = enquete
+                    .get("name")
+                    .and_then(|n| n.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let opcoes: Vec<&str> = enquete
+                    .get("options")
+                    .and_then(|o| o.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|o| o.get("optionName").and_then(|n| n.as_str()))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                metadados.insert("opcoes".into(), serde_json::json!(opcoes));
+                if let Some(qtd) = enquete.get("selectableOptionsCount") {
+                    metadados.insert("escolhas_permitidas".into(), qtd.clone());
+                }
+                // A pergunta É texto escrito pela pessoa: vale para a IA.
+                if !content.is_empty() {
+                    legenda = Some(content.clone());
+                }
+            } else if let Some(lista) = msg_obj.get("listMessage") {
+                media_type = MediaType::List;
+                content = lista
+                    .get("title")
+                    .or_else(|| lista.get("description"))
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                if let Some(botao) = lista.get("buttonText").and_then(|b| b.as_str()) {
+                    metadados.insert("botao".into(), serde_json::json!(botao));
+                }
+                if let Some(desc) = lista.get("description").and_then(|d| d.as_str()) {
+                    metadados.insert("descricao".into(), serde_json::json!(desc));
+                }
+                // Os itens ficam aninhados em `sections[].rows[]`; achatar aqui
+                // poupa a tela (e a IA) de conhecer o formato do provedor.
+                let itens: Vec<serde_json::Value> = lista
+                    .get("sections")
+                    .and_then(|s| s.as_array())
+                    .map(|secoes| {
+                        secoes
+                            .iter()
+                            .filter_map(|s| s.get("rows").and_then(|r| r.as_array()))
+                            .flatten()
+                            .map(|linha| {
+                                serde_json::json!({
+                                    "titulo": linha.get("title").and_then(|t| t.as_str()).unwrap_or(""),
+                                    "descricao": linha.get("description").and_then(|d| d.as_str()).unwrap_or(""),
+                                })
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                metadados.insert("itens".into(), serde_json::json!(itens));
+                if !content.is_empty() {
+                    legenda = Some(content.clone());
+                }
+            } else if let Some(botoes) = msg_obj.get("buttonsMessage") {
+                media_type = MediaType::Buttons;
+                content = botoes
+                    .get("contentText")
+                    .or_else(|| botoes.get("text"))
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                let rotulos: Vec<&str> = botoes
+                    .get("buttons")
+                    .and_then(|b| b.as_array())
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|b| {
+                                b.get("buttonText")
+                                    .and_then(|t| t.get("displayText"))
+                                    .and_then(|t| t.as_str())
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                metadados.insert("botoes".into(), serde_json::json!(rotulos));
+                if let Some(rodape) = botoes.get("footerText").and_then(|f| f.as_str()) {
+                    metadados.insert("rodape".into(), serde_json::json!(rodape));
+                }
+                if !content.is_empty() {
+                    legenda = Some(content.clone());
+                }
+            } else if let Some(r) = msg_obj
+                .get("reactionMessage")
+                .or_else(|| msg_obj.get("reactMessage"))
+            {
+                // P8 — reação não é bolha nova: é atributo da mensagem reagida.
+                // O alvo vem em `key.id`; sem ele não há o que marcar, e a
+                // reação é descartada em vez de virar uma linha solta no chat.
+                media_type = MediaType::Reaction;
+                let emoji = r
+                    .get("text")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("")
+                    .to_string();
+                content = emoji.clone();
+                if let Some(alvo) = r
+                    .get("key")
+                    .and_then(|k| k.get("id"))
+                    .and_then(|i| i.as_str())
+                {
+                    reacao = Some(Reacao {
+                        emoji,
+                        alvo_message_id: alvo.to_string(),
+                    });
+                }
             } else {
                 // Outro formato desconhecido
                 for (key, val) in msg_obj {
@@ -293,6 +471,8 @@ impl NormalizedMessage {
             media_mime,
             media_file_size,
             legenda,
+            metadados: serde_json::Value::Object(metadados),
+            reacao,
         })
     }
 
@@ -627,12 +807,190 @@ mod tests {
 
     #[test]
     fn parse_tipo_desconhecido_cai_em_media_type_other() {
+        // O exemplo era `reactionMessage`, que a P8 passou a tratar. Um tipo
+        // que o WhatsApp ainda não inventou serve melhor: o ramo genérico existe
+        // justamente para o que chegar depois de nós.
         let payload = payload_com_message(json!({
-            "reactionMessage": { "caption": "👍" }
+            "hologramMessage": { "caption": "👍" }
         }));
         let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
-        assert_eq!(msg.media_type, MediaType::Other("reaction".to_string()));
+        assert_eq!(msg.media_type, MediaType::Other("hologram".to_string()));
         assert_eq!(msg.content, "👍");
+    }
+
+    // ------------------------------------------------------------------ P8
+    //
+    // Enquete, lista, botões, reação e contato caíam todos em `Other` com
+    // conteúdo vazio: o ramo genérico procura `url`/`caption`, e nenhum desses
+    // tipos tem os dois.
+
+    #[test]
+    fn parse_enquete_traz_pergunta_e_alternativas() {
+        let payload = payload_com_message(json!({
+            "pollCreationMessage": {
+                "name": "Qual horário fica melhor?",
+                "options": [
+                    { "optionName": "Manhã" },
+                    { "optionName": "Tarde" }
+                ],
+                "selectableOptionsCount": 1
+            }
+        }));
+        let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
+        assert_eq!(msg.media_type, MediaType::Poll);
+        assert_eq!(msg.content, "Qual horário fica melhor?");
+        assert_eq!(
+            msg.metadados.get("opcoes").unwrap(),
+            &json!(["Manhã", "Tarde"])
+        );
+        // A pergunta é texto escrito por alguém: a IA precisa dela.
+        assert_eq!(msg.texto_para_ia(), Some("Qual horário fica melhor?"));
+    }
+
+    #[test]
+    fn parse_enquete_aceita_as_versoes_v2_e_v3() {
+        for chave in ["pollCreationMessageV2", "pollCreationMessageV3"] {
+            let mut message = serde_json::Map::new();
+            message.insert(
+                chave.to_string(),
+                json!({ "name": "Enquete", "options": [{ "optionName": "A" }] }),
+            );
+            let payload = payload_com_message(serde_json::Value::Object(message));
+            let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
+            assert_eq!(msg.media_type, MediaType::Poll, "{chave}");
+            assert_eq!(msg.content, "Enquete", "{chave}");
+        }
+    }
+
+    #[test]
+    fn parse_lista_achata_os_itens_das_secoes() {
+        // Os itens vêm aninhados em `sections[].rows[]`. Achatar aqui poupa a
+        // tela de conhecer o formato do provedor.
+        let payload = payload_com_message(json!({
+            "listMessage": {
+                "title": "Escolha o serviço",
+                "buttonText": "Ver opções",
+                "description": "Atendimento",
+                "sections": [
+                    { "rows": [
+                        { "title": "Suporte", "description": "Problemas" },
+                        { "title": "Vendas", "description": "Orçamento" }
+                    ] }
+                ]
+            }
+        }));
+        let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
+        assert_eq!(msg.media_type, MediaType::List);
+        assert_eq!(msg.content, "Escolha o serviço");
+        let itens = msg.metadados.get("itens").unwrap().as_array().unwrap();
+        assert_eq!(itens.len(), 2);
+        assert_eq!(itens[1].get("titulo").unwrap(), "Vendas");
+        assert_eq!(msg.metadados.get("botao").unwrap(), "Ver opções");
+    }
+
+    #[test]
+    fn parse_botoes_traz_texto_e_rotulos() {
+        let payload = payload_com_message(json!({
+            "buttonsMessage": {
+                "contentText": "Confirma o horário?",
+                "footerText": "Responda em até 1h",
+                "buttons": [
+                    { "buttonText": { "displayText": "Sim" } },
+                    { "buttonText": { "displayText": "Não" } }
+                ]
+            }
+        }));
+        let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
+        assert_eq!(msg.media_type, MediaType::Buttons);
+        assert_eq!(msg.content, "Confirma o horário?");
+        assert_eq!(msg.metadados.get("botoes").unwrap(), &json!(["Sim", "Não"]));
+        assert_eq!(msg.metadados.get("rodape").unwrap(), "Responda em até 1h");
+    }
+
+    #[test]
+    fn parse_reacao_aponta_para_a_mensagem_reagida() {
+        let payload = payload_com_message(json!({
+            "reactionMessage": {
+                "text": "👍",
+                "key": { "id": "MSGALVO123" }
+            }
+        }));
+        let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
+        assert_eq!(msg.media_type, MediaType::Reaction);
+        let reacao = msg.reacao.expect("reação sem alvo");
+        assert_eq!(reacao.emoji, "👍");
+        assert_eq!(reacao.alvo_message_id, "MSGALVO123");
+    }
+
+    #[test]
+    fn parse_reacao_vazia_e_remocao_e_nao_emoji_em_branco() {
+        // O WhatsApp manda `text: ""` quando a pessoa desfaz a reação. Tratar
+        // como emoji vazio deixaria um rastro invisível na bolha para sempre.
+        let payload = payload_com_message(json!({
+            "reactionMessage": { "text": "", "key": { "id": "MSGALVO123" } }
+        }));
+        let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
+        let reacao = msg.reacao.expect("remoção também aponta para o alvo");
+        assert!(reacao.emoji.is_empty());
+        assert_eq!(reacao.alvo_message_id, "MSGALVO123");
+    }
+
+    #[test]
+    fn parse_reacao_sem_alvo_nao_vira_reacao() {
+        // Sem `key.id` não há o que marcar. Virar bolha solta no chat seria pior
+        // do que descartar.
+        let payload = payload_com_message(json!({
+            "reactionMessage": { "text": "👍" }
+        }));
+        let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
+        assert_eq!(msg.media_type, MediaType::Reaction);
+        assert!(msg.reacao.is_none());
+    }
+
+    #[test]
+    fn parse_contato_guarda_o_vcard() {
+        // Sem o vCard a bolha mostra um nome e nenhum telefone — e o atendente
+        // não tem como ligar para quem o cliente acabou de indicar.
+        let payload = payload_com_message(json!({
+            "contactMessage": {
+                "displayName": "Maria",
+                "vcard": "BEGIN:VCARD\nTEL:+5511999999999\nEND:VCARD"
+            }
+        }));
+        let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
+        assert_eq!(msg.media_type, MediaType::Contact);
+        assert!(msg
+            .metadados
+            .get("vcard")
+            .unwrap()
+            .as_str()
+            .unwrap()
+            .contains("TEL"));
+    }
+
+    #[test]
+    fn parse_varios_contatos_de_uma_vez() {
+        let payload = payload_com_message(json!({
+            "contactsArrayMessage": {
+                "contacts": [
+                    { "displayName": "Maria" },
+                    { "displayName": "João" }
+                ]
+            }
+        }));
+        let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
+        assert_eq!(msg.media_type, MediaType::Contact);
+        assert_eq!(msg.content, "Maria, João");
+    }
+
+    #[test]
+    fn mensagem_comum_nao_ganha_metadados() {
+        // `{}` no caso comum: o campo existe para os tipos interativos, e sujar
+        // toda linha do thread com um objeto vazio de chaves seria desperdício.
+        let payload = payload_com_message(json!({ "conversation": "oi" }));
+        let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
+        assert_eq!(msg.metadados, json!({}));
+        assert!(msg.reacao.is_none());
     }
 
     #[test]

@@ -223,6 +223,7 @@ use contracts::grpc::queries::{
     QueryAuditLogResponse,
     QuitarMinhaAssinaturaRequest,
     QuitarMinhaAssinaturaResponse,
+    ReacaoDaMensagem,
     RedefinirSenhaRequest,
     RedefinirSenhaResponse,
     ReenviarConviteRequest,
@@ -6834,6 +6835,9 @@ impl AdminService for AdminFacade {
                                 .get("citada_preview")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string()),
+                            // P8 — reações e o que não cabe em `conteudo`.
+                            reacoes: reacoes_do_item(item),
+                            metadados_json: metadados_do_item(item),
                         });
                     }
                 }
@@ -9337,6 +9341,51 @@ fn instancia_do_json(v: &serde_json::Value) -> MyWhatsappInstance {
             .unwrap_or_default()
             .to_string(),
     }
+}
+
+/// P8 — as reações gravadas em `metadados.reacoes`.
+///
+/// Silenciosamente vazio quando o formato não é o esperado: uma linha antiga com
+/// `metadados` escrito por outra coisa não pode derrubar a conversa inteira.
+/// Emoji vazio também sai: no provedor ele significa "desfiz a reação".
+fn reacoes_do_item(item: &serde_json::Value) -> Vec<ReacaoDaMensagem> {
+    item.get("metadados")
+        .and_then(|m| m.get("reacoes"))
+        .and_then(|r| r.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|r| {
+                    let emoji = r.get("emoji").and_then(|e| e.as_str())?;
+                    if emoji.is_empty() {
+                        return None;
+                    }
+                    Some(ReacaoDaMensagem {
+                        emoji: emoji.to_string(),
+                        de: r
+                            .get("de")
+                            .and_then(|d| d.as_str())
+                            .unwrap_or("contato")
+                            .to_string(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// P8 — o resto de `metadados`, como JSON cru, para a tela desenhar enquete,
+/// lista e botões.
+///
+/// `reacoes` sai daqui: já viaja em campo próprio, e mandá-lo duas vezes faria
+/// a tela ter duas fontes para a mesma coisa. Objeto vazio vira `None` — não há
+/// por que mandar `{}` em toda mensagem de texto da conversa.
+fn metadados_do_item(item: &serde_json::Value) -> Option<String> {
+    let mut obj = item.get("metadados")?.as_object()?.clone();
+    obj.remove("reacoes");
+    if obj.is_empty() {
+        return None;
+    }
+    serde_json::to_string(&obj).ok()
 }
 
 /// P7 — a linha do banco (`whatsapp_whitelist`) no tipo do contrato.

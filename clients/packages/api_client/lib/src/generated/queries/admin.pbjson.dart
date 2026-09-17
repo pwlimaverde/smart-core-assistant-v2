@@ -1635,6 +1635,23 @@ const MensagemThread$json = {
       '10': 'citadaPreview',
       '17': true
     },
+    {
+      '1': 'reacoes',
+      '3': 16,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.ReacaoDaMensagem',
+      '10': 'reacoes'
+    },
+    {
+      '1': 'metadados_json',
+      '3': 17,
+      '4': 1,
+      '5': 9,
+      '9': 7,
+      '10': 'metadadosJson',
+      '17': true
+    },
   ],
   '8': [
     {'1': '_resumo_midia'},
@@ -1644,6 +1661,7 @@ const MensagemThread$json = {
     {'1': '_mensagem_citada_id'},
     {'1': '_citada_remetente'},
     {'1': '_citada_preview'},
+    {'1': '_metadados_json'},
   ],
 };
 
@@ -1659,9 +1677,26 @@ final $typed_data.Uint8List mensagemThreadDescriptor = $convert.base64Decode(
     'RhdGFFbnRyZWd1ZYgBARIgCglkYXRhX2xpZGEYDCABKANIA1IIZGF0YUxpZGGIAQESMQoSbWVu'
     'c2FnZW1fY2l0YWRhX2lkGA0gASgFSARSEG1lbnNhZ2VtQ2l0YWRhSWSIAQESLgoQY2l0YWRhX3'
     'JlbWV0ZW50ZRgOIAEoCUgFUg9jaXRhZGFSZW1ldGVudGWIAQESKgoOY2l0YWRhX3ByZXZpZXcY'
-    'DyABKAlIBlINY2l0YWRhUHJldmlld4gBAUIPCg1fcmVzdW1vX21pZGlhQggKBl9taWRpYUIQCg'
-    '5fZGF0YV9lbnRyZWd1ZUIMCgpfZGF0YV9saWRhQhUKE19tZW5zYWdlbV9jaXRhZGFfaWRCEwoR'
-    'X2NpdGFkYV9yZW1ldGVudGVCEQoPX2NpdGFkYV9wcmV2aWV3');
+    'DyABKAlIBlINY2l0YWRhUHJldmlld4gBARJHCgdyZWFjb2VzGBAgAygLMi0uc21hcnRjb3JlLm'
+    'NvbnRyYWN0cy5xdWVyaWVzLlJlYWNhb0RhTWVuc2FnZW1SB3JlYWNvZXMSKgoObWV0YWRhZG9z'
+    'X2pzb24YESABKAlIB1INbWV0YWRhZG9zSnNvbogBAUIPCg1fcmVzdW1vX21pZGlhQggKBl9taW'
+    'RpYUIQCg5fZGF0YV9lbnRyZWd1ZUIMCgpfZGF0YV9saWRhQhUKE19tZW5zYWdlbV9jaXRhZGFf'
+    'aWRCEwoRX2NpdGFkYV9yZW1ldGVudGVCEQoPX2NpdGFkYV9wcmV2aWV3QhEKD19tZXRhZGFkb3'
+    'NfanNvbg==');
+
+@$core.Deprecated('Use reacaoDaMensagemDescriptor instead')
+const ReacaoDaMensagem$json = {
+  '1': 'ReacaoDaMensagem',
+  '2': [
+    {'1': 'emoji', '3': 1, '4': 1, '5': 9, '10': 'emoji'},
+    {'1': 'de', '3': 2, '4': 1, '5': 9, '10': 'de'},
+  ],
+};
+
+/// Descriptor for `ReacaoDaMensagem`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List reacaoDaMensagemDescriptor = $convert.base64Decode(
+    'ChBSZWFjYW9EYU1lbnNhZ2VtEhQKBWVtb2ppGAEgASgJUgVlbW9qaRIOCgJkZRgCIAEoCVICZG'
+    'U=');
 
 @$core.Deprecated('Use getThreadRequestDescriptor instead')
 const GetThreadRequest$json = {

@@ -129,6 +129,10 @@ pub struct OrigemMensagem {
     /// que o gravava era chamado apenas por um teste. Sem histórico não há como
     /// calibrar limiar nenhum — daí gravar vir antes de decidir.
     pub confianca_resposta: Option<f64>,
+    /// P8 — o que não cabe em `conteudo`: opções da enquete, itens da lista,
+    /// rótulos dos botões, vCard do contato. A coluna `metadados` existe desde a
+    /// 0006 e a ingestão nunca escreveu nela.
+    pub metadados: Option<serde_json::Value>,
 }
 
 /// N9/E1 — dados de uma mídia que o atendente enviou pelo painel.
@@ -283,6 +287,33 @@ pub trait AtendimentoStore: Send + Sync {
         action_id: Option<Uuid>,
         origem: OrigemMensagem,
     ) -> Result<Mensagem, DbError>;
+
+    /// P8 — grava (ou apaga) a reação de alguém numa mensagem.
+    ///
+    /// Reação não é bolha nova: é atributo da mensagem reagida, como no WhatsApp
+    /// Web. `emoji` vazio remove. `false` no retorno = mensagem alvo
+    /// desconhecida — reagir a uma conversa anterior à integração é comum e não
+    /// é erro.
+    async fn aplicar_reacao(
+        &self,
+        ctx: &RequestContext,
+        message_id_whatsapp: &str,
+        emoji: &str,
+        de: &str,
+    ) -> Result<bool, DbError>;
+
+    /// P8 — nome de perfil e foto vindos do evento `CONTACTS` do provedor.
+    ///
+    /// Só atualiza quem já existe: o evento pode trazer a agenda inteira do
+    /// aparelho, e criar contato a partir dele encheria a base de gente que
+    /// nunca escreveu para o tenant.
+    async fn atualizar_perfil_do_contato(
+        &self,
+        ctx: &RequestContext,
+        telefone: &str,
+        nome_perfil: &str,
+        foto_url: &str,
+    ) -> Result<bool, DbError>;
 
     /// D3 — liga/desliga a resposta automática da IA nesta conversa.
     ///

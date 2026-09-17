@@ -535,6 +535,22 @@ message MensagemThread {
   optional int32 mensagem_citada_id = 13;
   optional string citada_remetente = 14;
   optional string citada_preview = 15;
+  // P8 — reação (emoji) a esta mensagem. Não é bolha nova: é atributo da
+  // mensagem reagida, como no WhatsApp Web. Vazio na imensa maioria delas.
+  repeated ReacaoDaMensagem reacoes = 16;
+  // P8 — o que não cabe em `conteudo`: alternativas da enquete, itens da lista,
+  // rótulos dos botões, vCard do contato. JSON cru porque o formato varia com o
+  // tipo, e um campo por tipo engessaria o contrato no que o WhatsApp oferece
+  // hoje.
+  optional string metadados_json = 17;
+}
+
+// P8 — quem reagiu e com quê.
+message ReacaoDaMensagem {
+  string emoji = 1;
+  // Vocabulário do `remetente` da mensagem: "contato" ou "atendente". É o que
+  // diz de que lado da bolha desenhar.
+  string de = 2;
 }
 
 message GetThreadRequest {

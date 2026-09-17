@@ -65,6 +65,21 @@ final class CitacaoMensagem {
   });
 }
 
+/// P8 — uma reação (emoji) a uma mensagem.
+///
+/// Não é uma mensagem do thread: é atributo da mensagem reagida, como no
+/// WhatsApp Web. Até aqui a v2 desenhava a reação como uma bolha "👍" solta no
+/// meio da conversa.
+@immutable
+final class ReacaoDaMensagem {
+  final String emoji;
+
+  /// Mesmo vocabulário do `remetente`: `contato` ou `atendente`.
+  final String de;
+
+  const ReacaoDaMensagem({required this.emoji, required this.de});
+}
+
 /// Mensagem de um thread de atendimento (chat lateral — WS-6.3).
 ///
 /// [conteudo] é PII (mensagem do usuário/atendente): a UI nunca deve logá-lo.
@@ -100,6 +115,17 @@ final class MensagemThread {
   /// A mensagem que esta responde, quando é uma citação.
   final CitacaoMensagem? citacao;
 
+  /// P8 — quem reagiu a esta mensagem, e com quê. Vazio na imensa maioria.
+  final List<ReacaoDaMensagem> reacoes;
+
+  /// P8 — o que não cabe em [conteudo]: alternativas da enquete, itens da
+  /// lista, rótulos dos botões, vCard do contato.
+  ///
+  /// Mapa cru porque o formato varia com o tipo. A bolha lê a chave que o tipo
+  /// dela usa e ignora o resto — um campo por tipo engessaria o modelo no que o
+  /// WhatsApp oferece hoje.
+  final Map<String, dynamic> metadados;
+
   const MensagemThread({
     required this.id,
     required this.atendimentoId,
@@ -114,7 +140,24 @@ final class MensagemThread {
     this.entregueEm,
     this.lidaEm,
     this.citacao,
+    this.reacoes = const [],
+    this.metadados = const {},
   });
+
+  /// P8 — as alternativas da enquete, na ordem em que o autor as escreveu.
+  List<String> get opcoesDaEnquete =>
+      (metadados['opcoes'] as List?)?.map((o) => '$o').toList() ?? const [];
+
+  /// P8 — os rótulos dos botões.
+  List<String> get rotulosDosBotoes =>
+      (metadados['botoes'] as List?)?.map((b) => '$b').toList() ?? const [];
+
+  /// P8 — os itens da lista interativa, já achatados pelo servidor.
+  List<String> get itensDaLista =>
+      (metadados['itens'] as List?)
+          ?.map((i) => '${(i as Map?)?['titulo'] ?? i}')
+          .toList() ??
+      const [];
 
   /// Estado de entrega para desenhar os ticks. Só faz sentido em mensagem que
   /// SAIU (atendente ou bot); na mensagem do contato a UI não mostra tick.

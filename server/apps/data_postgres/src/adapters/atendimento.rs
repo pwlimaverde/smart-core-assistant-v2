@@ -178,6 +178,7 @@ async fn solicitar_pesquisa_satisfacao(
                 mensagem_citada_id: None,
                 ja_entregue: false,
                 confianca_resposta: None,
+                metadados: None,
             },
         )
         .await?;
@@ -616,6 +617,9 @@ impl AtendimentoStore for PgAtendimentoStore {
                         mensagem_citada_id,
                         ja_entregue: origem.ja_entregue,
                         confianca_resposta: origem.confianca_resposta,
+                        // P8 — opções da enquete, itens da lista, rótulos dos
+                        // botões, vCard do contato.
+                        metadados: origem.metadados.clone(),
                     },
                 )
                 .await?;
@@ -859,6 +863,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                         remetente: "atendente",
                         message_id_whatsapp: None,
                         mensagem_citada_id: None,
+                        metadados: None,
                         // Ainda não passou pelo WhatsApp: é o worker que envia.
                         ja_entregue: false,
                         confianca_resposta: None,
@@ -1390,6 +1395,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                                         mensagem_citada_id: None,
                                         ja_entregue: false,
                         confianca_resposta: None,
+                                        metadados: None,
                                     },
                                 )
                                 .await?;
@@ -2422,5 +2428,55 @@ mod tests {
             texto_da_saudacao("Ana", "   ", "  "),
             "Olá, meu nome é Ana, irei continuar seu atendimento."
         );
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn aplicar_reacao(
+        &self,
+        ctx: &RequestContext,
+        message_id_whatsapp: &str,
+        emoji: &str,
+        de: &str,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let alvo = message_id_whatsapp.to_string();
+        let emoji = emoji.to_string();
+        let de = de.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let aplicou = infrastructure_postgres::atendimentos::mensagens::aplicar_reacao(
+                &mut tx, &ctx, &alvo, &emoji, &de,
+            )
+            .await?;
+            Ok((aplicou, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn atualizar_perfil_do_contato(
+        &self,
+        ctx: &RequestContext,
+        telefone: &str,
+        nome_perfil: &str,
+        foto_url: &str,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let telefone = telefone.to_string();
+        let nome = nome_perfil.to_string();
+        let foto = foto_url.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let atualizou = infrastructure_postgres::clientes::contatos::atualizar_perfil_whatsapp(
+                &mut tx,
+                &ctx,
+                &telefone,
+                Some(&nome),
+                Some(&foto),
+            )
+            .await?;
+            Ok((atualizou, tx))
+        })
+        .await
     }
 }

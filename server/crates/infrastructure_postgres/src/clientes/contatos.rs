@@ -393,3 +393,37 @@ impl ContatoRepository for PostgresContatoRepository {
         Ok(rows)
     }
 }
+
+/// P8 — nome de perfil e foto vindos do evento `CONTACTS` do provedor.
+///
+/// **Só atualiza quem já existe.** O evento pode trazer a agenda inteira do
+/// aparelho, e criar contato a partir dele encheria a base de gente que nunca
+/// escreveu para o tenant — com todo o custo de LGPD que isso implica.
+///
+/// Campo vazio não apaga o que está gravado: o provedor manda o que tem, e uma
+/// atualização parcial não pode zerar o nome que alguém digitou à mão.
+///
+/// `false` no retorno = ninguém com esse telefone no tenant, que é o caso comum
+/// e não é erro.
+#[tracing::instrument(skip_all)]
+pub async fn atualizar_perfil_whatsapp(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    telefone: &str,
+    nome_perfil: Option<&str>,
+    foto_url: Option<&str>,
+) -> Result<bool, DbError> {
+    let r = sqlx::query(
+        r#"UPDATE oraculo_contato
+              SET nome_perfil_whatsapp = COALESCE(NULLIF($3, ''), nome_perfil_whatsapp),
+                  foto_perfil_url_origem = COALESCE(NULLIF($4, ''), foto_perfil_url_origem)
+            WHERE tenant_id = $1 AND telefone = $2"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(telefone)
+    .bind(nome_perfil.unwrap_or_default())
+    .bind(foto_url.unwrap_or_default())
+    .execute(&mut **tx)
+    .await?;
+    Ok(r.rows_affected() > 0)
+}

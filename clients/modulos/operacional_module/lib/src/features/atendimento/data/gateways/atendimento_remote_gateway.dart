@@ -431,7 +431,27 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
                 preview: m.citadaPreview,
               )
             : null,
+        // P8 — reação é atributo da mensagem reagida, não bolha nova.
+        reacoes: [
+          for (final r in m.reacoes)
+            ReacaoDaMensagem(emoji: r.emoji, de: r.de),
+        ],
+        metadados: _metadados(m),
       );
+
+  /// P8 — o JSON cru que acompanha enquete, lista, botões e contato.
+  ///
+  /// JSON quebrado vira mapa vazio em vez de derrubar a conversa: o campo é
+  /// decoração da bolha, e nenhuma decoração vale a tela inteira.
+  static Map<String, dynamic> _metadados(proto.MensagemThread m) {
+    if (!m.hasMetadadosJson() || m.metadadosJson.isEmpty) return const {};
+    try {
+      final decodificado = jsonDecode(m.metadadosJson);
+      return decodificado is Map<String, dynamic> ? decodificado : const {};
+    } on FormatException {
+      return const {};
+    }
+  }
 
   static MidiaMensagem _paraMidia(proto.MidiaMensagem m) => MidiaMensagem(
     tipo: TipoMidia.doServidor(m.kind),

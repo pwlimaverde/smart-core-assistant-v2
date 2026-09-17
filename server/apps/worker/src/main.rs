@@ -906,16 +906,103 @@ async fn despachar_evento(
         // tela de conexões.
         "whatsapp.connection.updated" => processar_estado_conexao(state, evt).await,
         "whatsapp.presence.updated" => processar_presenca_contato(state, evt).await,
-        // `whatsapp.contact.updated` (nome/foto de perfil) continua sem consumidor
-        // de propósito: **não existe porta de escrita de contato** no
-        // `data_postgres` — nenhum RPC toca `whatsapp_contact`. Criá-la é o escopo
-        // da N11/E6 (perfil do contato sob demanda), junto com a leitura do avatar.
-        // Consumir aqui hoje exigiria inventar a porta pela metade.
+        // P8 — o nome e a foto que o contato usa no WhatsApp. Antes o evento
+        // chegava e era descartado: a ficha mostrava o número cru de quem nunca
+        // se apresentou pelo nome.
+        "whatsapp.contact.updated" => processar_contato_atualizado(state, evt).await,
         // Eventos de outros consumidores (ex.: `media.purge`, do data_storage)
         // compartilham o stream: ignorar é o comportamento correto, e o XACK do
         // Consumer evita que fiquem pendurados na PEL deste grupo.
         _ => Ok(()),
     }
+}
+
+/// P8 — nome de perfil e foto do contato, comunicados pelo provedor.
+///
+/// **Só atualiza quem já existe** (o `data_postgres` aplica a regra): o evento
+/// pode trazer a agenda inteira do aparelho, e criar contato a partir dele
+/// encheria a base de gente que nunca escreveu para o tenant — com todo o custo
+/// de LGPD que isso implica.
+///
+/// Best-effort: falhar aqui não pode derrubar o consumo do stream, porque o
+/// evento é informativo e a conversa funciona sem ele.
+#[tracing::instrument(
+    skip_all,
+    fields(tenant_id = %evt.tenant_id, service = "worker", rpc = "contact.updated")
+)]
+async fn processar_contato_atualizado(
+    state: &AppState,
+    evt: transport::bus::EventoBruto,
+) -> anyhow::Result<()> {
+    let payload: serde_json::Value = serde_json::from_slice(&evt.payload)?;
+    let dados = payload
+        .get("raw_event")
+        .and_then(|r| r.get("data"))
+        .ok_or_else(|| anyhow::anyhow!("data ausente no evento de contato"))?;
+
+    // O provedor manda ora um objeto, ora uma lista: a atualização de um
+    // contato e a sincronia da agenda chegam pelo mesmo evento.
+    let contatos: Vec<&serde_json::Value> = match dados.as_array() {
+        Some(arr) => arr.iter().collect(),
+        None => vec![dados],
+    };
+
+    let tenant_uuid = Uuid::parse_str(&evt.tenant_id)?;
+    for contato in contatos {
+        let jid = contato
+            .get("remoteJid")
+            .or_else(|| contato.get("id"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        // Só a parte numérica, como na ingestão de mensagem: o telefone é a
+        // chave do contato, e o sufixo do JID não faz parte dele.
+        let telefone = jid.split('@').next().unwrap_or("").to_string();
+        if telefone.is_empty() {
+            continue;
+        }
+        let nome = contato
+            .get("pushName")
+            .or_else(|| contato.get("name"))
+            .or_else(|| contato.get("notify"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let foto = contato
+            .get("profilePicUrl")
+            .or_else(|| contato.get("profilePictureUrl"))
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if nome.is_empty() && foto.is_empty() {
+            continue;
+        }
+
+        let req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: evt.event_id.to_string(),
+            traceparent: evt.traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "AtualizarPerfilDoContato".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({
+                "telefone": telefone,
+                "nome_perfil": nome,
+                "foto_url": foto,
+            }))
+            .unwrap_or_default(),
+            error: None,
+            auth_user_id: 0,
+            auth_scopes: escopos_sistema(),
+            auth_is_superuser: false,
+            flow_permissions: vec![],
+            user_agent: String::new(),
+        };
+        if let Err(e) = state.pg_client.call(req, Duration::from_secs(5)).await {
+            tracing::warn!("falha ao atualizar o perfil do contato: {:?}", e);
+        }
+    }
+
+    Ok(())
 }
 
 /// N8.5/E5 — reage à mudança de estado da conexão do WhatsApp comunicada pelo
@@ -1145,6 +1232,56 @@ async fn processar_mensagem_recebida(
 
     let pg_client = &state.pg_client;
 
+    // P8 — reação não é mensagem: é atributo da mensagem reagida, como no
+    // WhatsApp Web. Aplicar e sair daqui é o que impede uma bolha "👍" solta no
+    // meio da conversa — que foi como a v2 mostrou reação até agora.
+    //
+    // Sai ANTES de resolver o atendimento: uma reação não abre conversa, não
+    // acorda o bot e não conta como mensagem nova para o SLA.
+    if let Some(ref reacao) = msg_normalized.reacao {
+        let payload = serde_json::json!({
+            "message_id_whatsapp": reacao.alvo_message_id,
+            "emoji": reacao.emoji,
+            // Quem reagiu, do ponto de vista da conversa. O mesmo vocabulário
+            // do `remetente` da mensagem, para a bolha saber de que lado
+            // desenhar.
+            "de": if msg_normalized.is_from_me { "atendente" } else { "contato" },
+        });
+        let env_reacao = Envelope {
+            tenant_id: envelope.tenant_id.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: envelope.event_id.to_string(),
+            traceparent: envelope.traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "AplicarReacaoMensagem".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap_or_default(),
+            error: None,
+            auth_user_id: 0,
+            auth_scopes: escopos_sistema(),
+            auth_is_superuser: false,
+            flow_permissions: vec![],
+            user_agent: String::new(),
+        };
+        match pg_client.call(env_reacao, Duration::from_secs(5)).await {
+            Ok(resp) if resp.kind != MessageKind::Error as i32 => {
+                tracing::info!(
+                    alvo = %reacao.alvo_message_id,
+                    "reação aplicada na mensagem"
+                );
+            }
+            Ok(resp) => {
+                tracing::warn!(
+                    "falha ao aplicar reação: {:?}",
+                    resp.error.map(|e| e.message)
+                );
+            }
+            Err(e) => tracing::warn!("falha ao aplicar reação: {:?}", e),
+        }
+        return Ok(());
+    }
+
     // 1. Resolve atendimento para contato
     let resolve_payload = serde_json::json!({
         "phone": msg_normalized.sender,
@@ -1226,8 +1363,17 @@ async fn processar_mensagem_recebida(
             domain_whatsapp::MediaType::Location => "localizacao",
             domain_whatsapp::MediaType::Sticker => "sticker",
             domain_whatsapp::MediaType::Contact => "contato",
+            // P8 — antes caíam em `Other` e chegavam ao chat vazias.
+            domain_whatsapp::MediaType::Poll => "enquete",
+            domain_whatsapp::MediaType::List => "lista",
+            domain_whatsapp::MediaType::Buttons => "botoes",
+            // Não chega aqui: a reação é aplicada na mensagem alvo antes deste
+            // ponto. O braço existe para o `match` ser exaustivo.
+            domain_whatsapp::MediaType::Reaction => "reacao",
             domain_whatsapp::MediaType::Other(ref o) => o,
         },
+        // P8 — opções da enquete, itens da lista, rótulos dos botões, vCard.
+        "metadados": msg_normalized.metadados,
         "sender_id": remetente,
         // Chave natural de idempotência: o bus é at-least-once, e sem o stanzaId
         // uma reentrega duplicaria a mensagem no chat.
