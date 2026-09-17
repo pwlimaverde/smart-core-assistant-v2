@@ -385,6 +385,45 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$enviarPresenca, request, options: options);
   }
 
+  /// P5 — a ficha completa.
+  $grpc.ResponseFuture<$0.ListarTimelineResponse> listarTimelineAtendimento(
+    $0.ListarTimelineRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listarTimelineAtendimento, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ListarAtendimentosDoContatoResponse>
+      listarAtendimentosDoContato(
+    $0.ListarAtendimentosDoContatoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listarAtendimentosDoContato, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> removerNota(
+    $0.RemoverNotaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$removerNota, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.EtiquetaResponse> updateEtiqueta(
+    $0.UpdateEtiquetaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$updateEtiqueta, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> desativarEtiqueta(
+    $0.DesativarEtiquetaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$desativarEtiqueta, request, options: options);
+  }
+
   /// P4 — operacao do quadro pelo supervisor.
   $grpc.ResponseFuture<$0.AtribuirAtendimentoResponse> atribuirAtendimento(
     $0.AtribuirAtendimentoRequest request, {
@@ -1195,6 +1234,32 @@ class AdminServiceClient extends $grpc.Client {
           '/smartcore.contracts.queries.AdminService/EnviarPresenca',
           ($0.EnviarPresencaRequest value) => value.writeToBuffer(),
           $0.EnviarPresencaResponse.fromBuffer);
+  static final _$listarTimelineAtendimento =
+      $grpc.ClientMethod<$0.ListarTimelineRequest, $0.ListarTimelineResponse>(
+          '/smartcore.contracts.queries.AdminService/ListarTimelineAtendimento',
+          ($0.ListarTimelineRequest value) => value.writeToBuffer(),
+          $0.ListarTimelineResponse.fromBuffer);
+  static final _$listarAtendimentosDoContato = $grpc.ClientMethod<
+          $0.ListarAtendimentosDoContatoRequest,
+          $0.ListarAtendimentosDoContatoResponse>(
+      '/smartcore.contracts.queries.AdminService/ListarAtendimentosDoContato',
+      ($0.ListarAtendimentosDoContatoRequest value) => value.writeToBuffer(),
+      $0.ListarAtendimentosDoContatoResponse.fromBuffer);
+  static final _$removerNota =
+      $grpc.ClientMethod<$0.RemoverNotaRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/RemoverNota',
+          ($0.RemoverNotaRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$updateEtiqueta =
+      $grpc.ClientMethod<$0.UpdateEtiquetaRequest, $0.EtiquetaResponse>(
+          '/smartcore.contracts.queries.AdminService/UpdateEtiqueta',
+          ($0.UpdateEtiquetaRequest value) => value.writeToBuffer(),
+          $0.EtiquetaResponse.fromBuffer);
+  static final _$desativarEtiqueta =
+      $grpc.ClientMethod<$0.DesativarEtiquetaRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/DesativarEtiqueta',
+          ($0.DesativarEtiquetaRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
   static final _$atribuirAtendimento = $grpc.ClientMethod<
           $0.AtribuirAtendimentoRequest, $0.AtribuirAtendimentoResponse>(
       '/smartcore.contracts.queries.AdminService/AtribuirAtendimento',
@@ -1985,6 +2050,51 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.EnviarPresencaRequest.fromBuffer(value),
         ($0.EnviarPresencaResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListarTimelineRequest,
+            $0.ListarTimelineResponse>(
+        'ListarTimelineAtendimento',
+        listarTimelineAtendimento_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListarTimelineRequest.fromBuffer(value),
+        ($0.ListarTimelineResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListarAtendimentosDoContatoRequest,
+            $0.ListarAtendimentosDoContatoResponse>(
+        'ListarAtendimentosDoContato',
+        listarAtendimentosDoContato_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListarAtendimentosDoContatoRequest.fromBuffer(value),
+        ($0.ListarAtendimentosDoContatoResponse value) =>
+            value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.RemoverNotaRequest, $0.SimpleOkResponse>(
+        'RemoverNota',
+        removerNota_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.RemoverNotaRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.UpdateEtiquetaRequest, $0.EtiquetaResponse>(
+            'UpdateEtiqueta',
+            updateEtiqueta_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.UpdateEtiquetaRequest.fromBuffer(value),
+            ($0.EtiquetaResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.DesativarEtiquetaRequest, $0.SimpleOkResponse>(
+            'DesativarEtiqueta',
+            desativarEtiqueta_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.DesativarEtiquetaRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.AtribuirAtendimentoRequest,
             $0.AtribuirAtendimentoResponse>(
         'AtribuirAtendimento',
@@ -3060,6 +3170,50 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.EnviarPresencaResponse> enviarPresenca(
       $grpc.ServiceCall call, $0.EnviarPresencaRequest request);
+
+  $async.Future<$0.ListarTimelineResponse> listarTimelineAtendimento_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListarTimelineRequest> $request) async {
+    return listarTimelineAtendimento($call, await $request);
+  }
+
+  $async.Future<$0.ListarTimelineResponse> listarTimelineAtendimento(
+      $grpc.ServiceCall call, $0.ListarTimelineRequest request);
+
+  $async.Future<$0.ListarAtendimentosDoContatoResponse>
+      listarAtendimentosDoContato_Pre($grpc.ServiceCall $call,
+          $async.Future<$0.ListarAtendimentosDoContatoRequest> $request) async {
+    return listarAtendimentosDoContato($call, await $request);
+  }
+
+  $async.Future<$0.ListarAtendimentosDoContatoResponse>
+      listarAtendimentosDoContato($grpc.ServiceCall call,
+          $0.ListarAtendimentosDoContatoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> removerNota_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.RemoverNotaRequest> $request) async {
+    return removerNota($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> removerNota(
+      $grpc.ServiceCall call, $0.RemoverNotaRequest request);
+
+  $async.Future<$0.EtiquetaResponse> updateEtiqueta_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.UpdateEtiquetaRequest> $request) async {
+    return updateEtiqueta($call, await $request);
+  }
+
+  $async.Future<$0.EtiquetaResponse> updateEtiqueta(
+      $grpc.ServiceCall call, $0.UpdateEtiquetaRequest request);
+
+  $async.Future<$0.SimpleOkResponse> desativarEtiqueta_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.DesativarEtiquetaRequest> $request) async {
+    return desativarEtiqueta($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> desativarEtiqueta(
+      $grpc.ServiceCall call, $0.DesativarEtiquetaRequest request);
 
   $async.Future<$0.AtribuirAtendimentoResponse> atribuirAtendimento_Pre(
       $grpc.ServiceCall $call,

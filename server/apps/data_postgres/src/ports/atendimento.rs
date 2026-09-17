@@ -180,6 +180,42 @@ pub trait AtendimentoStore: Send + Sync {
         atendente_id: Option<i32>,
     ) -> Result<bool, DbError>;
 
+    /// P5 — a linha do tempo do atendimento.
+    async fn listar_timeline(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<Vec<infrastructure_postgres::atendimentos::atendimentos::EventoDaTimeline>, DbError>;
+
+    /// P5 — as outras conversas do mesmo contato.
+    async fn listar_do_contato(
+        &self,
+        ctx: &RequestContext,
+        contato_id: i32,
+        limit: i64,
+    ) -> Result<Vec<Atendimento>, DbError>;
+
+    /// P5 — apaga uma nota interna.
+    async fn remover_nota(
+        &self,
+        ctx: &RequestContext,
+        nota_id: i64,
+        atendimento_id: i32,
+    ) -> Result<bool, DbError>;
+
+    /// P5 — renomeia/recolore uma etiqueta do catálogo.
+    async fn atualizar_etiqueta(
+        &self,
+        ctx: &RequestContext,
+        id: i64,
+        nome: &str,
+        cor: &str,
+        descricao: &str,
+    ) -> Result<Option<(i64, String, String, String, bool)>, DbError>;
+
+    /// P5 — tira a etiqueta do catálogo sem apagá-la das conversas.
+    async fn desativar_etiqueta(&self, ctx: &RequestContext, id: i64) -> Result<bool, DbError>;
+
     /// P4 — o quadro em linhas, para exportação (leva nome e telefone).
     async fn exportar_quadro(
         &self,

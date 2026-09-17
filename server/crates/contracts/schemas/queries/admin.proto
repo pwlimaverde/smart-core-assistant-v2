@@ -660,6 +660,56 @@ message EnviarMidiaAtendimentoResponse {
   int32 message_id = 1;
 }
 
+// P5 — um acontecimento da vida do atendimento.
+//
+// Tudo o que ja era gravado em tabelas separadas (movimento de etapa, nota,
+// etiqueta, avaliacao) reunido numa linha do tempo: e assim que se explica,
+// depois, por que uma conversa demorou.
+message EventoDaTimeline {
+  // "aberto" | "movido" | "nota" | "etiqueta" | "avaliado" | "encerrado"
+  string tipo = 1;
+  int64 quando = 2;      // epoch ms
+  string descricao = 3;  // ja pronto para a tela
+  string autor = 4;      // vazio quando foi o sistema/IA
+  bool automatico = 5;
+}
+
+message ListarTimelineRequest {
+  int32 atendimento_id = 1;
+}
+
+message ListarTimelineResponse {
+  repeated EventoDaTimeline eventos = 1;
+}
+
+// P5 — as outras conversas do mesmo contato.
+message ListarAtendimentosDoContatoRequest {
+  int32 contato_id = 1;
+  int32 limit = 2;
+}
+
+message ListarAtendimentosDoContatoResponse {
+  repeated AtendimentoResumo atendimentos = 1;
+}
+
+// P5 — apagar uma nota interna.
+message RemoverNotaRequest {
+  int64 nota_id = 1;
+  int32 atendimento_id = 2;
+}
+
+// P5 — manutencao do catalogo de etiquetas.
+message UpdateEtiquetaRequest {
+  int64 id = 1;
+  string nome = 2;
+  string cor = 3;
+  string descricao = 4;
+}
+
+message DesativarEtiquetaRequest {
+  int64 id = 1;
+}
+
 // P4 — quem cuida da conversa.
 //
 // `atendente_id = 0` significa "eu": o servidor resolve o atendente pelo
@@ -1233,6 +1283,12 @@ service AdminService {
   rpc ListarMidiasAtendimento(ListarMidiasAtendimentoRequest) returns (ListarMidiasAtendimentoResponse);
   // P3 — presenca do atendente na conversa (efemera).
   rpc EnviarPresenca(EnviarPresencaRequest) returns (EnviarPresencaResponse);
+  // P5 — a ficha completa.
+  rpc ListarTimelineAtendimento(ListarTimelineRequest) returns (ListarTimelineResponse);
+  rpc ListarAtendimentosDoContato(ListarAtendimentosDoContatoRequest) returns (ListarAtendimentosDoContatoResponse);
+  rpc RemoverNota(RemoverNotaRequest) returns (SimpleOkResponse);
+  rpc UpdateEtiqueta(UpdateEtiquetaRequest) returns (EtiquetaResponse);
+  rpc DesativarEtiqueta(DesativarEtiquetaRequest) returns (SimpleOkResponse);
   // P4 — operacao do quadro pelo supervisor.
   rpc AtribuirAtendimento(AtribuirAtendimentoRequest) returns (AtribuirAtendimentoResponse);
   rpc DefinirPrioridade(DefinirPrioridadeRequest) returns (DefinirPrioridadeResponse);

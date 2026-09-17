@@ -1986,6 +1986,137 @@ final $typed_data.Uint8List enviarMidiaAtendimentoResponseDescriptor =
         'Ch5FbnZpYXJNaWRpYUF0ZW5kaW1lbnRvUmVzcG9uc2USHQoKbWVzc2FnZV9pZBgBIAEoBVIJbW'
         'Vzc2FnZUlk');
 
+@$core.Deprecated('Use eventoDaTimelineDescriptor instead')
+const EventoDaTimeline$json = {
+  '1': 'EventoDaTimeline',
+  '2': [
+    {'1': 'tipo', '3': 1, '4': 1, '5': 9, '10': 'tipo'},
+    {'1': 'quando', '3': 2, '4': 1, '5': 3, '10': 'quando'},
+    {'1': 'descricao', '3': 3, '4': 1, '5': 9, '10': 'descricao'},
+    {'1': 'autor', '3': 4, '4': 1, '5': 9, '10': 'autor'},
+    {'1': 'automatico', '3': 5, '4': 1, '5': 8, '10': 'automatico'},
+  ],
+};
+
+/// Descriptor for `EventoDaTimeline`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List eventoDaTimelineDescriptor = $convert.base64Decode(
+    'ChBFdmVudG9EYVRpbWVsaW5lEhIKBHRpcG8YASABKAlSBHRpcG8SFgoGcXVhbmRvGAIgASgDUg'
+    'ZxdWFuZG8SHAoJZGVzY3JpY2FvGAMgASgJUglkZXNjcmljYW8SFAoFYXV0b3IYBCABKAlSBWF1'
+    'dG9yEh4KCmF1dG9tYXRpY28YBSABKAhSCmF1dG9tYXRpY28=');
+
+@$core.Deprecated('Use listarTimelineRequestDescriptor instead')
+const ListarTimelineRequest$json = {
+  '1': 'ListarTimelineRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+  ],
+};
+
+/// Descriptor for `ListarTimelineRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listarTimelineRequestDescriptor = $convert.base64Decode(
+    'ChVMaXN0YXJUaW1lbGluZVJlcXVlc3QSJQoOYXRlbmRpbWVudG9faWQYASABKAVSDWF0ZW5kaW'
+    '1lbnRvSWQ=');
+
+@$core.Deprecated('Use listarTimelineResponseDescriptor instead')
+const ListarTimelineResponse$json = {
+  '1': 'ListarTimelineResponse',
+  '2': [
+    {
+      '1': 'eventos',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.EventoDaTimeline',
+      '10': 'eventos'
+    },
+  ],
+};
+
+/// Descriptor for `ListarTimelineResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listarTimelineResponseDescriptor =
+    $convert.base64Decode(
+        'ChZMaXN0YXJUaW1lbGluZVJlc3BvbnNlEkcKB2V2ZW50b3MYASADKAsyLS5zbWFydGNvcmUuY2'
+        '9udHJhY3RzLnF1ZXJpZXMuRXZlbnRvRGFUaW1lbGluZVIHZXZlbnRvcw==');
+
+@$core.Deprecated('Use listarAtendimentosDoContatoRequestDescriptor instead')
+const ListarAtendimentosDoContatoRequest$json = {
+  '1': 'ListarAtendimentosDoContatoRequest',
+  '2': [
+    {'1': 'contato_id', '3': 1, '4': 1, '5': 5, '10': 'contatoId'},
+    {'1': 'limit', '3': 2, '4': 1, '5': 5, '10': 'limit'},
+  ],
+};
+
+/// Descriptor for `ListarAtendimentosDoContatoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listarAtendimentosDoContatoRequestDescriptor =
+    $convert.base64Decode(
+        'CiJMaXN0YXJBdGVuZGltZW50b3NEb0NvbnRhdG9SZXF1ZXN0Eh0KCmNvbnRhdG9faWQYASABKA'
+        'VSCWNvbnRhdG9JZBIUCgVsaW1pdBgCIAEoBVIFbGltaXQ=');
+
+@$core.Deprecated('Use listarAtendimentosDoContatoResponseDescriptor instead')
+const ListarAtendimentosDoContatoResponse$json = {
+  '1': 'ListarAtendimentosDoContatoResponse',
+  '2': [
+    {
+      '1': 'atendimentos',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.AtendimentoResumo',
+      '10': 'atendimentos'
+    },
+  ],
+};
+
+/// Descriptor for `ListarAtendimentosDoContatoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listarAtendimentosDoContatoResponseDescriptor =
+    $convert.base64Decode(
+        'CiNMaXN0YXJBdGVuZGltZW50b3NEb0NvbnRhdG9SZXNwb25zZRJSCgxhdGVuZGltZW50b3MYAS'
+        'ADKAsyLi5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuQXRlbmRpbWVudG9SZXN1bW9SDGF0'
+        'ZW5kaW1lbnRvcw==');
+
+@$core.Deprecated('Use removerNotaRequestDescriptor instead')
+const RemoverNotaRequest$json = {
+  '1': 'RemoverNotaRequest',
+  '2': [
+    {'1': 'nota_id', '3': 1, '4': 1, '5': 3, '10': 'notaId'},
+    {'1': 'atendimento_id', '3': 2, '4': 1, '5': 5, '10': 'atendimentoId'},
+  ],
+};
+
+/// Descriptor for `RemoverNotaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List removerNotaRequestDescriptor = $convert.base64Decode(
+    'ChJSZW1vdmVyTm90YVJlcXVlc3QSFwoHbm90YV9pZBgBIAEoA1IGbm90YUlkEiUKDmF0ZW5kaW'
+    '1lbnRvX2lkGAIgASgFUg1hdGVuZGltZW50b0lk');
+
+@$core.Deprecated('Use updateEtiquetaRequestDescriptor instead')
+const UpdateEtiquetaRequest$json = {
+  '1': 'UpdateEtiquetaRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 3, '10': 'id'},
+    {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'cor', '3': 3, '4': 1, '5': 9, '10': 'cor'},
+    {'1': 'descricao', '3': 4, '4': 1, '5': 9, '10': 'descricao'},
+  ],
+};
+
+/// Descriptor for `UpdateEtiquetaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List updateEtiquetaRequestDescriptor = $convert.base64Decode(
+    'ChVVcGRhdGVFdGlxdWV0YVJlcXVlc3QSDgoCaWQYASABKANSAmlkEhIKBG5vbWUYAiABKAlSBG'
+    '5vbWUSEAoDY29yGAMgASgJUgNjb3ISHAoJZGVzY3JpY2FvGAQgASgJUglkZXNjcmljYW8=');
+
+@$core.Deprecated('Use desativarEtiquetaRequestDescriptor instead')
+const DesativarEtiquetaRequest$json = {
+  '1': 'DesativarEtiquetaRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 3, '10': 'id'},
+  ],
+};
+
+/// Descriptor for `DesativarEtiquetaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List desativarEtiquetaRequestDescriptor = $convert
+    .base64Decode('ChhEZXNhdGl2YXJFdGlxdWV0YVJlcXVlc3QSDgoCaWQYASABKANSAmlk');
+
 @$core.Deprecated('Use atribuirAtendimentoRequestDescriptor instead')
 const AtribuirAtendimentoRequest$json = {
   '1': 'AtribuirAtendimentoRequest',

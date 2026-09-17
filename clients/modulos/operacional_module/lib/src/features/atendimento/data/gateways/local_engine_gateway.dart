@@ -16,6 +16,7 @@ import '../../domain/model/ficha.dart';
 import '../../domain/model/midia_mensagem.dart';
 import '../../domain/model/quadro.dart';
 import 'atendimento_remote_gateway.dart';
+import '../../domain/model/evento_timeline.dart';
 
 /// Debounce do gatilho de reconexão (N7.4): `connectivity_plus` reporta o tipo
 /// de interface (não garante alcance real à internet) e pode disparar eventos
@@ -350,6 +351,45 @@ final class LocalEngineGateway implements AtendimentoGateway {
       aoProgredir: aoProgredir,
     );
   }
+
+  // P5 — a ficha vem do servidor: timeline, histórico e catálogo são leitura
+  // de tabelas que o índice local não espelha.
+  @override
+  Future<List<EventoDaTimeline>> listarTimeline({
+    required int atendimentoId,
+  }) => _remoto.listarTimeline(atendimentoId: atendimentoId);
+
+  @override
+  Future<List<AtendimentoResumo>> listarAtendimentosDoContato({
+    required int contatoId,
+    int limit = 20,
+  }) => _remoto.listarAtendimentosDoContato(
+    contatoId: contatoId,
+    limit: limit,
+  );
+
+  @override
+  Future<void> removerNota({
+    required int notaId,
+    required int atendimentoId,
+  }) => _remoto.removerNota(notaId: notaId, atendimentoId: atendimentoId);
+
+  @override
+  Future<Etiqueta> atualizarEtiqueta({
+    required int id,
+    required String nome,
+    String cor = '',
+    String descricao = '',
+  }) => _remoto.atualizarEtiqueta(
+    id: id,
+    nome: nome,
+    cor: cor,
+    descricao: descricao,
+  );
+
+  @override
+  Future<void> desativarEtiqueta({required int id}) =>
+      _remoto.desativarEtiqueta(id: id);
 
   // P4 — operação do quadro: o índice local não decide dono, prioridade nem
   // fluxo, e resolver isso offline criaria conflito com o rodízio do servidor.

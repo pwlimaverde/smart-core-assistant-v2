@@ -606,6 +606,11 @@ async fn main() -> anyhow::Result<()> {
     let state_for_ativo_por_telefone = state_clone.clone();
     let state_for_atribuir = state_clone.clone();
     let state_for_exportar_quadro = state_clone.clone();
+    let state_for_timeline = state_clone.clone();
+    let state_for_do_contato = state_clone.clone();
+    let state_for_remover_nota = state_clone.clone();
+    let state_for_update_etiqueta = state_clone.clone();
+    let state_for_desativar_etiqueta = state_clone.clone();
     let state_for_prioridade = state_clone.clone();
     let state_for_reprocessar_dead_letter = state_clone.clone();
     let state_for_marcar_mensagem_enviada = state_clone.clone();
@@ -819,6 +824,30 @@ async fn main() -> anyhow::Result<()> {
             let state = state_for_marcar_midia_purgada.clone();
             Box::pin(
                 async move { handler_marcar_midia_purgada(state.atendimento.as_ref(), env).await },
+            )
+        })
+        .route("ListarTimelineAtendimento", move |env| {
+            let state = state_for_timeline.clone();
+            Box::pin(async move { handler_listar_timeline(state.atendimento.as_ref(), env).await })
+        })
+        .route("ListarAtendimentosDoContato", move |env| {
+            let state = state_for_do_contato.clone();
+            Box::pin(async move {
+                handler_listar_atendimentos_do_contato(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("RemoverNota", move |env| {
+            let state = state_for_remover_nota.clone();
+            Box::pin(async move { handler_remover_nota(state.atendimento.as_ref(), env).await })
+        })
+        .route("UpdateEtiqueta", move |env| {
+            let state = state_for_update_etiqueta.clone();
+            Box::pin(async move { handler_update_etiqueta(state.atendimento.as_ref(), env).await })
+        })
+        .route("DesativarEtiqueta", move |env| {
+            let state = state_for_desativar_etiqueta.clone();
+            Box::pin(
+                async move { handler_desativar_etiqueta(state.atendimento.as_ref(), env).await },
             )
         })
         .route("ExportarQuadro", move |env| {
@@ -4897,6 +4926,187 @@ async fn handler_resolver_campos_atendimento(
 
 /// Resolve instância/telefone de destino para o envio outbound de uma mensagem do
 /// atendente (elo outbox->outbound, N1.3).
+/// P5 — a linha do tempo do atendimento.
+#[tracing::instrument(skip_all, fields(rpc = "ListarTimelineAtendimento", tenant_id = %env.tenant_id))]
+async fn handler_listar_timeline(store: &dyn ports::AtendimentoStore, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_timeline(&ctx, atendimento_id).await {
+        Ok(eventos) => {
+            let itens: Vec<serde_json::Value> = eventos
+                .into_iter()
+                .map(|e| {
+                    serde_json::json!({
+                        "tipo": e.tipo,
+                        "quando": e.quando.timestamp_millis(),
+                        // A descrição pode conter texto de nota (conteúdo do
+                        // cliente): vai no payload, nunca no log.
+                        "descricao": e.descricao,
+                        "autor": e.autor.unwrap_or_default(),
+                        "automatico": e.automatico,
+                    })
+                })
+                .collect();
+            ok_reply(
+                &env,
+                "ListarTimelineAtendimentoReply",
+                serde_json::json!({ "eventos": itens }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P5 — as outras conversas do mesmo contato.
+#[tracing::instrument(skip_all, fields(rpc = "ListarAtendimentosDoContato", tenant_id = %env.tenant_id))]
+async fn handler_listar_atendimentos_do_contato(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let contato_id = match payload_json.get("contato_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("contato_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let limit = payload_json
+        .get("limit")
+        .and_then(|v| v.as_i64())
+        .filter(|v| *v > 0)
+        .unwrap_or(20);
+
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_do_contato(&ctx, contato_id, limit).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListarAtendimentosDoContatoReply",
+            serde_json::json!({ "atendimentos": itens }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P5 — apaga uma nota interna.
+#[tracing::instrument(skip_all, fields(rpc = "RemoverNota", tenant_id = %env.tenant_id))]
+async fn handler_remover_nota(store: &dyn ports::AtendimentoStore, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let nota_id = payload_json.get("nota_id").and_then(|v| v.as_i64());
+    let atendimento_id = payload_json
+        .get("atendimento_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32);
+    let (Some(nota_id), Some(atendimento_id)) = (nota_id, atendimento_id) else {
+        return erro(
+            error_core::AppError::Validation("nota_id e atendimento_id são obrigatórios".into()),
+            &env,
+        );
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.remover_nota(&ctx, nota_id, atendimento_id).await {
+        Ok(removida) => ok_reply(
+            &env,
+            "RemoverNotaReply",
+            serde_json::json!({ "ok": removida }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P5 — renomeia/recolore uma etiqueta do catálogo.
+#[tracing::instrument(skip_all, fields(rpc = "UpdateEtiqueta", tenant_id = %env.tenant_id))]
+async fn handler_update_etiqueta(store: &dyn ports::AtendimentoStore, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let id = match payload_json.get("id").and_then(|v| v.as_i64()) {
+        Some(id) => id,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+    let texto = |chave: &str| {
+        payload_json
+            .get(chave)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    let nome = texto("nome");
+    if nome.is_empty() {
+        return erro(
+            error_core::AppError::Validation("a etiqueta precisa de um nome".into()),
+            &env,
+        );
+    }
+    let cor = texto("cor");
+    let cor = if cor.is_empty() {
+        "#a98f71".to_string()
+    } else {
+        cor
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .atualizar_etiqueta(&ctx, id, &nome, &cor, &texto("descricao"))
+        .await
+    {
+        Ok(Some((id, nome, cor, descricao, ativo))) => ok_reply(
+            &env,
+            "UpdateEtiquetaReply",
+            serde_json::json!({
+                "id": id, "nome": nome, "cor": cor,
+                "descricao": descricao, "ativo": ativo,
+            }),
+        ),
+        // Não existe (ou é de outro tenant): validação, não falha de banco.
+        Ok(None) => erro(
+            error_core::AppError::Validation("etiqueta não encontrada".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P5 — desativa a etiqueta no catálogo.
+#[tracing::instrument(skip_all, fields(rpc = "DesativarEtiqueta", tenant_id = %env.tenant_id))]
+async fn handler_desativar_etiqueta(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let id = match payload_json.get("id").and_then(|v| v.as_i64()) {
+        Some(id) => id,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.desativar_etiqueta(&ctx, id).await {
+        Ok(ok) => ok_reply(
+            &env,
+            "DesativarEtiquetaReply",
+            serde_json::json!({ "ok": ok }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
 /// P4 — o quadro em CSV.
 ///
 /// Sai com nome e telefone de cliente: é exportação de PII em massa, e por isso

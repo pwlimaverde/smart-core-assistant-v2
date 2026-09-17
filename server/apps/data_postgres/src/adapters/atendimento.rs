@@ -287,6 +287,104 @@ impl AtendimentoStore for PgAtendimentoStore {
         .await
     }
 
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn listar_timeline(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<Vec<infrastructure_postgres::atendimentos::atendimentos::EventoDaTimeline>, DbError>
+    {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let eventos = infrastructure_postgres::atendimentos::atendimentos::listar_timeline(
+                &mut tx,
+                &ctx,
+                atendimento_id,
+            )
+            .await?;
+            Ok((eventos, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, contato_id = contato_id))]
+    async fn listar_do_contato(
+        &self,
+        ctx: &RequestContext,
+        contato_id: i32,
+        limit: i64,
+    ) -> Result<Vec<Atendimento>, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let itens = infrastructure_postgres::atendimentos::atendimentos::listar_do_contato(
+                &mut tx, &ctx, contato_id, limit,
+            )
+            .await?;
+            Ok((itens, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, nota_id = nota_id))]
+    async fn remover_nota(
+        &self,
+        ctx: &RequestContext,
+        nota_id: i64,
+        atendimento_id: i32,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let ok = infrastructure_postgres::atendimentos::etiquetas::remover_nota(
+                &mut tx,
+                &ctx,
+                nota_id,
+                atendimento_id,
+            )
+            .await?;
+            Ok((ok, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, etiqueta_id = id))]
+    async fn atualizar_etiqueta(
+        &self,
+        ctx: &RequestContext,
+        id: i64,
+        nome: &str,
+        cor: &str,
+        descricao: &str,
+    ) -> Result<Option<(i64, String, String, String, bool)>, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let (nome, cor, descricao) = (nome.to_string(), cor.to_string(), descricao.to_string());
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let etiqueta = infrastructure_postgres::atendimentos::etiquetas::atualizar_etiqueta(
+                &mut tx, &ctx, id, &nome, &cor, &descricao,
+            )
+            .await?;
+            Ok((etiqueta, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, etiqueta_id = id))]
+    async fn desativar_etiqueta(&self, ctx: &RequestContext, id: i64) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let ok = infrastructure_postgres::atendimentos::etiquetas::desativar_etiqueta(
+                &mut tx, &ctx, id,
+            )
+            .await?;
+            Ok((ok, tx))
+        })
+        .await
+    }
+
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
     async fn exportar_quadro(
         &self,

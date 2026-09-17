@@ -255,3 +255,73 @@ impl NotaRepository for PostgresNotaRepository {
         Ok(rows)
     }
 }
+
+/// P5 — apaga uma nota interna.
+///
+/// O `atendimento_id` entra no WHERE junto do id da nota: sem ele, um id
+/// adivinhado apagaria nota de outra conversa do mesmo tenant.
+#[tracing::instrument(skip_all, fields(nota_id = nota_id, atendimento_id = atendimento_id))]
+pub async fn remover_nota(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    nota_id: i64,
+    atendimento_id: i32,
+) -> Result<bool, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+    let r = sqlx::query(
+        "DELETE FROM atu_nota WHERE tenant_id = $1 AND id = $2 AND atendimento_id = $3",
+    )
+    .bind(ctx.tenant_id)
+    .bind(nota_id)
+    .bind(atendimento_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(r.rows_affected() > 0)
+}
+
+/// P5 — renomeia/recolore uma etiqueta do catálogo.
+#[tracing::instrument(skip_all, fields(etiqueta_id = id))]
+pub async fn atualizar_etiqueta(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    id: i64,
+    nome: &str,
+    cor: &str,
+    descricao: &str,
+) -> Result<Option<(i64, String, String, String, bool)>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+    let row = sqlx::query_as::<_, (i64, String, String, String, bool)>(
+        r#"UPDATE atu_etiqueta
+              SET nome = $1, cor = $2, descricao = $3
+            WHERE tenant_id = $4 AND id = $5
+        RETURNING id, nome, cor, descricao, ativo"#,
+    )
+    .bind(nome)
+    .bind(cor)
+    .bind(descricao)
+    .bind(ctx.tenant_id)
+    .bind(id)
+    .fetch_optional(&mut **tx)
+    .await
+    .map_err(DbError::from_sqlx_unique)?;
+    Ok(row)
+}
+
+/// P5 — tira a etiqueta do catálogo **sem** apagá-la das conversas.
+///
+/// Desativar e não excluir: a etiqueta aplicada é história do atendimento, e
+/// apagar a linha reescreveria o passado só porque o catálogo mudou.
+#[tracing::instrument(skip_all, fields(etiqueta_id = id))]
+pub async fn desativar_etiqueta(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    id: i64,
+) -> Result<bool, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+    let r = sqlx::query("UPDATE atu_etiqueta SET ativo = false WHERE tenant_id = $1 AND id = $2")
+        .bind(ctx.tenant_id)
+        .bind(id)
+        .execute(&mut **tx)
+        .await?;
+    Ok(r.rows_affected() > 0)
+}

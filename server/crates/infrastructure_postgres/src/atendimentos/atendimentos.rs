@@ -1456,3 +1456,116 @@ pub async fn exportar_quadro(
     .await?;
     Ok(rows)
 }
+
+/// P5 — um acontecimento da vida do atendimento, já pronto para a tela.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct EventoDaTimeline {
+    pub tipo: String,
+    pub quando: chrono::DateTime<chrono::Utc>,
+    pub descricao: String,
+    pub autor: Option<String>,
+    pub automatico: bool,
+}
+
+/// P5 — a linha do tempo do atendimento.
+///
+/// Junta numa consulta só o que estava espalhado por quatro tabelas. É um
+/// `UNION ALL` e não quatro chamadas porque a tela desenha uma lista ordenada:
+/// fundir no cliente daria a mesma coisa com quatro idas ao banco e a chance
+/// de mostrar metade da história enquanto a outra metade não chegou.
+#[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
+pub async fn listar_timeline(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+) -> Result<Vec<EventoDaTimeline>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let rows = sqlx::query_as::<_, EventoDaTimeline>(
+        r#"
+        SELECT 'aberto' AS tipo,
+               a.data_inicio AS quando,
+               COALESCE(NULLIF(a.assunto, ''), 'Conversa iniciada') AS descricao,
+               NULL::varchar AS autor,
+               true AS automatico
+          FROM oraculo_atendimento a
+         WHERE a.tenant_id = $1 AND a.id = $2
+
+        UNION ALL
+
+        SELECT 'movido',
+               m.data_movimento,
+               COALESCE(eo.nome, 'início') || ' → ' || COALESCE(ed.nome, '?')
+                 || COALESCE(' (' || NULLIF(m.motivo, '') || ')', ''),
+               ad.nome,
+               m.automatico
+          FROM oraculo_movimento_fluxo m
+          LEFT JOIN oraculo_etapa_fluxo eo
+            ON eo.id = m.etapa_origem_id AND eo.tenant_id = m.tenant_id
+          LEFT JOIN oraculo_etapa_fluxo ed
+            ON ed.id = m.etapa_destino_id AND ed.tenant_id = m.tenant_id
+          LEFT JOIN oraculo_atendente ad
+            ON ad.id = m.atendente_destino_id AND ad.tenant_id = m.tenant_id
+         WHERE m.tenant_id = $1 AND m.atendimento_id = $2
+
+        UNION ALL
+
+        SELECT 'nota', n.criado_em, n.texto, at.nome, false
+          FROM atu_nota n
+          LEFT JOIN oraculo_atendente at
+            ON at.id = n.criado_por_id AND at.tenant_id = n.tenant_id
+         WHERE n.tenant_id = $1 AND n.atendimento_id = $2
+
+        UNION ALL
+
+        SELECT 'etiqueta', ea.aplicada_em, e.nome, ap.nome, false
+          FROM atu_etiqueta_atendimento ea
+          JOIN atu_etiqueta e
+            ON e.id = ea.etiqueta_id AND e.tenant_id = ea.tenant_id
+          LEFT JOIN oraculo_atendente ap
+            ON ap.id = ea.aplicada_por_id AND ap.tenant_id = ea.tenant_id
+         WHERE ea.tenant_id = $1 AND ea.atendimento_id = $2
+
+        UNION ALL
+
+        SELECT 'encerrado', a.data_fim, 'Atendimento ' || a.status, NULL::varchar, false
+          FROM oraculo_atendimento a
+         WHERE a.tenant_id = $1 AND a.id = $2 AND a.data_fim IS NOT NULL
+
+        ORDER BY quando ASC
+        "#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows)
+}
+
+/// P5 — as outras conversas do mesmo contato, da mais recente para a antiga.
+#[tracing::instrument(skip_all, fields(contato_id = contato_id))]
+pub async fn listar_do_contato(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    contato_id: i32,
+    limit: i64,
+) -> Result<Vec<Atendimento>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let rows = sqlx::query_as::<_, Atendimento>(
+        r#"SELECT id, tenant_id, contato_id, departamento_id, fluxo_atendimento_id,
+                  status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
+                  assunto, prioridade, atendente_humano_id, contexto_conversa,
+                  historico_status, tags, avaliacao, feedback,
+                  data_primeira_resposta, bot_pode_atender,
+                  sentimento_nota, sentimento_label
+             FROM oraculo_atendimento
+            WHERE tenant_id = $1 AND contato_id = $2
+            ORDER BY data_inicio DESC
+            LIMIT $3"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(contato_id)
+    .bind(limit)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows)
+}

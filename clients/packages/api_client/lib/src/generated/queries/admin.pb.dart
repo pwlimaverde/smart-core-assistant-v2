@@ -7764,6 +7764,567 @@ class EnviarMidiaAtendimentoResponse extends $pb.GeneratedMessage {
   void clearMessageId() => $_clearField(1);
 }
 
+/// P5 — um acontecimento da vida do atendimento.
+///
+/// Tudo o que ja era gravado em tabelas separadas (movimento de etapa, nota,
+/// etiqueta, avaliacao) reunido numa linha do tempo: e assim que se explica,
+/// depois, por que uma conversa demorou.
+class EventoDaTimeline extends $pb.GeneratedMessage {
+  factory EventoDaTimeline({
+    $core.String? tipo,
+    $fixnum.Int64? quando,
+    $core.String? descricao,
+    $core.String? autor,
+    $core.bool? automatico,
+  }) {
+    final result = create();
+    if (tipo != null) result.tipo = tipo;
+    if (quando != null) result.quando = quando;
+    if (descricao != null) result.descricao = descricao;
+    if (autor != null) result.autor = autor;
+    if (automatico != null) result.automatico = automatico;
+    return result;
+  }
+
+  EventoDaTimeline._();
+
+  factory EventoDaTimeline.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory EventoDaTimeline.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'EventoDaTimeline',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'tipo')
+    ..aInt64(2, _omitFieldNames ? '' : 'quando')
+    ..aOS(3, _omitFieldNames ? '' : 'descricao')
+    ..aOS(4, _omitFieldNames ? '' : 'autor')
+    ..aOB(5, _omitFieldNames ? '' : 'automatico')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EventoDaTimeline clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  EventoDaTimeline copyWith(void Function(EventoDaTimeline) updates) =>
+      super.copyWith((message) => updates(message as EventoDaTimeline))
+          as EventoDaTimeline;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static EventoDaTimeline create() => EventoDaTimeline._();
+  @$core.override
+  EventoDaTimeline createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static EventoDaTimeline getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<EventoDaTimeline>(create);
+  static EventoDaTimeline? _defaultInstance;
+
+  /// "aberto" | "movido" | "nota" | "etiqueta" | "avaliado" | "encerrado"
+  @$pb.TagNumber(1)
+  $core.String get tipo => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set tipo($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTipo() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTipo() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $fixnum.Int64 get quando => $_getI64(1);
+  @$pb.TagNumber(2)
+  set quando($fixnum.Int64 value) => $_setInt64(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasQuando() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearQuando() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get descricao => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set descricao($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDescricao() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDescricao() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get autor => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set autor($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasAutor() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearAutor() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.bool get automatico => $_getBF(4);
+  @$pb.TagNumber(5)
+  set automatico($core.bool value) => $_setBool(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasAutomatico() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearAutomatico() => $_clearField(5);
+}
+
+class ListarTimelineRequest extends $pb.GeneratedMessage {
+  factory ListarTimelineRequest({
+    $core.int? atendimentoId,
+  }) {
+    final result = create();
+    if (atendimentoId != null) result.atendimentoId = atendimentoId;
+    return result;
+  }
+
+  ListarTimelineRequest._();
+
+  factory ListarTimelineRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListarTimelineRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListarTimelineRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'atendimentoId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListarTimelineRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListarTimelineRequest copyWith(
+          void Function(ListarTimelineRequest) updates) =>
+      super.copyWith((message) => updates(message as ListarTimelineRequest))
+          as ListarTimelineRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListarTimelineRequest create() => ListarTimelineRequest._();
+  @$core.override
+  ListarTimelineRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListarTimelineRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListarTimelineRequest>(create);
+  static ListarTimelineRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get atendimentoId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set atendimentoId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAtendimentoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAtendimentoId() => $_clearField(1);
+}
+
+class ListarTimelineResponse extends $pb.GeneratedMessage {
+  factory ListarTimelineResponse({
+    $core.Iterable<EventoDaTimeline>? eventos,
+  }) {
+    final result = create();
+    if (eventos != null) result.eventos.addAll(eventos);
+    return result;
+  }
+
+  ListarTimelineResponse._();
+
+  factory ListarTimelineResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListarTimelineResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListarTimelineResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<EventoDaTimeline>(1, _omitFieldNames ? '' : 'eventos',
+        subBuilder: EventoDaTimeline.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListarTimelineResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListarTimelineResponse copyWith(
+          void Function(ListarTimelineResponse) updates) =>
+      super.copyWith((message) => updates(message as ListarTimelineResponse))
+          as ListarTimelineResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListarTimelineResponse create() => ListarTimelineResponse._();
+  @$core.override
+  ListarTimelineResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListarTimelineResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListarTimelineResponse>(create);
+  static ListarTimelineResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<EventoDaTimeline> get eventos => $_getList(0);
+}
+
+/// P5 — as outras conversas do mesmo contato.
+class ListarAtendimentosDoContatoRequest extends $pb.GeneratedMessage {
+  factory ListarAtendimentosDoContatoRequest({
+    $core.int? contatoId,
+    $core.int? limit,
+  }) {
+    final result = create();
+    if (contatoId != null) result.contatoId = contatoId;
+    if (limit != null) result.limit = limit;
+    return result;
+  }
+
+  ListarAtendimentosDoContatoRequest._();
+
+  factory ListarAtendimentosDoContatoRequest.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListarAtendimentosDoContatoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListarAtendimentosDoContatoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'contatoId')
+    ..aI(2, _omitFieldNames ? '' : 'limit')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListarAtendimentosDoContatoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListarAtendimentosDoContatoRequest copyWith(
+          void Function(ListarAtendimentosDoContatoRequest) updates) =>
+      super.copyWith((message) =>
+              updates(message as ListarAtendimentosDoContatoRequest))
+          as ListarAtendimentosDoContatoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListarAtendimentosDoContatoRequest create() =>
+      ListarAtendimentosDoContatoRequest._();
+  @$core.override
+  ListarAtendimentosDoContatoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListarAtendimentosDoContatoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListarAtendimentosDoContatoRequest>(
+          create);
+  static ListarAtendimentosDoContatoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get contatoId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set contatoId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasContatoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearContatoId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get limit => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set limit($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasLimit() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearLimit() => $_clearField(2);
+}
+
+class ListarAtendimentosDoContatoResponse extends $pb.GeneratedMessage {
+  factory ListarAtendimentosDoContatoResponse({
+    $core.Iterable<AtendimentoResumo>? atendimentos,
+  }) {
+    final result = create();
+    if (atendimentos != null) result.atendimentos.addAll(atendimentos);
+    return result;
+  }
+
+  ListarAtendimentosDoContatoResponse._();
+
+  factory ListarAtendimentosDoContatoResponse.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListarAtendimentosDoContatoResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListarAtendimentosDoContatoResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<AtendimentoResumo>(1, _omitFieldNames ? '' : 'atendimentos',
+        subBuilder: AtendimentoResumo.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListarAtendimentosDoContatoResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListarAtendimentosDoContatoResponse copyWith(
+          void Function(ListarAtendimentosDoContatoResponse) updates) =>
+      super.copyWith((message) =>
+              updates(message as ListarAtendimentosDoContatoResponse))
+          as ListarAtendimentosDoContatoResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListarAtendimentosDoContatoResponse create() =>
+      ListarAtendimentosDoContatoResponse._();
+  @$core.override
+  ListarAtendimentosDoContatoResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListarAtendimentosDoContatoResponse getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<
+          ListarAtendimentosDoContatoResponse>(create);
+  static ListarAtendimentosDoContatoResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<AtendimentoResumo> get atendimentos => $_getList(0);
+}
+
+/// P5 — apagar uma nota interna.
+class RemoverNotaRequest extends $pb.GeneratedMessage {
+  factory RemoverNotaRequest({
+    $fixnum.Int64? notaId,
+    $core.int? atendimentoId,
+  }) {
+    final result = create();
+    if (notaId != null) result.notaId = notaId;
+    if (atendimentoId != null) result.atendimentoId = atendimentoId;
+    return result;
+  }
+
+  RemoverNotaRequest._();
+
+  factory RemoverNotaRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory RemoverNotaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'RemoverNotaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'notaId')
+    ..aI(2, _omitFieldNames ? '' : 'atendimentoId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RemoverNotaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  RemoverNotaRequest copyWith(void Function(RemoverNotaRequest) updates) =>
+      super.copyWith((message) => updates(message as RemoverNotaRequest))
+          as RemoverNotaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static RemoverNotaRequest create() => RemoverNotaRequest._();
+  @$core.override
+  RemoverNotaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static RemoverNotaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<RemoverNotaRequest>(create);
+  static RemoverNotaRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get notaId => $_getI64(0);
+  @$pb.TagNumber(1)
+  set notaId($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasNotaId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearNotaId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get atendimentoId => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set atendimentoId($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasAtendimentoId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearAtendimentoId() => $_clearField(2);
+}
+
+/// P5 — manutencao do catalogo de etiquetas.
+class UpdateEtiquetaRequest extends $pb.GeneratedMessage {
+  factory UpdateEtiquetaRequest({
+    $fixnum.Int64? id,
+    $core.String? nome,
+    $core.String? cor,
+    $core.String? descricao,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (nome != null) result.nome = nome;
+    if (cor != null) result.cor = cor;
+    if (descricao != null) result.descricao = descricao;
+    return result;
+  }
+
+  UpdateEtiquetaRequest._();
+
+  factory UpdateEtiquetaRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory UpdateEtiquetaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'UpdateEtiquetaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'nome')
+    ..aOS(3, _omitFieldNames ? '' : 'cor')
+    ..aOS(4, _omitFieldNames ? '' : 'descricao')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateEtiquetaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateEtiquetaRequest copyWith(
+          void Function(UpdateEtiquetaRequest) updates) =>
+      super.copyWith((message) => updates(message as UpdateEtiquetaRequest))
+          as UpdateEtiquetaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static UpdateEtiquetaRequest create() => UpdateEtiquetaRequest._();
+  @$core.override
+  UpdateEtiquetaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static UpdateEtiquetaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<UpdateEtiquetaRequest>(create);
+  static UpdateEtiquetaRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get id => $_getI64(0);
+  @$pb.TagNumber(1)
+  set id($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nome => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nome($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNome() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNome() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get cor => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set cor($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasCor() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearCor() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get descricao => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set descricao($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasDescricao() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearDescricao() => $_clearField(4);
+}
+
+class DesativarEtiquetaRequest extends $pb.GeneratedMessage {
+  factory DesativarEtiquetaRequest({
+    $fixnum.Int64? id,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    return result;
+  }
+
+  DesativarEtiquetaRequest._();
+
+  factory DesativarEtiquetaRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory DesativarEtiquetaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'DesativarEtiquetaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'id')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DesativarEtiquetaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DesativarEtiquetaRequest copyWith(
+          void Function(DesativarEtiquetaRequest) updates) =>
+      super.copyWith((message) => updates(message as DesativarEtiquetaRequest))
+          as DesativarEtiquetaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static DesativarEtiquetaRequest create() => DesativarEtiquetaRequest._();
+  @$core.override
+  DesativarEtiquetaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static DesativarEtiquetaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<DesativarEtiquetaRequest>(create);
+  static DesativarEtiquetaRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get id => $_getI64(0);
+  @$pb.TagNumber(1)
+  set id($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+}
+
 /// P4 — quem cuida da conversa.
 ///
 /// `atendente_id = 0` significa "eu": o servidor resolve o atendente pelo

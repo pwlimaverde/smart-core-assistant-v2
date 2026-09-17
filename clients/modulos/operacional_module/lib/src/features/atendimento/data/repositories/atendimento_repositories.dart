@@ -24,6 +24,7 @@ import '../../domain/parameters/send_outbound_message_parameters.dart';
 import '../../domain/model/midia_mensagem.dart';
 import '../../domain/parameters/presenca_parameters.dart';
 import '../../domain/parameters/quadro_operacao_parameters.dart';
+import '../../domain/model/evento_timeline.dart';
 
 /// As quatro fronteiras da feature. Cada `mapError` traduz a natureza da falha
 /// (transporte gRPC no Web, [LocalEngineFalha] no desktop) para o conjunto
@@ -580,4 +581,64 @@ final class ExportarQuadroRepository
     StackTrace s,
     ExportarQuadroParameters p,
   ) => _erroDeOperacaoDoQuadro(e, s, null);
+}
+
+/// P5 — tudo o que é ficha usa o mesmo conjunto de erros (`FichaError`): é o
+/// mesmo painel, e a tela trata as falhas no mesmo lugar.
+final class ListarTimelineRepository
+    extends
+        RepositoryBase<
+          List<EventoDaTimeline>,
+          ListarTimelineParameters,
+          FichaError
+        > {
+  const ListarTimelineRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, ListarTimelineParameters p) =>
+      _erroDeFicha(e, s, p.atendimentoId);
+}
+
+final class AtendimentosDoContatoRepository
+    extends
+        RepositoryBase<
+          List<AtendimentoResumo>,
+          AtendimentosDoContatoParameters,
+          FichaError
+        > {
+  const AtendimentosDoContatoRepository({required super.datasource});
+
+  @override
+  FichaError mapError(
+    Object e,
+    StackTrace s,
+    AtendimentosDoContatoParameters p,
+  ) => _erroDeFicha(e, s, null);
+}
+
+final class RemoverNotaRepository
+    extends RepositoryBase<Unit, RemoverNotaParameters, FichaError> {
+  const RemoverNotaRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, RemoverNotaParameters p) =>
+      _erroDeFicha(e, s, p.atendimentoId);
+}
+
+final class AtualizarEtiquetaRepository
+    extends RepositoryBase<Etiqueta, AtualizarEtiquetaParameters, FichaError> {
+  const AtualizarEtiquetaRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, AtualizarEtiquetaParameters p) =>
+      _erroDeFicha(e, s, null);
+}
+
+final class DesativarEtiquetaRepository
+    extends RepositoryBase<Unit, DesativarEtiquetaParameters, FichaError> {
+  const DesativarEtiquetaRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, DesativarEtiquetaParameters p) =>
+      _erroDeFicha(e, s, null);
 }

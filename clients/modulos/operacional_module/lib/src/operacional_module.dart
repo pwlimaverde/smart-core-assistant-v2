@@ -126,6 +126,51 @@ final class OperacionalModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<ListarTimelineUsecase>(
+      () => ListarTimelineUsecase(
+        repository: ListarTimelineRepository(
+          datasource: ListarTimelineDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<AtendimentosDoContatoUsecase>(
+      () => AtendimentosDoContatoUsecase(
+        repository: AtendimentosDoContatoRepository(
+          datasource: AtendimentosDoContatoDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<RemoverNotaUsecase>(
+      () => RemoverNotaUsecase(
+        repository: RemoverNotaRepository(
+          datasource: RemoverNotaDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<AtualizarEtiquetaUsecase>(
+      () => AtualizarEtiquetaUsecase(
+        repository: AtualizarEtiquetaRepository(
+          datasource: AtualizarEtiquetaDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<DesativarEtiquetaUsecase>(
+      () => DesativarEtiquetaUsecase(
+        repository: DesativarEtiquetaRepository(
+          datasource: DesativarEtiquetaDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
     i.lazySingleton<AtribuirAtendimentoUsecase>(
       () => AtribuirAtendimentoUsecase(
         repository: AtribuirAtendimentoRepository(

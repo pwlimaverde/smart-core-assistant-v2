@@ -54,6 +54,22 @@ void main() {
             datasource: DefinirValorCampoDatasource(gateway: gateway),
           ),
         ),
+        // P5 — a ficha agora exclui nota e mantém o catálogo de etiquetas.
+        removerNota: RemoverNotaUsecase(
+          repository: RemoverNotaRepository(
+            datasource: RemoverNotaDatasource(gateway: gateway),
+          ),
+        ),
+        atualizarEtiqueta: AtualizarEtiquetaUsecase(
+          repository: AtualizarEtiquetaRepository(
+            datasource: AtualizarEtiquetaDatasource(gateway: gateway),
+          ),
+        ),
+        desativarEtiqueta: DesativarEtiquetaUsecase(
+          repository: DesativarEtiquetaRepository(
+            datasource: DesativarEtiquetaDatasource(gateway: gateway),
+          ),
+        ),
       );
 
   Future<FichaController> montar(
@@ -377,5 +393,33 @@ void main() {
     )(const AtendimentoIdParameters(atendimentoId: 1));
 
     expect((res as Failure).error, isA<FichaSessaoExpirada>());
+  });
+
+  // ─── P5: excluir anotação ────────────────────────────────────────────────
+  testWidgets('excluir anotação pede confirmação e vai ao servidor', (
+    tester,
+  ) async {
+    final gateway = FakeAtendimentoGateway()
+      ..ficha = FichaAtendimento(
+        catalogo: const [],
+        aplicadas: const [],
+        notas: [
+          Nota(
+            id: 3,
+            texto: 'cliente pediu retorno',
+            criadoEm: DateTime(2026, 1, 1),
+          ),
+        ],
+      );
+    final controller = await montar(tester, gateway);
+    await controller.abrir(1);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Excluir anotação'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Excluir'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.acoesDaFicha, contains('removerNota:3:1'));
   });
 }

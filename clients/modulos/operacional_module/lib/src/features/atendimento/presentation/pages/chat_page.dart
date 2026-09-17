@@ -92,6 +92,19 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
       criarNota: inject(),
       definirBot: inject(),
       definirValorCampo: inject(),
+      // P5 — mesmo critério dos demais opcionais: sem registro, a ficha abre
+      // e só não oferece excluir nota nem editar etiqueta.
+      removerNota: GetIt.instance.isRegistered<RemoverNotaUsecase>()
+          ? inject<RemoverNotaUsecase>()
+          : null,
+      atualizarEtiqueta:
+          GetIt.instance.isRegistered<AtualizarEtiquetaUsecase>()
+          ? inject<AtualizarEtiquetaUsecase>()
+          : null,
+      desativarEtiqueta:
+          GetIt.instance.isRegistered<DesativarEtiquetaUsecase>()
+          ? inject<DesativarEtiquetaUsecase>()
+          : null,
     );
     _controller.abrir(widget.atendimentoId);
     _ficha.abrir(widget.atendimentoId);

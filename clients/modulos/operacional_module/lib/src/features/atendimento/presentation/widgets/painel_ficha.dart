@@ -1,9 +1,15 @@
 import 'package:design_system_module/design_system_module.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:get_it_module/get_it_module.dart';
 import 'package:presentation_module/presentation_module.dart';
+import 'package:return_success_or_error/return_success_or_error.dart';
 
+import '../../domain/errors/atendimento_errors.dart';
+import '../../domain/model/evento_timeline.dart';
 import '../../domain/model/ficha.dart';
+import '../../domain/parameters/ficha_parameters.dart';
+import '../../domain/usecases/atendimento_usecases.dart';
 import '../controllers/ficha_controller.dart';
 import 'dialogo_valor_campo.dart';
 
@@ -163,6 +169,23 @@ class _Conteudo extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
+                'História',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.history, size: 18),
+              tooltip: 'Ver a história do atendimento',
+              onPressed: () =>
+                  _abrirTimeline(context, controller.atendimentoId),
+            ),
+          ],
+        ),
+        const Divider(height: AppSpacing.xl),
+        Row(
+          children: [
+            Expanded(
+              child: Text(
                 'Anotações',
                 style: Theme.of(context).textTheme.titleSmall,
               ),
@@ -194,13 +217,26 @@ class _Conteudo extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    _quando(nota.criadoEm),
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelSmall?.copyWith(color: muted),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          _quando(nota.criadoEm),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.labelSmall?.copyWith(color: muted),
+                        ),
+                      ),
+                      // P5 — nota escrita errada ficava para sempre.
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 16),
+                        tooltip: 'Excluir anotação',
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () =>
+                            _excluirNota(context, controller, nota.id),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: AppSpacing.xs),
                   Text(nota.texto),
                 ],
               ),
@@ -649,4 +685,162 @@ class _LinhaDeCampo extends StatelessWidget {
       _ => semAspas,
     };
   }
+}
+
+/// P5 — confirma antes de apagar: anotação some para todo mundo.
+Future<void> _excluirNota(
+  BuildContext context,
+  FichaController controller,
+  int notaId,
+) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final confirmou = await showDialog<bool>(
+    context: context,
+    builder: (dialogo) => AlertDialog(
+      title: const Text('Excluir a anotação?'),
+      content: const Text('Ela some para todos os atendentes.'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dialogo).pop(false),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.of(dialogo).pop(true),
+          child: const Text('Excluir'),
+        ),
+      ],
+    ),
+  );
+  if (confirmou != true) return;
+  final erro = await controller.removerNota(notaId);
+  if (erro != null) {
+    messenger.showSnackBar(SnackBar(content: Text(erro.message)));
+  }
+}
+
+/// P5 — a história do atendimento, do jeito que a v1 mostrava: aberto, movido,
+/// anotado, etiquetado, encerrado.
+Future<void> _abrirTimeline(BuildContext context, int atendimentoId) {
+  return showDialog<void>(
+    context: context,
+    builder: (_) => Dialog(
+      child: SizedBox(
+        width: 560,
+        height: 480,
+        child: _Timeline(atendimentoId: atendimentoId),
+      ),
+    ),
+  );
+}
+
+class _Timeline extends StatefulWidget {
+  final int atendimentoId;
+
+  const _Timeline({required this.atendimentoId});
+
+  @override
+  State<_Timeline> createState() => _TimelineState();
+}
+
+class _TimelineState extends State<_Timeline> {
+  late Future<ReturnSuccessOrError<List<EventoDaTimeline>, FichaError>> _futuro;
+
+  @override
+  void initState() {
+    super.initState();
+    _futuro = inject<ListarTimelineUsecase>()(
+      ListarTimelineParameters(atendimentoId: widget.atendimentoId),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final muted = context.colors.fgMuted;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          child: Row(
+            children: [
+              const Icon(Icons.history, size: 20),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                'História do atendimento',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const Spacer(),
+              IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Fechar',
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: FutureBuilder<
+            ReturnSuccessOrError<List<EventoDaTimeline>, FichaError>
+          >(
+            future: _futuro,
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              return switch (snapshot.data!) {
+                Failure(:final error) => AppErrorView(message: error.message),
+                Success(:final value) when value.isEmpty => const AppEmptyView(
+                  icon: Icons.history,
+                  title: 'Sem história ainda',
+                  subtitle: 'Movimentos e anotações aparecem aqui.',
+                ),
+                Success(:final value) => ListView.separated(
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  itemCount: value.length,
+                  separatorBuilder: (_, _) =>
+                      const SizedBox(height: AppSpacing.sm),
+                  itemBuilder: (context, i) {
+                    final e = value[i];
+                    return Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(_icone(e.tipo), size: 16, color: muted),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(e.descricao),
+                              Text(
+                                [
+                                  _quando(e.quando),
+                                  if (e.autor.isNotEmpty) e.autor,
+                                  if (e.automatico) 'automático',
+                                ].join(' · '),
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(color: muted),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              };
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  static IconData _icone(String tipo) => switch (tipo) {
+    'aberto' => Icons.play_circle_outline,
+    'movido' => Icons.swap_horiz,
+    'nota' => Icons.sticky_note_2_outlined,
+    'etiqueta' => Icons.label_outline,
+    'avaliado' => Icons.star_outline,
+    'encerrado' => Icons.flag_outlined,
+    _ => Icons.circle_outlined,
+  };
 }

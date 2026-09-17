@@ -12,6 +12,7 @@ import '../../domain/model/mensagem_thread.dart';
 import '../../domain/model/ficha.dart';
 import '../../domain/model/midia_mensagem.dart';
 import '../../domain/model/quadro.dart';
+import '../../domain/model/evento_timeline.dart';
 
 /// Adapter Web do [AtendimentoGateway] via gRPC-Web (`AdminServiceClient`).
 ///
@@ -203,6 +204,78 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
       ),
     );
     return confirmacao.messageId;
+  }
+
+  @override
+  Future<List<EventoDaTimeline>> listarTimeline({
+    required int atendimentoId,
+  }) async {
+    final resp = await _client.listarTimelineAtendimento(
+      proto.ListarTimelineRequest(atendimentoId: atendimentoId),
+    );
+    return resp.eventos
+        .map(
+          (e) => EventoDaTimeline(
+            tipo: e.tipo,
+            quando: DateTime.fromMillisecondsSinceEpoch(e.quando.toInt()),
+            descricao: e.descricao,
+            autor: e.autor,
+            automatico: e.automatico,
+          ),
+        )
+        .toList();
+  }
+
+  @override
+  Future<List<AtendimentoResumo>> listarAtendimentosDoContato({
+    required int contatoId,
+    int limit = 20,
+  }) async {
+    final resp = await _client.listarAtendimentosDoContato(
+      proto.ListarAtendimentosDoContatoRequest(
+        contatoId: contatoId,
+        limit: limit,
+      ),
+    );
+    return resp.atendimentos.map(_paraAtendimentoResumo).toList();
+  }
+
+  @override
+  Future<void> removerNota({
+    required int notaId,
+    required int atendimentoId,
+  }) async {
+    await _client.removerNota(
+      proto.RemoverNotaRequest(
+        notaId: Int64(notaId),
+        atendimentoId: atendimentoId,
+      ),
+    );
+  }
+
+  @override
+  Future<Etiqueta> atualizarEtiqueta({
+    required int id,
+    required String nome,
+    String cor = '',
+    String descricao = '',
+  }) async {
+    final resp = await _client.updateEtiqueta(
+      proto.UpdateEtiquetaRequest(
+        id: Int64(id),
+        nome: nome,
+        cor: cor,
+        descricao: descricao,
+      ),
+    );
+    return _etiquetaDoProto(resp.etiqueta);
+  }
+
+  @override
+  Future<void> desativarEtiqueta({required int id}) async {
+    await _client.desativarEtiqueta(
+      proto.DesativarEtiquetaRequest(id: Int64(id)),
+    );
   }
 
   @override

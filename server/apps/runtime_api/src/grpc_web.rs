@@ -70,6 +70,7 @@ use contracts::grpc::queries::{
     DefinirRespostaBotInstanciaResponse,
     DeleteCoreSettingRequest,
     DeleteCoreSettingResponse,
+    DesativarEtiquetaRequest,
     DetalheAtendimentoResponse,
     EnviarMidiaAtendimentoRequest,
     EnviarMidiaAtendimentoResponse,
@@ -77,6 +78,7 @@ use contracts::grpc::queries::{
     EnviarPresencaResponse,
     Etiqueta as ProtoEtiqueta,
     EtiquetaResponse,
+    EventoDaTimeline,
     ExportTenantsCsvRequest,
     ExportTenantsCsvResponse,
     ExportarQuadroRequest,
@@ -156,8 +158,12 @@ use contracts::grpc::queries::{
     ListVoucherRedemptionsResponse,
     ListVouchersRequest,
     ListVouchersResponse,
+    ListarAtendimentosDoContatoRequest,
+    ListarAtendimentosDoContatoResponse,
     ListarMidiasAtendimentoRequest,
     ListarMidiasAtendimentoResponse,
+    ListarTimelineRequest,
+    ListarTimelineResponse,
     LoginRequest,
     LogoutRequest,
     LogoutResponse,
@@ -217,6 +223,7 @@ use contracts::grpc::queries::{
     RegistrarFeedbackTesteRequest,
     RegistrarFeedbackTesteResponse,
     RemoverMyTreinamentoRequest,
+    RemoverNotaRequest,
     RevokeInviteRequest,
     RevokeInviteResponse,
     RevokeMcpGrantRequest,
@@ -260,6 +267,7 @@ use contracts::grpc::queries::{
     TransferirParaFluxoRequest,
     TransferirParaFluxoResponse,
     TrechoUsado,
+    UpdateEtiquetaRequest,
     UpdateMyAtendenteRequest,
     UpdateMyCampoRequest,
     UpdateMyClienteRequest,
@@ -5897,6 +5905,171 @@ impl AdminService for AdminFacade {
     // superuser); o RBAC fino por fluxo (flow_permissions, WS-5a) é aplicado no
     // data_postgres sobre cada atendimento/fluxo. ---
 
+    /// P5 — a história do atendimento numa lista só.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "ListarTimelineAtendimento",
+            traceparent
+        )
+    )]
+    async fn listar_timeline_atendimento(
+        &self,
+        req: Request<ListarTimelineRequest>,
+    ) -> Result<Response<ListarTimelineResponse>, Status> {
+        let inner_ref = *req.get_ref();
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "ListarTimelineAtendimento",
+                &["atendimentos:read"],
+                serde_json::json!({ "atendimento_id": inner_ref.atendimento_id }),
+            )
+            .await?;
+
+        let eventos = corpo
+            .get("eventos")
+            .and_then(|v| v.as_array())
+            .map(|itens| {
+                itens
+                    .iter()
+                    .map(|e| {
+                        let texto = |chave: &str| {
+                            e.get(chave)
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_string()
+                        };
+                        EventoDaTimeline {
+                            tipo: texto("tipo"),
+                            quando: e.get("quando").and_then(|v| v.as_i64()).unwrap_or(0),
+                            descricao: texto("descricao"),
+                            autor: texto("autor"),
+                            automatico: e
+                                .get("automatico")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false),
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(Response::new(ListarTimelineResponse { eventos }))
+    }
+
+    /// P5 — as outras conversas do mesmo contato.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "ListarAtendimentosDoContato",
+            traceparent
+        )
+    )]
+    async fn listar_atendimentos_do_contato(
+        &self,
+        req: Request<ListarAtendimentosDoContatoRequest>,
+    ) -> Result<Response<ListarAtendimentosDoContatoResponse>, Status> {
+        let inner_ref = *req.get_ref();
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "ListarAtendimentosDoContato",
+                &["atendimentos:read"],
+                serde_json::json!({
+                    "contato_id": inner_ref.contato_id,
+                    "limit": if inner_ref.limit > 0 { inner_ref.limit } else { 20 },
+                }),
+            )
+            .await?;
+
+        let atendimentos = corpo
+            .get("atendimentos")
+            .and_then(|v| v.as_array())
+            .map(|itens| itens.iter().map(atendimento_resumo_do_json).collect())
+            .unwrap_or_default();
+
+        Ok(Response::new(ListarAtendimentosDoContatoResponse {
+            atendimentos,
+        }))
+    }
+
+    /// P5 — apaga uma nota interna.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "RemoverNota", traceparent)
+    )]
+    async fn remover_nota(
+        &self,
+        req: Request<RemoverNotaRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner_ref = *req.get_ref();
+        self.encaminhar_operacional(
+            &req,
+            "RemoverNota",
+            &["atendimentos:write"],
+            serde_json::json!({
+                "nota_id": inner_ref.nota_id,
+                "atendimento_id": inner_ref.atendimento_id,
+            }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { ok: true }))
+    }
+
+    /// P5 — renomeia/recolore uma etiqueta do catálogo.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "UpdateEtiqueta", traceparent)
+    )]
+    async fn update_etiqueta(
+        &self,
+        req: Request<UpdateEtiquetaRequest>,
+    ) -> Result<Response<EtiquetaResponse>, Status> {
+        let inner_ref = req.get_ref().clone();
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "UpdateEtiqueta",
+                &["atendimentos:write"],
+                serde_json::json!({
+                    "id": inner_ref.id,
+                    "nome": inner_ref.nome,
+                    "cor": inner_ref.cor,
+                    "descricao": inner_ref.descricao,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(EtiquetaResponse {
+            etiqueta: Some(etiqueta_do_json(&corpo)),
+        }))
+    }
+
+    /// P5 — tira a etiqueta do catálogo, sem apagá-la das conversas.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DesativarEtiqueta", traceparent)
+    )]
+    async fn desativar_etiqueta(
+        &self,
+        req: Request<DesativarEtiquetaRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner_ref = *req.get_ref();
+        self.encaminhar_operacional(
+            &req,
+            "DesativarEtiqueta",
+            &["atendimentos:write"],
+            serde_json::json!({ "id": inner_ref.id }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { ok: true }))
+    }
+
     /// P4 — quem cuida da conversa.
     ///
     /// O rodízio (B5) já fazia isso sozinho; aqui é a mão do supervisor. A
@@ -6237,74 +6410,7 @@ impl AdminService for AdminFacade {
                 let mut atendimentos = Vec::new();
                 if let Some(arr) = val.get("atendimentos").and_then(|v| v.as_array()) {
                     for item in arr {
-                        atendimentos.push(ProtoAtendimentoResumo {
-                            id: item.get("id").and_then(|v| v.as_i64()).unwrap_or_default() as i32,
-                            contato_id: item
-                                .get("contato_id")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or_default() as i32,
-                            status: item
-                                .get("status")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or_default()
-                                .to_string(),
-                            departamento_id: item
-                                .get("departamento_id")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or_default()
-                                as i32,
-                            fluxo_atendimento_id: item
-                                .get("fluxo_atendimento_id")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or_default()
-                                as i32,
-                            etapa_atual_id: item
-                                .get("etapa_atual_id")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or_default()
-                                as i32,
-                            assunto: item
-                                .get("assunto")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or_default()
-                                .to_string(),
-                            prioridade: item
-                                .get("prioridade")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or_default()
-                                .to_string(),
-                            atendente_humano_id: item
-                                .get("atendente_humano_id")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or_default()
-                                as i32,
-                            data_inicio: item
-                                .get("data_inicio")
-                                .and_then(|v| v.as_str())
-                                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                                .map(|d| d.timestamp_millis())
-                                .unwrap_or_default(),
-                            data_ultima_mensagem: item
-                                .get("data_ultima_mensagem")
-                                .and_then(|v| v.as_str())
-                                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                                .map(|d| d.timestamp_millis())
-                                .unwrap_or_default(),
-                            // Passagem direta (N6.5): sentimento vem pronto do
-                            // data_postgres; ausência/null viram None.
-                            sentimento_nota: item
-                                .get("sentimento_nota")
-                                .and_then(|v| v.as_i64())
-                                .map(|n| n as i32),
-                            sentimento_label: item
-                                .get("sentimento_label")
-                                .and_then(|v| v.as_str())
-                                .map(|s| s.to_string()),
-                            nao_lidas: item
-                                .get("nao_lidas")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or_default() as i32,
-                        });
+                        atendimentos.push(atendimento_resumo_do_json(item));
                     }
                 }
 
@@ -8549,6 +8655,78 @@ impl AdminService for AdminFacade {
 }
 
 /// Converte a etiqueta do JSON interno no tipo do contrato.
+/// P5 — o resumo do atendimento vindo do `data_postgres`.
+///
+/// Extraída do `list_atendimentos`: o histórico do contato devolve exatamente
+/// a mesma forma, e duplicar a conversão deixaria as duas telas divergirem no
+/// primeiro campo novo.
+fn atendimento_resumo_do_json(v: &serde_json::Value) -> ProtoAtendimentoResumo {
+    ProtoAtendimentoResumo {
+        id: v.get("id").and_then(|v| v.as_i64()).unwrap_or_default() as i32,
+        contato_id: v
+            .get("contato_id")
+            .and_then(|v| v.as_i64())
+            .unwrap_or_default() as i32,
+        status: v
+            .get("status")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        departamento_id: v
+            .get("departamento_id")
+            .and_then(|v| v.as_i64())
+            .unwrap_or_default() as i32,
+        fluxo_atendimento_id: v
+            .get("fluxo_atendimento_id")
+            .and_then(|v| v.as_i64())
+            .unwrap_or_default() as i32,
+        etapa_atual_id: v
+            .get("etapa_atual_id")
+            .and_then(|v| v.as_i64())
+            .unwrap_or_default() as i32,
+        assunto: v
+            .get("assunto")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        prioridade: v
+            .get("prioridade")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        atendente_humano_id: v
+            .get("atendente_humano_id")
+            .and_then(|v| v.as_i64())
+            .unwrap_or_default() as i32,
+        data_inicio: v
+            .get("data_inicio")
+            .and_then(|v| v.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.timestamp_millis())
+            .unwrap_or_default(),
+        data_ultima_mensagem: v
+            .get("data_ultima_mensagem")
+            .and_then(|v| v.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.timestamp_millis())
+            .unwrap_or_default(),
+        // Passagem direta (N6.5): sentimento vem pronto do
+        // data_postgres; ausência/null viram None.
+        sentimento_nota: v
+            .get("sentimento_nota")
+            .and_then(|v| v.as_i64())
+            .map(|n| n as i32),
+        sentimento_label: v
+            .get("sentimento_label")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        nao_lidas: v
+            .get("nao_lidas")
+            .and_then(|v| v.as_i64())
+            .unwrap_or_default() as i32,
+    }
+}
+
 fn etiqueta_do_json(v: &serde_json::Value) -> ProtoEtiqueta {
     let texto = |chave: &str| {
         v.get(chave)

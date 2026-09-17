@@ -17,6 +17,7 @@ import '../../domain/parameters/send_outbound_message_parameters.dart';
 import '../../domain/model/midia_mensagem.dart';
 import '../../domain/parameters/presenca_parameters.dart';
 import '../../domain/parameters/quadro_operacao_parameters.dart';
+import '../../domain/model/evento_timeline.dart';
 
 /// Os quatro `Datasource` da feature: adaptadores finos entre o `Parameters` de
 /// uma operação e o [AtendimentoGateway] da plataforma ativa.
@@ -379,4 +380,81 @@ final class ExportarQuadroDatasource
         somenteMeus: parameters.somenteMeus,
         somenteNaoLidos: parameters.somenteNaoLidos,
       );
+}
+
+/// P5 — a linha do tempo do atendimento.
+final class ListarTimelineDatasource
+    implements Datasource<List<EventoDaTimeline>, ListarTimelineParameters> {
+  final AtendimentoGateway _gateway;
+
+  const ListarTimelineDatasource({required this._gateway});
+
+  @override
+  Future<List<EventoDaTimeline>> call(ListarTimelineParameters parameters) =>
+      _gateway.listarTimeline(atendimentoId: parameters.atendimentoId);
+}
+
+/// P5 — as outras conversas do mesmo contato.
+final class AtendimentosDoContatoDatasource
+    implements
+        Datasource<List<AtendimentoResumo>, AtendimentosDoContatoParameters> {
+  final AtendimentoGateway _gateway;
+
+  const AtendimentosDoContatoDatasource({required this._gateway});
+
+  @override
+  Future<List<AtendimentoResumo>> call(
+    AtendimentosDoContatoParameters parameters,
+  ) => _gateway.listarAtendimentosDoContato(
+    contatoId: parameters.contatoId,
+    limit: parameters.limit,
+  );
+}
+
+/// P5 — apaga uma nota interna.
+final class RemoverNotaDatasource
+    implements Datasource<Unit, RemoverNotaParameters> {
+  final AtendimentoGateway _gateway;
+
+  const RemoverNotaDatasource({required this._gateway});
+
+  @override
+  Future<Unit> call(RemoverNotaParameters parameters) async {
+    await _gateway.removerNota(
+      notaId: parameters.notaId,
+      atendimentoId: parameters.atendimentoId,
+    );
+    return unit;
+  }
+}
+
+/// P5 — renomeia/recolore uma etiqueta do catálogo.
+final class AtualizarEtiquetaDatasource
+    implements Datasource<Etiqueta, AtualizarEtiquetaParameters> {
+  final AtendimentoGateway _gateway;
+
+  const AtualizarEtiquetaDatasource({required this._gateway});
+
+  @override
+  Future<Etiqueta> call(AtualizarEtiquetaParameters parameters) =>
+      _gateway.atualizarEtiqueta(
+        id: parameters.id,
+        nome: parameters.nome,
+        cor: parameters.cor,
+        descricao: parameters.descricao,
+      );
+}
+
+/// P5 — tira a etiqueta do catálogo.
+final class DesativarEtiquetaDatasource
+    implements Datasource<Unit, DesativarEtiquetaParameters> {
+  final AtendimentoGateway _gateway;
+
+  const DesativarEtiquetaDatasource({required this._gateway});
+
+  @override
+  Future<Unit> call(DesativarEtiquetaParameters parameters) async {
+    await _gateway.desativarEtiqueta(id: parameters.id);
+    return unit;
+  }
 }

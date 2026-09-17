@@ -5,6 +5,7 @@ import '../model/mensagem_thread.dart';
 import '../model/ficha.dart';
 import '../model/midia_mensagem.dart';
 import '../model/quadro.dart';
+import '../model/evento_timeline.dart';
 
 /// Fronteira de infraestrutura do atendimento, **escolhida por plataforma**:
 /// gRPC-Web no browser, motor local Rust (SQLite + fila offline) no desktop.
@@ -161,6 +162,32 @@ abstract interface class AtendimentoGateway {
   ///
   /// As URLs vêm assinadas com TTL curto: a lista é para exibir agora, não para
   /// guardar.
+  /// P5 — a linha do tempo do atendimento.
+  Future<List<EventoDaTimeline>> listarTimeline({required int atendimentoId});
+
+  /// P5 — as outras conversas do mesmo contato.
+  Future<List<AtendimentoResumo>> listarAtendimentosDoContato({
+    required int contatoId,
+    int limit,
+  });
+
+  /// P5 — apaga uma nota interna.
+  Future<void> removerNota({
+    required int notaId,
+    required int atendimentoId,
+  });
+
+  /// P5 — renomeia/recolore uma etiqueta do catálogo.
+  Future<Etiqueta> atualizarEtiqueta({
+    required int id,
+    required String nome,
+    String cor,
+    String descricao,
+  });
+
+  /// P5 — tira a etiqueta do catálogo sem apagá-la das conversas.
+  Future<void> desativarEtiqueta({required int id});
+
   /// P4 — define o dono da conversa.
   ///
   /// `false` quando a conversa já tem outro atendente: atribuir não rouba

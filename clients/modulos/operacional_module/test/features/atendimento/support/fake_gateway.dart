@@ -14,6 +14,7 @@ import 'package:operacional_module/src/features/atendimento/domain/model/midia_m
 import 'package:operacional_module/src/features/atendimento/domain/model/quadro.dart';
 import 'package:operacional_module/src/features/atendimento/domain/streams/atendimento_evento_stream.dart';
 import 'package:operacional_module/src/features/atendimento/domain/usecases/atendimento_usecases.dart';
+import 'package:operacional_module/src/features/atendimento/domain/model/evento_timeline.dart';
 
 /// Gateway falso: substitui a plataforma (gRPC-Web ou motor local) por dados em
 /// memória. Como é o **único** ponto trocado, os testes que o usam exercitam a
@@ -183,6 +184,51 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
     if (erroEnviarMidia != null) throw erroEnviarMidia!;
     aoProgredir?.call(1);
     return messageId;
+  }
+
+  /// P5 — a ficha completa.
+  List<EventoDaTimeline> timeline = const [];
+  final List<String> acoesDaFicha = [];
+
+  @override
+  Future<List<EventoDaTimeline>> listarTimeline({
+    required int atendimentoId,
+  }) async => timeline;
+
+  @override
+  Future<List<AtendimentoResumo>> listarAtendimentosDoContato({
+    required int contatoId,
+    int limit = 20,
+  }) async => fila;
+
+  @override
+  Future<void> removerNota({
+    required int notaId,
+    required int atendimentoId,
+  }) async {
+    acoesDaFicha.add('removerNota:$notaId:$atendimentoId');
+  }
+
+  @override
+  Future<Etiqueta> atualizarEtiqueta({
+    required int id,
+    required String nome,
+    String cor = '',
+    String descricao = '',
+  }) async {
+    acoesDaFicha.add('atualizarEtiqueta:$id:$nome');
+    return Etiqueta(
+      id: id,
+      nome: nome,
+      cor: cor,
+      descricao: descricao,
+      ativo: true,
+    );
+  }
+
+  @override
+  Future<void> desativarEtiqueta({required int id}) async {
+    acoesDaFicha.add('desativarEtiqueta:$id');
   }
 
   /// P4 — o que a tela pediu ao quadro.
@@ -374,6 +420,9 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   GetThreadUsecase thread,
   EnviarPresencaUsecase presenca,
   AtribuirAtendimentoUsecase atribuir,
+  RemoverNotaUsecase removerNota,
+  AtualizarEtiquetaUsecase atualizarEtiqueta,
+  DesativarEtiquetaUsecase desativarEtiqueta,
   DefinirPrioridadeUsecase prioridade,
   TransferirParaFluxoUsecase transferir,
   ExportarQuadroUsecase exportar,
@@ -410,6 +459,21 @@ usecasesSobre(FakeAtendimentoGateway gateway) => (
   thread: GetThreadUsecase(
     repository: GetThreadRepository(
       datasource: GetThreadDatasource(gateway: gateway),
+    ),
+  ),
+  removerNota: RemoverNotaUsecase(
+    repository: RemoverNotaRepository(
+      datasource: RemoverNotaDatasource(gateway: gateway),
+    ),
+  ),
+  atualizarEtiqueta: AtualizarEtiquetaUsecase(
+    repository: AtualizarEtiquetaRepository(
+      datasource: AtualizarEtiquetaDatasource(gateway: gateway),
+    ),
+  ),
+  desativarEtiqueta: DesativarEtiquetaUsecase(
+    repository: DesativarEtiquetaRepository(
+      datasource: DesativarEtiquetaDatasource(gateway: gateway),
     ),
   ),
   atribuir: AtribuirAtendimentoUsecase(
