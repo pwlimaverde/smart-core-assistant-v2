@@ -5910,7 +5910,7 @@ impl AdminService for AdminFacade {
         &self,
         req: Request<AtribuirAtendimentoRequest>,
     ) -> Result<Response<AtribuirAtendimentoResponse>, Status> {
-        let inner_ref = req.get_ref().clone();
+        let inner_ref = *req.get_ref();
         let corpo = self
             .encaminhar_operacional(
                 &req,
@@ -5977,7 +5977,7 @@ impl AdminService for AdminFacade {
         &self,
         req: Request<TransferirParaFluxoRequest>,
     ) -> Result<Response<TransferirParaFluxoResponse>, Status> {
-        let inner_ref = req.get_ref().clone();
+        let inner_ref = *req.get_ref();
         let corpo = self
             .encaminhar_operacional(
                 &req,

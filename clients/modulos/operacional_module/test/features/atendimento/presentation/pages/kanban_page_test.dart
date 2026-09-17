@@ -169,7 +169,7 @@ void main() {
 
     await montar(tester);
 
-    await tester.tap(find.byTooltip('Mudar o estado'));
+    await tester.tap(find.byTooltip('Ações da conversa'));
     await tester.pumpAndSettle();
 
     // O atendimento de teste nasce em 'fila'.
@@ -189,7 +189,7 @@ void main() {
 
     await montar(tester);
 
-    await tester.tap(find.byTooltip('Mudar o estado'));
+    await tester.tap(find.byTooltip('Ações da conversa'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Resolver'));
     await tester.pumpAndSettle();
