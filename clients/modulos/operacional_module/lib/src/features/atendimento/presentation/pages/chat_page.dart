@@ -108,7 +108,11 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
     );
     _controller.abrir(widget.atendimentoId);
     _ficha.abrir(widget.atendimentoId);
+    // P10 — a IA preencheu campo: a ficha aberta mostra sem precisar reabrir.
+    _controller.camposAtualizados.addListener(_recarregarFicha);
   }
+
+  void _recarregarFicha() => _ficha.abrir(widget.atendimentoId);
 
   @override
   void dispose() {

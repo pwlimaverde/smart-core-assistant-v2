@@ -415,5 +415,38 @@ void main() {
       expect(gateway.chamadasThread, recargas);
       await controller.close();
     });
+
+    test('campos da IA avisam a ficha sem recarregar a conversa', () async {
+      // P10 — a v1 publicava `custom_field.updated` e a ficha aberta se
+      // atualizava. Recarregar o thread por isso seria I/O à toa.
+      final gateway = FakeAtendimentoGateway(
+        thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
+      );
+      final controller = _controller(gateway);
+      await controller.abrir(5);
+      final recargas = gateway.chamadasThread;
+
+      gateway.eventos
+        ..add(
+          const AtendimentoEvento(
+            tipo: 'atendimento.campos_atualizados',
+            tenantId: 't',
+            payload: {'atendimento_id': 5, 'gravados': 2},
+          ),
+        )
+        // De outra conversa: não é desta ficha.
+        ..add(
+          const AtendimentoEvento(
+            tipo: 'atendimento.campos_atualizados',
+            tenantId: 't',
+            payload: {'atendimento_id': 99, 'gravados': 1},
+          ),
+        );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.camposAtualizados.value, 1);
+      expect(gateway.chamadasThread, recargas);
+      await controller.close();
+    });
   });
 }

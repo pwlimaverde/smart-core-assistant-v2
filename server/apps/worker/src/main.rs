@@ -694,7 +694,7 @@ async fn responder_via_ia(
                 })
             })
             .collect();
-        if let Err(e) = chamar_rpc(
+        match chamar_rpc(
             &state.pg_client,
             &tenant_id_str,
             "GravarCamposExtraidos",
@@ -707,7 +707,29 @@ async fn responder_via_ia(
         )
         .await
         {
-            tracing::warn!(erro = %e, "GravarCamposExtraidos falhou; a ficha segue sem o valor");
+            // P10 — a v1 publicava `custom_field.updated` quando a extração
+            // gravava algo, e a ficha aberta se atualizava sozinha. A v2 gravava
+            // em silêncio: o atendente só via o campo preenchido reabrindo o
+            // cartão. Só publica quando houve gravação — o caso comum (nada
+            // novo) não pode acordar todas as telas do tenant.
+            Ok(resumo) => {
+                let gravados = resumo.get("gravados").and_then(|v| v.as_u64()).unwrap_or(0);
+                if gravados > 0 {
+                    publicar_realtime(
+                        state,
+                        tenant_uuid,
+                        "atendimento.campos_atualizados",
+                        serde_json::json!({
+                            "atendimento_id": atendimento_id,
+                            "gravados": gravados,
+                        }),
+                    )
+                    .await;
+                }
+            }
+            Err(e) => {
+                tracing::warn!(erro = %e, "GravarCamposExtraidos falhou; a ficha segue sem o valor");
+            }
         }
     }
 

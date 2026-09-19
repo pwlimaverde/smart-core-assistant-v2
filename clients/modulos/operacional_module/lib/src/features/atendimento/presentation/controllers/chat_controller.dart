@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:presentation_module/presentation_module.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
 
@@ -65,6 +66,13 @@ final class ChatController extends BaseController<ChatViewModel> {
   /// apaga a presença do contato quando ela para de ser renovada.
   DateTime? _ultimaPresencaEnviada;
   Timer? _limpezaDaPresenca;
+
+  /// P10 — sobe a cada vez que a IA grava campos na ficha desta conversa.
+  ///
+  /// A v1 publicava `custom_field.updated` e a ficha aberta se atualizava; a v2
+  /// gravava em silêncio. É um contador, e não o dado: a ficha tem controller
+  /// próprio, e quem a desenha decide recarregar.
+  final camposAtualizados = ValueNotifier<int>(0);
 
   /// O provedor mantém "digitando" por poucos segundos; renovar a cada tecla
   /// seria uma chamada por caractere, e renovar de menos faz o aviso piscar.
@@ -276,6 +284,12 @@ final class ChatController extends BaseController<ChatViewModel> {
       }
       return;
     }
+    // P10 — campos que a IA preencheu mudam a ficha, não a conversa: recarregar
+    // o thread por isso seria I/O à toa.
+    if (evento.tipo == 'atendimento.campos_atualizados') {
+      if (evento.atendimentoId == _atendimentoId) camposAtualizados.value++;
+      return;
+    }
     // Só recarrega o thread quando o evento é do atendimento aberto — evita
     // I/O desnecessário para eventos de outros atendimentos da fila.
     if (evento.atendimentoId == _atendimentoId) {
@@ -375,6 +389,7 @@ final class ChatController extends BaseController<ChatViewModel> {
     _limpezaDaPresenca?.cancel();
     _reconnectTimer?.cancel();
     _subscription?.cancel();
+    camposAtualizados.dispose();
     return super.close();
   }
 }
