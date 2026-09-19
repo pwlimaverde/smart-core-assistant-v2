@@ -4770,6 +4770,35 @@ final $typed_data.Uint8List reenviarMensagemNaoEntregueResponseDescriptor =
         'CiNSZWVudmlhck1lbnNhZ2VtTmFvRW50cmVndWVSZXNwb25zZRIWCgZzdGF0dXMYASABKAlSBn'
         'N0YXR1cw==');
 
+@$core.Deprecated('Use getVersaoDoAppRequestDescriptor instead')
+const GetVersaoDoAppRequest$json = {
+  '1': 'GetVersaoDoAppRequest',
+  '2': [
+    {'1': 'plataforma', '3': 1, '4': 1, '5': 9, '10': 'plataforma'},
+  ],
+};
+
+/// Descriptor for `GetVersaoDoAppRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getVersaoDoAppRequestDescriptor = $convert.base64Decode(
+    'ChVHZXRWZXJzYW9Eb0FwcFJlcXVlc3QSHgoKcGxhdGFmb3JtYRgBIAEoCVIKcGxhdGFmb3JtYQ'
+    '==');
+
+@$core.Deprecated('Use getVersaoDoAppResponseDescriptor instead')
+const GetVersaoDoAppResponse$json = {
+  '1': 'GetVersaoDoAppResponse',
+  '2': [
+    {'1': 'build_atual', '3': 1, '4': 1, '5': 3, '10': 'buildAtual'},
+    {'1': 'url_download', '3': 2, '4': 1, '5': 9, '10': 'urlDownload'},
+    {'1': 'notas', '3': 3, '4': 1, '5': 9, '10': 'notas'},
+  ],
+};
+
+/// Descriptor for `GetVersaoDoAppResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List getVersaoDoAppResponseDescriptor = $convert.base64Decode(
+    'ChZHZXRWZXJzYW9Eb0FwcFJlc3BvbnNlEh8KC2J1aWxkX2F0dWFsGAEgASgDUgpidWlsZEF0dW'
+    'FsEiEKDHVybF9kb3dubG9hZBgCIAEoCVILdXJsRG93bmxvYWQSFAoFbm90YXMYAyABKAlSBW5v'
+    'dGFz');
+
 @$core.Deprecated('Use testarProvedorIaRequestDescriptor instead')
 const TestarProvedorIaRequest$json = {
   '1': 'TestarProvedorIaRequest',

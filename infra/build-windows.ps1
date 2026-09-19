@@ -87,7 +87,14 @@ $mcp = $config[$Env].mcp
 $appUrl = $config[$Env].app
 $zip = Join-Path $saidaDir "smart-core-$App-windows-$Env.zip"
 
-Write-Host "app=$App  ambiente=$Env" -ForegroundColor Green
+# P11 — o número de build é a data do commit (AAAAMMDDhhmm): cresce com o
+# tempo, é o mesmo para o mesmo commit em qualquer máquina, e é o que o app
+# compara com o publicado nas CoreSettings (`app.windows.build`) para avisar que
+# há versão nova. Fora de um checkout git fica 0, e o app não avisa nada.
+$build = (& git -C $repoRoot log -1 --format=%cd --date=format:%Y%m%d%H%M 2>$null)
+if (-not $build) { $build = "0" }
+
+Write-Host "app=$App  ambiente=$Env  build=$build" -ForegroundColor Green
 Write-Host "  API = $api"
 Write-Host "  MCP = $mcp"
 Write-Host "  APP = $appUrl"
@@ -106,7 +113,8 @@ try {
         --target "lib/main_$Env.dart" `
         --dart-define=SMARTCORE_API_ENDPOINT=$api `
         --dart-define=SMARTCORE_MCP_ENDPOINT=$mcp `
-        --dart-define=SMARTCORE_APP_PUBLIC_URL=$appUrl
+        --dart-define=SMARTCORE_APP_PUBLIC_URL=$appUrl `
+        --dart-define=SMARTCORE_APP_BUILD=$build
     if ($LASTEXITCODE -ne 0) {
         Write-Host "`nBuild falhou." -ForegroundColor Red
         Write-Host "Se o erro citar 'could not find specified instance of Visual Studio', rode de novo com -LimparCache." -ForegroundColor Yellow

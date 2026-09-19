@@ -1381,6 +1381,10 @@ service AdminService {
   // e o mesmo registro volta com um QR novo. Remover era a única saída, e ela
   // custava o cadastro inteiro para trocar de aparelho.
   rpc DesconectarMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
+  // P11 — a última versão publicada do app. Até aqui o zip era trocado à mão,
+  // e ninguém sabia que estava numa versão velha até um bug já corrigido
+  // aparecer de novo.
+  rpc GetVersaoDoApp(GetVersaoDoAppRequest) returns (GetVersaoDoAppResponse);
   rpc DefinirDepartamentoDaConexao(DefinirDepartamentoDaConexaoRequest) returns (SimpleOkResponse);
   rpc DetalheDaConexao(DetalheDaConexaoRequest) returns (DetalheDaConexaoResponse);
   // P9 — mensagens que o atendente mandou e que não tinham para onde ir. O
@@ -1977,6 +1981,22 @@ message ReenviarMensagemNaoEntregueResponse {
   // `nao_encontrada`. O segundo NÃO é erro: é a resposta honesta de que o
   // contato continua sem conexão ativa, e a tela precisa dizer isso.
   string status = 1;
+}
+
+// --- P11: versão do app ---
+
+message GetVersaoDoAppRequest {
+  // "windows" hoje. Um campo, e não um RPC por plataforma, para o dia em que
+  // houver instalador de outro sistema.
+  string plataforma = 1;
+}
+
+message GetVersaoDoAppResponse {
+  // Número de build (AAAAMMDDhhmm do commit). 0 = ninguém publicou ainda, e aí
+  // não há o que avisar.
+  int64 build_atual = 1;
+  string url_download = 2;
+  string notas = 3;
 }
 
 // --- P9: teste do provedor de IA ---

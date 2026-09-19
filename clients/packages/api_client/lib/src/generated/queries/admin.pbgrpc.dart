@@ -784,6 +784,16 @@ class AdminServiceClient extends $grpc.Client {
         options: options);
   }
 
+  /// P11 — a última versão publicada do app. Até aqui o zip era trocado à mão,
+  /// e ninguém sabia que estava numa versão velha até um bug já corrigido
+  /// aparecer de novo.
+  $grpc.ResponseFuture<$0.GetVersaoDoAppResponse> getVersaoDoApp(
+    $0.GetVersaoDoAppRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$getVersaoDoApp, request, options: options);
+  }
+
   $grpc.ResponseFuture<$0.SimpleOkResponse> definirDepartamentoDaConexao(
     $0.DefinirDepartamentoDaConexaoRequest request, {
     $grpc.CallOptions? options,
@@ -1580,6 +1590,11 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/DesconectarMyWhatsappInstance',
       ($0.MyWhatsappInstanceIdRequest value) => value.writeToBuffer(),
       $0.SimpleOkResponse.fromBuffer);
+  static final _$getVersaoDoApp =
+      $grpc.ClientMethod<$0.GetVersaoDoAppRequest, $0.GetVersaoDoAppResponse>(
+          '/smartcore.contracts.queries.AdminService/GetVersaoDoApp',
+          ($0.GetVersaoDoAppRequest value) => value.writeToBuffer(),
+          $0.GetVersaoDoAppResponse.fromBuffer);
   static final _$definirDepartamentoDaConexao = $grpc.ClientMethod<
           $0.DefinirDepartamentoDaConexaoRequest, $0.SimpleOkResponse>(
       '/smartcore.contracts.queries.AdminService/DefinirDepartamentoDaConexao',
@@ -2640,6 +2655,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.MyWhatsappInstanceIdRequest.fromBuffer(value),
         ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.GetVersaoDoAppRequest,
+            $0.GetVersaoDoAppResponse>(
+        'GetVersaoDoApp',
+        getVersaoDoApp_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.GetVersaoDoAppRequest.fromBuffer(value),
+        ($0.GetVersaoDoAppResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.DefinirDepartamentoDaConexaoRequest,
             $0.SimpleOkResponse>(
         'DefinirDepartamentoDaConexao',
@@ -3851,6 +3875,15 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.SimpleOkResponse> desconectarMyWhatsappInstance(
       $grpc.ServiceCall call, $0.MyWhatsappInstanceIdRequest request);
+
+  $async.Future<$0.GetVersaoDoAppResponse> getVersaoDoApp_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.GetVersaoDoAppRequest> $request) async {
+    return getVersaoDoApp($call, await $request);
+  }
+
+  $async.Future<$0.GetVersaoDoAppResponse> getVersaoDoApp(
+      $grpc.ServiceCall call, $0.GetVersaoDoAppRequest request);
 
   $async.Future<$0.SimpleOkResponse> definirDepartamentoDaConexao_Pre(
       $grpc.ServiceCall $call,

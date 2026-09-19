@@ -193,7 +193,7 @@ final class DetalheDaConexaoDatasource
 
 /// P9 — as mensagens que ficaram sem destino.
 final class ListarNaoEntreguesDatasource
-    implements Datasource<List<MensagemNaoEntregue>, NoParams> {
+    implements Datasource<List<MensagemParada>, NoParams> {
   final proto.AdminServiceClient _client;
 
   const ListarNaoEntreguesDatasource({required proto.AdminServiceClient client})
@@ -201,13 +201,13 @@ final class ListarNaoEntreguesDatasource
     : _client = client;
 
   @override
-  Future<List<MensagemNaoEntregue>> call(NoParams parameters) async {
+  Future<List<MensagemParada>> call(NoParams parameters) async {
     final resp = await _client.listMyMensagensNaoEntregues(
       proto.ListMyMensagensNaoEntreguesRequest(),
     );
     return [
       for (final m in resp.itens)
-        MensagemNaoEntregue(
+        MensagemParada(
           id: m.id,
           atendimentoId: m.atendimentoId,
           motivo: m.motivo,

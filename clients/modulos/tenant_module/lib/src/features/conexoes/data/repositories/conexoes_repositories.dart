@@ -129,7 +129,7 @@ final class DetalheDaConexaoRepository
 /// P9 — as mensagens que ficaram sem destino.
 final class ListarNaoEntreguesRepository
     extends
-        RepositoryBase<List<MensagemNaoEntregue>, NoParams, ConexoesError> {
+        RepositoryBase<List<MensagemParada>, NoParams, ConexoesError> {
   const ListarNaoEntreguesRepository({required super.datasource});
 
   @override

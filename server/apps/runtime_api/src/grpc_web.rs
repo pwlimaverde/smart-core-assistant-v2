@@ -111,6 +111,8 @@ use contracts::grpc::queries::{
     GetTenantResponse,
     GetThreadRequest,
     GetThreadResponse,
+    GetVersaoDoAppRequest,
+    GetVersaoDoAppResponse,
     IniciarAtendimentoManualRequest,
     IniciarAtendimentoManualResponse,
     ListAtendimentosRequest,
@@ -5234,6 +5236,85 @@ impl AdminService for AdminFacade {
         .await?;
 
         Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    /// P11 — a última versão publicada do app de uma plataforma.
+    ///
+    /// Vem das CoreSettings (`app.<plataforma>.build`, `.url`, `.notas`), que o
+    /// superusuário atualiza ao publicar o zip. Qualquer sessão pode perguntar;
+    /// por isso a resposta sai de uma lista FECHADA de três chaves, e nunca da
+    /// listagem inteira — as demais configurações incluem segredos.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "GetVersaoDoApp", traceparent)
+    )]
+    async fn get_versao_do_app(
+        &self,
+        req: Request<GetVersaoDoAppRequest>,
+    ) -> Result<Response<GetVersaoDoAppResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let plataforma = req.get_ref().plataforma.trim().to_lowercase();
+        // O nome vira parte da chave: só letras, para ninguém montar a chave de
+        // outra configuração pelo campo.
+        if plataforma.is_empty() || !plataforma.chars().all(|c| c.is_ascii_lowercase()) {
+            return Err(Status::invalid_argument("plataforma inválida"));
+        }
+
+        let env_req = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent_do_metadata(&req),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "ListCoreSettings".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({})).unwrap_or_default(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            // Leitura interna da borda: quem pediu não vê a lista, só as três
+            // chaves filtradas abaixo.
+            auth_is_superuser: true,
+            ..Default::default()
+        };
+        let resp = self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+            .map_err(|e| Status::unavailable(format!("Falha no serviço interno: {e}")))?;
+        if resp.kind == MessageKind::Error as i32 {
+            return Err(status_do_erro_interno(resp.error));
+        }
+        let corpo: serde_json::Value =
+            serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))?;
+
+        let valor = |sufixo: &str| -> String {
+            let chave = format!("app.{plataforma}.{sufixo}");
+            corpo
+                .get("settings")
+                .and_then(|v| v.as_array())
+                .and_then(|arr| {
+                    arr.iter().find(|s| {
+                        s.get("key").and_then(|k| k.as_str()) == Some(chave.as_str())
+                            && !s
+                                .get("encrypted")
+                                .and_then(|e| e.as_bool())
+                                .unwrap_or(false)
+                    })
+                })
+                .and_then(|s| s.get("value"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        };
+
+        Ok(Response::new(GetVersaoDoAppResponse {
+            build_atual: valor("build").parse::<i64>().unwrap_or(0),
+            url_download: valor("url"),
+            notas: valor("notas"),
+        }))
     }
 
     /// P9 — as mensagens do atendente que ficaram sem destino.

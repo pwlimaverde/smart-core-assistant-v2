@@ -189,8 +189,8 @@ final class DetalheDaConexaoUsecase
 final class ListarNaoEntreguesUsecase
     extends
         UsecaseBaseCallData<
-          List<MensagemNaoEntregue>,
-          List<MensagemNaoEntregue>,
+          List<MensagemParada>,
+          List<MensagemParada>,
           NoParams,
           ConexoesError
         > {
@@ -198,8 +198,8 @@ final class ListarNaoEntreguesUsecase
 
   @override
   ProcessData<
-    List<MensagemNaoEntregue>,
-    List<MensagemNaoEntregue>,
+    List<MensagemParada>,
+    List<MensagemParada>,
     NoParams,
     ConexoesError
   >

@@ -28,7 +28,7 @@ class _NaoEntregues extends StatefulWidget {
 }
 
 class _NaoEntreguesState extends State<_NaoEntregues> {
-  late Future<ReturnSuccessOrError<List<MensagemNaoEntregue>, ConexoesError>>
+  late Future<ReturnSuccessOrError<List<MensagemParada>, ConexoesError>>
   _futuro;
 
   @override
@@ -41,7 +41,7 @@ class _NaoEntreguesState extends State<_NaoEntregues> {
     _futuro = inject<ListarNaoEntreguesUsecase>()(noParams);
   }
 
-  Future<void> _reenviar(MensagemNaoEntregue m) async {
+  Future<void> _reenviar(MensagemParada m) async {
     final messenger = ScaffoldMessenger.of(context);
     final res = await inject<ReenviarNaoEntregueUsecase>()(
       ConexaoIdParameters(id: m.id),
@@ -86,7 +86,7 @@ class _NaoEntreguesState extends State<_NaoEntregues> {
         Expanded(
           child:
               FutureBuilder<
-                ReturnSuccessOrError<List<MensagemNaoEntregue>, ConexoesError>
+                ReturnSuccessOrError<List<MensagemParada>, ConexoesError>
               >(
                 future: _futuro,
                 builder: (context, snapshot) {

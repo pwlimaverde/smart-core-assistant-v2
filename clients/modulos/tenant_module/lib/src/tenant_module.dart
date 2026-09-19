@@ -16,6 +16,8 @@ import 'features/contatos/data/datasources/contatos_datasources.dart';
 import 'features/contatos/data/repositories/contatos_repositories.dart';
 import 'features/contatos/domain/usecases/contatos_usecases.dart';
 import 'features/contatos/presentation/routes/contatos_routes.dart';
+import 'features/versao/data/versao_datasource.dart';
+import 'features/versao/domain/versao_do_app.dart';
 import 'features/ignorados/data/datasources/ignorados_datasources.dart';
 import 'features/ignorados/data/repositories/ignorados_repositories.dart';
 import 'features/ignorados/domain/usecases/ignorados_usecases.dart';
@@ -301,6 +303,15 @@ final class TenantModule extends AppModule {
       () => ReenviarNaoEntregueUsecase(
         repository: ReenviarNaoEntregueRepository(
           datasource: ReenviarNaoEntregueDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+
+    // ── versão do app (P11) ────────────────────────────────────────────────
+    i.lazySingleton<ConsultarVersaoUsecase>(
+      () => ConsultarVersaoUsecase(
+        repository: ConsultarVersaoRepository(
+          datasource: ConsultarVersaoDatasource(client: _adminClient()),
         ),
       ),
     );

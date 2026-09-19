@@ -169,7 +169,7 @@ class DetalheConexao {
 /// reprocessamento existia desde a N7.2 e nenhuma tela o alcançava: a mensagem
 /// ficava parada sem ninguém saber que não chegou.
 @immutable
-class MensagemNaoEntregue {
+class MensagemParada {
   final int id;
   final int atendimentoId;
   final String motivo;
@@ -179,7 +179,7 @@ class MensagemNaoEntregue {
   final String trecho;
   final String contato;
 
-  const MensagemNaoEntregue({
+  const MensagemParada({
     required this.id,
     required this.atendimentoId,
     required this.motivo,

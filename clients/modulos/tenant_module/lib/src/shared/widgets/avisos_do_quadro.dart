@@ -1,5 +1,6 @@
 import 'package:dependencies_module/dependencies_module.dart';
 
+import '../../features/versao/presentation/aviso_versao.dart';
 import 'aviso_assinatura.dart';
 import 'aviso_conexao.dart';
 
@@ -20,6 +21,7 @@ final class AvisosDoQuadro extends StatelessWidget {
   @override
   Widget build(BuildContext context) => const Column(
     mainAxisSize: MainAxisSize.min,
-    children: [AvisoAssinatura(), AvisoConexao()],
+    // P11 — por último: versão nova é o menos urgente dos três.
+    children: [AvisoAssinatura(), AvisoConexao(), AvisoVersao()],
   );
 }

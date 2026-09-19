@@ -48,7 +48,7 @@ void main() {
     )(noParams);
 
     final itens =
-        (r as Success<List<MensagemNaoEntregue>, ConexoesError>).value;
+        (r as Success<List<MensagemParada>, ConexoesError>).value;
     expect(itens.single.contato, 'Maria');
     expect(itens.single.atendimentoId, 9);
   });

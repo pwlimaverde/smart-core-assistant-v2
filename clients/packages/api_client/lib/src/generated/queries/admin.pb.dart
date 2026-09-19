@@ -19451,6 +19451,146 @@ class ReenviarMensagemNaoEntregueResponse extends $pb.GeneratedMessage {
   void clearStatus() => $_clearField(1);
 }
 
+class GetVersaoDoAppRequest extends $pb.GeneratedMessage {
+  factory GetVersaoDoAppRequest({
+    $core.String? plataforma,
+  }) {
+    final result = create();
+    if (plataforma != null) result.plataforma = plataforma;
+    return result;
+  }
+
+  GetVersaoDoAppRequest._();
+
+  factory GetVersaoDoAppRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GetVersaoDoAppRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetVersaoDoAppRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'plataforma')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetVersaoDoAppRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetVersaoDoAppRequest copyWith(
+          void Function(GetVersaoDoAppRequest) updates) =>
+      super.copyWith((message) => updates(message as GetVersaoDoAppRequest))
+          as GetVersaoDoAppRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GetVersaoDoAppRequest create() => GetVersaoDoAppRequest._();
+  @$core.override
+  GetVersaoDoAppRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GetVersaoDoAppRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetVersaoDoAppRequest>(create);
+  static GetVersaoDoAppRequest? _defaultInstance;
+
+  /// "windows" hoje. Um campo, e não um RPC por plataforma, para o dia em que
+  /// houver instalador de outro sistema.
+  @$pb.TagNumber(1)
+  $core.String get plataforma => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set plataforma($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasPlataforma() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearPlataforma() => $_clearField(1);
+}
+
+class GetVersaoDoAppResponse extends $pb.GeneratedMessage {
+  factory GetVersaoDoAppResponse({
+    $fixnum.Int64? buildAtual,
+    $core.String? urlDownload,
+    $core.String? notas,
+  }) {
+    final result = create();
+    if (buildAtual != null) result.buildAtual = buildAtual;
+    if (urlDownload != null) result.urlDownload = urlDownload;
+    if (notas != null) result.notas = notas;
+    return result;
+  }
+
+  GetVersaoDoAppResponse._();
+
+  factory GetVersaoDoAppResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory GetVersaoDoAppResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'GetVersaoDoAppResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aInt64(1, _omitFieldNames ? '' : 'buildAtual')
+    ..aOS(2, _omitFieldNames ? '' : 'urlDownload')
+    ..aOS(3, _omitFieldNames ? '' : 'notas')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetVersaoDoAppResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  GetVersaoDoAppResponse copyWith(
+          void Function(GetVersaoDoAppResponse) updates) =>
+      super.copyWith((message) => updates(message as GetVersaoDoAppResponse))
+          as GetVersaoDoAppResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static GetVersaoDoAppResponse create() => GetVersaoDoAppResponse._();
+  @$core.override
+  GetVersaoDoAppResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static GetVersaoDoAppResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<GetVersaoDoAppResponse>(create);
+  static GetVersaoDoAppResponse? _defaultInstance;
+
+  /// Número de build (AAAAMMDDhhmm do commit). 0 = ninguém publicou ainda, e aí
+  /// não há o que avisar.
+  @$pb.TagNumber(1)
+  $fixnum.Int64 get buildAtual => $_getI64(0);
+  @$pb.TagNumber(1)
+  set buildAtual($fixnum.Int64 value) => $_setInt64(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasBuildAtual() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearBuildAtual() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get urlDownload => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set urlDownload($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasUrlDownload() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearUrlDownload() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get notas => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set notas($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasNotas() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearNotas() => $_clearField(3);
+}
+
 class TestarProvedorIaRequest extends $pb.GeneratedMessage {
   factory TestarProvedorIaRequest({
     $core.String? tenantId,
