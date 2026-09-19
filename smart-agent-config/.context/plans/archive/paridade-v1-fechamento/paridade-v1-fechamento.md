@@ -29,12 +29,12 @@ phases:
     name: "Review"
     prevc: "R"
     agent: "security-auditor"
-    status: "pending"
+    status: "completed"
   - id: "phase-e"
     name: "Execution"
     prevc: "E"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
     required_sensors: [tests-passing]
     required_artifacts: [handoff-summary]
     steps:
@@ -78,16 +78,16 @@ phases:
     name: "Validation"
     prevc: "V"
     agent: "test-writer"
-    status: "pending"
+    status: "completed"
   - id: "phase-c"
     name: "Confirmation"
     prevc: "C"
     agent: "documentation-writer"
-    status: "pending"
-status: filled
+    status: "completed"
+status: done
 progress: 0
 scaffoldVersion: "2.0.0"
-lastUpdated: "2026-09-16T00:21:13.330Z"
+lastUpdated: "2026-09-19T21:54:19.938Z"
 ---
 
 # Paridade com a v1 — fechamento do port no app Windows
@@ -155,4 +155,24 @@ Cada bloco: commit próprio, CI verde, e o andamento no
 
 ## Execution History
 
-> Last updated: 2026-09-16T00:21:13.330Z | Progress: 0%
+> Last updated: 2026-09-19T21:54:19.938Z | Progress: 0%
+
+### phase-c [DONE]
+- Started: 2026-09-19T21:54:19.938Z
+- Completed: 2026-09-19T21:54:19.938Z
+
+### phase-e [DONE]
+- Started: 2026-09-19T21:54:19.906Z
+- Completed: 2026-09-19T21:54:19.906Z
+
+### phase-p [DONE]
+- Started: 2026-09-19T21:54:19.846Z
+- Completed: 2026-09-19T21:54:19.846Z
+
+### phase-r [DONE]
+- Started: 2026-09-19T21:54:19.885Z
+- Completed: 2026-09-19T21:54:19.885Z
+
+### phase-v [DONE]
+- Started: 2026-09-19T21:54:19.921Z
+- Completed: 2026-09-19T21:54:19.921Z
