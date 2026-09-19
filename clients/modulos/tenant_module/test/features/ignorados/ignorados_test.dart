@@ -2,7 +2,6 @@ import 'package:api_client/api_client.dart' as proto;
 import 'package:api_client/testing.dart';
 import 'package:fixnum/fixnum.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:grpc/grpc.dart';
 import 'package:mocktail/mocktail.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
 import 'package:tenant_module/src/features/ignorados/data/datasources/ignorados_datasources.dart';
@@ -110,7 +109,7 @@ void main() {
     // O par (tenant, telefone) é único; repetir o número é o erro mais comum
     // desta tela, e a mensagem precisa dizer isso em vez de "algo deu errado".
     when(() => client.criarNumeroIgnorado(any())).thenThrow(
-      GrpcError.alreadyExists('Este número já está na lista'),
+      proto.GrpcError.alreadyExists('Este número já está na lista'),
     );
     final c = controller();
 
@@ -167,7 +166,7 @@ void main() {
   test('sessão expirada não vira "sem permissão"', () async {
     // Juntar as duas manda o dono da conta caçar um acesso que ele já tem.
     when(() => client.listMyNumerosIgnorados(any()))
-        .thenThrow(GrpcError.unauthenticated('token expirado'));
+        .thenThrow(proto.GrpcError.unauthenticated('token expirado'));
 
     final res = await ListarIgnoradosUsecase(
       repository: ListarIgnoradosRepository(

@@ -1261,6 +1261,10 @@ service AdminService {
 
   // Fase 3: Evolution Connection
   rpc TestEvolutionConnection(TestEvolutionConnectionRequest) returns (TestEvolutionConnectionResponse);
+  // P9 — o `test-connection` da v1 para o provedor de IA: um embedding de
+  // ensaio com a configuração do tenant. Hoje só se descobria que a chave do
+  // provedor tinha expirado quando o bot parava de responder.
+  rpc TestarProvedorIa(TestarProvedorIaRequest) returns (TestarProvedorIaResponse);
 
   // Fase 4: Feature Flags
   rpc ListFeatureFlags(ListFeatureFlagsRequest) returns (ListFeatureFlagsResponse);
@@ -1379,6 +1383,11 @@ service AdminService {
   rpc DesconectarMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
   rpc DefinirDepartamentoDaConexao(DefinirDepartamentoDaConexaoRequest) returns (SimpleOkResponse);
   rpc DetalheDaConexao(DetalheDaConexaoRequest) returns (DetalheDaConexaoResponse);
+  // P9 — mensagens que o atendente mandou e que não tinham para onde ir. O
+  // reprocessamento existia desde a N7.2 e não era alcançável de tela nenhuma:
+  // a mensagem ficava parada para sempre sem ninguém saber.
+  rpc ListMyMensagensNaoEntregues(ListMyMensagensNaoEntreguesRequest) returns (ListMyMensagensNaoEntreguesResponse);
+  rpc ReenviarMensagemNaoEntregue(ReenviarMensagemNaoEntregueRequest) returns (ReenviarMensagemNaoEntregueResponse);
 
   // P7 — os números que o sistema ignora (a "whitelist" da v1).
   rpc ListMyNumerosIgnorados(ListMyNumerosIgnoradosRequest) returns (ListMyNumerosIgnoradosResponse);
@@ -1935,6 +1944,54 @@ message DetalheDaConexaoResponse {
   // só, é exatamente o número dela.
   int32 atendimentos_abertos = 4;
   int32 mensagens_24h = 5;
+}
+
+// --- P9: mensagens não entregues (dead-letter) ---
+
+message MensagemNaoEntregue {
+  // Id do registro de dead-letter — é ele que o reenvio recebe.
+  int32 id = 1;
+  int32 mensagem_id = 2;
+  int32 atendimento_id = 3;
+  string motivo = 4;
+  int64 criado_em = 5;
+  // Início do texto, para o atendente reconhecer a mensagem sem abrir a
+  // conversa. É PII como todo conteúdo de mensagem.
+  string trecho = 6;
+  string contato = 7;
+}
+
+// Só as pendentes: as já reenviadas não pedem ação de ninguém.
+message ListMyMensagensNaoEntreguesRequest {}
+
+message ListMyMensagensNaoEntreguesResponse {
+  repeated MensagemNaoEntregue itens = 1;
+}
+
+message ReenviarMensagemNaoEntregueRequest {
+  int32 id = 1;
+}
+
+message ReenviarMensagemNaoEntregueResponse {
+  // `reprocessada` (voltou ao outbox, agora ou antes), `ainda_sem_destino` ou
+  // `nao_encontrada`. O segundo NÃO é erro: é a resposta honesta de que o
+  // contato continua sem conexão ativa, e a tela precisa dizer isso.
+  string status = 1;
+}
+
+// --- P9: teste do provedor de IA ---
+
+message TestarProvedorIaRequest {
+  string tenant_id = 1;
+}
+
+message TestarProvedorIaResponse {
+  bool ok = 1;
+  int32 latencia_ms = 2;
+  // Tamanho do vetor devolvido. Zero com `ok` falso; diferente do esperado
+  // pelo índice é sinal de modelo trocado por fora.
+  int32 dimensoes = 3;
+  string erro = 4;
 }
 
 // --- P7: numeros ignorados ---

@@ -7,6 +7,7 @@ import '../../../equipe/domain/usecases/equipe_usecases.dart';
 import '../../domain/model/conexao.dart';
 import '../controllers/conexoes_controllers.dart';
 import '../widgets/detalhe_conexao_dialog.dart';
+import '../widgets/nao_entregues_dialog.dart';
 import '../widgets/pareamento_dialog.dart';
 
 /// Conexões de WhatsApp do tenant.
@@ -43,6 +44,13 @@ class _ConexoesPageState extends State<ConexoesPage> {
             tooltip: 'Nova conexão',
             onPressed: () => _novaConexao(context),
           ),
+        // P9 — o que o atendente mandou e não chegou. Está aqui porque a causa
+        // é de conexão: o contato estava sem sessão ativa no envio.
+        IconButton(
+          icon: const Icon(Icons.report_gmailerrorred_outlined),
+          tooltip: 'Mensagens não entregues',
+          onPressed: () => mostrarNaoEntregues(context),
+        ),
         IconButton(
           icon: const Icon(Icons.refresh),
           tooltip: 'Atualizar',

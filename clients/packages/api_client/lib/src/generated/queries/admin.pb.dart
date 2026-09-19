@@ -19098,6 +19098,509 @@ class DetalheDaConexaoResponse extends $pb.GeneratedMessage {
   void clearMensagens24h() => $_clearField(5);
 }
 
+class MensagemNaoEntregue extends $pb.GeneratedMessage {
+  factory MensagemNaoEntregue({
+    $core.int? id,
+    $core.int? mensagemId,
+    $core.int? atendimentoId,
+    $core.String? motivo,
+    $fixnum.Int64? criadoEm,
+    $core.String? trecho,
+    $core.String? contato,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (mensagemId != null) result.mensagemId = mensagemId;
+    if (atendimentoId != null) result.atendimentoId = atendimentoId;
+    if (motivo != null) result.motivo = motivo;
+    if (criadoEm != null) result.criadoEm = criadoEm;
+    if (trecho != null) result.trecho = trecho;
+    if (contato != null) result.contato = contato;
+    return result;
+  }
+
+  MensagemNaoEntregue._();
+
+  factory MensagemNaoEntregue.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MensagemNaoEntregue.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MensagemNaoEntregue',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aI(2, _omitFieldNames ? '' : 'mensagemId')
+    ..aI(3, _omitFieldNames ? '' : 'atendimentoId')
+    ..aOS(4, _omitFieldNames ? '' : 'motivo')
+    ..aInt64(5, _omitFieldNames ? '' : 'criadoEm')
+    ..aOS(6, _omitFieldNames ? '' : 'trecho')
+    ..aOS(7, _omitFieldNames ? '' : 'contato')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MensagemNaoEntregue clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MensagemNaoEntregue copyWith(void Function(MensagemNaoEntregue) updates) =>
+      super.copyWith((message) => updates(message as MensagemNaoEntregue))
+          as MensagemNaoEntregue;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MensagemNaoEntregue create() => MensagemNaoEntregue._();
+  @$core.override
+  MensagemNaoEntregue createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MensagemNaoEntregue getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MensagemNaoEntregue>(create);
+  static MensagemNaoEntregue? _defaultInstance;
+
+  /// Id do registro de dead-letter — é ele que o reenvio recebe.
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get mensagemId => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set mensagemId($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasMensagemId() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearMensagemId() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.int get atendimentoId => $_getIZ(2);
+  @$pb.TagNumber(3)
+  set atendimentoId($core.int value) => $_setSignedInt32(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasAtendimentoId() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearAtendimentoId() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get motivo => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set motivo($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasMotivo() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearMotivo() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $fixnum.Int64 get criadoEm => $_getI64(4);
+  @$pb.TagNumber(5)
+  set criadoEm($fixnum.Int64 value) => $_setInt64(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasCriadoEm() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearCriadoEm() => $_clearField(5);
+
+  /// Início do texto, para o atendente reconhecer a mensagem sem abrir a
+  /// conversa. É PII como todo conteúdo de mensagem.
+  @$pb.TagNumber(6)
+  $core.String get trecho => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set trecho($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasTrecho() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearTrecho() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $core.String get contato => $_getSZ(6);
+  @$pb.TagNumber(7)
+  set contato($core.String value) => $_setString(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasContato() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearContato() => $_clearField(7);
+}
+
+/// Só as pendentes: as já reenviadas não pedem ação de ninguém.
+class ListMyMensagensNaoEntreguesRequest extends $pb.GeneratedMessage {
+  factory ListMyMensagensNaoEntreguesRequest() => create();
+
+  ListMyMensagensNaoEntreguesRequest._();
+
+  factory ListMyMensagensNaoEntreguesRequest.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyMensagensNaoEntreguesRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyMensagensNaoEntreguesRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyMensagensNaoEntreguesRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyMensagensNaoEntreguesRequest copyWith(
+          void Function(ListMyMensagensNaoEntreguesRequest) updates) =>
+      super.copyWith((message) =>
+              updates(message as ListMyMensagensNaoEntreguesRequest))
+          as ListMyMensagensNaoEntreguesRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyMensagensNaoEntreguesRequest create() =>
+      ListMyMensagensNaoEntreguesRequest._();
+  @$core.override
+  ListMyMensagensNaoEntreguesRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyMensagensNaoEntreguesRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyMensagensNaoEntreguesRequest>(
+          create);
+  static ListMyMensagensNaoEntreguesRequest? _defaultInstance;
+}
+
+class ListMyMensagensNaoEntreguesResponse extends $pb.GeneratedMessage {
+  factory ListMyMensagensNaoEntreguesResponse({
+    $core.Iterable<MensagemNaoEntregue>? itens,
+  }) {
+    final result = create();
+    if (itens != null) result.itens.addAll(itens);
+    return result;
+  }
+
+  ListMyMensagensNaoEntreguesResponse._();
+
+  factory ListMyMensagensNaoEntreguesResponse.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyMensagensNaoEntreguesResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyMensagensNaoEntreguesResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<MensagemNaoEntregue>(1, _omitFieldNames ? '' : 'itens',
+        subBuilder: MensagemNaoEntregue.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyMensagensNaoEntreguesResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyMensagensNaoEntreguesResponse copyWith(
+          void Function(ListMyMensagensNaoEntreguesResponse) updates) =>
+      super.copyWith((message) =>
+              updates(message as ListMyMensagensNaoEntreguesResponse))
+          as ListMyMensagensNaoEntreguesResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyMensagensNaoEntreguesResponse create() =>
+      ListMyMensagensNaoEntreguesResponse._();
+  @$core.override
+  ListMyMensagensNaoEntreguesResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyMensagensNaoEntreguesResponse getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<
+          ListMyMensagensNaoEntreguesResponse>(create);
+  static ListMyMensagensNaoEntreguesResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<MensagemNaoEntregue> get itens => $_getList(0);
+}
+
+class ReenviarMensagemNaoEntregueRequest extends $pb.GeneratedMessage {
+  factory ReenviarMensagemNaoEntregueRequest({
+    $core.int? id,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    return result;
+  }
+
+  ReenviarMensagemNaoEntregueRequest._();
+
+  factory ReenviarMensagemNaoEntregueRequest.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ReenviarMensagemNaoEntregueRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ReenviarMensagemNaoEntregueRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ReenviarMensagemNaoEntregueRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ReenviarMensagemNaoEntregueRequest copyWith(
+          void Function(ReenviarMensagemNaoEntregueRequest) updates) =>
+      super.copyWith((message) =>
+              updates(message as ReenviarMensagemNaoEntregueRequest))
+          as ReenviarMensagemNaoEntregueRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ReenviarMensagemNaoEntregueRequest create() =>
+      ReenviarMensagemNaoEntregueRequest._();
+  @$core.override
+  ReenviarMensagemNaoEntregueRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ReenviarMensagemNaoEntregueRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ReenviarMensagemNaoEntregueRequest>(
+          create);
+  static ReenviarMensagemNaoEntregueRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+}
+
+class ReenviarMensagemNaoEntregueResponse extends $pb.GeneratedMessage {
+  factory ReenviarMensagemNaoEntregueResponse({
+    $core.String? status,
+  }) {
+    final result = create();
+    if (status != null) result.status = status;
+    return result;
+  }
+
+  ReenviarMensagemNaoEntregueResponse._();
+
+  factory ReenviarMensagemNaoEntregueResponse.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ReenviarMensagemNaoEntregueResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ReenviarMensagemNaoEntregueResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'status')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ReenviarMensagemNaoEntregueResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ReenviarMensagemNaoEntregueResponse copyWith(
+          void Function(ReenviarMensagemNaoEntregueResponse) updates) =>
+      super.copyWith((message) =>
+              updates(message as ReenviarMensagemNaoEntregueResponse))
+          as ReenviarMensagemNaoEntregueResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ReenviarMensagemNaoEntregueResponse create() =>
+      ReenviarMensagemNaoEntregueResponse._();
+  @$core.override
+  ReenviarMensagemNaoEntregueResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ReenviarMensagemNaoEntregueResponse getDefault() =>
+      _defaultInstance ??= $pb.GeneratedMessage.$_defaultFor<
+          ReenviarMensagemNaoEntregueResponse>(create);
+  static ReenviarMensagemNaoEntregueResponse? _defaultInstance;
+
+  /// `reprocessada` (voltou ao outbox, agora ou antes), `ainda_sem_destino` ou
+  /// `nao_encontrada`. O segundo NÃO é erro: é a resposta honesta de que o
+  /// contato continua sem conexão ativa, e a tela precisa dizer isso.
+  @$pb.TagNumber(1)
+  $core.String get status => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set status($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasStatus() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearStatus() => $_clearField(1);
+}
+
+class TestarProvedorIaRequest extends $pb.GeneratedMessage {
+  factory TestarProvedorIaRequest({
+    $core.String? tenantId,
+  }) {
+    final result = create();
+    if (tenantId != null) result.tenantId = tenantId;
+    return result;
+  }
+
+  TestarProvedorIaRequest._();
+
+  factory TestarProvedorIaRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory TestarProvedorIaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'TestarProvedorIaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'tenantId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestarProvedorIaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestarProvedorIaRequest copyWith(
+          void Function(TestarProvedorIaRequest) updates) =>
+      super.copyWith((message) => updates(message as TestarProvedorIaRequest))
+          as TestarProvedorIaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static TestarProvedorIaRequest create() => TestarProvedorIaRequest._();
+  @$core.override
+  TestarProvedorIaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static TestarProvedorIaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<TestarProvedorIaRequest>(create);
+  static TestarProvedorIaRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get tenantId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set tenantId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTenantId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTenantId() => $_clearField(1);
+}
+
+class TestarProvedorIaResponse extends $pb.GeneratedMessage {
+  factory TestarProvedorIaResponse({
+    $core.bool? ok,
+    $core.int? latenciaMs,
+    $core.int? dimensoes,
+    $core.String? erro,
+  }) {
+    final result = create();
+    if (ok != null) result.ok = ok;
+    if (latenciaMs != null) result.latenciaMs = latenciaMs;
+    if (dimensoes != null) result.dimensoes = dimensoes;
+    if (erro != null) result.erro = erro;
+    return result;
+  }
+
+  TestarProvedorIaResponse._();
+
+  factory TestarProvedorIaResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory TestarProvedorIaResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'TestarProvedorIaResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOB(1, _omitFieldNames ? '' : 'ok')
+    ..aI(2, _omitFieldNames ? '' : 'latenciaMs')
+    ..aI(3, _omitFieldNames ? '' : 'dimensoes')
+    ..aOS(4, _omitFieldNames ? '' : 'erro')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestarProvedorIaResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  TestarProvedorIaResponse copyWith(
+          void Function(TestarProvedorIaResponse) updates) =>
+      super.copyWith((message) => updates(message as TestarProvedorIaResponse))
+          as TestarProvedorIaResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static TestarProvedorIaResponse create() => TestarProvedorIaResponse._();
+  @$core.override
+  TestarProvedorIaResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static TestarProvedorIaResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<TestarProvedorIaResponse>(create);
+  static TestarProvedorIaResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.bool get ok => $_getBF(0);
+  @$pb.TagNumber(1)
+  set ok($core.bool value) => $_setBool(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasOk() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearOk() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.int get latenciaMs => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set latenciaMs($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasLatenciaMs() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearLatenciaMs() => $_clearField(2);
+
+  /// Tamanho do vetor devolvido. Zero com `ok` falso; diferente do esperado
+  /// pelo índice é sinal de modelo trocado por fora.
+  @$pb.TagNumber(3)
+  $core.int get dimensoes => $_getIZ(2);
+  @$pb.TagNumber(3)
+  set dimensoes($core.int value) => $_setSignedInt32(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasDimensoes() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearDimensoes() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get erro => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set erro($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasErro() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearErro() => $_clearField(4);
+}
+
 /// --- P7: numeros ignorados ---
 ///
 /// A v1 chamava de "whitelist", e o nome mentia: a lista não libera ninguém, ela

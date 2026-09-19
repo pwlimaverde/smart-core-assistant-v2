@@ -10,3 +10,10 @@ final class TestEvolutionConnectionParameters extends Parameters {
 
   const TestEvolutionConnectionParameters({required this.tenantId});
 }
+
+/// P9 — o tenant cuja configuração de IA será ensaiada.
+final class TestarProvedorIaParameters extends Parameters {
+  final String tenantId;
+
+  const TestarProvedorIaParameters({required this.tenantId});
+}

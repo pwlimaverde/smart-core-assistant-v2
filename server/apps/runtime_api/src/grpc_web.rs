@@ -143,6 +143,8 @@ use contracts::grpc::queries::{
     ListMyFluxosResponse,
     ListMyIntentsRequest,
     ListMyIntentsResponse,
+    ListMyMensagensNaoEntreguesRequest,
+    ListMyMensagensNaoEntreguesResponse,
     ListMyNumerosIgnoradosRequest,
     ListMyNumerosIgnoradosResponse,
     ListMyTreinamentosRequest,
@@ -177,6 +179,7 @@ use contracts::grpc::queries::{
     MarcarAtendimentoLidoRequest,
     MarcarAtendimentoLidoResponse,
     McpGrantItem,
+    MensagemNaoEntregue,
     MensagemThread as ProtoMensagemThread,
     MidiaMensagem as ProtoMidiaMensagem,
     MoveAtendimentoEtapaRequest,
@@ -228,6 +231,8 @@ use contracts::grpc::queries::{
     RedefinirSenhaResponse,
     ReenviarConviteRequest,
     ReenviarConviteResponse,
+    ReenviarMensagemNaoEntregueRequest,
+    ReenviarMensagemNaoEntregueResponse,
     RefreshRequest,
     RegisterPaymentRequest,
     RegisterPaymentResponse,
@@ -275,6 +280,8 @@ use contracts::grpc::queries::{
     TestEvolutionConnectionResponse,
     TestarPerguntaRequest,
     TestarPerguntaResponse,
+    TestarProvedorIaRequest,
+    TestarProvedorIaResponse,
     TransferirParaFluxoRequest,
     TransferirParaFluxoResponse,
     TrechoUsado,
@@ -5229,6 +5236,72 @@ impl AdminService for AdminFacade {
         Ok(Response::new(SimpleOkResponse { sucesso: true }))
     }
 
+    /// P9 — as mensagens do atendente que ficaram sem destino.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "ListMyMensagensNaoEntregues",
+            traceparent
+        )
+    )]
+    async fn list_my_mensagens_nao_entregues(
+        &self,
+        req: Request<ListMyMensagensNaoEntreguesRequest>,
+    ) -> Result<Response<ListMyMensagensNaoEntreguesResponse>, Status> {
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "ListMensagensNaoEntregues",
+                &["operacional:read"],
+                serde_json::json!({}),
+            )
+            .await?;
+        let itens = corpo
+            .get("itens")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().map(nao_entregue_do_json).collect())
+            .unwrap_or_default();
+        Ok(Response::new(ListMyMensagensNaoEntreguesResponse { itens }))
+    }
+
+    /// P9 — devolve a mensagem ao outbox para uma nova tentativa.
+    ///
+    /// Reusa o `ReprocessarDeadLetter` da N7.2, que já audita quem mandou
+    /// reprocessar o quê — reenviar pode gerar entrega ao cliente.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "ReenviarMensagemNaoEntregue",
+            traceparent
+        )
+    )]
+    async fn reenviar_mensagem_nao_entregue(
+        &self,
+        req: Request<ReenviarMensagemNaoEntregueRequest>,
+    ) -> Result<Response<ReenviarMensagemNaoEntregueResponse>, Status> {
+        let id = req.get_ref().id;
+        if id <= 0 {
+            return Err(Status::invalid_argument("registro inválido"));
+        }
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "ReprocessarDeadLetter",
+                &["operacional:admin"],
+                serde_json::json!({ "dead_letter_id": id }),
+            )
+            .await?;
+        Ok(Response::new(ReenviarMensagemNaoEntregueResponse {
+            status: corpo
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string(),
+        }))
+    }
+
     /// P7 — encerra a sessão sem apagar a conexão.
     ///
     /// Remover era a única saída para trocar de aparelho, e ela custava o
@@ -5625,6 +5698,69 @@ impl AdminService for AdminFacade {
                 .map(|arr| arr.iter().map(resgate_do_json).collect())
                 .unwrap_or_default(),
         }))
+    }
+
+    /// P9 — o `test-connection` da v1 para o provedor de IA.
+    ///
+    /// Um embedding de ensaio com a configuração do tenant alvo: é a chamada
+    /// mais barata que passa pelo provedor inteiro (chave, cota, modelo). Antes
+    /// disto, chave expirada só aparecia quando o bot parava de responder.
+    ///
+    /// Falha do provedor volta como `ok: false` com o motivo, e não como erro
+    /// gRPC: o teste deu certo — o que ele descobriu é que o provedor não está.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "TestarProvedorIa", traceparent)
+    )]
+    async fn testar_provedor_ia(
+        &self,
+        req: Request<TestarProvedorIaRequest>,
+    ) -> Result<Response<TestarProvedorIaResponse>, Status> {
+        let _claims = exigir_superuser_do_metadata(&self.deps, &self.bus, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_id = req.get_ref().tenant_id.trim().to_string();
+        if Uuid::parse_str(&tenant_id).is_err() {
+            return Err(Status::invalid_argument("tenant inválido"));
+        }
+
+        let inicio = std::time::Instant::now();
+        let resultado = self
+            .ia
+            .embed(
+                ia_client::EmbedInput {
+                    tenant_id: tenant_id.clone(),
+                    // Texto fixo e sem dado de ninguém: o que se mede é o
+                    // caminho até o provedor, não o conteúdo.
+                    textos: vec!["teste de conexão".to_string()],
+                },
+                &traceparent,
+            )
+            .await;
+        let latencia_ms = inicio.elapsed().as_millis().min(i32::MAX as u128) as i32;
+
+        let resposta = match resultado {
+            Ok(saida) => {
+                let dimensoes = saida.embeddings.first().map(|v| v.len()).unwrap_or(0) as i32;
+                TestarProvedorIaResponse {
+                    ok: dimensoes > 0,
+                    latencia_ms,
+                    dimensoes,
+                    erro: if dimensoes > 0 {
+                        String::new()
+                    } else {
+                        "o provedor respondeu sem vetor".to_string()
+                    },
+                }
+            }
+            Err(e) => TestarProvedorIaResponse {
+                ok: false,
+                latencia_ms,
+                dimensoes: 0,
+                erro: e.to_string(),
+            },
+        };
+
+        Ok(Response::new(resposta))
     }
 
     // --- Fase 3: Evolution Connection ---
@@ -9340,6 +9476,31 @@ fn instancia_do_json(v: &serde_json::Value) -> MyWhatsappInstance {
             .and_then(|x| x.as_str())
             .unwrap_or_default()
             .to_string(),
+    }
+}
+
+/// P9 — a linha de dead-letter no tipo do contrato.
+fn nao_entregue_do_json(v: &serde_json::Value) -> MensagemNaoEntregue {
+    let texto = |chave: &str| {
+        v.get(chave)
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    let inteiro = |chave: &str| v.get(chave).and_then(|x| x.as_i64()).unwrap_or(0) as i32;
+    MensagemNaoEntregue {
+        id: inteiro("id"),
+        mensagem_id: inteiro("mensagem_id"),
+        atendimento_id: inteiro("atendimento_id"),
+        motivo: texto("motivo"),
+        criado_em: v
+            .get("criado_em")
+            .and_then(|x| x.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.timestamp_millis())
+            .unwrap_or(0),
+        trecho: texto("trecho"),
+        contato: texto("contato"),
     }
 }
 

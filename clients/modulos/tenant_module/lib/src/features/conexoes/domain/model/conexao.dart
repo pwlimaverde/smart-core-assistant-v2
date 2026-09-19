@@ -162,3 +162,52 @@ class DetalheConexao {
     this.ultimaChecagem,
   });
 }
+
+/// P9 — uma mensagem do atendente que não tinha para onde ir.
+///
+/// Acontece quando o contato não tem conexão ativa no momento do envio. O
+/// reprocessamento existia desde a N7.2 e nenhuma tela o alcançava: a mensagem
+/// ficava parada sem ninguém saber que não chegou.
+@immutable
+class MensagemNaoEntregue {
+  final int id;
+  final int atendimentoId;
+  final String motivo;
+  final DateTime criadaEm;
+
+  /// Início do texto. PII — nunca em log.
+  final String trecho;
+  final String contato;
+
+  const MensagemNaoEntregue({
+    required this.id,
+    required this.atendimentoId,
+    required this.motivo,
+    required this.criadaEm,
+    required this.trecho,
+    required this.contato,
+  });
+}
+
+/// P9 — o desfecho de uma tentativa de reenvio.
+enum DesfechoReenvio {
+  /// Voltou ao outbox; o worker tenta de novo.
+  reenviada('Mensagem reenviada.'),
+
+  /// O contato continua sem conexão ativa. Não é erro — é a resposta honesta
+  /// de que ainda não há para onde mandar.
+  semDestino('O contato ainda não tem conexão ativa. Tente depois.'),
+
+  /// Alguém já tratou, ou o registro sumiu.
+  naoEncontrada('Esta mensagem já foi tratada.');
+
+  final String texto;
+
+  const DesfechoReenvio(this.texto);
+
+  static DesfechoReenvio doServidor(String status) => switch (status) {
+    'reprocessada' => DesfechoReenvio.reenviada,
+    'ainda_sem_destino' => DesfechoReenvio.semDestino,
+    _ => DesfechoReenvio.naoEncontrada,
+  };
+}

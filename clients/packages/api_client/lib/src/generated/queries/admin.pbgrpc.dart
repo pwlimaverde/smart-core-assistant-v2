@@ -209,6 +209,16 @@ class AdminServiceClient extends $grpc.Client {
         options: options);
   }
 
+  /// P9 — o `test-connection` da v1 para o provedor de IA: um embedding de
+  /// ensaio com a configuração do tenant. Hoje só se descobria que a chave do
+  /// provedor tinha expirado quando o bot parava de responder.
+  $grpc.ResponseFuture<$0.TestarProvedorIaResponse> testarProvedorIa(
+    $0.TestarProvedorIaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$testarProvedorIa, request, options: options);
+  }
+
   /// Fase 4: Feature Flags
   $grpc.ResponseFuture<$0.ListFeatureFlagsResponse> listFeatureFlags(
     $0.ListFeatureFlagsRequest request, {
@@ -789,6 +799,27 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$detalheDaConexao, request, options: options);
   }
 
+  /// P9 — mensagens que o atendente mandou e que não tinham para onde ir. O
+  /// reprocessamento existia desde a N7.2 e não era alcançável de tela nenhuma:
+  /// a mensagem ficava parada para sempre sem ninguém saber.
+  $grpc.ResponseFuture<$0.ListMyMensagensNaoEntreguesResponse>
+      listMyMensagensNaoEntregues(
+    $0.ListMyMensagensNaoEntreguesRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyMensagensNaoEntregues, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ReenviarMensagemNaoEntregueResponse>
+      reenviarMensagemNaoEntregue(
+    $0.ReenviarMensagemNaoEntregueRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$reenviarMensagemNaoEntregue, request,
+        options: options);
+  }
+
   /// P7 — os números que o sistema ignora (a "whitelist" da v1).
   $grpc.ResponseFuture<$0.ListMyNumerosIgnoradosResponse>
       listMyNumerosIgnorados(
@@ -1180,6 +1211,11 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/TestEvolutionConnection',
       ($0.TestEvolutionConnectionRequest value) => value.writeToBuffer(),
       $0.TestEvolutionConnectionResponse.fromBuffer);
+  static final _$testarProvedorIa = $grpc.ClientMethod<
+          $0.TestarProvedorIaRequest, $0.TestarProvedorIaResponse>(
+      '/smartcore.contracts.queries.AdminService/TestarProvedorIa',
+      ($0.TestarProvedorIaRequest value) => value.writeToBuffer(),
+      $0.TestarProvedorIaResponse.fromBuffer);
   static final _$listFeatureFlags = $grpc.ClientMethod<
           $0.ListFeatureFlagsRequest, $0.ListFeatureFlagsResponse>(
       '/smartcore.contracts.queries.AdminService/ListFeatureFlags',
@@ -1554,6 +1590,18 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/DetalheDaConexao',
       ($0.DetalheDaConexaoRequest value) => value.writeToBuffer(),
       $0.DetalheDaConexaoResponse.fromBuffer);
+  static final _$listMyMensagensNaoEntregues = $grpc.ClientMethod<
+          $0.ListMyMensagensNaoEntreguesRequest,
+          $0.ListMyMensagensNaoEntreguesResponse>(
+      '/smartcore.contracts.queries.AdminService/ListMyMensagensNaoEntregues',
+      ($0.ListMyMensagensNaoEntreguesRequest value) => value.writeToBuffer(),
+      $0.ListMyMensagensNaoEntreguesResponse.fromBuffer);
+  static final _$reenviarMensagemNaoEntregue = $grpc.ClientMethod<
+          $0.ReenviarMensagemNaoEntregueRequest,
+          $0.ReenviarMensagemNaoEntregueResponse>(
+      '/smartcore.contracts.queries.AdminService/ReenviarMensagemNaoEntregue',
+      ($0.ReenviarMensagemNaoEntregueRequest value) => value.writeToBuffer(),
+      $0.ReenviarMensagemNaoEntregueResponse.fromBuffer);
   static final _$listMyNumerosIgnorados = $grpc.ClientMethod<
           $0.ListMyNumerosIgnoradosRequest, $0.ListMyNumerosIgnoradosResponse>(
       '/smartcore.contracts.queries.AdminService/ListMyNumerosIgnorados',
@@ -1949,6 +1997,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.TestEvolutionConnectionRequest.fromBuffer(value),
         ($0.TestEvolutionConnectionResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.TestarProvedorIaRequest,
+            $0.TestarProvedorIaResponse>(
+        'TestarProvedorIa',
+        testarProvedorIa_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.TestarProvedorIaRequest.fromBuffer(value),
+        ($0.TestarProvedorIaResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.ListFeatureFlagsRequest,
             $0.ListFeatureFlagsResponse>(
         'ListFeatureFlags',
@@ -2601,6 +2658,26 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.DetalheDaConexaoRequest.fromBuffer(value),
         ($0.DetalheDaConexaoResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListMyMensagensNaoEntreguesRequest,
+            $0.ListMyMensagensNaoEntreguesResponse>(
+        'ListMyMensagensNaoEntregues',
+        listMyMensagensNaoEntregues_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListMyMensagensNaoEntreguesRequest.fromBuffer(value),
+        ($0.ListMyMensagensNaoEntreguesResponse value) =>
+            value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ReenviarMensagemNaoEntregueRequest,
+            $0.ReenviarMensagemNaoEntregueResponse>(
+        'ReenviarMensagemNaoEntregue',
+        reenviarMensagemNaoEntregue_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ReenviarMensagemNaoEntregueRequest.fromBuffer(value),
+        ($0.ReenviarMensagemNaoEntregueResponse value) =>
+            value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.ListMyNumerosIgnoradosRequest,
             $0.ListMyNumerosIgnoradosResponse>(
         'ListMyNumerosIgnorados',
@@ -3131,6 +3208,15 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.TestEvolutionConnectionResponse> testEvolutionConnection(
       $grpc.ServiceCall call, $0.TestEvolutionConnectionRequest request);
+
+  $async.Future<$0.TestarProvedorIaResponse> testarProvedorIa_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.TestarProvedorIaRequest> $request) async {
+    return testarProvedorIa($call, await $request);
+  }
+
+  $async.Future<$0.TestarProvedorIaResponse> testarProvedorIa(
+      $grpc.ServiceCall call, $0.TestarProvedorIaRequest request);
 
   $async.Future<$0.ListFeatureFlagsResponse> listFeatureFlags_Pre(
       $grpc.ServiceCall $call,
@@ -3783,6 +3869,26 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.DetalheDaConexaoResponse> detalheDaConexao(
       $grpc.ServiceCall call, $0.DetalheDaConexaoRequest request);
+
+  $async.Future<$0.ListMyMensagensNaoEntreguesResponse>
+      listMyMensagensNaoEntregues_Pre($grpc.ServiceCall $call,
+          $async.Future<$0.ListMyMensagensNaoEntreguesRequest> $request) async {
+    return listMyMensagensNaoEntregues($call, await $request);
+  }
+
+  $async.Future<$0.ListMyMensagensNaoEntreguesResponse>
+      listMyMensagensNaoEntregues($grpc.ServiceCall call,
+          $0.ListMyMensagensNaoEntreguesRequest request);
+
+  $async.Future<$0.ReenviarMensagemNaoEntregueResponse>
+      reenviarMensagemNaoEntregue_Pre($grpc.ServiceCall $call,
+          $async.Future<$0.ReenviarMensagemNaoEntregueRequest> $request) async {
+    return reenviarMensagemNaoEntregue($call, await $request);
+  }
+
+  $async.Future<$0.ReenviarMensagemNaoEntregueResponse>
+      reenviarMensagemNaoEntregue($grpc.ServiceCall call,
+          $0.ReenviarMensagemNaoEntregueRequest request);
 
   $async.Future<$0.ListMyNumerosIgnoradosResponse> listMyNumerosIgnorados_Pre(
       $grpc.ServiceCall $call,

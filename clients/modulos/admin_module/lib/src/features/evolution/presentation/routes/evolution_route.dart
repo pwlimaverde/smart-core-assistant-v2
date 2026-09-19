@@ -16,6 +16,7 @@ final class EvolutionRoute extends GetItModule {
   void binds(Injector i) {
     i.controller<EvolutionController>(
       () => EvolutionController(
+        testarIa: inject<TestarProvedorIaUsecase>(),
         listTenantsUsecase: inject<ListTenantsUsecase>(),
         testConnectionUsecase: inject<TestEvolutionConnectionUsecase>(),
       ),

@@ -998,3 +998,47 @@ pub async fn aplicar_reacao(
     .await?;
     Ok(r.rows_affected() > 0)
 }
+
+/// P9 — uma mensagem que ficou sem destino.
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+pub struct MensagemNaoEntregue {
+    pub id: i32,
+    pub mensagem_id: i32,
+    pub atendimento_id: i32,
+    pub motivo: String,
+    pub criado_em: DateTime<Utc>,
+    /// Início do texto. PII — nunca em log.
+    pub trecho: String,
+    pub contato: String,
+}
+
+/// P9 — as mensagens pendentes de reenvio, as mais novas primeiro.
+///
+/// O reprocessamento existia desde a N7.2 e nenhuma tela listava o que havia a
+/// reprocessar: a mensagem ficava parada sem ninguém saber que ela não chegou.
+#[tracing::instrument(skip_all)]
+pub async fn listar_nao_entregues(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+) -> Result<Vec<MensagemNaoEntregue>, DbError> {
+    ctx.exigir_qualquer(&["operacional:read", "operacional:admin", "tenant:admin"])?;
+    let rows = sqlx::query_as::<_, MensagemNaoEntregue>(
+        r#"SELECT d.id, d.mensagem_id, d.atendimento_id, d.motivo, d.criado_em,
+                  LEFT(COALESCE(m.conteudo, ''), 120) AS trecho,
+                  COALESCE(c.nome_contato, c.telefone, '') AS contato
+             FROM mensagem_dead_letter d
+             LEFT JOIN oraculo_mensagem m
+                    ON m.id = d.mensagem_id AND m.tenant_id = d.tenant_id
+             LEFT JOIN oraculo_atendimento a
+                    ON a.id = d.atendimento_id AND a.tenant_id = d.tenant_id
+             LEFT JOIN oraculo_contato c
+                    ON c.id = a.contato_id AND c.tenant_id = d.tenant_id
+            WHERE d.tenant_id = $1 AND d.reprocessado = false
+            ORDER BY d.criado_em DESC
+            LIMIT 200"#,
+    )
+    .bind(ctx.tenant_id)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows)
+}

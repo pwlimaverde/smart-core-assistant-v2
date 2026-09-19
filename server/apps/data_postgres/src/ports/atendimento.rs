@@ -288,6 +288,12 @@ pub trait AtendimentoStore: Send + Sync {
         origem: OrigemMensagem,
     ) -> Result<Mensagem, DbError>;
 
+    /// P9 — as mensagens do atendente que ficaram sem destino.
+    async fn listar_nao_entregues(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<infrastructure_postgres::atendimentos::mensagens::MensagemNaoEntregue>, DbError>;
+
     /// P8 — grava (ou apaga) a reação de alguém numa mensagem.
     ///
     /// Reação não é bolha nova: é atributo da mensagem reagida, como no WhatsApp

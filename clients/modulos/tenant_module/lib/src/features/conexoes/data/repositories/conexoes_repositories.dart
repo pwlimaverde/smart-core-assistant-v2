@@ -125,3 +125,25 @@ final class DetalheDaConexaoRepository
   ConexoesError mapError(Object e, StackTrace s, ConexaoIdParameters p) =>
       _traduzir(e, 'detalhe da conexão');
 }
+
+/// P9 — as mensagens que ficaram sem destino.
+final class ListarNaoEntreguesRepository
+    extends
+        RepositoryBase<List<MensagemNaoEntregue>, NoParams, ConexoesError> {
+  const ListarNaoEntreguesRepository({required super.datasource});
+
+  @override
+  ConexoesError mapError(Object e, StackTrace s, NoParams p) =>
+      _traduzir(e, 'listar não entregues');
+}
+
+/// P9 — devolve a mensagem ao outbox.
+final class ReenviarNaoEntregueRepository
+    extends
+        RepositoryBase<DesfechoReenvio, ConexaoIdParameters, ConexoesError> {
+  const ReenviarNaoEntregueRepository({required super.datasource});
+
+  @override
+  ConexoesError mapError(Object e, StackTrace s, ConexaoIdParameters p) =>
+      _traduzir(e, 'reenviar não entregue');
+}

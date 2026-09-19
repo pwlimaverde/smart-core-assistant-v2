@@ -190,3 +190,50 @@ final class DetalheDaConexaoDatasource
     );
   }
 }
+
+/// P9 — as mensagens que ficaram sem destino.
+final class ListarNaoEntreguesDatasource
+    implements Datasource<List<MensagemNaoEntregue>, NoParams> {
+  final proto.AdminServiceClient _client;
+
+  const ListarNaoEntreguesDatasource({required proto.AdminServiceClient client})
+    // ignore: prefer_initializing_formals
+    : _client = client;
+
+  @override
+  Future<List<MensagemNaoEntregue>> call(NoParams parameters) async {
+    final resp = await _client.listMyMensagensNaoEntregues(
+      proto.ListMyMensagensNaoEntreguesRequest(),
+    );
+    return [
+      for (final m in resp.itens)
+        MensagemNaoEntregue(
+          id: m.id,
+          atendimentoId: m.atendimentoId,
+          motivo: m.motivo,
+          criadaEm: DateTime.fromMillisecondsSinceEpoch(m.criadoEm.toInt()),
+          trecho: m.trecho,
+          contato: m.contato,
+        ),
+    ];
+  }
+}
+
+/// P9 — devolve a mensagem ao outbox.
+final class ReenviarNaoEntregueDatasource
+    implements Datasource<DesfechoReenvio, ConexaoIdParameters> {
+  final proto.AdminServiceClient _client;
+
+  const ReenviarNaoEntregueDatasource({
+    required proto.AdminServiceClient client,
+    // ignore: prefer_initializing_formals
+  }) : _client = client;
+
+  @override
+  Future<DesfechoReenvio> call(ConexaoIdParameters parameters) async {
+    final resp = await _client.reenviarMensagemNaoEntregue(
+      proto.ReenviarMensagemNaoEntregueRequest(id: parameters.id),
+    );
+    return DesfechoReenvio.doServidor(resp.status);
+  }
+}

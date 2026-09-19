@@ -260,6 +260,13 @@ final class AdminModule extends AppModule {
     );
 
     // ── evolution ─────────────────────────────────────────────────────
+    i.lazySingleton<TestarProvedorIaUsecase>(
+      () => TestarProvedorIaUsecase(
+        repository: TestarProvedorIaRepository(
+          datasource: TestarProvedorIaDatasource(client: _adminClient()),
+        ),
+      ),
+    );
     i.lazySingleton<TestEvolutionConnectionUsecase>(
       () => TestEvolutionConnectionUsecase(
         repository: TestEvolutionConnectionRepository(

@@ -595,6 +595,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_toggle_bot_conversa = state_clone.clone();
     let state_for_marcar_lido = state_clone.clone();
     let state_for_aplicar_reacao = state_clone.clone();
+    let state_for_listar_nao_entregues = state_clone.clone();
     let state_for_atualizar_perfil_contato = state_clone.clone();
     let state_for_aplicar_politica = state_clone.clone();
     let state_for_move_atendimento_etapa = state_clone.clone();
@@ -708,6 +709,12 @@ async fn main() -> anyhow::Result<()> {
             let state = state_for_update_status.clone();
             Box::pin(
                 async move { handler_update_message_status(state.atendimento.as_ref(), env).await },
+            )
+        })
+        .route("ListMensagensNaoEntregues", move |env| {
+            let state = state_for_listar_nao_entregues.clone();
+            Box::pin(
+                async move { handler_listar_nao_entregues(state.atendimento.as_ref(), env).await },
             )
         })
         .route("AplicarReacaoMensagem", move |env| {
@@ -3763,6 +3770,22 @@ async fn handler_update_message_status(
             serde_json::json!({ "status": "success" }),
         ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// P9 — as mensagens do atendente que ficaram sem destino.
+async fn handler_listar_nao_entregues(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_nao_entregues(&ctx).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListMensagensNaoEntreguesReply",
+            serde_json::json!({ "itens": itens }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }
 

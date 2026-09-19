@@ -184,3 +184,55 @@ final class DetalheDaConexaoUsecase
   ConexoesError onUnexpected(Object e, StackTrace s) =>
       _inesperado('detalhe da conexão', e, s);
 }
+
+/// P9 — as mensagens que ficaram sem destino.
+final class ListarNaoEntreguesUsecase
+    extends
+        UsecaseBaseCallData<
+          List<MensagemNaoEntregue>,
+          List<MensagemNaoEntregue>,
+          NoParams,
+          ConexoesError
+        > {
+  const ListarNaoEntreguesUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    List<MensagemNaoEntregue>,
+    List<MensagemNaoEntregue>,
+    NoParams,
+    ConexoesError
+  >
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  ConexoesError onUnexpected(Object e, StackTrace s) =>
+      _inesperado('listar não entregues', e, s);
+}
+
+/// P9 — devolve a mensagem ao outbox.
+final class ReenviarNaoEntregueUsecase
+    extends
+        UsecaseBaseCallData<
+          DesfechoReenvio,
+          DesfechoReenvio,
+          ConexaoIdParameters,
+          ConexoesError
+        > {
+  const ReenviarNaoEntregueUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    DesfechoReenvio,
+    DesfechoReenvio,
+    ConexaoIdParameters,
+    ConexoesError
+  >
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  ConexoesError onUnexpected(Object e, StackTrace s) =>
+      _inesperado('reenviar não entregue', e, s);
+}

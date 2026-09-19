@@ -290,6 +290,21 @@ final class TenantModule extends AppModule {
       ),
     );
 
+    i.lazySingleton<ListarNaoEntreguesUsecase>(
+      () => ListarNaoEntreguesUsecase(
+        repository: ListarNaoEntreguesRepository(
+          datasource: ListarNaoEntreguesDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<ReenviarNaoEntregueUsecase>(
+      () => ReenviarNaoEntregueUsecase(
+        repository: ReenviarNaoEntregueRepository(
+          datasource: ReenviarNaoEntregueDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+
     // ── números ignorados (P7) ─────────────────────────────────────────────
     i.lazySingleton<ListarIgnoradosUsecase>(
       () => ListarIgnoradosUsecase(

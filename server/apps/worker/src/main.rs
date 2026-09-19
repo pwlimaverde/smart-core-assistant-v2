@@ -934,7 +934,7 @@ async fn processar_contato_atualizado(
     state: &AppState,
     evt: transport::bus::EventoBruto,
 ) -> anyhow::Result<()> {
-    let payload: serde_json::Value = serde_json::from_slice(&evt.payload)?;
+    let payload: serde_json::Value = serde_json::from_str(&evt.payload)?;
     let dados = payload
         .get("raw_event")
         .and_then(|r| r.get("data"))

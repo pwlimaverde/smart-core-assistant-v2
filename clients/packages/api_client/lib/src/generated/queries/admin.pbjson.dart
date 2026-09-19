@@ -4692,6 +4692,114 @@ final $typed_data.Uint8List detalheDaConexaoResponseDescriptor = $convert.base64
     'KAVSE2F0ZW5kaW1lbnRvc0FiZXJ0b3MSIwoNbWVuc2FnZW5zXzI0aBgFIAEoBVIMbWVuc2FnZW'
     '5zMjRo');
 
+@$core.Deprecated('Use mensagemNaoEntregueDescriptor instead')
+const MensagemNaoEntregue$json = {
+  '1': 'MensagemNaoEntregue',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'mensagem_id', '3': 2, '4': 1, '5': 5, '10': 'mensagemId'},
+    {'1': 'atendimento_id', '3': 3, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'motivo', '3': 4, '4': 1, '5': 9, '10': 'motivo'},
+    {'1': 'criado_em', '3': 5, '4': 1, '5': 3, '10': 'criadoEm'},
+    {'1': 'trecho', '3': 6, '4': 1, '5': 9, '10': 'trecho'},
+    {'1': 'contato', '3': 7, '4': 1, '5': 9, '10': 'contato'},
+  ],
+};
+
+/// Descriptor for `MensagemNaoEntregue`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List mensagemNaoEntregueDescriptor = $convert.base64Decode(
+    'ChNNZW5zYWdlbU5hb0VudHJlZ3VlEg4KAmlkGAEgASgFUgJpZBIfCgttZW5zYWdlbV9pZBgCIA'
+    'EoBVIKbWVuc2FnZW1JZBIlCg5hdGVuZGltZW50b19pZBgDIAEoBVINYXRlbmRpbWVudG9JZBIW'
+    'CgZtb3Rpdm8YBCABKAlSBm1vdGl2bxIbCgljcmlhZG9fZW0YBSABKANSCGNyaWFkb0VtEhYKBn'
+    'RyZWNobxgGIAEoCVIGdHJlY2hvEhgKB2NvbnRhdG8YByABKAlSB2NvbnRhdG8=');
+
+@$core.Deprecated('Use listMyMensagensNaoEntreguesRequestDescriptor instead')
+const ListMyMensagensNaoEntreguesRequest$json = {
+  '1': 'ListMyMensagensNaoEntreguesRequest',
+};
+
+/// Descriptor for `ListMyMensagensNaoEntreguesRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyMensagensNaoEntreguesRequestDescriptor =
+    $convert.base64Decode('CiJMaXN0TXlNZW5zYWdlbnNOYW9FbnRyZWd1ZXNSZXF1ZXN0');
+
+@$core.Deprecated('Use listMyMensagensNaoEntreguesResponseDescriptor instead')
+const ListMyMensagensNaoEntreguesResponse$json = {
+  '1': 'ListMyMensagensNaoEntreguesResponse',
+  '2': [
+    {
+      '1': 'itens',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.MensagemNaoEntregue',
+      '10': 'itens'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyMensagensNaoEntreguesResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyMensagensNaoEntreguesResponseDescriptor =
+    $convert.base64Decode(
+        'CiNMaXN0TXlNZW5zYWdlbnNOYW9FbnRyZWd1ZXNSZXNwb25zZRJGCgVpdGVucxgBIAMoCzIwLn'
+        'NtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5NZW5zYWdlbU5hb0VudHJlZ3VlUgVpdGVucw==');
+
+@$core.Deprecated('Use reenviarMensagemNaoEntregueRequestDescriptor instead')
+const ReenviarMensagemNaoEntregueRequest$json = {
+  '1': 'ReenviarMensagemNaoEntregueRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+  ],
+};
+
+/// Descriptor for `ReenviarMensagemNaoEntregueRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List reenviarMensagemNaoEntregueRequestDescriptor =
+    $convert.base64Decode(
+        'CiJSZWVudmlhck1lbnNhZ2VtTmFvRW50cmVndWVSZXF1ZXN0Eg4KAmlkGAEgASgFUgJpZA==');
+
+@$core.Deprecated('Use reenviarMensagemNaoEntregueResponseDescriptor instead')
+const ReenviarMensagemNaoEntregueResponse$json = {
+  '1': 'ReenviarMensagemNaoEntregueResponse',
+  '2': [
+    {'1': 'status', '3': 1, '4': 1, '5': 9, '10': 'status'},
+  ],
+};
+
+/// Descriptor for `ReenviarMensagemNaoEntregueResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List reenviarMensagemNaoEntregueResponseDescriptor =
+    $convert.base64Decode(
+        'CiNSZWVudmlhck1lbnNhZ2VtTmFvRW50cmVndWVSZXNwb25zZRIWCgZzdGF0dXMYASABKAlSBn'
+        'N0YXR1cw==');
+
+@$core.Deprecated('Use testarProvedorIaRequestDescriptor instead')
+const TestarProvedorIaRequest$json = {
+  '1': 'TestarProvedorIaRequest',
+  '2': [
+    {'1': 'tenant_id', '3': 1, '4': 1, '5': 9, '10': 'tenantId'},
+  ],
+};
+
+/// Descriptor for `TestarProvedorIaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List testarProvedorIaRequestDescriptor =
+    $convert.base64Decode(
+        'ChdUZXN0YXJQcm92ZWRvcklhUmVxdWVzdBIbCgl0ZW5hbnRfaWQYASABKAlSCHRlbmFudElk');
+
+@$core.Deprecated('Use testarProvedorIaResponseDescriptor instead')
+const TestarProvedorIaResponse$json = {
+  '1': 'TestarProvedorIaResponse',
+  '2': [
+    {'1': 'ok', '3': 1, '4': 1, '5': 8, '10': 'ok'},
+    {'1': 'latencia_ms', '3': 2, '4': 1, '5': 5, '10': 'latenciaMs'},
+    {'1': 'dimensoes', '3': 3, '4': 1, '5': 5, '10': 'dimensoes'},
+    {'1': 'erro', '3': 4, '4': 1, '5': 9, '10': 'erro'},
+  ],
+};
+
+/// Descriptor for `TestarProvedorIaResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List testarProvedorIaResponseDescriptor = $convert.base64Decode(
+    'ChhUZXN0YXJQcm92ZWRvcklhUmVzcG9uc2USDgoCb2sYASABKAhSAm9rEh8KC2xhdGVuY2lhX2'
+    '1zGAIgASgFUgpsYXRlbmNpYU1zEhwKCWRpbWVuc29lcxgDIAEoBVIJZGltZW5zb2VzEhIKBGVy'
+    'cm8YBCABKAlSBGVycm8=');
+
 @$core.Deprecated('Use myNumeroIgnoradoDescriptor instead')
 const MyNumeroIgnorado$json = {
   '1': 'MyNumeroIgnorado',

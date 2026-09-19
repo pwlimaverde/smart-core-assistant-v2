@@ -52,3 +52,31 @@ final class TestEvolutionConnectionUsecase
     TestEvolutionConnectionParameters parameters,
   ) => Success(data);
 }
+
+/// P9 — ensaio do provedor de IA do tenant.
+final class TestarProvedorIaUsecase
+    extends
+        UsecaseBaseCallData<
+          TesteProvedorIa,
+          TesteProvedorIa,
+          TestarProvedorIaParameters,
+          EvolutionError
+        > {
+  const TestarProvedorIaUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    TesteProvedorIa,
+    TesteProvedorIa,
+    TestarProvedorIaParameters,
+    EvolutionError
+  >
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  EvolutionError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('testarProvedorIa', exception, stackTrace);
+    return const EvolutionInesperado();
+  }
+}

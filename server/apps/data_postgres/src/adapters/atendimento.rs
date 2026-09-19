@@ -2380,55 +2380,6 @@ impl AtendimentoStore for PgAtendimentoStore {
         })
         .await
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::texto_da_saudacao;
-
-    /// A saudação é a primeira coisa que o contato lê depois que o bot cala.
-    /// Um texto com buraco ("sou  da ,") é pior que um texto curto.
-    #[test]
-    fn com_cargo_e_empresa_a_frase_e_a_da_v1() {
-        assert_eq!(
-            texto_da_saudacao("Ana", "Vendedora", "Ecoprint"),
-            "Olá, meu nome é Ana, sou Vendedora da Ecoprint, irei continuar seu atendimento."
-        );
-    }
-
-    #[test]
-    fn sem_cargo_a_frase_encolhe_em_vez_de_abrir_buraco() {
-        assert_eq!(
-            texto_da_saudacao("Ana", "", "Ecoprint"),
-            "Olá, meu nome é Ana, da Ecoprint, irei continuar seu atendimento."
-        );
-    }
-
-    #[test]
-    fn sem_empresa_tambem() {
-        assert_eq!(
-            texto_da_saudacao("Ana", "Vendedora", ""),
-            "Olá, meu nome é Ana, sou Vendedora, irei continuar seu atendimento."
-        );
-    }
-
-    #[test]
-    fn conta_nova_sem_cargo_nem_empresa_ainda_se_apresenta() {
-        // É o caso mais comum de quem acabou de instalar: os dois em branco.
-        assert_eq!(
-            texto_da_saudacao("Ana", "", ""),
-            "Olá, meu nome é Ana, irei continuar seu atendimento."
-        );
-    }
-
-    #[test]
-    fn espaco_em_branco_conta_como_vazio() {
-        // Um campo com espaços passa em `is_empty` e produziria "sou   da  ,".
-        assert_eq!(
-            texto_da_saudacao("Ana", "   ", "  "),
-            "Olá, meu nome é Ana, irei continuar seu atendimento."
-        );
-    }
 
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
     async fn aplicar_reacao(
@@ -2478,5 +2429,72 @@ mod tests {
             Ok((atualizou, tx))
         })
         .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_nao_entregues(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<infrastructure_postgres::atendimentos::mensagens::MensagemNaoEntregue>, DbError>
+    {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let itens = infrastructure_postgres::atendimentos::mensagens::listar_nao_entregues(
+                &mut tx, &ctx,
+            )
+            .await?;
+            Ok((itens, tx))
+        })
+        .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::texto_da_saudacao;
+
+    /// A saudação é a primeira coisa que o contato lê depois que o bot cala.
+    /// Um texto com buraco ("sou  da ,") é pior que um texto curto.
+    #[test]
+    fn com_cargo_e_empresa_a_frase_e_a_da_v1() {
+        assert_eq!(
+            texto_da_saudacao("Ana", "Vendedora", "Ecoprint"),
+            "Olá, meu nome é Ana, sou Vendedora da Ecoprint, irei continuar seu atendimento."
+        );
+    }
+
+    #[test]
+    fn sem_cargo_a_frase_encolhe_em_vez_de_abrir_buraco() {
+        assert_eq!(
+            texto_da_saudacao("Ana", "", "Ecoprint"),
+            "Olá, meu nome é Ana, da Ecoprint, irei continuar seu atendimento."
+        );
+    }
+
+    #[test]
+    fn sem_empresa_tambem() {
+        assert_eq!(
+            texto_da_saudacao("Ana", "Vendedora", ""),
+            "Olá, meu nome é Ana, sou Vendedora, irei continuar seu atendimento."
+        );
+    }
+
+    #[test]
+    fn conta_nova_sem_cargo_nem_empresa_ainda_se_apresenta() {
+        // É o caso mais comum de quem acabou de instalar: os dois em branco.
+        assert_eq!(
+            texto_da_saudacao("Ana", "", ""),
+            "Olá, meu nome é Ana, irei continuar seu atendimento."
+        );
+    }
+
+    #[test]
+    fn espaco_em_branco_conta_como_vazio() {
+        // Um campo com espaços passa em `is_empty` e produziria "sou   da  ,".
+        assert_eq!(
+            texto_da_saudacao("Ana", "   ", "  "),
+            "Olá, meu nome é Ana, irei continuar seu atendimento."
+        );
     }
 }
