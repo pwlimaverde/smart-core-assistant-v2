@@ -153,12 +153,12 @@ portar, e fechar o documento de paridade.
 | P4 | `e21458f` | ✅ 35282650965 | Atribuir/devolver à fila (auditado), prioridade com conjunto fechado, transferência de fluxo na borda e exportação CSV com `tenant:admin`. |
 | P5 | `a8adf73` | ✅ 35284883697 | Timeline (UNION de movimentos, notas e etiquetas), histórico do contato, excluir nota e manutenção do catálogo de etiquetas. |
 | P6 | `c7e2c3d` | ✅ 35285652733 | `data_primeira_resposta` gravada uma vez (atendente ou bot) e mediana de 24h no painel. |
-| P7 | `0511a17` | ✅ Rust 35458880967 | Números ignorados (a "whitelist", renomeada pelo que faz) com tela própria; conexão → departamento no roteamento da ingestão; detalhe da conexão; encerrar a sessão sem remover a conexão. |
-| P8 | `a10c373` | ✅ Rust 35458880967 | Enquete, lista, botões e vários contatos normalizados com `metadados`; reação aplicada na mensagem alvo (não vira bolha); consumidor do evento `CONTACTS` que só atualiza quem já existe. |
-| P9 | `6bb4b36` | ⏳ | Mensagens não entregues (dead-letter) na tela de conexões; testar provedor de IA; exportar/importar CoreSettings sem vazar valor cifrado. |
-| P10 | `9e7a376` | ✅ Rust 35458880967 | Guarda de confiança no write-back de campos (a IA rebaixava valores) e evento `atendimento.campos_atualizados` para a ficha aberta. |
-| P11 | `2258530` | ⏳ | Carimbo de build no binário Windows, `GetVersaoDoApp` sobre três chaves fechadas das CoreSettings e faixa de versão nova no quadro. |
-| P12 | — | — | Varredura abaixo. |
+| P7 | `0511a17` | ✅ 35460056817 | Números ignorados (a "whitelist", renomeada pelo que faz) com tela própria; conexão → departamento no roteamento da ingestão; detalhe da conexão; encerrar a sessão sem remover a conexão. |
+| P8 | `a10c373` | ✅ 35460056817 | Enquete, lista, botões e vários contatos normalizados com `metadados`; reação aplicada na mensagem alvo (não vira bolha); consumidor do evento `CONTACTS` que só atualiza quem já existe. |
+| P9 | `6bb4b36` | ✅ 35460056817 | Mensagens não entregues (dead-letter) na tela de conexões; testar provedor de IA; exportar/importar CoreSettings sem vazar valor cifrado. |
+| P10 | `9e7a376` | ✅ 35460056817 | Guarda de confiança no write-back de campos (a IA rebaixava valores) e evento `atendimento.campos_atualizados` para a ficha aberta. |
+| P11 | `2258530` | ✅ 35460056817 | Carimbo de build no binário Windows, `GetVersaoDoApp` sobre três chaves fechadas das CoreSettings e faixa de versão nova no quadro. |
+| P12 | `70aebe8` | ✅ 35460056817 | Varredura abaixo: toda rota da v1 tem destino ou decisão registrada. |
 
 ### P12 — Varredura final das rotas da v1
 
