@@ -17,7 +17,7 @@ final class EvolutionController extends BaseController<List<Tenant>> {
   EvolutionController({
     required this._listTenantsUsecase,
     required this._testConnectionUsecase,
-    TestarProvedorIaUsecase? this._testarIa,
+    this._testarIa,
   });
 
   /// P9 — ensaia o provedor de IA do tenant.
