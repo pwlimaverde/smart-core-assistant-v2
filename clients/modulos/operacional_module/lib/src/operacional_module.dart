@@ -10,6 +10,7 @@ import 'features/atendimento/domain/gateways/atendimento_gateway.dart';
 import 'features/atendimento/domain/streams/atendimento_evento_stream.dart';
 import 'features/atendimento/domain/usecases/atendimento_usecases.dart';
 import 'features/atendimento/presentation/routes/kanban_route.dart';
+import 'features/atendimento/presentation/escrita_no_quadro.dart';
 
 /// Módulo Operacional (fila/Kanban/chat — WS-6): monta a cadeia
 /// `Gateway → Datasource → Repository → Usecase` e contribui a rota
@@ -45,15 +46,24 @@ final class OperacionalModule extends AppModule {
   /// quadro só não avisa.
   final int? Function()? usuarioAtual;
 
+  /// P16 — a sessão pode escrever no atendimento? Sem ele, o quadro oferece
+  /// tudo (e o servidor recusa o que não pode).
+  final bool Function()? podeEscrever;
+
   OperacionalModule({
     this.drawerBuilder,
     this.avisoBuilder,
     this.buscarContatos,
     this.usuarioAtual,
+    this.podeEscrever,
   });
 
   @override
   void globalBinds(Injector i) {
+    final pergunta = podeEscrever;
+    if (pergunta != null) {
+      i.lazySingleton<EscritaNoQuadro>(() => EscritaNoQuadro(pergunta));
+    }
     // Fronteira de infraestrutura, uma por plataforma. O `AdminServiceClient`
     // (do GrpcTransport global) serve o Web hoje e o transporte de sync do
     // desktop; o tenant vem da sessão.
@@ -121,6 +131,15 @@ final class OperacionalModule extends AppModule {
       () => SetAtendimentoStatusUsecase(
         repository: SetAtendimentoStatusRepository(
           datasource: SetAtendimentoStatusDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<MarcarRevisadoUsecase>(
+      () => MarcarRevisadoUsecase(
+        repository: MarcarRevisadoRepository(
+          datasource: MarcarRevisadoDatasource(
             gateway: inject<AtendimentoGateway>(),
           ),
         ),

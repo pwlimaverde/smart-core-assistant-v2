@@ -54,3 +54,10 @@ final class ExportarQuadroParameters extends Parameters {
     this.somenteNaoLidos = false,
   });
 }
+
+/// P16 — conclui a revisão de uma resposta da IA.
+final class MarcarRevisadoParameters extends Parameters {
+  final int atendimentoId;
+
+  const MarcarRevisadoParameters({required this.atendimentoId});
+}

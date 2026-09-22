@@ -628,6 +628,17 @@ impl AtendimentoStore for PgAtendimentoStore {
             repo_atendimento
                 .touch_last_message(&mut tx, &ctx, atendimento_id)
                 .await?;
+            // P16 — o atendente respondeu na conversa: a resposta da IA que
+            // pedia revisão foi vista por alguém.
+            if remetente == "atendente" {
+                infrastructure_postgres::atendimentos::atendimentos::definir_revisao_pendente(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    false,
+                )
+                .await?;
+            }
             // P6 — só o que SAI conta como resposta; mensagem do contato é o
             // relógio começando, não parando.
             if remetente != "contato" {
@@ -2606,6 +2617,29 @@ impl AtendimentoStore for PgAtendimentoStore {
             )
             .await?;
             Ok((r, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn definir_revisao_pendente(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        pendente: bool,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let mudou =
+                infrastructure_postgres::atendimentos::atendimentos::definir_revisao_pendente(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    pendente,
+                )
+                .await?;
+            Ok((mudou, tx))
         })
         .await
     }

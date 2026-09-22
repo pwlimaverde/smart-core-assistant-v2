@@ -17,4 +17,5 @@ export 'src/shared/widgets/avisos_do_quadro.dart' show AvisosDoQuadro;
 export 'src/shared/buscar_contatos_do_tenant.dart' show buscarContatosDoTenant;
 // B2: o treinamento mora noutro módulo, que não conhece a sessão; o app lhe
 // entrega esta pergunta pronta.
-export 'src/shared/permissoes.dart' show sessaoPodeAlterar, usuarioDaSessao;
+export 'src/shared/permissoes.dart'
+    show sessaoPodeAlterar, sessaoPodeAtender, usuarioDaSessao;

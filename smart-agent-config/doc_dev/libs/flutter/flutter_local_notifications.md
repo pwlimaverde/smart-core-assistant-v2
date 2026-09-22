@@ -6,6 +6,14 @@
 - **Propósito no Projeto:** Notificação nativa do Windows quando uma conversa é atribuída ao atendente — alerta visual integrado ao SO, com suporte a cliques para navegar até a conversa.
 - **Documentação Oficial:** https://pub.dev/packages/flutter_local_notifications
 
+
+> ⚠️ **Correção de 2026-09-22 (conferida no código-fonte da 22.3.1):** a API
+> atual usa **parâmetros nomeados** — `initialize(settings: …,
+> onDidReceiveNotificationResponse: …)` e `show(id: …, title: …, body: …,
+> notificationDetails: …, payload: …)`. Os exemplos posicionais abaixo são da
+> API antiga e não compilam na 22.x. Uso real no projeto:
+> `operacional_module/lib/src/features/atendimento/presentation/aviso_nativo/`.
+
 ---
 
 ## Histórico de Atualizações

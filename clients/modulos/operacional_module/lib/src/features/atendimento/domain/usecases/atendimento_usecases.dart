@@ -770,3 +770,26 @@ final class ObterContatoUsecase
     return const FichaInesperado();
   }
 }
+
+/// P16 — conclui a revisão de uma resposta da IA.
+final class MarcarRevisadoUsecase
+    extends
+        UsecaseBaseCallData<
+          Unit,
+          Unit,
+          MarcarRevisadoParameters,
+          QuadroOperacaoError
+        > {
+  const MarcarRevisadoUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, MarcarRevisadoParameters, QuadroOperacaoError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  QuadroOperacaoError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('marcarRevisado', exception, stackTrace);
+    return const QuadroOperacaoInesperado();
+  }
+}

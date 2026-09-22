@@ -166,6 +166,9 @@ abstract interface class AtendimentoGateway {
   /// P5 — a linha do tempo do atendimento.
   Future<List<EventoDaTimeline>> listarTimeline({required int atendimentoId});
 
+  /// P16 — o atendente conferiu a resposta que a IA deu com pouca confiança.
+  Future<void> marcarRevisado({required int atendimentoId});
+
   /// P13 — nome, telefone e foto do contato da conversa. `forcar` pede uma foto
   /// nova ao WhatsApp quando a guardada não abre (URL do CDN expirada).
   Future<ContatoDaConversa> obterContatoDoAtendimento({

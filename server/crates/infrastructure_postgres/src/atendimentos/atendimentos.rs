@@ -1634,6 +1634,10 @@ pub struct ContatoDoQuadro {
     pub nome: String,
     pub telefone: String,
     pub foto_url: String,
+    /// P16 — a IA respondeu abaixo da confiança automática e ninguém conferiu.
+    /// Vem por aqui, e não no `Atendimento`, porque aquele struct é lido por
+    /// consultas com macro, e o cache `.sqlx` não conhece a coluna nova.
+    pub revisao_pendente: bool,
 }
 
 #[tracing::instrument(skip_all, fields(quantidade = ids.len()))]
@@ -1648,7 +1652,8 @@ pub async fn contatos_do_quadro(
                   COALESCE(NULLIF(TRIM(c.nome_contato), ''),
                            NULLIF(TRIM(c.nome_perfil_whatsapp), ''), '') AS nome,
                   COALESCE(c.telefone, '') AS telefone,
-                  COALESCE(c.foto_perfil_url_origem, '') AS foto_url
+                  COALESCE(c.foto_perfil_url_origem, '') AS foto_url,
+                  a.revisao_pendente
              FROM oraculo_atendimento a
              JOIN oraculo_contato c
                ON c.id = a.contato_id AND c.tenant_id = a.tenant_id
@@ -1722,4 +1727,29 @@ pub async fn registrar_foto_do_contato(
     .execute(&mut **tx)
     .await?;
     Ok(())
+}
+
+/// P16 — liga ou desliga a marca "revisar" do cartão.
+///
+/// `false` no retorno = nada mudou (já estava assim, ou o atendimento não é
+/// deste tenant); quem chama não audita o que não aconteceu.
+#[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, pendente = pendente))]
+pub async fn definir_revisao_pendente(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+    pendente: bool,
+) -> Result<bool, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+    let r = sqlx::query(
+        r#"UPDATE oraculo_atendimento
+              SET revisao_pendente = $3
+            WHERE tenant_id = $1 AND id = $2 AND revisao_pendente IS DISTINCT FROM $3"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .bind(pendente)
+    .execute(&mut **tx)
+    .await?;
+    Ok(r.rows_affected() > 0)
 }

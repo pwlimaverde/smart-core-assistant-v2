@@ -794,6 +794,14 @@ class AdminServiceClient extends $grpc.Client {
         options: options);
   }
 
+  /// P16 — o atendente conferiu a resposta que a IA deu com pouca confiança.
+  $grpc.ResponseFuture<$0.SimpleOkResponse> marcarRevisado(
+    $0.MarcarRevisadoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$marcarRevisado, request, options: options);
+  }
+
   /// P11 — a última versão publicada do app. Até aqui o zip era trocado à mão,
   /// e ninguém sabia que estava numa versão velha até um bug já corrigido
   /// aparecer de novo.
@@ -1606,6 +1614,11 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/ObterContatoDoAtendimento',
       ($0.ObterContatoDoAtendimentoRequest value) => value.writeToBuffer(),
       $0.ObterContatoDoAtendimentoResponse.fromBuffer);
+  static final _$marcarRevisado =
+      $grpc.ClientMethod<$0.MarcarRevisadoRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/MarcarRevisado',
+          ($0.MarcarRevisadoRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
   static final _$getVersaoDoApp =
       $grpc.ClientMethod<$0.GetVersaoDoAppRequest, $0.GetVersaoDoAppResponse>(
           '/smartcore.contracts.queries.AdminService/GetVersaoDoApp',
@@ -2680,6 +2693,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.ObterContatoDoAtendimentoRequest.fromBuffer(value),
         ($0.ObterContatoDoAtendimentoResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.MarcarRevisadoRequest, $0.SimpleOkResponse>(
+            'MarcarRevisado',
+            marcarRevisado_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.MarcarRevisadoRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.GetVersaoDoAppRequest,
             $0.GetVersaoDoAppResponse>(
         'GetVersaoDoApp',
@@ -3909,6 +3931,14 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.ObterContatoDoAtendimentoResponse> obterContatoDoAtendimento(
       $grpc.ServiceCall call, $0.ObterContatoDoAtendimentoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> marcarRevisado_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.MarcarRevisadoRequest> $request) async {
+    return marcarRevisado($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> marcarRevisado(
+      $grpc.ServiceCall call, $0.MarcarRevisadoRequest request);
 
   $async.Future<$0.GetVersaoDoAppResponse> getVersaoDoApp_Pre(
       $grpc.ServiceCall $call,

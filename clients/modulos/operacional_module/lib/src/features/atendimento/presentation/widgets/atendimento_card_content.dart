@@ -45,6 +45,18 @@ class AtendimentoCardContent extends StatelessWidget {
         Row(
           children: [
             _PrioridadeChip(prioridade: atendimento.prioridade),
+            // P16 — a IA respondeu com pouca confiança e ninguém conferiu.
+            if (atendimento.revisaoPendente) ...[
+              const SizedBox(width: AppSpacing.xs),
+              Tooltip(
+                message: 'A IA respondeu com pouca confiança. Confira a resposta.',
+                child: Icon(
+                  Icons.rate_review_outlined,
+                  size: 14,
+                  color: colors.warning,
+                ),
+              ),
+            ],
             if (atendimento.sentimentoLabel case final label?
                 when label.isNotEmpty) ...[
               const SizedBox(width: AppSpacing.xs),

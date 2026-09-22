@@ -331,6 +331,14 @@ pub trait AtendimentoStore: Send + Sync {
         habilitado: bool,
     ) -> Result<bool, DbError>;
 
+    /// P16 — liga/desliga a marca "revisar" do cartão.
+    async fn definir_revisao_pendente(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        pendente: bool,
+    ) -> Result<bool, DbError>;
+
     /// P15 — completa o cadastro do contato com as entidades (N10 E4), só no
     /// que está vazio. Devolve `(contato_id, nomes dos campos preenchidos)`.
     async fn enriquecer_contato(

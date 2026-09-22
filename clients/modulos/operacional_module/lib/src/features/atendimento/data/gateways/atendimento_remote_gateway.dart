@@ -208,6 +208,13 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
   }
 
   @override
+  Future<void> marcarRevisado({required int atendimentoId}) async {
+    await _client.marcarRevisado(
+      proto.MarcarRevisadoRequest(atendimentoId: atendimentoId),
+    );
+  }
+
+  @override
   Future<ContatoDaConversa> obterContatoDoAtendimento({
     required int atendimentoId,
     bool forcar = false,
@@ -425,6 +432,7 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
         contatoNome: a.contatoNome,
         contatoTelefone: a.contatoTelefone,
         contatoFotoUrl: a.contatoFotoUrl,
+        revisaoPendente: a.revisaoPendente,
       );
 
   static MensagemThread _paraMensagemThread(proto.MensagemThread m) =>

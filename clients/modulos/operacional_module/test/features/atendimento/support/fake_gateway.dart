@@ -200,6 +200,13 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   );
   final List<bool> pedidosDeContato = [];
 
+  /// P16 — atendimentos marcados como revisados.
+  final List<int> revisados = [];
+
+  @override
+  Future<void> marcarRevisado({required int atendimentoId}) async =>
+      revisados.add(atendimentoId);
+
   @override
   Future<ContatoDaConversa> obterContatoDoAtendimento({
     required int atendimentoId,
@@ -617,7 +624,9 @@ AtendimentoResumo atendimentoDeTeste({
   int? etapaAtualId,
   String prioridade = 'normal',
   DateTime? dataUltimaMensagem,
+  bool revisaoPendente = false,
 }) => AtendimentoResumo(
+  revisaoPendente: revisaoPendente,
   id: id,
   contatoId: id,
   status: 'fila',

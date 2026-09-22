@@ -484,6 +484,14 @@ message AtendimentoResumo {
   // URL do CDN do WhatsApp, assinada e com validade: a tela trata imagem
   // quebrada como "sem foto" e pede uma nova com `ObterContatoDoAtendimento`.
   string contato_foto_url = 17;
+  // P16 — a IA respondeu abaixo da confiança automática do tenant e ninguém
+  // conferiu ainda. Some quando um atendente responde ou marca como revisado.
+  bool revisao_pendente = 18;
+}
+
+// P16 — conclui a revisão de uma resposta da IA.
+message MarcarRevisadoRequest {
+  int32 atendimento_id = 1;
 }
 
 // P13 — nome, telefone e foto do contato de uma conversa, para o cabeçalho.
@@ -1406,6 +1414,8 @@ service AdminService {
   rpc DesconectarMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
   // P13 — o contato da conversa, com a foto buscada no WhatsApp sob demanda.
   rpc ObterContatoDoAtendimento(ObterContatoDoAtendimentoRequest) returns (ObterContatoDoAtendimentoResponse);
+  // P16 — o atendente conferiu a resposta que a IA deu com pouca confiança.
+  rpc MarcarRevisado(MarcarRevisadoRequest) returns (SimpleOkResponse);
   // P11 — a última versão publicada do app. Até aqui o zip era trocado à mão,
   // e ninguém sabia que estava numa versão velha até um bug já corrigido
   // aparecer de novo.

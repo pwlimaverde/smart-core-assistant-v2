@@ -655,3 +655,17 @@ final class ObterContatoRepository
   FichaError mapError(Object e, StackTrace s, ObterContatoParameters p) =>
       _erroDeFicha(e, s, p.atendimentoId);
 }
+
+/// P16 — conclui a revisão de uma resposta da IA.
+final class MarcarRevisadoRepository
+    extends
+        RepositoryBase<Unit, MarcarRevisadoParameters, QuadroOperacaoError> {
+  const MarcarRevisadoRepository({required super.datasource});
+
+  @override
+  QuadroOperacaoError mapError(
+    Object e,
+    StackTrace s,
+    MarcarRevisadoParameters p,
+  ) => _erroDeOperacaoDoQuadro(e, s, p.atendimentoId);
+}

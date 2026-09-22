@@ -2232,6 +2232,23 @@ async fn acionar_bot(
             .unwrap_or(0.8);
             let decisao =
                 decisao_da_resposta(confianca_bot, transferida_pela_ia, minima_automatica);
+            // P16 — a resposta saiu, mas abaixo da confiança automática: o
+            // cartão ganha a marca "revisar". Best-effort — falhar aqui não
+            // desfaz a resposta que já foi enviada.
+            if decisao == "revisao" {
+                if let Err(e) = chamar_rpc(
+                    &state.pg_client,
+                    &ctx.tenant_str,
+                    "DefinirRevisaoPendente",
+                    serde_json::json!({ "atendimento_id": atendimento_id, "pendente": true }),
+                    &ctx.event_id,
+                    &ctx.traceparent,
+                )
+                .await
+                {
+                    tracing::warn!(erro = %e, "falha ao marcar a resposta para revisão");
+                }
+            }
             tracing::info!(
                 atendimento_id,
                 confianca = confianca_bot,

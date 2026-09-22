@@ -5790,6 +5790,7 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
     $core.String? contatoNome,
     $core.String? contatoTelefone,
     $core.String? contatoFotoUrl,
+    $core.bool? revisaoPendente,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -5811,6 +5812,7 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
     if (contatoNome != null) result.contatoNome = contatoNome;
     if (contatoTelefone != null) result.contatoTelefone = contatoTelefone;
     if (contatoFotoUrl != null) result.contatoFotoUrl = contatoFotoUrl;
+    if (revisaoPendente != null) result.revisaoPendente = revisaoPendente;
     return result;
   }
 
@@ -5845,6 +5847,7 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
     ..aOS(15, _omitFieldNames ? '' : 'contatoNome')
     ..aOS(16, _omitFieldNames ? '' : 'contatoTelefone')
     ..aOS(17, _omitFieldNames ? '' : 'contatoFotoUrl')
+    ..aOB(18, _omitFieldNames ? '' : 'revisaoPendente')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -6023,6 +6026,74 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
   $core.bool hasContatoFotoUrl() => $_has(16);
   @$pb.TagNumber(17)
   void clearContatoFotoUrl() => $_clearField(17);
+
+  /// P16 — a IA respondeu abaixo da confiança automática do tenant e ninguém
+  /// conferiu ainda. Some quando um atendente responde ou marca como revisado.
+  @$pb.TagNumber(18)
+  $core.bool get revisaoPendente => $_getBF(17);
+  @$pb.TagNumber(18)
+  set revisaoPendente($core.bool value) => $_setBool(17, value);
+  @$pb.TagNumber(18)
+  $core.bool hasRevisaoPendente() => $_has(17);
+  @$pb.TagNumber(18)
+  void clearRevisaoPendente() => $_clearField(18);
+}
+
+/// P16 — conclui a revisão de uma resposta da IA.
+class MarcarRevisadoRequest extends $pb.GeneratedMessage {
+  factory MarcarRevisadoRequest({
+    $core.int? atendimentoId,
+  }) {
+    final result = create();
+    if (atendimentoId != null) result.atendimentoId = atendimentoId;
+    return result;
+  }
+
+  MarcarRevisadoRequest._();
+
+  factory MarcarRevisadoRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MarcarRevisadoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MarcarRevisadoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'atendimentoId')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MarcarRevisadoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MarcarRevisadoRequest copyWith(
+          void Function(MarcarRevisadoRequest) updates) =>
+      super.copyWith((message) => updates(message as MarcarRevisadoRequest))
+          as MarcarRevisadoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MarcarRevisadoRequest create() => MarcarRevisadoRequest._();
+  @$core.override
+  MarcarRevisadoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MarcarRevisadoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MarcarRevisadoRequest>(create);
+  static MarcarRevisadoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get atendimentoId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set atendimentoId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAtendimentoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAtendimentoId() => $_clearField(1);
 }
 
 /// P13 — nome, telefone e foto do contato de uma conversa, para o cabeçalho.

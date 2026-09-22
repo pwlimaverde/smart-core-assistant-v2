@@ -474,3 +474,17 @@ final class ObterContatoDatasource
         forcar: parameters.forcar,
       );
 }
+
+/// P16 — conclui a revisão de uma resposta da IA.
+final class MarcarRevisadoDatasource
+    implements Datasource<Unit, MarcarRevisadoParameters> {
+  final AtendimentoGateway _gateway;
+
+  const MarcarRevisadoDatasource({required this._gateway});
+
+  @override
+  Future<Unit> call(MarcarRevisadoParameters parameters) async {
+    await _gateway.marcarRevisado(atendimentoId: parameters.atendimentoId);
+    return unit;
+  }
+}

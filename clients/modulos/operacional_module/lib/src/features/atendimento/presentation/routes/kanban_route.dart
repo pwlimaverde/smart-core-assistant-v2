@@ -60,6 +60,7 @@ final class KanbanRoute extends GetItModule {
         prioridadeUsecase: _seRegistrado<DefinirPrioridadeUsecase>(),
         transferirUsecase: _seRegistrado<TransferirParaFluxoUsecase>(),
         exportarUsecase: _seRegistrado<ExportarQuadroUsecase>(),
+        revisadoUsecase: _seRegistrado<MarcarRevisadoUsecase>(),
       ),
     );
   }

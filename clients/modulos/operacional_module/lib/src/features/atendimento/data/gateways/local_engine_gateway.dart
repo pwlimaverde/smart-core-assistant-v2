@@ -400,6 +400,11 @@ final class LocalEngineGateway implements AtendimentoGateway {
     required int atendimentoId,
   }) => _remoto.listarTimeline(atendimentoId: atendimentoId);
 
+  /// P16 — direto ao servidor, como as outras operações do supervisor.
+  @override
+  Future<void> marcarRevisado({required int atendimentoId}) =>
+      _remoto.marcarRevisado(atendimentoId: atendimentoId);
+
   /// P13 — só existe com rede: o índice local não guarda o contato.
   @override
   Future<ContatoDaConversa> obterContatoDoAtendimento({

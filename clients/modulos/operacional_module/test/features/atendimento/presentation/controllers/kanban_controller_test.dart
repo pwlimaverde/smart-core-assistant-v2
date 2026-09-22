@@ -1,9 +1,12 @@
 import 'package:api_client/api_client.dart' show GrpcError;
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:operacional_module/src/features/atendimento/data/datasources/atendimento_datasources.dart';
+import 'package:operacional_module/src/features/atendimento/data/repositories/atendimento_repositories.dart';
 import 'package:operacional_module/src/features/atendimento/domain/errors/atendimento_errors.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/atendimento_evento.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/quadro.dart';
+import 'package:operacional_module/src/features/atendimento/domain/usecases/atendimento_usecases.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/controllers/kanban_controller.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/controllers/kanban_state.dart';
 import 'package:presentation_module/presentation_module.dart';
@@ -36,6 +39,11 @@ KanbanController _controller(
     prioridadeUsecase: u.prioridade,
     transferirUsecase: u.transferir,
     exportarUsecase: u.exportar,
+    revisadoUsecase: MarcarRevisadoUsecase(
+      repository: MarcarRevisadoRepository(
+        datasource: MarcarRevisadoDatasource(gateway: gateway),
+      ),
+    ),
   );
 }
 
@@ -669,6 +677,43 @@ void main() {
       expect(erro, isNull);
       expect(csv, [1, 2, 3]);
       expect(gateway.operacoesDoQuadro.last, 'exportar:maria:true:false');
+      await c.close();
+    });
+  });
+  group('revisão das respostas da IA (P16)', () {
+    test('o filtro "a revisar" deixa só os cartões marcados', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [
+          atendimentoDeTeste(id: 1, etapaAtualId: 10, revisaoPendente: true),
+          atendimentoDeTeste(id: 2, etapaAtualId: 10),
+        ],
+      );
+      final c = _controller(gateway);
+      await c.carregar();
+
+      await c.alternarFiltro(revisar: true);
+
+      final vm = (c.state as SuccessState<KanbanViewModel>).data;
+      final ids = vm.porEtapa.values.expand((l) => l).map((a) => a.id);
+      expect(ids, [1]);
+      expect(c.temFiltro, isTrue);
+
+      await c.limparFiltros();
+      expect(c.somenteRevisar, isFalse);
+      await c.close();
+    });
+
+    test('marcar como revisado chega ao gateway e recarrega', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 7, etapaAtualId: 10, revisaoPendente: true)],
+      );
+      final c = _controller(gateway);
+      await c.carregar();
+
+      final erro = await c.marcarRevisado(7);
+
+      expect(erro, isNull);
+      expect(gateway.revisados, [7]);
       await c.close();
     });
   });

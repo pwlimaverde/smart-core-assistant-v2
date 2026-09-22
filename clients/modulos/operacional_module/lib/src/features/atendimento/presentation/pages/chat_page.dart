@@ -27,6 +27,7 @@ import '../widgets/chat_connection_badge.dart';
 import '../widgets/chat_message_bubble.dart';
 import '../widgets/galeria_do_atendimento.dart';
 import '../widgets/painel_ficha.dart';
+import '../escrita_no_quadro.dart';
 
 /// A conversa de um atendimento, **sem moldura de tela**.
 ///
@@ -569,6 +570,17 @@ class _ChatBody extends StatelessWidget {
         ),
         if (viewModel.citando case final citada?)
           _BarraDeCitacao(mensagem: citada, aoCancelar: aoCancelarCitacao),
+        // P16 — quem só lê vê a conversa inteira, sem a caixa de envio que o
+        // servidor recusaria.
+        if (!quadroPodeEscrever())
+          const Padding(
+            padding: EdgeInsets.all(AppSpacing.md),
+            child: Text(
+              'Você tem acesso só de leitura a esta conversa.',
+              textAlign: TextAlign.center,
+            ),
+          )
+        else
         Padding(
           padding: const EdgeInsets.all(AppSpacing.sm),
           child: Row(

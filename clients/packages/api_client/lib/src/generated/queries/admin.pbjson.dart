@@ -1462,6 +1462,7 @@ const AtendimentoResumo$json = {
     {'1': 'contato_nome', '3': 15, '4': 1, '5': 9, '10': 'contatoNome'},
     {'1': 'contato_telefone', '3': 16, '4': 1, '5': 9, '10': 'contatoTelefone'},
     {'1': 'contato_foto_url', '3': 17, '4': 1, '5': 9, '10': 'contatoFotoUrl'},
+    {'1': 'revisao_pendente', '3': 18, '4': 1, '5': 8, '10': 'revisaoPendente'},
   ],
   '8': [
     {'1': '_sentimento_nota'},
@@ -1482,8 +1483,22 @@ final $typed_data.Uint8List atendimentoResumoDescriptor = $convert.base64Decode(
     'bnRvTm90YYgBARIuChBzZW50aW1lbnRvX2xhYmVsGA0gASgJSAFSD3NlbnRpbWVudG9MYWJlbI'
     'gBARIbCgluYW9fbGlkYXMYDiABKAVSCG5hb0xpZGFzEiEKDGNvbnRhdG9fbm9tZRgPIAEoCVIL'
     'Y29udGF0b05vbWUSKQoQY29udGF0b190ZWxlZm9uZRgQIAEoCVIPY29udGF0b1RlbGVmb25lEi'
-    'gKEGNvbnRhdG9fZm90b191cmwYESABKAlSDmNvbnRhdG9Gb3RvVXJsQhIKEF9zZW50aW1lbnRv'
-    'X25vdGFCEwoRX3NlbnRpbWVudG9fbGFiZWw=');
+    'gKEGNvbnRhdG9fZm90b191cmwYESABKAlSDmNvbnRhdG9Gb3RvVXJsEikKEHJldmlzYW9fcGVu'
+    'ZGVudGUYEiABKAhSD3JldmlzYW9QZW5kZW50ZUISChBfc2VudGltZW50b19ub3RhQhMKEV9zZW'
+    '50aW1lbnRvX2xhYmVs');
+
+@$core.Deprecated('Use marcarRevisadoRequestDescriptor instead')
+const MarcarRevisadoRequest$json = {
+  '1': 'MarcarRevisadoRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+  ],
+};
+
+/// Descriptor for `MarcarRevisadoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List marcarRevisadoRequestDescriptor = $convert.base64Decode(
+    'ChVNYXJjYXJSZXZpc2Fkb1JlcXVlc3QSJQoOYXRlbmRpbWVudG9faWQYASABKAVSDWF0ZW5kaW'
+    '1lbnRvSWQ=');
 
 @$core.Deprecated('Use obterContatoDoAtendimentoRequestDescriptor instead')
 const ObterContatoDoAtendimentoRequest$json = {

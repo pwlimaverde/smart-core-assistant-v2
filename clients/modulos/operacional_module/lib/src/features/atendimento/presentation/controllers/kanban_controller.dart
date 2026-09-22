@@ -44,6 +44,9 @@ final class KanbanController extends BaseController<KanbanViewModel> {
   final TransferirParaFluxoUsecase? _transferirUsecase;
   final ExportarQuadroUsecase? _exportarUsecase;
 
+  /// P16 — conclui a revisão de uma resposta da IA.
+  final MarcarRevisadoUsecase? _revisadoUsecase;
+
   /// Fonte de eventos realtime (opcional — testes de unidade do controller não
   /// precisam abrir stream).
   final AtendimentoEventoStream? eventos;
@@ -59,15 +62,20 @@ final class KanbanController extends BaseController<KanbanViewModel> {
   String _busca = '';
   bool _somenteMeus = false;
   bool _somenteNaoLidas = false;
+
+  /// P16 — só os cartões com resposta da IA a conferir. Filtro local: o
+  /// quadro já está carregado, e a marca vem em cada cartão.
+  bool _somenteRevisar = false;
   Timer? _debounceBusca;
 
   String get busca => _busca;
   bool get somenteMeus => _somenteMeus;
   bool get somenteNaoLidas => _somenteNaoLidas;
+  bool get somenteRevisar => _somenteRevisar;
 
   /// Há algum filtro ativo — a tela usa para oferecer o "limpar".
   bool get temFiltro =>
-      _busca.isNotEmpty || _somenteMeus || _somenteNaoLidas;
+      _busca.isNotEmpty || _somenteMeus || _somenteNaoLidas || _somenteRevisar;
 
   /// Conversas que o rodízio acabou de atribuir **a quem está logado**.
   ///
@@ -87,7 +95,9 @@ final class KanbanController extends BaseController<KanbanViewModel> {
     DefinirPrioridadeUsecase? prioridadeUsecase,
     TransferirParaFluxoUsecase? transferirUsecase,
     ExportarQuadroUsecase? exportarUsecase,
-  }) : _atribuirUsecase = atribuirUsecase,
+    MarcarRevisadoUsecase? revisadoUsecase,
+  }) : _revisadoUsecase = revisadoUsecase,
+       _atribuirUsecase = atribuirUsecase,
        _prioridadeUsecase = prioridadeUsecase,
        _transferirUsecase = transferirUsecase,
        _exportarUsecase = exportarUsecase,
@@ -196,10 +206,24 @@ final class KanbanController extends BaseController<KanbanViewModel> {
 
   /// P1 — liga/desliga os filtros combináveis. Recarrega na hora: é um clique,
   /// não uma rajada.
-  Future<void> alternarFiltro({bool? meus, bool? naoLidas}) {
+  Future<void> alternarFiltro({bool? meus, bool? naoLidas, bool? revisar}) {
     if (meus != null) _somenteMeus = meus;
     if (naoLidas != null) _somenteNaoLidas = naoLidas;
+    if (revisar != null) _somenteRevisar = revisar;
     return carregar();
+  }
+
+  /// P16 — o atendente conferiu a resposta que a IA deu com pouca confiança.
+  Future<QuadroOperacaoError?> marcarRevisado(int atendimentoId) async {
+    final usecase = _revisadoUsecase;
+    if (usecase == null) return null;
+    final res = await usecase(
+      MarcarRevisadoParameters(atendimentoId: atendimentoId),
+    );
+    return switch (res) {
+      Success() => await _recarregarERetornar(),
+      Failure(:final error) => error,
+    };
   }
 
   /// P4 — põe a conversa na mão de alguém (ou devolve para a fila).
@@ -298,6 +322,7 @@ final class KanbanController extends BaseController<KanbanViewModel> {
     _busca = '';
     _somenteMeus = false;
     _somenteNaoLidas = false;
+    _somenteRevisar = false;
     return carregar();
   }
 
@@ -320,7 +345,11 @@ final class KanbanController extends BaseController<KanbanViewModel> {
           fluxoId: fluxoId,
           fluxos: _fluxos,
           colunas: _colunas,
-          porEtapa: KanbanViewModel.agruparPorEtapa(value),
+          porEtapa: KanbanViewModel.agruparPorEtapa(
+            _somenteRevisar
+                ? value.where((a) => a.revisaoPendente).toList()
+                : value,
+          ),
         ),
       ),
       Failure(:final error) => Failure(error),

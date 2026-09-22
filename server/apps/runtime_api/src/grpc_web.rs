@@ -181,6 +181,7 @@ use contracts::grpc::queries::{
     LogoutResponse,
     MarcarAtendimentoLidoRequest,
     MarcarAtendimentoLidoResponse,
+    MarcarRevisadoRequest,
     McpGrantItem,
     MensagemNaoEntregue,
     MensagemThread as ProtoMensagemThread,
@@ -5353,6 +5354,29 @@ impl AdminService for AdminFacade {
         }))
     }
 
+    /// P16 — o atendente conferiu a resposta que a IA deu com pouca confiança.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "MarcarRevisado", traceparent)
+    )]
+    async fn marcar_revisado(
+        &self,
+        req: Request<MarcarRevisadoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let id = req.get_ref().atendimento_id;
+        if id <= 0 {
+            return Err(Status::invalid_argument("atendimento inválido"));
+        }
+        self.encaminhar_operacional(
+            &req,
+            "DefinirRevisaoPendente",
+            &["atendimentos:write"],
+            serde_json::json!({ "atendimento_id": id, "pendente": false }),
+        )
+        .await?;
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
     /// P11 — a última versão publicada do app de uma plataforma.
     ///
     /// Vem das CoreSettings (`app.<plataforma>.build`, `.url`, `.notas`), que o
@@ -9372,6 +9396,10 @@ fn atendimento_resumo_do_json(v: &serde_json::Value) -> ProtoAtendimentoResumo {
         contato_nome: texto_do(v, "contato_nome"),
         contato_telefone: texto_do(v, "contato_telefone"),
         contato_foto_url: texto_do(v, "contato_foto_url"),
+        revisao_pendente: v
+            .get("revisao_pendente")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false),
     }
 }
 

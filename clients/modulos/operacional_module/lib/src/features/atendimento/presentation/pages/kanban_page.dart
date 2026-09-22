@@ -16,6 +16,8 @@ import '../controllers/kanban_controller.dart';
 import '../controllers/kanban_state.dart';
 import '../widgets/atendimento_card_content.dart';
 import 'chat_page.dart';
+import '../escrita_no_quadro.dart';
+import '../aviso_nativo/aviso_nativo.dart';
 
 /// Payload carregado pelo drag de um [KanbanCard] — id do atendimento e etapa
 /// de origem (a coluna de onde saiu), consumido pela coluna de destino.
@@ -81,6 +83,10 @@ class _KanbanPageState extends State<KanbanPage> {
     final controller = inject<KanbanController>();
     controller.carregar();
     _atribuicoes = controller.atribuicoes.listen(_avisarAtribuicao);
+    // P16 — o clique no aviso do Windows abre a conversa.
+    unawaited(AvisoNativo.iniciar(aoClicar: (id) {
+      if (mounted) _abrir(id);
+    }));
   }
 
   @override
@@ -95,6 +101,18 @@ class _KanbanPageState extends State<KanbanPage> {
   void _avisarAtribuicao(AtribuicaoRecebida atribuicao) {
     if (!mounted) return;
     final onde = atribuicao.fluxo.isEmpty ? '' : ' em ${atribuicao.fluxo}';
+    // P16 — com a janela fora de foco, o aviso do quadro não é visto: vai
+    // também para o Windows.
+    final estado = WidgetsBinding.instance.lifecycleState;
+    if (estado != null && estado != AppLifecycleState.resumed) {
+      unawaited(
+        AvisoNativo.mostrar(
+          atendimentoId: atribuicao.atendimentoId,
+          titulo: 'Conversa atribuída a você',
+          corpo: 'Uma conversa$onde está com você agora.',
+        ),
+      );
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Uma conversa$onde foi atribuída a você.'),
@@ -191,7 +209,7 @@ class _KanbanPageState extends State<KanbanPage> {
       title: 'Atendimento',
       drawer: widget.drawer,
       actions: [
-        if (widget.buscarContatos != null)
+        if (widget.buscarContatos != null && quadroPodeEscrever())
           IconButton(
             icon: const Icon(Icons.person_add_alt_1_outlined),
             tooltip: 'Iniciar atendimento',
@@ -406,6 +424,8 @@ class _Coluna extends StatelessWidget {
       itemCount: itens.length,
       onAccept: (payload) {
         if (payload.etapaOrigemId == coluna.id) return;
+        // P16 — quem só lê arrasta e o cartão volta: nada a enviar ao servidor.
+        if (!quadroPodeEscrever()) return;
         _moverComFeedback(
           context,
           atendimentoId: payload.atendimentoId,
@@ -431,11 +451,12 @@ class _Coluna extends StatelessWidget {
                 // existe para o quadro que não tem coluna daquele tipo — sem
                 // ele, não haveria como marcar uma conversa como pendente num
                 // quadro de três colunas.
-                _MenuDoCartao(
-                  atendimento: atendimento,
-                  controller: controller,
-                  viewModel: viewModel,
-                ),
+                if (quadroPodeEscrever())
+                  _MenuDoCartao(
+                    atendimento: atendimento,
+                    controller: controller,
+                    viewModel: viewModel,
+                  ),
               ],
             ),
           ),
@@ -503,6 +524,13 @@ class _MenuDoCartao extends StatelessWidget {
       icon: const Icon(Icons.more_vert, size: 18),
       tooltip: 'Ações da conversa',
       itemBuilder: (_) => [
+        if (atendimento.revisaoPendente) ...[
+          const PopupMenuItem(
+            value: 'revisado:ok',
+            child: Text('Marcar a resposta da IA como revisada'),
+          ),
+          const PopupMenuDivider(),
+        ],
         const PopupMenuItem(value: 'dono:eu', child: Text('Atribuir a mim')),
         if (atendimento.atendenteHumanoId != null)
           const PopupMenuItem(
@@ -547,6 +575,7 @@ class _MenuDoCartao extends StatelessWidget {
         atendimentoId: atendimento.id,
         prioridade: partes[1],
       ),
+      'revisado' => await controller.marcarRevisado(atendimento.id),
       'fluxo' => (await controller.transferirParaFluxo(
         atendimentoId: atendimento.id,
         fluxoId: int.parse(partes[1]),
@@ -639,6 +668,16 @@ class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
             selected: c.somenteNaoLidas,
             onSelected: (v) async {
               await c.alternarFiltro(naoLidas: v);
+              if (mounted) setState(() {});
+            },
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          // P16 — respostas da IA que ninguém conferiu.
+          FilterChip(
+            label: const Text('A revisar'),
+            selected: c.somenteRevisar,
+            onSelected: (v) async {
+              await c.alternarFiltro(revisar: v);
               if (mounted) setState(() {});
             },
           ),

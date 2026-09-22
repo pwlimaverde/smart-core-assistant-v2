@@ -596,6 +596,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_marcar_lido = state_clone.clone();
     let state_for_aplicar_reacao = state_clone.clone();
     let state_for_contato_do_atendimento = state_clone.clone();
+    let state_for_revisao_pendente = state_clone.clone();
     let state_for_registrar_foto = state_clone.clone();
     let state_for_listar_nao_entregues = state_clone.clone();
     let state_for_atualizar_perfil_contato = state_clone.clone();
@@ -718,6 +719,17 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(
                 async move { handler_listar_nao_entregues(state.atendimento.as_ref(), env).await },
             )
+        })
+        .route("DefinirRevisaoPendente", move |env| {
+            let state = state_for_revisao_pendente.clone();
+            Box::pin(async move {
+                handler_definir_revisao_pendente(
+                    state.atendimento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
         })
         .route("ContatoDoAtendimento", move |env| {
             let state = state_for_contato_do_atendimento.clone();
@@ -2138,6 +2150,10 @@ async fn handler_list_atendimentos(store: &dyn ports::AtendimentoStore, env: Env
                             obj.insert("contato_nome".into(), serde_json::json!(c.nome));
                             obj.insert("contato_telefone".into(), serde_json::json!(c.telefone));
                             obj.insert("contato_foto_url".into(), serde_json::json!(c.foto_url));
+                            obj.insert(
+                                "revisao_pendente".into(),
+                                serde_json::json!(c.revisao_pendente),
+                            );
                         }
                     }
                     item
@@ -3810,6 +3826,61 @@ async fn handler_update_message_status(
             serde_json::json!({ "status": "success" }),
         ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// P16 — liga (worker) ou desliga (atendente) a marca "revisar".
+///
+/// Só a conclusão por uma pessoa é auditada: ligar é consequência automática
+/// de uma decisão que já está no evento `bot.respondeu`.
+async fn handler_definir_revisao_pendente(
+    store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let Some(atendimento_id) = payload
+        .get("atendimento_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32)
+    else {
+        return erro(
+            error_core::AppError::Validation("atendimento_id ausente".into()),
+            &env,
+        );
+    };
+    let Some(pendente) = payload.get("pendente").and_then(|v| v.as_bool()) else {
+        return erro(
+            error_core::AppError::Validation("pendente ausente".into()),
+            &env,
+        );
+    };
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .definir_revisao_pendente(&ctx, atendimento_id, pendente)
+        .await
+    {
+        Ok(mudou) => {
+            if mudou && !pendente {
+                audit
+                    .publish(
+                        &env,
+                        "atendimento.revisao_concluida",
+                        format!("resposta da IA no atendimento #{atendimento_id} revisada"),
+                        serde_json::json!({ "atendimento_id": atendimento_id }),
+                    )
+                    .await;
+            }
+            ok_reply(
+                &env,
+                "DefinirRevisaoPendenteReply",
+                serde_json::json!({ "mudou": mudou }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }
 
@@ -12273,6 +12344,7 @@ mod tests_atendimento_cliente_unit {
                         nome: "Maria".into(),
                         telefone: "5511999998888".into(),
                         foto_url: String::new(),
+                        revisao_pendente: false,
                     },
                 )]))
             });
