@@ -150,6 +150,31 @@ final class LocalEngineGateway implements AtendimentoGateway {
     bool somenteMeus = false,
     bool somenteNaoLidos = false,
   }) async {
+    // O servidor é a fonte do quadro; o índice local é o cache para quando não
+    // há rede. Até aqui era o contrário, e o índice nunca era alimentado: nada
+    // chamava `ingestAtendimento`, então no Windows o quadro dependia só do que
+    // o próprio aparelho tinha movido — e nada do que o servidor traz (contato,
+    // não lidas, sentimento, filtros do P1) chegava à tela.
+    //
+    // Escoa a fila offline ANTES de ler: senão um cartão movido sem rede volta
+    // para a coluna antiga na primeira leitura, até o sync alcançar.
+    await _sincronizarBestEffort();
+    try {
+      final remotos = await _remoto.listAtendimentos(
+        status: status,
+        departamentoId: departamentoId,
+        limit: limit,
+        busca: busca,
+        somenteMeus: somenteMeus,
+        somenteNaoLidos: somenteNaoLidos,
+      );
+      unawaited(_guardarAtendimentos(remotos));
+      return remotos;
+    } catch (e) {
+      // Só sem rede o cache entra. Sessão expirada ou falta de permissão sobem
+      // como estão: mostrar dados velhos esconderia o motivo verdadeiro.
+      if (!_semRede(e)) rethrow;
+    }
     try {
       final engine = await _engine();
       final rows = await engine.listAtendimentos(
@@ -157,9 +182,6 @@ final class LocalEngineGateway implements AtendimentoGateway {
         departamentoId: departamentoId,
         limit: limit,
       );
-      // Ao abrir a fila, tenta escoar as ações offline pendentes (best-effort):
-      // se estiver offline, as ações permanecem enfileiradas para nova tentativa.
-      unawaited(_sincronizarBestEffort());
       final termo = busca.trim().toLowerCase();
       return rows
           .map(_paraResumo)
@@ -247,6 +269,24 @@ final class LocalEngineGateway implements AtendimentoGateway {
     int offset = 0,
     int? beforeId,
   }) async {
+    // Servidor primeiro, pelo mesmo motivo do quadro: é ele que traz ticks,
+    // citação, mídia, reações e o que o P1–P12 acrescentou à mensagem.
+    try {
+      final remotas = await _remoto.getThread(
+        atendimentoId: atendimentoId,
+        limit: limit,
+        offset: offset,
+        beforeId: beforeId,
+      );
+      unawaited(_guardarMensagens(remotas));
+      // A mensagem escrita sem rede ainda não existe no servidor: vive no
+      // índice com id negativo até o sync. Sem juntá-la aqui, ela sumiria da
+      // conversa assim que a rede voltasse e antes de o envio completar.
+      if (beforeId != null) return remotas;
+      return [...remotas, ...await _pendentesLocais(atendimentoId)];
+    } catch (e) {
+      if (!_semRede(e)) rethrow;
+    }
     try {
       final engine = await _engine();
       final rows = await engine.getThread(
@@ -465,8 +505,35 @@ final class LocalEngineGateway implements AtendimentoGateway {
     );
   }
 
+  /// O realtime do servidor junto com os eventos do próprio motor.
+  ///
+  /// Antes era só o do motor, que emite apenas o que este aparelho fez: mensagem
+  /// nova, presença, atribuição e campos preenchidos pela IA nunca chegavam ao
+  /// Windows. O erro do stream do servidor sobe como está — é ele que dispara o
+  /// backoff de reconexão da tela; o local não derruba nada.
   @override
-  Stream<AtendimentoEvento> streamAtendimentos() async* {
+  Stream<AtendimentoEvento> streamAtendimentos() {
+    StreamSubscription<AtendimentoEvento>? remota;
+    StreamSubscription<AtendimentoEvento>? local;
+    late final StreamController<AtendimentoEvento> saida;
+    saida = StreamController<AtendimentoEvento>(
+      onListen: () {
+        remota = _remoto.streamAtendimentos().listen(
+          saida.add,
+          onError: saida.addError,
+          onDone: saida.close,
+        );
+        local = _streamLocal().listen(saida.add, onError: (Object _) {});
+      },
+      onCancel: () async {
+        await remota?.cancel();
+        await local?.cancel();
+      },
+    );
+    return saida.stream;
+  }
+
+  Stream<AtendimentoEvento> _streamLocal() async* {
     final engine = await _engine();
     yield* engine.streamAtendimentos().map(_paraEvento).handleError((
       Object e,
@@ -474,6 +541,76 @@ final class LocalEngineGateway implements AtendimentoGateway {
     ) {
       throw _mapErro(e);
     });
+  }
+
+  /// Falta de rede, e não recusa do servidor: é o único caso em que o cache
+  /// local responde no lugar dele.
+  static bool _semRede(Object e) =>
+      e is SocketException ||
+      e is TimeoutException ||
+      proto.classificarFalhaGrpc(e) == proto.GrpcFailureKind.unavailable;
+
+  /// Cache do quadro no índice, best-effort: falhar aqui não pode derrubar a
+  /// tela, que já tem os dados do servidor.
+  Future<void> _guardarAtendimentos(List<AtendimentoResumo> itens) async {
+    try {
+      final engine = await _engine();
+      for (final a in itens) {
+        await engine.ingestAtendimento(
+          a: AtendimentoResumoFfi(
+            id: a.id,
+            contatoId: a.contatoId,
+            status: a.status,
+            departamentoId: a.departamentoId,
+            fluxoAtendimentoId: a.fluxoAtendimentoId,
+            etapaAtualId: a.etapaAtualId,
+            assunto: a.assunto,
+            prioridade: a.prioridade,
+            atendenteHumanoId: a.atendenteHumanoId,
+            dataInicio: a.dataInicio.millisecondsSinceEpoch,
+            dataUltimaMensagem: a.dataUltimaMensagem?.millisecondsSinceEpoch,
+          ),
+        );
+      }
+    } catch (_) {
+      // Cache é conveniência: sem ele o app só perde o modo offline.
+    }
+  }
+
+  Future<void> _guardarMensagens(List<MensagemThread> itens) async {
+    try {
+      final engine = await _engine();
+      for (final m in itens) {
+        await engine.ingestMensagem(
+          m: MensagemThreadFfi(
+            id: m.id,
+            atendimentoId: m.atendimentoId,
+            tipo: m.tipo,
+            conteudo: m.conteudo,
+            remetente: m.remetente,
+            timestamp: m.timestamp.millisecondsSinceEpoch,
+            statusEnvio: m.statusEnvio,
+            geradoPorIa: m.geradoPorIa,
+            resumoMidia: m.resumoMidia,
+          ),
+        );
+      }
+    } catch (_) {}
+  }
+
+  /// Mensagens escritas sem rede (id negativo), ainda na fila de envio.
+  Future<List<MensagemThread>> _pendentesLocais(int atendimentoId) async {
+    try {
+      final engine = await _engine();
+      final rows = await engine.getThread(
+        atendimentoId: atendimentoId,
+        limit: 200,
+        offset: 0,
+      );
+      return rows.where((m) => m.id < 0).map(_paraMensagem).toList();
+    } catch (_) {
+      return const [];
+    }
   }
 
   static AtendimentoResumo _paraResumo(AtendimentoResumoFfi a) =>

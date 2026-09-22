@@ -18,6 +18,7 @@ precisa ficar verde antes da fase seguinte. Testes não rodam nesta máquina.
 
 | # | Fase | Origem | Por que nesta posição | Estado |
 |---|------|--------|-----------------------|--------|
+| P12b | O app Windows lê do servidor | achado de 22/09 | **Bloqueia o teste prático**: no desktop o quadro, a conversa e o realtime vinham só do índice local, que nada alimentava | ⬜ |
 | P13 | Foto e nome do contato | N11 E6 | Corrige primeiro um defeito latente (envelope `{data}` do avatar), e é o mais visível para quem atende | ⬜ |
 | P14 | Etiquetagem por intenção | N10 E3 | Tem a regra de conflito com humano; fixa o padrão que o P15 reusa no mesmo handler | ⬜ |
 | P15 | Enriquecimento do contato | N10 E4 | Mesmo handler do P14; é a fase de PII mais sensível | ⬜ |
@@ -46,3 +47,11 @@ número em zero.
   (`infrastructure_evolution::get_profile_picture`), e o teste com mock usa a
   resposta sem envelope — contra o servidor real a foto volta sempre vazia.
   Entrou como passo 1 do P13.
+- **O app Windows não lia do servidor** (22/09). O `LocalEngineGateway` servia
+  quadro, conversa e realtime só do índice SQLite local, e nada chamava
+  `ingestAtendimento`/`ingestMensagem`: o quadro dependia do que o próprio
+  aparelho tinha movido, e nada do P1–P12 (contato, não lidas, ticks, citação,
+  reações, presença, atribuição) chegava à tela do Windows. Virou a fase P12b,
+  antes do P13: servidor primeiro, índice como cache e fallback sem rede.
+- **O cartão do quadro mostra `Contato #id`**: o resumo nunca levou nome nem
+  telefone do contato. Entrou no P13.
