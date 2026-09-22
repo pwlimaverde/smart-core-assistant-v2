@@ -116,12 +116,16 @@ class FichaAtendimento {
   /// ficha simplesmente não desenha a seção.
   final List<ValorCampo> campos;
 
+  /// P15 — o que a IA encontrou do contato e não tem coluna no cadastro.
+  final Map<String, String> dadosDoContato;
+
   const FichaAtendimento({
     required this.catalogo,
     required this.aplicadas,
     required this.notas,
     this.botPodeAtender = true,
     this.campos = const [],
+    this.dadosDoContato = const {},
   });
 
   /// Reconstrói a ficha trocando só o que foi passado.
@@ -136,12 +140,14 @@ class FichaAtendimento {
     List<Nota>? notas,
     bool? botPodeAtender,
     List<ValorCampo>? campos,
+    Map<String, String>? dadosDoContato,
   }) => FichaAtendimento(
     catalogo: catalogo ?? this.catalogo,
     aplicadas: aplicadas ?? this.aplicadas,
     notas: notas ?? this.notas,
     botPodeAtender: botPodeAtender ?? this.botPodeAtender,
     campos: campos ?? this.campos,
+    dadosDoContato: dadosDoContato ?? this.dadosDoContato,
   );
 
   Set<int> get idsAplicados => aplicadas.map((e) => e.id).toSet();

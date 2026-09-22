@@ -331,6 +331,15 @@ pub trait AtendimentoStore: Send + Sync {
         habilitado: bool,
     ) -> Result<bool, DbError>;
 
+    /// P15 — completa o cadastro do contato com as entidades (N10 E4), só no
+    /// que está vazio. Devolve `(contato_id, nomes dos campos preenchidos)`.
+    async fn enriquecer_contato(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        valores: infrastructure_postgres::clientes::contatos::ValoresDoContato,
+    ) -> Result<(i32, Vec<String>), DbError>;
+
     /// P14 — aplica as etiquetas das intenções confiantes (N10 E3).
     ///
     /// Só etiqueta que já existe e está ativa; nunca a que uma pessoa removeu

@@ -2875,8 +2875,16 @@ async fn analisar_mensagem_best_effort(
                 .get("etiquetas_aplicadas")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(0);
-            tracing::info!(etiquetas_aplicadas = etiquetas, "análise gravada");
-            if etiquetas > 0 {
+            let campos_contato = resp
+                .get("campos_contato_preenchidos")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            tracing::info!(
+                etiquetas_aplicadas = etiquetas,
+                campos_contato_preenchidos = campos_contato,
+                "análise gravada"
+            );
+            if etiquetas > 0 || campos_contato > 0 {
                 publicar_realtime(
                     state,
                     tenant_uuid,

@@ -162,6 +162,48 @@ void main() {
       expect(find.text('Colar nesta conversa'), findsOneWidget);
     });
 
+    testWidgets('a etiqueta posta pela IA tem o ✨ (P14)', (tester) async {
+      final gateway = FakeAtendimentoGateway()
+        ..ficha = const FichaAtendimento(
+          catalogo: [],
+          aplicadas: [
+            Etiqueta(
+              id: 7,
+              nome: 'orcamento',
+              cor: '#3b82f6',
+              descricao: '',
+              ativo: true,
+              aplicadaPelaIa: true,
+            ),
+          ],
+          notas: [],
+        );
+
+      await montar(tester, gateway);
+
+      expect(find.text('orcamento'), findsOneWidget);
+      expect(find.byIcon(Icons.auto_awesome), findsOneWidget);
+    });
+
+    testWidgets('mostra o que a IA encontrou do contato (P15)', (
+      tester,
+    ) async {
+      final gateway = FakeAtendimentoGateway()
+        ..ficha = const FichaAtendimento(
+          catalogo: [],
+          aplicadas: [],
+          notas: [],
+          dadosDoContato: {'cidade': 'Recife'},
+        );
+
+      await montar(tester, gateway);
+      await tester.tap(find.text('Dados que a IA encontrou'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Recife'), findsOneWidget);
+      expect(find.text('cidade'), findsOneWidget);
+    });
+
     testWidgets('conversa sem etiqueta diz isso, sem parecer erro', (
       tester,
     ) async {

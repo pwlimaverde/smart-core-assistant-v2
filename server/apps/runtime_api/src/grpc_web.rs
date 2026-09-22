@@ -7762,6 +7762,16 @@ impl AdminService for AdminFacade {
                 .and_then(|v| v.as_array())
                 .map(|arr| arr.iter().map(valor_campo_do_json).collect())
                 .unwrap_or_default(),
+            // P15 — o que a IA guardou do contato.
+            dados_do_contato: corpo
+                .get("dados_do_contato")
+                .and_then(|v| v.as_object())
+                .map(|o| {
+                    o.iter()
+                        .filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string())))
+                        .collect()
+                })
+                .unwrap_or_default(),
         }))
     }
 

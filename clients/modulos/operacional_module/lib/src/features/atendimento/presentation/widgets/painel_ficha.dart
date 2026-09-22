@@ -164,6 +164,28 @@ class _Conteudo extends StatelessWidget {
             ],
           ),
         ],
+        // P15 — o que a IA encontrou do contato nas conversas e não tem coluna
+        // no cadastro. Recolhido e só de leitura: é pista, não cadastro.
+        if (ficha.dadosDoContato.isNotEmpty) ...[
+          const Divider(height: AppSpacing.xl),
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            leading: const Icon(Icons.auto_awesome, size: 16),
+            title: Text(
+              'Dados que a IA encontrou',
+              style: Theme.of(context).textTheme.titleSmall,
+            ),
+            children: [
+              for (final entrada in ficha.dadosDoContato.entries)
+                ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(entrada.value),
+                  subtitle: Text(entrada.key),
+                ),
+            ],
+          ),
+        ],
         const Divider(height: AppSpacing.xl),
         Row(
           children: [

@@ -5035,12 +5035,67 @@ async fn handler_anexar_analise_mensagem(
                     Err(e) => tracing::warn!(erro = %e, "falha ao aplicar etiquetas por intenção"),
                 }
             }
+            // P15 — as entidades completam o cadastro do contato, só no que está
+            // vazio. Também em transação própria, pelo mesmo motivo das etiquetas.
+            let entidades: Vec<(String, String, f64)> = payload_json
+                .get("entidades")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|e| {
+                            Some((
+                                e.get("tipo")?.as_str()?.to_string(),
+                                e.get("valor")?.as_str()?.to_string(),
+                                e.get("confianca")?.as_f64()?,
+                            ))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let valores = infrastructure_postgres::clientes::contatos::valores_para_o_contato(
+                &entidades, piso,
+            );
+            let mut campos_contato = 0usize;
+            if atendimento_id > 0 && valores != Default::default() {
+                match store
+                    .enriquecer_contato(&ctx, atendimento_id, valores)
+                    .await
+                {
+                    Ok((contato_id, campos)) if !campos.is_empty() => {
+                        campos_contato = campos.len();
+                        // Mutação de cadastro por agente automático: a trilha é
+                        // o que permite desfazer. Só os NOMES dos campos — nome,
+                        // e-mail e documento são PII direta.
+                        audit
+                            .publish(
+                                &env,
+                                "contato.enriquecido_por_ia",
+                                format!(
+                                    "IA completou {} campo(s) do contato #{}",
+                                    campos.len(),
+                                    contato_id
+                                ),
+                                serde_json::json!({
+                                    "contato_id": contato_id,
+                                    "atendimento_id": atendimento_id,
+                                    "campos": campos,
+                                }),
+                            )
+                            .await;
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        tracing::warn!(erro = %e, "falha ao completar o contato pela análise")
+                    }
+                }
+            }
             ok_reply(
                 &env,
                 "AnexarAnaliseMensagemReply",
                 serde_json::json!({
                     "assunto_definido": assunto_definido,
                     "etiquetas_aplicadas": etiquetas_aplicadas,
+                    "campos_contato_preenchidos": campos_contato,
                 }),
             )
         }
@@ -12391,11 +12446,27 @@ mod tests_atendimento_cliente_unit {
                     },
                 ])
             });
+        // P15 — a "cidade" (0,8 = piso) entra nos extras do contato.
+        store
+            .expect_enriquecer_contato()
+            .times(1)
+            .withf(|_, atendimento_id, valores| {
+                *atendimento_id == 9 && valores.extras.contains_key("cidade")
+            })
+            .returning(|_, _, _| Ok((3, vec!["metadados.entidades".to_string()])));
         let mut audit = crate::ports::MockAuditPort::new();
         audit
             .expect_publish()
             .times(1)
             .withf(|_, evento, _, _| evento == "etiqueta.aplicada_por_ia")
+            .returning(|_, _, _, _| ());
+        audit
+            .expect_publish()
+            .times(1)
+            .withf(|_, evento, _, ctx| {
+                // Os NOMES dos campos, nunca os valores.
+                evento == "contato.enriquecido_por_ia" && !ctx.to_string().contains("Recife")
+            })
             .returning(|_, _, _, _| ());
         let env = envelope_com_payload(
             "AnexarAnaliseMensagem",

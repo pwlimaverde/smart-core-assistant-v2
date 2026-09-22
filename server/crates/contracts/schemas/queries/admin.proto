@@ -2304,6 +2304,9 @@ message DetalheAtendimentoResponse {
   // no mesmo painel: buscar em duas chamadas faria metade da ficha aparecer
   // antes da outra.
   repeated ValorCampoDoAtendimento campos = 5;
+  // P15 — o que a IA encontrou do contato nas conversas e não tem coluna no
+  // cadastro (cidade, empresa, documento…). Só leitura na ficha.
+  map<string, string> dados_do_contato = 6;
 }
 
 // Um campo do cartao na ficha de UM atendimento: a definicao mais o valor.

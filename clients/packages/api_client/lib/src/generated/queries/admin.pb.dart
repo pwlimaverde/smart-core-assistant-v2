@@ -22712,6 +22712,7 @@ class DetalheAtendimentoResponse extends $pb.GeneratedMessage {
     $core.Iterable<Nota>? notas,
     $core.bool? botPodeAtender,
     $core.Iterable<ValorCampoDoAtendimento>? campos,
+    $core.Iterable<$core.MapEntry<$core.String, $core.String>>? dadosDoContato,
   }) {
     final result = create();
     if (catalogo != null) result.catalogo.addAll(catalogo);
@@ -22719,6 +22720,8 @@ class DetalheAtendimentoResponse extends $pb.GeneratedMessage {
     if (notas != null) result.notas.addAll(notas);
     if (botPodeAtender != null) result.botPodeAtender = botPodeAtender;
     if (campos != null) result.campos.addAll(campos);
+    if (dadosDoContato != null)
+      result.dadosDoContato.addEntries(dadosDoContato);
     return result;
   }
 
@@ -22744,6 +22747,11 @@ class DetalheAtendimentoResponse extends $pb.GeneratedMessage {
     ..aOB(4, _omitFieldNames ? '' : 'botPodeAtender')
     ..pPM<ValorCampoDoAtendimento>(5, _omitFieldNames ? '' : 'campos',
         subBuilder: ValorCampoDoAtendimento.create)
+    ..m<$core.String, $core.String>(6, _omitFieldNames ? '' : 'dadosDoContato',
+        entryClassName: 'DetalheAtendimentoResponse.DadosDoContatoEntry',
+        keyFieldType: $pb.PbFieldType.OS,
+        valueFieldType: $pb.PbFieldType.OS,
+        packageName: const $pb.PackageName('smartcore.contracts.queries'))
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -22796,6 +22804,11 @@ class DetalheAtendimentoResponse extends $pb.GeneratedMessage {
   /// antes da outra.
   @$pb.TagNumber(5)
   $pb.PbList<ValorCampoDoAtendimento> get campos => $_getList(4);
+
+  /// P15 — o que a IA encontrou do contato nas conversas e não tem coluna no
+  /// cadastro (cidade, empresa, documento…). Só leitura na ficha.
+  @$pb.TagNumber(6)
+  $pb.PbMap<$core.String, $core.String> get dadosDoContato => $_getMap(5);
 }
 
 /// Um campo do cartao na ficha de UM atendimento: a definicao mais o valor.

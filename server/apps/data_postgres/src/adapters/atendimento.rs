@@ -2241,6 +2241,14 @@ impl AtendimentoStore for PgAtendimentoStore {
             let notas = PostgresNotaRepository
                 .listar_por_atendimento(&mut tx, &ctx, atendimento_id)
                 .await?;
+            // P15 — o que a IA já guardou do contato (seção só de leitura).
+            let dados_do_contato =
+                infrastructure_postgres::clientes::contatos::entidades_do_contato(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                )
+                .await?;
             // P14 — quais destas a IA colocou (o ✨ da ficha).
             let da_ia = infrastructure_postgres::atendimentos::etiquetas::etiquetas_da_ia(
                 &mut tx,
@@ -2328,6 +2336,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                 "notas": notas,
                 "bot_pode_atender": bot_pode_atender,
                 "campos": campos,
+                "dados_do_contato": dados_do_contato,
             });
             Ok((json, tx))
         })
@@ -2575,6 +2584,28 @@ impl AtendimentoStore for PgAtendimentoStore {
                 )
                 .await?;
             Ok((aplicadas, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn enriquecer_contato(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        valores: infrastructure_postgres::clientes::contatos::ValoresDoContato,
+    ) -> Result<(i32, Vec<String>), DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let r = infrastructure_postgres::clientes::contatos::enriquecer_contato_do_atendimento(
+                &mut tx,
+                &ctx,
+                atendimento_id,
+                &valores,
+            )
+            .await?;
+            Ok((r, tx))
         })
         .await
     }
