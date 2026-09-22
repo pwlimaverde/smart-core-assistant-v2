@@ -2099,10 +2099,13 @@ async fn handler_list_atendimentos(store: &dyn ports::AtendimentoStore, env: Env
             let contagem = if ids.is_empty() {
                 std::collections::HashMap::new()
             } else {
-                store.contar_nao_lidas(&ctx, ids).await.unwrap_or_else(|e| {
-                    tracing::warn!(erro = %e, "falha ao contar mensagens não lidas");
-                    std::collections::HashMap::new()
-                })
+                store
+                    .contar_nao_lidas(&ctx, ids.clone())
+                    .await
+                    .unwrap_or_else(|e| {
+                        tracing::warn!(erro = %e, "falha ao contar mensagens não lidas");
+                        std::collections::HashMap::new()
+                    })
             };
             // P13 — o contato de cada cartão. O cartão mostrava `Contato #id`;
             // falhar aqui também não esconde o quadro.
