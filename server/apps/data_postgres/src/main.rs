@@ -595,6 +595,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_toggle_bot_conversa = state_clone.clone();
     let state_for_marcar_lido = state_clone.clone();
     let state_for_aplicar_reacao = state_clone.clone();
+    let state_for_contato_do_atendimento = state_clone.clone();
+    let state_for_registrar_foto = state_clone.clone();
     let state_for_listar_nao_entregues = state_clone.clone();
     let state_for_atualizar_perfil_contato = state_clone.clone();
     let state_for_aplicar_politica = state_clone.clone();
@@ -716,6 +718,18 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(
                 async move { handler_listar_nao_entregues(state.atendimento.as_ref(), env).await },
             )
+        })
+        .route("ContatoDoAtendimento", move |env| {
+            let state = state_for_contato_do_atendimento.clone();
+            Box::pin(async move {
+                handler_contato_do_atendimento(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("RegistrarFotoDoContato", move |env| {
+            let state = state_for_registrar_foto.clone();
+            Box::pin(async move {
+                handler_registrar_foto_do_contato(state.atendimento.as_ref(), env).await
+            })
         })
         .route("AplicarReacaoMensagem", move |env| {
             let state = state_for_aplicar_reacao.clone();
@@ -2090,6 +2104,19 @@ async fn handler_list_atendimentos(store: &dyn ports::AtendimentoStore, env: Env
                     std::collections::HashMap::new()
                 })
             };
+            // P13 — o contato de cada cartão. O cartão mostrava `Contato #id`;
+            // falhar aqui também não esconde o quadro.
+            let contatos = if ids.is_empty() {
+                std::collections::HashMap::new()
+            } else {
+                store
+                    .contatos_do_quadro(&ctx, ids.clone())
+                    .await
+                    .unwrap_or_else(|e| {
+                        tracing::warn!(erro = %e, "falha ao ler os contatos do quadro");
+                        std::collections::HashMap::new()
+                    })
+            };
             let itens: Vec<serde_json::Value> = atendimentos
                 .iter()
                 .map(|a| {
@@ -2099,6 +2126,11 @@ async fn handler_list_atendimentos(store: &dyn ports::AtendimentoStore, env: Env
                             "nao_lidas".to_string(),
                             serde_json::json!(contagem.get(&a.id).copied().unwrap_or(0)),
                         );
+                        if let Some(c) = contatos.get(&a.id) {
+                            obj.insert("contato_nome".into(), serde_json::json!(c.nome));
+                            obj.insert("contato_telefone".into(), serde_json::json!(c.telefone));
+                            obj.insert("contato_foto_url".into(), serde_json::json!(c.foto_url));
+                        }
                     }
                     item
                 })
@@ -3770,6 +3802,75 @@ async fn handler_update_message_status(
             serde_json::json!({ "status": "success" }),
         ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// P13 — o contato do atendimento, com a data da última consulta da foto.
+async fn handler_contato_do_atendimento(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let Some(atendimento_id) = payload
+        .get("atendimento_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32)
+    else {
+        return erro(
+            error_core::AppError::Validation("atendimento_id ausente".into()),
+            &env,
+        );
+    };
+    let ctx = contexto_do_envelope(&env);
+    match store.contato_do_atendimento(&ctx, atendimento_id).await {
+        Ok(Some(c)) => ok_reply(&env, "ContatoDoAtendimentoReply", serde_json::json!(c)),
+        Ok(None) => erro(
+            error_core::AppError::Database("atendimento não encontrado".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P13 — grava o resultado da consulta da foto. Sem auditoria, de propósito:
+/// é enriquecimento derivado (decisão da N11 E6).
+async fn handler_registrar_foto_do_contato(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let Some(contato_id) = payload
+        .get("contato_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32)
+    else {
+        return erro(
+            error_core::AppError::Validation("contato_id ausente".into()),
+            &env,
+        );
+    };
+    let foto_url = payload
+        .get("foto_url")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| s.to_string());
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .registrar_foto_do_contato(&ctx, contato_id, foto_url)
+        .await
+    {
+        Ok(()) => ok_reply(
+            &env,
+            "RegistrarFotoDoContatoReply",
+            serde_json::json!({ "sucesso": true }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }
 
@@ -12040,12 +12141,28 @@ mod tests_atendimento_cliente_unit {
             .times(1)
             .withf(|_, ids| ids == &vec![7])
             .returning(|_, _| Ok(std::collections::HashMap::from([(7, 3)])));
+        store
+            .expect_contatos_do_quadro()
+            .times(1)
+            .returning(|_, _| {
+                Ok(std::collections::HashMap::from([(
+                    7,
+                    infrastructure_postgres::atendimentos::atendimentos::ContatoDoQuadro {
+                        atendimento_id: 7,
+                        nome: "Maria".into(),
+                        telefone: "5511999998888".into(),
+                        foto_url: String::new(),
+                    },
+                )]))
+            });
         let env = envelope_com_payload("ListAtendimentos", serde_json::json!({}));
 
         let resp = handler_list_atendimentos(&store, env).await;
 
         let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
         assert_eq!(body["atendimentos"][0]["nao_lidas"], 3);
+        // P13 — o cartão deixa de ser `Contato #id`.
+        assert_eq!(body["atendimentos"][0]["contato_nome"], "Maria");
     }
 
     /// B6: marcar como lida devolve o espelho para o WhatsApp só quando há o

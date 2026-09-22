@@ -784,6 +784,16 @@ class AdminServiceClient extends $grpc.Client {
         options: options);
   }
 
+  /// P13 — o contato da conversa, com a foto buscada no WhatsApp sob demanda.
+  $grpc.ResponseFuture<$0.ObterContatoDoAtendimentoResponse>
+      obterContatoDoAtendimento(
+    $0.ObterContatoDoAtendimentoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$obterContatoDoAtendimento, request,
+        options: options);
+  }
+
   /// P11 — a última versão publicada do app. Até aqui o zip era trocado à mão,
   /// e ninguém sabia que estava numa versão velha até um bug já corrigido
   /// aparecer de novo.
@@ -1590,6 +1600,12 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/DesconectarMyWhatsappInstance',
       ($0.MyWhatsappInstanceIdRequest value) => value.writeToBuffer(),
       $0.SimpleOkResponse.fromBuffer);
+  static final _$obterContatoDoAtendimento = $grpc.ClientMethod<
+          $0.ObterContatoDoAtendimentoRequest,
+          $0.ObterContatoDoAtendimentoResponse>(
+      '/smartcore.contracts.queries.AdminService/ObterContatoDoAtendimento',
+      ($0.ObterContatoDoAtendimentoRequest value) => value.writeToBuffer(),
+      $0.ObterContatoDoAtendimentoResponse.fromBuffer);
   static final _$getVersaoDoApp =
       $grpc.ClientMethod<$0.GetVersaoDoAppRequest, $0.GetVersaoDoAppResponse>(
           '/smartcore.contracts.queries.AdminService/GetVersaoDoApp',
@@ -2655,6 +2671,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.MyWhatsappInstanceIdRequest.fromBuffer(value),
         ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ObterContatoDoAtendimentoRequest,
+            $0.ObterContatoDoAtendimentoResponse>(
+        'ObterContatoDoAtendimento',
+        obterContatoDoAtendimento_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ObterContatoDoAtendimentoRequest.fromBuffer(value),
+        ($0.ObterContatoDoAtendimentoResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.GetVersaoDoAppRequest,
             $0.GetVersaoDoAppResponse>(
         'GetVersaoDoApp',
@@ -3875,6 +3900,15 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.SimpleOkResponse> desconectarMyWhatsappInstance(
       $grpc.ServiceCall call, $0.MyWhatsappInstanceIdRequest request);
+
+  $async.Future<$0.ObterContatoDoAtendimentoResponse>
+      obterContatoDoAtendimento_Pre($grpc.ServiceCall $call,
+          $async.Future<$0.ObterContatoDoAtendimentoRequest> $request) async {
+    return obterContatoDoAtendimento($call, await $request);
+  }
+
+  $async.Future<$0.ObterContatoDoAtendimentoResponse> obterContatoDoAtendimento(
+      $grpc.ServiceCall call, $0.ObterContatoDoAtendimentoRequest request);
 
   $async.Future<$0.GetVersaoDoAppResponse> getVersaoDoApp_Pre(
       $grpc.ServiceCall $call,

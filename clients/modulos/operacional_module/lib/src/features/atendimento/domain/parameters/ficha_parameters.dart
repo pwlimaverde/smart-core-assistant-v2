@@ -105,3 +105,14 @@ final class DesativarEtiquetaParameters extends Parameters {
 
   const DesativarEtiquetaParameters({required this.id});
 }
+
+/// P13 — o contato da conversa, para o cabeçalho.
+final class ObterContatoParameters extends Parameters {
+  final int atendimentoId;
+  final bool forcar;
+
+  const ObterContatoParameters({
+    required this.atendimentoId,
+    this.forcar = false,
+  });
+}

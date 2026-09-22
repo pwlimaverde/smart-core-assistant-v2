@@ -476,6 +476,29 @@ message AtendimentoResumo {
   optional int32 sentimento_nota = 12;    // última leitura de sentimento da IA (N6.5)
   optional string sentimento_label = 13; // ex.: positivo/neutro/negativo
   int32 nao_lidas = 14;                  // B6 (N9/E4): mensagens do contato ainda não lidas
+  // P13 — o contato do cartão. O quadro mostrava `Contato #id`: o resumo nunca
+  // levou nome nem telefone. `contato_nome` cai para o nome de perfil do
+  // WhatsApp e fica vazio quando nem isso existe (a tela mostra o telefone).
+  string contato_nome = 15;
+  string contato_telefone = 16;
+  // URL do CDN do WhatsApp, assinada e com validade: a tela trata imagem
+  // quebrada como "sem foto" e pede uma nova com `ObterContatoDoAtendimento`.
+  string contato_foto_url = 17;
+}
+
+// P13 — nome, telefone e foto do contato de uma conversa, para o cabeçalho.
+message ObterContatoDoAtendimentoRequest {
+  int32 atendimento_id = 1;
+  // Ignora o prazo de 7 dias entre consultas ao provedor. A tela usa quando a
+  // foto guardada não abre (a URL do CDN expirou).
+  bool forcar = 2;
+}
+
+message ObterContatoDoAtendimentoResponse {
+  int32 contato_id = 1;
+  string nome = 2;
+  string telefone = 3;
+  string foto_url = 4;
 }
 
 message ListAtendimentosRequest {
@@ -1381,6 +1404,8 @@ service AdminService {
   // e o mesmo registro volta com um QR novo. Remover era a única saída, e ela
   // custava o cadastro inteiro para trocar de aparelho.
   rpc DesconectarMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
+  // P13 — o contato da conversa, com a foto buscada no WhatsApp sob demanda.
+  rpc ObterContatoDoAtendimento(ObterContatoDoAtendimentoRequest) returns (ObterContatoDoAtendimentoResponse);
   // P11 — a última versão publicada do app. Até aqui o zip era trocado à mão,
   // e ninguém sabia que estava numa versão velha até um bug já corrigido
   // aparecer de novo.

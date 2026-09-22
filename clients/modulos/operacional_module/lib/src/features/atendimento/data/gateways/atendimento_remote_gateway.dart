@@ -13,6 +13,7 @@ import '../../domain/model/ficha.dart';
 import '../../domain/model/midia_mensagem.dart';
 import '../../domain/model/quadro.dart';
 import '../../domain/model/evento_timeline.dart';
+import '../../domain/model/contato_da_conversa.dart';
 
 /// Adapter Web do [AtendimentoGateway] via gRPC-Web (`AdminServiceClient`).
 ///
@@ -204,6 +205,25 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
       ),
     );
     return confirmacao.messageId;
+  }
+
+  @override
+  Future<ContatoDaConversa> obterContatoDoAtendimento({
+    required int atendimentoId,
+    bool forcar = false,
+  }) async {
+    final resp = await _client.obterContatoDoAtendimento(
+      proto.ObterContatoDoAtendimentoRequest(
+        atendimentoId: atendimentoId,
+        forcar: forcar,
+      ),
+    );
+    return ContatoDaConversa(
+      contatoId: resp.contatoId,
+      nome: resp.nome,
+      telefone: resp.telefone,
+      fotoUrl: resp.fotoUrl,
+    );
   }
 
   @override
@@ -402,6 +422,9 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
         sentimentoNota: a.hasSentimentoNota() ? a.sentimentoNota : null,
         sentimentoLabel: a.hasSentimentoLabel() ? a.sentimentoLabel : null,
         naoLidas: a.naoLidas,
+        contatoNome: a.contatoNome,
+        contatoTelefone: a.contatoTelefone,
+        contatoFotoUrl: a.contatoFotoUrl,
       );
 
   static MensagemThread _paraMensagemThread(proto.MensagemThread m) =>

@@ -1621,3 +1621,105 @@ pub async fn mediana_primeira_resposta_24h(
     .await?;
     Ok(row.and_then(|(v,)| v).map(|v| v.round() as i32))
 }
+
+/// P13 — o contato de cada cartão do quadro.
+///
+/// O resumo do atendimento nunca levou nome nem telefone: o cartão mostrava
+/// `Contato #id`. `nome` cai para o nome de perfil do WhatsApp quando ninguém
+/// cadastrou um, e fica vazio quando nem isso existe — a tela então mostra o
+/// telefone.
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+pub struct ContatoDoQuadro {
+    pub atendimento_id: i32,
+    pub nome: String,
+    pub telefone: String,
+    pub foto_url: String,
+}
+
+#[tracing::instrument(skip_all, fields(quantidade = ids.len()))]
+pub async fn contatos_do_quadro(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    ids: &[i32],
+) -> Result<Vec<ContatoDoQuadro>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let rows = sqlx::query_as::<_, ContatoDoQuadro>(
+        r#"SELECT a.id AS atendimento_id,
+                  COALESCE(NULLIF(TRIM(c.nome_contato), ''),
+                           NULLIF(TRIM(c.nome_perfil_whatsapp), ''), '') AS nome,
+                  COALESCE(c.telefone, '') AS telefone,
+                  COALESCE(c.foto_perfil_url_origem, '') AS foto_url
+             FROM oraculo_atendimento a
+             JOIN oraculo_contato c
+               ON c.id = a.contato_id AND c.tenant_id = a.tenant_id
+            WHERE a.tenant_id = $1 AND a.id = ANY($2)"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(ids)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows)
+}
+
+/// P13 — o contato de um atendimento, com a data da última consulta da foto.
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+pub struct ContatoComFoto {
+    pub contato_id: i32,
+    pub nome: String,
+    pub telefone: String,
+    pub foto_url: String,
+    pub foto_verificada_em: Option<DateTime<Utc>>,
+}
+
+#[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
+pub async fn contato_do_atendimento(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+) -> Result<Option<ContatoComFoto>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let row = sqlx::query_as::<_, ContatoComFoto>(
+        r#"SELECT c.id AS contato_id,
+                  COALESCE(NULLIF(TRIM(c.nome_contato), ''),
+                           NULLIF(TRIM(c.nome_perfil_whatsapp), ''), '') AS nome,
+                  COALESCE(c.telefone, '') AS telefone,
+                  COALESCE(c.foto_perfil_url_origem, '') AS foto_url,
+                  c.foto_verificada_em
+             FROM oraculo_atendimento a
+             JOIN oraculo_contato c
+               ON c.id = a.contato_id AND c.tenant_id = a.tenant_id
+            WHERE a.tenant_id = $1 AND a.id = $2"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row)
+}
+
+/// P13 — grava o resultado da consulta da foto.
+///
+/// `None` NÃO apaga a foto guardada: o cliente do provedor devolve `None`
+/// também quando a chamada falha, e apagar por causa de uma queda de rede
+/// tiraria a foto de quem tem. Só a data da consulta anda.
+#[tracing::instrument(skip_all, fields(contato_id = contato_id))]
+pub async fn registrar_foto_do_contato(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    contato_id: i32,
+    foto_url: Option<&str>,
+) -> Result<(), DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    sqlx::query(
+        r#"UPDATE oraculo_contato
+              SET foto_perfil_url_origem = COALESCE(NULLIF($3, ''), foto_perfil_url_origem),
+                  foto_verificada_em = NOW()
+            WHERE tenant_id = $1 AND id = $2"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(contato_id)
+    .bind(foto_url.unwrap_or_default())
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}

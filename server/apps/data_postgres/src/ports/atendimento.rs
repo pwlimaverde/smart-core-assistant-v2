@@ -331,6 +331,34 @@ pub trait AtendimentoStore: Send + Sync {
         habilitado: bool,
     ) -> Result<bool, DbError>;
 
+    /// P13 — nome, telefone e foto do contato de cada cartão do quadro.
+    async fn contatos_do_quadro(
+        &self,
+        ctx: &RequestContext,
+        ids: Vec<i32>,
+    ) -> Result<
+        std::collections::HashMap<
+            i32,
+            infrastructure_postgres::atendimentos::atendimentos::ContatoDoQuadro,
+        >,
+        DbError,
+    >;
+
+    /// P13 — o contato de um atendimento, com a data da última consulta da foto.
+    async fn contato_do_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<Option<infrastructure_postgres::atendimentos::atendimentos::ContatoComFoto>, DbError>;
+
+    /// P13 — grava o resultado da consulta da foto (`None` não apaga).
+    async fn registrar_foto_do_contato(
+        &self,
+        ctx: &RequestContext,
+        contato_id: i32,
+        foto_url: Option<String>,
+    ) -> Result<(), DbError>;
+
     /// B6 (N9 E4) — mensagens do contato ainda não lidas, por atendimento.
     async fn contar_nao_lidas(
         &self,

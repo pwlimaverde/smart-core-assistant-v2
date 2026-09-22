@@ -25,6 +25,7 @@ import '../../domain/model/midia_mensagem.dart';
 import '../../domain/parameters/presenca_parameters.dart';
 import '../../domain/parameters/quadro_operacao_parameters.dart';
 import '../../domain/model/evento_timeline.dart';
+import '../../domain/model/contato_da_conversa.dart';
 
 /// As quatro fronteiras da feature. Cada `mapError` traduz a natureza da falha
 /// (transporte gRPC no Web, [LocalEngineFalha] no desktop) para o conjunto
@@ -641,4 +642,16 @@ final class DesativarEtiquetaRepository
   @override
   FichaError mapError(Object e, StackTrace s, DesativarEtiquetaParameters p) =>
       _erroDeFicha(e, s, null);
+}
+
+/// P13 — o contato da conversa. Mesmo conjunto de erros da ficha: é o mesmo
+/// painel, e falhar aqui só deixa o cabeçalho com o número do atendimento.
+final class ObterContatoRepository
+    extends
+        RepositoryBase<ContatoDaConversa, ObterContatoParameters, FichaError> {
+  const ObterContatoRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, ObterContatoParameters p) =>
+      _erroDeFicha(e, s, p.atendimentoId);
 }

@@ -20,6 +20,7 @@ import '../model/midia_mensagem.dart';
 import '../parameters/presenca_parameters.dart';
 import '../parameters/quadro_operacao_parameters.dart';
 import '../model/evento_timeline.dart';
+import '../model/contato_da_conversa.dart';
 
 /// Os quatro casos de uso do atendimento.
 ///
@@ -738,6 +739,34 @@ final class DesativarEtiquetaUsecase
   @override
   FichaError onUnexpected(Object exception, StackTrace stackTrace) {
     _logBug('desativarEtiqueta', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
+/// P13 — o contato da conversa, para o cabeçalho.
+final class ObterContatoUsecase
+    extends
+        UsecaseBaseCallData<
+          ContatoDaConversa,
+          ContatoDaConversa,
+          ObterContatoParameters,
+          FichaError
+        > {
+  const ObterContatoUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    ContatoDaConversa,
+    ContatoDaConversa,
+    ObterContatoParameters,
+    FichaError
+  >
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('obterContato', exception, stackTrace);
     return const FichaInesperado();
   }
 }

@@ -68,6 +68,8 @@ pub const MAPA: &[(&str, &[&str])] = &[
     // derruba o número do tenant inteiro. Ver o detalhe é leitura.
     ("DisconnectWhatsappInstance", &["operacional:admin"]),
     ("DetalheDaConexao", &["operacional:read"]),
+    // P13 — a foto do contato é buscada para quem abre a conversa.
+    ("GetWhatsappProfilePicture", &["atendimentos:read"]),
     ("ListDepartamentosDasConexoes", &["operacional:read"]),
     ("DefinirDepartamentoDaConexao", &["operacional:admin"]),
     // P7 — os números ignorados. Ler é `operacional:read` porque a lista explica

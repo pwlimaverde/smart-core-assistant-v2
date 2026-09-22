@@ -220,6 +220,8 @@ use contracts::grpc::queries::{
     Nota as ProtoNota,
     NotaResponse,
     NumeroIgnoradoIdRequest,
+    ObterContatoDoAtendimentoRequest,
+    ObterContatoDoAtendimentoResponse,
     OpcaoCampo,
     PaymentRecord as ProtoPaymentRecord,
     Plan as ProtoPlan,
@@ -5238,6 +5240,118 @@ impl AdminService for AdminFacade {
         Ok(Response::new(SimpleOkResponse { sucesso: true }))
     }
 
+    /// P13 — o contato da conversa, com a foto buscada no WhatsApp sob demanda.
+    ///
+    /// O provedor é consultado no máximo uma vez a cada 7 dias por contato,
+    /// inclusive quando a resposta foi "sem foto". `forcar` ignora o prazo —
+    /// a tela o usa quando a URL guardada não abre (o CDN do WhatsApp assina as
+    /// URLs com validade) — mas não em menos de 10 minutos da última consulta,
+    /// para uma tela em laço não bater no provedor a cada quadro.
+    ///
+    /// Falhar a consulta ao provedor não é erro: devolve o que está guardado.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ObterContatoDoAtendimento", origem = tracing::field::Empty, traceparent)
+    )]
+    async fn obter_contato_do_atendimento(
+        &self,
+        req: Request<ObterContatoDoAtendimentoRequest>,
+    ) -> Result<Response<ObterContatoDoAtendimentoResponse>, Status> {
+        let inner = *req.get_ref();
+        if inner.atendimento_id <= 0 {
+            return Err(Status::invalid_argument("atendimento inválido"));
+        }
+        let contato = self
+            .encaminhar_operacional(
+                &req,
+                "ContatoDoAtendimento",
+                &["atendimentos:read"],
+                serde_json::json!({ "atendimento_id": inner.atendimento_id }),
+            )
+            .await?;
+
+        let contato_id = contato
+            .get("contato_id")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as i32;
+        let mut foto_url = texto_do(&contato, "foto_url");
+        let verificada_ha = contato
+            .get("foto_verificada_em")
+            .and_then(|v| v.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| chrono::Utc::now().signed_duration_since(d));
+        let prazo = if inner.forcar {
+            chrono::Duration::minutes(10)
+        } else {
+            chrono::Duration::days(7)
+        };
+        let consultar = verificada_ha.is_none_or(|idade| idade > prazo);
+
+        let span = tracing::Span::current();
+        if !consultar {
+            span.record("origem", "cache");
+        } else {
+            // A instância e o telefone do atendimento: o mesmo caminho da
+            // presença (P3).
+            let destino = self
+                .encaminhar_operacional(
+                    &req,
+                    "ResolverDestinoDoAtendimento",
+                    &["atendimentos:read"],
+                    serde_json::json!({ "atendimento_id": inner.atendimento_id }),
+                )
+                .await
+                .ok();
+            let alvo = destino.as_ref().and_then(|d| {
+                Some((
+                    d.get("instance_id").and_then(|v| v.as_i64())?,
+                    d.get("to_number").and_then(|v| v.as_str())?.to_string(),
+                ))
+            });
+            if let Some((instance_id, numero)) = alvo {
+                let resposta = self
+                    .encaminhar_tenant(
+                        &req,
+                        &self.whatsapp,
+                        "GetWhatsappProfilePicture",
+                        serde_json::json!({ "id": instance_id, "number": numero }),
+                    )
+                    .await;
+                let achada = resposta
+                    .ok()
+                    .and_then(|r| r.get("url").and_then(|v| v.as_str()).map(str::to_string))
+                    .filter(|u| !u.trim().is_empty());
+                span.record(
+                    "origem",
+                    if achada.is_some() {
+                        "provedor"
+                    } else {
+                        "sem_foto"
+                    },
+                );
+                // Grava a consulta — com ou sem foto — para o freio valer.
+                let _ = self
+                    .encaminhar_operacional(
+                        &req,
+                        "RegistrarFotoDoContato",
+                        &["atendimentos:read"],
+                        serde_json::json!({ "contato_id": contato_id, "foto_url": achada }),
+                    )
+                    .await;
+                if let Some(u) = achada {
+                    foto_url = u;
+                }
+            }
+        }
+
+        Ok(Response::new(ObterContatoDoAtendimentoResponse {
+            contato_id,
+            nome: texto_do(&contato, "nome"),
+            telefone: texto_do(&contato, "telefone"),
+            foto_url,
+        }))
+    }
+
     /// P11 — a última versão publicada do app de uma plataforma.
     ///
     /// Vem das CoreSettings (`app.<plataforma>.build`, `.url`, `.notas`), que o
@@ -9238,7 +9352,19 @@ fn atendimento_resumo_do_json(v: &serde_json::Value) -> ProtoAtendimentoResumo {
             .get("nao_lidas")
             .and_then(|v| v.as_i64())
             .unwrap_or_default() as i32,
+        // P13 — o contato do cartão.
+        contato_nome: texto_do(v, "contato_nome"),
+        contato_telefone: texto_do(v, "contato_telefone"),
+        contato_foto_url: texto_do(v, "contato_foto_url"),
     }
+}
+
+/// Texto de um campo do JSON do `data_postgres`; ausente ou nulo vira "".
+fn texto_do(v: &serde_json::Value, chave: &str) -> String {
+    v.get(chave)
+        .and_then(|x| x.as_str())
+        .unwrap_or_default()
+        .to_string()
 }
 
 fn etiqueta_do_json(v: &serde_json::Value) -> ProtoEtiqueta {

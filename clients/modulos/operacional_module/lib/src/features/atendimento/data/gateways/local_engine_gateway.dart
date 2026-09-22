@@ -17,6 +17,7 @@ import '../../domain/model/midia_mensagem.dart';
 import '../../domain/model/quadro.dart';
 import 'atendimento_remote_gateway.dart';
 import '../../domain/model/evento_timeline.dart';
+import '../../domain/model/contato_da_conversa.dart';
 
 /// Debounce do gatilho de reconexão (N7.4): `connectivity_plus` reporta o tipo
 /// de interface (não garante alcance real à internet) e pode disparar eventos
@@ -398,6 +399,16 @@ final class LocalEngineGateway implements AtendimentoGateway {
   Future<List<EventoDaTimeline>> listarTimeline({
     required int atendimentoId,
   }) => _remoto.listarTimeline(atendimentoId: atendimentoId);
+
+  /// P13 — só existe com rede: o índice local não guarda o contato.
+  @override
+  Future<ContatoDaConversa> obterContatoDoAtendimento({
+    required int atendimentoId,
+    bool forcar = false,
+  }) => _remoto.obterContatoDoAtendimento(
+    atendimentoId: atendimentoId,
+    forcar: forcar,
+  );
 
   @override
   Future<List<AtendimentoResumo>> listarAtendimentosDoContato({

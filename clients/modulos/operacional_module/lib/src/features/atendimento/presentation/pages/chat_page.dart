@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:cross_file/cross_file.dart';
 import 'package:dependencies_module/dependencies_module.dart' show GetIt;
 import 'package:design_system_module/design_system_module.dart';
@@ -12,12 +14,15 @@ import 'package:presentation_module/presentation_module.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
 import 'package:record/record.dart';
 
+import '../../domain/model/contato_da_conversa.dart';
 import '../../domain/model/mensagem_thread.dart';
+import '../../domain/parameters/ficha_parameters.dart';
 import '../../domain/parameters/presenca_parameters.dart';
 import '../../domain/usecases/atendimento_usecases.dart';
 import '../controllers/chat_controller.dart';
 import '../controllers/chat_state.dart';
 import '../controllers/ficha_controller.dart';
+import '../widgets/avatar_do_contato.dart';
 import '../widgets/chat_connection_badge.dart';
 import '../widgets/chat_message_bubble.dart';
 import '../widgets/galeria_do_atendimento.dart';
@@ -351,7 +356,7 @@ class ChatPage extends StatelessWidget {
 /// Só aparece embutido. Como tela cheia quem cumpre esse papel é a `AppBar`,
 /// com o botão de voltar que o sistema já desenha — dois cabeçalhos seriam um
 /// a mais.
-class _CabecalhoDoPainel extends StatelessWidget {
+class _CabecalhoDoPainel extends StatefulWidget {
   final int atendimentoId;
   final VoidCallback aoFechar;
 
@@ -361,8 +366,49 @@ class _CabecalhoDoPainel extends StatelessWidget {
   });
 
   @override
+  State<_CabecalhoDoPainel> createState() => _CabecalhoDoPainelState();
+}
+
+/// P13 — o cabeçalho diz com quem é a conversa, e não só o número dela.
+class _CabecalhoDoPainelState extends State<_CabecalhoDoPainel> {
+  ContatoDaConversa? _contato;
+
+  /// Uma foto nova por abertura, no máximo: a URL do CDN expira, e pedir de
+  /// novo a cada redesenho martelaria o provedor.
+  bool _jaPediuFotoNova = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_carregar());
+  }
+
+  Future<void> _carregar({bool forcar = false}) async {
+    if (!GetIt.instance.isRegistered<ObterContatoUsecase>()) return;
+    final res = await inject<ObterContatoUsecase>()(
+      ObterContatoParameters(
+        atendimentoId: widget.atendimentoId,
+        forcar: forcar,
+      ),
+    );
+    if (!mounted) return;
+    if (res case Success(:final value)) setState(() => _contato = value);
+  }
+
+  void _fotoQuebrou() {
+    if (_jaPediuFotoNova) return;
+    _jaPediuFotoNova = true;
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => unawaited(_carregar(forcar: true)),
+    );
+  }
+
+  @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    final contato = _contato;
+    final atendimentoId = widget.atendimentoId;
+    final aoFechar = widget.aoFechar;
     return Container(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,
@@ -376,11 +422,34 @@ class _CabecalhoDoPainel extends StatelessWidget {
       ),
       child: Row(
         children: [
+          if (contato != null) ...[
+            AvatarDoContato(
+              nome: contato.nomeParaExibir,
+              fotoUrl: contato.fotoUrl,
+              aoFalharFoto: _fotoQuebrou,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+          ],
           Expanded(
-            child: Text(
-              'Atendimento #$atendimentoId',
-              style: Theme.of(context).textTheme.titleSmall,
-              overflow: TextOverflow.ellipsis,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  contato?.nomeParaExibir ?? 'Atendimento #$atendimentoId',
+                  style: Theme.of(context).textTheme.titleSmall,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (contato != null &&
+                    contato.nome.isNotEmpty &&
+                    contato.telefone.isNotEmpty)
+                  Text(
+                    contato.telefone,
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelSmall?.copyWith(color: colors.fgMuted),
+                  ),
+              ],
             ),
           ),
           IconButton(

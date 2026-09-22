@@ -1459,6 +1459,9 @@ const AtendimentoResumo$json = {
       '17': true
     },
     {'1': 'nao_lidas', '3': 14, '4': 1, '5': 5, '10': 'naoLidas'},
+    {'1': 'contato_nome', '3': 15, '4': 1, '5': 9, '10': 'contatoNome'},
+    {'1': 'contato_telefone', '3': 16, '4': 1, '5': 9, '10': 'contatoTelefone'},
+    {'1': 'contato_foto_url', '3': 17, '4': 1, '5': 9, '10': 'contatoFotoUrl'},
   ],
   '8': [
     {'1': '_sentimento_nota'},
@@ -1477,8 +1480,43 @@ final $typed_data.Uint8List atendimentoResumoDescriptor = $convert.base64Decode(
     'X2luaWNpbxgKIAEoA1IKZGF0YUluaWNpbxIwChRkYXRhX3VsdGltYV9tZW5zYWdlbRgLIAEoA1'
     'ISZGF0YVVsdGltYU1lbnNhZ2VtEiwKD3NlbnRpbWVudG9fbm90YRgMIAEoBUgAUg5zZW50aW1l'
     'bnRvTm90YYgBARIuChBzZW50aW1lbnRvX2xhYmVsGA0gASgJSAFSD3NlbnRpbWVudG9MYWJlbI'
-    'gBARIbCgluYW9fbGlkYXMYDiABKAVSCG5hb0xpZGFzQhIKEF9zZW50aW1lbnRvX25vdGFCEwoR'
-    'X3NlbnRpbWVudG9fbGFiZWw=');
+    'gBARIbCgluYW9fbGlkYXMYDiABKAVSCG5hb0xpZGFzEiEKDGNvbnRhdG9fbm9tZRgPIAEoCVIL'
+    'Y29udGF0b05vbWUSKQoQY29udGF0b190ZWxlZm9uZRgQIAEoCVIPY29udGF0b1RlbGVmb25lEi'
+    'gKEGNvbnRhdG9fZm90b191cmwYESABKAlSDmNvbnRhdG9Gb3RvVXJsQhIKEF9zZW50aW1lbnRv'
+    'X25vdGFCEwoRX3NlbnRpbWVudG9fbGFiZWw=');
+
+@$core.Deprecated('Use obterContatoDoAtendimentoRequestDescriptor instead')
+const ObterContatoDoAtendimentoRequest$json = {
+  '1': 'ObterContatoDoAtendimentoRequest',
+  '2': [
+    {'1': 'atendimento_id', '3': 1, '4': 1, '5': 5, '10': 'atendimentoId'},
+    {'1': 'forcar', '3': 2, '4': 1, '5': 8, '10': 'forcar'},
+  ],
+};
+
+/// Descriptor for `ObterContatoDoAtendimentoRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List obterContatoDoAtendimentoRequestDescriptor =
+    $convert.base64Decode(
+        'CiBPYnRlckNvbnRhdG9Eb0F0ZW5kaW1lbnRvUmVxdWVzdBIlCg5hdGVuZGltZW50b19pZBgBIA'
+        'EoBVINYXRlbmRpbWVudG9JZBIWCgZmb3JjYXIYAiABKAhSBmZvcmNhcg==');
+
+@$core.Deprecated('Use obterContatoDoAtendimentoResponseDescriptor instead')
+const ObterContatoDoAtendimentoResponse$json = {
+  '1': 'ObterContatoDoAtendimentoResponse',
+  '2': [
+    {'1': 'contato_id', '3': 1, '4': 1, '5': 5, '10': 'contatoId'},
+    {'1': 'nome', '3': 2, '4': 1, '5': 9, '10': 'nome'},
+    {'1': 'telefone', '3': 3, '4': 1, '5': 9, '10': 'telefone'},
+    {'1': 'foto_url', '3': 4, '4': 1, '5': 9, '10': 'fotoUrl'},
+  ],
+};
+
+/// Descriptor for `ObterContatoDoAtendimentoResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List obterContatoDoAtendimentoResponseDescriptor =
+    $convert.base64Decode(
+        'CiFPYnRlckNvbnRhdG9Eb0F0ZW5kaW1lbnRvUmVzcG9uc2USHQoKY29udGF0b19pZBgBIAEoBV'
+        'IJY29udGF0b0lkEhIKBG5vbWUYAiABKAlSBG5vbWUSGgoIdGVsZWZvbmUYAyABKAlSCHRlbGVm'
+        'b25lEhkKCGZvdG9fdXJsGAQgASgJUgdmb3RvVXJs');
 
 @$core.Deprecated('Use listAtendimentosRequestDescriptor instead')
 const ListAtendimentosRequest$json = {

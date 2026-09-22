@@ -782,11 +782,21 @@ impl ProfileQuery for EvolutionProvider {
         match resp {
             Ok(r) => {
                 if r.status().is_success() {
-                    let parsed: AvatarResp = r.json().await.unwrap_or(AvatarResp {
+                    // P13 — a evolution-go embrulha toda resposta em
+                    // `{"data": …}`. Ler direto na struct devolvia sempre `None`
+                    // contra o servidor real (o teste usava a resposta sem o
+                    // envelope). `json_do_provedor` aceita as duas formas.
+                    let corpo = Self::json_do_provedor(r)
+                        .await
+                        .unwrap_or(serde_json::Value::Null);
+                    let parsed: AvatarResp = serde_json::from_value(corpo).unwrap_or(AvatarResp {
                         profile_picture_url: None,
                         url: None,
                     });
-                    Ok(parsed.profile_picture_url.or(parsed.url))
+                    Ok(parsed
+                        .profile_picture_url
+                        .or(parsed.url)
+                        .filter(|u| !u.trim().is_empty()))
                 } else {
                     Ok(None)
                 }

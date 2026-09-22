@@ -646,6 +646,53 @@ async fn test_profile_query() {
     assert_eq!(res, Some("http://profile-pic".to_string()));
 }
 
+/// P13 — a resposta REAL da evolution-go vem embrulhada em `{"data": …}`.
+/// O teste de cima usa a forma sem envelope, e foi assim que a foto voltava
+/// sempre vazia em produção sem nenhum teste falhar.
+#[tokio::test]
+async fn test_profile_query_com_envelope() {
+    let (server, provider) = setup().await;
+    let token = SecretString::from("inst-token".to_string());
+
+    Mock::given(method("POST"))
+        .and(path("/user/avatar"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": { "profilePictureUrl": "https://pps.whatsapp.net/foto" },
+            "message": "success"
+        })))
+        .mount(&server)
+        .await;
+
+    let profiles = provider.profiles().unwrap();
+    let res = profiles
+        .get_profile_picture("instancia-1", &token, "5511999998888")
+        .await
+        .unwrap();
+    assert_eq!(res, Some("https://pps.whatsapp.net/foto".to_string()));
+}
+
+/// P13 — URL vazia é "sem foto", não uma foto de endereço vazio.
+#[tokio::test]
+async fn test_profile_query_url_vazia_e_sem_foto() {
+    let (server, provider) = setup().await;
+    let token = SecretString::from("inst-token".to_string());
+
+    Mock::given(method("POST"))
+        .and(path("/user/avatar"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "data": { "url": "" }
+        })))
+        .mount(&server)
+        .await;
+
+    let profiles = provider.profiles().unwrap();
+    let res = profiles
+        .get_profile_picture("instancia-1", &token, "5511999998888")
+        .await
+        .unwrap();
+    assert_eq!(res, None);
+}
+
 #[tokio::test]
 async fn test_set_advanced_settings() {
     let (server, provider) = setup().await;

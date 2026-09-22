@@ -15,6 +15,7 @@ import 'package:operacional_module/src/features/atendimento/domain/model/quadro.
 import 'package:operacional_module/src/features/atendimento/domain/streams/atendimento_evento_stream.dart';
 import 'package:operacional_module/src/features/atendimento/domain/usecases/atendimento_usecases.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/evento_timeline.dart';
+import 'package:operacional_module/src/features/atendimento/domain/model/contato_da_conversa.dart';
 
 /// Gateway falso: substitui a plataforma (gRPC-Web ou motor local) por dados em
 /// memória. Como é o **único** ponto trocado, os testes que o usam exercitam a
@@ -189,6 +190,24 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   /// P5 — a ficha completa.
   List<EventoDaTimeline> timeline = const [];
   final List<String> acoesDaFicha = [];
+
+  /// P13 — o contato que o cabeçalho mostra, e quantas vezes pediram foto nova.
+  ContatoDaConversa contato = const ContatoDaConversa(
+    contatoId: 2,
+    nome: 'Maria',
+    telefone: '5511999998888',
+    fotoUrl: '',
+  );
+  final List<bool> pedidosDeContato = [];
+
+  @override
+  Future<ContatoDaConversa> obterContatoDoAtendimento({
+    required int atendimentoId,
+    bool forcar = false,
+  }) async {
+    pedidosDeContato.add(forcar);
+    return contato;
+  }
 
   @override
   Future<List<EventoDaTimeline>> listarTimeline({

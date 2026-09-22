@@ -18,6 +18,7 @@ import '../../domain/model/midia_mensagem.dart';
 import '../../domain/parameters/presenca_parameters.dart';
 import '../../domain/parameters/quadro_operacao_parameters.dart';
 import '../../domain/model/evento_timeline.dart';
+import '../../domain/model/contato_da_conversa.dart';
 
 /// Os quatro `Datasource` da feature: adaptadores finos entre o `Parameters` de
 /// uma operação e o [AtendimentoGateway] da plataforma ativa.
@@ -457,4 +458,19 @@ final class DesativarEtiquetaDatasource
     await _gateway.desativarEtiqueta(id: parameters.id);
     return unit;
   }
+}
+
+/// P13 — o contato da conversa.
+final class ObterContatoDatasource
+    implements Datasource<ContatoDaConversa, ObterContatoParameters> {
+  final AtendimentoGateway _gateway;
+
+  const ObterContatoDatasource({required this._gateway});
+
+  @override
+  Future<ContatoDaConversa> call(ObterContatoParameters parameters) =>
+      _gateway.obterContatoDoAtendimento(
+        atendimentoId: parameters.atendimentoId,
+        forcar: parameters.forcar,
+      );
 }

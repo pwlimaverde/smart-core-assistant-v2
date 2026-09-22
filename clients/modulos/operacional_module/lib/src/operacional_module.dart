@@ -126,6 +126,15 @@ final class OperacionalModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<ObterContatoUsecase>(
+      () => ObterContatoUsecase(
+        repository: ObterContatoRepository(
+          datasource: ObterContatoDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
     i.lazySingleton<ListarTimelineUsecase>(
       () => ListarTimelineUsecase(
         repository: ListarTimelineRepository(

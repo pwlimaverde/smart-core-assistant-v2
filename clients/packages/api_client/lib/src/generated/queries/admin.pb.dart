@@ -5787,6 +5787,9 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
     $core.int? sentimentoNota,
     $core.String? sentimentoLabel,
     $core.int? naoLidas,
+    $core.String? contatoNome,
+    $core.String? contatoTelefone,
+    $core.String? contatoFotoUrl,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -5805,6 +5808,9 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
     if (sentimentoNota != null) result.sentimentoNota = sentimentoNota;
     if (sentimentoLabel != null) result.sentimentoLabel = sentimentoLabel;
     if (naoLidas != null) result.naoLidas = naoLidas;
+    if (contatoNome != null) result.contatoNome = contatoNome;
+    if (contatoTelefone != null) result.contatoTelefone = contatoTelefone;
+    if (contatoFotoUrl != null) result.contatoFotoUrl = contatoFotoUrl;
     return result;
   }
 
@@ -5836,6 +5842,9 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
     ..aI(12, _omitFieldNames ? '' : 'sentimentoNota')
     ..aOS(13, _omitFieldNames ? '' : 'sentimentoLabel')
     ..aI(14, _omitFieldNames ? '' : 'naoLidas')
+    ..aOS(15, _omitFieldNames ? '' : 'contatoNome')
+    ..aOS(16, _omitFieldNames ? '' : 'contatoTelefone')
+    ..aOS(17, _omitFieldNames ? '' : 'contatoFotoUrl')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -5982,6 +5991,209 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
   $core.bool hasNaoLidas() => $_has(13);
   @$pb.TagNumber(14)
   void clearNaoLidas() => $_clearField(14);
+
+  /// P13 — o contato do cartão. O quadro mostrava `Contato #id`: o resumo nunca
+  /// levou nome nem telefone. `contato_nome` cai para o nome de perfil do
+  /// WhatsApp e fica vazio quando nem isso existe (a tela mostra o telefone).
+  @$pb.TagNumber(15)
+  $core.String get contatoNome => $_getSZ(14);
+  @$pb.TagNumber(15)
+  set contatoNome($core.String value) => $_setString(14, value);
+  @$pb.TagNumber(15)
+  $core.bool hasContatoNome() => $_has(14);
+  @$pb.TagNumber(15)
+  void clearContatoNome() => $_clearField(15);
+
+  @$pb.TagNumber(16)
+  $core.String get contatoTelefone => $_getSZ(15);
+  @$pb.TagNumber(16)
+  set contatoTelefone($core.String value) => $_setString(15, value);
+  @$pb.TagNumber(16)
+  $core.bool hasContatoTelefone() => $_has(15);
+  @$pb.TagNumber(16)
+  void clearContatoTelefone() => $_clearField(16);
+
+  /// URL do CDN do WhatsApp, assinada e com validade: a tela trata imagem
+  /// quebrada como "sem foto" e pede uma nova com `ObterContatoDoAtendimento`.
+  @$pb.TagNumber(17)
+  $core.String get contatoFotoUrl => $_getSZ(16);
+  @$pb.TagNumber(17)
+  set contatoFotoUrl($core.String value) => $_setString(16, value);
+  @$pb.TagNumber(17)
+  $core.bool hasContatoFotoUrl() => $_has(16);
+  @$pb.TagNumber(17)
+  void clearContatoFotoUrl() => $_clearField(17);
+}
+
+/// P13 — nome, telefone e foto do contato de uma conversa, para o cabeçalho.
+class ObterContatoDoAtendimentoRequest extends $pb.GeneratedMessage {
+  factory ObterContatoDoAtendimentoRequest({
+    $core.int? atendimentoId,
+    $core.bool? forcar,
+  }) {
+    final result = create();
+    if (atendimentoId != null) result.atendimentoId = atendimentoId;
+    if (forcar != null) result.forcar = forcar;
+    return result;
+  }
+
+  ObterContatoDoAtendimentoRequest._();
+
+  factory ObterContatoDoAtendimentoRequest.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ObterContatoDoAtendimentoRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ObterContatoDoAtendimentoRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'atendimentoId')
+    ..aOB(2, _omitFieldNames ? '' : 'forcar')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ObterContatoDoAtendimentoRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ObterContatoDoAtendimentoRequest copyWith(
+          void Function(ObterContatoDoAtendimentoRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as ObterContatoDoAtendimentoRequest))
+          as ObterContatoDoAtendimentoRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ObterContatoDoAtendimentoRequest create() =>
+      ObterContatoDoAtendimentoRequest._();
+  @$core.override
+  ObterContatoDoAtendimentoRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ObterContatoDoAtendimentoRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ObterContatoDoAtendimentoRequest>(
+          create);
+  static ObterContatoDoAtendimentoRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get atendimentoId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set atendimentoId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasAtendimentoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearAtendimentoId() => $_clearField(1);
+
+  /// Ignora o prazo de 7 dias entre consultas ao provedor. A tela usa quando a
+  /// foto guardada não abre (a URL do CDN expirou).
+  @$pb.TagNumber(2)
+  $core.bool get forcar => $_getBF(1);
+  @$pb.TagNumber(2)
+  set forcar($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasForcar() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearForcar() => $_clearField(2);
+}
+
+class ObterContatoDoAtendimentoResponse extends $pb.GeneratedMessage {
+  factory ObterContatoDoAtendimentoResponse({
+    $core.int? contatoId,
+    $core.String? nome,
+    $core.String? telefone,
+    $core.String? fotoUrl,
+  }) {
+    final result = create();
+    if (contatoId != null) result.contatoId = contatoId;
+    if (nome != null) result.nome = nome;
+    if (telefone != null) result.telefone = telefone;
+    if (fotoUrl != null) result.fotoUrl = fotoUrl;
+    return result;
+  }
+
+  ObterContatoDoAtendimentoResponse._();
+
+  factory ObterContatoDoAtendimentoResponse.fromBuffer(
+          $core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ObterContatoDoAtendimentoResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ObterContatoDoAtendimentoResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'contatoId')
+    ..aOS(2, _omitFieldNames ? '' : 'nome')
+    ..aOS(3, _omitFieldNames ? '' : 'telefone')
+    ..aOS(4, _omitFieldNames ? '' : 'fotoUrl')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ObterContatoDoAtendimentoResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ObterContatoDoAtendimentoResponse copyWith(
+          void Function(ObterContatoDoAtendimentoResponse) updates) =>
+      super.copyWith((message) =>
+              updates(message as ObterContatoDoAtendimentoResponse))
+          as ObterContatoDoAtendimentoResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ObterContatoDoAtendimentoResponse create() =>
+      ObterContatoDoAtendimentoResponse._();
+  @$core.override
+  ObterContatoDoAtendimentoResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ObterContatoDoAtendimentoResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ObterContatoDoAtendimentoResponse>(
+          create);
+  static ObterContatoDoAtendimentoResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get contatoId => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set contatoId($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasContatoId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearContatoId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get nome => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set nome($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasNome() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearNome() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get telefone => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set telefone($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasTelefone() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearTelefone() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get fotoUrl => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set fotoUrl($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasFotoUrl() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearFotoUrl() => $_clearField(4);
 }
 
 class ListAtendimentosRequest extends $pb.GeneratedMessage {

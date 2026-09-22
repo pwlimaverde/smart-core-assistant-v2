@@ -6,6 +6,7 @@ import '../model/ficha.dart';
 import '../model/midia_mensagem.dart';
 import '../model/quadro.dart';
 import '../model/evento_timeline.dart';
+import '../model/contato_da_conversa.dart';
 
 /// Fronteira de infraestrutura do atendimento, **escolhida por plataforma**:
 /// gRPC-Web no browser, motor local Rust (SQLite + fila offline) no desktop.
@@ -164,6 +165,13 @@ abstract interface class AtendimentoGateway {
   /// guardar.
   /// P5 — a linha do tempo do atendimento.
   Future<List<EventoDaTimeline>> listarTimeline({required int atendimentoId});
+
+  /// P13 — nome, telefone e foto do contato da conversa. `forcar` pede uma foto
+  /// nova ao WhatsApp quando a guardada não abre (URL do CDN expirada).
+  Future<ContatoDaConversa> obterContatoDoAtendimento({
+    required int atendimentoId,
+    bool forcar = false,
+  });
 
   /// P5 — as outras conversas do mesmo contato.
   Future<List<AtendimentoResumo>> listarAtendimentosDoContato({

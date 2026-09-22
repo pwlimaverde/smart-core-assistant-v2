@@ -2448,6 +2448,74 @@ impl AtendimentoStore for PgAtendimentoStore {
         })
         .await
     }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn contatos_do_quadro(
+        &self,
+        ctx: &RequestContext,
+        ids: Vec<i32>,
+    ) -> Result<
+        std::collections::HashMap<
+            i32,
+            infrastructure_postgres::atendimentos::atendimentos::ContatoDoQuadro,
+        >,
+        DbError,
+    > {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let linhas = infrastructure_postgres::atendimentos::atendimentos::contatos_do_quadro(
+                &mut tx, &ctx, &ids,
+            )
+            .await?;
+            let mapa = linhas.into_iter().map(|c| (c.atendimento_id, c)).collect();
+            Ok((mapa, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn contato_do_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<Option<infrastructure_postgres::atendimentos::atendimentos::ContatoComFoto>, DbError>
+    {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let c = infrastructure_postgres::atendimentos::atendimentos::contato_do_atendimento(
+                &mut tx,
+                &ctx,
+                atendimento_id,
+            )
+            .await?;
+            Ok((c, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, contato_id = contato_id))]
+    async fn registrar_foto_do_contato(
+        &self,
+        ctx: &RequestContext,
+        contato_id: i32,
+        foto_url: Option<String>,
+    ) -> Result<(), DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            infrastructure_postgres::atendimentos::atendimentos::registrar_foto_do_contato(
+                &mut tx,
+                &ctx,
+                contato_id,
+                foto_url.as_deref(),
+            )
+            .await?;
+            Ok(((), tx))
+        })
+        .await
+    }
 }
 
 #[cfg(test)]
