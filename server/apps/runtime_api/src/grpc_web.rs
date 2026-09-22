@@ -9380,6 +9380,10 @@ fn etiqueta_do_json(v: &serde_json::Value) -> ProtoEtiqueta {
         cor: texto("cor"),
         descricao: texto("descricao"),
         ativo: v.get("ativo").and_then(|x| x.as_bool()).unwrap_or(true),
+        aplicada_pela_ia: v
+            .get("aplicada_pela_ia")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false),
     }
 }
 

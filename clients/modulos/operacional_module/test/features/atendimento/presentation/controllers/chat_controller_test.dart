@@ -448,5 +448,28 @@ void main() {
       expect(gateway.chamadasThread, recargas);
       await controller.close();
     });
+
+    test('etiqueta posta pela IA também avisa a ficha', () async {
+      // P14 — a etiqueta da intenção muda a ficha, não a conversa.
+      final gateway = FakeAtendimentoGateway(
+        thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 1, 1))],
+      );
+      final controller = _controller(gateway);
+      await controller.abrir(5);
+      final recargas = gateway.chamadasThread;
+
+      gateway.eventos.add(
+        const AtendimentoEvento(
+          tipo: 'atendimento.etiquetas_atualizadas',
+          tenantId: 't',
+          payload: {'atendimento_id': 5},
+        ),
+      );
+      await Future<void>.delayed(Duration.zero);
+
+      expect(controller.camposAtualizados.value, 1);
+      expect(gateway.chamadasThread, recargas);
+      await controller.close();
+    });
   });
 }

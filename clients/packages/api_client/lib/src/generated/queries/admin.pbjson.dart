@@ -5466,6 +5466,7 @@ const Etiqueta$json = {
     {'1': 'cor', '3': 3, '4': 1, '5': 9, '10': 'cor'},
     {'1': 'descricao', '3': 4, '4': 1, '5': 9, '10': 'descricao'},
     {'1': 'ativo', '3': 5, '4': 1, '5': 8, '10': 'ativo'},
+    {'1': 'aplicada_pela_ia', '3': 6, '4': 1, '5': 8, '10': 'aplicadaPelaIa'},
   ],
 };
 
@@ -5473,7 +5474,7 @@ const Etiqueta$json = {
 final $typed_data.Uint8List etiquetaDescriptor = $convert.base64Decode(
     'CghFdGlxdWV0YRIOCgJpZBgBIAEoA1ICaWQSEgoEbm9tZRgCIAEoCVIEbm9tZRIQCgNjb3IYAy'
     'ABKAlSA2NvchIcCglkZXNjcmljYW8YBCABKAlSCWRlc2NyaWNhbxIUCgVhdGl2bxgFIAEoCFIF'
-    'YXRpdm8=');
+    'YXRpdm8SKAoQYXBsaWNhZGFfcGVsYV9pYRgGIAEoCFIOYXBsaWNhZGFQZWxhSWE=');
 
 @$core.Deprecated('Use notaDescriptor instead')
 const Nota$json = {

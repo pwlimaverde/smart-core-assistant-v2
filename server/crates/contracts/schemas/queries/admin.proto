@@ -2277,6 +2277,9 @@ message Etiqueta {
   // Do CATALOGO. Uma etiqueta desativada continua aparecendo nas conversas em
   // que ja estava -- sumir com ela reescreveria o passado.
   bool ativo = 5;
+  // P14 — colocada pela IA a partir da intenção detectada. Só faz sentido nas
+  // etiquetas da conversa, não no catálogo.
+  bool aplicada_pela_ia = 6;
 }
 
 message Nota {

@@ -574,7 +574,21 @@ class _Chip extends StatelessWidget {
     final cor = corDaEtiqueta(etiqueta.cor);
     return Chip(
       avatar: CircleAvatar(radius: 6, backgroundColor: cor),
-      label: Text(etiqueta.nome),
+      // P14 — a etiqueta que a IA colocou se distingue da que uma pessoa pôs.
+      // Tirá-la impede a IA de recolocar nesta conversa.
+      label: etiqueta.aplicadaPelaIa
+          ? Tooltip(
+              message: 'Aplicada pela IA. Se tirar, ela não volta nesta conversa.',
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(etiqueta.nome),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.auto_awesome, size: 12),
+                ],
+              ),
+            )
+          : Text(etiqueta.nome),
       backgroundColor: cor.withValues(alpha: 0.12),
       side: BorderSide(color: cor.withValues(alpha: 0.5)),
       onDeleted: aoRemover,

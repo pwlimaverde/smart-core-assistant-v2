@@ -22515,6 +22515,7 @@ class Etiqueta extends $pb.GeneratedMessage {
     $core.String? cor,
     $core.String? descricao,
     $core.bool? ativo,
+    $core.bool? aplicadaPelaIa,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -22522,6 +22523,7 @@ class Etiqueta extends $pb.GeneratedMessage {
     if (cor != null) result.cor = cor;
     if (descricao != null) result.descricao = descricao;
     if (ativo != null) result.ativo = ativo;
+    if (aplicadaPelaIa != null) result.aplicadaPelaIa = aplicadaPelaIa;
     return result;
   }
 
@@ -22544,6 +22546,7 @@ class Etiqueta extends $pb.GeneratedMessage {
     ..aOS(3, _omitFieldNames ? '' : 'cor')
     ..aOS(4, _omitFieldNames ? '' : 'descricao')
     ..aOB(5, _omitFieldNames ? '' : 'ativo')
+    ..aOB(6, _omitFieldNames ? '' : 'aplicadaPelaIa')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -22610,6 +22613,17 @@ class Etiqueta extends $pb.GeneratedMessage {
   $core.bool hasAtivo() => $_has(4);
   @$pb.TagNumber(5)
   void clearAtivo() => $_clearField(5);
+
+  /// P14 — colocada pela IA a partir da intenção detectada. Só faz sentido nas
+  /// etiquetas da conversa, não no catálogo.
+  @$pb.TagNumber(6)
+  $core.bool get aplicadaPelaIa => $_getBF(5);
+  @$pb.TagNumber(6)
+  set aplicadaPelaIa($core.bool value) => $_setBool(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasAplicadaPelaIa() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearAplicadaPelaIa() => $_clearField(6);
 }
 
 class Nota extends $pb.GeneratedMessage {

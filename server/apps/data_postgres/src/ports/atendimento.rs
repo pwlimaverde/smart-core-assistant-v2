@@ -331,6 +331,21 @@ pub trait AtendimentoStore: Send + Sync {
         habilitado: bool,
     ) -> Result<bool, DbError>;
 
+    /// P14 — aplica as etiquetas das intenções confiantes (N10 E3).
+    ///
+    /// Só etiqueta que já existe e está ativa; nunca a que uma pessoa removeu
+    /// neste atendimento. Devolve só as que entraram agora.
+    async fn aplicar_etiquetas_da_analise(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        intencoes: Vec<(String, f64)>,
+        piso: f64,
+    ) -> Result<
+        Vec<infrastructure_postgres::atendimentos::etiquetas::EtiquetaAplicadaPelaIa>,
+        DbError,
+    >;
+
     /// P13 — nome, telefone e foto do contato de cada cartão do quadro.
     async fn contatos_do_quadro(
         &self,

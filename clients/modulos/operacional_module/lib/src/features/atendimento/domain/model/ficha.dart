@@ -13,12 +13,17 @@ class Etiqueta {
   /// oferecida para colar em conversa nova.
   final bool ativo;
 
+  /// P14 — colocada pela IA a partir da intenção detectada. Só nas etiquetas
+  /// da conversa; no catálogo é sempre `false`.
+  final bool aplicadaPelaIa;
+
   const Etiqueta({
     required this.id,
     required this.nome,
     required this.cor,
     required this.descricao,
     required this.ativo,
+    this.aplicadaPelaIa = false,
   });
 }
 

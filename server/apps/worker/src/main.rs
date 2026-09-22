@@ -2848,6 +2848,15 @@ async fn analisar_mensagem_best_effort(
             "atendimento_id": atendimento_id,
             "intents": intents,
             "entidades": entidades,
+            // P14/P15 — o mesmo "quando confio na IA" do B4 decide se a
+            // intenção vira etiqueta e se a entidade entra no cadastro.
+            "piso_confianca": config_tenant::numero(
+                state.redis_conn.as_ref(),
+                tenant_uuid,
+                "confianca_minima_automatica",
+            )
+            .await
+            .unwrap_or(0.8),
         }),
         causation_id,
         traceparent,
@@ -2861,6 +2870,21 @@ async fn analisar_mensagem_best_effort(
                     .and_then(|v| v.as_bool())
                     .unwrap_or(false),
             );
+            // P14 — contagem, nunca nomes nem conteúdo.
+            let etiquetas = resp
+                .get("etiquetas_aplicadas")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            tracing::info!(etiquetas_aplicadas = etiquetas, "análise gravada");
+            if etiquetas > 0 {
+                publicar_realtime(
+                    state,
+                    tenant_uuid,
+                    "atendimento.etiquetas_atualizadas",
+                    serde_json::json!({ "atendimento_id": atendimento_id }),
+                )
+                .await;
+            }
         }
         Err(e) => tracing::warn!(erro = %e, "falha ao gravar a análise da mensagem"),
     }

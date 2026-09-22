@@ -946,7 +946,12 @@ async fn main() -> anyhow::Result<()> {
         .route("AnexarAnaliseMensagem", move |env| {
             let state = state_for_anexar_analise_mensagem.clone();
             Box::pin(async move {
-                handler_anexar_analise_mensagem(state.atendimento.as_ref(), env).await
+                handler_anexar_analise_mensagem(
+                    state.atendimento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
             })
         })
         .route("AnexarAnaliseMidia", move |env| {
@@ -4933,6 +4938,7 @@ fn assunto_da_analise(intents: &serde_json::Value) -> Option<String> {
 /// seria auditável. Os valores de entidade podem ser PII e não entram em log.
 async fn handler_anexar_analise_mensagem(
     store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
     env: Envelope,
 ) -> Envelope {
     let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
@@ -4976,11 +4982,68 @@ async fn handler_anexar_analise_mensagem(
         )
         .await
     {
-        Ok(assunto_definido) => ok_reply(
-            &env,
-            "AnexarAnaliseMensagemReply",
-            serde_json::json!({ "assunto_definido": assunto_definido }),
-        ),
+        Ok(assunto_definido) => {
+            // P14 — as etiquetas das intenções. Em transação própria: falhar
+            // aqui não pode desfazer a análise, que já é útil sozinha.
+            let piso = payload_json
+                .get("piso_confianca")
+                .and_then(|v| v.as_f64())
+                .filter(|p| (0.0..=1.0).contains(p))
+                .unwrap_or(crate::adapters::campos_extraidos::PISO_CONFIANCA_PADRAO);
+            let intencoes: Vec<(String, f64)> = payload_json
+                .get("intents")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|i| {
+                            Some((
+                                i.get("tipo")?.as_str()?.to_string(),
+                                i.get("confianca")?.as_f64()?,
+                            ))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let mut etiquetas_aplicadas = 0usize;
+            if atendimento_id > 0 && !intencoes.is_empty() {
+                match store
+                    .aplicar_etiquetas_da_analise(&ctx, atendimento_id, intencoes, piso)
+                    .await
+                {
+                    Ok(aplicadas) => {
+                        etiquetas_aplicadas = aplicadas.len();
+                        for e in aplicadas {
+                            // Mutação visível ao operador: a trilha responde
+                            // "quem colou isso aqui". Nome de etiqueta não é PII.
+                            audit
+                                .publish(
+                                    &env,
+                                    "etiqueta.aplicada_por_ia",
+                                    format!(
+                                        "IA aplicou a etiqueta '{}' no atendimento #{}",
+                                        e.nome, atendimento_id
+                                    ),
+                                    serde_json::json!({
+                                        "atendimento_id": atendimento_id,
+                                        "etiqueta_id": e.id,
+                                        "confianca": e.confianca,
+                                    }),
+                                )
+                                .await;
+                        }
+                    }
+                    Err(e) => tracing::warn!(erro = %e, "falha ao aplicar etiquetas por intenção"),
+                }
+            }
+            ok_reply(
+                &env,
+                "AnexarAnaliseMensagemReply",
+                serde_json::json!({
+                    "assunto_definido": assunto_definido,
+                    "etiquetas_aplicadas": etiquetas_aplicadas,
+                }),
+            )
+        }
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }
@@ -12312,6 +12375,28 @@ mod tests_atendimento_cliente_unit {
                 },
             )
             .returning(|_, _, _, _, _, _| Ok(true));
+        // P14 — a intenção confiante vira etiqueta, auditada.
+        store
+            .expect_aplicar_etiquetas_da_analise()
+            .times(1)
+            .withf(|_, atendimento_id, intencoes, piso| {
+                *atendimento_id == 9 && intencoes.len() == 1 && (*piso - 0.8).abs() < 1e-9
+            })
+            .returning(|_, _, _, _| {
+                Ok(vec![
+                    infrastructure_postgres::atendimentos::etiquetas::EtiquetaAplicadaPelaIa {
+                        id: 4,
+                        nome: "Segunda via".into(),
+                        confianca: 0.9,
+                    },
+                ])
+            });
+        let mut audit = MockAuditPort::new();
+        audit
+            .expect_publish()
+            .times(1)
+            .withf(|_, evento, _, _| evento == "etiqueta.aplicada_por_ia")
+            .returning(|_, _, _, _| ());
         let env = envelope_com_payload(
             "AnexarAnaliseMensagem",
             serde_json::json!({
@@ -12322,11 +12407,12 @@ mod tests_atendimento_cliente_unit {
             }),
         );
 
-        let resp = handler_anexar_analise_mensagem(&store, env).await;
+        let resp = handler_anexar_analise_mensagem(&store, &audit, env).await;
 
         assert_eq!(resp.kind, MessageKind::Reply as i32);
         let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
         assert_eq!(body["assunto_definido"], true);
+        assert_eq!(body["etiquetas_aplicadas"], 1);
     }
 
     /// B9 (N10 E5): a chave tem de ser das que o servidor gera.

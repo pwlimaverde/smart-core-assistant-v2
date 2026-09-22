@@ -286,7 +286,9 @@ final class ChatController extends BaseController<ChatViewModel> {
     }
     // P10 — campos que a IA preencheu mudam a ficha, não a conversa: recarregar
     // o thread por isso seria I/O à toa.
-    if (evento.tipo == 'atendimento.campos_atualizados') {
+    if (evento.tipo == 'atendimento.campos_atualizados' ||
+        // P14 — etiqueta posta pela IA também é mudança da ficha.
+        evento.tipo == 'atendimento.etiquetas_atualizadas') {
       if (evento.atendimentoId == _atendimentoId) camposAtualizados.value++;
       return;
     }

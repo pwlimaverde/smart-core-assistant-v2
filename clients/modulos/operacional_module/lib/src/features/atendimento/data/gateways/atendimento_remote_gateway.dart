@@ -636,6 +636,7 @@ Etiqueta _etiquetaDoProto(proto.Etiqueta e) => Etiqueta(
   cor: e.cor,
   descricao: e.descricao,
   ativo: e.ativo,
+  aplicadaPelaIa: e.aplicadaPelaIa,
 );
 
 /// Um campo do cartão, do protobuf para o domínio (N9 E13).

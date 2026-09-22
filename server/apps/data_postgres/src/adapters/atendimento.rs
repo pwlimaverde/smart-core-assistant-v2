@@ -2241,6 +2241,23 @@ impl AtendimentoStore for PgAtendimentoStore {
             let notas = PostgresNotaRepository
                 .listar_por_atendimento(&mut tx, &ctx, atendimento_id)
                 .await?;
+            // P14 — quais destas a IA colocou (o ✨ da ficha).
+            let da_ia = infrastructure_postgres::atendimentos::etiquetas::etiquetas_da_ia(
+                &mut tx,
+                &ctx,
+                atendimento_id,
+            )
+            .await?;
+            let aplicadas: Vec<serde_json::Value> = aplicadas
+                .iter()
+                .map(|e| {
+                    let mut v = serde_json::to_value(e).unwrap_or_default();
+                    if let Some(o) = v.as_object_mut() {
+                        o.insert("aplicada_pela_ia".into(), da_ia.contains(&e.id).into());
+                    }
+                    v
+                })
+                .collect();
 
             // D3 — a ficha desenha o interruptor do bot, então precisa saber em
             // que estado ele está. Vem na mesma transação: um RPC extra só para
@@ -2347,12 +2364,29 @@ impl AtendimentoStore for PgAtendimentoStore {
         let ctx = ctx.clone();
         run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
             let repo = PostgresEtiquetaRepository;
+            // P14 — o que uma pessoa decide sobre a etiqueta vale contra a IA:
+            // tirar bloqueia a recolocação automática neste atendimento, e
+            // colocar de volta desfaz o bloqueio.
             if aplicar {
                 repo.aplicar(&mut tx, &ctx, atendimento_id, etiqueta_id)
                     .await?;
+                infrastructure_postgres::atendimentos::etiquetas::desbloquear_etiqueta_para_ia(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    etiqueta_id,
+                )
+                .await?;
             } else {
                 repo.remover(&mut tx, &ctx, atendimento_id, etiqueta_id)
                     .await?;
+                infrastructure_postgres::atendimentos::etiquetas::bloquear_etiqueta_para_ia(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    etiqueta_id,
+                )
+                .await?;
             }
             Ok((true, tx))
         })
@@ -2513,6 +2547,34 @@ impl AtendimentoStore for PgAtendimentoStore {
             )
             .await?;
             Ok(((), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn aplicar_etiquetas_da_analise(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        intencoes: Vec<(String, f64)>,
+        piso: f64,
+    ) -> Result<
+        Vec<infrastructure_postgres::atendimentos::etiquetas::EtiquetaAplicadaPelaIa>,
+        DbError,
+    > {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let aplicadas =
+                infrastructure_postgres::atendimentos::etiquetas::aplicar_etiquetas_por_intencao(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    &intencoes,
+                    piso,
+                )
+                .await?;
+            Ok((aplicadas, tx))
         })
         .await
     }
