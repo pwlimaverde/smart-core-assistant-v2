@@ -61,6 +61,7 @@ use contracts::grpc::queries::{
     CreateVoucherRequest,
     CreateVoucherResponse,
     CriarNumeroIgnoradoRequest,
+    DadoDoContato,
     DadosMyCliente,
     DefinirBotDaConversaRequest,
     DefinirBotDaConversaResponse,
@@ -7768,7 +7769,12 @@ impl AdminService for AdminFacade {
                 .and_then(|v| v.as_object())
                 .map(|o| {
                     o.iter()
-                        .filter_map(|(k, v)| Some((k.clone(), v.as_str()?.to_string())))
+                        .filter_map(|(k, v)| {
+                            Some(DadoDoContato {
+                                chave: k.clone(),
+                                valor: v.as_str()?.to_string(),
+                            })
+                        })
                         .collect()
                 })
                 .unwrap_or_default(),

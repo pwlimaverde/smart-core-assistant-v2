@@ -568,7 +568,7 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
           .toList(),
       botPodeAtender: resp.botPodeAtender,
       campos: resp.campos.map(_valorCampoDoProto).toList(),
-      dadosDoContato: Map.of(resp.dadosDoContato),
+      dadosDoContato: {for (final d in resp.dadosDoContato) d.chave: d.valor},
     );
   }
 

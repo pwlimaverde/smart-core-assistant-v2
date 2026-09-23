@@ -22712,7 +22712,7 @@ class DetalheAtendimentoResponse extends $pb.GeneratedMessage {
     $core.Iterable<Nota>? notas,
     $core.bool? botPodeAtender,
     $core.Iterable<ValorCampoDoAtendimento>? campos,
-    $core.Iterable<$core.MapEntry<$core.String, $core.String>>? dadosDoContato,
+    $core.Iterable<DadoDoContato>? dadosDoContato,
   }) {
     final result = create();
     if (catalogo != null) result.catalogo.addAll(catalogo);
@@ -22720,8 +22720,7 @@ class DetalheAtendimentoResponse extends $pb.GeneratedMessage {
     if (notas != null) result.notas.addAll(notas);
     if (botPodeAtender != null) result.botPodeAtender = botPodeAtender;
     if (campos != null) result.campos.addAll(campos);
-    if (dadosDoContato != null)
-      result.dadosDoContato.addEntries(dadosDoContato);
+    if (dadosDoContato != null) result.dadosDoContato.addAll(dadosDoContato);
     return result;
   }
 
@@ -22747,11 +22746,8 @@ class DetalheAtendimentoResponse extends $pb.GeneratedMessage {
     ..aOB(4, _omitFieldNames ? '' : 'botPodeAtender')
     ..pPM<ValorCampoDoAtendimento>(5, _omitFieldNames ? '' : 'campos',
         subBuilder: ValorCampoDoAtendimento.create)
-    ..m<$core.String, $core.String>(6, _omitFieldNames ? '' : 'dadosDoContato',
-        entryClassName: 'DetalheAtendimentoResponse.DadosDoContatoEntry',
-        keyFieldType: $pb.PbFieldType.OS,
-        valueFieldType: $pb.PbFieldType.OS,
-        packageName: const $pb.PackageName('smartcore.contracts.queries'))
+    ..pPM<DadoDoContato>(6, _omitFieldNames ? '' : 'dadosDoContato',
+        subBuilder: DadoDoContato.create)
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -22806,9 +22802,78 @@ class DetalheAtendimentoResponse extends $pb.GeneratedMessage {
   $pb.PbList<ValorCampoDoAtendimento> get campos => $_getList(4);
 
   /// P15 — o que a IA encontrou do contato nas conversas e não tem coluna no
-  /// cadastro (cidade, empresa, documento…). Só leitura na ficha.
+  /// cadastro (cidade, empresa, documento…). Só leitura na ficha. Lista de
+  /// pares e não map<>: o conversor proto→flatbuffers não entende map.
   @$pb.TagNumber(6)
-  $pb.PbMap<$core.String, $core.String> get dadosDoContato => $_getMap(5);
+  $pb.PbList<DadoDoContato> get dadosDoContato => $_getList(5);
+}
+
+/// P15 — um dado do contato achado pela IA (ex.: cidade = Recife).
+class DadoDoContato extends $pb.GeneratedMessage {
+  factory DadoDoContato({
+    $core.String? chave,
+    $core.String? valor,
+  }) {
+    final result = create();
+    if (chave != null) result.chave = chave;
+    if (valor != null) result.valor = valor;
+    return result;
+  }
+
+  DadoDoContato._();
+
+  factory DadoDoContato.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory DadoDoContato.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'DadoDoContato',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'chave')
+    ..aOS(2, _omitFieldNames ? '' : 'valor')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DadoDoContato clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  DadoDoContato copyWith(void Function(DadoDoContato) updates) =>
+      super.copyWith((message) => updates(message as DadoDoContato))
+          as DadoDoContato;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static DadoDoContato create() => DadoDoContato._();
+  @$core.override
+  DadoDoContato createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static DadoDoContato getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<DadoDoContato>(create);
+  static DadoDoContato? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get chave => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set chave($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasChave() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearChave() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get valor => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set valor($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasValor() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearValor() => $_clearField(2);
 }
 
 /// Um campo do cartao na ficha de UM atendimento: a definicao mais o valor.

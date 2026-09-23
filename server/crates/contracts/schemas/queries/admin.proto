@@ -2305,8 +2305,15 @@ message DetalheAtendimentoResponse {
   // antes da outra.
   repeated ValorCampoDoAtendimento campos = 5;
   // P15 — o que a IA encontrou do contato nas conversas e não tem coluna no
-  // cadastro (cidade, empresa, documento…). Só leitura na ficha.
-  map<string, string> dados_do_contato = 6;
+  // cadastro (cidade, empresa, documento…). Só leitura na ficha. Lista de
+  // pares e não map<>: o conversor proto→flatbuffers não entende map.
+  repeated DadoDoContato dados_do_contato = 6;
+}
+
+// P15 — um dado do contato achado pela IA (ex.: cidade = Recife).
+message DadoDoContato {
+  string chave = 1;
+  string valor = 2;
 }
 
 // Um campo do cartao na ficha de UM atendimento: a definicao mais o valor.

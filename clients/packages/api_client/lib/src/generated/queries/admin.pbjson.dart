@@ -5533,22 +5533,10 @@ const DetalheAtendimentoResponse$json = {
       '3': 6,
       '4': 3,
       '5': 11,
-      '6':
-          '.smartcore.contracts.queries.DetalheAtendimentoResponse.DadosDoContatoEntry',
+      '6': '.smartcore.contracts.queries.DadoDoContato',
       '10': 'dadosDoContato'
     },
   ],
-  '3': [DetalheAtendimentoResponse_DadosDoContatoEntry$json],
-};
-
-@$core.Deprecated('Use detalheAtendimentoResponseDescriptor instead')
-const DetalheAtendimentoResponse_DadosDoContatoEntry$json = {
-  '1': 'DadosDoContatoEntry',
-  '2': [
-    {'1': 'key', '3': 1, '4': 1, '5': 9, '10': 'key'},
-    {'1': 'value', '3': 2, '4': 1, '5': 9, '10': 'value'},
-  ],
-  '7': {'7': true},
 };
 
 /// Descriptor for `DetalheAtendimentoResponse`. Decode as a `google.protobuf.DescriptorProto`.
@@ -5559,10 +5547,22 @@ final $typed_data.Uint8List detalheAtendimentoResponseDescriptor = $convert.base
     'oFbm90YXMYAyADKAsyIS5zbWFydGNvcmUuY29udHJhY3RzLnF1ZXJpZXMuTm90YVIFbm90YXMS'
     'KAoQYm90X3BvZGVfYXRlbmRlchgEIAEoCFIOYm90UG9kZUF0ZW5kZXISTAoGY2FtcG9zGAUgAy'
     'gLMjQuc21hcnRjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLlZhbG9yQ2FtcG9Eb0F0ZW5kaW1lbnRv'
-    'UgZjYW1wb3MSdQoQZGFkb3NfZG9fY29udGF0bxgGIAMoCzJLLnNtYXJ0Y29yZS5jb250cmFjdH'
-    'MucXVlcmllcy5EZXRhbGhlQXRlbmRpbWVudG9SZXNwb25zZS5EYWRvc0RvQ29udGF0b0VudHJ5'
-    'Ug5kYWRvc0RvQ29udGF0bxpBChNEYWRvc0RvQ29udGF0b0VudHJ5EhAKA2tleRgBIAEoCVIDa2'
-    'V5EhQKBXZhbHVlGAIgASgJUgV2YWx1ZToCOAE=');
+    'UgZjYW1wb3MSVAoQZGFkb3NfZG9fY29udGF0bxgGIAMoCzIqLnNtYXJ0Y29yZS5jb250cmFjdH'
+    'MucXVlcmllcy5EYWRvRG9Db250YXRvUg5kYWRvc0RvQ29udGF0bw==');
+
+@$core.Deprecated('Use dadoDoContatoDescriptor instead')
+const DadoDoContato$json = {
+  '1': 'DadoDoContato',
+  '2': [
+    {'1': 'chave', '3': 1, '4': 1, '5': 9, '10': 'chave'},
+    {'1': 'valor', '3': 2, '4': 1, '5': 9, '10': 'valor'},
+  ],
+};
+
+/// Descriptor for `DadoDoContato`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List dadoDoContatoDescriptor = $convert.base64Decode(
+    'Cg1EYWRvRG9Db250YXRvEhQKBWNoYXZlGAEgASgJUgVjaGF2ZRIUCgV2YWxvchgCIAEoCVIFdm'
+    'Fsb3I=');
 
 @$core.Deprecated('Use valorCampoDoAtendimentoDescriptor instead')
 const ValorCampoDoAtendimento$json = {
