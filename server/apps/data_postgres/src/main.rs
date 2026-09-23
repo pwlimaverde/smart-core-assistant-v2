@@ -12391,7 +12391,7 @@ mod tests_atendimento_cliente_unit {
                     },
                 ])
             });
-        let mut audit = MockAuditPort::new();
+        let mut audit = crate::ports::MockAuditPort::new();
         audit
             .expect_publish()
             .times(1)
