@@ -451,6 +451,9 @@ void main() {
                 confianca: 0.9,
               ),
             ],
+            dadosDoContato: [
+              proto.DadoDoContato(chave: 'cidade', valor: 'Recife'),
+            ],
           ),
         ),
       );
@@ -462,6 +465,8 @@ void main() {
       expect(ficha.notas.single.texto, 'ligar amanhã');
       expect(ficha.botPodeAtender, isFalse);
       expect(ficha.campos.single.slug, 'cpf');
+      // P15 — os pares viram mapa na ficha.
+      expect(ficha.dadosDoContato, {'cidade': 'Recife'});
     });
 
     test('etiquetas: criar, atualizar, alternar e desativar', () async {
