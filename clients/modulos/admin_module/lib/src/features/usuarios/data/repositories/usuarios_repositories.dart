@@ -5,6 +5,7 @@ import 'package:api_client/api_client.dart'
 import 'package:return_success_or_error/return_success_or_error.dart';
 
 import '../../domain/errors/usuarios_errors.dart';
+import '../../domain/model/migracao_de_escopos.dart';
 import '../../domain/model/usuario_global.dart';
 import '../../domain/parameters/usuarios_parameters.dart';
 
@@ -69,4 +70,18 @@ final class DefinirUsuarioAtivoRepository
     StackTrace s,
     DefinirUsuarioAtivoParameters p,
   ) => _mapUsuarios('definirUsuarioAtivo', e, s);
+}
+
+final class MigrarEscoposRepository
+    extends
+        RepositoryBase<
+          ResultadoDaMigracao,
+          MigrarEscoposParameters,
+          UsuariosError
+        > {
+  const MigrarEscoposRepository({required super.datasource});
+
+  @override
+  UsuariosError mapError(Object e, StackTrace s, MigrarEscoposParameters p) =>
+      _mapUsuarios('migrarEscopos', e, s);
 }

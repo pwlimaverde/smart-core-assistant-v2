@@ -497,6 +497,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_list_superusers = state_clone.clone();
     let state_for_admin_list_users = state_clone.clone();
     let state_for_admin_set_user_active = state_clone.clone();
+    let state_for_migracao_listar = state_clone.clone();
+    let state_for_migracao_gravar = state_clone.clone();
     let state_for_delete_superuser = state_clone.clone();
     let state_for_get_user_identity = state_clone.clone();
     let state_for_get_user_flow_permissions = state_clone.clone();
@@ -1249,6 +1251,19 @@ async fn main() -> anyhow::Result<()> {
         .route("AdminListUsers", move |env| {
             let state = state_for_admin_list_users.clone();
             Box::pin(async move { handler_admin_list_users(state.auth.as_ref(), env).await })
+        })
+        .route("ListarVinculosParaMigracao", move |env| {
+            let state = state_for_migracao_listar.clone();
+            Box::pin(async move {
+                handler_listar_vinculos_para_migracao(state.auth.as_ref(), env).await
+            })
+        })
+        .route("GravarPermissoesExplicitas", move |env| {
+            let state = state_for_migracao_gravar.clone();
+            Box::pin(async move {
+                handler_gravar_permissoes_explicitas(state.auth.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
         })
         .route("AdminSetUserActive", move |env| {
             let state = state_for_admin_set_user_active.clone();
@@ -6259,6 +6274,7 @@ async fn handler_verify_credentials(
             "tenant_id": tenant_id_str,
             "role": role,
             "module_permissions": module_permissions,
+            "fallback_role_habilitado": fallback_role_habilitado(store, user.is_superuser).await,
         });
         ok_reply(&env, "VerifyCredentialsReply", reply_payload)
     } else {
@@ -8944,6 +8960,119 @@ mod tests_auditoria_unit {
 
 // --- Novos Handlers Admin e Identidade ---
 
+/// P18 — a chave do fallback de escopos, para o login decidir. Superusuário
+/// não usa fallback (nem consulta). Falha de leitura = habilitado: é o
+/// comportamento de hoje, e um erro de banco não pode tirar escrita de ninguém.
+async fn fallback_role_habilitado(store: &dyn ports::AuthStore, is_superuser: bool) -> bool {
+    if is_superuser {
+        return true;
+    }
+    match store.fallback_de_papel_habilitado().await {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(erro = %e, "não li AUTH_FALLBACK_ROLE_HABILITADO; mantendo habilitado");
+            true
+        }
+    }
+}
+
+/// P18 — torna explícitos os escopos que cada vínculo já tem pelo papel.
+///
+/// O cálculo dos escopos mora na `application` (no `runtime_api`); aqui só se
+/// lista e grava. Cada gravação é condicional às permissões lidas — se alguém
+/// mudou no meio, pula — e é auditada **por usuário**: mudança de permissão é
+/// evento crítico (doc 08 §4.2).
+async fn handler_listar_vinculos_para_migracao(
+    store: &dyn ports::AuthStore,
+    env: Envelope,
+) -> Envelope {
+    if !env.auth_is_superuser {
+        return erro(
+            error_core::AppError::Auth("somente o superusuário".into()),
+            &env,
+        );
+    }
+    match store.listar_vinculos_para_migracao().await {
+        Ok(vinculos) => ok_reply(
+            &env,
+            "ListarVinculosParaMigracaoReply",
+            serde_json::json!({ "vinculos": vinculos }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+async fn handler_gravar_permissoes_explicitas(
+    store: &dyn ports::AuthStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    if !env.auth_is_superuser {
+        return erro(
+            error_core::AppError::Auth("somente o superusuário".into()),
+            &env,
+        );
+    }
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let itens = payload
+        .get("itens")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let mut migrados = 0u32;
+    let mut pulados = 0u32;
+    for item in &itens {
+        let Some(id) = item.get("id").and_then(|v| v.as_i64()).map(|v| v as i32) else {
+            pulados += 1;
+            continue;
+        };
+        let lidas = item
+            .get("lidas")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
+        let escopos = item
+            .get("escopos")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        match store
+            .gravar_permissoes_explicitas(id, &lidas, &escopos)
+            .await
+        {
+            Ok(true) => {
+                migrados += 1;
+                audit
+                    .publish(
+                        &env,
+                        "tenant_user.permissoes_migradas",
+                        format!("permissões do vínculo {id} tornadas explícitas"),
+                        serde_json::json!({
+                            "tenant_user_id": id,
+                            "user_id": item.get("user_id"),
+                            "tenant_id": item.get("tenant_id"),
+                            "papel": item.get("papel"),
+                            "escopos": escopos,
+                        }),
+                    )
+                    .await;
+            }
+            Ok(false) => pulados += 1,
+            Err(e) => {
+                tracing::warn!(tenant_user_id = id, erro = %e, "migração do vínculo falhou");
+                pulados += 1;
+            }
+        }
+    }
+    tracing::info!(migrados, pulados, "escopos implícitos migrados");
+    ok_reply(
+        &env,
+        "GravarPermissoesExplicitasReply",
+        serde_json::json!({ "migrados": migrados, "pulados": pulados }),
+    )
+}
+
 async fn handler_get_user_identity(store: &dyn ports::AuthStore, env: Envelope) -> Envelope {
     let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
     let id = payload_json.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
@@ -8971,6 +9100,7 @@ async fn handler_get_user_identity(store: &dyn ports::AuthStore, env: Envelope) 
                 "tenant_id": tenant_id_str,
                 "role": role,
                 "module_permissions": module_permissions,
+                "fallback_role_habilitado": fallback_role_habilitado(store, user.is_superuser).await,
             });
             ok_reply(&env, "GetUserIdentityReply", reply)
         }
@@ -13603,5 +13733,106 @@ mod tests_quota_unit {
         let resp = handler_create_departamento(&quota, &operacional, &audit, env).await;
 
         assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+}
+
+#[cfg(test)]
+mod tests_migracao_escopos_unit {
+    use super::*;
+    use crate::ports::{MockAuditPort, MockAuthStore};
+    use contracts::{Envelope, MessageKind};
+
+    fn envelope(method: &str, payload: serde_json::Value, superusuario: bool) -> Envelope {
+        Envelope {
+            kind: MessageKind::Request as i32,
+            method: method.to_string(),
+            tenant_id: uuid::Uuid::nil().to_string(),
+            traceparent: "00-trace-span-01".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            auth_is_superuser: superusuario,
+            ..Default::default()
+        }
+    }
+
+    /// P18: só o superusuário migra — nem lista, nem grava.
+    #[tokio::test]
+    async fn migracao_recusa_quem_nao_e_superusuario() {
+        let mut store = MockAuthStore::new();
+        store.expect_listar_vinculos_para_migracao().never();
+        store.expect_gravar_permissoes_explicitas().never();
+        let audit = MockAuditPort::new();
+
+        let r1 = handler_listar_vinculos_para_migracao(
+            &store,
+            envelope("ListarVinculosParaMigracao", serde_json::json!({}), false),
+        )
+        .await;
+        let r2 = handler_gravar_permissoes_explicitas(
+            &store,
+            &audit,
+            envelope(
+                "GravarPermissoesExplicitas",
+                serde_json::json!({ "itens": [{ "id": 1, "escopos": ["x"] }] }),
+                false,
+            ),
+        )
+        .await;
+
+        assert_eq!(r1.kind, MessageKind::Error as i32);
+        assert_eq!(r2.kind, MessageKind::Error as i32);
+    }
+
+    /// P18: audita por usuário o que gravou; quem mudou no meio é pulado, sem
+    /// auditoria.
+    #[tokio::test]
+    async fn migracao_audita_cada_vinculo_gravado_e_conta_os_pulados() {
+        let mut store = MockAuthStore::new();
+        store
+            .expect_gravar_permissoes_explicitas()
+            .times(2)
+            .returning(|id, _, _| Ok(id == 1));
+        let mut audit = MockAuditPort::new();
+        audit
+            .expect_publish()
+            .times(1)
+            .withf(|_, evento, _, _| evento == "tenant_user.permissoes_migradas")
+            .returning(|_, _, _, _| ());
+
+        let resp = handler_gravar_permissoes_explicitas(
+            &store,
+            &audit,
+            envelope(
+                "GravarPermissoesExplicitas",
+                serde_json::json!({ "itens": [
+                    { "id": 1, "lidas": {}, "escopos": ["atendimentos:read"] },
+                    { "id": 2, "lidas": {}, "escopos": ["atendimentos:read"] },
+                ] }),
+                true,
+            ),
+        )
+        .await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["migrados"], 1);
+        assert_eq!(body["pulados"], 1);
+    }
+
+    /// P18: erro ao ler a chave do fallback não tira escrita de ninguém.
+    #[tokio::test]
+    async fn chave_do_fallback_ilegivel_mantem_habilitado() {
+        let mut store = MockAuthStore::new();
+        store
+            .expect_fallback_de_papel_habilitado()
+            .returning(|| Err(infrastructure_postgres::DbError::NotFound));
+        assert!(fallback_role_habilitado(&store, false).await);
+
+        let mut desligado = MockAuthStore::new();
+        desligado
+            .expect_fallback_de_papel_habilitado()
+            .returning(|| Ok(false));
+        assert!(!fallback_role_habilitado(&desligado, false).await);
+        // Superusuário nem consulta.
+        assert!(fallback_role_habilitado(&MockAuthStore::new(), true).await);
     }
 }

@@ -2,6 +2,7 @@ import 'package:presentation_module/presentation_module.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
 
 import '../../domain/errors/usuarios_errors.dart';
+import '../../domain/model/migracao_de_escopos.dart';
 import '../../domain/model/usuario_global.dart';
 import '../../domain/parameters/usuarios_parameters.dart';
 import '../../domain/usecases/usuarios_usecases.dart';
@@ -14,12 +15,28 @@ import '../../domain/usecases/usuarios_usecases.dart';
 final class UsuariosController extends BaseController<List<UsuarioGlobal>> {
   final ListarUsuariosUsecase _listar;
   final DefinirUsuarioAtivoUsecase _definirAtivo;
+  final MigrarEscoposUsecase? _migrar;
 
   UsuariosController({
     required ListarUsuariosUsecase listar,
     required DefinirUsuarioAtivoUsecase definirAtivo,
+    MigrarEscoposUsecase? migrar,
   }) : _listar = listar,
-       _definirAtivo = definirAtivo;
+       _definirAtivo = definirAtivo,
+       _migrar = migrar;
+
+  /// P18 — a tela só oferece a migração quando o caso de uso existe.
+  bool get podeMigrarEscopos => _migrar != null;
+
+  /// P18 — prévia (`simular`) ou migração de fato dos escopos implícitos.
+  Future<ReturnSuccessOrError<ResultadoDaMigracao, UsuariosError>>
+  migrarEscopos({required bool simular}) {
+    final migrar = _migrar;
+    if (migrar == null) {
+      return Future.value(const Failure(UsuariosInesperado()));
+    }
+    return migrar(MigrarEscoposParameters(simular: simular));
+  }
 
   String _busca = '';
 

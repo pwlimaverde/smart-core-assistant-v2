@@ -161,4 +161,37 @@ impl AuthStore for PgAuthStore {
         )
         .await
     }
+
+    #[tracing::instrument(skip_all)]
+    async fn fallback_de_papel_habilitado(&self) -> Result<bool, DbError> {
+        infrastructure_postgres::tenants::tenants::fallback_de_papel_habilitado(&self.pool).await
+    }
+
+    #[tracing::instrument(skip_all)]
+    async fn listar_vinculos_para_migracao(
+        &self,
+    ) -> Result<Vec<infrastructure_postgres::tenants::tenants::VinculoParaMigracao>, DbError> {
+        if self.admin_pool.is_none() {
+            tracing::warn!(
+                "migração de escopos sem DATABASE_ADMIN_URL: a RLS de \
+                 tenants_tenantuser esconderá os vínculos de outros tenants"
+            );
+        }
+        let pool = self.admin_pool.as_ref().unwrap_or(&self.pool);
+        infrastructure_postgres::tenants::tenants::listar_vinculos_para_migracao(pool).await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_user_id = id))]
+    async fn gravar_permissoes_explicitas(
+        &self,
+        id: i32,
+        lidas: &serde_json::Value,
+        escopos: &serde_json::Value,
+    ) -> Result<bool, DbError> {
+        let pool = self.admin_pool.as_ref().unwrap_or(&self.pool);
+        infrastructure_postgres::tenants::tenants::gravar_permissoes_explicitas(
+            pool, id, lidas, escopos,
+        )
+        .await
+    }
 }

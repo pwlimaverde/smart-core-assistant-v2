@@ -35,6 +35,7 @@ use contracts::grpc::queries::{
     AuditLogEntry as ProtoAuditLogEntry,
     AuthResponse,
     AvaliacaoDeTeste,
+    ContagemDeMigracao,
     ContatoDoCliente,
     CoreSetting as ProtoCoreSetting,
     CreateEtiquetaRequest,
@@ -190,6 +191,8 @@ use contracts::grpc::queries::{
     MensagemNaoEntregue,
     MensagemThread as ProtoMensagemThread,
     MidiaMensagem as ProtoMidiaMensagem,
+    MigrarEscoposImplicitosRequest,
+    MigrarEscoposImplicitosResponse,
     MoveAtendimentoEtapaRequest,
     MoveAtendimentoEtapaResponse,
     MoverMyEtapaFluxoRequest,
@@ -1242,6 +1245,42 @@ pub struct AdminFacade {
 }
 
 impl AdminFacade {
+    /// P18 — chamada ao `data_postgres` em nome do superusuário.
+    async fn chamar_pg_como_superusuario(
+        &self,
+        claims: &application::jwt::Claims,
+        traceparent: String,
+        metodo: &str,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, Status> {
+        let env_req = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent,
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: metodo.to_string(),
+            payload: serde_json::to_vec(&payload).unwrap_or_default(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: true,
+            ..Default::default()
+        };
+        let resp = self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(30))
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        if resp.kind == MessageKind::Error as i32 {
+            let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
+            return Err(Status::failed_precondition(err_msg));
+        }
+        serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))
+    }
+
     pub fn new(
         deps: Arc<AuthDeps>,
         bus: redis::aio::ConnectionManager,
@@ -2023,6 +2062,108 @@ impl AdminService for AdminFacade {
         }
 
         Ok(Response::new(AdminListUsersResponse { usuarios }))
+    }
+
+    /// P18 — torna explícitos os escopos que cada vínculo tem pelo papel.
+    ///
+    /// A regra (quem depende do fallback e que escopos ele tem) é a do login,
+    /// `application::auth::login`; o `data_postgres` só lista e grava. Assim a
+    /// migração não tem como gravar um acesso diferente do que a pessoa tinha.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "MigrarEscoposImplicitos", traceparent)
+    )]
+    async fn migrar_escopos_implicitos(
+        &self,
+        req: Request<MigrarEscoposImplicitosRequest>,
+    ) -> Result<Response<MigrarEscoposImplicitosResponse>, Status> {
+        let claims = exigir_superuser_do_metadata(&self.deps, &self.bus, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let dry_run = req.get_ref().dry_run;
+
+        let corpo = self
+            .chamar_pg_como_superusuario(
+                &claims,
+                traceparent.clone(),
+                "ListarVinculosParaMigracao",
+                serde_json::json!({}),
+            )
+            .await?;
+        let vinculos = corpo
+            .get("vinculos")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        let mut itens = Vec::new();
+        let mut contagens: std::collections::BTreeMap<(String, String, String), i32> =
+            std::collections::BTreeMap::new();
+        for v in &vinculos {
+            let lidas = v
+                .get("module_permissions")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
+            if application::auth::login::tem_permissoes_explicitas(&lidas) {
+                continue;
+            }
+            let papel = texto_do(v, "role");
+            let tenant_id = texto_do(v, "tenant_id");
+            let tenant_nome = texto_do(v, "tenant_nome");
+            *contagens
+                .entry((tenant_id.clone(), tenant_nome, papel.clone()))
+                .or_default() += 1;
+            itens.push(serde_json::json!({
+                "id": v.get("id"),
+                "user_id": v.get("user_id"),
+                "tenant_id": tenant_id,
+                "papel": papel,
+                "lidas": lidas,
+                "escopos": application::auth::login::escopos_do_papel(&papel),
+            }));
+        }
+        let total = itens.len() as i32;
+
+        let (migrados, pulados) = if dry_run || itens.is_empty() {
+            (0, 0)
+        } else {
+            let r = self
+                .chamar_pg_como_superusuario(
+                    &claims,
+                    traceparent,
+                    "GravarPermissoesExplicitas",
+                    serde_json::json!({ "itens": itens }),
+                )
+                .await?;
+            (
+                r.get("migrados").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+                r.get("pulados").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+            )
+        };
+        tracing::info!(
+            total,
+            migrados,
+            pulados,
+            dry_run,
+            "migração de escopos implícitos"
+        );
+
+        Ok(Response::new(MigrarEscoposImplicitosResponse {
+            contagens: contagens
+                .into_iter()
+                .map(
+                    |((tenant_id, tenant_nome, papel), quantidade)| ContagemDeMigracao {
+                        tenant_id,
+                        tenant_nome,
+                        papel,
+                        quantidade,
+                    },
+                )
+                .collect(),
+            total,
+            migrados,
+            pulados,
+            dry_run,
+        }))
     }
 
     /// D7 — bloqueia/desbloqueia o acesso de um usuário. Só superusuário.

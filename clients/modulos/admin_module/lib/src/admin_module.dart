@@ -87,6 +87,14 @@ final class AdminModule extends AppModule {
         ),
       ),
     );
+    // P18 — tornar explícitos os escopos implícitos (D4 passo 2).
+    i.lazySingleton<MigrarEscoposUsecase>(
+      () => MigrarEscoposUsecase(
+        repository: MigrarEscoposRepository(
+          datasource: MigrarEscoposDatasource(client: _adminClient()),
+        ),
+      ),
+    );
 
     // ── tenants ───────────────────────────────────────────────────────
     i.lazySingleton<ListTenantsUsecase>(

@@ -974,6 +974,29 @@ message AdminSetUserActiveResponse {
   bool ativo = 1;
 }
 
+// P18 — migração dos escopos implícitos (D4 passo 2).
+message MigrarEscoposImplicitosRequest {
+  bool dry_run = 1;
+}
+
+message ContagemDeMigracao {
+  string tenant_id = 1;
+  string tenant_nome = 2;
+  string papel = 3;
+  int32 quantidade = 4;
+}
+
+message MigrarEscoposImplicitosResponse {
+  // Os vínculos que dependem do fallback, por tenant e papel.
+  repeated ContagemDeMigracao contagens = 1;
+  int32 total = 2;
+  // 0 no dry_run.
+  int32 migrados = 3;
+  // Mudaram no meio (outra pessoa editou) ou falharam.
+  int32 pulados = 4;
+  bool dry_run = 5;
+}
+
 // ---------------------------------------------------------------------------
 // N13 — Consentimentos OAuth dos clientes MCP ("Aplicativos conectados")
 // ---------------------------------------------------------------------------
@@ -1269,6 +1292,9 @@ service AdminService {
   // Fase 2: Tenants
   rpc AdminListUsers(AdminListUsersRequest) returns (AdminListUsersResponse);
   rpc AdminSetUserActive(AdminSetUserActiveRequest) returns (AdminSetUserActiveResponse);
+  // P18 — torna explícitos os escopos que cada vínculo tem hoje pelo papel.
+  // Não muda o acesso de ninguém; dry_run só conta.
+  rpc MigrarEscoposImplicitos(MigrarEscoposImplicitosRequest) returns (MigrarEscoposImplicitosResponse);
   rpc ListTenants(ListTenantsRequest) returns (ListTenantsResponse);
   rpc GetTenant(GetTenantRequest) returns (GetTenantResponse);
   rpc CreateTenant(CreateTenantRequest) returns (CreateTenantResponse);

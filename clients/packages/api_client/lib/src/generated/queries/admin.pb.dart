@@ -11094,6 +11094,261 @@ class AdminSetUserActiveResponse extends $pb.GeneratedMessage {
   void clearAtivo() => $_clearField(1);
 }
 
+/// P18 — migração dos escopos implícitos (D4 passo 2).
+class MigrarEscoposImplicitosRequest extends $pb.GeneratedMessage {
+  factory MigrarEscoposImplicitosRequest({
+    $core.bool? dryRun,
+  }) {
+    final result = create();
+    if (dryRun != null) result.dryRun = dryRun;
+    return result;
+  }
+
+  MigrarEscoposImplicitosRequest._();
+
+  factory MigrarEscoposImplicitosRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MigrarEscoposImplicitosRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MigrarEscoposImplicitosRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOB(1, _omitFieldNames ? '' : 'dryRun')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MigrarEscoposImplicitosRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MigrarEscoposImplicitosRequest copyWith(
+          void Function(MigrarEscoposImplicitosRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as MigrarEscoposImplicitosRequest))
+          as MigrarEscoposImplicitosRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MigrarEscoposImplicitosRequest create() =>
+      MigrarEscoposImplicitosRequest._();
+  @$core.override
+  MigrarEscoposImplicitosRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MigrarEscoposImplicitosRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MigrarEscoposImplicitosRequest>(create);
+  static MigrarEscoposImplicitosRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.bool get dryRun => $_getBF(0);
+  @$pb.TagNumber(1)
+  set dryRun($core.bool value) => $_setBool(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasDryRun() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearDryRun() => $_clearField(1);
+}
+
+class ContagemDeMigracao extends $pb.GeneratedMessage {
+  factory ContagemDeMigracao({
+    $core.String? tenantId,
+    $core.String? tenantNome,
+    $core.String? papel,
+    $core.int? quantidade,
+  }) {
+    final result = create();
+    if (tenantId != null) result.tenantId = tenantId;
+    if (tenantNome != null) result.tenantNome = tenantNome;
+    if (papel != null) result.papel = papel;
+    if (quantidade != null) result.quantidade = quantidade;
+    return result;
+  }
+
+  ContagemDeMigracao._();
+
+  factory ContagemDeMigracao.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ContagemDeMigracao.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ContagemDeMigracao',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'tenantId')
+    ..aOS(2, _omitFieldNames ? '' : 'tenantNome')
+    ..aOS(3, _omitFieldNames ? '' : 'papel')
+    ..aI(4, _omitFieldNames ? '' : 'quantidade')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ContagemDeMigracao clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ContagemDeMigracao copyWith(void Function(ContagemDeMigracao) updates) =>
+      super.copyWith((message) => updates(message as ContagemDeMigracao))
+          as ContagemDeMigracao;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ContagemDeMigracao create() => ContagemDeMigracao._();
+  @$core.override
+  ContagemDeMigracao createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ContagemDeMigracao getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ContagemDeMigracao>(create);
+  static ContagemDeMigracao? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get tenantId => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set tenantId($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasTenantId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearTenantId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get tenantNome => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set tenantNome($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasTenantNome() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearTenantNome() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get papel => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set papel($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasPapel() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearPapel() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.int get quantidade => $_getIZ(3);
+  @$pb.TagNumber(4)
+  set quantidade($core.int value) => $_setSignedInt32(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasQuantidade() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearQuantidade() => $_clearField(4);
+}
+
+class MigrarEscoposImplicitosResponse extends $pb.GeneratedMessage {
+  factory MigrarEscoposImplicitosResponse({
+    $core.Iterable<ContagemDeMigracao>? contagens,
+    $core.int? total,
+    $core.int? migrados,
+    $core.int? pulados,
+    $core.bool? dryRun,
+  }) {
+    final result = create();
+    if (contagens != null) result.contagens.addAll(contagens);
+    if (total != null) result.total = total;
+    if (migrados != null) result.migrados = migrados;
+    if (pulados != null) result.pulados = pulados;
+    if (dryRun != null) result.dryRun = dryRun;
+    return result;
+  }
+
+  MigrarEscoposImplicitosResponse._();
+
+  factory MigrarEscoposImplicitosResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MigrarEscoposImplicitosResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MigrarEscoposImplicitosResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<ContagemDeMigracao>(1, _omitFieldNames ? '' : 'contagens',
+        subBuilder: ContagemDeMigracao.create)
+    ..aI(2, _omitFieldNames ? '' : 'total')
+    ..aI(3, _omitFieldNames ? '' : 'migrados')
+    ..aI(4, _omitFieldNames ? '' : 'pulados')
+    ..aOB(5, _omitFieldNames ? '' : 'dryRun')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MigrarEscoposImplicitosResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MigrarEscoposImplicitosResponse copyWith(
+          void Function(MigrarEscoposImplicitosResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as MigrarEscoposImplicitosResponse))
+          as MigrarEscoposImplicitosResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MigrarEscoposImplicitosResponse create() =>
+      MigrarEscoposImplicitosResponse._();
+  @$core.override
+  MigrarEscoposImplicitosResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MigrarEscoposImplicitosResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MigrarEscoposImplicitosResponse>(
+          create);
+  static MigrarEscoposImplicitosResponse? _defaultInstance;
+
+  /// Os vínculos que dependem do fallback, por tenant e papel.
+  @$pb.TagNumber(1)
+  $pb.PbList<ContagemDeMigracao> get contagens => $_getList(0);
+
+  @$pb.TagNumber(2)
+  $core.int get total => $_getIZ(1);
+  @$pb.TagNumber(2)
+  set total($core.int value) => $_setSignedInt32(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasTotal() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearTotal() => $_clearField(2);
+
+  /// 0 no dry_run.
+  @$pb.TagNumber(3)
+  $core.int get migrados => $_getIZ(2);
+  @$pb.TagNumber(3)
+  set migrados($core.int value) => $_setSignedInt32(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasMigrados() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearMigrados() => $_clearField(3);
+
+  /// Mudaram no meio (outra pessoa editou) ou falharam.
+  @$pb.TagNumber(4)
+  $core.int get pulados => $_getIZ(3);
+  @$pb.TagNumber(4)
+  set pulados($core.int value) => $_setSignedInt32(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasPulados() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearPulados() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.bool get dryRun => $_getBF(4);
+  @$pb.TagNumber(5)
+  set dryRun($core.bool value) => $_setBool(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasDryRun() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearDryRun() => $_clearField(5);
+}
+
 class ListMcpGrantsRequest extends $pb.GeneratedMessage {
   factory ListMcpGrantsRequest() => create();
 

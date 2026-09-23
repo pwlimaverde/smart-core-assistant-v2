@@ -2745,6 +2745,64 @@ final $typed_data.Uint8List adminSetUserActiveResponseDescriptor =
     $convert.base64Decode(
         'ChpBZG1pblNldFVzZXJBY3RpdmVSZXNwb25zZRIUCgVhdGl2bxgBIAEoCFIFYXRpdm8=');
 
+@$core.Deprecated('Use migrarEscoposImplicitosRequestDescriptor instead')
+const MigrarEscoposImplicitosRequest$json = {
+  '1': 'MigrarEscoposImplicitosRequest',
+  '2': [
+    {'1': 'dry_run', '3': 1, '4': 1, '5': 8, '10': 'dryRun'},
+  ],
+};
+
+/// Descriptor for `MigrarEscoposImplicitosRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List migrarEscoposImplicitosRequestDescriptor =
+    $convert.base64Decode(
+        'Ch5NaWdyYXJFc2NvcG9zSW1wbGljaXRvc1JlcXVlc3QSFwoHZHJ5X3J1bhgBIAEoCFIGZHJ5Un'
+        'Vu');
+
+@$core.Deprecated('Use contagemDeMigracaoDescriptor instead')
+const ContagemDeMigracao$json = {
+  '1': 'ContagemDeMigracao',
+  '2': [
+    {'1': 'tenant_id', '3': 1, '4': 1, '5': 9, '10': 'tenantId'},
+    {'1': 'tenant_nome', '3': 2, '4': 1, '5': 9, '10': 'tenantNome'},
+    {'1': 'papel', '3': 3, '4': 1, '5': 9, '10': 'papel'},
+    {'1': 'quantidade', '3': 4, '4': 1, '5': 5, '10': 'quantidade'},
+  ],
+};
+
+/// Descriptor for `ContagemDeMigracao`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List contagemDeMigracaoDescriptor = $convert.base64Decode(
+    'ChJDb250YWdlbURlTWlncmFjYW8SGwoJdGVuYW50X2lkGAEgASgJUgh0ZW5hbnRJZBIfCgt0ZW'
+    '5hbnRfbm9tZRgCIAEoCVIKdGVuYW50Tm9tZRIUCgVwYXBlbBgDIAEoCVIFcGFwZWwSHgoKcXVh'
+    'bnRpZGFkZRgEIAEoBVIKcXVhbnRpZGFkZQ==');
+
+@$core.Deprecated('Use migrarEscoposImplicitosResponseDescriptor instead')
+const MigrarEscoposImplicitosResponse$json = {
+  '1': 'MigrarEscoposImplicitosResponse',
+  '2': [
+    {
+      '1': 'contagens',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.ContagemDeMigracao',
+      '10': 'contagens'
+    },
+    {'1': 'total', '3': 2, '4': 1, '5': 5, '10': 'total'},
+    {'1': 'migrados', '3': 3, '4': 1, '5': 5, '10': 'migrados'},
+    {'1': 'pulados', '3': 4, '4': 1, '5': 5, '10': 'pulados'},
+    {'1': 'dry_run', '3': 5, '4': 1, '5': 8, '10': 'dryRun'},
+  ],
+};
+
+/// Descriptor for `MigrarEscoposImplicitosResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List migrarEscoposImplicitosResponseDescriptor =
+    $convert.base64Decode(
+        'Ch9NaWdyYXJFc2NvcG9zSW1wbGljaXRvc1Jlc3BvbnNlEk0KCWNvbnRhZ2VucxgBIAMoCzIvLn'
+        'NtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy5Db250YWdlbURlTWlncmFjYW9SCWNvbnRhZ2Vu'
+        'cxIUCgV0b3RhbBgCIAEoBVIFdG90YWwSGgoIbWlncmFkb3MYAyABKAVSCG1pZ3JhZG9zEhgKB3'
+        'B1bGFkb3MYBCABKAVSB3B1bGFkb3MSFwoHZHJ5X3J1bhgFIAEoCFIGZHJ5UnVu');
+
 @$core.Deprecated('Use listMcpGrantsRequestDescriptor instead')
 const ListMcpGrantsRequest$json = {
   '1': 'ListMcpGrantsRequest',

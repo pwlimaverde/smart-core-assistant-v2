@@ -83,6 +83,17 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$adminSetUserActive, request, options: options);
   }
 
+  /// P18 — torna explícitos os escopos que cada vínculo tem hoje pelo papel.
+  /// Não muda o acesso de ninguém; dry_run só conta.
+  $grpc.ResponseFuture<$0.MigrarEscoposImplicitosResponse>
+      migrarEscoposImplicitos(
+    $0.MigrarEscoposImplicitosRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$migrarEscoposImplicitos, request,
+        options: options);
+  }
+
   $grpc.ResponseFuture<$0.ListTenantsResponse> listTenants(
     $0.ListTenantsRequest request, {
     $grpc.CallOptions? options,
@@ -1172,6 +1183,12 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/AdminSetUserActive',
       ($0.AdminSetUserActiveRequest value) => value.writeToBuffer(),
       $0.AdminSetUserActiveResponse.fromBuffer);
+  static final _$migrarEscoposImplicitos = $grpc.ClientMethod<
+          $0.MigrarEscoposImplicitosRequest,
+          $0.MigrarEscoposImplicitosResponse>(
+      '/smartcore.contracts.queries.AdminService/MigrarEscoposImplicitos',
+      ($0.MigrarEscoposImplicitosRequest value) => value.writeToBuffer(),
+      $0.MigrarEscoposImplicitosResponse.fromBuffer);
   static final _$listTenants =
       $grpc.ClientMethod<$0.ListTenantsRequest, $0.ListTenantsResponse>(
           '/smartcore.contracts.queries.AdminService/ListTenants',
@@ -1926,6 +1943,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.AdminSetUserActiveRequest.fromBuffer(value),
         ($0.AdminSetUserActiveResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.MigrarEscoposImplicitosRequest,
+            $0.MigrarEscoposImplicitosResponse>(
+        'MigrarEscoposImplicitos',
+        migrarEscoposImplicitos_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.MigrarEscoposImplicitosRequest.fromBuffer(value),
+        ($0.MigrarEscoposImplicitosResponse value) => value.writeToBuffer()));
     $addMethod(
         $grpc.ServiceMethod<$0.ListTenantsRequest, $0.ListTenantsResponse>(
             'ListTenants',
@@ -3179,6 +3205,15 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.AdminSetUserActiveResponse> adminSetUserActive(
       $grpc.ServiceCall call, $0.AdminSetUserActiveRequest request);
+
+  $async.Future<$0.MigrarEscoposImplicitosResponse> migrarEscoposImplicitos_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MigrarEscoposImplicitosRequest> $request) async {
+    return migrarEscoposImplicitos($call, await $request);
+  }
+
+  $async.Future<$0.MigrarEscoposImplicitosResponse> migrarEscoposImplicitos(
+      $grpc.ServiceCall call, $0.MigrarEscoposImplicitosRequest request);
 
   $async.Future<$0.ListTenantsResponse> listTenants_Pre($grpc.ServiceCall $call,
       $async.Future<$0.ListTenantsRequest> $request) async {

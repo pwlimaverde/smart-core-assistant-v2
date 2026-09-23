@@ -17,6 +17,9 @@ final class UsuariosRoute extends GetItModule {
       () => UsuariosController(
         listar: inject<ListarUsuariosUsecase>(),
         definirAtivo: inject<DefinirUsuarioAtivoUsecase>(),
+        migrar: GetIt.instance.isRegistered<MigrarEscoposUsecase>()
+            ? inject<MigrarEscoposUsecase>()
+            : null,
       ),
     );
   }

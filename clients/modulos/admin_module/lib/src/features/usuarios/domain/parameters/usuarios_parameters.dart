@@ -24,3 +24,10 @@ final class DefinirUsuarioAtivoParameters extends Parameters {
     required this.ativo,
   });
 }
+
+/// P18 — `simular` = só conta, não grava.
+final class MigrarEscoposParameters extends Parameters {
+  final bool simular;
+
+  const MigrarEscoposParameters({required this.simular});
+}
