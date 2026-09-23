@@ -20,6 +20,14 @@ bool sessaoPodeAlterar(String rota) {
   return escopos == null || podeAlterarTela(escopos, rota);
 }
 
+/// P16 — a sessão pode escrever no atendimento (enviar, mover, atribuir)?
+/// Mesma ressalva de [sessaoPodeAlterar]: sem sessão conhecida, `true`.
+bool sessaoPodeAtender() {
+  final escopos = _escoposDaSessao();
+  return escopos == null ||
+      escoposSatisfazem(escopos, const ['atendimentos:write']);
+}
+
 /// Id do usuário da sessão atual (B5); `null` sem sessão ou em token antigo.
 int? usuarioDaSessao() {
   if (!GetIt.instance.isRegistered<AuthService>()) return null;

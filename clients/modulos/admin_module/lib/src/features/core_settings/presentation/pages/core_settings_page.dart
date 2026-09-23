@@ -1,4 +1,5 @@
 import 'package:dependencies_module/dependencies_module.dart' hide CoreSetting;
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 
 import '../../domain/model/core_setting.dart';
 import '../controllers/core_settings_controller.dart';
@@ -23,12 +24,85 @@ class _CoreSettingsPageState extends State<CoreSettingsPage> {
     });
   }
 
+  /// P9 — copia o JSON para a área de transferência.
+  ///
+  /// Área de transferência, e não arquivo: funciona igual no app e no painel
+  /// web, sem pedir permissão de disco. Valor cifrado não sai (ver
+  /// `exportarJson`).
+  Future<void> _exportar() async {
+    final messenger = ScaffoldMessenger.of(context);
+    await Clipboard.setData(ClipboardData(text: _controller.exportarJson()));
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Configurações copiadas. Os valores cifrados não saem — só a chave.',
+        ),
+      ),
+    );
+  }
+
+  /// P9 — cola o JSON exportado de outro ambiente.
+  Future<void> _importar() async {
+    final messenger = ScaffoldMessenger.of(context);
+    final campo = TextEditingController();
+    final confirmado = await showDialog<bool>(
+      context: context,
+      builder: (dialogo) => AlertDialog(
+        title: const Text('Importar configurações'),
+        content: SizedBox(
+          width: 520,
+          child: TextField(
+            controller: campo,
+            maxLines: 14,
+            decoration: const InputDecoration(
+              hintText: 'Cole aqui o JSON exportado',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogo).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogo).pop(true),
+            child: const Text('Importar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmado != true) return;
+    final r = await _controller.importarJson(campo.text);
+    messenger.showSnackBar(
+      SnackBar(
+        content: Text(
+          r.erro ??
+              '${r.gravadas} gravadas, ${r.puladas} puladas '
+                  '(cifradas sem valor não sobrescrevem o destino).',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
       title: 'Configurações Globais',
       drawer: const AdminDrawer(),
       actions: [
+        // P9 — o export/import do Django admin da v1: levar a configuração de
+        // um ambiente a outro sem redigitar chave por chave.
+        IconButton(
+          icon: const Icon(Icons.file_upload_outlined),
+          tooltip: 'Exportar (copia o JSON)',
+          onPressed: _exportar,
+        ),
+        IconButton(
+          icon: const Icon(Icons.file_download_outlined),
+          tooltip: 'Importar JSON',
+          onPressed: _importar,
+        ),
         IconButton(
           icon: const Icon(Icons.refresh),
           tooltip: 'Recarregar',

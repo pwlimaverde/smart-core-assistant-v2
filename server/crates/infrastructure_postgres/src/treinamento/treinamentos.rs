@@ -587,3 +587,63 @@ pub async fn situacao_dos_arquivos(
         .map(|(id, nome, status, erro)| (id, (nome, status, erro)))
         .collect())
 }
+
+/// P17 — uma avaliação do teste de resposta, para a revisão.
+///
+/// Pergunta e correção são texto livre do operador e podem citar cliente:
+/// viajam até a tela de quem treina, nunca para log nem auditoria.
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+pub struct AvaliacaoDeTeste {
+    pub id: i32,
+    pub pergunta: String,
+    pub resposta_bot: String,
+    pub resposta_corrigida: Option<String>,
+    pub avaliacao: String,
+    pub confiabilidade: f64,
+    pub created_at: DateTime<Utc>,
+}
+
+/// P17 — as avaliações ainda não tratadas, as ruins primeiro (são as que pedem
+/// ação), depois as mais novas.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+pub async fn listar_avaliacoes_pendentes(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    limite: i64,
+) -> Result<Vec<AvaliacaoDeTeste>, DbError> {
+    ctx.exigir_qualquer(&["treinamento:read", "treinamento:write", "tenant:admin"])?;
+    let rows = sqlx::query_as::<_, AvaliacaoDeTeste>(
+        r#"SELECT id, mensagem_original AS pergunta, resposta_bot, resposta_corrigida,
+                  avaliacao, confiabilidade, created_at
+             FROM treinamento_query_test_feedback
+            WHERE tenant_id = $1 AND tratada_em IS NULL
+            ORDER BY (avaliacao = 'ruim') DESC, created_at DESC
+            LIMIT $2"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(limite.clamp(1, 200))
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows)
+}
+
+/// P17 — tira a avaliação da lista de revisão. `false` = já estava tratada ou
+/// não é deste tenant.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+pub async fn marcar_avaliacao_tratada(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    id: i32,
+) -> Result<bool, DbError> {
+    ctx.exigir_qualquer(&["treinamento:write", "tenant:admin"])?;
+    let r = sqlx::query(
+        r#"UPDATE treinamento_query_test_feedback
+              SET tratada_em = NOW()
+            WHERE tenant_id = $1 AND id = $2 AND tratada_em IS NULL"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(r.rows_affected() > 0)
+}

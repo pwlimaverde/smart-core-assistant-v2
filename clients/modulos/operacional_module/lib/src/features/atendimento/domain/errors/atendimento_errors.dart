@@ -452,3 +452,127 @@ final class ValorCampoInesperado extends DefinirValorCampoError
   const ValorCampoInesperado()
     : super('Não foi possível salvar. Tente de novo.');
 }
+
+// ─── P3: presença e galeria ───────────────────────────────────────────────────
+
+/// Erros de `enviarPresenca` — deliberadamente curtos.
+///
+/// Presença é efêmera: ninguém precisa saber que o "digitando..." não chegou, e
+/// distinguir sessão expirada de rede caída aqui não muda nada para quem está
+/// escrevendo. As duas variantes existem só para a cadeia RSOE ter um tipo
+/// fechado; a tela ignora as duas.
+sealed class PresencaError extends AppError {
+  const PresencaError(super.message);
+}
+
+final class PresencaNaoEntregue extends PresencaError with NetworkFailure {
+  const PresencaNaoEntregue() : super('A presença não chegou ao contato.');
+}
+
+final class PresencaInesperado extends PresencaError with UnexpectedFailure {
+  const PresencaInesperado() : super('A presença não chegou ao contato.');
+}
+
+/// Erros de `listarMidias` (galeria do atendimento).
+sealed class MidiasError extends AppError {
+  const MidiasError(super.message);
+}
+
+final class MidiasAcessoNegado extends MidiasError with UnauthorizedFailure {
+  const MidiasAcessoNegado()
+    : super('Você não tem acesso aos arquivos desta conversa.');
+}
+
+final class MidiasSessaoExpirada extends MidiasError with UnauthorizedFailure {
+  const MidiasSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
+final class MidiasIndisponivel extends MidiasError with NetworkFailure {
+  const MidiasIndisponivel()
+    : super('Não foi possível carregar os arquivos. Tente novamente.');
+}
+
+final class MidiasFalhaLocal extends MidiasError {
+  const MidiasFalhaLocal()
+    : super('Falha no armazenamento local. Reinicie o aplicativo.');
+}
+
+final class MidiasInesperado extends MidiasError with UnexpectedFailure {
+  const MidiasInesperado()
+    : super('Não foi possível carregar os arquivos. Tente novamente.');
+}
+
+/// Erros de `enviarMidia` (anexo e áudio).
+sealed class EnviarMidiaError extends AppError {
+  const EnviarMidiaError(super.message);
+}
+
+final class EnviarMidiaAcessoNegado extends EnviarMidiaError
+    with UnauthorizedFailure {
+  const EnviarMidiaAcessoNegado()
+    : super('Você não tem permissão para enviar arquivos nesta conversa.');
+}
+
+final class EnviarMidiaSessaoExpirada extends EnviarMidiaError
+    with UnauthorizedFailure {
+  const EnviarMidiaSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
+/// O servidor recusou o arquivo: tipo não aceito ou tamanho acima do limite.
+/// A mensagem do servidor é preservada porque ela diz qual dos dois foi.
+final class EnviarMidiaRecusado extends EnviarMidiaError {
+  const EnviarMidiaRecusado(String? detalhe)
+    : super(detalhe ?? 'O arquivo não foi aceito.');
+}
+
+final class EnviarMidiaIndisponivel extends EnviarMidiaError
+    with NetworkFailure {
+  const EnviarMidiaIndisponivel()
+    : super('Não foi possível enviar o arquivo. Tente novamente.');
+}
+
+final class EnviarMidiaInesperado extends EnviarMidiaError
+    with UnexpectedFailure {
+  const EnviarMidiaInesperado()
+    : super('Não foi possível enviar o arquivo. Tente novamente.');
+}
+
+/// Erros das operações do quadro (P4): atribuir, prioridade, transferir e
+/// exportar. Um conjunto só porque as quatro falham pelos mesmos motivos e são
+/// tratadas no mesmo lugar — o menu do cartão.
+sealed class QuadroOperacaoError extends AppError {
+  const QuadroOperacaoError(super.message);
+}
+
+final class QuadroOperacaoAcessoNegado extends QuadroOperacaoError
+    with UnauthorizedFailure {
+  const QuadroOperacaoAcessoNegado()
+    : super('Você não tem permissão para esta ação no quadro.');
+}
+
+final class QuadroOperacaoSessaoExpirada extends QuadroOperacaoError
+    with UnauthorizedFailure {
+  const QuadroOperacaoSessaoExpirada()
+    : super('Sua sessão expirou. Entre de novo para continuar.');
+}
+
+/// O servidor recusou: prioridade fora da lista, fluxo inexistente, usuário sem
+/// cadastro de atendente. A mensagem dele diz qual dos casos é.
+final class QuadroOperacaoRecusada extends QuadroOperacaoError {
+  const QuadroOperacaoRecusada(String? detalhe)
+    : super(detalhe ?? 'A ação não foi aceita.');
+}
+
+final class QuadroOperacaoIndisponivel extends QuadroOperacaoError
+    with NetworkFailure {
+  const QuadroOperacaoIndisponivel()
+    : super('Não foi possível concluir a ação. Tente novamente.');
+}
+
+final class QuadroOperacaoInesperado extends QuadroOperacaoError
+    with UnexpectedFailure {
+  const QuadroOperacaoInesperado()
+    : super('Não foi possível concluir a ação. Tente novamente.');
+}

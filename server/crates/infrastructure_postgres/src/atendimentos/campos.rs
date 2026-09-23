@@ -419,7 +419,16 @@ impl ValorCampoRepository for PostgresValorCampoRepository {
         mensagem_origem_id: Option<i32>,
     ) -> Result<bool, DbError> {
         ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
-        let res = sqlx::query!(
+        // P10 — a guarda que faltava contra a v1 (`extract_custom_fields_async`):
+        // a IA só troca um valor DELA por outro de confiança igual ou maior.
+        // Sem isso, uma extração tardia e insegura rebaixava um valor firme —
+        // o e-mail lido com 0,95 na primeira mensagem virava o palpite de 0,6
+        // da décima. Igual (e não só maior, como na v1) deixa a correção mais
+        // recente ganhar quando o modelo tem a mesma certeza: o cliente que
+        // corrige o próprio e-mail está certo da segunda vez.
+        //
+        // Sem macro: o texto da consulta mudou, e o cache `.sqlx` não o conhece.
+        let res = sqlx::query(
             r#"INSERT INTO atu_valor_campo
                    (tenant_id, atendimento_id, campo_id, valor, origem,
                     confianca, mensagem_origem_id)
@@ -431,14 +440,16 @@ impl ValorCampoRepository for PostgresValorCampoRepository {
                        mensagem_origem_id = EXCLUDED.mensagem_origem_id,
                        data_atualizacao = NOW()
                  WHERE atu_valor_campo.editado_por_id IS NULL
-                   AND atu_valor_campo.valor <> 'null'::jsonb"#,
-            ctx.tenant_id,
-            atendimento_id,
-            campo_id,
-            valor,
-            confianca,
-            mensagem_origem_id
+                   AND atu_valor_campo.valor <> 'null'::jsonb
+                   AND (atu_valor_campo.confianca IS NULL
+                        OR EXCLUDED.confianca >= atu_valor_campo.confianca)"#,
         )
+        .bind(ctx.tenant_id)
+        .bind(atendimento_id)
+        .bind(campo_id)
+        .bind(valor)
+        .bind(confianca)
+        .bind(mensagem_origem_id)
         .execute(&mut **tx)
         .await?;
         Ok(res.rows_affected() > 0)

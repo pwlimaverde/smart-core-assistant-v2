@@ -1112,39 +1112,118 @@ pub async fn definir_assunto_se_vazio(
     Ok(res.rows_affected() > 0)
 }
 
+/// P1 — o recorte da lista do quadro, igual ao da v1 (`list_conversations`).
+///
+/// Campo vazio/zero = sem filtro. `atendente_id = Some(-1)` é "sem dono": a
+/// fila que ninguém assumiu, que na v1 era o filtro mais usado do supervisor.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct FiltroDoQuadro {
+    pub busca: String,
+    pub atendente_id: Option<i32>,
+    pub somente_nao_lidos: bool,
+    pub prioridade: String,
+    pub etiqueta_id: Option<i64>,
+    /// "minhas conversas": resolvido aqui pelo `user_id` do contexto.
+    pub somente_meus: bool,
+}
+
 /// Todos os atendimentos **ativos** do tenant (tudo menos `arquivado`).
 ///
 /// É o que o quadro pede quando não filtra por status: as colunas vão de "fila"
 /// a "finalização", e listar só `fila` deixava o quadro vazio assim que a
 /// conversa andava — que é o estado normal de quem está atendendo. Arquivado
 /// fica de fora porque o quadro é o trabalho de agora, não o histórico.
+///
+/// Ordena pela **última mensagem**, como a v1: o quadro é a fila de quem está
+/// esperando resposta, e ordenar pela abertura empurra para baixo justamente a
+/// conversa que acabou de receber mensagem.
 #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, limit = limit))]
 pub async fn listar_ativos_do_tenant(
     tx: &mut Transaction<'_, Postgres>,
     ctx: &RequestContext,
     departamento_id: Option<i32>,
+    filtro: &FiltroDoQuadro,
     limit: i64,
 ) -> Result<Vec<Atendimento>, DbError> {
     ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let busca = filtro.busca.trim();
     let rows = sqlx::query_as::<_, Atendimento>(
-        r#"SELECT id, tenant_id, contato_id, departamento_id, fluxo_atendimento_id,
-                  status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
-                  assunto, prioridade, atendente_humano_id, contexto_conversa,
-                  historico_status, tags, avaliacao, feedback,
-                  data_primeira_resposta, bot_pode_atender,
-                  sentimento_nota, sentimento_label
-           FROM oraculo_atendimento
-           WHERE tenant_id = $1 AND status <> 'arquivado'
-             AND ($2::int IS NULL OR departamento_id = $2)
-           ORDER BY data_inicio DESC
-           LIMIT $3"#,
+        r#"SELECT a.id, a.tenant_id, a.contato_id, a.departamento_id, a.fluxo_atendimento_id,
+                  a.status, a.etapa_atual_id, a.data_inicio, a.data_fim, a.data_ultima_mensagem,
+                  a.assunto, a.prioridade, a.atendente_humano_id, a.contexto_conversa,
+                  a.historico_status, a.tags, a.avaliacao, a.feedback,
+                  a.data_primeira_resposta, a.bot_pode_atender,
+                  a.sentimento_nota, a.sentimento_label
+           FROM oraculo_atendimento a
+           LEFT JOIN oraculo_contato c
+             ON c.id = a.contato_id AND c.tenant_id = a.tenant_id
+           WHERE a.tenant_id = $1 AND a.status <> 'arquivado'
+             AND ($2::int IS NULL OR a.departamento_id = $2)
+             AND ($3 = '' OR COALESCE(c.nome_contato, '') ILIKE '%' || $3 || '%'
+                  OR COALESCE(c.nome_perfil_whatsapp, '') ILIKE '%' || $3 || '%'
+                  OR COALESCE(c.telefone, '') LIKE '%' || $3 || '%'
+                  OR COALESCE(a.assunto, '') ILIKE '%' || $3 || '%')
+             AND ($4::int IS NULL
+                  OR ($4 = -1 AND a.atendente_humano_id IS NULL)
+                  OR a.atendente_humano_id = $4)
+             AND ($5 = '' OR a.prioridade = $5)
+             AND (NOT $9 OR a.atendente_humano_id IN (
+                   SELECT at.id FROM oraculo_atendente at
+                    WHERE at.tenant_id = a.tenant_id AND at.usuario_id = $10))
+             AND ($6::int IS NULL OR EXISTS (
+                   SELECT 1 FROM atu_etiqueta_atendimento ea
+                    WHERE ea.tenant_id = a.tenant_id AND ea.atendimento_id = a.id
+                      AND ea.etiqueta_id = $6))
+             AND (NOT $7 OR EXISTS (
+                   SELECT 1 FROM oraculo_mensagem m
+                    WHERE m.tenant_id = a.tenant_id AND m.atendimento_id = a.id
+                      AND m.lido = false AND m.remetente = 'contato'))
+           ORDER BY COALESCE(a.data_ultima_mensagem, a.data_inicio) DESC
+           LIMIT $8"#,
     )
     .bind(ctx.tenant_id)
     .bind(departamento_id)
+    .bind(busca)
+    .bind(filtro.atendente_id)
+    .bind(filtro.prioridade.trim())
+    .bind(filtro.etiqueta_id)
+    .bind(filtro.somente_nao_lidos)
     .bind(limit)
+    .bind(filtro.somente_meus)
+    .bind(ctx.user_id)
     .fetch_all(&mut **tx)
     .await?;
     Ok(rows)
+}
+
+/// P3 — o atendimento ativo de um telefone, sem criar nada.
+///
+/// Serve à presença ("digitando..."), que chega da Evolution identificada só
+/// pelo número. Diferente do `ResolveAtendimentoParaContato` da ingestão, aqui
+/// **não** se cria contato nem atendimento: ninguém abre uma conversa porque o
+/// outro lado encostou no teclado.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+pub async fn buscar_ativo_por_telefone(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    telefone: &str,
+) -> Result<Option<i32>, DbError> {
+    let row = sqlx::query_as::<_, (i32,)>(
+        r#"SELECT a.id
+             FROM oraculo_atendimento a
+             JOIN oraculo_contato c
+               ON c.id = a.contato_id AND c.tenant_id = a.tenant_id
+            WHERE a.tenant_id = $1
+              AND c.telefone = $2
+              AND a.status NOT IN ('resolvido', 'cancelado', 'arquivado')
+            ORDER BY a.data_inicio DESC
+            LIMIT 1"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(telefone)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row.map(|(id,)| id))
 }
 
 #[cfg(test)]
@@ -1244,4 +1323,433 @@ mod tests {
         assert!(!status_e_fim_de_linha("pendencia"));
         assert!(!status_e_fim_de_linha("fila"));
     }
+}
+
+/// P4 — a urgência do cartão.
+///
+/// O conjunto é fechado de propósito: a coluna é texto livre no banco, e um
+/// valor fora da lista viraria um cartão que nenhum filtro encontra.
+pub const PRIORIDADES: [&str; 4] = ["baixa", "normal", "alta", "urgente"];
+
+#[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, prioridade = prioridade))]
+pub async fn definir_prioridade(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+    prioridade: &str,
+) -> Result<bool, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+    // A validação do conjunto fechado é do handler, que sabe devolver
+    // `Validation` ao cliente; aqui um valor estranho não deve chegar.
+    debug_assert!(PRIORIDADES.contains(&prioridade));
+    let r = sqlx::query(
+        "UPDATE oraculo_atendimento SET prioridade = $1 WHERE tenant_id = $2 AND id = $3",
+    )
+    .bind(prioridade)
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(r.rows_affected() > 0)
+}
+
+/// P4 — o atendente ligado ao usuário logado, quando existe.
+///
+/// É o que traduz "atribuir a mim" para um id de atendente: a tela conhece o
+/// usuário da sessão, nunca o cadastro de atendentes.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+pub async fn atendente_do_usuario(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+) -> Result<Option<i32>, DbError> {
+    let row = sqlx::query_as::<_, (i32,)>(
+        "SELECT id FROM oraculo_atendente \
+         WHERE tenant_id = $1 AND usuario_id = $2 AND ativo = true LIMIT 1",
+    )
+    .bind(ctx.tenant_id)
+    .bind(ctx.user_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row.map(|(id,)| id))
+}
+
+/// P4 — uma linha do quadro exportado.
+///
+/// Traz o nome e o telefone do contato porque um CSV de ids não serve para
+/// nada a quem vai abrir a planilha — e é justamente por trazer isso que a
+/// exportação é auditada na camada de cima.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct LinhaDoQuadro {
+    pub id: i32,
+    pub contato: Option<String>,
+    pub telefone: Option<String>,
+    pub assunto: Option<String>,
+    pub status: String,
+    pub prioridade: String,
+    pub atendente: Option<String>,
+    pub fluxo: Option<String>,
+    pub etapa: Option<String>,
+    pub data_inicio: chrono::DateTime<chrono::Utc>,
+    pub data_ultima_mensagem: Option<chrono::DateTime<chrono::Utc>>,
+    pub nao_lidas: i64,
+}
+
+/// P4 — o quadro inteiro (no recorte pedido) para exportação.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+pub async fn exportar_quadro(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    departamento_id: Option<i32>,
+    filtro: &FiltroDoQuadro,
+    limit: i64,
+) -> Result<Vec<LinhaDoQuadro>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let busca = filtro.busca.trim();
+    let rows = sqlx::query_as::<_, LinhaDoQuadro>(
+        r#"SELECT a.id,
+                  c.nome_contato AS contato,
+                  c.telefone,
+                  a.assunto,
+                  a.status,
+                  a.prioridade,
+                  at.nome AS atendente,
+                  f.nome AS fluxo,
+                  e.nome AS etapa,
+                  a.data_inicio,
+                  a.data_ultima_mensagem,
+                  (SELECT COUNT(*) FROM oraculo_mensagem m
+                    WHERE m.tenant_id = a.tenant_id AND m.atendimento_id = a.id
+                      AND m.lido = false AND m.remetente = 'contato') AS nao_lidas
+           FROM oraculo_atendimento a
+           LEFT JOIN oraculo_contato c
+             ON c.id = a.contato_id AND c.tenant_id = a.tenant_id
+           LEFT JOIN oraculo_atendente at
+             ON at.id = a.atendente_humano_id AND at.tenant_id = a.tenant_id
+           LEFT JOIN oraculo_fluxo_atendimento f
+             ON f.id = a.fluxo_atendimento_id AND f.tenant_id = a.tenant_id
+           LEFT JOIN oraculo_etapa_fluxo e
+             ON e.id = a.etapa_atual_id AND e.tenant_id = a.tenant_id
+           WHERE a.tenant_id = $1 AND a.status <> 'arquivado'
+             AND ($2::int IS NULL OR a.departamento_id = $2)
+             AND ($3 = '' OR COALESCE(c.nome_contato, '') ILIKE '%' || $3 || '%'
+                  OR COALESCE(c.nome_perfil_whatsapp, '') ILIKE '%' || $3 || '%'
+                  OR COALESCE(c.telefone, '') LIKE '%' || $3 || '%'
+                  OR COALESCE(a.assunto, '') ILIKE '%' || $3 || '%')
+             AND (NOT $4 OR a.atendente_humano_id IN (
+                   SELECT x.id FROM oraculo_atendente x
+                    WHERE x.tenant_id = a.tenant_id AND x.usuario_id = $5))
+             AND (NOT $6 OR EXISTS (
+                   SELECT 1 FROM oraculo_mensagem m
+                    WHERE m.tenant_id = a.tenant_id AND m.atendimento_id = a.id
+                      AND m.lido = false AND m.remetente = 'contato'))
+           ORDER BY COALESCE(a.data_ultima_mensagem, a.data_inicio) DESC
+           LIMIT $7"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(departamento_id)
+    .bind(busca)
+    .bind(filtro.somente_meus)
+    .bind(ctx.user_id)
+    .bind(filtro.somente_nao_lidos)
+    .bind(limit)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows)
+}
+
+/// P5 — um acontecimento da vida do atendimento, já pronto para a tela.
+#[derive(Debug, Clone, sqlx::FromRow)]
+pub struct EventoDaTimeline {
+    pub tipo: String,
+    pub quando: chrono::DateTime<chrono::Utc>,
+    pub descricao: String,
+    pub autor: Option<String>,
+    pub automatico: bool,
+}
+
+/// P5 — a linha do tempo do atendimento.
+///
+/// Junta numa consulta só o que estava espalhado por quatro tabelas. É um
+/// `UNION ALL` e não quatro chamadas porque a tela desenha uma lista ordenada:
+/// fundir no cliente daria a mesma coisa com quatro idas ao banco e a chance
+/// de mostrar metade da história enquanto a outra metade não chegou.
+#[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
+pub async fn listar_timeline(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+) -> Result<Vec<EventoDaTimeline>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let rows = sqlx::query_as::<_, EventoDaTimeline>(
+        r#"
+        SELECT 'aberto' AS tipo,
+               a.data_inicio AS quando,
+               COALESCE(NULLIF(a.assunto, ''), 'Conversa iniciada') AS descricao,
+               NULL::varchar AS autor,
+               true AS automatico
+          FROM oraculo_atendimento a
+         WHERE a.tenant_id = $1 AND a.id = $2
+
+        UNION ALL
+
+        SELECT 'movido',
+               m.data_movimento,
+               COALESCE(eo.nome, 'início') || ' → ' || COALESCE(ed.nome, '?')
+                 || COALESCE(' (' || NULLIF(m.motivo, '') || ')', ''),
+               ad.nome,
+               m.automatico
+          FROM oraculo_movimento_fluxo m
+          LEFT JOIN oraculo_etapa_fluxo eo
+            ON eo.id = m.etapa_origem_id AND eo.tenant_id = m.tenant_id
+          LEFT JOIN oraculo_etapa_fluxo ed
+            ON ed.id = m.etapa_destino_id AND ed.tenant_id = m.tenant_id
+          LEFT JOIN oraculo_atendente ad
+            ON ad.id = m.atendente_destino_id AND ad.tenant_id = m.tenant_id
+         WHERE m.tenant_id = $1 AND m.atendimento_id = $2
+
+        UNION ALL
+
+        SELECT 'nota', n.criado_em, n.texto, at.nome, false
+          FROM atu_nota n
+          LEFT JOIN oraculo_atendente at
+            ON at.id = n.criado_por_id AND at.tenant_id = n.tenant_id
+         WHERE n.tenant_id = $1 AND n.atendimento_id = $2
+
+        UNION ALL
+
+        SELECT 'etiqueta', ea.aplicada_em, e.nome, ap.nome, false
+          FROM atu_etiqueta_atendimento ea
+          JOIN atu_etiqueta e
+            ON e.id = ea.etiqueta_id AND e.tenant_id = ea.tenant_id
+          LEFT JOIN oraculo_atendente ap
+            ON ap.id = ea.aplicada_por_id AND ap.tenant_id = ea.tenant_id
+         WHERE ea.tenant_id = $1 AND ea.atendimento_id = $2
+
+        UNION ALL
+
+        SELECT 'encerrado', a.data_fim, 'Atendimento ' || a.status, NULL::varchar, false
+          FROM oraculo_atendimento a
+         WHERE a.tenant_id = $1 AND a.id = $2 AND a.data_fim IS NOT NULL
+
+        ORDER BY quando ASC
+        "#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows)
+}
+
+/// P5 — as outras conversas do mesmo contato, da mais recente para a antiga.
+#[tracing::instrument(skip_all, fields(contato_id = contato_id))]
+pub async fn listar_do_contato(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    contato_id: i32,
+    limit: i64,
+) -> Result<Vec<Atendimento>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let rows = sqlx::query_as::<_, Atendimento>(
+        r#"SELECT id, tenant_id, contato_id, departamento_id, fluxo_atendimento_id,
+                  status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
+                  assunto, prioridade, atendente_humano_id, contexto_conversa,
+                  historico_status, tags, avaliacao, feedback,
+                  data_primeira_resposta, bot_pode_atender,
+                  sentimento_nota, sentimento_label
+             FROM oraculo_atendimento
+            WHERE tenant_id = $1 AND contato_id = $2
+            ORDER BY data_inicio DESC
+            LIMIT $3"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(contato_id)
+    .bind(limit)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows)
+}
+
+/// P6 — carimba a primeira resposta do atendimento, uma vez só.
+///
+/// A coluna `data_primeira_resposta` existe desde a 0006, é lida em cinco
+/// consultas e nunca foi escrita: o SLA do painel media o vazio. O `WHERE ...
+/// IS NULL` é o que garante "uma vez": a segunda resposta do mesmo atendimento
+/// não move o carimbo, e a conta do tempo continua sendo do primeiro retorno.
+///
+/// Vale para atendente **e** bot, como na v1: para quem está esperando, quem
+/// respondeu primeiro importa menos do que ter sido respondido.
+#[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
+pub async fn marcar_primeira_resposta(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+) -> Result<bool, DbError> {
+    let r = sqlx::query(
+        r#"UPDATE oraculo_atendimento
+              SET data_primeira_resposta = NOW()
+            WHERE tenant_id = $1 AND id = $2 AND data_primeira_resposta IS NULL"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .execute(&mut **tx)
+    .await?;
+    Ok(r.rows_affected() > 0)
+}
+
+/// P6 — a mediana do tempo de primeira resposta, em segundos, nas últimas
+/// 24 horas.
+///
+/// Mediana e não média: uma conversa esquecida no fim de semana levaria a
+/// média para as alturas e esconderia o atendimento normal do dia.
+#[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+pub async fn mediana_primeira_resposta_24h(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+) -> Result<Option<i32>, DbError> {
+    let row = sqlx::query_as::<_, (Option<f64>,)>(
+        r#"SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (
+                    ORDER BY EXTRACT(EPOCH FROM (data_primeira_resposta - data_inicio))
+                  )
+             FROM oraculo_atendimento
+            WHERE tenant_id = $1
+              AND data_primeira_resposta IS NOT NULL
+              AND data_inicio > NOW() - INTERVAL '24 hours'"#,
+    )
+    .bind(ctx.tenant_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row.and_then(|(v,)| v).map(|v| v.round() as i32))
+}
+
+/// P13 — o contato de cada cartão do quadro.
+///
+/// O resumo do atendimento nunca levou nome nem telefone: o cartão mostrava
+/// `Contato #id`. `nome` cai para o nome de perfil do WhatsApp quando ninguém
+/// cadastrou um, e fica vazio quando nem isso existe — a tela então mostra o
+/// telefone.
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+pub struct ContatoDoQuadro {
+    pub atendimento_id: i32,
+    pub nome: String,
+    pub telefone: String,
+    pub foto_url: String,
+    /// P16 — a IA respondeu abaixo da confiança automática e ninguém conferiu.
+    /// Vem por aqui, e não no `Atendimento`, porque aquele struct é lido por
+    /// consultas com macro, e o cache `.sqlx` não conhece a coluna nova.
+    pub revisao_pendente: bool,
+}
+
+#[tracing::instrument(skip_all, fields(quantidade = ids.len()))]
+pub async fn contatos_do_quadro(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    ids: &[i32],
+) -> Result<Vec<ContatoDoQuadro>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let rows = sqlx::query_as::<_, ContatoDoQuadro>(
+        r#"SELECT a.id AS atendimento_id,
+                  COALESCE(NULLIF(TRIM(c.nome_contato), ''),
+                           NULLIF(TRIM(c.nome_perfil_whatsapp), ''), '') AS nome,
+                  COALESCE(c.telefone, '') AS telefone,
+                  COALESCE(c.foto_perfil_url_origem, '') AS foto_url,
+                  a.revisao_pendente
+             FROM oraculo_atendimento a
+             JOIN oraculo_contato c
+               ON c.id = a.contato_id AND c.tenant_id = a.tenant_id
+            WHERE a.tenant_id = $1 AND a.id = ANY($2)"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(ids)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows)
+}
+
+/// P13 — o contato de um atendimento, com a data da última consulta da foto.
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+pub struct ContatoComFoto {
+    pub contato_id: i32,
+    pub nome: String,
+    pub telefone: String,
+    pub foto_url: String,
+    pub foto_verificada_em: Option<DateTime<Utc>>,
+}
+
+#[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
+pub async fn contato_do_atendimento(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+) -> Result<Option<ContatoComFoto>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let row = sqlx::query_as::<_, ContatoComFoto>(
+        r#"SELECT c.id AS contato_id,
+                  COALESCE(NULLIF(TRIM(c.nome_contato), ''),
+                           NULLIF(TRIM(c.nome_perfil_whatsapp), ''), '') AS nome,
+                  COALESCE(c.telefone, '') AS telefone,
+                  COALESCE(c.foto_perfil_url_origem, '') AS foto_url,
+                  c.foto_verificada_em
+             FROM oraculo_atendimento a
+             JOIN oraculo_contato c
+               ON c.id = a.contato_id AND c.tenant_id = a.tenant_id
+            WHERE a.tenant_id = $1 AND a.id = $2"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row)
+}
+
+/// P13 — grava o resultado da consulta da foto.
+///
+/// `None` NÃO apaga a foto guardada: o cliente do provedor devolve `None`
+/// também quando a chamada falha, e apagar por causa de uma queda de rede
+/// tiraria a foto de quem tem. Só a data da consulta anda.
+#[tracing::instrument(skip_all, fields(contato_id = contato_id))]
+pub async fn registrar_foto_do_contato(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    contato_id: i32,
+    foto_url: Option<&str>,
+) -> Result<(), DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    sqlx::query(
+        r#"UPDATE oraculo_contato
+              SET foto_perfil_url_origem = COALESCE(NULLIF($3, ''), foto_perfil_url_origem),
+                  foto_verificada_em = NOW()
+            WHERE tenant_id = $1 AND id = $2"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(contato_id)
+    .bind(foto_url.unwrap_or_default())
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+/// P16 — liga ou desliga a marca "revisar" do cartão.
+///
+/// `false` no retorno = nada mudou (já estava assim, ou o atendimento não é
+/// deste tenant); quem chama não audita o que não aconteceu.
+#[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, pendente = pendente))]
+pub async fn definir_revisao_pendente(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+    pendente: bool,
+) -> Result<bool, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+    let r = sqlx::query(
+        r#"UPDATE oraculo_atendimento
+              SET revisao_pendente = $3
+            WHERE tenant_id = $1 AND id = $2 AND revisao_pendente IS DISTINCT FROM $3"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .bind(pendente)
+    .execute(&mut **tx)
+    .await?;
+    Ok(r.rows_affected() > 0)
 }

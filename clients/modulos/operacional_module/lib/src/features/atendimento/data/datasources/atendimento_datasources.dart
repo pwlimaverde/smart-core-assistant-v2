@@ -14,6 +14,11 @@ import '../../domain/model/quadro.dart';
 import '../../domain/parameters/ficha_parameters.dart';
 import '../../domain/parameters/quadro_parameters.dart';
 import '../../domain/parameters/send_outbound_message_parameters.dart';
+import '../../domain/model/midia_mensagem.dart';
+import '../../domain/parameters/presenca_parameters.dart';
+import '../../domain/parameters/quadro_operacao_parameters.dart';
+import '../../domain/model/evento_timeline.dart';
+import '../../domain/model/contato_da_conversa.dart';
 
 /// Os quatro `Datasource` da feature: adaptadores finos entre o `Parameters` de
 /// uma operação e o [AtendimentoGateway] da plataforma ativa.
@@ -36,6 +41,9 @@ final class ListAtendimentosDatasource
         status: parameters.status,
         departamentoId: parameters.departamentoId,
         limit: parameters.limit,
+        busca: parameters.busca,
+        somenteMeus: parameters.somenteMeus,
+        somenteNaoLidos: parameters.somenteNaoLidos,
       );
 }
 
@@ -52,6 +60,7 @@ final class GetThreadDatasource
         atendimentoId: parameters.atendimentoId,
         limit: parameters.limit,
         offset: parameters.offset,
+        beforeId: parameters.beforeId,
       );
 }
 
@@ -128,6 +137,7 @@ final class SendOutboundMessageDatasource
         atendimentoId: parameters.atendimentoId,
         conteudo: parameters.conteudo,
         tipo: parameters.tipo,
+        mensagemCitadaId: parameters.mensagemCitadaId,
       );
 }
 
@@ -254,6 +264,227 @@ final class CriarNotaDatasource
       atendimentoId: parameters.atendimentoId,
       texto: parameters.texto,
     );
+    return unit;
+  }
+}
+
+/// P3 — avisa o contato que o atendente está digitando/gravando.
+final class EnviarPresencaDatasource
+    implements Datasource<bool, EnviarPresencaParameters> {
+  final AtendimentoGateway _gateway;
+
+  const EnviarPresencaDatasource({required this._gateway});
+
+  @override
+  Future<bool> call(EnviarPresencaParameters parameters) =>
+      _gateway.enviarPresenca(
+        atendimentoId: parameters.atendimentoId,
+        situacao: parameters.situacao,
+      );
+}
+
+/// P3 — os arquivos trocados na conversa (galeria).
+final class ListarMidiasDatasource
+    implements Datasource<List<MidiaMensagem>, ListarMidiasParameters> {
+  final AtendimentoGateway _gateway;
+
+  const ListarMidiasDatasource({required this._gateway});
+
+  @override
+  Future<List<MidiaMensagem>> call(ListarMidiasParameters parameters) =>
+      _gateway.listarMidias(
+        atendimentoId: parameters.atendimentoId,
+        limit: parameters.limit,
+        offset: parameters.offset,
+      );
+}
+
+/// P3 — sobe o anexo e o põe na conversa. Devolve o id da mensagem criada.
+final class EnviarMidiaDatasource
+    implements Datasource<int, EnviarMidiaParameters> {
+  final AtendimentoGateway _gateway;
+
+  const EnviarMidiaDatasource({required this._gateway});
+
+  @override
+  Future<int> call(EnviarMidiaParameters parameters) => _gateway.enviarMidia(
+    atendimentoId: parameters.atendimentoId,
+    nomeArquivo: parameters.nomeArquivo,
+    mimetype: parameters.mimetype,
+    bytes: parameters.bytes,
+    legenda: parameters.legenda,
+    ehPtt: parameters.ehPtt,
+  );
+}
+
+/// P4 — dono da conversa.
+final class AtribuirAtendimentoDatasource
+    implements Datasource<bool, AtribuirAtendimentoParameters> {
+  final AtendimentoGateway _gateway;
+
+  const AtribuirAtendimentoDatasource({required this._gateway});
+
+  @override
+  Future<bool> call(AtribuirAtendimentoParameters parameters) =>
+      _gateway.atribuirAtendimento(
+        atendimentoId: parameters.atendimentoId,
+        atendenteId: parameters.atendenteId,
+        devolverParaFila: parameters.devolverParaFila,
+      );
+}
+
+/// P4 — urgência do cartão.
+final class DefinirPrioridadeDatasource
+    implements Datasource<Unit, DefinirPrioridadeParameters> {
+  final AtendimentoGateway _gateway;
+
+  const DefinirPrioridadeDatasource({required this._gateway});
+
+  @override
+  Future<Unit> call(DefinirPrioridadeParameters parameters) async {
+    await _gateway.definirPrioridade(
+      atendimentoId: parameters.atendimentoId,
+      prioridade: parameters.prioridade,
+    );
+    return unit;
+  }
+}
+
+/// P4 — transferência de fluxo. Devolve o nome do fluxo de destino.
+final class TransferirParaFluxoDatasource
+    implements Datasource<String, TransferirParaFluxoParameters> {
+  final AtendimentoGateway _gateway;
+
+  const TransferirParaFluxoDatasource({required this._gateway});
+
+  @override
+  Future<String> call(TransferirParaFluxoParameters parameters) =>
+      _gateway.transferirParaFluxo(
+        atendimentoId: parameters.atendimentoId,
+        fluxoId: parameters.fluxoId,
+      );
+}
+
+/// P4 — o quadro em CSV.
+final class ExportarQuadroDatasource
+    implements Datasource<List<int>, ExportarQuadroParameters> {
+  final AtendimentoGateway _gateway;
+
+  const ExportarQuadroDatasource({required this._gateway});
+
+  @override
+  Future<List<int>> call(ExportarQuadroParameters parameters) =>
+      _gateway.exportarQuadro(
+        status: parameters.status,
+        departamentoId: parameters.departamentoId,
+        busca: parameters.busca,
+        somenteMeus: parameters.somenteMeus,
+        somenteNaoLidos: parameters.somenteNaoLidos,
+      );
+}
+
+/// P5 — a linha do tempo do atendimento.
+final class ListarTimelineDatasource
+    implements Datasource<List<EventoDaTimeline>, ListarTimelineParameters> {
+  final AtendimentoGateway _gateway;
+
+  const ListarTimelineDatasource({required this._gateway});
+
+  @override
+  Future<List<EventoDaTimeline>> call(ListarTimelineParameters parameters) =>
+      _gateway.listarTimeline(atendimentoId: parameters.atendimentoId);
+}
+
+/// P5 — as outras conversas do mesmo contato.
+final class AtendimentosDoContatoDatasource
+    implements
+        Datasource<List<AtendimentoResumo>, AtendimentosDoContatoParameters> {
+  final AtendimentoGateway _gateway;
+
+  const AtendimentosDoContatoDatasource({required this._gateway});
+
+  @override
+  Future<List<AtendimentoResumo>> call(
+    AtendimentosDoContatoParameters parameters,
+  ) => _gateway.listarAtendimentosDoContato(
+    contatoId: parameters.contatoId,
+    limit: parameters.limit,
+  );
+}
+
+/// P5 — apaga uma nota interna.
+final class RemoverNotaDatasource
+    implements Datasource<Unit, RemoverNotaParameters> {
+  final AtendimentoGateway _gateway;
+
+  const RemoverNotaDatasource({required this._gateway});
+
+  @override
+  Future<Unit> call(RemoverNotaParameters parameters) async {
+    await _gateway.removerNota(
+      notaId: parameters.notaId,
+      atendimentoId: parameters.atendimentoId,
+    );
+    return unit;
+  }
+}
+
+/// P5 — renomeia/recolore uma etiqueta do catálogo.
+final class AtualizarEtiquetaDatasource
+    implements Datasource<Etiqueta, AtualizarEtiquetaParameters> {
+  final AtendimentoGateway _gateway;
+
+  const AtualizarEtiquetaDatasource({required this._gateway});
+
+  @override
+  Future<Etiqueta> call(AtualizarEtiquetaParameters parameters) =>
+      _gateway.atualizarEtiqueta(
+        id: parameters.id,
+        nome: parameters.nome,
+        cor: parameters.cor,
+        descricao: parameters.descricao,
+      );
+}
+
+/// P5 — tira a etiqueta do catálogo.
+final class DesativarEtiquetaDatasource
+    implements Datasource<Unit, DesativarEtiquetaParameters> {
+  final AtendimentoGateway _gateway;
+
+  const DesativarEtiquetaDatasource({required this._gateway});
+
+  @override
+  Future<Unit> call(DesativarEtiquetaParameters parameters) async {
+    await _gateway.desativarEtiqueta(id: parameters.id);
+    return unit;
+  }
+}
+
+/// P13 — o contato da conversa.
+final class ObterContatoDatasource
+    implements Datasource<ContatoDaConversa, ObterContatoParameters> {
+  final AtendimentoGateway _gateway;
+
+  const ObterContatoDatasource({required this._gateway});
+
+  @override
+  Future<ContatoDaConversa> call(ObterContatoParameters parameters) =>
+      _gateway.obterContatoDoAtendimento(
+        atendimentoId: parameters.atendimentoId,
+        forcar: parameters.forcar,
+      );
+}
+
+/// P16 — conclui a revisão de uma resposta da IA.
+final class MarcarRevisadoDatasource
+    implements Datasource<Unit, MarcarRevisadoParameters> {
+  final AtendimentoGateway _gateway;
+
+  const MarcarRevisadoDatasource({required this._gateway});
+
+  @override
+  Future<Unit> call(MarcarRevisadoParameters parameters) async {
+    await _gateway.marcarRevisado(atendimentoId: parameters.atendimentoId);
     return unit;
   }
 }

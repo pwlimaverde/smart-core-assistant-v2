@@ -405,11 +405,34 @@ pub fn derivar_escopos(
     // leitura. Ele não muda nada para ninguém hoje (nenhum usuário tem esse
     // papel) e é o que torna o papel **representável** quando a migração
     // acontecer.
+    //
+    // P18 — o passo 3 da D4: com a CoreSetting `AUTH_FALLBACK_ROLE_HABILITADO`
+    // em `false` (o `data_postgres` manda o valor junto da identidade), quem
+    // não tem `module_permissions` recebe só leitura. Ausente = habilitado: é o
+    // comportamento de hoje, e desligar é decisão do operador depois de medir.
+    // A origem continua `FallbackRole` — é o que a medição precisa contar.
+    let fallback_habilitado = user_info
+        .get("fallback_role_habilitado")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(true);
+    if !fallback_habilitado {
+        return (escopos_somente_leitura(), OrigemEscopos::FallbackRole);
+    }
     let role = user_info
         .get("role")
         .and_then(|v| v.as_str())
         .unwrap_or("atendente");
-    let escopos = match role {
+    (escopos_do_papel(role), OrigemEscopos::FallbackRole)
+}
+
+/// P18 — os escopos que um papel dá a quem não tem `module_permissions`.
+///
+/// Fonte única: o fallback do login e a migração que torna esses escopos
+/// explícitos (`MigrarEscoposImplicitos`) usam esta função. Uma cópia em SQL
+/// poderia divergir, e a migração gravaria um acesso diferente do que a pessoa
+/// tinha — exatamente o que ela promete não fazer.
+pub fn escopos_do_papel(role: &str) -> Vec<String> {
+    match role {
         "admin" | "owner" => vec![
             "atendimentos:read".into(),
             "atendimentos:write".into(),
@@ -422,13 +445,72 @@ pub fn derivar_escopos(
             "atendimentos:write".into(),
             "clientes:write".into(),
         ],
-    };
-    (escopos, OrigemEscopos::FallbackRole)
+    }
+}
+
+/// P18 — o vínculo já tem permissões explícitas? Mesma regra do
+/// [`derivar_escopos`]: lista vazia ou objeto sem nenhum `true` não conta.
+pub fn tem_permissoes_explicitas(module_permissions: &serde_json::Value) -> bool {
+    matches!(
+        derivar_escopos(
+            false,
+            &serde_json::json!({ "module_permissions": module_permissions }),
+        )
+        .1,
+        OrigemEscopos::ModulePermissions
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // -- P18: escopos_do_papel e a chave do fallback -----------------------
+
+    #[test]
+    fn escopos_do_papel_e_o_mesmo_resultado_do_fallback_para_todo_papel() {
+        // A migração grava o que esta função devolve; se divergisse do login,
+        // tornar o acesso explícito mudaria o acesso.
+        for papel in ["admin", "owner", "viewer", "atendente", "gerente", ""] {
+            let (escopos, origem) = derivar_escopos(false, &serde_json::json!({ "role": papel }));
+            assert_eq!(origem, OrigemEscopos::FallbackRole);
+            assert_eq!(escopos, escopos_do_papel(papel), "papel {papel:?}");
+        }
+    }
+
+    #[test]
+    fn fallback_desligado_da_so_leitura_e_continua_contado() {
+        let info = serde_json::json!({ "role": "admin", "fallback_role_habilitado": false });
+        let (escopos, origem) = derivar_escopos(false, &info);
+        assert_eq!(escopos, vec!["atendimentos:read".to_string()]);
+        assert_eq!(origem, OrigemEscopos::FallbackRole);
+    }
+
+    #[test]
+    fn fallback_desligado_nao_afeta_quem_tem_permissoes_explicitas() {
+        let info = serde_json::json!({
+            "role": "atendente",
+            "module_permissions": ["atendimentos:write"],
+            "fallback_role_habilitado": false,
+        });
+        assert_eq!(
+            derivar_escopos(false, &info).0,
+            vec!["atendimentos:write".to_string()]
+        );
+    }
+
+    #[test]
+    fn permissoes_explicitas_seguem_a_regra_do_login() {
+        assert!(!tem_permissoes_explicitas(&serde_json::json!({})));
+        assert!(!tem_permissoes_explicitas(&serde_json::json!([])));
+        assert!(!tem_permissoes_explicitas(&serde_json::Value::Null));
+        assert!(!tem_permissoes_explicitas(
+            &serde_json::json!({ "atendimentos:read": false })
+        ));
+        assert!(tem_permissoes_explicitas(&serde_json::json!([
+            "atendimentos:read"
+        ])));
+    }
 
     // -- derivar_escopos --------------------------------------------------
 

@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:return_success_or_error/return_success_or_error.dart';
 
 import '../errors/usuarios_errors.dart';
+import '../model/migracao_de_escopos.dart';
 import '../model/usuario_global.dart';
 import '../parameters/usuarios_parameters.dart';
 
@@ -77,6 +78,44 @@ final class DefinirUsuarioAtivoUsecase
   @override
   UsuariosError onUnexpected(Object exception, StackTrace stackTrace) {
     _logBug('definirUsuarioAtivo', exception, stackTrace);
+    return const UsuariosInesperado();
+  }
+}
+
+/// P18 — migra (ou só conta) os escopos implícitos. A contagem vem ordenada
+/// pelo maior grupo: é o que o superusuário quer ver primeiro.
+final class MigrarEscoposUsecase
+    extends
+        UsecaseBaseCallData<
+          ResultadoDaMigracao,
+          ResultadoDaMigracao,
+          MigrarEscoposParameters,
+          UsuariosError
+        > {
+  const MigrarEscoposUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    ResultadoDaMigracao,
+    ResultadoDaMigracao,
+    MigrarEscoposParameters,
+    UsuariosError
+  >
+  get process =>
+      (data, _) => Success(
+        ResultadoDaMigracao(
+          contagens: List.of(data.contagens)
+            ..sort((a, b) => b.quantidade.compareTo(a.quantidade)),
+          total: data.total,
+          migrados: data.migrados,
+          pulados: data.pulados,
+          simulacao: data.simulacao,
+        ),
+      );
+
+  @override
+  UsuariosError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('migrarEscopos', exception, stackTrace);
     return const UsuariosInesperado();
   }
 }

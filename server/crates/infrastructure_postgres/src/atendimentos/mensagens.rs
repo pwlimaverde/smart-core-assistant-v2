@@ -76,6 +76,12 @@ pub struct NovaMensagem<'a> {
     /// Fica na linha da **resposta**, não na da pergunta como fazia a v1: a v2
     /// responde a uma rajada agregada, e não existe "a mensagem respondida".
     pub confianca_resposta: Option<f64>,
+    /// P8 — o que não cabe em `conteudo`: opções da enquete, itens da lista,
+    /// rótulos dos botões, vCard do contato.
+    ///
+    /// A coluna existe desde a 0006 e a ingestão nunca escreveu nela: enquete e
+    /// lista chegavam ao chat só com o título, sem as alternativas.
+    pub metadados: Option<serde_json::Value>,
 }
 
 impl<'a> NovaMensagem<'a> {
@@ -90,6 +96,7 @@ impl<'a> NovaMensagem<'a> {
             mensagem_citada_id: None,
             ja_entregue: false,
             confianca_resposta: None,
+            metadados: None,
         }
     }
 }
@@ -268,8 +275,9 @@ impl MensagemRepository for PostgresMensagemRepository {
             r#"INSERT INTO oraculo_mensagem
                    (tenant_id, atendimento_id, tipo, conteudo, remetente,
                     message_id_whatsapp, mensagem_citada_id, gerado_por_ia, status_envio,
-                    confianca_resposta)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+                    confianca_resposta, metadados)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+                       COALESCE($11, '{}'::jsonb))
                RETURNING id, tenant_id, atendimento_id, tipo, conteudo, remetente,
                          timestamp, message_id_whatsapp, metadados, respondida, lido,
                          resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
@@ -287,6 +295,7 @@ impl MensagemRepository for PostgresMensagemRepository {
         .bind(gerado_por_ia)
         .bind(status_envio)
         .bind(nova.confianca_resposta)
+        .bind(nova.metadados)
         .fetch_one(&mut **tx)
         .await
         .map_err(DbError::from_sqlx_unique)?;
@@ -866,4 +875,170 @@ pub async fn anexar_analise_mensagem(
     .execute(&mut **tx)
     .await?;
     Ok(())
+}
+
+/// P2 — as `limit` mensagens imediatamente **anteriores** a `before_id`.
+///
+/// Devolve em ordem crescente, como a tela desenha. O cursor é o id (não o
+/// offset) porque a conversa continua recebendo mensagem enquanto se rola o
+/// histórico: com offset, cada chegada empurra a janela e a pessoa vê a mesma
+/// bolha duas vezes — ou pula uma.
+#[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, before_id = before_id))]
+pub async fn listar_anteriores_a(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+    before_id: i32,
+    limit: i64,
+) -> Result<Vec<Mensagem>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let rows = sqlx::query_as::<_, Mensagem>(
+        r#"SELECT * FROM (
+               SELECT id, tenant_id, atendimento_id, tipo, conteudo, remetente,
+                      timestamp, message_id_whatsapp, metadados, respondida, lido,
+                      resposta_bot, intent_detectado, entidades_extraidas, confianca_resposta,
+                      arquivo_midia, analise_midia, resumo_midia, gerado_por_ia, mensagem_citada_id,
+                      quoted_preview, status_envio, data_entregue, data_lida,
+                      mimetype_midia, nome_arquivo_midia, tamanho_midia
+                 FROM oraculo_mensagem
+                WHERE tenant_id = $1 AND atendimento_id = $2 AND id < $3
+                ORDER BY timestamp DESC, id DESC
+                LIMIT $4
+           ) AS anteriores
+           ORDER BY timestamp ASC, id ASC"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .bind(before_id)
+    .bind(limit)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows)
+}
+
+/// P3 — para onde mandar a presença de um atendimento: instância e telefone.
+///
+/// Espelha o destino do envio outbound, mas parte do **atendimento**: presença
+/// não tem mensagem à qual se pendurar. Sem destino resolvível devolve `None`
+/// — e quem chama simplesmente não manda nada, porque "digitando" que não
+/// chega não é erro que valha interromper a conversa.
+#[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id))]
+pub async fn resolver_destino_do_atendimento(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+) -> Result<Option<(i64, String)>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
+    let row = sqlx::query_as::<_, (i64, String)>(
+        r#"SELECT wc.instance_id, oc.telefone
+             FROM oraculo_atendimento oa
+             JOIN oraculo_contato oc
+               ON oc.id = oa.contato_id AND oc.tenant_id = oa.tenant_id
+             JOIN whatsapp_contact wc
+               ON wc.contact_id = oc.id AND wc.tenant_id = oc.tenant_id AND wc.active = true
+            WHERE oa.tenant_id = $1 AND oa.id = $2 AND oc.telefone IS NOT NULL
+            ORDER BY wc.updated_at DESC
+            LIMIT 1"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(atendimento_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row)
+}
+
+/// P8 — grava (ou apaga) a reação de alguém numa mensagem.
+///
+/// Reação não é bolha nova: é atributo da mensagem reagida, como no WhatsApp
+/// Web. Fica em `metadados.reacoes`, uma lista de `{emoji, de}`.
+///
+/// Uma pessoa tem **uma** reação por mensagem: reagir de novo troca a anterior,
+/// que é o comportamento do WhatsApp. `emoji` vazio é remoção — o provedor manda
+/// `text: ""` quando a pessoa desfaz, e guardar isso deixaria um rastro
+/// invisível na bolha para sempre.
+///
+/// `false` no retorno = mensagem alvo desconhecida. Acontece de verdade: reagir
+/// a uma conversa anterior à integração é comum, e não é erro.
+#[tracing::instrument(skip_all, fields(alvo = %message_id_whatsapp))]
+pub async fn aplicar_reacao(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    message_id_whatsapp: &str,
+    emoji: &str,
+    de: &str,
+) -> Result<bool, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+    // Tudo numa consulta só: ler, filtrar e regravar em três idas ao banco
+    // abriria janela para duas reações simultâneas se perderem.
+    let r = sqlx::query(
+        r#"UPDATE oraculo_mensagem
+              SET metadados = jsonb_set(
+                    COALESCE(metadados, '{}'::jsonb),
+                    '{reacoes}',
+                    COALESCE(
+                      (SELECT jsonb_agg(r)
+                         FROM jsonb_array_elements(
+                                COALESCE(metadados->'reacoes', '[]'::jsonb)
+                              ) AS r
+                        WHERE r->>'de' IS DISTINCT FROM $4),
+                      '[]'::jsonb
+                    ) || CASE WHEN $3 = '' THEN '[]'::jsonb
+                              ELSE jsonb_build_array(
+                                     jsonb_build_object('emoji', $3::text, 'de', $4::text)
+                                   )
+                         END
+                  )
+            WHERE tenant_id = $1 AND message_id_whatsapp = $2"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(message_id_whatsapp)
+    .bind(emoji)
+    .bind(de)
+    .execute(&mut **tx)
+    .await?;
+    Ok(r.rows_affected() > 0)
+}
+
+/// P9 — uma mensagem que ficou sem destino.
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+pub struct MensagemNaoEntregue {
+    pub id: i32,
+    pub mensagem_id: i32,
+    pub atendimento_id: i32,
+    pub motivo: String,
+    pub criado_em: DateTime<Utc>,
+    /// Início do texto. PII — nunca em log.
+    pub trecho: String,
+    pub contato: String,
+}
+
+/// P9 — as mensagens pendentes de reenvio, as mais novas primeiro.
+///
+/// O reprocessamento existia desde a N7.2 e nenhuma tela listava o que havia a
+/// reprocessar: a mensagem ficava parada sem ninguém saber que ela não chegou.
+#[tracing::instrument(skip_all)]
+pub async fn listar_nao_entregues(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+) -> Result<Vec<MensagemNaoEntregue>, DbError> {
+    ctx.exigir_qualquer(&["operacional:read", "operacional:admin", "tenant:admin"])?;
+    let rows = sqlx::query_as::<_, MensagemNaoEntregue>(
+        r#"SELECT d.id, d.mensagem_id, d.atendimento_id, d.motivo, d.criado_em,
+                  LEFT(COALESCE(m.conteudo, ''), 120) AS trecho,
+                  COALESCE(c.nome_contato, c.telefone, '') AS contato
+             FROM mensagem_dead_letter d
+             LEFT JOIN oraculo_mensagem m
+                    ON m.id = d.mensagem_id AND m.tenant_id = d.tenant_id
+             LEFT JOIN oraculo_atendimento a
+                    ON a.id = d.atendimento_id AND a.tenant_id = d.tenant_id
+             LEFT JOIN oraculo_contato c
+                    ON c.id = a.contato_id AND c.tenant_id = d.tenant_id
+            WHERE d.tenant_id = $1 AND d.reprocessado = false
+            ORDER BY d.criado_em DESC
+            LIMIT 200"#,
+    )
+    .bind(ctx.tenant_id)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(rows)
 }

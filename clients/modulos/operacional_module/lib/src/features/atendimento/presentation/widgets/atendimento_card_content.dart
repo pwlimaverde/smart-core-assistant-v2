@@ -2,6 +2,7 @@ import 'package:design_system_module/design_system_module.dart';
 import 'package:flutter/material.dart';
 
 import '../../domain/model/atendimento_resumo.dart';
+import 'avatar_do_contato.dart';
 
 /// Conteúdo textual de um card de atendimento no Kanban (WS-6.2): assunto,
 /// prioridade e id do contato. Nunca exibe telefone completo (mascarado pelo
@@ -44,15 +45,34 @@ class AtendimentoCardContent extends StatelessWidget {
         Row(
           children: [
             _PrioridadeChip(prioridade: atendimento.prioridade),
+            // P16 — a IA respondeu com pouca confiança e ninguém conferiu.
+            if (atendimento.revisaoPendente) ...[
+              const SizedBox(width: AppSpacing.xs),
+              Tooltip(
+                message: 'A IA respondeu com pouca confiança. Confira a resposta.',
+                child: Icon(
+                  Icons.rate_review_outlined,
+                  size: 14,
+                  color: colors.warning,
+                ),
+              ),
+            ],
             if (atendimento.sentimentoLabel case final label?
                 when label.isNotEmpty) ...[
               const SizedBox(width: AppSpacing.xs),
               _SentimentoChip(label: label),
             ],
             const SizedBox(width: AppSpacing.xs),
+            // P13 — quem é, e não `Contato #id`.
+            AvatarDoContato(
+              nome: atendimento.nomeParaExibir,
+              fotoUrl: atendimento.contatoFotoUrl,
+              raio: 9,
+            ),
+            const SizedBox(width: AppSpacing.xs),
             Expanded(
               child: Text(
-                'Contato #${atendimento.contatoId}',
+                atendimento.nomeParaExibir,
                 style: Theme.of(
                   context,
                 ).textTheme.labelSmall?.copyWith(color: colors.fgMuted),

@@ -16,6 +16,12 @@ import 'features/contatos/data/datasources/contatos_datasources.dart';
 import 'features/contatos/data/repositories/contatos_repositories.dart';
 import 'features/contatos/domain/usecases/contatos_usecases.dart';
 import 'features/contatos/presentation/routes/contatos_routes.dart';
+import 'features/versao/data/versao_datasource.dart';
+import 'features/versao/domain/versao_do_app.dart';
+import 'features/ignorados/data/datasources/ignorados_datasources.dart';
+import 'features/ignorados/data/repositories/ignorados_repositories.dart';
+import 'features/ignorados/domain/usecases/ignorados_usecases.dart';
+import 'features/ignorados/presentation/routes/ignorados_routes.dart';
 import 'features/fluxos/data/datasources/fluxos_datasources.dart';
 import 'features/fluxos/data/repositories/fluxos_repositories.dart';
 import 'features/fluxos/domain/usecases/fluxos_usecases.dart';
@@ -262,6 +268,83 @@ final class TenantModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<DesconectarConexaoUsecase>(
+      () => DesconectarConexaoUsecase(
+        repository: DesconectarConexaoRepository(
+          datasource: DesconectarConexaoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<DefinirDepartamentoDaConexaoUsecase>(
+      () => DefinirDepartamentoDaConexaoUsecase(
+        repository: DefinirDepartamentoDaConexaoRepository(
+          datasource: DefinirDepartamentoDaConexaoDatasource(
+            client: _adminClient(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<DetalheDaConexaoUsecase>(
+      () => DetalheDaConexaoUsecase(
+        repository: DetalheDaConexaoRepository(
+          datasource: DetalheDaConexaoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+
+    i.lazySingleton<ListarNaoEntreguesUsecase>(
+      () => ListarNaoEntreguesUsecase(
+        repository: ListarNaoEntreguesRepository(
+          datasource: ListarNaoEntreguesDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<ReenviarNaoEntregueUsecase>(
+      () => ReenviarNaoEntregueUsecase(
+        repository: ReenviarNaoEntregueRepository(
+          datasource: ReenviarNaoEntregueDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+
+    // ── versão do app (P11) ────────────────────────────────────────────────
+    i.lazySingleton<ConsultarVersaoUsecase>(
+      () => ConsultarVersaoUsecase(
+        repository: ConsultarVersaoRepository(
+          datasource: ConsultarVersaoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+
+    // ── números ignorados (P7) ─────────────────────────────────────────────
+    i.lazySingleton<ListarIgnoradosUsecase>(
+      () => ListarIgnoradosUsecase(
+        repository: ListarIgnoradosRepository(
+          datasource: ListarIgnoradosDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<CriarIgnoradoUsecase>(
+      () => CriarIgnoradoUsecase(
+        repository: CriarIgnoradoRepository(
+          datasource: CriarIgnoradoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<AtualizarIgnoradoUsecase>(
+      () => AtualizarIgnoradoUsecase(
+        repository: AtualizarIgnoradoRepository(
+          datasource: AtualizarIgnoradoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
+    i.lazySingleton<RemoverIgnoradoUsecase>(
+      () => RemoverIgnoradoUsecase(
+        repository: RemoverIgnoradoRepository(
+          datasource: RemoverIgnoradoDatasource(client: _adminClient()),
+        ),
+      ),
+    );
 
     // ── contatos ──────────────────────────────────────────────────────────
     // ── clientes (B10 / N11 E5) ────────────────────────────────────────────
@@ -446,6 +529,7 @@ final class TenantModule extends AppModule {
     TenantOwnConfigRoute(),
     IntegracoesRoute(),
     ConexoesRoute(),
+    IgnoradosRoute(),
     ContatosRoute(),
     ClientesRoute(),
     EquipeRoute(),

@@ -16,6 +16,11 @@ import '../model/quadro.dart';
 import '../parameters/ficha_parameters.dart';
 import '../parameters/quadro_parameters.dart';
 import '../parameters/send_outbound_message_parameters.dart';
+import '../model/midia_mensagem.dart';
+import '../parameters/presenca_parameters.dart';
+import '../parameters/quadro_operacao_parameters.dart';
+import '../model/evento_timeline.dart';
+import '../model/contato_da_conversa.dart';
 
 /// Os quatro casos de uso do atendimento.
 ///
@@ -461,5 +466,330 @@ final class CriarNotaUsecase
   FichaError onUnexpected(Object exception, StackTrace stackTrace) {
     _logBug('criarNota', exception, stackTrace);
     return const FichaInesperado();
+  }
+}
+
+/// P3 — "digitando..." do atendente.
+final class EnviarPresencaUsecase
+    extends
+        UsecaseBaseCallData<bool, bool, EnviarPresencaParameters, PresencaError> {
+  const EnviarPresencaUsecase({required super.repository});
+
+  @override
+  ProcessData<bool, bool, EnviarPresencaParameters, PresencaError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  PresencaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('enviarPresenca', exception, stackTrace);
+    return const PresencaInesperado();
+  }
+}
+
+/// P3 — galeria de arquivos da conversa.
+final class ListarMidiasUsecase
+    extends
+        UsecaseBaseCallData<
+          List<MidiaMensagem>,
+          List<MidiaMensagem>,
+          ListarMidiasParameters,
+          MidiasError
+        > {
+  const ListarMidiasUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    List<MidiaMensagem>,
+    List<MidiaMensagem>,
+    ListarMidiasParameters,
+    MidiasError
+  >
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  MidiasError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('listarMidias', exception, stackTrace);
+    return const MidiasInesperado();
+  }
+}
+
+/// P3 — anexo e áudio na conversa.
+final class EnviarMidiaUsecase
+    extends
+        UsecaseBaseCallData<int, int, EnviarMidiaParameters, EnviarMidiaError> {
+  const EnviarMidiaUsecase({required super.repository});
+
+  @override
+  ProcessData<int, int, EnviarMidiaParameters, EnviarMidiaError> get process =>
+      (data, _) => Success(data);
+
+  @override
+  EnviarMidiaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('enviarMidia', exception, stackTrace);
+    return const EnviarMidiaInesperado();
+  }
+}
+
+/// P4 — dono da conversa.
+final class AtribuirAtendimentoUsecase
+    extends
+        UsecaseBaseCallData<
+          bool,
+          bool,
+          AtribuirAtendimentoParameters,
+          QuadroOperacaoError
+        > {
+  const AtribuirAtendimentoUsecase({required super.repository});
+
+  @override
+  ProcessData<bool, bool, AtribuirAtendimentoParameters, QuadroOperacaoError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  QuadroOperacaoError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('atribuirAtendimento', exception, stackTrace);
+    return const QuadroOperacaoInesperado();
+  }
+}
+
+/// P4 — urgência do cartão.
+final class DefinirPrioridadeUsecase
+    extends
+        UsecaseBaseCallData<
+          Unit,
+          Unit,
+          DefinirPrioridadeParameters,
+          QuadroOperacaoError
+        > {
+  const DefinirPrioridadeUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, DefinirPrioridadeParameters, QuadroOperacaoError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  QuadroOperacaoError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('definirPrioridade', exception, stackTrace);
+    return const QuadroOperacaoInesperado();
+  }
+}
+
+/// P4 — transferência de fluxo feita a mão.
+final class TransferirParaFluxoUsecase
+    extends
+        UsecaseBaseCallData<
+          String,
+          String,
+          TransferirParaFluxoParameters,
+          QuadroOperacaoError
+        > {
+  const TransferirParaFluxoUsecase({required super.repository});
+
+  @override
+  ProcessData<String, String, TransferirParaFluxoParameters, QuadroOperacaoError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  QuadroOperacaoError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('transferirParaFluxo', exception, stackTrace);
+    return const QuadroOperacaoInesperado();
+  }
+}
+
+/// P4 — o quadro em CSV.
+final class ExportarQuadroUsecase
+    extends
+        UsecaseBaseCallData<
+          List<int>,
+          List<int>,
+          ExportarQuadroParameters,
+          QuadroOperacaoError
+        > {
+  const ExportarQuadroUsecase({required super.repository});
+
+  @override
+  ProcessData<List<int>, List<int>, ExportarQuadroParameters, QuadroOperacaoError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  QuadroOperacaoError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('exportarQuadro', exception, stackTrace);
+    return const QuadroOperacaoInesperado();
+  }
+}
+
+/// P5 — a linha do tempo do atendimento.
+final class ListarTimelineUsecase
+    extends
+        UsecaseBaseCallData<
+          List<EventoDaTimeline>,
+          List<EventoDaTimeline>,
+          ListarTimelineParameters,
+          FichaError
+        > {
+  const ListarTimelineUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    List<EventoDaTimeline>,
+    List<EventoDaTimeline>,
+    ListarTimelineParameters,
+    FichaError
+  >
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('listarTimeline', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
+/// P5 — as outras conversas do mesmo contato.
+final class AtendimentosDoContatoUsecase
+    extends
+        UsecaseBaseCallData<
+          List<AtendimentoResumo>,
+          List<AtendimentoResumo>,
+          AtendimentosDoContatoParameters,
+          FichaError
+        > {
+  const AtendimentosDoContatoUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    List<AtendimentoResumo>,
+    List<AtendimentoResumo>,
+    AtendimentosDoContatoParameters,
+    FichaError
+  >
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('atendimentosDoContato', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
+/// P5 — apaga uma nota interna.
+final class RemoverNotaUsecase
+    extends
+        UsecaseBaseCallData<Unit, Unit, RemoverNotaParameters, FichaError> {
+  const RemoverNotaUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, RemoverNotaParameters, FichaError> get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('removerNota', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
+/// P5 — renomeia/recolore uma etiqueta do catálogo.
+final class AtualizarEtiquetaUsecase
+    extends
+        UsecaseBaseCallData<
+          Etiqueta,
+          Etiqueta,
+          AtualizarEtiquetaParameters,
+          FichaError
+        > {
+  const AtualizarEtiquetaUsecase({required super.repository});
+
+  @override
+  ProcessData<Etiqueta, Etiqueta, AtualizarEtiquetaParameters, FichaError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('atualizarEtiqueta', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
+/// P5 — tira a etiqueta do catálogo.
+final class DesativarEtiquetaUsecase
+    extends
+        UsecaseBaseCallData<
+          Unit,
+          Unit,
+          DesativarEtiquetaParameters,
+          FichaError
+        > {
+  const DesativarEtiquetaUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, DesativarEtiquetaParameters, FichaError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('desativarEtiqueta', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
+/// P13 — o contato da conversa, para o cabeçalho.
+final class ObterContatoUsecase
+    extends
+        UsecaseBaseCallData<
+          ContatoDaConversa,
+          ContatoDaConversa,
+          ObterContatoParameters,
+          FichaError
+        > {
+  const ObterContatoUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    ContatoDaConversa,
+    ContatoDaConversa,
+    ObterContatoParameters,
+    FichaError
+  >
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  FichaError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('obterContato', exception, stackTrace);
+    return const FichaInesperado();
+  }
+}
+
+/// P16 — conclui a revisão de uma resposta da IA.
+final class MarcarRevisadoUsecase
+    extends
+        UsecaseBaseCallData<
+          Unit,
+          Unit,
+          MarcarRevisadoParameters,
+          QuadroOperacaoError
+        > {
+  const MarcarRevisadoUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, MarcarRevisadoParameters, QuadroOperacaoError>
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  QuadroOperacaoError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('marcarRevisado', exception, stackTrace);
+    return const QuadroOperacaoInesperado();
   }
 }

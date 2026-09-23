@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:design_system_module/design_system_module.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it_module/get_it_module.dart';
@@ -14,6 +16,8 @@ import '../controllers/kanban_controller.dart';
 import '../controllers/kanban_state.dart';
 import '../widgets/atendimento_card_content.dart';
 import 'chat_page.dart';
+import '../escrita_no_quadro.dart';
+import '../aviso_nativo/aviso_nativo.dart';
 
 /// Payload carregado pelo drag de um [KanbanCard] — id do atendimento e etapa
 /// de origem (a coluna de onde saiu), consumido pela coluna de destino.
@@ -79,6 +83,10 @@ class _KanbanPageState extends State<KanbanPage> {
     final controller = inject<KanbanController>();
     controller.carregar();
     _atribuicoes = controller.atribuicoes.listen(_avisarAtribuicao);
+    // P16 — o clique no aviso do Windows abre a conversa.
+    unawaited(AvisoNativo.iniciar(aoClicar: (id) {
+      if (mounted) _abrir(id);
+    }));
   }
 
   @override
@@ -93,6 +101,18 @@ class _KanbanPageState extends State<KanbanPage> {
   void _avisarAtribuicao(AtribuicaoRecebida atribuicao) {
     if (!mounted) return;
     final onde = atribuicao.fluxo.isEmpty ? '' : ' em ${atribuicao.fluxo}';
+    // P16 — com a janela fora de foco, o aviso do quadro não é visto: vai
+    // também para o Windows.
+    final estado = WidgetsBinding.instance.lifecycleState;
+    if (estado != null && estado != AppLifecycleState.resumed) {
+      unawaited(
+        AvisoNativo.mostrar(
+          atendimentoId: atribuicao.atendimentoId,
+          titulo: 'Conversa atribuída a você',
+          corpo: 'Uma conversa$onde está com você agora.',
+        ),
+      );
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text('Uma conversa$onde foi atribuída a você.'),
@@ -154,6 +174,33 @@ class _KanbanPageState extends State<KanbanPage> {
     );
   }
 
+  /// P4 — baixa o quadro em CSV, no mesmo recorte que está na tela.
+  ///
+  /// O arquivo é gravado onde a pessoa escolher: exportação com nome e
+  /// telefone de cliente não deve cair numa pasta qualquer sem ela saber.
+  Future<void> _exportar(KanbanController controller) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final (csv, erro) = await controller.exportar();
+    if (erro != null) {
+      messenger.showSnackBar(SnackBar(content: Text(erro.message)));
+      return;
+    }
+    if (csv == null) return;
+    final hoje = DateTime.now();
+    final nome =
+        'quadro_${hoje.year}-${hoje.month.toString().padLeft(2, '0')}-'
+        '${hoje.day.toString().padLeft(2, '0')}.csv';
+    final destino = await FilePicker.saveFile(
+      dialogTitle: 'Salvar o quadro',
+      fileName: nome,
+      bytes: Uint8List.fromList(csv),
+    );
+    if (destino == null || !mounted) return;
+    messenger.showSnackBar(
+      SnackBar(content: Text('Quadro exportado para $destino')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final controller = inject<KanbanController>();
@@ -162,12 +209,17 @@ class _KanbanPageState extends State<KanbanPage> {
       title: 'Atendimento',
       drawer: widget.drawer,
       actions: [
-        if (widget.buscarContatos != null)
+        if (widget.buscarContatos != null && quadroPodeEscrever())
           IconButton(
             icon: const Icon(Icons.person_add_alt_1_outlined),
             tooltip: 'Iniciar atendimento',
             onPressed: () => _iniciarAtendimento(controller),
           ),
+        IconButton(
+          icon: const Icon(Icons.download_outlined),
+          tooltip: 'Exportar o quadro (CSV)',
+          onPressed: () => _exportar(controller),
+        ),
         IconButton(
           icon: const Icon(Icons.refresh),
           tooltip: 'Recarregar',
@@ -180,6 +232,7 @@ class _KanbanPageState extends State<KanbanPage> {
       body: Column(
         children: [
           if (widget.aviso != null) widget.aviso!,
+          _BarraDeFiltros(controller: controller),
           Expanded(
             child: LayoutBuilder(
               builder: (context, constraints) {
@@ -371,6 +424,8 @@ class _Coluna extends StatelessWidget {
       itemCount: itens.length,
       onAccept: (payload) {
         if (payload.etapaOrigemId == coluna.id) return;
+        // P16 — quem só lê arrasta e o cartão volta: nada a enviar ao servidor.
+        if (!quadroPodeEscrever()) return;
         _moverComFeedback(
           context,
           atendimentoId: payload.atendimentoId,
@@ -396,7 +451,12 @@ class _Coluna extends StatelessWidget {
                 // existe para o quadro que não tem coluna daquele tipo — sem
                 // ele, não haveria como marcar uma conversa como pendente num
                 // quadro de três colunas.
-                _MenuDeEstado(atendimento: atendimento, controller: controller),
+                if (quadroPodeEscrever())
+                  _MenuDoCartao(
+                    atendimento: atendimento,
+                    controller: controller,
+                    viewModel: viewModel,
+                  ),
               ],
             ),
           ),
@@ -434,32 +494,205 @@ const _estadosOferecidos = <(String, String)>[
   ('cancelado', 'Cancelar atendimento'),
 ];
 
-class _MenuDeEstado extends StatelessWidget {
+/// P4 — as prioridades que o cartão aceita, na ordem em que fazem sentido
+/// para quem olha a fila.
+const _prioridadesOferecidas = <(String, String)>[
+  ('urgente', 'Urgente'),
+  ('alta', 'Alta'),
+  ('normal', 'Normal'),
+  ('baixa', 'Baixa'),
+];
+
+/// O menu do cartão: dono, urgência, fluxo e estado.
+///
+/// Um menu só, e não quatro botões: o cartão é pequeno, e cada ação dessas é
+/// ocasional — o caminho do dia a dia continua sendo arrastar.
+class _MenuDoCartao extends StatelessWidget {
   final AtendimentoResumo atendimento;
   final KanbanController controller;
+  final KanbanViewModel viewModel;
 
-  const _MenuDeEstado({required this.atendimento, required this.controller});
+  const _MenuDoCartao({
+    required this.atendimento,
+    required this.controller,
+    required this.viewModel,
+  });
 
   @override
   Widget build(BuildContext context) {
     return PopupMenuButton<String>(
       icon: const Icon(Icons.more_vert, size: 18),
-      tooltip: 'Mudar o estado',
+      tooltip: 'Ações da conversa',
       itemBuilder: (_) => [
+        if (atendimento.revisaoPendente) ...[
+          const PopupMenuItem(
+            value: 'revisado:ok',
+            child: Text('Marcar a resposta da IA como revisada'),
+          ),
+          const PopupMenuDivider(),
+        ],
+        const PopupMenuItem(value: 'dono:eu', child: Text('Atribuir a mim')),
+        if (atendimento.atendenteHumanoId != null)
+          const PopupMenuItem(
+            value: 'dono:fila',
+            child: Text('Devolver para a fila'),
+          ),
+        const PopupMenuDivider(),
+        for (final (valor, rotulo) in _prioridadesOferecidas)
+          if (valor != atendimento.prioridade)
+            PopupMenuItem(
+              value: 'prioridade:$valor',
+              child: Text('Prioridade: $rotulo'),
+            ),
+        // Transferir de fluxo só aparece quando há para onde transferir.
+        if (viewModel.fluxos.length > 1) ...[
+          const PopupMenuDivider(),
+          for (final fluxo in viewModel.fluxos)
+            if (fluxo.id != atendimento.fluxoAtendimentoId)
+              PopupMenuItem(
+                value: 'fluxo:${fluxo.id}',
+                child: Text('Transferir para ${fluxo.rotulo}'),
+              ),
+        ],
+        const PopupMenuDivider(),
         for (final (status, rotulo) in _estadosOferecidos)
           if (status != atendimento.status)
-            PopupMenuItem(value: status, child: Text(rotulo)),
+            PopupMenuItem(value: 'status:$status', child: Text(rotulo)),
       ],
-      onSelected: (status) async {
-        final messenger = ScaffoldMessenger.of(context);
-        final erro = await controller.definirStatus(
-          atendimentoId: atendimento.id,
-          status: status,
-        );
-        if (erro != null) {
-          messenger.showSnackBar(SnackBar(content: Text(erro.message)));
-        }
-      },
+      onSelected: (escolha) => _executar(context, escolha),
+    );
+  }
+
+  Future<void> _executar(BuildContext context, String escolha) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final partes = escolha.split(':');
+    final erro = switch (partes.first) {
+      'dono' => await controller.atribuir(
+        atendimentoId: atendimento.id,
+        devolverParaFila: partes[1] == 'fila',
+      ),
+      'prioridade' => await controller.definirPrioridade(
+        atendimentoId: atendimento.id,
+        prioridade: partes[1],
+      ),
+      'revisado' => await controller.marcarRevisado(atendimento.id),
+      'fluxo' => (await controller.transferirParaFluxo(
+        atendimentoId: atendimento.id,
+        fluxoId: int.parse(partes[1]),
+      )).$2,
+      _ => await controller.definirStatus(
+        atendimentoId: atendimento.id,
+        status: partes[1],
+      ),
+    };
+    if (erro != null) {
+      messenger.showSnackBar(SnackBar(content: Text(erro.message)));
+    }
+  }
+}
+
+/// P1 — o recorte da lista, como na v1: buscar por nome, telefone ou assunto,
+/// e combinar com "minhas" e "não lidas".
+class _BarraDeFiltros extends StatefulWidget {
+  final KanbanController controller;
+
+  const _BarraDeFiltros({required this.controller});
+
+  @override
+  State<_BarraDeFiltros> createState() => _BarraDeFiltrosState();
+}
+
+class _BarraDeFiltrosState extends State<_BarraDeFiltros> {
+  late final TextEditingController _texto = TextEditingController(
+    text: widget.controller.busca,
+  );
+
+  @override
+  void dispose() {
+    _texto.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final c = widget.controller;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.md,
+        AppSpacing.sm,
+        AppSpacing.md,
+        0,
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _texto,
+              decoration: InputDecoration(
+                isDense: true,
+                prefixIcon: const Icon(Icons.search, size: 20),
+                hintText: 'Buscar por nome, telefone ou assunto',
+                border: const OutlineInputBorder(),
+                suffixIcon: _texto.text.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.close, size: 18),
+                        tooltip: 'Limpar busca',
+                        onPressed: () {
+                          _texto.clear();
+                          setState(() {});
+                          c.digitarBusca('');
+                        },
+                      ),
+              ),
+              onChanged: (v) {
+                // O setState é só pelo botão de limpar; a consulta em si é
+                // adiada pelo debounce do controller.
+                setState(() {});
+                c.digitarBusca(v);
+              },
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          FilterChip(
+            label: const Text('Minhas'),
+            selected: c.somenteMeus,
+            onSelected: (v) async {
+              await c.alternarFiltro(meus: v);
+              if (mounted) setState(() {});
+            },
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          FilterChip(
+            label: const Text('Não lidas'),
+            selected: c.somenteNaoLidas,
+            onSelected: (v) async {
+              await c.alternarFiltro(naoLidas: v);
+              if (mounted) setState(() {});
+            },
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          // P16 — respostas da IA que ninguém conferiu.
+          FilterChip(
+            label: const Text('A revisar'),
+            selected: c.somenteRevisar,
+            onSelected: (v) async {
+              await c.alternarFiltro(revisar: v);
+              if (mounted) setState(() {});
+            },
+          ),
+          if (c.temFiltro)
+            IconButton(
+              icon: const Icon(Icons.filter_alt_off_outlined),
+              tooltip: 'Limpar filtros',
+              onPressed: () async {
+                _texto.clear();
+                await c.limparFiltros();
+                if (mounted) setState(() {});
+              },
+            ),
+        ],
+      ),
     );
   }
 }

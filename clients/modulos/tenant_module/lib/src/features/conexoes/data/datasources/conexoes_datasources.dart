@@ -12,6 +12,8 @@ Conexao _paraDominio(proto.MyWhatsappInstance c) => Conexao(
   ativa: c.active,
   criadaEm: DateTime.fromMillisecondsSinceEpoch(c.createdAt.toInt()),
   respostaBot: c.respostaBot,
+  departamentoId: c.departamentoId,
+  departamentoNome: c.departamentoNome,
 );
 
 final class ListarConexoesDatasource
@@ -117,5 +119,121 @@ final class DefinirRespostaBotDatasource
       ),
     );
     return resp.habilitado;
+  }
+}
+
+/// P7 — encerra a sessão sem apagar a conexão.
+final class DesconectarConexaoDatasource
+    implements Datasource<Unit, ConexaoIdParameters> {
+  final proto.AdminServiceClient _client;
+
+  const DesconectarConexaoDatasource({required proto.AdminServiceClient client})
+    // ignore: prefer_initializing_formals
+    : _client = client;
+
+  @override
+  Future<Unit> call(ConexaoIdParameters parameters) async {
+    await _client.desconectarMyWhatsappInstance(
+      proto.MyWhatsappInstanceIdRequest(id: parameters.id),
+    );
+    return unit;
+  }
+}
+
+/// P7 — para qual departamento este número roteia.
+final class DefinirDepartamentoDaConexaoDatasource
+    implements Datasource<Unit, DepartamentoDaConexaoParameters> {
+  final proto.AdminServiceClient _client;
+
+  const DefinirDepartamentoDaConexaoDatasource({
+    required proto.AdminServiceClient client,
+    // ignore: prefer_initializing_formals
+  }) : _client = client;
+
+  @override
+  Future<Unit> call(DepartamentoDaConexaoParameters parameters) async {
+    await _client.definirDepartamentoDaConexao(
+      proto.DefinirDepartamentoDaConexaoRequest(
+        id: parameters.id,
+        departamentoId: parameters.departamentoId,
+      ),
+    );
+    return unit;
+  }
+}
+
+/// P7 — o detalhe da conexão.
+final class DetalheDaConexaoDatasource
+    implements Datasource<DetalheConexao, ConexaoIdParameters> {
+  final proto.AdminServiceClient _client;
+
+  const DetalheDaConexaoDatasource({required proto.AdminServiceClient client})
+    // ignore: prefer_initializing_formals
+    : _client = client;
+
+  @override
+  Future<DetalheConexao> call(ConexaoIdParameters parameters) async {
+    final resp = await _client.detalheDaConexao(
+      proto.DetalheDaConexaoRequest(id: parameters.id),
+    );
+    final checagem = resp.ultimaChecagem.toInt();
+    return DetalheConexao(
+      conexao: _paraDominio(resp.conexao),
+      instanciaNoProvedor: resp.instanciaNoProvedor,
+      atendimentosAbertos: resp.atendimentosAbertos,
+      mensagens24h: resp.mensagens24h,
+      // 0 é "nunca conferida", não 1970: mostrar a data da época seria pior do
+      // que não mostrar nada.
+      ultimaChecagem: checagem == 0
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(checagem),
+    );
+  }
+}
+
+/// P9 — as mensagens que ficaram sem destino.
+final class ListarNaoEntreguesDatasource
+    implements Datasource<List<MensagemParada>, NoParams> {
+  final proto.AdminServiceClient _client;
+
+  const ListarNaoEntreguesDatasource({required proto.AdminServiceClient client})
+    // ignore: prefer_initializing_formals
+    : _client = client;
+
+  @override
+  Future<List<MensagemParada>> call(NoParams parameters) async {
+    final resp = await _client.listMyMensagensNaoEntregues(
+      proto.ListMyMensagensNaoEntreguesRequest(),
+    );
+    return [
+      for (final m in resp.itens)
+        MensagemParada(
+          id: m.id,
+          atendimentoId: m.atendimentoId,
+          motivo: m.motivo,
+          criadaEm: DateTime.fromMillisecondsSinceEpoch(m.criadoEm.toInt()),
+          trecho: m.trecho,
+          contato: m.contato,
+        ),
+    ];
+  }
+}
+
+/// P9 — devolve a mensagem ao outbox.
+final class ReenviarNaoEntregueDatasource
+    implements Datasource<DesfechoReenvio, ConexaoIdParameters> {
+  final proto.AdminServiceClient _client;
+
+  const ReenviarNaoEntregueDatasource({
+    required proto.AdminServiceClient client,
+    // ignore: prefer_initializing_formals
+  }) : _client = client;
+
+  @override
+  Future<DesfechoReenvio> call(ConexaoIdParameters parameters) async {
+    final resp = await _client.reenviarMensagemNaoEntregue(
+      proto.ReenviarMensagemNaoEntregueRequest(id: parameters.id),
+    );
+    return DesfechoReenvio.doServidor(resp.status);
   }
 }

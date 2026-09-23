@@ -75,3 +75,42 @@ final class RegistrarFeedbackTesteUsecase
     return const EnsaioInesperado();
   }
 }
+
+/// P17 — as avaliações do teste ainda não tratadas.
+final class ListarAvaliacoesUsecase
+    extends
+        UsecaseBaseCallData<
+          List<AvaliacaoPendente>,
+          List<AvaliacaoPendente>,
+          NoParams,
+          EnsaioError
+        > {
+  const ListarAvaliacoesUsecase({required super.repository});
+
+  @override
+  ProcessData<
+    List<AvaliacaoPendente>,
+    List<AvaliacaoPendente>,
+    NoParams,
+    EnsaioError
+  >
+  get process =>
+      (data, _) => Success(data);
+
+  @override
+  EnsaioError onUnexpected(Object e, StackTrace s) => const EnsaioInesperado();
+}
+
+/// P17 — tira a avaliação da revisão.
+final class TratarAvaliacaoUsecase
+    extends
+        UsecaseBaseCallData<Unit, Unit, TratarAvaliacaoParameters, EnsaioError> {
+  const TratarAvaliacaoUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, TratarAvaliacaoParameters, EnsaioError> get process =>
+      (data, _) => Success(data);
+
+  @override
+  EnsaioError onUnexpected(Object e, StackTrace s) => const EnsaioInesperado();
+}

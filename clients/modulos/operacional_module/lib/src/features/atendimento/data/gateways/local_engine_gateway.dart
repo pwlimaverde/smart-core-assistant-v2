@@ -16,6 +16,8 @@ import '../../domain/model/ficha.dart';
 import '../../domain/model/midia_mensagem.dart';
 import '../../domain/model/quadro.dart';
 import 'atendimento_remote_gateway.dart';
+import '../../domain/model/evento_timeline.dart';
+import '../../domain/model/contato_da_conversa.dart';
 
 /// Debounce do gatilho de reconexão (N7.4): `connectivity_plus` reporta o tipo
 /// de interface (não garante alcance real à internet) e pode disparar eventos
@@ -142,7 +144,38 @@ final class LocalEngineGateway implements AtendimentoGateway {
     String status = 'fila',
     int? departamentoId,
     int limit = 50,
+    // P1 — o índice local guarda o atendimento, não o contato nem o vínculo
+    // do atendente com o usuário: dá para filtrar por assunto e por não lidas,
+    // e "minhas" fica só no modo online, onde o servidor resolve quem sou eu.
+    String busca = '',
+    bool somenteMeus = false,
+    bool somenteNaoLidos = false,
   }) async {
+    // O servidor é a fonte do quadro; o índice local é o cache para quando não
+    // há rede. Até aqui era o contrário, e o índice nunca era alimentado: nada
+    // chamava `ingestAtendimento`, então no Windows o quadro dependia só do que
+    // o próprio aparelho tinha movido — e nada do que o servidor traz (contato,
+    // não lidas, sentimento, filtros do P1) chegava à tela.
+    //
+    // Escoa a fila offline ANTES de ler: senão um cartão movido sem rede volta
+    // para a coluna antiga na primeira leitura, até o sync alcançar.
+    await _sincronizarBestEffort();
+    try {
+      final remotos = await _remoto.listAtendimentos(
+        status: status,
+        departamentoId: departamentoId,
+        limit: limit,
+        busca: busca,
+        somenteMeus: somenteMeus,
+        somenteNaoLidos: somenteNaoLidos,
+      );
+      unawaited(_guardarAtendimentos(remotos));
+      return remotos;
+    } catch (e) {
+      // Só sem rede o cache entra. Sessão expirada ou falta de permissão sobem
+      // como estão: mostrar dados velhos esconderia o motivo verdadeiro.
+      if (!_semRede(e)) rethrow;
+    }
     try {
       final engine = await _engine();
       final rows = await engine.listAtendimentos(
@@ -150,10 +183,15 @@ final class LocalEngineGateway implements AtendimentoGateway {
         departamentoId: departamentoId,
         limit: limit,
       );
-      // Ao abrir a fila, tenta escoar as ações offline pendentes (best-effort):
-      // se estiver offline, as ações permanecem enfileiradas para nova tentativa.
-      unawaited(_sincronizarBestEffort());
-      return rows.map(_paraResumo).toList();
+      final termo = busca.trim().toLowerCase();
+      return rows
+          .map(_paraResumo)
+          .where(
+            (a) =>
+                (termo.isEmpty || a.assunto.toLowerCase().contains(termo)) &&
+                (!somenteNaoLidos || a.naoLidas > 0),
+          )
+          .toList();
     } catch (e) {
       throw _mapErro(e);
     }
@@ -230,7 +268,26 @@ final class LocalEngineGateway implements AtendimentoGateway {
     required int atendimentoId,
     int limit = 50,
     int offset = 0,
+    int? beforeId,
   }) async {
+    // Servidor primeiro, pelo mesmo motivo do quadro: é ele que traz ticks,
+    // citação, mídia, reações e o que o P1–P12 acrescentou à mensagem.
+    try {
+      final remotas = await _remoto.getThread(
+        atendimentoId: atendimentoId,
+        limit: limit,
+        offset: offset,
+        beforeId: beforeId,
+      );
+      unawaited(_guardarMensagens(remotas));
+      // A mensagem escrita sem rede ainda não existe no servidor: vive no
+      // índice com id negativo até o sync. Sem juntá-la aqui, ela sumiria da
+      // conversa assim que a rede voltasse e antes de o envio completar.
+      if (beforeId != null) return remotas;
+      return [...remotas, ...await _pendentesLocais(atendimentoId)];
+    } catch (e) {
+      if (!_semRede(e)) rethrow;
+    }
     try {
       final engine = await _engine();
       final rows = await engine.getThread(
@@ -238,6 +295,12 @@ final class LocalEngineGateway implements AtendimentoGateway {
         limit: limit,
         offset: offset,
       );
+      // P2 — o índice local não tem cursor: corta pelo id aqui, para a rolagem
+      // para cima devolver o trecho certo também offline.
+      if (beforeId != null) {
+        final anteriores = rows.where((m) => m.id < beforeId).toList();
+        return anteriores.map(_paraMensagem).toList();
+      }
       return rows.map(_paraMensagem).toList();
     } catch (e) {
       throw _mapErro(e);
@@ -282,6 +345,9 @@ final class LocalEngineGateway implements AtendimentoGateway {
     required int atendimentoId,
     required String conteudo,
     String tipo = 'texto',
+    // P2 — a fila offline guarda a intenção de enviar, não a citação: o motor
+    // local não conhece `mensagem_citada_id`. Citar exige estar online.
+    int? mensagemCitadaId,
   }) async {
     try {
       // NUNCA logar `conteudo` (PII) — só trafega no corpo da chamada FFI.
@@ -327,6 +393,119 @@ final class LocalEngineGateway implements AtendimentoGateway {
     );
   }
 
+  // P5 — a ficha vem do servidor: timeline, histórico e catálogo são leitura
+  // de tabelas que o índice local não espelha.
+  @override
+  Future<List<EventoDaTimeline>> listarTimeline({
+    required int atendimentoId,
+  }) => _remoto.listarTimeline(atendimentoId: atendimentoId);
+
+  /// P16 — direto ao servidor, como as outras operações do supervisor.
+  @override
+  Future<void> marcarRevisado({required int atendimentoId}) =>
+      _remoto.marcarRevisado(atendimentoId: atendimentoId);
+
+  /// P13 — só existe com rede: o índice local não guarda o contato.
+  @override
+  Future<ContatoDaConversa> obterContatoDoAtendimento({
+    required int atendimentoId,
+    bool forcar = false,
+  }) => _remoto.obterContatoDoAtendimento(
+    atendimentoId: atendimentoId,
+    forcar: forcar,
+  );
+
+  @override
+  Future<List<AtendimentoResumo>> listarAtendimentosDoContato({
+    required int contatoId,
+    int limit = 20,
+  }) => _remoto.listarAtendimentosDoContato(
+    contatoId: contatoId,
+    limit: limit,
+  );
+
+  @override
+  Future<void> removerNota({
+    required int notaId,
+    required int atendimentoId,
+  }) => _remoto.removerNota(notaId: notaId, atendimentoId: atendimentoId);
+
+  @override
+  Future<Etiqueta> atualizarEtiqueta({
+    required int id,
+    required String nome,
+    String cor = '',
+    String descricao = '',
+  }) => _remoto.atualizarEtiqueta(
+    id: id,
+    nome: nome,
+    cor: cor,
+    descricao: descricao,
+  );
+
+  @override
+  Future<void> desativarEtiqueta({required int id}) =>
+      _remoto.desativarEtiqueta(id: id);
+
+  // P4 — operação do quadro: o índice local não decide dono, prioridade nem
+  // fluxo, e resolver isso offline criaria conflito com o rodízio do servidor.
+  @override
+  Future<bool> atribuirAtendimento({
+    required int atendimentoId,
+    int? atendenteId,
+    bool devolverParaFila = false,
+  }) => _remoto.atribuirAtendimento(
+    atendimentoId: atendimentoId,
+    atendenteId: atendenteId,
+    devolverParaFila: devolverParaFila,
+  );
+
+  @override
+  Future<void> definirPrioridade({
+    required int atendimentoId,
+    required String prioridade,
+  }) => _remoto.definirPrioridade(
+    atendimentoId: atendimentoId,
+    prioridade: prioridade,
+  );
+
+  @override
+  Future<String> transferirParaFluxo({
+    required int atendimentoId,
+    required int fluxoId,
+  }) => _remoto.transferirParaFluxo(
+    atendimentoId: atendimentoId,
+    fluxoId: fluxoId,
+  );
+
+  @override
+  Future<List<int>> exportarQuadro({
+    String status = '',
+    int? departamentoId,
+    String busca = '',
+    bool somenteMeus = false,
+    bool somenteNaoLidos = false,
+  }) => _remoto.exportarQuadro(
+    status: status,
+    departamentoId: departamentoId,
+    busca: busca,
+    somenteMeus: somenteMeus,
+    somenteNaoLidos: somenteNaoLidos,
+  );
+
+  @override
+  Future<bool> enviarPresenca({
+    required int atendimentoId,
+    String situacao = 'composing',
+  }) {
+    // P3 — presença é efêmera e só faz sentido com o provedor alcançável:
+    // delega ao remoto, como a galeria.
+    return _remoto.enviarPresenca(
+      atendimentoId: atendimentoId,
+      situacao: situacao,
+    );
+  }
+
   /// A galeria é leitura de URLs assinadas com TTL curto: cacheá-las no índice
   /// offline entregaria links vencidos na próxima abertura.
   @override
@@ -342,8 +521,35 @@ final class LocalEngineGateway implements AtendimentoGateway {
     );
   }
 
+  /// O realtime do servidor junto com os eventos do próprio motor.
+  ///
+  /// Antes era só o do motor, que emite apenas o que este aparelho fez: mensagem
+  /// nova, presença, atribuição e campos preenchidos pela IA nunca chegavam ao
+  /// Windows. O erro do stream do servidor sobe como está — é ele que dispara o
+  /// backoff de reconexão da tela; o local não derruba nada.
   @override
-  Stream<AtendimentoEvento> streamAtendimentos() async* {
+  Stream<AtendimentoEvento> streamAtendimentos() {
+    StreamSubscription<AtendimentoEvento>? remota;
+    StreamSubscription<AtendimentoEvento>? local;
+    late final StreamController<AtendimentoEvento> saida;
+    saida = StreamController<AtendimentoEvento>(
+      onListen: () {
+        remota = _remoto.streamAtendimentos().listen(
+          saida.add,
+          onError: saida.addError,
+          onDone: saida.close,
+        );
+        local = _streamLocal().listen(saida.add, onError: (Object _) {});
+      },
+      onCancel: () async {
+        await remota?.cancel();
+        await local?.cancel();
+      },
+    );
+    return saida.stream;
+  }
+
+  Stream<AtendimentoEvento> _streamLocal() async* {
     final engine = await _engine();
     yield* engine.streamAtendimentos().map(_paraEvento).handleError((
       Object e,
@@ -351,6 +557,76 @@ final class LocalEngineGateway implements AtendimentoGateway {
     ) {
       throw _mapErro(e);
     });
+  }
+
+  /// Falta de rede, e não recusa do servidor: é o único caso em que o cache
+  /// local responde no lugar dele.
+  static bool _semRede(Object e) =>
+      e is SocketException ||
+      e is TimeoutException ||
+      proto.classificarFalhaGrpc(e) == proto.GrpcFailureKind.unavailable;
+
+  /// Cache do quadro no índice, best-effort: falhar aqui não pode derrubar a
+  /// tela, que já tem os dados do servidor.
+  Future<void> _guardarAtendimentos(List<AtendimentoResumo> itens) async {
+    try {
+      final engine = await _engine();
+      for (final a in itens) {
+        await engine.ingestAtendimento(
+          a: AtendimentoResumoFfi(
+            id: a.id,
+            contatoId: a.contatoId,
+            status: a.status,
+            departamentoId: a.departamentoId,
+            fluxoAtendimentoId: a.fluxoAtendimentoId,
+            etapaAtualId: a.etapaAtualId,
+            assunto: a.assunto,
+            prioridade: a.prioridade,
+            atendenteHumanoId: a.atendenteHumanoId,
+            dataInicio: a.dataInicio.millisecondsSinceEpoch,
+            dataUltimaMensagem: a.dataUltimaMensagem?.millisecondsSinceEpoch,
+          ),
+        );
+      }
+    } catch (_) {
+      // Cache é conveniência: sem ele o app só perde o modo offline.
+    }
+  }
+
+  Future<void> _guardarMensagens(List<MensagemThread> itens) async {
+    try {
+      final engine = await _engine();
+      for (final m in itens) {
+        await engine.ingestMensagem(
+          m: MensagemThreadFfi(
+            id: m.id,
+            atendimentoId: m.atendimentoId,
+            tipo: m.tipo,
+            conteudo: m.conteudo,
+            remetente: m.remetente,
+            timestamp: m.timestamp.millisecondsSinceEpoch,
+            statusEnvio: m.statusEnvio,
+            geradoPorIa: m.geradoPorIa,
+            resumoMidia: m.resumoMidia,
+          ),
+        );
+      }
+    } catch (_) {}
+  }
+
+  /// Mensagens escritas sem rede (id negativo), ainda na fila de envio.
+  Future<List<MensagemThread>> _pendentesLocais(int atendimentoId) async {
+    try {
+      final engine = await _engine();
+      final rows = await engine.getThread(
+        atendimentoId: atendimentoId,
+        limit: 200,
+        offset: 0,
+      );
+      return rows.where((m) => m.id < 0).map(_paraMensagem).toList();
+    } catch (_) {
+      return const [];
+    }
   }
 
   static AtendimentoResumo _paraResumo(AtendimentoResumoFfi a) =>
@@ -503,6 +779,7 @@ final class LocalEngineGateway implements AtendimentoGateway {
           .toList(),
       botPodeAtender: resp.botPodeAtender,
       campos: resp.campos.map(_valorCampoDoProto).toList(),
+      dadosDoContato: {for (final d in resp.dadosDoContato) d.chave: d.valor},
     );
   }
 
@@ -569,6 +846,7 @@ Etiqueta _etiquetaDoProto(proto.Etiqueta e) => Etiqueta(
   cor: e.cor,
   descricao: e.descricao,
   ativo: e.ativo,
+  aplicadaPelaIa: e.aplicadaPelaIa,
 );
 
 /// Um campo do cartão, do protobuf para o domínio (N9 E13).

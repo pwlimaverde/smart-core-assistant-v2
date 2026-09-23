@@ -50,6 +50,24 @@ class _EvolutionPageState extends State<EvolutionPage> {
     }
   }
 
+  /// P9 — ensaia o provedor de IA do tenant e conta o resultado.
+  Future<void> _testarIa(String tenantId) async {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(content: Text('Testando o provedor de IA…')),
+    );
+    final res = await _controller.testarIa(tenantId);
+    if (!mounted) return;
+    messenger.hideCurrentSnackBar();
+    final texto = switch (res) {
+      Success(:final value) when value.ok =>
+        'IA respondendo: ${value.latenciaMs} ms, vetor de ${value.dimensoes}.',
+      Success(:final value) => 'A IA não respondeu: ${value.erro}',
+      Failure(:final error) => ErrorMessageMapper.map(error),
+    };
+    messenger.showSnackBar(SnackBar(content: Text(texto)));
+  }
+
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
@@ -185,6 +203,9 @@ class _EvolutionPageState extends State<EvolutionPage> {
                     ),
                     DataCell(_buildConnectionStatusWidget(isLoading, result)),
                     DataCell(
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
                       ElevatedButton.icon(
                         icon: isLoading
                             ? const SizedBox(
@@ -210,6 +231,16 @@ class _EvolutionPageState extends State<EvolutionPage> {
                             vertical: 8,
                           ),
                         ),
+                      ),
+                          const SizedBox(width: 8),
+                          // P9 — o `test-connection` da v1 para a IA. Chave
+                          // expirada só aparecia quando o bot parava.
+                          OutlinedButton.icon(
+                            icon: const Icon(Icons.psychology_outlined, size: 16),
+                            label: const Text('Testar IA'),
+                            onPressed: () => _testarIa(tenant.id),
+                          ),
+                        ],
                       ),
                     ),
                   ],

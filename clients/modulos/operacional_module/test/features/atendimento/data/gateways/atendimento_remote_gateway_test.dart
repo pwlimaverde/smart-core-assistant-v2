@@ -19,6 +19,28 @@ void main() {
     registerFallbackValue(proto.MoveAtendimentoEtapaRequest());
     registerFallbackValue(proto.SendOutboundMessageRequest());
     registerFallbackValue(proto.StreamAtendimentosRequest());
+    registerFallbackValue(proto.AtendimentoIdRequest());
+    registerFallbackValue(proto.CreateEtiquetaRequest());
+    registerFallbackValue(proto.IniciarAtendimentoManualRequest());
+    registerFallbackValue(proto.SetMyValorCampoRequest());
+    registerFallbackValue(proto.ListarTimelineRequest());
+    registerFallbackValue(proto.ListarAtendimentosDoContatoRequest());
+    registerFallbackValue(proto.RemoverNotaRequest());
+    registerFallbackValue(proto.UpdateEtiquetaRequest());
+    registerFallbackValue(proto.DesativarEtiquetaRequest());
+    registerFallbackValue(proto.AtribuirAtendimentoRequest());
+    registerFallbackValue(proto.DefinirPrioridadeRequest());
+    registerFallbackValue(proto.TransferirParaFluxoRequest());
+    registerFallbackValue(proto.ExportarQuadroRequest());
+    registerFallbackValue(proto.EnviarPresencaRequest());
+    registerFallbackValue(proto.SetAtendimentoStatusRequest());
+    registerFallbackValue(proto.ListMyFluxosRequest());
+    registerFallbackValue(proto.MyFluxoIdRequest());
+    registerFallbackValue(proto.AlternarEtiquetaRequest());
+    registerFallbackValue(proto.MarcarAtendimentoLidoRequest());
+    registerFallbackValue(proto.DefinirBotDaConversaRequest());
+    registerFallbackValue(proto.CreateNotaRequest());
+    registerFallbackValue(proto.ObterContatoDoAtendimentoRequest());
   });
 
   setUp(() {
@@ -54,6 +76,9 @@ void main() {
         status: 'em_atendimento',
         departamentoId: 3,
         limit: 10,
+        busca: '5531',
+        somenteMeus: true,
+        somenteNaoLidos: true,
       );
 
       final enviado =
@@ -62,6 +87,11 @@ void main() {
       expect(enviado.status, 'em_atendimento');
       expect(enviado.departamentoId, 3);
       expect(enviado.limit, 10);
+      // P1 — o recorte da v1 tem de chegar ao servidor; filtrar no cliente
+      // esconderia justamente a conversa que não foi baixada.
+      expect(enviado.busca, '5531');
+      expect(enviado.somenteMeus, isTrue);
+      expect(enviado.somenteNaoLidos, isTrue);
 
       final a = fila.single;
       expect(a.id, 1);
@@ -326,6 +356,311 @@ void main() {
         gateway.streamAtendimentos(),
         emitsError(isA<proto.GrpcError>()),
       );
+    });
+  });
+
+  group('contato (P13)', () {
+    test('o resumo traz nome, telefone e foto do contato', () async {
+      when(() => client.listAtendimentos(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.ListAtendimentosResponse(
+            atendimentos: [
+              proto.AtendimentoResumo(
+                id: 3,
+                contatoId: 9,
+                status: 'fila',
+                dataInicio: _ms(DateTime(2026, 9, 1)),
+                contatoNome: 'Maria',
+                contatoTelefone: '5511999998888',
+                contatoFotoUrl: 'https://pps.whatsapp.net/f',
+              ),
+            ],
+          ),
+        ),
+      );
+
+      final fila = await gateway.listAtendimentos();
+
+      expect(fila.single.nomeParaExibir, 'Maria');
+      expect(fila.single.contatoFotoUrl, 'https://pps.whatsapp.net/f');
+    });
+
+    test('pede o contato repassando o forcar', () async {
+      when(() => client.obterContatoDoAtendimento(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.ObterContatoDoAtendimentoResponse(
+            contatoId: 9,
+            nome: '',
+            telefone: '5511999998888',
+          ),
+        ),
+      );
+
+      final c = await gateway.obterContatoDoAtendimento(
+        atendimentoId: 3,
+        forcar: true,
+      );
+
+      expect(c.nomeParaExibir, '5511999998888');
+      final enviado =
+          verify(
+                () => client.obterContatoDoAtendimento(captureAny()),
+              ).captured.single
+              as proto.ObterContatoDoAtendimentoRequest;
+      expect(enviado.forcar, isTrue);
+    });
+  });
+
+  group('ficha e chamadas diretas ao contrato', () {
+    test('getFicha mapeia etiquetas, notas e campos', () async {
+      when(() => client.getDetalheAtendimento(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.DetalheAtendimentoResponse(
+            catalogo: [
+              proto.Etiqueta(
+                id: Int64(1),
+                nome: 'VIP',
+                cor: '#f00',
+                ativo: true,
+              ),
+            ],
+            etiquetas: [
+              proto.Etiqueta(
+                id: Int64(4),
+                nome: 'Segunda via',
+                ativo: true,
+                aplicadaPelaIa: true,
+              ),
+            ],
+            notas: [
+              proto.Nota(
+                id: Int64(7),
+                texto: 'ligar amanhã',
+                criadoEm: _ms(DateTime(2026, 9, 1)),
+              ),
+            ],
+            botPodeAtender: false,
+            campos: [
+              proto.ValorCampoDoAtendimento(
+                campoId: Int64(3),
+                slug: 'cpf',
+                nome: 'CPF',
+                tipo: 'texto',
+                valorJson: '"123"',
+                origem: 'ia',
+                confianca: 0.9,
+              ),
+            ],
+            dadosDoContato: [
+              proto.DadoDoContato(chave: 'cidade', valor: 'Recife'),
+            ],
+          ),
+        ),
+      );
+
+      final ficha = await gateway.getFicha(9);
+
+      expect(ficha.catalogo.single.nome, 'VIP');
+      expect(ficha.aplicadas.single.aplicadaPelaIa, isTrue);
+      expect(ficha.notas.single.texto, 'ligar amanhã');
+      expect(ficha.botPodeAtender, isFalse);
+      expect(ficha.campos.single.slug, 'cpf');
+      // P15 — os pares viram mapa na ficha.
+      expect(ficha.dadosDoContato, {'cidade': 'Recife'});
+    });
+
+    test('etiquetas: criar, atualizar, alternar e desativar', () async {
+      when(
+        () => client.createEtiqueta(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.EtiquetaResponse()));
+      when(() => client.updateEtiqueta(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.EtiquetaResponse(
+            etiqueta: proto.Etiqueta(id: Int64(2), nome: 'Novo', ativo: true),
+          ),
+        ),
+      );
+      when(
+        () => client.alternarEtiqueta(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
+      when(
+        () => client.desativarEtiqueta(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
+
+      await gateway.criarEtiqueta(nome: 'VIP', cor: '#f00');
+      final atualizada = await gateway.atualizarEtiqueta(id: 2, nome: 'Novo');
+      await gateway.alternarEtiqueta(
+        atendimentoId: 9,
+        etiquetaId: 2,
+        aplicar: true,
+      );
+      await gateway.desativarEtiqueta(id: 2);
+
+      expect(atualizada.nome, 'Novo');
+      final alternar =
+          verify(() => client.alternarEtiqueta(captureAny())).captured.single
+              as proto.AlternarEtiquetaRequest;
+      expect(alternar.aplicar, isTrue);
+      verify(() => client.desativarEtiqueta(any())).called(1);
+    });
+
+    test('notas: criar e remover', () async {
+      when(
+        () => client.createNota(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.NotaResponse()));
+      when(
+        () => client.removerNota(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
+
+      await gateway.criarNota(atendimentoId: 9, texto: 'x');
+      await gateway.removerNota(notaId: 1, atendimentoId: 9);
+
+      verify(() => client.createNota(any())).called(1);
+      verify(() => client.removerNota(any())).called(1);
+    });
+
+    test('iniciar, campo, status, bot e lido', () async {
+      when(() => client.iniciarAtendimentoManual(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.IniciarAtendimentoManualResponse(
+            atendimentoId: 12,
+            jaExistia: true,
+          ),
+        ),
+      );
+      when(
+        () => client.setMyValorCampo(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
+      when(
+        () => client.setAtendimentoStatus(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.SetAtendimentoStatusResponse()));
+      when(
+        () => client.definirBotDaConversa(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.DefinirBotDaConversaResponse()));
+      when(() => client.marcarAtendimentoLido(any())).thenAnswer(
+        (_) => respostaGrpc(proto.MarcarAtendimentoLidoResponse(marcadas: 3)),
+      );
+
+      final iniciado = await gateway.iniciarAtendimento(
+        contatoId: 1,
+        fluxoId: 2,
+        etapaInicialId: 3,
+      );
+      await gateway.definirValorCampo(
+        atendimentoId: 9,
+        campoId: 3,
+        valorJson: '"x"',
+      );
+      await gateway.setAtendimentoStatus(atendimentoId: 9, status: 'fechado');
+      await gateway.definirBotDaConversa(atendimentoId: 9, habilitado: true);
+      final lidas = await gateway.marcarAtendimentoLido(9);
+
+      expect(iniciado.atendimentoId, 12);
+      expect(iniciado.jaExistia, isTrue);
+      expect(lidas, 3);
+    });
+
+    test('atribuir, prioridade, transferir, presença e exportar', () async {
+      when(() => client.atribuirAtendimento(any())).thenAnswer(
+        (_) => respostaGrpc(proto.AtribuirAtendimentoResponse(atribuido: true)),
+      );
+      when(
+        () => client.definirPrioridade(any()),
+      ).thenAnswer((_) => respostaGrpc(proto.DefinirPrioridadeResponse()));
+      when(() => client.transferirParaFluxo(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.TransferirParaFluxoResponse(
+            transferido: true,
+            fluxoNome: 'Vendas',
+          ),
+        ),
+      );
+      when(() => client.enviarPresenca(any())).thenAnswer(
+        (_) => respostaGrpc(proto.EnviarPresencaResponse(enviado: true)),
+      );
+      when(() => client.exportarQuadro(any())).thenAnswer(
+        (_) => respostaGrpc(proto.ExportarQuadroResponse(csv: [65, 66])),
+      );
+
+      final atribuido = await gateway.atribuirAtendimento(atendimentoId: 9);
+      await gateway.definirPrioridade(atendimentoId: 9, prioridade: 'alta');
+      final fluxo = await gateway.transferirParaFluxo(
+        atendimentoId: 9,
+        fluxoId: 2,
+      );
+      final presenca = await gateway.enviarPresenca(atendimentoId: 9);
+      final csv = await gateway.exportarQuadro(busca: 'ana');
+
+      expect(atribuido, isTrue);
+      expect(fluxo, 'Vendas');
+      expect(presenca, isTrue);
+      expect(csv, [65, 66]);
+      final atribuir =
+          verify(() => client.atribuirAtendimento(captureAny())).captured.single
+              as proto.AtribuirAtendimentoRequest;
+      // 0 no protobuf = "a mim".
+      expect(atribuir.atendenteId, 0);
+    });
+
+    test('fluxos, colunas, timeline e histórico do contato', () async {
+      when(() => client.listMyFluxos(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.ListMyFluxosResponse(
+            fluxos: [
+              proto.MyFluxo(id: 1, nome: 'Vendas', ativo: true),
+              proto.MyFluxo(id: 2, nome: 'Velho', ativo: false),
+            ],
+          ),
+        ),
+      );
+      when(() => client.listMyEtapasFluxo(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.ListMyEtapasFluxoResponse(
+            etapas: [
+              proto.MyEtapaFluxo(id: 5, nome: 'Novo', ordem: 1, cor: '#fff'),
+            ],
+          ),
+        ),
+      );
+      when(() => client.listarTimelineAtendimento(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.ListarTimelineResponse(
+            eventos: [
+              proto.EventoDaTimeline(
+                tipo: 'status',
+                quando: _ms(DateTime(2026, 9, 2)),
+                descricao: 'Fechado',
+                automatico: true,
+              ),
+            ],
+          ),
+        ),
+      );
+      when(() => client.listarAtendimentosDoContato(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.ListarAtendimentosDoContatoResponse(
+            atendimentos: [
+              proto.AtendimentoResumo(
+                id: 3,
+                contatoId: 9,
+                status: 'fechado',
+                dataInicio: _ms(DateTime(2026, 8, 1)),
+              ),
+            ],
+          ),
+        ),
+      );
+
+      final fluxos = await gateway.listFluxos();
+      final colunas = await gateway.listColunas(1);
+      final timeline = await gateway.listarTimeline(atendimentoId: 9);
+      final historico = await gateway.listarAtendimentosDoContato(contatoId: 9);
+
+      // Fluxo desativado não aparece no seletor do quadro.
+      expect(fluxos.map((f) => f.nome), ['Vendas']);
+      expect(colunas.single.nome, 'Novo');
+      expect(timeline.single.automatico, isTrue);
+      expect(historico.single.id, 3);
     });
   });
 }

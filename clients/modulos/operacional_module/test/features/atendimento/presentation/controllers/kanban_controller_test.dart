@@ -1,9 +1,12 @@
 import 'package:api_client/api_client.dart' show GrpcError;
 import 'package:bloc_test/bloc_test.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:operacional_module/src/features/atendimento/data/datasources/atendimento_datasources.dart';
+import 'package:operacional_module/src/features/atendimento/data/repositories/atendimento_repositories.dart';
 import 'package:operacional_module/src/features/atendimento/domain/errors/atendimento_errors.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/atendimento_evento.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/quadro.dart';
+import 'package:operacional_module/src/features/atendimento/domain/usecases/atendimento_usecases.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/controllers/kanban_controller.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/controllers/kanban_state.dart';
 import 'package:presentation_module/presentation_module.dart';
@@ -32,6 +35,15 @@ KanbanController _controller(
     statusUsecase: u.status,
     eventos: comStream ? u.eventos : null,
     usuarioAtual: () => usuarioAtual,
+    atribuirUsecase: u.atribuir,
+    prioridadeUsecase: u.prioridade,
+    transferirUsecase: u.transferir,
+    exportarUsecase: u.exportar,
+    revisadoUsecase: MarcarRevisadoUsecase(
+      repository: MarcarRevisadoRepository(
+        datasource: MarcarRevisadoDatasource(gateway: gateway),
+      ),
+    ),
   );
 }
 
@@ -537,6 +549,172 @@ void main() {
       final estado = controller.state as SuccessState<KanbanViewModel>;
       expect(estado.data.porEtapa[40]?.single.status, 'cancelado');
       await controller.close();
+    });
+  });
+
+
+  // ─── P1: busca e filtros ───────────────────────────────────────────────────
+  group('busca e filtros (P1)', () {
+    test('a busca vai para o gateway depois da pausa de digitação', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
+      );
+      final c = _controller(gateway);
+      await c.carregar();
+      final antes = gateway.chamadasList;
+
+      c.digitarBusca('5531');
+      c.digitarBusca('55319');
+      // Enquanto o dedo está no teclado, ninguém consulta o servidor.
+      expect(gateway.chamadasList, antes);
+
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+      expect(gateway.chamadasList, antes + 1);
+      expect(gateway.ultimaBusca, '55319');
+      await c.close();
+    });
+
+    test('"minhas" e "não lidas" combinam e recarregam na hora', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
+      );
+      final c = _controller(gateway);
+      await c.carregar();
+
+      await c.alternarFiltro(meus: true);
+      await c.alternarFiltro(naoLidas: true);
+
+      expect(gateway.ultimoSomenteMeus, isTrue);
+      expect(gateway.ultimoSomenteNaoLidos, isTrue);
+      expect(c.temFiltro, isTrue);
+      await c.close();
+    });
+
+    test('limpar devolve o quadro inteiro', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 1, etapaAtualId: 10)],
+      );
+      final c = _controller(gateway);
+      await c.carregar();
+      await c.alternarFiltro(meus: true, naoLidas: true);
+
+      await c.limparFiltros();
+
+      expect(c.temFiltro, isFalse);
+      expect(gateway.ultimaBusca, '');
+      expect(gateway.ultimoSomenteMeus, isFalse);
+      expect(gateway.ultimoSomenteNaoLidos, isFalse);
+      await c.close();
+    });
+  });
+  // ─── P4: operação do quadro ───────────────────────────────────────────────
+  group('operação do quadro (P4)', () {
+    test('atribuir a mim recarrega o quadro', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 7, etapaAtualId: 10)],
+      );
+      final c = _controller(gateway);
+      await c.carregar();
+      final recargas = gateway.chamadasList;
+
+      final erro = await c.atribuir(atendimentoId: 7);
+
+      expect(erro, isNull);
+      expect(gateway.operacoesDoQuadro, ['atribuir:7:0']);
+      expect(gateway.chamadasList, recargas + 1);
+      await c.close();
+    });
+
+    test('conversa que já tem dono devolve recusa explicada', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 7, etapaAtualId: 10)],
+      )..atribuicaoAceita = false;
+      final c = _controller(gateway);
+      await c.carregar();
+
+      final erro = await c.atribuir(atendimentoId: 7);
+
+      // Sem isso a tela ficaria muda e pareceria que o clique não pegou.
+      expect(erro, isA<QuadroOperacaoRecusada>());
+      expect(erro!.message, contains('outro atendente'));
+      await c.close();
+    });
+
+    test('prioridade e transferência chegam ao servidor', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 7, etapaAtualId: 10)],
+      );
+      final c = _controller(gateway);
+      await c.carregar();
+
+      await c.definirPrioridade(atendimentoId: 7, prioridade: 'urgente');
+      final (destino, erro) = await c.transferirParaFluxo(
+        atendimentoId: 7,
+        fluxoId: 2,
+      );
+
+      expect(gateway.operacoesDoQuadro, [
+        'prioridade:7:urgente',
+        'fluxo:7:2',
+      ]);
+      expect(destino, 'Suporte');
+      expect(erro, isNull);
+      await c.close();
+    });
+
+    test('exportar leva o mesmo recorte que está na tela', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 7, etapaAtualId: 10)],
+      )..csvDoQuadro = [1, 2, 3];
+      final c = _controller(gateway);
+      await c.carregar();
+      await c.alternarFiltro(meus: true);
+      c.digitarBusca('maria');
+      await Future<void>.delayed(const Duration(milliseconds: 500));
+
+      final (csv, erro) = await c.exportar();
+
+      expect(erro, isNull);
+      expect(csv, [1, 2, 3]);
+      expect(gateway.operacoesDoQuadro.last, 'exportar:maria:true:false');
+      await c.close();
+    });
+  });
+  group('revisão das respostas da IA (P16)', () {
+    test('o filtro "a revisar" deixa só os cartões marcados', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [
+          atendimentoDeTeste(id: 1, etapaAtualId: 10, revisaoPendente: true),
+          atendimentoDeTeste(id: 2, etapaAtualId: 10),
+        ],
+      );
+      final c = _controller(gateway);
+      await c.carregar();
+
+      await c.alternarFiltro(revisar: true);
+
+      final vm = (c.state as SuccessState<KanbanViewModel>).data;
+      final ids = vm.porEtapa.values.expand((l) => l).map((a) => a.id);
+      expect(ids, [1]);
+      expect(c.temFiltro, isTrue);
+
+      await c.limparFiltros();
+      expect(c.somenteRevisar, isFalse);
+      await c.close();
+    });
+
+    test('marcar como revisado chega ao gateway e recarrega', () async {
+      final gateway = FakeAtendimentoGateway(
+        fila: [atendimentoDeTeste(id: 7, etapaAtualId: 10, revisaoPendente: true)],
+      );
+      final c = _controller(gateway);
+      await c.carregar();
+
+      final erro = await c.marcarRevisado(7);
+
+      expect(erro, isNull);
+      expect(gateway.revisados, [7]);
+      await c.close();
     });
   });
 }

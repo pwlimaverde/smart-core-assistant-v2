@@ -83,6 +83,17 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$adminSetUserActive, request, options: options);
   }
 
+  /// P18 — torna explícitos os escopos que cada vínculo tem hoje pelo papel.
+  /// Não muda o acesso de ninguém; dry_run só conta.
+  $grpc.ResponseFuture<$0.MigrarEscoposImplicitosResponse>
+      migrarEscoposImplicitos(
+    $0.MigrarEscoposImplicitosRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$migrarEscoposImplicitos, request,
+        options: options);
+  }
+
   $grpc.ResponseFuture<$0.ListTenantsResponse> listTenants(
     $0.ListTenantsRequest request, {
     $grpc.CallOptions? options,
@@ -207,6 +218,16 @@ class AdminServiceClient extends $grpc.Client {
   }) {
     return $createUnaryCall(_$testEvolutionConnection, request,
         options: options);
+  }
+
+  /// P9 — o `test-connection` da v1 para o provedor de IA: um embedding de
+  /// ensaio com a configuração do tenant. Hoje só se descobria que a chave do
+  /// provedor tinha expirado quando o bot parava de responder.
+  $grpc.ResponseFuture<$0.TestarProvedorIaResponse> testarProvedorIa(
+    $0.TestarProvedorIaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$testarProvedorIa, request, options: options);
   }
 
   /// Fase 4: Feature Flags
@@ -375,6 +396,82 @@ class AdminServiceClient extends $grpc.Client {
   }) {
     return $createUnaryCall(_$listarMidiasAtendimento, request,
         options: options);
+  }
+
+  /// P3 — presenca do atendente na conversa (efemera).
+  $grpc.ResponseFuture<$0.EnviarPresencaResponse> enviarPresenca(
+    $0.EnviarPresencaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$enviarPresenca, request, options: options);
+  }
+
+  /// P5 — a ficha completa.
+  $grpc.ResponseFuture<$0.ListarTimelineResponse> listarTimelineAtendimento(
+    $0.ListarTimelineRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listarTimelineAtendimento, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ListarAtendimentosDoContatoResponse>
+      listarAtendimentosDoContato(
+    $0.ListarAtendimentosDoContatoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listarAtendimentosDoContato, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> removerNota(
+    $0.RemoverNotaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$removerNota, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.EtiquetaResponse> updateEtiqueta(
+    $0.UpdateEtiquetaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$updateEtiqueta, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> desativarEtiqueta(
+    $0.DesativarEtiquetaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$desativarEtiqueta, request, options: options);
+  }
+
+  /// P4 — operacao do quadro pelo supervisor.
+  $grpc.ResponseFuture<$0.AtribuirAtendimentoResponse> atribuirAtendimento(
+    $0.AtribuirAtendimentoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$atribuirAtendimento, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.DefinirPrioridadeResponse> definirPrioridade(
+    $0.DefinirPrioridadeRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$definirPrioridade, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.TransferirParaFluxoResponse> transferirParaFluxo(
+    $0.TransferirParaFluxoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$transferirParaFluxo, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ExportarQuadroResponse> exportarQuadro(
+    $0.ExportarQuadroRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$exportarQuadro, request, options: options);
   }
 
   /// Fase N3: Painel do Tenant. Exigem só autenticação (não superuser); o RBAC fino
@@ -612,6 +709,25 @@ class AdminServiceClient extends $grpc.Client {
         options: options);
   }
 
+  /// P17 — revisar as avaliações acumuladas: a correção feita no teste vira
+  /// material de treinamento (pela criação normal) e sai da lista.
+  $grpc.ResponseFuture<$0.ListMyAvaliacoesDeTesteResponse>
+      listMyAvaliacoesDeTeste(
+    $0.ListMyAvaliacoesDeTesteRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyAvaliacoesDeTeste, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> marcarAvaliacaoTratada(
+    $0.MarcarAvaliacaoTratadaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$marcarAvaliacaoTratada, request,
+        options: options);
+  }
+
   $grpc.ResponseFuture<$0.MyTreinamentoResponse> getMyTreinamento(
     $0.GetMyTreinamentoRequest request, {
     $grpc.CallOptions? options,
@@ -685,6 +801,113 @@ class AdminServiceClient extends $grpc.Client {
   }) {
     return $createUnaryCall(_$deleteMyWhatsappInstance, request,
         options: options);
+  }
+
+  /// P7 — encerra a SESSÃO sem apagar a conexão: o histórico e o cadastro ficam,
+  /// e o mesmo registro volta com um QR novo. Remover era a única saída, e ela
+  /// custava o cadastro inteiro para trocar de aparelho.
+  $grpc.ResponseFuture<$0.SimpleOkResponse> desconectarMyWhatsappInstance(
+    $0.MyWhatsappInstanceIdRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$desconectarMyWhatsappInstance, request,
+        options: options);
+  }
+
+  /// P13 — o contato da conversa, com a foto buscada no WhatsApp sob demanda.
+  $grpc.ResponseFuture<$0.ObterContatoDoAtendimentoResponse>
+      obterContatoDoAtendimento(
+    $0.ObterContatoDoAtendimentoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$obterContatoDoAtendimento, request,
+        options: options);
+  }
+
+  /// P16 — o atendente conferiu a resposta que a IA deu com pouca confiança.
+  $grpc.ResponseFuture<$0.SimpleOkResponse> marcarRevisado(
+    $0.MarcarRevisadoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$marcarRevisado, request, options: options);
+  }
+
+  /// P11 — a última versão publicada do app. Até aqui o zip era trocado à mão,
+  /// e ninguém sabia que estava numa versão velha até um bug já corrigido
+  /// aparecer de novo.
+  $grpc.ResponseFuture<$0.GetVersaoDoAppResponse> getVersaoDoApp(
+    $0.GetVersaoDoAppRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$getVersaoDoApp, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> definirDepartamentoDaConexao(
+    $0.DefinirDepartamentoDaConexaoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$definirDepartamentoDaConexao, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.DetalheDaConexaoResponse> detalheDaConexao(
+    $0.DetalheDaConexaoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$detalheDaConexao, request, options: options);
+  }
+
+  /// P9 — mensagens que o atendente mandou e que não tinham para onde ir. O
+  /// reprocessamento existia desde a N7.2 e não era alcançável de tela nenhuma:
+  /// a mensagem ficava parada para sempre sem ninguém saber.
+  $grpc.ResponseFuture<$0.ListMyMensagensNaoEntreguesResponse>
+      listMyMensagensNaoEntregues(
+    $0.ListMyMensagensNaoEntreguesRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyMensagensNaoEntregues, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.ReenviarMensagemNaoEntregueResponse>
+      reenviarMensagemNaoEntregue(
+    $0.ReenviarMensagemNaoEntregueRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$reenviarMensagemNaoEntregue, request,
+        options: options);
+  }
+
+  /// P7 — os números que o sistema ignora (a "whitelist" da v1).
+  $grpc.ResponseFuture<$0.ListMyNumerosIgnoradosResponse>
+      listMyNumerosIgnorados(
+    $0.ListMyNumerosIgnoradosRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyNumerosIgnorados, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.MyNumeroIgnoradoResponse> criarNumeroIgnorado(
+    $0.CriarNumeroIgnoradoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$criarNumeroIgnorado, request, options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> atualizarNumeroIgnorado(
+    $0.AtualizarNumeroIgnoradoRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$atualizarNumeroIgnorado, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> removerNumeroIgnorado(
+    $0.NumeroIgnoradoIdRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$removerNumeroIgnorado, request, options: options);
   }
 
   /// Departamentos e atendentes — a estrutura para onde a fila manda conversa.
@@ -960,6 +1183,12 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/AdminSetUserActive',
       ($0.AdminSetUserActiveRequest value) => value.writeToBuffer(),
       $0.AdminSetUserActiveResponse.fromBuffer);
+  static final _$migrarEscoposImplicitos = $grpc.ClientMethod<
+          $0.MigrarEscoposImplicitosRequest,
+          $0.MigrarEscoposImplicitosResponse>(
+      '/smartcore.contracts.queries.AdminService/MigrarEscoposImplicitos',
+      ($0.MigrarEscoposImplicitosRequest value) => value.writeToBuffer(),
+      $0.MigrarEscoposImplicitosResponse.fromBuffer);
   static final _$listTenants =
       $grpc.ClientMethod<$0.ListTenantsRequest, $0.ListTenantsResponse>(
           '/smartcore.contracts.queries.AdminService/ListTenants',
@@ -1046,6 +1275,11 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/TestEvolutionConnection',
       ($0.TestEvolutionConnectionRequest value) => value.writeToBuffer(),
       $0.TestEvolutionConnectionResponse.fromBuffer);
+  static final _$testarProvedorIa = $grpc.ClientMethod<
+          $0.TestarProvedorIaRequest, $0.TestarProvedorIaResponse>(
+      '/smartcore.contracts.queries.AdminService/TestarProvedorIa',
+      ($0.TestarProvedorIaRequest value) => value.writeToBuffer(),
+      $0.TestarProvedorIaResponse.fromBuffer);
   static final _$listFeatureFlags = $grpc.ClientMethod<
           $0.ListFeatureFlagsRequest, $0.ListFeatureFlagsResponse>(
       '/smartcore.contracts.queries.AdminService/ListFeatureFlags',
@@ -1153,6 +1387,57 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/ListarMidiasAtendimento',
       ($0.ListarMidiasAtendimentoRequest value) => value.writeToBuffer(),
       $0.ListarMidiasAtendimentoResponse.fromBuffer);
+  static final _$enviarPresenca =
+      $grpc.ClientMethod<$0.EnviarPresencaRequest, $0.EnviarPresencaResponse>(
+          '/smartcore.contracts.queries.AdminService/EnviarPresenca',
+          ($0.EnviarPresencaRequest value) => value.writeToBuffer(),
+          $0.EnviarPresencaResponse.fromBuffer);
+  static final _$listarTimelineAtendimento =
+      $grpc.ClientMethod<$0.ListarTimelineRequest, $0.ListarTimelineResponse>(
+          '/smartcore.contracts.queries.AdminService/ListarTimelineAtendimento',
+          ($0.ListarTimelineRequest value) => value.writeToBuffer(),
+          $0.ListarTimelineResponse.fromBuffer);
+  static final _$listarAtendimentosDoContato = $grpc.ClientMethod<
+          $0.ListarAtendimentosDoContatoRequest,
+          $0.ListarAtendimentosDoContatoResponse>(
+      '/smartcore.contracts.queries.AdminService/ListarAtendimentosDoContato',
+      ($0.ListarAtendimentosDoContatoRequest value) => value.writeToBuffer(),
+      $0.ListarAtendimentosDoContatoResponse.fromBuffer);
+  static final _$removerNota =
+      $grpc.ClientMethod<$0.RemoverNotaRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/RemoverNota',
+          ($0.RemoverNotaRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$updateEtiqueta =
+      $grpc.ClientMethod<$0.UpdateEtiquetaRequest, $0.EtiquetaResponse>(
+          '/smartcore.contracts.queries.AdminService/UpdateEtiqueta',
+          ($0.UpdateEtiquetaRequest value) => value.writeToBuffer(),
+          $0.EtiquetaResponse.fromBuffer);
+  static final _$desativarEtiqueta =
+      $grpc.ClientMethod<$0.DesativarEtiquetaRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/DesativarEtiqueta',
+          ($0.DesativarEtiquetaRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$atribuirAtendimento = $grpc.ClientMethod<
+          $0.AtribuirAtendimentoRequest, $0.AtribuirAtendimentoResponse>(
+      '/smartcore.contracts.queries.AdminService/AtribuirAtendimento',
+      ($0.AtribuirAtendimentoRequest value) => value.writeToBuffer(),
+      $0.AtribuirAtendimentoResponse.fromBuffer);
+  static final _$definirPrioridade = $grpc.ClientMethod<
+          $0.DefinirPrioridadeRequest, $0.DefinirPrioridadeResponse>(
+      '/smartcore.contracts.queries.AdminService/DefinirPrioridade',
+      ($0.DefinirPrioridadeRequest value) => value.writeToBuffer(),
+      $0.DefinirPrioridadeResponse.fromBuffer);
+  static final _$transferirParaFluxo = $grpc.ClientMethod<
+          $0.TransferirParaFluxoRequest, $0.TransferirParaFluxoResponse>(
+      '/smartcore.contracts.queries.AdminService/TransferirParaFluxo',
+      ($0.TransferirParaFluxoRequest value) => value.writeToBuffer(),
+      $0.TransferirParaFluxoResponse.fromBuffer);
+  static final _$exportarQuadro =
+      $grpc.ClientMethod<$0.ExportarQuadroRequest, $0.ExportarQuadroResponse>(
+          '/smartcore.contracts.queries.AdminService/ExportarQuadro',
+          ($0.ExportarQuadroRequest value) => value.writeToBuffer(),
+          $0.ExportarQuadroResponse.fromBuffer);
   static final _$createInvite =
       $grpc.ClientMethod<$0.CreateInviteRequest, $0.CreateInviteResponse>(
           '/smartcore.contracts.queries.AdminService/CreateInvite',
@@ -1307,6 +1592,17 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/RegistrarFeedbackTeste',
       ($0.RegistrarFeedbackTesteRequest value) => value.writeToBuffer(),
       $0.RegistrarFeedbackTesteResponse.fromBuffer);
+  static final _$listMyAvaliacoesDeTeste = $grpc.ClientMethod<
+          $0.ListMyAvaliacoesDeTesteRequest,
+          $0.ListMyAvaliacoesDeTesteResponse>(
+      '/smartcore.contracts.queries.AdminService/ListMyAvaliacoesDeTeste',
+      ($0.ListMyAvaliacoesDeTesteRequest value) => value.writeToBuffer(),
+      $0.ListMyAvaliacoesDeTesteResponse.fromBuffer);
+  static final _$marcarAvaliacaoTratada =
+      $grpc.ClientMethod<$0.MarcarAvaliacaoTratadaRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/MarcarAvaliacaoTratada',
+          ($0.MarcarAvaliacaoTratadaRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
   static final _$getMyTreinamento =
       $grpc.ClientMethod<$0.GetMyTreinamentoRequest, $0.MyTreinamentoResponse>(
           '/smartcore.contracts.queries.AdminService/GetMyTreinamento',
@@ -1353,6 +1649,69 @@ class AdminServiceClient extends $grpc.Client {
       $grpc.ClientMethod<$0.MyWhatsappInstanceIdRequest, $0.SimpleOkResponse>(
           '/smartcore.contracts.queries.AdminService/DeleteMyWhatsappInstance',
           ($0.MyWhatsappInstanceIdRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$desconectarMyWhatsappInstance = $grpc.ClientMethod<
+          $0.MyWhatsappInstanceIdRequest, $0.SimpleOkResponse>(
+      '/smartcore.contracts.queries.AdminService/DesconectarMyWhatsappInstance',
+      ($0.MyWhatsappInstanceIdRequest value) => value.writeToBuffer(),
+      $0.SimpleOkResponse.fromBuffer);
+  static final _$obterContatoDoAtendimento = $grpc.ClientMethod<
+          $0.ObterContatoDoAtendimentoRequest,
+          $0.ObterContatoDoAtendimentoResponse>(
+      '/smartcore.contracts.queries.AdminService/ObterContatoDoAtendimento',
+      ($0.ObterContatoDoAtendimentoRequest value) => value.writeToBuffer(),
+      $0.ObterContatoDoAtendimentoResponse.fromBuffer);
+  static final _$marcarRevisado =
+      $grpc.ClientMethod<$0.MarcarRevisadoRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/MarcarRevisado',
+          ($0.MarcarRevisadoRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
+  static final _$getVersaoDoApp =
+      $grpc.ClientMethod<$0.GetVersaoDoAppRequest, $0.GetVersaoDoAppResponse>(
+          '/smartcore.contracts.queries.AdminService/GetVersaoDoApp',
+          ($0.GetVersaoDoAppRequest value) => value.writeToBuffer(),
+          $0.GetVersaoDoAppResponse.fromBuffer);
+  static final _$definirDepartamentoDaConexao = $grpc.ClientMethod<
+          $0.DefinirDepartamentoDaConexaoRequest, $0.SimpleOkResponse>(
+      '/smartcore.contracts.queries.AdminService/DefinirDepartamentoDaConexao',
+      ($0.DefinirDepartamentoDaConexaoRequest value) => value.writeToBuffer(),
+      $0.SimpleOkResponse.fromBuffer);
+  static final _$detalheDaConexao = $grpc.ClientMethod<
+          $0.DetalheDaConexaoRequest, $0.DetalheDaConexaoResponse>(
+      '/smartcore.contracts.queries.AdminService/DetalheDaConexao',
+      ($0.DetalheDaConexaoRequest value) => value.writeToBuffer(),
+      $0.DetalheDaConexaoResponse.fromBuffer);
+  static final _$listMyMensagensNaoEntregues = $grpc.ClientMethod<
+          $0.ListMyMensagensNaoEntreguesRequest,
+          $0.ListMyMensagensNaoEntreguesResponse>(
+      '/smartcore.contracts.queries.AdminService/ListMyMensagensNaoEntregues',
+      ($0.ListMyMensagensNaoEntreguesRequest value) => value.writeToBuffer(),
+      $0.ListMyMensagensNaoEntreguesResponse.fromBuffer);
+  static final _$reenviarMensagemNaoEntregue = $grpc.ClientMethod<
+          $0.ReenviarMensagemNaoEntregueRequest,
+          $0.ReenviarMensagemNaoEntregueResponse>(
+      '/smartcore.contracts.queries.AdminService/ReenviarMensagemNaoEntregue',
+      ($0.ReenviarMensagemNaoEntregueRequest value) => value.writeToBuffer(),
+      $0.ReenviarMensagemNaoEntregueResponse.fromBuffer);
+  static final _$listMyNumerosIgnorados = $grpc.ClientMethod<
+          $0.ListMyNumerosIgnoradosRequest, $0.ListMyNumerosIgnoradosResponse>(
+      '/smartcore.contracts.queries.AdminService/ListMyNumerosIgnorados',
+      ($0.ListMyNumerosIgnoradosRequest value) => value.writeToBuffer(),
+      $0.ListMyNumerosIgnoradosResponse.fromBuffer);
+  static final _$criarNumeroIgnorado = $grpc.ClientMethod<
+          $0.CriarNumeroIgnoradoRequest, $0.MyNumeroIgnoradoResponse>(
+      '/smartcore.contracts.queries.AdminService/CriarNumeroIgnorado',
+      ($0.CriarNumeroIgnoradoRequest value) => value.writeToBuffer(),
+      $0.MyNumeroIgnoradoResponse.fromBuffer);
+  static final _$atualizarNumeroIgnorado = $grpc.ClientMethod<
+          $0.AtualizarNumeroIgnoradoRequest, $0.SimpleOkResponse>(
+      '/smartcore.contracts.queries.AdminService/AtualizarNumeroIgnorado',
+      ($0.AtualizarNumeroIgnoradoRequest value) => value.writeToBuffer(),
+      $0.SimpleOkResponse.fromBuffer);
+  static final _$removerNumeroIgnorado =
+      $grpc.ClientMethod<$0.NumeroIgnoradoIdRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/RemoverNumeroIgnorado',
+          ($0.NumeroIgnoradoIdRequest value) => value.writeToBuffer(),
           $0.SimpleOkResponse.fromBuffer);
   static final _$listMyDepartamentos = $grpc.ClientMethod<
           $0.ListMyDepartamentosRequest, $0.ListMyDepartamentosResponse>(
@@ -1584,6 +1943,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.AdminSetUserActiveRequest.fromBuffer(value),
         ($0.AdminSetUserActiveResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.MigrarEscoposImplicitosRequest,
+            $0.MigrarEscoposImplicitosResponse>(
+        'MigrarEscoposImplicitos',
+        migrarEscoposImplicitos_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.MigrarEscoposImplicitosRequest.fromBuffer(value),
+        ($0.MigrarEscoposImplicitosResponse value) => value.writeToBuffer()));
     $addMethod(
         $grpc.ServiceMethod<$0.ListTenantsRequest, $0.ListTenantsResponse>(
             'ListTenants',
@@ -1729,6 +2097,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.TestEvolutionConnectionRequest.fromBuffer(value),
         ($0.TestEvolutionConnectionResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.TestarProvedorIaRequest,
+            $0.TestarProvedorIaResponse>(
+        'TestarProvedorIa',
+        testarProvedorIa_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.TestarProvedorIaRequest.fromBuffer(value),
+        ($0.TestarProvedorIaResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.ListFeatureFlagsRequest,
             $0.ListFeatureFlagsResponse>(
         'ListFeatureFlags',
@@ -1914,6 +2291,96 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.ListarMidiasAtendimentoRequest.fromBuffer(value),
         ($0.ListarMidiasAtendimentoResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.EnviarPresencaRequest,
+            $0.EnviarPresencaResponse>(
+        'EnviarPresenca',
+        enviarPresenca_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.EnviarPresencaRequest.fromBuffer(value),
+        ($0.EnviarPresencaResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListarTimelineRequest,
+            $0.ListarTimelineResponse>(
+        'ListarTimelineAtendimento',
+        listarTimelineAtendimento_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListarTimelineRequest.fromBuffer(value),
+        ($0.ListarTimelineResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListarAtendimentosDoContatoRequest,
+            $0.ListarAtendimentosDoContatoResponse>(
+        'ListarAtendimentosDoContato',
+        listarAtendimentosDoContato_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListarAtendimentosDoContatoRequest.fromBuffer(value),
+        ($0.ListarAtendimentosDoContatoResponse value) =>
+            value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.RemoverNotaRequest, $0.SimpleOkResponse>(
+        'RemoverNota',
+        removerNota_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.RemoverNotaRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.UpdateEtiquetaRequest, $0.EtiquetaResponse>(
+            'UpdateEtiqueta',
+            updateEtiqueta_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.UpdateEtiquetaRequest.fromBuffer(value),
+            ($0.EtiquetaResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.DesativarEtiquetaRequest, $0.SimpleOkResponse>(
+            'DesativarEtiqueta',
+            desativarEtiqueta_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.DesativarEtiquetaRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.AtribuirAtendimentoRequest,
+            $0.AtribuirAtendimentoResponse>(
+        'AtribuirAtendimento',
+        atribuirAtendimento_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.AtribuirAtendimentoRequest.fromBuffer(value),
+        ($0.AtribuirAtendimentoResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.DefinirPrioridadeRequest,
+            $0.DefinirPrioridadeResponse>(
+        'DefinirPrioridade',
+        definirPrioridade_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.DefinirPrioridadeRequest.fromBuffer(value),
+        ($0.DefinirPrioridadeResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.TransferirParaFluxoRequest,
+            $0.TransferirParaFluxoResponse>(
+        'TransferirParaFluxo',
+        transferirParaFluxo_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.TransferirParaFluxoRequest.fromBuffer(value),
+        ($0.TransferirParaFluxoResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ExportarQuadroRequest,
+            $0.ExportarQuadroResponse>(
+        'ExportarQuadro',
+        exportarQuadro_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ExportarQuadroRequest.fromBuffer(value),
+        ($0.ExportarQuadroResponse value) => value.writeToBuffer()));
     $addMethod(
         $grpc.ServiceMethod<$0.CreateInviteRequest, $0.CreateInviteResponse>(
             'CreateInvite',
@@ -2182,6 +2649,24 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.RegistrarFeedbackTesteRequest.fromBuffer(value),
         ($0.RegistrarFeedbackTesteResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListMyAvaliacoesDeTesteRequest,
+            $0.ListMyAvaliacoesDeTesteResponse>(
+        'ListMyAvaliacoesDeTeste',
+        listMyAvaliacoesDeTeste_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListMyAvaliacoesDeTesteRequest.fromBuffer(value),
+        ($0.ListMyAvaliacoesDeTesteResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.MarcarAvaliacaoTratadaRequest,
+            $0.SimpleOkResponse>(
+        'MarcarAvaliacaoTratada',
+        marcarAvaliacaoTratada_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.MarcarAvaliacaoTratadaRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.GetMyTreinamentoRequest,
             $0.MyTreinamentoResponse>(
         'GetMyTreinamento',
@@ -2264,6 +2749,116 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.MyWhatsappInstanceIdRequest.fromBuffer(value),
         ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.MyWhatsappInstanceIdRequest,
+            $0.SimpleOkResponse>(
+        'DesconectarMyWhatsappInstance',
+        desconectarMyWhatsappInstance_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.MyWhatsappInstanceIdRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ObterContatoDoAtendimentoRequest,
+            $0.ObterContatoDoAtendimentoResponse>(
+        'ObterContatoDoAtendimento',
+        obterContatoDoAtendimento_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ObterContatoDoAtendimentoRequest.fromBuffer(value),
+        ($0.ObterContatoDoAtendimentoResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.MarcarRevisadoRequest, $0.SimpleOkResponse>(
+            'MarcarRevisado',
+            marcarRevisado_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.MarcarRevisadoRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.GetVersaoDoAppRequest,
+            $0.GetVersaoDoAppResponse>(
+        'GetVersaoDoApp',
+        getVersaoDoApp_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.GetVersaoDoAppRequest.fromBuffer(value),
+        ($0.GetVersaoDoAppResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.DefinirDepartamentoDaConexaoRequest,
+            $0.SimpleOkResponse>(
+        'DefinirDepartamentoDaConexao',
+        definirDepartamentoDaConexao_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.DefinirDepartamentoDaConexaoRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.DetalheDaConexaoRequest,
+            $0.DetalheDaConexaoResponse>(
+        'DetalheDaConexao',
+        detalheDaConexao_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.DetalheDaConexaoRequest.fromBuffer(value),
+        ($0.DetalheDaConexaoResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListMyMensagensNaoEntreguesRequest,
+            $0.ListMyMensagensNaoEntreguesResponse>(
+        'ListMyMensagensNaoEntregues',
+        listMyMensagensNaoEntregues_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListMyMensagensNaoEntreguesRequest.fromBuffer(value),
+        ($0.ListMyMensagensNaoEntreguesResponse value) =>
+            value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ReenviarMensagemNaoEntregueRequest,
+            $0.ReenviarMensagemNaoEntregueResponse>(
+        'ReenviarMensagemNaoEntregue',
+        reenviarMensagemNaoEntregue_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ReenviarMensagemNaoEntregueRequest.fromBuffer(value),
+        ($0.ReenviarMensagemNaoEntregueResponse value) =>
+            value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListMyNumerosIgnoradosRequest,
+            $0.ListMyNumerosIgnoradosResponse>(
+        'ListMyNumerosIgnorados',
+        listMyNumerosIgnorados_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListMyNumerosIgnoradosRequest.fromBuffer(value),
+        ($0.ListMyNumerosIgnoradosResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.CriarNumeroIgnoradoRequest,
+            $0.MyNumeroIgnoradoResponse>(
+        'CriarNumeroIgnorado',
+        criarNumeroIgnorado_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.CriarNumeroIgnoradoRequest.fromBuffer(value),
+        ($0.MyNumeroIgnoradoResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.AtualizarNumeroIgnoradoRequest,
+            $0.SimpleOkResponse>(
+        'AtualizarNumeroIgnorado',
+        atualizarNumeroIgnorado_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.AtualizarNumeroIgnoradoRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
+    $addMethod(
+        $grpc.ServiceMethod<$0.NumeroIgnoradoIdRequest, $0.SimpleOkResponse>(
+            'RemoverNumeroIgnorado',
+            removerNumeroIgnorado_Pre,
+            false,
+            false,
+            ($core.List<$core.int> value) =>
+                $0.NumeroIgnoradoIdRequest.fromBuffer(value),
+            ($0.SimpleOkResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.ListMyDepartamentosRequest,
             $0.ListMyDepartamentosResponse>(
         'ListMyDepartamentos',
@@ -2611,6 +3206,15 @@ abstract class AdminServiceBase extends $grpc.Service {
   $async.Future<$0.AdminSetUserActiveResponse> adminSetUserActive(
       $grpc.ServiceCall call, $0.AdminSetUserActiveRequest request);
 
+  $async.Future<$0.MigrarEscoposImplicitosResponse> migrarEscoposImplicitos_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MigrarEscoposImplicitosRequest> $request) async {
+    return migrarEscoposImplicitos($call, await $request);
+  }
+
+  $async.Future<$0.MigrarEscoposImplicitosResponse> migrarEscoposImplicitos(
+      $grpc.ServiceCall call, $0.MigrarEscoposImplicitosRequest request);
+
   $async.Future<$0.ListTenantsResponse> listTenants_Pre($grpc.ServiceCall $call,
       $async.Future<$0.ListTenantsRequest> $request) async {
     return listTenants($call, await $request);
@@ -2758,6 +3362,15 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.TestEvolutionConnectionResponse> testEvolutionConnection(
       $grpc.ServiceCall call, $0.TestEvolutionConnectionRequest request);
+
+  $async.Future<$0.TestarProvedorIaResponse> testarProvedorIa_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.TestarProvedorIaRequest> $request) async {
+    return testarProvedorIa($call, await $request);
+  }
+
+  $async.Future<$0.TestarProvedorIaResponse> testarProvedorIa(
+      $grpc.ServiceCall call, $0.TestarProvedorIaRequest request);
 
   $async.Future<$0.ListFeatureFlagsResponse> listFeatureFlags_Pre(
       $grpc.ServiceCall $call,
@@ -2944,6 +3557,95 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.ListarMidiasAtendimentoResponse> listarMidiasAtendimento(
       $grpc.ServiceCall call, $0.ListarMidiasAtendimentoRequest request);
+
+  $async.Future<$0.EnviarPresencaResponse> enviarPresenca_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.EnviarPresencaRequest> $request) async {
+    return enviarPresenca($call, await $request);
+  }
+
+  $async.Future<$0.EnviarPresencaResponse> enviarPresenca(
+      $grpc.ServiceCall call, $0.EnviarPresencaRequest request);
+
+  $async.Future<$0.ListarTimelineResponse> listarTimelineAtendimento_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListarTimelineRequest> $request) async {
+    return listarTimelineAtendimento($call, await $request);
+  }
+
+  $async.Future<$0.ListarTimelineResponse> listarTimelineAtendimento(
+      $grpc.ServiceCall call, $0.ListarTimelineRequest request);
+
+  $async.Future<$0.ListarAtendimentosDoContatoResponse>
+      listarAtendimentosDoContato_Pre($grpc.ServiceCall $call,
+          $async.Future<$0.ListarAtendimentosDoContatoRequest> $request) async {
+    return listarAtendimentosDoContato($call, await $request);
+  }
+
+  $async.Future<$0.ListarAtendimentosDoContatoResponse>
+      listarAtendimentosDoContato($grpc.ServiceCall call,
+          $0.ListarAtendimentosDoContatoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> removerNota_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.RemoverNotaRequest> $request) async {
+    return removerNota($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> removerNota(
+      $grpc.ServiceCall call, $0.RemoverNotaRequest request);
+
+  $async.Future<$0.EtiquetaResponse> updateEtiqueta_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.UpdateEtiquetaRequest> $request) async {
+    return updateEtiqueta($call, await $request);
+  }
+
+  $async.Future<$0.EtiquetaResponse> updateEtiqueta(
+      $grpc.ServiceCall call, $0.UpdateEtiquetaRequest request);
+
+  $async.Future<$0.SimpleOkResponse> desativarEtiqueta_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.DesativarEtiquetaRequest> $request) async {
+    return desativarEtiqueta($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> desativarEtiqueta(
+      $grpc.ServiceCall call, $0.DesativarEtiquetaRequest request);
+
+  $async.Future<$0.AtribuirAtendimentoResponse> atribuirAtendimento_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.AtribuirAtendimentoRequest> $request) async {
+    return atribuirAtendimento($call, await $request);
+  }
+
+  $async.Future<$0.AtribuirAtendimentoResponse> atribuirAtendimento(
+      $grpc.ServiceCall call, $0.AtribuirAtendimentoRequest request);
+
+  $async.Future<$0.DefinirPrioridadeResponse> definirPrioridade_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.DefinirPrioridadeRequest> $request) async {
+    return definirPrioridade($call, await $request);
+  }
+
+  $async.Future<$0.DefinirPrioridadeResponse> definirPrioridade(
+      $grpc.ServiceCall call, $0.DefinirPrioridadeRequest request);
+
+  $async.Future<$0.TransferirParaFluxoResponse> transferirParaFluxo_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.TransferirParaFluxoRequest> $request) async {
+    return transferirParaFluxo($call, await $request);
+  }
+
+  $async.Future<$0.TransferirParaFluxoResponse> transferirParaFluxo(
+      $grpc.ServiceCall call, $0.TransferirParaFluxoRequest request);
+
+  $async.Future<$0.ExportarQuadroResponse> exportarQuadro_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ExportarQuadroRequest> $request) async {
+    return exportarQuadro($call, await $request);
+  }
+
+  $async.Future<$0.ExportarQuadroResponse> exportarQuadro(
+      $grpc.ServiceCall call, $0.ExportarQuadroRequest request);
 
   $async.Future<$0.CreateInviteResponse> createInvite_Pre(
       $grpc.ServiceCall $call,
@@ -3213,6 +3915,24 @@ abstract class AdminServiceBase extends $grpc.Service {
   $async.Future<$0.RegistrarFeedbackTesteResponse> registrarFeedbackTeste(
       $grpc.ServiceCall call, $0.RegistrarFeedbackTesteRequest request);
 
+  $async.Future<$0.ListMyAvaliacoesDeTesteResponse> listMyAvaliacoesDeTeste_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListMyAvaliacoesDeTesteRequest> $request) async {
+    return listMyAvaliacoesDeTeste($call, await $request);
+  }
+
+  $async.Future<$0.ListMyAvaliacoesDeTesteResponse> listMyAvaliacoesDeTeste(
+      $grpc.ServiceCall call, $0.ListMyAvaliacoesDeTesteRequest request);
+
+  $async.Future<$0.SimpleOkResponse> marcarAvaliacaoTratada_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MarcarAvaliacaoTratadaRequest> $request) async {
+    return marcarAvaliacaoTratada($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> marcarAvaliacaoTratada(
+      $grpc.ServiceCall call, $0.MarcarAvaliacaoTratadaRequest request);
+
   $async.Future<$0.MyTreinamentoResponse> getMyTreinamento_Pre(
       $grpc.ServiceCall $call,
       $async.Future<$0.GetMyTreinamentoRequest> $request) async {
@@ -3294,6 +4014,115 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.SimpleOkResponse> deleteMyWhatsappInstance(
       $grpc.ServiceCall call, $0.MyWhatsappInstanceIdRequest request);
+
+  $async.Future<$0.SimpleOkResponse> desconectarMyWhatsappInstance_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MyWhatsappInstanceIdRequest> $request) async {
+    return desconectarMyWhatsappInstance($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> desconectarMyWhatsappInstance(
+      $grpc.ServiceCall call, $0.MyWhatsappInstanceIdRequest request);
+
+  $async.Future<$0.ObterContatoDoAtendimentoResponse>
+      obterContatoDoAtendimento_Pre($grpc.ServiceCall $call,
+          $async.Future<$0.ObterContatoDoAtendimentoRequest> $request) async {
+    return obterContatoDoAtendimento($call, await $request);
+  }
+
+  $async.Future<$0.ObterContatoDoAtendimentoResponse> obterContatoDoAtendimento(
+      $grpc.ServiceCall call, $0.ObterContatoDoAtendimentoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> marcarRevisado_Pre($grpc.ServiceCall $call,
+      $async.Future<$0.MarcarRevisadoRequest> $request) async {
+    return marcarRevisado($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> marcarRevisado(
+      $grpc.ServiceCall call, $0.MarcarRevisadoRequest request);
+
+  $async.Future<$0.GetVersaoDoAppResponse> getVersaoDoApp_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.GetVersaoDoAppRequest> $request) async {
+    return getVersaoDoApp($call, await $request);
+  }
+
+  $async.Future<$0.GetVersaoDoAppResponse> getVersaoDoApp(
+      $grpc.ServiceCall call, $0.GetVersaoDoAppRequest request);
+
+  $async.Future<$0.SimpleOkResponse> definirDepartamentoDaConexao_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.DefinirDepartamentoDaConexaoRequest> $request) async {
+    return definirDepartamentoDaConexao($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> definirDepartamentoDaConexao(
+      $grpc.ServiceCall call, $0.DefinirDepartamentoDaConexaoRequest request);
+
+  $async.Future<$0.DetalheDaConexaoResponse> detalheDaConexao_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.DetalheDaConexaoRequest> $request) async {
+    return detalheDaConexao($call, await $request);
+  }
+
+  $async.Future<$0.DetalheDaConexaoResponse> detalheDaConexao(
+      $grpc.ServiceCall call, $0.DetalheDaConexaoRequest request);
+
+  $async.Future<$0.ListMyMensagensNaoEntreguesResponse>
+      listMyMensagensNaoEntregues_Pre($grpc.ServiceCall $call,
+          $async.Future<$0.ListMyMensagensNaoEntreguesRequest> $request) async {
+    return listMyMensagensNaoEntregues($call, await $request);
+  }
+
+  $async.Future<$0.ListMyMensagensNaoEntreguesResponse>
+      listMyMensagensNaoEntregues($grpc.ServiceCall call,
+          $0.ListMyMensagensNaoEntreguesRequest request);
+
+  $async.Future<$0.ReenviarMensagemNaoEntregueResponse>
+      reenviarMensagemNaoEntregue_Pre($grpc.ServiceCall $call,
+          $async.Future<$0.ReenviarMensagemNaoEntregueRequest> $request) async {
+    return reenviarMensagemNaoEntregue($call, await $request);
+  }
+
+  $async.Future<$0.ReenviarMensagemNaoEntregueResponse>
+      reenviarMensagemNaoEntregue($grpc.ServiceCall call,
+          $0.ReenviarMensagemNaoEntregueRequest request);
+
+  $async.Future<$0.ListMyNumerosIgnoradosResponse> listMyNumerosIgnorados_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListMyNumerosIgnoradosRequest> $request) async {
+    return listMyNumerosIgnorados($call, await $request);
+  }
+
+  $async.Future<$0.ListMyNumerosIgnoradosResponse> listMyNumerosIgnorados(
+      $grpc.ServiceCall call, $0.ListMyNumerosIgnoradosRequest request);
+
+  $async.Future<$0.MyNumeroIgnoradoResponse> criarNumeroIgnorado_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.CriarNumeroIgnoradoRequest> $request) async {
+    return criarNumeroIgnorado($call, await $request);
+  }
+
+  $async.Future<$0.MyNumeroIgnoradoResponse> criarNumeroIgnorado(
+      $grpc.ServiceCall call, $0.CriarNumeroIgnoradoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> atualizarNumeroIgnorado_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.AtualizarNumeroIgnoradoRequest> $request) async {
+    return atualizarNumeroIgnorado($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> atualizarNumeroIgnorado(
+      $grpc.ServiceCall call, $0.AtualizarNumeroIgnoradoRequest request);
+
+  $async.Future<$0.SimpleOkResponse> removerNumeroIgnorado_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.NumeroIgnoradoIdRequest> $request) async {
+    return removerNumeroIgnorado($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> removerNumeroIgnorado(
+      $grpc.ServiceCall call, $0.NumeroIgnoradoIdRequest request);
 
   $async.Future<$0.ListMyDepartamentosResponse> listMyDepartamentos_Pre(
       $grpc.ServiceCall $call,

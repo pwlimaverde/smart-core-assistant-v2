@@ -14,6 +14,11 @@ class Painel {
   final int departamentos;
   final int treinamentosAtivos;
 
+  /// P6 — mediana do tempo até a primeira resposta nas últimas 24h, em
+  /// segundos. `-1` quando ninguém foi respondido nessa janela: é diferente de
+  /// "respondido em zero segundo".
+  final int primeiraRespostaMedianaS;
+
   const Painel({
     required this.emAndamento,
     required this.aguardando,
@@ -22,7 +27,26 @@ class Painel {
     required this.conexoesTotal,
     required this.departamentos,
     required this.treinamentosAtivos,
+    this.primeiraRespostaMedianaS = -1,
   });
+
+  /// P6 — há medida de SLA para mostrar?
+  bool get temSla => primeiraRespostaMedianaS >= 0;
+
+  /// O SLA em linguagem de quem lê: "1 min 20 s", "3 min", "2 h 5 min".
+  String get slaFormatado {
+    final s = primeiraRespostaMedianaS;
+    if (s < 0) return '—';
+    if (s < 60) return '${s}s';
+    if (s < 3600) {
+      final minutos = s ~/ 60;
+      final resto = s % 60;
+      return resto == 0 ? '${minutos}min' : '${minutos}min ${resto}s';
+    }
+    final horas = s ~/ 3600;
+    final minutos = (s % 3600) ~/ 60;
+    return minutos == 0 ? '${horas}h' : '${horas}h ${minutos}min';
+  }
 
   /// Alguma conexão caiu — o sintoma mais grave, porque para de entrar
   /// mensagem sem ninguém perceber.

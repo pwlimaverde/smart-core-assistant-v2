@@ -25,3 +25,14 @@ final class RespostaBotParameters extends Parameters {
 
   const RespostaBotParameters({required this.id, required this.habilitado});
 }
+
+/// P7 — roteamento por conexão. `departamentoId = 0` desfaz o vínculo.
+final class DepartamentoDaConexaoParameters extends Parameters {
+  final int id;
+  final int departamentoId;
+
+  const DepartamentoDaConexaoParameters({
+    required this.id,
+    required this.departamentoId,
+  });
+}

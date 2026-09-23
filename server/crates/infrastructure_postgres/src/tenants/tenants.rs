@@ -619,3 +619,75 @@ impl TenantInviteRepository for PostgresTenantInviteRepository {
         Ok(row)
     }
 }
+
+/// P18 — um vínculo TenantUser visto pela migração de escopos implícitos.
+#[derive(Debug, Clone, sqlx::FromRow, serde::Serialize, serde::Deserialize)]
+pub struct VinculoParaMigracao {
+    pub id: i32,
+    pub user_id: i32,
+    pub tenant_id: Uuid,
+    pub tenant_nome: String,
+    pub role: String,
+    pub module_permissions: serde_json::Value,
+}
+
+/// P18 — todos os vínculos ativos, de todos os tenants. Quem decide se o vínculo
+/// precisa de migração é a regra do login (na `application`), não o SQL: uma
+/// cópia da regra aqui poderia divergir dela.
+///
+/// Exige o pool com BYPASSRLS (é operação do superusuário, atravessa tenants).
+#[tracing::instrument(skip_all)]
+pub async fn listar_vinculos_para_migracao(
+    admin_pool: &PgPool,
+) -> Result<Vec<VinculoParaMigracao>, DbError> {
+    let rows = sqlx::query_as::<_, VinculoParaMigracao>(
+        r#"SELECT tu.id, tu.user_id, tu.tenant_id, COALESCE(t.name, '') AS tenant_nome,
+                  tu.role, tu.module_permissions
+             FROM tenants_tenantuser tu
+             LEFT JOIN tenants_tenant t ON t.id = tu.tenant_id
+            WHERE tu.is_active
+            ORDER BY t.name, tu.id"#,
+    )
+    .fetch_all(admin_pool)
+    .await?;
+    Ok(rows)
+}
+
+/// P18 — grava os escopos explícitos de um vínculo, **só se** as permissões
+/// ainda forem as que a migração leu. Se alguém mexeu no meio, não sobrescreve:
+/// devolve `false` e a migração conta como pulado.
+#[tracing::instrument(skip_all, fields(tenant_user_id = id))]
+pub async fn gravar_permissoes_explicitas(
+    admin_pool: &PgPool,
+    id: i32,
+    lidas: &serde_json::Value,
+    escopos: &serde_json::Value,
+) -> Result<bool, DbError> {
+    let r = sqlx::query(
+        r#"UPDATE tenants_tenantuser
+              SET module_permissions = $3::jsonb
+            WHERE id = $1 AND module_permissions = $2::jsonb"#,
+    )
+    .bind(id)
+    .bind(lidas)
+    .bind(escopos)
+    .execute(admin_pool)
+    .await?;
+    Ok(r.rows_affected() > 0)
+}
+
+/// P18 — a CoreSetting `AUTH_FALLBACK_ROLE_HABILITADO`. Ausente, vazia ou
+/// qualquer coisa que não seja "false"/"0"/"nao" = habilitado (o comportamento
+/// de hoje). Desligar tem de ser um ato explícito do operador.
+#[tracing::instrument(skip_all)]
+pub async fn fallback_de_papel_habilitado(pool: &PgPool) -> Result<bool, DbError> {
+    let valor: Option<String> = sqlx::query_scalar(
+        "SELECT value FROM settings_manager_coresettings WHERE key = 'AUTH_FALLBACK_ROLE_HABILITADO'",
+    )
+    .fetch_optional(pool)
+    .await?;
+    Ok(!matches!(
+        valor.as_deref().map(|v| v.trim().to_lowercase()).as_deref(),
+        Some("false") | Some("0") | Some("nao") | Some("não")
+    ))
+}

@@ -67,3 +67,38 @@ final class RegistrarFeedbackTesteRepository
     };
   }
 }
+
+/// P17 — mesma tradução de falhas do ensaio.
+EnsaioError _erroDaRevisao(Object e, String operacao) {
+  final kind = classificarFalhaGrpc(e);
+  developer.log(
+    '$operacao falhou: $kind',
+    name: 'treinamento_module.ensaio',
+    error: e,
+  );
+  return switch (kind) {
+    GrpcFailureKind.unauthenticated => const EnsaioSessaoExpirada(),
+    GrpcFailureKind.permissionDenied => const EnsaioAcessoNegado(),
+    GrpcFailureKind.unavailable ||
+    GrpcFailureKind.rateLimited => const EnsaioIaIndisponivel(),
+    _ => const EnsaioInesperado(),
+  };
+}
+
+final class ListarAvaliacoesRepository
+    extends RepositoryBase<List<AvaliacaoPendente>, NoParams, EnsaioError> {
+  const ListarAvaliacoesRepository({required super.datasource});
+
+  @override
+  EnsaioError mapError(Object e, StackTrace s, NoParams p) =>
+      _erroDaRevisao(e, 'listar avaliações');
+}
+
+final class TratarAvaliacaoRepository
+    extends RepositoryBase<Unit, TratarAvaliacaoParameters, EnsaioError> {
+  const TratarAvaliacaoRepository({required super.datasource});
+
+  @override
+  EnsaioError mapError(Object e, StackTrace s, TratarAvaliacaoParameters p) =>
+      _erroDaRevisao(e, 'tratar avaliação');
+}

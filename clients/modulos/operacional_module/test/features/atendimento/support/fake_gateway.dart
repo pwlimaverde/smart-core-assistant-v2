@@ -14,6 +14,8 @@ import 'package:operacional_module/src/features/atendimento/domain/model/midia_m
 import 'package:operacional_module/src/features/atendimento/domain/model/quadro.dart';
 import 'package:operacional_module/src/features/atendimento/domain/streams/atendimento_evento_stream.dart';
 import 'package:operacional_module/src/features/atendimento/domain/usecases/atendimento_usecases.dart';
+import 'package:operacional_module/src/features/atendimento/domain/model/evento_timeline.dart';
+import 'package:operacional_module/src/features/atendimento/domain/model/contato_da_conversa.dart';
 
 /// Gateway falso: substitui a plataforma (gRPC-Web ou motor local) por dados em
 /// memória. Como é o **único** ponto trocado, os testes que o usam exercitam a
@@ -33,7 +35,19 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   Object? erroColunas;
 
   int chamadasList = 0;
+
+  /// P1 — último recorte pedido ao gateway.
+  String ultimaBusca = '';
+  bool ultimoSomenteMeus = false;
+  bool ultimoSomenteNaoLidos = false;
   int chamadasThread = 0;
+
+  /// P2 — cursor recebido na última chamada e a página antiga a devolver.
+  int? ultimoBeforeId;
+  List<MensagemThread> anteriores = const [];
+
+  /// P2 — a citação que a última mensagem enviada levava.
+  int? ultimaCitacaoEnviada;
   int chamadasMove = 0;
   int chamadasSend = 0;
   int chamadasStatus = 0;
@@ -89,8 +103,15 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
     String status = 'fila',
     int? departamentoId,
     int limit = 50,
+    String busca = '',
+    bool somenteMeus = false,
+    bool somenteNaoLidos = false,
   }) async {
     chamadasList++;
+    // P1 — guarda o recorte pedido para os testes de busca e filtros.
+    ultimaBusca = busca;
+    ultimoSomenteMeus = somenteMeus;
+    ultimoSomenteNaoLidos = somenteNaoLidos;
     if (erroList != null) throw erroList!;
     return fila;
   }
@@ -100,9 +121,14 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
     required int atendimentoId,
     int limit = 50,
     int offset = 0,
+    int? beforeId,
   }) async {
     chamadasThread++;
+    // P2 — guarda o cursor pedido e responde a página antiga combinada, se o
+    // teste tiver preparado uma.
+    ultimoBeforeId = beforeId;
     if (erroThread != null) throw erroThread!;
+    if (beforeId != null) return anteriores;
     return thread;
   }
 
@@ -122,8 +148,10 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
     required int atendimentoId,
     required String conteudo,
     String tipo = 'texto',
+    int? mensagemCitadaId,
   }) async {
     chamadasSend++;
+    ultimaCitacaoEnviada = mensagemCitadaId;
     if (erroSend != null) throw erroSend!;
     return messageId;
   }
@@ -157,6 +185,137 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
     if (erroEnviarMidia != null) throw erroEnviarMidia!;
     aoProgredir?.call(1);
     return messageId;
+  }
+
+  /// P5 — a ficha completa.
+  List<EventoDaTimeline> timeline = const [];
+  final List<String> acoesDaFicha = [];
+
+  /// P13 — o contato que o cabeçalho mostra, e quantas vezes pediram foto nova.
+  ContatoDaConversa contato = const ContatoDaConversa(
+    contatoId: 2,
+    nome: 'Maria',
+    telefone: '5511999998888',
+    fotoUrl: '',
+  );
+  final List<bool> pedidosDeContato = [];
+
+  /// P16 — atendimentos marcados como revisados.
+  final List<int> revisados = [];
+
+  @override
+  Future<void> marcarRevisado({required int atendimentoId}) async =>
+      revisados.add(atendimentoId);
+
+  @override
+  Future<ContatoDaConversa> obterContatoDoAtendimento({
+    required int atendimentoId,
+    bool forcar = false,
+  }) async {
+    pedidosDeContato.add(forcar);
+    return contato;
+  }
+
+  @override
+  Future<List<EventoDaTimeline>> listarTimeline({
+    required int atendimentoId,
+  }) async => timeline;
+
+  @override
+  Future<List<AtendimentoResumo>> listarAtendimentosDoContato({
+    required int contatoId,
+    int limit = 20,
+  }) async => fila;
+
+  @override
+  Future<void> removerNota({
+    required int notaId,
+    required int atendimentoId,
+  }) async {
+    acoesDaFicha.add('removerNota:$notaId:$atendimentoId');
+  }
+
+  @override
+  Future<Etiqueta> atualizarEtiqueta({
+    required int id,
+    required String nome,
+    String cor = '',
+    String descricao = '',
+  }) async {
+    acoesDaFicha.add('atualizarEtiqueta:$id:$nome');
+    return Etiqueta(
+      id: id,
+      nome: nome,
+      cor: cor,
+      descricao: descricao,
+      ativo: true,
+    );
+  }
+
+  @override
+  Future<void> desativarEtiqueta({required int id}) async {
+    acoesDaFicha.add('desativarEtiqueta:$id');
+  }
+
+  /// P4 — o que a tela pediu ao quadro.
+  final List<String> operacoesDoQuadro = [];
+  bool atribuicaoAceita = true;
+  List<int> csvDoQuadro = const [];
+
+  @override
+  Future<bool> atribuirAtendimento({
+    required int atendimentoId,
+    int? atendenteId,
+    bool devolverParaFila = false,
+  }) async {
+    operacoesDoQuadro.add(
+      devolverParaFila
+          ? 'devolver:$atendimentoId'
+          : 'atribuir:$atendimentoId:${atendenteId ?? 0}',
+    );
+    return atribuicaoAceita;
+  }
+
+  @override
+  Future<void> definirPrioridade({
+    required int atendimentoId,
+    required String prioridade,
+  }) async {
+    operacoesDoQuadro.add('prioridade:$atendimentoId:$prioridade');
+  }
+
+  @override
+  Future<String> transferirParaFluxo({
+    required int atendimentoId,
+    required int fluxoId,
+  }) async {
+    operacoesDoQuadro.add('fluxo:$atendimentoId:$fluxoId');
+    return 'Suporte';
+  }
+
+  @override
+  Future<List<int>> exportarQuadro({
+    String status = '',
+    int? departamentoId,
+    String busca = '',
+    bool somenteMeus = false,
+    bool somenteNaoLidos = false,
+  }) async {
+    operacoesDoQuadro.add('exportar:$busca:$somenteMeus:$somenteNaoLidos');
+    return csvDoQuadro;
+  }
+
+  /// P3 — presenças pedidas pela tela, na ordem.
+  final List<String> presencasEnviadas = [];
+  bool presencaEntregue = true;
+
+  @override
+  Future<bool> enviarPresenca({
+    required int atendimentoId,
+    String situacao = 'composing',
+  }) async {
+    presencasEnviadas.add(situacao);
+    return presencaEntregue;
   }
 
   @override
@@ -285,6 +444,15 @@ final class FakeAtendimentoGateway implements AtendimentoGateway {
   DefinirValorCampoUsecase definirValorCampo,
   ListAtendimentosUsecase list,
   GetThreadUsecase thread,
+  EnviarPresencaUsecase presenca,
+  AtribuirAtendimentoUsecase atribuir,
+  RemoverNotaUsecase removerNota,
+  AtualizarEtiquetaUsecase atualizarEtiqueta,
+  DesativarEtiquetaUsecase desativarEtiqueta,
+  DefinirPrioridadeUsecase prioridade,
+  TransferirParaFluxoUsecase transferir,
+  ExportarQuadroUsecase exportar,
+  ListarMidiasUsecase midias,
   MoveAtendimentoEtapaUsecase move,
   SendOutboundMessageUsecase send,
   ListFluxosUsecase fluxos,
@@ -317,6 +485,51 @@ usecasesSobre(FakeAtendimentoGateway gateway) => (
   thread: GetThreadUsecase(
     repository: GetThreadRepository(
       datasource: GetThreadDatasource(gateway: gateway),
+    ),
+  ),
+  removerNota: RemoverNotaUsecase(
+    repository: RemoverNotaRepository(
+      datasource: RemoverNotaDatasource(gateway: gateway),
+    ),
+  ),
+  atualizarEtiqueta: AtualizarEtiquetaUsecase(
+    repository: AtualizarEtiquetaRepository(
+      datasource: AtualizarEtiquetaDatasource(gateway: gateway),
+    ),
+  ),
+  desativarEtiqueta: DesativarEtiquetaUsecase(
+    repository: DesativarEtiquetaRepository(
+      datasource: DesativarEtiquetaDatasource(gateway: gateway),
+    ),
+  ),
+  atribuir: AtribuirAtendimentoUsecase(
+    repository: AtribuirAtendimentoRepository(
+      datasource: AtribuirAtendimentoDatasource(gateway: gateway),
+    ),
+  ),
+  prioridade: DefinirPrioridadeUsecase(
+    repository: DefinirPrioridadeRepository(
+      datasource: DefinirPrioridadeDatasource(gateway: gateway),
+    ),
+  ),
+  transferir: TransferirParaFluxoUsecase(
+    repository: TransferirParaFluxoRepository(
+      datasource: TransferirParaFluxoDatasource(gateway: gateway),
+    ),
+  ),
+  exportar: ExportarQuadroUsecase(
+    repository: ExportarQuadroRepository(
+      datasource: ExportarQuadroDatasource(gateway: gateway),
+    ),
+  ),
+  presenca: EnviarPresencaUsecase(
+    repository: EnviarPresencaRepository(
+      datasource: EnviarPresencaDatasource(gateway: gateway),
+    ),
+  ),
+  midias: ListarMidiasUsecase(
+    repository: ListarMidiasRepository(
+      datasource: ListarMidiasDatasource(gateway: gateway),
     ),
   ),
   move: MoveAtendimentoEtapaUsecase(
@@ -411,7 +624,9 @@ AtendimentoResumo atendimentoDeTeste({
   int? etapaAtualId,
   String prioridade = 'normal',
   DateTime? dataUltimaMensagem,
+  bool revisaoPendente = false,
 }) => AtendimentoResumo(
+  revisaoPendente: revisaoPendente,
   id: id,
   contatoId: id,
   status: 'fila',

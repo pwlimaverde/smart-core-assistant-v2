@@ -29,8 +29,13 @@ use contracts::grpc::queries::{
     AtendimentoIdRequest,
     // Fase 6 - Operacional (fila/Kanban/chat)
     AtendimentoResumo as ProtoAtendimentoResumo,
+    AtribuirAtendimentoRequest,
+    AtribuirAtendimentoResponse,
+    AtualizarNumeroIgnoradoRequest,
     AuditLogEntry as ProtoAuditLogEntry,
     AuthResponse,
+    AvaliacaoDeTeste,
+    ContagemDeMigracao,
     ContatoDoCliente,
     CoreSetting as ProtoCoreSetting,
     CreateEtiquetaRequest,
@@ -57,22 +62,35 @@ use contracts::grpc::queries::{
     // Vouchers de ativação
     CreateVoucherRequest,
     CreateVoucherResponse,
+    CriarNumeroIgnoradoRequest,
+    DadoDoContato,
     DadosMyCliente,
     DefinirBotDaConversaRequest,
     DefinirBotDaConversaResponse,
+    DefinirDepartamentoDaConexaoRequest,
     DefinirMyClienteAtivoRequest,
     DefinirMyContatoAtivoRequest,
+    DefinirPrioridadeRequest,
+    DefinirPrioridadeResponse,
     DefinirRespostaBotInstanciaRequest,
     DefinirRespostaBotInstanciaResponse,
     DeleteCoreSettingRequest,
     DeleteCoreSettingResponse,
+    DesativarEtiquetaRequest,
     DetalheAtendimentoResponse,
+    DetalheDaConexaoRequest,
+    DetalheDaConexaoResponse,
     EnviarMidiaAtendimentoRequest,
     EnviarMidiaAtendimentoResponse,
+    EnviarPresencaRequest,
+    EnviarPresencaResponse,
     Etiqueta as ProtoEtiqueta,
     EtiquetaResponse,
+    EventoDaTimeline,
     ExportTenantsCsvRequest,
     ExportTenantsCsvResponse,
+    ExportarQuadroRequest,
+    ExportarQuadroResponse,
     FeatureFlag as ProtoFeatureFlag,
     FeatureFlagOverride as ProtoFeatureFlagOverride,
     FinalizarMyTreinamentoRequest,
@@ -96,6 +114,8 @@ use contracts::grpc::queries::{
     GetTenantResponse,
     GetThreadRequest,
     GetThreadResponse,
+    GetVersaoDoAppRequest,
+    GetVersaoDoAppResponse,
     IniciarAtendimentoManualRequest,
     IniciarAtendimentoManualResponse,
     ListAtendimentosRequest,
@@ -114,6 +134,8 @@ use contracts::grpc::queries::{
     ListMyAtendentesResponse,
     ListMyAuditLogRequest,
     ListMyAuditLogResponse,
+    ListMyAvaliacoesDeTesteRequest,
+    ListMyAvaliacoesDeTesteResponse,
     ListMyCamposRequest,
     ListMyCamposResponse,
     ListMyClientesRequest,
@@ -128,6 +150,10 @@ use contracts::grpc::queries::{
     ListMyFluxosResponse,
     ListMyIntentsRequest,
     ListMyIntentsResponse,
+    ListMyMensagensNaoEntreguesRequest,
+    ListMyMensagensNaoEntreguesResponse,
+    ListMyNumerosIgnoradosRequest,
+    ListMyNumerosIgnoradosResponse,
     ListMyTreinamentosRequest,
     ListMyTreinamentosResponse,
     ListMyWhatsappInstancesRequest,
@@ -148,16 +174,25 @@ use contracts::grpc::queries::{
     ListVoucherRedemptionsResponse,
     ListVouchersRequest,
     ListVouchersResponse,
+    ListarAtendimentosDoContatoRequest,
+    ListarAtendimentosDoContatoResponse,
     ListarMidiasAtendimentoRequest,
     ListarMidiasAtendimentoResponse,
+    ListarTimelineRequest,
+    ListarTimelineResponse,
     LoginRequest,
     LogoutRequest,
     LogoutResponse,
     MarcarAtendimentoLidoRequest,
     MarcarAtendimentoLidoResponse,
+    MarcarAvaliacaoTratadaRequest,
+    MarcarRevisadoRequest,
     McpGrantItem,
+    MensagemNaoEntregue,
     MensagemThread as ProtoMensagemThread,
     MidiaMensagem as ProtoMidiaMensagem,
+    MigrarEscoposImplicitosRequest,
+    MigrarEscoposImplicitosResponse,
     MoveAtendimentoEtapaRequest,
     MoveAtendimentoEtapaResponse,
     MoverMyEtapaFluxoRequest,
@@ -185,12 +220,17 @@ use contracts::grpc::queries::{
     MyIntentDados,
     MyIntentIdRequest,
     MyIntentResponse,
+    MyNumeroIgnorado,
+    MyNumeroIgnoradoResponse,
     MyTreinamento,
     MyTreinamentoResponse,
     MyWhatsappInstance,
     MyWhatsappInstanceIdRequest,
     Nota as ProtoNota,
     NotaResponse,
+    NumeroIgnoradoIdRequest,
+    ObterContatoDoAtendimentoRequest,
+    ObterContatoDoAtendimentoResponse,
     OpcaoCampo,
     PaymentRecord as ProtoPaymentRecord,
     Plan as ProtoPlan,
@@ -199,16 +239,20 @@ use contracts::grpc::queries::{
     QueryAuditLogResponse,
     QuitarMinhaAssinaturaRequest,
     QuitarMinhaAssinaturaResponse,
+    ReacaoDaMensagem,
     RedefinirSenhaRequest,
     RedefinirSenhaResponse,
     ReenviarConviteRequest,
     ReenviarConviteResponse,
+    ReenviarMensagemNaoEntregueRequest,
+    ReenviarMensagemNaoEntregueResponse,
     RefreshRequest,
     RegisterPaymentRequest,
     RegisterPaymentResponse,
     RegistrarFeedbackTesteRequest,
     RegistrarFeedbackTesteResponse,
     RemoverMyTreinamentoRequest,
+    RemoverNotaRequest,
     RevokeInviteRequest,
     RevokeInviteResponse,
     RevokeMcpGrantRequest,
@@ -249,7 +293,12 @@ use contracts::grpc::queries::{
     TestEvolutionConnectionResponse,
     TestarPerguntaRequest,
     TestarPerguntaResponse,
+    TestarProvedorIaRequest,
+    TestarProvedorIaResponse,
+    TransferirParaFluxoRequest,
+    TransferirParaFluxoResponse,
     TrechoUsado,
+    UpdateEtiquetaRequest,
     UpdateMyAtendenteRequest,
     UpdateMyCampoRequest,
     UpdateMyClienteRequest,
@@ -1196,6 +1245,42 @@ pub struct AdminFacade {
 }
 
 impl AdminFacade {
+    /// P18 — chamada ao `data_postgres` em nome do superusuário.
+    async fn chamar_pg_como_superusuario(
+        &self,
+        claims: &application::jwt::Claims,
+        traceparent: String,
+        metodo: &str,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, Status> {
+        let env_req = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent,
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: metodo.to_string(),
+            payload: serde_json::to_vec(&payload).unwrap_or_default(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: true,
+            ..Default::default()
+        };
+        let resp = self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(30))
+            .await
+            .map_err(|e| Status::internal(e.to_string()))?;
+        if resp.kind == MessageKind::Error as i32 {
+            let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
+            return Err(Status::failed_precondition(err_msg));
+        }
+        serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))
+    }
+
     pub fn new(
         deps: Arc<AuthDeps>,
         bus: redis::aio::ConnectionManager,
@@ -1452,6 +1537,68 @@ impl AdminFacade {
             return Err(status_do_erro_interno(resp.error));
         }
 
+        serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))
+    }
+
+    /// P4 — envelope das rotas operacionais: escopo exigido na borda e
+    /// `flow_permissions` resolvidas, que é o que o `data_postgres` usa para o
+    /// RBAC fino por fluxo. O `encaminhar_tenant` manda a lista vazia, e com
+    /// ela um atendente comum não enxergaria os próprios cartões.
+    async fn encaminhar_operacional<T>(
+        &self,
+        req: &Request<T>,
+        metodo: &str,
+        escopos: &[&str],
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, req).await?;
+        exigir_escopo(&claims, escopos, metodo)?;
+        let traceparent = traceparent_do_metadata(req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let auth_user_id = claims.sub.parse::<i32>().unwrap_or(0);
+        let flow_permissions = if claims.is_superuser {
+            Vec::new()
+        } else {
+            resolver_flow_permissions_web(&self.deps, &claims.tenant_id, auth_user_id, &traceparent)
+                .await
+        };
+
+        let env_req = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent,
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: metodo.to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            auth_user_id,
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            flow_permissions,
+            ..Default::default()
+        };
+
+        let resp = self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(15))
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço interno: {}", e)))?;
+        if resp.kind == MessageKind::Error as i32 {
+            let err = resp.error.unwrap_or_default();
+            // Validação do servidor vira `invalid_argument` na borda: a tela
+            // precisa distinguir "você errou" de "o banco caiu".
+            return Err(
+                if err.category == contracts::ErrorCategory::Validation as i32 {
+                    Status::invalid_argument(err.message)
+                } else {
+                    Status::internal(format!("Erro no banco: {}", err.message))
+                },
+            );
+        }
         serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))
     }
 }
@@ -1915,6 +2062,108 @@ impl AdminService for AdminFacade {
         }
 
         Ok(Response::new(AdminListUsersResponse { usuarios }))
+    }
+
+    /// P18 — torna explícitos os escopos que cada vínculo tem pelo papel.
+    ///
+    /// A regra (quem depende do fallback e que escopos ele tem) é a do login,
+    /// `application::auth::login`; o `data_postgres` só lista e grava. Assim a
+    /// migração não tem como gravar um acesso diferente do que a pessoa tinha.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "MigrarEscoposImplicitos", traceparent)
+    )]
+    async fn migrar_escopos_implicitos(
+        &self,
+        req: Request<MigrarEscoposImplicitosRequest>,
+    ) -> Result<Response<MigrarEscoposImplicitosResponse>, Status> {
+        let claims = exigir_superuser_do_metadata(&self.deps, &self.bus, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let dry_run = req.get_ref().dry_run;
+
+        let corpo = self
+            .chamar_pg_como_superusuario(
+                &claims,
+                traceparent.clone(),
+                "ListarVinculosParaMigracao",
+                serde_json::json!({}),
+            )
+            .await?;
+        let vinculos = corpo
+            .get("vinculos")
+            .and_then(|v| v.as_array())
+            .cloned()
+            .unwrap_or_default();
+
+        let mut itens = Vec::new();
+        let mut contagens: std::collections::BTreeMap<(String, String, String), i32> =
+            std::collections::BTreeMap::new();
+        for v in &vinculos {
+            let lidas = v
+                .get("module_permissions")
+                .cloned()
+                .unwrap_or(serde_json::Value::Null);
+            if application::auth::login::tem_permissoes_explicitas(&lidas) {
+                continue;
+            }
+            let papel = texto_do(v, "role");
+            let tenant_id = texto_do(v, "tenant_id");
+            let tenant_nome = texto_do(v, "tenant_nome");
+            *contagens
+                .entry((tenant_id.clone(), tenant_nome, papel.clone()))
+                .or_default() += 1;
+            itens.push(serde_json::json!({
+                "id": v.get("id"),
+                "user_id": v.get("user_id"),
+                "tenant_id": tenant_id,
+                "papel": papel,
+                "lidas": lidas,
+                "escopos": application::auth::login::escopos_do_papel(&papel),
+            }));
+        }
+        let total = itens.len() as i32;
+
+        let (migrados, pulados) = if dry_run || itens.is_empty() {
+            (0, 0)
+        } else {
+            let r = self
+                .chamar_pg_como_superusuario(
+                    &claims,
+                    traceparent,
+                    "GravarPermissoesExplicitas",
+                    serde_json::json!({ "itens": itens }),
+                )
+                .await?;
+            (
+                r.get("migrados").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+                r.get("pulados").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+            )
+        };
+        tracing::info!(
+            total,
+            migrados,
+            pulados,
+            dry_run,
+            "migração de escopos implícitos"
+        );
+
+        Ok(Response::new(MigrarEscoposImplicitosResponse {
+            contagens: contagens
+                .into_iter()
+                .map(
+                    |((tenant_id, tenant_nome, papel), quantidade)| ContagemDeMigracao {
+                        tenant_id,
+                        tenant_nome,
+                        papel,
+                        quantidade,
+                    },
+                )
+                .collect(),
+            total,
+            migrados,
+            pulados,
+            dry_run,
+        }))
     }
 
     /// D7 — bloqueia/desbloqueia o acesso de um usuário. Só superusuário.
@@ -4289,6 +4538,11 @@ impl AdminService for AdminFacade {
             conexoes_total: n("conexoes_total"),
             departamentos: n("departamentos"),
             treinamentos_ativos: n("treinamentos_ativos"),
+            // P6 — ausente (painel antigo) vale como "sem medida", não zero.
+            primeira_resposta_mediana_s: corpo
+                .get("primeira_resposta_mediana_s")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(-1) as i32,
         }))
     }
 
@@ -4904,11 +5158,43 @@ impl AdminService for AdminFacade {
             )
             .await?;
 
-        let instancias = corpo
+        let mut instancias: Vec<MyWhatsappInstance> = corpo
             .get("instances")
             .and_then(|v| v.as_array())
             .map(|arr| arr.iter().map(instancia_do_json).collect())
             .unwrap_or_default();
+
+        // P7 — o departamento de cada conexão vem numa segunda chamada porque a
+        // listagem usa `query_as!` (macro, cache `.sqlx`) e a coluna é nova.
+        // Best-effort: falhar aqui deixaria a tela sem a lista inteira por causa
+        // de um rótulo. Sem departamento, a conexão aparece como antes.
+        if let Ok(deps) = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "ListDepartamentosDasConexoes",
+                serde_json::json!({}),
+            )
+            .await
+        {
+            if let Some(arr) = deps.get("itens").and_then(|v| v.as_array()) {
+                for item in arr {
+                    let id = item.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                    let Some(alvo) = instancias.iter_mut().find(|i| i.id == id) else {
+                        continue;
+                    };
+                    alvo.departamento_id = item
+                        .get("departamento_id")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0) as i32;
+                    alvo.departamento_nome = item
+                        .get("departamento_nome")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or_default()
+                        .to_string();
+                }
+            }
+        }
 
         Ok(Response::new(ListMyWhatsappInstancesResponse {
             instancias,
@@ -5101,6 +5387,601 @@ impl AdminService for AdminFacade {
         Ok(Response::new(SimpleOkResponse { sucesso: true }))
     }
 
+    /// P13 — o contato da conversa, com a foto buscada no WhatsApp sob demanda.
+    ///
+    /// O provedor é consultado no máximo uma vez a cada 7 dias por contato,
+    /// inclusive quando a resposta foi "sem foto". `forcar` ignora o prazo —
+    /// a tela o usa quando a URL guardada não abre (o CDN do WhatsApp assina as
+    /// URLs com validade) — mas não em menos de 10 minutos da última consulta,
+    /// para uma tela em laço não bater no provedor a cada quadro.
+    ///
+    /// Falhar a consulta ao provedor não é erro: devolve o que está guardado.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ObterContatoDoAtendimento", origem = tracing::field::Empty, traceparent)
+    )]
+    async fn obter_contato_do_atendimento(
+        &self,
+        req: Request<ObterContatoDoAtendimentoRequest>,
+    ) -> Result<Response<ObterContatoDoAtendimentoResponse>, Status> {
+        let inner = *req.get_ref();
+        if inner.atendimento_id <= 0 {
+            return Err(Status::invalid_argument("atendimento inválido"));
+        }
+        let contato = self
+            .encaminhar_operacional(
+                &req,
+                "ContatoDoAtendimento",
+                &["atendimentos:read"],
+                serde_json::json!({ "atendimento_id": inner.atendimento_id }),
+            )
+            .await?;
+
+        let contato_id = contato
+            .get("contato_id")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0) as i32;
+        let mut foto_url = texto_do(&contato, "foto_url");
+        let verificada_ha = contato
+            .get("foto_verificada_em")
+            .and_then(|v| v.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| chrono::Utc::now().signed_duration_since(d));
+        let prazo = if inner.forcar {
+            chrono::Duration::minutes(10)
+        } else {
+            chrono::Duration::days(7)
+        };
+        let consultar = verificada_ha.is_none_or(|idade| idade > prazo);
+
+        let span = tracing::Span::current();
+        if !consultar {
+            span.record("origem", "cache");
+        } else {
+            // A instância e o telefone do atendimento: o mesmo caminho da
+            // presença (P3).
+            let destino = self
+                .encaminhar_operacional(
+                    &req,
+                    "ResolverDestinoDoAtendimento",
+                    &["atendimentos:read"],
+                    serde_json::json!({ "atendimento_id": inner.atendimento_id }),
+                )
+                .await
+                .ok();
+            let alvo = destino.as_ref().and_then(|d| {
+                Some((
+                    d.get("instance_id").and_then(|v| v.as_i64())?,
+                    d.get("to_number").and_then(|v| v.as_str())?.to_string(),
+                ))
+            });
+            if let Some((instance_id, numero)) = alvo {
+                let resposta = self
+                    .encaminhar_tenant(
+                        &req,
+                        &self.whatsapp,
+                        "GetWhatsappProfilePicture",
+                        serde_json::json!({ "id": instance_id, "number": numero }),
+                    )
+                    .await;
+                let achada = resposta
+                    .ok()
+                    .and_then(|r| r.get("url").and_then(|v| v.as_str()).map(str::to_string))
+                    .filter(|u| !u.trim().is_empty());
+                span.record(
+                    "origem",
+                    if achada.is_some() {
+                        "provedor"
+                    } else {
+                        "sem_foto"
+                    },
+                );
+                // Grava a consulta — com ou sem foto — para o freio valer.
+                let _ = self
+                    .encaminhar_operacional(
+                        &req,
+                        "RegistrarFotoDoContato",
+                        &["atendimentos:read"],
+                        serde_json::json!({ "contato_id": contato_id, "foto_url": achada }),
+                    )
+                    .await;
+                if let Some(u) = achada {
+                    foto_url = u;
+                }
+            }
+        }
+
+        Ok(Response::new(ObterContatoDoAtendimentoResponse {
+            contato_id,
+            nome: texto_do(&contato, "nome"),
+            telefone: texto_do(&contato, "telefone"),
+            foto_url,
+        }))
+    }
+
+    /// P17 — as avaliações do teste de resposta ainda não tratadas.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyAvaliacoesDeTeste", traceparent)
+    )]
+    async fn list_my_avaliacoes_de_teste(
+        &self,
+        req: Request<ListMyAvaliacoesDeTesteRequest>,
+    ) -> Result<Response<ListMyAvaliacoesDeTesteResponse>, Status> {
+        let limite = req.get_ref().limite;
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "ListAvaliacoesDeTeste",
+                &["treinamento:read"],
+                serde_json::json!({ "limite": if limite > 0 { limite } else { 50 } }),
+            )
+            .await?;
+        let itens = corpo
+            .get("itens")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .map(|v| AvaliacaoDeTeste {
+                        id: v.get("id").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+                        pergunta: texto_do(v, "pergunta"),
+                        resposta_bot: texto_do(v, "resposta_bot"),
+                        resposta_corrigida: texto_do(v, "resposta_corrigida"),
+                        avaliacao: texto_do(v, "avaliacao"),
+                        confiabilidade: v
+                            .get("confiabilidade")
+                            .and_then(|x| x.as_f64())
+                            .unwrap_or(0.0),
+                        criada_em: v
+                            .get("created_at")
+                            .and_then(|x| x.as_str())
+                            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                            .map(|d| d.timestamp_millis())
+                            .unwrap_or(0),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(Response::new(ListMyAvaliacoesDeTesteResponse { itens }))
+    }
+
+    /// P17 — tira a avaliação da revisão.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "MarcarAvaliacaoTratada", traceparent)
+    )]
+    async fn marcar_avaliacao_tratada(
+        &self,
+        req: Request<MarcarAvaliacaoTratadaRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = *req.get_ref();
+        if inner.id <= 0 {
+            return Err(Status::invalid_argument("avaliação inválida"));
+        }
+        self.encaminhar_operacional(
+            &req,
+            "MarcarAvaliacaoTratada",
+            &["treinamento:write"],
+            serde_json::json!({ "id": inner.id, "virou_treinamento": inner.virou_treinamento }),
+        )
+        .await?;
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    /// P16 — o atendente conferiu a resposta que a IA deu com pouca confiança.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "MarcarRevisado", traceparent)
+    )]
+    async fn marcar_revisado(
+        &self,
+        req: Request<MarcarRevisadoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let id = req.get_ref().atendimento_id;
+        if id <= 0 {
+            return Err(Status::invalid_argument("atendimento inválido"));
+        }
+        self.encaminhar_operacional(
+            &req,
+            "DefinirRevisaoPendente",
+            &["atendimentos:write"],
+            serde_json::json!({ "atendimento_id": id, "pendente": false }),
+        )
+        .await?;
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    /// P11 — a última versão publicada do app de uma plataforma.
+    ///
+    /// Vem das CoreSettings (`app.<plataforma>.build`, `.url`, `.notas`), que o
+    /// superusuário atualiza ao publicar o zip. Qualquer sessão pode perguntar;
+    /// por isso a resposta sai de uma lista FECHADA de três chaves, e nunca da
+    /// listagem inteira — as demais configurações incluem segredos.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "GetVersaoDoApp", traceparent)
+    )]
+    async fn get_versao_do_app(
+        &self,
+        req: Request<GetVersaoDoAppRequest>,
+    ) -> Result<Response<GetVersaoDoAppResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        let plataforma = req.get_ref().plataforma.trim().to_lowercase();
+        // O nome vira parte da chave: só letras, para ninguém montar a chave de
+        // outra configuração pelo campo.
+        if plataforma.is_empty() || !plataforma.chars().all(|c| c.is_ascii_lowercase()) {
+            return Err(Status::invalid_argument("plataforma inválida"));
+        }
+
+        let env_req = Envelope {
+            tenant_id: Uuid::nil().to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent_do_metadata(&req),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "ListCoreSettings".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({})).unwrap_or_default(),
+            auth_user_id: claims.sub.parse::<i32>().unwrap_or(0),
+            auth_scopes: claims.scopes.clone(),
+            // Leitura interna da borda: quem pediu não vê a lista, só as três
+            // chaves filtradas abaixo.
+            auth_is_superuser: true,
+            ..Default::default()
+        };
+        let resp = self
+            .deps
+            .pg
+            .call(env_req, std::time::Duration::from_secs(5))
+            .await
+            .map_err(|e| Status::unavailable(format!("Falha no serviço interno: {e}")))?;
+        if resp.kind == MessageKind::Error as i32 {
+            return Err(status_do_erro_interno(resp.error));
+        }
+        let corpo: serde_json::Value =
+            serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))?;
+
+        let valor = |sufixo: &str| -> String {
+            let chave = format!("app.{plataforma}.{sufixo}");
+            corpo
+                .get("settings")
+                .and_then(|v| v.as_array())
+                .and_then(|arr| {
+                    arr.iter().find(|s| {
+                        s.get("key").and_then(|k| k.as_str()) == Some(chave.as_str())
+                            && !s
+                                .get("encrypted")
+                                .and_then(|e| e.as_bool())
+                                .unwrap_or(false)
+                    })
+                })
+                .and_then(|s| s.get("value"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .trim()
+                .to_string()
+        };
+
+        Ok(Response::new(GetVersaoDoAppResponse {
+            build_atual: valor("build").parse::<i64>().unwrap_or(0),
+            url_download: valor("url"),
+            notas: valor("notas"),
+        }))
+    }
+
+    /// P9 — as mensagens do atendente que ficaram sem destino.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "ListMyMensagensNaoEntregues",
+            traceparent
+        )
+    )]
+    async fn list_my_mensagens_nao_entregues(
+        &self,
+        req: Request<ListMyMensagensNaoEntreguesRequest>,
+    ) -> Result<Response<ListMyMensagensNaoEntreguesResponse>, Status> {
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "ListMensagensNaoEntregues",
+                &["operacional:read"],
+                serde_json::json!({}),
+            )
+            .await?;
+        let itens = corpo
+            .get("itens")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().map(nao_entregue_do_json).collect())
+            .unwrap_or_default();
+        Ok(Response::new(ListMyMensagensNaoEntreguesResponse { itens }))
+    }
+
+    /// P9 — devolve a mensagem ao outbox para uma nova tentativa.
+    ///
+    /// Reusa o `ReprocessarDeadLetter` da N7.2, que já audita quem mandou
+    /// reprocessar o quê — reenviar pode gerar entrega ao cliente.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "ReenviarMensagemNaoEntregue",
+            traceparent
+        )
+    )]
+    async fn reenviar_mensagem_nao_entregue(
+        &self,
+        req: Request<ReenviarMensagemNaoEntregueRequest>,
+    ) -> Result<Response<ReenviarMensagemNaoEntregueResponse>, Status> {
+        let id = req.get_ref().id;
+        if id <= 0 {
+            return Err(Status::invalid_argument("registro inválido"));
+        }
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "ReprocessarDeadLetter",
+                &["operacional:admin"],
+                serde_json::json!({ "dead_letter_id": id }),
+            )
+            .await?;
+        Ok(Response::new(ReenviarMensagemNaoEntregueResponse {
+            status: corpo
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string(),
+        }))
+    }
+
+    /// P7 — encerra a sessão sem apagar a conexão.
+    ///
+    /// Remover era a única saída para trocar de aparelho, e ela custava o
+    /// cadastro inteiro: nome da instância, vínculo de departamento, tudo. Aqui
+    /// o registro fica e volta com um QR novo.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "DesconectarMyWhatsappInstance",
+            traceparent
+        )
+    )]
+    async fn desconectar_my_whatsapp_instance(
+        &self,
+        req: Request<MyWhatsappInstanceIdRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let id = req.get_ref().id;
+        self.encaminhar_tenant(
+            &req,
+            &self.whatsapp,
+            "DisconnectWhatsappInstance",
+            serde_json::json!({ "id": id }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    /// P7 — roteamento por conexão: a conversa que chega neste número entra no
+    /// fluxo do departamento dele. `departamento_id = 0` desfaz o vínculo.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "DefinirDepartamentoDaConexao",
+            traceparent
+        )
+    )]
+    async fn definir_departamento_da_conexao(
+        &self,
+        req: Request<DefinirDepartamentoDaConexaoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = *req.get_ref();
+        if inner.id <= 0 {
+            return Err(Status::invalid_argument("conexão inválida"));
+        }
+        self.encaminhar_operacional(
+            &req,
+            "DefinirDepartamentoDaConexao",
+            &["operacional:admin"],
+            serde_json::json!({
+                "id": inner.id,
+                "departamento_id": inner.departamento_id,
+            }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    /// P7 — o detalhe da conexão: estado, número pareado, departamento e o que
+    /// se perde ao desconectar agora.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DetalheDaConexao", traceparent)
+    )]
+    async fn detalhe_da_conexao(
+        &self,
+        req: Request<DetalheDaConexaoRequest>,
+    ) -> Result<Response<DetalheDaConexaoResponse>, Status> {
+        let id = req.get_ref().id;
+        if id <= 0 {
+            return Err(Status::invalid_argument("conexão inválida"));
+        }
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "DetalheDaConexao",
+                &["operacional:read"],
+                serde_json::json!({ "id": id }),
+            )
+            .await?;
+
+        let texto = |chave: &str| {
+            corpo
+                .get(chave)
+                .and_then(|x| x.as_str())
+                .unwrap_or_default()
+                .to_string()
+        };
+        let inteiro = |chave: &str| corpo.get(chave).and_then(|x| x.as_i64()).unwrap_or(0);
+
+        let conexao = MyWhatsappInstance {
+            id: inteiro("id") as i32,
+            name: texto("name"),
+            phone_number: texto("phone_number"),
+            connection_state: texto("connection_state"),
+            active: corpo
+                .get("active")
+                .and_then(|x| x.as_bool())
+                .unwrap_or(false),
+            provider: texto("provider"),
+            created_at: corpo
+                .get("created_at")
+                .and_then(|x| x.as_str())
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|d| d.timestamp_millis())
+                .unwrap_or(0),
+            resposta_bot: corpo
+                .get("resposta_bot")
+                .and_then(|x| x.as_bool())
+                .unwrap_or(true),
+            departamento_id: inteiro("departamento_id") as i32,
+            departamento_nome: texto("departamento_nome"),
+        };
+
+        Ok(Response::new(DetalheDaConexaoResponse {
+            conexao: Some(conexao),
+            ultima_checagem: corpo
+                .get("last_state_check")
+                .and_then(|x| x.as_str())
+                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                .map(|d| d.timestamp_millis())
+                .unwrap_or(0),
+            instancia_no_provedor: texto("instance_id"),
+            atendimentos_abertos: inteiro("atendimentos_abertos") as i32,
+            mensagens_24h: inteiro("mensagens_24h") as i32,
+        }))
+    }
+
+    /// P7 — os números que o sistema ignora (a "whitelist" da v1).
+    ///
+    /// A regra já era aplicada na ingestão; o que não existia era meio de ver ou
+    /// mexer na lista sem abrir o banco.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyNumerosIgnorados", traceparent)
+    )]
+    async fn list_my_numeros_ignorados(
+        &self,
+        req: Request<ListMyNumerosIgnoradosRequest>,
+    ) -> Result<Response<ListMyNumerosIgnoradosResponse>, Status> {
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "ListNumerosIgnorados",
+                &["operacional:read"],
+                serde_json::json!({}),
+            )
+            .await?;
+
+        let itens = corpo
+            .get("itens")
+            .and_then(|v| v.as_array())
+            .map(|arr| arr.iter().map(numero_ignorado_do_json).collect())
+            .unwrap_or_default();
+
+        Ok(Response::new(ListMyNumerosIgnoradosResponse { itens }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "CriarNumeroIgnorado", traceparent)
+    )]
+    async fn criar_numero_ignorado(
+        &self,
+        req: Request<CriarNumeroIgnoradoRequest>,
+    ) -> Result<Response<MyNumeroIgnoradoResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let telefone = inner.telefone.trim().to_string();
+        if telefone.is_empty() {
+            return Err(Status::invalid_argument("informe o número"));
+        }
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "CriarNumeroIgnorado",
+                &["operacional:admin"],
+                serde_json::json!({
+                    "nome": inner.nome.trim(),
+                    "telefone": telefone,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(MyNumeroIgnoradoResponse {
+            item: corpo.get("item").map(numero_ignorado_do_json),
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "AtualizarNumeroIgnorado", traceparent)
+    )]
+    async fn atualizar_numero_ignorado(
+        &self,
+        req: Request<AtualizarNumeroIgnoradoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = req.get_ref().clone();
+        if inner.id <= 0 {
+            return Err(Status::invalid_argument("registro inválido"));
+        }
+        let telefone = inner.telefone.trim().to_string();
+        if telefone.is_empty() {
+            return Err(Status::invalid_argument("informe o número"));
+        }
+        self.encaminhar_operacional(
+            &req,
+            "AtualizarNumeroIgnorado",
+            &["operacional:admin"],
+            serde_json::json!({
+                "id": inner.id,
+                "nome": inner.nome.trim(),
+                "telefone": telefone,
+                "ativo": inner.ativo,
+            }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "RemoverNumeroIgnorado", traceparent)
+    )]
+    async fn remover_numero_ignorado(
+        &self,
+        req: Request<NumeroIgnoradoIdRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let id = req.get_ref().id;
+        if id <= 0 {
+            return Err(Status::invalid_argument("registro inválido"));
+        }
+        self.encaminhar_operacional(
+            &req,
+            "RemoverNumeroIgnorado",
+            &["operacional:admin"],
+            serde_json::json!({ "id": id }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
     #[tracing::instrument(
         skip_all,
         fields(service = "runtime_api", rpc = "DeleteMyWhatsappInstance", traceparent)
@@ -5251,6 +6132,69 @@ impl AdminService for AdminFacade {
                 .map(|arr| arr.iter().map(resgate_do_json).collect())
                 .unwrap_or_default(),
         }))
+    }
+
+    /// P9 — o `test-connection` da v1 para o provedor de IA.
+    ///
+    /// Um embedding de ensaio com a configuração do tenant alvo: é a chamada
+    /// mais barata que passa pelo provedor inteiro (chave, cota, modelo). Antes
+    /// disto, chave expirada só aparecia quando o bot parava de responder.
+    ///
+    /// Falha do provedor volta como `ok: false` com o motivo, e não como erro
+    /// gRPC: o teste deu certo — o que ele descobriu é que o provedor não está.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "TestarProvedorIa", traceparent)
+    )]
+    async fn testar_provedor_ia(
+        &self,
+        req: Request<TestarProvedorIaRequest>,
+    ) -> Result<Response<TestarProvedorIaResponse>, Status> {
+        let _claims = exigir_superuser_do_metadata(&self.deps, &self.bus, &req).await?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_id = req.get_ref().tenant_id.trim().to_string();
+        if Uuid::parse_str(&tenant_id).is_err() {
+            return Err(Status::invalid_argument("tenant inválido"));
+        }
+
+        let inicio = std::time::Instant::now();
+        let resultado = self
+            .ia
+            .embed(
+                ia_client::EmbedInput {
+                    tenant_id: tenant_id.clone(),
+                    // Texto fixo e sem dado de ninguém: o que se mede é o
+                    // caminho até o provedor, não o conteúdo.
+                    textos: vec!["teste de conexão".to_string()],
+                },
+                &traceparent,
+            )
+            .await;
+        let latencia_ms = inicio.elapsed().as_millis().min(i32::MAX as u128) as i32;
+
+        let resposta = match resultado {
+            Ok(saida) => {
+                let dimensoes = saida.embeddings.first().map(|v| v.len()).unwrap_or(0) as i32;
+                TestarProvedorIaResponse {
+                    ok: dimensoes > 0,
+                    latencia_ms,
+                    dimensoes,
+                    erro: if dimensoes > 0 {
+                        String::new()
+                    } else {
+                        "o provedor respondeu sem vetor".to_string()
+                    },
+                }
+            }
+            Err(e) => TestarProvedorIaResponse {
+                ok: false,
+                latencia_ms,
+                dimensoes: 0,
+                erro: e.to_string(),
+            },
+        };
+
+        Ok(Response::new(resposta))
     }
 
     // --- Fase 3: Evolution Connection ---
@@ -5825,6 +6769,435 @@ impl AdminService for AdminFacade {
     // superuser); o RBAC fino por fluxo (flow_permissions, WS-5a) é aplicado no
     // data_postgres sobre cada atendimento/fluxo. ---
 
+    /// P5 — a história do atendimento numa lista só.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "ListarTimelineAtendimento",
+            traceparent
+        )
+    )]
+    async fn listar_timeline_atendimento(
+        &self,
+        req: Request<ListarTimelineRequest>,
+    ) -> Result<Response<ListarTimelineResponse>, Status> {
+        let inner_ref = *req.get_ref();
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "ListarTimelineAtendimento",
+                &["atendimentos:read"],
+                serde_json::json!({ "atendimento_id": inner_ref.atendimento_id }),
+            )
+            .await?;
+
+        let eventos = corpo
+            .get("eventos")
+            .and_then(|v| v.as_array())
+            .map(|itens| {
+                itens
+                    .iter()
+                    .map(|e| {
+                        let texto = |chave: &str| {
+                            e.get(chave)
+                                .and_then(|v| v.as_str())
+                                .unwrap_or_default()
+                                .to_string()
+                        };
+                        EventoDaTimeline {
+                            tipo: texto("tipo"),
+                            quando: e.get("quando").and_then(|v| v.as_i64()).unwrap_or(0),
+                            descricao: texto("descricao"),
+                            autor: texto("autor"),
+                            automatico: e
+                                .get("automatico")
+                                .and_then(|v| v.as_bool())
+                                .unwrap_or(false),
+                        }
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+
+        Ok(Response::new(ListarTimelineResponse { eventos }))
+    }
+
+    /// P5 — as outras conversas do mesmo contato.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "ListarAtendimentosDoContato",
+            traceparent
+        )
+    )]
+    async fn listar_atendimentos_do_contato(
+        &self,
+        req: Request<ListarAtendimentosDoContatoRequest>,
+    ) -> Result<Response<ListarAtendimentosDoContatoResponse>, Status> {
+        let inner_ref = *req.get_ref();
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "ListarAtendimentosDoContato",
+                &["atendimentos:read"],
+                serde_json::json!({
+                    "contato_id": inner_ref.contato_id,
+                    "limit": if inner_ref.limit > 0 { inner_ref.limit } else { 20 },
+                }),
+            )
+            .await?;
+
+        let atendimentos = corpo
+            .get("atendimentos")
+            .and_then(|v| v.as_array())
+            .map(|itens| itens.iter().map(atendimento_resumo_do_json).collect())
+            .unwrap_or_default();
+
+        Ok(Response::new(ListarAtendimentosDoContatoResponse {
+            atendimentos,
+        }))
+    }
+
+    /// P5 — apaga uma nota interna.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "RemoverNota", traceparent)
+    )]
+    async fn remover_nota(
+        &self,
+        req: Request<RemoverNotaRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner_ref = *req.get_ref();
+        self.encaminhar_operacional(
+            &req,
+            "RemoverNota",
+            &["atendimentos:write"],
+            serde_json::json!({
+                "nota_id": inner_ref.nota_id,
+                "atendimento_id": inner_ref.atendimento_id,
+            }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    /// P5 — renomeia/recolore uma etiqueta do catálogo.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "UpdateEtiqueta", traceparent)
+    )]
+    async fn update_etiqueta(
+        &self,
+        req: Request<UpdateEtiquetaRequest>,
+    ) -> Result<Response<EtiquetaResponse>, Status> {
+        let inner_ref = req.get_ref().clone();
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "UpdateEtiqueta",
+                &["atendimentos:write"],
+                serde_json::json!({
+                    "id": inner_ref.id,
+                    "nome": inner_ref.nome,
+                    "cor": inner_ref.cor,
+                    "descricao": inner_ref.descricao,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(EtiquetaResponse {
+            etiqueta: Some(etiqueta_do_json(&corpo)),
+        }))
+    }
+
+    /// P5 — tira a etiqueta do catálogo, sem apagá-la das conversas.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DesativarEtiqueta", traceparent)
+    )]
+    async fn desativar_etiqueta(
+        &self,
+        req: Request<DesativarEtiquetaRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner_ref = *req.get_ref();
+        self.encaminhar_operacional(
+            &req,
+            "DesativarEtiqueta",
+            &["atendimentos:write"],
+            serde_json::json!({ "id": inner_ref.id }),
+        )
+        .await?;
+
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    /// P4 — quem cuida da conversa.
+    ///
+    /// O rodízio (B5) já fazia isso sozinho; aqui é a mão do supervisor. A
+    /// regra é a mesma dos dois lados: atribuir **não** tira conversa de quem
+    /// já a assumiu — devolver para a fila é uma ação explícita.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "AtribuirAtendimento", traceparent)
+    )]
+    async fn atribuir_atendimento(
+        &self,
+        req: Request<AtribuirAtendimentoRequest>,
+    ) -> Result<Response<AtribuirAtendimentoResponse>, Status> {
+        let inner_ref = *req.get_ref();
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "AtribuirAtendimento",
+                &["atendimentos:write"],
+                serde_json::json!({
+                    "atendimento_id": inner_ref.atendimento_id,
+                    "atendente_id": inner_ref.atendente_id,
+                    "devolver_para_fila": inner_ref.devolver_para_fila,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(AtribuirAtendimentoResponse {
+            atribuido: corpo
+                .get("atribuido")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            motivo: corpo
+                .get("motivo")
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string(),
+        }))
+    }
+
+    /// P4 — urgência do cartão. A coluna existia desde a 0006 e ninguém
+    /// escrevia nela.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DefinirPrioridade", traceparent)
+    )]
+    async fn definir_prioridade(
+        &self,
+        req: Request<DefinirPrioridadeRequest>,
+    ) -> Result<Response<DefinirPrioridadeResponse>, Status> {
+        let inner_ref = req.get_ref().clone();
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "DefinirPrioridade",
+                &["atendimentos:write"],
+                serde_json::json!({
+                    "atendimento_id": inner_ref.atendimento_id,
+                    "prioridade": inner_ref.prioridade,
+                }),
+            )
+            .await?;
+
+        Ok(Response::new(DefinirPrioridadeResponse {
+            definida: corpo
+                .get("definida")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+        }))
+    }
+
+    /// P4 — transferir a conversa de fluxo pela tela.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "TransferirParaFluxo", traceparent)
+    )]
+    async fn transferir_para_fluxo(
+        &self,
+        req: Request<TransferirParaFluxoRequest>,
+    ) -> Result<Response<TransferirParaFluxoResponse>, Status> {
+        let inner_ref = *req.get_ref();
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "TransferirAtendimentoParaFluxo",
+                &["atendimentos:write"],
+                serde_json::json!({
+                    "atendimento_id": inner_ref.atendimento_id,
+                    "fluxo_id": inner_ref.fluxo_id,
+                }),
+            )
+            .await?;
+
+        let texto = |chave: &str| {
+            corpo
+                .get(chave)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string()
+        };
+        Ok(Response::new(TransferirParaFluxoResponse {
+            transferido: corpo
+                .get("transferido")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            fluxo_id: corpo.get("fluxo_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+            fluxo_nome: texto("fluxo_nome"),
+            etapa_id: corpo.get("etapa_id").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+            etapa_nome: texto("etapa_nome"),
+            motivo: texto("reason"),
+        }))
+    }
+
+    /// P4 — o quadro em CSV, para quem precisa fechar o dia numa planilha.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ExportarQuadro", traceparent)
+    )]
+    async fn exportar_quadro(
+        &self,
+        req: Request<ExportarQuadroRequest>,
+    ) -> Result<Response<ExportarQuadroResponse>, Status> {
+        let inner_ref = req.get_ref().clone();
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "ExportarQuadro",
+                // Exportar é leitura, mas em massa e com PII: exige o escopo de
+                // administração do tenant, não o de operar a fila.
+                &["tenant:admin"],
+                serde_json::json!({
+                    "status": inner_ref.status,
+                    "departamento_id": inner_ref.departamento_id,
+                    "busca": inner_ref.busca,
+                    "somente_meus": inner_ref.somente_meus,
+                    "somente_nao_lidos": inner_ref.somente_nao_lidos,
+                }),
+            )
+            .await?;
+
+        let csv = corpo
+            .get("csv")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+        Ok(Response::new(ExportarQuadroResponse {
+            linhas: corpo.get("linhas").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
+            csv: csv.into_bytes(),
+        }))
+    }
+
+    /// P3 — "digitando..." do atendente chega ao contato.
+    ///
+    /// Duas pernas: o `data_postgres` diz por qual conexão e para qual número
+    /// (aplicando a RLS do tenant), e o `data_whatsapp` manda. Sem conexão
+    /// ativa para o contato, devolve `enviado = false` em vez de erro: presença
+    /// é enfeite, e derrubar a digitação por causa dela seria desproporcional.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "EnviarPresenca", traceparent)
+    )]
+    async fn enviar_presenca(
+        &self,
+        req: Request<EnviarPresencaRequest>,
+    ) -> Result<Response<EnviarPresencaResponse>, Status> {
+        let claims = exigir_autenticado_do_metadata(&self.deps, &req).await?;
+        exigir_escopo(&claims, &["atendimentos:write"], "EnviarPresenca")?;
+        let traceparent = traceparent_do_metadata(&req);
+        let tenant_uuid = Uuid::parse_str(&claims.tenant_id)
+            .map_err(|_| Status::invalid_argument("Invalid tenant UUID"))?;
+        let inner = req.into_inner();
+
+        let situacao = match inner.situacao.trim() {
+            "" => "composing".to_string(),
+            outro @ ("composing" | "recording" | "paused") => outro.to_string(),
+            _ => return Err(Status::invalid_argument("situação de presença inválida")),
+        };
+
+        let auth_user_id = claims.sub.parse::<i32>().unwrap_or(0);
+        let flow_permissions = if claims.is_superuser {
+            Vec::new()
+        } else {
+            resolver_flow_permissions_web(&self.deps, &claims.tenant_id, auth_user_id, &traceparent)
+                .await
+        };
+
+        let env_destino = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent: traceparent.clone(),
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "ResolverDestinoDoAtendimento".to_string(),
+            payload: serde_json::to_vec(
+                &serde_json::json!({ "atendimento_id": inner.atendimento_id }),
+            )
+            .unwrap(),
+            auth_user_id,
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            flow_permissions,
+            ..Default::default()
+        };
+
+        let resp = self
+            .deps
+            .pg
+            .call(env_destino, std::time::Duration::from_secs(5))
+            .await
+            .map_err(|e| Status::internal(format!("Falha no serviço interno: {}", e)))?;
+        if resp.kind == MessageKind::Error as i32 {
+            let err_msg = resp.error.map(|e| e.message).unwrap_or_default();
+            return Err(Status::internal(format!("Erro no banco: {}", err_msg)));
+        }
+        let destino: serde_json::Value =
+            serde_json::from_slice(&resp.payload).map_err(|e| Status::internal(e.to_string()))?;
+
+        let (Some(instance_id), Some(to_number)) = (
+            destino.get("instance_id").and_then(|v| v.as_i64()),
+            destino.get("to_number").and_then(|v| v.as_str()),
+        ) else {
+            return Ok(Response::new(EnviarPresencaResponse { enviado: false }));
+        };
+
+        let env_presenca = Envelope {
+            tenant_id: tenant_uuid.to_string(),
+            schema_version: 1,
+            message_id: Uuid::now_v7().to_string(),
+            causation_id: String::new(),
+            traceparent,
+            occurred_at: chrono::Utc::now().timestamp_millis(),
+            kind: MessageKind::Request as i32,
+            method: "SetWhatsappPresence".to_string(),
+            payload: serde_json::to_vec(&serde_json::json!({
+                "id": instance_id,
+                "chat": to_number,
+                "state": situacao,
+                "is_audio": situacao == "recording",
+            }))
+            .unwrap(),
+            auth_user_id,
+            auth_scopes: claims.scopes.clone(),
+            auth_is_superuser: claims.is_superuser,
+            ..Default::default()
+        };
+
+        let enviado = match self
+            .whatsapp
+            .call(env_presenca, std::time::Duration::from_secs(5))
+            .await
+        {
+            Ok(r) => r.kind != MessageKind::Error as i32,
+            // O provedor fora do ar não pode interromper quem está digitando.
+            Err(e) => {
+                tracing::debug!(erro = %e, "presença não entregue ao provedor");
+                false
+            }
+        };
+
+        Ok(Response::new(EnviarPresencaResponse { enviado }))
+    }
+
     #[tracing::instrument(
         skip_all,
         fields(service = "runtime_api", rpc = "ListAtendimentos", traceparent)
@@ -5844,6 +7217,14 @@ impl AdminService for AdminFacade {
             // Vazio viaja como vazio: é "o quadro inteiro". Trocar por "fila"
             // aqui escondia toda conversa que já tinha andado de coluna.
             "status": inner.status,
+            // P1 — o recorte da v1: busca por texto, dono, não lidas, prioridade
+            // e etiqueta.
+            "busca": inner.busca,
+            "atendente_id": inner.atendente_id,
+            "somente_nao_lidos": inner.somente_nao_lidos,
+            "prioridade": inner.prioridade,
+            "etiqueta_id": inner.etiqueta_id,
+            "somente_meus": inner.somente_meus,
             "departamento_id": if inner.departamento_id > 0 { Some(inner.departamento_id) } else { None },
             "limit": if inner.limit > 0 { inner.limit } else { 50 },
         });
@@ -5893,74 +7274,7 @@ impl AdminService for AdminFacade {
                 let mut atendimentos = Vec::new();
                 if let Some(arr) = val.get("atendimentos").and_then(|v| v.as_array()) {
                     for item in arr {
-                        atendimentos.push(ProtoAtendimentoResumo {
-                            id: item.get("id").and_then(|v| v.as_i64()).unwrap_or_default() as i32,
-                            contato_id: item
-                                .get("contato_id")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or_default() as i32,
-                            status: item
-                                .get("status")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or_default()
-                                .to_string(),
-                            departamento_id: item
-                                .get("departamento_id")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or_default()
-                                as i32,
-                            fluxo_atendimento_id: item
-                                .get("fluxo_atendimento_id")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or_default()
-                                as i32,
-                            etapa_atual_id: item
-                                .get("etapa_atual_id")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or_default()
-                                as i32,
-                            assunto: item
-                                .get("assunto")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or_default()
-                                .to_string(),
-                            prioridade: item
-                                .get("prioridade")
-                                .and_then(|v| v.as_str())
-                                .unwrap_or_default()
-                                .to_string(),
-                            atendente_humano_id: item
-                                .get("atendente_humano_id")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or_default()
-                                as i32,
-                            data_inicio: item
-                                .get("data_inicio")
-                                .and_then(|v| v.as_str())
-                                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                                .map(|d| d.timestamp_millis())
-                                .unwrap_or_default(),
-                            data_ultima_mensagem: item
-                                .get("data_ultima_mensagem")
-                                .and_then(|v| v.as_str())
-                                .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
-                                .map(|d| d.timestamp_millis())
-                                .unwrap_or_default(),
-                            // Passagem direta (N6.5): sentimento vem pronto do
-                            // data_postgres; ausência/null viram None.
-                            sentimento_nota: item
-                                .get("sentimento_nota")
-                                .and_then(|v| v.as_i64())
-                                .map(|n| n as i32),
-                            sentimento_label: item
-                                .get("sentimento_label")
-                                .and_then(|v| v.as_str())
-                                .map(|s| s.to_string()),
-                            nao_lidas: item
-                                .get("nao_lidas")
-                                .and_then(|v| v.as_i64())
-                                .unwrap_or_default() as i32,
-                        });
+                        atendimentos.push(atendimento_resumo_do_json(item));
                     }
                 }
 
@@ -5989,6 +7303,8 @@ impl AdminService for AdminFacade {
             "atendimento_id": inner.atendimento_id,
             "limit": if inner.limit > 0 { inner.limit } else { 50 },
             "offset": inner.offset,
+            // P2 — cursor da rolagem para trás (ausente na primeira carga).
+            "before_id": inner.before_id,
         });
 
         let env_req = Envelope {
@@ -6089,6 +7405,9 @@ impl AdminService for AdminFacade {
                                 .get("citada_preview")
                                 .and_then(|v| v.as_str())
                                 .map(|s| s.to_string()),
+                            // P8 — reações e o que não cabe em `conteudo`.
+                            reacoes: reacoes_do_item(item),
+                            metadados_json: metadados_do_item(item),
                         });
                     }
                 }
@@ -6681,6 +8000,21 @@ impl AdminService for AdminFacade {
                 .get("campos")
                 .and_then(|v| v.as_array())
                 .map(|arr| arr.iter().map(valor_campo_do_json).collect())
+                .unwrap_or_default(),
+            // P15 — o que a IA guardou do contato.
+            dados_do_contato: corpo
+                .get("dados_do_contato")
+                .and_then(|v| v.as_object())
+                .map(|o| {
+                    o.iter()
+                        .filter_map(|(k, v)| {
+                            Some(DadoDoContato {
+                                chave: k.clone(),
+                                valor: v.as_str()?.to_string(),
+                            })
+                        })
+                        .collect()
+                })
                 .unwrap_or_default(),
         }))
     }
@@ -8203,6 +9537,94 @@ impl AdminService for AdminFacade {
 }
 
 /// Converte a etiqueta do JSON interno no tipo do contrato.
+/// P5 — o resumo do atendimento vindo do `data_postgres`.
+///
+/// Extraída do `list_atendimentos`: o histórico do contato devolve exatamente
+/// a mesma forma, e duplicar a conversão deixaria as duas telas divergirem no
+/// primeiro campo novo.
+fn atendimento_resumo_do_json(v: &serde_json::Value) -> ProtoAtendimentoResumo {
+    ProtoAtendimentoResumo {
+        id: v.get("id").and_then(|v| v.as_i64()).unwrap_or_default() as i32,
+        contato_id: v
+            .get("contato_id")
+            .and_then(|v| v.as_i64())
+            .unwrap_or_default() as i32,
+        status: v
+            .get("status")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        departamento_id: v
+            .get("departamento_id")
+            .and_then(|v| v.as_i64())
+            .unwrap_or_default() as i32,
+        fluxo_atendimento_id: v
+            .get("fluxo_atendimento_id")
+            .and_then(|v| v.as_i64())
+            .unwrap_or_default() as i32,
+        etapa_atual_id: v
+            .get("etapa_atual_id")
+            .and_then(|v| v.as_i64())
+            .unwrap_or_default() as i32,
+        assunto: v
+            .get("assunto")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        prioridade: v
+            .get("prioridade")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        atendente_humano_id: v
+            .get("atendente_humano_id")
+            .and_then(|v| v.as_i64())
+            .unwrap_or_default() as i32,
+        data_inicio: v
+            .get("data_inicio")
+            .and_then(|v| v.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.timestamp_millis())
+            .unwrap_or_default(),
+        data_ultima_mensagem: v
+            .get("data_ultima_mensagem")
+            .and_then(|v| v.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.timestamp_millis())
+            .unwrap_or_default(),
+        // Passagem direta (N6.5): sentimento vem pronto do
+        // data_postgres; ausência/null viram None.
+        sentimento_nota: v
+            .get("sentimento_nota")
+            .and_then(|v| v.as_i64())
+            .map(|n| n as i32),
+        sentimento_label: v
+            .get("sentimento_label")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string()),
+        nao_lidas: v
+            .get("nao_lidas")
+            .and_then(|v| v.as_i64())
+            .unwrap_or_default() as i32,
+        // P13 — o contato do cartão.
+        contato_nome: texto_do(v, "contato_nome"),
+        contato_telefone: texto_do(v, "contato_telefone"),
+        contato_foto_url: texto_do(v, "contato_foto_url"),
+        revisao_pendente: v
+            .get("revisao_pendente")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false),
+    }
+}
+
+/// Texto de um campo do JSON do `data_postgres`; ausente ou nulo vira "".
+fn texto_do(v: &serde_json::Value, chave: &str) -> String {
+    v.get(chave)
+        .and_then(|x| x.as_str())
+        .unwrap_or_default()
+        .to_string()
+}
+
 fn etiqueta_do_json(v: &serde_json::Value) -> ProtoEtiqueta {
     let texto = |chave: &str| {
         v.get(chave)
@@ -8216,6 +9638,10 @@ fn etiqueta_do_json(v: &serde_json::Value) -> ProtoEtiqueta {
         cor: texto("cor"),
         descricao: texto("descricao"),
         ativo: v.get("ativo").and_then(|x| x.as_bool()).unwrap_or(true),
+        aplicada_pela_ia: v
+            .get("aplicada_pela_ia")
+            .and_then(|x| x.as_bool())
+            .unwrap_or(false),
     }
 }
 
@@ -8508,6 +9934,114 @@ fn instancia_do_json(v: &serde_json::Value) -> MyWhatsappInstance {
             .get("resposta_bot")
             .and_then(|x| x.as_bool())
             .unwrap_or(true),
+        // P7 — preenchidos depois, pela consulta do departamento: a listagem do
+        // banco não os traz. 0/"" = sem departamento, que é o padrão.
+        departamento_id: v
+            .get("departamento_id")
+            .and_then(|x| x.as_i64())
+            .unwrap_or(0) as i32,
+        departamento_nome: v
+            .get("departamento_nome")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string(),
+    }
+}
+
+/// P9 — a linha de dead-letter no tipo do contrato.
+fn nao_entregue_do_json(v: &serde_json::Value) -> MensagemNaoEntregue {
+    let texto = |chave: &str| {
+        v.get(chave)
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string()
+    };
+    let inteiro = |chave: &str| v.get(chave).and_then(|x| x.as_i64()).unwrap_or(0) as i32;
+    MensagemNaoEntregue {
+        id: inteiro("id"),
+        mensagem_id: inteiro("mensagem_id"),
+        atendimento_id: inteiro("atendimento_id"),
+        motivo: texto("motivo"),
+        criado_em: v
+            .get("criado_em")
+            .and_then(|x| x.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.timestamp_millis())
+            .unwrap_or(0),
+        trecho: texto("trecho"),
+        contato: texto("contato"),
+    }
+}
+
+/// P8 — as reações gravadas em `metadados.reacoes`.
+///
+/// Silenciosamente vazio quando o formato não é o esperado: uma linha antiga com
+/// `metadados` escrito por outra coisa não pode derrubar a conversa inteira.
+/// Emoji vazio também sai: no provedor ele significa "desfiz a reação".
+fn reacoes_do_item(item: &serde_json::Value) -> Vec<ReacaoDaMensagem> {
+    item.get("metadados")
+        .and_then(|m| m.get("reacoes"))
+        .and_then(|r| r.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|r| {
+                    let emoji = r.get("emoji").and_then(|e| e.as_str())?;
+                    if emoji.is_empty() {
+                        return None;
+                    }
+                    Some(ReacaoDaMensagem {
+                        emoji: emoji.to_string(),
+                        de: r
+                            .get("de")
+                            .and_then(|d| d.as_str())
+                            .unwrap_or("contato")
+                            .to_string(),
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// P8 — o resto de `metadados`, como JSON cru, para a tela desenhar enquete,
+/// lista e botões.
+///
+/// `reacoes` sai daqui: já viaja em campo próprio, e mandá-lo duas vezes faria
+/// a tela ter duas fontes para a mesma coisa. Objeto vazio vira `None` — não há
+/// por que mandar `{}` em toda mensagem de texto da conversa.
+fn metadados_do_item(item: &serde_json::Value) -> Option<String> {
+    let mut obj = item.get("metadados")?.as_object()?.clone();
+    obj.remove("reacoes");
+    if obj.is_empty() {
+        return None;
+    }
+    serde_json::to_string(&obj).ok()
+}
+
+/// P7 — a linha do banco (`whatsapp_whitelist`) no tipo do contrato.
+///
+/// Os nomes divergem de propósito: no banco a tabela ainda se chama
+/// `whitelist`, herança da v1; no contrato ela é o que faz — número ignorado.
+fn numero_ignorado_do_json(v: &serde_json::Value) -> MyNumeroIgnorado {
+    MyNumeroIgnorado {
+        id: v.get("id").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+        nome: v
+            .get("name")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        telefone: v
+            .get("phone_number")
+            .and_then(|x| x.as_str())
+            .unwrap_or_default()
+            .to_string(),
+        ativo: v.get("active").and_then(|x| x.as_bool()).unwrap_or(false),
+        criado_em: v
+            .get("created_at")
+            .and_then(|x| x.as_str())
+            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+            .map(|d| d.timestamp_millis())
+            .unwrap_or(0),
     }
 }
 

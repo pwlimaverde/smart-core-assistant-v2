@@ -557,4 +557,40 @@ impl TreinamentoStore for PgTreinamentoStore {
         })
         .await
     }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_avaliacoes_pendentes(
+        &self,
+        ctx: &RequestContext,
+        limite: i64,
+    ) -> Result<Vec<infrastructure_postgres::treinamento::treinamentos::AvaliacaoDeTeste>, DbError>
+    {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let itens =
+                infrastructure_postgres::treinamento::treinamentos::listar_avaliacoes_pendentes(
+                    &mut tx, &ctx, limite,
+                )
+                .await?;
+            Ok((itens, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn marcar_avaliacao_tratada(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
+            let ok = infrastructure_postgres::treinamento::treinamentos::marcar_avaliacao_tratada(
+                &mut tx, &ctx, id,
+            )
+            .await?;
+            Ok((ok, tx))
+        })
+        .await
+    }
 }

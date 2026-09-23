@@ -91,3 +91,59 @@ final class DefinirRespostaBotRepository
   ConexoesError mapError(Object e, StackTrace s, RespostaBotParameters p) =>
       _traduzir(e, 'definirRespostaBot');
 }
+
+/// P7 — encerra a sessão sem apagar a conexão.
+final class DesconectarConexaoRepository
+    extends RepositoryBase<Unit, ConexaoIdParameters, ConexoesError> {
+  const DesconectarConexaoRepository({required super.datasource});
+
+  @override
+  ConexoesError mapError(Object e, StackTrace s, ConexaoIdParameters p) =>
+      _traduzir(e, 'desconectar');
+}
+
+/// P7 — roteamento por conexão.
+final class DefinirDepartamentoDaConexaoRepository
+    extends
+        RepositoryBase<Unit, DepartamentoDaConexaoParameters, ConexoesError> {
+  const DefinirDepartamentoDaConexaoRepository({required super.datasource});
+
+  @override
+  ConexoesError mapError(
+    Object e,
+    StackTrace s,
+    DepartamentoDaConexaoParameters p,
+  ) => _traduzir(e, 'definir departamento da conexão');
+}
+
+/// P7 — o detalhe da conexão.
+final class DetalheDaConexaoRepository
+    extends RepositoryBase<DetalheConexao, ConexaoIdParameters, ConexoesError> {
+  const DetalheDaConexaoRepository({required super.datasource});
+
+  @override
+  ConexoesError mapError(Object e, StackTrace s, ConexaoIdParameters p) =>
+      _traduzir(e, 'detalhe da conexão');
+}
+
+/// P9 — as mensagens que ficaram sem destino.
+final class ListarNaoEntreguesRepository
+    extends
+        RepositoryBase<List<MensagemParada>, NoParams, ConexoesError> {
+  const ListarNaoEntreguesRepository({required super.datasource});
+
+  @override
+  ConexoesError mapError(Object e, StackTrace s, NoParams p) =>
+      _traduzir(e, 'listar não entregues');
+}
+
+/// P9 — devolve a mensagem ao outbox.
+final class ReenviarNaoEntregueRepository
+    extends
+        RepositoryBase<DesfechoReenvio, ConexaoIdParameters, ConexoesError> {
+  const ReenviarNaoEntregueRepository({required super.datasource});
+
+  @override
+  ConexoesError mapError(Object e, StackTrace s, ConexaoIdParameters p) =>
+      _traduzir(e, 'reenviar não entregue');
+}

@@ -129,6 +129,10 @@ pub struct OrigemMensagem {
     /// que o gravava era chamado apenas por um teste. Sem histórico não há como
     /// calibrar limiar nenhum — daí gravar vir antes de decidir.
     pub confianca_resposta: Option<f64>,
+    /// P8 — o que não cabe em `conteudo`: opções da enquete, itens da lista,
+    /// rótulos dos botões, vCard do contato. A coluna `metadados` existe desde a
+    /// 0006 e a ingestão nunca escreveu nela.
+    pub metadados: Option<serde_json::Value>,
 }
 
 /// N9/E1 — dados de uma mídia que o atendente enviou pelo painel.
@@ -165,7 +169,90 @@ pub trait AtendimentoStore: Send + Sync {
         atendimento_id: i32,
         limit: i64,
         offset: i64,
+        // P2 — cursor da rolagem para trás. `Some(id)` ignora o `offset`.
+        before_id: Option<i32>,
     ) -> Result<Vec<Mensagem>, DbError>;
+
+    /// P4 — dono da conversa. `atendente_id = None` devolve para a fila.
+    ///
+    /// Devolve `false` quando a conversa já tem outro dono: atribuir não rouba
+    /// conversa de quem está no meio de um atendimento.
+    async fn atribuir_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        atendente_id: Option<i32>,
+    ) -> Result<bool, DbError>;
+
+    /// P5 — a linha do tempo do atendimento.
+    async fn listar_timeline(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<Vec<infrastructure_postgres::atendimentos::atendimentos::EventoDaTimeline>, DbError>;
+
+    /// P5 — as outras conversas do mesmo contato.
+    async fn listar_do_contato(
+        &self,
+        ctx: &RequestContext,
+        contato_id: i32,
+        limit: i64,
+    ) -> Result<Vec<Atendimento>, DbError>;
+
+    /// P5 — apaga uma nota interna.
+    async fn remover_nota(
+        &self,
+        ctx: &RequestContext,
+        nota_id: i64,
+        atendimento_id: i32,
+    ) -> Result<bool, DbError>;
+
+    /// P5 — renomeia/recolore uma etiqueta do catálogo.
+    async fn atualizar_etiqueta(
+        &self,
+        ctx: &RequestContext,
+        id: i64,
+        nome: &str,
+        cor: &str,
+        descricao: &str,
+    ) -> Result<Option<infrastructure_postgres::atendimentos::etiquetas::EtiquetaAtualizada>, DbError>;
+
+    /// P5 — tira a etiqueta do catálogo sem apagá-la das conversas.
+    async fn desativar_etiqueta(&self, ctx: &RequestContext, id: i64) -> Result<bool, DbError>;
+
+    /// P4 — o quadro em linhas, para exportação (leva nome e telefone).
+    async fn exportar_quadro(
+        &self,
+        ctx: &RequestContext,
+        departamento_id: Option<i32>,
+        filtro: infrastructure_postgres::atendimentos::atendimentos::FiltroDoQuadro,
+        limit: i64,
+    ) -> Result<Vec<infrastructure_postgres::atendimentos::atendimentos::LinhaDoQuadro>, DbError>;
+
+    /// P4 — urgência do cartão.
+    async fn definir_prioridade(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        prioridade: &str,
+    ) -> Result<bool, DbError>;
+
+    /// P4 — o atendente ligado ao usuário logado ("atribuir a mim").
+    async fn atendente_do_usuario(&self, ctx: &RequestContext) -> Result<Option<i32>, DbError>;
+
+    /// P3 — o atendimento ativo de um telefone (sem criar nada).
+    async fn buscar_atendimento_ativo_por_telefone(
+        &self,
+        ctx: &RequestContext,
+        telefone: &str,
+    ) -> Result<Option<i32>, DbError>;
+
+    /// P3 — instância e telefone para onde mandar a presença do atendente.
+    async fn resolver_destino_do_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<Option<(i64, String)>, DbError>;
 
     /// Lista atendimentos por status (snapshot), opcionalmente filtrando departamento.
     async fn listar_atendimentos(
@@ -173,6 +260,7 @@ pub trait AtendimentoStore: Send + Sync {
         ctx: &RequestContext,
         status: &str,
         departamento_id: Option<i32>,
+        filtro: infrastructure_postgres::atendimentos::atendimentos::FiltroDoQuadro,
         limit: i64,
     ) -> Result<Vec<Atendimento>, DbError>;
 
@@ -200,6 +288,39 @@ pub trait AtendimentoStore: Send + Sync {
         origem: OrigemMensagem,
     ) -> Result<Mensagem, DbError>;
 
+    /// P9 — as mensagens do atendente que ficaram sem destino.
+    async fn listar_nao_entregues(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<infrastructure_postgres::atendimentos::mensagens::MensagemNaoEntregue>, DbError>;
+
+    /// P8 — grava (ou apaga) a reação de alguém numa mensagem.
+    ///
+    /// Reação não é bolha nova: é atributo da mensagem reagida, como no WhatsApp
+    /// Web. `emoji` vazio remove. `false` no retorno = mensagem alvo
+    /// desconhecida — reagir a uma conversa anterior à integração é comum e não
+    /// é erro.
+    async fn aplicar_reacao(
+        &self,
+        ctx: &RequestContext,
+        message_id_whatsapp: &str,
+        emoji: &str,
+        de: &str,
+    ) -> Result<bool, DbError>;
+
+    /// P8 — nome de perfil e foto vindos do evento `CONTACTS` do provedor.
+    ///
+    /// Só atualiza quem já existe: o evento pode trazer a agenda inteira do
+    /// aparelho, e criar contato a partir dele encheria a base de gente que
+    /// nunca escreveu para o tenant.
+    async fn atualizar_perfil_do_contato(
+        &self,
+        ctx: &RequestContext,
+        telefone: &str,
+        nome_perfil: &str,
+        foto_url: &str,
+    ) -> Result<bool, DbError>;
+
     /// D3 — liga/desliga a resposta automática da IA nesta conversa.
     ///
     /// `false` no retorno = atendimento inexistente ou de outro tenant.
@@ -209,6 +330,66 @@ pub trait AtendimentoStore: Send + Sync {
         atendimento_id: i32,
         habilitado: bool,
     ) -> Result<bool, DbError>;
+
+    /// P16 — liga/desliga a marca "revisar" do cartão.
+    async fn definir_revisao_pendente(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        pendente: bool,
+    ) -> Result<bool, DbError>;
+
+    /// P15 — completa o cadastro do contato com as entidades (N10 E4), só no
+    /// que está vazio. Devolve `(contato_id, nomes dos campos preenchidos)`.
+    async fn enriquecer_contato(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        valores: infrastructure_postgres::clientes::contatos::ValoresDoContato,
+    ) -> Result<(i32, Vec<String>), DbError>;
+
+    /// P14 — aplica as etiquetas das intenções confiantes (N10 E3).
+    ///
+    /// Só etiqueta que já existe e está ativa; nunca a que uma pessoa removeu
+    /// neste atendimento. Devolve só as que entraram agora.
+    async fn aplicar_etiquetas_da_analise(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        intencoes: Vec<(String, f64)>,
+        piso: f64,
+    ) -> Result<
+        Vec<infrastructure_postgres::atendimentos::etiquetas::EtiquetaAplicadaPelaIa>,
+        DbError,
+    >;
+
+    /// P13 — nome, telefone e foto do contato de cada cartão do quadro.
+    async fn contatos_do_quadro(
+        &self,
+        ctx: &RequestContext,
+        ids: Vec<i32>,
+    ) -> Result<
+        std::collections::HashMap<
+            i32,
+            infrastructure_postgres::atendimentos::atendimentos::ContatoDoQuadro,
+        >,
+        DbError,
+    >;
+
+    /// P13 — o contato de um atendimento, com a data da última consulta da foto.
+    async fn contato_do_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<Option<infrastructure_postgres::atendimentos::atendimentos::ContatoComFoto>, DbError>;
+
+    /// P13 — grava o resultado da consulta da foto (`None` não apaga).
+    async fn registrar_foto_do_contato(
+        &self,
+        ctx: &RequestContext,
+        contato_id: i32,
+        foto_url: Option<String>,
+    ) -> Result<(), DbError>;
 
     /// B6 (N9 E4) — mensagens do contato ainda não lidas, por atendimento.
     async fn contar_nao_lidas(
@@ -308,10 +489,16 @@ pub trait AtendimentoStore: Send + Sync {
     /// Aplica a política de ticket/Kanban: para um atendimento ainda não posicionado,
     /// resolve o fluxo padrão, coloca-o na etapa inicial ('fila'), registra o
     /// `MovimentoFluxo` automático e devolve o resultado para auditoria/realtime (WS-2.4).
+    ///
+    /// P7 — `instance_id` é a conexão por onde a conversa entrou (0 = não
+    /// informado, clientes antigos). É o roteamento por número da v1: a conversa
+    /// vai para o fluxo do departamento daquela conexão; sem departamento, ou
+    /// sem fluxo ativo nele, cai no primeiro fluxo ativo do tenant como antes.
     async fn aplicar_politica_ticket_kanban(
         &self,
         ctx: &RequestContext,
         atendimento_id: i32,
+        instance_id: i32,
     ) -> Result<TicketKanbanOutcome, DbError>;
 
     /// Move manualmente um atendimento para outra etapa do Kanban (drag-and-drop na

@@ -48,3 +48,35 @@ class Ensaio {
   /// treinamento.
   bool get semContexto => trechos.isEmpty && comportamentoAplicado.isEmpty;
 }
+
+/// P17 — uma avaliação do teste ainda não tratada.
+///
+/// `AvaliacaoPendente`, e não `AvaliacaoDeTeste`: o `dependencies_module`
+/// reexporta o contrato, e o nome do tipo gerado colidiria.
+class AvaliacaoPendente {
+  final int id;
+  final String pergunta;
+  final String respostaBot;
+
+  /// A resposta certa que a pessoa escreveu. Vazia quando ela só avaliou.
+  final String respostaCorrigida;
+  final bool boa;
+  final DateTime criadaEm;
+
+  const AvaliacaoPendente({
+    required this.id,
+    required this.pergunta,
+    required this.respostaBot,
+    required this.respostaCorrigida,
+    required this.boa,
+    required this.criadaEm,
+  });
+
+  /// Só a ruim com correção vira material: a boa não ensina nada novo, e a
+  /// ruim sem correção só diz que algo está errado.
+  bool get podeVirarTreinamento => !boa && respostaCorrigida.trim().isNotEmpty;
+
+  /// O texto que vai para o treinamento: a pergunta e a resposta certa.
+  String get conteudoParaTreinamento =>
+      'Pergunta: $pergunta\n\nResposta: $respostaCorrigida';
+}

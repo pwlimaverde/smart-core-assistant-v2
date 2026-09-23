@@ -22,6 +22,12 @@ final class FichaController extends BaseController<FichaAtendimento> {
   final DefinirBotDaConversaUsecase _definirBot;
   final DefinirValorCampoUsecase _definirValorCampo;
 
+  /// P5 — o resto da ficha. Opcionais: a conversa embutida em telas que não
+  /// registraram o módulo inteiro continua abrindo.
+  final RemoverNotaUsecase? _removerNota;
+  final AtualizarEtiquetaUsecase? _atualizarEtiqueta;
+  final DesativarEtiquetaUsecase? _desativarEtiqueta;
+
   int _atendimentoId = 0;
 
   FichaController({
@@ -31,7 +37,13 @@ final class FichaController extends BaseController<FichaAtendimento> {
     required CriarNotaUsecase criarNota,
     required DefinirBotDaConversaUsecase definirBot,
     required DefinirValorCampoUsecase definirValorCampo,
-  }) : _carregar = carregar,
+    RemoverNotaUsecase? removerNota,
+    AtualizarEtiquetaUsecase? atualizarEtiqueta,
+    DesativarEtiquetaUsecase? desativarEtiqueta,
+  }) : _removerNota = removerNota,
+       _atualizarEtiqueta = atualizarEtiqueta,
+       _desativarEtiqueta = desativarEtiqueta,
+       _carregar = carregar,
        _criarEtiqueta = criarEtiqueta,
        _alternar = alternar,
        _criarNota = criarNota,
@@ -54,6 +66,56 @@ final class FichaController extends BaseController<FichaAtendimento> {
     final res = await _criarEtiqueta(
       CriarEtiquetaParameters(nome: nome, cor: cor),
     );
+    if (res case Failure(:final error)) return error;
+    await abrir(_atendimentoId);
+    return null;
+  }
+
+  /// P5 — apaga uma nota interna.
+  ///
+  /// Nota escrita errada ficava para sempre: a v1 deixava excluir, e sem isso
+  /// o painel vira um mural que ninguém limpa.
+  Future<FichaError?> removerNota(int notaId) async {
+    final usecase = _removerNota;
+    if (usecase == null) return null;
+    final res = await usecase(
+      RemoverNotaParameters(notaId: notaId, atendimentoId: _atendimentoId),
+    );
+    if (res case Failure(:final error)) return error;
+    await abrir(_atendimentoId);
+    return null;
+  }
+
+  /// P5 — renomeia/recolore uma etiqueta do catálogo.
+  Future<FichaError?> atualizarEtiqueta({
+    required int id,
+    required String nome,
+    String cor = '',
+    String descricao = '',
+  }) async {
+    final usecase = _atualizarEtiqueta;
+    if (usecase == null) return null;
+    final res = await usecase(
+      AtualizarEtiquetaParameters(
+        id: id,
+        nome: nome,
+        cor: cor,
+        descricao: descricao,
+      ),
+    );
+    if (res case Failure(:final error)) return error;
+    await abrir(_atendimentoId);
+    return null;
+  }
+
+  /// P5 — tira a etiqueta do catálogo.
+  ///
+  /// Ela continua nas conversas em que já estava: desativar é parar de
+  /// oferecer, não reescrever o que já aconteceu.
+  Future<FichaError?> desativarEtiqueta(int id) async {
+    final usecase = _desativarEtiqueta;
+    if (usecase == null) return null;
+    final res = await usecase(DesativarEtiquetaParameters(id: id));
     if (res case Failure(:final error)) return error;
     await abrir(_atendimentoId);
     return null;

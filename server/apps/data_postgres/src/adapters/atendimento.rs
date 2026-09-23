@@ -178,10 +178,19 @@ async fn solicitar_pesquisa_satisfacao(
                 mensagem_citada_id: None,
                 ja_entregue: false,
                 confianca_resposta: None,
+                metadados: None,
             },
         )
         .await?;
     repo.touch_last_message(tx, ctx, atendimento_id).await?;
+    // P6 — esta é uma resposta do bot: se for a primeira do atendimento,
+    // carimba o SLA.
+    infrastructure_postgres::atendimentos::atendimentos::marcar_primeira_resposta(
+        tx,
+        ctx,
+        atendimento_id,
+    )
+    .await?;
 
     let evento = serde_json::json!({
         "message_id": msg.id.to_string(),
@@ -232,15 +241,259 @@ impl AtendimentoStore for PgAtendimentoStore {
         atendimento_id: i32,
         limit: i64,
         offset: i64,
+        before_id: Option<i32>,
     ) -> Result<Vec<Mensagem>, DbError> {
         let repo = PostgresMensagemRepository;
         let ctx = ctx.clone();
         let tenant_id = ctx.tenant_id;
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
-            let mensagens = repo
-                .listar_por_atendimento(&mut tx, &ctx, atendimento_id, limit, offset)
-                .await?;
+            let mensagens = match before_id {
+                Some(cursor) => {
+                    infrastructure_postgres::atendimentos::mensagens::listar_anteriores_a(
+                        &mut tx,
+                        &ctx,
+                        atendimento_id,
+                        cursor,
+                        limit,
+                    )
+                    .await?
+                }
+                None => {
+                    repo.listar_por_atendimento(&mut tx, &ctx, atendimento_id, limit, offset)
+                        .await?
+                }
+            };
             Ok((mensagens, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn atribuir_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        atendente_id: Option<i32>,
+    ) -> Result<bool, DbError> {
+        let repo = PostgresAtendimentoRepository;
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let resultado = match atendente_id {
+                // `atribuir_se_livre` já existia para o rodízio (B5) e tem a
+                // regra que interessa aqui: não tira conversa de quem a pegou.
+                Some(id) => {
+                    repo.atribuir_se_livre(&mut tx, &ctx, atendimento_id, id)
+                        .await?
+                }
+                None => {
+                    repo.desatribuir(&mut tx, &ctx, atendimento_id).await?;
+                    true
+                }
+            };
+            Ok((resultado, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn listar_timeline(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<Vec<infrastructure_postgres::atendimentos::atendimentos::EventoDaTimeline>, DbError>
+    {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let eventos = infrastructure_postgres::atendimentos::atendimentos::listar_timeline(
+                &mut tx,
+                &ctx,
+                atendimento_id,
+            )
+            .await?;
+            Ok((eventos, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, contato_id = contato_id))]
+    async fn listar_do_contato(
+        &self,
+        ctx: &RequestContext,
+        contato_id: i32,
+        limit: i64,
+    ) -> Result<Vec<Atendimento>, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let itens = infrastructure_postgres::atendimentos::atendimentos::listar_do_contato(
+                &mut tx, &ctx, contato_id, limit,
+            )
+            .await?;
+            Ok((itens, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, nota_id = nota_id))]
+    async fn remover_nota(
+        &self,
+        ctx: &RequestContext,
+        nota_id: i64,
+        atendimento_id: i32,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let ok = infrastructure_postgres::atendimentos::etiquetas::remover_nota(
+                &mut tx,
+                &ctx,
+                nota_id,
+                atendimento_id,
+            )
+            .await?;
+            Ok((ok, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, etiqueta_id = id))]
+    async fn atualizar_etiqueta(
+        &self,
+        ctx: &RequestContext,
+        id: i64,
+        nome: &str,
+        cor: &str,
+        descricao: &str,
+    ) -> Result<Option<infrastructure_postgres::atendimentos::etiquetas::EtiquetaAtualizada>, DbError>
+    {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let (nome, cor, descricao) = (nome.to_string(), cor.to_string(), descricao.to_string());
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let etiqueta = infrastructure_postgres::atendimentos::etiquetas::atualizar_etiqueta(
+                &mut tx, &ctx, id, &nome, &cor, &descricao,
+            )
+            .await?;
+            Ok((etiqueta, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, etiqueta_id = id))]
+    async fn desativar_etiqueta(&self, ctx: &RequestContext, id: i64) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let ok = infrastructure_postgres::atendimentos::etiquetas::desativar_etiqueta(
+                &mut tx, &ctx, id,
+            )
+            .await?;
+            Ok((ok, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn exportar_quadro(
+        &self,
+        ctx: &RequestContext,
+        departamento_id: Option<i32>,
+        filtro: infrastructure_postgres::atendimentos::atendimentos::FiltroDoQuadro,
+        limit: i64,
+    ) -> Result<Vec<infrastructure_postgres::atendimentos::atendimentos::LinhaDoQuadro>, DbError>
+    {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let linhas = infrastructure_postgres::atendimentos::atendimentos::exportar_quadro(
+                &mut tx,
+                &ctx,
+                departamento_id,
+                &filtro,
+                limit,
+            )
+            .await?;
+            Ok((linhas, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn definir_prioridade(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        prioridade: &str,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let prioridade = prioridade.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let ok = infrastructure_postgres::atendimentos::atendimentos::definir_prioridade(
+                &mut tx,
+                &ctx,
+                atendimento_id,
+                &prioridade,
+            )
+            .await?;
+            Ok((ok, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn atendente_do_usuario(&self, ctx: &RequestContext) -> Result<Option<i32>, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let id = infrastructure_postgres::atendimentos::atendimentos::atendente_do_usuario(
+                &mut tx, &ctx,
+            )
+            .await?;
+            Ok((id, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn buscar_atendimento_ativo_por_telefone(
+        &self,
+        ctx: &RequestContext,
+        telefone: &str,
+    ) -> Result<Option<i32>, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let telefone = telefone.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let id =
+                infrastructure_postgres::atendimentos::atendimentos::buscar_ativo_por_telefone(
+                    &mut tx, &ctx, &telefone,
+                )
+                .await?;
+            Ok((id, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn resolver_destino_do_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<Option<(i64, String)>, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let destino =
+                infrastructure_postgres::atendimentos::mensagens::resolver_destino_do_atendimento(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                )
+                .await?;
+            Ok((destino, tx))
         })
         .await
     }
@@ -251,6 +504,7 @@ impl AtendimentoStore for PgAtendimentoStore {
         ctx: &RequestContext,
         status: &str,
         departamento_id: Option<i32>,
+        filtro: infrastructure_postgres::atendimentos::atendimentos::FiltroDoQuadro,
         limit: i64,
     ) -> Result<Vec<Atendimento>, DbError> {
         let repo = PostgresAtendimentoRepository;
@@ -265,6 +519,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                         &mut tx,
                         &ctx,
                         departamento_id,
+                        &filtro,
                         limit,
                     )
                     .await?;
@@ -362,12 +617,38 @@ impl AtendimentoStore for PgAtendimentoStore {
                         mensagem_citada_id,
                         ja_entregue: origem.ja_entregue,
                         confianca_resposta: origem.confianca_resposta,
+                        // P8 — opções da enquete, itens da lista, rótulos dos
+                        // botões, vCard do contato.
+                        metadados: origem.metadados.clone(),
                     },
                 )
                 .await?;
 
             let repo_atendimento = PostgresAtendimentoRepository;
-            repo_atendimento.touch_last_message(&mut tx, &ctx, atendimento_id).await?;
+            repo_atendimento
+                .touch_last_message(&mut tx, &ctx, atendimento_id)
+                .await?;
+            // P16 — o atendente respondeu na conversa: a resposta da IA que
+            // pedia revisão foi vista por alguém.
+            if remetente == "atendente" {
+                infrastructure_postgres::atendimentos::atendimentos::definir_revisao_pendente(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    false,
+                )
+                .await?;
+            }
+            // P6 — só o que SAI conta como resposta; mensagem do contato é o
+            // relógio começando, não parando.
+            if remetente != "contato" {
+                infrastructure_postgres::atendimentos::atendimentos::marcar_primeira_resposta(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                )
+                .await?;
+            }
 
             // Padrão OUTBOX: insere o evento de domínio na MESMA transação ACID.
             let event_payload = serde_json::json!({
@@ -593,6 +874,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                         remetente: "atendente",
                         message_id_whatsapp: None,
                         mensagem_citada_id: None,
+                        metadados: None,
                         // Ainda não passou pelo WhatsApp: é o worker que envia.
                         ja_entregue: false,
                         confianca_resposta: None,
@@ -842,6 +1124,7 @@ impl AtendimentoStore for PgAtendimentoStore {
         &self,
         ctx: &RequestContext,
         atendimento_id: i32,
+        instance_id: i32,
     ) -> Result<TicketKanbanOutcome, DbError> {
         let repo_atendimento = PostgresAtendimentoRepository;
         let repo_fluxo = PostgresFluxoAtendimentoRepository;
@@ -877,10 +1160,39 @@ impl AtendimentoStore for PgAtendimentoStore {
                 return Ok((outcome, tx));
             }
 
-            // Resolve o fluxo: o do atendimento (se houver) ou o primeiro ativo do tenant.
+            // Resolve o fluxo: o do atendimento (se houver), senão o do
+            // DEPARTAMENTO DA CONEXÃO (P7 — o roteamento por número da v1) e,
+            // em último caso, o primeiro fluxo ativo do tenant.
+            //
+            // A ordem importa: a conexão só decide quando o atendimento ainda
+            // não tem fluxo. Um atendimento já roteado não é rerroteado porque
+            // a mensagem seguinte chegou por outro número.
             let fluxo = match atendimento.fluxo_atendimento_id {
                 Some(fid) => repo_fluxo.buscar_por_id(&mut tx, &ctx, fid).await?,
-                None => repo_fluxo.buscar_primeiro_ativo(&mut tx, &ctx).await?,
+                None => {
+                    let do_departamento = if instance_id > 0 {
+                        match infrastructure_postgres::integracoes::conexoes::departamento_da_conexao(
+                            &mut tx,
+                            &ctx,
+                            instance_id,
+                        )
+                        .await?
+                        {
+                            Some(dep) => {
+                                repo_fluxo
+                                    .buscar_primeiro_ativo_do_departamento(&mut tx, &ctx, dep)
+                                    .await?
+                            }
+                            None => None,
+                        }
+                    } else {
+                        None
+                    };
+                    match do_departamento {
+                        Some(f) => Some(f),
+                        None => repo_fluxo.buscar_primeiro_ativo(&mut tx, &ctx).await?,
+                    }
+                }
             };
             let fluxo = match fluxo {
                 Some(f) => f,
@@ -1094,6 +1406,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                                         mensagem_citada_id: None,
                                         ja_entregue: false,
                         confianca_resposta: None,
+                                        metadados: None,
                                     },
                                 )
                                 .await?;
@@ -1939,6 +2252,31 @@ impl AtendimentoStore for PgAtendimentoStore {
             let notas = PostgresNotaRepository
                 .listar_por_atendimento(&mut tx, &ctx, atendimento_id)
                 .await?;
+            // P15 — o que a IA já guardou do contato (seção só de leitura).
+            let dados_do_contato =
+                infrastructure_postgres::clientes::contatos::entidades_do_contato(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                )
+                .await?;
+            // P14 — quais destas a IA colocou (o ✨ da ficha).
+            let da_ia = infrastructure_postgres::atendimentos::etiquetas::etiquetas_da_ia(
+                &mut tx,
+                &ctx,
+                atendimento_id,
+            )
+            .await?;
+            let aplicadas: Vec<serde_json::Value> = aplicadas
+                .iter()
+                .map(|e| {
+                    let mut v = serde_json::to_value(e).unwrap_or_default();
+                    if let Some(o) = v.as_object_mut() {
+                        o.insert("aplicada_pela_ia".into(), da_ia.contains(&e.id).into());
+                    }
+                    v
+                })
+                .collect();
 
             // D3 — a ficha desenha o interruptor do bot, então precisa saber em
             // que estado ele está. Vem na mesma transação: um RPC extra só para
@@ -2009,6 +2347,7 @@ impl AtendimentoStore for PgAtendimentoStore {
                 "notas": notas,
                 "bot_pode_atender": bot_pode_atender,
                 "campos": campos,
+                "dados_do_contato": dados_do_contato,
             });
             Ok((json, tx))
         })
@@ -2045,12 +2384,29 @@ impl AtendimentoStore for PgAtendimentoStore {
         let ctx = ctx.clone();
         run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
             let repo = PostgresEtiquetaRepository;
+            // P14 — o que uma pessoa decide sobre a etiqueta vale contra a IA:
+            // tirar bloqueia a recolocação automática neste atendimento, e
+            // colocar de volta desfaz o bloqueio.
             if aplicar {
                 repo.aplicar(&mut tx, &ctx, atendimento_id, etiqueta_id)
                     .await?;
+                infrastructure_postgres::atendimentos::etiquetas::desbloquear_etiqueta_para_ia(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    etiqueta_id,
+                )
+                .await?;
             } else {
                 repo.remover(&mut tx, &ctx, atendimento_id, etiqueta_id)
                     .await?;
+                infrastructure_postgres::atendimentos::etiquetas::bloquear_etiqueta_para_ia(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    etiqueta_id,
+                )
+                .await?;
             }
             Ok((true, tx))
         })
@@ -2075,6 +2431,215 @@ impl AtendimentoStore for PgAtendimentoStore {
             let json = serde_json::to_value(&nota)
                 .map_err(|e| DbError::ConfigError(format!("falha ao serializar: {e}")))?;
             Ok((json, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn aplicar_reacao(
+        &self,
+        ctx: &RequestContext,
+        message_id_whatsapp: &str,
+        emoji: &str,
+        de: &str,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let alvo = message_id_whatsapp.to_string();
+        let emoji = emoji.to_string();
+        let de = de.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let aplicou = infrastructure_postgres::atendimentos::mensagens::aplicar_reacao(
+                &mut tx, &ctx, &alvo, &emoji, &de,
+            )
+            .await?;
+            Ok((aplicou, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn atualizar_perfil_do_contato(
+        &self,
+        ctx: &RequestContext,
+        telefone: &str,
+        nome_perfil: &str,
+        foto_url: &str,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let telefone = telefone.to_string();
+        let nome = nome_perfil.to_string();
+        let foto = foto_url.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let atualizou = infrastructure_postgres::clientes::contatos::atualizar_perfil_whatsapp(
+                &mut tx,
+                &ctx,
+                &telefone,
+                Some(&nome),
+                Some(&foto),
+            )
+            .await?;
+            Ok((atualizou, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_nao_entregues(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<infrastructure_postgres::atendimentos::mensagens::MensagemNaoEntregue>, DbError>
+    {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let itens = infrastructure_postgres::atendimentos::mensagens::listar_nao_entregues(
+                &mut tx, &ctx,
+            )
+            .await?;
+            Ok((itens, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn contatos_do_quadro(
+        &self,
+        ctx: &RequestContext,
+        ids: Vec<i32>,
+    ) -> Result<
+        std::collections::HashMap<
+            i32,
+            infrastructure_postgres::atendimentos::atendimentos::ContatoDoQuadro,
+        >,
+        DbError,
+    > {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let linhas = infrastructure_postgres::atendimentos::atendimentos::contatos_do_quadro(
+                &mut tx, &ctx, &ids,
+            )
+            .await?;
+            let mapa = linhas.into_iter().map(|c| (c.atendimento_id, c)).collect();
+            Ok((mapa, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn contato_do_atendimento(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+    ) -> Result<Option<infrastructure_postgres::atendimentos::atendimentos::ContatoComFoto>, DbError>
+    {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let c = infrastructure_postgres::atendimentos::atendimentos::contato_do_atendimento(
+                &mut tx,
+                &ctx,
+                atendimento_id,
+            )
+            .await?;
+            Ok((c, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, contato_id = contato_id))]
+    async fn registrar_foto_do_contato(
+        &self,
+        ctx: &RequestContext,
+        contato_id: i32,
+        foto_url: Option<String>,
+    ) -> Result<(), DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            infrastructure_postgres::atendimentos::atendimentos::registrar_foto_do_contato(
+                &mut tx,
+                &ctx,
+                contato_id,
+                foto_url.as_deref(),
+            )
+            .await?;
+            Ok(((), tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn aplicar_etiquetas_da_analise(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        intencoes: Vec<(String, f64)>,
+        piso: f64,
+    ) -> Result<
+        Vec<infrastructure_postgres::atendimentos::etiquetas::EtiquetaAplicadaPelaIa>,
+        DbError,
+    > {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let aplicadas =
+                infrastructure_postgres::atendimentos::etiquetas::aplicar_etiquetas_por_intencao(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    &intencoes,
+                    piso,
+                )
+                .await?;
+            Ok((aplicadas, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn enriquecer_contato(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        valores: infrastructure_postgres::clientes::contatos::ValoresDoContato,
+    ) -> Result<(i32, Vec<String>), DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let r = infrastructure_postgres::clientes::contatos::enriquecer_contato_do_atendimento(
+                &mut tx,
+                &ctx,
+                atendimento_id,
+                &valores,
+            )
+            .await?;
+            Ok((r, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    async fn definir_revisao_pendente(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        pendente: bool,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let mudou =
+                infrastructure_postgres::atendimentos::atendimentos::definir_revisao_pendente(
+                    &mut tx,
+                    &ctx,
+                    atendimento_id,
+                    pendente,
+                )
+                .await?;
+            Ok((mudou, tx))
         })
         .await
     }

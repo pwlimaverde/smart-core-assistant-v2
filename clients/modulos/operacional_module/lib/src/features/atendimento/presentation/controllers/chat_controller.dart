@@ -2,13 +2,16 @@ import 'dart:async';
 import 'dart:developer' as developer;
 import 'dart:math';
 
+import 'package:flutter/foundation.dart' show ValueNotifier;
 import 'package:presentation_module/presentation_module.dart';
 import 'package:return_success_or_error/return_success_or_error.dart';
 
 import '../../domain/errors/atendimento_errors.dart';
 import '../../domain/model/atendimento_evento.dart';
+import '../../domain/model/mensagem_thread.dart';
 import '../../domain/parameters/ficha_parameters.dart';
 import '../../domain/parameters/get_thread_parameters.dart';
+import '../../domain/parameters/presenca_parameters.dart';
 import '../../domain/parameters/send_outbound_message_parameters.dart';
 import '../../domain/streams/atendimento_evento_stream.dart';
 import '../../domain/usecases/atendimento_usecases.dart';
@@ -30,6 +33,10 @@ final class ChatController extends BaseController<ChatViewModel> {
   /// B6 — opcional: sem ele a conversa abre e só não marca a leitura.
   final MarcarAtendimentoLidoUsecase? _marcarLido;
 
+  /// P3 — opcional pelo mesmo motivo: sem ele a conversa funciona e o contato
+  /// apenas não vê o "digitando...".
+  final EnviarPresencaUsecase? _presenca;
+
   /// Dependências como private named parameters (Dart 3.12): o chamador usa
   /// `getThreadUsecase`/`sendUsecase`/`eventos`, os campos ficam privados.
   ChatController({
@@ -37,7 +44,9 @@ final class ChatController extends BaseController<ChatViewModel> {
     required this._sendUsecase,
     required this._eventos,
     MarcarAtendimentoLidoUsecase? marcarLidoUsecase,
-  }) : _marcarLido = marcarLidoUsecase;
+    EnviarPresencaUsecase? presencaUsecase,
+  }) : _marcarLido = marcarLidoUsecase,
+       _presenca = presencaUsecase;
 
   static const _backoffBase = Duration(seconds: 1);
   static const _backoffMax = Duration(seconds: 30);
@@ -52,6 +61,26 @@ final class ChatController extends BaseController<ChatViewModel> {
   /// Id da mensagem do contato mais recente já marcada como lida: evita ir
   /// ao servidor a cada rolagem quando nada novo chegou.
   int? _ultimaMarcada;
+
+  /// P3 — quando a última presença do atendente foi enviada, e o timer que
+  /// apaga a presença do contato quando ela para de ser renovada.
+  DateTime? _ultimaPresencaEnviada;
+  Timer? _limpezaDaPresenca;
+
+  /// P10 — sobe a cada vez que a IA grava campos na ficha desta conversa.
+  ///
+  /// A v1 publicava `custom_field.updated` e a ficha aberta se atualizava; a v2
+  /// gravava em silêncio. É um contador, e não o dado: a ficha tem controller
+  /// próprio, e quem a desenha decide recarregar.
+  final camposAtualizados = ValueNotifier<int>(0);
+
+  /// O provedor mantém "digitando" por poucos segundos; renovar a cada tecla
+  /// seria uma chamada por caractere, e renovar de menos faz o aviso piscar.
+  static const _intervaloDePresenca = Duration(seconds: 4);
+
+  /// Depois disso sem notícia, o "digitando..." some sozinho: o provedor nem
+  /// sempre manda o evento de parada.
+  static const _validadeDaPresenca = Duration(seconds: 8);
 
   /// Abre o chat de um atendimento: carrega o histórico e conecta o stream.
   Future<void> abrir(int atendimentoId) async {
@@ -83,15 +112,122 @@ final class ChatController extends BaseController<ChatViewModel> {
   Future<SendOutboundMessageError?> enviar(String conteudo) async {
     final atendimentoId = _atendimentoId;
     if (atendimentoId == null) return null;
+    final atual = state;
+    final citada = atual is SuccessState<ChatViewModel>
+        ? atual.data.citando
+        : null;
     final res = await _sendUsecase(
       SendOutboundMessageParameters(
         atendimentoId: atendimentoId,
         conteudo: conteudo,
+        mensagemCitadaId: citada?.id,
       ),
     );
+    // Mandou: não está mais digitando.
+    unawaited(pararDeDigitar());
     if (res case Failure(:final error)) return error;
+    // A citação vale para UMA resposta: mantê-la faria a próxima mensagem
+    // responder a mesma bolha sem que ninguém tenha pedido.
+    cancelarCitacao();
     await _recarregarThread();
     return null;
+  }
+
+  /// P3 — a pessoa está escrevendo: avisa o contato, no máximo uma vez a
+  /// cada [_intervaloDePresenca].
+  ///
+  /// Falha em silêncio de propósito: quem está digitando não pode receber um
+  /// erro porque o "digitando..." não chegou.
+  Future<void> avisarQueEstaDigitando({bool gravandoAudio = false}) async {
+    final usecase = _presenca;
+    final atendimentoId = _atendimentoId;
+    if (usecase == null || atendimentoId == null) return;
+    final agora = DateTime.now();
+    final ultima = _ultimaPresencaEnviada;
+    if (!gravandoAudio &&
+        ultima != null &&
+        agora.difference(ultima) < _intervaloDePresenca) {
+      return;
+    }
+    _ultimaPresencaEnviada = agora;
+    await usecase(
+      EnviarPresencaParameters(
+        atendimentoId: atendimentoId,
+        situacao: gravandoAudio ? 'recording' : 'composing',
+      ),
+    );
+  }
+
+  /// P3 — parou de escrever (enviou ou desistiu).
+  Future<void> pararDeDigitar() async {
+    final usecase = _presenca;
+    final atendimentoId = _atendimentoId;
+    if (usecase == null || atendimentoId == null) return;
+    if (_ultimaPresencaEnviada == null) return;
+    _ultimaPresencaEnviada = null;
+    await usecase(
+      EnviarPresencaParameters(
+        atendimentoId: atendimentoId,
+        situacao: 'paused',
+      ),
+    );
+  }
+
+  /// P2 — a próxima resposta vai citar [mensagem].
+  void citar(MensagemThread mensagem) {
+    final atual = state;
+    if (atual is! SuccessState<ChatViewModel>) return;
+    emit(SuccessState(atual.data.copyWith(citando: mensagem)));
+  }
+
+  /// P2 — desiste de citar.
+  void cancelarCitacao() {
+    final atual = state;
+    if (atual is! SuccessState<ChatViewModel>) return;
+    if (atual.data.citando == null) return;
+    emit(SuccessState(atual.data.copyWith(limparCitacao: true)));
+  }
+
+  /// P2 — a pessoa rolou até o topo: carrega o trecho anterior do histórico.
+  ///
+  /// Usa o id da bolha mais antiga como cursor, e não o total já carregado:
+  /// enquanto se lê o histórico a conversa continua recebendo, e um offset
+  /// mudaria de significado a cada mensagem que chega.
+  Future<void> carregarAntigas() async {
+    final atendimentoId = _atendimentoId;
+    final atual = state;
+    if (atendimentoId == null || atual is! SuccessState<ChatViewModel>) return;
+    final vm = atual.data;
+    if (vm.carregandoAntigas || vm.fimDoHistorico || vm.mensagens.isEmpty) {
+      return;
+    }
+    emit(SuccessState(vm.copyWith(carregandoAntigas: true)));
+
+    final res = await _getThreadUsecase(
+      GetThreadParameters(
+        atendimentoId: atendimentoId,
+        beforeId: vm.mensagens.first.id,
+      ),
+    );
+    final depois = state;
+    if (depois is! SuccessState<ChatViewModel>) return;
+    switch (res) {
+      case Success(:final value):
+        emit(
+          SuccessState(
+            depois.data.copyWith(
+              mensagens: [...value, ...depois.data.mensagens],
+              carregandoAntigas: false,
+              // Página vazia = chegou ao começo da conversa.
+              fimDoHistorico: value.isEmpty,
+            ),
+          ),
+        );
+      case Failure():
+        // Falhar ao buscar histórico não derruba a conversa aberta: a pessoa
+        // continua lendo e respondendo o que já está na tela.
+        emit(SuccessState(depois.data.copyWith(carregandoAntigas: false)));
+    }
   }
 
   /// B6 (N9 E4) — a pessoa está vendo o fim da conversa: marca como lido o
@@ -140,11 +276,49 @@ final class ChatController extends BaseController<ChatViewModel> {
   void _aoReceberEvento(AtendimentoEvento evento) {
     _tentativa = 0;
     _atualizarStatus(ChatConnectionStatus.conectado);
+    // P3 — presença não é mensagem: muda uma linha do cabeçalho e não custa
+    // uma recarga da conversa inteira.
+    if (evento.tipo == 'whatsapp.presenca') {
+      if (evento.atendimentoId == _atendimentoId) {
+        _aplicarPresencaDoContato('${evento.payload['situacao'] ?? ''}');
+      }
+      return;
+    }
+    // P10 — campos que a IA preencheu mudam a ficha, não a conversa: recarregar
+    // o thread por isso seria I/O à toa.
+    if (evento.tipo == 'atendimento.campos_atualizados' ||
+        // P14 — etiqueta posta pela IA também é mudança da ficha.
+        evento.tipo == 'atendimento.etiquetas_atualizadas') {
+      if (evento.atendimentoId == _atendimentoId) camposAtualizados.value++;
+      return;
+    }
     // Só recarrega o thread quando o evento é do atendimento aberto — evita
     // I/O desnecessário para eventos de outros atendimentos da fila.
     if (evento.atendimentoId == _atendimentoId) {
       unawaited(_recarregarThread());
     }
+  }
+
+  void _aplicarPresencaDoContato(String situacao) {
+    final atual = state;
+    if (atual is! SuccessState<ChatViewModel>) return;
+    // "available"/"unavailable" são estado de conexão do contato, não de
+    // digitação: para a conversa, valem como "nada acontecendo".
+    final exibivel = situacao == 'composing' || situacao == 'recording'
+        ? situacao
+        : '';
+    if (atual.data.presencaDoContato != exibivel) {
+      emit(SuccessState(atual.data.copyWith(presencaDoContato: exibivel)));
+    }
+    _limpezaDaPresenca?.cancel();
+    if (exibivel.isEmpty) return;
+    _limpezaDaPresenca = Timer(_validadeDaPresenca, () {
+      final agora = state;
+      if (agora is SuccessState<ChatViewModel> &&
+          agora.data.presencaDoContato.isNotEmpty) {
+        emit(SuccessState(agora.data.copyWith(presencaDoContato: '')));
+      }
+    });
   }
 
   void _aoFalharStream(Object error, StackTrace stackTrace) {
@@ -193,7 +367,13 @@ final class ChatController extends BaseController<ChatViewModel> {
     if (res case Success(:final value)) {
       final atual = state;
       if (atual is SuccessState<ChatViewModel>) {
-        emit(SuccessState(atual.data.copyWith(mensagens: value)));
+        // A recarga traz só a última página. Quem já tinha rolado para cima
+        // perderia o histórico carregado se a lista fosse trocada inteira.
+        final novos = {for (final m in value) m.id};
+        final antigas = atual.data.mensagens.where((m) => !novos.contains(m.id));
+        final unidas = [...antigas, ...value]
+          ..sort((a, b) => a.id.compareTo(b.id));
+        emit(SuccessState(atual.data.copyWith(mensagens: unidas)));
       }
     }
   }
@@ -208,8 +388,10 @@ final class ChatController extends BaseController<ChatViewModel> {
   @override
   Future<void> close() {
     _encerrado = true;
+    _limpezaDaPresenca?.cancel();
     _reconnectTimer?.cancel();
     _subscription?.cancel();
+    camposAtualizados.dispose();
     return super.close();
   }
 }

@@ -108,6 +108,20 @@ final class TreinamentoModule extends AppModule {
     );
 
     // ── ensaio de pergunta ────────────────────────────────────────────────
+    i.lazySingleton<ListarAvaliacoesUsecase>(
+      () => ListarAvaliacoesUsecase(
+        repository: ListarAvaliacoesRepository(
+          datasource: ListarAvaliacoesDatasource(client: _admin()),
+        ),
+      ),
+    );
+    i.lazySingleton<TratarAvaliacaoUsecase>(
+      () => TratarAvaliacaoUsecase(
+        repository: TratarAvaliacaoRepository(
+          datasource: TratarAvaliacaoDatasource(client: _admin()),
+        ),
+      ),
+    );
     i.lazySingleton<RegistrarFeedbackTesteUsecase>(
       () => RegistrarFeedbackTesteUsecase(
         repository: RegistrarFeedbackTesteRepository(

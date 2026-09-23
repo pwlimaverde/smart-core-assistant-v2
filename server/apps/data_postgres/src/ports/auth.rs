@@ -54,6 +54,22 @@ pub trait AuthStore: Send + Sync {
     /// Remove fisicamente um superusuário; retorna linhas afetadas (0 = inexistente).
     async fn deletar_superuser(&self, user_id: i32) -> Result<u64, DbError>;
 
+    /// P18 — a CoreSetting que liga o fallback de escopos pelo papel.
+    async fn fallback_de_papel_habilitado(&self) -> Result<bool, DbError>;
+
+    /// P18 — os vínculos ativos de todos os tenants, para a migração.
+    async fn listar_vinculos_para_migracao(
+        &self,
+    ) -> Result<Vec<infrastructure_postgres::tenants::tenants::VinculoParaMigracao>, DbError>;
+
+    /// P18 — grava os escopos explícitos se as permissões ainda forem `lidas`.
+    async fn gravar_permissoes_explicitas(
+        &self,
+        id: i32,
+        lidas: &serde_json::Value,
+        escopos: &serde_json::Value,
+    ) -> Result<bool, DbError>;
+
     /// N11 E8 — guarda o hash de um pedido de redefinição de senha.
     async fn registrar_redefinicao_senha(
         &self,

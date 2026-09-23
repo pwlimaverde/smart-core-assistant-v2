@@ -476,12 +476,55 @@ message AtendimentoResumo {
   optional int32 sentimento_nota = 12;    // última leitura de sentimento da IA (N6.5)
   optional string sentimento_label = 13; // ex.: positivo/neutro/negativo
   int32 nao_lidas = 14;                  // B6 (N9/E4): mensagens do contato ainda não lidas
+  // P13 — o contato do cartão. O quadro mostrava `Contato #id`: o resumo nunca
+  // levou nome nem telefone. `contato_nome` cai para o nome de perfil do
+  // WhatsApp e fica vazio quando nem isso existe (a tela mostra o telefone).
+  string contato_nome = 15;
+  string contato_telefone = 16;
+  // URL do CDN do WhatsApp, assinada e com validade: a tela trata imagem
+  // quebrada como "sem foto" e pede uma nova com `ObterContatoDoAtendimento`.
+  string contato_foto_url = 17;
+  // P16 — a IA respondeu abaixo da confiança automática do tenant e ninguém
+  // conferiu ainda. Some quando um atendente responde ou marca como revisado.
+  bool revisao_pendente = 18;
+}
+
+// P16 — conclui a revisão de uma resposta da IA.
+message MarcarRevisadoRequest {
+  int32 atendimento_id = 1;
+}
+
+// P13 — nome, telefone e foto do contato de uma conversa, para o cabeçalho.
+message ObterContatoDoAtendimentoRequest {
+  int32 atendimento_id = 1;
+  // Ignora o prazo de 7 dias entre consultas ao provedor. A tela usa quando a
+  // foto guardada não abre (a URL do CDN expirou).
+  bool forcar = 2;
+}
+
+message ObterContatoDoAtendimentoResponse {
+  int32 contato_id = 1;
+  string nome = 2;
+  string telefone = 3;
+  string foto_url = 4;
 }
 
 message ListAtendimentosRequest {
-  string status = 1;         // default "fila" no cliente quando vazio
+  // Vazio = o quadro inteiro (tudo que nao foi arquivado).
+  string status = 1;
   int32 departamento_id = 2; // 0 = todos os departamentos
   int32 limit = 3;
+  // P1 (paridade v1 `list_conversations`): o mesmo recorte que a v1 fazia.
+  // Casa nome do contato, nome do perfil do WhatsApp, telefone e assunto.
+  string busca = 4;
+  // 0 = todos. Use -1 para "sem dono" (a fila que ninguem assumiu).
+  int32 atendente_id = 5;
+  bool somente_nao_lidos = 6;
+  string prioridade = 7;     // vazio = todas
+  int64 etiqueta_id = 8;     // 0 = todas
+  // "minhas conversas": o servidor resolve o atendente pelo usuario logado,
+  // como a v1 fazia — o cliente nao conhece o id do atendente.
+  bool somente_meus = 9;
 }
 
 message ListAtendimentosResponse {
@@ -523,12 +566,33 @@ message MensagemThread {
   optional int32 mensagem_citada_id = 13;
   optional string citada_remetente = 14;
   optional string citada_preview = 15;
+  // P8 — reação (emoji) a esta mensagem. Não é bolha nova: é atributo da
+  // mensagem reagida, como no WhatsApp Web. Vazio na imensa maioria delas.
+  repeated ReacaoDaMensagem reacoes = 16;
+  // P8 — o que não cabe em `conteudo`: alternativas da enquete, itens da lista,
+  // rótulos dos botões, vCard do contato. JSON cru porque o formato varia com o
+  // tipo, e um campo por tipo engessaria o contrato no que o WhatsApp oferece
+  // hoje.
+  optional string metadados_json = 17;
+}
+
+// P8 — quem reagiu e com quê.
+message ReacaoDaMensagem {
+  string emoji = 1;
+  // Vocabulário do `remetente` da mensagem: "contato" ou "atendente". É o que
+  // diz de que lado da bolha desenhar.
+  string de = 2;
 }
 
 message GetThreadRequest {
   int32 atendimento_id = 1;
   int32 limit = 2;
   int32 offset = 3;
+  // P2 — rolar para cima carrega o que veio ANTES desta mensagem, como o
+  // `get_messages(before_id=...)` da v1. Paginar por offset numa conversa que
+  // recebe mensagem enquanto se rola repete ou pula bolha; o cursor nao.
+  // Quando presente, `offset` e ignorado.
+  optional int32 before_id = 4;
 }
 
 message GetThreadResponse {
@@ -641,6 +705,133 @@ message EnviarMidiaAtendimentoRequest {
 
 message EnviarMidiaAtendimentoResponse {
   int32 message_id = 1;
+}
+
+// P5 — um acontecimento da vida do atendimento.
+//
+// Tudo o que ja era gravado em tabelas separadas (movimento de etapa, nota,
+// etiqueta, avaliacao) reunido numa linha do tempo: e assim que se explica,
+// depois, por que uma conversa demorou.
+message EventoDaTimeline {
+  // "aberto" | "movido" | "nota" | "etiqueta" | "avaliado" | "encerrado"
+  string tipo = 1;
+  int64 quando = 2;      // epoch ms
+  string descricao = 3;  // ja pronto para a tela
+  string autor = 4;      // vazio quando foi o sistema/IA
+  bool automatico = 5;
+}
+
+message ListarTimelineRequest {
+  int32 atendimento_id = 1;
+}
+
+message ListarTimelineResponse {
+  repeated EventoDaTimeline eventos = 1;
+}
+
+// P5 — as outras conversas do mesmo contato.
+message ListarAtendimentosDoContatoRequest {
+  int32 contato_id = 1;
+  int32 limit = 2;
+}
+
+message ListarAtendimentosDoContatoResponse {
+  repeated AtendimentoResumo atendimentos = 1;
+}
+
+// P5 — apagar uma nota interna.
+message RemoverNotaRequest {
+  int64 nota_id = 1;
+  int32 atendimento_id = 2;
+}
+
+// P5 — manutencao do catalogo de etiquetas.
+message UpdateEtiquetaRequest {
+  int64 id = 1;
+  string nome = 2;
+  string cor = 3;
+  string descricao = 4;
+}
+
+message DesativarEtiquetaRequest {
+  int64 id = 1;
+}
+
+// P4 — quem cuida da conversa.
+//
+// `atendente_id = 0` significa "eu": o servidor resolve o atendente pelo
+// usuario do token, como a v1 fazia no "assumir".
+message AtribuirAtendimentoRequest {
+  int32 atendimento_id = 1;
+  int32 atendente_id = 2;
+  // true devolve a conversa para a fila (tira o dono).
+  bool devolver_para_fila = 3;
+}
+
+message AtribuirAtendimentoResponse {
+  bool atribuido = 1;
+  // Preenchido quando a conversa ja tinha dono: atribuir nao rouba conversa.
+  string motivo = 2;
+}
+
+// P4 — urgencia do cartao: "baixa", "normal", "alta" ou "urgente".
+message DefinirPrioridadeRequest {
+  int32 atendimento_id = 1;
+  string prioridade = 2;
+}
+
+message DefinirPrioridadeResponse {
+  bool definida = 1;
+}
+
+// P4 — transferir a conversa para outro fluxo, pela tela.
+//
+// A IA ja fazia isso desde a N6.3; o RPC existia no `data_postgres` e nunca
+// teve caminho da borda, entao o supervisor nao conseguia corrigir a mao.
+message TransferirParaFluxoRequest {
+  int32 atendimento_id = 1;
+  int32 fluxo_id = 2;
+}
+
+message TransferirParaFluxoResponse {
+  bool transferido = 1;
+  int32 fluxo_id = 2;
+  string fluxo_nome = 3;
+  int32 etapa_id = 4;
+  string etapa_nome = 5;
+  string motivo = 6;
+}
+
+// P4 — o quadro em CSV.
+//
+// Exportacao de PII em massa: e auditada no servidor, como a de tenants.
+message ExportarQuadroRequest {
+  // Mesmo recorte do ListAtendimentos: exporta-se o que esta na tela.
+  string status = 1;
+  int32 departamento_id = 2;
+  string busca = 3;
+  bool somente_meus = 4;
+  bool somente_nao_lidos = 5;
+}
+
+message ExportarQuadroResponse {
+  // CSV em UTF-8, com cabecalho.
+  bytes csv = 1;
+  int32 linhas = 2;
+}
+
+// P3 — "digitando..." / "gravando audio..." do atendente para o contato.
+//
+// E efemero: nao grava nada, nao entra na thread. O `data_whatsapp` ja sabia
+// mandar (`SetWhatsappPresence`); faltava caminho da borda ate ele.
+message EnviarPresencaRequest {
+  int32 atendimento_id = 1;
+  // "composing", "recording" ou "paused".
+  string situacao = 2;
+}
+
+message EnviarPresencaResponse {
+  bool enviado = 1;
 }
 
 message ListarMidiasAtendimentoRequest {
@@ -781,6 +972,29 @@ message AdminSetUserActiveRequest {
 
 message AdminSetUserActiveResponse {
   bool ativo = 1;
+}
+
+// P18 — migração dos escopos implícitos (D4 passo 2).
+message MigrarEscoposImplicitosRequest {
+  bool dry_run = 1;
+}
+
+message ContagemDeMigracao {
+  string tenant_id = 1;
+  string tenant_nome = 2;
+  string papel = 3;
+  int32 quantidade = 4;
+}
+
+message MigrarEscoposImplicitosResponse {
+  // Os vínculos que dependem do fallback, por tenant e papel.
+  repeated ContagemDeMigracao contagens = 1;
+  int32 total = 2;
+  // 0 no dry_run.
+  int32 migrados = 3;
+  // Mudaram no meio (outra pessoa editou) ou falharam.
+  int32 pulados = 4;
+  bool dry_run = 5;
 }
 
 // ---------------------------------------------------------------------------
@@ -1078,6 +1292,9 @@ service AdminService {
   // Fase 2: Tenants
   rpc AdminListUsers(AdminListUsersRequest) returns (AdminListUsersResponse);
   rpc AdminSetUserActive(AdminSetUserActiveRequest) returns (AdminSetUserActiveResponse);
+  // P18 — torna explícitos os escopos que cada vínculo tem hoje pelo papel.
+  // Não muda o acesso de ninguém; dry_run só conta.
+  rpc MigrarEscoposImplicitos(MigrarEscoposImplicitosRequest) returns (MigrarEscoposImplicitosResponse);
   rpc ListTenants(ListTenantsRequest) returns (ListTenantsResponse);
   rpc GetTenant(GetTenantRequest) returns (GetTenantResponse);
   rpc CreateTenant(CreateTenantRequest) returns (CreateTenantResponse);
@@ -1101,6 +1318,10 @@ service AdminService {
 
   // Fase 3: Evolution Connection
   rpc TestEvolutionConnection(TestEvolutionConnectionRequest) returns (TestEvolutionConnectionResponse);
+  // P9 — o `test-connection` da v1 para o provedor de IA: um embedding de
+  // ensaio com a configuração do tenant. Hoje só se descobria que a chave do
+  // provedor tinha expirado quando o bot parava de responder.
+  rpc TestarProvedorIa(TestarProvedorIaRequest) returns (TestarProvedorIaResponse);
 
   // Fase 4: Feature Flags
   rpc ListFeatureFlags(ListFeatureFlagsRequest) returns (ListFeatureFlagsResponse);
@@ -1137,6 +1358,19 @@ service AdminService {
   rpc SolicitarUploadMidia(SolicitarUploadMidiaRequest) returns (SolicitarUploadMidiaResponse);
   rpc EnviarMidiaAtendimento(EnviarMidiaAtendimentoRequest) returns (EnviarMidiaAtendimentoResponse);
   rpc ListarMidiasAtendimento(ListarMidiasAtendimentoRequest) returns (ListarMidiasAtendimentoResponse);
+  // P3 — presenca do atendente na conversa (efemera).
+  rpc EnviarPresenca(EnviarPresencaRequest) returns (EnviarPresencaResponse);
+  // P5 — a ficha completa.
+  rpc ListarTimelineAtendimento(ListarTimelineRequest) returns (ListarTimelineResponse);
+  rpc ListarAtendimentosDoContato(ListarAtendimentosDoContatoRequest) returns (ListarAtendimentosDoContatoResponse);
+  rpc RemoverNota(RemoverNotaRequest) returns (SimpleOkResponse);
+  rpc UpdateEtiqueta(UpdateEtiquetaRequest) returns (EtiquetaResponse);
+  rpc DesativarEtiqueta(DesativarEtiquetaRequest) returns (SimpleOkResponse);
+  // P4 — operacao do quadro pelo supervisor.
+  rpc AtribuirAtendimento(AtribuirAtendimentoRequest) returns (AtribuirAtendimentoResponse);
+  rpc DefinirPrioridade(DefinirPrioridadeRequest) returns (DefinirPrioridadeResponse);
+  rpc TransferirParaFluxo(TransferirParaFluxoRequest) returns (TransferirParaFluxoResponse);
+  rpc ExportarQuadro(ExportarQuadroRequest) returns (ExportarQuadroResponse);
 
   // Fase N3: Painel do Tenant. Exigem só autenticação (não superuser); o RBAC fino
   // `tenant:admin` é aplicado no data_postgres. AcceptInvite é rota pública (sem sessão).
@@ -1185,6 +1419,10 @@ service AdminService {
   rpc SolicitarUploadTreinamento(SolicitarUploadTreinamentoRequest) returns (SolicitarUploadTreinamentoResponse);
   rpc CreateMyTreinamentoComArquivo(CreateMyTreinamentoComArquivoRequest) returns (MyTreinamentoResponse);
   rpc RegistrarFeedbackTeste(RegistrarFeedbackTesteRequest) returns (RegistrarFeedbackTesteResponse);
+  // P17 — revisar as avaliações acumuladas: a correção feita no teste vira
+  // material de treinamento (pela criação normal) e sai da lista.
+  rpc ListMyAvaliacoesDeTeste(ListMyAvaliacoesDeTesteRequest) returns (ListMyAvaliacoesDeTesteResponse);
+  rpc MarcarAvaliacaoTratada(MarcarAvaliacaoTratadaRequest) returns (SimpleOkResponse);
   rpc GetMyTreinamento(GetMyTreinamentoRequest) returns (MyTreinamentoResponse);
   rpc FinalizarMyTreinamento(FinalizarMyTreinamentoRequest) returns (SimpleOkResponse);
   rpc RemoverMyTreinamento(RemoverMyTreinamentoRequest) returns (SimpleOkResponse);
@@ -1200,6 +1438,31 @@ service AdminService {
   rpc MarcarAtendimentoLido(MarcarAtendimentoLidoRequest) returns (MarcarAtendimentoLidoResponse);
   rpc ReconnectMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
   rpc DeleteMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
+  // P7 — encerra a SESSÃO sem apagar a conexão: o histórico e o cadastro ficam,
+  // e o mesmo registro volta com um QR novo. Remover era a única saída, e ela
+  // custava o cadastro inteiro para trocar de aparelho.
+  rpc DesconectarMyWhatsappInstance(MyWhatsappInstanceIdRequest) returns (SimpleOkResponse);
+  // P13 — o contato da conversa, com a foto buscada no WhatsApp sob demanda.
+  rpc ObterContatoDoAtendimento(ObterContatoDoAtendimentoRequest) returns (ObterContatoDoAtendimentoResponse);
+  // P16 — o atendente conferiu a resposta que a IA deu com pouca confiança.
+  rpc MarcarRevisado(MarcarRevisadoRequest) returns (SimpleOkResponse);
+  // P11 — a última versão publicada do app. Até aqui o zip era trocado à mão,
+  // e ninguém sabia que estava numa versão velha até um bug já corrigido
+  // aparecer de novo.
+  rpc GetVersaoDoApp(GetVersaoDoAppRequest) returns (GetVersaoDoAppResponse);
+  rpc DefinirDepartamentoDaConexao(DefinirDepartamentoDaConexaoRequest) returns (SimpleOkResponse);
+  rpc DetalheDaConexao(DetalheDaConexaoRequest) returns (DetalheDaConexaoResponse);
+  // P9 — mensagens que o atendente mandou e que não tinham para onde ir. O
+  // reprocessamento existia desde a N7.2 e não era alcançável de tela nenhuma:
+  // a mensagem ficava parada para sempre sem ninguém saber.
+  rpc ListMyMensagensNaoEntregues(ListMyMensagensNaoEntreguesRequest) returns (ListMyMensagensNaoEntreguesResponse);
+  rpc ReenviarMensagemNaoEntregue(ReenviarMensagemNaoEntregueRequest) returns (ReenviarMensagemNaoEntregueResponse);
+
+  // P7 — os números que o sistema ignora (a "whitelist" da v1).
+  rpc ListMyNumerosIgnorados(ListMyNumerosIgnoradosRequest) returns (ListMyNumerosIgnoradosResponse);
+  rpc CriarNumeroIgnorado(CriarNumeroIgnoradoRequest) returns (MyNumeroIgnoradoResponse);
+  rpc AtualizarNumeroIgnorado(AtualizarNumeroIgnoradoRequest) returns (SimpleOkResponse);
+  rpc RemoverNumeroIgnorado(NumeroIgnoradoIdRequest) returns (SimpleOkResponse);
 
   // Departamentos e atendentes — a estrutura para onde a fila manda conversa.
   rpc ListMyDepartamentos(ListMyDepartamentosRequest) returns (ListMyDepartamentosResponse);
@@ -1569,6 +1832,10 @@ message GetMyPainelResponse {
   int32 conexoes_total = 5;
   int32 departamentos = 6;
   int32 treinamentos_ativos = 7;
+  // P6 — mediana do tempo ate a primeira resposta nas ultimas 24h, em
+  // segundos. -1 = ninguem foi respondido ainda nessa janela (diferente de
+  // "respondido em zero segundo").
+  int32 primeira_resposta_mediana_s = 8;
 }
 
 // --- Departamentos e atendentes ---
@@ -1669,6 +1936,11 @@ message MyWhatsappInstance {
   // Aditivo: cliente antigo o le como `false` por omissao, mas nunca o mostra,
   // entao segue no comportamento de hoje.
   bool resposta_bot = 8;
+  // P7 — a v1 roteava por número: a conversa que chega nesta conexão entra no
+  // fluxo do departamento dela. 0 = sem departamento, e o roteamento cai no
+  // primeiro fluxo ativo do tenant, como era até aqui.
+  int32 departamento_id = 9;
+  string departamento_nome = 10;
 }
 
 // D3 — liga/desliga a resposta automatica da IA para a conexao inteira.
@@ -1714,6 +1986,170 @@ message ListMyWhatsappInstancesResponse {
 }
 
 message MyWhatsappInstanceIdRequest {
+  int32 id = 1;
+}
+
+// P7 — roteamento por conexão. `departamento_id = 0` desfaz o vínculo.
+message DefinirDepartamentoDaConexaoRequest {
+  int32 id = 1;
+  int32 departamento_id = 2;
+}
+
+// P7 — o detalhe da conexão: o que não cabe na lista e quem investiga precisa.
+message DetalheDaConexaoRequest {
+  int32 id = 1;
+}
+
+message DetalheDaConexaoResponse {
+  MyWhatsappInstance conexao = 1;
+  // Quando o estado foi conferido com o provedor pela última vez. 0 = nunca.
+  int64 ultima_checagem = 2;
+  // O identificador da instância NO PROVEDOR — o que aparece no log da
+  // evolution-go e o que se manda para o suporte.
+  string instancia_no_provedor = 3;
+  // Do TENANT, não desta conexão: o atendimento não guarda por qual conexão
+  // entrou. Vale como "desligar agora deixa gente no meio do caminho?", que é
+  // a pergunta de quem está prestes a encerrar a sessão — e, com uma conexão
+  // só, é exatamente o número dela.
+  int32 atendimentos_abertos = 4;
+  int32 mensagens_24h = 5;
+}
+
+// --- P9: mensagens não entregues (dead-letter) ---
+
+message MensagemNaoEntregue {
+  // Id do registro de dead-letter — é ele que o reenvio recebe.
+  int32 id = 1;
+  int32 mensagem_id = 2;
+  int32 atendimento_id = 3;
+  string motivo = 4;
+  int64 criado_em = 5;
+  // Início do texto, para o atendente reconhecer a mensagem sem abrir a
+  // conversa. É PII como todo conteúdo de mensagem.
+  string trecho = 6;
+  string contato = 7;
+}
+
+// Só as pendentes: as já reenviadas não pedem ação de ninguém.
+message ListMyMensagensNaoEntreguesRequest {}
+
+message ListMyMensagensNaoEntreguesResponse {
+  repeated MensagemNaoEntregue itens = 1;
+}
+
+message ReenviarMensagemNaoEntregueRequest {
+  int32 id = 1;
+}
+
+message ReenviarMensagemNaoEntregueResponse {
+  // `reprocessada` (voltou ao outbox, agora ou antes), `ainda_sem_destino` ou
+  // `nao_encontrada`. O segundo NÃO é erro: é a resposta honesta de que o
+  // contato continua sem conexão ativa, e a tela precisa dizer isso.
+  string status = 1;
+}
+
+// --- P17: revisão das avaliações do teste ---
+
+message AvaliacaoDeTeste {
+  int32 id = 1;
+  string pergunta = 2;
+  string resposta_bot = 3;
+  // Vazia quando a pessoa só avaliou, sem escrever a resposta certa.
+  string resposta_corrigida = 4;
+  // "boa" | "ruim".
+  string avaliacao = 5;
+  double confiabilidade = 6;
+  int64 criada_em = 7;
+}
+
+message ListMyAvaliacoesDeTesteRequest {
+  int32 limite = 1;
+}
+
+message ListMyAvaliacoesDeTesteResponse {
+  repeated AvaliacaoDeTeste itens = 1;
+}
+
+message MarcarAvaliacaoTratadaRequest {
+  int32 id = 1;
+  // true = a correção virou material de treinamento; false = dispensada.
+  bool virou_treinamento = 2;
+}
+
+// --- P11: versão do app ---
+
+message GetVersaoDoAppRequest {
+  // "windows" hoje. Um campo, e não um RPC por plataforma, para o dia em que
+  // houver instalador de outro sistema.
+  string plataforma = 1;
+}
+
+message GetVersaoDoAppResponse {
+  // Número de build (AAAAMMDDhhmm do commit). 0 = ninguém publicou ainda, e aí
+  // não há o que avisar.
+  int64 build_atual = 1;
+  string url_download = 2;
+  string notas = 3;
+}
+
+// --- P9: teste do provedor de IA ---
+
+message TestarProvedorIaRequest {
+  string tenant_id = 1;
+}
+
+message TestarProvedorIaResponse {
+  bool ok = 1;
+  int32 latencia_ms = 2;
+  // Tamanho do vetor devolvido. Zero com `ok` falso; diferente do esperado
+  // pelo índice é sinal de modelo trocado por fora.
+  int32 dimensoes = 3;
+  string erro = 4;
+}
+
+// --- P7: numeros ignorados ---
+//
+// A v1 chamava de "whitelist", e o nome mentia: a lista não libera ninguém, ela
+// IGNORA. Número que está nela não abre atendimento, não aciona a IA e não
+// recebe pesquisa de satisfação. Serve para o número da própria equipe, o do
+// contador, o do fornecedor que só manda boleto — conversas que não são
+// atendimento e que sujavam o quadro.
+//
+// A regra já era aplicada na ingestão desde o começo; o que não existia era
+// meio de ver ou mexer na lista sem SQL.
+message MyNumeroIgnorado {
+  int32 id = 1;
+  string nome = 2;
+  string telefone = 3;
+  bool ativo = 4;
+  int64 criado_em = 5;
+}
+
+// Traz também os inativos: desligar um número é a forma de voltar a atender
+// alguém sem perder o registro de que ele já esteve fora.
+message ListMyNumerosIgnoradosRequest {}
+
+message ListMyNumerosIgnoradosResponse {
+  repeated MyNumeroIgnorado itens = 1;
+}
+
+message CriarNumeroIgnoradoRequest {
+  string nome = 1;
+  string telefone = 2;
+}
+
+message MyNumeroIgnoradoResponse {
+  MyNumeroIgnorado item = 1;
+}
+
+message AtualizarNumeroIgnoradoRequest {
+  int32 id = 1;
+  string nome = 2;
+  string telefone = 3;
+  bool ativo = 4;
+}
+
+message NumeroIgnoradoIdRequest {
   int32 id = 1;
 }
 
@@ -1909,6 +2345,9 @@ message Etiqueta {
   // Do CATALOGO. Uma etiqueta desativada continua aparecendo nas conversas em
   // que ja estava -- sumir com ela reescreveria o passado.
   bool ativo = 5;
+  // P14 — colocada pela IA a partir da intenção detectada. Só faz sentido nas
+  // etiquetas da conversa, não no catálogo.
+  bool aplicada_pela_ia = 6;
 }
 
 message Nota {
@@ -1933,6 +2372,16 @@ message DetalheAtendimentoResponse {
   // no mesmo painel: buscar em duas chamadas faria metade da ficha aparecer
   // antes da outra.
   repeated ValorCampoDoAtendimento campos = 5;
+  // P15 — o que a IA encontrou do contato nas conversas e não tem coluna no
+  // cadastro (cidade, empresa, documento…). Só leitura na ficha. Lista de
+  // pares e não map<>: o conversor proto→flatbuffers não entende map.
+  repeated DadoDoContato dados_do_contato = 6;
+}
+
+// P15 — um dado do contato achado pela IA (ex.: cidade = Recife).
+message DadoDoContato {
+  string chave = 1;
+  string valor = 2;
 }
 
 // Um campo do cartao na ficha de UM atendimento: a definicao mais o valor.

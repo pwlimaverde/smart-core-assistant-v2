@@ -32,3 +32,24 @@ final class TestEvolutionConnectionDatasource
     );
   }
 }
+
+/// P9 — ensaio do provedor de IA do tenant (um embedding de teste).
+final class TestarProvedorIaDatasource
+    implements Datasource<TesteProvedorIa, TestarProvedorIaParameters> {
+  final proto.AdminServiceClient _client;
+
+  const TestarProvedorIaDatasource({required this._client});
+
+  @override
+  Future<TesteProvedorIa> call(TestarProvedorIaParameters parameters) async {
+    final resp = await _client.testarProvedorIa(
+      proto.TestarProvedorIaRequest(tenantId: parameters.tenantId),
+    );
+    return TesteProvedorIa(
+      ok: resp.ok,
+      latenciaMs: resp.latenciaMs,
+      dimensoes: resp.dimensoes,
+      erro: resp.erro,
+    );
+  }
+}

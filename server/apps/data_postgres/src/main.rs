@@ -497,6 +497,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_list_superusers = state_clone.clone();
     let state_for_admin_list_users = state_clone.clone();
     let state_for_admin_set_user_active = state_clone.clone();
+    let state_for_migracao_listar = state_clone.clone();
+    let state_for_migracao_gravar = state_clone.clone();
     let state_for_delete_superuser = state_clone.clone();
     let state_for_get_user_identity = state_clone.clone();
     let state_for_get_user_flow_permissions = state_clone.clone();
@@ -582,11 +584,24 @@ async fn main() -> anyhow::Result<()> {
     let state_for_atualizar_instancia_provider_id = state_clone.clone();
     let state_for_verify_whatsapp_instance_token = state_clone.clone();
     let state_for_is_phone_whitelisted = state_clone.clone();
+    let state_for_listar_numeros_ignorados = state_clone.clone();
+    let state_for_criar_numero_ignorado = state_clone.clone();
+    let state_for_atualizar_numero_ignorado = state_clone.clone();
+    let state_for_remover_numero_ignorado = state_clone.clone();
+    let state_for_definir_departamento_conexao = state_clone.clone();
+    let state_for_detalhe_conexao = state_clone.clone();
+    let state_for_departamentos_das_conexoes = state_clone.clone();
     let state_for_resolve_atendimento = state_clone.clone();
     let state_for_iniciar_manual = state_clone.clone();
     let state_for_toggle_bot = state_clone.clone();
     let state_for_toggle_bot_conversa = state_clone.clone();
     let state_for_marcar_lido = state_clone.clone();
+    let state_for_aplicar_reacao = state_clone.clone();
+    let state_for_contato_do_atendimento = state_clone.clone();
+    let state_for_revisao_pendente = state_clone.clone();
+    let state_for_registrar_foto = state_clone.clone();
+    let state_for_listar_nao_entregues = state_clone.clone();
+    let state_for_atualizar_perfil_contato = state_clone.clone();
     let state_for_aplicar_politica = state_clone.clone();
     let state_for_move_atendimento_etapa = state_clone.clone();
     let state_for_send_outbound_message = state_clone.clone();
@@ -602,6 +617,16 @@ async fn main() -> anyhow::Result<()> {
     let state_for_listar_midias_expiradas = state_clone.clone();
     let state_for_marcar_midia_purgada = state_clone.clone();
     let state_for_resolver_destino_envio = state_clone.clone();
+    let state_for_resolver_destino_atendimento = state_clone.clone();
+    let state_for_ativo_por_telefone = state_clone.clone();
+    let state_for_atribuir = state_clone.clone();
+    let state_for_exportar_quadro = state_clone.clone();
+    let state_for_timeline = state_clone.clone();
+    let state_for_do_contato = state_clone.clone();
+    let state_for_remover_nota = state_clone.clone();
+    let state_for_update_etiqueta = state_clone.clone();
+    let state_for_desativar_etiqueta = state_clone.clone();
+    let state_for_prioridade = state_clone.clone();
     let state_for_reprocessar_dead_letter = state_clone.clone();
     let state_for_marcar_mensagem_enviada = state_clone.clone();
     let state_for_marcar_mensagem_falha_envio = state_clone.clone();
@@ -615,6 +640,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_query_compose = state_clone.clone();
     let s_trn_criar = state_clone.clone();
     let s_trn_feedback = state_clone.clone();
+    let s_trn_avaliacoes = state_clone.clone();
+    let s_trn_tratada = state_clone.clone();
     let s_trn_autorizar_arquivo = state_clone.clone();
     let s_trn_criar_arquivo = state_clone.clone();
     let s_trn_extracoes = state_clone.clone();
@@ -690,6 +717,45 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(
                 async move { handler_update_message_status(state.atendimento.as_ref(), env).await },
             )
+        })
+        .route("ListMensagensNaoEntregues", move |env| {
+            let state = state_for_listar_nao_entregues.clone();
+            Box::pin(
+                async move { handler_listar_nao_entregues(state.atendimento.as_ref(), env).await },
+            )
+        })
+        .route("DefinirRevisaoPendente", move |env| {
+            let state = state_for_revisao_pendente.clone();
+            Box::pin(async move {
+                handler_definir_revisao_pendente(
+                    state.atendimento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("ContatoDoAtendimento", move |env| {
+            let state = state_for_contato_do_atendimento.clone();
+            Box::pin(async move {
+                handler_contato_do_atendimento(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("RegistrarFotoDoContato", move |env| {
+            let state = state_for_registrar_foto.clone();
+            Box::pin(async move {
+                handler_registrar_foto_do_contato(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("AplicarReacaoMensagem", move |env| {
+            let state = state_for_aplicar_reacao.clone();
+            Box::pin(async move { handler_aplicar_reacao(state.atendimento.as_ref(), env).await })
+        })
+        .route("AtualizarPerfilDoContato", move |env| {
+            let state = state_for_atualizar_perfil_contato.clone();
+            Box::pin(async move {
+                handler_atualizar_perfil_do_contato(state.atendimento.as_ref(), env).await
+            })
         })
         .route("AplicarPoliticaTicketKanban", move |env| {
             let state = state_for_aplicar_politica.clone();
@@ -816,6 +882,61 @@ async fn main() -> anyhow::Result<()> {
                 async move { handler_marcar_midia_purgada(state.atendimento.as_ref(), env).await },
             )
         })
+        .route("ListarTimelineAtendimento", move |env| {
+            let state = state_for_timeline.clone();
+            Box::pin(async move { handler_listar_timeline(state.atendimento.as_ref(), env).await })
+        })
+        .route("ListarAtendimentosDoContato", move |env| {
+            let state = state_for_do_contato.clone();
+            Box::pin(async move {
+                handler_listar_atendimentos_do_contato(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("RemoverNota", move |env| {
+            let state = state_for_remover_nota.clone();
+            Box::pin(async move { handler_remover_nota(state.atendimento.as_ref(), env).await })
+        })
+        .route("UpdateEtiqueta", move |env| {
+            let state = state_for_update_etiqueta.clone();
+            Box::pin(async move { handler_update_etiqueta(state.atendimento.as_ref(), env).await })
+        })
+        .route("DesativarEtiqueta", move |env| {
+            let state = state_for_desativar_etiqueta.clone();
+            Box::pin(
+                async move { handler_desativar_etiqueta(state.atendimento.as_ref(), env).await },
+            )
+        })
+        .route("ExportarQuadro", move |env| {
+            let state = state_for_exportar_quadro.clone();
+            Box::pin(async move {
+                handler_exportar_quadro(state.atendimento.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("AtribuirAtendimento", move |env| {
+            let state = state_for_atribuir.clone();
+            Box::pin(async move {
+                handler_atribuir_atendimento(state.atendimento.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
+        })
+        .route("DefinirPrioridade", move |env| {
+            let state = state_for_prioridade.clone();
+            Box::pin(
+                async move { handler_definir_prioridade(state.atendimento.as_ref(), env).await },
+            )
+        })
+        .route("BuscarAtendimentoAtivoPorTelefone", move |env| {
+            let state = state_for_ativo_por_telefone.clone();
+            Box::pin(async move {
+                handler_buscar_atendimento_ativo_por_telefone(state.atendimento.as_ref(), env).await
+            })
+        })
+        .route("ResolverDestinoDoAtendimento", move |env| {
+            let state = state_for_resolver_destino_atendimento.clone();
+            Box::pin(async move {
+                handler_resolver_destino_do_atendimento(state.atendimento.as_ref(), env).await
+            })
+        })
         .route("ResolverDestinoEnvioOutbound", move |env| {
             let state = state_for_resolver_destino_envio.clone();
             Box::pin(async move {
@@ -841,7 +962,12 @@ async fn main() -> anyhow::Result<()> {
         .route("AnexarAnaliseMensagem", move |env| {
             let state = state_for_anexar_analise_mensagem.clone();
             Box::pin(async move {
-                handler_anexar_analise_mensagem(state.atendimento.as_ref(), env).await
+                handler_anexar_analise_mensagem(
+                    state.atendimento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
             })
         })
         .route("AnexarAnaliseMidia", move |env| {
@@ -947,6 +1073,23 @@ async fn main() -> anyhow::Result<()> {
             let state = s_trn_feedback.clone();
             Box::pin(async move {
                 handler_registrar_feedback_teste(
+                    state.treinamento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("ListAvaliacoesDeTeste", move |env| {
+            let state = s_trn_avaliacoes.clone();
+            Box::pin(async move {
+                handler_listar_avaliacoes_de_teste(state.treinamento.as_ref(), env).await
+            })
+        })
+        .route("MarcarAvaliacaoTratada", move |env| {
+            let state = s_trn_tratada.clone();
+            Box::pin(async move {
+                handler_marcar_avaliacao_tratada(
                     state.treinamento.as_ref(),
                     state.audit.as_ref(),
                     env,
@@ -1108,6 +1251,19 @@ async fn main() -> anyhow::Result<()> {
         .route("AdminListUsers", move |env| {
             let state = state_for_admin_list_users.clone();
             Box::pin(async move { handler_admin_list_users(state.auth.as_ref(), env).await })
+        })
+        .route("ListarVinculosParaMigracao", move |env| {
+            let state = state_for_migracao_listar.clone();
+            Box::pin(async move {
+                handler_listar_vinculos_para_migracao(state.auth.as_ref(), env).await
+            })
+        })
+        .route("GravarPermissoesExplicitas", move |env| {
+            let state = state_for_migracao_gravar.clone();
+            Box::pin(async move {
+                handler_gravar_permissoes_explicitas(state.auth.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
         })
         .route("AdminSetUserActive", move |env| {
             let state = state_for_admin_set_user_active.clone();
@@ -1533,6 +1689,58 @@ async fn main() -> anyhow::Result<()> {
                 async move { handler_list_whatsapp_instances(state.whatsapp.as_ref(), env).await },
             )
         })
+        .route("ListNumerosIgnorados", move |env| {
+            let state = state_for_listar_numeros_ignorados.clone();
+            Box::pin(
+                async move { handler_listar_numeros_ignorados(state.whatsapp.as_ref(), env).await },
+            )
+        })
+        .route("CriarNumeroIgnorado", move |env| {
+            let state = state_for_criar_numero_ignorado.clone();
+            Box::pin(async move {
+                handler_criar_numero_ignorado(state.whatsapp.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
+        })
+        .route("AtualizarNumeroIgnorado", move |env| {
+            let state = state_for_atualizar_numero_ignorado.clone();
+            Box::pin(async move {
+                handler_atualizar_numero_ignorado(
+                    state.whatsapp.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("RemoverNumeroIgnorado", move |env| {
+            let state = state_for_remover_numero_ignorado.clone();
+            Box::pin(async move {
+                handler_remover_numero_ignorado(state.whatsapp.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
+        })
+        .route("DefinirDepartamentoDaConexao", move |env| {
+            let state = state_for_definir_departamento_conexao.clone();
+            Box::pin(async move {
+                handler_definir_departamento_conexao(
+                    state.whatsapp.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("DetalheDaConexao", move |env| {
+            let state = state_for_detalhe_conexao.clone();
+            Box::pin(async move { handler_detalhe_da_conexao(state.whatsapp.as_ref(), env).await })
+        })
+        .route("ListDepartamentosDasConexoes", move |env| {
+            let state = state_for_departamentos_das_conexoes.clone();
+            Box::pin(async move {
+                handler_departamentos_das_conexoes(state.whatsapp.as_ref(), env).await
+            })
+        })
         .route("AdminListAllConnectedInstances", move |env| {
             let state = state_for_admin_list_all_connected_instances.clone();
             Box::pin(async move {
@@ -1861,10 +2069,16 @@ async fn handler_get_thread(store: &dyn ports::AtendimentoStore, env: Envelope) 
         .get("offset")
         .and_then(|v| v.as_i64())
         .unwrap_or(0);
+    // P2 — cursor da rolagem para trás; quando vem, manda no `offset`.
+    let before_id = payload_json
+        .get("before_id")
+        .and_then(|v| v.as_i64())
+        .filter(|v| *v > 0)
+        .map(|v| v as i32);
 
     let ctx = contexto_do_envelope(&env);
     match store
-        .listar_mensagens(&ctx, atendimento_id, limit, offset)
+        .listar_mensagens(&ctx, atendimento_id, limit, offset, before_id)
         .await
     {
         Ok(mensagens) => ok_reply(
@@ -1893,10 +2107,40 @@ async fn handler_list_atendimentos(store: &dyn ports::AtendimentoStore, env: Env
         .get("limit")
         .and_then(|v| v.as_i64())
         .unwrap_or(50);
+    // P1 — o mesmo recorte da v1. Campo ausente = sem filtro.
+    let texto = |chave: &str| {
+        payload_json
+            .get(chave)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    let filtro = infrastructure_postgres::atendimentos::atendimentos::FiltroDoQuadro {
+        busca: texto("busca"),
+        atendente_id: payload_json
+            .get("atendente_id")
+            .and_then(|v| v.as_i64())
+            .filter(|v| *v != 0)
+            .map(|v| v as i32),
+        somente_nao_lidos: payload_json
+            .get("somente_nao_lidos")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        prioridade: texto("prioridade"),
+        somente_meus: payload_json
+            .get("somente_meus")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        etiqueta_id: payload_json
+            .get("etiqueta_id")
+            .and_then(|v| v.as_i64())
+            .filter(|v| *v > 0),
+    };
 
     let ctx = contexto_do_envelope(&env);
     match store
-        .listar_atendimentos(&ctx, &status, departamento_id, limit)
+        .listar_atendimentos(&ctx, &status, departamento_id, filtro, limit)
         .await
     {
         Ok(atendimentos) => {
@@ -1906,10 +2150,26 @@ async fn handler_list_atendimentos(store: &dyn ports::AtendimentoStore, env: Env
             let contagem = if ids.is_empty() {
                 std::collections::HashMap::new()
             } else {
-                store.contar_nao_lidas(&ctx, ids).await.unwrap_or_else(|e| {
-                    tracing::warn!(erro = %e, "falha ao contar mensagens não lidas");
-                    std::collections::HashMap::new()
-                })
+                store
+                    .contar_nao_lidas(&ctx, ids.clone())
+                    .await
+                    .unwrap_or_else(|e| {
+                        tracing::warn!(erro = %e, "falha ao contar mensagens não lidas");
+                        std::collections::HashMap::new()
+                    })
+            };
+            // P13 — o contato de cada cartão. O cartão mostrava `Contato #id`;
+            // falhar aqui também não esconde o quadro.
+            let contatos = if ids.is_empty() {
+                std::collections::HashMap::new()
+            } else {
+                store
+                    .contatos_do_quadro(&ctx, ids.clone())
+                    .await
+                    .unwrap_or_else(|e| {
+                        tracing::warn!(erro = %e, "falha ao ler os contatos do quadro");
+                        std::collections::HashMap::new()
+                    })
             };
             let itens: Vec<serde_json::Value> = atendimentos
                 .iter()
@@ -1920,6 +2180,15 @@ async fn handler_list_atendimentos(store: &dyn ports::AtendimentoStore, env: Env
                             "nao_lidas".to_string(),
                             serde_json::json!(contagem.get(&a.id).copied().unwrap_or(0)),
                         );
+                        if let Some(c) = contatos.get(&a.id) {
+                            obj.insert("contato_nome".into(), serde_json::json!(c.nome));
+                            obj.insert("contato_telefone".into(), serde_json::json!(c.telefone));
+                            obj.insert("contato_foto_url".into(), serde_json::json!(c.foto_url));
+                            obj.insert(
+                                "revisao_pendente".into(),
+                                serde_json::json!(c.revisao_pendente),
+                            );
+                        }
                     }
                     item
                 })
@@ -3181,6 +3450,13 @@ async fn handler_persist_message(store: &dyn ports::AtendimentoStore, env: Envel
             .get("confianca")
             .and_then(|v| v.as_f64())
             .filter(|c| c.is_finite()),
+        // P8 — opções da enquete, itens da lista, rótulos dos botões, vCard.
+        // Objeto vazio não é gravado: sujar toda linha do thread com `{}` de
+        // chaves seria desperdício, e a coluna já tem esse default.
+        metadados: payload_json
+            .get("metadados")
+            .filter(|v| v.as_object().is_some_and(|o| !o.is_empty()))
+            .cloned(),
     };
 
     // O traceparent é persistido no outbox para manter o trace distribuído vivo
@@ -3587,6 +3863,237 @@ async fn handler_update_message_status(
     }
 }
 
+/// P16 — liga (worker) ou desliga (atendente) a marca "revisar".
+///
+/// Só a conclusão por uma pessoa é auditada: ligar é consequência automática
+/// de uma decisão que já está no evento `bot.respondeu`.
+async fn handler_definir_revisao_pendente(
+    store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let Some(atendimento_id) = payload
+        .get("atendimento_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32)
+    else {
+        return erro(
+            error_core::AppError::Validation("atendimento_id ausente".into()),
+            &env,
+        );
+    };
+    let Some(pendente) = payload.get("pendente").and_then(|v| v.as_bool()) else {
+        return erro(
+            error_core::AppError::Validation("pendente ausente".into()),
+            &env,
+        );
+    };
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .definir_revisao_pendente(&ctx, atendimento_id, pendente)
+        .await
+    {
+        Ok(mudou) => {
+            if mudou && !pendente {
+                audit
+                    .publish(
+                        &env,
+                        "atendimento.revisao_concluida",
+                        format!("resposta da IA no atendimento #{atendimento_id} revisada"),
+                        serde_json::json!({ "atendimento_id": atendimento_id }),
+                    )
+                    .await;
+            }
+            ok_reply(
+                &env,
+                "DefinirRevisaoPendenteReply",
+                serde_json::json!({ "mudou": mudou }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P13 — o contato do atendimento, com a data da última consulta da foto.
+async fn handler_contato_do_atendimento(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let Some(atendimento_id) = payload
+        .get("atendimento_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32)
+    else {
+        return erro(
+            error_core::AppError::Validation("atendimento_id ausente".into()),
+            &env,
+        );
+    };
+    let ctx = contexto_do_envelope(&env);
+    match store.contato_do_atendimento(&ctx, atendimento_id).await {
+        Ok(Some(c)) => ok_reply(&env, "ContatoDoAtendimentoReply", serde_json::json!(c)),
+        Ok(None) => erro(
+            error_core::AppError::Database("atendimento não encontrado".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P13 — grava o resultado da consulta da foto. Sem auditoria, de propósito:
+/// é enriquecimento derivado (decisão da N11 E6).
+async fn handler_registrar_foto_do_contato(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let Some(contato_id) = payload
+        .get("contato_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32)
+    else {
+        return erro(
+            error_core::AppError::Validation("contato_id ausente".into()),
+            &env,
+        );
+    };
+    let foto_url = payload
+        .get("foto_url")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| s.to_string());
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .registrar_foto_do_contato(&ctx, contato_id, foto_url)
+        .await
+    {
+        Ok(()) => ok_reply(
+            &env,
+            "RegistrarFotoDoContatoReply",
+            serde_json::json!({ "sucesso": true }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P9 — as mensagens do atendente que ficaram sem destino.
+async fn handler_listar_nao_entregues(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_nao_entregues(&ctx).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListMensagensNaoEntreguesReply",
+            serde_json::json!({ "itens": itens }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P8 — grava (ou apaga) a reação de alguém numa mensagem.
+///
+/// Alvo desconhecido responde `aplicou: false`, e não erro: reagir a uma
+/// conversa anterior à integração é comum, e transformar isso em falha faria o
+/// worker reprocessar o evento para sempre.
+async fn handler_aplicar_reacao(store: &dyn ports::AtendimentoStore, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let alvo = match payload
+        .get("message_id_whatsapp")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        Some(a) => a,
+        None => {
+            return erro(
+                error_core::AppError::Validation("message_id_whatsapp ausente".into()),
+                &env,
+            )
+        }
+    };
+    // Vazio é remoção, e por isso não há validação de "emoji obrigatório".
+    let emoji = payload
+        .get("emoji")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    let de = payload
+        .get("de")
+        .and_then(|v| v.as_str())
+        .unwrap_or("contato");
+
+    let ctx = contexto_do_envelope(&env);
+    match store.aplicar_reacao(&ctx, alvo, emoji, de).await {
+        Ok(aplicou) => ok_reply(
+            &env,
+            "AplicarReacaoMensagemReply",
+            serde_json::json!({ "aplicou": aplicou }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P8 — nome de perfil e foto do evento `CONTACTS`.
+async fn handler_atualizar_perfil_do_contato(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let telefone = match payload
+        .get("telefone")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+    {
+        Some(t) => t,
+        None => {
+            return erro(
+                error_core::AppError::Validation("telefone ausente".into()),
+                &env,
+            )
+        }
+    };
+    let nome = payload
+        .get("nome_perfil")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+    let foto = payload
+        .get("foto_url")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default();
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .atualizar_perfil_do_contato(&ctx, telefone, nome, foto)
+        .await
+    {
+        // `false` = ninguém com esse telefone no tenant. É o caso comum quando o
+        // provedor manda a agenda inteira do aparelho, e não é erro.
+        Ok(atualizou) => ok_reply(
+            &env,
+            "AtualizarPerfilDoContatoReply",
+            serde_json::json!({ "atualizou": atualizou }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
 async fn handler_aplicar_politica_ticket_kanban(
     store: &dyn ports::AtendimentoStore,
     env: Envelope,
@@ -3606,9 +4113,18 @@ async fn handler_aplicar_politica_ticket_kanban(
         }
     };
 
+    // P7 — a conexão por onde a conversa entrou decide o departamento, e com
+    // ele o fluxo. Ausente (0) preserva o comportamento anterior: primeiro fluxo
+    // ativo do tenant. Um worker defasado não pode deixar a conversa fora do
+    // quadro só por não mandar o campo novo.
+    let instance_id = payload_json
+        .get("instance_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+
     let ctx = contexto_do_envelope(&env);
     match store
-        .aplicar_politica_ticket_kanban(&ctx, atendimento_id)
+        .aplicar_politica_ticket_kanban(&ctx, atendimento_id, instance_id)
         .await
     {
         Ok(outcome) => ok_reply(
@@ -4527,6 +5043,7 @@ fn assunto_da_analise(intents: &serde_json::Value) -> Option<String> {
 /// seria auditável. Os valores de entidade podem ser PII e não entram em log.
 async fn handler_anexar_analise_mensagem(
     store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
     env: Envelope,
 ) -> Envelope {
     let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
@@ -4570,11 +5087,123 @@ async fn handler_anexar_analise_mensagem(
         )
         .await
     {
-        Ok(assunto_definido) => ok_reply(
-            &env,
-            "AnexarAnaliseMensagemReply",
-            serde_json::json!({ "assunto_definido": assunto_definido }),
-        ),
+        Ok(assunto_definido) => {
+            // P14 — as etiquetas das intenções. Em transação própria: falhar
+            // aqui não pode desfazer a análise, que já é útil sozinha.
+            let piso = payload_json
+                .get("piso_confianca")
+                .and_then(|v| v.as_f64())
+                .filter(|p| (0.0..=1.0).contains(p))
+                .unwrap_or(crate::adapters::campos_extraidos::PISO_CONFIANCA_PADRAO);
+            let intencoes: Vec<(String, f64)> = payload_json
+                .get("intents")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|i| {
+                            Some((
+                                i.get("tipo")?.as_str()?.to_string(),
+                                i.get("confianca")?.as_f64()?,
+                            ))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let mut etiquetas_aplicadas = 0usize;
+            if atendimento_id > 0 && !intencoes.is_empty() {
+                match store
+                    .aplicar_etiquetas_da_analise(&ctx, atendimento_id, intencoes, piso)
+                    .await
+                {
+                    Ok(aplicadas) => {
+                        etiquetas_aplicadas = aplicadas.len();
+                        for e in aplicadas {
+                            // Mutação visível ao operador: a trilha responde
+                            // "quem colou isso aqui". Nome de etiqueta não é PII.
+                            audit
+                                .publish(
+                                    &env,
+                                    "etiqueta.aplicada_por_ia",
+                                    format!(
+                                        "IA aplicou a etiqueta '{}' no atendimento #{}",
+                                        e.nome, atendimento_id
+                                    ),
+                                    serde_json::json!({
+                                        "atendimento_id": atendimento_id,
+                                        "etiqueta_id": e.id,
+                                        "confianca": e.confianca,
+                                    }),
+                                )
+                                .await;
+                        }
+                    }
+                    Err(e) => tracing::warn!(erro = %e, "falha ao aplicar etiquetas por intenção"),
+                }
+            }
+            // P15 — as entidades completam o cadastro do contato, só no que está
+            // vazio. Também em transação própria, pelo mesmo motivo das etiquetas.
+            let entidades: Vec<(String, String, f64)> = payload_json
+                .get("entidades")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|e| {
+                            Some((
+                                e.get("tipo")?.as_str()?.to_string(),
+                                e.get("valor")?.as_str()?.to_string(),
+                                e.get("confianca")?.as_f64()?,
+                            ))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            let valores = infrastructure_postgres::clientes::contatos::valores_para_o_contato(
+                &entidades, piso,
+            );
+            let mut campos_contato = 0usize;
+            if atendimento_id > 0 && valores != Default::default() {
+                match store
+                    .enriquecer_contato(&ctx, atendimento_id, valores)
+                    .await
+                {
+                    Ok((contato_id, campos)) if !campos.is_empty() => {
+                        campos_contato = campos.len();
+                        // Mutação de cadastro por agente automático: a trilha é
+                        // o que permite desfazer. Só os NOMES dos campos — nome,
+                        // e-mail e documento são PII direta.
+                        audit
+                            .publish(
+                                &env,
+                                "contato.enriquecido_por_ia",
+                                format!(
+                                    "IA completou {} campo(s) do contato #{}",
+                                    campos.len(),
+                                    contato_id
+                                ),
+                                serde_json::json!({
+                                    "contato_id": contato_id,
+                                    "atendimento_id": atendimento_id,
+                                    "campos": campos,
+                                }),
+                            )
+                            .await;
+                    }
+                    Ok(_) => {}
+                    Err(e) => {
+                        tracing::warn!(erro = %e, "falha ao completar o contato pela análise")
+                    }
+                }
+            }
+            ok_reply(
+                &env,
+                "AnexarAnaliseMensagemReply",
+                serde_json::json!({
+                    "assunto_definido": assunto_definido,
+                    "etiquetas_aplicadas": etiquetas_aplicadas,
+                    "campos_contato_preenchidos": campos_contato,
+                }),
+            )
+        }
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }
@@ -4825,6 +5454,495 @@ async fn handler_resolver_campos_atendimento(
 
 /// Resolve instância/telefone de destino para o envio outbound de uma mensagem do
 /// atendente (elo outbox->outbound, N1.3).
+/// P5 — a linha do tempo do atendimento.
+#[tracing::instrument(skip_all, fields(rpc = "ListarTimelineAtendimento", tenant_id = %env.tenant_id))]
+async fn handler_listar_timeline(store: &dyn ports::AtendimentoStore, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_timeline(&ctx, atendimento_id).await {
+        Ok(eventos) => {
+            let itens: Vec<serde_json::Value> = eventos
+                .into_iter()
+                .map(|e| {
+                    serde_json::json!({
+                        "tipo": e.tipo,
+                        "quando": e.quando.timestamp_millis(),
+                        // A descrição pode conter texto de nota (conteúdo do
+                        // cliente): vai no payload, nunca no log.
+                        "descricao": e.descricao,
+                        "autor": e.autor.unwrap_or_default(),
+                        "automatico": e.automatico,
+                    })
+                })
+                .collect();
+            ok_reply(
+                &env,
+                "ListarTimelineAtendimentoReply",
+                serde_json::json!({ "eventos": itens }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P5 — as outras conversas do mesmo contato.
+#[tracing::instrument(skip_all, fields(rpc = "ListarAtendimentosDoContato", tenant_id = %env.tenant_id))]
+async fn handler_listar_atendimentos_do_contato(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let contato_id = match payload_json.get("contato_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("contato_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let limit = payload_json
+        .get("limit")
+        .and_then(|v| v.as_i64())
+        .filter(|v| *v > 0)
+        .unwrap_or(20);
+
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_do_contato(&ctx, contato_id, limit).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListarAtendimentosDoContatoReply",
+            serde_json::json!({ "atendimentos": itens }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P5 — apaga uma nota interna.
+#[tracing::instrument(skip_all, fields(rpc = "RemoverNota", tenant_id = %env.tenant_id))]
+async fn handler_remover_nota(store: &dyn ports::AtendimentoStore, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let nota_id = payload_json.get("nota_id").and_then(|v| v.as_i64());
+    let atendimento_id = payload_json
+        .get("atendimento_id")
+        .and_then(|v| v.as_i64())
+        .map(|v| v as i32);
+    let (Some(nota_id), Some(atendimento_id)) = (nota_id, atendimento_id) else {
+        return erro(
+            error_core::AppError::Validation("nota_id e atendimento_id são obrigatórios".into()),
+            &env,
+        );
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.remover_nota(&ctx, nota_id, atendimento_id).await {
+        Ok(removida) => ok_reply(
+            &env,
+            "RemoverNotaReply",
+            serde_json::json!({ "ok": removida }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P5 — renomeia/recolore uma etiqueta do catálogo.
+#[tracing::instrument(skip_all, fields(rpc = "UpdateEtiqueta", tenant_id = %env.tenant_id))]
+async fn handler_update_etiqueta(store: &dyn ports::AtendimentoStore, env: Envelope) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let id = match payload_json.get("id").and_then(|v| v.as_i64()) {
+        Some(id) => id,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+    let texto = |chave: &str| {
+        payload_json
+            .get(chave)
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim()
+            .to_string()
+    };
+    let nome = texto("nome");
+    if nome.is_empty() {
+        return erro(
+            error_core::AppError::Validation("a etiqueta precisa de um nome".into()),
+            &env,
+        );
+    }
+    let cor = texto("cor");
+    let cor = if cor.is_empty() {
+        "#a98f71".to_string()
+    } else {
+        cor
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .atualizar_etiqueta(&ctx, id, &nome, &cor, &texto("descricao"))
+        .await
+    {
+        Ok(Some(e)) => ok_reply(
+            &env,
+            "UpdateEtiquetaReply",
+            serde_json::json!({
+                "id": e.id, "nome": e.nome, "cor": e.cor,
+                "descricao": e.descricao, "ativo": e.ativo,
+            }),
+        ),
+        // Não existe (ou é de outro tenant): validação, não falha de banco.
+        Ok(None) => erro(
+            error_core::AppError::Validation("etiqueta não encontrada".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P5 — desativa a etiqueta no catálogo.
+#[tracing::instrument(skip_all, fields(rpc = "DesativarEtiqueta", tenant_id = %env.tenant_id))]
+async fn handler_desativar_etiqueta(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let id = match payload_json.get("id").and_then(|v| v.as_i64()) {
+        Some(id) => id,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.desativar_etiqueta(&ctx, id).await {
+        Ok(ok) => ok_reply(
+            &env,
+            "DesativarEtiquetaReply",
+            serde_json::json!({ "ok": ok }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P4 — o quadro em CSV.
+///
+/// Sai com nome e telefone de cliente: é exportação de PII em massa, e por isso
+/// é auditada com a contagem de linhas — a auditoria registra que saiu e
+/// quanto saiu, nunca o conteúdo.
+#[tracing::instrument(skip_all, fields(rpc = "ExportarQuadro", tenant_id = %env.tenant_id))]
+async fn handler_exportar_quadro(
+    store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let departamento_id = payload_json
+        .get("departamento_id")
+        .and_then(|v| v.as_i64())
+        .filter(|v| *v > 0)
+        .map(|v| v as i32);
+    let filtro = infrastructure_postgres::atendimentos::atendimentos::FiltroDoQuadro {
+        busca: payload_json
+            .get("busca")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .trim()
+            .to_string(),
+        atendente_id: None,
+        somente_nao_lidos: payload_json
+            .get("somente_nao_lidos")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+        prioridade: String::new(),
+        etiqueta_id: None,
+        somente_meus: payload_json
+            .get("somente_meus")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false),
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    // Teto alto o bastante para a operação de um dia e baixo o bastante para a
+    // exportação não virar um dump do banco inteiro.
+    match store
+        .exportar_quadro(&ctx, departamento_id, filtro, 5000)
+        .await
+    {
+        Ok(linhas) => {
+            let mut csv = String::from(
+                "id;contato;telefone;assunto;status;prioridade;atendente;fluxo;etapa;                 aberto_em;ultima_mensagem;nao_lidas\n",
+            );
+            for l in &linhas {
+                csv.push_str(&format!(
+                    "{};{};{};{};{};{};{};{};{};{};{};{}\n",
+                    l.id,
+                    campo_csv(l.contato.as_deref()),
+                    campo_csv(l.telefone.as_deref()),
+                    campo_csv(l.assunto.as_deref()),
+                    campo_csv(Some(&l.status)),
+                    campo_csv(Some(&l.prioridade)),
+                    campo_csv(l.atendente.as_deref()),
+                    campo_csv(l.fluxo.as_deref()),
+                    campo_csv(l.etapa.as_deref()),
+                    l.data_inicio.to_rfc3339(),
+                    l.data_ultima_mensagem
+                        .map(|d| d.to_rfc3339())
+                        .unwrap_or_default(),
+                    l.nao_lidas,
+                ));
+            }
+            audit
+                .publish(
+                    &env,
+                    "atendimento.quadro_exportado",
+                    format!("Quadro exportado: {} conversas", linhas.len()),
+                    serde_json::json!({ "linhas": linhas.len() }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "ExportarQuadroReply",
+                serde_json::json!({ "csv": csv, "linhas": linhas.len() }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// Escapa um campo do CSV: o separador é `;` e o conteúdo é texto de cliente,
+/// que tem ponto e vírgula, aspas e quebra de linha à vontade.
+fn campo_csv(valor: Option<&str>) -> String {
+    let bruto = valor.unwrap_or_default();
+    if bruto.contains([';', '"', '\n', '\r']) {
+        format!("\"{}\"", bruto.replace('"', "\"\""))
+    } else {
+        bruto.to_string()
+    }
+}
+
+/// P4 — define (ou tira) o dono da conversa.
+///
+/// A atribuição é auditada: saber quem pôs uma conversa na mão de quem é o que
+/// permite explicar, depois, por que um cliente ficou esperando.
+#[tracing::instrument(skip_all, fields(rpc = "AtribuirAtendimento", tenant_id = %env.tenant_id))]
+async fn handler_atribuir_atendimento(
+    store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let devolver = payload_json
+        .get("devolver_para_fila")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    let ctx = contexto_do_envelope(&env);
+    let alvo = if devolver {
+        None
+    } else {
+        match payload_json
+            .get("atendente_id")
+            .and_then(|v| v.as_i64())
+            .filter(|v| *v > 0)
+        {
+            Some(id) => Some(id as i32),
+            // Sem atendente explícito, é "atribuir a mim".
+            None => match store.atendente_do_usuario(&ctx).await {
+                Ok(Some(id)) => Some(id),
+                Ok(None) => {
+                    return erro(
+                        error_core::AppError::Validation(
+                            "seu usuário não está cadastrado como atendente".into(),
+                        ),
+                        &env,
+                    )
+                }
+                Err(e) => return erro(error_core::AppError::Database(e.to_string()), &env),
+            },
+        }
+    };
+
+    match store.atribuir_atendimento(&ctx, atendimento_id, alvo).await {
+        Ok(atribuido) => {
+            audit
+                .publish(
+                    &env,
+                    if devolver {
+                        "atendimento.devolvido_para_fila"
+                    } else {
+                        "atendimento.atribuido"
+                    },
+                    format!("Atendimento {atendimento_id}: dono alterado"),
+                    serde_json::json!({
+                        "atendimento_id": atendimento_id,
+                        "atendente_id": alvo,
+                        "aplicado": atribuido,
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "AtribuirAtendimentoReply",
+                serde_json::json!({
+                    "atribuido": atribuido,
+                    "motivo": if atribuido { "" } else { "a conversa já tem outro atendente" },
+                }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P4 — urgência do cartão.
+#[tracing::instrument(skip_all, fields(rpc = "DefinirPrioridade", tenant_id = %env.tenant_id))]
+async fn handler_definir_prioridade(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+    let prioridade = payload_json
+        .get("prioridade")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_lowercase();
+    if !infrastructure_postgres::atendimentos::atendimentos::PRIORIDADES
+        .contains(&prioridade.as_str())
+    {
+        return erro(
+            error_core::AppError::Validation(format!("prioridade '{prioridade}' inválida")),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .definir_prioridade(&ctx, atendimento_id, &prioridade)
+        .await
+    {
+        Ok(definida) => ok_reply(
+            &env,
+            "DefinirPrioridadeReply",
+            serde_json::json!({ "definida": definida }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P3 — o atendimento ativo de um telefone, para casar a presença que chega.
+#[tracing::instrument(skip_all, fields(rpc = "BuscarAtendimentoAtivoPorTelefone", tenant_id = %env.tenant_id))]
+async fn handler_buscar_atendimento_ativo_por_telefone(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    // O telefone é PII: entra no payload, nunca no span nem no log.
+    let telefone = payload_json
+        .get("telefone")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if telefone.is_empty() {
+        return erro(
+            error_core::AppError::Validation("telefone ausente".into()),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .buscar_atendimento_ativo_por_telefone(&ctx, &telefone)
+        .await
+    {
+        Ok(id) => ok_reply(
+            &env,
+            "BuscarAtendimentoAtivoPorTelefoneReply",
+            serde_json::json!({ "atendimento_id": id }),
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// P3 — para onde mandar a presença do atendente nesta conversa.
+#[tracing::instrument(skip_all, fields(rpc = "ResolverDestinoDoAtendimento", tenant_id = %env.tenant_id))]
+async fn handler_resolver_destino_do_atendimento(
+    store: &dyn ports::AtendimentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let atendimento_id = match payload_json.get("atendimento_id").and_then(|v| v.as_i64()) {
+        Some(id) => id as i32,
+        None => {
+            return erro(
+                error_core::AppError::Validation("atendimento_id ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .resolver_destino_do_atendimento(&ctx, atendimento_id)
+        .await
+    {
+        Ok(Some((instance_id, telefone))) => ok_reply(
+            &env,
+            "ResolverDestinoDoAtendimentoReply",
+            serde_json::json!({ "instance_id": instance_id, "to_number": telefone }),
+        ),
+        // Sem conexão ativa para o contato: quem chama decide o que fazer.
+        Ok(None) => ok_reply(
+            &env,
+            "ResolverDestinoDoAtendimentoReply",
+            serde_json::json!({}),
+        ),
+        Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
 async fn handler_resolver_destino_envio_outbound(
     store: &dyn ports::AtendimentoStore,
     audit: &dyn ports::AuditPort,
@@ -5156,6 +6274,7 @@ async fn handler_verify_credentials(
             "tenant_id": tenant_id_str,
             "role": role,
             "module_permissions": module_permissions,
+            "fallback_role_habilitado": fallback_role_habilitado(store, user.is_superuser).await,
         });
         ok_reply(&env, "VerifyCredentialsReply", reply_payload)
     } else {
@@ -6960,6 +8079,73 @@ async fn handler_create_treinamento(
         houve_correcao = tracing::field::Empty
     )
 )]
+/// P17 — as avaliações do teste ainda não tratadas. Sem auditoria: é leitura
+/// da própria curadoria, e o conteúdo (que pode citar cliente) não vai a log.
+async fn handler_listar_avaliacoes_de_teste(
+    store: &dyn ports::TreinamentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let limite = payload.get("limite").and_then(|v| v.as_i64()).unwrap_or(50);
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_avaliacoes_pendentes(&ctx, limite).await {
+        Ok(itens) => {
+            tracing::info!(quantidade = itens.len(), "avaliações pendentes listadas");
+            ok_reply(
+                &env,
+                "ListAvaliacoesDeTesteReply",
+                serde_json::json!({ "itens": itens }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P17 — tira a avaliação da revisão (virou treinamento, ou foi dispensada).
+async fn handler_marcar_avaliacao_tratada(
+    store: &dyn ports::TreinamentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let Some(id) = payload.get("id").and_then(|v| v.as_i64()).map(|v| v as i32) else {
+        return erro(error_core::AppError::Validation("id ausente".into()), &env);
+    };
+    let virou_treinamento = payload
+        .get("virou_treinamento")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let ctx = contexto_do_envelope(&env);
+    match store.marcar_avaliacao_tratada(&ctx, id).await {
+        Ok(mudou) => {
+            if mudou {
+                audit
+                    .publish(
+                        &env,
+                        if virou_treinamento {
+                            "treinamento.correcao_promovida"
+                        } else {
+                            "treinamento.avaliacao_dispensada"
+                        },
+                        format!("avaliação de teste {id} tratada"),
+                        serde_json::json!({ "avaliacao_id": id, "virou_treinamento": virou_treinamento }),
+                    )
+                    .await;
+            }
+            ok_reply(
+                &env,
+                "MarcarAvaliacaoTratadaReply",
+                serde_json::json!({ "sucesso": mudou }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
 async fn handler_registrar_feedback_teste(
     store: &dyn ports::TreinamentoStore,
     audit: &dyn ports::AuditPort,
@@ -7774,6 +8960,119 @@ mod tests_auditoria_unit {
 
 // --- Novos Handlers Admin e Identidade ---
 
+/// P18 — a chave do fallback de escopos, para o login decidir. Superusuário
+/// não usa fallback (nem consulta). Falha de leitura = habilitado: é o
+/// comportamento de hoje, e um erro de banco não pode tirar escrita de ninguém.
+async fn fallback_role_habilitado(store: &dyn ports::AuthStore, is_superuser: bool) -> bool {
+    if is_superuser {
+        return true;
+    }
+    match store.fallback_de_papel_habilitado().await {
+        Ok(v) => v,
+        Err(e) => {
+            tracing::warn!(erro = %e, "não li AUTH_FALLBACK_ROLE_HABILITADO; mantendo habilitado");
+            true
+        }
+    }
+}
+
+/// P18 — torna explícitos os escopos que cada vínculo já tem pelo papel.
+///
+/// O cálculo dos escopos mora na `application` (no `runtime_api`); aqui só se
+/// lista e grava. Cada gravação é condicional às permissões lidas — se alguém
+/// mudou no meio, pula — e é auditada **por usuário**: mudança de permissão é
+/// evento crítico (doc 08 §4.2).
+async fn handler_listar_vinculos_para_migracao(
+    store: &dyn ports::AuthStore,
+    env: Envelope,
+) -> Envelope {
+    if !env.auth_is_superuser {
+        return erro(
+            error_core::AppError::Auth("somente o superusuário".into()),
+            &env,
+        );
+    }
+    match store.listar_vinculos_para_migracao().await {
+        Ok(vinculos) => ok_reply(
+            &env,
+            "ListarVinculosParaMigracaoReply",
+            serde_json::json!({ "vinculos": vinculos }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+async fn handler_gravar_permissoes_explicitas(
+    store: &dyn ports::AuthStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    if !env.auth_is_superuser {
+        return erro(
+            error_core::AppError::Auth("somente o superusuário".into()),
+            &env,
+        );
+    }
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let itens = payload
+        .get("itens")
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let mut migrados = 0u32;
+    let mut pulados = 0u32;
+    for item in &itens {
+        let Some(id) = item.get("id").and_then(|v| v.as_i64()).map(|v| v as i32) else {
+            pulados += 1;
+            continue;
+        };
+        let lidas = item
+            .get("lidas")
+            .cloned()
+            .unwrap_or(serde_json::Value::Null);
+        let escopos = item
+            .get("escopos")
+            .cloned()
+            .unwrap_or_else(|| serde_json::json!([]));
+        match store
+            .gravar_permissoes_explicitas(id, &lidas, &escopos)
+            .await
+        {
+            Ok(true) => {
+                migrados += 1;
+                audit
+                    .publish(
+                        &env,
+                        "tenant_user.permissoes_migradas",
+                        format!("permissões do vínculo {id} tornadas explícitas"),
+                        serde_json::json!({
+                            "tenant_user_id": id,
+                            "user_id": item.get("user_id"),
+                            "tenant_id": item.get("tenant_id"),
+                            "papel": item.get("papel"),
+                            "escopos": escopos,
+                        }),
+                    )
+                    .await;
+            }
+            Ok(false) => pulados += 1,
+            Err(e) => {
+                tracing::warn!(tenant_user_id = id, erro = %e, "migração do vínculo falhou");
+                pulados += 1;
+            }
+        }
+    }
+    tracing::info!(migrados, pulados, "escopos implícitos migrados");
+    ok_reply(
+        &env,
+        "GravarPermissoesExplicitasReply",
+        serde_json::json!({ "migrados": migrados, "pulados": pulados }),
+    )
+}
+
 async fn handler_get_user_identity(store: &dyn ports::AuthStore, env: Envelope) -> Envelope {
     let payload_json: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
     let id = payload_json.get("id").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
@@ -7801,6 +9100,7 @@ async fn handler_get_user_identity(store: &dyn ports::AuthStore, env: Envelope) 
                 "tenant_id": tenant_id_str,
                 "role": role,
                 "module_permissions": module_permissions,
+                "fallback_role_habilitado": fallback_role_habilitado(store, user.is_superuser).await,
             });
             ok_reply(&env, "GetUserIdentityReply", reply)
         }
@@ -9367,6 +10667,308 @@ async fn handler_list_whatsapp_instances(
     }
 }
 
+/// P7 — a lista de números ignorados, inclusive os desligados.
+///
+/// A regra da "whitelist" (que ignora, não libera — ver o contrato) já valia na
+/// ingestão desde o começo. O que não existia era meio de ver ou mexer nela sem
+/// abrir o banco.
+async fn handler_listar_numeros_ignorados(
+    store: &dyn ports::WhatsappStore,
+    env: Envelope,
+) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_numeros_ignorados(&ctx).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListNumerosIgnoradosReply",
+            serde_json::json!({ "itens": itens }),
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P7 — acrescenta um número à lista.
+///
+/// Auditado: ignorar um número faz o sistema parar de atender alguém, e a
+/// pergunta "por que este cliente nunca é respondido?" precisa ter resposta.
+async fn handler_criar_numero_ignorado(
+    store: &dyn ports::WhatsappStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let nome = payload
+        .get("nome")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let telefone = payload
+        .get("telefone")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if telefone.is_empty() {
+        return erro(
+            error_core::AppError::Validation("telefone ausente".into()),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store.criar_numero_ignorado(&ctx, &nome, &telefone).await {
+        Ok(item) => {
+            audit
+                .publish(
+                    &env,
+                    "whatsapp.numero_ignorado.criado",
+                    format!("número '{}' passou a ser ignorado", item.phone_number),
+                    serde_json::json!({ "id": item.id, "nome": item.name }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "CriarNumeroIgnoradoReply",
+                serde_json::json!({ "item": item }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P7 — corrige o cadastro ou liga/desliga a regra.
+async fn handler_atualizar_numero_ignorado(
+    store: &dyn ports::WhatsappStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let id = match payload.get("id").and_then(|v| v.as_i64()) {
+        Some(i) => i as i32,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+    let nome = payload
+        .get("nome")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    let telefone = payload
+        .get("telefone")
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .trim()
+        .to_string();
+    if telefone.is_empty() {
+        return erro(
+            error_core::AppError::Validation("telefone ausente".into()),
+            &env,
+        );
+    }
+    // Sem default: "não mandou" é erro de contrato, não "desligue a regra".
+    let ativo = match payload.get("ativo").and_then(|v| v.as_bool()) {
+        Some(v) => v,
+        None => {
+            return erro(
+                error_core::AppError::Validation("ativo ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .atualizar_numero_ignorado(&ctx, id, &nome, &telefone, ativo)
+        .await
+    {
+        Ok(Some(item)) => {
+            audit
+                .publish(
+                    &env,
+                    "whatsapp.numero_ignorado.alterado",
+                    format!(
+                        "número '{}' {}",
+                        item.phone_number,
+                        if item.active {
+                            "voltou a ser ignorado"
+                        } else {
+                            "voltou a ser atendido"
+                        }
+                    ),
+                    serde_json::json!({ "id": item.id, "ativo": item.active }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "AtualizarNumeroIgnoradoReply",
+                serde_json::json!({ "sucesso": true, "item": item }),
+            )
+        }
+        // Inexistente ou de outro tenant: a RLS já o escondeu, e responder
+        // "sucesso" faria a tela sumir com uma linha que continua lá.
+        Ok(None) => erro(
+            error_core::AppError::Database("número ignorado não encontrado".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P7 — apaga a entrada de vez.
+async fn handler_remover_numero_ignorado(
+    store: &dyn ports::WhatsappStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let id = match payload.get("id").and_then(|v| v.as_i64()) {
+        Some(i) => i as i32,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.remover_numero_ignorado(&ctx, id).await {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "whatsapp.numero_ignorado.removido",
+                    format!("entrada {id} removida da lista de números ignorados"),
+                    serde_json::json!({ "id": id }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "RemoverNumeroIgnoradoReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Database("número ignorado não encontrado".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P7 — liga a conexão a um departamento; `departamento_id = 0` desfaz.
+async fn handler_definir_departamento_conexao(
+    store: &dyn ports::WhatsappStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let id = match payload.get("id").and_then(|v| v.as_i64()) {
+        Some(i) => i as i32,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+    // 0 é "sem departamento", não "departamento zero": é assim que a tela
+    // desfaz o vínculo sem precisar de um campo a mais.
+    let departamento_id = payload
+        .get("departamento_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let departamento_id = (departamento_id > 0).then_some(departamento_id);
+
+    let ctx = contexto_do_envelope(&env);
+    match store
+        .definir_departamento_da_conexao(&ctx, id, departamento_id)
+        .await
+    {
+        Ok(true) => {
+            audit
+                .publish(
+                    &env,
+                    "whatsapp_instance.departamento_definido",
+                    match departamento_id {
+                        Some(d) => format!("conexão {id} passou a rotear para o departamento {d}"),
+                        None => format!("conexão {id} deixou de rotear por departamento"),
+                    },
+                    serde_json::json!({ "instance_id": id, "departamento_id": departamento_id }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "DefinirDepartamentoDaConexaoReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(false) => erro(
+            error_core::AppError::Database("conexão não encontrada".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P7 — o departamento de cada conexão do tenant.
+///
+/// Rota separada da listagem porque `ListWhatsappInstances` usa `query_as!`
+/// (macro), cujo cache `.sqlx` não conhece a coluna nova. Juntar as duas
+/// exigiria regravar o cache contra um banco vivo, e o build offline da CI
+/// quebraria antes de qualquer teste rodar.
+async fn handler_departamentos_das_conexoes(
+    store: &dyn ports::WhatsappStore,
+    env: Envelope,
+) -> Envelope {
+    let ctx = contexto_do_envelope(&env);
+    match store.departamentos_das_conexoes(&ctx).await {
+        Ok(linhas) => {
+            let itens: Vec<serde_json::Value> = linhas
+                .into_iter()
+                .map(|(id, dep, nome)| {
+                    serde_json::json!({
+                        "id": id,
+                        "departamento_id": dep.unwrap_or(0),
+                        "departamento_nome": nome,
+                    })
+                })
+                .collect();
+            ok_reply(
+                &env,
+                "ListDepartamentosDasConexoesReply",
+                serde_json::json!({ "itens": itens }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P7 — o detalhe da conexão.
+async fn handler_detalhe_da_conexao(store: &dyn ports::WhatsappStore, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let id = match payload.get("id").and_then(|v| v.as_i64()) {
+        Some(i) => i as i32,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.detalhe_da_conexao(&ctx, id).await {
+        Ok(Some(d)) => ok_reply(&env, "DetalheDaConexaoReply", serde_json::json!(d)),
+        Ok(None) => erro(
+            error_core::AppError::Database("conexão não encontrada".into()),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
 async fn handler_admin_list_all_connected_instances(
     store: &dyn ports::WhatsappStore,
     env: Envelope,
@@ -10536,6 +12138,27 @@ mod tests_atendimento_cliente_unit {
     }
 
     /// HAPPY PATH: get_thread devolve as mensagens da thread.
+    /// P2: rolar para cima pede o que veio ANTES da bolha mais antiga da tela.
+    #[tokio::test]
+    async fn get_thread_repassa_o_cursor_da_rolagem() {
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_listar_mensagens()
+            .times(1)
+            .returning(|_, _, _, _, before_id| {
+                assert_eq!(before_id, Some(42));
+                Ok(vec![])
+            });
+        let env = envelope_com_payload(
+            "GetThread",
+            serde_json::json!({ "atendimento_id": 1, "before_id": 42 }),
+        );
+
+        let resp = handler_get_thread(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
     #[tokio::test]
     async fn get_thread_returns_messages() {
         // Arrange
@@ -10543,7 +12166,7 @@ mod tests_atendimento_cliente_unit {
         store
             .expect_listar_mensagens()
             .times(1)
-            .returning(|_, _, _, _| Ok(vec![mensagem_fake(1)]));
+            .returning(|_, _, _, _, _| Ok(vec![mensagem_fake(1)]));
         let env = envelope_com_payload("GetThread", serde_json::json!({ "atendimento_id": 1 }));
 
         // Act
@@ -10877,6 +12500,40 @@ mod tests_atendimento_cliente_unit {
         assert_eq!(err.category, contracts::ErrorCategory::Internal as i32);
     }
 
+    /// P1: o recorte pedido pelo app (busca, "minhas", não lidas) chega inteiro
+    /// ao repositório — filtrar no cliente esconderia a conversa não baixada.
+    #[tokio::test]
+    async fn list_atendimentos_repassa_o_recorte_da_busca() {
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_listar_atendimentos()
+            .times(1)
+            .returning(|_, _, _, filtro, _| {
+                assert_eq!(filtro.busca, "5531");
+                assert!(filtro.somente_meus);
+                assert!(filtro.somente_nao_lidos);
+                assert_eq!(filtro.prioridade, "alta");
+                assert_eq!(filtro.etiqueta_id, Some(9));
+                assert_eq!(filtro.atendente_id, Some(-1));
+                Ok(vec![])
+            });
+        let env = envelope_com_payload(
+            "ListAtendimentos",
+            serde_json::json!({
+                "busca": "  5531  ",
+                "somente_meus": true,
+                "somente_nao_lidos": true,
+                "prioridade": "alta",
+                "etiqueta_id": 9,
+                "atendente_id": -1,
+            }),
+        );
+
+        let resp = handler_list_atendimentos(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
     /// HAPPY PATH: list_atendimentos devolve Reply com o array de atendimentos.
     #[tokio::test]
     async fn list_atendimentos_returns_reply() {
@@ -10885,7 +12542,7 @@ mod tests_atendimento_cliente_unit {
         store
             .expect_listar_atendimentos()
             .times(1)
-            .returning(|_, _, _, _| Ok(vec![]));
+            .returning(|_, _, _, _, _| Ok(vec![]));
         let env = envelope_com_payload("ListAtendimentos", serde_json::json!({}));
 
         // Act
@@ -10904,7 +12561,7 @@ mod tests_atendimento_cliente_unit {
         store
             .expect_listar_atendimentos()
             .times(1)
-            .returning(|_, _, _, _| {
+            .returning(|_, _, _, _, _| {
                 let a: infrastructure_postgres::atendimentos::atendimentos::Atendimento =
                     serde_json::from_value(serde_json::json!({
                         "id": 7, "tenant_id": uuid::Uuid::nil(), "contato_id": 1,
@@ -10925,12 +12582,29 @@ mod tests_atendimento_cliente_unit {
             .times(1)
             .withf(|_, ids| ids == &vec![7])
             .returning(|_, _| Ok(std::collections::HashMap::from([(7, 3)])));
+        store
+            .expect_contatos_do_quadro()
+            .times(1)
+            .returning(|_, _| {
+                Ok(std::collections::HashMap::from([(
+                    7,
+                    infrastructure_postgres::atendimentos::atendimentos::ContatoDoQuadro {
+                        atendimento_id: 7,
+                        nome: "Maria".into(),
+                        telefone: "5511999998888".into(),
+                        foto_url: String::new(),
+                        revisao_pendente: false,
+                    },
+                )]))
+            });
         let env = envelope_com_payload("ListAtendimentos", serde_json::json!({}));
 
         let resp = handler_list_atendimentos(&store, env).await;
 
         let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
         assert_eq!(body["atendimentos"][0]["nao_lidas"], 3);
+        // P13 — o cartão deixa de ser `Contato #id`.
+        assert_eq!(body["atendimentos"][0]["contato_nome"], "Maria");
     }
 
     /// B6: marcar como lida devolve o espelho para o WhatsApp só quando há o
@@ -11077,6 +12751,44 @@ mod tests_atendimento_cliente_unit {
                 },
             )
             .returning(|_, _, _, _, _, _| Ok(true));
+        // P14 — a intenção confiante vira etiqueta, auditada.
+        store
+            .expect_aplicar_etiquetas_da_analise()
+            .times(1)
+            .withf(|_, atendimento_id, intencoes, piso| {
+                *atendimento_id == 9 && intencoes.len() == 1 && (*piso - 0.8).abs() < 1e-9
+            })
+            .returning(|_, _, _, _| {
+                Ok(vec![
+                    infrastructure_postgres::atendimentos::etiquetas::EtiquetaAplicadaPelaIa {
+                        id: 4,
+                        nome: "Segunda via".into(),
+                        confianca: 0.9,
+                    },
+                ])
+            });
+        // P15 — a "cidade" (0,8 = piso) entra nos extras do contato.
+        store
+            .expect_enriquecer_contato()
+            .times(1)
+            .withf(|_, atendimento_id, valores| {
+                *atendimento_id == 9 && valores.extras.contains_key("cidade")
+            })
+            .returning(|_, _, _| Ok((3, vec!["metadados.entidades".to_string()])));
+        let mut audit = crate::ports::MockAuditPort::new();
+        audit
+            .expect_publish()
+            .times(1)
+            .withf(|_, evento, _, _| evento == "etiqueta.aplicada_por_ia")
+            .returning(|_, _, _, _| ());
+        audit
+            .expect_publish()
+            .times(1)
+            .withf(|_, evento, _, ctx| {
+                // Os NOMES dos campos, nunca os valores.
+                evento == "contato.enriquecido_por_ia" && !ctx.to_string().contains("Recife")
+            })
+            .returning(|_, _, _, _| ());
         let env = envelope_com_payload(
             "AnexarAnaliseMensagem",
             serde_json::json!({
@@ -11087,11 +12799,12 @@ mod tests_atendimento_cliente_unit {
             }),
         );
 
-        let resp = handler_anexar_analise_mensagem(&store, env).await;
+        let resp = handler_anexar_analise_mensagem(&store, &audit, env).await;
 
         assert_eq!(resp.kind, MessageKind::Reply as i32);
         let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
         assert_eq!(body["assunto_definido"], true);
+        assert_eq!(body["etiquetas_aplicadas"], 1);
     }
 
     /// B9 (N10 E5): a chave tem de ser das que o servidor gera.
@@ -12053,5 +13766,106 @@ mod tests_quota_unit {
         let resp = handler_create_departamento(&quota, &operacional, &audit, env).await;
 
         assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+}
+
+#[cfg(test)]
+mod tests_migracao_escopos_unit {
+    use super::*;
+    use crate::ports::{MockAuditPort, MockAuthStore};
+    use contracts::{Envelope, MessageKind};
+
+    fn envelope(method: &str, payload: serde_json::Value, superusuario: bool) -> Envelope {
+        Envelope {
+            kind: MessageKind::Request as i32,
+            method: method.to_string(),
+            tenant_id: uuid::Uuid::nil().to_string(),
+            traceparent: "00-trace-span-01".to_string(),
+            payload: serde_json::to_vec(&payload).unwrap(),
+            auth_is_superuser: superusuario,
+            ..Default::default()
+        }
+    }
+
+    /// P18: só o superusuário migra — nem lista, nem grava.
+    #[tokio::test]
+    async fn migracao_recusa_quem_nao_e_superusuario() {
+        let mut store = MockAuthStore::new();
+        store.expect_listar_vinculos_para_migracao().never();
+        store.expect_gravar_permissoes_explicitas().never();
+        let audit = MockAuditPort::new();
+
+        let r1 = handler_listar_vinculos_para_migracao(
+            &store,
+            envelope("ListarVinculosParaMigracao", serde_json::json!({}), false),
+        )
+        .await;
+        let r2 = handler_gravar_permissoes_explicitas(
+            &store,
+            &audit,
+            envelope(
+                "GravarPermissoesExplicitas",
+                serde_json::json!({ "itens": [{ "id": 1, "escopos": ["x"] }] }),
+                false,
+            ),
+        )
+        .await;
+
+        assert_eq!(r1.kind, MessageKind::Error as i32);
+        assert_eq!(r2.kind, MessageKind::Error as i32);
+    }
+
+    /// P18: audita por usuário o que gravou; quem mudou no meio é pulado, sem
+    /// auditoria.
+    #[tokio::test]
+    async fn migracao_audita_cada_vinculo_gravado_e_conta_os_pulados() {
+        let mut store = MockAuthStore::new();
+        store
+            .expect_gravar_permissoes_explicitas()
+            .times(2)
+            .returning(|id, _, _| Ok(id == 1));
+        let mut audit = MockAuditPort::new();
+        audit
+            .expect_publish()
+            .times(1)
+            .withf(|_, evento, _, _| evento == "tenant_user.permissoes_migradas")
+            .returning(|_, _, _, _| ());
+
+        let resp = handler_gravar_permissoes_explicitas(
+            &store,
+            &audit,
+            envelope(
+                "GravarPermissoesExplicitas",
+                serde_json::json!({ "itens": [
+                    { "id": 1, "lidas": {}, "escopos": ["atendimentos:read"] },
+                    { "id": 2, "lidas": {}, "escopos": ["atendimentos:read"] },
+                ] }),
+                true,
+            ),
+        )
+        .await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(body["migrados"], 1);
+        assert_eq!(body["pulados"], 1);
+    }
+
+    /// P18: erro ao ler a chave do fallback não tira escrita de ninguém.
+    #[tokio::test]
+    async fn chave_do_fallback_ilegivel_mantem_habilitado() {
+        let mut store = MockAuthStore::new();
+        store
+            .expect_fallback_de_papel_habilitado()
+            .returning(|| Err(infrastructure_postgres::DbError::NotFound));
+        assert!(fallback_role_habilitado(&store, false).await);
+
+        let mut desligado = MockAuthStore::new();
+        desligado
+            .expect_fallback_de_papel_habilitado()
+            .returning(|| Ok(false));
+        assert!(!fallback_role_habilitado(&desligado, false).await);
+        // Superusuário nem consulta.
+        assert!(fallback_role_habilitado(&MockAuthStore::new(), true).await);
     }
 }

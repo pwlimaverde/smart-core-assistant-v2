@@ -9,6 +9,7 @@ import '../../domain/model/atendimento_resumo.dart';
 import '../../domain/model/quadro.dart';
 import '../../domain/parameters/list_atendimentos_parameters.dart';
 import '../../domain/parameters/move_atendimento_etapa_parameters.dart';
+import '../../domain/parameters/quadro_operacao_parameters.dart';
 import '../../domain/parameters/quadro_parameters.dart';
 import '../../domain/streams/atendimento_evento_stream.dart';
 import '../../domain/usecases/atendimento_usecases.dart';
@@ -36,6 +37,16 @@ final class KanbanController extends BaseController<KanbanViewModel> {
   final ListColunasUsecase _colunasUsecase;
   final SetAtendimentoStatusUsecase _statusUsecase;
 
+  /// P4 — as operações do supervisor sobre o cartão. Opcionais: nos testes de
+  /// tela nem todas estão registradas, e o quadro tem de abrir assim mesmo.
+  final AtribuirAtendimentoUsecase? _atribuirUsecase;
+  final DefinirPrioridadeUsecase? _prioridadeUsecase;
+  final TransferirParaFluxoUsecase? _transferirUsecase;
+  final ExportarQuadroUsecase? _exportarUsecase;
+
+  /// P16 — conclui a revisão de uma resposta da IA.
+  final MarcarRevisadoUsecase? _revisadoUsecase;
+
   /// Fonte de eventos realtime (opcional — testes de unidade do controller não
   /// precisam abrir stream).
   final AtendimentoEventoStream? eventos;
@@ -46,6 +57,25 @@ final class KanbanController extends BaseController<KanbanViewModel> {
   final int? Function()? usuarioAtual;
 
   final _atribuicoes = StreamController<AtribuicaoRecebida>.broadcast();
+
+  /// P1 — o recorte da lista, como na v1: texto livre, "minhas" e "não lidas".
+  String _busca = '';
+  bool _somenteMeus = false;
+  bool _somenteNaoLidas = false;
+
+  /// P16 — só os cartões com resposta da IA a conferir. Filtro local: o
+  /// quadro já está carregado, e a marca vem em cada cartão.
+  bool _somenteRevisar = false;
+  Timer? _debounceBusca;
+
+  String get busca => _busca;
+  bool get somenteMeus => _somenteMeus;
+  bool get somenteNaoLidas => _somenteNaoLidas;
+  bool get somenteRevisar => _somenteRevisar;
+
+  /// Há algum filtro ativo — a tela usa para oferecer o "limpar".
+  bool get temFiltro =>
+      _busca.isNotEmpty || _somenteMeus || _somenteNaoLidas || _somenteRevisar;
 
   /// Conversas que o rodízio acabou de atribuir **a quem está logado**.
   ///
@@ -61,7 +91,17 @@ final class KanbanController extends BaseController<KanbanViewModel> {
     required ListFluxosUsecase fluxosUsecase,
     required ListColunasUsecase colunasUsecase,
     required SetAtendimentoStatusUsecase statusUsecase,
-  }) : _listUsecase = listUsecase,
+    AtribuirAtendimentoUsecase? atribuirUsecase,
+    DefinirPrioridadeUsecase? prioridadeUsecase,
+    TransferirParaFluxoUsecase? transferirUsecase,
+    ExportarQuadroUsecase? exportarUsecase,
+    MarcarRevisadoUsecase? revisadoUsecase,
+  }) : _revisadoUsecase = revisadoUsecase,
+       _atribuirUsecase = atribuirUsecase,
+       _prioridadeUsecase = prioridadeUsecase,
+       _transferirUsecase = transferirUsecase,
+       _exportarUsecase = exportarUsecase,
+       _listUsecase = listUsecase,
        _moveUsecase = moveUsecase,
        _fluxosUsecase = fluxosUsecase,
        _colunasUsecase = colunasUsecase,
@@ -114,6 +154,7 @@ final class KanbanController extends BaseController<KanbanViewModel> {
   @override
   Future<void> close() {
     _debounce?.cancel();
+    _debounceBusca?.cancel();
     _streamSubscription?.cancel();
     _atribuicoes.close();
     return super.close();
@@ -152,13 +193,151 @@ final class KanbanController extends BaseController<KanbanViewModel> {
   /// Troca o quadro aberto.
   Future<void> abrirQuadro(int fluxoId) => carregar(fluxoId: fluxoId);
 
+  /// P1 — digitar na busca. Recarrega depois de uma pausa: sem isso, uma
+  /// palavra de oito letras viraria oito consultas ao servidor.
+  void digitarBusca(String texto) {
+    _busca = texto;
+    _debounceBusca?.cancel();
+    _debounceBusca = Timer(
+      const Duration(milliseconds: 350),
+      () => carregar(),
+    );
+  }
+
+  /// P1 — liga/desliga os filtros combináveis. Recarrega na hora: é um clique,
+  /// não uma rajada.
+  Future<void> alternarFiltro({bool? meus, bool? naoLidas, bool? revisar}) {
+    if (meus != null) _somenteMeus = meus;
+    if (naoLidas != null) _somenteNaoLidas = naoLidas;
+    if (revisar != null) _somenteRevisar = revisar;
+    return carregar();
+  }
+
+  /// P16 — o atendente conferiu a resposta que a IA deu com pouca confiança.
+  Future<QuadroOperacaoError?> marcarRevisado(int atendimentoId) async {
+    final usecase = _revisadoUsecase;
+    if (usecase == null) return null;
+    final res = await usecase(
+      MarcarRevisadoParameters(atendimentoId: atendimentoId),
+    );
+    return switch (res) {
+      Success() => await _recarregarERetornar(),
+      Failure(:final error) => error,
+    };
+  }
+
+  /// P4 — põe a conversa na mão de alguém (ou devolve para a fila).
+  ///
+  /// Recarrega o quadro no sucesso: o cartão muda de dono e, com o filtro
+  /// "minhas" ligado, pode até sair da tela — é o comportamento certo.
+  Future<QuadroOperacaoError?> atribuir({
+    required int atendimentoId,
+    int? atendenteId,
+    bool devolverParaFila = false,
+  }) async {
+    final usecase = _atribuirUsecase;
+    if (usecase == null) return null;
+    final res = await usecase(
+      AtribuirAtendimentoParameters(
+        atendimentoId: atendimentoId,
+        atendenteId: atendenteId,
+        devolverParaFila: devolverParaFila,
+      ),
+    );
+    return switch (res) {
+      Success(:final value) => value
+          ? await _recarregarERetornar()
+          // O servidor não roubou a conversa de quem já a tinha; a tela
+          // precisa dizer isso, senão parece que o clique não funcionou.
+          : const QuadroOperacaoRecusada(
+              'A conversa já está com outro atendente.',
+            ),
+      Failure(:final error) => error,
+    };
+  }
+
+  /// P4 — urgência do cartão.
+  Future<QuadroOperacaoError?> definirPrioridade({
+    required int atendimentoId,
+    required String prioridade,
+  }) async {
+    final usecase = _prioridadeUsecase;
+    if (usecase == null) return null;
+    final res = await usecase(
+      DefinirPrioridadeParameters(
+        atendimentoId: atendimentoId,
+        prioridade: prioridade,
+      ),
+    );
+    return switch (res) {
+      Success() => await _recarregarERetornar(),
+      Failure(:final error) => error,
+    };
+  }
+
+  /// P4 — leva a conversa para outro fluxo. Devolve o nome do destino.
+  Future<(String?, QuadroOperacaoError?)> transferirParaFluxo({
+    required int atendimentoId,
+    required int fluxoId,
+  }) async {
+    final usecase = _transferirUsecase;
+    if (usecase == null) return (null, null);
+    final res = await usecase(
+      TransferirParaFluxoParameters(
+        atendimentoId: atendimentoId,
+        fluxoId: fluxoId,
+      ),
+    );
+    return switch (res) {
+      Success(:final value) => (value, await _recarregarERetornar()),
+      Failure(:final error) => (null, error),
+    };
+  }
+
+  /// P4 — o quadro em CSV, no recorte que está na tela.
+  Future<(List<int>?, QuadroOperacaoError?)> exportar() async {
+    final usecase = _exportarUsecase;
+    if (usecase == null) return (null, null);
+    final res = await usecase(
+      ExportarQuadroParameters(
+        busca: _busca.trim(),
+        somenteMeus: _somenteMeus,
+        somenteNaoLidos: _somenteNaoLidas,
+      ),
+    );
+    return switch (res) {
+      Success(:final value) => (value, null),
+      Failure(:final error) => (null, error),
+    };
+  }
+
+  Future<QuadroOperacaoError?> _recarregarERetornar() async {
+    await carregar();
+    return null;
+  }
+
+  /// P1 — volta ao quadro inteiro.
+  Future<void> limparFiltros() {
+    _debounceBusca?.cancel();
+    _busca = '';
+    _somenteMeus = false;
+    _somenteNaoLidas = false;
+    _somenteRevisar = false;
+    return carregar();
+  }
+
   Future<ReturnSuccessOrError<KanbanViewModel, ListAtendimentosError>> _montar(
     int? fluxoId,
   ) async {
     // Sem filtro de status: o quadro mostra a conversa em qualquer coluna, e
     // filtrar por "fila" deixaria as colunas de trabalho e finalização vazias.
     final res = await _listUsecase(
-      const ListAtendimentosParameters(status: ''),
+      ListAtendimentosParameters(
+        status: '',
+        busca: _busca.trim(),
+        somenteMeus: _somenteMeus,
+        somenteNaoLidos: _somenteNaoLidas,
+      ),
     );
     return switch (res) {
       Success(:final value) => Success(
@@ -166,7 +345,11 @@ final class KanbanController extends BaseController<KanbanViewModel> {
           fluxoId: fluxoId,
           fluxos: _fluxos,
           colunas: _colunas,
-          porEtapa: KanbanViewModel.agruparPorEtapa(value),
+          porEtapa: KanbanViewModel.agruparPorEtapa(
+            _somenteRevisar
+                ? value.where((a) => a.revisaoPendente).toList()
+                : value,
+          ),
         ),
       ),
       Failure(:final error) => Failure(error),

@@ -42,6 +42,16 @@ dependencies:
   # N9/E1: escolher o arquivo. Na Web devolve `bytes`, no Windows `path`; o
   # gateway resolve a diferença e a tela nunca a vê.
   file_picker: ^11.0.2
+  # P3: áudio de voz (PTT) gravado na conversa. Tem implementação em Windows,
+  # que é a plataforma-alvo do app do tenant.
+  record: ^6.1.1
+  # `XFile`, para ler o arquivo que o gravador deixou em disco.
+  cross_file: ^0.3.4+2
+  # Pasta temporária do sistema para o áudio gravado — sem `dart:io`, que
+  # quebraria a compilação Web do painel admin.
+  path_provider: ^2.1.5
+  # P16 — aviso nativo do Windows (só desktop; a web usa o SnackBar).
+  flutter_local_notifications: ^22.3.1
 
 dev_dependencies:
   # Registro do controller nos testes de widget.

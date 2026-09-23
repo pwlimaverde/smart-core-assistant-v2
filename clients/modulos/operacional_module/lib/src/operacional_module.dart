@@ -10,6 +10,7 @@ import 'features/atendimento/domain/gateways/atendimento_gateway.dart';
 import 'features/atendimento/domain/streams/atendimento_evento_stream.dart';
 import 'features/atendimento/domain/usecases/atendimento_usecases.dart';
 import 'features/atendimento/presentation/routes/kanban_route.dart';
+import 'features/atendimento/presentation/escrita_no_quadro.dart';
 
 /// Módulo Operacional (fila/Kanban/chat — WS-6): monta a cadeia
 /// `Gateway → Datasource → Repository → Usecase` e contribui a rota
@@ -45,15 +46,24 @@ final class OperacionalModule extends AppModule {
   /// quadro só não avisa.
   final int? Function()? usuarioAtual;
 
+  /// P16 — a sessão pode escrever no atendimento? Sem ele, o quadro oferece
+  /// tudo (e o servidor recusa o que não pode).
+  final bool Function()? podeEscrever;
+
   OperacionalModule({
     this.drawerBuilder,
     this.avisoBuilder,
     this.buscarContatos,
     this.usuarioAtual,
+    this.podeEscrever,
   });
 
   @override
   void globalBinds(Injector i) {
+    final pergunta = podeEscrever;
+    if (pergunta != null) {
+      i.lazySingleton<EscritaNoQuadro>(() => EscritaNoQuadro(pergunta));
+    }
     // Fronteira de infraestrutura, uma por plataforma. O `AdminServiceClient`
     // (do GrpcTransport global) serve o Web hoje e o transporte de sync do
     // desktop; o tenant vem da sessão.
@@ -121,6 +131,132 @@ final class OperacionalModule extends AppModule {
       () => SetAtendimentoStatusUsecase(
         repository: SetAtendimentoStatusRepository(
           datasource: SetAtendimentoStatusDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<MarcarRevisadoUsecase>(
+      () => MarcarRevisadoUsecase(
+        repository: MarcarRevisadoRepository(
+          datasource: MarcarRevisadoDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<ObterContatoUsecase>(
+      () => ObterContatoUsecase(
+        repository: ObterContatoRepository(
+          datasource: ObterContatoDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<ListarTimelineUsecase>(
+      () => ListarTimelineUsecase(
+        repository: ListarTimelineRepository(
+          datasource: ListarTimelineDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<AtendimentosDoContatoUsecase>(
+      () => AtendimentosDoContatoUsecase(
+        repository: AtendimentosDoContatoRepository(
+          datasource: AtendimentosDoContatoDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<RemoverNotaUsecase>(
+      () => RemoverNotaUsecase(
+        repository: RemoverNotaRepository(
+          datasource: RemoverNotaDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<AtualizarEtiquetaUsecase>(
+      () => AtualizarEtiquetaUsecase(
+        repository: AtualizarEtiquetaRepository(
+          datasource: AtualizarEtiquetaDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<DesativarEtiquetaUsecase>(
+      () => DesativarEtiquetaUsecase(
+        repository: DesativarEtiquetaRepository(
+          datasource: DesativarEtiquetaDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<AtribuirAtendimentoUsecase>(
+      () => AtribuirAtendimentoUsecase(
+        repository: AtribuirAtendimentoRepository(
+          datasource: AtribuirAtendimentoDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<DefinirPrioridadeUsecase>(
+      () => DefinirPrioridadeUsecase(
+        repository: DefinirPrioridadeRepository(
+          datasource: DefinirPrioridadeDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<TransferirParaFluxoUsecase>(
+      () => TransferirParaFluxoUsecase(
+        repository: TransferirParaFluxoRepository(
+          datasource: TransferirParaFluxoDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<ExportarQuadroUsecase>(
+      () => ExportarQuadroUsecase(
+        repository: ExportarQuadroRepository(
+          datasource: ExportarQuadroDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<EnviarMidiaUsecase>(
+      () => EnviarMidiaUsecase(
+        repository: EnviarMidiaRepository(
+          datasource: EnviarMidiaDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<EnviarPresencaUsecase>(
+      () => EnviarPresencaUsecase(
+        repository: EnviarPresencaRepository(
+          datasource: EnviarPresencaDatasource(
+            gateway: inject<AtendimentoGateway>(),
+          ),
+        ),
+      ),
+    );
+    i.lazySingleton<ListarMidiasUsecase>(
+      () => ListarMidiasUsecase(
+        repository: ListarMidiasRepository(
+          datasource: ListarMidiasDatasource(
             gateway: inject<AtendimentoGateway>(),
           ),
         ),

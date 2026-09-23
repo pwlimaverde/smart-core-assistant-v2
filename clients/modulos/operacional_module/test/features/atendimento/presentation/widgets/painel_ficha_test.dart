@@ -54,6 +54,22 @@ void main() {
             datasource: DefinirValorCampoDatasource(gateway: gateway),
           ),
         ),
+        // P5 — a ficha agora exclui nota e mantém o catálogo de etiquetas.
+        removerNota: RemoverNotaUsecase(
+          repository: RemoverNotaRepository(
+            datasource: RemoverNotaDatasource(gateway: gateway),
+          ),
+        ),
+        atualizarEtiqueta: AtualizarEtiquetaUsecase(
+          repository: AtualizarEtiquetaRepository(
+            datasource: AtualizarEtiquetaDatasource(gateway: gateway),
+          ),
+        ),
+        desativarEtiqueta: DesativarEtiquetaUsecase(
+          repository: DesativarEtiquetaRepository(
+            datasource: DesativarEtiquetaDatasource(gateway: gateway),
+          ),
+        ),
       );
 
   Future<FichaController> montar(
@@ -144,6 +160,48 @@ void main() {
       expect(find.text('urgente'), findsOneWidget);
       expect(find.text('vip'), findsOneWidget);
       expect(find.text('Colar nesta conversa'), findsOneWidget);
+    });
+
+    testWidgets('a etiqueta posta pela IA tem o ✨ (P14)', (tester) async {
+      final gateway = FakeAtendimentoGateway()
+        ..ficha = const FichaAtendimento(
+          catalogo: [],
+          aplicadas: [
+            Etiqueta(
+              id: 7,
+              nome: 'orcamento',
+              cor: '#3b82f6',
+              descricao: '',
+              ativo: true,
+              aplicadaPelaIa: true,
+            ),
+          ],
+          notas: [],
+        );
+
+      await montar(tester, gateway);
+
+      expect(find.text('orcamento'), findsOneWidget);
+      expect(find.byIcon(Icons.auto_awesome), findsOneWidget);
+    });
+
+    testWidgets('mostra o que a IA encontrou do contato (P15)', (
+      tester,
+    ) async {
+      final gateway = FakeAtendimentoGateway()
+        ..ficha = const FichaAtendimento(
+          catalogo: [],
+          aplicadas: [],
+          notas: [],
+          dadosDoContato: {'cidade': 'Recife'},
+        );
+
+      await montar(tester, gateway);
+      await tester.tap(find.text('Dados que a IA encontrou'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Recife'), findsOneWidget);
+      expect(find.text('cidade'), findsOneWidget);
     });
 
     testWidgets('conversa sem etiqueta diz isso, sem parecer erro', (
@@ -377,5 +435,33 @@ void main() {
     )(const AtendimentoIdParameters(atendimentoId: 1));
 
     expect((res as Failure).error, isA<FichaSessaoExpirada>());
+  });
+
+  // ─── P5: excluir anotação ────────────────────────────────────────────────
+  testWidgets('excluir anotação pede confirmação e vai ao servidor', (
+    tester,
+  ) async {
+    final gateway = FakeAtendimentoGateway()
+      ..ficha = FichaAtendimento(
+        catalogo: const [],
+        aplicadas: const [],
+        notas: [
+          Nota(
+            id: 3,
+            texto: 'cliente pediu retorno',
+            criadoEm: DateTime(2026, 1, 1),
+          ),
+        ],
+      );
+    final controller = await montar(tester, gateway);
+    await controller.abrir(1);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Excluir anotação'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Excluir'));
+    await tester.pumpAndSettle();
+
+    expect(gateway.acoesDaFicha, contains('removerNota:3:1'));
   });
 }

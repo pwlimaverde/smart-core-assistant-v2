@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart' as proto;
 import 'package:return_success_or_error/return_success_or_error.dart';
 
+import '../../domain/model/migracao_de_escopos.dart';
 import '../../domain/model/usuario_global.dart';
 import '../../domain/parameters/usuarios_parameters.dart';
 
@@ -65,5 +66,36 @@ final class DefinirUsuarioAtivoDatasource
       ),
     );
     return unit;
+  }
+}
+
+/// P18 — torna explícitos os escopos que cada vínculo tem hoje pelo papel.
+final class MigrarEscoposDatasource
+    implements Datasource<ResultadoDaMigracao, MigrarEscoposParameters> {
+  final proto.AdminServiceClient _client;
+
+  const MigrarEscoposDatasource({required this._client});
+
+  @override
+  Future<ResultadoDaMigracao> call(MigrarEscoposParameters parameters) async {
+    final resp = await _client.migrarEscoposImplicitos(
+      proto.MigrarEscoposImplicitosRequest(dryRun: parameters.simular),
+    );
+    return ResultadoDaMigracao(
+      contagens: resp.contagens
+          .map(
+            (c) => GrupoAMigrar(
+              tenantId: c.tenantId,
+              tenantNome: c.tenantNome,
+              papel: c.papel,
+              quantidade: c.quantidade,
+            ),
+          )
+          .toList(),
+      total: resp.total,
+      migrados: resp.migrados,
+      pulados: resp.pulados,
+      simulacao: resp.dryRun,
+    );
   }
 }

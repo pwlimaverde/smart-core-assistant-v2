@@ -21,6 +21,11 @@ import '../../domain/model/quadro.dart';
 import '../../domain/parameters/ficha_parameters.dart';
 import '../../domain/parameters/quadro_parameters.dart';
 import '../../domain/parameters/send_outbound_message_parameters.dart';
+import '../../domain/model/midia_mensagem.dart';
+import '../../domain/parameters/presenca_parameters.dart';
+import '../../domain/parameters/quadro_operacao_parameters.dart';
+import '../../domain/model/evento_timeline.dart';
+import '../../domain/model/contato_da_conversa.dart';
 
 /// As quatro fronteiras da feature. Cada `mapError` traduz a natureza da falha
 /// (transporte gRPC no Web, [LocalEngineFalha] no desktop) para o conjunto
@@ -422,4 +427,245 @@ final class CriarNotaRepository
   @override
   FichaError mapError(Object e, StackTrace s, CriarNotaParameters p) =>
       _erroDeFicha(e, s, p.atendimentoId);
+}
+
+/// P3 — presença: qualquer falha vira "não entregue". Não há o que a pessoa
+/// possa fazer com o detalhe, e a conversa continua normalmente.
+final class EnviarPresencaRepository
+    extends RepositoryBase<bool, EnviarPresencaParameters, PresencaError> {
+  const EnviarPresencaRepository({required super.datasource});
+
+  @override
+  PresencaError mapError(Object e, StackTrace s, EnviarPresencaParameters p) {
+    _log('enviarPresenca', e, s, atendimentoId: p.atendimentoId);
+    return switch (_kindDeTransporte(e)) {
+      GrpcFailureKind.unavailable ||
+      GrpcFailureKind.rateLimited => const PresencaNaoEntregue(),
+      _ => const PresencaInesperado(),
+    };
+  }
+}
+
+final class ListarMidiasRepository
+    extends
+        RepositoryBase<
+          List<MidiaMensagem>,
+          ListarMidiasParameters,
+          MidiasError
+        > {
+  const ListarMidiasRepository({required super.datasource});
+
+  @override
+  MidiasError mapError(Object e, StackTrace s, ListarMidiasParameters p) {
+    _log('listarMidias', e, s, atendimentoId: p.atendimentoId);
+    return switch (_kindDeTransporte(e)) {
+      null => const MidiasFalhaLocal(),
+      GrpcFailureKind.unauthenticated => const MidiasSessaoExpirada(),
+      GrpcFailureKind.permissionDenied => const MidiasAcessoNegado(),
+      GrpcFailureKind.unavailable ||
+      GrpcFailureKind.rateLimited => const MidiasIndisponivel(),
+      _ => const MidiasInesperado(),
+    };
+  }
+}
+
+final class EnviarMidiaRepository
+    extends RepositoryBase<int, EnviarMidiaParameters, EnviarMidiaError> {
+  const EnviarMidiaRepository({required super.datasource});
+
+  @override
+  EnviarMidiaError mapError(Object e, StackTrace s, EnviarMidiaParameters p) {
+    // Nunca os bytes nem o nome do arquivo: os dois são do cliente.
+    _log('enviarMidia', e, s, atendimentoId: p.atendimentoId);
+    return switch (_kindDeTransporte(e)) {
+      GrpcFailureKind.unauthenticated => const EnviarMidiaSessaoExpirada(),
+      GrpcFailureKind.permissionDenied => const EnviarMidiaAcessoNegado(),
+      GrpcFailureKind.invalidArgument ||
+      GrpcFailureKind.failedPrecondition => EnviarMidiaRecusado(
+        e is GrpcError ? e.message : null,
+      ),
+      // `rateLimited` é o `resourceExhausted` do gRPC, que aqui significa cota
+      // de armazenamento estourada: é recusa, não instabilidade.
+      GrpcFailureKind.rateLimited => EnviarMidiaRecusado(
+        e is GrpcError ? e.message : null,
+      ),
+      GrpcFailureKind.unavailable => const EnviarMidiaIndisponivel(),
+      _ => const EnviarMidiaInesperado(),
+    };
+  }
+}
+
+/// P4 — as quatro operações do quadro classificam a falha do mesmo jeito.
+QuadroOperacaoError _erroDeOperacaoDoQuadro(
+  Object e,
+  StackTrace s,
+  int? atendimentoId,
+) {
+  _log('quadroOperacao', e, s, atendimentoId: atendimentoId);
+  return switch (_kindDeTransporte(e)) {
+    GrpcFailureKind.unauthenticated => const QuadroOperacaoSessaoExpirada(),
+    GrpcFailureKind.permissionDenied => const QuadroOperacaoAcessoNegado(),
+    GrpcFailureKind.invalidArgument ||
+    GrpcFailureKind.failedPrecondition ||
+    GrpcFailureKind.notFound => QuadroOperacaoRecusada(
+      e is GrpcError ? e.message : null,
+    ),
+    GrpcFailureKind.unavailable ||
+    GrpcFailureKind.rateLimited => const QuadroOperacaoIndisponivel(),
+    _ => const QuadroOperacaoInesperado(),
+  };
+}
+
+final class AtribuirAtendimentoRepository
+    extends
+        RepositoryBase<
+          bool,
+          AtribuirAtendimentoParameters,
+          QuadroOperacaoError
+        > {
+  const AtribuirAtendimentoRepository({required super.datasource});
+
+  @override
+  QuadroOperacaoError mapError(
+    Object e,
+    StackTrace s,
+    AtribuirAtendimentoParameters p,
+  ) => _erroDeOperacaoDoQuadro(e, s, p.atendimentoId);
+}
+
+final class DefinirPrioridadeRepository
+    extends
+        RepositoryBase<
+          Unit,
+          DefinirPrioridadeParameters,
+          QuadroOperacaoError
+        > {
+  const DefinirPrioridadeRepository({required super.datasource});
+
+  @override
+  QuadroOperacaoError mapError(
+    Object e,
+    StackTrace s,
+    DefinirPrioridadeParameters p,
+  ) => _erroDeOperacaoDoQuadro(e, s, p.atendimentoId);
+}
+
+final class TransferirParaFluxoRepository
+    extends
+        RepositoryBase<
+          String,
+          TransferirParaFluxoParameters,
+          QuadroOperacaoError
+        > {
+  const TransferirParaFluxoRepository({required super.datasource});
+
+  @override
+  QuadroOperacaoError mapError(
+    Object e,
+    StackTrace s,
+    TransferirParaFluxoParameters p,
+  ) => _erroDeOperacaoDoQuadro(e, s, p.atendimentoId);
+}
+
+final class ExportarQuadroRepository
+    extends
+        RepositoryBase<
+          List<int>,
+          ExportarQuadroParameters,
+          QuadroOperacaoError
+        > {
+  const ExportarQuadroRepository({required super.datasource});
+
+  @override
+  QuadroOperacaoError mapError(
+    Object e,
+    StackTrace s,
+    ExportarQuadroParameters p,
+  ) => _erroDeOperacaoDoQuadro(e, s, null);
+}
+
+/// P5 — tudo o que é ficha usa o mesmo conjunto de erros (`FichaError`): é o
+/// mesmo painel, e a tela trata as falhas no mesmo lugar.
+final class ListarTimelineRepository
+    extends
+        RepositoryBase<
+          List<EventoDaTimeline>,
+          ListarTimelineParameters,
+          FichaError
+        > {
+  const ListarTimelineRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, ListarTimelineParameters p) =>
+      _erroDeFicha(e, s, p.atendimentoId);
+}
+
+final class AtendimentosDoContatoRepository
+    extends
+        RepositoryBase<
+          List<AtendimentoResumo>,
+          AtendimentosDoContatoParameters,
+          FichaError
+        > {
+  const AtendimentosDoContatoRepository({required super.datasource});
+
+  @override
+  FichaError mapError(
+    Object e,
+    StackTrace s,
+    AtendimentosDoContatoParameters p,
+  ) => _erroDeFicha(e, s, null);
+}
+
+final class RemoverNotaRepository
+    extends RepositoryBase<Unit, RemoverNotaParameters, FichaError> {
+  const RemoverNotaRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, RemoverNotaParameters p) =>
+      _erroDeFicha(e, s, p.atendimentoId);
+}
+
+final class AtualizarEtiquetaRepository
+    extends RepositoryBase<Etiqueta, AtualizarEtiquetaParameters, FichaError> {
+  const AtualizarEtiquetaRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, AtualizarEtiquetaParameters p) =>
+      _erroDeFicha(e, s, null);
+}
+
+final class DesativarEtiquetaRepository
+    extends RepositoryBase<Unit, DesativarEtiquetaParameters, FichaError> {
+  const DesativarEtiquetaRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, DesativarEtiquetaParameters p) =>
+      _erroDeFicha(e, s, null);
+}
+
+/// P13 — o contato da conversa. Mesmo conjunto de erros da ficha: é o mesmo
+/// painel, e falhar aqui só deixa o cabeçalho com o número do atendimento.
+final class ObterContatoRepository
+    extends
+        RepositoryBase<ContatoDaConversa, ObterContatoParameters, FichaError> {
+  const ObterContatoRepository({required super.datasource});
+
+  @override
+  FichaError mapError(Object e, StackTrace s, ObterContatoParameters p) =>
+      _erroDeFicha(e, s, p.atendimentoId);
+}
+
+/// P16 — conclui a revisão de uma resposta da IA.
+final class MarcarRevisadoRepository
+    extends
+        RepositoryBase<Unit, MarcarRevisadoParameters, QuadroOperacaoError> {
+  const MarcarRevisadoRepository({required super.datasource});
+
+  @override
+  QuadroOperacaoError mapError(
+    Object e,
+    StackTrace s,
+    MarcarRevisadoParameters p,
+  ) => _erroDeOperacaoDoQuadro(e, s, p.atendimentoId);
 }

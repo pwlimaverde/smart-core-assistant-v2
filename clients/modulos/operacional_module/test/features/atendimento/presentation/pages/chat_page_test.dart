@@ -2,6 +2,8 @@ import 'package:api_client/api_client.dart' show GrpcError;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
+import 'package:operacional_module/src/features/atendimento/data/datasources/atendimento_datasources.dart';
+import 'package:operacional_module/src/features/atendimento/data/repositories/atendimento_repositories.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/ficha.dart';
 import 'package:operacional_module/src/features/atendimento/domain/streams/atendimento_evento_stream.dart';
 import 'package:operacional_module/src/features/atendimento/domain/usecases/atendimento_usecases.dart';
@@ -148,5 +150,38 @@ void main() {
       tester.widget<TextField>(find.byType(TextField).first).controller?.text,
       isEmpty,
     );
+  });
+
+  testWidgets('embutida, o cabeçalho mostra quem é o contato (P13)', (
+    tester,
+  ) async {
+    final gateway = FakeAtendimentoGateway(
+      thread: [mensagemDeTeste(id: 1, timestamp: DateTime(2026, 8, 1))],
+    );
+    tester.view.physicalSize = const Size(1400, 1200);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.resetPhysicalSize);
+    registrar(gateway);
+    getIt.registerSingleton<ObterContatoUsecase>(
+      ObterContatoUsecase(
+        repository: ObterContatoRepository(
+          datasource: ObterContatoDatasource(gateway: gateway),
+        ),
+      ),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PainelDeConversa(atendimentoId: 7, aoFechar: () {}),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    // Nome no lugar do número do atendimento, e o telefone embaixo.
+    expect(find.text('Maria'), findsWidgets);
+    expect(find.text('5511999998888'), findsOneWidget);
+    expect(find.text('Atendimento #7'), findsNothing);
   });
 }

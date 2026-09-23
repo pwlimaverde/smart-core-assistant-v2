@@ -26,6 +26,22 @@ final class AtendimentoResumo {
   /// quadro, o que falta responder.
   final int naoLidas;
 
+  /// P13 — o contato do cartão. Vazios quando o servidor não os mandou (índice
+  /// local sem rede, servidor antigo): a tela cai para `Contato #id`.
+  final String contatoNome;
+  final String contatoTelefone;
+  final String contatoFotoUrl;
+
+  /// P16 — a IA respondeu abaixo da confiança automática e ninguém conferiu.
+  final bool revisaoPendente;
+
+  /// Como o cartão chama o contato: o nome, senão o telefone, senão o id.
+  String get nomeParaExibir => contatoNome.isNotEmpty
+      ? contatoNome
+      : contatoTelefone.isNotEmpty
+      ? contatoTelefone
+      : 'Contato #$contatoId';
+
   const AtendimentoResumo({
     required this.id,
     required this.contatoId,
@@ -41,6 +57,10 @@ final class AtendimentoResumo {
     this.sentimentoNota,
     this.sentimentoLabel,
     this.naoLidas = 0,
+    this.contatoNome = '',
+    this.contatoTelefone = '',
+    this.contatoFotoUrl = '',
+    this.revisaoPendente = false,
   });
 
   /// Cópia com a etapa (e opcionalmente o status) alterados — usada para
@@ -65,6 +85,10 @@ final class AtendimentoResumo {
     sentimentoNota: sentimentoNota,
     sentimentoLabel: sentimentoLabel,
     naoLidas: naoLidas ?? this.naoLidas,
+    contatoNome: contatoNome,
+    contatoTelefone: contatoTelefone,
+    contatoFotoUrl: contatoFotoUrl,
+    revisaoPendente: revisaoPendente,
   );
 
   @override

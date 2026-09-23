@@ -140,6 +140,20 @@ pub trait TreinamentoStore: Send + Sync {
 
     // ── curadoria de intenções (tela de treinamento) ──────────────────────
 
+    /// P17 — as avaliações do teste ainda não tratadas.
+    async fn listar_avaliacoes_pendentes(
+        &self,
+        ctx: &RequestContext,
+        limite: i64,
+    ) -> Result<Vec<infrastructure_postgres::treinamento::treinamentos::AvaliacaoDeTeste>, DbError>;
+
+    /// P17 — tira a avaliação da lista de revisão.
+    async fn marcar_avaliacao_tratada(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<bool, DbError>;
+
     /// B9 (N10 E6) — grava a avaliação de um ensaio, com a correção.
     async fn registrar_feedback_teste(
         &self,

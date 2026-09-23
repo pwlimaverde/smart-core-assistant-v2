@@ -56,3 +56,52 @@ final class RegistrarFeedbackTesteDatasource
     return resp.id;
   }
 }
+
+/// P17 — as avaliações do teste ainda não tratadas.
+final class ListarAvaliacoesDatasource
+    implements Datasource<List<AvaliacaoPendente>, NoParams> {
+  final proto.AdminServiceClient _client;
+
+  const ListarAvaliacoesDatasource({required proto.AdminServiceClient client})
+    // ignore: prefer_initializing_formals
+    : _client = client;
+
+  @override
+  Future<List<AvaliacaoPendente>> call(NoParams parameters) async {
+    final resp = await _client.listMyAvaliacoesDeTeste(
+      proto.ListMyAvaliacoesDeTesteRequest(limite: 50),
+    );
+    return [
+      for (final a in resp.itens)
+        AvaliacaoPendente(
+          id: a.id,
+          pergunta: a.pergunta,
+          respostaBot: a.respostaBot,
+          respostaCorrigida: a.respostaCorrigida,
+          boa: a.avaliacao == 'boa',
+          criadaEm: DateTime.fromMillisecondsSinceEpoch(a.criadaEm.toInt()),
+        ),
+    ];
+  }
+}
+
+/// P17 — tira a avaliação da revisão.
+final class TratarAvaliacaoDatasource
+    implements Datasource<Unit, TratarAvaliacaoParameters> {
+  final proto.AdminServiceClient _client;
+
+  const TratarAvaliacaoDatasource({required proto.AdminServiceClient client})
+    // ignore: prefer_initializing_formals
+    : _client = client;
+
+  @override
+  Future<Unit> call(TratarAvaliacaoParameters parameters) async {
+    await _client.marcarAvaliacaoTratada(
+      proto.MarcarAvaliacaoTratadaRequest(
+        id: parameters.id,
+        virouTreinamento: parameters.virouTreinamento,
+      ),
+    );
+    return unit;
+  }
+}

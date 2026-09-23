@@ -376,4 +376,44 @@ void main() {
       expect((res as Failure).error, isA<PainelSessaoExpirada>());
     });
   });
+
+  // ─── P6: SLA de primeira resposta ────────────────────────────────────────
+  group('SLA de primeira resposta (P6)', () {
+    test('sem medida na janela, o painel não mostra número', () {
+      const p = Painel(
+        emAndamento: 0,
+        aguardando: 0,
+        mensagens24h: 0,
+        conexoesAtivas: 1,
+        conexoesTotal: 1,
+        departamentos: 1,
+        treinamentosAtivos: 0,
+      );
+
+      // -1 é "ninguém respondido nas últimas 24h"; zero seria "respondido
+      // instantaneamente", que é outra coisa.
+      expect(p.temSla, isFalse);
+      expect(p.slaFormatado, '—');
+    });
+
+    test('o tempo sai em linguagem de quem lê', () {
+      Painel com(int segundos) => Painel(
+        emAndamento: 0,
+        aguardando: 0,
+        mensagens24h: 0,
+        conexoesAtivas: 1,
+        conexoesTotal: 1,
+        departamentos: 1,
+        treinamentosAtivos: 0,
+        primeiraRespostaMedianaS: segundos,
+      );
+
+      expect(com(0).temSla, isTrue);
+      expect(com(45).slaFormatado, '45s');
+      expect(com(95).slaFormatado, '1min 35s');
+      expect(com(180).slaFormatado, '3min');
+      expect(com(7500).slaFormatado, '2h 5min');
+      expect(com(7200).slaFormatado, '2h');
+    });
+  });
 }

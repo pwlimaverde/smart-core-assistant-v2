@@ -54,6 +54,7 @@ async fn main() -> anyhow::Result<()> {
     let s_create = state.clone();
     let s_delete = state.clone();
     let s_reconnect = state.clone();
+    let s_disconnect = state.clone();
     let s_status = state.clone();
     let s_send_text = state.clone();
     let s_send_media = state.clone();
@@ -79,6 +80,10 @@ async fn main() -> anyhow::Result<()> {
         .route("ReconnectWhatsappInstance", move |env| {
             let s = s_reconnect.clone();
             Box::pin(async move { handler_reconnect_whatsapp_instance(s, env).await })
+        })
+        .route("DisconnectWhatsappInstance", move |env| {
+            let s = s_disconnect.clone();
+            Box::pin(async move { handler_disconnect_whatsapp_instance(s, env).await })
         })
         .route("GetWhatsappInstanceStatus", move |env| {
             let s = s_status.clone();
@@ -676,6 +681,92 @@ async fn handler_reconnect_whatsapp_instance(state: AppState, env: Envelope) -> 
             "religada": religada,
             "precisa_parear": precisa_parear
         }),
+    )
+}
+
+/// P7 — encerra a SESSÃO sem apagar a conexão.
+///
+/// Era o `logout/` da v1, e a v2 só tinha "remover": trocar de aparelho custava
+/// o cadastro inteiro — nome da instância, vínculo de departamento, tudo. Aqui o
+/// registro fica, o histórico fica, e o mesmo cadastro volta lendo um QR novo.
+///
+/// O estado é gravado como `disconnected` mesmo quando o provedor recusa: quem
+/// pediu para desconectar não pode ficar com a tela dizendo "Conectada" porque a
+/// evolution-go respondeu 500. O erro sobe junto, para a tela contar o que houve.
+#[tracing::instrument(skip_all, fields(rpc = "DisconnectWhatsappInstance", tenant_id = %env.tenant_id))]
+async fn handler_disconnect_whatsapp_instance(state: AppState, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+
+    let db_id = match payload.get("id").and_then(|v| v.as_i64()) {
+        Some(id) => id,
+        None => return erro(error_core::AppError::Validation("id ausente".into()), &env),
+    };
+
+    let instance = match chamar_data_postgres(
+        "GetWhatsappInstance",
+        &env.tenant_id,
+        serde_json::json!({ "id": db_id }),
+        &env,
+    )
+    .await
+    {
+        Ok(inst) => inst,
+        Err(e) => return erro(e, &env),
+    };
+
+    let name = match instance.get("name").and_then(|v| v.as_str()) {
+        Some(s) => s.to_string(),
+        None => {
+            return erro(
+                error_core::AppError::Database("não encontrado: Instância não encontrada".into()),
+                &env,
+            )
+        }
+    };
+
+    let api_key = match instance.get("api_key").and_then(|v| v.as_str()) {
+        Some(s) => s.to_string(),
+        None => {
+            return erro(
+                error_core::AppError::Validation("Chave da instância ausente".into()),
+                &env,
+            )
+        }
+    };
+
+    let provider_name = instance
+        .get("provider")
+        .and_then(|v| v.as_str())
+        .unwrap_or("evolution");
+    let p = match state.registry.resolve(provider_name) {
+        Ok(prov) => prov,
+        Err(e) => return erro(error_core::AppError::Internal(e.to_string()), &env),
+    };
+
+    let api_key_sec = SecretString::from(api_key);
+    let falha = p.disconnect_instance(&name, &api_key_sec).await.err();
+
+    gravar_estado(&env, db_id, "disconnected").await;
+
+    if let Some(e) = falha {
+        tracing::warn!(
+            instance_id = db_id,
+            "provedor recusou o logout: {:?}. Estado gravado como desconectado assim mesmo.",
+            e
+        );
+        return erro(
+            error_core::AppError::Internal(format!("Falha ao encerrar a sessão no provedor: {e}")),
+            &env,
+        );
+    }
+
+    ok_reply(
+        &env,
+        "DisconnectWhatsappInstanceReply",
+        serde_json::json!({ "status": "success", "state": "disconnected" }),
     )
 }
 

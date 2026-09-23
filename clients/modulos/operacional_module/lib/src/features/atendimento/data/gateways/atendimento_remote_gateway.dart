@@ -12,6 +12,8 @@ import '../../domain/model/mensagem_thread.dart';
 import '../../domain/model/ficha.dart';
 import '../../domain/model/midia_mensagem.dart';
 import '../../domain/model/quadro.dart';
+import '../../domain/model/evento_timeline.dart';
+import '../../domain/model/contato_da_conversa.dart';
 
 /// Adapter Web do [AtendimentoGateway] via gRPC-Web (`AdminServiceClient`).
 ///
@@ -42,12 +44,18 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
     String status = 'fila',
     int? departamentoId,
     int limit = 50,
+    String busca = '',
+    bool somenteMeus = false,
+    bool somenteNaoLidos = false,
   }) async {
     final resp = await _client.listAtendimentos(
       proto.ListAtendimentosRequest(
         status: status,
         departamentoId: departamentoId ?? 0,
         limit: limit,
+        busca: busca,
+        somenteMeus: somenteMeus,
+        somenteNaoLidos: somenteNaoLidos,
       ),
     );
     return resp.atendimentos.map(_paraAtendimentoResumo).toList();
@@ -58,12 +66,14 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
     required int atendimentoId,
     int limit = 50,
     int offset = 0,
+    int? beforeId,
   }) async {
     final resp = await _client.getThread(
       proto.GetThreadRequest(
         atendimentoId: atendimentoId,
         limit: limit,
         offset: offset,
+        beforeId: beforeId,
       ),
     );
     return resp.mensagens.map(_paraMensagemThread).toList();
@@ -127,6 +137,7 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
     required int atendimentoId,
     required String conteudo,
     String tipo = 'texto',
+    int? mensagemCitadaId,
   }) async {
     // NUNCA logar `conteudo` (PII) — só trafega no corpo da chamada RPC.
     final resp = await _client.sendOutboundMessage(
@@ -134,6 +145,7 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
         atendimentoId: atendimentoId,
         conteudo: conteudo,
         tipo: tipo,
+        mensagemCitadaId: mensagemCitadaId,
       ),
     );
     return resp.messageId;
@@ -196,6 +208,183 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
   }
 
   @override
+  Future<void> marcarRevisado({required int atendimentoId}) async {
+    await _client.marcarRevisado(
+      proto.MarcarRevisadoRequest(atendimentoId: atendimentoId),
+    );
+  }
+
+  @override
+  Future<ContatoDaConversa> obterContatoDoAtendimento({
+    required int atendimentoId,
+    bool forcar = false,
+  }) async {
+    final resp = await _client.obterContatoDoAtendimento(
+      proto.ObterContatoDoAtendimentoRequest(
+        atendimentoId: atendimentoId,
+        forcar: forcar,
+      ),
+    );
+    return ContatoDaConversa(
+      contatoId: resp.contatoId,
+      nome: resp.nome,
+      telefone: resp.telefone,
+      fotoUrl: resp.fotoUrl,
+    );
+  }
+
+  @override
+  Future<List<EventoDaTimeline>> listarTimeline({
+    required int atendimentoId,
+  }) async {
+    final resp = await _client.listarTimelineAtendimento(
+      proto.ListarTimelineRequest(atendimentoId: atendimentoId),
+    );
+    return resp.eventos
+        .map(
+          (e) => EventoDaTimeline(
+            tipo: e.tipo,
+            quando: DateTime.fromMillisecondsSinceEpoch(e.quando.toInt()),
+            descricao: e.descricao,
+            autor: e.autor,
+            automatico: e.automatico,
+          ),
+        )
+        .toList();
+  }
+
+  @override
+  Future<List<AtendimentoResumo>> listarAtendimentosDoContato({
+    required int contatoId,
+    int limit = 20,
+  }) async {
+    final resp = await _client.listarAtendimentosDoContato(
+      proto.ListarAtendimentosDoContatoRequest(
+        contatoId: contatoId,
+        limit: limit,
+      ),
+    );
+    return resp.atendimentos.map(_paraAtendimentoResumo).toList();
+  }
+
+  @override
+  Future<void> removerNota({
+    required int notaId,
+    required int atendimentoId,
+  }) async {
+    await _client.removerNota(
+      proto.RemoverNotaRequest(
+        notaId: Int64(notaId),
+        atendimentoId: atendimentoId,
+      ),
+    );
+  }
+
+  @override
+  Future<Etiqueta> atualizarEtiqueta({
+    required int id,
+    required String nome,
+    String cor = '',
+    String descricao = '',
+  }) async {
+    final resp = await _client.updateEtiqueta(
+      proto.UpdateEtiquetaRequest(
+        id: Int64(id),
+        nome: nome,
+        cor: cor,
+        descricao: descricao,
+      ),
+    );
+    return _etiquetaDoProto(resp.etiqueta);
+  }
+
+  @override
+  Future<void> desativarEtiqueta({required int id}) async {
+    await _client.desativarEtiqueta(
+      proto.DesativarEtiquetaRequest(id: Int64(id)),
+    );
+  }
+
+  @override
+  Future<bool> atribuirAtendimento({
+    required int atendimentoId,
+    int? atendenteId,
+    bool devolverParaFila = false,
+  }) async {
+    final resp = await _client.atribuirAtendimento(
+      proto.AtribuirAtendimentoRequest(
+        atendimentoId: atendimentoId,
+        // 0 no protobuf é "ausente", e é justamente o que significa "a mim".
+        atendenteId: atendenteId ?? 0,
+        devolverParaFila: devolverParaFila,
+      ),
+    );
+    return resp.atribuido;
+  }
+
+  @override
+  Future<void> definirPrioridade({
+    required int atendimentoId,
+    required String prioridade,
+  }) async {
+    await _client.definirPrioridade(
+      proto.DefinirPrioridadeRequest(
+        atendimentoId: atendimentoId,
+        prioridade: prioridade,
+      ),
+    );
+  }
+
+  @override
+  Future<String> transferirParaFluxo({
+    required int atendimentoId,
+    required int fluxoId,
+  }) async {
+    final resp = await _client.transferirParaFluxo(
+      proto.TransferirParaFluxoRequest(
+        atendimentoId: atendimentoId,
+        fluxoId: fluxoId,
+      ),
+    );
+    // O nome do fluxo de destino é o que a tela mostra na confirmação.
+    return resp.transferido ? resp.fluxoNome : '';
+  }
+
+  @override
+  Future<List<int>> exportarQuadro({
+    String status = '',
+    int? departamentoId,
+    String busca = '',
+    bool somenteMeus = false,
+    bool somenteNaoLidos = false,
+  }) async {
+    final resp = await _client.exportarQuadro(
+      proto.ExportarQuadroRequest(
+        status: status,
+        departamentoId: departamentoId ?? 0,
+        busca: busca,
+        somenteMeus: somenteMeus,
+        somenteNaoLidos: somenteNaoLidos,
+      ),
+    );
+    return resp.csv;
+  }
+
+  @override
+  Future<bool> enviarPresenca({
+    required int atendimentoId,
+    String situacao = 'composing',
+  }) async {
+    final resp = await _client.enviarPresenca(
+      proto.EnviarPresencaRequest(
+        atendimentoId: atendimentoId,
+        situacao: situacao,
+      ),
+    );
+    return resp.enviado;
+  }
+
+  @override
   Future<List<MidiaMensagem>> listarMidias({
     required int atendimentoId,
     int limit = 50,
@@ -240,6 +429,10 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
         sentimentoNota: a.hasSentimentoNota() ? a.sentimentoNota : null,
         sentimentoLabel: a.hasSentimentoLabel() ? a.sentimentoLabel : null,
         naoLidas: a.naoLidas,
+        contatoNome: a.contatoNome,
+        contatoTelefone: a.contatoTelefone,
+        contatoFotoUrl: a.contatoFotoUrl,
+        revisaoPendente: a.revisaoPendente,
       );
 
   static MensagemThread _paraMensagemThread(proto.MensagemThread m) =>
@@ -269,7 +462,27 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
                 preview: m.citadaPreview,
               )
             : null,
+        // P8 — reação é atributo da mensagem reagida, não bolha nova.
+        reacoes: [
+          for (final r in m.reacoes)
+            ReacaoDaMensagem(emoji: r.emoji, de: r.de),
+        ],
+        metadados: _metadados(m),
       );
+
+  /// P8 — o JSON cru que acompanha enquete, lista, botões e contato.
+  ///
+  /// JSON quebrado vira mapa vazio em vez de derrubar a conversa: o campo é
+  /// decoração da bolha, e nenhuma decoração vale a tela inteira.
+  static Map<String, dynamic> _metadados(proto.MensagemThread m) {
+    if (!m.hasMetadadosJson() || m.metadadosJson.isEmpty) return const {};
+    try {
+      final decodificado = jsonDecode(m.metadadosJson);
+      return decodificado is Map<String, dynamic> ? decodificado : const {};
+    } on FormatException {
+      return const {};
+    }
+  }
 
   static MidiaMensagem _paraMidia(proto.MidiaMensagem m) => MidiaMensagem(
     tipo: TipoMidia.doServidor(m.kind),
@@ -363,6 +576,7 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
           .toList(),
       botPodeAtender: resp.botPodeAtender,
       campos: resp.campos.map(_valorCampoDoProto).toList(),
+      dadosDoContato: {for (final d in resp.dadosDoContato) d.chave: d.valor},
     );
   }
 
@@ -431,6 +645,7 @@ Etiqueta _etiquetaDoProto(proto.Etiqueta e) => Etiqueta(
   cor: e.cor,
   descricao: e.descricao,
   ativo: e.ativo,
+  aplicadaPelaIa: e.aplicadaPelaIa,
 );
 
 /// Um campo do cartão, do protobuf para o domínio (N9 E13).

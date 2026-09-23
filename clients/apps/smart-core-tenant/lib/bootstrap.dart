@@ -52,6 +52,8 @@ Future<void> bootstrap(AppConfig config) async {
       // B5: para o quadro reconhecer a conversa que o rodízio atribuiu a quem
       // está logado e avisar só essa pessoa.
       usuarioAtual: usuarioDaSessao,
+      // P16: quem só lê não vê enviar, mover nem atribuir.
+      podeEscrever: sessaoPodeAtender,
     ),
     TenantModule(),
     TreinamentoModule(

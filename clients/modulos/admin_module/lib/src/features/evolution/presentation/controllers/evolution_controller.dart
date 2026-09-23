@@ -11,10 +11,23 @@ final class EvolutionController extends BaseController<List<Tenant>> {
   final ListTenantsUsecase _listTenantsUsecase;
   final TestEvolutionConnectionUsecase _testConnectionUsecase;
 
+  /// P9 — opcional para não quebrar quem monta o controller sem ele.
+  final TestarProvedorIaUsecase? _testarIa;
+
   EvolutionController({
     required this._listTenantsUsecase,
     required this._testConnectionUsecase,
+    this._testarIa,
   });
+
+  /// P9 — ensaia o provedor de IA do tenant.
+  Future<ReturnSuccessOrError<TesteProvedorIa, EvolutionError>> testarIa(
+    String tenantId,
+  ) async {
+    final usecase = _testarIa;
+    if (usecase == null) return const Failure(EvolutionInesperado());
+    return usecase(TestarProvedorIaParameters(tenantId: tenantId));
+  }
 
   Future<void> fetchTenants() => execute(() => _listTenantsUsecase(noParams));
 

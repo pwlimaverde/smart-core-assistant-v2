@@ -7,11 +7,13 @@ use async_trait::async_trait;
 use sqlx::PgPool;
 
 use infrastructure_postgres::crypto::CipherManager;
+use infrastructure_postgres::integracoes::conexoes;
+use infrastructure_postgres::integracoes::conexoes::DetalheDaConexao;
 use infrastructure_postgres::integracoes::whatsapp::{
     PostgresWhatsappInstanceRepository, WhatsappInstance, WhatsappInstanceRepository,
 };
 use infrastructure_postgres::integracoes::whitelist::{
-    PostgresWhiteListRepository, WhiteListRepository,
+    PostgresWhiteListRepository, WhiteList, WhiteListRepository,
 };
 use infrastructure_postgres::{run_in_tenant_transaction, DbError, RequestContext};
 
@@ -238,6 +240,140 @@ impl WhatsappStore for PgWhatsappStore {
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
             let res = repo.esta_na_lista(&mut tx, &ctx, &phone_number).await?;
             Ok((res, tx))
+        })
+        .await
+    }
+
+    // ------------------------------------------------------------ P7
+    //
+    // Números ignorados e o vínculo conexão → departamento. Cada método abre a
+    // própria transação pelo `run_in_tenant_transaction`, como o resto do
+    // adapter: a RLS depende do `SET LOCAL app.current_tenant` que ele aplica.
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn listar_numeros_ignorados(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<WhiteList>, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let repo = PostgresWhiteListRepository;
+            let itens = repo.listar_todas(&mut tx, &ctx).await?;
+            Ok((itens, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn criar_numero_ignorado(
+        &self,
+        ctx: &RequestContext,
+        nome: &str,
+        telefone: &str,
+    ) -> Result<WhiteList, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let nome = nome.to_string();
+        let telefone = telefone.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let repo = PostgresWhiteListRepository;
+            let item = repo.criar(&mut tx, &ctx, &nome, &telefone, None).await?;
+            Ok((item, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn atualizar_numero_ignorado(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        nome: &str,
+        telefone: &str,
+        ativo: bool,
+    ) -> Result<Option<WhiteList>, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        let nome = nome.to_string();
+        let telefone = telefone.to_string();
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let repo = PostgresWhiteListRepository;
+            let item = repo
+                .atualizar(&mut tx, &ctx, id, &nome, &telefone, ativo)
+                .await?;
+            Ok((item, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn remover_numero_ignorado(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let repo = PostgresWhiteListRepository;
+            let apagou = repo.remover(&mut tx, &ctx, id).await?;
+            Ok((apagou, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn definir_departamento_da_conexao(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+        departamento_id: Option<i32>,
+    ) -> Result<bool, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let ok = conexoes::definir_departamento(&mut tx, &ctx, id, departamento_id).await?;
+            Ok((ok, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, id = id))]
+    async fn detalhe_da_conexao(
+        &self,
+        ctx: &RequestContext,
+        id: i32,
+    ) -> Result<Option<DetalheDaConexao>, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let d = conexoes::detalhe(&mut tx, &ctx, id).await?;
+            Ok((d, tx))
+        })
+        .await
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id))]
+    async fn departamentos_das_conexoes(
+        &self,
+        ctx: &RequestContext,
+    ) -> Result<Vec<(i32, Option<i32>, String)>, DbError> {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let linhas = conexoes::departamentos_das_conexoes(&mut tx, &ctx).await?;
+            let saida = linhas
+                .into_iter()
+                .map(|l| {
+                    (
+                        l.id,
+                        l.departamento_id,
+                        l.departamento_nome.unwrap_or_default(),
+                    )
+                })
+                .collect();
+            Ok((saida, tx))
         })
         .await
     }

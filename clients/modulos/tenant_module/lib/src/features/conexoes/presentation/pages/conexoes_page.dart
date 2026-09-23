@@ -2,8 +2,12 @@ import 'package:dependencies_module/dependencies_module.dart';
 
 import '../../../../shared/permissoes.dart';
 import '../../../../shared/widgets/tenant_drawer.dart';
+import '../../../equipe/domain/model/equipe.dart';
+import '../../../equipe/domain/usecases/equipe_usecases.dart';
 import '../../domain/model/conexao.dart';
 import '../controllers/conexoes_controllers.dart';
+import '../widgets/detalhe_conexao_dialog.dart';
+import '../widgets/nao_entregues_dialog.dart';
 import '../widgets/pareamento_dialog.dart';
 
 /// Conexões de WhatsApp do tenant.
@@ -40,6 +44,13 @@ class _ConexoesPageState extends State<ConexoesPage> {
             tooltip: 'Nova conexão',
             onPressed: () => _novaConexao(context),
           ),
+        // P9 — o que o atendente mandou e não chegou. Está aqui porque a causa
+        // é de conexão: o contato estava sem sessão ativa no envio.
+        IconButton(
+          icon: const Icon(Icons.report_gmailerrorred_outlined),
+          tooltip: 'Mensagens não entregues',
+          onPressed: () => mostrarNaoEntregues(context),
+        ),
         IconButton(
           icon: const Icon(Icons.refresh),
           tooltip: 'Atualizar',
@@ -108,6 +119,8 @@ class _ConexoesPageState extends State<ConexoesPage> {
                           conexao: itens[i],
                           controller: _controller,
                           abrirPareamento: _abrirPareamento,
+                          abrirDetalhe: _abrirDetalhe,
+                          escolherDepartamento: _escolherDepartamento,
                         ),
                       ),
                     ),
@@ -129,6 +142,71 @@ class _ConexoesPageState extends State<ConexoesPage> {
       id: id,
       nome: nome,
     );
+  }
+
+  /// P7 — o detalhe, aberto pela PÁGINA pelo mesmo motivo do pareamento: a
+  /// linha é desmontada quando a lista recarrega e leva o `context` junto.
+  Future<void> _abrirDetalhe(int id) async {
+    if (!mounted) return;
+    await mostrarDetalheDaConexao(context, controller: _controller, id: id);
+  }
+
+  /// P7 — para qual departamento este número roteia.
+  ///
+  /// A lista de departamentos vem da equipe, que é do mesmo módulo. Sem
+  /// nenhum cadastrado a caixa diz isso em vez de abrir vazia: o caminho é
+  /// criar o departamento primeiro, e a tela precisa apontá-lo.
+  Future<void> _escolherDepartamento(Conexao conexao) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final res = await inject<CarregarEquipeUsecase>()(noParams);
+    if (!mounted) return;
+
+    final departamentos = switch (res) {
+      Success(:final value) => value.departamentos.where((d) => d.ativo).toList(),
+      Failure() => const <Departamento>[],
+    };
+    if (departamentos.isEmpty) {
+      messenger.showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Nenhum departamento ativo. Crie um em Equipe para poder rotear '
+            'por número.',
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Um par, e não um `Departamento` de mentira: "nenhum" é uma escolha
+    // legítima aqui, e inventar um registro com id 0 para representá-la faria
+    // um objeto de domínio que não corresponde a nada no banco.
+    final escolhido = await showDialog<(int, String)>(
+      context: context,
+      builder: (dialogo) => SimpleDialog(
+        title: Text('Para onde "${conexao.nome}" manda conversa?'),
+        children: [
+          SimpleDialogOption(
+            onPressed: () => Navigator.of(dialogo).pop((0, '')),
+            child: const Text('Nenhum (usa o primeiro fluxo ativo)'),
+          ),
+          for (final d in departamentos)
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(dialogo).pop((d.id, d.nome)),
+              child: Text(d.nome),
+            ),
+        ],
+      ),
+    );
+    if (escolhido == null) return;
+
+    final resultado = await _controller.definirDepartamento(
+      id: conexao.id,
+      departamentoId: escolhido.$1,
+      departamentoNome: escolhido.$2,
+    );
+    if (resultado case Failure(:final error)) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    }
   }
 
   /// Cria a conexão e emenda direto no pareamento: o nome sozinho não serve de
@@ -193,10 +271,16 @@ class _Linha extends StatelessWidget {
   /// Aberta pela página: ver `_abrirPareamento`.
   final Future<void> Function(int id, String nome) abrirPareamento;
 
+  /// P7 — também da página, pelo mesmo motivo.
+  final Future<void> Function(int id) abrirDetalhe;
+  final Future<void> Function(Conexao conexao) escolherDepartamento;
+
   const _Linha({
     required this.conexao,
     required this.controller,
     required this.abrirPareamento,
+    required this.abrirDetalhe,
+    required this.escolherDepartamento,
   });
 
   @override
@@ -229,6 +313,28 @@ class _Linha extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                     color: context.colors.fgMuted,
                   ),
+                ),
+                // P7 — para onde este número manda conversa. Sem o rótulo,
+                // descobrir por que uma conversa caiu na fila errada exigia
+                // abrir o banco.
+                const SizedBox(height: AppSpacing.xs),
+                Row(
+                  children: [
+                    Icon(
+                      Icons.call_split,
+                      size: 14,
+                      color: context.colors.fgMuted,
+                    ),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(
+                      conexao.departamentoId == 0
+                          ? 'Sem departamento — entra no primeiro fluxo ativo'
+                          : 'Entra no fluxo de ${conexao.departamentoNome}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: context.colors.fgMuted,
+                      ),
+                    ),
+                  ],
                 ),
                 // O estado desligado precisa ser visível no cartão, e não só no
                 // interruptor: quem abre a tela para entender por que o bot
@@ -295,6 +401,46 @@ class _Linha extends StatelessWidget {
               tooltip: 'Reconectar',
               onPressed: () => _reconectar(context),
             ),
+          // P7 — o resto mora num menu: o cartão já tem interruptor, QR,
+          // reconectar e remover, e mais dois botões soltos viram uma fileira
+          // de ícones que ninguém lê.
+          PopupMenuButton<String>(
+            tooltip: 'Mais ações',
+            onSelected: (opcao) => switch (opcao) {
+              'detalhe' => abrirDetalhe(conexao.id),
+              'departamento' => escolherDepartamento(conexao),
+              'desconectar' => _desconectar(context),
+              _ => Future<void>.value(),
+            },
+            itemBuilder: (_) => [
+              const PopupMenuItem(
+                value: 'detalhe',
+                child: ListTile(
+                  leading: Icon(Icons.info_outline),
+                  title: Text('Detalhe da conexão'),
+                ),
+              ),
+              if (sessaoPodeAlterar('/tenant/conexoes'))
+                const PopupMenuItem(
+                  value: 'departamento',
+                  child: ListTile(
+                    leading: Icon(Icons.call_split),
+                    title: Text('Departamento'),
+                  ),
+                ),
+              // Só faz sentido no que ainda está de pé: pedir logout de uma
+              // sessão já caída não tem efeito nenhum e confunde.
+              if (sessaoPodeAlterar('/tenant/conexoes') &&
+                  conexao.situacao != SituacaoConexao.desconectada)
+                const PopupMenuItem(
+                  value: 'desconectar',
+                  child: ListTile(
+                    leading: Icon(Icons.logout),
+                    title: Text('Encerrar a sessão'),
+                  ),
+                ),
+            ],
+          ),
           if (sessaoPodeAlterar('/tenant/conexoes'))
             IconButton(
               icon: const Icon(Icons.delete_outline),
@@ -304,6 +450,40 @@ class _Linha extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  /// P7 — encerra a sessão sem apagar a conexão.
+  ///
+  /// Confirma sempre: o número sai do ar na hora, e quem esbarrou no item do
+  /// menu descobriria pelo silêncio das mensagens que pararam de chegar.
+  Future<void> _desconectar(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final confirmou = await showDialog<bool>(
+      context: context,
+      builder: (dialogo) => AlertDialog(
+        title: Text('Encerrar a sessão de "${conexao.nome}"?'),
+        content: const Text(
+          'O número para de receber mensagens até alguém ler um QR novo. A '
+          'conexão e todo o histórico continuam aqui — diferente de remover.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogo).pop(false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogo).pop(true),
+            child: const Text('Encerrar'),
+          ),
+        ],
+      ),
+    );
+    if (confirmou != true) return;
+
+    final res = await controller.desconectar(conexao.id);
+    if (res case Failure(:final error)) {
+      messenger.showSnackBar(SnackBar(content: Text(error.message)));
+    }
   }
 
   /// Liga/desliga a IA da conexão.

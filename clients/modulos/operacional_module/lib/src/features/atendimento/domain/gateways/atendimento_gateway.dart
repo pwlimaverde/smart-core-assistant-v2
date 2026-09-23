@@ -5,6 +5,8 @@ import '../model/mensagem_thread.dart';
 import '../model/ficha.dart';
 import '../model/midia_mensagem.dart';
 import '../model/quadro.dart';
+import '../model/evento_timeline.dart';
+import '../model/contato_da_conversa.dart';
 
 /// Fronteira de infraestrutura do atendimento, **escolhida por plataforma**:
 /// gRPC-Web no browser, motor local Rust (SQLite + fila offline) no desktop.
@@ -32,6 +34,9 @@ abstract interface class AtendimentoGateway {
     String status,
     int? departamentoId,
     int limit,
+    String busca,
+    bool somenteMeus,
+    bool somenteNaoLidos,
   });
 
   /// Carrega o thread (histórico de mensagens) de um atendimento.
@@ -39,6 +44,7 @@ abstract interface class AtendimentoGateway {
     required int atendimentoId,
     int limit,
     int offset,
+    int? beforeId,
   });
 
   /// C3 — abre um atendimento a partir de um cliente já cadastrado.
@@ -127,6 +133,7 @@ abstract interface class AtendimentoGateway {
     required int atendimentoId,
     required String conteudo,
     String tipo,
+    int? mensagemCitadaId,
   });
 
   /// N9/E1 — sobe um anexo e o põe na conversa.
@@ -156,6 +163,82 @@ abstract interface class AtendimentoGateway {
   ///
   /// As URLs vêm assinadas com TTL curto: a lista é para exibir agora, não para
   /// guardar.
+  /// P5 — a linha do tempo do atendimento.
+  Future<List<EventoDaTimeline>> listarTimeline({required int atendimentoId});
+
+  /// P16 — o atendente conferiu a resposta que a IA deu com pouca confiança.
+  Future<void> marcarRevisado({required int atendimentoId});
+
+  /// P13 — nome, telefone e foto do contato da conversa. `forcar` pede uma foto
+  /// nova ao WhatsApp quando a guardada não abre (URL do CDN expirada).
+  Future<ContatoDaConversa> obterContatoDoAtendimento({
+    required int atendimentoId,
+    bool forcar = false,
+  });
+
+  /// P5 — as outras conversas do mesmo contato.
+  Future<List<AtendimentoResumo>> listarAtendimentosDoContato({
+    required int contatoId,
+    int limit,
+  });
+
+  /// P5 — apaga uma nota interna.
+  Future<void> removerNota({
+    required int notaId,
+    required int atendimentoId,
+  });
+
+  /// P5 — renomeia/recolore uma etiqueta do catálogo.
+  Future<Etiqueta> atualizarEtiqueta({
+    required int id,
+    required String nome,
+    String cor,
+    String descricao,
+  });
+
+  /// P5 — tira a etiqueta do catálogo sem apagá-la das conversas.
+  Future<void> desativarEtiqueta({required int id});
+
+  /// P4 — define o dono da conversa.
+  ///
+  /// `false` quando a conversa já tem outro atendente: atribuir não rouba
+  /// conversa de quem está no meio dela.
+  Future<bool> atribuirAtendimento({
+    required int atendimentoId,
+    int? atendenteId,
+    bool devolverParaFila,
+  });
+
+  /// P4 — urgência do cartão.
+  Future<void> definirPrioridade({
+    required int atendimentoId,
+    required String prioridade,
+  });
+
+  /// P4 — leva a conversa para outro fluxo.
+  Future<String> transferirParaFluxo({
+    required int atendimentoId,
+    required int fluxoId,
+  });
+
+  /// P4 — o quadro em CSV (bytes prontos para gravar em arquivo).
+  Future<List<int>> exportarQuadro({
+    String status,
+    int? departamentoId,
+    String busca,
+    bool somenteMeus,
+    bool somenteNaoLidos,
+  });
+
+  /// P3 — avisa o contato que o atendente está digitando/gravando.
+  ///
+  /// Devolve `false` quando não há conexão ativa para o contato. Não lança:
+  /// presença é enfeite, e quem digita não deve ser interrompido por ela.
+  Future<bool> enviarPresenca({
+    required int atendimentoId,
+    String situacao,
+  });
+
   Future<List<MidiaMensagem>> listarMidias({
     required int atendimentoId,
     int limit,

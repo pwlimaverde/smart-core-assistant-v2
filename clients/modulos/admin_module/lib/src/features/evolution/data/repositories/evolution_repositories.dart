@@ -58,3 +58,21 @@ final class TestEvolutionConnectionRepository
     TestEvolutionConnectionParameters parameters,
   ) => _mapEvolution('testEvolutionConnection', exception, stackTrace);
 }
+
+/// P9 — ensaio do provedor de IA.
+final class TestarProvedorIaRepository
+    extends
+        RepositoryBase<
+          TesteProvedorIa,
+          TestarProvedorIaParameters,
+          EvolutionError
+        > {
+  const TestarProvedorIaRepository({required super.datasource});
+
+  @override
+  EvolutionError mapError(
+    Object exception,
+    StackTrace stackTrace,
+    TestarProvedorIaParameters parameters,
+  ) => _mapEvolution('testarProvedorIa', exception, stackTrace);
+}
