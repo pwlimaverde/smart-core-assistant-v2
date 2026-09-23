@@ -24,17 +24,17 @@ phases:
     name: "Planning"
     prevc: "P"
     agent: "architect-specialist"
-    status: "pending"
+    status: "completed"
   - id: "phase-r"
     name: "Review"
     prevc: "R"
     agent: "security-auditor"
-    status: "pending"
+    status: "completed"
   - id: "phase-e"
     name: "Execution"
     prevc: "E"
     agent: "backend-specialist"
-    status: "pending"
+    status: "completed"
     required_sensors: [tests-passing]
     required_artifacts: [handoff-summary]
     steps:
@@ -60,14 +60,14 @@ phases:
     name: "Validation"
     prevc: "V"
     agent: "test-writer"
-    status: "pending"
+    status: "completed"
   - id: "phase-c"
     name: "Confirmation"
     prevc: "C"
     agent: "documentation-writer"
-    status: "pending"
-status: filled
-progress: 0
+    status: "completed"
+status: completed
+progress: 100
 scaffoldVersion: "2.0.0"
 lastUpdated: "2026-09-22T23:32:59.228Z"
 ---
@@ -75,8 +75,8 @@ lastUpdated: "2026-09-22T23:32:59.228Z"
 # Pendências pós-paridade
 
 > Plano canônico (leve). A verdade técnica está nos artefatos:
-> - **Plano completo:** [`pendencias-pos-paridade/plano_completo_pendencias-pos-paridade.md`](./pendencias-pos-paridade/plano_completo_pendencias-pos-paridade.md)
-> - **Docs de libs e do provedor:** [`pendencias-pos-paridade/info_aux_pendencias-pos-paridade.md`](./pendencias-pos-paridade/info_aux_pendencias-pos-paridade.md)
+> - **Plano completo:** [`pendencias-pos-paridade/plano_completo_pendencias-pos-paridade.md`](./plano_completo_pendencias-pos-paridade.md)
+> - **Docs de libs e do provedor:** [`pendencias-pos-paridade/info_aux_pendencias-pos-paridade.md`](./info_aux_pendencias-pos-paridade.md)
 > - **Cronograma e andamento:** `doc_dev/planejamento/38-cronograma-pendencias-pos-paridade.md`
 
 ## Objetivo
