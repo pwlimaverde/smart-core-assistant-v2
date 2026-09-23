@@ -19,6 +19,7 @@ void main() {
     registerFallbackValue(proto.MoveAtendimentoEtapaRequest());
     registerFallbackValue(proto.SendOutboundMessageRequest());
     registerFallbackValue(proto.StreamAtendimentosRequest());
+    registerFallbackValue(proto.ObterContatoDoAtendimentoRequest());
   });
 
   setUp(() {
@@ -334,6 +335,58 @@ void main() {
         gateway.streamAtendimentos(),
         emitsError(isA<proto.GrpcError>()),
       );
+    });
+  });
+
+  group('contato (P13)', () {
+    test('o resumo traz nome, telefone e foto do contato', () async {
+      when(() => client.listAtendimentos(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.ListAtendimentosResponse(
+            atendimentos: [
+              proto.AtendimentoResumo(
+                id: 3,
+                contatoId: 9,
+                status: 'fila',
+                dataInicio: _ms(DateTime(2026, 9, 1)),
+                contatoNome: 'Maria',
+                contatoTelefone: '5511999998888',
+                contatoFotoUrl: 'https://pps.whatsapp.net/f',
+              ),
+            ],
+          ),
+        ),
+      );
+
+      final fila = await gateway.listAtendimentos();
+
+      expect(fila.single.nomeParaExibir, 'Maria');
+      expect(fila.single.contatoFotoUrl, 'https://pps.whatsapp.net/f');
+    });
+
+    test('pede o contato repassando o forcar', () async {
+      when(() => client.obterContatoDoAtendimento(any())).thenAnswer(
+        (_) => respostaGrpc(
+          proto.ObterContatoDoAtendimentoResponse(
+            contatoId: 9,
+            nome: '',
+            telefone: '5511999998888',
+          ),
+        ),
+      );
+
+      final c = await gateway.obterContatoDoAtendimento(
+        atendimentoId: 3,
+        forcar: true,
+      );
+
+      expect(c.nomeParaExibir, '5511999998888');
+      final enviado =
+          verify(
+                () => client.obterContatoDoAtendimento(captureAny()),
+              ).captured.single
+              as proto.ObterContatoDoAtendimentoRequest;
+      expect(enviado.forcar, isTrue);
     });
   });
 }
