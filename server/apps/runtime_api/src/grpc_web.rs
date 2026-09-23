@@ -34,6 +34,7 @@ use contracts::grpc::queries::{
     AtualizarNumeroIgnoradoRequest,
     AuditLogEntry as ProtoAuditLogEntry,
     AuthResponse,
+    AvaliacaoDeTeste,
     ContatoDoCliente,
     CoreSetting as ProtoCoreSetting,
     CreateEtiquetaRequest,
@@ -132,6 +133,8 @@ use contracts::grpc::queries::{
     ListMyAtendentesResponse,
     ListMyAuditLogRequest,
     ListMyAuditLogResponse,
+    ListMyAvaliacoesDeTesteRequest,
+    ListMyAvaliacoesDeTesteResponse,
     ListMyCamposRequest,
     ListMyCamposResponse,
     ListMyClientesRequest,
@@ -181,6 +184,7 @@ use contracts::grpc::queries::{
     LogoutResponse,
     MarcarAtendimentoLidoRequest,
     MarcarAtendimentoLidoResponse,
+    MarcarAvaliacaoTratadaRequest,
     MarcarRevisadoRequest,
     McpGrantItem,
     MensagemNaoEntregue,
@@ -5352,6 +5356,75 @@ impl AdminService for AdminFacade {
             telefone: texto_do(&contato, "telefone"),
             foto_url,
         }))
+    }
+
+    /// P17 — as avaliações do teste de resposta ainda não tratadas.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyAvaliacoesDeTeste", traceparent)
+    )]
+    async fn list_my_avaliacoes_de_teste(
+        &self,
+        req: Request<ListMyAvaliacoesDeTesteRequest>,
+    ) -> Result<Response<ListMyAvaliacoesDeTesteResponse>, Status> {
+        let limite = req.get_ref().limite;
+        let corpo = self
+            .encaminhar_operacional(
+                &req,
+                "ListAvaliacoesDeTeste",
+                &["treinamento:read"],
+                serde_json::json!({ "limite": if limite > 0 { limite } else { 50 } }),
+            )
+            .await?;
+        let itens = corpo
+            .get("itens")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .map(|v| AvaliacaoDeTeste {
+                        id: v.get("id").and_then(|x| x.as_i64()).unwrap_or(0) as i32,
+                        pergunta: texto_do(v, "pergunta"),
+                        resposta_bot: texto_do(v, "resposta_bot"),
+                        resposta_corrigida: texto_do(v, "resposta_corrigida"),
+                        avaliacao: texto_do(v, "avaliacao"),
+                        confiabilidade: v
+                            .get("confiabilidade")
+                            .and_then(|x| x.as_f64())
+                            .unwrap_or(0.0),
+                        criada_em: v
+                            .get("created_at")
+                            .and_then(|x| x.as_str())
+                            .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                            .map(|d| d.timestamp_millis())
+                            .unwrap_or(0),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(Response::new(ListMyAvaliacoesDeTesteResponse { itens }))
+    }
+
+    /// P17 — tira a avaliação da revisão.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "MarcarAvaliacaoTratada", traceparent)
+    )]
+    async fn marcar_avaliacao_tratada(
+        &self,
+        req: Request<MarcarAvaliacaoTratadaRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = *req.get_ref();
+        if inner.id <= 0 {
+            return Err(Status::invalid_argument("avaliação inválida"));
+        }
+        self.encaminhar_operacional(
+            &req,
+            "MarcarAvaliacaoTratada",
+            &["treinamento:write"],
+            serde_json::json!({ "id": inner.id, "virou_treinamento": inner.virou_treinamento }),
+        )
+        .await?;
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
     }
 
     /// P16 — o atendente conferiu a resposta que a IA deu com pouca confiança.

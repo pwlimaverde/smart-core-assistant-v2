@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dependencies_module/dependencies_module.dart';
 
+import '../../../ensaio/presentation/widgets/aba_avaliacoes.dart';
 import '../../../ensaio/presentation/widgets/aba_ensaio.dart';
 import '../../../intents/presentation/widgets/aba_intents.dart';
 import '../../domain/model/treinamento.dart';
@@ -49,7 +50,7 @@ class _TreinamentoPageState extends State<TreinamentoPage>
   void initState() {
     super.initState();
     _controller = inject<TreinamentoController>();
-    _abas = TabController(length: 3, vsync: this);
+    _abas = TabController(length: 4, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _controller.carregar());
     _controller.stream.listen((_) => _ajustarPoll());
   }
@@ -110,6 +111,8 @@ class _TreinamentoPageState extends State<TreinamentoPage>
                 // A terceira responde a pergunta que as duas primeiras deixam
                 // no ar: "isso que eu cadastrei funcionou?".
                 Tab(icon: Icon(Icons.science_outlined), text: 'Testar'),
+                // P17 — o que o teste ensinou, esperando virar material.
+                Tab(icon: Icon(Icons.fact_check_outlined), text: 'Avaliações'),
               ],
             ),
             const SizedBox(height: AppSpacing.lg),
@@ -120,6 +123,7 @@ class _TreinamentoPageState extends State<TreinamentoPage>
                   _AbaMaterial(controller: _controller),
                   const AbaIntents(),
                   const AbaEnsaio(),
+                  AbaAvaliacoes(podeAlterar: PermissaoDoTreinamento.podeAlterar()),
                 ],
               ),
             ),

@@ -698,6 +698,25 @@ class AdminServiceClient extends $grpc.Client {
         options: options);
   }
 
+  /// P17 — revisar as avaliações acumuladas: a correção feita no teste vira
+  /// material de treinamento (pela criação normal) e sai da lista.
+  $grpc.ResponseFuture<$0.ListMyAvaliacoesDeTesteResponse>
+      listMyAvaliacoesDeTeste(
+    $0.ListMyAvaliacoesDeTesteRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$listMyAvaliacoesDeTeste, request,
+        options: options);
+  }
+
+  $grpc.ResponseFuture<$0.SimpleOkResponse> marcarAvaliacaoTratada(
+    $0.MarcarAvaliacaoTratadaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$marcarAvaliacaoTratada, request,
+        options: options);
+  }
+
   $grpc.ResponseFuture<$0.MyTreinamentoResponse> getMyTreinamento(
     $0.GetMyTreinamentoRequest request, {
     $grpc.CallOptions? options,
@@ -1556,6 +1575,17 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/RegistrarFeedbackTeste',
       ($0.RegistrarFeedbackTesteRequest value) => value.writeToBuffer(),
       $0.RegistrarFeedbackTesteResponse.fromBuffer);
+  static final _$listMyAvaliacoesDeTeste = $grpc.ClientMethod<
+          $0.ListMyAvaliacoesDeTesteRequest,
+          $0.ListMyAvaliacoesDeTesteResponse>(
+      '/smartcore.contracts.queries.AdminService/ListMyAvaliacoesDeTeste',
+      ($0.ListMyAvaliacoesDeTesteRequest value) => value.writeToBuffer(),
+      $0.ListMyAvaliacoesDeTesteResponse.fromBuffer);
+  static final _$marcarAvaliacaoTratada =
+      $grpc.ClientMethod<$0.MarcarAvaliacaoTratadaRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/MarcarAvaliacaoTratada',
+          ($0.MarcarAvaliacaoTratadaRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
   static final _$getMyTreinamento =
       $grpc.ClientMethod<$0.GetMyTreinamentoRequest, $0.MyTreinamentoResponse>(
           '/smartcore.contracts.queries.AdminService/GetMyTreinamento',
@@ -2593,6 +2623,24 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.RegistrarFeedbackTesteRequest.fromBuffer(value),
         ($0.RegistrarFeedbackTesteResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.ListMyAvaliacoesDeTesteRequest,
+            $0.ListMyAvaliacoesDeTesteResponse>(
+        'ListMyAvaliacoesDeTeste',
+        listMyAvaliacoesDeTeste_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.ListMyAvaliacoesDeTesteRequest.fromBuffer(value),
+        ($0.ListMyAvaliacoesDeTesteResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.MarcarAvaliacaoTratadaRequest,
+            $0.SimpleOkResponse>(
+        'MarcarAvaliacaoTratada',
+        marcarAvaliacaoTratada_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.MarcarAvaliacaoTratadaRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
     $addMethod($grpc.ServiceMethod<$0.GetMyTreinamentoRequest,
             $0.MyTreinamentoResponse>(
         'GetMyTreinamento',
@@ -3831,6 +3879,24 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.RegistrarFeedbackTesteResponse> registrarFeedbackTeste(
       $grpc.ServiceCall call, $0.RegistrarFeedbackTesteRequest request);
+
+  $async.Future<$0.ListMyAvaliacoesDeTesteResponse> listMyAvaliacoesDeTeste_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.ListMyAvaliacoesDeTesteRequest> $request) async {
+    return listMyAvaliacoesDeTeste($call, await $request);
+  }
+
+  $async.Future<$0.ListMyAvaliacoesDeTesteResponse> listMyAvaliacoesDeTeste(
+      $grpc.ServiceCall call, $0.ListMyAvaliacoesDeTesteRequest request);
+
+  $async.Future<$0.SimpleOkResponse> marcarAvaliacaoTratada_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.MarcarAvaliacaoTratadaRequest> $request) async {
+    return marcarAvaliacaoTratada($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> marcarAvaliacaoTratada(
+      $grpc.ServiceCall call, $0.MarcarAvaliacaoTratadaRequest request);
 
   $async.Future<$0.MyTreinamentoResponse> getMyTreinamento_Pre(
       $grpc.ServiceCall $call,

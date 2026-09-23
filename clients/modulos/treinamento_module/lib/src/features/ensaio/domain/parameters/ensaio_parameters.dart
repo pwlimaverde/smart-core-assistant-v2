@@ -26,3 +26,16 @@ final class RegistrarFeedbackTesteParameters extends Parameters {
     required this.confiabilidade,
   });
 }
+
+/// P17 — tira a avaliação da revisão.
+final class TratarAvaliacaoParameters extends Parameters {
+  final int id;
+
+  /// `true` = a correção virou material de treinamento; `false` = dispensada.
+  final bool virouTreinamento;
+
+  const TratarAvaliacaoParameters({
+    required this.id,
+    required this.virouTreinamento,
+  });
+}

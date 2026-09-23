@@ -1393,6 +1393,10 @@ service AdminService {
   rpc SolicitarUploadTreinamento(SolicitarUploadTreinamentoRequest) returns (SolicitarUploadTreinamentoResponse);
   rpc CreateMyTreinamentoComArquivo(CreateMyTreinamentoComArquivoRequest) returns (MyTreinamentoResponse);
   rpc RegistrarFeedbackTeste(RegistrarFeedbackTesteRequest) returns (RegistrarFeedbackTesteResponse);
+  // P17 — revisar as avaliações acumuladas: a correção feita no teste vira
+  // material de treinamento (pela criação normal) e sai da lista.
+  rpc ListMyAvaliacoesDeTeste(ListMyAvaliacoesDeTesteRequest) returns (ListMyAvaliacoesDeTesteResponse);
+  rpc MarcarAvaliacaoTratada(MarcarAvaliacaoTratadaRequest) returns (SimpleOkResponse);
   rpc GetMyTreinamento(GetMyTreinamentoRequest) returns (MyTreinamentoResponse);
   rpc FinalizarMyTreinamento(FinalizarMyTreinamentoRequest) returns (SimpleOkResponse);
   rpc RemoverMyTreinamento(RemoverMyTreinamentoRequest) returns (SimpleOkResponse);
@@ -2016,6 +2020,34 @@ message ReenviarMensagemNaoEntregueResponse {
   // `nao_encontrada`. O segundo NÃO é erro: é a resposta honesta de que o
   // contato continua sem conexão ativa, e a tela precisa dizer isso.
   string status = 1;
+}
+
+// --- P17: revisão das avaliações do teste ---
+
+message AvaliacaoDeTeste {
+  int32 id = 1;
+  string pergunta = 2;
+  string resposta_bot = 3;
+  // Vazia quando a pessoa só avaliou, sem escrever a resposta certa.
+  string resposta_corrigida = 4;
+  // "boa" | "ruim".
+  string avaliacao = 5;
+  double confiabilidade = 6;
+  int64 criada_em = 7;
+}
+
+message ListMyAvaliacoesDeTesteRequest {
+  int32 limite = 1;
+}
+
+message ListMyAvaliacoesDeTesteResponse {
+  repeated AvaliacaoDeTeste itens = 1;
+}
+
+message MarcarAvaliacaoTratadaRequest {
+  int32 id = 1;
+  // true = a correção virou material de treinamento; false = dispensada.
+  bool virou_treinamento = 2;
 }
 
 // --- P11: versão do app ---

@@ -13,13 +13,17 @@ import '../controllers/treinamento_controllers.dart';
 ///  - o erro aparece DENTRO da janela — um SnackBar renderiza atrás do barrier
 ///    modal, e o usuário clicaria em salvar sem ver nada acontecer.
 
-Future<void> abrirCriacao(
+/// Devolve `true` quando o treinamento foi criado — o P17 usa para tirar a
+/// avaliação da revisão só depois de ela ter virado material.
+Future<bool> abrirCriacao(
   BuildContext context,
-  TreinamentoController controller,
-) async {
+  TreinamentoController controller, {
+  String conteudoInicial = '',
+}) async {
   final tag = TextEditingController();
   final grupo = TextEditingController();
-  final conteudo = TextEditingController();
+  final conteudo = TextEditingController(text: conteudoInicial);
+  var criou = false;
   String? erro;
   var salvando = false;
 
@@ -118,6 +122,7 @@ Future<void> abrirCriacao(
                         }
                         return;
                       }
+                      criou = true;
                       navigator.pop();
                     },
             ),
@@ -126,6 +131,7 @@ Future<void> abrirCriacao(
       ),
     ),
   );
+  return criou;
 }
 
 /// B9 (N10 E5) — os formatos que o servidor lê.

@@ -638,6 +638,8 @@ async fn main() -> anyhow::Result<()> {
     let state_for_query_compose = state_clone.clone();
     let s_trn_criar = state_clone.clone();
     let s_trn_feedback = state_clone.clone();
+    let s_trn_avaliacoes = state_clone.clone();
+    let s_trn_tratada = state_clone.clone();
     let s_trn_autorizar_arquivo = state_clone.clone();
     let s_trn_criar_arquivo = state_clone.clone();
     let s_trn_extracoes = state_clone.clone();
@@ -1069,6 +1071,23 @@ async fn main() -> anyhow::Result<()> {
             let state = s_trn_feedback.clone();
             Box::pin(async move {
                 handler_registrar_feedback_teste(
+                    state.treinamento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
+        })
+        .route("ListAvaliacoesDeTeste", move |env| {
+            let state = s_trn_avaliacoes.clone();
+            Box::pin(async move {
+                handler_listar_avaliacoes_de_teste(state.treinamento.as_ref(), env).await
+            })
+        })
+        .route("MarcarAvaliacaoTratada", move |env| {
+            let state = s_trn_tratada.clone();
+            Box::pin(async move {
+                handler_marcar_avaliacao_tratada(
                     state.treinamento.as_ref(),
                     state.audit.as_ref(),
                     env,
@@ -8044,6 +8063,73 @@ async fn handler_create_treinamento(
         houve_correcao = tracing::field::Empty
     )
 )]
+/// P17 — as avaliações do teste ainda não tratadas. Sem auditoria: é leitura
+/// da própria curadoria, e o conteúdo (que pode citar cliente) não vai a log.
+async fn handler_listar_avaliacoes_de_teste(
+    store: &dyn ports::TreinamentoStore,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value =
+        serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
+    let limite = payload.get("limite").and_then(|v| v.as_i64()).unwrap_or(50);
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_avaliacoes_pendentes(&ctx, limite).await {
+        Ok(itens) => {
+            tracing::info!(quantidade = itens.len(), "avaliações pendentes listadas");
+            ok_reply(
+                &env,
+                "ListAvaliacoesDeTesteReply",
+                serde_json::json!({ "itens": itens }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
+/// P17 — tira a avaliação da revisão (virou treinamento, ou foi dispensada).
+async fn handler_marcar_avaliacao_tratada(
+    store: &dyn ports::TreinamentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let Some(id) = payload.get("id").and_then(|v| v.as_i64()).map(|v| v as i32) else {
+        return erro(error_core::AppError::Validation("id ausente".into()), &env);
+    };
+    let virou_treinamento = payload
+        .get("virou_treinamento")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+    let ctx = contexto_do_envelope(&env);
+    match store.marcar_avaliacao_tratada(&ctx, id).await {
+        Ok(mudou) => {
+            if mudou {
+                audit
+                    .publish(
+                        &env,
+                        if virou_treinamento {
+                            "treinamento.correcao_promovida"
+                        } else {
+                            "treinamento.avaliacao_dispensada"
+                        },
+                        format!("avaliação de teste {id} tratada"),
+                        serde_json::json!({ "avaliacao_id": id, "virou_treinamento": virou_treinamento }),
+                    )
+                    .await;
+            }
+            ok_reply(
+                &env,
+                "MarcarAvaliacaoTratadaReply",
+                serde_json::json!({ "sucesso": mudou }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
 async fn handler_registrar_feedback_teste(
     store: &dyn ports::TreinamentoStore,
     audit: &dyn ports::AuditPort,

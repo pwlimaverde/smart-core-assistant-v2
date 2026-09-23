@@ -4823,6 +4823,90 @@ final $typed_data.Uint8List reenviarMensagemNaoEntregueResponseDescriptor =
         'CiNSZWVudmlhck1lbnNhZ2VtTmFvRW50cmVndWVSZXNwb25zZRIWCgZzdGF0dXMYASABKAlSBn'
         'N0YXR1cw==');
 
+@$core.Deprecated('Use avaliacaoDeTesteDescriptor instead')
+const AvaliacaoDeTeste$json = {
+  '1': 'AvaliacaoDeTeste',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {'1': 'pergunta', '3': 2, '4': 1, '5': 9, '10': 'pergunta'},
+    {'1': 'resposta_bot', '3': 3, '4': 1, '5': 9, '10': 'respostaBot'},
+    {
+      '1': 'resposta_corrigida',
+      '3': 4,
+      '4': 1,
+      '5': 9,
+      '10': 'respostaCorrigida'
+    },
+    {'1': 'avaliacao', '3': 5, '4': 1, '5': 9, '10': 'avaliacao'},
+    {'1': 'confiabilidade', '3': 6, '4': 1, '5': 1, '10': 'confiabilidade'},
+    {'1': 'criada_em', '3': 7, '4': 1, '5': 3, '10': 'criadaEm'},
+  ],
+};
+
+/// Descriptor for `AvaliacaoDeTeste`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List avaliacaoDeTesteDescriptor = $convert.base64Decode(
+    'ChBBdmFsaWFjYW9EZVRlc3RlEg4KAmlkGAEgASgFUgJpZBIaCghwZXJndW50YRgCIAEoCVIIcG'
+    'VyZ3VudGESIQoMcmVzcG9zdGFfYm90GAMgASgJUgtyZXNwb3N0YUJvdBItChJyZXNwb3N0YV9j'
+    'b3JyaWdpZGEYBCABKAlSEXJlc3Bvc3RhQ29ycmlnaWRhEhwKCWF2YWxpYWNhbxgFIAEoCVIJYX'
+    'ZhbGlhY2FvEiYKDmNvbmZpYWJpbGlkYWRlGAYgASgBUg5jb25maWFiaWxpZGFkZRIbCgljcmlh'
+    'ZGFfZW0YByABKANSCGNyaWFkYUVt');
+
+@$core.Deprecated('Use listMyAvaliacoesDeTesteRequestDescriptor instead')
+const ListMyAvaliacoesDeTesteRequest$json = {
+  '1': 'ListMyAvaliacoesDeTesteRequest',
+  '2': [
+    {'1': 'limite', '3': 1, '4': 1, '5': 5, '10': 'limite'},
+  ],
+};
+
+/// Descriptor for `ListMyAvaliacoesDeTesteRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyAvaliacoesDeTesteRequestDescriptor =
+    $convert.base64Decode(
+        'Ch5MaXN0TXlBdmFsaWFjb2VzRGVUZXN0ZVJlcXVlc3QSFgoGbGltaXRlGAEgASgFUgZsaW1pdG'
+        'U=');
+
+@$core.Deprecated('Use listMyAvaliacoesDeTesteResponseDescriptor instead')
+const ListMyAvaliacoesDeTesteResponse$json = {
+  '1': 'ListMyAvaliacoesDeTesteResponse',
+  '2': [
+    {
+      '1': 'itens',
+      '3': 1,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.AvaliacaoDeTeste',
+      '10': 'itens'
+    },
+  ],
+};
+
+/// Descriptor for `ListMyAvaliacoesDeTesteResponse`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List listMyAvaliacoesDeTesteResponseDescriptor =
+    $convert.base64Decode(
+        'Ch9MaXN0TXlBdmFsaWFjb2VzRGVUZXN0ZVJlc3BvbnNlEkMKBWl0ZW5zGAEgAygLMi0uc21hcn'
+        'Rjb3JlLmNvbnRyYWN0cy5xdWVyaWVzLkF2YWxpYWNhb0RlVGVzdGVSBWl0ZW5z');
+
+@$core.Deprecated('Use marcarAvaliacaoTratadaRequestDescriptor instead')
+const MarcarAvaliacaoTratadaRequest$json = {
+  '1': 'MarcarAvaliacaoTratadaRequest',
+  '2': [
+    {'1': 'id', '3': 1, '4': 1, '5': 5, '10': 'id'},
+    {
+      '1': 'virou_treinamento',
+      '3': 2,
+      '4': 1,
+      '5': 8,
+      '10': 'virouTreinamento'
+    },
+  ],
+};
+
+/// Descriptor for `MarcarAvaliacaoTratadaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List marcarAvaliacaoTratadaRequestDescriptor =
+    $convert.base64Decode(
+        'Ch1NYXJjYXJBdmFsaWFjYW9UcmF0YWRhUmVxdWVzdBIOCgJpZBgBIAEoBVICaWQSKwoRdmlyb3'
+        'VfdHJlaW5hbWVudG8YAiABKAhSEHZpcm91VHJlaW5hbWVudG8=');
+
 @$core.Deprecated('Use getVersaoDoAppRequestDescriptor instead')
 const GetVersaoDoAppRequest$json = {
   '1': 'GetVersaoDoAppRequest',

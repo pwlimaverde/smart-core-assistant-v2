@@ -19734,6 +19734,318 @@ class ReenviarMensagemNaoEntregueResponse extends $pb.GeneratedMessage {
   void clearStatus() => $_clearField(1);
 }
 
+class AvaliacaoDeTeste extends $pb.GeneratedMessage {
+  factory AvaliacaoDeTeste({
+    $core.int? id,
+    $core.String? pergunta,
+    $core.String? respostaBot,
+    $core.String? respostaCorrigida,
+    $core.String? avaliacao,
+    $core.double? confiabilidade,
+    $fixnum.Int64? criadaEm,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (pergunta != null) result.pergunta = pergunta;
+    if (respostaBot != null) result.respostaBot = respostaBot;
+    if (respostaCorrigida != null) result.respostaCorrigida = respostaCorrigida;
+    if (avaliacao != null) result.avaliacao = avaliacao;
+    if (confiabilidade != null) result.confiabilidade = confiabilidade;
+    if (criadaEm != null) result.criadaEm = criadaEm;
+    return result;
+  }
+
+  AvaliacaoDeTeste._();
+
+  factory AvaliacaoDeTeste.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory AvaliacaoDeTeste.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'AvaliacaoDeTeste',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOS(2, _omitFieldNames ? '' : 'pergunta')
+    ..aOS(3, _omitFieldNames ? '' : 'respostaBot')
+    ..aOS(4, _omitFieldNames ? '' : 'respostaCorrigida')
+    ..aOS(5, _omitFieldNames ? '' : 'avaliacao')
+    ..aD(6, _omitFieldNames ? '' : 'confiabilidade')
+    ..aInt64(7, _omitFieldNames ? '' : 'criadaEm')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AvaliacaoDeTeste clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  AvaliacaoDeTeste copyWith(void Function(AvaliacaoDeTeste) updates) =>
+      super.copyWith((message) => updates(message as AvaliacaoDeTeste))
+          as AvaliacaoDeTeste;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static AvaliacaoDeTeste create() => AvaliacaoDeTeste._();
+  @$core.override
+  AvaliacaoDeTeste createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static AvaliacaoDeTeste getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<AvaliacaoDeTeste>(create);
+  static AvaliacaoDeTeste? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $core.String get pergunta => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set pergunta($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasPergunta() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearPergunta() => $_clearField(2);
+
+  @$pb.TagNumber(3)
+  $core.String get respostaBot => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set respostaBot($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasRespostaBot() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearRespostaBot() => $_clearField(3);
+
+  /// Vazia quando a pessoa só avaliou, sem escrever a resposta certa.
+  @$pb.TagNumber(4)
+  $core.String get respostaCorrigida => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set respostaCorrigida($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasRespostaCorrigida() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearRespostaCorrigida() => $_clearField(4);
+
+  /// "boa" | "ruim".
+  @$pb.TagNumber(5)
+  $core.String get avaliacao => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set avaliacao($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasAvaliacao() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearAvaliacao() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.double get confiabilidade => $_getN(5);
+  @$pb.TagNumber(6)
+  set confiabilidade($core.double value) => $_setDouble(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasConfiabilidade() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearConfiabilidade() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $fixnum.Int64 get criadaEm => $_getI64(6);
+  @$pb.TagNumber(7)
+  set criadaEm($fixnum.Int64 value) => $_setInt64(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasCriadaEm() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearCriadaEm() => $_clearField(7);
+}
+
+class ListMyAvaliacoesDeTesteRequest extends $pb.GeneratedMessage {
+  factory ListMyAvaliacoesDeTesteRequest({
+    $core.int? limite,
+  }) {
+    final result = create();
+    if (limite != null) result.limite = limite;
+    return result;
+  }
+
+  ListMyAvaliacoesDeTesteRequest._();
+
+  factory ListMyAvaliacoesDeTesteRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyAvaliacoesDeTesteRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyAvaliacoesDeTesteRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'limite')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyAvaliacoesDeTesteRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyAvaliacoesDeTesteRequest copyWith(
+          void Function(ListMyAvaliacoesDeTesteRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListMyAvaliacoesDeTesteRequest))
+          as ListMyAvaliacoesDeTesteRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyAvaliacoesDeTesteRequest create() =>
+      ListMyAvaliacoesDeTesteRequest._();
+  @$core.override
+  ListMyAvaliacoesDeTesteRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyAvaliacoesDeTesteRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyAvaliacoesDeTesteRequest>(create);
+  static ListMyAvaliacoesDeTesteRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get limite => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set limite($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasLimite() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearLimite() => $_clearField(1);
+}
+
+class ListMyAvaliacoesDeTesteResponse extends $pb.GeneratedMessage {
+  factory ListMyAvaliacoesDeTesteResponse({
+    $core.Iterable<AvaliacaoDeTeste>? itens,
+  }) {
+    final result = create();
+    if (itens != null) result.itens.addAll(itens);
+    return result;
+  }
+
+  ListMyAvaliacoesDeTesteResponse._();
+
+  factory ListMyAvaliacoesDeTesteResponse.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory ListMyAvaliacoesDeTesteResponse.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'ListMyAvaliacoesDeTesteResponse',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..pPM<AvaliacaoDeTeste>(1, _omitFieldNames ? '' : 'itens',
+        subBuilder: AvaliacaoDeTeste.create)
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyAvaliacoesDeTesteResponse clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  ListMyAvaliacoesDeTesteResponse copyWith(
+          void Function(ListMyAvaliacoesDeTesteResponse) updates) =>
+      super.copyWith(
+              (message) => updates(message as ListMyAvaliacoesDeTesteResponse))
+          as ListMyAvaliacoesDeTesteResponse;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static ListMyAvaliacoesDeTesteResponse create() =>
+      ListMyAvaliacoesDeTesteResponse._();
+  @$core.override
+  ListMyAvaliacoesDeTesteResponse createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static ListMyAvaliacoesDeTesteResponse getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<ListMyAvaliacoesDeTesteResponse>(
+          create);
+  static ListMyAvaliacoesDeTesteResponse? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $pb.PbList<AvaliacaoDeTeste> get itens => $_getList(0);
+}
+
+class MarcarAvaliacaoTratadaRequest extends $pb.GeneratedMessage {
+  factory MarcarAvaliacaoTratadaRequest({
+    $core.int? id,
+    $core.bool? virouTreinamento,
+  }) {
+    final result = create();
+    if (id != null) result.id = id;
+    if (virouTreinamento != null) result.virouTreinamento = virouTreinamento;
+    return result;
+  }
+
+  MarcarAvaliacaoTratadaRequest._();
+
+  factory MarcarAvaliacaoTratadaRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory MarcarAvaliacaoTratadaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'MarcarAvaliacaoTratadaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aI(1, _omitFieldNames ? '' : 'id')
+    ..aOB(2, _omitFieldNames ? '' : 'virouTreinamento')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MarcarAvaliacaoTratadaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  MarcarAvaliacaoTratadaRequest copyWith(
+          void Function(MarcarAvaliacaoTratadaRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as MarcarAvaliacaoTratadaRequest))
+          as MarcarAvaliacaoTratadaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static MarcarAvaliacaoTratadaRequest create() =>
+      MarcarAvaliacaoTratadaRequest._();
+  @$core.override
+  MarcarAvaliacaoTratadaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static MarcarAvaliacaoTratadaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<MarcarAvaliacaoTratadaRequest>(create);
+  static MarcarAvaliacaoTratadaRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.int get id => $_getIZ(0);
+  @$pb.TagNumber(1)
+  set id($core.int value) => $_setSignedInt32(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasId() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearId() => $_clearField(1);
+
+  /// true = a correção virou material de treinamento; false = dispensada.
+  @$pb.TagNumber(2)
+  $core.bool get virouTreinamento => $_getBF(1);
+  @$pb.TagNumber(2)
+  set virouTreinamento($core.bool value) => $_setBool(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasVirouTreinamento() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearVirouTreinamento() => $_clearField(2);
+}
+
 class GetVersaoDoAppRequest extends $pb.GeneratedMessage {
   factory GetVersaoDoAppRequest({
     $core.String? plataforma,
