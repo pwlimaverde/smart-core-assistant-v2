@@ -71,14 +71,10 @@ async fn main() -> anyhow::Result<()> {
     // Authorization server OAuth 2.1 do MCP. Sobe só se estiver configurado: um
     // ambiente sem o par de chaves segue rodando o control_plane normalmente, e
     // o que falta aparece no log em vez de derrubar o processo.
-    let servidor_oauth = match montar_oauth(redis_conn_oauth).await {
-        Ok(Some(fut)) => Some(fut),
-        Ok(None) => None,
-        Err(e) => {
-            tracing::error!(erro = %e, "authorization server do MCP não pôde subir");
-            None
-        }
-    };
+    //
+    // A montagem roda DENTRO do futuro do AS, e não antes do `select!`: ela
+    // espera o `data_postgres` e o `data_redis` subirem, e isso não pode segurar
+    // o servidor RPC do control_plane.
 
     // Ver a nota em `data_redis`: SIGTERM precisa ser tratado, senão todo deploy
     // mata o processo no meio do que estava em voo.
@@ -87,11 +83,17 @@ async fn main() -> anyhow::Result<()> {
     // deixaria o processo vivo atendendo metade das requisições — que é pior que
     // não atender nenhuma, porque o healthcheck continuaria verde.
     let oauth_fut = async {
-        match servidor_oauth {
-            Some(fut) => fut.await,
+        match montar_oauth(redis_conn_oauth).await {
+            Ok(Some(fut)) => fut.await,
             // Sem AS configurado, este ramo nunca resolve: o `select!` fica
             // decidido pelos outros dois.
-            None => std::future::pending().await,
+            Ok(None) => std::future::pending().await,
+            // Erro de configuração (chave inválida, segredo ausente): tentar de
+            // novo não resolve. Fica no log e o resto do control_plane segue.
+            Err(e) => {
+                tracing::error!(erro = %e, "authorization server do MCP não pôde subir");
+                std::future::pending().await
+            }
         }
     };
 
@@ -154,9 +156,9 @@ async fn montar_oauth(
     // (mantém a conexão atrás de um `Mutex`), e o `AuthDeps` a consome por
     // valor. As duas multiplexam sobre a mesma porta, então o custo é uma
     // conexão TCP a mais no processo inteiro.
-    let pg_auth = transport::conectar_cliente("data_postgres").await?;
-    let pg_oauth = transport::conectar_cliente("data_postgres").await?;
-    let redis_rpc = transport::conectar_cliente("data_redis").await?;
+    let pg_auth = conectar_insistindo("data_postgres").await;
+    let pg_oauth = conectar_insistindo("data_postgres").await;
+    let redis_rpc = conectar_insistindo("data_redis").await;
 
     let auth_deps = application::auth::login::AuthDeps {
         pg: pg_auth,
@@ -214,6 +216,32 @@ async fn montar_oauth(
         )
         .await
     }))
+}
+
+/// Conecta a um serviço interno sem desistir.
+///
+/// O `conectar_cliente` tenta algumas vezes e devolve erro. Na subida conjunta
+/// da stack isso não basta: o `data_postgres` pode levar mais que esse tempo
+/// (DNS da rede do compose ainda sem o nome, Redis carregando o dataset). Antes,
+/// o AS desistia e o control_plane seguia vivo e "healthy" sem ele: o login dos
+/// clientes MCP ficava em 502 até alguém reiniciar o container à mão.
+async fn conectar_insistindo(servico: &str) -> transport::MuxClient {
+    let mut espera = Duration::from_secs(2);
+    loop {
+        match transport::conectar_cliente(servico).await {
+            Ok(cliente) => return cliente,
+            Err(e) => {
+                tracing::warn!(
+                    servico,
+                    erro = %e,
+                    espera_s = espera.as_secs(),
+                    "AS do MCP aguardando dependência para subir"
+                );
+                tokio::time::sleep(espera).await;
+                espera = (espera * 2).min(Duration::from_secs(30));
+            }
+        }
+    }
 }
 
 fn ok_reply(env: &Envelope, method: &str, payload: serde_json::Value) -> Envelope {

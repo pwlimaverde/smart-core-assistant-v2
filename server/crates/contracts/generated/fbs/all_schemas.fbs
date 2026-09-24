@@ -458,12 +458,38 @@ table AtendimentoResumo {
   sentimento_nota:int;
   sentimento_label:string;
   nao_lidas:int;
+  contato_nome:string;
+  contato_telefone:string;
+  contato_foto_url:string;
+  revisao_pendente:bool;
+}
+
+table MarcarRevisadoRequest {
+  atendimento_id:int;
+}
+
+table ObterContatoDoAtendimentoRequest {
+  atendimento_id:int;
+  forcar:bool;
+}
+
+table ObterContatoDoAtendimentoResponse {
+  contato_id:int;
+  nome:string;
+  telefone:string;
+  foto_url:string;
 }
 
 table ListAtendimentosRequest {
   status:string;
   departamento_id:int;
   limit:int;
+  busca:string;
+  atendente_id:int;
+  somente_nao_lidos:bool;
+  prioridade:string;
+  etiqueta_id:long;
+  somente_meus:bool;
 }
 
 table ListAtendimentosResponse {
@@ -496,12 +522,20 @@ table MensagemThread {
   mensagem_citada_id:int;
   citada_remetente:string;
   citada_preview:string;
+  reacoes:[ReacaoDaMensagem];
+  metadados_json:string;
+}
+
+table ReacaoDaMensagem {
+  emoji:string;
+  de:string;
 }
 
 table GetThreadRequest {
   atendimento_id:int;
   limit:int;
   offset:int;
+  before_id:int;
 }
 
 table GetThreadResponse {
@@ -582,6 +616,103 @@ table EnviarMidiaAtendimentoRequest {
 
 table EnviarMidiaAtendimentoResponse {
   message_id:int;
+}
+
+table EventoDaTimeline {
+  tipo:string;
+  quando:long;
+  descricao:string;
+  autor:string;
+  automatico:bool;
+}
+
+table ListarTimelineRequest {
+  atendimento_id:int;
+}
+
+table ListarTimelineResponse {
+  eventos:[EventoDaTimeline];
+}
+
+table ListarAtendimentosDoContatoRequest {
+  contato_id:int;
+  limit:int;
+}
+
+table ListarAtendimentosDoContatoResponse {
+  atendimentos:[AtendimentoResumo];
+}
+
+table RemoverNotaRequest {
+  nota_id:long;
+  atendimento_id:int;
+}
+
+table UpdateEtiquetaRequest {
+  id:long;
+  nome:string;
+  cor:string;
+  descricao:string;
+}
+
+table DesativarEtiquetaRequest {
+  id:long;
+}
+
+table AtribuirAtendimentoRequest {
+  atendimento_id:int;
+  atendente_id:int;
+  devolver_para_fila:bool;
+}
+
+table AtribuirAtendimentoResponse {
+  atribuido:bool;
+  motivo:string;
+}
+
+table DefinirPrioridadeRequest {
+  atendimento_id:int;
+  prioridade:string;
+}
+
+table DefinirPrioridadeResponse {
+  definida:bool;
+}
+
+table TransferirParaFluxoRequest {
+  atendimento_id:int;
+  fluxo_id:int;
+}
+
+table TransferirParaFluxoResponse {
+  transferido:bool;
+  fluxo_id:int;
+  fluxo_nome:string;
+  etapa_id:int;
+  etapa_nome:string;
+  motivo:string;
+}
+
+table ExportarQuadroRequest {
+  status:string;
+  departamento_id:int;
+  busca:string;
+  somente_meus:bool;
+  somente_nao_lidos:bool;
+}
+
+table ExportarQuadroResponse {
+  csv:[ubyte];
+  linhas:int;
+}
+
+table EnviarPresencaRequest {
+  atendimento_id:int;
+  situacao:string;
+}
+
+table EnviarPresencaResponse {
+  enviado:bool;
 }
 
 table ListarMidiasAtendimentoRequest {
@@ -706,6 +837,25 @@ table AdminSetUserActiveRequest {
 
 table AdminSetUserActiveResponse {
   ativo:bool;
+}
+
+table MigrarEscoposImplicitosRequest {
+  dry_run:bool;
+}
+
+table ContagemDeMigracao {
+  tenant_id:string;
+  tenant_nome:string;
+  papel:string;
+  quantidade:int;
+}
+
+table MigrarEscoposImplicitosResponse {
+  contagens:[ContagemDeMigracao];
+  total:int;
+  migrados:int;
+  pulados:int;
+  dry_run:bool;
 }
 
 table ListMcpGrantsRequest {
@@ -1181,6 +1331,7 @@ table GetMyPainelResponse {
   conexoes_total:int;
   departamentos:int;
   treinamentos_ativos:int;
+  primeira_resposta_mediana_s:int;
 }
 
 table MyDepartamento {
@@ -1265,6 +1416,8 @@ table MyWhatsappInstance {
   provider:string;
   created_at:long;
   resposta_bot:bool;
+  departamento_id:int;
+  departamento_nome:string;
 }
 
 table DefinirRespostaBotInstanciaRequest {
@@ -1301,6 +1454,127 @@ table ListMyWhatsappInstancesResponse {
 }
 
 table MyWhatsappInstanceIdRequest {
+  id:int;
+}
+
+table DefinirDepartamentoDaConexaoRequest {
+  id:int;
+  departamento_id:int;
+}
+
+table DetalheDaConexaoRequest {
+  id:int;
+}
+
+table DetalheDaConexaoResponse {
+  conexao:MyWhatsappInstance;
+  ultima_checagem:long;
+  instancia_no_provedor:string;
+  atendimentos_abertos:int;
+  mensagens_24h:int;
+}
+
+table MensagemNaoEntregue {
+  id:int;
+  mensagem_id:int;
+  atendimento_id:int;
+  motivo:string;
+  criado_em:long;
+  trecho:string;
+  contato:string;
+}
+
+table ListMyMensagensNaoEntreguesRequest {
+}
+
+table ListMyMensagensNaoEntreguesResponse {
+  itens:[MensagemNaoEntregue];
+}
+
+table ReenviarMensagemNaoEntregueRequest {
+  id:int;
+}
+
+table ReenviarMensagemNaoEntregueResponse {
+  status:string;
+}
+
+table AvaliacaoDeTeste {
+  id:int;
+  pergunta:string;
+  resposta_bot:string;
+  resposta_corrigida:string;
+  avaliacao:string;
+  confiabilidade:double;
+  criada_em:long;
+}
+
+table ListMyAvaliacoesDeTesteRequest {
+  limite:int;
+}
+
+table ListMyAvaliacoesDeTesteResponse {
+  itens:[AvaliacaoDeTeste];
+}
+
+table MarcarAvaliacaoTratadaRequest {
+  id:int;
+  virou_treinamento:bool;
+}
+
+table GetVersaoDoAppRequest {
+  plataforma:string;
+}
+
+table GetVersaoDoAppResponse {
+  build_atual:long;
+  url_download:string;
+  notas:string;
+}
+
+table TestarProvedorIaRequest {
+  tenant_id:string;
+}
+
+table TestarProvedorIaResponse {
+  ok:bool;
+  latencia_ms:int;
+  dimensoes:int;
+  erro:string;
+}
+
+table MyNumeroIgnorado {
+  id:int;
+  nome:string;
+  telefone:string;
+  ativo:bool;
+  criado_em:long;
+}
+
+table ListMyNumerosIgnoradosRequest {
+}
+
+table ListMyNumerosIgnoradosResponse {
+  itens:[MyNumeroIgnorado];
+}
+
+table CriarNumeroIgnoradoRequest {
+  nome:string;
+  telefone:string;
+}
+
+table MyNumeroIgnoradoResponse {
+  item:MyNumeroIgnorado;
+}
+
+table AtualizarNumeroIgnoradoRequest {
+  id:int;
+  nome:string;
+  telefone:string;
+  ativo:bool;
+}
+
+table NumeroIgnoradoIdRequest {
   id:int;
 }
 
@@ -1463,6 +1737,7 @@ table Etiqueta {
   cor:string;
   descricao:string;
   ativo:bool;
+  aplicada_pela_ia:bool;
 }
 
 table Nota {
@@ -1477,6 +1752,12 @@ table DetalheAtendimentoResponse {
   notas:[Nota];
   bot_pode_atender:bool;
   campos:[ValorCampoDoAtendimento];
+  dados_do_contato:[DadoDoContato];
+}
+
+table DadoDoContato {
+  chave:string;
+  valor:string;
 }
 
 table ValorCampoDoAtendimento {
