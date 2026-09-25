@@ -18,6 +18,11 @@ set -eu
 
 DESTINO="${BACKUP_DIR:-/backups}"
 INTERVALO="${BACKUP_INTERVALO_SEGUNDOS:-86400}"
+# Espera curta depois de uma falha. Sem ela, um dump que falha dorme o intervalo
+# inteiro: em 24/09/2026 o Docker reiniciou, este serviço subiu antes do
+# Postgres aceitar conexão e a stack ficou 17h sem backup, até o watchdog
+# reiniciar o container.
+REPETICAO="${BACKUP_REPETICAO_SEGUNDOS:-300}"
 RETENCAO_DIAS="${BACKUP_RETENCAO_DIAS:-14}"
 RETENCAO_MAX="${BACKUP_RETENCAO_MAX_ARQUIVOS:-60}"
 MARCA_SUCESSO="$DESTINO/.ultimo_sucesso"
@@ -99,6 +104,9 @@ log INFO backup.iniciado "Servico de backup no ar" \
 while true; do
     if executar_backup; then
         aplicar_retencao
+        sleep "$INTERVALO"
+    else
+        log WARN backup.repeticao_agendada "Nova tentativa em breve" "\"em_s\":$REPETICAO"
+        sleep "$REPETICAO"
     fi
-    sleep "$INTERVALO"
 done

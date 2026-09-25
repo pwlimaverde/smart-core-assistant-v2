@@ -871,6 +871,45 @@ async fn handler_reconciliar_conexao_instancia(state: AppState, env: Envelope) -
         );
     }
 
+    // Só religa quem estava no ar. Uma instância sem sessão (desvinculada,
+    // nunca pareada, desligada de propósito) não volta com `connect` — e cada
+    // `connect` nela custa caro: a evolution-go 0.7.2 entra em QR, esgota os
+    // códigos, força logout e REINICIA o cliente sozinha, para sempre, abrindo
+    // um pool de banco novo a cada volta. Um laço por tick. Em 24/09/2026 a
+    // instância 181, nunca pareada, acumulou dezenas desses laços, ~47 mil
+    // webhooks em 3h, 1040 pools vazados, e derrubou o gateway com pânico.
+    let estado_gravado = instance.get("connection_state").and_then(|v| v.as_str());
+    if let Some(motivo) = impedimento_para_religar(&estado_inicial, estado_gravado) {
+        let texto = if estado_inicial == ConnectionState::Connecting {
+            "connecting"
+        } else {
+            estado_gravado.unwrap_or("disconnected")
+        };
+        // Avisa na transição, não a cada tick: repetir o mesmo alerta a cada
+        // cinco minutos só enterra o que é novo.
+        if estado_gravado != Some(texto) {
+            gravar_estado(&env, db_id, texto).await;
+            tracing::warn!(
+                instance_id = db_id,
+                estado = texto,
+                motivo,
+                "instância exige novo pareamento (QR); reconciliação não religa"
+            );
+        } else {
+            tracing::debug!(
+                instance_id = db_id,
+                estado = texto,
+                motivo,
+                "instância segue sem sessão; sem ação"
+            );
+        }
+        return ok_reply(
+            &env,
+            "ReconciliarConexaoInstanciaReply",
+            serde_json::json!({ "state": texto, "religada": false, "precisa_parear": true }),
+        );
+    }
+
     let webhook_conf = WebhookConfig {
         url: format!(
             "http://webhook_ingress:9200/webhook/{}/{}/{}",
@@ -885,8 +924,11 @@ async fn handler_reconciliar_conexao_instancia(state: AppState, env: Envelope) -
     };
 
     if let Err(e) = p.connect_instance(name, &api_key_sec, &webhook_conf).await {
+        // O estado gravado fica como estava (`connected`) de propósito: o
+        // provedor não aceitou o pedido, então nenhum cliente foi iniciado e
+        // nenhum laço de QR começou. Tentar de novo no próximo tick é seguro — e
+        // é o que traz a instância de volta depois de o provedor reiniciar.
         tracing::warn!(instance_id = db_id, erro = %e, "falha ao religar instância");
-        gravar_estado(&env, db_id, "disconnected").await;
         return ok_reply(
             &env,
             "ReconciliarConexaoInstanciaReply",
@@ -928,6 +970,32 @@ async fn handler_reconciliar_conexao_instancia(state: AppState, env: Envelope) -
             "precisa_parear": precisa_parear
         }),
     )
+}
+
+/// Por que a reconciliação **não** deve chamar `connect`, quando não deve.
+///
+/// Recebe o estado lido agora no provedor (já sabido que não é `Connected` nem
+/// `Unknown`) e o último estado gravado no banco.
+///
+/// - `Connecting` no provedor é socket aberto sem sessão: a instância já está
+///   mostrando QR. Religar só empilharia outro cliente em QR.
+/// - Fora isso, religa apenas o que o banco dava por `connected` — a queda que
+///   a reconciliação existe para desfazer. Qualquer outro estado gravado quer
+///   dizer que uma tentativa anterior já concluiu "só QR resolve", que a
+///   instância nunca foi pareada, ou que alguém a desligou de propósito. Em
+///   todos, quem destrava é o usuário na tela de conexão, e o `connected` que
+///   ela grava ao parear devolve a instância à reconciliação.
+fn impedimento_para_religar(
+    estado_inicial: &ConnectionState,
+    estado_gravado: Option<&str>,
+) -> Option<&'static str> {
+    if *estado_inicial == ConnectionState::Connecting {
+        return Some("aguardando_qr");
+    }
+    if estado_gravado != Some("connected") {
+        return Some("sem_sessao_para_religar");
+    }
+    None
 }
 
 /// O que o estado, depois da tentativa de religar, significa para quem espera:
@@ -2086,6 +2154,41 @@ mod tests {
         assert_eq!(texto, "disconnected");
         assert!(!religada);
         assert!(parear);
+    }
+
+    // --- Quando a reconciliação nem tenta religar ---
+    //
+    // Cada `connect` numa instância sem sessão prende a evolution-go num laço
+    // de QR que não termina sozinho. O filtro abaixo é o que impede o tick
+    // periódico de empilhar esses laços até derrubar o gateway.
+
+    #[test]
+    fn queda_de_instancia_que_estava_no_ar_religa() {
+        assert_eq!(
+            impedimento_para_religar(&ConnectionState::Disconnected, Some("connected")),
+            None
+        );
+    }
+
+    #[test]
+    fn instancia_ja_em_qr_nao_ganha_outro_cliente() {
+        // Mesmo gravada como `connected`: socket aberto sem sessão é aparelho
+        // desvinculado, e o provedor já está exibindo QR.
+        assert_eq!(
+            impedimento_para_religar(&ConnectionState::Connecting, Some("connected")),
+            Some("aguardando_qr")
+        );
+    }
+
+    #[test]
+    fn instancia_sem_sessao_nao_e_religada_a_cada_tick() {
+        for gravado in [Some("connecting"), Some("disconnected"), None] {
+            assert_eq!(
+                impedimento_para_religar(&ConnectionState::Disconnected, gravado),
+                Some("sem_sessao_para_religar"),
+                "gravado = {gravado:?}"
+            );
+        }
     }
 
     #[test]
