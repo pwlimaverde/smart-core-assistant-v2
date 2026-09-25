@@ -200,6 +200,11 @@ services:
     # silencio por semanas. Esta e exatamente a versao que já roda aqui, então a
     # troca de registro nao muda comportamento nenhum.
     image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+    # Em 25/09/2026 o quay.io passou a responder 401 para os repositórios da
+    # MinIO: a imagem saiu do ar publicamente e o `compose pull` do deploy
+    # falhava inteiro por causa dela. `missing` usa a cópia que já está em
+    # disco. Numa máquina nova não há cópia: ali é preciso trocar a origem.
+    pull_policy: missing
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
@@ -216,6 +221,7 @@ services:
     # Mesmo motivo do `minio` acima. A tag mais nova disponivel no quay e uma
     # semana posterior a que estava em disco; o `mc` aqui so cria bucket.
     image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+    pull_policy: missing # ver `minio` acima
     depends_on:
       minio: { condition: service_started }
     environment:
