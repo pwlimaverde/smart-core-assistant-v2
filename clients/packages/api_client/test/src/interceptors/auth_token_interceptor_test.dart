@@ -119,8 +119,10 @@ void main() {
       expect(metadata.containsKey('authorization'), isFalse);
     });
 
-    test('interceptStreaming apenas repassa a chamada sem alterações', () {
-      final interceptor = AuthTokenInterceptor(() async => 'token');
+    test('interceptStreaming também injeta o access token', () async {
+      // Sem o token o servidor recusa o StreamAtendimentos, e o quadro fica
+      // sem tempo real.
+      final interceptor = AuthTokenInterceptor(() async => 'token_do_stream');
       final mockRequests = Stream<String>.value('req');
       final mockInvokerStreaming = MockInvokerStreaming();
 
@@ -135,9 +137,22 @@ void main() {
         mockInvokerStreaming.call,
       );
 
-      verify(
-        () => mockInvokerStreaming.call(mockMethod, mockRequests, any()),
-      ).called(1);
+      final captured =
+          verify(
+                () => mockInvokerStreaming.call<String, String>(
+                  mockMethod,
+                  mockRequests,
+                  captureAny(),
+                ),
+              ).captured.single
+              as CallOptions;
+
+      final metadata = <String, String>{};
+      for (final provider in captured.metadataProviders) {
+        await provider(metadata, 'some_uri');
+      }
+
+      expect(metadata['authorization'], 'Bearer token_do_stream');
     });
   });
 }
