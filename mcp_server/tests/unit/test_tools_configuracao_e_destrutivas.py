@@ -81,12 +81,15 @@ async def test_create_etapa_usa_o_tipo_informado_e_nao_um_default_silencioso():
 
     with como(ADMIN):
         await servidor.funcoes["create_etapa_fluxo"](
-            fluxo_id=9, nome="Proposta enviada", tipo_etapa="final", cor="#2E7D32"
+            fluxo_id=9,
+            nome="Proposta enviada",
+            tipo_etapa="finalizacao",
+            cor="#2E7D32",
         )
 
     _, req, _ = cliente.chamadas[-1]
     assert req.fluxo_id == 9
-    assert req.tipo_etapa == "final"
+    assert req.tipo_etapa == "finalizacao"
     assert req.cor == "#2E7D32"
 
 
@@ -162,21 +165,59 @@ async def test_create_atendente_leva_departamento_e_fluxo():
     assert req.fluxo_id == 9
 
 
-async def test_update_departamento_exige_os_campos_porque_substitui():
+async def test_update_departamento_so_muda_o_informado():
     servidor, registro, executor, cliente, _ = montar_ambiente(
-        {"UpdateMyDepartamento": pb.SimpleOkResponse(sucesso=True)}
+        {
+            "ListMyDepartamentos": pb.ListMyDepartamentosResponse(
+                departamentos=[
+                    pb.MyDepartamento(
+                        id=4, nome="Comercial", descricao="antiga", ativo=True
+                    )
+                ]
+            ),
+            "UpdateMyDepartamento": pb.SimpleOkResponse(sucesso=True),
+        }
     )
     configuracao.registrar(servidor, registro, executor)
 
     with como(ADMIN):
+        simulado = await servidor.funcoes["update_departamento"](
+            departamento_id=4, descricao="Contas grandes", dry_run=True
+        )
         await servidor.funcoes["update_departamento"](
-            departamento_id=4, nome="Comercial B2B", descricao="Contas grandes"
+            departamento_id=4, descricao="Contas grandes"
         )
 
+    # A simulação diz o que muda de fato — não "renomear".
+    assert "descricao" in simulado and "nome" not in simulado.split("alterar")[1]
     _, req, _ = cliente.chamadas[-1]
     assert req.id == 4
-    assert req.nome == "Comercial B2B"
+    assert req.nome == "Comercial"
+    assert req.descricao == "Contas grandes"
     assert req.ativo is True
+
+
+async def test_update_fluxo_preserva_o_que_nao_foi_informado():
+    servidor, registro, executor, cliente, _ = montar_ambiente(
+        {
+            "ListMyFluxos": pb.ListMyFluxosResponse(
+                fluxos=[pb.MyFluxo(id=9, nome="Funil", descricao="d", ativo=True)]
+            ),
+            "UpdateMyFluxo": pb.SimpleOkResponse(sucesso=True),
+        }
+    )
+    configuracao.registrar(servidor, registro, executor)
+
+    with como(ADMIN):
+        nada = await servidor.funcoes["update_fluxo"](
+            fluxo_id=9, nome="Funil", dry_run=True
+        )
+        await servidor.funcoes["update_fluxo"](fluxo_id=9, nome="Funil de Vendas")
+
+    assert "nada" in nada
+    _, req, _ = cliente.chamadas[-1]
+    assert req.nome == "Funil de Vendas"
+    assert req.descricao == "d"
 
 
 # ---------------------------------------------------------------------------

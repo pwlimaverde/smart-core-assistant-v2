@@ -172,7 +172,10 @@ def registrar(
                 "id": a.id,
                 "nome": a.nome,
                 "cargo": a.cargo,
+                "email": a.email,
                 "departamento_id": a.departamento_id,
+                # 0 = atende todos os fluxos do departamento.
+                "fluxo_id": a.fluxo_id,
                 "ativo": a.ativo,
                 "disponivel": a.disponivel,
                 "max_atendimentos_simultaneos": a.max_atendimentos_simultaneos,
@@ -382,6 +385,13 @@ def registrar(
             "get_tenant_config", "GetMyTenantConfig", pb.GetMyTenantConfigRequest()
         )
         return {
+            "observacao": (
+                "Campos de modelo, provedor e embeddings VAZIOS não são falta de "
+                "configuração: o negócio usa o padrão global do sistema, "
+                "definido pelo administrador. provedores_configurados lista só "
+                "as chaves PRÓPRIAS do negócio — vazio significa que ele usa as "
+                "chaves globais."
+            ),
             "dados_empresa": resposta.dados_empresa,
             "persona_bot": resposta.persona_bot,
             "nome_do_agente": resposta.bot_agent_name,

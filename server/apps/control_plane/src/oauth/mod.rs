@@ -727,6 +727,14 @@ pub struct TokenForm {
 }
 
 fn erro_token(status: StatusCode, erro: &str, descricao: &str) -> Response {
+    // Toda recusa no endpoint de token fica registrada com o motivo. Sem isto
+    // a renovação falhou em silêncio por semanas: o cliente só dizia que "o
+    // usuário não concluiu a autenticação", e o servidor não tinha uma linha.
+    tracing::warn!(
+        erro,
+        motivo = descricao,
+        "endpoint de token recusou o pedido"
+    );
     (
         status,
         // `no-store` é exigência da RFC 6749 §5.1 para respostas com token: um
@@ -979,6 +987,7 @@ async fn token_por_refresh(estado: OauthState, form: TokenForm) -> Response {
         );
     }
 
+    tracing::info!(%grant_id, "token MCP renovado");
     emitir_par_de_tokens(
         &estado, grant_id, user_id, tenant_id, &client_id, &efetivos, cfg,
     )

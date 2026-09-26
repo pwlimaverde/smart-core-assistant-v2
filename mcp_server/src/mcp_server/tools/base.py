@@ -12,6 +12,7 @@ import binascii
 import time
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx2 as httpx
@@ -148,6 +149,49 @@ class Executor:
         self.metricas.tool_executada(tool.nome, "dry_run", 0.0)
 
 
+#: Campos de data que o contrato manda em epoch ms. Viram ISO 8601 na saída:
+#: um "1789260542401" não diz nada a quem lê, e o modelo erra a conta.
+_CAMPOS_DE_DATA = (
+    "criado_em",
+    "criada_em",
+    "atualizado_em",
+    "created_at",
+    "expires_at",
+    "timestamp",
+    "quando",
+    "ultima_interacao",
+    "cadastrado_em",
+    "data_inicio",
+    "data_ultima_mensagem",
+    "ultima_checagem",
+)
+
+
+def _iso(valor: Any) -> Any:
+    try:
+        ms = int(valor)
+    except (TypeError, ValueError):
+        return valor
+    if ms <= 0:
+        return None
+    return (
+        datetime.fromtimestamp(ms / 1000, tz=UTC)
+        .isoformat(timespec="seconds")
+        .replace("+00:00", "Z")
+    )
+
+
+def _datas_em_iso(valor: Any) -> Any:
+    if isinstance(valor, dict):
+        return {
+            k: (_iso(v) if k in _CAMPOS_DE_DATA else _datas_em_iso(v))
+            for k, v in valor.items()
+        }
+    if isinstance(valor, list):
+        return [_datas_em_iso(v) for v in valor]
+    return valor
+
+
 def para_dict(mensagem: Any) -> dict[str, Any]:
     """Resposta protobuf → dicionário, com os nomes de campo do contrato.
 
@@ -156,11 +200,13 @@ def para_dict(mensagem: Any) -> dict[str, Any]:
     ao agente sem que teste nenhum perceba. Campos com valor padrão entram
     também: um `ativo: false` ausente seria lido como "não sei".
     """
-    return MessageToDict(
+    bruto = MessageToDict(
         mensagem,
         preserving_proto_field_name=True,
         always_print_fields_with_no_presence=True,
     )
+    convertido: dict[str, Any] = _datas_em_iso(bruto)
+    return convertido
 
 
 #: Teto de arquivo enviado pelo agente (base64 decodificado). O agente carrega o

@@ -254,6 +254,42 @@ pub async fn buscar_ativo_com_segredo(
     }
 }
 
+/// Como [`buscar_ativo_com_segredo`], mas só pelo id — para a renovação do
+/// token, em que o tenant ainda não é conhecido (o refresh token carrega só o
+/// id do grant).
+///
+/// Exige o pool com BYPASSRLS: pela RLS, sem tenant na sessão a linha é
+/// invisível. Era exatamente o defeito: a renovação buscava com tenant nulo, o
+/// `tenant_id = $2` nunca casava, e TODA renovação falhava em silêncio — o
+/// cliente MCP perdia a sessão a cada 15 minutos. O id do grant é UUID
+/// aleatório, e a rota é interna (só o `control_plane` a alcança).
+#[tracing::instrument(skip_all, fields(grant_id = %grant_id))]
+pub async fn buscar_ativo_com_segredo_por_id(
+    admin_pool: &sqlx::PgPool,
+    grant_id: Uuid,
+) -> Result<Option<McpGrantComSegredo>, DbError> {
+    let row = sqlx::query(
+        "SELECT id, tenant_id, user_id, client_id, client_name, redirect_uri,
+                scopes, last_used_at, revoked_at, created_at, refresh_token_hash
+           FROM mcp_oauth_grant
+          WHERE id = $1 AND revoked_at IS NULL",
+    )
+    .bind(grant_id)
+    .fetch_optional(admin_pool)
+    .await?;
+
+    match row {
+        Some(row) => {
+            let refresh_token_hash: Option<String> = row.try_get("refresh_token_hash")?;
+            Ok(Some(McpGrantComSegredo {
+                grant: McpGrant::da_linha(&row)?,
+                refresh_token_hash,
+            }))
+        }
+        None => Ok(None),
+    }
+}
+
 /// Derruba o grant por detecção de reuso de refresh token já rotacionado.
 ///
 /// Não é "recusar a requisição": um refresh antigo sendo apresentado significa

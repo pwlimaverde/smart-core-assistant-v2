@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import inspect
+import json
 import os
 from typing import Any
 
@@ -92,6 +93,18 @@ def _respostas() -> Respostas:
             ),
             "ListMyMensagensNaoEntregues": pb.ListMyMensagensNaoEntreguesResponse(
                 itens=[pb.MensagemNaoEntregue(id=1, atendimento_id=7)]
+            ),
+            "ListMyAtendentes": pb.ListMyAtendentesResponse(
+                atendentes=[
+                    pb.MyAtendente(
+                        id=2,
+                        nome="Paulo",
+                        cargo="Vendedor",
+                        departamento_id=416,
+                        fluxo_id=301,
+                        ativo=True,
+                    )
+                ]
             ),
             "ListMyNumerosIgnorados": pb.ListMyNumerosIgnoradosResponse(
                 itens=[pb.MyNumeroIgnorado(id=1, telefone="558599")]
@@ -665,3 +678,86 @@ def test_para_dict_inclui_campos_com_valor_padrao():
     d = para_dict(pb.MyContato(id=1, ativo=False))
     assert d["ativo"] is False
     assert d["id"] == 1
+
+
+async def test_update_atendente_nao_zera_o_fluxo():
+    servidor, cliente, _ = _montar()
+    with como(ADMIN):
+        await servidor.funcoes["update_atendente"](atendente_id=2, cargo="Gerente")
+    _, req, _ = cliente.chamadas[-1]
+    assert req.cargo == "Gerente"
+    # O que não foi informado continua como estava — o fluxo inclusive.
+    assert req.fluxo_id == 301
+    assert req.departamento_id == 416
+    assert req.nome == "Paulo"
+
+
+def test_tipos_de_entidade_aceitam_objeto_texto_e_formato_da_v1():
+    normalizar = configuracao_tenant.normalizar_tipos_de_entidade
+    assert json.loads(normalizar({"cidade": "onde mora"})) == {"cidade": "onde mora"}
+    assert json.loads(normalizar(["cpf"])) == ["cpf"]
+    # Texto JSON, e texto JSON codificado duas vezes.
+    assert json.loads(normalizar('{"cpf": "doc"}')) == {"cpf": "doc"}
+    assert json.loads(normalizar(json.dumps('{"cpf": "doc"}'))) == {"cpf": "doc"}
+    # Backup da v1: embrulhado e com categorias.
+    v1 = {"entity_types": {"produto": {"dimensoes": "tamanho"}}}
+    assert json.loads(normalizar(v1)) == {"dimensoes": "tamanho [produto]"}
+    for ruim in ("não é json", 42):
+        with pytest.raises(ToolError):
+            normalizar(ruim)
+
+
+async def test_dry_run_valida_como_a_chamada_real():
+    """A simulação não pode aprovar o que a chamada real recusaria."""
+    servidor, cliente, _ = _montar()
+    with como(ADMIN):
+        with pytest.raises(ToolError):
+            await servidor.funcoes["update_config_avancada"](
+                primary_color="verde", dry_run=True
+            )
+        with pytest.raises(ToolError):
+            await servidor.funcoes["update_config_avancada"](
+                entity_types_json="{quebrado", dry_run=True
+            )
+        with pytest.raises(ToolError):
+            await servidor.funcoes["set_prompts"](
+                prompts=[configuracao_tenant.Prompt(chave="OPENAI_API_KEY", texto="x")],
+                dry_run=True,
+            )
+        ok = await servidor.funcoes["update_config_avancada"](
+            entity_types_json={"entity_types": {"p": {"cor": "c"}}}, dry_run=True
+        )
+    assert "SIMULAÇÃO" in ok
+    assert "UpdateMyConfigAvancada" not in cliente.metodos
+
+
+async def test_tipos_de_entidade_chegam_normalizados_ao_backend():
+    servidor, cliente, _ = _montar()
+    with como(ADMIN):
+        await servidor.funcoes["update_config_avancada"](
+            entity_types_json={"dimensoes": "tamanho"}
+        )
+    _, req, _ = cliente.chamadas[-1]
+    assert json.loads(req.entity_types_json) == {"dimensoes": "tamanho"}
+
+
+def test_datas_saem_em_iso():
+    d = para_dict(pb.MyIntent(id=1, criado_em=1789260542401, atualizado_em=0))
+    assert d["criado_em"].startswith("2026-")
+    assert d["criado_em"].endswith("Z")
+    # Zero é "sem data", e não 1970.
+    assert d["atualizado_em"] is None
+
+
+async def test_list_atendentes_traz_o_fluxo():
+    servidor, _, _ = _montar()
+    with como(ADMIN):
+        ats = await servidor.funcoes["list_atendentes"]()
+    assert ats[0]["fluxo_id"] == 301
+
+
+async def test_get_tenant_config_explica_a_heranca_do_global():
+    servidor, _, _ = _montar()
+    with como(ADMIN):
+        cfg = await servidor.funcoes["get_tenant_config"]()
+    assert "padrão global" in cfg["observacao"]

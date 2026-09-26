@@ -8,8 +8,9 @@ para a tarefa que ele existe para fazer — configurar um funil do zero.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any, Literal
 
+from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import Field
 
 from mcp_server.grpc.contracts import admin_pb2 as pb
@@ -79,34 +80,56 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
         departamento_id: Annotated[
             int, Field(description="Id, obtido em `list_departamentos`.")
         ],
-        nome: Annotated[str, Field(description="Novo nome.")],
+        nome: Annotated[
+            str | None, Field(default=None, description="Novo nome.")
+        ] = None,
         descricao: Annotated[
-            str, Field(default="", description="Nova descrição.")
-        ] = "",
-        ativo: Annotated[bool, Field(default=True, description="Manter ativo.")] = True,
+            str | None, Field(default=None, description="Nova descrição.")
+        ] = None,
+        ativo: Annotated[
+            bool | None, Field(default=None, description="Ativo ou não.")
+        ] = None,
         dry_run: Annotated[
             bool, Field(default=False, description="Só simular.")
         ] = False,
     ) -> str:
         """Altera nome, descrição ou situação de um departamento existente.
 
-        Passe todos os campos, não só o que muda: esta tool **substitui** os
-        valores, então omitir a descrição a apaga. Leia o valor atual em
-        `list_departamentos` antes.
+        Só o que for informado muda; o resto é mantido como está.
         """
         tool = registro.exigir("update_departamento")
+        lista = await executor.executar(
+            "update_departamento",
+            "ListMyDepartamentos",
+            pb.ListMyDepartamentosRequest(),
+            contabilizar=False,
+        )
+        atual = next((d for d in lista.departamentos if d.id == departamento_id), None)
+        if atual is None:
+            raise ToolError(
+                f"O departamento {departamento_id} não existe. "
+                "Confira em `list_departamentos`."
+            )
+        novo: dict[str, Any] = {
+            "nome": atual.nome if nome is None else nome,
+            "descricao": atual.descricao if descricao is None else descricao,
+            "ativo": atual.ativo if ativo is None else ativo,
+        }
+        mudancas = [k for k, v in novo.items() if v != getattr(atual, k)]
         if dry_run:
             executor.registrar_simulacao(tool)
-            return resultado_dry_run(tool, f"renomear o departamento {departamento_id}")
-
+            return resultado_dry_run(
+                tool,
+                f"alterar {', '.join(mudancas)} do departamento '{atual.nome}'"
+                if mudancas
+                else f"nada — o departamento '{atual.nome}' já está assim",
+            )
         await executor.executar(
             "update_departamento",
             "UpdateMyDepartamento",
-            pb.UpdateMyDepartamentoRequest(
-                id=departamento_id, nome=nome, descricao=descricao, ativo=ativo
-            ),
+            pb.UpdateMyDepartamentoRequest(id=departamento_id, **novo),
         )
-        return f"Departamento {departamento_id} atualizado."
+        return f"Departamento '{novo['nome']}' atualizado."
 
     # -- Fluxos --------------------------------------------------------------
 
@@ -159,33 +182,57 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
     )
     async def update_fluxo(
         fluxo_id: Annotated[int, Field(description="Id do fluxo, de `list_fluxos`.")],
-        nome: Annotated[str, Field(description="Novo nome.")],
+        nome: Annotated[
+            str | None, Field(default=None, description="Novo nome.")
+        ] = None,
         descricao: Annotated[
-            str, Field(default="", description="Nova descrição.")
-        ] = "",
-        ativo: Annotated[bool, Field(default=True, description="Manter ativo.")] = True,
+            str | None, Field(default=None, description="Nova descrição.")
+        ] = None,
         dry_run: Annotated[
             bool, Field(default=False, description="Só simular.")
         ] = False,
     ) -> str:
-        """Altera nome, descrição ou situação de um fluxo.
+        """Altera nome ou descrição de um fluxo. Só o que for informado muda.
 
         Para desativar um fluxo use `desativar_fluxo`, que pede confirmação — é
         uma ação com consequência para os atendimentos abertos nele.
         """
         tool = registro.exigir("update_fluxo")
+        lista = await executor.executar(
+            "update_fluxo", "ListMyFluxos", pb.ListMyFluxosRequest(), contabilizar=False
+        )
+        atual = next((f for f in lista.fluxos if f.id == fluxo_id), None)
+        if atual is None:
+            raise ToolError(f"O fluxo {fluxo_id} não existe. Confira em `list_fluxos`.")
+        novo_nome = atual.nome if nome is None else nome
+        nova_descricao = atual.descricao if descricao is None else descricao
+        mudancas = [
+            campo
+            for campo, antes, depois in (
+                ("nome", atual.nome, novo_nome),
+                ("descricao", atual.descricao, nova_descricao),
+            )
+            if antes != depois
+        ]
         if dry_run:
             executor.registrar_simulacao(tool)
-            return resultado_dry_run(tool, f"atualizar o fluxo {fluxo_id}")
-
+            return resultado_dry_run(
+                tool,
+                f"alterar {', '.join(mudancas)} do fluxo '{atual.nome}'"
+                if mudancas
+                else f"nada — o fluxo '{atual.nome}' já está assim",
+            )
         await executor.executar(
             "update_fluxo",
             "UpdateMyFluxo",
             pb.UpdateMyFluxoRequest(
-                id=fluxo_id, nome=nome, descricao=descricao, ativo=ativo
+                id=fluxo_id,
+                nome=novo_nome,
+                descricao=nova_descricao,
+                ativo=atual.ativo,
             ),
         )
-        return f"Fluxo {fluxo_id} atualizado."
+        return f"Fluxo '{novo_nome}' atualizado."
 
     # -- Etapas --------------------------------------------------------------
 
@@ -201,15 +248,16 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
             str, Field(description="Nome da etapa, ex.: 'Proposta enviada'.")
         ],
         tipo_etapa: Annotated[
-            str,
+            Literal["fila", "trabalho", "espera", "finalizacao"],
             Field(
-                default="intermediaria",
+                default="trabalho",
                 description=(
-                    "Papel da etapa no funil: 'inicial' para a primeira, "
-                    "'intermediaria' para o meio, 'final' para a conclusão."
+                    "Papel da etapa no quadro: 'fila' (entrada), 'trabalho' "
+                    "(em andamento), 'espera' (pendência, depende de terceiro) "
+                    "ou 'finalizacao' (resolvido/cancelado)."
                 ),
             ),
-        ] = "intermediaria",
+        ] = "trabalho",
         cor: Annotated[
             str, Field(default="", description="Cor em hexadecimal, ex.: '#2E7D32'.")
         ] = "",

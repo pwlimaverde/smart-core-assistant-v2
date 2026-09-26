@@ -37,11 +37,40 @@ pub struct ConfigAvancada {
 /// embrulhado em `{"entity_types": {...}}`; sem desembrulhar, o único "tipo"
 /// seria a própria palavra `entity_types`.
 pub fn normalizar_tipos_de_entidade(valor: serde_json::Value) -> Result<serde_json::Value, String> {
+    // JSON codificado duas vezes: o cliente mandou a string de um JSON dentro
+    // de outra string. Desembrulha em vez de recusar.
+    let valor = match valor {
+        serde_json::Value::String(texto) => serde_json::from_str(&texto)
+            .map_err(|e| format!("tipos de entidade: JSON inválido ({e})"))?,
+        outro => outro,
+    };
     let valor = match valor {
         serde_json::Value::Object(mut mapa)
             if mapa.len() == 1 && mapa.contains_key("entity_types") =>
         {
             mapa.remove("entity_types").unwrap_or_default()
+        }
+        outro => outro,
+    };
+    // Categorias da v1 (`{"categoria": {"tipo": "descrição"}}`): a análise lê
+    // os TIPOS, e sem achatar veria só os nomes das categorias.
+    let valor = match valor {
+        serde_json::Value::Object(mapa)
+            if !mapa.is_empty() && mapa.values().all(|v| v.is_object()) =>
+        {
+            let mut plano = serde_json::Map::new();
+            for (categoria, itens) in mapa {
+                if let serde_json::Value::Object(itens) = itens {
+                    for (tipo, desc) in itens {
+                        let desc = desc.as_str().unwrap_or_default();
+                        plano.insert(
+                            tipo,
+                            serde_json::Value::String(format!("{desc} [{categoria}]")),
+                        );
+                    }
+                }
+            }
+            serde_json::Value::Object(plano)
         }
         outro => outro,
     };
@@ -227,9 +256,17 @@ mod testes {
     fn tipos_da_v1_sao_desembrulhados() {
         let v1 = serde_json::json!({ "entity_types": { "produto_grafico": { "dimensoes": "tamanho" } } });
         let v = normalizar_tipos_de_entidade(v1).unwrap();
-        assert!(v.get("produto_grafico").is_some());
+        // Categorias achatadas: o tipo fica, a categoria vai para a descrição.
+        assert_eq!(v["dimensoes"], "tamanho [produto_grafico]");
+        assert!(v.get("produto_grafico").is_none());
         assert!(normalizar_tipos_de_entidade(serde_json::json!(["cpf"])).is_ok());
         assert!(normalizar_tipos_de_entidade(serde_json::json!("cpf")).is_err());
+        // Codificado duas vezes: a string de um objeto JSON.
+        let duplo = serde_json::json!("{\"cidade\": \"onde mora\"}");
+        assert!(normalizar_tipos_de_entidade(duplo)
+            .unwrap()
+            .get("cidade")
+            .is_some());
     }
 
     #[test]

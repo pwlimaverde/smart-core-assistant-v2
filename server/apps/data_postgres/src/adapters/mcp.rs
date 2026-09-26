@@ -17,11 +17,14 @@ use crate::ports::McpGrantStore;
 #[derive(Clone)]
 pub struct PgMcpGrantStore {
     pub pool: PgPool,
+    /// Pool com BYPASSRLS, só para a busca do grant na renovação do token,
+    /// quando o tenant ainda não é conhecido.
+    pub admin_pool: Option<PgPool>,
 }
 
 impl PgMcpGrantStore {
-    pub fn new(pool: PgPool) -> Self {
-        Self { pool }
+    pub fn new(pool: PgPool, admin_pool: Option<PgPool>) -> Self {
+        Self { pool, admin_pool }
     }
 }
 
@@ -135,6 +138,17 @@ impl McpGrantStore for PgMcpGrantStore {
         tenant_id: Uuid,
         grant_id: Uuid,
     ) -> Result<Option<McpGrantComSegredo>, DbError> {
+        // Renovação de token: o refresh token só carrega o id do grant.
+        if tenant_id.is_nil() {
+            let Some(admin) = self.admin_pool.as_ref() else {
+                tracing::warn!(
+                    "renovação do token MCP sem DATABASE_ADMIN_URL: a RLS esconde \
+                     o consentimento e a renovação vai falhar"
+                );
+                return grants::buscar_ativo_com_segredo_por_id(&self.pool, grant_id).await;
+            };
+            return grants::buscar_ativo_com_segredo_por_id(admin, grant_id).await;
+        }
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
             let achado = grants::buscar_ativo_com_segredo(&mut tx, tenant_id, grant_id).await?;
             Ok((achado, tx))

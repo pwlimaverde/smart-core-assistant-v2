@@ -282,8 +282,9 @@ async fn main() -> anyhow::Result<()> {
     );
     let voucher_store: std::sync::Arc<dyn ports::VoucherStore> =
         std::sync::Arc::new(adapters::PgVoucherStore::new(pool.clone()));
-    let mcp_grant_store: std::sync::Arc<dyn ports::McpGrantStore> =
-        std::sync::Arc::new(adapters::PgMcpGrantStore::new(pool.clone()));
+    let mcp_grant_store: std::sync::Arc<dyn ports::McpGrantStore> = std::sync::Arc::new(
+        adapters::PgMcpGrantStore::new(pool.clone(), admin_pool.clone()),
+    );
 
     let state = AppState {
         pool: pool.clone(),

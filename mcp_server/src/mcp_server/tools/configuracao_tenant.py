@@ -14,6 +14,8 @@ parcial por construção.
 
 from __future__ import annotations
 
+import json
+import re
 from typing import Annotated, Any, Literal
 
 from mcp.server.mcpserver.exceptions import ToolError
@@ -46,6 +48,72 @@ CAMPOS_GERAIS = (
     "confianca_minima_transferencia",
     "confianca_minima_automatica",
 )
+
+
+def normalizar_tipos_de_entidade(valor: Any) -> str:
+    """Aceita objeto, lista, texto JSON (inclusive codificado duas vezes) e o
+    formato da v1, e devolve o texto JSON que o servidor grava.
+
+    Formatos aceitos:
+    - `{"tipo": "descrição"}` ou `["tipo", ...]`;
+    - `{"entity_types": {...}}` (backup da v1);
+    - categorias da v1 — `{"categoria": {"tipo": "descrição"}}` — que viram
+      um objeto só, `{"tipo": "descrição [categoria]"}`: a análise lê os
+      TIPOS, e sem achatar ela veria só os nomes das categorias.
+    """
+    for _ in range(2):
+        if isinstance(valor, str):
+            try:
+                valor = json.loads(valor)
+            except json.JSONDecodeError:
+                raise ToolError(
+                    "tipos de entidade: o texto não é JSON válido."
+                ) from None
+    if isinstance(valor, dict) and set(valor) == {"entity_types"}:
+        valor = valor["entity_types"]
+    if (
+        isinstance(valor, dict)
+        and valor
+        and all(isinstance(v, dict) for v in valor.values())
+    ):
+        valor = {
+            tipo: f"{desc} [{categoria}]"
+            for categoria, itens in valor.items()
+            for tipo, desc in itens.items()
+        }
+    if not isinstance(valor, dict | list):
+        raise ToolError(
+            "tipos de entidade: use um objeto {tipo: descrição} ou uma lista de nomes."
+        )
+    return json.dumps(valor, ensure_ascii=False)
+
+
+def _validar_avancada(pedidos: dict[str, Any]) -> None:
+    """As mesmas regras do servidor, antes de chamar — é o que faz o
+    `dry_run` falhar onde a chamada real falharia."""
+    for campo in ("primary_color", "secondary_color"):
+        cor = pedidos.get(campo)
+        if cor is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", cor):
+            raise ToolError(f"{campo}: use o formato #RRGGBB.")
+    for campo, teto in (
+        ("brand_name", 100),
+        ("timezone", 50),
+        ("language_code", 10),
+        ("msg_pesquisa_satisfacao", 500),
+    ):
+        texto = pedidos.get(campo)
+        if texto is not None and len(texto) > teto:
+            raise ToolError(f"{campo}: no máximo {teto} caracteres.")
+
+
+def _validar_chave_de_prompt(chave: str) -> str:
+    normal = chave.strip().upper()
+    if not re.fullmatch(r"PROMPT_[A-Z_]+", normal):
+        raise ToolError(
+            f"Chave de prompt inválida: '{chave}'. Use PROMPT_* "
+            "(ex.: PROMPT_REGRAS_RESPOSTA)."
+        )
+    return normal
 
 
 class Prompt(BaseModel):
@@ -238,13 +306,14 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
     )
     async def update_config_avancada(
         entity_types_json: Annotated[
-            str | None,
+            dict[str, Any] | list[str] | str | None,
             Field(
                 default=None,
                 description=(
-                    "Tipos de entidade que a IA extrai, em JSON: objeto "
-                    '{"tipo": "descrição"} ou lista de nomes. Aceita o formato '
-                    'da v1 ({"entity_types": {...}}).'
+                    "Tipos de entidade que a IA extrai: objeto "
+                    '{"tipo": "descrição"}, lista de nomes, ou o mesmo em texto '
+                    "JSON. Aceita o formato da v1 (com ou sem "
+                    '{"entity_types": ...} e com categorias).'
                 ),
             ),
         ] = None,
@@ -291,6 +360,11 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
         pedidos: dict[str, Any] = {k: v for k, v in campos.items() if v is not None}
         if not pedidos:
             raise ToolError("Informe ao menos um campo para alterar.")
+        if "entity_types_json" in pedidos:
+            pedidos["entity_types_json"] = normalizar_tipos_de_entidade(
+                pedidos["entity_types_json"]
+            )
+        _validar_avancada(pedidos)
         if dry_run:
             executor.registrar_simulacao(tool)
             return resultado_dry_run(tool, f"alterar {', '.join(sorted(pedidos))}")
@@ -319,7 +393,7 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
         tool = registro.exigir("set_prompts")
         if not prompts:
             raise ToolError("Informe ao menos um prompt.")
-        chaves = ", ".join(p.chave.upper() for p in prompts)
+        chaves = ", ".join(_validar_chave_de_prompt(p.chave) for p in prompts)
         if dry_run:
             executor.registrar_simulacao(tool)
             return resultado_dry_run(tool, f"gravar os prompts {chaves}")

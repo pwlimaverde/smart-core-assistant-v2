@@ -8,7 +8,7 @@ some das fichas e do prompt da IA e por isso pede confirmação pelo nome.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import Field
@@ -538,36 +538,59 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
     )
     async def update_atendente(
         atendente_id: Annotated[int, Field(description="Id, de `list_atendentes`.")],
-        nome: str,
-        departamento_id: int,
-        cargo: str = "",
-        fluxo_id: Annotated[int, Field(default=0, description="0 = todos.")] = 0,
-        ativo: bool = True,
-        disponivel: bool = True,
-        max_atendimentos_simultaneos: int = 0,
+        nome: str | None = None,
+        cargo: str | None = None,
+        departamento_id: int | None = None,
+        fluxo_id: Annotated[
+            int | None, Field(default=None, description="0 = todos os fluxos.")
+        ] = None,
+        ativo: bool | None = None,
+        disponivel: bool | None = None,
+        max_atendimentos_simultaneos: int | None = None,
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Edita um atendente: cargo, departamento, fluxo, disponibilidade e
-        limite de atendimentos simultâneos. Todos os campos são gravados."""
+        """Edita um atendente: nome, cargo, departamento, fluxo, disponibilidade
+        e limite de atendimentos simultâneos. Só o que for informado muda — o
+        resto (inclusive o fluxo) é mantido como está."""
         tool = registro.exigir("update_atendente")
+        lista = await executor.executar(
+            "update_atendente",
+            "ListMyAtendentes",
+            pb.ListMyAtendentesRequest(),
+            contabilizar=False,
+        )
+        atual = next((a for a in lista.atendentes if a.id == atendente_id), None)
+        if atual is None:
+            raise ToolError(
+                f"O atendente {atendente_id} não existe. Confira em `list_atendentes`."
+            )
+        pedidos = {
+            "nome": nome,
+            "cargo": cargo,
+            "departamento_id": departamento_id,
+            "fluxo_id": fluxo_id,
+            "ativo": ativo,
+            "disponivel": disponivel,
+            "max_atendimentos_simultaneos": max_atendimentos_simultaneos,
+        }
+        novo: dict[str, Any] = {
+            k: (getattr(atual, k) if v is None else v) for k, v in pedidos.items()
+        }
+        mudancas = [k for k, v in novo.items() if v != getattr(atual, k)]
         if dry_run:
             executor.registrar_simulacao(tool)
-            return resultado_dry_run(tool, "alterar o atendente")
+            return resultado_dry_run(
+                tool,
+                f"alterar {', '.join(mudancas)} de '{atual.nome}'"
+                if mudancas
+                else f"nada — '{atual.nome}' já está assim",
+            )
         await executor.executar(
             "update_atendente",
             "UpdateMyAtendente",
-            pb.UpdateMyAtendenteRequest(
-                id=atendente_id,
-                nome=nome,
-                cargo=cargo,
-                departamento_id=departamento_id,
-                fluxo_id=fluxo_id,
-                ativo=ativo,
-                disponivel=disponivel,
-                max_atendimentos_simultaneos=max_atendimentos_simultaneos,
-            ),
+            pb.UpdateMyAtendenteRequest(id=atendente_id, **novo),
         )
-        return f"Atendente {atendente_id} atualizado."
+        return f"Atendente '{novo['nome']}' atualizado."
 
     # -- Auditoria ------------------------------------------------------------
 
