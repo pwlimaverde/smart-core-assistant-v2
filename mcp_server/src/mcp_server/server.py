@@ -34,7 +34,17 @@ from mcp_server import settings as config
 from mcp_server import telemetry
 from mcp_server.auth.token_verifier import TrocadorDeToken, VerificadorDeToken
 from mcp_server.grpc.runtime_client import RuntimeApiClient
-from mcp_server.tools import configuracao, destrutivas, envio, leitura
+from mcp_server.tools import (
+    atendimento,
+    cadastros,
+    configuracao,
+    configuracao_tenant,
+    destrutivas,
+    envio,
+    equipe_whatsapp,
+    leitura,
+    treinamento_ia,
+)
 from mcp_server.tools.base import Executor
 from mcp_server.tools.guards import LimiteCategoria, RateLimiter
 from mcp_server.tools.registry import Categoria, Registro, ServidorMcpFiltrado
@@ -54,6 +64,10 @@ Como trabalhar aqui:
    desfazer**. Mostre o texto antes de enviar, sempre.
 4. Se uma tool responder que falta permissão, não tente de novo com outros \
    argumentos: a pessoa precisa reconectar o aplicativo concedendo aquele acesso.
+
+5. Configuração do assistente: `get_tenant_config` mostra tudo (inclusive os \
+   prompts do negócio). `update_tenant_config`, `update_config_avancada` e \
+   `set_prompts` mudam só o que for informado.
 
 As tools que você enxerga são as que a autorização permite. Se algo que você \
 esperava não aparece, é permissão — não é falha do servidor.\
@@ -132,8 +146,14 @@ def montar() -> ServidorMcpFiltrado:
     # A ordem de registro é a ordem de `tools/list`. Leitura primeiro: é o que o
     # agente precisa chamar antes de qualquer outra coisa, e modelos dão peso à
     # ordem em que as ferramentas aparecem.
-    leitura.registrar(mcp, registro, executor, teto=cfg.max_itens_por_pagina)
+    teto = cfg.max_itens_por_pagina
+    leitura.registrar(mcp, registro, executor, teto=teto)
     configuracao.registrar(mcp, registro, executor)
+    configuracao_tenant.registrar(mcp, registro, executor)
+    cadastros.registrar(mcp, registro, executor, teto=teto)
+    treinamento_ia.registrar(mcp, registro, executor, teto=teto)
+    atendimento.registrar(mcp, registro, executor, teto=teto)
+    equipe_whatsapp.registrar(mcp, registro, executor, teto=teto)
     envio.registrar(mcp, registro, executor)
     destrutivas.registrar(mcp, registro, executor)
 
@@ -153,9 +173,7 @@ def _registrar_icone(mcp: ServidorMcpFiltrado) -> None:
     O arquivo é lido uma vez, na subida, e servido de memória — são 7 KB, e um
     `open()` por request seria trabalho à toa.
     """
-    dados = (
-        resources.files("mcp_server.static").joinpath("icon-128.png").read_bytes()
-    )
+    dados = resources.files("mcp_server.static").joinpath("icon-128.png").read_bytes()
 
     @mcp.custom_route("/icon.png", methods=["GET"], include_in_schema=False)
     async def icone(_: Request) -> Response:

@@ -403,8 +403,15 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
     )
     async def marcar_atendimento_lido(
         atendimento_id: Annotated[int, ATENDIMENTO_ID],
+        dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
         """Marca as mensagens do cliente como lidas (zera o contador do cartão)."""
+        tool = registro.exigir("marcar_atendimento_lido")
+        if dry_run:
+            executor.registrar_simulacao(tool)
+            return resultado_dry_run(
+                tool, "marcar como lidas as mensagens do atendimento"
+            )
         r = await executor.executar(
             "marcar_atendimento_lido",
             "MarcarAtendimentoLido",
@@ -412,14 +419,23 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         )
         return f"{r.marcadas} mensagem(ns) marcada(s) como lida(s)."
 
-    registro.registrar("marcar_revisado", Categoria.CONFIGURACAO, ("atendimentos:write",))
+    registro.registrar(
+        "marcar_revisado", Categoria.CONFIGURACAO, ("atendimentos:write",)
+    )
 
     @mcp.tool(
         name="marcar_revisado", annotations=registro.exigir("marcar_revisado").anotacoes
     )
-    async def marcar_revisado(atendimento_id: Annotated[int, ATENDIMENTO_ID]) -> str:
+    async def marcar_revisado(
+        atendimento_id: Annotated[int, ATENDIMENTO_ID],
+        dry_run: Annotated[bool, DRY_RUN] = False,
+    ) -> str:
         """Tira a marca "A revisar" de uma conversa em que a IA respondeu com
         pouca confiança, depois de alguém conferir a resposta."""
+        tool = registro.exigir("marcar_revisado")
+        if dry_run:
+            executor.registrar_simulacao(tool)
+            return resultado_dry_run(tool, "tirar a marca 'A revisar' do atendimento")
         await executor.executar(
             "marcar_revisado",
             "MarcarRevisado",
@@ -440,8 +456,13 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         habilitado: Annotated[
             bool, Field(description="true = a IA volta a responder nesta conversa.")
         ],
+        dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
         """Liga ou desliga a IA **só nesta conversa** (o interruptor da ficha)."""
+        tool = registro.exigir("definir_bot_da_conversa")
+        if dry_run:
+            executor.registrar_simulacao(tool)
+            return resultado_dry_run(tool, "ligar/desligar a IA nesta conversa")
         r = await executor.executar(
             "definir_bot_da_conversa",
             "DefinirBotDaConversa",
@@ -459,8 +480,13 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
     async def create_nota(
         atendimento_id: Annotated[int, ATENDIMENTO_ID],
         texto: Annotated[str, Field(description="Nota interna (o cliente não vê).")],
+        dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
         """Acrescenta uma nota interna ao atendimento."""
+        tool = registro.exigir("create_nota")
+        if dry_run:
+            executor.registrar_simulacao(tool)
+            return resultado_dry_run(tool, "criar uma nota interna")
         r = await executor.executar(
             "create_nota",
             "CreateNota",
@@ -476,13 +502,30 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
     async def remover_nota(
         atendimento_id: Annotated[int, ATENDIMENTO_ID],
         nota_id: Annotated[int, Field(description="Id, de `get_ficha_atendimento`.")],
+        confirmar: Annotated[
+            str,
+            Field(default="", description="O id da nota de novo, como confirmação."),
+        ] = "",
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Remove uma nota interna. Não tem desfazer."""
+        """Remove uma nota interna. Não tem desfazer. A nota precisa ser deste
+        atendimento — o par é conferido no servidor."""
         tool = registro.exigir("remover_nota")
+        ficha = await executor.executar(
+            "remover_nota",
+            "GetDetalheAtendimento",
+            pb.AtendimentoIdRequest(atendimento_id=atendimento_id),
+            contabilizar=False,
+        )
+        if not any(n.id == nota_id for n in ficha.notas):
+            raise ToolError(
+                f"A nota {nota_id} não é do atendimento {atendimento_id}. "
+                "Confira em `get_ficha_atendimento`."
+            )
         if dry_run:
             executor.registrar_simulacao(tool)
             return resultado_dry_run(tool, f"remover a nota {nota_id}")
+        exigir_confirmacao(tool, str(nota_id), confirmar or None)
         await executor.executar(
             "remover_nota",
             "RemoverNota",
@@ -500,11 +543,18 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
     async def create_etiqueta(
         nome: Annotated[str, Field(description="Nome da etiqueta.")],
         cor: Annotated[str, Field(default="", description="#RRGGBB.")] = "",
+        dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
         """Cria uma etiqueta no catálogo do negócio. Confira antes, em
         `get_ficha_atendimento`, se já não existe uma igual."""
+        tool = registro.exigir("create_etiqueta")
+        if dry_run:
+            executor.registrar_simulacao(tool)
+            return resultado_dry_run(tool, "criar uma etiqueta no catálogo")
         r = await executor.executar(
-            "create_etiqueta", "CreateEtiqueta", pb.CreateEtiquetaRequest(nome=nome, cor=cor)
+            "create_etiqueta",
+            "CreateEtiqueta",
+            pb.CreateEtiquetaRequest(nome=nome, cor=cor),
         )
         return f"Etiqueta '{r.etiqueta.nome}' criada com o id {r.etiqueta.id}."
 
@@ -526,8 +576,13 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
                 description="Quando usar — a IA lê isto para etiquetar sozinha.",
             ),
         ] = "",
+        dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
         """Renomeia uma etiqueta ou muda cor e descrição."""
+        tool = registro.exigir("update_etiqueta")
+        if dry_run:
+            executor.registrar_simulacao(tool)
+            return resultado_dry_run(tool, "alterar a etiqueta")
         r = await executor.executar(
             "update_etiqueta",
             "UpdateEtiqueta",
@@ -592,7 +647,8 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
     )
 
     @mcp.tool(
-        name="aplicar_etiqueta", annotations=registro.exigir("aplicar_etiqueta").anotacoes
+        name="aplicar_etiqueta",
+        annotations=registro.exigir("aplicar_etiqueta").anotacoes,
     )
     async def aplicar_etiqueta(
         atendimento_id: Annotated[int, ATENDIMENTO_ID],
@@ -600,9 +656,14 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         aplicar: Annotated[
             bool, Field(default=True, description="false = tirar do atendimento.")
         ] = True,
+        dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
         """Coloca ou tira uma etiqueta de um atendimento. Tirar uma etiqueta que
         a IA pôs impede a IA de recolocá-la nesta conversa."""
+        tool = registro.exigir("aplicar_etiqueta")
+        if dry_run:
+            executor.registrar_simulacao(tool)
+            return resultado_dry_run(tool, "aplicar/retirar a etiqueta do atendimento")
         await executor.executar(
             "aplicar_etiqueta",
             "AlternarEtiqueta",
@@ -612,7 +673,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         )
         return "Etiqueta aplicada." if aplicar else "Etiqueta retirada."
 
-    registro.registrar("set_valor_campo", Categoria.CONFIGURACAO, ("atendimentos:write",))
+    registro.registrar(
+        "set_valor_campo", Categoria.CONFIGURACAO, ("atendimentos:write",)
+    )
 
     @mcp.tool(
         name="set_valor_campo", annotations=registro.exigir("set_valor_campo").anotacoes
@@ -630,9 +693,14 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
                 )
             ),
         ],
+        dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
         """Preenche um campo personalizado do cartão. Valor dado por pessoa não é
         sobrescrito depois pela IA."""
+        tool = registro.exigir("set_valor_campo")
+        if dry_run:
+            executor.registrar_simulacao(tool)
+            return resultado_dry_run(tool, "gravar o valor do campo")
         await executor.executar(
             "set_valor_campo",
             "SetMyValorCampo",
@@ -655,6 +723,16 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
             str, Field(description="O arquivo em base64 (até 16 MB).")
         ],
         legenda: Annotated[str, Field(default="", description="Texto junto.")] = "",
+        confirmar: Annotated[
+            str,
+            Field(
+                default="",
+                description=(
+                    "O `contato_id` deste atendimento (de `list_atendimentos`). "
+                    "Preencha só depois de conferir o envio com a pessoa."
+                ),
+            ),
+        ] = "",
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
         """Envia um arquivo (foto, PDF, áudio, vídeo) ao WhatsApp do cliente.
@@ -671,6 +749,13 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
                 f"enviar '{nome_arquivo}' ({len(dados)} bytes) no atendimento "
                 f"{atendimento_id}",
             )
+        contato = await executor.executar(
+            "send_media",
+            "ObterContatoDoAtendimento",
+            pb.ObterContatoDoAtendimentoRequest(atendimento_id=atendimento_id),
+            contabilizar=False,
+        )
+        exigir_confirmacao(tool, str(contato.contato_id), confirmar or None)
         up = await executor.executar(
             "send_media",
             "SolicitarUploadMidia",

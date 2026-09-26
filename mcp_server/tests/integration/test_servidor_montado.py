@@ -152,12 +152,12 @@ def test_token_de_audiencia_alheia_e_recusado_pelo_caminho_http(servidor, chaves
     assert r.status_code == 401
 
 
-def test_o_servidor_registra_as_28_tools_com_escopo_e_anotacao(servidor):
+def test_o_servidor_registra_as_100_tools_com_escopo_e_anotacao(servidor):
     """Invariantes do catálogo, verificadas no servidor montado de verdade."""
     registro = servidor._registro
     tools = registro.todos()
 
-    assert len(tools) == 28
+    assert len(tools) == 100
     # Nenhuma tool sem escopo: seria tool que qualquer token executa.
     assert all(t.escopos for t in tools)
     # Nomes válidos para a spec: [A-Za-z0-9_.-], até 128 caracteres.

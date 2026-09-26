@@ -399,4 +399,44 @@ def registrar(
             "provedores_configurados": sorted(
                 entrada.key for entrada in resposta.api_keys if entrada.value
             ),
+            "transcription_provider": resposta.transcription_provider,
+            "transcription_model": resposta.transcription_model,
+            "vision_provider": resposta.vision_provider,
+            "vision_model": resposta.vision_model,
+            "embeddings_class": resposta.embeddings_class,
+            "chunk_size": resposta.chunk_size,
+            "chunk_overlap": resposta.chunk_overlap,
+            "similarity_threshold": resposta.similarity_threshold,
+            "vector_distance_threshold": resposta.vector_distance_threshold,
+            "confianca_minima_transferencia": resposta.confianca_minima_transferencia,
+            "confianca_minima_automatica": resposta.confianca_minima_automatica,
+            # Configuração avançada. `None` = o negócio herda o padrão global.
+            "tipos_de_entidade_json": resposta.entity_types_json,
+            "prompts_do_negocio": {p.chave: p.texto for p in resposta.prompts},
+            "marca": resposta.brand_name,
+            "cor_primaria": resposta.primary_color,
+            "cor_secundaria": resposta.secondary_color,
+            "fuso": resposta.timezone,
+            "idioma": resposta.language_code,
+            "analise_previa_habilitada": (
+                resposta.analise_previa_habilitada
+                if resposta.HasField("analise_previa_habilitada")
+                else None
+            ),
+            "pesquisa_satisfacao_ativa": (
+                resposta.pesquisa_satisfacao_ativa
+                if resposta.HasField("pesquisa_satisfacao_ativa")
+                else None
+            ),
+            "msg_pesquisa_satisfacao": resposta.msg_pesquisa_satisfacao,
+            "minutos_inatividade_encerra": (
+                resposta.minutos_inatividade_encerra
+                if resposta.HasField("minutos_inatividade_encerra")
+                else None
+            ),
+            "transcricao_habilitada": (
+                resposta.transcription_enabled
+                if resposta.HasField("transcription_enabled")
+                else None
+            ),
         }

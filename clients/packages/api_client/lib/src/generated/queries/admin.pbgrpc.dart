@@ -539,6 +539,17 @@ class AdminServiceClient extends $grpc.Client {
     return $createUnaryCall(_$updateMyTenantConfig, request, options: options);
   }
 
+  /// Paridade MCP — atualização PARCIAL da configuração avançada (prompts por
+  /// tenant, tipos de entidade, marca, fuso, idioma, pesquisa de satisfação,
+  /// inatividade, análise prévia, transcrição). Campo ausente não é tocado.
+  $grpc.ResponseFuture<$0.SimpleOkResponse> updateMyConfigAvancada(
+    $0.UpdateMyConfigAvancadaRequest request, {
+    $grpc.CallOptions? options,
+  }) {
+    return $createUnaryCall(_$updateMyConfigAvancada, request,
+        options: options);
+  }
+
   /// Fase N13: aplicativos de IA conectados por OAuth 2.1 (servidor MCP).
   /// Cada usuário enxerga e revoga APENAS os próprios consentimentos — nem um
   /// `tenant:admin` vê o do colega. Por isso não há variante administrativa.
@@ -1483,6 +1494,11 @@ class AdminServiceClient extends $grpc.Client {
       '/smartcore.contracts.queries.AdminService/UpdateMyTenantConfig',
       ($0.UpdateMyTenantConfigRequest value) => value.writeToBuffer(),
       $0.UpdateTenantConfigResponse.fromBuffer);
+  static final _$updateMyConfigAvancada =
+      $grpc.ClientMethod<$0.UpdateMyConfigAvancadaRequest, $0.SimpleOkResponse>(
+          '/smartcore.contracts.queries.AdminService/UpdateMyConfigAvancada',
+          ($0.UpdateMyConfigAvancadaRequest value) => value.writeToBuffer(),
+          $0.SimpleOkResponse.fromBuffer);
   static final _$listMcpGrants =
       $grpc.ClientMethod<$0.ListMcpGrantsRequest, $0.ListMcpGrantsResponse>(
           '/smartcore.contracts.queries.AdminService/ListMcpGrants',
@@ -2462,6 +2478,15 @@ abstract class AdminServiceBase extends $grpc.Service {
         ($core.List<$core.int> value) =>
             $0.UpdateMyTenantConfigRequest.fromBuffer(value),
         ($0.UpdateTenantConfigResponse value) => value.writeToBuffer()));
+    $addMethod($grpc.ServiceMethod<$0.UpdateMyConfigAvancadaRequest,
+            $0.SimpleOkResponse>(
+        'UpdateMyConfigAvancada',
+        updateMyConfigAvancada_Pre,
+        false,
+        false,
+        ($core.List<$core.int> value) =>
+            $0.UpdateMyConfigAvancadaRequest.fromBuffer(value),
+        ($0.SimpleOkResponse value) => value.writeToBuffer()));
     $addMethod(
         $grpc.ServiceMethod<$0.ListMcpGrantsRequest, $0.ListMcpGrantsResponse>(
             'ListMcpGrants',
@@ -3726,6 +3751,15 @@ abstract class AdminServiceBase extends $grpc.Service {
 
   $async.Future<$0.UpdateTenantConfigResponse> updateMyTenantConfig(
       $grpc.ServiceCall call, $0.UpdateMyTenantConfigRequest request);
+
+  $async.Future<$0.SimpleOkResponse> updateMyConfigAvancada_Pre(
+      $grpc.ServiceCall $call,
+      $async.Future<$0.UpdateMyConfigAvancadaRequest> $request) async {
+    return updateMyConfigAvancada($call, await $request);
+  }
+
+  $async.Future<$0.SimpleOkResponse> updateMyConfigAvancada(
+      $grpc.ServiceCall call, $0.UpdateMyConfigAvancadaRequest request);
 
   $async.Future<$0.ListMcpGrantsResponse> listMcpGrants_Pre(
       $grpc.ServiceCall $call,

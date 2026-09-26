@@ -42,7 +42,7 @@ class Executor:
     metricas: Metricas
     #: Upload para URL assinada (mídia e arquivo de treinamento). Substituível
     #: nos testes: nenhum teste deve depender de rede.
-    enviador: "Enviador | None" = None
+    enviador: Enviador | None = None
 
     async def enviar_arquivo(self, url: str, content_type: str, dados: bytes) -> None:
         await (self.enviador or enviar_para_url_assinada)(url, content_type, dados)

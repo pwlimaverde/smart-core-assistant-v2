@@ -609,6 +609,18 @@ class GetTenantConfigResponse extends $pb.GeneratedMessage {
     $core.Iterable<ApiKeyEntry>? apiKeys,
     $core.String? confiancaMinimaTransferencia,
     $core.String? confiancaMinimaAutomatica,
+    $core.String? entityTypesJson,
+    $core.Iterable<PromptDoTenant>? prompts,
+    $core.String? brandName,
+    $core.String? primaryColor,
+    $core.String? secondaryColor,
+    $core.String? timezone,
+    $core.String? languageCode,
+    $core.bool? analisePreviaHabilitada,
+    $core.bool? pesquisaSatisfacaoAtiva,
+    $core.String? msgPesquisaSatisfacao,
+    $core.int? minutosInatividadeEncerra,
+    $core.bool? transcriptionEnabled,
   }) {
     final result = create();
     if (dadosEmpresa != null) result.dadosEmpresa = dadosEmpresa;
@@ -639,6 +651,23 @@ class GetTenantConfigResponse extends $pb.GeneratedMessage {
       result.confiancaMinimaTransferencia = confiancaMinimaTransferencia;
     if (confiancaMinimaAutomatica != null)
       result.confiancaMinimaAutomatica = confiancaMinimaAutomatica;
+    if (entityTypesJson != null) result.entityTypesJson = entityTypesJson;
+    if (prompts != null) result.prompts.addAll(prompts);
+    if (brandName != null) result.brandName = brandName;
+    if (primaryColor != null) result.primaryColor = primaryColor;
+    if (secondaryColor != null) result.secondaryColor = secondaryColor;
+    if (timezone != null) result.timezone = timezone;
+    if (languageCode != null) result.languageCode = languageCode;
+    if (analisePreviaHabilitada != null)
+      result.analisePreviaHabilitada = analisePreviaHabilitada;
+    if (pesquisaSatisfacaoAtiva != null)
+      result.pesquisaSatisfacaoAtiva = pesquisaSatisfacaoAtiva;
+    if (msgPesquisaSatisfacao != null)
+      result.msgPesquisaSatisfacao = msgPesquisaSatisfacao;
+    if (minutosInatividadeEncerra != null)
+      result.minutosInatividadeEncerra = minutosInatividadeEncerra;
+    if (transcriptionEnabled != null)
+      result.transcriptionEnabled = transcriptionEnabled;
     return result;
   }
 
@@ -679,6 +708,19 @@ class GetTenantConfigResponse extends $pb.GeneratedMessage {
         subBuilder: ApiKeyEntry.create)
     ..aOS(21, _omitFieldNames ? '' : 'confiancaMinimaTransferencia')
     ..aOS(22, _omitFieldNames ? '' : 'confiancaMinimaAutomatica')
+    ..aOS(23, _omitFieldNames ? '' : 'entityTypesJson')
+    ..pPM<PromptDoTenant>(24, _omitFieldNames ? '' : 'prompts',
+        subBuilder: PromptDoTenant.create)
+    ..aOS(25, _omitFieldNames ? '' : 'brandName')
+    ..aOS(26, _omitFieldNames ? '' : 'primaryColor')
+    ..aOS(27, _omitFieldNames ? '' : 'secondaryColor')
+    ..aOS(28, _omitFieldNames ? '' : 'timezone')
+    ..aOS(29, _omitFieldNames ? '' : 'languageCode')
+    ..aOB(30, _omitFieldNames ? '' : 'analisePreviaHabilitada')
+    ..aOB(31, _omitFieldNames ? '' : 'pesquisaSatisfacaoAtiva')
+    ..aOS(32, _omitFieldNames ? '' : 'msgPesquisaSatisfacao')
+    ..aI(33, _omitFieldNames ? '' : 'minutosInatividadeEncerra')
+    ..aOB(34, _omitFieldNames ? '' : 'transcriptionEnabled')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -895,6 +937,112 @@ class GetTenantConfigResponse extends $pb.GeneratedMessage {
   $core.bool hasConfiancaMinimaAutomatica() => $_has(21);
   @$pb.TagNumber(22)
   void clearConfiancaMinimaAutomatica() => $_clearField(22);
+
+  /// --- Configuração avançada (paridade MCP) ---
+  /// JSON dos tipos de entidade (objeto {tipo: descrição} ou lista de nomes).
+  @$pb.TagNumber(23)
+  $core.String get entityTypesJson => $_getSZ(22);
+  @$pb.TagNumber(23)
+  set entityTypesJson($core.String value) => $_setString(22, value);
+  @$pb.TagNumber(23)
+  $core.bool hasEntityTypesJson() => $_has(22);
+  @$pb.TagNumber(23)
+  void clearEntityTypesJson() => $_clearField(23);
+
+  /// Overrides de prompt deste tenant (chave PROMPT_* => texto).
+  @$pb.TagNumber(24)
+  $pb.PbList<PromptDoTenant> get prompts => $_getList(23);
+
+  @$pb.TagNumber(25)
+  $core.String get brandName => $_getSZ(24);
+  @$pb.TagNumber(25)
+  set brandName($core.String value) => $_setString(24, value);
+  @$pb.TagNumber(25)
+  $core.bool hasBrandName() => $_has(24);
+  @$pb.TagNumber(25)
+  void clearBrandName() => $_clearField(25);
+
+  @$pb.TagNumber(26)
+  $core.String get primaryColor => $_getSZ(25);
+  @$pb.TagNumber(26)
+  set primaryColor($core.String value) => $_setString(25, value);
+  @$pb.TagNumber(26)
+  $core.bool hasPrimaryColor() => $_has(25);
+  @$pb.TagNumber(26)
+  void clearPrimaryColor() => $_clearField(26);
+
+  @$pb.TagNumber(27)
+  $core.String get secondaryColor => $_getSZ(26);
+  @$pb.TagNumber(27)
+  set secondaryColor($core.String value) => $_setString(26, value);
+  @$pb.TagNumber(27)
+  $core.bool hasSecondaryColor() => $_has(26);
+  @$pb.TagNumber(27)
+  void clearSecondaryColor() => $_clearField(27);
+
+  @$pb.TagNumber(28)
+  $core.String get timezone => $_getSZ(27);
+  @$pb.TagNumber(28)
+  set timezone($core.String value) => $_setString(27, value);
+  @$pb.TagNumber(28)
+  $core.bool hasTimezone() => $_has(27);
+  @$pb.TagNumber(28)
+  void clearTimezone() => $_clearField(28);
+
+  @$pb.TagNumber(29)
+  $core.String get languageCode => $_getSZ(28);
+  @$pb.TagNumber(29)
+  set languageCode($core.String value) => $_setString(28, value);
+  @$pb.TagNumber(29)
+  $core.bool hasLanguageCode() => $_has(28);
+  @$pb.TagNumber(29)
+  void clearLanguageCode() => $_clearField(29);
+
+  /// Ausente = o tenant herda o CoreSetting global.
+  @$pb.TagNumber(30)
+  $core.bool get analisePreviaHabilitada => $_getBF(29);
+  @$pb.TagNumber(30)
+  set analisePreviaHabilitada($core.bool value) => $_setBool(29, value);
+  @$pb.TagNumber(30)
+  $core.bool hasAnalisePreviaHabilitada() => $_has(29);
+  @$pb.TagNumber(30)
+  void clearAnalisePreviaHabilitada() => $_clearField(30);
+
+  @$pb.TagNumber(31)
+  $core.bool get pesquisaSatisfacaoAtiva => $_getBF(30);
+  @$pb.TagNumber(31)
+  set pesquisaSatisfacaoAtiva($core.bool value) => $_setBool(30, value);
+  @$pb.TagNumber(31)
+  $core.bool hasPesquisaSatisfacaoAtiva() => $_has(30);
+  @$pb.TagNumber(31)
+  void clearPesquisaSatisfacaoAtiva() => $_clearField(31);
+
+  @$pb.TagNumber(32)
+  $core.String get msgPesquisaSatisfacao => $_getSZ(31);
+  @$pb.TagNumber(32)
+  set msgPesquisaSatisfacao($core.String value) => $_setString(31, value);
+  @$pb.TagNumber(32)
+  $core.bool hasMsgPesquisaSatisfacao() => $_has(31);
+  @$pb.TagNumber(32)
+  void clearMsgPesquisaSatisfacao() => $_clearField(32);
+
+  @$pb.TagNumber(33)
+  $core.int get minutosInatividadeEncerra => $_getIZ(32);
+  @$pb.TagNumber(33)
+  set minutosInatividadeEncerra($core.int value) => $_setSignedInt32(32, value);
+  @$pb.TagNumber(33)
+  $core.bool hasMinutosInatividadeEncerra() => $_has(32);
+  @$pb.TagNumber(33)
+  void clearMinutosInatividadeEncerra() => $_clearField(33);
+
+  @$pb.TagNumber(34)
+  $core.bool get transcriptionEnabled => $_getBF(33);
+  @$pb.TagNumber(34)
+  set transcriptionEnabled($core.bool value) => $_setBool(33, value);
+  @$pb.TagNumber(34)
+  $core.bool hasTranscriptionEnabled() => $_has(33);
+  @$pb.TagNumber(34)
+  void clearTranscriptionEnabled() => $_clearField(34);
 }
 
 class UpdateTenantConfigRequest extends $pb.GeneratedMessage {
@@ -1219,6 +1367,268 @@ class UpdateTenantConfigRequest extends $pb.GeneratedMessage {
   $core.bool hasConfiancaMinimaAutomatica() => $_has(22);
   @$pb.TagNumber(23)
   void clearConfiancaMinimaAutomatica() => $_clearField(23);
+}
+
+/// Paridade MCP — um override de prompt do tenant.
+class PromptDoTenant extends $pb.GeneratedMessage {
+  factory PromptDoTenant({
+    $core.String? chave,
+    $core.String? texto,
+  }) {
+    final result = create();
+    if (chave != null) result.chave = chave;
+    if (texto != null) result.texto = texto;
+    return result;
+  }
+
+  PromptDoTenant._();
+
+  factory PromptDoTenant.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory PromptDoTenant.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'PromptDoTenant',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'chave')
+    ..aOS(2, _omitFieldNames ? '' : 'texto')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PromptDoTenant clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  PromptDoTenant copyWith(void Function(PromptDoTenant) updates) =>
+      super.copyWith((message) => updates(message as PromptDoTenant))
+          as PromptDoTenant;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static PromptDoTenant create() => PromptDoTenant._();
+  @$core.override
+  PromptDoTenant createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static PromptDoTenant getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<PromptDoTenant>(create);
+  static PromptDoTenant? _defaultInstance;
+
+  /// PROMPT_* (maiúsculas; a v1 usava minúsculas e também vale).
+  @$pb.TagNumber(1)
+  $core.String get chave => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set chave($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasChave() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearChave() => $_clearField(1);
+
+  /// Vazio remove o override: o tenant volta a herdar o global.
+  @$pb.TagNumber(2)
+  $core.String get texto => $_getSZ(1);
+  @$pb.TagNumber(2)
+  set texto($core.String value) => $_setString(1, value);
+  @$pb.TagNumber(2)
+  $core.bool hasTexto() => $_has(1);
+  @$pb.TagNumber(2)
+  void clearTexto() => $_clearField(2);
+}
+
+/// Paridade MCP — atualização parcial: ausente = não mexer.
+class UpdateMyConfigAvancadaRequest extends $pb.GeneratedMessage {
+  factory UpdateMyConfigAvancadaRequest({
+    $core.String? entityTypesJson,
+    $core.Iterable<PromptDoTenant>? prompts,
+    $core.String? brandName,
+    $core.String? primaryColor,
+    $core.String? secondaryColor,
+    $core.String? timezone,
+    $core.String? languageCode,
+    $core.bool? analisePreviaHabilitada,
+    $core.bool? pesquisaSatisfacaoAtiva,
+    $core.String? msgPesquisaSatisfacao,
+    $core.int? minutosInatividadeEncerra,
+    $core.bool? transcriptionEnabled,
+  }) {
+    final result = create();
+    if (entityTypesJson != null) result.entityTypesJson = entityTypesJson;
+    if (prompts != null) result.prompts.addAll(prompts);
+    if (brandName != null) result.brandName = brandName;
+    if (primaryColor != null) result.primaryColor = primaryColor;
+    if (secondaryColor != null) result.secondaryColor = secondaryColor;
+    if (timezone != null) result.timezone = timezone;
+    if (languageCode != null) result.languageCode = languageCode;
+    if (analisePreviaHabilitada != null)
+      result.analisePreviaHabilitada = analisePreviaHabilitada;
+    if (pesquisaSatisfacaoAtiva != null)
+      result.pesquisaSatisfacaoAtiva = pesquisaSatisfacaoAtiva;
+    if (msgPesquisaSatisfacao != null)
+      result.msgPesquisaSatisfacao = msgPesquisaSatisfacao;
+    if (minutosInatividadeEncerra != null)
+      result.minutosInatividadeEncerra = minutosInatividadeEncerra;
+    if (transcriptionEnabled != null)
+      result.transcriptionEnabled = transcriptionEnabled;
+    return result;
+  }
+
+  UpdateMyConfigAvancadaRequest._();
+
+  factory UpdateMyConfigAvancadaRequest.fromBuffer($core.List<$core.int> data,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromBuffer(data, registry);
+  factory UpdateMyConfigAvancadaRequest.fromJson($core.String json,
+          [$pb.ExtensionRegistry registry = $pb.ExtensionRegistry.EMPTY]) =>
+      create()..mergeFromJson(json, registry);
+
+  static final $pb.BuilderInfo _i = $pb.BuilderInfo(
+      _omitMessageNames ? '' : 'UpdateMyConfigAvancadaRequest',
+      package: const $pb.PackageName(
+          _omitMessageNames ? '' : 'smartcore.contracts.queries'),
+      createEmptyInstance: create)
+    ..aOS(1, _omitFieldNames ? '' : 'entityTypesJson')
+    ..pPM<PromptDoTenant>(2, _omitFieldNames ? '' : 'prompts',
+        subBuilder: PromptDoTenant.create)
+    ..aOS(3, _omitFieldNames ? '' : 'brandName')
+    ..aOS(4, _omitFieldNames ? '' : 'primaryColor')
+    ..aOS(5, _omitFieldNames ? '' : 'secondaryColor')
+    ..aOS(6, _omitFieldNames ? '' : 'timezone')
+    ..aOS(7, _omitFieldNames ? '' : 'languageCode')
+    ..aOB(8, _omitFieldNames ? '' : 'analisePreviaHabilitada')
+    ..aOB(9, _omitFieldNames ? '' : 'pesquisaSatisfacaoAtiva')
+    ..aOS(10, _omitFieldNames ? '' : 'msgPesquisaSatisfacao')
+    ..aI(11, _omitFieldNames ? '' : 'minutosInatividadeEncerra')
+    ..aOB(12, _omitFieldNames ? '' : 'transcriptionEnabled')
+    ..hasRequiredFields = false;
+
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateMyConfigAvancadaRequest clone() => deepCopy();
+  @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
+  UpdateMyConfigAvancadaRequest copyWith(
+          void Function(UpdateMyConfigAvancadaRequest) updates) =>
+      super.copyWith(
+              (message) => updates(message as UpdateMyConfigAvancadaRequest))
+          as UpdateMyConfigAvancadaRequest;
+
+  @$core.override
+  $pb.BuilderInfo get info_ => _i;
+
+  @$core.pragma('dart2js:noInline')
+  static UpdateMyConfigAvancadaRequest create() =>
+      UpdateMyConfigAvancadaRequest._();
+  @$core.override
+  UpdateMyConfigAvancadaRequest createEmptyInstance() => create();
+  @$core.pragma('dart2js:noInline')
+  static UpdateMyConfigAvancadaRequest getDefault() => _defaultInstance ??=
+      $pb.GeneratedMessage.$_defaultFor<UpdateMyConfigAvancadaRequest>(create);
+  static UpdateMyConfigAvancadaRequest? _defaultInstance;
+
+  @$pb.TagNumber(1)
+  $core.String get entityTypesJson => $_getSZ(0);
+  @$pb.TagNumber(1)
+  set entityTypesJson($core.String value) => $_setString(0, value);
+  @$pb.TagNumber(1)
+  $core.bool hasEntityTypesJson() => $_has(0);
+  @$pb.TagNumber(1)
+  void clearEntityTypesJson() => $_clearField(1);
+
+  @$pb.TagNumber(2)
+  $pb.PbList<PromptDoTenant> get prompts => $_getList(1);
+
+  @$pb.TagNumber(3)
+  $core.String get brandName => $_getSZ(2);
+  @$pb.TagNumber(3)
+  set brandName($core.String value) => $_setString(2, value);
+  @$pb.TagNumber(3)
+  $core.bool hasBrandName() => $_has(2);
+  @$pb.TagNumber(3)
+  void clearBrandName() => $_clearField(3);
+
+  @$pb.TagNumber(4)
+  $core.String get primaryColor => $_getSZ(3);
+  @$pb.TagNumber(4)
+  set primaryColor($core.String value) => $_setString(3, value);
+  @$pb.TagNumber(4)
+  $core.bool hasPrimaryColor() => $_has(3);
+  @$pb.TagNumber(4)
+  void clearPrimaryColor() => $_clearField(4);
+
+  @$pb.TagNumber(5)
+  $core.String get secondaryColor => $_getSZ(4);
+  @$pb.TagNumber(5)
+  set secondaryColor($core.String value) => $_setString(4, value);
+  @$pb.TagNumber(5)
+  $core.bool hasSecondaryColor() => $_has(4);
+  @$pb.TagNumber(5)
+  void clearSecondaryColor() => $_clearField(5);
+
+  @$pb.TagNumber(6)
+  $core.String get timezone => $_getSZ(5);
+  @$pb.TagNumber(6)
+  set timezone($core.String value) => $_setString(5, value);
+  @$pb.TagNumber(6)
+  $core.bool hasTimezone() => $_has(5);
+  @$pb.TagNumber(6)
+  void clearTimezone() => $_clearField(6);
+
+  @$pb.TagNumber(7)
+  $core.String get languageCode => $_getSZ(6);
+  @$pb.TagNumber(7)
+  set languageCode($core.String value) => $_setString(6, value);
+  @$pb.TagNumber(7)
+  $core.bool hasLanguageCode() => $_has(6);
+  @$pb.TagNumber(7)
+  void clearLanguageCode() => $_clearField(7);
+
+  @$pb.TagNumber(8)
+  $core.bool get analisePreviaHabilitada => $_getBF(7);
+  @$pb.TagNumber(8)
+  set analisePreviaHabilitada($core.bool value) => $_setBool(7, value);
+  @$pb.TagNumber(8)
+  $core.bool hasAnalisePreviaHabilitada() => $_has(7);
+  @$pb.TagNumber(8)
+  void clearAnalisePreviaHabilitada() => $_clearField(8);
+
+  @$pb.TagNumber(9)
+  $core.bool get pesquisaSatisfacaoAtiva => $_getBF(8);
+  @$pb.TagNumber(9)
+  set pesquisaSatisfacaoAtiva($core.bool value) => $_setBool(8, value);
+  @$pb.TagNumber(9)
+  $core.bool hasPesquisaSatisfacaoAtiva() => $_has(8);
+  @$pb.TagNumber(9)
+  void clearPesquisaSatisfacaoAtiva() => $_clearField(9);
+
+  @$pb.TagNumber(10)
+  $core.String get msgPesquisaSatisfacao => $_getSZ(9);
+  @$pb.TagNumber(10)
+  set msgPesquisaSatisfacao($core.String value) => $_setString(9, value);
+  @$pb.TagNumber(10)
+  $core.bool hasMsgPesquisaSatisfacao() => $_has(9);
+  @$pb.TagNumber(10)
+  void clearMsgPesquisaSatisfacao() => $_clearField(10);
+
+  /// 0 ou negativo = volta a herdar o global.
+  @$pb.TagNumber(11)
+  $core.int get minutosInatividadeEncerra => $_getIZ(10);
+  @$pb.TagNumber(11)
+  set minutosInatividadeEncerra($core.int value) => $_setSignedInt32(10, value);
+  @$pb.TagNumber(11)
+  $core.bool hasMinutosInatividadeEncerra() => $_has(10);
+  @$pb.TagNumber(11)
+  void clearMinutosInatividadeEncerra() => $_clearField(11);
+
+  @$pb.TagNumber(12)
+  $core.bool get transcriptionEnabled => $_getBF(11);
+  @$pb.TagNumber(12)
+  set transcriptionEnabled($core.bool value) => $_setBool(11, value);
+  @$pb.TagNumber(12)
+  $core.bool hasTranscriptionEnabled() => $_has(11);
+  @$pb.TagNumber(12)
+  void clearTranscriptionEnabled() => $_clearField(12);
 }
 
 class UpdateTenantConfigResponse extends $pb.GeneratedMessage {

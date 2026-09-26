@@ -149,7 +149,7 @@ async def _contato_do_atendimento(executor: Executor, atendimento_id: int) -> in
         pb.ListAtendimentosRequest(
             status="", departamento_id=0, limit=_LIMITE_BUSCA_ATENDIMENTO
         ),
-       contabilizar=False,
+        contabilizar=False,
     )
     for resumo in resposta.atendimentos:
         if resumo.id == atendimento_id:

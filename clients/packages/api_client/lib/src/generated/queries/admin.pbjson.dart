@@ -219,6 +219,75 @@ const GetTenantConfigResponse$json = {
       '5': 9,
       '10': 'confiancaMinimaAutomatica'
     },
+    {
+      '1': 'entity_types_json',
+      '3': 23,
+      '4': 1,
+      '5': 9,
+      '10': 'entityTypesJson'
+    },
+    {
+      '1': 'prompts',
+      '3': 24,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.PromptDoTenant',
+      '10': 'prompts'
+    },
+    {'1': 'brand_name', '3': 25, '4': 1, '5': 9, '10': 'brandName'},
+    {'1': 'primary_color', '3': 26, '4': 1, '5': 9, '10': 'primaryColor'},
+    {'1': 'secondary_color', '3': 27, '4': 1, '5': 9, '10': 'secondaryColor'},
+    {'1': 'timezone', '3': 28, '4': 1, '5': 9, '10': 'timezone'},
+    {'1': 'language_code', '3': 29, '4': 1, '5': 9, '10': 'languageCode'},
+    {
+      '1': 'analise_previa_habilitada',
+      '3': 30,
+      '4': 1,
+      '5': 8,
+      '9': 0,
+      '10': 'analisePreviaHabilitada',
+      '17': true
+    },
+    {
+      '1': 'pesquisa_satisfacao_ativa',
+      '3': 31,
+      '4': 1,
+      '5': 8,
+      '9': 1,
+      '10': 'pesquisaSatisfacaoAtiva',
+      '17': true
+    },
+    {
+      '1': 'msg_pesquisa_satisfacao',
+      '3': 32,
+      '4': 1,
+      '5': 9,
+      '10': 'msgPesquisaSatisfacao'
+    },
+    {
+      '1': 'minutos_inatividade_encerra',
+      '3': 33,
+      '4': 1,
+      '5': 5,
+      '9': 2,
+      '10': 'minutosInatividadeEncerra',
+      '17': true
+    },
+    {
+      '1': 'transcription_enabled',
+      '3': 34,
+      '4': 1,
+      '5': 8,
+      '9': 3,
+      '10': 'transcriptionEnabled',
+      '17': true
+    },
+  ],
+  '8': [
+    {'1': '_analise_previa_habilitada'},
+    {'1': '_pesquisa_satisfacao_ativa'},
+    {'1': '_minutos_inatividade_encerra'},
+    {'1': '_transcription_enabled'},
   ],
 };
 
@@ -241,7 +310,20 @@ final $typed_data.Uint8List getTenantConfigResponseDescriptor = $convert.base64D
     'cmVzaG9sZBJDCghhcGlfa2V5cxgUIAMoCzIoLnNtYXJ0Y29yZS5jb250cmFjdHMucXVlcmllcy'
     '5BcGlLZXlFbnRyeVIHYXBpS2V5cxJECh5jb25maWFuY2FfbWluaW1hX3RyYW5zZmVyZW5jaWEY'
     'FSABKAlSHGNvbmZpYW5jYU1pbmltYVRyYW5zZmVyZW5jaWESPgobY29uZmlhbmNhX21pbmltYV'
-    '9hdXRvbWF0aWNhGBYgASgJUhljb25maWFuY2FNaW5pbWFBdXRvbWF0aWNh');
+    '9hdXRvbWF0aWNhGBYgASgJUhljb25maWFuY2FNaW5pbWFBdXRvbWF0aWNhEioKEWVudGl0eV90'
+    'eXBlc19qc29uGBcgASgJUg9lbnRpdHlUeXBlc0pzb24SRQoHcHJvbXB0cxgYIAMoCzIrLnNtYX'
+    'J0Y29yZS5jb250cmFjdHMucXVlcmllcy5Qcm9tcHREb1RlbmFudFIHcHJvbXB0cxIdCgpicmFu'
+    'ZF9uYW1lGBkgASgJUglicmFuZE5hbWUSIwoNcHJpbWFyeV9jb2xvchgaIAEoCVIMcHJpbWFyeU'
+    'NvbG9yEicKD3NlY29uZGFyeV9jb2xvchgbIAEoCVIOc2Vjb25kYXJ5Q29sb3ISGgoIdGltZXpv'
+    'bmUYHCABKAlSCHRpbWV6b25lEiMKDWxhbmd1YWdlX2NvZGUYHSABKAlSDGxhbmd1YWdlQ29kZR'
+    'I/ChlhbmFsaXNlX3ByZXZpYV9oYWJpbGl0YWRhGB4gASgISABSF2FuYWxpc2VQcmV2aWFIYWJp'
+    'bGl0YWRhiAEBEj8KGXBlc3F1aXNhX3NhdGlzZmFjYW9fYXRpdmEYHyABKAhIAVIXcGVzcXVpc2'
+    'FTYXRpc2ZhY2FvQXRpdmGIAQESNgoXbXNnX3Blc3F1aXNhX3NhdGlzZmFjYW8YICABKAlSFW1z'
+    'Z1Blc3F1aXNhU2F0aXNmYWNhbxJDChttaW51dG9zX2luYXRpdmlkYWRlX2VuY2VycmEYISABKA'
+    'VIAlIZbWludXRvc0luYXRpdmlkYWRlRW5jZXJyYYgBARI4ChV0cmFuc2NyaXB0aW9uX2VuYWJs'
+    'ZWQYIiABKAhIA1IUdHJhbnNjcmlwdGlvbkVuYWJsZWSIAQFCHAoaX2FuYWxpc2VfcHJldmlhX2'
+    'hhYmlsaXRhZGFCHAoaX3Blc3F1aXNhX3NhdGlzZmFjYW9fYXRpdmFCHgocX21pbnV0b3NfaW5h'
+    'dGl2aWRhZGVfZW5jZXJyYUIYChZfdHJhbnNjcmlwdGlvbl9lbmFibGVk');
 
 @$core.Deprecated('Use updateTenantConfigRequestDescriptor instead')
 const UpdateTenantConfigRequest$json = {
@@ -343,6 +425,167 @@ final $typed_data.Uint8List updateTenantConfigRequestDescriptor = $convert.base6
     'Y29uZmlhbmNhX21pbmltYV90cmFuc2ZlcmVuY2lhGBYgASgJUhxjb25maWFuY2FNaW5pbWFUcm'
     'Fuc2ZlcmVuY2lhEj4KG2NvbmZpYW5jYV9taW5pbWFfYXV0b21hdGljYRgXIAEoCVIZY29uZmlh'
     'bmNhTWluaW1hQXV0b21hdGljYQ==');
+
+@$core.Deprecated('Use promptDoTenantDescriptor instead')
+const PromptDoTenant$json = {
+  '1': 'PromptDoTenant',
+  '2': [
+    {'1': 'chave', '3': 1, '4': 1, '5': 9, '10': 'chave'},
+    {'1': 'texto', '3': 2, '4': 1, '5': 9, '10': 'texto'},
+  ],
+};
+
+/// Descriptor for `PromptDoTenant`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List promptDoTenantDescriptor = $convert.base64Decode(
+    'Cg5Qcm9tcHREb1RlbmFudBIUCgVjaGF2ZRgBIAEoCVIFY2hhdmUSFAoFdGV4dG8YAiABKAlSBX'
+    'RleHRv');
+
+@$core.Deprecated('Use updateMyConfigAvancadaRequestDescriptor instead')
+const UpdateMyConfigAvancadaRequest$json = {
+  '1': 'UpdateMyConfigAvancadaRequest',
+  '2': [
+    {
+      '1': 'entity_types_json',
+      '3': 1,
+      '4': 1,
+      '5': 9,
+      '9': 0,
+      '10': 'entityTypesJson',
+      '17': true
+    },
+    {
+      '1': 'prompts',
+      '3': 2,
+      '4': 3,
+      '5': 11,
+      '6': '.smartcore.contracts.queries.PromptDoTenant',
+      '10': 'prompts'
+    },
+    {
+      '1': 'brand_name',
+      '3': 3,
+      '4': 1,
+      '5': 9,
+      '9': 1,
+      '10': 'brandName',
+      '17': true
+    },
+    {
+      '1': 'primary_color',
+      '3': 4,
+      '4': 1,
+      '5': 9,
+      '9': 2,
+      '10': 'primaryColor',
+      '17': true
+    },
+    {
+      '1': 'secondary_color',
+      '3': 5,
+      '4': 1,
+      '5': 9,
+      '9': 3,
+      '10': 'secondaryColor',
+      '17': true
+    },
+    {
+      '1': 'timezone',
+      '3': 6,
+      '4': 1,
+      '5': 9,
+      '9': 4,
+      '10': 'timezone',
+      '17': true
+    },
+    {
+      '1': 'language_code',
+      '3': 7,
+      '4': 1,
+      '5': 9,
+      '9': 5,
+      '10': 'languageCode',
+      '17': true
+    },
+    {
+      '1': 'analise_previa_habilitada',
+      '3': 8,
+      '4': 1,
+      '5': 8,
+      '9': 6,
+      '10': 'analisePreviaHabilitada',
+      '17': true
+    },
+    {
+      '1': 'pesquisa_satisfacao_ativa',
+      '3': 9,
+      '4': 1,
+      '5': 8,
+      '9': 7,
+      '10': 'pesquisaSatisfacaoAtiva',
+      '17': true
+    },
+    {
+      '1': 'msg_pesquisa_satisfacao',
+      '3': 10,
+      '4': 1,
+      '5': 9,
+      '9': 8,
+      '10': 'msgPesquisaSatisfacao',
+      '17': true
+    },
+    {
+      '1': 'minutos_inatividade_encerra',
+      '3': 11,
+      '4': 1,
+      '5': 5,
+      '9': 9,
+      '10': 'minutosInatividadeEncerra',
+      '17': true
+    },
+    {
+      '1': 'transcription_enabled',
+      '3': 12,
+      '4': 1,
+      '5': 8,
+      '9': 10,
+      '10': 'transcriptionEnabled',
+      '17': true
+    },
+  ],
+  '8': [
+    {'1': '_entity_types_json'},
+    {'1': '_brand_name'},
+    {'1': '_primary_color'},
+    {'1': '_secondary_color'},
+    {'1': '_timezone'},
+    {'1': '_language_code'},
+    {'1': '_analise_previa_habilitada'},
+    {'1': '_pesquisa_satisfacao_ativa'},
+    {'1': '_msg_pesquisa_satisfacao'},
+    {'1': '_minutos_inatividade_encerra'},
+    {'1': '_transcription_enabled'},
+  ],
+};
+
+/// Descriptor for `UpdateMyConfigAvancadaRequest`. Decode as a `google.protobuf.DescriptorProto`.
+final $typed_data.Uint8List updateMyConfigAvancadaRequestDescriptor = $convert.base64Decode(
+    'Ch1VcGRhdGVNeUNvbmZpZ0F2YW5jYWRhUmVxdWVzdBIvChFlbnRpdHlfdHlwZXNfanNvbhgBIA'
+    'EoCUgAUg9lbnRpdHlUeXBlc0pzb26IAQESRQoHcHJvbXB0cxgCIAMoCzIrLnNtYXJ0Y29yZS5j'
+    'b250cmFjdHMucXVlcmllcy5Qcm9tcHREb1RlbmFudFIHcHJvbXB0cxIiCgpicmFuZF9uYW1lGA'
+    'MgASgJSAFSCWJyYW5kTmFtZYgBARIoCg1wcmltYXJ5X2NvbG9yGAQgASgJSAJSDHByaW1hcnlD'
+    'b2xvcogBARIsCg9zZWNvbmRhcnlfY29sb3IYBSABKAlIA1IOc2Vjb25kYXJ5Q29sb3KIAQESHw'
+    'oIdGltZXpvbmUYBiABKAlIBFIIdGltZXpvbmWIAQESKAoNbGFuZ3VhZ2VfY29kZRgHIAEoCUgF'
+    'UgxsYW5ndWFnZUNvZGWIAQESPwoZYW5hbGlzZV9wcmV2aWFfaGFiaWxpdGFkYRgIIAEoCEgGUh'
+    'dhbmFsaXNlUHJldmlhSGFiaWxpdGFkYYgBARI/ChlwZXNxdWlzYV9zYXRpc2ZhY2FvX2F0aXZh'
+    'GAkgASgISAdSF3Blc3F1aXNhU2F0aXNmYWNhb0F0aXZhiAEBEjsKF21zZ19wZXNxdWlzYV9zYX'
+    'Rpc2ZhY2FvGAogASgJSAhSFW1zZ1Blc3F1aXNhU2F0aXNmYWNhb4gBARJDChttaW51dG9zX2lu'
+    'YXRpdmlkYWRlX2VuY2VycmEYCyABKAVICVIZbWludXRvc0luYXRpdmlkYWRlRW5jZXJyYYgBAR'
+    'I4ChV0cmFuc2NyaXB0aW9uX2VuYWJsZWQYDCABKAhIClIUdHJhbnNjcmlwdGlvbkVuYWJsZWSI'
+    'AQFCFAoSX2VudGl0eV90eXBlc19qc29uQg0KC19icmFuZF9uYW1lQhAKDl9wcmltYXJ5X2NvbG'
+    '9yQhIKEF9zZWNvbmRhcnlfY29sb3JCCwoJX3RpbWV6b25lQhAKDl9sYW5ndWFnZV9jb2RlQhwK'
+    'Gl9hbmFsaXNlX3ByZXZpYV9oYWJpbGl0YWRhQhwKGl9wZXNxdWlzYV9zYXRpc2ZhY2FvX2F0aX'
+    'ZhQhoKGF9tc2dfcGVzcXVpc2Ffc2F0aXNmYWNhb0IeChxfbWludXRvc19pbmF0aXZpZGFkZV9l'
+    'bmNlcnJhQhgKFl90cmFuc2NyaXB0aW9uX2VuYWJsZWQ=');
 
 @$core.Deprecated('Use updateTenantConfigResponseDescriptor instead')
 const UpdateTenantConfigResponse$json = {

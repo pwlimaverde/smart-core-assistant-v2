@@ -303,8 +303,7 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
 
 def _nao_encontrado(o_que: str, item_id: int, tool_de_lista: str) -> ToolError:
     return ToolError(
-        f"{o_que} {item_id} não existe. "
-        f"Liste com `{tool_de_lista}` e use um id de lá."
+        f"{o_que} {item_id} não existe. Liste com `{tool_de_lista}` e use um id de lá."
     )
 
 

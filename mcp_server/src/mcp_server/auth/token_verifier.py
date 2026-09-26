@@ -78,9 +78,7 @@ class VerificadorDeToken(TokenVerifier):
         `debug`, sem o token e sem as claims.
         """
         if not self._chave:
-            logger.error(
-                "chave pública do AS ausente: nenhum token pode ser validado"
-            )
+            logger.error("chave pública do AS ausente: nenhum token pode ser validado")
             return None
 
         try:
