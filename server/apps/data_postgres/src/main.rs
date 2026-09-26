@@ -8812,12 +8812,13 @@ async fn handler_remover_treinamento(
 fn erro(app_err: error_core::AppError, env: &Envelope) -> Envelope {
     // Ponto único de saída de erro dos handlers admin: registra no tracing com
     // severidade e correlação (trace/tenant) antes de devolver o Envelope de erro.
-    error_core::registrar(
+    error_core::registrar_no_rpc(
         &app_err,
         &error_core::ErrorContext {
             trace_id: env.traceparent.clone(),
             tenant_id: env.tenant_id.clone(),
         },
+        &env.method,
     );
     let err_env = app_err.to_error_envelope(&env.traceparent, "data_postgres");
     Envelope {

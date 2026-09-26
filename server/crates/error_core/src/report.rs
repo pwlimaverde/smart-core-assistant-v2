@@ -54,7 +54,24 @@ impl ErrorReport {
 /// - Usa `error!()` para `Severity::Error` e `warn!()` para `Severity::Warn`.
 /// - Nunca inclui PII, stack trace ou mensagem interna no campo `message`.
 pub fn registrar(err: &AppError, ctx: &ErrorContext) {
+    registrar_no_rpc(err, ctx, "");
+}
+
+/// Igual a [`registrar`], dizendo também **qual RPC** falhou e, quando a culpa
+/// é da entrada (validação, conflito), **por quê**.
+///
+/// Sem isso o log dizia só "Dados de entrada inválidos." — sem a operação e sem
+/// o motivo, um erro visto no teste não levava a lugar nenhum. O motivo passa por
+/// [`detalhe_sem_dados`]: é texto escrito pelo desenvolvedor ("id ausente",
+/// "missing field `nome`"), mas a mensagem do serde ecoa o valor recebido, e
+/// esse valor pode ser dado pessoal. Erros de infraestrutura continuam sem
+/// detalhe: ali a mensagem vem do driver e pode trazer SQL e valores.
+pub fn registrar_no_rpc(err: &AppError, ctx: &ErrorContext, rpc: &str) {
     let report = ErrorReport::from_error(err, ctx);
+    let detalhe = match err {
+        AppError::Validation(m) | AppError::Conflict(m) => detalhe_sem_dados(m),
+        _ => String::new(),
+    };
 
     match report.severity {
         Severity::Error => {
@@ -63,6 +80,7 @@ pub fn registrar(err: &AppError, ctx: &ErrorContext) {
                 trace_id   = %report.trace_id,
                 tenant_id  = %report.tenant_id,
                 message    = %report.public_message,
+                rpc        = %rpc,
                 "Erro de aplicação registrado"
             );
         }
@@ -72,15 +90,99 @@ pub fn registrar(err: &AppError, ctx: &ErrorContext) {
                 trace_id   = %report.trace_id,
                 tenant_id  = %report.tenant_id,
                 message    = %report.public_message,
+                rpc        = %rpc,
+                detalhe    = %detalhe,
                 "Aviso de aplicação registrado"
             );
         }
     }
 }
 
+/// Motivo de erro seguro para log: sem valor entre aspas, sem sequência longa
+/// de dígitos (telefone, CPF, documento) e sem e-mail, com teto de 200
+/// caracteres. Nomes de campo entre crases ficam, porque são eles que dizem o
+/// que faltou.
+pub fn detalhe_sem_dados(msg: &str) -> String {
+    fn despejar(saida: &mut String, digitos: &mut String) {
+        if digitos.len() >= 6 {
+            saida.push('…');
+        } else {
+            saida.push_str(digitos);
+        }
+        digitos.clear();
+    }
+
+    let mut saida = String::with_capacity(msg.len().min(200));
+    let mut digitos = String::new();
+    let mut entre_aspas = false;
+    for c in msg.chars() {
+        if c == '"' {
+            despejar(&mut saida, &mut digitos);
+            entre_aspas = !entre_aspas;
+            saida.push('"');
+            if entre_aspas {
+                saida.push('…');
+            }
+            continue;
+        }
+        if entre_aspas {
+            continue;
+        }
+        if c.is_ascii_digit() {
+            digitos.push(c);
+            continue;
+        }
+        despejar(&mut saida, &mut digitos);
+        saida.push(c);
+    }
+    despejar(&mut saida, &mut digitos);
+
+    let sem_email: Vec<&str> = saida
+        .split(' ')
+        .map(|palavra| {
+            if palavra.contains('@') {
+                "…@…"
+            } else {
+                palavra
+            }
+        })
+        .collect();
+    sem_email.join(" ").chars().take(200).collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn detalhe_mantem_o_motivo_e_esconde_o_valor() {
+        assert_eq!(detalhe_sem_dados("id ausente"), "id ausente");
+        assert_eq!(
+            detalhe_sem_dados("missing field `nome` at line 1 column 20"),
+            "missing field `nome` at line 1 column 20"
+        );
+        assert_eq!(
+            detalhe_sem_dados("invalid type: string \"Maria da Silva\", expected i64"),
+            "invalid type: string \"…\", expected i64"
+        );
+    }
+
+    #[test]
+    fn detalhe_esconde_telefone_e_email_sem_aspas() {
+        assert_eq!(
+            detalhe_sem_dados("contato 5588981061874 já existe"),
+            "contato … já existe"
+        );
+        assert_eq!(
+            detalhe_sem_dados("email joao@exemplo.com inválido"),
+            "email …@… inválido"
+        );
+    }
+
+    #[test]
+    fn detalhe_tem_teto() {
+        assert_eq!(detalhe_sem_dados(&"a".repeat(500)).chars().count(), 200);
+    }
 
     #[test]
     fn test_error_report_creation() {
