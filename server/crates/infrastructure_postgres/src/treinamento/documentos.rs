@@ -17,6 +17,28 @@ pub struct Documento {
     pub data_criacao: DateTime<Utc>,
 }
 
+/// Apaga os trechos vetorizados de um treinamento.
+///
+/// Chamado antes de gravar os trechos novos: finalizar de novo troca o texto e
+/// volta o treinamento para a fila, e sem esta limpeza os trechos do texto
+/// antigo continuavam valendo ao lado dos novos. Devolve quantos apagou.
+///
+/// Sem macro: consulta nova, fora do cache `.sqlx`.
+pub async fn apagar_do_treinamento(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    treinamento_id: i32,
+) -> Result<u64, DbError> {
+    ctx.exigir_qualquer(&["treinamento:write", "tenant:admin"])?;
+    let res =
+        sqlx::query("DELETE FROM oraculo_documento WHERE tenant_id = $1 AND treinamento_id = $2")
+            .bind(ctx.tenant_id)
+            .bind(treinamento_id)
+            .execute(&mut **tx)
+            .await?;
+    Ok(res.rows_affected())
+}
+
 #[async_trait]
 pub trait DocumentoRepository: Send + Sync {
     async fn criar(

@@ -17,7 +17,12 @@ from mcp_server.tools.base import (
     limitar_itens,
     para_dict,
 )
-from mcp_server.tools.guards import exigir_confirmacao, resultado_dry_run
+from mcp_server.tools.guards import (
+    exigir_confirmacao,
+    mesmo_nome,
+    recusar_duplicata,
+    resultado_dry_run,
+)
 from mcp_server.tools.registry import Categoria, Registro
 
 DRY_RUN = Field(default=False, description="Só simular.")
@@ -147,6 +152,28 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         reconhece e o comportamento que ela deve ter nesse caso. Tag+grupo são
         únicos — confira `list_intencoes` antes."""
         tool = registro.exigir("create_intencao")
+        lista = await executor.executar(
+            "create_intencao",
+            "ListMyIntents",
+            pb.ListMyIntentsRequest(),
+            contabilizar=False,
+        )
+        igual = next(
+            (
+                i
+                for i in lista.intents
+                if mesmo_nome(i.tag, tag) and mesmo_nome(i.grupo, grupo)
+            ),
+            None,
+        )
+        if igual is not None:
+            return recusar_duplicata(
+                executor,
+                tool,
+                dry_run,
+                f"já existe a intenção '{igual.tag}' no grupo '{igual.grupo}' "
+                f"(id {igual.id}). Use `update_intencao` para alterá-la.",
+            )
         if dry_run:
             executor.registrar_simulacao(tool)
             return resultado_dry_run(tool, f"criar a intenção '{grupo}/{tag}'")

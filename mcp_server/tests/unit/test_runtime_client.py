@@ -94,6 +94,16 @@ def test_conflito_de_estado_e_distinguido_de_argumento_invalido():
     assert "fluxo já inativo" in texto
 
 
+def test_duplicidade_nao_expoe_o_esquema_do_banco():
+    detalhe = (
+        "Erro de banco de dados: violação de constraint: violação de restrição "
+        'de unicidade: duplicate key value violates unique constraint "t_key"'
+    )
+    texto = str(traduzir(grpc.StatusCode.FAILED_PRECONDITION, detalhe))
+    assert "já existe um registro igual" in texto
+    assert "t_key" not in texto and "constraint" not in texto
+
+
 def test_toda_traducao_carrega_o_nome_da_operacao():
     """Sem o nome, o agente não sabe QUAL das chamadas dele falhou."""
     codigos_com_metodo = [

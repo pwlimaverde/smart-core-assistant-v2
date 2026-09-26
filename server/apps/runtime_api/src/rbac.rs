@@ -107,6 +107,9 @@ pub const MAPA: &[(&str, &[&str])] = &[
     ("ListTreinamentos", &["treinamento:read"]),
     ("GetTreinamento", &["treinamento:read"]),
     ("QueryCompose", &["treinamento:read"]),
+    // O ensaio de pergunta oferece à IA os mesmos setores de transferência da
+    // conversa real; sem eles, "quero falar com fulano" nunca transferia.
+    ("ListarFluxosDoTenant", &["treinamento:read"]),
     ("CreateTreinamento", &["treinamento:write"]),
     ("RegistrarFeedbackTeste", &["treinamento:write"]),
     ("FinalizarTreinamento", &["treinamento:write"]),

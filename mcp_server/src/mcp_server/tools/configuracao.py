@@ -15,7 +15,7 @@ from pydantic import Field
 
 from mcp_server.grpc.contracts import admin_pb2 as pb
 from mcp_server.tools.base import Executor
-from mcp_server.tools.guards import resultado_dry_run
+from mcp_server.tools.guards import mesmo_nome, recusar_duplicata, resultado_dry_run
 from mcp_server.tools.registry import Categoria, Registro
 
 
@@ -57,6 +57,21 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
         estrutura é da empresa, não do atendimento.
         """
         tool = registro.exigir("create_departamento")
+        lista = await executor.executar(
+            "create_departamento",
+            "ListMyDepartamentos",
+            pb.ListMyDepartamentosRequest(),
+            contabilizar=False,
+        )
+        igual = next((d for d in lista.departamentos if mesmo_nome(d.nome, nome)), None)
+        if igual is not None:
+            return recusar_duplicata(
+                executor,
+                tool,
+                dry_run,
+                f"o departamento '{igual.nome}' já existe (id {igual.id}). "
+                "Use `update_departamento` para alterá-lo.",
+            )
         if dry_run:
             executor.registrar_simulacao(tool)
             return resultado_dry_run(tool, f"criar o departamento '{nome}'")
@@ -160,6 +175,26 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
         fluxo sem etapas não serve para nada.
         """
         tool = registro.exigir("create_fluxo")
+        lista = await executor.executar(
+            "create_fluxo", "ListMyFluxos", pb.ListMyFluxosRequest(), contabilizar=False
+        )
+        igual = next(
+            (
+                f
+                for f in lista.fluxos
+                if f.departamento_id == departamento_id and mesmo_nome(f.nome, nome)
+            ),
+            None,
+        )
+        if igual is not None:
+            return recusar_duplicata(
+                executor,
+                tool,
+                dry_run,
+                f"o fluxo '{igual.nome}' já existe no departamento "
+                f"{departamento_id} (id {igual.id}). Use `update_fluxo` para "
+                "alterá-lo.",
+            )
         if dry_run:
             executor.registrar_simulacao(tool)
             return resultado_dry_run(
@@ -272,6 +307,21 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
         acontecem — assim não é preciso reordenar depois.
         """
         tool = registro.exigir("create_etapa_fluxo")
+        lista = await executor.executar(
+            "create_etapa_fluxo",
+            "ListMyEtapasFluxo",
+            pb.MyFluxoIdRequest(id=fluxo_id),
+            contabilizar=False,
+        )
+        igual = next((e for e in lista.etapas if mesmo_nome(e.nome, nome)), None)
+        if igual is not None:
+            return recusar_duplicata(
+                executor,
+                tool,
+                dry_run,
+                f"a etapa '{igual.nome}' já existe no fluxo {fluxo_id} "
+                f"(id {igual.id}).",
+            )
         if dry_run:
             executor.registrar_simulacao(tool)
             return resultado_dry_run(
@@ -359,6 +409,28 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
         divide o histórico dela e é chato de desfazer.
         """
         tool = registro.exigir("create_atendente")
+        lista = await executor.executar(
+            "create_atendente",
+            "ListMyAtendentes",
+            pb.ListMyAtendentesRequest(),
+            contabilizar=False,
+        )
+        igual = next(
+            (
+                a
+                for a in lista.atendentes
+                if email.strip() and mesmo_nome(a.email, email)
+            ),
+            None,
+        )
+        if igual is not None:
+            return recusar_duplicata(
+                executor,
+                tool,
+                dry_run,
+                f"o e-mail já é do atendente '{igual.nome}' (id {igual.id}). "
+                "Uma pessoa cadastrada duas vezes divide o histórico.",
+            )
         if dry_run:
             executor.registrar_simulacao(tool)
             return resultado_dry_run(tool, f"cadastrar o atendente '{nome}'")
@@ -410,6 +482,29 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
         resposta a qualquer cliente.
         """
         tool = registro.exigir("create_treinamento")
+        lista = await executor.executar(
+            "create_treinamento",
+            "ListMyTreinamentos",
+            pb.ListMyTreinamentosRequest(),
+            contabilizar=False,
+        )
+        igual = next(
+            (
+                t
+                for t in lista.treinamentos
+                if mesmo_nome(t.tag, tag) and mesmo_nome(t.grupo, grupo)
+            ),
+            None,
+        )
+        if igual is not None:
+            return recusar_duplicata(
+                executor,
+                tool,
+                dry_run,
+                f"já existe o treinamento '{igual.grupo}/{igual.tag}' "
+                f"(id {igual.id}). Para trocar o texto, use "
+                "`finalizar_treinamento` com `conteudo_revisado`.",
+            )
         if dry_run:
             executor.registrar_simulacao(tool)
             return resultado_dry_run(tool, f"criar o treinamento com a tag '{tag}'")
@@ -464,6 +559,7 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
         tool = registro.exigir("finalizar_treinamento")
         texto = conteudo_revisado.strip()
         origem = "o conteúdo revisado informado"
+        ja_finalizado = False
         if not texto:
             # O servidor exige o texto final; sem revisão, é o que já está no
             # treinamento. A simulação passa pela mesma leitura e recusa o que
@@ -474,6 +570,7 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
                 pb.GetMyTreinamentoRequest(id=treinamento_id),
             )
             t = atual.treinamento
+            ja_finalizado = t.finalizado
             texto = t.conteudo.strip()
             origem = "o conteúdo atual do treinamento"
             if not texto:
@@ -490,11 +587,18 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
 
         if dry_run:
             executor.registrar_simulacao(tool)
-            return resultado_dry_run(
-                tool,
+            efeito = (
                 f"finalizar o treinamento {treinamento_id} vetorizando {origem} "
-                f"({len(texto)} caracteres)",
+                f"({len(texto)} caracteres)"
             )
+            if ja_finalizado:
+                efeito = (
+                    f"o treinamento {treinamento_id} já está finalizado; ele "
+                    f"seria vetorizado de novo com {origem} ({len(texto)} "
+                    "caracteres), e os trechos atuais seriam substituídos, "
+                    "não somados"
+                )
+            return resultado_dry_run(tool, efeito)
 
         await executor.executar(
             "finalizar_treinamento",

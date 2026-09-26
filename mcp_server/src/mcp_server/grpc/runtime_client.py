@@ -29,6 +29,14 @@ from loguru import logger
 from mcp_server.grpc.contracts import admin_pb2_grpc
 
 
+def _e_duplicidade(detalhe: str) -> bool:
+    """O backend recusou por violação de unicidade (o registro já existe)."""
+    texto = detalhe.casefold()
+    return any(
+        marca in texto for marca in ("unicidade", "duplicate key", "unique constraint")
+    )
+
+
 class ErroDoBackend(Exception):
     """Falha vinda do `runtime_api`, já traduzida para linguagem de agente.
 
@@ -144,6 +152,15 @@ class RuntimeApiClient:
         elif codigo == grpc.StatusCode.INVALID_ARGUMENT:
             # O detalhe do backend é validação de campo, não dado de cliente.
             msg = f"`{metodo}`: argumento inválido ({detalhe})."
+        elif codigo == grpc.StatusCode.ALREADY_EXISTS or (
+            codigo == grpc.StatusCode.FAILED_PRECONDITION and _e_duplicidade(detalhe)
+        ):
+            # O detalhe de uma violação de unicidade traz nome de tabela e de
+            # constraint: nada que o agente use, e expõe o esquema do banco.
+            msg = (
+                f"`{metodo}`: já existe um registro igual. Liste antes e altere "
+                "o existente em vez de criar outro."
+            )
         elif codigo == grpc.StatusCode.FAILED_PRECONDITION:
             msg = f"`{metodo}`: a operação conflita com o estado atual ({detalhe})."
         elif codigo == grpc.StatusCode.DEADLINE_EXCEEDED:

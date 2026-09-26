@@ -395,8 +395,29 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
             raise ToolError("Informe ao menos um prompt.")
         chaves = ", ".join(_validar_chave_de_prompt(p.chave) for p in prompts)
         if dry_run:
+            # A simulação compara com o gravado, como `update_departamento`:
+            # "gravar" um texto idêntico ao atual não muda nada, e dizer que
+            # mudaria leva o agente a relatar uma alteração que não houve.
+            atual = await executor.executar(
+                "set_prompts",
+                "GetMyTenantConfig",
+                pb.GetMyTenantConfigRequest(),
+                contabilizar=False,
+            )
+            gravados = {p.chave.strip().upper(): p.texto for p in atual.prompts}
+            mudam = [
+                _validar_chave_de_prompt(p.chave)
+                for p in prompts
+                if gravados.get(_validar_chave_de_prompt(p.chave), "").strip()
+                != p.texto.strip()
+            ]
             executor.registrar_simulacao(tool)
-            return resultado_dry_run(tool, f"gravar os prompts {chaves}")
+            return resultado_dry_run(
+                tool,
+                f"gravar os prompts {', '.join(mudam)}"
+                if mudam
+                else "nada — os prompts informados já estão gravados assim",
+            )
         await executor.executar(
             "set_prompts",
             "UpdateMyConfigAvancada",

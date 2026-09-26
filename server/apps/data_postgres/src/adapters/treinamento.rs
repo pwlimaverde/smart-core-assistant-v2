@@ -378,6 +378,14 @@ impl TreinamentoStore for PgTreinamentoStore {
         let ctx = ctx.clone();
         run_in_tenant_transaction(&self.pool, ctx.tenant_id, move |mut tx| async move {
             let repo_doc = PostgresDocumentoRepository;
+            // Substitui, não soma: um treinamento refinalizado volta à fila com
+            // texto novo, e os trechos do texto antigo precisam sair junto.
+            infrastructure_postgres::treinamento::documentos::apagar_do_treinamento(
+                &mut tx,
+                &ctx,
+                treinamento_id,
+            )
+            .await?;
             for chunk in &chunks {
                 repo_doc
                     .criar(

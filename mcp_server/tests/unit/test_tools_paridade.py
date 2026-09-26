@@ -380,14 +380,15 @@ CASOS: list[tuple[str, dict[str, Any], str, dict[str, Any]]] = [
     (
         "create_intencao",
         {
-            "tag": "saudacao",
+            # "saudacao/basico" já existe no backend falso: é a duplicata.
+            "tag": "despedida",
             "grupo": "basico",
             "descricao": "d",
-            "exemplo": "oi",
+            "exemplo": "tchau",
             "comportamento": "c",
         },
         "CreateMyIntent",
-        {"tag": "saudacao"},
+        {"tag": "despedida"},
     ),
     (
         "update_intencao",
@@ -623,6 +624,40 @@ async def test_set_prompts_manda_chave_e_texto():
         )
     _, req, _ = cliente.chamadas[-1]
     assert [(p.chave, p.texto) for p in req.prompts] == [("PROMPT_A", "")]
+
+
+async def test_set_prompts_dry_run_compara_com_o_gravado():
+    """Texto idêntico ao gravado é "nada a mudar", não "gravar"."""
+    servidor, cliente, _ = _montar()
+    with como(ADMIN):
+        igual = await servidor.funcoes["set_prompts"](
+            prompts=[configuracao_tenant.Prompt(chave="prompt_x", texto="y")],
+            dry_run=True,
+        )
+        diferente = await servidor.funcoes["set_prompts"](
+            prompts=[configuracao_tenant.Prompt(chave="PROMPT_X", texto="z")],
+            dry_run=True,
+        )
+    assert "nada" in igual
+    assert "PROMPT_X" in diferente and "nada" not in diferente
+    assert "UpdateMyConfigAvancada" not in cliente.metodos
+
+
+async def test_create_intencao_duplicada_nao_chega_ao_banco():
+    servidor, cliente, _ = _montar()
+    argumentos = {
+        "tag": "Saudacao",
+        "grupo": "basico",
+        "descricao": "d",
+        "exemplo": "oi",
+        "comportamento": "c",
+    }
+    with como(ADMIN):
+        simulado = await servidor.funcoes["create_intencao"](**argumentos, dry_run=True)
+        with pytest.raises(ToolError, match="id 2"):
+            await servidor.funcoes["create_intencao"](**argumentos)
+    assert "nada" in simulado and "update_intencao" in simulado
+    assert "CreateMyIntent" not in cliente.metodos
 
 
 async def test_config_avancada_sem_campo_e_recusada():

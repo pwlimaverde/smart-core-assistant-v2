@@ -625,6 +625,31 @@ fn exigir_escopo_de_rota(claims: &application::jwt::Claims, metodo: &str) -> Res
     Err(Status::permission_denied("errors.auth.forbidden"))
 }
 
+/// Os fluxos do tenant no formato que o `Responder` espera: chave
+/// "Setor - descrição" (na falta da descrição, o nome do fluxo) e o id como
+/// valor — a mesma convenção do worker, para o ensaio e a conversa real
+/// oferecerem à IA o mesmo catálogo.
+fn fluxos_para_o_responder(resp: &serde_json::Value) -> Vec<(String, String)> {
+    resp.get("fluxos")
+        .and_then(|v| v.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|f| {
+                    let id = f.get("id").and_then(|v| v.as_i64())?;
+                    let setor = f.get("setor").and_then(|v| v.as_str()).unwrap_or_default();
+                    let descricao = f
+                        .get("descricao")
+                        .and_then(|v| v.as_str())
+                        .filter(|s| !s.is_empty())
+                        .or_else(|| f.get("nome").and_then(|v| v.as_str()))
+                        .unwrap_or_default();
+                    Some((format!("{setor} - {descricao}"), id.to_string()))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// Exige que a sessão (já autenticada) tenha **um** dos escopos informados.
 ///
 /// Usada pelos handlers operacionais escritos à mão, que até N13.3 exigiam
@@ -3839,7 +3864,10 @@ impl AdminService for AdminFacade {
             ));
         }
 
-        // 2. RAG pelo mesmo RPC que o worker usa.
+        // 2. RAG pelo mesmo RPC que o worker usa. Sem `distance_threshold`: o
+        // data_postgres aplica o limiar efetivo do tenant, o mesmo da conversa
+        // real. Um 0.3 fixo aqui fazia o ensaio não achar trecho nenhum
+        // enquanto o cliente, no WhatsApp, recebia a base.
         let contexto = self
             .encaminhar_tenant(
                 &req,
@@ -3847,10 +3875,6 @@ impl AdminService for AdminFacade {
                 "QueryCompose",
                 serde_json::json!({
                     "query_embedding": vetor,
-                    // O mesmo padrão do worker quando a config não diz outra
-                    // coisa; um limiar diferente aqui faria o ensaio ver mais
-                    // (ou menos) material que a conversa real.
-                    "distance_threshold": 0.3,
                     "chunk_top_k": 3,
                 }),
             )
@@ -3888,9 +3912,27 @@ impl AdminService for AdminFacade {
             }
         }
 
-        // 3. Resposta. Sem histórico e sem fluxos: o ensaio é de uma pergunta
-        // isolada, e inventar uma conversa anterior mudaria o que a IA
-        // responderia.
+        // 3. Setores de transferência, montados como o worker monta: sem eles
+        // o prompt dizia "nenhum setor disponível" e o ensaio nunca mostrava
+        // transferência. Best-effort, como no worker.
+        let fluxos_disponiveis = match self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "ListarFluxosDoTenant",
+                serde_json::json!({}),
+            )
+            .await
+        {
+            Ok(resp) => fluxos_para_o_responder(&resp),
+            Err(e) => {
+                tracing::warn!(erro = %e, "ListarFluxosDoTenant falhou; ensaio sem setores");
+                Vec::new()
+            }
+        };
+
+        // 4. Resposta. Sem histórico: o ensaio é de uma pergunta isolada, e
+        // inventar uma conversa anterior mudaria o que a IA responderia.
         let saida = self
             .ia
             .responder(
@@ -3898,6 +3940,7 @@ impl AdminService for AdminFacade {
                     tenant_id: claims.tenant_id.clone(),
                     atendimento_id: String::new(),
                     mensagem: pergunta,
+                    fluxos_disponiveis,
                     dados_treinamento: partes.join("\n\n"),
                     ..Default::default()
                 },
@@ -10638,6 +10681,26 @@ mod tests {
         .unwrap_err();
         assert_eq!(err.code(), tonic::Code::PermissionDenied);
         assert_eq!(err.message(), "errors.auth.forbidden");
+    }
+
+    #[test]
+    fn fluxos_para_o_responder_segue_a_convencao_do_worker() {
+        let resp = serde_json::json!({ "fluxos": [
+            { "id": 301, "setor": "Comercial", "descricao": "", "nome": "Atendimento - Paulo" },
+            { "id": 300, "setor": "Atendimento", "descricao": "Triagem", "nome": "Inicial" },
+            { "setor": "sem id" },
+        ]});
+        assert_eq!(
+            fluxos_para_o_responder(&resp),
+            vec![
+                (
+                    "Comercial - Atendimento - Paulo".to_string(),
+                    "301".to_string()
+                ),
+                ("Atendimento - Triagem".to_string(), "300".to_string()),
+            ]
+        );
+        assert!(fluxos_para_o_responder(&serde_json::json!({})).is_empty());
     }
 
     #[test]

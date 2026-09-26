@@ -30,6 +30,7 @@ from __future__ import annotations
 import time
 from collections import defaultdict
 from dataclasses import dataclass
+from typing import Any
 
 from mcp.server.mcpserver.exceptions import ToolError
 
@@ -141,6 +142,30 @@ class RateLimiter:
         agora = time.monotonic()
         usados = len([t for t in self._minuto[(grant_id, categoria)] if agora - t < 60])
         return max(limite.por_minuto - usados, 0)
+
+
+def mesmo_nome(a: str, b: str) -> bool:
+    """Compara nomes como uma pessoa compara: sem caixa nem espaço sobrando.
+
+    "Comercial" e " comercial " são o mesmo departamento para quem lê o quadro;
+    tratá-los como diferentes deixaria passar a duplicata mais comum.
+    """
+    return " ".join(a.split()).casefold() == " ".join(b.split()).casefold()
+
+
+def recusar_duplicata(
+    executor: Any, tool: ToolRegistrada, dry_run: bool, existente: str
+) -> str:
+    """Criação de algo que já existe: a simulação responde "nada", a real recusa.
+
+    A simulação precisa dizer o mesmo que a chamada real faria; antes ela
+    respondia "criar ..." para um registro que já estava lá, e a execução
+    criava a duplicata (ou esbarrava numa constraint do banco).
+    """
+    if dry_run:
+        executor.registrar_simulacao(tool)
+        return resultado_dry_run(tool, f"nada — {existente}")
+    raise ToolError(f"Nada foi criado: {existente}")
 
 
 def resultado_dry_run(tool: ToolRegistrada, descricao_do_efeito: str) -> str:

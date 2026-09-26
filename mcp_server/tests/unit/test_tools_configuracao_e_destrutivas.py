@@ -31,9 +31,10 @@ ADMIN = ["tenant:admin"]
 async def test_create_departamento_manda_nome_e_descricao():
     servidor, registro, executor, cliente, _ = montar_ambiente(
         {
+            "ListMyDepartamentos": pb.ListMyDepartamentosResponse(),
             "CreateMyDepartamento": pb.CreateMyDepartamentoResponse(
                 id=4, nome="Comercial"
-            )
+            ),
         }
     )
     configuracao.registrar(servidor, registro, executor)
@@ -52,9 +53,13 @@ async def test_create_departamento_manda_nome_e_descricao():
 async def test_create_fluxo_amarra_o_departamento_informado():
     servidor, registro, executor, cliente, _ = montar_ambiente(
         {
+            # Mesmo nome em OUTRO departamento não é duplicata.
+            "ListMyFluxos": pb.ListMyFluxosResponse(
+                fluxos=[pb.MyFluxo(id=3, nome="Funil de Vendas", departamento_id=5)]
+            ),
             "CreateMyFluxo": pb.MyFluxoResponse(
                 fluxo=pb.MyFluxo(id=9, nome="Funil de Vendas")
-            )
+            ),
         }
     )
     configuracao.registrar(servidor, registro, executor)
@@ -72,9 +77,10 @@ async def test_create_fluxo_amarra_o_departamento_informado():
 async def test_create_etapa_usa_o_tipo_informado_e_nao_um_default_silencioso():
     servidor, registro, executor, cliente, _ = montar_ambiente(
         {
+            "ListMyEtapasFluxo": pb.ListMyEtapasFluxoResponse(),
             "CreateMyEtapaFluxo": pb.MyEtapaFluxoResponse(
                 etapa=pb.MyEtapaFluxo(id=2, nome="Proposta enviada")
-            )
+            ),
         }
     )
     configuracao.registrar(servidor, registro, executor)
@@ -114,9 +120,10 @@ async def test_create_treinamento_avisa_que_falta_finalizar():
     """
     servidor, registro, executor, _, _ = montar_ambiente(
         {
+            "ListMyTreinamentos": pb.ListMyTreinamentosResponse(),
             "CreateMyTreinamento": pb.MyTreinamentoResponse(
                 treinamento=pb.MyTreinamento(id=3, tag="politica-troca")
-            )
+            ),
         }
     )
     configuracao.registrar(servidor, registro, executor)
@@ -148,9 +155,10 @@ async def test_set_bot_persona_substitui_e_manda_o_nome_do_agente():
 async def test_create_atendente_leva_departamento_e_fluxo():
     servidor, registro, executor, cliente, _ = montar_ambiente(
         {
+            "ListMyAtendentes": pb.ListMyAtendentesResponse(),
             "CreateMyAtendente": pb.MyAtendenteResponse(
                 atendente=pb.MyAtendente(id=11, nome="João")
-            )
+            ),
         }
     )
     configuracao.registrar(servidor, registro, executor)
@@ -163,6 +171,70 @@ async def test_create_atendente_leva_departamento_e_fluxo():
     _, req, _ = cliente.chamadas[-1]
     assert req.departamento_id == 4
     assert req.fluxo_id == 9
+
+
+async def test_criar_o_que_ja_existe_simula_nada_e_recusa_de_verdade():
+    """A simulação diz o mesmo que a chamada real: nada a criar.
+
+    Antes, o `dry_run` respondia "criar ..." para um registro que já estava
+    lá, e a execução criava a duplicata.
+    """
+    servidor, registro, executor, cliente, _ = montar_ambiente(
+        {
+            "ListMyDepartamentos": pb.ListMyDepartamentosResponse(
+                departamentos=[pb.MyDepartamento(id=416, nome="Comercial")]
+            ),
+            "ListMyFluxos": pb.ListMyFluxosResponse(
+                fluxos=[
+                    pb.MyFluxo(id=301, nome="Atendimento - Paulo", departamento_id=416)
+                ]
+            ),
+            "ListMyEtapasFluxo": pb.ListMyEtapasFluxoResponse(
+                etapas=[pb.MyEtapaFluxo(id=248, nome="Aguardando Orçamento")]
+            ),
+            "ListMyAtendentes": pb.ListMyAtendentesResponse(
+                atendentes=[
+                    pb.MyAtendente(id=129, nome="Paulo", email="Paulo@Exemplo.com")
+                ]
+            ),
+            "ListMyTreinamentos": pb.ListMyTreinamentosResponse(
+                treinamentos=[pb.MyTreinamento(id=127, tag="blueback", grupo="visual")]
+            ),
+        }
+    )
+    configuracao.registrar(servidor, registro, executor)
+    chamadas = [
+        ("create_departamento", {"nome": " comercial "}, "416"),
+        (
+            "create_fluxo",
+            {"departamento_id": 416, "nome": "Atendimento - Paulo"},
+            "301",
+        ),
+        (
+            "create_etapa_fluxo",
+            {"fluxo_id": 301, "nome": "aguardando orçamento"},
+            "248",
+        ),
+        (
+            "create_atendente",
+            {"nome": "Paulo W.", "email": "paulo@exemplo.com", "departamento_id": 416},
+            "129",
+        ),
+        (
+            "create_treinamento",
+            {"tag": "blueback", "grupo": "visual", "conteudo": "x"},
+            "127",
+        ),
+    ]
+
+    with como(ADMIN):
+        for nome, argumentos, id_existente in chamadas:
+            simulado = await servidor.funcoes[nome](**argumentos, dry_run=True)
+            assert "nada" in simulado and id_existente in simulado, nome
+            with pytest.raises(ToolError, match=id_existente):
+                await servidor.funcoes[nome](**argumentos)
+
+    assert not [m for m in cliente.metodos if m.startswith("Create")]
 
 
 async def test_update_departamento_so_muda_o_informado():
@@ -446,6 +518,27 @@ async def test_finalizar_treinamento_usa_o_conteudo_atual_sem_revisao():
     _, req, _ = cliente.chamadas[-1]
     assert req.id == 112
     assert req.conteudo == "Cartões 300g"
+
+
+async def test_finalizar_de_novo_avisa_que_os_trechos_sao_substituidos():
+    servidor, registro, executor, _, _ = montar_ambiente(
+        {
+            "GetMyTreinamento": pb.MyTreinamentoResponse(
+                treinamento=pb.MyTreinamento(
+                    id=112, conteudo="Cartões 300g", finalizado=True
+                )
+            ),
+        }
+    )
+    configuracao.registrar(servidor, registro, executor)
+
+    with como(ADMIN):
+        simulado = await servidor.funcoes["finalizar_treinamento"](
+            treinamento_id=112, dry_run=True
+        )
+
+    assert "já está finalizado" in simulado
+    assert "substituídos" in simulado
 
 
 async def test_finalizar_treinamento_com_revisao_nao_le_o_atual():

@@ -1028,7 +1028,10 @@ async fn main() -> anyhow::Result<()> {
         })
         .route("QueryCompose", move |env| {
             let state = state_for_query_compose.clone();
-            Box::pin(async move { handler_query_compose(state.treinamento.as_ref(), env).await })
+            Box::pin(async move {
+                handler_query_compose(state.treinamento.as_ref(), state.config_cache.as_ref(), env)
+                    .await
+            })
         })
         .route("CreateTreinamento", move |env| {
             let state = s_trn_criar.clone();
@@ -6343,8 +6346,18 @@ async fn handler_verify_credentials(
 
 /// RAG (fase N2, `ia_engine`): compõe o contexto de treinamento para uma mensagem
 /// já embedada pelo worker (via `ia_engine.Embed`) — busca vetorial pgvector sob
-/// RLS de tenant. `distance_threshold` default 0.3 (cosseno), `chunk_top_k` default 3.
-async fn handler_query_compose(store: &dyn ports::TreinamentoStore, env: Envelope) -> Envelope {
+/// RLS de tenant. `chunk_top_k` default 3.
+///
+/// `distance_threshold` ausente é o limiar EFETIVO do tenant (o configurado ou,
+/// na falta dele, o global) — o mesmo que o worker usa na conversa real. O
+/// ensaio de pergunta mandava 0.3 fixo e, com trechos de ~1.400 caracteres,
+/// nenhuma pergunta chegava a tanto: a base parecia vazia para o teste e cheia
+/// para o cliente.
+async fn handler_query_compose(
+    store: &dyn ports::TreinamentoStore,
+    config_cache: &infrastructure_postgres::TenantConfigCache,
+    env: Envelope,
+) -> Envelope {
     let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
         Ok(v) => v,
         Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
@@ -6365,16 +6378,22 @@ async fn handler_query_compose(store: &dyn ports::TreinamentoStore, env: Envelop
             )
         }
     };
-    let distance_threshold = payload_json
-        .get("distance_threshold")
-        .and_then(|v| v.as_f64())
-        .unwrap_or(0.3);
     let chunk_top_k = payload_json
         .get("chunk_top_k")
         .and_then(|v| v.as_i64())
         .unwrap_or(3);
 
     let ctx = contexto_do_envelope(&env);
+    let distance_threshold = match payload_json
+        .get("distance_threshold")
+        .and_then(|v| v.as_f64())
+    {
+        Some(limiar) => limiar,
+        None => match config_cache.get_config(ctx.tenant_id).await {
+            Ok(cfg) => cfg.vector_distance_threshold,
+            Err(e) => return erro(error_core::AppError::Database(e.to_string()), &env),
+        },
+    };
     match store
         .query_compose(&ctx, query_embedding, distance_threshold, chunk_top_k)
         .await
