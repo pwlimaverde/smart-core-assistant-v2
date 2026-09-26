@@ -494,6 +494,10 @@ table AtendimentoResumo {
   contato_telefone:string;
   contato_foto_url:string;
   revisao_pendente:bool;
+  ultima_mensagem:string;
+  ultima_mensagem_tipo:string;
+  ultima_mensagem_remetente:string;
+  atendente_nome:string;
 }
 
 table MarcarRevisadoRequest {
