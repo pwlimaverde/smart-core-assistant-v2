@@ -638,8 +638,8 @@ async def test_set_prompts_dry_run_compara_com_o_gravado():
             prompts=[configuracao_tenant.Prompt(chave="PROMPT_X", texto="z")],
             dry_run=True,
         )
-    assert "nada" in igual
-    assert "PROMPT_X" in diferente and "nada" not in diferente
+    assert "efeito será: nada" in igual
+    assert "efeito será: gravar os prompts PROMPT_X" in diferente
     assert "UpdateMyConfigAvancada" not in cliente.metodos
 
 
@@ -656,7 +656,7 @@ async def test_create_intencao_duplicada_nao_chega_ao_banco():
         simulado = await servidor.funcoes["create_intencao"](**argumentos, dry_run=True)
         with pytest.raises(ToolError, match="id 2"):
             await servidor.funcoes["create_intencao"](**argumentos)
-    assert "nada" in simulado and "update_intencao" in simulado
+    assert "efeito será: nada" in simulado and "update_intencao" in simulado
     assert "CreateMyIntent" not in cliente.metodos
 
 

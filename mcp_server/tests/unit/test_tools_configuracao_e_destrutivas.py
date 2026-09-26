@@ -230,7 +230,7 @@ async def test_criar_o_que_ja_existe_simula_nada_e_recusa_de_verdade():
     with como(ADMIN):
         for nome, argumentos, id_existente in chamadas:
             simulado = await servidor.funcoes[nome](**argumentos, dry_run=True)
-            assert "nada" in simulado and id_existente in simulado, nome
+            assert "efeito será: nada" in simulado and id_existente in simulado, nome
             with pytest.raises(ToolError, match=id_existente):
                 await servidor.funcoes[nome](**argumentos)
 
