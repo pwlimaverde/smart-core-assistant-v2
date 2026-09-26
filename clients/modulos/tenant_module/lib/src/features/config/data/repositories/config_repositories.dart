@@ -65,3 +65,20 @@ final class UpdateMyTenantConfigRepository
     UpdateMyTenantConfigParameters parameters,
   ) => _mapConfig('updateMyTenantConfig', exception, stackTrace);
 }
+
+final class UpdateConfigAvancadaRepository
+    extends
+        RepositoryBase<
+          Unit,
+          UpdateConfigAvancadaParameters,
+          TenantConfigError
+        > {
+  const UpdateConfigAvancadaRepository({required super.datasource});
+
+  @override
+  TenantConfigError mapError(
+    Object exception,
+    StackTrace stackTrace,
+    UpdateConfigAvancadaParameters parameters,
+  ) => _mapConfig('updateConfigAvancada', exception, stackTrace);
+}

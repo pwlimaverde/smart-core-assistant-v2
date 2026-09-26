@@ -65,3 +65,26 @@ final class UpdateMyTenantConfigUsecase
     UpdateMyTenantConfigParameters parameters,
   ) => const Success(unit);
 }
+
+/// Grava a configuração avançada (prompts do negócio, tipos de entidade...).
+final class UpdateConfigAvancadaUsecase
+    extends
+        UsecaseBaseCallData<
+          Unit,
+          Unit,
+          UpdateConfigAvancadaParameters,
+          TenantConfigError
+        > {
+  const UpdateConfigAvancadaUsecase({required super.repository});
+
+  @override
+  ProcessData<Unit, Unit, UpdateConfigAvancadaParameters, TenantConfigError>
+  get process =>
+      (_, _) => const Success(unit);
+
+  @override
+  TenantConfigError onUnexpected(Object exception, StackTrace stackTrace) {
+    _logBug('updateConfigAvancada', exception, stackTrace);
+    return const ConfigInesperado();
+  }
+}

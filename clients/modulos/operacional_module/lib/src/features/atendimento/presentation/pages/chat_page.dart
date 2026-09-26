@@ -52,10 +52,25 @@ class PainelDeConversa extends StatefulWidget {
   /// `AppBar` da [ChatPage] já cumpre esse papel e isto vem nulo.
   final VoidCallback? aoFechar;
 
+  /// Se os detalhes do atendimento (a ficha) estão à vista quando o painel é
+  /// estreito demais para ela ficar ao lado. Vem de fora para que o quadro
+  /// possa abri-la direto do cartão e pelo atalho `i`; sem ele, o painel cuida
+  /// do próprio estado.
+  final ValueNotifier<bool>? detalhesAbertos;
+
+  /// Recolhe a conversa para a mini-barra do quadro (modo "Kanban" da v1).
+  final VoidCallback? aoMinimizar;
+
+  /// Dá à conversa a tela inteira (modo "Atendimento" da v1).
+  final VoidCallback? aoExpandir;
+
   const PainelDeConversa({
     super.key,
     required this.atendimentoId,
     this.aoFechar,
+    this.detalhesAbertos,
+    this.aoMinimizar,
+    this.aoExpandir,
   });
 
   @override
@@ -69,6 +84,11 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
 
   /// B6 — para saber se o fim da conversa está à vista.
   final _rolagem = ScrollController();
+
+  /// O estado dos detalhes quando ninguém de fora o controla.
+  late final ValueNotifier<bool> _detalhesProprios = ValueNotifier(false);
+  ValueNotifier<bool> get _detalhes =>
+      widget.detalhesAbertos ?? _detalhesProprios;
 
   @override
   void initState() {
@@ -103,12 +123,10 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
       removerNota: GetIt.instance.isRegistered<RemoverNotaUsecase>()
           ? inject<RemoverNotaUsecase>()
           : null,
-      atualizarEtiqueta:
-          GetIt.instance.isRegistered<AtualizarEtiquetaUsecase>()
+      atualizarEtiqueta: GetIt.instance.isRegistered<AtualizarEtiquetaUsecase>()
           ? inject<AtualizarEtiquetaUsecase>()
           : null,
-      desativarEtiqueta:
-          GetIt.instance.isRegistered<DesativarEtiquetaUsecase>()
+      desativarEtiqueta: GetIt.instance.isRegistered<DesativarEtiquetaUsecase>()
           ? inject<DesativarEtiquetaUsecase>()
           : null,
     );
@@ -124,6 +142,7 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
   void dispose() {
     _controller.close();
     _ficha.close();
+    _detalhesProprios.dispose();
     _inputController.dispose();
     _rolagem.dispose();
     super.dispose();
@@ -176,6 +195,9 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
                   _CabecalhoDoPainel(
                     atendimentoId: widget.atendimentoId,
                     aoFechar: widget.aoFechar!,
+                    detalhes: _detalhes,
+                    aoMinimizar: widget.aoMinimizar,
+                    aoExpandir: widget.aoExpandir,
                   ),
                   Expanded(child: conversa),
                 ],
@@ -187,7 +209,34 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
         //
         // O limite vale para a largura DESTE painel, não para a da janela: ao
         // lado do quadro ele tem uns 420px, e a ficha não caberia junto.
-        if (constraints.maxWidth < 900) return corpo;
+        //
+        // Aí ela vira gaveta sobre a conversa, aberta pelo botão de detalhes
+        // (ou pelo cartão, ou pelo atalho `i`) — o "Detalhes do Atendimento"
+        // da v1. Antes ela simplesmente sumia, e os campos personalizados do
+        // cartão ficavam sem lugar nenhum para aparecer.
+        if (constraints.maxWidth < 900) {
+          return ValueListenableBuilder<bool>(
+            valueListenable: _detalhes,
+            builder: (context, abertos, _) => Stack(
+              children: [
+                Positioned.fill(child: corpo),
+                if (abertos)
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: PainelFicha(
+                      controller: _ficha,
+                      largura: constraints.maxWidth < 380
+                          ? constraints.maxWidth
+                          : 380,
+                      aoFechar: () => _detalhes.value = false,
+                    ),
+                  ),
+              ],
+            ),
+          );
+        }
 
         return Row(
           children: [
@@ -301,25 +350,25 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
 
   /// O servidor decide o que aceita pelo mimetype; o picker devolve só a
   /// extensão. Desconhecido vai como binário, e o servidor recusa se não puder.
-  static String _mimetypePorExtensao(String? extensao) =>
-      switch (extensao?.toLowerCase()) {
-        'jpg' || 'jpeg' => 'image/jpeg',
-        'png' => 'image/png',
-        'gif' => 'image/gif',
-        'webp' => 'image/webp',
-        'pdf' => 'application/pdf',
-        'mp3' => 'audio/mpeg',
-        'ogg' => 'audio/ogg',
-        'm4a' => 'audio/mp4',
-        'mp4' => 'video/mp4',
-        'doc' => 'application/msword',
-        'docx' =>
-          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'xls' => 'application/vnd.ms-excel',
-        'xlsx' =>
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        _ => 'application/octet-stream',
-      };
+  static String _mimetypePorExtensao(String? extensao) => switch (extensao
+      ?.toLowerCase()) {
+    'jpg' || 'jpeg' => 'image/jpeg',
+    'png' => 'image/png',
+    'gif' => 'image/gif',
+    'webp' => 'image/webp',
+    'pdf' => 'application/pdf',
+    'mp3' => 'audio/mpeg',
+    'ogg' => 'audio/ogg',
+    'm4a' => 'audio/mp4',
+    'mp4' => 'video/mp4',
+    'doc' => 'application/msword',
+    'docx' =>
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'xls' => 'application/vnd.ms-excel',
+    'xlsx' =>
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    _ => 'application/octet-stream',
+  };
 
   Future<void> _enviar() async {
     final texto = _inputController.text.trim();
@@ -339,15 +388,42 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
 ///
 /// Em janela larga o quadro embute [PainelDeConversa] diretamente e esta
 /// página não entra em cena.
-class ChatPage extends StatelessWidget {
+class ChatPage extends StatefulWidget {
   final int atendimentoId;
 
   const ChatPage({super.key, required this.atendimentoId});
 
   @override
+  State<ChatPage> createState() => _ChatPageState();
+}
+
+class _ChatPageState extends State<ChatPage> {
+  /// Em tela estreita a ficha é gaveta; o botão da barra do topo a abre.
+  final _detalhes = ValueNotifier<bool>(false);
+
+  @override
+  void dispose() {
+    _detalhes.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) => AppScaffold(
-    title: 'Atendimento #$atendimentoId',
-    body: PainelDeConversa(atendimentoId: atendimentoId),
+    title: 'Atendimento #${widget.atendimentoId}',
+    actions: [
+      ValueListenableBuilder<bool>(
+        valueListenable: _detalhes,
+        builder: (context, abertos, _) => IconButton(
+          icon: Icon(abertos ? Icons.info : Icons.info_outline),
+          tooltip: 'Detalhes do atendimento',
+          onPressed: () => _detalhes.value = !abertos,
+        ),
+      ),
+    ],
+    body: PainelDeConversa(
+      atendimentoId: widget.atendimentoId,
+      detalhesAbertos: _detalhes,
+    ),
   );
 }
 
@@ -360,10 +436,16 @@ class ChatPage extends StatelessWidget {
 class _CabecalhoDoPainel extends StatefulWidget {
   final int atendimentoId;
   final VoidCallback aoFechar;
+  final ValueNotifier<bool> detalhes;
+  final VoidCallback? aoMinimizar;
+  final VoidCallback? aoExpandir;
 
   const _CabecalhoDoPainel({
     required this.atendimentoId,
     required this.aoFechar,
+    required this.detalhes,
+    this.aoMinimizar,
+    this.aoExpandir,
   });
 
   @override
@@ -451,6 +533,27 @@ class _CabecalhoDoPainelState extends State<_CabecalhoDoPainel> {
                     ).textTheme.labelSmall?.copyWith(color: colors.fgMuted),
                   ),
               ],
+            ),
+          ),
+          if (widget.aoMinimizar != null)
+            IconButton(
+              icon: const Icon(Icons.close_fullscreen),
+              tooltip: 'Minimizar (Esc)',
+              onPressed: widget.aoMinimizar,
+            ),
+          if (widget.aoExpandir != null)
+            IconButton(
+              icon: const Icon(Icons.open_in_full),
+              tooltip: 'Expandir (Alt+3)',
+              onPressed: widget.aoExpandir,
+            ),
+          ValueListenableBuilder<bool>(
+            valueListenable: widget.detalhes,
+            builder: (context, abertos, _) => IconButton(
+              icon: Icon(abertos ? Icons.info : Icons.info_outline),
+              tooltip: 'Detalhes do atendimento (i)',
+              isSelected: abertos,
+              onPressed: () => widget.detalhes.value = !abertos,
             ),
           ),
           IconButton(
@@ -581,39 +684,39 @@ class _ChatBody extends StatelessWidget {
             ),
           )
         else
-        Padding(
-          padding: const EdgeInsets.all(AppSpacing.sm),
-          child: Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.attach_file),
-                tooltip: 'Anexar arquivo',
-                onPressed: aoAnexar,
-              ),
-              IconButton(
-                icon: Icon(gravando ? Icons.stop_circle : Icons.mic_none),
-                color: gravando ? AppPalette.danger : null,
-                tooltip: gravando ? 'Parar e enviar' : 'Gravar áudio',
-                onPressed: aoGravar,
-              ),
-              Expanded(
-                child: AppTextField(
-                  label: 'Mensagem',
-                  hint: 'Digite uma mensagem…',
-                  controller: inputController,
-                  onChanged: (_) => aoDigitar(),
-                  onSubmitted: (_) => onEnviar(),
+          Padding(
+            padding: const EdgeInsets.all(AppSpacing.sm),
+            child: Row(
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.attach_file),
+                  tooltip: 'Anexar arquivo',
+                  onPressed: aoAnexar,
                 ),
-              ),
-              const SizedBox(width: AppSpacing.sm),
-              IconButton.filled(
-                onPressed: onEnviar,
-                tooltip: 'Enviar mensagem',
-                icon: const Icon(Icons.send),
-              ),
-            ],
+                IconButton(
+                  icon: Icon(gravando ? Icons.stop_circle : Icons.mic_none),
+                  color: gravando ? AppPalette.danger : null,
+                  tooltip: gravando ? 'Parar e enviar' : 'Gravar áudio',
+                  onPressed: aoGravar,
+                ),
+                Expanded(
+                  child: AppTextField(
+                    label: 'Mensagem',
+                    hint: 'Digite uma mensagem…',
+                    controller: inputController,
+                    onChanged: (_) => aoDigitar(),
+                    onSubmitted: (_) => onEnviar(),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                IconButton.filled(
+                  onPressed: onEnviar,
+                  tooltip: 'Enviar mensagem',
+                  icon: const Icon(Icons.send),
+                ),
+              ],
+            ),
           ),
-        ),
       ],
     );
   }
@@ -656,10 +759,7 @@ class _SeparadorDeDia extends StatelessWidget {
             color: colors.chip,
             borderRadius: AppRadius.pill,
           ),
-          child: Text(
-            _rotulo(),
-            style: Theme.of(context).textTheme.labelSmall,
-          ),
+          child: Text(_rotulo(), style: Theme.of(context).textTheme.labelSmall),
         ),
       ),
     );
@@ -721,9 +821,7 @@ class _AvisoDePresenca extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final texto = situacao == 'recording'
-        ? 'gravando áudio…'
-        : 'digitando…';
+    final texto = situacao == 'recording' ? 'gravando áudio…' : 'digitando…';
     return Padding(
       padding: const EdgeInsets.fromLTRB(
         AppSpacing.md,

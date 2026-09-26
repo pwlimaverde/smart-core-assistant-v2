@@ -18,6 +18,10 @@ final class TenantOwnConfigRoute extends GetItModule {
       () => TenantOwnConfigController(
         getUsecase: inject<GetMyTenantConfigUsecase>(),
         updateUsecase: inject<UpdateMyTenantConfigUsecase>(),
+        updateAvancadaUsecase:
+            GetIt.instance.isRegistered<UpdateConfigAvancadaUsecase>()
+            ? inject<UpdateConfigAvancadaUsecase>()
+            : null,
       ),
     );
   }

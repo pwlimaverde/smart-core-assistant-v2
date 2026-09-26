@@ -31,31 +31,78 @@ Color corDaEtiqueta(String hex) {
 class PainelFicha extends StatelessWidget {
   final FichaController controller;
 
-  const PainelFicha({required this.controller, super.key});
+  /// Largura do painel. Ao lado da conversa larga são 320; como gaveta sobre
+  /// o painel estreito do quadro, o que couber.
+  final double largura;
+
+  /// Quando vem, a ficha é uma gaveta: ganha título e botão de fechar, como o
+  /// "Detalhes do Atendimento" da v1. Ao lado da conversa larga ela fica
+  /// sempre à vista e não precisa disso.
+  final VoidCallback? aoFechar;
+
+  const PainelFicha({
+    required this.controller,
+    this.largura = 320,
+    this.aoFechar,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
+    final conteudo = BlocBuilder<FichaController, ViewState<FichaAtendimento>>(
+      bloc: controller,
+      builder: (context, state) => switch (state) {
+        InitialState() ||
+        LoadingState() => const Center(child: CircularProgressIndicator()),
+        // A ficha falha sozinha: a conversa ao lado continua utilizável, e
+        // a mensagem precisa dizer que o que caiu foi o painel.
+        ErrorState(:final error) => AppErrorView(
+          message: error.message,
+          onRetry: () => controller.abrir(controller.atendimentoId),
+        ),
+        SuccessState(:final data) => _Conteudo(
+          ficha: data,
+          controller: controller,
+        ),
+      },
+    );
+    final fechar = aoFechar;
     return SizedBox(
-      width: 320,
+      width: largura,
       child: Card(
         margin: const EdgeInsets.all(AppSpacing.sm),
-        child: BlocBuilder<FichaController, ViewState<FichaAtendimento>>(
-          bloc: controller,
-          builder: (context, state) => switch (state) {
-            InitialState() ||
-            LoadingState() => const Center(child: CircularProgressIndicator()),
-            // A ficha falha sozinha: a conversa ao lado continua utilizável, e
-            // a mensagem precisa dizer que o que caiu foi o painel.
-            ErrorState(:final error) => AppErrorView(
-              message: error.message,
-              onRetry: () => controller.abrir(controller.atendimentoId),
-            ),
-            SuccessState(:final data) => _Conteudo(
-              ficha: data,
-              controller: controller,
-            ),
-          },
-        ),
+        elevation: fechar == null ? null : 8,
+        child: fechar == null
+            ? conteudo
+            : Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      AppSpacing.md,
+                      AppSpacing.xs,
+                      AppSpacing.xs,
+                      0,
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Detalhes do atendimento',
+                            style: Theme.of(context).textTheme.titleSmall,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          tooltip: 'Fechar os detalhes (Esc)',
+                          onPressed: fechar,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(child: conteudo),
+                ],
+              ),
       ),
     );
   }
@@ -600,7 +647,8 @@ class _Chip extends StatelessWidget {
       // Tirá-la impede a IA de recolocar nesta conversa.
       label: etiqueta.aplicadaPelaIa
           ? Tooltip(
-              message: 'Aplicada pela IA. Se tirar, ela não volta nesta conversa.',
+              message:
+                  'Aplicada pela IA. Se tirar, ela não volta nesta conversa.',
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -814,57 +862,63 @@ class _TimelineState extends State<_Timeline> {
           ),
         ),
         Expanded(
-          child: FutureBuilder<
-            ReturnSuccessOrError<List<EventoDaTimeline>, FichaError>
-          >(
-            future: _futuro,
-            builder: (context, snapshot) {
-              if (!snapshot.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              return switch (snapshot.data!) {
-                Failure(:final error) => AppErrorView(message: error.message),
-                Success(:final value) when value.isEmpty => const AppEmptyView(
-                  icon: Icons.history,
-                  title: 'Sem história ainda',
-                  subtitle: 'Movimentos e anotações aparecem aqui.',
-                ),
-                Success(:final value) => ListView.separated(
-                  padding: const EdgeInsets.all(AppSpacing.md),
-                  itemCount: value.length,
-                  separatorBuilder: (_, _) =>
-                      const SizedBox(height: AppSpacing.sm),
-                  itemBuilder: (context, i) {
-                    final e = value[i];
-                    return Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(_icone(e.tipo), size: 16, color: muted),
-                        const SizedBox(width: AppSpacing.sm),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(e.descricao),
-                              Text(
-                                [
-                                  _quando(e.quando),
-                                  if (e.autor.isNotEmpty) e.autor,
-                                  if (e.automatico) 'automático',
-                                ].join(' · '),
-                                style: Theme.of(context).textTheme.labelSmall
-                                    ?.copyWith(color: muted),
+          child:
+              FutureBuilder<
+                ReturnSuccessOrError<List<EventoDaTimeline>, FichaError>
+              >(
+                future: _futuro,
+                builder: (context, snapshot) {
+                  if (!snapshot.hasData) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+                  return switch (snapshot.data!) {
+                    Failure(:final error) => AppErrorView(
+                      message: error.message,
+                    ),
+                    Success(:final value) when value.isEmpty =>
+                      const AppEmptyView(
+                        icon: Icons.history,
+                        title: 'Sem história ainda',
+                        subtitle: 'Movimentos e anotações aparecem aqui.',
+                      ),
+                    Success(:final value) => ListView.separated(
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      itemCount: value.length,
+                      separatorBuilder: (_, _) =>
+                          const SizedBox(height: AppSpacing.sm),
+                      itemBuilder: (context, i) {
+                        final e = value[i];
+                        return Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(_icone(e.tipo), size: 16, color: muted),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(e.descricao),
+                                  Text(
+                                    [
+                                      _quando(e.quando),
+                                      if (e.autor.isNotEmpty) e.autor,
+                                      if (e.automatico) 'automático',
+                                    ].join(' · '),
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .labelSmall
+                                        ?.copyWith(color: muted),
+                                  ),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    );
-                  },
-                ),
-              };
-            },
-          ),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  };
+                },
+              ),
         ),
       ],
     );

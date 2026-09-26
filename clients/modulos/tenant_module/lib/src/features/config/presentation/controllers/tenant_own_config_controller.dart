@@ -10,10 +10,32 @@ final class TenantOwnConfigController extends BaseController<TenantConfig> {
   final GetMyTenantConfigUsecase _getUsecase;
   final UpdateMyTenantConfigUsecase _updateUsecase;
 
+  /// Opcional: onde não foi registrado, a tela não oferece a seção avançada.
+  final UpdateConfigAvancadaUsecase? _updateAvancadaUsecase;
+
   TenantOwnConfigController({
     required this._getUsecase,
     required this._updateUsecase,
+    this._updateAvancadaUsecase,
   });
+
+  bool get podeEditarAvancada => _updateAvancadaUsecase != null;
+
+  Future<ReturnSuccessOrError<Unit, TenantConfigError>> updateAvancada(
+    ConfigAvancada avancada, {
+    Set<String> promptsRemovidos = const {},
+  }) async {
+    final usecase = _updateAvancadaUsecase;
+    if (usecase == null) return const Failure(ConfigInesperado());
+    final res = await usecase(
+      UpdateConfigAvancadaParameters(
+        avancada: avancada,
+        promptsRemovidos: promptsRemovidos,
+      ),
+    );
+    if (res is Success) await fetchConfig();
+    return res;
+  }
 
   Future<void> fetchConfig() => execute(() => _getUsecase(noParams));
 

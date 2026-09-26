@@ -1,9 +1,9 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:design_system_module/design_system_module.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:get_it_module/get_it_module.dart';
 import 'package:presentation_module/presentation_module.dart';
@@ -15,6 +15,7 @@ import '../../domain/model/quadro.dart';
 import '../controllers/kanban_controller.dart';
 import '../controllers/kanban_state.dart';
 import '../widgets/atendimento_card_content.dart';
+import '../widgets/mini_barra_da_conversa.dart';
 import 'chat_page.dart';
 import '../escrita_no_quadro.dart';
 import '../aviso_nativo/aviso_nativo.dart';
@@ -60,6 +61,12 @@ class KanbanPage extends StatefulWidget {
 
   const KanbanPage({this.drawer, this.aviso, this.buscarContatos, super.key});
 
+  /// Volta ao modo de foco padrão — os testes não podem herdar o modo um do
+  /// outro, e ele é lembrado enquanto o app está aberto.
+  @visibleForTesting
+  static void reiniciarModoDeFoco() =>
+      _KanbanPageState._modoLembrado = ModoDeFoco.dividido;
+
   @override
   State<KanbanPage> createState() => _KanbanPageState();
 }
@@ -74,6 +81,15 @@ class _KanbanPageState extends State<KanbanPage> {
   /// Conversa aberta no painel da direita. `null` = só o quadro.
   int? _conversaAberta;
 
+  /// O modo de foco escolhido por último, lembrado enquanto o app está aberto:
+  /// sair do quadro e voltar não deve desfazer a preferência de quem atende.
+  static ModoDeFoco _modoLembrado = ModoDeFoco.dividido;
+
+  late ModoDeFoco _modo = _modoLembrado;
+
+  /// Os detalhes (a ficha) do atendimento aberto, como gaveta do painel.
+  final _detalhes = ValueNotifier<bool>(false);
+
   /// B5 — avisos de conversa atribuída a quem está logado.
   StreamSubscription<AtribuicaoRecebida>? _atribuicoes;
 
@@ -83,16 +99,118 @@ class _KanbanPageState extends State<KanbanPage> {
     final controller = inject<KanbanController>();
     controller.carregar();
     _atribuicoes = controller.atribuicoes.listen(_avisarAtribuicao);
+    HardwareKeyboard.instance.addHandler(_teclas);
     // P16 — o clique no aviso do Windows abre a conversa.
-    unawaited(AvisoNativo.iniciar(aoClicar: (id) {
-      if (mounted) _abrir(id);
-    }));
+    unawaited(
+      AvisoNativo.iniciar(
+        aoClicar: (id) {
+          if (mounted) _abrir(id);
+        },
+      ),
+    );
   }
 
   @override
   void dispose() {
     _atribuicoes?.cancel();
+    HardwareKeyboard.instance.removeHandler(_teclas);
+    _detalhes.dispose();
     super.dispose();
+  }
+
+  void _definirModo(ModoDeFoco modo) {
+    _modoLembrado = modo;
+    setState(() => _modo = modo);
+  }
+
+  /// Clique fora da conversa: ela recolhe para a mini-barra e devolve a
+  /// largura ao quadro, como no workspace da v1.
+  void _minimizar() {
+    if (_conversaAberta == null || _modo == ModoDeFoco.quadro) return;
+    _detalhes.value = false;
+    _definirModo(ModoDeFoco.quadro);
+  }
+
+  void _fechar() {
+    _detalhes.value = false;
+    setState(() => _conversaAberta = null);
+  }
+
+  /// O cartão da conversa aberta, se ele está no quadro (o filtro pode tê-lo
+  /// escondido).
+  AtendimentoResumo? _resumoDe(int atendimentoId) {
+    final estado = inject<KanbanController>().state;
+    if (estado is! SuccessState<KanbanViewModel>) return null;
+    for (final itens in estado.data.porEtapa.values) {
+      for (final a in itens) {
+        if (a.id == atendimentoId) return a;
+      }
+    }
+    return null;
+  }
+
+  /// Atalhos do workspace da v1: Alt+1/2/3 trocam o foco, `Esc` o reduz e `i`
+  /// abre ou fecha os detalhes.
+  ///
+  /// Handler do teclado inteiro, e não um `Focus` na árvore: depois de clicar
+  /// num cartão o foco não fica em lugar nenhum desta tela, e o atalho tem de
+  /// funcionar assim mesmo.
+  bool _teclas(KeyEvent evento) {
+    if (evento is! KeyDownEvent || !mounted) return false;
+    if (!(ModalRoute.of(context)?.isCurrent ?? true)) return false;
+    if (MediaQuery.sizeOf(context).width < _larguraParaOsDois) return false;
+    final tecla = evento.logicalKey;
+    final teclado = HardwareKeyboard.instance;
+
+    if (teclado.isAltPressed) {
+      final modo = switch (tecla) {
+        LogicalKeyboardKey.digit1 => ModoDeFoco.quadro,
+        LogicalKeyboardKey.digit2 => ModoDeFoco.dividido,
+        LogicalKeyboardKey.digit3 => ModoDeFoco.conversa,
+        _ => null,
+      };
+      if (modo == null) return false;
+      _definirModo(modo);
+      return true;
+    }
+
+    if (tecla == LogicalKeyboardKey.escape) {
+      if (_detalhes.value) {
+        _detalhes.value = false;
+        return true;
+      }
+      if (_conversaAberta == null) return false;
+      if (_modo == ModoDeFoco.conversa) {
+        _definirModo(ModoDeFoco.dividido);
+        return true;
+      }
+      if (_modo == ModoDeFoco.dividido) {
+        _minimizar();
+        return true;
+      }
+      return false;
+    }
+
+    // `i` só vale fora de campo de texto: digitando, é a letra.
+    if (tecla == LogicalKeyboardKey.keyI &&
+        _conversaAberta != null &&
+        !teclado.isControlPressed &&
+        !teclado.isMetaPressed &&
+        !_digitando()) {
+      _detalhes.value = !_detalhes.value;
+      if (_detalhes.value && _modo == ModoDeFoco.quadro) {
+        _definirModo(ModoDeFoco.dividido);
+      }
+      return true;
+    }
+    return false;
+  }
+
+  static bool _digitando() {
+    final contexto = FocusManager.instance.primaryFocus?.context;
+    if (contexto == null) return false;
+    return contexto.widget is EditableText ||
+        contexto.findAncestorWidgetOfExactType<EditableText>() != null;
   }
 
   /// A conversa já apareceu no quadro (o evento também o recarrega); o aviso
@@ -163,10 +281,22 @@ class _KanbanPageState extends State<KanbanPage> {
   ///
   /// Ao lado do quadro quando há largura: era assim na v1, e é o que permite
   /// atender sem perder de vista a fila. Numa janela estreita, tela cheia.
-  void _abrir(int atendimentoId) {
+  ///
+  /// `detalhes` abre junto a ficha do atendimento (o botão de detalhes do
+  /// cartão): é por ela que se veem e editam os campos personalizados.
+  void _abrir(int atendimentoId, {bool detalhes = false}) {
     inject<KanbanController>().zerarNaoLidas(atendimentoId);
     if (MediaQuery.sizeOf(context).width >= _larguraParaOsDois) {
-      setState(() => _conversaAberta = atendimentoId);
+      _detalhes.value = detalhes;
+      setState(() {
+        _conversaAberta = atendimentoId;
+        // Abrir a partir do quadro minimizado expande: quem clicou no cartão
+        // quer ver a conversa, não a mini-barra.
+        if (_modo == ModoDeFoco.quadro) {
+          _modo = ModoDeFoco.dividido;
+          _modoLembrado = _modo;
+        }
+      });
       return;
     }
     Navigator.of(context).push(
@@ -209,6 +339,24 @@ class _KanbanPageState extends State<KanbanPage> {
       title: 'Atendimento',
       drawer: widget.drawer,
       actions: [
+        if (MediaQuery.sizeOf(context).width >= _larguraParaOsDois)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
+            child: SegmentedButton<ModoDeFoco>(
+              showSelectedIcon: false,
+              segments: [
+                for (final modo in ModoDeFoco.values)
+                  ButtonSegment(
+                    value: modo,
+                    icon: Icon(modo.icone, size: 16),
+                    label: Text(modo.rotulo),
+                    tooltip: '${modo.rotulo} (Alt+${modo.index + 1})',
+                  ),
+              ],
+              selected: {_modo},
+              onSelectionChanged: (s) => _definirModo(s.first),
+            ),
+          ),
         if (widget.buscarContatos != null && quadroPodeEscrever())
           IconButton(
             icon: const Icon(Icons.person_add_alt_1_outlined),
@@ -252,6 +400,7 @@ class _KanbanPageState extends State<KanbanPage> {
                             viewModel: data,
                             controller: controller,
                             aoAbrir: _abrir,
+                            aoDetalhar: (id) => _abrir(id, detalhes: true),
                           ),
                         };
                       },
@@ -266,29 +415,68 @@ class _KanbanPageState extends State<KanbanPage> {
                   return quadro;
                 }
 
-                return Row(
-                  children: [
-                    Expanded(child: quadro),
-                    Container(
-                      width: 460,
-                      decoration: BoxDecoration(
-                        border: Border(
-                          left: BorderSide(color: context.colors.border),
+                // `ValueKey` no id: trocar de atendimento tem de **recriar** o
+                // painel. Sem ela o Flutter reaproveita o State, e o
+                // `initState` — que é onde o stream abre — não roda de novo: a
+                // tela mudaria de título e continuaria na conversa anterior.
+                final painel = PainelDeConversa(
+                  key: ValueKey(aberta),
+                  atendimentoId: aberta,
+                  aoFechar: _fechar,
+                  detalhesAbertos: _detalhes,
+                  aoMinimizar: () => _definirModo(ModoDeFoco.quadro),
+                  aoExpandir: _modo == ModoDeFoco.conversa
+                      ? null
+                      : () => _definirModo(ModoDeFoco.conversa),
+                );
+
+                return switch (_modo) {
+                  // Só o quadro, com a conversa recolhida no canto.
+                  ModoDeFoco.quadro => Stack(
+                    children: [
+                      Positioned.fill(child: quadro),
+                      Positioned(
+                        right: AppSpacing.md,
+                        bottom: AppSpacing.md,
+                        child: MiniBarraDaConversa(
+                          atendimentoId: aberta,
+                          atendimento: _resumoDe(aberta),
+                          aoAbrir: () => _definirModo(ModoDeFoco.dividido),
+                          aoVerDetalhes: () {
+                            _detalhes.value = true;
+                            _definirModo(ModoDeFoco.dividido);
+                          },
+                          aoFechar: _fechar,
                         ),
                       ),
-                      // `ValueKey` no id: trocar de atendimento tem de
-                      // **recriar** o painel. Sem ela o Flutter reaproveita o
-                      // State, e o `initState` — que é onde o stream abre —
-                      // não roda de novo: a tela mudaria de título e
-                      // continuaria mostrando a conversa anterior.
-                      child: PainelDeConversa(
-                        key: ValueKey(aberta),
-                        atendimentoId: aberta,
-                        aoFechar: () => setState(() => _conversaAberta = null),
+                    ],
+                  ),
+                  // A conversa com a tela inteira: a ficha fica ao lado dela.
+                  ModoDeFoco.conversa => painel,
+                  ModoDeFoco.dividido => Row(
+                    children: [
+                      // Clique no quadro fora de um cartão recolhe a conversa.
+                      // O toque num cartão (ou no menu dele) é de quem está
+                      // mais dentro e ganha a disputa — só o fundo chega aqui.
+                      Expanded(
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: _minimizar,
+                          child: quadro,
+                        ),
                       ),
-                    ),
-                  ],
-                );
+                      Container(
+                        width: 460,
+                        decoration: BoxDecoration(
+                          border: Border(
+                            left: BorderSide(color: context.colors.border),
+                          ),
+                        ),
+                        child: painel,
+                      ),
+                    ],
+                  ),
+                };
               },
             ),
           ),
@@ -306,10 +494,14 @@ class _Quadro extends StatelessWidget {
   /// conversa aparece é a página, que conhece a largura da janela.
   final void Function(int atendimentoId) aoAbrir;
 
+  /// O botão de detalhes do cartão: abre a conversa já com a ficha à vista.
+  final void Function(int atendimentoId) aoDetalhar;
+
   const _Quadro({
     required this.viewModel,
     required this.controller,
     required this.aoAbrir,
+    required this.aoDetalhar,
   });
 
   @override
@@ -374,6 +566,7 @@ class _Quadro extends StatelessWidget {
                       viewModel: viewModel,
                       controller: controller,
                       aoAbrir: aoAbrir,
+                      aoDetalhar: aoDetalhar,
                     ),
                   // Conversas fora de qualquer coluna do quadro: chegaram antes
                   // do fluxo existir, ou apontam para uma coluna já removida.
@@ -391,6 +584,7 @@ class _Quadro extends StatelessWidget {
                       viewModel: viewModel,
                       controller: controller,
                       aoAbrir: aoAbrir,
+                      aoDetalhar: aoDetalhar,
                     ),
                 ],
               ),
@@ -408,6 +602,7 @@ class _Coluna extends StatelessWidget {
   final KanbanViewModel viewModel;
   final KanbanController controller;
   final void Function(int atendimentoId) aoAbrir;
+  final void Function(int atendimentoId) aoDetalhar;
 
   const _Coluna({
     required this.coluna,
@@ -415,6 +610,7 @@ class _Coluna extends StatelessWidget {
     required this.viewModel,
     required this.controller,
     required this.aoAbrir,
+    required this.aoDetalhar,
   });
 
   @override
@@ -446,6 +642,14 @@ class _Coluna extends StatelessWidget {
                     onTap: () => aoAbrir(atendimento.id),
                     child: AtendimentoCardContent(atendimento: atendimento),
                   ),
+                ),
+                // Os detalhes do cartão (campos, etiquetas, notas, histórico),
+                // como o botão de detalhes do cartão da v1.
+                IconButton(
+                  icon: const Icon(Icons.info_outline, size: 18),
+                  tooltip: 'Detalhes do atendimento',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () => aoDetalhar(atendimento.id),
                 ),
                 // O arrasto continua sendo o caminho principal; este menu
                 // existe para o quadro que não tem coluna daquele tipo — sem

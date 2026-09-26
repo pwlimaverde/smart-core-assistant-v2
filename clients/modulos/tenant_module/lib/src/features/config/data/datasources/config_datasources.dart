@@ -39,6 +39,28 @@ final class GetMyTenantConfigDatasource
       confiancaMinimaTransferencia: resp.confiancaMinimaTransferencia,
       confiancaMinimaAutomatica: resp.confiancaMinimaAutomatica,
       apiKeys: {for (final e in resp.apiKeys) e.key: e.value},
+      avancada: ConfigAvancada(
+        tiposDeEntidadeJson: resp.entityTypesJson,
+        prompts: {for (final p in resp.prompts) p.chave: p.texto},
+        marca: resp.brandName,
+        corPrimaria: resp.primaryColor,
+        corSecundaria: resp.secondaryColor,
+        fuso: resp.timezone,
+        idioma: resp.languageCode,
+        analisePrevia: resp.hasAnalisePreviaHabilitada()
+            ? resp.analisePreviaHabilitada
+            : null,
+        pesquisaSatisfacao: resp.hasPesquisaSatisfacaoAtiva()
+            ? resp.pesquisaSatisfacaoAtiva
+            : null,
+        msgPesquisaSatisfacao: resp.msgPesquisaSatisfacao,
+        minutosInatividade: resp.hasMinutosInatividadeEncerra()
+            ? resp.minutosInatividadeEncerra
+            : null,
+        transcricao: resp.hasTranscriptionEnabled()
+            ? resp.transcriptionEnabled
+            : null,
+      ),
     );
   }
 }
@@ -82,6 +104,46 @@ final class UpdateMyTenantConfigDatasource
           for (final e in config.apiKeys.entries)
             proto.ApiKeyEntry(key: e.key, value: e.value),
         ],
+      ),
+    );
+    return unit;
+  }
+}
+
+/// Grava a configuração avançada do tenant da sessão.
+final class UpdateConfigAvancadaDatasource
+    implements Datasource<Unit, UpdateConfigAvancadaParameters> {
+  final proto.AdminServiceClient _client;
+
+  const UpdateConfigAvancadaDatasource({required this._client});
+
+  @override
+  Future<Unit> call(UpdateConfigAvancadaParameters parameters) async {
+    final a = parameters.avancada;
+    await _client.updateMyConfigAvancada(
+      proto.UpdateMyConfigAvancadaRequest(
+        entityTypesJson: a.tiposDeEntidadeJson.trim().isEmpty
+            ? '{}'
+            : a.tiposDeEntidadeJson,
+        prompts: [
+          for (final e in a.prompts.entries)
+            proto.PromptDoTenant(chave: e.key, texto: e.value),
+          for (final chave in parameters.promptsRemovidos)
+            if (!a.prompts.containsKey(chave))
+              proto.PromptDoTenant(chave: chave, texto: ''),
+        ],
+        // Vazio não vai: o servidor recusa cor fora de #RRGGBB, e "sem
+        // valor" aqui é "não mexer".
+        brandName: a.marca.isEmpty ? null : a.marca,
+        primaryColor: a.corPrimaria.isEmpty ? null : a.corPrimaria,
+        secondaryColor: a.corSecundaria.isEmpty ? null : a.corSecundaria,
+        timezone: a.fuso.isEmpty ? null : a.fuso,
+        languageCode: a.idioma.isEmpty ? null : a.idioma,
+        analisePreviaHabilitada: a.analisePrevia,
+        pesquisaSatisfacaoAtiva: a.pesquisaSatisfacao,
+        msgPesquisaSatisfacao: a.msgPesquisaSatisfacao,
+        minutosInatividadeEncerra: a.minutosInatividade ?? 0,
+        transcriptionEnabled: a.transcricao,
       ),
     );
     return unit;

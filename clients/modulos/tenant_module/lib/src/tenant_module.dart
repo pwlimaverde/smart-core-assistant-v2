@@ -512,6 +512,13 @@ final class TenantModule extends AppModule {
         ),
       ),
     );
+    i.lazySingleton<UpdateConfigAvancadaUsecase>(
+      () => UpdateConfigAvancadaUsecase(
+        repository: UpdateConfigAvancadaRepository(
+          datasource: UpdateConfigAvancadaDatasource(client: _adminClient()),
+        ),
+      ),
+    );
     i.lazySingleton<UpdateMyTenantConfigUsecase>(
       () => UpdateMyTenantConfigUsecase(
         repository: UpdateMyTenantConfigRepository(

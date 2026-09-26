@@ -15,3 +15,18 @@ final class UpdateMyTenantConfigParameters extends Parameters {
 
   const UpdateMyTenantConfigParameters({required this.config});
 }
+
+/// Gravação da configuração avançada. O RPC é parcial: mesmo assim a tela
+/// manda o conjunto que mostrou, e os prompts retirados vão com texto vazio
+/// (é assim que o servidor os tira do negócio).
+final class UpdateConfigAvancadaParameters extends Parameters {
+  final ConfigAvancada avancada;
+
+  /// Prompts que o negócio tinha e a tela retirou.
+  final Set<String> promptsRemovidos;
+
+  const UpdateConfigAvancadaParameters({
+    required this.avancada,
+    this.promptsRemovidos = const {},
+  });
+}
