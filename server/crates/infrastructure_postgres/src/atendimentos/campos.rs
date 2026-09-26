@@ -440,6 +440,7 @@ impl ValorCampoRepository for PostgresValorCampoRepository {
                        mensagem_origem_id = EXCLUDED.mensagem_origem_id,
                        data_atualizacao = NOW()
                  WHERE atu_valor_campo.editado_por_id IS NULL
+                   AND atu_valor_campo.origem <> 'MANUAL'
                    AND atu_valor_campo.valor <> 'null'::jsonb
                    AND (atu_valor_campo.confianca IS NULL
                         OR EXCLUDED.confianca >= atu_valor_campo.confianca)"#,

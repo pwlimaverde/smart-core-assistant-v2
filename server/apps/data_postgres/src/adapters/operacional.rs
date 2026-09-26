@@ -1374,18 +1374,27 @@ impl OperacionalStore for PgOperacionalStore {
                 None,
             )
             .await?;
-            // `editado_por_id` é a marca que impede a IA de sobrescrever. Ela
-            // existia na tabela e nunca era gravada — o write-back do C1
-            // depende dela para saber que ali tem dono.
-            sqlx::query!(
+            // `editado_por_id` aponta para `oraculo_atendente`, e não para
+            // `auth_user`: gravar ali o id do login estourava a chave
+            // estrangeira e o valor nunca era salvo. Resolve o atendente
+            // ligado a quem está logado; quem não é atendente (um
+            // administrador) grava sem autor — a proteção contra a IA
+            // sobrescrever vem da `origem = 'MANUAL'`, gravada acima.
+            //
+            // Sem macro: consulta nova, fora do cache `.sqlx`.
+            sqlx::query(
                 r#"UPDATE atu_valor_campo
-                      SET editado_por_id = $1
+                      SET editado_por_id = (
+                            SELECT a.id FROM oraculo_atendente a
+                             WHERE a.tenant_id = $2 AND a.usuario_id = $1
+                             ORDER BY a.ativo DESC, a.id
+                             LIMIT 1)
                     WHERE tenant_id = $2 AND atendimento_id = $3 AND campo_id = $4"#,
-                autor,
-                tenant_id,
-                atendimento_id,
-                campo_id
             )
+            .bind(autor)
+            .bind(tenant_id)
+            .bind(atendimento_id)
+            .bind(campo_id)
             .execute(&mut *tx)
             .await?;
             Ok((true, tx))

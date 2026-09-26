@@ -2335,8 +2335,9 @@ impl AtendimentoStore for PgAtendimentoStore {
                             .unwrap_or_default(),
                         "origem": v.map(|v| v.origem.clone()).unwrap_or_default(),
                         "confianca": v.and_then(|v| v.confianca).unwrap_or(0.0),
-                        "editado_por_humano": v
-                            .is_some_and(|v| v.editado_por_id.is_some()),
+                        "editado_por_humano": v.is_some_and(|v| {
+                            v.editado_por_id.is_some() || v.origem == "MANUAL"
+                        }),
                     })
                 })
                 .collect();
