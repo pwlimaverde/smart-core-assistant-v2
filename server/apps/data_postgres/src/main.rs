@@ -507,6 +507,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_delete_core_setting = state_clone.clone();
     let state_for_get_tenant_config = state_clone.clone();
     let state_for_update_tenant_config = state_clone.clone();
+    let state_for_config_avancada = state_clone.clone();
     let state_for_list_tenants = state_clone.clone();
     let state_for_get_tenant = state_clone.clone();
     let state_for_update_tenant = state_clone.clone();
@@ -1316,6 +1317,17 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(
                 async move { handler_get_tenant_config(state.operacional.as_ref(), env).await },
             )
+        })
+        .route("UpdateConfigAvancada", move |env| {
+            let state = state_for_config_avancada.clone();
+            Box::pin(async move {
+                handler_update_config_avancada(
+                    state.operacional.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
+            })
         })
         .route("UpdateTenantConfig", move |env| {
             let state = state_for_update_tenant_config.clone();
@@ -9322,6 +9334,118 @@ async fn handler_resolver_config_ia(
             }),
         ),
         Err(err) => erro(error_core::AppError::Database(err.to_string()), &env),
+    }
+}
+
+/// Paridade MCP — atualização parcial da configuração avançada do tenant.
+///
+/// O tenant vem do envelope (nunca do payload): é rota do próprio tenant, não
+/// do painel do superusuário. A auditoria leva só os NOMES dos campos.
+async fn handler_update_config_avancada(
+    store: &dyn ports::OperacionalStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    use infrastructure_postgres::tenants::config_avancada as ca;
+    let ctx = contexto_do_envelope(&env);
+    if ctx.tenant_id.is_nil() {
+        return erro(
+            error_core::AppError::Validation("tenant ausente".into()),
+            &env,
+        );
+    }
+    // `tenant:admin` também vale — o `has_permission` sozinho não o reconhece.
+    if ctx
+        .exigir_qualquer(&["configuracoes:write", "tenant:admin"])
+        .is_err()
+    {
+        return erro(
+            error_core::AppError::Auth("sem permissão para alterar a configuração".into()),
+            &env,
+        );
+    }
+    let p: serde_json::Value = match serde_json::from_slice(&env.payload) {
+        Ok(v) => v,
+        Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
+    };
+    let texto = |k: &str| p.get(k).and_then(|v| v.as_str()).map(str::to_string);
+    let booleano = |k: &str| p.get(k).and_then(|v| v.as_bool());
+    let entity_types = match p.get("entity_types_json").and_then(|v| v.as_str()) {
+        None => None,
+        Some(bruto) => match serde_json::from_str::<serde_json::Value>(bruto)
+            .map_err(|e| format!("entity_types_json não é JSON: {e}"))
+            .and_then(ca::normalizar_tipos_de_entidade)
+        {
+            Ok(v) => Some(v),
+            Err(msg) => return erro(error_core::AppError::Validation(msg), &env),
+        },
+    };
+    let prompts: Vec<(String, String)> = p
+        .get("prompts")
+        .and_then(|v| v.as_array())
+        .map(|itens| {
+            itens
+                .iter()
+                .filter_map(|i| {
+                    Some((
+                        i.get("chave")?.as_str()?.to_string(),
+                        i.get("texto")
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string(),
+                    ))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let pedido = ca::ConfigAvancada {
+        entity_types,
+        prompts,
+        brand_name: texto("brand_name"),
+        primary_color: texto("primary_color"),
+        secondary_color: texto("secondary_color"),
+        timezone: texto("timezone"),
+        language_code: texto("language_code"),
+        analise_previa_habilitada: booleano("analise_previa_habilitada"),
+        pesquisa_satisfacao_ativa: booleano("pesquisa_satisfacao_ativa"),
+        msg_pesquisa_satisfacao: texto("msg_pesquisa_satisfacao"),
+        minutos_inatividade_encerra: p
+            .get("minutos_inatividade_encerra")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32),
+        transcription_enabled: booleano("transcription_enabled"),
+    };
+    // Prompt inválido é erro de quem pediu, não do banco: valida antes.
+    if let Err(msg) = ca::mesclar_prompts(&serde_json::json!({}), &pedido.prompts) {
+        return erro(error_core::AppError::Validation(msg), &env);
+    }
+    let campos = match ca::validar(&pedido) {
+        Ok(c) if c.is_empty() => {
+            return erro(
+                error_core::AppError::Validation("nenhum campo para alterar".into()),
+                &env,
+            )
+        }
+        Ok(c) => c,
+        Err(msg) => return erro(error_core::AppError::Validation(msg), &env),
+    };
+    match store.atualizar_config_avancada(ctx.tenant_id, pedido).await {
+        Ok(()) => {
+            audit
+                .publish(
+                    &env,
+                    "tenant_config_updated",
+                    "Configuração avançada do tenant atualizada".to_string(),
+                    serde_json::json!({ "campos": campos }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "UpdateConfigAvancadaReply",
+                serde_json::json!({ "sucesso": true, "campos": campos }),
+            )
+        }
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }
 

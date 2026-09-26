@@ -70,6 +70,22 @@ message GetTenantConfigResponse {
   // Vazio = não mexer. "0" em confianca_minima_transferencia desliga o veto.
   string confianca_minima_transferencia = 21;
   string confianca_minima_automatica = 22;
+  // --- Configuração avançada (paridade MCP) ---
+  // JSON dos tipos de entidade (objeto {tipo: descrição} ou lista de nomes).
+  string entity_types_json = 23;
+  // Overrides de prompt deste tenant (chave PROMPT_* => texto).
+  repeated PromptDoTenant prompts = 24;
+  string brand_name = 25;
+  string primary_color = 26;
+  string secondary_color = 27;
+  string timezone = 28;
+  string language_code = 29;
+  // Ausente = o tenant herda o CoreSetting global.
+  optional bool analise_previa_habilitada = 30;
+  optional bool pesquisa_satisfacao_ativa = 31;
+  string msg_pesquisa_satisfacao = 32;
+  optional int32 minutos_inatividade_encerra = 33;
+  optional bool transcription_enabled = 34;
 }
 
 message UpdateTenantConfigRequest {
@@ -98,6 +114,31 @@ message UpdateTenantConfigRequest {
   // Vazio = não mexer. "0" em confianca_minima_transferencia desliga o veto.
   string confianca_minima_transferencia = 22;
   string confianca_minima_automatica = 23;
+}
+
+// Paridade MCP — um override de prompt do tenant.
+message PromptDoTenant {
+  // PROMPT_* (maiúsculas; a v1 usava minúsculas e também vale).
+  string chave = 1;
+  // Vazio remove o override: o tenant volta a herdar o global.
+  string texto = 2;
+}
+
+// Paridade MCP — atualização parcial: ausente = não mexer.
+message UpdateMyConfigAvancadaRequest {
+  optional string entity_types_json = 1;
+  repeated PromptDoTenant prompts = 2;
+  optional string brand_name = 3;
+  optional string primary_color = 4;
+  optional string secondary_color = 5;
+  optional string timezone = 6;
+  optional string language_code = 7;
+  optional bool analise_previa_habilitada = 8;
+  optional bool pesquisa_satisfacao_ativa = 9;
+  optional string msg_pesquisa_satisfacao = 10;
+  // 0 ou negativo = volta a herdar o global.
+  optional int32 minutos_inatividade_encerra = 11;
+  optional bool transcription_enabled = 12;
 }
 
 message UpdateTenantConfigResponse {
@@ -1383,6 +1424,10 @@ service AdminService {
   rpc UpdateTenantUser(UpdateTenantUserRequest) returns (UpdateTenantUserResponse);
   rpc GetMyTenantConfig(GetMyTenantConfigRequest) returns (GetTenantConfigResponse);
   rpc UpdateMyTenantConfig(UpdateMyTenantConfigRequest) returns (UpdateTenantConfigResponse);
+  // Paridade MCP — atualização PARCIAL da configuração avançada (prompts por
+  // tenant, tipos de entidade, marca, fuso, idioma, pesquisa de satisfação,
+  // inatividade, análise prévia, transcrição). Campo ausente não é tocado.
+  rpc UpdateMyConfigAvancada(UpdateMyConfigAvancadaRequest) returns (SimpleOkResponse);
 
   // Fase N13: aplicativos de IA conectados por OAuth 2.1 (servidor MCP).
   // Cada usuário enxerga e revoga APENAS os próprios consentimentos — nem um

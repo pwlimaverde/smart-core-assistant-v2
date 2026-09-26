@@ -295,7 +295,10 @@ impl OperacionalStore for PgOperacionalStore {
              msg_transferencia, llm_class, model, llm_temperature, transcription_provider, \
              transcription_model, vision_provider, vision_model, embeddings_class, \
              embeddings_model, chunk_size, chunk_overlap, similarity_threshold, \
-             vector_distance_threshold, confianca_minima_transferencia, confianca_minima_automatica, api_keys \
+             vector_distance_threshold, confianca_minima_transferencia, confianca_minima_automatica, api_keys, \
+             entity_types, prompts, brand_name, primary_color, secondary_color, timezone, language_code, \
+             analise_previa_habilitada, pesquisa_satisfacao_ativa, msg_pesquisa_satisfacao, \
+             minutos_inatividade_encerra, transcription_enabled \
              FROM tenants_tenantconfig WHERE tenant_id = $1",
         )
         .bind(tenant_id)
@@ -360,7 +363,43 @@ impl OperacionalStore for PgOperacionalStore {
             "confianca_minima_transferencia": dec_opcional("confianca_minima_transferencia"),
             "confianca_minima_automatica": dec_opcional("confianca_minima_automatica"),
             "api_keys": serde_json::Value::Object(api_keys_masked),
+            // Configuração avançada (paridade MCP). Booleans e minutos vêm como
+            // null quando o tenant herda o global — é diferente de "desligado".
+            "entity_types": row.get::<serde_json::Value, _>("entity_types"),
+            "prompts": row.get::<serde_json::Value, _>("prompts"),
+            "brand_name": s("brand_name"),
+            "primary_color": s("primary_color"),
+            "secondary_color": s("secondary_color"),
+            "timezone": s("timezone"),
+            "language_code": s("language_code"),
+            "analise_previa_habilitada": row.get::<Option<bool>, _>("analise_previa_habilitada"),
+            "pesquisa_satisfacao_ativa": row.get::<Option<bool>, _>("pesquisa_satisfacao_ativa"),
+            "msg_pesquisa_satisfacao": s("msg_pesquisa_satisfacao"),
+            "minutos_inatividade_encerra": row.get::<Option<i32>, _>("minutos_inatividade_encerra"),
+            "transcription_enabled": row.get::<Option<bool>, _>("transcription_enabled"),
         })))
+    }
+
+    #[tracing::instrument(skip_all, fields(tenant_id = %tenant_id))]
+    async fn atualizar_config_avancada(
+        &self,
+        tenant_id: Uuid,
+        pedido: infrastructure_postgres::tenants::config_avancada::ConfigAvancada,
+    ) -> Result<(), DbError> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query("SELECT set_config('app.current_tenant', $1, true)")
+            .bind(tenant_id.to_string())
+            .execute(&mut *tx)
+            .await?;
+        infrastructure_postgres::tenants::config_avancada::atualizar(&mut tx, tenant_id, &pedido)
+            .await?;
+        tx.commit().await?;
+        // Mesma invalidação do `atualizar_tenant_config`: prompts e tipos de
+        // entidade chegam ao ia_engine pelo RuntimeConfig em cache.
+        self.config_cache.invalidate(&tenant_id);
+        self.publicar_invalidacao_cache(Some(tenant_id)).await;
+        self.republicar_config_ia(Some(tenant_id)).await;
+        Ok(())
     }
 
     #[tracing::instrument(skip_all, fields(tenant_id = %tenant_id))]

@@ -296,6 +296,13 @@ pub async fn resolve_runtime_config(
 /// as duas formas razoáveis: lista de nomes, ou objeto cujas chaves são os tipos
 /// (com a descrição como valor). Qualquer outra coisa vale "sem tipos".
 pub fn tipos_de_entidade(valor: Option<&serde_json::Value>) -> Vec<String> {
+    // Formato do backup da v1: `{"entity_types": {...}}`.
+    let valor = match valor {
+        Some(serde_json::Value::Object(m)) if m.len() == 1 && m.contains_key("entity_types") => {
+            m.get("entity_types")
+        }
+        outro => outro,
+    };
     let nomes: Vec<String> = match valor {
         Some(serde_json::Value::Array(itens)) => itens
             .iter()
@@ -326,6 +333,10 @@ mod tests_tipos_de_entidade {
         assert!(tipos_de_entidade(Some(&serde_json::json!({}))).is_empty());
         assert!(tipos_de_entidade(Some(&serde_json::json!(42))).is_empty());
         assert!(tipos_de_entidade(None).is_empty());
+
+        // Formato da v1, embrulhado.
+        let v1 = serde_json::json!({ "entity_types": { "produto_grafico": {} } });
+        assert_eq!(tipos_de_entidade(Some(&v1)), vec!["produto_grafico"]);
     }
 }
 

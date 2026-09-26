@@ -69,6 +69,18 @@ table GetTenantConfigResponse {
   api_keys:[ApiKeyEntry];
   confianca_minima_transferencia:string;
   confianca_minima_automatica:string;
+  entity_types_json:string;
+  prompts:[PromptDoTenant];
+  brand_name:string;
+  primary_color:string;
+  secondary_color:string;
+  timezone:string;
+  language_code:string;
+  analise_previa_habilitada:bool;
+  pesquisa_satisfacao_ativa:bool;
+  msg_pesquisa_satisfacao:string;
+  minutos_inatividade_encerra:int;
+  transcription_enabled:bool;
 }
 
 table UpdateTenantConfigRequest {
@@ -95,6 +107,26 @@ table UpdateTenantConfigRequest {
   api_keys:[ApiKeyEntry];
   confianca_minima_transferencia:string;
   confianca_minima_automatica:string;
+}
+
+table PromptDoTenant {
+  chave:string;
+  texto:string;
+}
+
+table UpdateMyConfigAvancadaRequest {
+  entity_types_json:string;
+  prompts:[PromptDoTenant];
+  brand_name:string;
+  primary_color:string;
+  secondary_color:string;
+  timezone:string;
+  language_code:string;
+  analise_previa_habilitada:bool;
+  pesquisa_satisfacao_ativa:bool;
+  msg_pesquisa_satisfacao:string;
+  minutos_inatividade_encerra:int;
+  transcription_enabled:bool;
 }
 
 table UpdateTenantConfigResponse {

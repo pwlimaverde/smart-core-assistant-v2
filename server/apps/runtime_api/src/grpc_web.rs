@@ -234,6 +234,7 @@ use contracts::grpc::queries::{
     OpcaoCampo,
     PaymentRecord as ProtoPaymentRecord,
     Plan as ProtoPlan,
+    PromptDoTenant,
     // Fase 5 - Auditoria & Saúde
     QueryAuditLogRequest,
     QueryAuditLogResponse,
@@ -302,6 +303,7 @@ use contracts::grpc::queries::{
     UpdateMyAtendenteRequest,
     UpdateMyCampoRequest,
     UpdateMyClienteRequest,
+    UpdateMyConfigAvancadaRequest,
     UpdateMyContatoRequest,
     UpdateMyDepartamentoRequest,
     UpdateMyEtapaFluxoRequest,
@@ -830,6 +832,46 @@ fn mapear_tenant_config_response(val: &serde_json::Value) -> GetTenantConfigResp
         confianca_minima_transferencia: campo_str("confianca_minima_transferencia"),
         confianca_minima_automatica: campo_str("confianca_minima_automatica"),
         api_keys: api_keys_proto,
+        // Configuração avançada (paridade MCP).
+        entity_types_json: val
+            .get("entity_types")
+            .filter(|v| !v.is_null())
+            .map(|v| v.to_string())
+            .unwrap_or_default(),
+        prompts: val
+            .get("prompts")
+            .and_then(|v| v.as_object())
+            .map(|o| {
+                let mut itens: Vec<PromptDoTenant> = o
+                    .iter()
+                    .filter_map(|(k, v)| {
+                        Some(PromptDoTenant {
+                            chave: k.clone(),
+                            texto: v.as_str()?.to_string(),
+                        })
+                    })
+                    .collect();
+                itens.sort_by(|a, b| a.chave.cmp(&b.chave));
+                itens
+            })
+            .unwrap_or_default(),
+        brand_name: texto_do(val, "brand_name"),
+        primary_color: texto_do(val, "primary_color"),
+        secondary_color: texto_do(val, "secondary_color"),
+        timezone: texto_do(val, "timezone"),
+        language_code: texto_do(val, "language_code"),
+        analise_previa_habilitada: val
+            .get("analise_previa_habilitada")
+            .and_then(|v| v.as_bool()),
+        pesquisa_satisfacao_ativa: val
+            .get("pesquisa_satisfacao_ativa")
+            .and_then(|v| v.as_bool()),
+        msg_pesquisa_satisfacao: texto_do(val, "msg_pesquisa_satisfacao"),
+        minutos_inatividade_encerra: val
+            .get("minutos_inatividade_encerra")
+            .and_then(|v| v.as_i64())
+            .map(|v| v as i32),
+        transcription_enabled: val.get("transcription_enabled").and_then(|v| v.as_bool()),
     }
 }
 
@@ -9453,6 +9495,71 @@ impl AdminService for AdminFacade {
             }
             Err(e) => Err(Status::internal(format!("Falha no serviço interno: {}", e))),
         }
+    }
+
+    /// Paridade MCP — atualização parcial da configuração avançada do tenant.
+    /// Só os campos presentes seguem no payload: é o que garante que um campo
+    /// ausente não seja tocado no `data_postgres`.
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "UpdateMyConfigAvancada", traceparent)
+    )]
+    async fn update_my_config_avancada(
+        &self,
+        req: Request<UpdateMyConfigAvancadaRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let mut payload = serde_json::Map::new();
+        let mut por = |k: &str, v: serde_json::Value| {
+            payload.insert(k.to_string(), v);
+        };
+        if let Some(v) = inner.entity_types_json {
+            por("entity_types_json", v.into());
+        }
+        if !inner.prompts.is_empty() {
+            por(
+                "prompts",
+                serde_json::Value::Array(
+                    inner
+                        .prompts
+                        .iter()
+                        .map(|p| serde_json::json!({ "chave": p.chave, "texto": p.texto }))
+                        .collect(),
+                ),
+            );
+        }
+        for (k, v) in [
+            ("brand_name", inner.brand_name),
+            ("primary_color", inner.primary_color),
+            ("secondary_color", inner.secondary_color),
+            ("timezone", inner.timezone),
+            ("language_code", inner.language_code),
+            ("msg_pesquisa_satisfacao", inner.msg_pesquisa_satisfacao),
+        ] {
+            if let Some(v) = v {
+                por(k, v.into());
+            }
+        }
+        for (k, v) in [
+            ("analise_previa_habilitada", inner.analise_previa_habilitada),
+            ("pesquisa_satisfacao_ativa", inner.pesquisa_satisfacao_ativa),
+            ("transcription_enabled", inner.transcription_enabled),
+        ] {
+            if let Some(v) = v {
+                por(k, v.into());
+            }
+        }
+        if let Some(m) = inner.minutos_inatividade_encerra {
+            por("minutos_inatividade_encerra", m.into());
+        }
+        self.encaminhar_operacional(
+            &req,
+            "UpdateConfigAvancada",
+            &["configuracoes:write"],
+            serde_json::Value::Object(payload),
+        )
+        .await?;
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
     }
 
     /// UpdateMyTenantConfig: variante tenant-scoped de `update_tenant_config` —

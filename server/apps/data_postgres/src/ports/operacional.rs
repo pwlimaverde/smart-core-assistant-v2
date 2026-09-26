@@ -69,6 +69,13 @@ pub trait OperacionalStore: Send + Sync {
     /// Lista as configurações globais (valores cifrados já mascarados).
     async fn listar_core_settings(&self) -> Result<Vec<CoreSetting>, DbError>;
 
+    /// Paridade MCP — grava só os campos pedidos da configuração avançada.
+    async fn atualizar_config_avancada(
+        &self,
+        tenant_id: uuid::Uuid,
+        pedido: infrastructure_postgres::tenants::config_avancada::ConfigAvancada,
+    ) -> Result<(), DbError>;
+
     /// Cria/atualiza uma configuração global; cifra o valor quando `encrypted`.
     async fn upsert_core_setting(
         &self,
