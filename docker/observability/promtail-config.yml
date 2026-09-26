@@ -19,7 +19,9 @@ scrape_configs:
   # Promtail os descartava).
   - job_name: containers
     docker_sd_configs:
-      - host: unix:///var/run/docker.sock
+      # Pelo proxy só leitura da stack, não pelo socket (ver `docker-proxy`
+      # no compose).
+      - host: tcp://docker-proxy:2375
         refresh_interval: 5s
     relabel_configs:
       - source_labels: ['__meta_docker_container_name']

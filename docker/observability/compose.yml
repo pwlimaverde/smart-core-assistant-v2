@@ -33,7 +33,31 @@ networks:
     name: smart_core_v2_mcp_telemetria
     driver: bridge
 
+  # Só o promtail e o proxy do socket. `internal`: sem saída para fora, e
+  # nenhum outro serviço alcança o proxy.
+  docker_proxy:
+    internal: true
+
 services:
+  # Proxy do socket do Docker, só leitura, para o promtail.
+  #
+  # O promtail processa log de todos os containers — conteúdo que vem de fora
+  # (webhook, mensagem de WhatsApp, requisição HTTP). Com o `docker.sock`
+  # montado, uma falha nele dava controle total do Docker, isto é, root no
+  # host; o `:ro` na montagem não muda isso, o socket aceita qualquer comando.
+  # Pelo proxy ele só lista containers e redes e lê logs: `POST` desligado, e
+  # nada de exec, imagens, volumes ou sistema.
+  docker-proxy:
+    image: tecnativa/docker-socket-proxy:v0.5.0
+    environment:
+      CONTAINERS: 1
+      NETWORKS: 1
+      POST: 0
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks: [docker_proxy]
+    restart: unless-stopped
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.153.0
     volumes:
@@ -120,9 +144,10 @@ services:
     image: grafana/promtail:3.6.8
     volumes:
       - ./promtail-config.yml:/etc/promtail/config.yml:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
       - /var/lib/docker/containers:/var/lib/docker/containers:ro
-    networks: [smart_core_v2_observability]
+    # Docker só pelo `docker-proxy` (ver acima), nunca pelo socket.
+    networks: [smart_core_v2_observability, docker_proxy]
+    depends_on: [docker-proxy]
     restart: unless-stopped
 
 volumes:
