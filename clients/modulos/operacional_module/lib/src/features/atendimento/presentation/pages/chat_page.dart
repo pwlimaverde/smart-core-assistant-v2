@@ -861,15 +861,10 @@ class _AcoesRapidas extends StatelessWidget {
         color: colors.card,
         border: Border(bottom: BorderSide(color: colors.border)),
       ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-        child: Row(
-          children: [
-            for (final b in botoes) ...[b, const SizedBox(width: 6)],
-          ],
-        ),
-      ),
+      // Quebra linha em vez de rolar: na conversa de 460px ao lado do quadro,
+      // a rolagem escondia "Resolver" e "Cancelar" fora da vista.
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      child: Wrap(spacing: 6, runSpacing: 6, children: botoes),
     );
   }
 }
