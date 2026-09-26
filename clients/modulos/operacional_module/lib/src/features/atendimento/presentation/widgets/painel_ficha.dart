@@ -43,8 +43,9 @@ Color corDaEtiqueta(String hex) {
 class PainelFicha extends StatelessWidget {
   final FichaController controller;
 
-  /// Largura do painel: 320 ao lado da conversa, o que couber como gaveta.
-  final double largura;
+  /// Largura do painel. `null` ocupa o espaço que quem o embute der — a
+  /// metade do painel da conversa; como gaveta, o que couber.
+  final double? largura;
 
   /// Quando vem, o painel ganha o botão de fechar no canto do cabeçalho.
   final VoidCallback? aoFechar;

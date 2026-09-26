@@ -198,10 +198,7 @@ final class KanbanController extends BaseController<KanbanViewModel> {
   void digitarBusca(String texto) {
     _busca = texto;
     _debounceBusca?.cancel();
-    _debounceBusca = Timer(
-      const Duration(milliseconds: 350),
-      () => carregar(),
-    );
+    _debounceBusca = Timer(const Duration(milliseconds: 350), () => carregar());
   }
 
   /// P1 — liga/desliga os filtros combináveis. Recarrega na hora: é um clique,
@@ -245,13 +242,14 @@ final class KanbanController extends BaseController<KanbanViewModel> {
       ),
     );
     return switch (res) {
-      Success(:final value) => value
-          ? await _recarregarERetornar()
-          // O servidor não roubou a conversa de quem já a tinha; a tela
-          // precisa dizer isso, senão parece que o clique não funcionou.
-          : const QuadroOperacaoRecusada(
-              'A conversa já está com outro atendente.',
-            ),
+      Success(:final value) =>
+        value
+            ? await _recarregarERetornar()
+            // O servidor não roubou a conversa de quem já a tinha; a tela
+            // precisa dizer isso, senão parece que o clique não funcionou.
+            : const QuadroOperacaoRecusada(
+                'A conversa já está com outro atendente.',
+              ),
       Failure(:final error) => error,
     };
   }
@@ -345,16 +343,29 @@ final class KanbanController extends BaseController<KanbanViewModel> {
           fluxoId: fluxoId,
           fluxos: _fluxos,
           colunas: _colunas,
-          porEtapa: KanbanViewModel.agruparPorEtapa(
-            _somenteRevisar
-                ? value.where((a) => a.revisaoPendente).toList()
-                : value,
-          ),
+          porEtapa: KanbanViewModel.agruparPorEtapa([
+            for (final a in value)
+              if (_doQuadro(a, fluxoId) &&
+                  (!_somenteRevisar || a.revisaoPendente))
+                a,
+          ]),
         ),
       ),
       Failure(:final error) => Failure(error),
     };
   }
+
+  /// Se a conversa pertence ao quadro aberto.
+  ///
+  /// A lista vem do tenant inteiro, e sem este recorte as conversas dos
+  /// outros fluxos apareciam no quadro — numa etapa que ele não tem, e por
+  /// isso numa coluna "Sem coluna" que o fluxo não possui. A conversa sem
+  /// fluxo nenhum (chegou antes de haver um) continua em qualquer quadro:
+  /// escondê-la faria sumir atendimento de verdade.
+  static bool _doQuadro(AtendimentoResumo a, int? fluxoId) =>
+      fluxoId == null ||
+      a.fluxoAtendimentoId == null ||
+      a.fluxoAtendimentoId == fluxoId;
 
   /// B6 — a conversa foi aberta: o número do cartão some na hora, sem esperar
   /// a próxima recarga. O servidor marca a leitura quando o fim da conversa

@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:design_system_module/design_system_module.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -84,10 +85,6 @@ class _KanbanPageState extends State<KanbanPage> {
   /// Abaixo disso ela vira tela cheia: espremer as duas deixaria o quadro
   /// ilegível e a conversa também, que é o pior dos dois mundos.
   static const _larguraParaOsDois = 1100.0;
-
-  /// A partir daqui o painel de informações fica ao lado da conversa, no
-  /// modo dividido, sem esmagar o quadro. Abaixo, ele vira gaveta da conversa.
-  static const _larguraComInformacoes = 1280.0;
 
   /// Conversa aberta no painel da direita. `null` = só o quadro.
   int? _conversaAberta;
@@ -518,7 +515,7 @@ class _KanbanPageState extends State<KanbanPage> {
         ModoDeFoco.dividido => Row(
           children: [
             Expanded(child: quadro),
-            const SizedBox(width: larguraDaConversa, child: _SemConversa()),
+            const Expanded(child: _SemConversa()),
           ],
         ),
         ModoDeFoco.conversa => Row(
@@ -586,20 +583,15 @@ class _KanbanPageState extends State<KanbanPage> {
               child: quadro,
             ),
           ),
-          ValueListenableBuilder<bool>(
-            valueListenable: _detalhes,
-            builder: (context, abertos, filho) => AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              curve: Curves.easeOut,
-              width: abertos && constraints.maxWidth >= _larguraComInformacoes
-                  ? larguraDaConversa + larguraDasInformacoes
-                  : larguraDaConversa,
+          // Conversa e informações ocupam exatamente a metade da tela; a
+          // outra metade é do quadro.
+          Expanded(
+            child: DecoratedBox(
               decoration: BoxDecoration(
                 border: Border(left: BorderSide(color: context.colors.border)),
               ),
-              child: filho,
+              child: painel,
             ),
-            child: painel,
           ),
         ],
       ),
@@ -905,9 +897,7 @@ class _Quadro extends StatelessWidget {
         // existir (o cartão dela é alvo de busca e de arrasto), e um quadro
         // tem poucas colunas.
         Expanded(
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: _RolagemDoQuadro(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
@@ -1563,6 +1553,62 @@ class _Trilho extends StatelessWidget {
               ),
           ],
         ],
+      ),
+    );
+  }
+}
+
+/// A rolagem horizontal do quadro, com a barra sempre à vista.
+///
+/// No desktop o mouse não arrasta a lista e a roda rola na vertical: sem a
+/// barra, a coluna fora da tela simplesmente não tinha como ser alcançada. A
+/// roda sobre o fundo do quadro (fora de uma coluna, que rola os cartões) e o
+/// Shift+roda também levam para os lados.
+class _RolagemDoQuadro extends StatefulWidget {
+  final Widget child;
+
+  const _RolagemDoQuadro({required this.child});
+
+  @override
+  State<_RolagemDoQuadro> createState() => _RolagemDoQuadroState();
+}
+
+class _RolagemDoQuadroState extends State<_RolagemDoQuadro> {
+  final _rolagem = ScrollController();
+
+  @override
+  void dispose() {
+    _rolagem.dispose();
+    super.dispose();
+  }
+
+  void _rodar(PointerSignalEvent evento) {
+    if (evento is! PointerScrollEvent || !_rolagem.hasClients) return;
+    final delta = evento.scrollDelta.dx != 0
+        ? evento.scrollDelta.dx
+        : evento.scrollDelta.dy;
+    final posicao = _rolagem.position;
+    final destino = (posicao.pixels + delta).clamp(
+      posicao.minScrollExtent,
+      posicao.maxScrollExtent,
+    );
+    if (destino != posicao.pixels) _rolagem.jumpTo(destino);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Listener(
+      onPointerSignal: _rodar,
+      child: Scrollbar(
+        controller: _rolagem,
+        thumbVisibility: true,
+        trackVisibility: true,
+        child: SingleChildScrollView(
+          controller: _rolagem,
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+          child: widget.child,
+        ),
       ),
     );
   }

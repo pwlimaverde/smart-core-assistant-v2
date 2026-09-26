@@ -238,6 +238,7 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
         final resumo = widget.noQuadro?.resumo;
         final ficha = PainelFicha(
           controller: _ficha,
+          largura: null,
           noQuadro: widget.noQuadro,
           nomeDoContato: contato?.nomeParaExibir ?? '',
           telefoneDoContato: contato?.telefone ?? '',
@@ -285,9 +286,9 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
         // média, o celular) ele vira gaveta sobre as mensagens, ABAIXO do
         // cabeçalho: minimizar, fechar e o próprio botão de detalhes continuam
         // à mão com ele aberto.
-        final cabemOsDois =
-            constraints.maxWidth >=
-            larguraDaConversa + larguraDasInformacoes - 8;
+        // A partir daqui, conversa e informações dividem o painel meio a
+        // meio; abaixo, cada metade ficaria estreita demais para ler.
+        final cabemOsDois = constraints.maxWidth >= 640;
         return ValueListenableBuilder<bool>(
           valueListenable: _detalhes,
           builder: (context, abertos, _) {
@@ -296,7 +297,7 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
               return Row(
                 children: [
                   Expanded(child: comCabecalho(corpo)),
-                  ficha,
+                  Expanded(child: ficha),
                 ],
               );
             }

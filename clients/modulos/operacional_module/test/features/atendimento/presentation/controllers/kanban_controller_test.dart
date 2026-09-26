@@ -5,6 +5,7 @@ import 'package:operacional_module/src/features/atendimento/data/datasources/ate
 import 'package:operacional_module/src/features/atendimento/data/repositories/atendimento_repositories.dart';
 import 'package:operacional_module/src/features/atendimento/domain/errors/atendimento_errors.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/atendimento_evento.dart';
+import 'package:operacional_module/src/features/atendimento/domain/model/atendimento_resumo.dart';
 import 'package:operacional_module/src/features/atendimento/domain/model/quadro.dart';
 import 'package:operacional_module/src/features/atendimento/domain/usecases/atendimento_usecases.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/controllers/kanban_controller.dart';
@@ -552,7 +553,6 @@ void main() {
     });
   });
 
-
   // ─── P1: busca e filtros ───────────────────────────────────────────────────
   group('busca e filtros (P1)', () {
     test('a busca vai para o gateway depois da pausa de digitação', () async {
@@ -653,10 +653,7 @@ void main() {
         fluxoId: 2,
       );
 
-      expect(gateway.operacoesDoQuadro, [
-        'prioridade:7:urgente',
-        'fluxo:7:2',
-      ]);
+      expect(gateway.operacoesDoQuadro, ['prioridade:7:urgente', 'fluxo:7:2']);
       expect(destino, 'Suporte');
       expect(erro, isNull);
       await c.close();
@@ -705,7 +702,9 @@ void main() {
 
     test('marcar como revisado chega ao gateway e recarrega', () async {
       final gateway = FakeAtendimentoGateway(
-        fila: [atendimentoDeTeste(id: 7, etapaAtualId: 10, revisaoPendente: true)],
+        fila: [
+          atendimentoDeTeste(id: 7, etapaAtualId: 10, revisaoPendente: true),
+        ],
       );
       final c = _controller(gateway);
       await c.carregar();
@@ -716,5 +715,34 @@ void main() {
       expect(gateway.revisados, [7]);
       await c.close();
     });
+  });
+
+  test('o quadro mostra só as conversas do fluxo aberto', () async {
+    // A lista vem do tenant inteiro: sem o recorte, a conversa de outro fluxo
+    // aparecia numa coluna "Sem coluna" que o quadro não tem.
+    AtendimentoResumo de(int id, int? fluxo) => AtendimentoResumo(
+      id: id,
+      contatoId: id,
+      status: 'fila',
+      fluxoAtendimentoId: fluxo,
+      etapaAtualId: 10,
+      assunto: 'Assunto $id',
+      prioridade: 'normal',
+      dataInicio: DateTime(2026, 1, 1),
+    );
+    final gateway = FakeAtendimentoGateway(
+      fila: [de(1, 1), de(2, 2), de(3, null)],
+    );
+    final c = _controller(gateway);
+
+    await c.carregar();
+
+    final estado = c.state as SuccessState<KanbanViewModel>;
+    final ids = [
+      for (final itens in estado.data.porEtapa.values)
+        for (final a in itens) a.id,
+    ]..sort();
+    expect(ids, [1, 3]);
+    await c.close();
   });
 }
