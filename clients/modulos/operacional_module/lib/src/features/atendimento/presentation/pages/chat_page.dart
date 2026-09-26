@@ -264,24 +264,21 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
                 aoMinimizar: widget.aoMinimizar,
                 aoExpandir: widget.aoExpandir,
               );
-        final corpo = Column(
+        // A faixa de ações fica fora da área que a gaveta cobre: com as
+        // informações abertas por cima, Resolver e Nota continuam à mão.
+        final acoes = _AcoesRapidas(
+          noQuadro: widget.noQuadro,
+          ficha: _ficha,
+          aoAnotar: () => setState(() => _modoNota = true),
+        );
+        final corpo = conversa;
+        Widget comCabecalho(Widget conteudo) => Column(
           children: [
-            _AcoesRapidas(
-              noQuadro: widget.noQuadro,
-              ficha: _ficha,
-              aoAnotar: () => setState(() => _modoNota = true),
-            ),
-            Expanded(child: conversa),
+            ?cabecalho,
+            acoes,
+            Expanded(child: conteudo),
           ],
         );
-        Widget comCabecalho(Widget conteudo) => cabecalho == null
-            ? conteudo
-            : Column(
-                children: [
-                  cabecalho,
-                  Expanded(child: conteudo),
-                ],
-              );
 
         // O painel de informações fica ao lado da conversa quando os dois
         // cabem. Numa largura menor (a conversa ao lado do quadro numa janela
@@ -289,7 +286,8 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
         // cabeçalho: minimizar, fechar e o próprio botão de detalhes continuam
         // à mão com ele aberto.
         final cabemOsDois =
-            constraints.maxWidth >= larguraDaConversa + larguraDasInformacoes;
+            constraints.maxWidth >=
+            larguraDaConversa + larguraDasInformacoes - 8;
         return ValueListenableBuilder<bool>(
           valueListenable: _detalhes,
           builder: (context, abertos, _) {

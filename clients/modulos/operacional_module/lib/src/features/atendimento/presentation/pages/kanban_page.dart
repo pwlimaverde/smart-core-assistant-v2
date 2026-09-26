@@ -901,41 +901,47 @@ class _Quadro extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _CabecalhoDoQuadro(viewModel: viewModel, controller: controller),
+        // Rolagem com Row, e não ListView: a coluna fora da vista precisa
+        // existir (o cartão dela é alvo de busca e de arrasto), e um quadro
+        // tem poucas colunas.
         Expanded(
-          child: ListView(
+          child: SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-            children: [
-              for (final coluna in viewModel.colunas)
-                _Coluna(
-                  coluna: coluna,
-                  itens:
-                      viewModel.porEtapa[coluna.id] ??
-                      const <AtendimentoResumo>[],
-                  viewModel: viewModel,
-                  controller: controller,
-                  abertoId: abertoId,
-                  aoAbrir: aoAbrir,
-                ),
-              // Conversas fora de qualquer coluna do quadro: chegaram antes do
-              // fluxo existir, ou apontam para uma coluna já removida.
-              // Escondê-las faria sumir atendimento de verdade.
-              if (soltas.isNotEmpty)
-                _Coluna(
-                  coluna: const ColunaDoQuadro(
-                    id: KanbanViewModel.semEtapa,
-                    nome: 'Sem coluna',
-                    cor: '#F59E0B',
-                    ordem: 9999,
-                    tipo: 'fila',
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (final coluna in viewModel.colunas)
+                  _Coluna(
+                    coluna: coluna,
+                    itens:
+                        viewModel.porEtapa[coluna.id] ??
+                        const <AtendimentoResumo>[],
+                    viewModel: viewModel,
+                    controller: controller,
+                    abertoId: abertoId,
+                    aoAbrir: aoAbrir,
                   ),
-                  itens: soltas,
-                  viewModel: viewModel,
-                  controller: controller,
-                  abertoId: abertoId,
-                  aoAbrir: aoAbrir,
-                ),
-            ],
+                // Conversas fora de qualquer coluna do quadro: chegaram antes do
+                // fluxo existir, ou apontam para uma coluna já removida.
+                // Escondê-las faria sumir atendimento de verdade.
+                if (soltas.isNotEmpty)
+                  _Coluna(
+                    coluna: const ColunaDoQuadro(
+                      id: KanbanViewModel.semEtapa,
+                      nome: 'Sem coluna',
+                      cor: '#F59E0B',
+                      ordem: 9999,
+                      tipo: 'fila',
+                    ),
+                    itens: soltas,
+                    viewModel: viewModel,
+                    controller: controller,
+                    abertoId: abertoId,
+                    aoAbrir: aoAbrir,
+                  ),
+              ],
+            ),
           ),
         ),
       ],
