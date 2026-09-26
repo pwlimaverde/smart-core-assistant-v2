@@ -20,19 +20,7 @@ final class AuthTokenInterceptor implements ClientInterceptor {
     CallOptions options,
     ClientUnaryInvoker<Q, R> invoker,
   ) {
-    final withAuth = options.mergedWith(
-      CallOptions(
-        providers: [
-          (metadata, _) async {
-            final token = await _readAccessToken();
-            if (token != null && token.isNotEmpty) {
-              metadata['authorization'] = 'Bearer $token';
-            }
-          },
-        ],
-      ),
-    );
-    return invoker(method, request, withAuth);
+    return invoker(method, request, _comToken(options));
   }
 
   @override
@@ -42,7 +30,24 @@ final class AuthTokenInterceptor implements ClientInterceptor {
     CallOptions options,
     ClientStreamingInvoker<Q, R> invoker,
   ) {
-    // Sem streaming no escopo do login; repassa sem alteração.
-    return invoker(method, requests, options);
+    // O stream precisa do token tanto quanto a chamada unária. Repassar sem ele
+    // fazia o `StreamAtendimentos` ser recusado sempre ("stream.nao_autorizado"
+    // na auditoria): o quadro nunca recebia evento em tempo real e só se
+    // atualizava recarregando. O provider roda a cada abertura, então a
+    // reconexão depois de um refresh já sai com o token novo.
+    return invoker(method, requests, _comToken(options));
   }
+
+  CallOptions _comToken(CallOptions options) => options.mergedWith(
+    CallOptions(
+      providers: [
+        (metadata, _) async {
+          final token = await _readAccessToken();
+          if (token != null && token.isNotEmpty) {
+            metadata['authorization'] = 'Bearer $token';
+          }
+        },
+      ],
+    ),
+  );
 }

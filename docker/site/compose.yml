@@ -20,8 +20,10 @@ services:
       context: .
     image: smartcore-site:local
     restart: unless-stopped
+    # Só na ponte do Docker: o Caddy da borda serve o site com TLS. Em 0.0.0.0
+    # a porta ficava aberta para a internet sem TLS e sem os cabeçalhos da borda.
     ports:
-      - "${SITE_HOST_PORT:-8085}:80"
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:${SITE_HOST_PORT:-8085}:80"
     mem_limit: 64m
     logging:
       driver: json-file

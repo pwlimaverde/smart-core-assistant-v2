@@ -401,12 +401,13 @@ fn extrair_bearer(env: &Envelope) -> Option<&str> {
 /// Registra o erro no tracing (ponto único da borda: todo Envelope de erro emitido
 /// pela `runtime_api` passa pelos helpers `erro_*` e fica visível nos logs).
 fn registrar_erro_borda(app_err: &error_core::AppError, env: &Envelope) {
-    error_core::registrar(
+    error_core::registrar_no_rpc(
         app_err,
         &error_core::ErrorContext {
             trace_id: env.traceparent.clone(),
             tenant_id: env.tenant_id.clone(),
         },
+        &env.method,
     );
 }
 

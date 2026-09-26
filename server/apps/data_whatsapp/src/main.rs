@@ -880,6 +880,36 @@ async fn handler_reconciliar_conexao_instancia(state: AppState, env: Envelope) -
     // webhooks em 3h, 1040 pools vazados, e derrubou o gateway com pânico.
     let estado_gravado = instance.get("connection_state").and_then(|v| v.as_str());
     if let Some(motivo) = impedimento_para_religar(&estado_inicial, estado_gravado) {
+        // QR no ar e ninguém na tela de conexão: o pareamento foi abandonado. A
+        // evolution-go não para sozinha (ver `cancelar_pareamento`), então quem
+        // encerra é a reconciliação.
+        //
+        // Exige `connecting` também no tick anterior: uma sessão pareada passa
+        // alguns segundos em `Connecting` durante o handshake, e apagar a
+        // instância nessa hora faria o provedor deslogar um WhatsApp em uso.
+        // Cinco minutos no mesmo estado não é handshake. A última conferência,
+        // logo antes de apagar, fecha a janela que sobra.
+        if estado_inicial == ConnectionState::Connecting
+            && estado_gravado == Some("connecting")
+            && !tela_de_pareamento_aberta(&state, name).await
+            && p.get_connection_state(name, &api_key_sec).await.ok()
+                == Some(ConnectionState::Connecting)
+        {
+            let texto = if cancelar_pareamento(p.as_ref(), name, &api_key_sec, &state).await {
+                "disconnected"
+            } else {
+                "connecting"
+            };
+            if estado_gravado != Some(texto) {
+                gravar_estado(&env, db_id, texto).await;
+            }
+            return ok_reply(
+                &env,
+                "ReconciliarConexaoInstanciaReply",
+                serde_json::json!({ "state": texto, "religada": false, "precisa_parear": true }),
+            );
+        }
+
         let texto = if estado_inicial == ConnectionState::Connecting {
             "connecting"
         } else {
@@ -970,6 +1000,124 @@ async fn handler_reconciliar_conexao_instancia(state: AppState, env: Envelope) -
             "precisa_parear": precisa_parear
         }),
     )
+}
+
+/// Por quanto tempo uma consulta da tela de conexão vale como "alguém está
+/// olhando o QR".
+///
+/// As telas consultam o status a cada 3 s (onboarding) e 8 s (painel); três
+/// minutos cobrem com folga uma aba em segundo plano, que o navegador desacelera,
+/// sem deixar um QR abandonado girando por muito mais que um ciclo da
+/// reconciliação.
+fn pareamento_ttl_s() -> usize {
+    std::env::var("SMARTCORE_WHATSAPP_PAREAMENTO_TTL_S")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .unwrap_or(180)
+        .max(60)
+}
+
+fn chave_pareamento(name: &str) -> String {
+    format!("whatsapp:pareamento:{name}")
+}
+
+fn webhook_da_instancia(provider_name: &str, tenant_id: &str, db_id: i64) -> WebhookConfig {
+    WebhookConfig {
+        url: format!("http://webhook_ingress:9200/webhook/{provider_name}/{tenant_id}/{db_id}"),
+        subscribe: vec![
+            "MESSAGE".to_string(),
+            "CONNECTION".to_string(),
+            "PRESENCE".to_string(),
+            "QRCODE".to_string(),
+        ],
+    }
+}
+
+/// `true` se a tela de conexão consultou esta instância há pouco.
+///
+/// Na dúvida (Redis fora), responde que sim: cancelar o pareamento de quem está
+/// com o celular na mão é pior que deixar um QR girando mais um ciclo.
+async fn tela_de_pareamento_aberta(state: &AppState, name: &str) -> bool {
+    let mut redis = state.redis_conn.clone();
+    let existe: Result<bool, _> = redis::cmd("EXISTS")
+        .arg(chave_pareamento(name))
+        .query_async(&mut redis)
+        .await;
+    existe.unwrap_or(true)
+}
+
+/// Encerra um pareamento abandonado apagando e recriando a instância no
+/// provedor, com o mesmo nome e o mesmo token.
+///
+/// É o único jeito que a API da evolution-go 0.7.2 oferece. Pelo código dela:
+/// `logout`, `disconnect` e o esgotamento dos QR mandam o mesmo sinal ao
+/// cliente, e o `StartClient` responde a esse sinal SEMPRE com "Restarting
+/// client" — um QR novo, para sempre (a documentação promete o contrário; o
+/// código não cumpre). Só a remoção fecha e apaga o canal desse sinal e o
+/// registro da instância; sem os dois, o próximo `Disconnected` tenta
+/// `ReconnectClient`, não acha a instância e o laço termina.
+///
+/// A recriação devolve o que a instância tinha de útil: nome e token (é com
+/// eles que o banco a encontra) e as configurações avançadas. O webhook volta
+/// no `connect` que a tela de conexão faz ao abrir o próximo pareamento. A
+/// instância nasce parada: o provedor só inicia cliente quando alguém pede QR.
+///
+/// Devolve `true` se o pareamento foi encerrado.
+async fn cancelar_pareamento(
+    p: &dyn MessagingProvider,
+    name: &str,
+    token: &SecretString,
+    state: &AppState,
+) -> bool {
+    if let Err(e) = p.delete_instance(name).await {
+        tracing::warn!(instancia = name, erro = %e, "falha ao cancelar pareamento abandonado");
+        return false;
+    }
+
+    let mut recriada = false;
+    for tentativa in 1..=3u64 {
+        match p.create_instance(name, Some(token)).await {
+            Ok(_) => {
+                recriada = true;
+                break;
+            }
+            Err(e) => {
+                tracing::warn!(instancia = name, tentativa, erro = %e, "falha ao recriar instância");
+                tokio::time::sleep(Duration::from_secs(tentativa)).await;
+            }
+        }
+    }
+    if !recriada {
+        // Sem a instância no provedor, a tela de conexão falha até alguém
+        // recriá-la. Não é silencioso de propósito.
+        tracing::error!(
+            instancia = name,
+            "pareamento cancelado, mas a instância não foi recriada no provedor"
+        );
+        return true;
+    }
+
+    if let Some(adv) = p.advanced_settings() {
+        if let Err(e) = adv
+            .set_advanced_settings(name, token, AdvancedSettings::default())
+            .await
+        {
+            tracing::warn!(instancia = name, erro = %e, "falha ao reaplicar advanced settings");
+        }
+    }
+
+    // O QR em cache pertence ao cliente que acabou de ser encerrado.
+    let mut redis = state.redis_conn.clone();
+    let _: Result<(), _> = redis::cmd("DEL")
+        .arg(format!("whatsapp:qr:{name}"))
+        .query_async(&mut redis)
+        .await;
+
+    tracing::info!(
+        instancia = name,
+        "pareamento abandonado encerrado no provedor; instância recriada parada"
+    );
+    true
 }
 
 /// Por que a reconciliação **não** deve chamar `connect`, quando não deve.
@@ -1159,6 +1307,16 @@ async fn handler_get_whatsapp_instance_status(state: AppState, env: Envelope) ->
         let chave = format!("whatsapp:qr:{name}");
         let mut redis = state.redis_conn.clone();
 
+        // Marca a tela como aberta. É o que impede a reconciliação de encerrar
+        // o pareamento de quem está com o celular na mão.
+        let _: Result<(), _> = redis::cmd("SET")
+            .arg(chave_pareamento(name))
+            .arg(1)
+            .arg("EX")
+            .arg(pareamento_ttl_s())
+            .query_async(&mut redis)
+            .await;
+
         let em_cache: Option<String> = redis::cmd("GET")
             .arg(&chave)
             .query_async(&mut redis)
@@ -1171,7 +1329,36 @@ async fn handler_get_whatsapp_instance_status(state: AppState, env: Envelope) ->
                 qr_code = Some(qr);
             }
             None => {
-                if let Ok(qr) = p.get_qr_code(name, &api_key_sec).await {
+                // Sem cliente no provedor, quem o inicia é o `connect`, que
+                // grava o webhook antes (uma instância recriada por
+                // `cancelar_pareamento` não tem nenhum, e pareava sem entregar
+                // mensagem). Com cliente rodando, ele só atualiza a
+                // configuração.
+                //
+                // E NÃO pede o QR na mesma volta. O `connect` inicia o cliente
+                // em segundo plano; pedir o QR logo em seguida encontrava o
+                // cliente ainda inexistente, e o provedor iniciava um SEGUNDO —
+                // dois laços de QR em paralelo (visto em 26/09). A trava de 15 s
+                // cobre as consultas da tela enquanto o cliente sobe; na
+                // seguinte ele já existe, e o QR sai dele.
+                if prov_state == ConnectionState::Disconnected {
+                    let primeira: Result<Option<String>, _> = redis::cmd("SET")
+                        .arg(format!("whatsapp:conectando:{name}"))
+                        .arg(1)
+                        .arg("NX")
+                        .arg("EX")
+                        .arg(15)
+                        .query_async(&mut redis)
+                        .await;
+                    // Redis fora não pode travar o pareamento: segue com o
+                    // `connect`, como era antes da trava.
+                    if !matches!(primeira, Ok(None)) {
+                        let webhook = webhook_da_instancia(provider_name, &env.tenant_id, db_id);
+                        if let Err(e) = p.connect_instance(name, &api_key_sec, &webhook).await {
+                            tracing::warn!(instance_id = db_id, erro = %e, "falha ao preparar a instância para o QR");
+                        }
+                    }
+                } else if let Ok(qr) = p.get_qr_code(name, &api_key_sec).await {
                     // `EX` e nao `PX`: a granularidade de segundos basta, e o
                     // valor fica legivel no `redis-cli TTL`.
                     let _: Result<(), _> = redis::cmd("SET")
@@ -2161,6 +2348,30 @@ mod tests {
     // Cada `connect` numa instância sem sessão prende a evolution-go num laço
     // de QR que não termina sozinho. O filtro abaixo é o que impede o tick
     // periódico de empilhar esses laços até derrubar o gateway.
+
+    #[test]
+    fn tela_de_pareamento_vale_por_tres_minutos_e_nunca_menos_de_um() {
+        std::env::remove_var("SMARTCORE_WHATSAPP_PAREAMENTO_TTL_S");
+        assert_eq!(pareamento_ttl_s(), 180);
+        std::env::set_var("SMARTCORE_WHATSAPP_PAREAMENTO_TTL_S", "10");
+        assert_eq!(
+            pareamento_ttl_s(),
+            60,
+            "abaixo de um minuto a tela lenta perderia o QR"
+        );
+        std::env::remove_var("SMARTCORE_WHATSAPP_PAREAMENTO_TTL_S");
+    }
+
+    #[test]
+    fn webhook_da_instancia_aponta_para_o_ingress_do_tenant() {
+        let w = webhook_da_instancia("evolution", "t-1", 181);
+        assert_eq!(
+            w.url,
+            "http://webhook_ingress:9200/webhook/evolution/t-1/181"
+        );
+        assert!(w.subscribe.iter().any(|e| e == "CONNECTION"));
+        assert!(w.subscribe.iter().any(|e| e == "MESSAGE"));
+    }
 
     #[test]
     fn queda_de_instancia_que_estava_no_ar_religa() {

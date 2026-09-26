@@ -60,8 +60,13 @@ services:
       DATABASE_SAVE_MESSAGES: "false"
       WADEBUG: "ERROR"
       LOGTYPE: console
+    # Só no loopback: a v2 fala com a evolution pela rede Docker
+    # (`smartcore-evolution:8080`), e a borda não a publica. A porta no host
+    # existe para administração local (curl, manager). Em 0.0.0.0 a API inteira
+    # do WhatsApp ficava na internet protegida só pela chave global — e o Docker
+    # publica por cima do UFW.
     ports:
-      - "${EVOLUTION_PORT:-8080}:8080"
+      - "${EVOLUTION_BIND_IP:-127.0.0.1}:${EVOLUTION_PORT:-8080}:8080"
     volumes:
       - evolution_data:/app/dbdata
       - evolution_logs:/app/logs
