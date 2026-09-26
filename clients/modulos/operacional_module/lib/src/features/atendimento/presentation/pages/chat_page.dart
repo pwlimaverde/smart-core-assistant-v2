@@ -188,8 +188,45 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
           },
         );
 
-        final corpo = widget.aoFechar == null
+        // Em janela estreita a ficha não fica ao lado da conversa: ler e
+        // responder é o que não pode ficar sem espaço.
+        //
+        // O limite vale para a largura DESTE painel, não para a da janela: ao
+        // lado do quadro ele tem uns 460px, e a ficha não caberia junto.
+        //
+        // Aí ela vira gaveta sobre as mensagens, aberta pelo botão de detalhes
+        // (ou pelo cartão, ou pelo atalho `i`) — o "Detalhes do Atendimento"
+        // da v1. Antes ela simplesmente sumia, e os campos personalizados do
+        // cartão ficavam sem lugar nenhum para aparecer. A gaveta fica ABAIXO
+        // do cabeçalho: minimizar, fechar e o próprio botão de detalhes
+        // continuam à mão com ela aberta.
+        final estreito = constraints.maxWidth < 900;
+        final mensagens = !estreito
             ? conversa
+            : ValueListenableBuilder<bool>(
+                valueListenable: _detalhes,
+                builder: (context, abertos, _) => Stack(
+                  children: [
+                    Positioned.fill(child: conversa),
+                    if (abertos)
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: PainelFicha(
+                          controller: _ficha,
+                          largura: constraints.maxWidth < 380
+                              ? constraints.maxWidth
+                              : 380,
+                          aoFechar: () => _detalhes.value = false,
+                        ),
+                      ),
+                  ],
+                ),
+              );
+
+        final corpo = widget.aoFechar == null
+            ? mensagens
             : Column(
                 children: [
                   _CabecalhoDoPainel(
@@ -199,44 +236,11 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
                     aoMinimizar: widget.aoMinimizar,
                     aoExpandir: widget.aoExpandir,
                   ),
-                  Expanded(child: conversa),
+                  Expanded(child: mensagens),
                 ],
               );
 
-        // Em janela estreita a ficha some em vez de espremer a conversa: ler e
-        // responder é o que não pode ficar sem espaço. As etiquetas continuam
-        // visíveis no cartão do quadro.
-        //
-        // O limite vale para a largura DESTE painel, não para a da janela: ao
-        // lado do quadro ele tem uns 420px, e a ficha não caberia junto.
-        //
-        // Aí ela vira gaveta sobre a conversa, aberta pelo botão de detalhes
-        // (ou pelo cartão, ou pelo atalho `i`) — o "Detalhes do Atendimento"
-        // da v1. Antes ela simplesmente sumia, e os campos personalizados do
-        // cartão ficavam sem lugar nenhum para aparecer.
-        if (constraints.maxWidth < 900) {
-          return ValueListenableBuilder<bool>(
-            valueListenable: _detalhes,
-            builder: (context, abertos, _) => Stack(
-              children: [
-                Positioned.fill(child: corpo),
-                if (abertos)
-                  Positioned(
-                    top: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: PainelFicha(
-                      controller: _ficha,
-                      largura: constraints.maxWidth < 380
-                          ? constraints.maxWidth
-                          : 380,
-                      aoFechar: () => _detalhes.value = false,
-                    ),
-                  ),
-              ],
-            ),
-          );
-        }
+        if (estreito) return corpo;
 
         return Row(
           children: [
