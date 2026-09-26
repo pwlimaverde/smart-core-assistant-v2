@@ -35,14 +35,14 @@ networks:
 
 services:
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
+    image: otel/opentelemetry-collector-contrib:0.153.0
     volumes:
       - ./otel-collector-config.yml:/etc/otelcol-contrib/config.yaml:ro
     networks: [smart_core_v2_observability, smart_core_v2_mcp_telemetria]
     restart: unless-stopped
 
   loki:
-    image: grafana/loki:latest
+    image: grafana/loki:3.7.2
     volumes:
       - ./loki-config.yml:/etc/loki/local-config.yaml:ro
       - loki_data:/loki
@@ -65,7 +65,7 @@ services:
     restart: unless-stopped
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.12.0
     # Retencao explicita: sem "command", o entrypoint usa so os defaults da
     # imagem. Declarar aqui documenta a decisao (14 dias, ver P5 do plano de
     # observabilidade) e blinda contra mudanca de default em versao futura.
@@ -82,9 +82,13 @@ services:
     restart: unless-stopped
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.0.2
+    # Só na ponte do Docker: quem fala com o Grafana é o Caddy da borda, por
+    # `host.docker.internal`. Publicado em 0.0.0.0, a porta 3000 ficava aberta
+    # para a internet em HTTP puro — a senha de login trafegava sem TLS, e o
+    # Docker publica por cima do UFW.
     ports:
-      - "3000:3000"
+      - "${HOST_BRIDGE_IP:-172.17.0.1}:3000:3000"
     environment:
       # Destino dos alertas. O provisionamento (`provisioning/alerting/
       # contact-points.yml`) lê estas variáveis; elas precisam SEMPRE existir,
@@ -113,7 +117,7 @@ services:
     restart: unless-stopped
 
   promtail:
-    image: grafana/promtail:latest
+    image: grafana/promtail:3.6.8
     volumes:
       - ./promtail-config.yml:/etc/promtail/config.yml:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro

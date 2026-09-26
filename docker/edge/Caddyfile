@@ -150,6 +150,13 @@ dev.smartcoreassistant.com.br {
 
 # ----- Grafana (observabilidade) -----
 grafana.smartcoreassistant.com.br {
+	# O Grafana manda nosniff e X-Frame-Options, mas não HSTS: sem ele, o
+	# primeiro acesso por http:// fica exposto a downgrade antes do redirect.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
 	reverse_proxy host.docker.internal:3000
 }
 
