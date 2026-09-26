@@ -1329,19 +1329,36 @@ async fn handler_get_whatsapp_instance_status(state: AppState, env: Envelope) ->
                 qr_code = Some(qr);
             }
             None => {
-                // Sem cliente no provedor, o pedido de QR inicia um — mas sem
-                // webhook se a instância acabou de ser recriada por um
-                // pareamento abandonado (ver `cancelar_pareamento`), e aí o
-                // WhatsApp pareava sem entregar mensagem nenhuma. O `connect`
-                // grava o webhook antes; com cliente rodando ele só atualiza a
-                // configuração, sem reiniciar.
+                // Sem cliente no provedor, quem o inicia é o `connect`, que
+                // grava o webhook antes (uma instância recriada por
+                // `cancelar_pareamento` não tem nenhum, e pareava sem entregar
+                // mensagem). Com cliente rodando, ele só atualiza a
+                // configuração.
+                //
+                // E NÃO pede o QR na mesma volta. O `connect` inicia o cliente
+                // em segundo plano; pedir o QR logo em seguida encontrava o
+                // cliente ainda inexistente, e o provedor iniciava um SEGUNDO —
+                // dois laços de QR em paralelo (visto em 26/09). A trava de 15 s
+                // cobre as consultas da tela enquanto o cliente sobe; na
+                // seguinte ele já existe, e o QR sai dele.
                 if prov_state == ConnectionState::Disconnected {
-                    let webhook = webhook_da_instancia(provider_name, &env.tenant_id, db_id);
-                    if let Err(e) = p.connect_instance(name, &api_key_sec, &webhook).await {
-                        tracing::warn!(instance_id = db_id, erro = %e, "falha ao preparar a instância para o QR");
+                    let primeira: Result<Option<String>, _> = redis::cmd("SET")
+                        .arg(format!("whatsapp:conectando:{name}"))
+                        .arg(1)
+                        .arg("NX")
+                        .arg("EX")
+                        .arg(15)
+                        .query_async(&mut redis)
+                        .await;
+                    // Redis fora não pode travar o pareamento: segue com o
+                    // `connect`, como era antes da trava.
+                    if !matches!(primeira, Ok(None)) {
+                        let webhook = webhook_da_instancia(provider_name, &env.tenant_id, db_id);
+                        if let Err(e) = p.connect_instance(name, &api_key_sec, &webhook).await {
+                            tracing::warn!(instance_id = db_id, erro = %e, "falha ao preparar a instância para o QR");
+                        }
                     }
-                }
-                if let Ok(qr) = p.get_qr_code(name, &api_key_sec).await {
+                } else if let Ok(qr) = p.get_qr_code(name, &api_key_sec).await {
                     // `EX` e nao `PX`: a granularidade de segundos basta, e o
                     // valor fica legivel no `redis-cli TTL`.
                     let _: Result<(), _> = redis::cmd("SET")
