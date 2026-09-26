@@ -5,6 +5,7 @@
 //! `endpoint_url` + `force_path_style`, sem `aws-config`.
 
 use aws_sdk_s3::config::{BehaviorVersion, Credentials, Region};
+use aws_sdk_s3::error::{DisplayErrorContext, ProvideErrorMetadata};
 use aws_sdk_s3::types::{
     BucketLifecycleConfiguration, CorsConfiguration, CorsRule, ExpirationStatus,
     LifecycleExpiration, LifecycleRule, LifecycleRuleFilter,
@@ -153,9 +154,22 @@ pub async fn garantir_lifecycle(client: &Client, bucket: &str, expiration_days: 
             expiration_days,
             "lifecycle do bucket aplicado (defesa em profundidade da retenção de mídia)"
         ),
+        Err(e)
+            if sem_permissao(
+                e.as_service_error().and_then(|s| s.code()),
+                e.raw_response().map(|r| r.status().as_u16()),
+            ) =>
+        {
+            tracing::info!(
+                bucket = %bucket,
+                "lifecycle do bucket não aplicado: o token de acesso é só de objetos; \
+                 a regra de expiração se configura no painel do R2"
+            )
+        }
         Err(e) => tracing::warn!(
             bucket = %bucket,
-            "falha ao aplicar lifecycle do bucket (best-effort, prosseguindo): {e}"
+            erro = %DisplayErrorContext(&e),
+            "falha ao aplicar lifecycle do bucket (best-effort, prosseguindo)"
         ),
     }
 }
@@ -226,11 +240,35 @@ pub async fn garantir_cors(client: &Client, bucket: &str, allowed_origins: &[Str
             origins = ?allowed_origins,
             "CORS do bucket aplicado (paridade Web — mídia entregue por presign)"
         ),
+        Err(e)
+            if sem_permissao(
+                e.as_service_error().and_then(|s| s.code()),
+                e.raw_response().map(|r| r.status().as_u16()),
+            ) =>
+        {
+            tracing::info!(
+                bucket = %bucket,
+                "CORS do bucket não aplicado: o token de acesso é só de objetos; \
+                 a política versionada (infra/r2-cors.json) vale pelo painel do R2"
+            )
+        }
         Err(e) => tracing::warn!(
             bucket = %bucket,
-            "falha ao aplicar CORS do bucket (best-effort, prosseguindo): {e}"
+            erro = %DisplayErrorContext(&e),
+            "falha ao aplicar CORS do bucket (best-effort, prosseguindo)"
         ),
     }
+}
+
+/// A configuração do bucket foi recusada por falta de permissão.
+///
+/// No R2, o token de acesso da aplicação é só de objetos (ler, gravar,
+/// apagar); CORS e lifecycle são do painel da Cloudflare. A recusa então não é
+/// defeito — era um aviso a cada boot que escondia, atrás de "service error",
+/// qualquer falha de verdade.
+fn sem_permissao(codigo: Option<&str>, status: Option<u16>) -> bool {
+    matches!(codigo, Some("AccessDenied" | "Forbidden" | "Unauthorized"))
+        || matches!(status, Some(401 | 403))
 }
 
 /// Healthcheck simples: confirma o acesso ao bucket via `head_bucket`.
@@ -242,4 +280,18 @@ pub async fn health(client: &Client, bucket: &str) -> Result<(), StorageError> {
         .await
         .map(|_| ())
         .map_err(|e| StorageError::S3(format!("healthcheck do bucket '{bucket}' falhou: {e}")))
+}
+
+#[cfg(test)]
+mod tests_sem_permissao {
+    use super::sem_permissao;
+
+    #[test]
+    fn recusa_por_permissao_nao_e_falha() {
+        assert!(sem_permissao(Some("AccessDenied"), None));
+        assert!(sem_permissao(None, Some(403)));
+        assert!(sem_permissao(Some("Unauthorized"), Some(401)));
+        assert!(!sem_permissao(Some("NoSuchBucket"), Some(404)));
+        assert!(!sem_permissao(None, None));
+    }
 }

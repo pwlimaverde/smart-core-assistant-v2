@@ -147,6 +147,65 @@ pub trait AtendenteRepository: Send + Sync {
 
 pub struct PostgresAtendenteRepository;
 
+/// De que lado o vínculo atendente↔login é procurado.
+enum VinculoPor {
+    /// O login que está agindo (procura o atendente dele).
+    Usuario(i32),
+    /// Um atendente recém-criado (procura o login dele).
+    Atendente(i32),
+}
+
+/// Liga um atendente ativo e sem vínculo ao login de mesmo e-mail.
+///
+/// Só dentro do tenant e só a membro ATIVO dele (`tenants_tenantuser`, sob
+/// RLS): um e-mail igual de fora do tenant nunca vira atendente aqui. Um login
+/// fica com no máximo um atendente por tenant. Devolve o `usuario_id` ligado.
+///
+/// Sem macro: consulta nova, fora do cache `.sqlx`.
+async fn vincular_login_por_email(
+    tx: &mut Transaction<'_, Postgres>,
+    tenant_id: Uuid,
+    por: VinculoPor,
+) -> Result<Option<i32>, DbError> {
+    let (usuario, atendente) = match por {
+        VinculoPor::Usuario(u) => (Some(u), None),
+        VinculoPor::Atendente(a) => (None, Some(a)),
+    };
+    let ligado: Option<(i32,)> = sqlx::query_as(
+        r#"UPDATE oraculo_atendente a
+              SET usuario_id = v.user_id
+             FROM (
+                   SELECT a2.id AS atendente_id, u.id AS user_id
+                     FROM oraculo_atendente a2
+                     JOIN auth_user u
+                       ON lower(trim(u.email)) = lower(trim(a2.email))
+                     JOIN tenants_tenantuser tu
+                       ON tu.user_id = u.id AND tu.tenant_id = a2.tenant_id
+                      AND tu.is_active
+                    WHERE a2.tenant_id = $1
+                      AND a2.usuario_id IS NULL
+                      AND a2.ativo
+                      AND trim(a2.email) <> ''
+                      AND ($2::int IS NULL OR u.id = $2)
+                      AND ($3::int IS NULL OR a2.id = $3)
+                      AND NOT EXISTS (
+                            SELECT 1 FROM oraculo_atendente j
+                             WHERE j.tenant_id = a2.tenant_id AND j.usuario_id = u.id
+                          )
+                    ORDER BY a2.id, u.id
+                    LIMIT 1
+                  ) v
+            WHERE a.id = v.atendente_id
+        RETURNING a.usuario_id"#,
+    )
+    .bind(tenant_id)
+    .bind(usuario)
+    .bind(atendente)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(ligado.map(|(u,)| u))
+}
+
 #[async_trait]
 impl AtendenteRepository for PostgresAtendenteRepository {
     // `nome`/`email` são PII: `skip_all`.
@@ -182,6 +241,14 @@ impl AtendenteRepository for PostgresAtendenteRepository {
         .fetch_one(&mut **tx)
         .await
         .map_err(DbError::from_sqlx_unique)?;
+        // O atendente novo já nasce ligado ao login de mesmo e-mail, se a
+        // pessoa já é membro do tenant; senão, liga no primeiro "Assumir".
+        let mut row = row;
+        if let Some(usuario) =
+            vincular_login_por_email(tx, ctx.tenant_id, VinculoPor::Atendente(row.id)).await?
+        {
+            row.usuario_id = Some(usuario);
+        }
         Ok(row)
     }
 
@@ -216,6 +283,10 @@ impl AtendenteRepository for PostgresAtendenteRepository {
         ctx: &RequestContext,
         usuario_id: i32,
     ) -> Result<Option<Atendente>, DbError> {
+        // Login ainda sem atendente: liga pelo e-mail antes de buscar. O
+        // cadastro nunca preenchia o vínculo, e sem ele "Assumir" dizia que o
+        // usuário não era atendente.
+        vincular_login_por_email(tx, ctx.tenant_id, VinculoPor::Usuario(usuario_id)).await?;
         // Só atendente ATIVO: quem saiu da equipe não volta a receber conversa
         // por ter arrastado um cartão.
         let row = sqlx::query_as!(
