@@ -108,7 +108,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         ativo: Annotated[bool, Field(description="false = desativar.")],
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Ativa ou desativa um contato (reversível)."""
+        """Ativa ou desativa um contato. É reversível: o histórico fica, e o contato
+        volta com `ativo=true`. Use para tirar da lista quem não é mais cliente, não
+        para apagar dados."""
         tool = registro.exigir("definir_contato_ativo")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -273,7 +275,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         ativo: Annotated[bool, Field(description="false = desativar.")],
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Ativa ou desativa um cliente (reversível)."""
+        """Ativa ou desativa um cliente (empresa). É reversível: o cadastro e os
+        contatos ligados continuam lá. Use quando o cliente deixou de comprar, não
+        para corrigir dados."""
         tool = registro.exigir("definir_cliente_ativo")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -296,7 +300,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
     async def list_contatos_do_cliente(
         cliente_id: Annotated[int, Field(description="Id do cliente.")],
     ) -> list[dict[str, object]]:
-        """Os contatos (pessoas) ligados a um cliente."""
+        """Lista os contatos (pessoas) ligados a um cliente. Use para saber com quem
+        falar numa empresa, ou antes de ligar/desligar um contato com
+        `vincular_contato_cliente`."""
         r = await executor.executar(
             "list_contatos_do_cliente",
             "ListMyContatosDoCliente",
@@ -320,7 +326,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         ] = True,
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Liga (ou desliga) um contato a um cliente."""
+        """Liga um contato (pessoa) a um cliente (empresa), ou desliga com
+        `vincular=false`. Um contato pode estar em mais de um cliente. Busque os
+        dois ids antes."""
         tool = registro.exigir("vincular_contato_cliente")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -463,7 +471,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         confirmar: Annotated[str, Field(default="", description="Nome exato.")] = "",
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Desativa um campo: some das fichas novas e a IA para de extraí-lo."""
+        """Desativa um campo personalizado: some das fichas novas e a IA para de
+        extraí-lo nas conversas. Os valores já gravados ficam. Exige confirmação com
+        o nome exato do campo."""
         tool = registro.exigir("desativar_campo")
         lista = await executor.executar(
             "desativar_campo",

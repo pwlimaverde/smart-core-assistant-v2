@@ -141,7 +141,8 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
     async def get_contato_do_atendimento(
         atendimento_id: Annotated[int, ATENDIMENTO_ID],
     ) -> dict[str, object]:
-        """Nome, telefone e foto do contato de um atendimento."""
+        """Nome, telefone e foto do contato de um atendimento. Use para saber com quem
+        é a conversa antes de responder, sem precisar buscar em `list_contatos`."""
         r = await executor.executar(
             "get_contato_do_atendimento",
             "ObterContatoDoAtendimento",
@@ -314,7 +315,8 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         ] = False,
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Define quem é o responsável pelo atendimento, ou o devolve à fila."""
+        """Define quem é o responsável pelo atendimento, ou o devolve à fila com
+        `devolver_para_fila=true`. Use `list_atendentes` para achar o id da pessoa."""
         tool = registro.exigir("atribuir_atendimento")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -349,7 +351,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         ],
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Muda a prioridade do atendimento."""
+        """Muda a prioridade do atendimento (baixa, normal, alta, urgente). A
+        prioridade ordena o quadro e os filtros do app; use com parcimônia, senão
+        tudo vira urgente."""
         tool = registro.exigir("definir_prioridade")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -405,7 +409,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         atendimento_id: Annotated[int, ATENDIMENTO_ID],
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Marca as mensagens do cliente como lidas (zera o contador do cartão)."""
+        """Marca as mensagens do cliente como lidas, zerando o contador do cartão. Use
+        depois de ler a conversa com `get_thread`, como faria o atendente ao
+        abri-la."""
         tool = registro.exigir("marcar_atendimento_lido")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -458,7 +464,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         ],
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Liga ou desliga a IA **só nesta conversa** (o interruptor da ficha)."""
+        """Liga ou desliga a IA **só nesta conversa** (o interruptor da ficha).
+        Desligar é o que se faz quando uma pessoa assume; para o número inteiro use
+        `definir_resposta_bot_conexao`."""
         tool = registro.exigir("definir_bot_da_conversa")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -482,7 +490,8 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         texto: Annotated[str, Field(description="Nota interna (o cliente não vê).")],
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Acrescenta uma nota interna ao atendimento."""
+        """Acrescenta uma nota interna ao atendimento. O cliente não vê. Use para
+        registrar combinados, pendências e contexto para o próximo atendente."""
         tool = registro.exigir("create_nota")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -578,7 +587,8 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         ] = "",
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Renomeia uma etiqueta ou muda cor e descrição."""
+        """Renomeia uma etiqueta do catálogo ou muda cor e descrição. A descrição diz
+        quando usar a etiqueta — é o que a IA lê para etiquetar sozinha."""
         tool = registro.exigir("update_etiqueta")
         if dry_run:
             executor.registrar_simulacao(tool)

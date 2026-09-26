@@ -143,7 +143,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         ],
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Cria uma intenção. Tag+grupo são únicos: confira `list_intencoes`."""
+        """Cria uma intenção (o 'QueryCompose' da v1): um tipo de mensagem que a IA
+        reconhece e o comportamento que ela deve ter nesse caso. Tag+grupo são
+        únicos — confira `list_intencoes` antes."""
         tool = registro.exigir("create_intencao")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -171,7 +173,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         comportamento: str,
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Edita uma intenção. Todos os campos são gravados."""
+        """Edita uma intenção existente (tag, grupo, descrição, exemplo e
+        comportamento). Todos os campos são gravados: leia com `list_intencoes` e
+        reenvie o que não muda."""
         tool = registro.exigir("update_intencao")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -199,7 +203,8 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         ] = "",
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Remove uma intenção. Não tem desfazer."""
+        """Remove uma intenção: a IA deixa de reconhecer esse tipo de mensagem. Não tem
+        desfazer. Exige confirmação com a tag exata, de `list_intencoes`."""
         tool = registro.exigir("remover_intencao")
         lista = await executor.executar(
             "remover_intencao",
@@ -262,7 +267,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         confiabilidade: float = 0.0,
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Registra a avaliação de um teste (o 👍/👎 da tela de teste)."""
+        """Registra a avaliação de uma resposta obtida com `testar_pergunta` (o 👍/👎 da
+        tela de teste). Se foi ruim, informe a resposta correta: ela vai para a
+        revisão."""
         tool = registro.exigir("registrar_avaliacao_teste")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -290,7 +297,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         annotations=registro.exigir("list_avaliacoes_de_teste").anotacoes,
     )
     async def list_avaliacoes_de_teste() -> list[dict[str, object]]:
-        """As avaliações do teste ainda não tratadas, as ruins primeiro."""
+        """Lista as avaliações do teste de resposta ainda não tratadas, as ruins
+        primeiro. Use para revisar o que o assistente errou e decidir o que vira
+        treinamento."""
         r = await executor.executar(
             "list_avaliacoes_de_teste",
             "ListMyAvaliacoesDeTeste",
@@ -313,7 +322,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         ],
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Tira a avaliação da lista de revisão."""
+        """Tira uma avaliação da lista de revisão, dizendo se a correção virou
+        treinamento ou foi dispensada. Use depois de criar o treinamento com
+        `create_treinamento`."""
         tool = registro.exigir("marcar_avaliacao_tratada")
         if dry_run:
             executor.registrar_simulacao(tool)

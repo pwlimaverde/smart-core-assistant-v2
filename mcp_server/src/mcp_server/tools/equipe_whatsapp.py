@@ -45,7 +45,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         name="list_usuarios", annotations=registro.exigir("list_usuarios").anotacoes
     )
     async def list_usuarios() -> list[dict[str, object]]:
-        """Os usuários com acesso ao negócio, com papel e permissões."""
+        """Lista os usuários com acesso ao negócio, com papel, permissões e fluxos que
+        cada um enxerga. Só administradores. Use antes de mudar acessos com
+        `update_usuario`."""
         r = await executor.executar(
             "list_usuarios", "ListTenantUsers", pb.ListTenantUsersRequest()
         )
@@ -100,7 +102,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         name="list_convites", annotations=registro.exigir("list_convites").anotacoes
     )
     async def list_convites() -> list[dict[str, object]]:
-        """Os convites enviados, com situação (usado, revogado, expirado)."""
+        """Lista os convites de equipe enviados, com a situação de cada um (usado,
+        revogado, expirado). Use antes de convidar de novo alguém, para não
+        duplicar."""
         r = await executor.executar(
             "list_convites", "ListInvites", pb.ListInvitesRequest()
         )
@@ -152,7 +156,8 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         convite_id: Annotated[str, Field(description="Id, de `list_convites`.")],
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Reenvia o e-mail do convite e renova o prazo."""
+        """Reenvia o e-mail de um convite ainda não usado e renova o prazo de validade.
+        Use quando a pessoa diz que não recebeu ou o convite expirou."""
         tool = registro.exigir("reenviar_convite")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -176,7 +181,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         ] = "",
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Revoga um convite ainda não usado."""
+        """Revoga um convite ainda não usado: o link deixa de funcionar. Não tem
+        desfazer (um convite novo teria de ser enviado). Exige o e-mail exato como
+        confirmação."""
         tool = registro.exigir("revogar_convite")
         lista = await executor.executar(
             "revogar_convite",
@@ -282,7 +289,8 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         conexao_id: Annotated[int, CONEXAO_ID],
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Tenta reconectar uma conexão caída (sem novo pareamento)."""
+        """Pede a reconexão de um número de WhatsApp que caiu, sem novo pareamento. Se
+        a sessão foi perdida, não resolve: aí é preciso escanear o QR de novo."""
         tool = registro.exigir("reconectar_conexao_whatsapp")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -343,7 +351,8 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         habilitado: Annotated[bool, Field(description="A IA responde neste número.")],
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Liga ou desliga a IA em **todas** as conversas de um número."""
+        """Liga ou desliga a IA em **todas** as conversas de um número de WhatsApp.
+        Para uma conversa só, use `definir_bot_da_conversa`. Só administradores."""
         tool = registro.exigir("definir_resposta_bot_conexao")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -374,7 +383,8 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         ],
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Define para qual departamento vão as conversas deste número."""
+        """Define para qual departamento vão as conversas novas de um número de
+        WhatsApp. Use `list_departamentos` para o id; 0 tira o departamento."""
         tool = registro.exigir("definir_departamento_da_conexao")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -397,7 +407,8 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         annotations=registro.exigir("list_mensagens_nao_entregues").anotacoes,
     )
     async def list_mensagens_nao_entregues() -> list[dict[str, object]]:
-        """Mensagens que não conseguiram sair para o WhatsApp, com o motivo."""
+        """Lista as mensagens que não conseguiram sair para o WhatsApp, com o motivo da
+        falha. Use quando o cliente diz que não recebeu, e antes de reenviar."""
         r = await executor.executar(
             "list_mensagens_nao_entregues",
             "ListMyMensagensNaoEntregues",
@@ -486,7 +497,8 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         telefone: Annotated[str, Field(description="Com DDI e DDD.")],
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Passa a ignorar as mensagens de um número."""
+        """Passa a ignorar as mensagens de um número: a IA não responde e nenhum
+        atendimento é aberto. Use para familiares, fornecedores e números de teste."""
         tool = registro.exigir("create_numero_ignorado")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -513,7 +525,8 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         ativo: bool = True,
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Edita um número ignorado (ou o pausa com `ativo=false`)."""
+        """Edita um número ignorado, ou o pausa com `ativo=false` (as mensagens voltam
+        a ser atendidas sem apagar o cadastro)."""
         tool = registro.exigir("update_numero_ignorado")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -542,7 +555,9 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         ] = "",
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Volta a atender as mensagens desse número."""
+        """Remove um número da lista de ignorados: as mensagens dele voltam a ser
+        atendidas pela IA e a abrir atendimento. Exige o telefone exato como
+        confirmação."""
         tool = registro.exigir("remover_numero_ignorado")
         lista = await executor.executar(
             "remover_numero_ignorado",
