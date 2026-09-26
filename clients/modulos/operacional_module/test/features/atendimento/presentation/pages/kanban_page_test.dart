@@ -259,6 +259,10 @@ void conversaAoLadoDoQuadro() {
     expect(find.text('ENTRADA'), findsOneWidget);
     expect(find.byType(PainelDeConversa), findsNothing);
 
+    // O quadro divide a tela com a conversa: a coluna do cartão pode estar
+    // fora da vista, e quem usa rola até ela.
+    await tester.ensureVisible(find.text('Assunto 7'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Assunto 7'));
     await tester.pumpAndSettle();
 
@@ -272,6 +276,8 @@ void conversaAoLadoDoQuadro() {
 
   testWidgets('fechar a conversa devolve o quadro inteiro', (tester) async {
     await abrirOQuadro(tester, largura: 1600);
+    await tester.ensureVisible(find.text('Assunto 7'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Assunto 7'));
     await tester.pumpAndSettle();
 
