@@ -421,3 +421,62 @@ async def test_toda_destrutiva_recusa_sem_confirmacao():
     # Nenhuma escrita chegou ao backend — só as leituras que resolvem o alvo.
     escritas = [m for m in cliente.metodos if not m.startswith("List")]
     assert escritas == []
+
+
+async def test_finalizar_treinamento_usa_o_conteudo_atual_sem_revisao():
+    """Sem revisão, o texto final é o do treinamento — o servidor recusa vazio."""
+    servidor, registro, executor, cliente, _ = montar_ambiente(
+        {
+            "GetMyTreinamento": pb.MyTreinamentoResponse(
+                treinamento=pb.MyTreinamento(id=112, conteudo="  Cartões 300g  ")
+            ),
+            "FinalizarMyTreinamento": pb.SimpleOkResponse(sucesso=True),
+        }
+    )
+    configuracao.registrar(servidor, registro, executor)
+
+    with como(ADMIN):
+        simulado = await servidor.funcoes["finalizar_treinamento"](
+            treinamento_id=112, dry_run=True
+        )
+        assert "FinalizarMyTreinamento" not in cliente.metodos
+        await servidor.funcoes["finalizar_treinamento"](treinamento_id=112)
+
+    assert "conteúdo atual" in simulado
+    _, req, _ = cliente.chamadas[-1]
+    assert req.id == 112
+    assert req.conteudo == "Cartões 300g"
+
+
+async def test_finalizar_treinamento_com_revisao_nao_le_o_atual():
+    servidor, registro, executor, cliente, _ = montar_ambiente(
+        {"FinalizarMyTreinamento": pb.SimpleOkResponse(sucesso=True)}
+    )
+    configuracao.registrar(servidor, registro, executor)
+
+    with como(ADMIN):
+        await servidor.funcoes["finalizar_treinamento"](
+            treinamento_id=7, conteudo_revisado="Texto revisado"
+        )
+
+    assert "GetMyTreinamento" not in cliente.metodos
+    _, req, _ = cliente.chamadas[-1]
+    assert req.conteudo == "Texto revisado"
+
+
+async def test_finalizar_treinamento_vazio_falha_ja_na_simulacao():
+    """A simulação não pode aprovar o que a chamada real recusaria."""
+    servidor, registro, executor, cliente, _ = montar_ambiente(
+        {
+            "GetMyTreinamento": pb.MyTreinamentoResponse(
+                treinamento=pb.MyTreinamento(
+                    id=9, conteudo="", extracao_status="pendente"
+                )
+            )
+        }
+    )
+    configuracao.registrar(servidor, registro, executor)
+
+    with como(ADMIN), pytest.raises(ToolError, match="pendente"):
+        await servidor.funcoes["finalizar_treinamento"](treinamento_id=9, dry_run=True)
+    assert "FinalizarMyTreinamento" not in cliente.metodos

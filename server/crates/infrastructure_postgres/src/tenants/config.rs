@@ -264,11 +264,18 @@ pub async fn resolve_runtime_config(
         vision_model: fallback(tc.vision_model, "VISION_MODEL"),
         embeddings_class: fallback(tc.embeddings_class, "EMBEDDINGS_CLASS"),
         embeddings_model: fallback(tc.embeddings_model, "EMBEDDINGS_MODEL"),
-        chunk_size: fallback_i32(tc.chunk_size, "CHUNK_SIZE"),
-        chunk_overlap: fallback_i32(tc.chunk_overlap, "CHUNK_OVERLAP"),
-        similarity_threshold: fallback_dec(tc.similarity_threshold, "SIMILARITY_THRESHOLD"),
+        // Parâmetros do RAG: zero no tenant é "não configurado", e cai no
+        // global. A tela e a migração gravavam 0 no campo deixado em branco, e
+        // o 0 valia literalmente: distância máxima 0 recusava toda intenção e
+        // todo trecho, e chunk 0 não fatiava o treinamento.
+        chunk_size: fallback_i32(configurado(tc.chunk_size), "CHUNK_SIZE"),
+        chunk_overlap: fallback_i32(configurado(tc.chunk_overlap), "CHUNK_OVERLAP"),
+        similarity_threshold: fallback_dec(
+            configurado(tc.similarity_threshold),
+            "SIMILARITY_THRESHOLD",
+        ),
         vector_distance_threshold: fallback_dec(
-            tc.vector_distance_threshold,
+            configurado(tc.vector_distance_threshold),
             "VECTOR_DISTANCE_THRESHOLD",
         ),
         // B4. Sem o `fallback_dec`, de propósito: ele cai em 0.0 quando falta a
@@ -288,6 +295,16 @@ pub async fn resolve_runtime_config(
         google_api_key: resolve_api_key("google_api_key", "GOOGLE_API_KEY")?,
         prompts,
     })
+}
+
+/// Um parâmetro numérico do tenant só vale quando é positivo; zero (ou menos)
+/// é "não configurado" e deixa o global decidir.
+///
+/// Vale para os parâmetros do RAG, em que 0 não tem uso real: distância máxima
+/// 0 não aceita nada, similaridade mínima 0 aceita tudo, e chunk de tamanho 0
+/// não fatia.
+fn configurado<T: PartialOrd + Default>(valor: Option<T>) -> Option<T> {
+    valor.filter(|v| *v > T::default())
 }
 
 /// B9 (N10 E1) — os tipos de entidade configurados, como lista.
@@ -316,6 +333,23 @@ pub fn tipos_de_entidade(valor: Option<&serde_json::Value>) -> Vec<String> {
         .map(|n| n.trim().to_string())
         .filter(|n| !n.is_empty())
         .collect()
+}
+
+#[cfg(test)]
+mod tests_configurado {
+    use super::configurado;
+    use rust_decimal::Decimal;
+
+    #[test]
+    fn zero_no_tenant_deixa_o_global_decidir() {
+        assert_eq!(configurado(Some(Decimal::ZERO)), None);
+        assert_eq!(configurado(Some(0)), None);
+        assert_eq!(configurado(Some(-1)), None);
+        assert_eq!(configurado::<i32>(None), None);
+        let meio = Decimal::new(5, 1);
+        assert_eq!(configurado(Some(meio)), Some(meio));
+        assert_eq!(configurado(Some(800)), Some(800));
+    }
 }
 
 #[cfg(test)]

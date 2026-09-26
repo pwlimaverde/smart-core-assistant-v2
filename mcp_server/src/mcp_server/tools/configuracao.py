@@ -436,6 +436,17 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
         treinamento_id: Annotated[
             int, Field(description="Id, de `list_treinamentos`.")
         ],
+        conteudo_revisado: Annotated[
+            str,
+            Field(
+                default="",
+                description=(
+                    "O texto final, se ele foi revisado depois de criado. "
+                    "Vazio usa o conteúdo atual do treinamento, como está em "
+                    "`get_treinamento`."
+                ),
+            ),
+        ] = "",
         dry_run: Annotated[
             bool, Field(default=False, description="Só simular.")
         ] = False,
@@ -443,20 +454,55 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
         """Finaliza um treinamento, colocando-o na fila de vetorização.
 
         É este passo que faz o conteúdo começar a ser usado nas respostas ao
-        cliente.
+        cliente. O texto que vira vetor é o `conteudo_revisado`; sem ele, o
+        conteúdo atual do treinamento — o caminho de quem cria e finaliza sem
+        revisar. Treinamento de arquivo precisa ter a extração concluída
+        (`extracao_status` = `extraido`), senão não há texto a vetorizar.
+        Finalizar de novo um treinamento já finalizado troca o texto e
+        vetoriza outra vez.
         """
         tool = registro.exigir("finalizar_treinamento")
+        texto = conteudo_revisado.strip()
+        origem = "o conteúdo revisado informado"
+        if not texto:
+            # O servidor exige o texto final; sem revisão, é o que já está no
+            # treinamento. A simulação passa pela mesma leitura e recusa o que
+            # a chamada real recusaria.
+            atual = await executor.executar(
+                "finalizar_treinamento",
+                "GetMyTreinamento",
+                pb.GetMyTreinamentoRequest(id=treinamento_id),
+            )
+            t = atual.treinamento
+            texto = t.conteudo.strip()
+            origem = "o conteúdo atual do treinamento"
+            if not texto:
+                motivo = (
+                    f" (extração do arquivo: {t.extracao_status})"
+                    if t.extracao_status
+                    else ""
+                )
+                raise ToolError(
+                    f"O treinamento {treinamento_id} está sem conteúdo{motivo}: "
+                    "não há o que vetorizar. Informe `conteudo_revisado` ou "
+                    "espere a extração do arquivo terminar."
+                )
+
         if dry_run:
             executor.registrar_simulacao(tool)
-            return resultado_dry_run(tool, f"finalizar o treinamento {treinamento_id}")
+            return resultado_dry_run(
+                tool,
+                f"finalizar o treinamento {treinamento_id} vetorizando {origem} "
+                f"({len(texto)} caracteres)",
+            )
 
         await executor.executar(
             "finalizar_treinamento",
             "FinalizarMyTreinamento",
-            pb.FinalizarMyTreinamentoRequest(id=treinamento_id),
+            pb.FinalizarMyTreinamentoRequest(id=treinamento_id, conteudo=texto),
         )
         return (
-            f"Treinamento {treinamento_id} finalizado; "
+            f"Treinamento {treinamento_id} finalizado com {origem}; "
             "a vetorização acontece em seguida."
         )
 
