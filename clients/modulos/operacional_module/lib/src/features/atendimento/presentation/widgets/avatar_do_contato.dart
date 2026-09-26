@@ -37,15 +37,17 @@ class AvatarDoContato extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
+    // O avatar sem foto é o dourado da marca com as iniciais em branco, como
+    // em todo o workspace (`ws-card__av`, `ws-chat__av`, `ws-info__av`).
     final semFoto = CircleAvatar(
       radius: raio,
-      backgroundColor: colors.border,
+      backgroundColor: colors.accent,
       child: Text(
         iniciais(nome),
         style: TextStyle(
-          fontSize: raio * 0.8,
-          color: colors.fgStrong,
-          fontWeight: FontWeight.w600,
+          fontSize: raio * 0.72,
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

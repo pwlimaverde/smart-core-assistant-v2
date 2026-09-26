@@ -528,6 +528,12 @@ message AtendimentoResumo {
   // P16 — a IA respondeu abaixo da confiança automática do tenant e ninguém
   // conferiu ainda. Some quando um atendente responde ou marca como revisado.
   bool revisao_pendente = 18;
+  // Workspace — a prévia da última mensagem no cartão, em uma linha e cortada
+  // em 160 caracteres. Vazia em mídia sem legenda: a tela usa o tipo.
+  string ultima_mensagem = 19;
+  string ultima_mensagem_tipo = 20;
+  string ultima_mensagem_remetente = 21; // contato, bot ou atendente
+  string atendente_nome = 22;            // vazio quando ninguém assumiu
 }
 
 // P16 — conclui a revisão de uma resposta da IA.

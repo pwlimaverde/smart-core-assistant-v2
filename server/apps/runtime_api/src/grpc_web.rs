@@ -9721,6 +9721,10 @@ fn atendimento_resumo_do_json(v: &serde_json::Value) -> ProtoAtendimentoResumo {
             .get("revisao_pendente")
             .and_then(|x| x.as_bool())
             .unwrap_or(false),
+        ultima_mensagem: texto_do(v, "ultima_mensagem"),
+        ultima_mensagem_tipo: texto_do(v, "ultima_mensagem_tipo"),
+        ultima_mensagem_remetente: texto_do(v, "ultima_mensagem_remetente"),
+        atendente_nome: texto_do(v, "atendente_nome"),
     }
 }
 

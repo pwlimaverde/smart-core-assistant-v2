@@ -7,14 +7,16 @@ import 'package:operacional_module/src/features/atendimento/domain/usecases/aten
 import 'package:operacional_module/src/features/atendimento/presentation/controllers/kanban_controller.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/pages/chat_page.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/pages/kanban_page.dart';
+import 'package:operacional_module/src/features/atendimento/presentation/widgets/avatar_do_contato.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/widgets/mini_barra_da_conversa.dart';
 import 'package:operacional_module/src/features/atendimento/presentation/widgets/painel_ficha.dart';
 
 import '../../support/fake_gateway.dart';
 
-/// O workspace da v1: o cartão abre os detalhes, clicar fora recolhe a
-/// conversa para a mini-barra, e os modos de foco (Kanban / Dividido /
-/// Atendimento) com os atalhos Alt+1/2/3, Esc e `i`.
+/// O workspace: um clique no cartão abre a conversa com as informações do
+/// atendimento à direita, clicar fora recolhe a conversa para a mini-barra, e
+/// os modos de foco (Kanban / Dividido / Atendimento) com os atalhos
+/// Alt+1/2/3, Esc e `i`.
 void main() {
   final getIt = GetIt.instance;
 
@@ -44,11 +46,13 @@ void main() {
       ..registerSingleton<DefinirValorCampoUsecase>(u.definirValorCampo);
   }
 
+  late FakeAtendimentoGateway gatewayAtual;
+
   Future<void> abrirOQuadro(
     WidgetTester tester, {
     double largura = 1600,
   }) async {
-    final gateway = FakeAtendimentoGateway()
+    final gateway = gatewayAtual = FakeAtendimentoGateway()
       ..colunas = colunasDeTeste()
       ..fluxos = fluxosDeTeste()
       ..fila = [atendimentoDeTeste(id: 7, etapaAtualId: 1)];
@@ -62,42 +66,93 @@ void main() {
   }
 
   Future<void> abrirACoversa(WidgetTester tester) async {
+    await tester.ensureVisible(find.text('Assunto 7'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Assunto 7'));
     await tester.pumpAndSettle();
   }
 
-  testWidgets('o botão de detalhes do cartão abre a conversa com a ficha', (
+  testWidgets('um clique no cartão abre a conversa e as informações', (
     tester,
   ) async {
     await abrirOQuadro(tester);
-
-    await tester.tap(find.byTooltip('Detalhes do atendimento'));
-    await tester.pumpAndSettle();
+    await abrirACoversa(tester);
 
     expect(find.byType(PainelDeConversa), findsOneWidget);
     expect(
       find.byType(PainelFicha),
       findsOneWidget,
-      reason: 'o cartão abriu, mas os detalhes (e os campos) não',
+      reason: 'o cartão abriu a conversa, mas não as informações ao lado',
     );
-    expect(find.text('Detalhes do atendimento'), findsOneWidget);
+    // Sem botão de detalhes no cartão: o cartão é o caminho.
+    expect(find.byTooltip('Detalhes do atendimento'), findsNothing);
+    // As informações ficam AO LADO da conversa, não por cima.
+    final conversa = tester.getRect(
+      find.widgetWithText(TextField, 'Digite uma mensagem…'),
+    );
+    final ficha = tester.getRect(find.byType(PainelFicha));
+    expect(ficha.left, greaterThanOrEqualTo(conversa.right));
   });
 
-  testWidgets('o botão de detalhes do painel abre e fecha a ficha', (
+  testWidgets('o botão de informações do painel fecha e reabre a ficha', (
     tester,
   ) async {
     await abrirOQuadro(tester);
     await abrirACoversa(tester);
+    expect(find.byType(PainelFicha), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Detalhes do atendimento (i)'));
+    await tester.pumpAndSettle();
     expect(find.byType(PainelFicha), findsNothing);
+    expect(find.byType(PainelDeConversa), findsOneWidget);
 
     await tester.tap(find.byTooltip('Detalhes do atendimento (i)'));
     await tester.pumpAndSettle();
     expect(find.byType(PainelFicha), findsOneWidget);
+  });
 
-    await tester.tap(find.byTooltip('Fechar os detalhes (Esc)'));
+  testWidgets('as informações mostram e mudam o estado do atendimento', (
+    tester,
+  ) async {
+    await abrirOQuadro(tester);
+    await abrirACoversa(tester);
+
+    expect(find.text('ATENDIMENTO'), findsOneWidget);
+    expect(find.text('Na fila'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Mudar o status'));
     await tester.pumpAndSettle();
-    expect(find.byType(PainelFicha), findsNothing);
-    expect(find.byType(PainelDeConversa), findsOneWidget);
+    await tester.tap(find.text('Pendente').last);
+    await tester.pumpAndSettle();
+    expect(gatewayAtual.statusRecebido, 'pendencia');
+  });
+
+  testWidgets('a faixa de ações rápidas resolve a conversa', (tester) async {
+    await abrirOQuadro(tester);
+    await abrirACoversa(tester);
+
+    await tester.tap(find.text('Resolver'));
+    await tester.pumpAndSettle();
+    expect(gatewayAtual.statusRecebido, 'resolvido');
+  });
+
+  testWidgets('a nota interna vai para a ficha, não para o contato', (
+    tester,
+  ) async {
+    await abrirOQuadro(tester);
+    await abrirACoversa(tester);
+
+    await tester.tap(find.text('Nota interna'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Nota interna — só a equipe vê'),
+      'cliente prefere ligação',
+    );
+    await tester.tap(find.byTooltip('Salvar nota interna'));
+    await tester.pumpAndSettle();
+
+    expect(gatewayAtual.notaRecebida, 'cliente prefere ligação');
+    expect(gatewayAtual.chamadasSend, 0);
   });
 
   testWidgets('clicar no quadro fora do cartão recolhe a conversa', (
@@ -107,7 +162,7 @@ void main() {
     await abrirACoversa(tester);
 
     // O título da coluna não tem ação própria: é "fora" da conversa.
-    await tester.tap(find.text('Entrada'));
+    await tester.tap(find.text('ENTRADA'));
     await tester.pumpAndSettle();
 
     expect(find.byType(PainelDeConversa), findsNothing);
@@ -150,11 +205,16 @@ void main() {
     expect(find.byType(PainelDeConversa), findsNothing);
   });
 
-  testWidgets('Esc reduz o foco aos poucos e i abre os detalhes', (
+  testWidgets('Esc reduz o foco aos poucos e i alterna os detalhes', (
     tester,
   ) async {
     await abrirOQuadro(tester);
     await abrirACoversa(tester);
+    expect(find.byType(PainelFicha), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyI);
+    await tester.pumpAndSettle();
+    expect(find.byType(PainelFicha), findsNothing);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.keyI);
     await tester.pumpAndSettle();
@@ -178,20 +238,19 @@ void main() {
     await abrirACoversa(tester);
 
     // Atendimento: a conversa ocupa a tela, e o quadro sai.
-    await tester.tap(
-      find.descendant(
-        of: find.byType(SegmentedButton<ModoDeFoco>),
-        matching: find.text('Atendimento'),
-      ),
-    );
+    await tester.tap(find.byTooltip('Atendimento (Alt+3)'));
     await tester.pumpAndSettle();
-    expect(find.text('Entrada'), findsNothing);
+    expect(find.text('ENTRADA'), findsNothing);
     expect(find.byType(PainelDeConversa), findsOneWidget);
+    // O quadro virou a trilha: o cartão continua a um clique.
+    expect(find.byType(AvatarDoContato), findsWidgets);
 
-    // Esc volta ao dividido.
+    // Esc fecha as informações; o seguinte volta ao dividido.
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
-    expect(find.text('Entrada'), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(find.text('ENTRADA'), findsOneWidget);
     expect(find.byType(PainelDeConversa), findsOneWidget);
 
     await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
@@ -208,17 +267,18 @@ void main() {
 
     await tester.tap(find.byTooltip('Expandir (Alt+3)'));
     await tester.pumpAndSettle();
-    expect(find.text('Entrada'), findsNothing);
+    expect(find.text('ENTRADA'), findsNothing);
   });
 
   testWidgets('em tela cheia (janela estreita) a ficha abre pela barra', (
     tester,
   ) async {
-    await abrirOQuadro(tester, largura: 800);
+    await abrirOQuadro(tester, largura: 700);
     await tester.ensureVisible(find.text('Assunto 7'));
     await tester.pumpAndSettle();
     await abrirACoversa(tester);
     expect(find.byType(ChatPage), findsOneWidget);
+    expect(find.byType(PainelFicha), findsNothing);
 
     await tester.tap(find.byTooltip('Detalhes do atendimento'));
     await tester.pumpAndSettle();

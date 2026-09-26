@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
@@ -53,9 +54,9 @@ void main() {
 
     await montar(tester);
 
-    expect(find.text('Entrada'), findsOneWidget);
-    expect(find.text('Trabalhando'), findsOneWidget);
-    expect(find.text('Fechado'), findsOneWidget);
+    expect(find.text('ENTRADA'), findsOneWidget);
+    expect(find.text('TRABALHANDO'), findsOneWidget);
+    expect(find.text('FECHADO'), findsOneWidget);
   });
 
   testWidgets('sem fluxo cadastrado, convida a criar um', (tester) async {
@@ -94,7 +95,7 @@ void main() {
     await montar(tester);
 
     expect(find.byTooltip('Open navigation menu'), findsNothing);
-    expect(find.text('Entrada'), findsOneWidget);
+    expect(find.text('ENTRADA'), findsOneWidget);
   });
 
   testWidgets('a conversa aparece na coluna em que está', (tester) async {
@@ -126,7 +127,7 @@ void main() {
 
     await montar(tester);
 
-    expect(find.text('Sem coluna'), findsOneWidget);
+    expect(find.text('SEM COLUNA'), findsOneWidget);
     expect(find.textContaining('Assunto 7'), findsOneWidget);
   });
 
@@ -169,7 +170,8 @@ void main() {
 
     await montar(tester);
 
-    await tester.tap(find.byTooltip('Ações da conversa'));
+    // O menu do cartão abre no botão direito: o clique comum abre a conversa.
+    await tester.tap(find.text('Assunto 1'), buttons: kSecondaryButton);
     await tester.pumpAndSettle();
 
     // O atendimento de teste nasce em 'fila'.
@@ -189,7 +191,7 @@ void main() {
 
     await montar(tester);
 
-    await tester.tap(find.byTooltip('Ações da conversa'));
+    await tester.tap(find.text('Assunto 1'), buttons: kSecondaryButton);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Resolver'));
     await tester.pumpAndSettle();
@@ -254,7 +256,7 @@ void conversaAoLadoDoQuadro() {
     await abrirOQuadro(tester, largura: 1600);
 
     // O quadro está lá antes de clicar, e a conversa não.
-    expect(find.text('Entrada'), findsOneWidget);
+    expect(find.text('ENTRADA'), findsOneWidget);
     expect(find.byType(PainelDeConversa), findsNothing);
 
     await tester.tap(find.text('Assunto 7'));
@@ -262,7 +264,7 @@ void conversaAoLadoDoQuadro() {
 
     expect(find.byType(PainelDeConversa), findsOneWidget);
     expect(
-      find.text('Entrada'),
+      find.text('ENTRADA'),
       findsOneWidget,
       reason: 'o quadro sumiu: a conversa tomou a tela em vez de dividir',
     );
@@ -277,7 +279,7 @@ void conversaAoLadoDoQuadro() {
     await tester.pumpAndSettle();
 
     expect(find.byType(PainelDeConversa), findsNothing);
-    expect(find.text('Entrada'), findsOneWidget);
+    expect(find.text('ENTRADA'), findsOneWidget);
   });
 
   testWidgets('em janela estreita continua sendo tela cheia', (tester) async {

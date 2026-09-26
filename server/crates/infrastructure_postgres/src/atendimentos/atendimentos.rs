@@ -1638,6 +1638,15 @@ pub struct ContatoDoQuadro {
     /// Vem por aqui, e não no `Atendimento`, porque aquele struct é lido por
     /// consultas com macro, e o cache `.sqlx` não conhece a coluna nova.
     pub revisao_pendente: bool,
+    /// Prévia da última mensagem, em uma linha e cortada — o cartão do
+    /// workspace mostra o que foi dito por último sem abrir a conversa.
+    /// Vazia em mídia sem legenda: a tela usa o `ultima_mensagem_tipo`.
+    pub ultima_mensagem: String,
+    pub ultima_mensagem_tipo: String,
+    /// `contato`, `bot` ou `atendente` — o cartão marca o que foi enviado.
+    pub ultima_mensagem_remetente: String,
+    /// Nome do atendente humano atribuído; vazio quando ninguém assumiu.
+    pub atendente_nome: String,
 }
 
 #[tracing::instrument(skip_all, fields(quantidade = ids.len()))]
@@ -1653,10 +1662,26 @@ pub async fn contatos_do_quadro(
                            NULLIF(TRIM(c.nome_perfil_whatsapp), ''), '') AS nome,
                   COALESCE(c.telefone, '') AS telefone,
                   COALESCE(c.foto_perfil_url_origem, '') AS foto_url,
-                  a.revisao_pendente
+                  a.revisao_pendente,
+                  COALESCE(LEFT(TRIM(REGEXP_REPLACE(m.conteudo, '\s+', ' ', 'g')), 160), '')
+                      AS ultima_mensagem,
+                  COALESCE(m.tipo, '') AS ultima_mensagem_tipo,
+                  COALESCE(m.remetente, '') AS ultima_mensagem_remetente,
+                  COALESCE(at.nome, '') AS atendente_nome
              FROM oraculo_atendimento a
              JOIN oraculo_contato c
                ON c.id = a.contato_id AND c.tenant_id = a.tenant_id
+             LEFT JOIN oraculo_atendente at
+               ON at.id = a.atendente_humano_id AND at.tenant_id = a.tenant_id
+             -- A última mensagem de cada cartão: um passo no índice
+             -- (tenant_id, atendimento_id, timestamp).
+             LEFT JOIN LATERAL (
+                   SELECT mm.conteudo, mm.tipo, mm.remetente
+                     FROM oraculo_mensagem mm
+                    WHERE mm.tenant_id = a.tenant_id AND mm.atendimento_id = a.id
+                    ORDER BY mm.timestamp DESC, mm.id DESC
+                    LIMIT 1
+             ) m ON TRUE
             WHERE a.tenant_id = $1 AND a.id = ANY($2)"#,
     )
     .bind(ctx.tenant_id)

@@ -2201,6 +2201,22 @@ async fn handler_list_atendimentos(store: &dyn ports::AtendimentoStore, env: Env
                                 "revisao_pendente".into(),
                                 serde_json::json!(c.revisao_pendente),
                             );
+                            obj.insert(
+                                "ultima_mensagem".into(),
+                                serde_json::json!(c.ultima_mensagem),
+                            );
+                            obj.insert(
+                                "ultima_mensagem_tipo".into(),
+                                serde_json::json!(c.ultima_mensagem_tipo),
+                            );
+                            obj.insert(
+                                "ultima_mensagem_remetente".into(),
+                                serde_json::json!(c.ultima_mensagem_remetente),
+                            );
+                            obj.insert(
+                                "atendente_nome".into(),
+                                serde_json::json!(c.atendente_nome),
+                            );
                         }
                     }
                     item
@@ -12720,6 +12736,10 @@ mod tests_atendimento_cliente_unit {
                         telefone: "5511999998888".into(),
                         foto_url: String::new(),
                         revisao_pendente: false,
+                        ultima_mensagem: "Bom dia, quero um orçamento".into(),
+                        ultima_mensagem_tipo: "conversation".into(),
+                        ultima_mensagem_remetente: "contato".into(),
+                        atendente_nome: "Ana".into(),
                     },
                 )]))
             });

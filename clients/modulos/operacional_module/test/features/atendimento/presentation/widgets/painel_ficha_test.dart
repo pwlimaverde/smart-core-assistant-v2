@@ -185,9 +185,7 @@ void main() {
       expect(find.byIcon(Icons.auto_awesome), findsOneWidget);
     });
 
-    testWidgets('mostra o que a IA encontrou do contato (P15)', (
-      tester,
-    ) async {
+    testWidgets('mostra o que a IA encontrou do contato (P15)', (tester) async {
       final gateway = FakeAtendimentoGateway()
         ..ficha = const FichaAtendimento(
           catalogo: [],
@@ -197,9 +195,9 @@ void main() {
         );
 
       await montar(tester, gateway);
-      await tester.tap(find.text('Dados que a IA encontrou'));
-      await tester.pumpAndSettle();
 
+      // À vista, sem precisar expandir: é o que se procura aqui.
+      expect(find.text('DADOS DO CONTATO'), findsOneWidget);
       expect(find.text('Recife'), findsOneWidget);
       expect(find.text('cidade'), findsOneWidget);
     });

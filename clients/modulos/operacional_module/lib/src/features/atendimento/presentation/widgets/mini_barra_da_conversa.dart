@@ -2,6 +2,7 @@ import 'package:design_system_module/design_system_module.dart';
 import 'package:flutter/material.dart';
 
 import '../../domain/model/atendimento_resumo.dart';
+import 'atendimento_card_content.dart';
 import 'avatar_do_contato.dart';
 
 /// Como o quadro divide a tela com a conversa — os três modos de foco do
@@ -13,7 +14,7 @@ enum ModoDeFoco {
   /// Quadro e conversa lado a lado.
   dividido('Dividido', Icons.vertical_split_outlined),
 
-  /// A conversa ocupa a tela; os detalhes ficam ao lado dela.
+  /// A conversa ocupa a tela; o quadro vira a trilha de avatares.
   conversa('Atendimento', Icons.forum_outlined);
 
   final String rotulo;
@@ -23,7 +24,7 @@ enum ModoDeFoco {
 }
 
 /// A conversa minimizada: mantém à vista com quem se está falando sem ocupar a
-/// lateral do quadro. É o `chat_mini_bar` do workspace da v1.
+/// lateral do quadro. É o `chat_mini_bar` (`ws-mini`) do workspace.
 class MiniBarraDaConversa extends StatelessWidget {
   /// O resumo do cartão, quando ele está no quadro filtrado. Pode faltar (a
   /// conversa foi aberta por aviso e o filtro a esconde): aí mostra o número.
@@ -53,88 +54,188 @@ class MiniBarraDaConversa extends StatelessWidget {
       if (resumo != null && resumo.naoLidas > 0)
         '${resumo.naoLidas} não lida(s)',
     ].join(' · ');
+    final previa = resumo == null ? '' : previaDaUltimaMensagem(resumo);
+    final quando = resumo?.dataUltimaMensagem;
 
     return Material(
-      elevation: 12,
-      borderRadius: BorderRadius.circular(14),
-      color: colors.panel,
+      elevation: 16,
+      borderRadius: BorderRadius.circular(12),
+      clipBehavior: Clip.antiAlias,
+      color: colors.card,
       child: SizedBox(
-        width: 320,
+        width: 360,
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            InkWell(
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(14),
+            // O cabeçalho dourado (`ws-mini__head`): clicar devolve a conversa.
+            Material(
+              color: colors.accent,
+              child: InkWell(
+                onTap: aoAbrir,
+                hoverColor: colors.accentHover,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 8, 10),
+                  child: Row(
+                    children: [
+                      Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.4),
+                            width: 1.5,
+                          ),
+                        ),
+                        child: AvatarDoContato(
+                          nome: nome,
+                          fotoUrl: resumo?.contatoFotoUrl ?? '',
+                          raio: 14,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              nome,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
+                            if (linhaDeBaixo.isNotEmpty)
+                              Text(
+                                linhaDeBaixo,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.white.withValues(alpha: 0.85),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      _BotaoDoCabecalho(
+                        icone: Icons.info_outline,
+                        dica: 'Detalhes do atendimento',
+                        aoTocar: aoVerDetalhes,
+                      ),
+                      const SizedBox(width: 4),
+                      _BotaoDoCabecalho(
+                        icone: Icons.close,
+                        dica: 'Fechar a conversa',
+                        aoTocar: aoFechar,
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              onTap: aoAbrir,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.md,
-                  AppSpacing.sm,
-                  AppSpacing.xs,
-                  AppSpacing.sm,
+            ),
+            if (previa.isNotEmpty)
+              Container(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                decoration: BoxDecoration(
+                  border: Border(top: BorderSide(color: colors.border)),
                 ),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    AvatarDoContato(
-                      nome: nome,
-                      fotoUrl: resumo?.contatoFotoUrl ?? '',
+                    Container(
+                      width: 30,
+                      height: 30,
+                      decoration: BoxDecoration(
+                        color: colors.chip,
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.chat_bubble_outline,
+                        size: 14,
+                        color: colors.accentHover,
+                      ),
                     ),
-                    const SizedBox(width: AppSpacing.sm),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            nome,
-                            style: Theme.of(context).textTheme.titleSmall,
+                            previa,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 12,
+                              height: 1.4,
+                              color: colors.fg,
+                            ),
                           ),
-                          if (linhaDeBaixo.isNotEmpty)
+                          if (quando != null)
                             Text(
-                              linhaDeBaixo,
-                              style: Theme.of(context).textTheme.labelSmall
-                                  ?.copyWith(color: colors.fgMuted),
-                              overflow: TextOverflow.ellipsis,
+                              tempoRelativo(quando),
+                              style: TextStyle(
+                                fontSize: 10,
+                                color: colors.fgMuted,
+                              ),
                             ),
                         ],
                       ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.close, size: 18),
-                      tooltip: 'Fechar a conversa',
-                      onPressed: aoFechar,
-                    ),
                   ],
                 ),
               ),
-            ),
-            const Divider(height: 1),
-            Padding(
-              padding: const EdgeInsets.all(AppSpacing.sm),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      icon: const Icon(Icons.chat_bubble_outline, size: 16),
-                      label: const Text('Abrir conversa'),
-                      onPressed: aoAbrir,
-                    ),
+            Container(
+              padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+              decoration: BoxDecoration(
+                border: Border(top: BorderSide(color: colors.border)),
+              ),
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: colors.success,
+                  foregroundColor: Colors.white,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: AppRadius.md,
                   ),
-                  const SizedBox(width: AppSpacing.xs),
-                  IconButton.outlined(
-                    icon: const Icon(Icons.info_outline, size: 18),
-                    tooltip: 'Detalhes do atendimento',
-                    onPressed: aoVerDetalhes,
-                  ),
-                ],
+                ),
+                icon: const Icon(Icons.chat_bubble_outline, size: 15),
+                label: const Text('Abrir conversa'),
+                onPressed: aoAbrir,
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Botão translúcido do cabeçalho dourado (`ws-mini__btn`).
+class _BotaoDoCabecalho extends StatelessWidget {
+  final IconData icone;
+  final String dica;
+  final VoidCallback aoTocar;
+
+  const _BotaoDoCabecalho({
+    required this.icone,
+    required this.dica,
+    required this.aoTocar,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: Icon(icone, size: 16, color: Colors.white),
+      tooltip: dica,
+      style: IconButton.styleFrom(
+        backgroundColor: Colors.white.withValues(alpha: 0.15),
+        minimumSize: const Size(28, 28),
+        fixedSize: const Size(28, 28),
+        padding: EdgeInsets.zero,
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.sm),
+      ),
+      onPressed: aoTocar,
     );
   }
 }

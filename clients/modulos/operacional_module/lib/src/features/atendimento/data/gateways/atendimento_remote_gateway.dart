@@ -433,6 +433,10 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
         contatoTelefone: a.contatoTelefone,
         contatoFotoUrl: a.contatoFotoUrl,
         revisaoPendente: a.revisaoPendente,
+        ultimaMensagem: a.ultimaMensagem,
+        ultimaMensagemTipo: a.ultimaMensagemTipo,
+        ultimaMensagemRemetente: a.ultimaMensagemRemetente,
+        atendenteNome: a.atendenteNome,
       );
 
   static MensagemThread _paraMensagemThread(proto.MensagemThread m) =>
@@ -464,8 +468,7 @@ final class AtendimentoRemoteGateway implements AtendimentoGateway {
             : null,
         // P8 — reação é atributo da mensagem reagida, não bolha nova.
         reacoes: [
-          for (final r in m.reacoes)
-            ReacaoDaMensagem(emoji: r.emoji, de: r.de),
+          for (final r in m.reacoes) ReacaoDaMensagem(emoji: r.emoji, de: r.de),
         ],
         metadados: _metadados(m),
       );

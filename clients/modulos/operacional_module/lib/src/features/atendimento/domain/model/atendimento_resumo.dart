@@ -35,6 +35,17 @@ final class AtendimentoResumo {
   /// P16 — a IA respondeu abaixo da confiança automática e ninguém conferiu.
   final bool revisaoPendente;
 
+  /// Workspace — a prévia da última mensagem, em uma linha. Vazia em mídia
+  /// sem legenda: o cartão usa o [ultimaMensagemTipo] para dizer o que foi.
+  final String ultimaMensagem;
+  final String ultimaMensagemTipo;
+
+  /// `contato`, `bot` ou `atendente` — o cartão marca o que saiu daqui.
+  final String ultimaMensagemRemetente;
+
+  /// Nome do atendente humano; vazio quando ninguém assumiu.
+  final String atendenteNome;
+
   /// Como o cartão chama o contato: o nome, senão o telefone, senão o id.
   String get nomeParaExibir => contatoNome.isNotEmpty
       ? contatoNome
@@ -61,6 +72,10 @@ final class AtendimentoResumo {
     this.contatoTelefone = '',
     this.contatoFotoUrl = '',
     this.revisaoPendente = false,
+    this.ultimaMensagem = '',
+    this.ultimaMensagemTipo = '',
+    this.ultimaMensagemRemetente = '',
+    this.atendenteNome = '',
   });
 
   /// Cópia com a etapa (e opcionalmente o status) alterados — usada para
@@ -89,6 +104,10 @@ final class AtendimentoResumo {
     contatoTelefone: contatoTelefone,
     contatoFotoUrl: contatoFotoUrl,
     revisaoPendente: revisaoPendente,
+    ultimaMensagem: ultimaMensagem,
+    ultimaMensagemTipo: ultimaMensagemTipo,
+    ultimaMensagemRemetente: ultimaMensagemRemetente,
+    atendenteNome: atendenteNome,
   );
 
   @override

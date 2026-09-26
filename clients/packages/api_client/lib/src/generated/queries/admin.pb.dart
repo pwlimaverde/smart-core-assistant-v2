@@ -6201,6 +6201,10 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
     $core.String? contatoTelefone,
     $core.String? contatoFotoUrl,
     $core.bool? revisaoPendente,
+    $core.String? ultimaMensagem,
+    $core.String? ultimaMensagemTipo,
+    $core.String? ultimaMensagemRemetente,
+    $core.String? atendenteNome,
   }) {
     final result = create();
     if (id != null) result.id = id;
@@ -6223,6 +6227,12 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
     if (contatoTelefone != null) result.contatoTelefone = contatoTelefone;
     if (contatoFotoUrl != null) result.contatoFotoUrl = contatoFotoUrl;
     if (revisaoPendente != null) result.revisaoPendente = revisaoPendente;
+    if (ultimaMensagem != null) result.ultimaMensagem = ultimaMensagem;
+    if (ultimaMensagemTipo != null)
+      result.ultimaMensagemTipo = ultimaMensagemTipo;
+    if (ultimaMensagemRemetente != null)
+      result.ultimaMensagemRemetente = ultimaMensagemRemetente;
+    if (atendenteNome != null) result.atendenteNome = atendenteNome;
     return result;
   }
 
@@ -6258,6 +6268,10 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
     ..aOS(16, _omitFieldNames ? '' : 'contatoTelefone')
     ..aOS(17, _omitFieldNames ? '' : 'contatoFotoUrl')
     ..aOB(18, _omitFieldNames ? '' : 'revisaoPendente')
+    ..aOS(19, _omitFieldNames ? '' : 'ultimaMensagem')
+    ..aOS(20, _omitFieldNames ? '' : 'ultimaMensagemTipo')
+    ..aOS(21, _omitFieldNames ? '' : 'ultimaMensagemRemetente')
+    ..aOS(22, _omitFieldNames ? '' : 'atendenteNome')
     ..hasRequiredFields = false;
 
   @$core.Deprecated('See https://github.com/google/protobuf.dart/issues/998.')
@@ -6447,6 +6461,44 @@ class AtendimentoResumo extends $pb.GeneratedMessage {
   $core.bool hasRevisaoPendente() => $_has(17);
   @$pb.TagNumber(18)
   void clearRevisaoPendente() => $_clearField(18);
+
+  /// Workspace — a prévia da última mensagem no cartão, em uma linha e cortada
+  /// em 160 caracteres. Vazia em mídia sem legenda: a tela usa o tipo.
+  @$pb.TagNumber(19)
+  $core.String get ultimaMensagem => $_getSZ(18);
+  @$pb.TagNumber(19)
+  set ultimaMensagem($core.String value) => $_setString(18, value);
+  @$pb.TagNumber(19)
+  $core.bool hasUltimaMensagem() => $_has(18);
+  @$pb.TagNumber(19)
+  void clearUltimaMensagem() => $_clearField(19);
+
+  @$pb.TagNumber(20)
+  $core.String get ultimaMensagemTipo => $_getSZ(19);
+  @$pb.TagNumber(20)
+  set ultimaMensagemTipo($core.String value) => $_setString(19, value);
+  @$pb.TagNumber(20)
+  $core.bool hasUltimaMensagemTipo() => $_has(19);
+  @$pb.TagNumber(20)
+  void clearUltimaMensagemTipo() => $_clearField(20);
+
+  @$pb.TagNumber(21)
+  $core.String get ultimaMensagemRemetente => $_getSZ(20);
+  @$pb.TagNumber(21)
+  set ultimaMensagemRemetente($core.String value) => $_setString(20, value);
+  @$pb.TagNumber(21)
+  $core.bool hasUltimaMensagemRemetente() => $_has(20);
+  @$pb.TagNumber(21)
+  void clearUltimaMensagemRemetente() => $_clearField(21);
+
+  @$pb.TagNumber(22)
+  $core.String get atendenteNome => $_getSZ(21);
+  @$pb.TagNumber(22)
+  set atendenteNome($core.String value) => $_setString(21, value);
+  @$pb.TagNumber(22)
+  $core.bool hasAtendenteNome() => $_has(21);
+  @$pb.TagNumber(22)
+  void clearAtendenteNome() => $_clearField(22);
 }
 
 /// P16 — conclui a revisão de uma resposta da IA.

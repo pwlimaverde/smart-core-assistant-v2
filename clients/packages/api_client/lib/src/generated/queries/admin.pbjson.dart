@@ -1706,6 +1706,22 @@ const AtendimentoResumo$json = {
     {'1': 'contato_telefone', '3': 16, '4': 1, '5': 9, '10': 'contatoTelefone'},
     {'1': 'contato_foto_url', '3': 17, '4': 1, '5': 9, '10': 'contatoFotoUrl'},
     {'1': 'revisao_pendente', '3': 18, '4': 1, '5': 8, '10': 'revisaoPendente'},
+    {'1': 'ultima_mensagem', '3': 19, '4': 1, '5': 9, '10': 'ultimaMensagem'},
+    {
+      '1': 'ultima_mensagem_tipo',
+      '3': 20,
+      '4': 1,
+      '5': 9,
+      '10': 'ultimaMensagemTipo'
+    },
+    {
+      '1': 'ultima_mensagem_remetente',
+      '3': 21,
+      '4': 1,
+      '5': 9,
+      '10': 'ultimaMensagemRemetente'
+    },
+    {'1': 'atendente_nome', '3': 22, '4': 1, '5': 9, '10': 'atendenteNome'},
   ],
   '8': [
     {'1': '_sentimento_nota'},
@@ -1727,8 +1743,11 @@ final $typed_data.Uint8List atendimentoResumoDescriptor = $convert.base64Decode(
     'gBARIbCgluYW9fbGlkYXMYDiABKAVSCG5hb0xpZGFzEiEKDGNvbnRhdG9fbm9tZRgPIAEoCVIL'
     'Y29udGF0b05vbWUSKQoQY29udGF0b190ZWxlZm9uZRgQIAEoCVIPY29udGF0b1RlbGVmb25lEi'
     'gKEGNvbnRhdG9fZm90b191cmwYESABKAlSDmNvbnRhdG9Gb3RvVXJsEikKEHJldmlzYW9fcGVu'
-    'ZGVudGUYEiABKAhSD3JldmlzYW9QZW5kZW50ZUISChBfc2VudGltZW50b19ub3RhQhMKEV9zZW'
-    '50aW1lbnRvX2xhYmVs');
+    'ZGVudGUYEiABKAhSD3JldmlzYW9QZW5kZW50ZRInCg91bHRpbWFfbWVuc2FnZW0YEyABKAlSDn'
+    'VsdGltYU1lbnNhZ2VtEjAKFHVsdGltYV9tZW5zYWdlbV90aXBvGBQgASgJUhJ1bHRpbWFNZW5z'
+    'YWdlbVRpcG8SOgoZdWx0aW1hX21lbnNhZ2VtX3JlbWV0ZW50ZRgVIAEoCVIXdWx0aW1hTWVuc2'
+    'FnZW1SZW1ldGVudGUSJQoOYXRlbmRlbnRlX25vbWUYFiABKAlSDWF0ZW5kZW50ZU5vbWVCEgoQ'
+    'X3NlbnRpbWVudG9fbm90YUITChFfc2VudGltZW50b19sYWJlbA==');
 
 @$core.Deprecated('Use marcarRevisadoRequestDescriptor instead')
 const MarcarRevisadoRequest$json = {

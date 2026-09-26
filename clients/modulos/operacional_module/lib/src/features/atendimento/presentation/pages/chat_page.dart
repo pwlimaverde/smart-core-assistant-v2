@@ -15,6 +15,7 @@ import 'package:return_success_or_error/return_success_or_error.dart';
 import 'package:record/record.dart';
 
 import '../../domain/model/contato_da_conversa.dart';
+import '../../domain/model/ficha.dart';
 import '../../domain/model/mensagem_thread.dart';
 import '../../domain/parameters/ficha_parameters.dart';
 import '../../domain/parameters/presenca_parameters.dart';
@@ -22,12 +23,18 @@ import '../../domain/usecases/atendimento_usecases.dart';
 import '../controllers/chat_controller.dart';
 import '../controllers/chat_state.dart';
 import '../controllers/ficha_controller.dart';
+import '../widgets/atendimento_no_quadro.dart';
 import '../widgets/avatar_do_contato.dart';
 import '../widgets/chat_connection_badge.dart';
 import '../widgets/chat_message_bubble.dart';
-import '../widgets/galeria_do_atendimento.dart';
 import '../widgets/painel_ficha.dart';
 import '../escrita_no_quadro.dart';
+
+/// Largura da conversa ao lado do quadro (`--ws-chat-w`).
+const larguraDaConversa = 460.0;
+
+/// Largura do painel de informações (`--ws-info-w`).
+const larguraDasInformacoes = 320.0;
 
 /// A conversa de um atendimento, **sem moldura de tela**.
 ///
@@ -41,6 +48,10 @@ import '../escrita_no_quadro.dart';
 /// reconexão automática (backoff exponencial + jitter) e mostra o estado da
 /// conexão ([ChatConnectionBadge]).
 ///
+/// À direita fica o painel de informações ([PainelFicha]): quem é o contato,
+/// o estado do atendimento, etiquetas, campos, arquivos e anotações — tudo o
+/// que se manipula num atendimento, aberto junto com a conversa.
+///
 /// Cada abertura tem [ChatController] próprio, fechado (stream cancelado) no
 /// descarte. Trocar de atendimento no painel **recria** o widget — ver a
 /// `ValueKey` em quem o usa —, o que garante um stream por conversa em vez de
@@ -52,10 +63,9 @@ class PainelDeConversa extends StatefulWidget {
   /// `AppBar` da [ChatPage] já cumpre esse papel e isto vem nulo.
   final VoidCallback? aoFechar;
 
-  /// Se os detalhes do atendimento (a ficha) estão à vista quando o painel é
-  /// estreito demais para ela ficar ao lado. Vem de fora para que o quadro
-  /// possa abri-la direto do cartão e pelo atalho `i`; sem ele, o painel cuida
-  /// do próprio estado.
+  /// Se o painel de informações está à vista. Vem de fora para que o quadro
+  /// o abra no clique do cartão e pelo atalho `i`; sem ele, o painel cuida do
+  /// próprio estado e começa fechado.
   final ValueNotifier<bool>? detalhesAbertos;
 
   /// Recolhe a conversa para a mini-barra do quadro (modo "Kanban" da v1).
@@ -64,6 +74,10 @@ class PainelDeConversa extends StatefulWidget {
   /// Dá à conversa a tela inteira (modo "Atendimento" da v1).
   final VoidCallback? aoExpandir;
 
+  /// O cartão e as ações do quadro — status, prioridade, dono, transferência.
+  /// Falta quando a conversa foi aberta fora do quadro.
+  final AtendimentoNoQuadro? noQuadro;
+
   const PainelDeConversa({
     super.key,
     required this.atendimentoId,
@@ -71,6 +85,7 @@ class PainelDeConversa extends StatefulWidget {
     this.detalhesAbertos,
     this.aoMinimizar,
     this.aoExpandir,
+    this.noQuadro,
   });
 
   @override
@@ -89,6 +104,16 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
   late final ValueNotifier<bool> _detalhesProprios = ValueNotifier(false);
   ValueNotifier<bool> get _detalhes =>
       widget.detalhesAbertos ?? _detalhesProprios;
+
+  /// A aba do compositor: mensagem ao contato ou nota interna.
+  bool _modoNota = false;
+
+  /// P13 — com quem é a conversa (nome, telefone e foto atualizados).
+  ContatoDaConversa? _contato;
+
+  /// Uma foto nova por abertura, no máximo: a URL do CDN expira, e pedir de
+  /// novo a cada redesenho martelaria o provedor.
+  bool _jaPediuFotoNova = false;
 
   @override
   void initState() {
@@ -134,9 +159,30 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
     _ficha.abrir(widget.atendimentoId);
     // P10 — a IA preencheu campo: a ficha aberta mostra sem precisar reabrir.
     _controller.camposAtualizados.addListener(_recarregarFicha);
+    unawaited(_carregarContato());
   }
 
   void _recarregarFicha() => _ficha.abrir(widget.atendimentoId);
+
+  Future<void> _carregarContato({bool forcar = false}) async {
+    if (!GetIt.instance.isRegistered<ObterContatoUsecase>()) return;
+    final res = await inject<ObterContatoUsecase>()(
+      ObterContatoParameters(
+        atendimentoId: widget.atendimentoId,
+        forcar: forcar,
+      ),
+    );
+    if (!mounted) return;
+    if (res case Success(:final value)) setState(() => _contato = value);
+  }
+
+  void _fotoQuebrou() {
+    if (_jaPediuFotoNova) return;
+    _jaPediuFotoNova = true;
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => unawaited(_carregarContato(forcar: true)),
+    );
+  }
 
   @override
   void dispose() {
@@ -181,72 +227,108 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
                 aoAnexar: _anexar,
                 aoGravar: _alternarGravacao,
                 gravando: _gravando,
-                aoAbrirGaleria: () =>
-                    GaleriaDoAtendimento.abrir(context, widget.atendimentoId),
+                modoNota: _modoNota,
+                aoTrocarModo: (nota) => setState(() => _modoNota = nota),
               ),
             };
           },
         );
 
-        // Em janela estreita a ficha não fica ao lado da conversa: ler e
-        // responder é o que não pode ficar sem espaço.
-        //
-        // O limite vale para a largura DESTE painel, não para a da janela: ao
-        // lado do quadro ele tem uns 460px, e a ficha não caberia junto.
-        //
-        // Aí ela vira gaveta sobre as mensagens, aberta pelo botão de detalhes
-        // (ou pelo cartão, ou pelo atalho `i`) — o "Detalhes do Atendimento"
-        // da v1. Antes ela simplesmente sumia, e os campos personalizados do
-        // cartão ficavam sem lugar nenhum para aparecer. A gaveta fica ABAIXO
-        // do cabeçalho: minimizar, fechar e o próprio botão de detalhes
-        // continuam à mão com ela aberta.
-        final estreito = constraints.maxWidth < 900;
-        final mensagens = !estreito
-            ? conversa
-            : ValueListenableBuilder<bool>(
-                valueListenable: _detalhes,
-                builder: (context, abertos, _) => Stack(
-                  children: [
-                    Positioned.fill(child: conversa),
-                    if (abertos)
-                      Positioned(
-                        top: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: PainelFicha(
-                          controller: _ficha,
-                          largura: constraints.maxWidth < 380
-                              ? constraints.maxWidth
-                              : 380,
-                          aoFechar: () => _detalhes.value = false,
-                        ),
-                      ),
-                  ],
-                ),
-              );
+        final contato = _contato;
+        final resumo = widget.noQuadro?.resumo;
+        final ficha = PainelFicha(
+          controller: _ficha,
+          noQuadro: widget.noQuadro,
+          nomeDoContato: contato?.nomeParaExibir ?? '',
+          telefoneDoContato: contato?.telefone ?? '',
+          fotoDoContato: contato?.fotoUrl ?? '',
+        );
 
-        final corpo = widget.aoFechar == null
-            ? mensagens
+        final cabecalho = widget.aoFechar == null
+            ? null
+            : _CabecalhoDoPainel(
+                atendimentoId: widget.atendimentoId,
+                nome:
+                    contato?.nomeParaExibir ??
+                    resumo?.nomeParaExibir ??
+                    'Atendimento #${widget.atendimentoId}',
+                telefone: contato?.telefone ?? resumo?.contatoTelefone ?? '',
+                fotoUrl: contato?.fotoUrl ?? resumo?.contatoFotoUrl ?? '',
+                mostrarTelefone:
+                    (contato?.nome.isNotEmpty ?? false) ||
+                    (resumo?.contatoNome.isNotEmpty ?? false),
+                noQuadro: widget.noQuadro,
+                aoFalharFoto: _fotoQuebrou,
+                aoFechar: widget.aoFechar!,
+                detalhes: _detalhes,
+                aoMinimizar: widget.aoMinimizar,
+                aoExpandir: widget.aoExpandir,
+              );
+        final corpo = Column(
+          children: [
+            _AcoesRapidas(
+              noQuadro: widget.noQuadro,
+              ficha: _ficha,
+              aoAnotar: () => setState(() => _modoNota = true),
+            ),
+            Expanded(child: conversa),
+          ],
+        );
+        Widget comCabecalho(Widget conteudo) => cabecalho == null
+            ? conteudo
             : Column(
                 children: [
-                  _CabecalhoDoPainel(
-                    atendimentoId: widget.atendimentoId,
-                    aoFechar: widget.aoFechar!,
-                    detalhes: _detalhes,
-                    aoMinimizar: widget.aoMinimizar,
-                    aoExpandir: widget.aoExpandir,
-                  ),
-                  Expanded(child: mensagens),
+                  cabecalho,
+                  Expanded(child: conteudo),
                 ],
               );
 
-        if (estreito) return corpo;
-
-        return Row(
-          children: [
-            Expanded(child: corpo),
-            PainelFicha(controller: _ficha),
-          ],
+        // O painel de informações fica ao lado da conversa quando os dois
+        // cabem. Numa largura menor (a conversa ao lado do quadro numa janela
+        // média, o celular) ele vira gaveta sobre as mensagens, ABAIXO do
+        // cabeçalho: minimizar, fechar e o próprio botão de detalhes continuam
+        // à mão com ele aberto.
+        final cabemOsDois =
+            constraints.maxWidth >= larguraDaConversa + larguraDasInformacoes;
+        return ValueListenableBuilder<bool>(
+          valueListenable: _detalhes,
+          builder: (context, abertos, _) {
+            if (!abertos) return comCabecalho(corpo);
+            if (cabemOsDois) {
+              return Row(
+                children: [
+                  Expanded(child: comCabecalho(corpo)),
+                  ficha,
+                ],
+              );
+            }
+            return comCabecalho(
+              Stack(
+                children: [
+                  Positioned.fill(child: corpo),
+                  Positioned(
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: Material(
+                      elevation: 12,
+                      child: PainelFicha(
+                        controller: _ficha,
+                        noQuadro: widget.noQuadro,
+                        nomeDoContato: contato?.nomeParaExibir ?? '',
+                        telefoneDoContato: contato?.telefone ?? '',
+                        fotoDoContato: contato?.fotoUrl ?? '',
+                        largura: constraints.maxWidth < 380
+                            ? constraints.maxWidth
+                            : 380,
+                        aoFechar: () => _detalhes.value = false,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
     );
@@ -377,6 +459,20 @@ class _PainelDeConversaState extends State<PainelDeConversa> {
   Future<void> _enviar() async {
     final texto = _inputController.text.trim();
     if (texto.isEmpty) return;
+    // Aba "Nota interna": vai para a ficha, nunca para o contato.
+    if (_modoNota) {
+      final messenger = ScaffoldMessenger.of(context);
+      final falha = await _ficha.anotar(texto);
+      if (falha != null) {
+        messenger.showSnackBar(SnackBar(content: Text(falha.message)));
+        return;
+      }
+      _inputController.clear();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('Nota interna salva.')),
+      );
+      return;
+    }
     _inputController.clear();
     final erro = await _controller.enviar(texto);
     if (erro != null && mounted) {
@@ -402,43 +498,64 @@ class ChatPage extends StatefulWidget {
 }
 
 class _ChatPageState extends State<ChatPage> {
-  /// Em tela estreita a ficha é gaveta; o botão da barra do topo a abre.
-  final _detalhes = ValueNotifier<bool>(false);
+  /// O painel de informações: ao lado da conversa quando cabe (e aí já abre
+  /// à vista), gaveta aberta pelo botão da barra do topo quando não cabe.
+  ValueNotifier<bool>? _detalhes;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _detalhes ??= ValueNotifier<bool>(
+      MediaQuery.sizeOf(context).width >=
+          larguraDaConversa + larguraDasInformacoes,
+    );
+  }
 
   @override
   void dispose() {
-    _detalhes.dispose();
+    _detalhes?.dispose();
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => AppScaffold(
-    title: 'Atendimento #${widget.atendimentoId}',
-    actions: [
-      ValueListenableBuilder<bool>(
-        valueListenable: _detalhes,
-        builder: (context, abertos, _) => IconButton(
-          icon: Icon(abertos ? Icons.info : Icons.info_outline),
-          tooltip: 'Detalhes do atendimento',
-          onPressed: () => _detalhes.value = !abertos,
+  Widget build(BuildContext context) {
+    final detalhes = _detalhes!;
+    return AppScaffold(
+      title: 'Atendimento #${widget.atendimentoId}',
+      actions: [
+        ValueListenableBuilder<bool>(
+          valueListenable: detalhes,
+          builder: (context, abertos, _) => IconButton(
+            icon: Icon(abertos ? Icons.info : Icons.info_outline),
+            tooltip: 'Detalhes do atendimento',
+            onPressed: () => detalhes.value = !abertos,
+          ),
         ),
+      ],
+      body: PainelDeConversa(
+        atendimentoId: widget.atendimentoId,
+        detalhesAbertos: detalhes,
       ),
-    ],
-    body: PainelDeConversa(
-      atendimentoId: widget.atendimentoId,
-      detalhesAbertos: _detalhes,
-    ),
-  );
+    );
+  }
 }
 
-/// Faixa de topo do painel embutido: diz qual conversa está aberta e como
-/// fechá-la.
+/// O topo da conversa embutida (`ws-chat__head`): com quem é, em que etapa e
+/// com quem está, e os controles de foco.
 ///
 /// Só aparece embutido. Como tela cheia quem cumpre esse papel é a `AppBar`,
 /// com o botão de voltar que o sistema já desenha — dois cabeçalhos seriam um
 /// a mais.
-class _CabecalhoDoPainel extends StatefulWidget {
+class _CabecalhoDoPainel extends StatelessWidget {
   final int atendimentoId;
+  final String nome;
+  final String telefone;
+  final String fotoUrl;
+
+  /// O telefone só vai para a linha de baixo quando o nome não é ele mesmo.
+  final bool mostrarTelefone;
+  final AtendimentoNoQuadro? noQuadro;
+  final VoidCallback aoFalharFoto;
   final VoidCallback aoFechar;
   final ValueNotifier<bool> detalhes;
   final VoidCallback? aoMinimizar;
@@ -446,6 +563,12 @@ class _CabecalhoDoPainel extends StatefulWidget {
 
   const _CabecalhoDoPainel({
     required this.atendimentoId,
+    required this.nome,
+    required this.telefone,
+    required this.fotoUrl,
+    required this.mostrarTelefone,
+    required this.noQuadro,
+    required this.aoFalharFoto,
     required this.aoFechar,
     required this.detalhes,
     this.aoMinimizar,
@@ -453,119 +576,301 @@ class _CabecalhoDoPainel extends StatefulWidget {
   });
 
   @override
-  State<_CabecalhoDoPainel> createState() => _CabecalhoDoPainelState();
-}
-
-/// P13 — o cabeçalho diz com quem é a conversa, e não só o número dela.
-class _CabecalhoDoPainelState extends State<_CabecalhoDoPainel> {
-  ContatoDaConversa? _contato;
-
-  /// Uma foto nova por abertura, no máximo: a URL do CDN expira, e pedir de
-  /// novo a cada redesenho martelaria o provedor.
-  bool _jaPediuFotoNova = false;
-
-  @override
-  void initState() {
-    super.initState();
-    unawaited(_carregar());
-  }
-
-  Future<void> _carregar({bool forcar = false}) async {
-    if (!GetIt.instance.isRegistered<ObterContatoUsecase>()) return;
-    final res = await inject<ObterContatoUsecase>()(
-      ObterContatoParameters(
-        atendimentoId: widget.atendimentoId,
-        forcar: forcar,
-      ),
-    );
-    if (!mounted) return;
-    if (res case Success(:final value)) setState(() => _contato = value);
-  }
-
-  void _fotoQuebrou() {
-    if (_jaPediuFotoNova) return;
-    _jaPediuFotoNova = true;
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => unawaited(_carregar(forcar: true)),
-    );
-  }
-
-  @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    final contato = _contato;
-    final atendimentoId = widget.atendimentoId;
-    final aoFechar = widget.aoFechar;
+    final resumo = noQuadro?.resumo;
+    final estiloDaLinha = TextStyle(fontSize: 11, color: colors.fgMuted);
+    final partes = <Widget>[
+      if (mostrarTelefone && telefone.isNotEmpty)
+        Text(telefone, style: estiloDaLinha),
+      if (noQuadro case final q? when q.etapaNome.isNotEmpty)
+        Text(q.etapaNome, style: estiloDaLinha),
+      if (resumo != null && resumo.atendenteNome.isNotEmpty)
+        Text('com ${resumo.atendenteNome}', style: estiloDaLinha),
+    ];
+
     return Container(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.md,
-        AppSpacing.sm,
-        AppSpacing.sm,
-        AppSpacing.sm,
-      ),
+      padding: const EdgeInsets.fromLTRB(8, 10, 8, 10),
       decoration: BoxDecoration(
-        color: colors.panel,
+        color: colors.card,
         border: Border(bottom: BorderSide(color: colors.border)),
       ),
       child: Row(
         children: [
-          if (contato != null) ...[
-            AvatarDoContato(
-              nome: contato.nomeParaExibir,
-              fotoUrl: contato.fotoUrl,
-              aoFalharFoto: _fotoQuebrou,
+          if (aoMinimizar != null)
+            _BotaoDoCabecalho(
+              icone: Icons.keyboard_double_arrow_right,
+              dica: 'Minimizar (Esc)',
+              aoTocar: aoMinimizar!,
             ),
-            const SizedBox(width: AppSpacing.sm),
-          ],
+          const SizedBox(width: 4),
+          AvatarDoContato(
+            nome: nome,
+            fotoUrl: fotoUrl,
+            raio: 19,
+            aoFalharFoto: aoFalharFoto,
+          ),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  contato?.nomeParaExibir ?? 'Atendimento #$atendimentoId',
-                  style: Theme.of(context).textTheme.titleSmall,
+                  nome,
+                  maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                ),
-                if (contato != null &&
-                    contato.nome.isNotEmpty &&
-                    contato.telefone.isNotEmpty)
-                  Text(
-                    contato.telefone,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelSmall?.copyWith(color: colors.fgMuted),
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    height: 1.2,
+                    color: colors.fgStrong,
                   ),
+                ),
+                if (partes.isNotEmpty) ...[
+                  const SizedBox(height: 1),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 6,
+                    children: [
+                      for (var i = 0; i < partes.length; i++) ...[
+                        if (i > 0)
+                          Container(
+                            width: 3,
+                            height: 3,
+                            decoration: BoxDecoration(
+                              color: colors.fgSubtle,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        partes[i],
+                      ],
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
-          if (widget.aoMinimizar != null)
-            IconButton(
-              icon: const Icon(Icons.close_fullscreen),
-              tooltip: 'Minimizar (Esc)',
-              onPressed: widget.aoMinimizar,
-            ),
-          if (widget.aoExpandir != null)
-            IconButton(
-              icon: const Icon(Icons.open_in_full),
-              tooltip: 'Expandir (Alt+3)',
-              onPressed: widget.aoExpandir,
+          if (aoExpandir != null)
+            _BotaoDoCabecalho(
+              icone: Icons.open_in_full,
+              dica: 'Expandir (Alt+3)',
+              aoTocar: aoExpandir!,
             ),
           ValueListenableBuilder<bool>(
-            valueListenable: widget.detalhes,
-            builder: (context, abertos, _) => IconButton(
-              icon: Icon(abertos ? Icons.info : Icons.info_outline),
-              tooltip: 'Detalhes do atendimento (i)',
-              isSelected: abertos,
-              onPressed: () => widget.detalhes.value = !abertos,
+            valueListenable: detalhes,
+            builder: (context, abertos, _) => _BotaoDoCabecalho(
+              icone: abertos ? Icons.info : Icons.info_outline,
+              dica: 'Detalhes do atendimento (i)',
+              ativo: abertos,
+              aoTocar: () => detalhes.value = !abertos,
             ),
           ),
-          IconButton(
-            icon: const Icon(Icons.close),
-            tooltip: 'Fechar a conversa',
-            onPressed: aoFechar,
+          _BotaoDoCabecalho(
+            icone: Icons.close,
+            dica: 'Fechar a conversa',
+            aoTocar: aoFechar,
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Botão quadrado de ícone do cabeçalho (`ws-chat__iconbtn`).
+class _BotaoDoCabecalho extends StatelessWidget {
+  final IconData icone;
+  final String dica;
+  final VoidCallback aoTocar;
+  final bool ativo;
+
+  const _BotaoDoCabecalho({
+    required this.icone,
+    required this.dica,
+    required this.aoTocar,
+    this.ativo = false,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return IconButton(
+      icon: Icon(icone, size: 18),
+      tooltip: dica,
+      color: ativo ? colors.accent : colors.fgMuted,
+      style: IconButton.styleFrom(
+        minimumSize: const Size(32, 32),
+        shape: const RoundedRectangleBorder(borderRadius: AppRadius.md),
+      ),
+      onPressed: aoTocar,
+    );
+  }
+}
+
+/// A faixa de ações rápidas sob o cabeçalho (`ws-chat__qstrip`): transferir,
+/// pendência, resolver, nota, etiqueta e cancelar — o que se faz o dia
+/// inteiro, a um clique, sem sair da conversa.
+class _AcoesRapidas extends StatelessWidget {
+  final AtendimentoNoQuadro? noQuadro;
+  final FichaController ficha;
+
+  /// "Nota" leva o compositor para a aba de nota interna.
+  final VoidCallback aoAnotar;
+
+  const _AcoesRapidas({
+    required this.noQuadro,
+    required this.ficha,
+    required this.aoAnotar,
+  });
+
+  Future<void> _rodar(
+    BuildContext context,
+    Future<String?> Function() acao,
+  ) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final erro = await acao();
+    if (erro != null) {
+      messenger.showSnackBar(SnackBar(content: Text(erro)));
+    }
+  }
+
+  Future<void> _cancelar(BuildContext context, AtendimentoNoQuadro q) async {
+    final confirmou = await showDialog<bool>(
+      context: context,
+      builder: (dialogo) => AlertDialog(
+        title: const Text('Cancelar o atendimento?'),
+        content: const Text(
+          'A conversa sai da fila de trabalho. Se o contato escrever de novo, '
+          'um atendimento novo começa.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogo).pop(false),
+            child: const Text('Voltar'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogo).pop(true),
+            child: const Text('Cancelar atendimento'),
+          ),
+        ],
+      ),
+    );
+    if (confirmou != true || !context.mounted) return;
+    await _rodar(context, () => q.definirStatus('cancelado'));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!quadroPodeEscrever()) return const SizedBox.shrink();
+    final colors = context.colors;
+    final q = noQuadro;
+    final status = q?.resumo.status ?? '';
+
+    final botoes = <Widget>[
+      if (q != null && q.outrosFluxos.isNotEmpty)
+        PopupMenuButton<int>(
+          tooltip: 'Transferir para outro quadro',
+          onSelected: (id) => _rodar(context, () => q.transferirParaFluxo(id)),
+          itemBuilder: (_) => [
+            for (final f in q.outrosFluxos)
+              PopupMenuItem(
+                value: f.id,
+                child: Text('Transferir para ${f.rotulo}'),
+              ),
+          ],
+          child: const BotaoDeAcao(
+            rotulo: 'Transferir',
+            icone: Icons.swap_horiz,
+            tom: TomDaAcao.ouro,
+            aoTocar: null,
+          ),
+        ),
+      if (q != null && q.resumo.atendenteHumanoId == null)
+        BotaoDeAcao(
+          rotulo: 'Assumir',
+          icone: Icons.person_add_alt_1_outlined,
+          tom: TomDaAcao.ouro,
+          aoTocar: () => _rodar(context, () => q.assumir(true)),
+        ),
+      if (q != null && status != 'pendencia')
+        BotaoDeAcao(
+          rotulo: 'Pendência',
+          icone: Icons.schedule,
+          aoTocar: () => _rodar(context, () => q.definirStatus('pendencia')),
+        ),
+      if (q != null && status != 'resolvido')
+        BotaoDeAcao(
+          rotulo: 'Resolver',
+          icone: Icons.check,
+          tom: TomDaAcao.sucesso,
+          aoTocar: () => _rodar(context, () => q.definirStatus('resolvido')),
+        ),
+      BotaoDeAcao(
+        rotulo: 'Nota',
+        icone: Icons.sticky_note_2_outlined,
+        aoTocar: aoAnotar,
+      ),
+      BlocBuilder<FichaController, ViewState<FichaAtendimento>>(
+        bloc: ficha,
+        builder: (context, state) {
+          final disponiveis = switch (state) {
+            SuccessState(:final data) => data.disponiveis,
+            _ => const <Etiqueta>[],
+          };
+          return PopupMenuButton<int>(
+            tooltip: 'Etiquetar a conversa',
+            onSelected: (id) => id < 0
+                ? abrirDialogoDeEtiqueta(context, ficha)
+                : alternarEtiqueta(context, ficha, id, aplicar: true),
+            itemBuilder: (_) => [
+              for (final e in disponiveis)
+                PopupMenuItem(
+                  value: e.id,
+                  child: Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 5,
+                        backgroundColor: corDaEtiqueta(e.cor),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(e.nome),
+                    ],
+                  ),
+                ),
+              if (disponiveis.isNotEmpty) const PopupMenuDivider(),
+              const PopupMenuItem(value: -1, child: Text('Nova etiqueta…')),
+            ],
+            child: const BotaoDeAcao(
+              rotulo: 'Etiqueta',
+              icone: Icons.sell_outlined,
+              aoTocar: null,
+            ),
+          );
+        },
+      ),
+      if (q != null && status != 'cancelado')
+        BotaoDeAcao(
+          rotulo: 'Cancelar',
+          icone: Icons.block,
+          tom: TomDaAcao.perigo,
+          aoTocar: () => _cancelar(context, q),
+        ),
+    ];
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: colors.card,
+        border: Border(bottom: BorderSide(color: colors.border)),
+      ),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        child: Row(
+          children: [
+            for (final b in botoes) ...[b, const SizedBox(width: 6)],
+          ],
+        ),
       ),
     );
   }
@@ -583,7 +888,8 @@ class _ChatBody extends StatelessWidget {
   final VoidCallback aoAnexar;
   final VoidCallback aoGravar;
   final bool gravando;
-  final VoidCallback aoAbrirGaleria;
+  final bool modoNota;
+  final ValueChanged<bool> aoTrocarModo;
 
   const _ChatBody({
     required this.viewModel,
@@ -597,83 +903,79 @@ class _ChatBody extends StatelessWidget {
     required this.aoAnexar,
     required this.aoGravar,
     required this.gravando,
-    required this.aoAbrirGaleria,
+    required this.modoNota,
+    required this.aoTrocarModo,
   });
 
   @override
   Widget build(BuildContext context) {
+    final escuro = Theme.of(context).brightness == Brightness.dark;
     return Column(
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: ChatConnectionBadge(status: viewModel.connectionStatus),
-            ),
-            IconButton(
-              icon: const Icon(Icons.perm_media_outlined),
-              tooltip: 'Arquivos da conversa',
-              onPressed: aoAbrirGaleria,
-            ),
-          ],
-        ),
+        ChatConnectionBadge(status: viewModel.connectionStatus),
         if (viewModel.presencaDoContato.isNotEmpty)
           _AvisoDePresenca(situacao: viewModel.presencaDoContato),
         Expanded(
-          child: viewModel.mensagens.isEmpty
-              ? const AppEmptyView(
-                  icon: Icons.chat_bubble_outline,
-                  title: 'Nenhuma mensagem ainda',
-                  subtitle:
-                      'Envie a primeira mensagem para iniciar a conversa.',
-                )
-              : NotificationListener<ScrollEndNotification>(
-                  onNotification: (_) {
-                    aoPararDeRolar();
-                    return false;
-                  },
-                  child: ListView.builder(
-                    controller: rolagem,
-                    reverse: true,
-                    padding: const EdgeInsets.all(AppSpacing.md),
-                    // O item extra é o topo da rolagem: spinner enquanto o
-                    // histórico antigo vem, ou nada quando acabou.
-                    itemCount: viewModel.mensagens.length + 1,
-                    itemBuilder: (context, index) {
-                      if (index == viewModel.mensagens.length) {
-                        return viewModel.carregandoAntigas
-                            ? const Padding(
-                                padding: EdgeInsets.all(AppSpacing.md),
-                                child: Center(
-                                  child: SizedBox(
-                                    height: 18,
-                                    width: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
+          child: ColoredBox(
+            // O fundo bege do WhatsApp (`--ws-chat-bg`): é onde quem atende
+            // já está acostumado a ler conversa.
+            color: escuro ? AppPalette.chatBgDark : AppPalette.chatBgLight,
+            child: viewModel.mensagens.isEmpty
+                ? const AppEmptyView(
+                    icon: Icons.chat_bubble_outline,
+                    title: 'Nenhuma mensagem ainda',
+                    subtitle:
+                        'Envie a primeira mensagem para iniciar a conversa.',
+                  )
+                : NotificationListener<ScrollEndNotification>(
+                    onNotification: (_) {
+                      aoPararDeRolar();
+                      return false;
+                    },
+                    child: ListView.builder(
+                      controller: rolagem,
+                      reverse: true,
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                      // O item extra é o topo da rolagem: spinner enquanto o
+                      // histórico antigo vem, ou nada quando acabou.
+                      itemCount: viewModel.mensagens.length + 1,
+                      itemBuilder: (context, index) {
+                        if (index == viewModel.mensagens.length) {
+                          return viewModel.carregandoAntigas
+                              ? const Padding(
+                                  padding: EdgeInsets.all(AppSpacing.md),
+                                  child: Center(
+                                    child: SizedBox(
+                                      height: 18,
+                                      width: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
                                     ),
                                   ),
-                                ),
-                              )
-                            : const SizedBox.shrink();
-                      }
-                      final posicao = viewModel.mensagens.length - 1 - index;
-                      final mensagem = viewModel.mensagens[posicao];
-                      final anterior = posicao == 0
-                          ? null
-                          : viewModel.mensagens[posicao - 1];
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (mudouODia(anterior, mensagem))
-                            _SeparadorDeDia(dia: mensagem.timestamp),
-                          ChatMessageBubble(
-                            mensagem: mensagem,
-                            aoCitar: () => aoCitar(mensagem),
-                          ),
-                        ],
-                      );
-                    },
+                                )
+                              : const SizedBox.shrink();
+                        }
+                        final posicao = viewModel.mensagens.length - 1 - index;
+                        final mensagem = viewModel.mensagens[posicao];
+                        final anterior = posicao == 0
+                            ? null
+                            : viewModel.mensagens[posicao - 1];
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (mudouODia(anterior, mensagem))
+                              _SeparadorDeDia(dia: mensagem.timestamp),
+                            ChatMessageBubble(
+                              mensagem: mensagem,
+                              aoCitar: () => aoCitar(mensagem),
+                            ),
+                          ],
+                        );
+                      },
+                    ),
                   ),
-                ),
+          ),
         ),
         if (viewModel.citando case final citada?)
           _BarraDeCitacao(mensagem: citada, aoCancelar: aoCancelarCitacao),
@@ -688,40 +990,225 @@ class _ChatBody extends StatelessWidget {
             ),
           )
         else
-          Padding(
-            padding: const EdgeInsets.all(AppSpacing.sm),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.attach_file),
-                  tooltip: 'Anexar arquivo',
-                  onPressed: aoAnexar,
-                ),
-                IconButton(
-                  icon: Icon(gravando ? Icons.stop_circle : Icons.mic_none),
-                  color: gravando ? AppPalette.danger : null,
-                  tooltip: gravando ? 'Parar e enviar' : 'Gravar áudio',
-                  onPressed: aoGravar,
-                ),
-                Expanded(
-                  child: AppTextField(
-                    label: 'Mensagem',
-                    hint: 'Digite uma mensagem…',
-                    controller: inputController,
-                    onChanged: (_) => aoDigitar(),
-                    onSubmitted: (_) => onEnviar(),
-                  ),
-                ),
-                const SizedBox(width: AppSpacing.sm),
-                IconButton.filled(
-                  onPressed: onEnviar,
-                  tooltip: 'Enviar mensagem',
-                  icon: const Icon(Icons.send),
-                ),
-              ],
-            ),
+          _Compositor(
+            inputController: inputController,
+            onEnviar: onEnviar,
+            aoDigitar: aoDigitar,
+            aoAnexar: aoAnexar,
+            aoGravar: aoGravar,
+            gravando: gravando,
+            modoNota: modoNota,
+            aoTrocarModo: aoTrocarModo,
           ),
       ],
+    );
+  }
+}
+
+/// A caixa de envio (`ws-composer`), com as abas "Mensagem" e "Nota interna".
+///
+/// A nota interna sai pelo mesmo lugar em que se escreve a mensagem — e por
+/// isso a caixa muda de cor: mandar ao cliente o que era para a equipe é o
+/// erro que ela existe para evitar.
+class _Compositor extends StatelessWidget {
+  final TextEditingController inputController;
+  final VoidCallback onEnviar;
+  final VoidCallback aoDigitar;
+  final VoidCallback aoAnexar;
+  final VoidCallback aoGravar;
+  final bool gravando;
+  final bool modoNota;
+  final ValueChanged<bool> aoTrocarModo;
+
+  const _Compositor({
+    required this.inputController,
+    required this.onEnviar,
+    required this.aoDigitar,
+    required this.aoAnexar,
+    required this.aoGravar,
+    required this.gravando,
+    required this.modoNota,
+    required this.aoTrocarModo,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final escuro = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      decoration: BoxDecoration(
+        color: escuro ? colors.panel : const Color(0xFFF0F2F5),
+        border: Border(top: BorderSide(color: colors.border)),
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              _Aba(
+                rotulo: 'Mensagem',
+                icone: Icons.chat_outlined,
+                ativa: !modoNota,
+                aoTocar: () => aoTrocarModo(false),
+              ),
+              _Aba(
+                rotulo: 'Nota interna',
+                icone: Icons.lock_outline,
+                ativa: modoNota,
+                aoTocar: () => aoTrocarModo(true),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              if (!modoNota) ...[
+                _BotaoRedondoDoCompositor(
+                  icone: Icons.attach_file,
+                  dica: 'Anexar arquivo',
+                  aoTocar: aoAnexar,
+                ),
+                _BotaoRedondoDoCompositor(
+                  icone: gravando ? Icons.stop_circle : Icons.mic_none,
+                  dica: gravando ? 'Parar e enviar' : 'Gravar áudio',
+                  cor: gravando ? colors.danger : null,
+                  aoTocar: aoGravar,
+                ),
+                const SizedBox(width: 4),
+              ],
+              Expanded(
+                child: TextField(
+                  controller: inputController,
+                  minLines: 1,
+                  maxLines: 5,
+                  textInputAction: TextInputAction.send,
+                  onChanged: (_) {
+                    if (!modoNota) aoDigitar();
+                  },
+                  onSubmitted: (_) => onEnviar(),
+                  style: TextStyle(fontSize: 13, color: colors.fgStrong),
+                  decoration: InputDecoration(
+                    isDense: true,
+                    hintText: modoNota
+                        ? 'Nota interna — só a equipe vê'
+                        : 'Digite uma mensagem…',
+                    filled: true,
+                    fillColor: modoNota ? colors.warningSoft : colors.inputBg,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(22),
+                      borderSide: BorderSide(color: colors.border),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(22),
+                      borderSide: BorderSide(
+                        color: modoNota ? colors.warning : colors.border,
+                      ),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(22),
+                      borderSide: BorderSide(
+                        color: modoNota ? colors.warning : colors.accent,
+                        width: 1.5,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton.filled(
+                onPressed: onEnviar,
+                tooltip: modoNota ? 'Salvar nota interna' : 'Enviar mensagem',
+                style: IconButton.styleFrom(
+                  backgroundColor: modoNota ? colors.warning : colors.success,
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(38, 38),
+                ),
+                icon: Icon(modoNota ? Icons.lock : Icons.send, size: 18),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Aba extends StatelessWidget {
+  final String rotulo;
+  final IconData icone;
+  final bool ativa;
+  final VoidCallback aoTocar;
+
+  const _Aba({
+    required this.rotulo,
+    required this.icone,
+    required this.ativa,
+    required this.aoTocar,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    final cor = ativa ? colors.accentHover : colors.fgMuted;
+    return InkWell(
+      onTap: aoTocar,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          border: Border(
+            bottom: BorderSide(
+              color: ativa ? colors.accent : Colors.transparent,
+              width: 2,
+            ),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icone, size: 13, color: cor),
+            const SizedBox(width: 5),
+            Text(
+              rotulo,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: ativa ? FontWeight.w600 : FontWeight.w500,
+                color: cor,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BotaoRedondoDoCompositor extends StatelessWidget {
+  final IconData icone;
+  final String dica;
+  final VoidCallback aoTocar;
+  final Color? cor;
+
+  const _BotaoRedondoDoCompositor({
+    required this.icone,
+    required this.dica,
+    required this.aoTocar,
+    this.cor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: Icon(icone, size: 20),
+      tooltip: dica,
+      color: cor ?? context.colors.fgMuted,
+      onPressed: aoTocar,
     );
   }
 }
@@ -759,11 +1246,27 @@ class _SeparadorDeDia extends StatelessWidget {
       child: Center(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          // `ws-daysep`: a etiqueta branca em caixa alta sobre o fundo bege.
           decoration: BoxDecoration(
-            color: colors.chip,
-            borderRadius: AppRadius.pill,
+            color: colors.card,
+            borderRadius: AppRadius.md,
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x14000000),
+                blurRadius: 1,
+                offset: Offset(0, 1),
+              ),
+            ],
           ),
-          child: Text(_rotulo(), style: Theme.of(context).textTheme.labelSmall),
+          child: Text(
+            _rotulo().toUpperCase(),
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.8,
+              color: colors.fgMuted,
+            ),
+          ),
         ),
       ),
     );
