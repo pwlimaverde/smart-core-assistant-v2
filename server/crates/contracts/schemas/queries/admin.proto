@@ -1805,12 +1805,21 @@ message DefinirMyContatoAtivoRequest {
 message ExcluirMyItemRequest {
   string tipo = 1;
   int64 id = 2;
+  // O nome do item, digitado por quem pede — obrigatório para excluir de fato.
+  string confirmar = 3;
+  // true = só descreve (rótulo, conversas que vão junto, se está em uso).
+  bool dry_run = 4;
 }
 
 message ExcluirMyItemResponse {
   bool sucesso = 1;
   // Conversas excluídas junto (só na exclusão de contato).
   repeated int64 atendimentos_excluidos = 2;
+  // Preenchidos na simulação (dry_run).
+  bool simulacao = 3;
+  string rotulo = 4;       // o nome a digitar em `confirmar`
+  int64 conversas = 5;     // conversas que iriam junto
+  string em_uso = 6;       // vazio = pode excluir; senão, o motivo
 }
 
 // false = desativar; true = reativar. Excluído não reativa.

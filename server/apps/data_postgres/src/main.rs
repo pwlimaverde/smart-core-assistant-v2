@@ -7261,7 +7261,51 @@ async fn handler_excluir_item(
     }
 
     let ctx = contexto_do_envelope(&env);
-    match store.excluir(&ctx, tipo, id).await {
+
+    // Simulação: o que vai ser atingido e o nome a digitar. Nada muda.
+    if payload
+        .get("dry_run")
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false)
+    {
+        return match store.descrever(&ctx, tipo, id).await {
+            Ok(Some(d)) => ok_reply(
+                &env,
+                "ExcluirItemReply",
+                serde_json::json!({
+                    "sucesso": true,
+                    "simulacao": true,
+                    "rotulo": d.rotulo,
+                    "conversas": d.conversas,
+                    "em_uso": d.em_uso.unwrap_or_default(),
+                }),
+            ),
+            Ok(None) => erro(
+                error_core::AppError::Validation("item não encontrado ou já excluído".into()),
+                &env,
+            ),
+            Err(e) => erro(e.into(), &env),
+        };
+    }
+
+    // Exclusão definitiva exige o nome digitado: sem ele, um id errado ou
+    // alucinado apagaria outra coisa.
+    let confirmar = payload
+        .get("confirmar")
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .unwrap_or_default()
+        .to_string();
+    if confirmar.is_empty() {
+        return erro(
+            error_core::AppError::Validation(
+                "exclusão definitiva: confirme digitando o nome do item".into(),
+            ),
+            &env,
+        );
+    }
+
+    match store.excluir(&ctx, tipo, id, confirmar).await {
         Ok(ResultadoExclusao::Excluido { cascata }) => {
             audit
                 .publish(
@@ -7296,6 +7340,12 @@ async fn handler_excluir_item(
         Ok(ResultadoExclusao::EmUso(motivo)) => {
             erro(error_core::AppError::Validation(motivo), &env)
         }
+        Ok(ResultadoExclusao::ConfirmacaoNaoConfere) => erro(
+            error_core::AppError::Validation(
+                "o nome digitado não é o do item: nada foi excluído".into(),
+            ),
+            &env,
+        ),
         Err(e) => erro(e.into(), &env),
     }
 }
@@ -14430,8 +14480,10 @@ mod tests_exclusao_unit {
         store
             .expect_excluir()
             .times(1)
-            .withf(|_, tipo, id| *tipo == TipoExcluivel::Contato && *id == 546)
-            .returning(|_, _, _| {
+            .withf(|_, tipo, id, confirmar| {
+                *tipo == TipoExcluivel::Contato && *id == 546 && confirmar == "Paulo W"
+            })
+            .returning(|_, _, _, _| {
                 Ok(ResultadoExclusao::Excluido {
                     cascata: vec![462, 463],
                 })
@@ -14448,7 +14500,7 @@ mod tests_exclusao_unit {
             .returning(|_, _, _, _| ());
         let env = envelope(
             "ExcluirItem",
-            serde_json::json!({ "tipo": "contato", "id": 546 }),
+            serde_json::json!({ "tipo": "contato", "id": 546, "confirmar": " Paulo W " }),
         );
 
         let resp = handler_excluir_item(&store, &audit, env).await;
@@ -14462,16 +14514,75 @@ mod tests_exclusao_unit {
         let mut store = MockExclusaoStore::new();
         store
             .expect_excluir()
-            .returning(|_, _, _| Ok(ResultadoExclusao::EmUso("há 2 conversa(s)".into())));
+            .returning(|_, _, _, _| Ok(ResultadoExclusao::EmUso("há 2 conversa(s)".into())));
         let audit = MockAuditPort::new();
         let env = envelope(
             "ExcluirItem",
-            serde_json::json!({ "tipo": "fluxo", "id": 3 }),
+            serde_json::json!({ "tipo": "fluxo", "id": 3, "confirmar": "Vendas" }),
         );
 
         let resp = handler_excluir_item(&store, &audit, env).await;
 
         assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    /// Sem o nome digitado, nada é excluído — nem chega ao banco.
+    #[tokio::test]
+    async fn excluir_sem_confirmacao_recusa() {
+        let store = MockExclusaoStore::new();
+        let audit = MockAuditPort::new();
+        let env = envelope(
+            "ExcluirItem",
+            serde_json::json!({ "tipo": "nota", "id": 9 }),
+        );
+
+        let resp = handler_excluir_item(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    #[tokio::test]
+    async fn nome_que_nao_confere_nao_exclui_nem_audita() {
+        let mut store = MockExclusaoStore::new();
+        store
+            .expect_excluir()
+            .returning(|_, _, _, _| Ok(ResultadoExclusao::ConfirmacaoNaoConfere));
+        let audit = MockAuditPort::new();
+        let env = envelope(
+            "ExcluirItem",
+            serde_json::json!({ "tipo": "nota", "id": 9, "confirmar": "outra" }),
+        );
+
+        let resp = handler_excluir_item(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    /// A simulação descreve e não exclui.
+    #[tokio::test]
+    async fn dry_run_descreve_sem_excluir() {
+        use infrastructure_postgres::exclusao::DescricaoExclusao;
+        let mut store = MockExclusaoStore::new();
+        store.expect_descrever().times(1).returning(|_, _, _| {
+            Ok(Some(DescricaoExclusao {
+                rotulo: "Paulo W".into(),
+                conversas: 2,
+                em_uso: None,
+            }))
+        });
+        store.expect_excluir().never();
+        let audit = MockAuditPort::new();
+        let env = envelope(
+            "ExcluirItem",
+            serde_json::json!({ "tipo": "contato", "id": 546, "dry_run": true }),
+        );
+
+        let resp = handler_excluir_item(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+        let corpo: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
+        assert_eq!(corpo["rotulo"], "Paulo W");
+        assert_eq!(corpo["conversas"], 2);
     }
 
     /// Conexão só pelo DeleteWhatsappInstance, que apaga no provedor antes.

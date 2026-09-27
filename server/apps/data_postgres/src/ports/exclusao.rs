@@ -2,18 +2,29 @@
 //! os excluídos, para qualquer entidade de [`TipoExcluivel`].
 
 use async_trait::async_trait;
-use infrastructure_postgres::exclusao::{ItemExcluido, ResultadoExclusao, TipoExcluivel};
+use infrastructure_postgres::exclusao::{
+    DescricaoExclusao, ItemExcluido, ResultadoExclusao, TipoExcluivel,
+};
 use infrastructure_postgres::{DbError, RequestContext};
 
 #[cfg_attr(test, mockall::automock)]
 #[async_trait]
 pub trait ExclusaoStore: Send + Sync {
-    /// Exclui. Definitivo: não há restauração.
+    /// O que a exclusão vai atingir, sem mudar nada (`dry_run`).
+    async fn descrever(
+        &self,
+        ctx: &RequestContext,
+        tipo: TipoExcluivel,
+        id: i64,
+    ) -> Result<Option<DescricaoExclusao>, DbError>;
+
+    /// Exclui, conferindo o nome digitado. Definitivo: não há restauração.
     async fn excluir(
         &self,
         ctx: &RequestContext,
         tipo: TipoExcluivel,
         id: i64,
+        confirmar: String,
     ) -> Result<ResultadoExclusao, DbError>;
 
     /// Desativa ou reativa. `None` = a entidade não tem estado inativo;

@@ -371,27 +371,6 @@ async def test_desativar_atendente_resolve_pelo_nome():
     assert "DesativarMyAtendente" in cliente.metodos
 
 
-async def test_remover_treinamento_confirma_pela_tag():
-    treinos = pb.ListMyTreinamentosResponse(
-        treinamentos=[pb.MyTreinamento(id=3, tag="politica-troca")]
-    )
-    servidor, registro, executor, cliente, _ = montar_ambiente(
-        {
-            "ListMyTreinamentos": treinos,
-            "RemoverMyTreinamento": pb.SimpleOkResponse(sucesso=True),
-        }
-    )
-    destrutivas.registrar(servidor, registro, executor)
-
-    with como(ADMIN):
-        r = await servidor.funcoes["remover_treinamento"](
-            treinamento_id=3, confirmar="politica-troca"
-        )
-
-    assert "politica-troca" in r
-    assert "RemoverMyTreinamento" in cliente.metodos
-
-
 async def test_desativar_etapa_resolve_dentro_do_fluxo_informado():
     etapas = pb.ListMyEtapasFluxoResponse(
         etapas=[pb.MyEtapaFluxo(id=2, nome="Proposta enviada")]
@@ -411,10 +390,10 @@ async def test_desativar_etapa_resolve_dentro_do_fluxo_informado():
     assert "DesativarMyEtapaFluxo" in cliente.metodos
 
 
-async def test_remover_conexao_avisa_do_qr_code_no_dry_run_e_no_sucesso():
+async def test_excluir_conexao_avisa_do_qr_code_no_dry_run_e_no_sucesso():
     """A ação mais grave do servidor. O aviso do QR Code não é detalhe.
 
-    Quem remove uma conexão achando que está "reiniciando" descobre o custo
+    Quem exclui uma conexão achando que está "reiniciando" descobre o custo
     quando precisa do celular de volta.
     """
     instancias = pb.ListMyWhatsappInstancesResponse(
@@ -429,13 +408,13 @@ async def test_remover_conexao_avisa_do_qr_code_no_dry_run_e_no_sucesso():
     destrutivas.registrar(servidor, registro, executor)
 
     with como(ADMIN):
-        simulado = await servidor.funcoes["remover_conexao_whatsapp"](
+        simulado = await servidor.funcoes["excluir_conexao_whatsapp"](
             conexao_id=7, dry_run=True
         )
         assert "QR Code" in simulado
         assert "DeleteMyWhatsappInstance" not in cliente.metodos
 
-        feito = await servidor.funcoes["remover_conexao_whatsapp"](
+        feito = await servidor.funcoes["excluir_conexao_whatsapp"](
             conexao_id=7, confirmar="Comercial"
         )
 
@@ -475,8 +454,7 @@ async def test_toda_destrutiva_recusa_sem_confirmacao():
         "desativar_etapa_fluxo": {"fluxo_id": 1, "etapa_id": 1},
         "desativar_departamento": {"departamento_id": 1},
         "desativar_atendente": {"atendente_id": 1},
-        "remover_treinamento": {"treinamento_id": 1},
-        "remover_conexao_whatsapp": {"conexao_id": 1},
+        "excluir_conexao_whatsapp": {"conexao_id": 1},
     }
     destrutivas_registradas = [
         r.nome for r in registro.todos() if r.categoria.value == "destrutiva"

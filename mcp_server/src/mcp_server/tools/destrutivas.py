@@ -200,62 +200,17 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
         )
         return f"Atendente '{nome}' desativado."
 
-    # -- Treinamento ---------------------------------------------------------
-
-    registro.registrar(
-        "remover_treinamento", Categoria.DESTRUTIVA, ("treinamento:write",)
-    )
-
-    @mcp.tool(
-        name="remover_treinamento",
-        annotations=registro.exigir("remover_treinamento").anotacoes,
-    )
-    async def remover_treinamento(
-        treinamento_id: Annotated[
-            int, Field(description="Id, de `list_treinamentos`.")
-        ],
-        confirmar: Annotated[
-            str,
-            Field(
-                default="",
-                description="A `tag` exata do treinamento, de `list_treinamentos`.",
-            ),
-        ] = "",
-        dry_run: Annotated[
-            bool, Field(default=False, description="Só simular.")
-        ] = False,
-    ) -> str:
-        """Remove um treinamento da base de conhecimento do assistente.
-
-        **Não tem desfazer** e o assistente deixa de saber aquele assunto — ele
-        passa a responder com a mensagem de fallback onde antes respondia direito.
-        """
-        tool = registro.exigir("remover_treinamento")
-        tag = await _tag_do_treinamento(executor, treinamento_id)
-
-        if dry_run:
-            executor.registrar_simulacao(tool)
-            return resultado_dry_run(tool, f"remover o treinamento '{tag}'")
-
-        exigir_confirmacao(tool, tag, confirmar or None)
-        await executor.executar(
-            "remover_treinamento",
-            "RemoverMyTreinamento",
-            pb.RemoverMyTreinamentoRequest(id=treinamento_id),
-        )
-        return f"Treinamento '{tag}' removido."
-
     # -- Conexão de WhatsApp -------------------------------------------------
 
     registro.registrar(
-        "remover_conexao_whatsapp", Categoria.DESTRUTIVA, ("operacional:admin",)
+        "excluir_conexao_whatsapp", Categoria.DESTRUTIVA, ("operacional:admin",)
     )
 
     @mcp.tool(
-        name="remover_conexao_whatsapp",
-        annotations=registro.exigir("remover_conexao_whatsapp").anotacoes,
+        name="excluir_conexao_whatsapp",
+        annotations=registro.exigir("excluir_conexao_whatsapp").anotacoes,
     )
-    async def remover_conexao_whatsapp(
+    async def excluir_conexao_whatsapp(
         conexao_id: Annotated[
             int, Field(description="Id, de `list_conexoes_whatsapp`.")
         ],
@@ -266,33 +221,34 @@ def registrar(mcp, registro: Registro, executor: Executor) -> None:
             bool, Field(default=False, description="Só simular.")
         ] = False,
     ) -> str:
-        """Remove uma conexão de WhatsApp do negócio.
+        """Exclui uma conexão de WhatsApp do negócio. **Definitivo.**
 
-        **É a ação mais grave deste servidor.** O número para de receber e de
-        enviar mensagens na hora, e reconectar exige ler o QR Code de novo, do
-        celular. Se a intenção é só reiniciar uma conexão travada, isto NÃO é o
-        que se quer.
+        **É a ação mais grave deste servidor.** A sessão é apagada no WhatsApp,
+        o número para de receber e de enviar mensagens na hora, e a conexão não
+        volta: para usar o número de novo, cria-se outra e lê-se o QR Code do
+        celular. O registro fica só para a auditoria. Se a intenção é só
+        reiniciar uma conexão travada, use `reconectar_conexao_whatsapp`.
         """
-        tool = registro.exigir("remover_conexao_whatsapp")
+        tool = registro.exigir("excluir_conexao_whatsapp")
         nome = await _nome_da_conexao(executor, conexao_id)
 
         if dry_run:
             executor.registrar_simulacao(tool)
             return resultado_dry_run(
                 tool,
-                f"remover a conexão '{nome}', o que derruba o número e "
-                "exige novo QR Code",
+                f"excluir DEFINITIVAMENTE a conexão '{nome}', o que derruba o "
+                "número; para voltar, só criando outra conexão e lendo novo QR Code",
             )
 
         exigir_confirmacao(tool, nome, confirmar or None)
         await executor.executar(
-            "remover_conexao_whatsapp",
+            "excluir_conexao_whatsapp",
             "DeleteMyWhatsappInstance",
             pb.MyWhatsappInstanceIdRequest(id=conexao_id),
         )
         return (
-            f"Conexão '{nome}' removida. "
-            "O número precisará de novo QR Code para voltar."
+            f"Conexão '{nome}' excluída definitivamente. "
+            "Para usar o número de novo, crie outra conexão e leia o QR Code."
         )
 
 
@@ -359,22 +315,9 @@ async def _nome_do_atendente(executor: Executor, atendente_id: int) -> str:
     raise _nao_encontrado("O atendente", atendente_id, "list_atendentes")
 
 
-async def _tag_do_treinamento(executor: Executor, treinamento_id: int) -> str:
-    resposta = await executor.executar(
-        "remover_treinamento",
-        "ListMyTreinamentos",
-        pb.ListMyTreinamentosRequest(),
-        contabilizar=False,
-    )
-    for t in resposta.treinamentos:
-        if t.id == treinamento_id:
-            return str(t.tag)
-    raise _nao_encontrado("O treinamento", treinamento_id, "list_treinamentos")
-
-
 async def _nome_da_conexao(executor: Executor, conexao_id: int) -> str:
     resposta = await executor.executar(
-        "remover_conexao_whatsapp",
+        "excluir_conexao_whatsapp",
         "ListMyWhatsappInstances",
         pb.ListMyWhatsappInstancesRequest(),
         contabilizar=False,

@@ -636,7 +636,7 @@ async fn painel_nao_abre_segundo_atendimento_para_o_mesmo_contato() {
 async fn test_exclusao_definitiva_de_contato_e_atendimento() {
     use infrastructure_postgres::atendimentos::atendimentos::listar_do_contato;
     use infrastructure_postgres::exclusao::{
-        definir_ativo, excluir, listar_excluidos, ResultadoExclusao, TipoExcluivel,
+        definir_ativo, descrever, excluir, listar_excluidos, ResultadoExclusao, TipoExcluivel,
     };
 
     let pool = obter_pool_teste().await;
@@ -677,10 +677,36 @@ async fn test_exclusao_definitiva_de_contato_e_atendimento() {
         .unwrap();
     assert!(lista.iter().any(|c| c.id == contato.id && !c.ativo));
 
-    // Excluir leva a conversa junto e tira os dois de todo lugar.
-    let r = excluir(&mut tx, &ctx, TipoExcluivel::Contato, contato.id as i64)
+    // A simulação mostra o nome a digitar e o que vai junto; nome errado não exclui.
+    let d = descrever(&mut tx, &ctx, TipoExcluivel::Contato, contato.id as i64)
         .await
-        .unwrap();
+        .unwrap()
+        .expect("contato existe");
+    assert_eq!(d.rotulo, "Contato Excluido");
+    assert_eq!(d.conversas, 1);
+    assert_eq!(
+        excluir(
+            &mut tx,
+            &ctx,
+            TipoExcluivel::Contato,
+            contato.id as i64,
+            Some("Outro Nome")
+        )
+        .await
+        .unwrap(),
+        ResultadoExclusao::ConfirmacaoNaoConfere
+    );
+
+    // Excluir leva a conversa junto e tira os dois de todo lugar.
+    let r = excluir(
+        &mut tx,
+        &ctx,
+        TipoExcluivel::Contato,
+        contato.id as i64,
+        None,
+    )
+    .await
+    .unwrap();
     assert_eq!(
         r,
         ResultadoExclusao::Excluido {
@@ -717,9 +743,15 @@ async fn test_exclusao_definitiva_de_contato_e_atendimento() {
         Some(false)
     );
     assert_eq!(
-        excluir(&mut tx, &ctx, TipoExcluivel::Contato, contato.id as i64)
-            .await
-            .unwrap(),
+        excluir(
+            &mut tx,
+            &ctx,
+            TipoExcluivel::Contato,
+            contato.id as i64,
+            None
+        )
+        .await
+        .unwrap(),
         ResultadoExclusao::NaoEncontrado
     );
 
@@ -754,9 +786,15 @@ async fn test_exclusao_definitiva_de_contato_e_atendimento() {
         .await
         .unwrap();
     assert!(matches!(
-        excluir(&mut tx, &ctx, TipoExcluivel::Departamento, depto.id as i64)
-            .await
-            .unwrap(),
+        excluir(
+            &mut tx,
+            &ctx,
+            TipoExcluivel::Departamento,
+            depto.id as i64,
+            None
+        )
+        .await
+        .unwrap(),
         ResultadoExclusao::EmUso(_)
     ));
 

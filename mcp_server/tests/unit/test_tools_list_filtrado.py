@@ -46,7 +46,8 @@ async def test_token_so_leitura_nao_ve_nenhuma_tool_de_escrita(servidor):
         "create_departamento",
         "send_message",
         "desativar_fluxo",
-        "remover_conexao_whatsapp",
+        "excluir_conexao_whatsapp",
+        "excluir_item",
         "set_bot_persona",
     ):
         assert proibida not in visiveis
@@ -56,7 +57,7 @@ async def test_admin_ve_o_catalogo_inteiro(servidor):
     visiveis = await nomes(servidor, ADMIN)
     assert len(visiveis) == len(servidor._registro.todos())
     assert "send_message" in visiveis
-    assert "remover_conexao_whatsapp" in visiveis
+    assert "excluir_conexao_whatsapp" in visiveis
 
 
 async def test_dois_tokens_de_escopos_diferentes_recebem_listas_diferentes(servidor):

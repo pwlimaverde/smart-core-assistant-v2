@@ -172,17 +172,100 @@ pub enum ResultadoExclusao {
     NaoEncontrado,
     /// Em uso: a exclusão deixaria conversas órfãs. A mensagem diz o que fazer.
     EmUso(String),
+    /// O nome digitado não é o do item: nada foi excluído.
+    ConfirmacaoNaoConfere,
+}
+
+/// O que a exclusão vai atingir, antes de excluir (o `dry_run` e o diálogo de
+/// confirmação mostram isto).
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct DescricaoExclusao {
+    /// O nome como o painel mostra — é o que se digita para confirmar.
+    pub rotulo: String,
+    /// Conversas que vão junto (só contato).
+    pub conversas: i64,
+    /// Por que não pode ser excluído agora, se não puder.
+    pub em_uso: Option<String>,
+}
+
+/// Descreve o item a excluir, sem mudar nada. `None` = não existe, é de outro
+/// tenant ou já foi excluído.
+#[tracing::instrument(skip_all, fields(tipo = tipo.nome(), id = id))]
+pub async fn descrever(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    tipo: TipoExcluivel,
+    id: i64,
+) -> Result<Option<DescricaoExclusao>, DbError> {
+    ctx.exigir_qualquer(tipo.escopos())?;
+    let Some(rotulo) = rotulo_de(tx, ctx, tipo, id).await? else {
+        return Ok(None);
+    };
+    let conversas = if tipo == TipoExcluivel::Contato {
+        sqlx::query_scalar::<_, i64>(
+            "SELECT COUNT(*) FROM oraculo_atendimento \
+              WHERE tenant_id = $1 AND contato_id = $2 AND excluido_em IS NULL",
+        )
+        .bind(ctx.tenant_id)
+        .bind(id)
+        .fetch_one(&mut **tx)
+        .await?
+    } else {
+        0
+    };
+    let em_uso = em_uso(tx, ctx, tipo, id).await?;
+    Ok(Some(DescricaoExclusao {
+        rotulo,
+        conversas,
+        em_uso,
+    }))
+}
+
+/// O rótulo de um item não excluído.
+async fn rotulo_de(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    tipo: TipoExcluivel,
+    id: i64,
+) -> Result<Option<String>, DbError> {
+    let sql = format!(
+        "SELECT ({rotulo})::text FROM {tabela} t \
+          WHERE t.tenant_id = $1 AND t.id = $2 AND t.excluido_em IS NULL",
+        rotulo = tipo.rotulo_sql(),
+        tabela = tipo.tabela(),
+    );
+    let linha: Option<(Option<String>,)> = sqlx::query_as(sqlx::AssertSqlSafe(sql))
+        .bind(ctx.tenant_id)
+        .bind(id)
+        .fetch_optional(&mut **tx)
+        .await?;
+    Ok(linha.map(|(r,)| r.unwrap_or_default()))
 }
 
 /// Exclui um item. Definitivo: não há restauração.
+///
+/// `confirmar` é o nome digitado por quem pediu: precisa ser o rótulo do item
+/// (sem diferenciar espaços nas pontas). `None` só para chamadas internas que
+/// já confirmaram por outro caminho.
 #[tracing::instrument(skip_all, fields(tipo = tipo.nome(), id = id))]
 pub async fn excluir(
     tx: &mut Transaction<'_, Postgres>,
     ctx: &RequestContext,
     tipo: TipoExcluivel,
     id: i64,
+    confirmar: Option<&str>,
 ) -> Result<ResultadoExclusao, DbError> {
     ctx.exigir_qualquer(tipo.escopos())?;
+
+    if let Some(digitado) = confirmar {
+        match rotulo_de(tx, ctx, tipo, id).await? {
+            None => return Ok(ResultadoExclusao::NaoEncontrado),
+            Some(rotulo) if rotulo.trim() != digitado.trim() => {
+                return Ok(ResultadoExclusao::ConfirmacaoNaoConfere)
+            }
+            Some(_) => {}
+        }
+    }
 
     if let Some(motivo) = em_uso(tx, ctx, tipo, id).await? {
         return Ok(ResultadoExclusao::EmUso(motivo));

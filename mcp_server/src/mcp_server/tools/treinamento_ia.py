@@ -7,7 +7,6 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import Field
 
 from mcp_server.grpc.contracts import admin_pb2 as pb
@@ -18,7 +17,6 @@ from mcp_server.tools.base import (
     para_dict,
 )
 from mcp_server.tools.guards import (
-    exigir_confirmacao,
     mesmo_nome,
     recusar_duplicata,
     resultado_dry_run,
@@ -216,42 +214,6 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
             ),
         )
         return f"Intenção {intencao_id} atualizada."
-
-    registro.registrar("remover_intencao", Categoria.DESTRUTIVA, ("treinamento:write",))
-
-    @mcp.tool(
-        name="remover_intencao",
-        annotations=registro.exigir("remover_intencao").anotacoes,
-    )
-    async def remover_intencao(
-        intencao_id: Annotated[int, Field(description="Id, de `list_intencoes`.")],
-        confirmar: Annotated[
-            str, Field(default="", description="A tag exata da intenção.")
-        ] = "",
-        dry_run: Annotated[bool, DRY_RUN] = False,
-    ) -> str:
-        """Remove uma intenção: a IA deixa de reconhecer esse tipo de mensagem. Não tem
-        desfazer. Exige confirmação com a tag exata, de `list_intencoes`."""
-        tool = registro.exigir("remover_intencao")
-        lista = await executor.executar(
-            "remover_intencao",
-            "ListMyIntents",
-            pb.ListMyIntentsRequest(),
-            contabilizar=False,
-        )
-        tag = next((i.tag for i in lista.intents if i.id == intencao_id), None)
-        if tag is None:
-            raise ToolError(
-                f"A intenção {intencao_id} não existe. Confira `list_intencoes`."
-            )
-        if dry_run:
-            executor.registrar_simulacao(tool)
-            return resultado_dry_run(tool, f"remover a intenção '{tag}'")
-        exigir_confirmacao(tool, tag, confirmar or None)
-        await executor.executar(
-            "remover_intencao", "RemoveMyIntent", pb.MyIntentIdRequest(id=intencao_id)
-        )
-        return f"Intenção '{tag}' removida."
 
     # -- Teste de resposta e avaliações --------------------------------------
 

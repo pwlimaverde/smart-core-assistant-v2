@@ -503,45 +503,6 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         )
         return f"Nota {r.nota.id} criada."
 
-    registro.registrar("remover_nota", Categoria.DESTRUTIVA, ("atendimentos:write",))
-
-    @mcp.tool(
-        name="remover_nota", annotations=registro.exigir("remover_nota").anotacoes
-    )
-    async def remover_nota(
-        atendimento_id: Annotated[int, ATENDIMENTO_ID],
-        nota_id: Annotated[int, Field(description="Id, de `get_ficha_atendimento`.")],
-        confirmar: Annotated[
-            str,
-            Field(default="", description="O id da nota de novo, como confirmação."),
-        ] = "",
-        dry_run: Annotated[bool, DRY_RUN] = False,
-    ) -> str:
-        """Remove uma nota interna. Não tem desfazer. A nota precisa ser deste
-        atendimento — o par é conferido no servidor."""
-        tool = registro.exigir("remover_nota")
-        ficha = await executor.executar(
-            "remover_nota",
-            "GetDetalheAtendimento",
-            pb.AtendimentoIdRequest(atendimento_id=atendimento_id),
-            contabilizar=False,
-        )
-        if not any(n.id == nota_id for n in ficha.notas):
-            raise ToolError(
-                f"A nota {nota_id} não é do atendimento {atendimento_id}. "
-                "Confira em `get_ficha_atendimento`."
-            )
-        if dry_run:
-            executor.registrar_simulacao(tool)
-            return resultado_dry_run(tool, f"remover a nota {nota_id}")
-        exigir_confirmacao(tool, str(nota_id), confirmar or None)
-        await executor.executar(
-            "remover_nota",
-            "RemoverNota",
-            pb.RemoverNotaRequest(nota_id=nota_id, atendimento_id=atendimento_id),
-        )
-        return f"Nota {nota_id} removida."
-
     registro.registrar(
         "create_etiqueta", Categoria.CONFIGURACAO, ("atendimentos:write",)
     )

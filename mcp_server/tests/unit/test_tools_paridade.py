@@ -26,6 +26,7 @@ from mcp_server.tools import (  # noqa: E402
     cadastros,
     configuracao_tenant,
     equipe_whatsapp,
+    exclusao,
     leitura,
     treinamento_ia,
 )
@@ -143,6 +144,7 @@ def _montar() -> tuple[Any, Any, list[tuple[str, str, bytes]]]:
         treinamento_ia,
         atendimento,
         equipe_whatsapp,
+        exclusao,
     ):
         modulo.registrar(servidor, registro, executor)
     return servidor, cliente, enviados
@@ -237,12 +239,6 @@ CASOS: list[tuple[str, dict[str, Any], str, dict[str, Any]]] = [
         {"atendimento_id": 7, "texto": "ligar"},
         "CreateNota",
         {"texto": "ligar"},
-    ),
-    (
-        "remover_nota",
-        {"atendimento_id": 7, "nota_id": 9, "confirmar": "9"},
-        "RemoverNota",
-        {"nota_id": 9},
     ),
     (
         "create_etiqueta",
@@ -404,12 +400,6 @@ CASOS: list[tuple[str, dict[str, Any], str, dict[str, Any]]] = [
         {"id": 2},
     ),
     (
-        "remover_intencao",
-        {"intencao_id": 2, "confirmar": "saudacao"},
-        "RemoveMyIntent",
-        {"id": 2},
-    ),
-    (
         "testar_pergunta",
         {"pergunta": "quanto custa?"},
         "TestarPergunta",
@@ -520,10 +510,10 @@ CASOS: list[tuple[str, dict[str, Any], str, dict[str, Any]]] = [
         {"id": 1},
     ),
     (
-        "remover_numero_ignorado",
-        {"item_id": 1, "confirmar": "558599"},
-        "RemoverNumeroIgnorado",
-        {"id": 1},
+        "reativar_item",
+        {"tipo": "etapa", "id": 4},
+        "DefinirMyItemAtivo",
+        {"tipo": "etapa", "id": 4, "ativo": True},
     ),
 ]
 
@@ -702,13 +692,10 @@ async def test_alvo_inexistente_e_recusado_antes_de_agir():
     servidor, cliente, _ = _montar()
     casos = [
         ("desativar_etiqueta", {"etiqueta_id": 99, "atendimento_id": 7}),
-        ("remover_nota", {"atendimento_id": 7, "nota_id": 99}),
         ("desativar_campo", {"campo_id": 99}),
-        ("remover_intencao", {"intencao_id": 99}),
         ("revogar_convite", {"convite_id": "x"}),
         ("desconectar_conexao_whatsapp", {"conexao_id": 99}),
         ("reenviar_mensagem_nao_entregue", {"item_id": 99}),
-        ("remover_numero_ignorado", {"item_id": 99}),
     ]
     for nome, args in casos:
         with como(ADMIN), pytest.raises(ToolError):

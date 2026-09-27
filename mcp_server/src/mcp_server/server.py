@@ -42,6 +42,7 @@ from mcp_server.tools import (
     destrutivas,
     envio,
     equipe_whatsapp,
+    exclusao,
     leitura,
     treinamento_ia,
 )
@@ -65,7 +66,11 @@ Como trabalhar aqui:
 4. Se uma tool responder que falta permissão, não tente de novo com outros \
    argumentos: a pessoa precisa reconectar o aplicativo concedendo aquele acesso.
 
-5. Configuração do assistente: `get_tenant_config` mostra tudo (inclusive os \
+5. Desativar é reversível (`reativar_item` desfaz). Excluir (`excluir_item`, \
+   `excluir_conexao_whatsapp`) é DEFINITIVO: o item some do painel e não volta — \
+   se for preciso, cria-se outro. Rode `dry_run=true` antes e confirme com o nome.
+
+6. Configuração do assistente: `get_tenant_config` mostra tudo (inclusive os \
    prompts do negócio). `update_tenant_config`, `update_config_avancada` e \
    `set_prompts` mudam só o que for informado.
 
@@ -156,6 +161,7 @@ def montar() -> ServidorMcpFiltrado:
     equipe_whatsapp.registrar(mcp, registro, executor, teto=teto)
     envio.registrar(mcp, registro, executor)
     destrutivas.registrar(mcp, registro, executor)
+    exclusao.registrar(mcp, registro, executor, teto=teto)
 
     _registrar_icone(mcp)
 

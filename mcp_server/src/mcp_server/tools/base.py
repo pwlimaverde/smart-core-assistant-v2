@@ -254,6 +254,7 @@ _CAMPOS_DE_DATA = (
     "data_inicio",
     "data_ultima_mensagem",
     "ultima_checagem",
+    "excluido_em",
 )
 
 

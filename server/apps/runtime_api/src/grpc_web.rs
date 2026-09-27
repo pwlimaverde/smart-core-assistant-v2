@@ -4847,7 +4847,12 @@ impl AdminService for AdminFacade {
                 &req,
                 &self.deps.pg,
                 "ExcluirItem",
-                serde_json::json!({ "tipo": inner.tipo, "id": inner.id }),
+                serde_json::json!({
+                    "tipo": inner.tipo,
+                    "id": inner.id,
+                    "confirmar": inner.confirmar,
+                    "dry_run": inner.dry_run,
+                }),
             )
             .await?;
         let atendimentos_excluidos = val
@@ -4855,9 +4860,22 @@ impl AdminService for AdminFacade {
             .and_then(|v| v.as_array())
             .map(|a| a.iter().filter_map(|v| v.as_i64()).collect())
             .unwrap_or_default();
+        let texto = |k: &str| {
+            val.get(k)
+                .and_then(|v| v.as_str())
+                .unwrap_or_default()
+                .to_string()
+        };
         Ok(Response::new(ExcluirMyItemResponse {
             sucesso: true,
             atendimentos_excluidos,
+            simulacao: val
+                .get("simulacao")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            rotulo: texto("rotulo"),
+            conversas: val.get("conversas").and_then(|v| v.as_i64()).unwrap_or(0),
+            em_uso: texto("em_uso"),
         }))
     }
 
