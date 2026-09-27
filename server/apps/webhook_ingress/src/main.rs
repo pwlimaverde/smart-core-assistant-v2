@@ -113,17 +113,35 @@ async fn main() -> anyhow::Result<()> {
 }
 
 fn extrair_sender(event_type: &str, raw: &serde_json::Value) -> Option<String> {
+    // Com o remetente endereçado por LID (`…@lid`), o telefone vem no campo
+    // alternativo — é ele que está na lista de números ignorados.
+    fn preferir_telefone<'a>(
+        jid: Option<&'a str>,
+        alternativo: Option<&'a str>,
+    ) -> Option<&'a str> {
+        match (jid, alternativo) {
+            (Some(j), Some(a)) if j.ends_with("@lid") && a.ends_with("@s.whatsapp.net") => Some(a),
+            (j, _) => j,
+        }
+    }
     let jid = match event_type {
-        "messages.upsert" => raw
-            .get("data")
-            .and_then(|d| d.get("key"))
-            .and_then(|k| k.get("remoteJid"))
-            .and_then(|j| j.as_str()),
-        "Message" => raw
-            .get("data")
-            .and_then(|d| d.get("Info"))
-            .and_then(|i| i.get("Sender"))
-            .and_then(|s| s.as_str()),
+        "messages.upsert" => {
+            let key = raw.get("data").and_then(|d| d.get("key"));
+            preferir_telefone(
+                key.and_then(|k| k.get("remoteJid"))
+                    .and_then(|j| j.as_str()),
+                key.and_then(|k| k.get("remoteJidAlt"))
+                    .and_then(|j| j.as_str()),
+            )
+        }
+        "Message" => {
+            let info = raw.get("data").and_then(|d| d.get("Info"));
+            preferir_telefone(
+                info.and_then(|i| i.get("Sender")).and_then(|s| s.as_str()),
+                info.and_then(|i| i.get("SenderAlt"))
+                    .and_then(|s| s.as_str()),
+            )
+        }
         _ => None,
     };
 
@@ -777,11 +795,22 @@ fn translate_go_payload(payload: &serde_json::Value) -> serde_json::Value {
 
     let chat = info.get("Chat").and_then(|c| c.as_str()).unwrap_or("");
     let sender = info.get("Sender").and_then(|s| s.as_str()).unwrap_or("");
-    let alt = info
-        .get("SenderAlt")
-        .or_else(|| info.get("RecipientAlt"))
-        .and_then(|a| a.as_str())
-        .unwrap_or("");
+    // O endereço alternativo do CHAT (o telefone, quando o WhatsApp endereça a
+    // conversa por LID). Numa mensagem que chega, é o do remetente; numa que o
+    // próprio aparelho enviou (`IsFromMe`), é o do destinatário — o
+    // `SenderAlt` seria o nosso número, e a conversa iria parar no contato
+    // errado.
+    let de_mim = info
+        .get("IsFromMe")
+        .and_then(|f| f.as_bool())
+        .unwrap_or(false);
+    let alt = if de_mim {
+        info.get("RecipientAlt")
+    } else {
+        info.get("SenderAlt")
+    }
+    .and_then(|a| a.as_str())
+    .unwrap_or("");
 
     let ts_raw = info.get("Timestamp");
     let ts_val = if let Some(ts_str) = ts_raw.and_then(|t| t.as_str()) {
@@ -948,6 +977,70 @@ mod tests {
     use axum::http::{Request, StatusCode};
     use serde_json::json;
     use tower::ServiceExt;
+
+    /// A lista de ignorados guarda telefone: remetente por LID confere pelo
+    /// alternativo.
+    #[test]
+    fn remetente_por_lid_confere_a_lista_pelo_telefone() {
+        let go = json!({ "data": { "Info": {
+            "Sender": "82506422431828@lid",
+            "SenderAlt": "558899990000@s.whatsapp.net"
+        } } });
+        assert_eq!(
+            extrair_sender("Message", &go).as_deref(),
+            Some("558899990000")
+        );
+
+        let v2 = json!({ "data": { "key": {
+            "remoteJid": "82506422431828@lid",
+            "remoteJidAlt": "558899990000@s.whatsapp.net"
+        } } });
+        assert_eq!(
+            extrair_sender("messages.upsert", &v2).as_deref(),
+            Some("558899990000")
+        );
+
+        let sem_alt = json!({ "data": { "Info": { "Sender": "558811112222@s.whatsapp.net" } } });
+        assert_eq!(
+            extrair_sender("Message", &sem_alt).as_deref(),
+            Some("558811112222")
+        );
+    }
+
+    /// O JID alternativo segue o lado da conversa: remetente quando a mensagem
+    /// chega, destinatário quando o próprio aparelho enviou.
+    #[test]
+    fn traducao_go_escolhe_o_alternativo_do_chat() {
+        let chegando = json!({
+            "event": "Message",
+            "data": { "Info": {
+                "Chat": "82506422431828@lid", "Sender": "82506422431828@lid",
+                "SenderAlt": "558899990000@s.whatsapp.net",
+                "RecipientAlt": "", "IsFromMe": false, "ID": "A"
+            }, "Message": { "conversation": "oi" } }
+        });
+        let t = translate_go_payload(&chegando);
+        assert_eq!(
+            t["data"]["key"]["remoteJidAlt"],
+            "558899990000@s.whatsapp.net"
+        );
+
+        let enviada = json!({
+            "event": "Message",
+            "data": { "Info": {
+                "Chat": "82506422431828@lid", "Sender": "11111@lid",
+                "SenderAlt": "558800000000@s.whatsapp.net",
+                "RecipientAlt": "558899990000@s.whatsapp.net",
+                "IsFromMe": true, "ID": "B"
+            }, "Message": { "conversation": "resposta" } }
+        });
+        let t = translate_go_payload(&enviada);
+        // Nunca o nosso próprio número (SenderAlt) como o contato da conversa.
+        assert_eq!(
+            t["data"]["key"]["remoteJidAlt"],
+            "558899990000@s.whatsapp.net"
+        );
+    }
 
     async fn fake_bus(porta: u16) -> redis::aio::ConnectionManager {
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", porta))

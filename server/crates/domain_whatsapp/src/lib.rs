@@ -96,6 +96,25 @@ fn extrair_meta_midia(sub: &serde_json::Value) -> (Option<String>, Option<i64>) 
     (mime, size)
 }
 
+/// O JID da conversa, com o telefone no lugar do LID quando o provedor o manda.
+///
+/// Conversas endereçadas por LID (`…@lid`) trazem no `remoteJid` um identificador
+/// interno do WhatsApp, não o telefone — e cada LID virava um contato novo com
+/// "telefone" de 14 ou 15 dígitos. O telefone vem no `remoteJidAlt`
+/// (`…@s.whatsapp.net`); sem ele, fica o `remoteJid` como antes.
+fn jid_do_chat(key: &serde_json::Value) -> &str {
+    let remote_jid = key.get("remoteJid").and_then(|j| j.as_str()).unwrap_or("");
+    let alternativo = key
+        .get("remoteJidAlt")
+        .and_then(|j| j.as_str())
+        .unwrap_or("");
+    if remote_jid.ends_with("@lid") && alternativo.ends_with("@s.whatsapp.net") {
+        alternativo
+    } else {
+        remote_jid
+    }
+}
+
 impl NormalizedMessage {
     pub fn parse(
         raw: &serde_json::Value,
@@ -119,7 +138,7 @@ impl NormalizedMessage {
             .get("isGroup")
             .and_then(|g| g.as_bool())
             .unwrap_or(false);
-        let remote_jid = key.get("remoteJid").and_then(|j| j.as_str()).unwrap_or("");
+        let remote_jid = jid_do_chat(key);
 
         let sender_jid = if is_group {
             data.get("participant")
@@ -522,6 +541,63 @@ mod tests {
         assert!(!msg.is_from_me);
         assert!(!msg.is_group);
         assert_eq!(msg.reply_to, None);
+    }
+
+    /// Conversa endereçada por LID: o telefone vem no `remoteJidAlt`.
+    ///
+    /// Sem isto, os dígitos do LID viravam o "telefone" e cada conversa de teste
+    /// criou um contato novo (relatório de migração da Ecoprint, 27/09).
+    #[test]
+    fn conversa_por_lid_usa_o_telefone_do_jid_alternativo() {
+        let payload = json!({
+            "data": {
+                "key": {
+                    "remoteJid": "82506422431828@lid",
+                    "remoteJidAlt": "558899990000@s.whatsapp.net",
+                    "fromMe": false,
+                    "id": "MSG-LID"
+                },
+                "message": { "conversation": "teste" }
+            }
+        });
+
+        let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
+
+        assert_eq!(msg.sender, "558899990000");
+    }
+
+    /// Sem o alternativo, o comportamento anterior continua (não inventa número).
+    #[test]
+    fn conversa_por_lid_sem_alternativo_mantem_o_jid() {
+        let payload = json!({
+            "data": {
+                "key": { "remoteJid": "82506422431828@lid", "remoteJidAlt": "", "id": "M" },
+                "message": { "conversation": "x" }
+            }
+        });
+
+        let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
+
+        assert_eq!(msg.sender, "82506422431828");
+    }
+
+    /// Conversa já por telefone: o alternativo (que seria o LID) não troca nada.
+    #[test]
+    fn conversa_por_telefone_ignora_o_alternativo() {
+        let payload = json!({
+            "data": {
+                "key": {
+                    "remoteJid": "558899990000@s.whatsapp.net",
+                    "remoteJidAlt": "82506422431828@lid",
+                    "id": "M"
+                },
+                "message": { "conversation": "x" }
+            }
+        });
+
+        let msg = NormalizedMessage::parse(&payload, Uuid::new_v4(), 1).unwrap();
+
+        assert_eq!(msg.sender, "558899990000");
     }
 
     #[test]
