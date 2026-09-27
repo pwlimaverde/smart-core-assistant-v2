@@ -490,13 +490,36 @@ fn midia_do_item(item: &serde_json::Value) -> Option<ProtoMidiaMensagem> {
     })
 }
 
-/// Extrai o `User-Agent` da requisição gRPC-Web (WS-5b). Metadado de auditoria,
-/// não segredo; truncado defensivamente para evitar payload abusivo no audit_log.
+/// Header com que o `mcp_server` declara a tool e o consentimento de cada chamada.
+///
+/// Existe porque o gRPC não deixa o cliente mandar o próprio `user-agent` por
+/// chamada: o core do gRPC (Python e C) sobrescreve o valor com
+/// `grpc-python-asyncio/...`, e toda ação de agente chegava ao `audit_log`
+/// indistinguível — a tela "o que o agente fez" nunca achava nada.
+const HEADER_ORIGEM_AGENTE: &str = "x-smartcore-agente";
+
+/// Prefixo que a trilha reconhece como agente (o mesmo de
+/// `infrastructure_postgres::auditoria::audit_log::PREFIXO_USER_AGENT_MCP`).
+const PREFIXO_ORIGEM_AGENTE: &str = "SmartCoreAssistant-MCP/";
+
+/// Extrai a origem da requisição para a auditoria (WS-5b). Metadado de
+/// auditoria, não segredo; truncado defensivamente para evitar payload abusivo
+/// no audit_log.
+///
+/// A origem declarada pelo agente MCP vence o `user-agent` do transporte, mas só
+/// quando segue o formato `SmartCoreAssistant-MCP/<tool>`: é autodeclarada, como
+/// o próprio `user-agent`, e só serve para rotular a ação de quem já se
+/// autenticou — não concede nada.
 fn user_agent_do_metadata<T>(req: &Request<T>) -> String {
-    req.metadata()
-        .get("user-agent")
-        .and_then(|v| v.to_str().ok())
-        .map(|s| s.chars().take(512).collect::<String>())
+    let texto = |chave: &str| {
+        req.metadata()
+            .get(chave)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.chars().take(512).collect::<String>())
+    };
+    texto(HEADER_ORIGEM_AGENTE)
+        .filter(|s| s.starts_with(PREFIXO_ORIGEM_AGENTE))
+        .or_else(|| texto("user-agent"))
         .unwrap_or_default()
 }
 
@@ -10620,6 +10643,41 @@ mod tests {
             refresh_token: String::new(),
         });
         assert_eq!(user_agent_do_metadata(&req_vazio), "");
+    }
+
+    #[test]
+    fn user_agent_do_metadata_prefere_a_origem_declarada_pelo_agente() {
+        // O gRPC sobrescreve o `user-agent`; a tool vem no header próprio.
+        let mut req = Request::new(LogoutRequest {
+            refresh_token: String::new(),
+        });
+        req.metadata_mut().insert(
+            "user-agent",
+            "grpc-python-asyncio/1.83.1 grpc-c/56.0.0".parse().unwrap(),
+        );
+        req.metadata_mut().insert(
+            "x-smartcore-agente",
+            "SmartCoreAssistant-MCP/remover_nota (grant g-1)"
+                .parse()
+                .unwrap(),
+        );
+        assert_eq!(
+            user_agent_do_metadata(&req),
+            "SmartCoreAssistant-MCP/remover_nota (grant g-1)"
+        );
+    }
+
+    #[test]
+    fn user_agent_do_metadata_ignora_origem_fora_do_formato() {
+        // Qualquer outro valor no header não substitui o user-agent real.
+        let mut req = Request::new(LogoutRequest {
+            refresh_token: String::new(),
+        });
+        req.metadata_mut()
+            .insert("user-agent", "Mozilla/5.0 Flutter".parse().unwrap());
+        req.metadata_mut()
+            .insert("x-smartcore-agente", "qualquer-coisa".parse().unwrap());
+        assert_eq!(user_agent_do_metadata(&req), "Mozilla/5.0 Flutter");
     }
 
     #[test]

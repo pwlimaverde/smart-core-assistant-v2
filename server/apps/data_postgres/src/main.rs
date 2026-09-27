@@ -896,17 +896,22 @@ async fn main() -> anyhow::Result<()> {
         })
         .route("RemoverNota", move |env| {
             let state = state_for_remover_nota.clone();
-            Box::pin(async move { handler_remover_nota(state.atendimento.as_ref(), env).await })
+            Box::pin(async move {
+                handler_remover_nota(state.atendimento.as_ref(), state.audit.as_ref(), env).await
+            })
         })
         .route("UpdateEtiqueta", move |env| {
             let state = state_for_update_etiqueta.clone();
-            Box::pin(async move { handler_update_etiqueta(state.atendimento.as_ref(), env).await })
+            Box::pin(async move {
+                handler_update_etiqueta(state.atendimento.as_ref(), state.audit.as_ref(), env).await
+            })
         })
         .route("DesativarEtiqueta", move |env| {
             let state = state_for_desativar_etiqueta.clone();
-            Box::pin(
-                async move { handler_desativar_etiqueta(state.atendimento.as_ref(), env).await },
-            )
+            Box::pin(async move {
+                handler_desativar_etiqueta(state.atendimento.as_ref(), state.audit.as_ref(), env)
+                    .await
+            })
         })
         .route("ExportarQuadro", move |env| {
             let state = state_for_exportar_quadro.clone();
@@ -987,7 +992,12 @@ async fn main() -> anyhow::Result<()> {
         .route("TransferirAtendimentoParaFluxo", move |env| {
             let state = state_for_transferir_fluxo.clone();
             Box::pin(async move {
-                handler_transferir_atendimento_para_fluxo(state.atendimento.as_ref(), env).await
+                handler_transferir_atendimento_para_fluxo(
+                    state.atendimento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
             })
         })
         .route("GravarCamposExtraidos", move |env| {
@@ -5260,6 +5270,7 @@ async fn handler_listar_fluxos_do_tenant(
 /// Transfere o atendimento para outro fluxo (transferência automática pela IA, N6.3).
 async fn handler_transferir_atendimento_para_fluxo(
     store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
     env: Envelope,
 ) -> Envelope {
     let payload_json: serde_json::Value = match serde_json::from_slice(&env.payload) {
@@ -5290,21 +5301,40 @@ async fn handler_transferir_atendimento_para_fluxo(
         .transferir_atendimento_para_fluxo(&ctx, atendimento_id, fluxo_id)
         .await
     {
-        Ok(outcome) => ok_reply(
-            &env,
-            "TransferirAtendimentoParaFluxoReply",
-            serde_json::json!({
-                "transferido": outcome.transferido,
-                "fluxo_id": outcome.fluxo_id,
-                "fluxo_nome": outcome.fluxo_nome,
-                "etapa_id": outcome.etapa_id,
-                "etapa_nome": outcome.etapa_nome,
-                "reason": outcome.reason,
-                "atendente_id": outcome.atendente_id,
-                "atendente_nome": outcome.atendente_nome,
-                "atendente_usuario_id": outcome.atendente_usuario_id,
-            }),
-        ),
+        Ok(outcome) => {
+            // Só a transferência pedida por alguém (painel ou agente MCP): a da
+            // IA já é auditada pelo worker como `atendimento.transferido_por_ia`,
+            // e chega aqui sem usuário no envelope.
+            if outcome.transferido && env.auth_user_id > 0 {
+                audit
+                    .publish(
+                        &env,
+                        "atendimento.transferido",
+                        format!("Atendimento {atendimento_id} transferido para o fluxo {fluxo_id}"),
+                        serde_json::json!({
+                            "atendimento_id": atendimento_id,
+                            "fluxo_id": fluxo_id,
+                            "etapa_id": outcome.etapa_id,
+                        }),
+                    )
+                    .await;
+            }
+            ok_reply(
+                &env,
+                "TransferirAtendimentoParaFluxoReply",
+                serde_json::json!({
+                    "transferido": outcome.transferido,
+                    "fluxo_id": outcome.fluxo_id,
+                    "fluxo_nome": outcome.fluxo_nome,
+                    "etapa_id": outcome.etapa_id,
+                    "etapa_nome": outcome.etapa_nome,
+                    "reason": outcome.reason,
+                    "atendente_id": outcome.atendente_id,
+                    "atendente_nome": outcome.atendente_nome,
+                    "atendente_usuario_id": outcome.atendente_usuario_id,
+                }),
+            )
+        }
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }
@@ -5564,7 +5594,11 @@ async fn handler_listar_atendimentos_do_contato(
 
 /// P5 — apaga uma nota interna.
 #[tracing::instrument(skip_all, fields(rpc = "RemoverNota", tenant_id = %env.tenant_id))]
-async fn handler_remover_nota(store: &dyn ports::AtendimentoStore, env: Envelope) -> Envelope {
+async fn handler_remover_nota(
+    store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
     let payload_json: serde_json::Value =
         serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
     let nota_id = payload_json.get("nota_id").and_then(|v| v.as_i64());
@@ -5581,18 +5615,36 @@ async fn handler_remover_nota(store: &dyn ports::AtendimentoStore, env: Envelope
 
     let ctx = contexto_do_envelope(&env);
     match store.remover_nota(&ctx, nota_id, atendimento_id).await {
-        Ok(removida) => ok_reply(
-            &env,
-            "RemoverNotaReply",
-            serde_json::json!({ "ok": removida }),
-        ),
+        Ok(removida) => {
+            // Apagar anotação não tem desfazer: registra quem apagou e qual,
+            // nunca o texto (é PII livre do operador).
+            if removida {
+                audit
+                    .publish(
+                        &env,
+                        "nota.removida",
+                        format!("Anotação {nota_id} removida do atendimento {atendimento_id}"),
+                        serde_json::json!({ "nota_id": nota_id, "atendimento_id": atendimento_id }),
+                    )
+                    .await;
+            }
+            ok_reply(
+                &env,
+                "RemoverNotaReply",
+                serde_json::json!({ "ok": removida }),
+            )
+        }
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }
 
 /// P5 — renomeia/recolore uma etiqueta do catálogo.
 #[tracing::instrument(skip_all, fields(rpc = "UpdateEtiqueta", tenant_id = %env.tenant_id))]
-async fn handler_update_etiqueta(store: &dyn ports::AtendimentoStore, env: Envelope) -> Envelope {
+async fn handler_update_etiqueta(
+    store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
     let payload_json: serde_json::Value =
         serde_json::from_slice(&env.payload).unwrap_or_else(|_| serde_json::json!({}));
     let id = match payload_json.get("id").and_then(|v| v.as_i64()) {
@@ -5626,14 +5678,24 @@ async fn handler_update_etiqueta(store: &dyn ports::AtendimentoStore, env: Envel
         .atualizar_etiqueta(&ctx, id, &nome, &cor, &texto("descricao"))
         .await
     {
-        Ok(Some(e)) => ok_reply(
-            &env,
-            "UpdateEtiquetaReply",
-            serde_json::json!({
-                "id": e.id, "nome": e.nome, "cor": e.cor,
-                "descricao": e.descricao, "ativo": e.ativo,
-            }),
-        ),
+        Ok(Some(e)) => {
+            audit
+                .publish(
+                    &env,
+                    "etiqueta.atualizada",
+                    format!("Etiqueta {} atualizada", e.id),
+                    serde_json::json!({ "etiqueta_id": e.id, "nome": e.nome, "cor": e.cor }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "UpdateEtiquetaReply",
+                serde_json::json!({
+                    "id": e.id, "nome": e.nome, "cor": e.cor,
+                    "descricao": e.descricao, "ativo": e.ativo,
+                }),
+            )
+        }
         // Não existe (ou é de outro tenant): validação, não falha de banco.
         Ok(None) => erro(
             error_core::AppError::Validation("etiqueta não encontrada".into()),
@@ -5647,6 +5709,7 @@ async fn handler_update_etiqueta(store: &dyn ports::AtendimentoStore, env: Envel
 #[tracing::instrument(skip_all, fields(rpc = "DesativarEtiqueta", tenant_id = %env.tenant_id))]
 async fn handler_desativar_etiqueta(
     store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
     env: Envelope,
 ) -> Envelope {
     let payload_json: serde_json::Value =
@@ -5658,11 +5721,23 @@ async fn handler_desativar_etiqueta(
 
     let ctx = contexto_do_envelope(&env);
     match store.desativar_etiqueta(&ctx, id).await {
-        Ok(ok) => ok_reply(
-            &env,
-            "DesativarEtiquetaReply",
-            serde_json::json!({ "ok": ok }),
-        ),
+        Ok(ok) => {
+            if ok {
+                audit
+                    .publish(
+                        &env,
+                        "etiqueta.desativada",
+                        format!("Etiqueta {id} desativada"),
+                        serde_json::json!({ "etiqueta_id": id }),
+                    )
+                    .await;
+            }
+            ok_reply(
+                &env,
+                "DesativarEtiquetaReply",
+                serde_json::json!({ "ok": ok }),
+            )
+        }
         Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
     }
 }
@@ -12534,12 +12609,104 @@ mod tests_atendimento_cliente_unit {
             serde_json::json!({ "atendimento_id": 42, "fluxo_id": 7 }),
         );
 
-        let resp = handler_transferir_atendimento_para_fluxo(&store, env).await;
+        // Sem usuário no envelope = a IA (worker): já auditada no worker, então
+        // o mock sem expectativa falha se houver uma segunda linha aqui.
+        let audit = crate::ports::MockAuditPort::new();
+
+        let resp = handler_transferir_atendimento_para_fluxo(&store, &audit, env).await;
 
         assert_eq!(resp.kind, MessageKind::Reply as i32);
         let body: serde_json::Value = serde_json::from_slice(&resp.payload).unwrap();
         assert_eq!(body["transferido"].as_bool(), Some(true));
         assert_eq!(body["etapa_id"].as_i64(), Some(11));
+    }
+
+    /// Transferência pedida por alguém (painel ou agente MCP) entra na trilha.
+    #[tokio::test]
+    async fn transferir_atendimento_por_usuario_audita() {
+        use crate::ports::TransferenciaFluxoOutcome;
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_transferir_atendimento_para_fluxo()
+            .returning(|_, _, _| {
+                Ok(TransferenciaFluxoOutcome {
+                    transferido: true,
+                    fluxo_id: Some(7),
+                    etapa_id: Some(11),
+                    ..Default::default()
+                })
+            });
+        let mut audit = crate::ports::MockAuditPort::new();
+        audit
+            .expect_publish()
+            .times(1)
+            .withf(|_, event, _, ctx| event == "atendimento.transferido" && ctx["fluxo_id"] == 7)
+            .returning(|_, _, _, _| ());
+        let mut env = envelope_com_payload(
+            "TransferirAtendimentoParaFluxo",
+            serde_json::json!({ "atendimento_id": 42, "fluxo_id": 7 }),
+        );
+        env.auth_user_id = 5;
+
+        let resp = handler_transferir_atendimento_para_fluxo(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    /// Anotação apagada não tem desfazer: a trilha guarda qual, nunca o texto.
+    #[tokio::test]
+    async fn remover_nota_audita_sem_o_texto() {
+        let mut store = MockAtendimentoStore::new();
+        store.expect_remover_nota().returning(|_, _, _| Ok(true));
+        let mut audit = crate::ports::MockAuditPort::new();
+        audit
+            .expect_publish()
+            .times(1)
+            .withf(|_, event, _, ctx| {
+                event == "nota.removida" && ctx["nota_id"] == 9 && ctx.get("texto").is_none()
+            })
+            .returning(|_, _, _, _| ());
+        let env = envelope_com_payload(
+            "RemoverNota",
+            serde_json::json!({ "nota_id": 9, "atendimento_id": 42 }),
+        );
+
+        let resp = handler_remover_nota(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    /// Nada removido (id de outro tenant ou já apagado): nada a auditar.
+    #[tokio::test]
+    async fn remover_nota_inexistente_nao_audita() {
+        let mut store = MockAtendimentoStore::new();
+        store.expect_remover_nota().returning(|_, _, _| Ok(false));
+        let audit = crate::ports::MockAuditPort::new();
+        let env = envelope_com_payload(
+            "RemoverNota",
+            serde_json::json!({ "nota_id": 9, "atendimento_id": 42 }),
+        );
+
+        let resp = handler_remover_nota(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    #[tokio::test]
+    async fn desativar_etiqueta_audita() {
+        let mut store = MockAtendimentoStore::new();
+        store.expect_desativar_etiqueta().returning(|_, _| Ok(true));
+        let mut audit = crate::ports::MockAuditPort::new();
+        audit
+            .expect_publish()
+            .times(1)
+            .withf(|_, event, _, ctx| event == "etiqueta.desativada" && ctx["etiqueta_id"] == 4)
+            .returning(|_, _, _, _| ());
+        let env = envelope_com_payload("DesativarEtiqueta", serde_json::json!({ "id": 4 }));
+
+        let resp = handler_desativar_etiqueta(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
     }
 
     /// FAIL-CLOSED: transferir sem fluxo_id vira erro de validação.
@@ -12550,7 +12717,8 @@ mod tests_atendimento_cliente_unit {
             "TransferirAtendimentoParaFluxo",
             serde_json::json!({ "atendimento_id": 42 }),
         );
-        let resp = handler_transferir_atendimento_para_fluxo(&store, env).await;
+        let audit = crate::ports::MockAuditPort::new();
+        let resp = handler_transferir_atendimento_para_fluxo(&store, &audit, env).await;
         assert_eq!(resp.kind, MessageKind::Error as i32);
     }
 

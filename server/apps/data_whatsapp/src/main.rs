@@ -433,7 +433,7 @@ async fn handler_create_whatsapp_instance(mut state: AppState, env: Envelope) ->
         context: serde_json::json!({ "instance_name": instance_name, "provider": provider_name }),
         user_id: (env.auth_user_id > 0).then_some(env.auth_user_id),
         ip_address: None,
-        user_agent: None,
+        user_agent: user_agent_do_envelope(&env),
     };
     let audit_event = TenantEnvelope::novo(
         tenant_uuid.unwrap_or_else(Uuid::nil),
@@ -537,7 +537,7 @@ async fn handler_delete_whatsapp_instance(mut state: AppState, env: Envelope) ->
         context: serde_json::json!({ "instance_name": name }),
         user_id: (env.auth_user_id > 0).then_some(env.auth_user_id),
         ip_address: None,
-        user_agent: None,
+        user_agent: user_agent_do_envelope(&env),
     };
     let audit_event = TenantEnvelope::novo(
         tenant_uuid.unwrap_or_else(Uuid::nil),
@@ -554,8 +554,50 @@ async fn handler_delete_whatsapp_instance(mut state: AppState, env: Envelope) ->
     )
 }
 
+/// Origem da ação para a trilha: o `runtime_api` copia o user-agent do cliente
+/// para o envelope. É o que separa o que o dono fez no painel do que um agente
+/// MCP fez em nome dele (`SmartCoreAssistant-MCP/<tool>`).
+fn user_agent_do_envelope(env: &Envelope) -> Option<String> {
+    (!env.user_agent.is_empty()).then(|| env.user_agent.clone())
+}
+
+/// Evento de auditoria de uma instância no `security:stream`, no formato
+/// `AuditLogPayload` que o consumidor do `data_postgres` exige.
+async fn auditar_instancia(
+    redis: &mut redis::aio::ConnectionManager,
+    env: &Envelope,
+    event: &str,
+    message: String,
+    context: serde_json::Value,
+) {
+    let tenant_uuid = Uuid::parse_str(&env.tenant_id)
+        .ok()
+        .filter(|id| !id.is_nil());
+    let audit_payload = observability::AuditLogPayload {
+        tenant_id: tenant_uuid,
+        level: "INFO".to_string(),
+        service: "data_whatsapp".to_string(),
+        trace_id: Some(env.traceparent.clone()),
+        event: event.to_string(),
+        message,
+        context,
+        user_id: (env.auth_user_id > 0).then_some(env.auth_user_id),
+        ip_address: None,
+        user_agent: user_agent_do_envelope(env),
+    };
+    let audit_event = TenantEnvelope::novo(
+        tenant_uuid.unwrap_or_else(Uuid::nil),
+        "security.audit",
+        audit_payload,
+    )
+    .com_traceparent(env.traceparent.clone());
+    if let Err(e) = transport::bus::publicar_evento_seguranca(redis, &audit_event).await {
+        tracing::error!("Falha ao publicar auditoria de '{}': {:?}", event, e);
+    }
+}
+
 #[tracing::instrument(skip_all, fields(rpc = "ReconnectWhatsappInstance", tenant_id = %env.tenant_id))]
-async fn handler_reconnect_whatsapp_instance(state: AppState, env: Envelope) -> Envelope {
+async fn handler_reconnect_whatsapp_instance(mut state: AppState, env: Envelope) -> Envelope {
     let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
         Ok(v) => v,
         Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
@@ -654,6 +696,19 @@ async fn handler_reconnect_whatsapp_instance(state: AppState, env: Envelope) -> 
         gravar_estado(&env, db_id, texto).await;
     }
 
+    auditar_instancia(
+        &mut state.redis_conn,
+        &env,
+        "whatsapp.instance.reconnect",
+        format!("Reconexão da instância WhatsApp {db_id} pedida (estado: {texto})"),
+        serde_json::json!({
+            "instance_id": db_id,
+            "state": texto,
+            "precisa_parear": precisa_parear,
+        }),
+    )
+    .await;
+
     // Precisar de QR **não é erro**: é o desfecho normal de uma sessão que o
     // WhatsApp desfez, e o caminho adiante existe — a tela abre a caixa de
     // pareamento no sucesso, justamente porque não dá para saber antes se a
@@ -694,7 +749,7 @@ async fn handler_reconnect_whatsapp_instance(state: AppState, env: Envelope) -> 
 /// pediu para desconectar não pode ficar com a tela dizendo "Conectada" porque a
 /// evolution-go respondeu 500. O erro sobe junto, para a tela contar o que houve.
 #[tracing::instrument(skip_all, fields(rpc = "DisconnectWhatsappInstance", tenant_id = %env.tenant_id))]
-async fn handler_disconnect_whatsapp_instance(state: AppState, env: Envelope) -> Envelope {
+async fn handler_disconnect_whatsapp_instance(mut state: AppState, env: Envelope) -> Envelope {
     let payload: serde_json::Value = match serde_json::from_slice(&env.payload) {
         Ok(v) => v,
         Err(e) => return erro(error_core::AppError::Validation(e.to_string()), &env),
@@ -750,6 +805,21 @@ async fn handler_disconnect_whatsapp_instance(state: AppState, env: Envelope) ->
     let falha = p.disconnect_instance(&name, &api_key_sec).await.err();
 
     gravar_estado(&env, db_id, "disconnected").await;
+
+    // Encerrar a sessão obriga a parear de novo com o aparelho na mão: fica na
+    // trilha quem pediu, mesmo quando o provedor recusou.
+    auditar_instancia(
+        &mut state.redis_conn,
+        &env,
+        "whatsapp.instance.disconnect",
+        format!("Sessão da instância WhatsApp '{name}' encerrada"),
+        serde_json::json!({
+            "instance_id": db_id,
+            "instance_name": name,
+            "provedor_recusou": falha.is_some(),
+        }),
+    )
+    .await;
 
     if let Some(e) = falha {
         tracing::warn!(
@@ -1720,7 +1790,7 @@ async fn handler_admin_bulk_disconnect(mut state: AppState, env: Envelope) -> En
         context: serde_json::json!({ "count": count, "scope": escopo }),
         user_id: (env.auth_user_id > 0).then_some(env.auth_user_id),
         ip_address: None,
-        user_agent: None,
+        user_agent: user_agent_do_envelope(&env),
     };
     let audit_event = TenantEnvelope::novo(
         tenant_id_opt.unwrap_or_else(Uuid::nil),

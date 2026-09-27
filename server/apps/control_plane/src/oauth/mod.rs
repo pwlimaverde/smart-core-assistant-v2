@@ -1105,6 +1105,9 @@ async fn token_exchange(
         .and_then(|v| v.to_str().ok())
         .unwrap_or_default();
     if cfg.servico_secreto.is_empty() || !tokens::hash_confere(&cfg.servico_secreto, apresentado) {
+        // Dentro da rede só o `mcp_server` conhece o segredo: outro chamador
+        // aqui é alguém sondando o endpoint.
+        auditar_recusa_da_troca(&estado, "servico_nao_autorizado", None, None, None).await;
         return erro_token(
             StatusCode::UNAUTHORIZED,
             "invalid_client",
@@ -1120,11 +1123,14 @@ async fn token_exchange(
     ) {
         Ok(c) => c,
         Err(_) => {
+            // Token expirado é rotina (o cliente renova); não vai para a trilha.
+            // Fica no log, para um pico ser visível no Loki.
+            tracing::warn!(motivo = "token_invalido", "troca de token recusada");
             return erro_token(
                 StatusCode::UNAUTHORIZED,
                 "invalid_token",
                 "access token inválido, expirado ou de audiência alheia",
-            )
+            );
         }
     };
     tracing::Span::current().record("grant_id", claims.grant_id.as_str());
@@ -1146,6 +1152,16 @@ async fn token_exchange(
     .await
     .is_ok();
     if !grant_ok {
+        // Token válido de um consentimento revogado: o aplicativo continua
+        // tentando depois que o dono o desconectou.
+        auditar_recusa_da_troca(
+            &estado,
+            "grant_revogado",
+            Some(tenant_id),
+            Some(user_id),
+            Some(&claims.grant_id),
+        )
+        .await;
         return erro_token(
             StatusCode::UNAUTHORIZED,
             "invalid_token",
@@ -1160,6 +1176,14 @@ async fn token_exchange(
         .unwrap_or_default();
     let efetivos = scopes::interseccionar(&claims.scopes, &escopos_atuais);
     if efetivos.is_empty() {
+        auditar_recusa_da_troca(
+            &estado,
+            "sem_permissao",
+            Some(tenant_id),
+            Some(user_id),
+            Some(&claims.grant_id),
+        )
+        .await;
         return erro_token(
             StatusCode::FORBIDDEN,
             "insufficient_scope",
@@ -1202,6 +1226,42 @@ async fn token_exchange(
 // ---------------------------------------------------------------------------
 // Auxiliares
 // ---------------------------------------------------------------------------
+
+/// Troca de token recusada, no `security:stream` (`mcp.token_recusado`, WARN).
+///
+/// Nunca leva o token — só o motivo e os identificadores que a recusa já
+/// conhece. Falha ao publicar não muda a resposta: a recusa vale igual.
+async fn auditar_recusa_da_troca(
+    estado: &OauthState,
+    motivo: &str,
+    tenant_id: Option<Uuid>,
+    user_id: Option<i32>,
+    grant_id: Option<&str>,
+) {
+    tracing::warn!(motivo, "troca de token recusada");
+    let tenant_id = tenant_id.filter(|id| !id.is_nil());
+    let payload = observability::AuditLogPayload {
+        tenant_id,
+        level: "WARN".to_string(),
+        service: "control_plane".to_string(),
+        trace_id: None,
+        event: "mcp.token_recusado".to_string(),
+        message: format!("Troca de token do agente MCP recusada ({motivo})"),
+        context: serde_json::json!({ "motivo": motivo, "grant_id": grant_id }),
+        user_id: user_id.filter(|id| *id > 0),
+        ip_address: None,
+        user_agent: None,
+    };
+    let evento = contracts::TenantEnvelope::novo(
+        tenant_id.unwrap_or_else(Uuid::nil),
+        "security.audit",
+        payload,
+    );
+    let mut redis = estado.redis.clone();
+    if let Err(e) = transport::bus::publicar_evento_seguranca(&mut redis, &evento).await {
+        tracing::error!("Falha ao publicar auditoria da troca de token: {:?}", e);
+    }
+}
 
 fn novo_traceparent() -> String {
     format!(
