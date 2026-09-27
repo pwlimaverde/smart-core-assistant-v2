@@ -4,6 +4,7 @@ pub mod codec;
 pub mod error;
 pub mod framing;
 pub mod liveness;
+pub mod origem;
 pub mod runtime;
 
 // Re-exportações públicas para facilitar o uso por outros crates

@@ -523,6 +523,67 @@ fn user_agent_do_metadata<T>(req: &Request<T>) -> String {
         .unwrap_or_default()
 }
 
+/// A mesma escolha de [`user_agent_do_metadata`], a partir dos headers HTTP.
+fn origem_dos_headers(headers: &http::HeaderMap) -> String {
+    let texto = |chave: &str| {
+        headers
+            .get(chave)
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.chars().take(512).collect::<String>())
+    };
+    texto(HEADER_ORIGEM_AGENTE)
+        .filter(|s| s.starts_with(PREFIXO_ORIGEM_AGENTE))
+        .or_else(|| texto("user-agent"))
+        .unwrap_or_default()
+}
+
+/// Camada que registra a origem de cada requisição para o `transport`.
+///
+/// Dezenas de handlers montam o envelope para os serviços de dados sem copiar
+/// o `user_agent`; com a origem guardada aqui, o `MuxClient` completa todos eles
+/// (ver `transport::origem`). Sem isto, arquivar um atendimento ou mudar a
+/// configuração avançada pelo agente MCP chegava à trilha sem origem.
+#[derive(Clone, Copy, Default)]
+pub(crate) struct CamadaOrigem;
+
+impl<S> tower::Layer<S> for CamadaOrigem {
+    type Service = ServicoComOrigem<S>;
+
+    fn layer(&self, inner: S) -> Self::Service {
+        ServicoComOrigem { inner }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct ServicoComOrigem<S> {
+    inner: S,
+}
+
+impl<S, B> tower::Service<http::Request<B>> for ServicoComOrigem<S>
+where
+    S: tower::Service<http::Request<B>>,
+    S::Future: Send + 'static,
+    S::Response: 'static,
+    S::Error: 'static,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+    type Future = futures_util::future::BoxFuture<'static, Result<S::Response, S::Error>>;
+
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Result<(), Self::Error>> {
+        self.inner.poll_ready(cx)
+    }
+
+    fn call(&mut self, req: http::Request<B>) -> Self::Future {
+        let origem = origem_dos_headers(req.headers());
+        let futuro = self.inner.call(req);
+        Box::pin(transport::origem::com_origem(origem, futuro))
+    }
+}
+
 /// Guarda de borda gRPC-Web: valida JWT + blocklist Redis + privilégio de superusuário.
 async fn exigir_superuser_do_metadata<T>(
     deps: &AuthDeps,
@@ -10354,6 +10415,8 @@ pub async fn serve(deps: Arc<AuthDeps>, bus: redis::aio::ConnectionManager) -> a
         .accept_http1(true) // OBRIGATÓRIO para o browser (HTTP/1.1)
         .layer(cors) // CORS ANTES
         .layer(tonic_web::GrpcWebLayer::new()) // GrpcWebLayer DEPOIS
+        // Origem da requisição para a trilha de auditoria (ver `CamadaOrigem`).
+        .layer(CamadaOrigem)
         .add_service(facade_auth)
         .add_service(facade_onboarding)
         .add_service(facade_admin)
@@ -10678,6 +10741,51 @@ mod tests {
         req.metadata_mut()
             .insert("x-smartcore-agente", "qualquer-coisa".parse().unwrap());
         assert_eq!(user_agent_do_metadata(&req), "Mozilla/5.0 Flutter");
+    }
+
+    #[test]
+    fn origem_dos_headers_segue_a_mesma_regra_do_metadata() {
+        let mut h = http::HeaderMap::new();
+        h.insert("user-agent", "grpc-python-asyncio/1.83.1".parse().unwrap());
+        h.insert(
+            "x-smartcore-agente",
+            "SmartCoreAssistant-MCP/set_atendimento_status (grant g)"
+                .parse()
+                .unwrap(),
+        );
+        assert_eq!(
+            origem_dos_headers(&h),
+            "SmartCoreAssistant-MCP/set_atendimento_status (grant g)"
+        );
+
+        let mut so_navegador = http::HeaderMap::new();
+        so_navegador.insert("user-agent", "Mozilla/5.0 Flutter".parse().unwrap());
+        assert_eq!(origem_dos_headers(&so_navegador), "Mozilla/5.0 Flutter");
+        assert_eq!(origem_dos_headers(&http::HeaderMap::new()), "");
+    }
+
+    #[tokio::test]
+    async fn camada_origem_disponibiliza_a_origem_ao_handler() {
+        use tower::{Layer, Service};
+
+        let interno = tower::service_fn(|_req: http::Request<()>| async {
+            Ok::<_, std::convert::Infallible>(transport::origem::origem_atual())
+        });
+        let mut servico = CamadaOrigem.layer(interno);
+        let req = http::Request::builder()
+            .header(
+                "x-smartcore-agente",
+                "SmartCoreAssistant-MCP/arquivar (grant g)",
+            )
+            .body(())
+            .unwrap();
+
+        let origem = servico.call(req).await.unwrap();
+
+        assert_eq!(
+            origem.as_deref(),
+            Some("SmartCoreAssistant-MCP/arquivar (grant g)")
+        );
     }
 
     #[test]

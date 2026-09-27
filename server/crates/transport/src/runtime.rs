@@ -279,7 +279,12 @@ impl MuxClient {
 
     /// Executa uma chamada request/reply síncrona com timeout. Reconecta e repete uma vez
     /// quando a conexão cai durante o envio/espera; o timeout do chamador NÃO dispara reconexão.
-    pub async fn call(&self, env: Envelope, prazo: Duration) -> Result<Envelope, TransportError> {
+    pub async fn call(
+        &self,
+        mut env: Envelope,
+        prazo: Duration,
+    ) -> Result<Envelope, TransportError> {
+        crate::origem::completar_origem(&mut env);
         let body = self.codec.encode(&env).to_vec();
         for _ in 0..2 {
             let conexao = self.garantir_conexao().await?;

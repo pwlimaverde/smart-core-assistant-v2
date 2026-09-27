@@ -33,7 +33,7 @@ tokio-stream = "0.1"
 # Fachada gRPC-Web da borda do browser (Frente A do login-module).
 tonic = { workspace = true }
 tonic-web = { workspace = true }
-tower = { workspace = true }
+tower = { workspace = true, features = ["util"] }
 tower-http = { workspace = true }
 http = { workspace = true }
 
