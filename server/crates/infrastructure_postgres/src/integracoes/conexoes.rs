@@ -129,7 +129,7 @@ pub async fn detalhe(
                       AS atendimentos_abertos,
                   (SELECT COUNT(*) FROM oraculo_mensagem m
                     WHERE m.tenant_id = i.tenant_id
-                      AND m.data_envio > NOW() - INTERVAL '24 hours')
+                      AND m.timestamp > NOW() - INTERVAL '24 hours')
                       AS mensagens_24h
              FROM whatsapp_instance i
              LEFT JOIN oraculo_departamento d

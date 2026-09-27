@@ -327,3 +327,43 @@ async fn test_whatsapp_repo_extended() {
 
     tx.rollback().await.unwrap();
 }
+
+/// O detalhe da conexão roda a consulta de verdade contra o esquema migrado.
+///
+/// A consulta é `query_as` em texto (sem checagem do `sqlx prepare`), e citava
+/// `oraculo_mensagem.data_envio`, coluna que não existe: toda abertura do
+/// detalhe falhava com "falha temporária" no painel e no MCP, e nenhum teste
+/// executava o SQL.
+#[tokio::test]
+async fn test_detalhe_da_conexao_executa_no_esquema_real() {
+    let pool = obter_pool_teste().await;
+    let mut tx = pool.begin().await.unwrap();
+    let cipher = cipher_teste();
+
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant Detalhe Conexao").await;
+    configurar_tenant_transacao(&mut tx, tenant.id).await;
+    let ctx = criar_contexto_teste(tenant.id);
+
+    let inst = PostgresWhatsappInstanceRepository
+        .criar(&mut tx, &ctx, &cipher, "detalhe-1", "k", "evolution")
+        .await
+        .expect("Falha ao criar instância Whatsapp");
+
+    let detalhe = infrastructure_postgres::integracoes::conexoes::detalhe(&mut tx, &ctx, inst.id)
+        .await
+        .expect("a consulta do detalhe precisa rodar no esquema migrado")
+        .expect("a conexão recém-criada tem detalhe");
+
+    assert_eq!(detalhe.id, inst.id);
+    assert_eq!(detalhe.atendimentos_abertos, 0);
+    assert_eq!(detalhe.mensagens_24h, 0);
+
+    // Outro id do mesmo tenant: não existe, e isso não é erro.
+    let ausente =
+        infrastructure_postgres::integracoes::conexoes::detalhe(&mut tx, &ctx, inst.id + 1_000_000)
+            .await
+            .unwrap();
+    assert!(ausente.is_none());
+
+    tx.rollback().await.unwrap();
+}
