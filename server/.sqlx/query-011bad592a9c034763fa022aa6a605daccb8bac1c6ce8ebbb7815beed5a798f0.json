@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO tenants_subscription\n               (tenant_id, plan_id, status, payment_gateway, external_customer_id, external_subscription_id)\n           VALUES ($1, $2, 'ACTIVE', 'manual', '', '')",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "011bad592a9c034763fa022aa6a605daccb8bac1c6ce8ebbb7815beed5a798f0"
+}
