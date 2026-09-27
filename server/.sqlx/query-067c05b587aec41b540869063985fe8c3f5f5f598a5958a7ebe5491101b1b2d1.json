@@ -1,0 +1,114 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT f.id, f.departamento_id, d.nome AS \"departamento_nome!\",\n                      f.nome, f.descricao, f.ativo, f.data_criacao,\n                      (SELECT COUNT(*) FROM oraculo_etapa_fluxo e\n                        WHERE e.fluxo_id = f.id AND e.ativo = true) AS \"etapas!\",\n                      -- Vocabulário de status da v1: resolvido/cancelado/arquivado\n                      -- são os fins de linha; o resto ainda está vivo.\n                      (SELECT COUNT(*) FROM oraculo_atendimento a\n                        WHERE a.fluxo_atendimento_id = f.id\n                          AND a.status NOT IN ('resolvido', 'cancelado', 'arquivado'))\n                        AS \"atendimentos_abertos!\"\n               FROM oraculo_fluxo_atendimento f\n               JOIN oraculo_departamento d\n                 ON d.id = f.departamento_id AND d.tenant_id = f.tenant_id\n               WHERE f.tenant_id = $1 AND f.excluido_em IS NULL\n               ORDER BY d.nome, f.nome",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_fluxo_atendimento",
+            "name": "id"
+          }
+        }
+      },
+      {
+        "ordinal": 1,
+        "name": "departamento_id",
+        "type_info": "Int4",
+        "origin": {
+          "Table": {
+            "table": "oraculo_fluxo_atendimento",
+            "name": "departamento_id"
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "departamento_nome!",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_departamento",
+            "name": "nome"
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "nome",
+        "type_info": "Varchar",
+        "origin": {
+          "Table": {
+            "table": "oraculo_fluxo_atendimento",
+            "name": "nome"
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "descricao",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "oraculo_fluxo_atendimento",
+            "name": "descricao"
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "ativo",
+        "type_info": "Bool",
+        "origin": {
+          "Table": {
+            "table": "oraculo_fluxo_atendimento",
+            "name": "ativo"
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "data_criacao",
+        "type_info": "Timestamptz",
+        "origin": {
+          "Table": {
+            "table": "oraculo_fluxo_atendimento",
+            "name": "data_criacao"
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "etapas!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 8,
+        "name": "atendimentos_abertos!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "067c05b587aec41b540869063985fe8c3f5f5f598a5958a7ebe5491101b1b2d1"
+}

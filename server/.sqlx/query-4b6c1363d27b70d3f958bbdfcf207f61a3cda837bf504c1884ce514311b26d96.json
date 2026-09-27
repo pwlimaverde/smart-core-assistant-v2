@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oraculo_fluxo_atendimento\n                  SET nome = $3, descricao = $4, ativo = $5, data_atualizacao = NOW()\n                WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Varchar",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4b6c1363d27b70d3f958bbdfcf207f61a3cda837bf504c1884ce514311b26d96"
+}

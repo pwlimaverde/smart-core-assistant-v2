@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oraculo_atendente\n                  SET nome = $3, cargo = $4, departamento_id = $5, fluxo_id = $6,\n                      ativo = $7, disponivel = $8, max_atendimentos_simultaneos = $9,\n                      ultima_atividade = NOW()\n                WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Varchar",
+        "Varchar",
+        "Int4",
+        "Int4",
+        "Bool",
+        "Bool",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8890a1050c4a19e4a9ee7ac997d54ec69a705422c667e1c7cde5390df218df85"
+}

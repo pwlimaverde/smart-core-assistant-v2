@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE treinamento_querycompose\n                  SET excluido_em = NOW(), excluido_por_id = NULLIF($3, 0),\n                      embedding = NULL, updated_at = NOW()\n                WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "7b417f98a7a01062a903f09c9c5872481781825c5135921389730ec4e911a245"
+}

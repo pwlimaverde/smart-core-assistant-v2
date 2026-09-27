@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT comportamento\n            FROM treinamento_querycompose\n            WHERE tenant_id = $1\n              AND embedding IS NOT NULL\n              AND excluido_em IS NULL\n              AND (embedding <=> $2) <= $3\n            ORDER BY embedding <=> $2\n            LIMIT 1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "comportamento",
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "treinamento_querycompose",
+            "name": "comportamento"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        {
+          "Custom": {
+            "name": "vector",
+            "kind": "Simple"
+          }
+        },
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "83bdf09f8c58f6c12e135f4ea65b6e31e3164b096d38f454647ea80dd3733a62"
+}

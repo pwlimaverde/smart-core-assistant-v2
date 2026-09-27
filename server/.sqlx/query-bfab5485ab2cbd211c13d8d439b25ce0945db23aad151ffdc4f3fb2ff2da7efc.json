@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oraculo_contato SET ativo = $3\n             WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bfab5485ab2cbd211c13d8d439b25ce0945db23aad151ffdc4f3fb2ff2da7efc"
+}

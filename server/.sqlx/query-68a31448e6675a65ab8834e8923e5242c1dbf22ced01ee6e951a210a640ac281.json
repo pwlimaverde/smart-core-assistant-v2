@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oraculo_etapa_fluxo\n                  SET nome = $3, descricao = $4, cor = $5, tipo_etapa = $6\n                WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int4",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "68a31448e6675a65ab8834e8923e5242c1dbf22ced01ee6e951a210a640ac281"
+}

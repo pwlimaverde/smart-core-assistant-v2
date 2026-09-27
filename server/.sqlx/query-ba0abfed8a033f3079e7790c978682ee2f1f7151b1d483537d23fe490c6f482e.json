@@ -1,0 +1,65 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT\n                     -- Vocabulário de `StatusAtendimento` (herdado da v1):\n                     -- fila, em_atendimento, pendencia, resolvido, cancelado,\n                     -- arquivado. O painel mostra os dois que pedem ação.\n                     (SELECT COUNT(*) FROM oraculo_atendimento\n                       WHERE tenant_id = $1 AND status = 'em_atendimento')\n                       AS \"em_andamento!\",\n                     (SELECT COUNT(*) FROM oraculo_atendimento\n                       WHERE tenant_id = $1 AND status = 'fila')\n                       AS \"aguardando!\",\n                     -- Mensagem de conversa excluída não conta (doc 39 §3.4).\n                     (SELECT COUNT(*) FROM oraculo_mensagem m\n                       JOIN oraculo_atendimento a\n                         ON a.id = m.atendimento_id AND a.tenant_id = m.tenant_id\n                       WHERE m.tenant_id = $1 AND a.excluido_em IS NULL\n                         AND m.timestamp >= NOW() - INTERVAL '24 hours')\n                       AS \"mensagens_24h!\",\n                     (SELECT COUNT(*) FROM whatsapp_instance\n                       WHERE tenant_id = $1 AND connection_state = 'connected')\n                       AS \"conexoes_ativas!\",\n                     (SELECT COUNT(*) FROM whatsapp_instance\n                       WHERE tenant_id = $1 AND excluido_em IS NULL)\n                       AS \"conexoes_total!\",\n                     (SELECT COUNT(*) FROM oraculo_departamento\n                       WHERE tenant_id = $1 AND ativo = true)\n                       AS \"departamentos!\",\n                     (SELECT COUNT(*) FROM oraculo_treinamento\n                       WHERE tenant_id = $1 AND treinamento_vetorizado = true)\n                       AS \"treinamentos_ativos!\"\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "em_andamento!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 1,
+        "name": "aguardando!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 2,
+        "name": "mensagens_24h!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 3,
+        "name": "conexoes_ativas!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 4,
+        "name": "conexoes_total!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 5,
+        "name": "departamentos!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      },
+      {
+        "ordinal": 6,
+        "name": "treinamentos_ativos!",
+        "type_info": "Int8",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "ba0abfed8a033f3079e7790c978682ee2f1f7151b1d483537d23fe490c6f482e"
+}

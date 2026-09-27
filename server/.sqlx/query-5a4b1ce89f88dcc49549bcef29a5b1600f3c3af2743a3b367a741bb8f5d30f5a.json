@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE oraculo_departamento\n                  SET nome = $1, descricao = $2, ativo = $3\n                WHERE id = $4 AND tenant_id = $5 AND excluido_em IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Text",
+        "Bool",
+        "Int4",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5a4b1ce89f88dcc49549bcef29a5b1600f3c3af2743a3b367a741bb8f5d30f5a"
+}
