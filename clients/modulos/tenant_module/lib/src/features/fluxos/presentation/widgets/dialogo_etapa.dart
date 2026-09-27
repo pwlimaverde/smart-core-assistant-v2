@@ -3,11 +3,12 @@ import 'package:dependencies_module/dependencies_module.dart';
 import '../../domain/model/fluxo.dart';
 import '../controllers/fluxos_controllers.dart';
 
-/// Paleta oferecida para as colunas.
+/// Paleta sugerida para as colunas.
 ///
-/// Uma lista fechada em vez de um seletor livre: a cor aqui serve para
-/// distinguir colunas de relance, e uma paleta que se repete em todos os
-/// quadros faz isso melhor que um arco-íris escolhido a dedo.
+/// A cor serve para distinguir colunas de relance: é ela que pinta a borda da
+/// coluna, a faixa no topo dos cartões e, nas colunas de desfecho, o fundo do
+/// cartão. A paleta cobre o comum; para a cor da marca, há o campo
+/// hexadecimal logo abaixo dela.
 const coresDeEtapa = <String>[
   '#6B7280',
   '#3B82F6',
@@ -15,7 +16,29 @@ const coresDeEtapa = <String>[
   '#10B981',
   '#EF4444',
   '#8B5CF6',
+  '#0EA5E9',
+  '#06B6D4',
+  '#14B8A6',
+  '#22C55E',
+  '#84CC16',
+  '#EAB308',
+  '#F97316',
+  '#F43F5E',
+  '#EC4899',
+  '#D946EF',
+  '#6366F1',
+  '#1E3A8A',
+  '#78350F',
+  '#0F172A',
 ];
+
+/// Normaliza uma cor digitada para `#RRGGBB` maiúsculo, ou `null` se não é
+/// hexadecimal de 6 dígitos (com ou sem o `#`).
+String? normalizarHex(String digitado) {
+  final limpo = digitado.trim().replaceFirst('#', '');
+  if (!RegExp(r'^[0-9a-fA-F]{6}$').hasMatch(limpo)) return null;
+  return '#${limpo.toUpperCase()}';
+}
 
 Color corDoHex(String hex) {
   final limpo = hex.replaceFirst('#', '');
@@ -45,7 +68,8 @@ Future<void> _abrirFormulario({
   final nome = TextEditingController(text: item?.nome);
   final descricao = TextEditingController(text: item?.descricao);
   var tipo = item?.tipo ?? TipoEtapa.trabalho;
-  var cor = item?.cor ?? coresDeEtapa.first;
+  var cor = normalizarHex(item?.cor ?? '') ?? coresDeEtapa.first;
+  final hex = TextEditingController(text: cor);
   String? erro;
   var salvando = false;
   final editando = item != null;
@@ -53,7 +77,7 @@ Future<void> _abrirFormulario({
   await showDialog<void>(
     context: context,
     builder: (dialogContext) => DialogoComCampos(
-      campos: [nome, descricao],
+      campos: [nome, descricao, hex],
       builder: (dialogContext) => StatefulBuilder(
         builder: (stateCtx, setStateDialog) => AlertDialog(
           title: Text(editando ? 'Editar coluna' : 'Nova coluna'),
@@ -104,13 +128,52 @@ Future<void> _abrirFormulario({
                   const SizedBox(height: AppSpacing.xs),
                   Wrap(
                     spacing: AppSpacing.sm,
+                    runSpacing: AppSpacing.sm,
                     children: [
                       for (final opcao in coresDeEtapa)
                         _BolinhaDeCor(
                           hex: opcao,
                           selecionada: opcao == cor,
-                          aoTocar: () => setStateDialog(() => cor = opcao),
+                          aoTocar: () => setStateDialog(() {
+                            cor = opcao;
+                            hex.text = opcao;
+                          }),
                         ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: corDoHex(cor),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: stateCtx.colors.border),
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: TextField(
+                          key: const ValueKey('cor-hex'),
+                          controller: hex,
+                          maxLength: 7,
+                          decoration: InputDecoration(
+                            labelText: 'Cor personalizada (hexadecimal)',
+                            hintText: '#315C28',
+                            counterText: '',
+                            border: const OutlineInputBorder(),
+                            errorText: normalizarHex(hex.text) == null
+                                ? 'Use 6 dígitos, ex.: #315C28'
+                                : null,
+                          ),
+                          onChanged: (v) => setStateDialog(() {
+                            final valida = normalizarHex(v);
+                            if (valida != null) cor = valida;
+                          }),
+                        ),
+                      ),
                     ],
                   ),
                   if (erro case final msg?) ...[
@@ -138,6 +201,14 @@ Future<void> _abrirFormulario({
                       if (nome.text.trim().isEmpty) {
                         setStateDialog(
                           () => erro = 'Informe o nome da coluna.',
+                        );
+                        return;
+                      }
+                      if (normalizarHex(hex.text) == null) {
+                        setStateDialog(
+                          () => erro =
+                              'A cor precisa ter 6 dígitos hexadecimais, '
+                              'ex.: #315C28.',
                         );
                         return;
                       }
