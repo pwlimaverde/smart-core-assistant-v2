@@ -680,9 +680,22 @@ async def test_get_tenant_config_traz_prompts_e_o_que_herda_do_global():
 async def test_status_da_conexao_devolve_o_qr_como_imagem():
     servidor, _, _ = _montar()
     with como(ADMIN):
-        saida = await servidor.funcoes["get_status_conexao_whatsapp"](conexao_id=1)
+        saida = await servidor.funcoes["get_status_conexao_whatsapp"](
+            conexao_id=1, parear=True
+        )
     assert "connecting" in saida[0]
     assert saida[-1].to_image_content().mime_type == "image/png"
+
+
+async def test_conferir_o_status_nao_abre_pareamento():
+    """Só `parear=true` chama o status ao vivo, que abre o pareamento no
+    provedor. Conferir lê o estado gravado — nada muda no WhatsApp."""
+    servidor, cliente, _ = _montar()
+    with como(ADMIN):
+        saida = await servidor.funcoes["get_status_conexao_whatsapp"](conexao_id=1)
+    assert "GetMyWhatsappInstanceStatus" not in cliente.metodos
+    assert cliente.metodos == ["ListMyWhatsappInstances"]
+    assert "parear=true" in saida[-1]
 
 
 async def test_alvo_inexistente_e_recusado_antes_de_agir():

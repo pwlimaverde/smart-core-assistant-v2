@@ -220,7 +220,8 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
         """Cria uma conexão de WhatsApp. Em seguida use
-        `get_status_conexao_whatsapp` para obter o QR code a escanear."""
+        `get_status_conexao_whatsapp` com `parear=true` para obter o QR code
+        a escanear."""
         tool = registro.exigir("create_conexao_whatsapp")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -242,9 +243,45 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
     )
     async def get_status_conexao_whatsapp(
         conexao_id: Annotated[int, CONEXAO_ID],
+        parear: Annotated[
+            bool,
+            Field(
+                description=(
+                    "true só quando a pessoa vai escanear o QR agora: gera o "
+                    "código e abre o pareamento no WhatsApp. Para só conferir o "
+                    "estado, deixe false."
+                )
+            ),
+        ] = False,
     ) -> list[object]:
-        """Estado da conexão e, se ela estiver esperando pareamento, o QR code
-        para a pessoa escanear no WhatsApp do celular (Aparelhos conectados)."""
+        """Estado da conexão. Com `parear=true` e a conexão desconectada, gera o QR
+        code para a pessoa escanear no WhatsApp do celular (Aparelhos conectados).
+
+        Não use `parear=true` para conferir: gerar o QR abre uma sessão de
+        pareamento no provedor, que fica esperando a leitura."""
+        if not parear:
+            # O estado gravado, que a reconciliação mantém em dia. Consultar o
+            # status ao vivo abriria o pareamento no provedor — foi o que
+            # aconteceu numa conferência de rotina, com a conexão desconectada.
+            lista = await executor.executar(
+                "get_status_conexao_whatsapp",
+                "ListMyWhatsappInstances",
+                pb.ListMyWhatsappInstancesRequest(),
+            )
+            conexao = next((i for i in lista.instancias if i.id == conexao_id), None)
+            if conexao is None:
+                raise ToolError(
+                    "Conexão não encontrada. Confira `list_conexoes_whatsapp`."
+                )
+            estado = conexao.connection_state or "desconhecido"
+            saida_estado: list[object] = [f"Estado: {estado}."]
+            if estado != "connected":
+                saida_estado.append(
+                    "Para parear, chame de novo com `parear=true` quando a pessoa "
+                    "estiver com o celular em mãos."
+                )
+            return saida_estado
+
         r = await executor.executar(
             "get_status_conexao_whatsapp",
             "GetMyWhatsappInstanceStatus",
