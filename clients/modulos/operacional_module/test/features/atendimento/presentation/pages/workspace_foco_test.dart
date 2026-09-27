@@ -321,10 +321,15 @@ void main() {
       of: find.byType(AtendimentoCardContent),
       matching: find.text('Assunto 7'),
     );
+    // Com a conversa aberta o quadro tem meia tela: o cartão pode estar fora
+    // da vista, e o gesto começaria em cima da conversa.
+    await tester.ensureVisible(cartao);
+    await tester.pumpAndSettle();
+    expect(find.byType(PainelDeConversa), findsOneWidget);
     final gesto = await tester.startGesture(tester.getCenter(cartao));
-    await gesto.moveBy(const Offset(40, 0));
+    await gesto.moveBy(const Offset(-40, 0));
     await tester.pump();
-    await gesto.moveBy(const Offset(40, 0));
+    await gesto.moveBy(const Offset(-40, 0));
     await tester.pump();
 
     expect(find.byType(PainelDeConversa), findsNothing);
