@@ -421,6 +421,31 @@ impl AtendimentoStore for PgAtendimentoStore {
     }
 
     #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id))]
+    #[tracing::instrument(skip_all, fields(tenant_id = %ctx.tenant_id, atendimento_id = atendimento_id, ativo = ativo))]
+    async fn definir_atendimento_ativo(
+        &self,
+        ctx: &RequestContext,
+        atendimento_id: i32,
+        ativo: bool,
+    ) -> Result<
+        Option<infrastructure_postgres::atendimentos::atendimentos::AtendimentoDesativado>,
+        DbError,
+    > {
+        let ctx = ctx.clone();
+        let tenant_id = ctx.tenant_id;
+        run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
+            let r = infrastructure_postgres::atendimentos::atendimentos::definir_atendimento_ativo(
+                &mut tx,
+                &ctx,
+                atendimento_id,
+                ativo,
+            )
+            .await?;
+            Ok((r, tx))
+        })
+        .await
+    }
+
     async fn definir_prioridade(
         &self,
         ctx: &RequestContext,
@@ -1070,6 +1095,18 @@ impl AtendimentoStore for PgAtendimentoStore {
                 .buscar_por_telefone(&mut tx, &ctx, &telefone)
                 .await?
             {
+                // Contato excluído (desativado) que voltou a escrever: é uma
+                // pessoa real mandando mensagem, e o painel não mostra contato
+                // desativado — sem reativar, a conversa nova ficaria invisível.
+                // As conversas antigas continuam excluídas.
+                Some(c) if !c.ativo => {
+                    repo_contato.desativar(&mut tx, &ctx, c.id, true).await?;
+                    tracing::info!(
+                        contato_id = c.id,
+                        "contato excluído voltou a escrever; reativado"
+                    );
+                    c
+                }
                 Some(c) => c,
                 None => {
                     repo_contato

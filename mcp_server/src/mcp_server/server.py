@@ -65,7 +65,11 @@ Como trabalhar aqui:
 4. Se uma tool responder que falta permissão, não tente de novo com outros \
    argumentos: a pessoa precisa reconectar o aplicativo concedendo aquele acesso.
 
-5. Configuração do assistente: `get_tenant_config` mostra tudo (inclusive os \
+5. Excluir (`excluir_contato`, `excluir_atendimento`) é desativar: o item some \
+   do painel, nada é apagado e a exclusão fica em `list_auditoria` com o id. \
+   Para desfazer, use `restaurar_contato` / `restaurar_atendimento` com esse id.
+
+6. Configuração do assistente: `get_tenant_config` mostra tudo (inclusive os \
    prompts do negócio). `update_tenant_config`, `update_config_avancada` e \
    `set_prompts` mudam só o que for informado.
 

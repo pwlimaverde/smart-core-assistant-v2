@@ -371,23 +371,26 @@ impl ContatoRepository for PostgresContatoRepository {
         ctx.exigir_qualquer(&["clientes:read", "atendimentos:read", "tenant:admin"])?;
         // `$2 IS NULL` no mesmo statement em vez de dois SQLs: a diferença é um
         // filtro, não uma consulta diferente.
-        let rows = sqlx::query_as!(
-            Contato,
+        //
+        // Só ativos: excluir um contato é desativá-lo, e o excluído não aparece
+        // mais no painel. Ele segue no banco e na trilha de auditoria, que é por
+        // onde se restaura.
+        let rows = sqlx::query_as::<_, Contato>(
             r#"SELECT id, tenant_id, telefone, nome_contato, slug, email,
                       nome_perfil_whatsapp, data_cadastro, ultima_interacao,
                       ativo, metadados, foto_perfil, foto_perfil_url_origem
                FROM oraculo_contato
-               WHERE tenant_id = $1
+               WHERE tenant_id = $1 AND ativo = true
                  AND ($2::text IS NULL
                       OR nome_contato ILIKE '%' || $2 || '%'
                       OR telefone ILIKE '%' || $2 || '%'
                       OR nome_perfil_whatsapp ILIKE '%' || $2 || '%')
                ORDER BY ultima_interacao DESC
                LIMIT $3"#,
-            ctx.tenant_id,
-            busca,
-            limite
         )
+        .bind(ctx.tenant_id)
+        .bind(busca)
+        .bind(limite)
         .fetch_all(&mut **tx)
         .await?;
         Ok(rows)

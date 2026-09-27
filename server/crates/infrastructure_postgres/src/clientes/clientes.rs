@@ -521,7 +521,7 @@ pub async fn contatos_do_cliente(
                   COALESCE(o.telefone, '')
            FROM oraculo_cliente_contatos cc
            JOIN oraculo_contato o ON o.id = cc.contato_id AND o.tenant_id = cc.tenant_id
-           WHERE cc.tenant_id = $1 AND cc.cliente_id = $2
+           WHERE cc.tenant_id = $1 AND cc.cliente_id = $2 AND o.ativo = true
            ORDER BY 2, o.id"#,
     )
     .bind(ctx.tenant_id)

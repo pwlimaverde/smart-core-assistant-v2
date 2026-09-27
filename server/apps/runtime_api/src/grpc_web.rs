@@ -68,6 +68,7 @@ use contracts::grpc::queries::{
     DefinirBotDaConversaRequest,
     DefinirBotDaConversaResponse,
     DefinirDepartamentoDaConexaoRequest,
+    DefinirMyAtendimentoAtivoRequest,
     DefinirMyClienteAtivoRequest,
     DefinirMyContatoAtivoRequest,
     DefinirPrioridadeRequest,
@@ -4815,6 +4816,32 @@ impl AdminService for AdminFacade {
             &self.deps.pg,
             "DefinirContatoAtivo",
             serde_json::json!({ "id": inner.id, "ativo": inner.ativo }),
+        )
+        .await?;
+        Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            service = "runtime_api",
+            rpc = "DefinirMyAtendimentoAtivo",
+            traceparent
+        )
+    )]
+    async fn definir_my_atendimento_ativo(
+        &self,
+        req: Request<DefinirMyAtendimentoAtivoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = *req.get_ref();
+        if inner.atendimento_id <= 0 {
+            return Err(Status::invalid_argument("informe o atendimento"));
+        }
+        self.encaminhar_tenant(
+            &req,
+            &self.deps.pg,
+            "DefinirAtendimentoAtivo",
+            serde_json::json!({ "atendimento_id": inner.atendimento_id, "ativo": inner.ativo }),
         )
         .await?;
         Ok(Response::new(SimpleOkResponse { sucesso: true }))

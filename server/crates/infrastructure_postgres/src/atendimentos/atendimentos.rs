@@ -541,8 +541,8 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
         limit: i64,
     ) -> Result<Vec<Atendimento>, DbError> {
         ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
-        let rows = sqlx::query_as!(
-            Atendimento,
+        // Excluído (`desativado_em`) não aparece nem pedindo o status dele.
+        let rows = sqlx::query_as::<_, Atendimento>(
             r#"SELECT id, tenant_id, contato_id, departamento_id, fluxo_atendimento_id,
                       status, etapa_atual_id, data_inicio, data_fim, data_ultima_mensagem,
                       assunto, prioridade, atendente_humano_id, contexto_conversa,
@@ -550,15 +550,15 @@ impl AtendimentoRepository for PostgresAtendimentoRepository {
                       data_primeira_resposta, bot_pode_atender,
                       sentimento_nota, sentimento_label
                FROM oraculo_atendimento
-               WHERE tenant_id = $1 AND status = $2
+               WHERE tenant_id = $1 AND status = $2 AND desativado_em IS NULL
                  AND ($3::int IS NULL OR departamento_id = $3)
                ORDER BY data_inicio DESC
                LIMIT $4"#,
-            ctx.tenant_id,
-            status,
-            departamento_id,
-            limit
         )
+        .bind(ctx.tenant_id)
+        .bind(status)
+        .bind(departamento_id)
+        .bind(limit)
         .fetch_all(&mut **tx)
         .await?;
 
@@ -1157,7 +1157,7 @@ pub async fn listar_ativos_do_tenant(
            FROM oraculo_atendimento a
            LEFT JOIN oraculo_contato c
              ON c.id = a.contato_id AND c.tenant_id = a.tenant_id
-           WHERE a.tenant_id = $1 AND a.status <> 'arquivado'
+           WHERE a.tenant_id = $1 AND a.status <> 'arquivado' AND a.desativado_em IS NULL
              AND ($2::int IS NULL OR a.departamento_id = $2)
              AND ($3 = '' OR COALESCE(c.nome_contato, '') ILIKE '%' || $3 || '%'
                   OR COALESCE(c.nome_perfil_whatsapp, '') ILIKE '%' || $3 || '%'
@@ -1224,6 +1224,108 @@ pub async fn buscar_ativo_por_telefone(
     .fetch_optional(&mut **tx)
     .await?;
     Ok(row.map(|(id,)| id))
+}
+
+/// Exclusão lógica de todas as conversas de um contato (o contato foi excluído).
+///
+/// "Excluir" é desativar: a conversa em andamento é encerrada como `arquivado`
+/// (sai do quadro e deixa de receber a próxima mensagem, que abre outra) e
+/// todas ganham `desativado_em`, que as tira de todo o painel. Devolve os ids
+/// desativados agora — vão para a auditoria, que é por onde se restaura.
+#[tracing::instrument(skip_all, fields(contato_id = contato_id))]
+pub async fn desativar_do_contato(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    contato_id: i32,
+) -> Result<Vec<i32>, DbError> {
+    ctx.exigir_qualquer(&["clientes:write", "atendimentos:write", "tenant:admin"])?;
+    let ids = sqlx::query_scalar::<_, i32>(
+        r#"UPDATE oraculo_atendimento
+              SET desativado_em = NOW(),
+                  status = CASE WHEN status IN ('resolvido', 'cancelado', 'arquivado')
+                                THEN status ELSE 'arquivado' END,
+                  data_fim = COALESCE(data_fim, NOW())
+            WHERE tenant_id = $1 AND contato_id = $2 AND desativado_em IS NULL
+        RETURNING id"#,
+    )
+    .bind(ctx.tenant_id)
+    .bind(contato_id)
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok(ids)
+}
+
+/// Como ficou um atendimento depois de excluído ou restaurado.
+#[derive(Debug, Clone, Default)]
+pub struct AtendimentoDesativado {
+    pub id: i32,
+    pub contato_id: i32,
+    pub status: String,
+    /// Restaurar a conversa de um contato excluído restaura o contato também:
+    /// sem isso ela voltaria para um lugar que o painel não mostra.
+    pub contato_restaurado: bool,
+}
+
+/// Exclui (desativa) ou restaura um atendimento.
+///
+/// Excluir encerra a conversa em andamento como `arquivado`, como a exclusão
+/// do contato. Restaurar só devolve a visibilidade: o status fica o que era
+/// (uma conversa excluída em andamento volta como arquivada, e a próxima
+/// mensagem do cliente abre outra — reabrir a antiga por baixo seria pior).
+/// `None` quando não há o que mudar (inexistente, de outro tenant ou já no
+/// estado pedido).
+#[tracing::instrument(skip_all, fields(atendimento_id = atendimento_id, ativo = ativo))]
+pub async fn definir_atendimento_ativo(
+    tx: &mut Transaction<'_, Postgres>,
+    ctx: &RequestContext,
+    atendimento_id: i32,
+    ativo: bool,
+) -> Result<Option<AtendimentoDesativado>, DbError> {
+    ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
+    let sql = if ativo {
+        r#"UPDATE oraculo_atendimento
+              SET desativado_em = NULL
+            WHERE tenant_id = $1 AND id = $2 AND desativado_em IS NOT NULL
+        RETURNING id, contato_id, status"#
+    } else {
+        r#"UPDATE oraculo_atendimento
+              SET desativado_em = NOW(),
+                  status = CASE WHEN status IN ('resolvido', 'cancelado', 'arquivado')
+                                THEN status ELSE 'arquivado' END,
+                  data_fim = COALESCE(data_fim, NOW())
+            WHERE tenant_id = $1 AND id = $2 AND desativado_em IS NULL
+        RETURNING id, contato_id, status"#
+    };
+    let row = sqlx::query_as::<_, (i32, i32, String)>(sql)
+        .bind(ctx.tenant_id)
+        .bind(atendimento_id)
+        .fetch_optional(&mut **tx)
+        .await?;
+    let Some((id, contato_id, status)) = row else {
+        return Ok(None);
+    };
+
+    let contato_restaurado = if ativo {
+        sqlx::query(
+            r#"UPDATE oraculo_contato SET ativo = true
+                WHERE tenant_id = $1 AND id = $2 AND ativo = false"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(contato_id)
+        .execute(&mut **tx)
+        .await?
+        .rows_affected()
+            > 0
+    } else {
+        false
+    };
+
+    Ok(Some(AtendimentoDesativado {
+        id,
+        contato_id,
+        status,
+        contato_restaurado,
+    }))
 }
 
 #[cfg(test)]
@@ -1429,7 +1531,7 @@ pub async fn exportar_quadro(
              ON f.id = a.fluxo_atendimento_id AND f.tenant_id = a.tenant_id
            LEFT JOIN oraculo_etapa_fluxo e
              ON e.id = a.etapa_atual_id AND e.tenant_id = a.tenant_id
-           WHERE a.tenant_id = $1 AND a.status <> 'arquivado'
+           WHERE a.tenant_id = $1 AND a.status <> 'arquivado' AND a.desativado_em IS NULL
              AND ($2::int IS NULL OR a.departamento_id = $2)
              AND ($3 = '' OR COALESCE(c.nome_contato, '') ILIKE '%' || $3 || '%'
                   OR COALESCE(c.nome_perfil_whatsapp, '') ILIKE '%' || $3 || '%'
@@ -1558,7 +1660,7 @@ pub async fn listar_do_contato(
                   data_primeira_resposta, bot_pode_atender,
                   sentimento_nota, sentimento_label
              FROM oraculo_atendimento
-            WHERE tenant_id = $1 AND contato_id = $2
+            WHERE tenant_id = $1 AND contato_id = $2 AND desativado_em IS NULL
             ORDER BY data_inicio DESC
             LIMIT $3"#,
     )

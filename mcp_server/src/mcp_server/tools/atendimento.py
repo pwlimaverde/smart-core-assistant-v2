@@ -277,7 +277,11 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
         """Muda a situação do atendimento (resolver, cancelar, pôr em espera,
-        reabrir). O cartão vai para a coluna correspondente."""
+        reabrir). O cartão vai para a coluna correspondente.
+
+        `arquivado` é curadoria do histórico: a conversa sai do quadro, mas
+        continua no histórico do contato. Para tirá-la do painel inteiro (o
+        "excluir"), use `excluir_atendimento`."""
         tool = registro.exigir("set_atendimento_status")
         if dry_run:
             executor.registrar_simulacao(tool)
@@ -292,6 +296,104 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
             ),
         )
         return f"Atendimento {atendimento_id} agora está '{r.status or status}'."
+
+    registro.registrar(
+        "excluir_atendimento", Categoria.DESTRUTIVA, ("atendimentos:write",)
+    )
+
+    @mcp.tool(
+        name="excluir_atendimento",
+        annotations=registro.exigir("excluir_atendimento").anotacoes,
+    )
+    async def excluir_atendimento(
+        atendimento_id: Annotated[int, ATENDIMENTO_ID],
+        confirmar: Annotated[
+            str,
+            Field(
+                default="",
+                description=(
+                    "Nome do contato da conversa, como `get_contato_do_atendimento` "
+                    "mostra."
+                ),
+            ),
+        ] = "",
+        dry_run: Annotated[bool, DRY_RUN] = False,
+    ) -> str:
+        """Exclui uma conversa. **Excluir aqui é desativar:** ela some do quadro,
+        do histórico do contato e de todas as listas do painel, mas nada é
+        apagado. Se estava em andamento, é encerrada; a próxima mensagem do
+        cliente abre uma conversa nova.
+
+        A exclusão fica na auditoria (`list_auditoria`, evento
+        `atendimento.excluido`) com o id — é por ele que se desfaz, com
+        `restaurar_atendimento`.
+
+        Rode com `dry_run=true` antes, mostre à pessoa de quem é a conversa, e só
+        então exclua preenchendo `confirmar` com o nome do contato."""
+        tool = registro.exigir("excluir_atendimento")
+        contato = await executor.executar(
+            "excluir_atendimento",
+            "ObterContatoDoAtendimento",
+            pb.ObterContatoDoAtendimentoRequest(atendimento_id=atendimento_id),
+            contabilizar=False,
+        )
+        nome = contato.nome or contato.telefone
+        if dry_run:
+            executor.registrar_simulacao(tool)
+            return resultado_dry_run(
+                tool,
+                f"excluir (desativar) a conversa {atendimento_id} de '{nome}' — "
+                "some do painel, recuperável com `restaurar_atendimento`",
+            )
+        exigir_confirmacao(tool, nome, confirmar or None)
+        await executor.executar(
+            "excluir_atendimento",
+            "DefinirMyAtendimentoAtivo",
+            pb.DefinirMyAtendimentoAtivoRequest(
+                atendimento_id=atendimento_id, ativo=False
+            ),
+        )
+        return (
+            f"Conversa {atendimento_id} excluída (desativada). Para desfazer: "
+            "`restaurar_atendimento` com este id."
+        )
+
+    registro.registrar(
+        "restaurar_atendimento", Categoria.CONFIGURACAO, ("atendimentos:write",)
+    )
+
+    @mcp.tool(
+        name="restaurar_atendimento",
+        annotations=registro.exigir("restaurar_atendimento").anotacoes,
+    )
+    async def restaurar_atendimento(
+        atendimento_id: Annotated[
+            int,
+            Field(
+                description=(
+                    "Id da conversa excluída — está no evento "
+                    "`atendimento.excluido` (ou, se foi junto com o contato, em "
+                    "`contato_desativado`) de `list_auditoria`."
+                )
+            ),
+        ],
+        dry_run: Annotated[bool, DRY_RUN] = False,
+    ) -> str:
+        """Desfaz a exclusão de uma conversa: ela volta ao histórico do contato
+        (como encerrada — não é reaberta). Se o contato também estava excluído,
+        ele volta junto."""
+        tool = registro.exigir("restaurar_atendimento")
+        if dry_run:
+            executor.registrar_simulacao(tool)
+            return resultado_dry_run(tool, f"restaurar a conversa {atendimento_id}")
+        await executor.executar(
+            "restaurar_atendimento",
+            "DefinirMyAtendimentoAtivo",
+            pb.DefinirMyAtendimentoAtivoRequest(
+                atendimento_id=atendimento_id, ativo=True
+            ),
+        )
+        return f"Conversa {atendimento_id} restaurada."
 
     registro.registrar(
         "atribuir_atendimento", Categoria.CONFIGURACAO, ("atendimentos:write",)

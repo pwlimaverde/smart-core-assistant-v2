@@ -1531,6 +1531,9 @@ service AdminService {
   rpc CreateMyContato(CreateMyContatoRequest) returns (MyContatoResponse);
   rpc UpdateMyContato(UpdateMyContatoRequest) returns (SimpleOkResponse);
   rpc DefinirMyContatoAtivo(DefinirMyContatoAtivoRequest) returns (SimpleOkResponse);
+  // Excluir um atendimento é desativá-lo: some do painel, os dados ficam e a
+  // exclusão vai para a trilha de auditoria, que é por onde se restaura.
+  rpc DefinirMyAtendimentoAtivo(DefinirMyAtendimentoAtivoRequest) returns (SimpleOkResponse);
   // B10 (N11 E5): clientes (PJ/PF) e o vinculo com os contatos.
   rpc ListMyClientes(ListMyClientesRequest) returns (ListMyClientesResponse);
   rpc CreateMyCliente(CreateMyClienteRequest) returns (MyClienteResponse);
@@ -1789,6 +1792,12 @@ message UpdateMyContatoRequest {
 
 message DefinirMyContatoAtivoRequest {
   int32 id = 1;
+  bool ativo = 2;
+}
+
+// false = excluir (desativar); true = restaurar.
+message DefinirMyAtendimentoAtivoRequest {
+  int32 atendimento_id = 1;
   bool ativo = 2;
 }
 

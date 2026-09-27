@@ -95,32 +95,97 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
         )
         return f"Contato {contato_id} atualizado."
 
-    registro.registrar(
-        "definir_contato_ativo", Categoria.CONFIGURACAO, ("clientes:write",)
-    )
+    registro.registrar("excluir_contato", Categoria.DESTRUTIVA, ("clientes:write",))
 
     @mcp.tool(
-        name="definir_contato_ativo",
-        annotations=registro.exigir("definir_contato_ativo").anotacoes,
+        name="excluir_contato", annotations=registro.exigir("excluir_contato").anotacoes
     )
-    async def definir_contato_ativo(
-        contato_id: Annotated[int, Field(description="Id do contato.")],
-        ativo: Annotated[bool, Field(description="false = desativar.")],
+    async def excluir_contato(
+        contato_id: Annotated[int, Field(description="Id, de `list_contatos`.")],
+        confirmar: Annotated[
+            str,
+            Field(
+                default="",
+                description="Nome do contato, exatamente como `list_contatos` mostra.",
+            ),
+        ] = "",
         dry_run: Annotated[bool, DRY_RUN] = False,
     ) -> str:
-        """Ativa ou desativa um contato. É reversível: o histórico fica, e o contato
-        volta com `ativo=true`. Use para tirar da lista quem não é mais cliente, não
-        para apagar dados."""
-        tool = registro.exigir("definir_contato_ativo")
+        """Exclui um contato. **Excluir aqui é desativar:** o contato e todas as
+        conversas dele somem do painel e das listas, mas nada é apagado.
+
+        A exclusão fica registrada na auditoria (`list_auditoria`, evento
+        `contato_desativado`) com o id do contato e os das conversas que foram
+        junto — é por esse id que se desfaz, com `restaurar_contato`. Se a pessoa
+        voltar a escrever no WhatsApp, o contato volta sozinho (as conversas
+        antigas continuam excluídas).
+
+        Rode com `dry_run=true` antes, mostre à pessoa quantas conversas vão
+        junto, e só então exclua preenchendo `confirmar` com o nome."""
+        tool = registro.exigir("excluir_contato")
+        historico = await executor.executar(
+            "excluir_contato",
+            "ListarAtendimentosDoContato",
+            pb.ListarAtendimentosDoContatoRequest(contato_id=contato_id, limit=200),
+            contabilizar=False,
+        )
+        conversas = len(historico.atendimentos)
         if dry_run:
             executor.registrar_simulacao(tool)
-            return resultado_dry_run(tool, "ativar/desativar o contato")
+            return resultado_dry_run(
+                tool,
+                f"excluir (desativar) o contato {contato_id} e {conversas} "
+                "conversa(s) dele — somem do painel, recuperáveis com "
+                "`restaurar_contato`",
+            )
+
+        # O nome real sai da busca pelo próprio nome informado: não há leitura
+        # de contato por id, e a busca só acha o contato se o agente o viu antes.
+        if not confirmar.strip():
+            exigir_confirmacao(tool, "", None)  # recusa com a mensagem padrão
+        nome = await _nome_do_contato(executor, contato_id, confirmar)
+        exigir_confirmacao(tool, nome, confirmar)
         await executor.executar(
-            "definir_contato_ativo",
+            "excluir_contato",
             "DefinirMyContatoAtivo",
-            pb.DefinirMyContatoAtivoRequest(id=contato_id, ativo=ativo),
+            pb.DefinirMyContatoAtivoRequest(id=contato_id, ativo=False),
         )
-        return f"Contato {contato_id} {'ativado' if ativo else 'desativado'}."
+        return (
+            f"Contato {contato_id} excluído (desativado) com {conversas} conversa(s). "
+            "Para desfazer: `restaurar_contato` com este id."
+        )
+
+    registro.registrar("restaurar_contato", Categoria.CONFIGURACAO, ("clientes:write",))
+
+    @mcp.tool(
+        name="restaurar_contato",
+        annotations=registro.exigir("restaurar_contato").anotacoes,
+    )
+    async def restaurar_contato(
+        contato_id: Annotated[
+            int,
+            Field(
+                description=(
+                    "Id do contato excluído — está no evento `contato_desativado` "
+                    "de `list_auditoria`."
+                )
+            ),
+        ],
+        dry_run: Annotated[bool, DRY_RUN] = False,
+    ) -> str:
+        """Desfaz a exclusão de um contato: ele volta ao painel e às listas. As
+        conversas que foram excluídas junto voltam uma a uma com
+        `restaurar_atendimento` (os ids estão no mesmo evento da auditoria)."""
+        tool = registro.exigir("restaurar_contato")
+        if dry_run:
+            executor.registrar_simulacao(tool)
+            return resultado_dry_run(tool, f"restaurar o contato {contato_id}")
+        await executor.executar(
+            "restaurar_contato",
+            "DefinirMyContatoAtivo",
+            pb.DefinirMyContatoAtivoRequest(id=contato_id, ativo=True),
+        )
+        return f"Contato {contato_id} restaurado."
 
     # -- Clientes (empresas) -------------------------------------------------
 
@@ -613,3 +678,28 @@ def registrar(mcp, registro: Registro, executor: Executor, teto: int = 50) -> No
             pb.ListMyAuditLogRequest(origem=origem, limit=teto),
         )
         return [para_dict(e) for e in limitar_itens(list(r.entries), teto)]
+
+
+async def _nome_do_contato(executor: Executor, contato_id: int, nome: str) -> str:
+    """O nome do contato, confirmado por uma busca pelo nome informado.
+
+    Devolve o nome como o painel o mostra (o cadastrado ou, sem ele, o do perfil
+    do WhatsApp). Não achar é recusar: id inexistente, já excluído ou nome que
+    não é o dele.
+    """
+    r = await executor.executar(
+        "excluir_contato",
+        "ListMyContatos",
+        pb.ListMyContatosRequest(busca=nome.strip(), limite=200),
+        contabilizar=False,
+    )
+    for c in r.contatos:
+        if c.id == contato_id:
+            for candidato in (c.nome_contato, c.nome_perfil_whatsapp):
+                if candidato and candidato.strip() == nome.strip():
+                    return candidato
+            return c.nome_contato or c.nome_perfil_whatsapp
+    raise ToolError(
+        "Contato não encontrado com esse nome. Confira o id e o nome em "
+        "`list_contatos` (contatos já excluídos não aparecem)."
+    )

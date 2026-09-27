@@ -134,6 +134,7 @@ pub const MAPA: &[(&str, &[&str])] = &[
     ("CreateContato", &["clientes:write"]),
     ("UpdateContato", &["clientes:write"]),
     ("DefinirContatoAtivo", &["clientes:write"]),
+    ("DefinirAtendimentoAtivo", &["atendimentos:write"]),
     // B10 (N11 E5) — cadastro de clientes é dado de negócio do tenant: lê quem
     // lê cliente, escreve quem escreve cliente.
     ("ListClientes", &["clientes:read"]),

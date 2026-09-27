@@ -300,10 +300,16 @@ CASOS: list[tuple[str, dict[str, Any], str, dict[str, Any]]] = [
         {"id": 5},
     ),
     (
-        "definir_contato_ativo",
-        {"contato_id": 5, "ativo": False},
+        "restaurar_contato",
+        {"contato_id": 5},
         "DefinirMyContatoAtivo",
-        {"ativo": False},
+        {"id": 5, "ativo": True},
+    ),
+    (
+        "restaurar_atendimento",
+        {"atendimento_id": 7},
+        "DefinirMyAtendimentoAtivo",
+        {"atendimento_id": 7, "ativo": True},
     ),
     ("list_clientes", {"busca": "eco"}, "ListMyClientes", {"busca": "eco"}),
     (

@@ -629,6 +629,7 @@ async fn main() -> anyhow::Result<()> {
     let state_for_update_etiqueta = state_clone.clone();
     let state_for_desativar_etiqueta = state_clone.clone();
     let state_for_prioridade = state_clone.clone();
+    let state_for_atendimento_ativo = state_clone.clone();
     let state_for_reprocessar_dead_letter = state_clone.clone();
     let state_for_marcar_mensagem_enviada = state_clone.clone();
     let state_for_marcar_mensagem_falha_envio = state_clone.clone();
@@ -924,6 +925,17 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(async move {
                 handler_atribuir_atendimento(state.atendimento.as_ref(), state.audit.as_ref(), env)
                     .await
+            })
+        })
+        .route("DefinirAtendimentoAtivo", move |env| {
+            let state = state_for_atendimento_ativo.clone();
+            Box::pin(async move {
+                handler_definir_atendimento_ativo(
+                    state.atendimento.as_ref(),
+                    state.audit.as_ref(),
+                    env,
+                )
+                .await
             })
         })
         .route("DefinirPrioridade", move |env| {
@@ -5924,6 +5936,83 @@ async fn handler_atribuir_atendimento(
     }
 }
 
+/// Exclui (desativa) ou restaura um atendimento.
+///
+/// "Excluir" no Smart Core é desativar: a conversa some do painel e a linha de
+/// auditoria guarda o id — é por ela que se restaura. Nada é apagado.
+#[tracing::instrument(skip_all, fields(rpc = "DefinirAtendimentoAtivo", tenant_id = %env.tenant_id))]
+async fn handler_definir_atendimento_ativo(
+    store: &dyn ports::AtendimentoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let id = payload
+        .get("atendimento_id")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0) as i32;
+    let Some(ativo) = payload.get("ativo").and_then(|v| v.as_bool()) else {
+        return erro(
+            error_core::AppError::Validation("informe se o atendimento fica ativo".into()),
+            &env,
+        );
+    };
+    if id <= 0 {
+        return erro(
+            error_core::AppError::Validation("atendimento não informado".into()),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store.definir_atendimento_ativo(&ctx, id, ativo).await {
+        Ok(Some(r)) => {
+            let (evento, mensagem) = if ativo {
+                (
+                    "atendimento.restaurado",
+                    format!("Atendimento {id} restaurado"),
+                )
+            } else {
+                (
+                    "atendimento.excluido",
+                    format!("Atendimento {id} excluído (desativado)"),
+                )
+            };
+            audit
+                .publish(
+                    &env,
+                    evento,
+                    mensagem,
+                    serde_json::json!({
+                        "atendimento_id": id,
+                        "contato_id": r.contato_id,
+                        "status": r.status,
+                        "contato_restaurado": r.contato_restaurado,
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "DefinirAtendimentoAtivoReply",
+                serde_json::json!({
+                    "sucesso": true,
+                    "status": r.status,
+                    "contato_restaurado": r.contato_restaurado,
+                }),
+            )
+        }
+        Ok(None) => erro(
+            error_core::AppError::Validation(if ativo {
+                "atendimento não encontrado ou não está excluído".into()
+            } else {
+                "atendimento não encontrado ou já excluído".into()
+            }),
+            &env,
+        ),
+        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
+    }
+}
+
 /// P4 — urgência do cartão.
 #[tracing::instrument(skip_all, fields(rpc = "DefinirPrioridade", tenant_id = %env.tenant_id))]
 async fn handler_definir_prioridade(
@@ -7158,30 +7247,40 @@ async fn handler_definir_contato_ativo(
 
     let ctx = contexto_do_envelope(&env);
     match store.definir_contato_ativo(&ctx, id, ativo).await {
-        Ok(true) => {
-            let acao = if ativo {
-                "contato_reativado"
+        Ok(Some(atendimentos)) => {
+            // "Excluir" é desativar: o contato e as conversas dele somem do
+            // painel, e esta linha é o registro de que dá para restaurá-los — o
+            // id do contato e os das conversas que foram junto.
+            let (acao, mensagem) = if ativo {
+                ("contato_reativado", format!("Contato {id} restaurado"))
             } else {
-                "contato_desativado"
+                (
+                    "contato_desativado",
+                    format!(
+                        "Contato {id} excluído (desativado) com {} atendimento(s)",
+                        atendimentos.len()
+                    ),
+                )
             };
             audit
                 .publish(
                     &env,
                     acao,
-                    format!(
-                        "Contato {id} {}",
-                        if ativo { "reativado" } else { "desativado" }
-                    ),
-                    serde_json::json!({ "id": id, "ativo": ativo }),
+                    mensagem,
+                    serde_json::json!({
+                        "id": id,
+                        "ativo": ativo,
+                        "atendimentos_desativados": atendimentos,
+                    }),
                 )
                 .await;
             ok_reply(
                 &env,
                 "DefinirContatoAtivoReply",
-                serde_json::json!({ "sucesso": true }),
+                serde_json::json!({ "sucesso": true, "atendimentos_desativados": atendimentos }),
             )
         }
-        Ok(false) => erro(
+        Ok(None) => erro(
             error_core::AppError::Validation("contato não encontrado".into()),
             &env,
         ),
@@ -12651,6 +12750,76 @@ mod tests_atendimento_cliente_unit {
         let resp = handler_transferir_atendimento_para_fluxo(&store, &audit, env).await;
 
         assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    /// Excluir é desativar, e a trilha guarda o id para restaurar.
+    #[tokio::test]
+    async fn excluir_atendimento_desativa_e_audita_com_o_id() {
+        use infrastructure_postgres::atendimentos::atendimentos::AtendimentoDesativado;
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_definir_atendimento_ativo()
+            .times(1)
+            .withf(|_, id, ativo| *id == 463 && !*ativo)
+            .returning(|_, _, _| {
+                Ok(Some(AtendimentoDesativado {
+                    id: 463,
+                    contato_id: 560,
+                    status: "arquivado".into(),
+                    contato_restaurado: false,
+                }))
+            });
+        let mut audit = crate::ports::MockAuditPort::new();
+        audit
+            .expect_publish()
+            .times(1)
+            .withf(|_, event, _, ctx| {
+                event == "atendimento.excluido"
+                    && ctx["atendimento_id"] == 463
+                    && ctx["contato_id"] == 560
+            })
+            .returning(|_, _, _, _| ());
+        let env = envelope_com_payload(
+            "DefinirAtendimentoAtivo",
+            serde_json::json!({ "atendimento_id": 463, "ativo": false }),
+        );
+
+        let resp = handler_definir_atendimento_ativo(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    /// Sem dizer se fica ativo, não adivinha: excluir por omissão seria perigoso.
+    #[tokio::test]
+    async fn definir_atendimento_ativo_sem_o_campo_ativo_recusa() {
+        let store = MockAtendimentoStore::new();
+        let audit = crate::ports::MockAuditPort::new();
+        let env = envelope_com_payload(
+            "DefinirAtendimentoAtivo",
+            serde_json::json!({ "atendimento_id": 463 }),
+        );
+
+        let resp = handler_definir_atendimento_ativo(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    /// Já excluído (ou de outro tenant): nada muda e nada vai para a trilha.
+    #[tokio::test]
+    async fn excluir_atendimento_ja_excluido_nao_audita() {
+        let mut store = MockAtendimentoStore::new();
+        store
+            .expect_definir_atendimento_ativo()
+            .returning(|_, _, _| Ok(None));
+        let audit = crate::ports::MockAuditPort::new();
+        let env = envelope_com_payload(
+            "DefinirAtendimentoAtivo",
+            serde_json::json!({ "atendimento_id": 463, "ativo": false }),
+        );
+
+        let resp = handler_definir_atendimento_ativo(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
     }
 
     /// Anotação apagada não tem desfazer: a trilha guarda qual, nunca o texto.
