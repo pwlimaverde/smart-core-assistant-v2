@@ -466,7 +466,7 @@ pub async fn listar_excluidos(
                 }),
         );
     }
-    itens.sort_by(|a, b| b.excluido_em.cmp(&a.excluido_em));
+    itens.sort_by_key(|i| std::cmp::Reverse(i.excluido_em));
     itens.truncate(limite.max(0) as usize);
     Ok(itens)
 }
