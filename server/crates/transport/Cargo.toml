@@ -17,6 +17,8 @@ anyhow.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 opentelemetry = "0.24"
+# Liga o span de cada RPC recebido ao `traceparent` do envelope (ver runtime.rs).
+tracing-opentelemetry = "0.25"
 async-trait.workspace = true
 prost.workspace = true
 flatbuffers.workspace = true

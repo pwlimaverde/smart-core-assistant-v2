@@ -29,8 +29,22 @@ impl<'a> Extractor for HashMapExtractor<'a> {
 
 /// Injeta o trace context atual em um HashMap de metadados.
 /// Usar antes de despachar eventos no Redis Streams ou payload de mensagens.
+///
+/// O contexto vem do span **do `tracing`** em curso. `opentelemetry::Context::current()`
+/// sozinho não enxerga esses spans (o `tracing-opentelemetry` não sincroniza o
+/// contexto do OTel), e por isso o webhook publicava eventos sem `traceparent` —
+/// a cadeia webhook → worker → IA chegava ao Tempo em pedaços soltos. O contexto
+/// OTel "puro" continua valendo quando não há span do `tracing` ativo.
 pub fn injetar_contexto_atual(metadados: &mut HashMap<String, String>) {
-    let context = opentelemetry::Context::current();
+    use opentelemetry::trace::TraceContextExt;
+    use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+    let do_span = tracing::Span::current().context();
+    let context = if do_span.span().span_context().is_valid() {
+        do_span
+    } else {
+        opentelemetry::Context::current()
+    };
     opentelemetry::global::get_text_map_propagator(|propagator| {
         propagator.inject_context(&context, &mut HashMapCarrier(metadados));
     });

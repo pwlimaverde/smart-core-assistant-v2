@@ -513,6 +513,44 @@ impl Server {
     }
 }
 
+/// Span de um RPC recebido, filho do `traceparent` que veio no envelope.
+///
+/// Sem ele cada serviço de dados abria spans soltos, e o Tempo mostrava o
+/// `mcp_server`, o `worker` e o `data_postgres` como traces independentes.
+/// Os `#[tracing::instrument]` dos handlers ficam aninhados sob este span, e o
+/// trace passa a atravessar a fronteira do UDS/TCP. `traceparent` vazio ou
+/// inválido só produz um span raiz — nunca falha o RPC.
+fn span_do_rpc(env: &Envelope) -> tracing::Span {
+    use tracing_opentelemetry::OpenTelemetrySpanExt;
+
+    let span = tracing::info_span!(
+        "rpc",
+        otel.name = %env.method,
+        rpc = %env.method,
+        tenant_id = %env.tenant_id
+    );
+    if !env.traceparent.is_empty() {
+        let contexto = opentelemetry::global::get_text_map_propagator(|propagador| {
+            propagador.extract(&TraceparentDoEnvelope(&env.traceparent))
+        });
+        span.set_parent(contexto);
+    }
+    span
+}
+
+/// Carrier só com o `traceparent`, para o propagador W3C.
+struct TraceparentDoEnvelope<'a>(&'a str);
+
+impl opentelemetry::propagation::Extractor for TraceparentDoEnvelope<'_> {
+    fn get(&self, chave: &str) -> Option<&str> {
+        (chave == "traceparent").then_some(self.0)
+    }
+
+    fn keys(&self) -> Vec<&str> {
+        vec!["traceparent"]
+    }
+}
+
 async fn handle_connection<S>(
     stream: S,
     handlers: Arc<HashMap<String, Handler>>,
@@ -593,7 +631,8 @@ where
                 Ok(env) => {
                     let method = env.method.clone();
                     let response_env = if let Some(handler) = handlers_clone.get(&method) {
-                        handler(env).await
+                        let span = span_do_rpc(&env);
+                        tracing::Instrument::instrument(handler(env), span).await
                     } else {
                         // Retornar erro de metodo nao encontrado
                         Envelope {
