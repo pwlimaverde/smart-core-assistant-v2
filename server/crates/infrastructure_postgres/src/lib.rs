@@ -20,6 +20,7 @@ pub mod config_cache;
 pub mod connection;
 pub mod crypto;
 pub mod errors;
+pub mod exclusao;
 pub mod idempotencia;
 pub mod integracoes;
 pub mod mcp;

@@ -323,7 +323,7 @@ impl FluxoAtendimentoRepository for PostgresFluxoAtendimentoRepository {
                FROM oraculo_fluxo_atendimento f
                JOIN oraculo_departamento d
                  ON d.id = f.departamento_id AND d.tenant_id = f.tenant_id
-               WHERE f.tenant_id = $1
+               WHERE f.tenant_id = $1 AND f.excluido_em IS NULL
                ORDER BY d.nome, f.nome"#,
             ctx.tenant_id
         )
@@ -346,7 +346,7 @@ impl FluxoAtendimentoRepository for PostgresFluxoAtendimentoRepository {
         let res = sqlx::query!(
             r#"UPDATE oraculo_fluxo_atendimento
                   SET nome = $3, descricao = $4, ativo = $5, data_atualizacao = NOW()
-                WHERE tenant_id = $1 AND id = $2"#,
+                WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL"#,
             ctx.tenant_id,
             id,
             nome,
@@ -653,7 +653,7 @@ impl EtapaFluxoRepository for PostgresEtapaFluxoRepository {
         let res = sqlx::query!(
             r#"UPDATE oraculo_etapa_fluxo
                   SET nome = $3, descricao = $4, cor = $5, tipo_etapa = $6
-                WHERE tenant_id = $1 AND id = $2"#,
+                WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL"#,
             ctx.tenant_id,
             id,
             nome,
@@ -774,7 +774,7 @@ impl EtapaFluxoRepository for PostgresEtapaFluxoRepository {
         let total = sqlx::query_scalar!(
             r#"SELECT COUNT(*) AS "total!"
                  FROM oraculo_atendimento
-                WHERE tenant_id = $1 AND etapa_atual_id = $2"#,
+                WHERE tenant_id = $1 AND etapa_atual_id = $2 AND excluido_em IS NULL"#,
             ctx.tenant_id,
             id
         )

@@ -188,7 +188,8 @@ impl EtiquetaRepository for PostgresEtiquetaRepository {
         ctx.exigir_qualquer(&["atendimentos:read", "tenant:admin"])?;
         // Inclui as desativadas do catálogo: uma etiqueta aplicada e depois
         // desativada continua contando a história desta conversa, e sumir com
-        // ela reescreveria o passado.
+        // ela reescreveria o passado. A EXCLUÍDA sai: excluir é tirá-la de
+        // todo lugar do painel.
         let rows = sqlx::query_as!(
             Etiqueta,
             r#"SELECT e.id, e.tenant_id, e.nome, e.cor, e.descricao, e.ativo,
@@ -197,6 +198,7 @@ impl EtiquetaRepository for PostgresEtiquetaRepository {
                  JOIN atu_etiqueta_atendimento ea
                    ON ea.etiqueta_id = e.id AND ea.tenant_id = e.tenant_id
                 WHERE e.tenant_id = $1 AND ea.atendimento_id = $2
+                  AND e.excluido_em IS NULL
                 ORDER BY ea.aplicada_em"#,
             ctx.tenant_id,
             atendimento_id
@@ -245,7 +247,7 @@ impl NotaRepository for PostgresNotaRepository {
             Nota,
             r#"SELECT id, tenant_id, atendimento_id, texto, criado_por_id, criado_em
                FROM atu_nota
-               WHERE tenant_id = $1 AND atendimento_id = $2
+               WHERE tenant_id = $1 AND atendimento_id = $2 AND excluido_em IS NULL
                ORDER BY criado_em DESC"#,
             ctx.tenant_id,
             atendimento_id
@@ -256,10 +258,12 @@ impl NotaRepository for PostgresNotaRepository {
     }
 }
 
-/// P5 — apaga uma nota interna.
+/// P5 — exclui uma nota interna.
 ///
-/// O `atendimento_id` entra no WHERE junto do id da nota: sem ele, um id
-/// adivinhado apagaria nota de outra conversa do mesmo tenant.
+/// Excluir não apaga: a nota some do painel e da linha do tempo, e a linha fica
+/// só para a auditoria (doc 39). O `atendimento_id` entra no WHERE junto do id
+/// da nota: sem ele, um id adivinhado excluiria nota de outra conversa do mesmo
+/// tenant.
 #[tracing::instrument(skip_all, fields(nota_id = nota_id, atendimento_id = atendimento_id))]
 pub async fn remover_nota(
     tx: &mut Transaction<'_, Postgres>,
@@ -269,11 +273,13 @@ pub async fn remover_nota(
 ) -> Result<bool, DbError> {
     ctx.exigir_qualquer(&["atendimentos:write", "tenant:admin"])?;
     let r = sqlx::query(
-        "DELETE FROM atu_nota WHERE tenant_id = $1 AND id = $2 AND atendimento_id = $3",
+        "UPDATE atu_nota SET excluido_em = NOW(), excluido_por_id = NULLIF($4, 0) \
+         WHERE tenant_id = $1 AND id = $2 AND atendimento_id = $3 AND excluido_em IS NULL",
     )
     .bind(ctx.tenant_id)
     .bind(nota_id)
     .bind(atendimento_id)
+    .bind(ctx.user_id)
     .execute(&mut **tx)
     .await?;
     Ok(r.rows_affected() > 0)
@@ -306,7 +312,7 @@ pub async fn atualizar_etiqueta(
     let row = sqlx::query_as::<_, EtiquetaAtualizada>(
         r#"UPDATE atu_etiqueta
               SET nome = $1, cor = $2, descricao = $3
-            WHERE tenant_id = $4 AND id = $5
+            WHERE tenant_id = $4 AND id = $5 AND excluido_em IS NULL
         RETURNING id, nome, cor, descricao, ativo"#,
     )
     .bind(nome)

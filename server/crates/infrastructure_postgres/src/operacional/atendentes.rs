@@ -328,7 +328,7 @@ impl AtendenteRepository for PostgresAtendenteRepository {
                   SET nome = $3, cargo = $4, departamento_id = $5, fluxo_id = $6,
                       ativo = $7, disponivel = $8, max_atendimentos_simultaneos = $9,
                       ultima_atividade = NOW()
-                WHERE tenant_id = $1 AND id = $2"#,
+                WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL"#,
             ctx.tenant_id,
             id,
             nome,
@@ -496,7 +496,7 @@ impl AtendenteRepository for PostgresAtendenteRepository {
                       data_ultima_atribuicao, horario_trabalho, especialidades,
                       metadados, data_cadastro, ultima_atividade
                FROM oraculo_atendente
-               WHERE tenant_id = $1
+               WHERE tenant_id = $1 AND excluido_em IS NULL
                ORDER BY ativo DESC, nome"#,
             ctx.tenant_id
         )

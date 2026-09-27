@@ -331,6 +331,15 @@ impl TreinamentoStore for PgTreinamentoStore {
 
         run_in_tenant_transaction(&self.pool, ctx.tenant_id, |mut tx| async move {
             let removeu = repo.remover(&mut tx, &ctx, id).await?;
+            if removeu {
+                // A exclusão guarda a linha (doc 39), então a cascata da FK não
+                // leva mais os trechos: eles saem aqui, para a IA não achar o
+                // material excluído.
+                infrastructure_postgres::treinamento::documentos::apagar_do_treinamento(
+                    &mut tx, &ctx, id,
+                )
+                .await?;
+            }
             Ok((removeu, tx))
         })
         .await

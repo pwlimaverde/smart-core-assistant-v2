@@ -160,7 +160,7 @@ impl WhiteListRepository for PostgresWhiteListRepository {
         let rows = sqlx::query_as::<_, WhiteList>(
             r#"SELECT id, tenant_id, contact_id, name, phone_number, active, created_at
                FROM whatsapp_whitelist
-               WHERE tenant_id = $1
+               WHERE tenant_id = $1 AND excluido_em IS NULL
                ORDER BY active DESC, name"#,
         )
         .bind(ctx.tenant_id)
@@ -183,7 +183,7 @@ impl WhiteListRepository for PostgresWhiteListRepository {
         let row = sqlx::query_as::<_, WhiteList>(
             r#"UPDATE whatsapp_whitelist
                   SET name = $3, phone_number = $4, active = $5
-                WHERE tenant_id = $1 AND id = $2
+                WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL
             RETURNING id, tenant_id, contact_id, name, phone_number, active, created_at"#,
         )
         .bind(ctx.tenant_id)
@@ -205,11 +205,19 @@ impl WhiteListRepository for PostgresWhiteListRepository {
         id: i32,
     ) -> Result<bool, DbError> {
         ctx.exigir_qualquer(&["operacional:admin", "tenant:admin"])?;
-        let r = sqlx::query(r#"DELETE FROM whatsapp_whitelist WHERE tenant_id = $1 AND id = $2"#)
-            .bind(ctx.tenant_id)
-            .bind(id)
-            .execute(&mut **tx)
-            .await?;
+        // Excluir não apaga (doc 39): o número volta a ser atendido, e a linha
+        // fica só para a auditoria. `active = false` tira-o da checagem de
+        // ignorados, que só olha os ativos.
+        let r = sqlx::query(
+            r#"UPDATE whatsapp_whitelist
+                  SET active = false, excluido_em = NOW(), excluido_por_id = NULLIF($3, 0)
+                WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL"#,
+        )
+        .bind(ctx.tenant_id)
+        .bind(id)
+        .bind(ctx.user_id)
+        .execute(&mut **tx)
+        .await?;
         Ok(r.rows_affected() > 0)
     }
 }

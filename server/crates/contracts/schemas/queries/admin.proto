@@ -1531,9 +1531,16 @@ service AdminService {
   rpc CreateMyContato(CreateMyContatoRequest) returns (MyContatoResponse);
   rpc UpdateMyContato(UpdateMyContatoRequest) returns (SimpleOkResponse);
   rpc DefinirMyContatoAtivo(DefinirMyContatoAtivoRequest) returns (SimpleOkResponse);
-  // Excluir um atendimento é desativá-lo: some do painel, os dados ficam e a
-  // exclusão vai para a trilha de auditoria, que é por onde se restaura.
-  rpc DefinirMyAtendimentoAtivo(DefinirMyAtendimentoAtivoRequest) returns (SimpleOkResponse);
+  // Doc 39 — excluir é DEFINITIVO: o item some do painel, das seleções, da IA e
+  // das estatísticas, não volta, e a linha fica só para a auditoria. Desativar
+  // é o reversível. Os tipos: contato, cliente, atendimento, departamento,
+  // fluxo, etapa, atendente, campo, etiqueta, nota, intencao, treinamento,
+  // numero_ignorado (conexão se exclui por DeleteMyWhatsappInstance, que apaga
+  // no provedor antes).
+  rpc ExcluirMyItem(ExcluirMyItemRequest) returns (ExcluirMyItemResponse);
+  rpc DefinirMyItemAtivo(DefinirMyItemAtivoRequest) returns (SimpleOkResponse);
+  // Somente leitura, só tenant:admin — a aba "Excluídos" da auditoria.
+  rpc ListMyExcluidos(ListMyExcluidosRequest) returns (ListMyExcluidosResponse);
   // B10 (N11 E5): clientes (PJ/PF) e o vinculo com os contatos.
   rpc ListMyClientes(ListMyClientesRequest) returns (ListMyClientesResponse);
   rpc CreateMyCliente(CreateMyClienteRequest) returns (MyClienteResponse);
@@ -1795,10 +1802,39 @@ message DefinirMyContatoAtivoRequest {
   bool ativo = 2;
 }
 
-// false = excluir (desativar); true = restaurar.
-message DefinirMyAtendimentoAtivoRequest {
-  int32 atendimento_id = 1;
-  bool ativo = 2;
+message ExcluirMyItemRequest {
+  string tipo = 1;
+  int64 id = 2;
+}
+
+message ExcluirMyItemResponse {
+  bool sucesso = 1;
+  // Conversas excluídas junto (só na exclusão de contato).
+  repeated int64 atendimentos_excluidos = 2;
+}
+
+// false = desativar; true = reativar. Excluído não reativa.
+message DefinirMyItemAtivoRequest {
+  string tipo = 1;
+  int64 id = 2;
+  bool ativo = 3;
+}
+
+message ListMyExcluidosRequest {
+  string tipo = 1;   // vazio = todos
+  int32 limite = 2;  // 0 = 100; teto 500
+}
+
+message ItemExcluido {
+  string tipo = 1;
+  int64 id = 2;
+  string rotulo = 3;
+  int64 excluido_em = 4;   // epoch ms
+  string excluido_por = 5; // e-mail de quem excluiu; vazio = sistema
+}
+
+message ListMyExcluidosResponse {
+  repeated ItemExcluido itens = 1;
 }
 
 // --- B10 (N11 E5): clientes (PJ/PF) ---

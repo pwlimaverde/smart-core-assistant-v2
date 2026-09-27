@@ -160,7 +160,7 @@ impl QueryComposeRepository for PostgresQueryComposeRepository {
             r#"SELECT id, tenant_id, tag, grupo, descricao, exemplo, comportamento,
                       created_at, updated_at
                FROM treinamento_querycompose
-               WHERE tenant_id = $1
+               WHERE tenant_id = $1 AND excluido_em IS NULL
                ORDER BY created_at DESC"#,
             ctx.tenant_id
         )
@@ -198,6 +198,7 @@ impl QueryComposeRepository for PostgresQueryComposeRepository {
             FROM treinamento_querycompose
             WHERE tenant_id = $1
               AND embedding IS NOT NULL
+              AND excluido_em IS NULL
               AND (embedding <=> $2) <= $3
             ORDER BY embedding <=> $2
             LIMIT 1
@@ -232,7 +233,7 @@ impl QueryComposeRepository for PostgresQueryComposeRepository {
             r#"UPDATE treinamento_querycompose
                   SET tag = $3, grupo = $4, descricao = $5, exemplo = $6,
                       comportamento = $7, embedding = NULL, updated_at = NOW()
-                WHERE tenant_id = $1 AND id = $2"#,
+                WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL"#,
             ctx.tenant_id,
             id,
             tag,
@@ -255,10 +256,17 @@ impl QueryComposeRepository for PostgresQueryComposeRepository {
         id: i32,
     ) -> Result<bool, DbError> {
         ctx.exigir_qualquer(&["treinamento:write", "tenant:admin"])?;
+        // Excluir não apaga (doc 39): a intenção sai da IA e do painel, e a
+        // linha fica só para a auditoria. O vetor também sai — nenhuma busca
+        // deve encontrá-la, nem por descuido de um filtro.
         let res = sqlx::query!(
-            "DELETE FROM treinamento_querycompose WHERE tenant_id = $1 AND id = $2",
+            r#"UPDATE treinamento_querycompose
+                  SET excluido_em = NOW(), excluido_por_id = NULLIF($3, 0),
+                      embedding = NULL, updated_at = NOW()
+                WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL"#,
             ctx.tenant_id,
-            id
+            id,
+            ctx.user_id
         )
         .execute(&mut **tx)
         .await?;
@@ -291,7 +299,7 @@ impl QueryComposeRepository for PostgresQueryComposeRepository {
             r#"SELECT id, tenant_id, tag, grupo, descricao, exemplo, comportamento,
                       created_at, updated_at
                FROM treinamento_querycompose
-               WHERE embedding IS NULL
+               WHERE embedding IS NULL AND excluido_em IS NULL
                ORDER BY created_at ASC
                LIMIT $1"#,
         )

@@ -126,6 +126,7 @@ impl DocumentoRepository for PostgresDocumentoRepository {
             INNER JOIN oraculo_treinamento t ON d.treinamento_id = t.id
             WHERE d.tenant_id = $2
               AND t.treinamento_finalizado = true
+              AND t.excluido_em IS NULL
               AND d.embedding IS NOT NULL
               AND (d.embedding <=> $1) <= $3
             ORDER BY d.embedding <=> $1

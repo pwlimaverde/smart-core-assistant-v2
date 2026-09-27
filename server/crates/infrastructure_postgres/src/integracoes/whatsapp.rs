@@ -248,7 +248,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
                        connection_state, last_state_check, media_storage_backend, provider,
                        subscribed_events, last_connection_state, resposta_bot, created_at
                FROM whatsapp_instance
-               WHERE tenant_id = $1 AND name = $2"#,
+               WHERE tenant_id = $1 AND name = $2 AND excluido_em IS NULL"#,
             ctx.tenant_id,
             name
         )
@@ -271,7 +271,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
                        connection_state, last_state_check, media_storage_backend, provider,
                        subscribed_events, last_connection_state, resposta_bot, created_at
                FROM whatsapp_instance
-               WHERE tenant_id = $1 AND id = $2"#,
+               WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL"#,
             ctx.tenant_id,
             id
         )
@@ -294,7 +294,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
                        connection_state, last_state_check, media_storage_backend, provider,
                        subscribed_events, last_connection_state, resposta_bot, created_at
                FROM whatsapp_instance
-               WHERE tenant_id = $1 AND instance_id = $2"#,
+               WHERE tenant_id = $1 AND instance_id = $2 AND excluido_em IS NULL"#,
             ctx.tenant_id,
             instance_id_str
         )
@@ -316,7 +316,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
                SET connection_state = $1,
                    last_connection_state = $1,
                    last_state_check = NOW()
-               WHERE tenant_id = $2 AND id = $3"#,
+               WHERE tenant_id = $2 AND id = $3 AND excluido_em IS NULL"#,
             connection_state,
             ctx.tenant_id,
             id
@@ -337,7 +337,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
         let res = sqlx::query!(
             r#"UPDATE whatsapp_instance
                SET resposta_bot = $1
-               WHERE tenant_id = $2 AND id = $3"#,
+               WHERE tenant_id = $2 AND id = $3 AND excluido_em IS NULL"#,
             habilitado,
             ctx.tenant_id,
             id
@@ -360,7 +360,7 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
             r#"UPDATE whatsapp_instance
                SET instance_id = $1,
                    phone_number = $2
-               WHERE tenant_id = $3 AND id = $4"#,
+               WHERE tenant_id = $3 AND id = $4 AND excluido_em IS NULL"#,
             instance_id,
             phone_number,
             ctx.tenant_id,
@@ -426,11 +426,17 @@ impl WhatsappInstanceRepository for PostgresWhatsappInstanceRepository {
         id: i32,
     ) -> Result<(), DbError> {
         ctx.exigir_qualquer(&["operacional:admin", "tenant:admin", "integracoes:write"])?;
+        // Excluir não apaga (doc 39): a instância já foi apagada no provedor por
+        // quem chama; aqui a linha fica só para a auditoria, fora de uso
+        // (`active = false`) e com o nome livre para uma conexão nova.
         sqlx::query!(
-            r#"DELETE FROM whatsapp_instance
-               WHERE tenant_id = $1 AND id = $2"#,
+            r#"UPDATE whatsapp_instance
+                  SET active = false, connection_state = 'disconnected',
+                      excluido_em = NOW(), excluido_por_id = NULLIF($3, 0)
+                WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL"#,
             ctx.tenant_id,
-            id
+            id,
+            ctx.user_id
         )
         .execute(&mut **tx)
         .await?;

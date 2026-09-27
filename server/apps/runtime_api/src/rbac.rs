@@ -134,7 +134,31 @@ pub const MAPA: &[(&str, &[&str])] = &[
     ("CreateContato", &["clientes:write"]),
     ("UpdateContato", &["clientes:write"]),
     ("DefinirContatoAtivo", &["clientes:write"]),
-    ("DefinirAtendimentoAtivo", &["atendimentos:write"]),
+    // Doc 39: o escopo certo depende do tipo, e é conferido de novo por tipo na
+    // camada de banco (`TipoExcluivel::escopos`). Aqui entra qualquer escritor.
+    (
+        "ExcluirItem",
+        &[
+            "clientes:write",
+            "atendimentos:write",
+            "kanban:admin",
+            "operacional:admin",
+            "configuracoes:write",
+            "treinamento:write",
+        ],
+    ),
+    (
+        "DefinirItemAtivo",
+        &[
+            "clientes:write",
+            "atendimentos:write",
+            "kanban:admin",
+            "operacional:admin",
+            "configuracoes:write",
+            "treinamento:write",
+        ],
+    ),
+    ("ListarExcluidos", SOMENTE_ADMIN),
     // B10 (N11 E5) — cadastro de clientes é dado de negócio do tenant: lê quem
     // lê cliente, escreve quem escreve cliente.
     ("ListClientes", &["clientes:read"]),

@@ -229,19 +229,6 @@ pub trait AtendimentoStore: Send + Sync {
         limit: i64,
     ) -> Result<Vec<infrastructure_postgres::atendimentos::atendimentos::LinhaDoQuadro>, DbError>;
 
-    /// Exclui (desativa) ou restaura um atendimento. Nada é apagado: o
-    /// excluído some do painel e volta pela restauração. `None` = nada a mudar
-    /// (inexistente, de outro tenant ou já no estado pedido).
-    async fn definir_atendimento_ativo(
-        &self,
-        ctx: &RequestContext,
-        atendimento_id: i32,
-        ativo: bool,
-    ) -> Result<
-        Option<infrastructure_postgres::atendimentos::atendimentos::AtendimentoDesativado>,
-        DbError,
-    >;
-
     /// P4 — urgência do cartão.
     async fn definir_prioridade(
         &self,

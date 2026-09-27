@@ -155,7 +155,7 @@ impl ContatoRepository for PostgresContatoRepository {
             Contato,
             r#"INSERT INTO oraculo_contato (tenant_id, telefone, nome_contato)
                VALUES ($1, $2, $3)
-               ON CONFLICT (tenant_id, telefone) DO UPDATE
+               ON CONFLICT (tenant_id, telefone) WHERE excluido_em IS NULL DO UPDATE
                    SET nome_contato = COALESCE(EXCLUDED.nome_contato, oraculo_contato.nome_contato),
                        ultima_interacao = NOW()
                RETURNING id, tenant_id, telefone, nome_contato, slug, email,
@@ -221,7 +221,7 @@ impl ContatoRepository for PostgresContatoRepository {
                   SET nome_contato = COALESCE($3::text, nome_contato),
                       email        = COALESCE($4::text, email),
                       telefone     = COALESCE($5::text, telefone)
-                WHERE tenant_id = $1 AND id = $2"#,
+                WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL"#,
             ctx.tenant_id,
             id,
             edicao.nome_contato,
@@ -245,7 +245,9 @@ impl ContatoRepository for PostgresContatoRepository {
     ) -> Result<bool, DbError> {
         ctx.exigir_qualquer(&["clientes:write", "tenant:admin"])?;
         let afetadas = sqlx::query!(
-            "UPDATE oraculo_contato SET ativo = $3 WHERE tenant_id = $1 AND id = $2",
+            // Excluído não reativa: a exclusão é definitiva para o usuário.
+            "UPDATE oraculo_contato SET ativo = $3
+             WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL",
             ctx.tenant_id,
             id,
             ativo
@@ -286,7 +288,7 @@ impl ContatoRepository for PostgresContatoRepository {
                       nome_perfil_whatsapp, data_cadastro, ultima_interacao,
                       ativo, metadados, foto_perfil, foto_perfil_url_origem
                FROM oraculo_contato
-               WHERE tenant_id = $1 AND telefone = $2"#,
+               WHERE tenant_id = $1 AND telefone = $2 AND excluido_em IS NULL"#,
             ctx.tenant_id,
             telefone
         )
@@ -331,7 +333,7 @@ impl ContatoRepository for PostgresContatoRepository {
                       nome_perfil_whatsapp, data_cadastro, ultima_interacao,
                       ativo, metadados, foto_perfil, foto_perfil_url_origem
                FROM oraculo_contato
-               WHERE tenant_id = $1 AND ativo = true
+               WHERE tenant_id = $1 AND ativo = true AND excluido_em IS NULL
                ORDER BY ultima_interacao DESC
                LIMIT $2"#,
             ctx.tenant_id,
@@ -372,15 +374,14 @@ impl ContatoRepository for PostgresContatoRepository {
         // `$2 IS NULL` no mesmo statement em vez de dois SQLs: a diferença é um
         // filtro, não uma consulta diferente.
         //
-        // Só ativos: excluir um contato é desativá-lo, e o excluído não aparece
-        // mais no painel. Ele segue no banco e na trilha de auditoria, que é por
-        // onde se restaura.
+        // Inativos aparecem (com o selo, e podem ser reativados); excluídos não
+        // aparecem nunca — seguem no banco só para a auditoria.
         let rows = sqlx::query_as::<_, Contato>(
             r#"SELECT id, tenant_id, telefone, nome_contato, slug, email,
                       nome_perfil_whatsapp, data_cadastro, ultima_interacao,
                       ativo, metadados, foto_perfil, foto_perfil_url_origem
                FROM oraculo_contato
-               WHERE tenant_id = $1 AND ativo = true
+               WHERE tenant_id = $1 AND excluido_em IS NULL
                  AND ($2::text IS NULL
                       OR nome_contato ILIKE '%' || $2 || '%'
                       OR telefone ILIKE '%' || $2 || '%'
@@ -420,7 +421,7 @@ pub async fn atualizar_perfil_whatsapp(
         r#"UPDATE oraculo_contato
               SET nome_perfil_whatsapp = COALESCE(NULLIF($3, ''), nome_perfil_whatsapp),
                   foto_perfil_url_origem = COALESCE(NULLIF($4, ''), foto_perfil_url_origem)
-            WHERE tenant_id = $1 AND telefone = $2"#,
+            WHERE tenant_id = $1 AND telefone = $2 AND excluido_em IS NULL"#,
     )
     .bind(ctx.tenant_id)
     .bind(telefone)

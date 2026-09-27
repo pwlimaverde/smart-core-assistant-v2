@@ -117,15 +117,11 @@ pub trait ClienteStore: Send + Sync {
         vincular: bool,
     ) -> Result<bool, DbError>;
 
-    /// Exclui (desativa) ou restaura o contato. Nada é apagado.
-    ///
-    /// Excluir desativa também as conversas dele, que somem do painel junto.
-    /// `None` = contato inexistente; `Some(ids)` = feito, com os atendimentos
-    /// desativados agora (vazio ao restaurar).
+    /// Tira (ou devolve) o contato da lista sem apagar o histórico.
     async fn definir_contato_ativo(
         &self,
         ctx: &RequestContext,
         id: i32,
         ativo: bool,
-    ) -> Result<Option<Vec<i32>>, DbError>;
+    ) -> Result<bool, DbError>;
 }

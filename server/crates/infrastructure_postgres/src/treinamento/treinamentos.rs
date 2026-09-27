@@ -154,7 +154,7 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
                       treinamento_finalizado, treinamento_vetorizado,
                       data_criacao, data_atualizacao
                FROM oraculo_treinamento
-               WHERE tenant_id = $1 AND tag = $2 AND grupo = $3"#,
+               WHERE tenant_id = $1 AND tag = $2 AND grupo = $3 AND excluido_em IS NULL"#,
             ctx.tenant_id,
             tag,
             grupo
@@ -216,7 +216,7 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
                       treinamento_finalizado, treinamento_vetorizado,
                       data_criacao, data_atualizacao
                FROM oraculo_treinamento
-               WHERE tenant_id = $1
+               WHERE tenant_id = $1 AND excluido_em IS NULL
                  AND treinamento_finalizado = true AND treinamento_vetorizado = false
                ORDER BY data_criacao"#,
             ctx.tenant_id
@@ -242,6 +242,7 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
                       data_criacao, data_atualizacao
                FROM oraculo_treinamento
                WHERE treinamento_finalizado = true AND treinamento_vetorizado = false
+                 AND excluido_em IS NULL
                ORDER BY data_criacao ASC
                LIMIT $1"#,
         )
@@ -264,7 +265,7 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
                       treinamento_finalizado, treinamento_vetorizado,
                       data_criacao, data_atualizacao
                FROM oraculo_treinamento
-               WHERE tenant_id = $1
+               WHERE tenant_id = $1 AND excluido_em IS NULL
                ORDER BY data_criacao DESC"#,
             ctx.tenant_id
         )
@@ -310,7 +311,7 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
                   SET conteudo = $1,
                       treinamento_vetorizado = false,
                       data_atualizacao = NOW()
-                WHERE id = $2 AND tenant_id = $3"#,
+                WHERE id = $2 AND tenant_id = $3 AND excluido_em IS NULL"#,
             conteudo,
             treinamento_id,
             ctx.tenant_id
@@ -328,10 +329,17 @@ impl TreinamentoRepository for PostgresTreinamentoRepository {
         treinamento_id: i32,
     ) -> Result<bool, DbError> {
         ctx.exigir_qualquer(&["treinamento:write", "tenant:admin"])?;
+        // Excluir não apaga (doc 39): o material sai da IA e do painel, e a
+        // linha fica só para a auditoria. Os trechos vetorizados são derivados
+        // e saem de fato — quem chama apaga-os na mesma transação.
         let res = sqlx::query!(
-            "DELETE FROM oraculo_treinamento WHERE id = $1 AND tenant_id = $2",
+            r#"UPDATE oraculo_treinamento
+                  SET excluido_em = NOW(), excluido_por_id = NULLIF($3, 0),
+                      treinamento_vetorizado = false, data_atualizacao = NOW()
+                WHERE id = $1 AND tenant_id = $2 AND excluido_em IS NULL"#,
             treinamento_id,
-            ctx.tenant_id
+            ctx.tenant_id,
+            ctx.user_id
         )
         .execute(&mut **tx)
         .await?;
@@ -465,7 +473,7 @@ pub async fn criar_com_arquivo(
               treinamento_vetorizado, arquivo_chave, arquivo_nome,
               arquivo_mimetype, arquivo_bytes, extracao_status)
            VALUES ($1, $2, $3, NULL, false, false, $4, $5, $6, $7, 'pendente')
-           ON CONFLICT (tenant_id, tag, grupo) DO UPDATE
+           ON CONFLICT (tenant_id, tag, grupo) WHERE excluido_em IS NULL DO UPDATE
              SET conteudo = NULL,
                  treinamento_finalizado = false,
                  treinamento_vetorizado = false,
@@ -513,6 +521,7 @@ pub async fn listar_extracoes_pendentes(
                   COALESCE(arquivo_nome, ''), COALESCE(arquivo_mimetype, '')
            FROM oraculo_treinamento
            WHERE extracao_status = 'pendente' AND arquivo_chave IS NOT NULL
+             AND excluido_em IS NULL
            ORDER BY data_criacao ASC
            LIMIT $1"#,
     )

@@ -57,7 +57,7 @@ pub async fn definir_departamento(
         r#"UPDATE whatsapp_instance
               SET departamento_id = (
                     SELECT d.id FROM oraculo_departamento d
-                     WHERE d.tenant_id = $1 AND d.id = $3
+                     WHERE d.tenant_id = $1 AND d.id = $3 AND d.excluido_em IS NULL
                   )
             WHERE tenant_id = $1 AND id = $2"#,
     )
@@ -101,7 +101,7 @@ pub async fn departamentos_das_conexoes(
              FROM whatsapp_instance i
              LEFT JOIN oraculo_departamento d
                     ON d.id = i.departamento_id AND d.tenant_id = i.tenant_id
-            WHERE i.tenant_id = $1"#,
+            WHERE i.tenant_id = $1 AND i.excluido_em IS NULL"#,
     )
     .bind(ctx.tenant_id)
     .fetch_all(&mut **tx)
@@ -128,13 +128,15 @@ pub async fn detalhe(
                     WHERE a.tenant_id = i.tenant_id AND a.data_fim IS NULL)
                       AS atendimentos_abertos,
                   (SELECT COUNT(*) FROM oraculo_mensagem m
-                    WHERE m.tenant_id = i.tenant_id
+                     JOIN oraculo_atendimento a
+                       ON a.id = m.atendimento_id AND a.tenant_id = m.tenant_id
+                    WHERE m.tenant_id = i.tenant_id AND a.excluido_em IS NULL
                       AND m.timestamp > NOW() - INTERVAL '24 hours')
                       AS mensagens_24h
              FROM whatsapp_instance i
              LEFT JOIN oraculo_departamento d
                     ON d.id = i.departamento_id AND d.tenant_id = i.tenant_id
-            WHERE i.tenant_id = $1 AND i.id = $2"#,
+            WHERE i.tenant_id = $1 AND i.id = $2 AND i.excluido_em IS NULL"#,
     )
     .bind(ctx.tenant_id)
     .bind(id)

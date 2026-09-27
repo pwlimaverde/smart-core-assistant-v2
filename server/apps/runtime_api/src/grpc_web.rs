@@ -68,9 +68,9 @@ use contracts::grpc::queries::{
     DefinirBotDaConversaRequest,
     DefinirBotDaConversaResponse,
     DefinirDepartamentoDaConexaoRequest,
-    DefinirMyAtendimentoAtivoRequest,
     DefinirMyClienteAtivoRequest,
     DefinirMyContatoAtivoRequest,
+    DefinirMyItemAtivoRequest,
     DefinirPrioridadeRequest,
     DefinirPrioridadeResponse,
     DefinirRespostaBotInstanciaRequest,
@@ -88,6 +88,8 @@ use contracts::grpc::queries::{
     Etiqueta as ProtoEtiqueta,
     EtiquetaResponse,
     EventoDaTimeline,
+    ExcluirMyItemRequest,
+    ExcluirMyItemResponse,
     ExportTenantsCsvRequest,
     ExportTenantsCsvResponse,
     ExportarQuadroRequest,
@@ -119,6 +121,7 @@ use contracts::grpc::queries::{
     GetVersaoDoAppResponse,
     IniciarAtendimentoManualRequest,
     IniciarAtendimentoManualResponse,
+    ItemExcluido,
     ListAtendimentosRequest,
     ListAtendimentosResponse,
     ListCoreSettingsRequest,
@@ -147,6 +150,8 @@ use contracts::grpc::queries::{
     ListMyDepartamentosRequest,
     ListMyDepartamentosResponse,
     ListMyEtapasFluxoResponse,
+    ListMyExcluidosRequest,
+    ListMyExcluidosResponse,
     ListMyFluxosRequest,
     ListMyFluxosResponse,
     ListMyIntentsRequest,
@@ -4823,28 +4828,103 @@ impl AdminService for AdminFacade {
 
     #[tracing::instrument(
         skip_all,
-        fields(
-            service = "runtime_api",
-            rpc = "DefinirMyAtendimentoAtivo",
-            traceparent
-        )
+        fields(service = "runtime_api", rpc = "ExcluirMyItem", traceparent)
     )]
-    async fn definir_my_atendimento_ativo(
+    async fn excluir_my_item(
         &self,
-        req: Request<DefinirMyAtendimentoAtivoRequest>,
-    ) -> Result<Response<SimpleOkResponse>, Status> {
-        let inner = *req.get_ref();
-        if inner.atendimento_id <= 0 {
-            return Err(Status::invalid_argument("informe o atendimento"));
+        req: Request<ExcluirMyItemRequest>,
+    ) -> Result<Response<ExcluirMyItemResponse>, Status> {
+        let inner = req.get_ref().clone();
+        if inner.tipo == "conexao" {
+            // A conexão é apagada no provedor antes de ser marcada: o caminho
+            // é o DeleteMyWhatsappInstance, e não este.
+            return Err(Status::invalid_argument(
+                "conexão se exclui por DeleteMyWhatsappInstance",
+            ));
         }
+        let val = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "ExcluirItem",
+                serde_json::json!({ "tipo": inner.tipo, "id": inner.id }),
+            )
+            .await?;
+        let atendimentos_excluidos = val
+            .get("atendimentos_excluidos")
+            .and_then(|v| v.as_array())
+            .map(|a| a.iter().filter_map(|v| v.as_i64()).collect())
+            .unwrap_or_default();
+        Ok(Response::new(ExcluirMyItemResponse {
+            sucesso: true,
+            atendimentos_excluidos,
+        }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "DefinirMyItemAtivo", traceparent)
+    )]
+    async fn definir_my_item_ativo(
+        &self,
+        req: Request<DefinirMyItemAtivoRequest>,
+    ) -> Result<Response<SimpleOkResponse>, Status> {
+        let inner = req.get_ref().clone();
         self.encaminhar_tenant(
             &req,
             &self.deps.pg,
-            "DefinirAtendimentoAtivo",
-            serde_json::json!({ "atendimento_id": inner.atendimento_id, "ativo": inner.ativo }),
+            "DefinirItemAtivo",
+            serde_json::json!({ "tipo": inner.tipo, "id": inner.id, "ativo": inner.ativo }),
         )
         .await?;
         Ok(Response::new(SimpleOkResponse { sucesso: true }))
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(service = "runtime_api", rpc = "ListMyExcluidos", traceparent)
+    )]
+    async fn list_my_excluidos(
+        &self,
+        req: Request<ListMyExcluidosRequest>,
+    ) -> Result<Response<ListMyExcluidosResponse>, Status> {
+        let inner = req.get_ref().clone();
+        let val = self
+            .encaminhar_tenant(
+                &req,
+                &self.deps.pg,
+                "ListarExcluidos",
+                serde_json::json!({ "tipo": inner.tipo, "limite": inner.limite }),
+            )
+            .await?;
+        let itens = val
+            .get("itens")
+            .and_then(|v| v.as_array())
+            .map(|a| {
+                a.iter()
+                    .map(|i| ItemExcluido {
+                        tipo: i
+                            .get("tipo")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        id: i.get("id").and_then(|v| v.as_i64()).unwrap_or(0),
+                        rotulo: i
+                            .get("rotulo")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                        excluido_em: millis_do_item(i, "excluido_em").unwrap_or(0),
+                        excluido_por: i
+                            .get("excluido_por")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or_default()
+                            .to_string(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(Response::new(ListMyExcluidosResponse { itens }))
     }
 
     #[tracing::instrument(

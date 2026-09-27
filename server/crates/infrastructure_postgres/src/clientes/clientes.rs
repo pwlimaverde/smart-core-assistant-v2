@@ -193,7 +193,7 @@ impl ClienteRepository for PostgresClienteRepository {
                       cep, logradouro, numero, complemento, bairro, cidade, uf, pais,
                       data_cadastro, ultima_atualizacao, ativo, metadados
                FROM oraculo_cliente
-               WHERE tenant_id = $1 AND ativo = true
+               WHERE tenant_id = $1 AND ativo = true AND excluido_em IS NULL
                ORDER BY nome_fantasia
                LIMIT $2 OFFSET $3"#,
             ctx.tenant_id,
@@ -282,9 +282,11 @@ const SQL_LISTAR_CLIENTES: &str = r#"SELECT c.id, c.nome_fantasia,
     COALESCE(c.complemento, '') AS complemento, COALESCE(c.bairro, '') AS bairro,
     COALESCE(c.cidade, '') AS cidade, COALESCE(c.uf, '') AS uf, c.ativo,
     (SELECT COUNT(*) FROM oraculo_cliente_contatos cc
-      WHERE cc.tenant_id = c.tenant_id AND cc.cliente_id = c.id) AS contatos
+       JOIN oraculo_contato o ON o.id = cc.contato_id AND o.tenant_id = cc.tenant_id
+      WHERE cc.tenant_id = c.tenant_id AND cc.cliente_id = c.id
+        AND o.excluido_em IS NULL) AS contatos
            FROM oraculo_cliente c
-           WHERE c.tenant_id = $1 AND ($2 OR c.ativo)
+           WHERE c.tenant_id = $1 AND c.excluido_em IS NULL AND ($2 OR c.ativo)
              AND ($3 = '' OR c.nome_fantasia ILIKE '%' || $3 || '%'
                   OR COALESCE(c.razao_social, '') ILIKE '%' || $3 || '%'
                   OR COALESCE(c.cnpj, '') LIKE '%' || $3 || '%'
@@ -302,9 +304,11 @@ const SQL_BUSCAR_CLIENTE: &str = r#"SELECT c.id, c.nome_fantasia,
     COALESCE(c.complemento, '') AS complemento, COALESCE(c.bairro, '') AS bairro,
     COALESCE(c.cidade, '') AS cidade, COALESCE(c.uf, '') AS uf, c.ativo,
     (SELECT COUNT(*) FROM oraculo_cliente_contatos cc
-      WHERE cc.tenant_id = c.tenant_id AND cc.cliente_id = c.id) AS contatos
+       JOIN oraculo_contato o ON o.id = cc.contato_id AND o.tenant_id = cc.tenant_id
+      WHERE cc.tenant_id = c.tenant_id AND cc.cliente_id = c.id
+        AND o.excluido_em IS NULL) AS contatos
            FROM oraculo_cliente c
-           WHERE c.tenant_id = $1 AND c.id = $2"#;
+           WHERE c.tenant_id = $1 AND c.id = $2 AND c.excluido_em IS NULL"#;
 
 fn cliente_da_linha(row: &sqlx::postgres::PgRow) -> Result<ClienteResumo, DbError> {
     use sqlx::Row;
@@ -464,7 +468,7 @@ pub async fn atualizar_cliente(
                observacoes = $11, cep = $12, logradouro = $13, numero = $14,
                complemento = $15, bairro = $16, cidade = $17, uf = $18,
                ultima_atualizacao = NOW()
-           WHERE tenant_id = $1 AND id = $2"#,
+           WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL"#,
     )
     .bind(ctx.tenant_id)
     .bind(id)
@@ -499,7 +503,7 @@ pub async fn definir_cliente_ativo(
     ctx.exigir_qualquer(&["clientes:write", "tenant:admin"])?;
     let res = sqlx::query(
         "UPDATE oraculo_cliente SET ativo = $3, ultima_atualizacao = NOW() \
-         WHERE tenant_id = $1 AND id = $2",
+         WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL",
     )
     .bind(ctx.tenant_id)
     .bind(id)
@@ -521,7 +525,7 @@ pub async fn contatos_do_cliente(
                   COALESCE(o.telefone, '')
            FROM oraculo_cliente_contatos cc
            JOIN oraculo_contato o ON o.id = cc.contato_id AND o.tenant_id = cc.tenant_id
-           WHERE cc.tenant_id = $1 AND cc.cliente_id = $2 AND o.ativo = true
+           WHERE cc.tenant_id = $1 AND cc.cliente_id = $2 AND o.excluido_em IS NULL
            ORDER BY 2, o.id"#,
     )
     .bind(ctx.tenant_id)
@@ -549,8 +553,10 @@ pub async fn vincular_contato(
 ) -> Result<bool, DbError> {
     ctx.exigir_qualquer(&["clientes:write", "tenant:admin"])?;
     let (existem,): (bool,) = sqlx::query_as(
-        r#"SELECT EXISTS (SELECT 1 FROM oraculo_cliente WHERE tenant_id = $1 AND id = $2)
-              AND EXISTS (SELECT 1 FROM oraculo_contato WHERE tenant_id = $1 AND id = $3)"#,
+        r#"SELECT EXISTS (SELECT 1 FROM oraculo_cliente
+                           WHERE tenant_id = $1 AND id = $2 AND excluido_em IS NULL)
+              AND EXISTS (SELECT 1 FROM oraculo_contato
+                           WHERE tenant_id = $1 AND id = $3 AND excluido_em IS NULL)"#,
     )
     .bind(ctx.tenant_id)
     .bind(cliente_id)

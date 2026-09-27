@@ -247,26 +247,13 @@ impl ClienteStore for PgClienteStore {
         ctx: &RequestContext,
         id: i32,
         ativo: bool,
-    ) -> Result<Option<Vec<i32>>, DbError> {
+    ) -> Result<bool, DbError> {
         let repo = PostgresContatoRepository;
         let ctx = ctx.clone();
         let tenant_id = ctx.tenant_id;
         run_in_tenant_transaction(&self.pool, tenant_id, |mut tx| async move {
             let achou = repo.desativar(&mut tx, &ctx, id, ativo).await?;
-            if !achou {
-                return Ok((None, tx));
-            }
-            // Na mesma transação: contato excluído com conversa visível no
-            // quadro seria meia exclusão.
-            let ids = if ativo {
-                Vec::new()
-            } else {
-                infrastructure_postgres::atendimentos::atendimentos::desativar_do_contato(
-                    &mut tx, &ctx, id,
-                )
-                .await?
-            };
-            Ok((Some(ids), tx))
+            Ok((achou, tx))
         })
         .await
     }

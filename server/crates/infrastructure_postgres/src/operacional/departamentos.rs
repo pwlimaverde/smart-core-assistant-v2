@@ -206,7 +206,7 @@ impl DepartamentoRepository for PostgresDepartamentoRepository {
         let res = sqlx::query!(
             r#"UPDATE oraculo_departamento
                   SET nome = $1, descricao = $2, ativo = $3
-                WHERE id = $4 AND tenant_id = $5"#,
+                WHERE id = $4 AND tenant_id = $5 AND excluido_em IS NULL"#,
             nome,
             descricao,
             ativo,

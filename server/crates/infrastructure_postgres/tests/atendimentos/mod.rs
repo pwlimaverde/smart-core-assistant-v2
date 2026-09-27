@@ -626,23 +626,26 @@ async fn painel_nao_abre_segundo_atendimento_para_o_mesmo_contato() {
     tx.rollback().await.unwrap();
 }
 
-/// Excluir é desativar: some das listas do painel e volta pela restauração.
+/// Exclusão definitiva (doc 39): some de todo lugar, não volta, libera o
+/// telefone para um contato novo e fica visível só na lista de excluídos.
 ///
-/// As consultas são `query_as` em texto (sem checagem do `sqlx prepare`), então
-/// este teste é o que prova que rodam no esquema migrado — inclusive a coluna
-/// `desativado_em` da 0044.
+/// As consultas do módulo `exclusao` são montadas em texto a partir de uma lista
+/// fechada de tipos (sem checagem do `sqlx prepare`), então é este teste que
+/// prova que rodam no esquema migrado — inclusive os índices parciais da 0045.
 #[tokio::test]
-async fn test_exclusao_logica_de_contato_e_atendimento() {
-    use infrastructure_postgres::atendimentos::atendimentos::{
-        definir_atendimento_ativo, desativar_do_contato, listar_do_contato,
+async fn test_exclusao_definitiva_de_contato_e_atendimento() {
+    use infrastructure_postgres::atendimentos::atendimentos::listar_do_contato;
+    use infrastructure_postgres::exclusao::{
+        definir_ativo, excluir, listar_excluidos, ResultadoExclusao, TipoExcluivel,
     };
 
     let pool = obter_pool_teste().await;
     let mut tx = pool.begin().await.unwrap();
     let contato_repo = PostgresContatoRepository;
     let atendimento_repo = PostgresAtendimentoRepository;
+    let depto_repo = PostgresDepartamentoRepository;
 
-    let tenant = criar_tenant_para_teste(&mut tx, "Tenant Exclusao Logica").await;
+    let tenant = criar_tenant_para_teste(&mut tx, "Tenant Exclusao Definitiva").await;
     configurar_tenant_transacao(&mut tx, tenant.id).await;
     let ctx = criar_contexto_teste(tenant.id);
 
@@ -650,65 +653,112 @@ async fn test_exclusao_logica_de_contato_e_atendimento() {
         .salvar(&mut tx, &ctx, "5511900007777", Some("Contato Excluido"))
         .await
         .unwrap();
-    let em_andamento = atendimento_repo
+    let conversa = atendimento_repo
         .criar(&mut tx, &ctx, contato.id, None, None, None)
         .await
         .unwrap();
 
-    // Exclui o contato: ele e a conversa somem das listas do painel.
-    assert!(contato_repo
-        .desativar(&mut tx, &ctx, contato.id, false)
+    // Desativar é reversível e o inativo continua na lista de gestão.
+    assert_eq!(
+        definir_ativo(
+            &mut tx,
+            &ctx,
+            TipoExcluivel::Contato,
+            contato.id as i64,
+            false
+        )
         .await
-        .unwrap());
-    let ids = desativar_do_contato(&mut tx, &ctx, contato.id)
-        .await
-        .unwrap();
-    assert_eq!(ids, vec![em_andamento.id]);
-
-    let contatos = contato_repo
+        .unwrap(),
+        Some(true)
+    );
+    let lista = contato_repo
         .listar_por_tenant(&mut tx, &ctx, None, 50)
         .await
         .unwrap();
-    assert!(contatos.iter().all(|c| c.id != contato.id));
+    assert!(lista.iter().any(|c| c.id == contato.id && !c.ativo));
+
+    // Excluir leva a conversa junto e tira os dois de todo lugar.
+    let r = excluir(&mut tx, &ctx, TipoExcluivel::Contato, contato.id as i64)
+        .await
+        .unwrap();
+    assert_eq!(
+        r,
+        ResultadoExclusao::Excluido {
+            cascata: vec![conversa.id as i64]
+        }
+    );
+    let lista = contato_repo
+        .listar_por_tenant(&mut tx, &ctx, None, 50)
+        .await
+        .unwrap();
+    assert!(lista.iter().all(|c| c.id != contato.id));
     assert!(listar_do_contato(&mut tx, &ctx, contato.id, 50)
         .await
         .unwrap()
         .is_empty());
-
-    // A conversa em andamento foi encerrada: a próxima mensagem abre outra.
     let encerrada = atendimento_repo
-        .buscar_por_id(&mut tx, &ctx, em_andamento.id)
+        .buscar_por_id(&mut tx, &ctx, conversa.id)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(encerrada.status, "arquivado");
 
-    // Excluir de novo não muda nada.
-    assert!(
-        definir_atendimento_ativo(&mut tx, &ctx, em_andamento.id, false)
+    // Não volta: nem reativar nem excluir de novo.
+    assert_eq!(
+        definir_ativo(
+            &mut tx,
+            &ctx,
+            TipoExcluivel::Contato,
+            contato.id as i64,
+            true
+        )
+        .await
+        .unwrap(),
+        Some(false)
+    );
+    assert_eq!(
+        excluir(&mut tx, &ctx, TipoExcluivel::Contato, contato.id as i64)
             .await
-            .unwrap()
-            .is_none()
+            .unwrap(),
+        ResultadoExclusao::NaoEncontrado
     );
 
-    // Restaurar a conversa traz o contato junto.
-    let restaurado = definir_atendimento_ativo(&mut tx, &ctx, em_andamento.id, true)
+    // O telefone ficou livre: a mesma pessoa escrevendo de novo vira contato novo.
+    assert!(contato_repo
+        .buscar_por_telefone(&mut tx, &ctx, "5511900007777")
         .await
         .unwrap()
-        .expect("a conversa excluída pode ser restaurada");
-    assert!(restaurado.contato_restaurado);
-    assert_eq!(
-        listar_do_contato(&mut tx, &ctx, contato.id, 50)
-            .await
-            .unwrap()
-            .len(),
-        1
-    );
-    let contatos = contato_repo
-        .listar_por_tenant(&mut tx, &ctx, None, 50)
+        .is_none());
+    let novo = contato_repo
+        .salvar(&mut tx, &ctx, "5511900007777", Some("Contato Novo"))
         .await
         .unwrap();
-    assert!(contatos.iter().any(|c| c.id == contato.id));
+    assert_ne!(novo.id, contato.id);
+
+    // Só a lista de excluídos mostra o que foi excluído.
+    let excluidos = listar_excluidos(&mut tx, &ctx, None, 50).await.unwrap();
+    assert!(excluidos
+        .iter()
+        .any(|i| i.tipo == "contato" && i.id == contato.id as i64));
+    assert!(excluidos
+        .iter()
+        .any(|i| i.tipo == "atendimento" && i.id == conversa.id as i64));
+
+    // Departamento com fluxo vivo não se exclui (decisão D3).
+    let depto = depto_repo
+        .criar(&mut tx, &ctx, "Setor Excluir", None)
+        .await
+        .unwrap();
+    PostgresFluxoAtendimentoRepository
+        .criar(&mut tx, &ctx, depto.id, "Fluxo Vivo", None)
+        .await
+        .unwrap();
+    assert!(matches!(
+        excluir(&mut tx, &ctx, TipoExcluivel::Departamento, depto.id as i64)
+            .await
+            .unwrap(),
+        ResultadoExclusao::EmUso(_)
+    ));
 
     tx.rollback().await.unwrap();
 }

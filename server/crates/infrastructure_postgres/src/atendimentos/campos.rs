@@ -280,7 +280,7 @@ impl CampoPersonalizadoRepository for PostgresCampoPersonalizadoRepository {
                       obrigatorio = $5, extrair_automaticamente = $6,
                       extrair_hint = $7, mostrar_no_card = $8, ordem = $9,
                       ativo = $10, data_atualizacao = NOW()
-                WHERE tenant_id = $11 AND id = $12"#,
+                WHERE tenant_id = $11 AND id = $12 AND excluido_em IS NULL"#,
             edicao.nome,
             edicao.descricao,
             edicao.tipo,
@@ -333,7 +333,7 @@ impl CampoPersonalizadoRepository for PostgresCampoPersonalizadoRepository {
                       extrair_hint, mostrar_no_card, ordem, ativo,
                       data_criacao, data_atualizacao
                  FROM atu_campo_personalizado
-                WHERE tenant_id = $1
+                WHERE tenant_id = $1 AND excluido_em IS NULL
                 ORDER BY escopo, ordem, nome"#,
             ctx.tenant_id
         )

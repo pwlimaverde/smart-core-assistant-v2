@@ -1019,14 +1019,18 @@ impl OperacionalStore for PgOperacionalStore {
                      (SELECT COUNT(*) FROM oraculo_atendimento
                        WHERE tenant_id = $1 AND status = 'fila')
                        AS "aguardando!",
-                     (SELECT COUNT(*) FROM oraculo_mensagem
-                       WHERE tenant_id = $1
-                         AND timestamp >= NOW() - INTERVAL '24 hours')
+                     -- Mensagem de conversa excluída não conta (doc 39 §3.4).
+                     (SELECT COUNT(*) FROM oraculo_mensagem m
+                       JOIN oraculo_atendimento a
+                         ON a.id = m.atendimento_id AND a.tenant_id = m.tenant_id
+                       WHERE m.tenant_id = $1 AND a.excluido_em IS NULL
+                         AND m.timestamp >= NOW() - INTERVAL '24 hours')
                        AS "mensagens_24h!",
                      (SELECT COUNT(*) FROM whatsapp_instance
                        WHERE tenant_id = $1 AND connection_state = 'connected')
                        AS "conexoes_ativas!",
-                     (SELECT COUNT(*) FROM whatsapp_instance WHERE tenant_id = $1)
+                     (SELECT COUNT(*) FROM whatsapp_instance
+                       WHERE tenant_id = $1 AND excluido_em IS NULL)
                        AS "conexoes_total!",
                      (SELECT COUNT(*) FROM oraculo_departamento
                        WHERE tenant_id = $1 AND ativo = true)

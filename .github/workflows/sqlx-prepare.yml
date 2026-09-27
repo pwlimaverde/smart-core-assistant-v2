@@ -1,0 +1,107 @@
+name: sqlx prepare
+
+# Regenera o cache offline do sqlx (`server/.sqlx/`) e faz commit na própria
+# branch.
+#
+# Existe porque o cache só se gera compilando o workspace contra um banco com o
+# schema migrado, e a máquina do servidor não compila Rust (2 vCPU, 7,8 GB: um
+# `cargo build` derruba a stack). Sem ele, mudar uma `query!` obrigaria a trocá-la
+# por consulta sem checagem em tempo de compilação.
+#
+# Dispara com `[sqlx-prepare]` na mensagem do commit, fora de `main` e `dev`: um
+# `workflow_dispatch` só é acionável quando o arquivo já está na branch padrão.
+# O commit que este job faz usa o GITHUB_TOKEN e por isso não dispara outro CI —
+# o próximo push da branch valida tudo com o cache novo.
+
+on:
+  push:
+    branches-ignore: [main, dev]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sqlx-prepare-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    if: contains(github.event.head_commit.message, '[sqlx-prepare]')
+    name: Regenera server/.sqlx
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: smartcore_v2
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.ref }}
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: server
+
+      # Mesmo preparo do job Rust do CI: o build.rs de `contracts` exige protoc e flatc.
+      - name: Instala protoc e flatc
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq protobuf-compiler postgresql-client
+          wget -q -O /tmp/flatc.zip https://github.com/google/flatbuffers/releases/download/v25.12.19-2026-02-06-03fffb2/Linux.flatc.binary.g%2B%2B-13.zip
+          unzip -q -o /tmp/flatc.zip -d /tmp/flatc_extracted
+          sudo mv /tmp/flatc_extracted/flatc /usr/local/bin/flatc
+          sudo chmod +x /usr/local/bin/flatc
+
+      # As migrations concedem privilégios a estas roles; no container efêmero
+      # elas não existem (ver o mesmo passo no ci.yml).
+      - name: Roles do banco
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -p 5434 -U postgres -d smartcore_v2 -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$ BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'smartcore_app_rt') THEN
+              CREATE ROLE smartcore_app_rt LOGIN PASSWORD 'smartcore_app_rt' NOBYPASSRLS;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'smartcore_app') THEN
+              CREATE ROLE smartcore_app LOGIN PASSWORD 'smartcore_app' NOBYPASSRLS;
+            END IF;
+          END $$;
+          SQL
+
+      - name: Instala sqlx-cli
+        run: cargo install sqlx-cli --no-default-features --features postgres --locked
+
+      - name: Migrations e prepare
+        working-directory: server
+        env:
+          DATABASE_URL: postgres://postgres:postgres@localhost:5434/smartcore_v2
+        run: |
+          cargo sqlx migrate run --source crates/infrastructure_postgres/migrations
+          cargo sqlx prepare --workspace
+
+      - name: Commit do cache
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A server/.sqlx
+          if git diff --cached --quiet; then
+            echo "cache .sqlx já estava em dia"
+          else
+            git commit -m "chore(sqlx): regenera o cache offline das consultas"
+            git push origin HEAD:${{ github.ref_name }}
+          fi

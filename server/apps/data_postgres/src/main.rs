@@ -130,6 +130,8 @@ struct AppState {
     vouchers: std::sync::Arc<dyn ports::VoucherStore>,
     /// Consentimentos OAuth 2.1 dos clientes MCP (N13.2).
     mcp_grants: std::sync::Arc<dyn ports::McpGrantStore>,
+    /// Exclusão definitiva, desativar/reativar e a lista de excluídos (doc 39).
+    exclusao: std::sync::Arc<dyn ports::ExclusaoStore>,
 }
 
 #[tokio::main]
@@ -305,6 +307,7 @@ async fn main() -> anyhow::Result<()> {
         signup: signup_store,
         vouchers: voucher_store,
         mcp_grants: mcp_grant_store,
+        exclusao: std::sync::Arc::new(adapters::PgExclusaoStore::new(pool.clone())),
     };
 
     // Logger dedicado à supervisão das tasks de background. O `AuditPort` acima
@@ -526,6 +529,9 @@ async fn main() -> anyhow::Result<()> {
     let s_contato_criar = state_clone.clone();
     let s_contato_update = state_clone.clone();
     let s_contato_ativo = state_clone.clone();
+    let s_excluir_item = state_clone.clone();
+    let s_item_ativo = state_clone.clone();
+    let s_excluidos = state_clone.clone();
     let s_clientes_listar = state_clone.clone();
     let s_cliente_criar = state_clone.clone();
     let s_cliente_atualizar = state_clone.clone();
@@ -629,7 +635,6 @@ async fn main() -> anyhow::Result<()> {
     let state_for_update_etiqueta = state_clone.clone();
     let state_for_desativar_etiqueta = state_clone.clone();
     let state_for_prioridade = state_clone.clone();
-    let state_for_atendimento_ativo = state_clone.clone();
     let state_for_reprocessar_dead_letter = state_clone.clone();
     let state_for_marcar_mensagem_enviada = state_clone.clone();
     let state_for_marcar_mensagem_falha_envio = state_clone.clone();
@@ -925,17 +930,6 @@ async fn main() -> anyhow::Result<()> {
             Box::pin(async move {
                 handler_atribuir_atendimento(state.atendimento.as_ref(), state.audit.as_ref(), env)
                     .await
-            })
-        })
-        .route("DefinirAtendimentoAtivo", move |env| {
-            let state = state_for_atendimento_ativo.clone();
-            Box::pin(async move {
-                handler_definir_atendimento_ativo(
-                    state.atendimento.as_ref(),
-                    state.audit.as_ref(),
-                    env,
-                )
-                .await
             })
         })
         .route("DefinirPrioridade", move |env| {
@@ -1455,6 +1449,24 @@ async fn main() -> anyhow::Result<()> {
                 handler_definir_contato_ativo(state.cliente.as_ref(), state.audit.as_ref(), env)
                     .await
             })
+        })
+        // Doc 39 — exclusão definitiva, desativar/reativar e a lista de
+        // excluídos, para todas as entidades de `TipoExcluivel`.
+        .route("ExcluirItem", move |env| {
+            let state = s_excluir_item.clone();
+            Box::pin(async move {
+                handler_excluir_item(state.exclusao.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("DefinirItemAtivo", move |env| {
+            let state = s_item_ativo.clone();
+            Box::pin(async move {
+                handler_definir_item_ativo(state.exclusao.as_ref(), state.audit.as_ref(), env).await
+            })
+        })
+        .route("ListarExcluidos", move |env| {
+            let state = s_excluidos.clone();
+            Box::pin(async move { handler_listar_excluidos(state.exclusao.as_ref(), env).await })
         })
         // B10 (N11 E5) — clientes (PJ/PF) e o vínculo com os contatos.
         .route("ListClientes", move |env| {
@@ -5936,83 +5948,6 @@ async fn handler_atribuir_atendimento(
     }
 }
 
-/// Exclui (desativa) ou restaura um atendimento.
-///
-/// "Excluir" no Smart Core é desativar: a conversa some do painel e a linha de
-/// auditoria guarda o id — é por ela que se restaura. Nada é apagado.
-#[tracing::instrument(skip_all, fields(rpc = "DefinirAtendimentoAtivo", tenant_id = %env.tenant_id))]
-async fn handler_definir_atendimento_ativo(
-    store: &dyn ports::AtendimentoStore,
-    audit: &dyn ports::AuditPort,
-    env: Envelope,
-) -> Envelope {
-    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
-    let id = payload
-        .get("atendimento_id")
-        .and_then(|v| v.as_i64())
-        .unwrap_or(0) as i32;
-    let Some(ativo) = payload.get("ativo").and_then(|v| v.as_bool()) else {
-        return erro(
-            error_core::AppError::Validation("informe se o atendimento fica ativo".into()),
-            &env,
-        );
-    };
-    if id <= 0 {
-        return erro(
-            error_core::AppError::Validation("atendimento não informado".into()),
-            &env,
-        );
-    }
-
-    let ctx = contexto_do_envelope(&env);
-    match store.definir_atendimento_ativo(&ctx, id, ativo).await {
-        Ok(Some(r)) => {
-            let (evento, mensagem) = if ativo {
-                (
-                    "atendimento.restaurado",
-                    format!("Atendimento {id} restaurado"),
-                )
-            } else {
-                (
-                    "atendimento.excluido",
-                    format!("Atendimento {id} excluído (desativado)"),
-                )
-            };
-            audit
-                .publish(
-                    &env,
-                    evento,
-                    mensagem,
-                    serde_json::json!({
-                        "atendimento_id": id,
-                        "contato_id": r.contato_id,
-                        "status": r.status,
-                        "contato_restaurado": r.contato_restaurado,
-                    }),
-                )
-                .await;
-            ok_reply(
-                &env,
-                "DefinirAtendimentoAtivoReply",
-                serde_json::json!({
-                    "sucesso": true,
-                    "status": r.status,
-                    "contato_restaurado": r.contato_restaurado,
-                }),
-            )
-        }
-        Ok(None) => erro(
-            error_core::AppError::Validation(if ativo {
-                "atendimento não encontrado ou não está excluído".into()
-            } else {
-                "atendimento não encontrado ou já excluído".into()
-            }),
-            &env,
-        ),
-        Err(e) => erro(error_core::AppError::Database(e.to_string()), &env),
-    }
-}
-
 /// P4 — urgência do cartão.
 #[tracing::instrument(skip_all, fields(rpc = "DefinirPrioridade", tenant_id = %env.tenant_id))]
 async fn handler_definir_prioridade(
@@ -7247,42 +7182,211 @@ async fn handler_definir_contato_ativo(
 
     let ctx = contexto_do_envelope(&env);
     match store.definir_contato_ativo(&ctx, id, ativo).await {
-        Ok(Some(atendimentos)) => {
-            // "Excluir" é desativar: o contato e as conversas dele somem do
-            // painel, e esta linha é o registro de que dá para restaurá-los — o
-            // id do contato e os das conversas que foram junto.
-            let (acao, mensagem) = if ativo {
-                ("contato_reativado", format!("Contato {id} restaurado"))
+        Ok(true) => {
+            let acao = if ativo {
+                "contato_reativado"
             } else {
-                (
-                    "contato_desativado",
-                    format!(
-                        "Contato {id} excluído (desativado) com {} atendimento(s)",
-                        atendimentos.len()
-                    ),
-                )
+                "contato_desativado"
             };
             audit
                 .publish(
                     &env,
                     acao,
-                    mensagem,
-                    serde_json::json!({
-                        "id": id,
-                        "ativo": ativo,
-                        "atendimentos_desativados": atendimentos,
-                    }),
+                    format!(
+                        "Contato {id} {}",
+                        if ativo { "reativado" } else { "desativado" }
+                    ),
+                    serde_json::json!({ "id": id, "ativo": ativo }),
                 )
                 .await;
             ok_reply(
                 &env,
                 "DefinirContatoAtivoReply",
-                serde_json::json!({ "sucesso": true, "atendimentos_desativados": atendimentos }),
+                serde_json::json!({ "sucesso": true }),
             )
         }
-        Ok(None) => erro(
+        Ok(false) => erro(
             error_core::AppError::Validation("contato não encontrado".into()),
             &env,
+        ),
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+// --- Exclusão definitiva (doc 39) ---
+//
+// Excluir é definitivo para o usuário: o item some do painel, das seleções, da
+// IA e das estatísticas, e não volta. A linha fica só para a auditoria — é esta
+// trilha que registra quem excluiu o quê.
+
+/// Tipo e id do payload. Erro de validação quando faltam ou o tipo não existe.
+fn tipo_e_id_do_payload(
+    payload: &serde_json::Value,
+) -> Result<(infrastructure_postgres::exclusao::TipoExcluivel, i64), error_core::AppError> {
+    let tipo = payload
+        .get("tipo")
+        .and_then(|v| v.as_str())
+        .and_then(infrastructure_postgres::exclusao::TipoExcluivel::de_nome)
+        .ok_or_else(|| error_core::AppError::Validation("tipo de item desconhecido".into()))?;
+    let id = payload
+        .get("id")
+        .and_then(|v| v.as_i64())
+        .filter(|id| *id > 0)
+        .ok_or_else(|| error_core::AppError::Validation("item não informado".into()))?;
+    Ok((tipo, id))
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "ExcluirItem", tenant_id = %env.tenant_id))]
+async fn handler_excluir_item(
+    store: &dyn ports::ExclusaoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    use infrastructure_postgres::exclusao::{ResultadoExclusao, TipoExcluivel};
+
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let (tipo, id) = match tipo_e_id_do_payload(&payload) {
+        Ok(v) => v,
+        Err(e) => return erro(e, &env),
+    };
+    // A conexão precisa ser apagada no provedor antes: esse caminho é o
+    // `DeleteWhatsappInstance` do `data_whatsapp`, que marca a linha depois.
+    if tipo == TipoExcluivel::Conexao {
+        return erro(
+            error_core::AppError::Validation(
+                "conexão se exclui pelo DeleteWhatsappInstance".into(),
+            ),
+            &env,
+        );
+    }
+
+    let ctx = contexto_do_envelope(&env);
+    match store.excluir(&ctx, tipo, id).await {
+        Ok(ResultadoExclusao::Excluido { cascata }) => {
+            audit
+                .publish(
+                    &env,
+                    &format!("{}.excluido", tipo.nome()),
+                    format!(
+                        "{} {id} excluído definitivamente{}",
+                        tipo.nome(),
+                        if cascata.is_empty() {
+                            String::new()
+                        } else {
+                            format!(" com {} conversa(s)", cascata.len())
+                        }
+                    ),
+                    serde_json::json!({
+                        "tipo": tipo.nome(),
+                        "id": id,
+                        "atendimentos_excluidos": cascata,
+                    }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "ExcluirItemReply",
+                serde_json::json!({ "sucesso": true, "atendimentos_excluidos": cascata }),
+            )
+        }
+        Ok(ResultadoExclusao::NaoEncontrado) => erro(
+            error_core::AppError::Validation("item não encontrado ou já excluído".into()),
+            &env,
+        ),
+        Ok(ResultadoExclusao::EmUso(motivo)) => {
+            erro(error_core::AppError::Validation(motivo), &env)
+        }
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+#[tracing::instrument(skip_all, fields(rpc = "DefinirItemAtivo", tenant_id = %env.tenant_id))]
+async fn handler_definir_item_ativo(
+    store: &dyn ports::ExclusaoStore,
+    audit: &dyn ports::AuditPort,
+    env: Envelope,
+) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let (tipo, id) = match tipo_e_id_do_payload(&payload) {
+        Ok(v) => v,
+        Err(e) => return erro(e, &env),
+    };
+    let Some(ativo) = payload.get("ativo").and_then(|v| v.as_bool()) else {
+        return erro(
+            error_core::AppError::Validation("informe se o item fica ativo".into()),
+            &env,
+        );
+    };
+
+    let ctx = contexto_do_envelope(&env);
+    match store.definir_ativo(&ctx, tipo, id, ativo).await {
+        Ok(Some(true)) => {
+            let acao = if ativo { "reativado" } else { "desativado" };
+            audit
+                .publish(
+                    &env,
+                    &format!("{}.{acao}", tipo.nome()),
+                    format!("{} {id} {acao}", tipo.nome()),
+                    serde_json::json!({ "tipo": tipo.nome(), "id": id, "ativo": ativo }),
+                )
+                .await;
+            ok_reply(
+                &env,
+                "DefinirItemAtivoReply",
+                serde_json::json!({ "sucesso": true }),
+            )
+        }
+        Ok(Some(false)) => erro(
+            error_core::AppError::Validation(
+                "item não encontrado ou excluído (excluído não volta)".into(),
+            ),
+            &env,
+        ),
+        Ok(None) => erro(
+            error_core::AppError::Validation(format!(
+                "{} não tem desativação: só exclusão",
+                tipo.nome()
+            )),
+            &env,
+        ),
+        Err(e) => erro(e.into(), &env),
+    }
+}
+
+/// A aba "Excluídos" da auditoria: somente leitura, só `tenant:admin` (a
+/// checagem de escopo é da camada de banco).
+#[tracing::instrument(skip_all, fields(rpc = "ListarExcluidos", tenant_id = %env.tenant_id))]
+async fn handler_listar_excluidos(store: &dyn ports::ExclusaoStore, env: Envelope) -> Envelope {
+    let payload: serde_json::Value = serde_json::from_slice(&env.payload).unwrap_or_default();
+    let tipo = match payload
+        .get("tipo")
+        .and_then(|v| v.as_str())
+        .filter(|t| !t.is_empty())
+    {
+        None => None,
+        Some(nome) => match infrastructure_postgres::exclusao::TipoExcluivel::de_nome(nome) {
+            Some(t) => Some(t),
+            None => {
+                return erro(
+                    error_core::AppError::Validation("tipo de item desconhecido".into()),
+                    &env,
+                )
+            }
+        },
+    };
+    let limite = payload
+        .get("limite")
+        .and_then(|v| v.as_i64())
+        .filter(|l| *l > 0)
+        .unwrap_or(100)
+        .min(500);
+
+    let ctx = contexto_do_envelope(&env);
+    match store.listar_excluidos(&ctx, tipo, limite).await {
+        Ok(itens) => ok_reply(
+            &env,
+            "ListarExcluidosReply",
+            serde_json::json!({ "itens": itens }),
         ),
         Err(e) => erro(e.into(), &env),
     }
@@ -12752,76 +12856,6 @@ mod tests_atendimento_cliente_unit {
         assert_eq!(resp.kind, MessageKind::Reply as i32);
     }
 
-    /// Excluir é desativar, e a trilha guarda o id para restaurar.
-    #[tokio::test]
-    async fn excluir_atendimento_desativa_e_audita_com_o_id() {
-        use infrastructure_postgres::atendimentos::atendimentos::AtendimentoDesativado;
-        let mut store = MockAtendimentoStore::new();
-        store
-            .expect_definir_atendimento_ativo()
-            .times(1)
-            .withf(|_, id, ativo| *id == 463 && !*ativo)
-            .returning(|_, _, _| {
-                Ok(Some(AtendimentoDesativado {
-                    id: 463,
-                    contato_id: 560,
-                    status: "arquivado".into(),
-                    contato_restaurado: false,
-                }))
-            });
-        let mut audit = crate::ports::MockAuditPort::new();
-        audit
-            .expect_publish()
-            .times(1)
-            .withf(|_, event, _, ctx| {
-                event == "atendimento.excluido"
-                    && ctx["atendimento_id"] == 463
-                    && ctx["contato_id"] == 560
-            })
-            .returning(|_, _, _, _| ());
-        let env = envelope_com_payload(
-            "DefinirAtendimentoAtivo",
-            serde_json::json!({ "atendimento_id": 463, "ativo": false }),
-        );
-
-        let resp = handler_definir_atendimento_ativo(&store, &audit, env).await;
-
-        assert_eq!(resp.kind, MessageKind::Reply as i32);
-    }
-
-    /// Sem dizer se fica ativo, não adivinha: excluir por omissão seria perigoso.
-    #[tokio::test]
-    async fn definir_atendimento_ativo_sem_o_campo_ativo_recusa() {
-        let store = MockAtendimentoStore::new();
-        let audit = crate::ports::MockAuditPort::new();
-        let env = envelope_com_payload(
-            "DefinirAtendimentoAtivo",
-            serde_json::json!({ "atendimento_id": 463 }),
-        );
-
-        let resp = handler_definir_atendimento_ativo(&store, &audit, env).await;
-
-        assert_eq!(resp.kind, MessageKind::Error as i32);
-    }
-
-    /// Já excluído (ou de outro tenant): nada muda e nada vai para a trilha.
-    #[tokio::test]
-    async fn excluir_atendimento_ja_excluido_nao_audita() {
-        let mut store = MockAtendimentoStore::new();
-        store
-            .expect_definir_atendimento_ativo()
-            .returning(|_, _, _| Ok(None));
-        let audit = crate::ports::MockAuditPort::new();
-        let env = envelope_com_payload(
-            "DefinirAtendimentoAtivo",
-            serde_json::json!({ "atendimento_id": 463, "ativo": false }),
-        );
-
-        let resp = handler_definir_atendimento_ativo(&store, &audit, env).await;
-
-        assert_eq!(resp.kind, MessageKind::Error as i32);
-    }
-
     /// Anotação apagada não tem desfazer: a trilha guarda qual, nunca o texto.
     #[tokio::test]
     async fn remover_nota_audita_sem_o_texto() {
@@ -14369,5 +14403,158 @@ mod tests_migracao_escopos_unit {
         assert!(!fallback_role_habilitado(&desligado, false).await);
         // Superusuário nem consulta.
         assert!(fallback_role_habilitado(&MockAuthStore::new(), true).await);
+    }
+}
+
+#[cfg(test)]
+mod tests_exclusao_unit {
+    use super::*;
+    use crate::ports::{MockAuditPort, MockExclusaoStore};
+    use infrastructure_postgres::exclusao::{ResultadoExclusao, TipoExcluivel};
+
+    fn envelope(method: &str, payload: serde_json::Value) -> Envelope {
+        Envelope {
+            kind: MessageKind::Request as i32,
+            method: method.to_string(),
+            tenant_id: uuid::Uuid::new_v4().to_string(),
+            auth_user_id: 7,
+            payload: serde_json::to_vec(&payload).unwrap(),
+            ..Default::default()
+        }
+    }
+
+    /// A exclusão entra na trilha com o tipo, o id e as conversas que foram junto.
+    #[tokio::test]
+    async fn excluir_contato_audita_com_as_conversas() {
+        let mut store = MockExclusaoStore::new();
+        store
+            .expect_excluir()
+            .times(1)
+            .withf(|_, tipo, id| *tipo == TipoExcluivel::Contato && *id == 546)
+            .returning(|_, _, _| {
+                Ok(ResultadoExclusao::Excluido {
+                    cascata: vec![462, 463],
+                })
+            });
+        let mut audit = MockAuditPort::new();
+        audit
+            .expect_publish()
+            .times(1)
+            .withf(|_, event, _, ctx| {
+                event == "contato.excluido"
+                    && ctx["id"] == 546
+                    && ctx["atendimentos_excluidos"] == serde_json::json!([462, 463])
+            })
+            .returning(|_, _, _, _| ());
+        let env = envelope(
+            "ExcluirItem",
+            serde_json::json!({ "tipo": "contato", "id": 546 }),
+        );
+
+        let resp = handler_excluir_item(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    /// Em uso: recusa com o motivo, e nada vai para a trilha.
+    #[tokio::test]
+    async fn excluir_em_uso_recusa_sem_auditar() {
+        let mut store = MockExclusaoStore::new();
+        store
+            .expect_excluir()
+            .returning(|_, _, _| Ok(ResultadoExclusao::EmUso("há 2 conversa(s)".into())));
+        let audit = MockAuditPort::new();
+        let env = envelope(
+            "ExcluirItem",
+            serde_json::json!({ "tipo": "fluxo", "id": 3 }),
+        );
+
+        let resp = handler_excluir_item(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    /// Conexão só pelo DeleteWhatsappInstance, que apaga no provedor antes.
+    #[tokio::test]
+    async fn conexao_nao_se_exclui_por_aqui() {
+        let store = MockExclusaoStore::new();
+        let audit = MockAuditPort::new();
+        let env = envelope(
+            "ExcluirItem",
+            serde_json::json!({ "tipo": "conexao", "id": 181 }),
+        );
+
+        let resp = handler_excluir_item(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    #[tokio::test]
+    async fn tipo_desconhecido_e_recusado() {
+        let store = MockExclusaoStore::new();
+        let audit = MockAuditPort::new();
+        let env = envelope(
+            "ExcluirItem",
+            serde_json::json!({ "tipo": "usuario", "id": 1 }),
+        );
+
+        let resp = handler_excluir_item(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    /// Reativar o que foi excluído não é possível: a resposta diz por quê.
+    #[tokio::test]
+    async fn reativar_excluido_e_recusado() {
+        let mut store = MockExclusaoStore::new();
+        store
+            .expect_definir_ativo()
+            .returning(|_, _, _, _| Ok(Some(false)));
+        let audit = MockAuditPort::new();
+        let env = envelope(
+            "DefinirItemAtivo",
+            serde_json::json!({ "tipo": "etapa", "id": 9, "ativo": true }),
+        );
+
+        let resp = handler_definir_item_ativo(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Error as i32);
+    }
+
+    #[tokio::test]
+    async fn reativar_etapa_audita() {
+        let mut store = MockExclusaoStore::new();
+        store
+            .expect_definir_ativo()
+            .withf(|_, tipo, id, ativo| *tipo == TipoExcluivel::Etapa && *id == 9 && *ativo)
+            .returning(|_, _, _, _| Ok(Some(true)));
+        let mut audit = MockAuditPort::new();
+        audit
+            .expect_publish()
+            .times(1)
+            .withf(|_, event, _, _| event == "etapa.reativado")
+            .returning(|_, _, _, _| ());
+        let env = envelope(
+            "DefinirItemAtivo",
+            serde_json::json!({ "tipo": "etapa", "id": 9, "ativo": true }),
+        );
+
+        let resp = handler_definir_item_ativo(&store, &audit, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
+    }
+
+    #[tokio::test]
+    async fn listar_excluidos_filtra_pelo_tipo() {
+        let mut store = MockExclusaoStore::new();
+        store
+            .expect_listar_excluidos()
+            .withf(|_, tipo, limite| *tipo == Some(TipoExcluivel::Nota) && *limite == 100)
+            .returning(|_, _, _| Ok(vec![]));
+        let env = envelope("ListarExcluidos", serde_json::json!({ "tipo": "nota" }));
+
+        let resp = handler_listar_excluidos(&store, env).await;
+
+        assert_eq!(resp.kind, MessageKind::Reply as i32);
     }
 }
