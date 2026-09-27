@@ -101,9 +101,11 @@ void main() {
     expect(find.text('Ativo'), findsOneWidget);
   });
 
-  testWidgets('material já vetorizado não oferece revisão', (tester) async {
-    // Revisar o que a IA já processou pediria retrabalho sem ganho: o texto
-    // em uso é aquele. Reprocessar é o caminho, não revisar de novo.
+  testWidgets('material já vetorizado oferece editar e retreinar', (
+    tester,
+  ) async {
+    // Não é "revisar e enviar" (o passo do rascunho): é corrigir o que a IA
+    // já usa, gerando um treinamento novo com o texto editado — como na v1.
     respondeCom(finalizado: true, vetorizado: true);
     registrar();
 
@@ -111,7 +113,60 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byTooltip('Revisar e enviar para a IA'), findsNothing);
+    expect(find.byTooltip('Editar e retreinar'), findsOneWidget);
     expect(find.byTooltip('Remover'), findsOneWidget);
+  });
+
+  testWidgets('clicar no cartão abre o material completo', (tester) async {
+    respondeCom(finalizado: true, vetorizado: true);
+    registrar();
+
+    await montar(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('horario'));
+    await tester.pumpAndSettle();
+
+    final texto = find.byKey(const ValueKey('conteudo-do-material'));
+    expect(texto, findsOneWidget);
+    expect(
+      (tester.widget(texto) as SelectableText).data,
+      'Abrimos de segunda a sexta.',
+    );
+    expect(find.text('Editar e retreinar'), findsOneWidget);
+  });
+
+  testWidgets('editar e retreinar manda o texto novo para a IA', (
+    tester,
+  ) async {
+    respondeCom(finalizado: true, vetorizado: true);
+    when(
+      () => client.finalizarMyTreinamento(any()),
+    ).thenAnswer((_) => respostaGrpc(proto.SimpleOkResponse(sucesso: true)));
+    registrar();
+
+    await montar(tester);
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('horario'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Editar e retreinar'));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Abrimos de segunda a sexta.'),
+      'Abrimos de segunda a sábado.',
+    );
+    await tester.tap(find.text('Salvar e retreinar'));
+    await tester.pumpAndSettle();
+
+    final enviado =
+        verify(
+              () => client.finalizarMyTreinamento(captureAny()),
+            ).captured.single
+            as proto.FinalizarMyTreinamentoRequest;
+    expect(enviado.id, 1);
+    expect(enviado.conteudo, 'Abrimos de segunda a sábado.');
   });
 
   /// Rascunho tem de gritar, não sussurrar.

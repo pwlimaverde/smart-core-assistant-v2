@@ -123,7 +123,9 @@ class _TreinamentoPageState extends State<TreinamentoPage>
                   _AbaMaterial(controller: _controller),
                   const AbaIntents(),
                   const AbaEnsaio(),
-                  AbaAvaliacoes(podeAlterar: PermissaoDoTreinamento.podeAlterar()),
+                  AbaAvaliacoes(
+                    podeAlterar: PermissaoDoTreinamento.podeAlterar(),
+                  ),
                 ],
               ),
             ),
@@ -236,8 +238,16 @@ class _Linha extends StatelessWidget {
         ? '${item.conteudo.substring(0, 140)}…'
         : item.conteudo;
 
+    // O cartão inteiro abre o material completo: a linha mostra só o começo
+    // do texto, e conferir o que a IA sabe não pode depender de editar.
     return AppCard(
       padding: const EdgeInsets.all(AppSpacing.md),
+      onTap: () => abrirMaterial(
+        context,
+        item,
+        controller,
+        podeAlterar: PermissaoDoTreinamento.podeAlterar(),
+      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -317,6 +327,14 @@ class _Linha extends StatelessWidget {
               IconButton(
                 icon: const Icon(Icons.rate_review_outlined),
                 tooltip: 'Revisar e enviar para a IA',
+                onPressed: () => abrirRevisao(context, item, controller),
+              )
+            // Já treinado: editar gera um treinamento novo com o texto
+            // corrigido, como na v1.
+            else if (!item.extraindo)
+              IconButton(
+                icon: const Icon(Icons.edit_outlined),
+                tooltip: 'Editar e retreinar',
                 onPressed: () => abrirRevisao(context, item, controller),
               ),
             IconButton(
