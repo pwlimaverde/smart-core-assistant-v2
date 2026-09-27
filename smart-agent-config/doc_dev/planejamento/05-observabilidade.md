@@ -76,6 +76,41 @@ Tabela de RAM por componente; LGTM completo + dados + apps pressiona 8 GB → li
 
 A infraestrutura básica de observabilidade e propagação está concluída e integrada com a crate de erros ([06-tratamento-de-erros.md](./06-tratamento-de-erros.md)) e a de contratos ([07-crate-contracts.md](./07-crate-contracts.md)). O stack LGTM completo na Hostinger será configurado na Fase 9.
 
+## 10. Auditoria de 2026-09-27 — o que estava quebrado e o contrato vigente
+
+Levantamento feito direto no Tempo, no Prometheus e no `audit_log` da dev.
+
+| Achado | Efeito | Correção |
+|---|---|---|
+| O gRPC descarta o `user-agent` passado por chamada | Toda ação de agente MCP gravada como `grpc-python-asyncio/...`; a tela "o que o agente fez" (B3) vazia | Origem no header `x-smartcore-agente` (`SmartCoreAssistant-MCP/<tool> (grant <id>)`), lido pelo `runtime_api` |
+| `injetar_contexto_atual` lia `opentelemetry::Context::current()` | Webhook publicava sem `traceparent`; spans do `ia_engine` órfãos no Tempo | Usa o span do `tracing` em curso |
+| `transport::Server` não abria span a partir do envelope | Cada `data_*` com traces soltos | Span `rpc` filho do `traceparent` do envelope |
+| `mcp_server` não propagava `traceparent` | Trace parava no servidor MCP | Span `mcp.tool.<nome>` e `traceparent` no metadata |
+| `ia_engine` sem métricas, sem `tenant_id` nos spans, log em texto | Nenhum painel ou alerta possível | Métricas abaixo, span por feature, log JSON |
+| Escritas sem trilha | Nota removida, etiqueta editada/desativada, transferência manual, desconectar/religar WhatsApp e recusa de troca de token invisíveis | Eventos abaixo |
+
+**Métricas por serviço Python** (sufixo `_ms` preservado por `add_metric_suffixes: false`):
+
+- `smartcore_ia_rpc_total{rpc,result,codigo}`, `smartcore_ia_rpc_duration_ms{rpc}`
+- `smartcore_mcp_tool_total{tool,categoria,result}`, `smartcore_mcp_tool_duration_ms{tool,categoria}`,
+  `smartcore_mcp_denied_total{tool,categoria,motivo}`
+
+`tenant_id` e `grant_id` nunca são label — estão no span e no log.
+
+**Eventos de auditoria novos:** `nota.removida`, `etiqueta.atualizada`,
+`etiqueta.desativada`, `atendimento.transferido` (só pedido por pessoa ou agente;
+o da IA segue em `atendimento.transferido_por_ia`), `whatsapp.instance.reconnect`,
+`whatsapp.instance.disconnect`, `mcp.token_recusado`.
+
+**Fora da trilha por decisão:** `SetValorCampo` (histórico próprio, valor pode ser
+PII), `DefinirPrioridade`, `AlternarEtiqueta`, `MoverEtapaFluxo` (estado trivial e
+de alto volume). Recusa por guard e `dry_run` do MCP não chegam ao backend: ficam
+no log (`tool recusada`, `tool simulada (dry_run)`) e na métrica.
+
+**Log:** os dois serviços Python escrevem uma linha JSON por evento no stdout
+(`level`, `service`, `message`, `trace_id`, `span_id` e os campos extras).
+`SMARTCORE_LOG_FORMAT=texto` volta ao formato legível para rodar local.
+
 ---
 
 *Documento de observabilidade consolidado e revisado. Referências adicionais para implantação no host podem ser encontradas em [10-plano-cicd-devops.md](./10-plano-cicd-devops.md).*
