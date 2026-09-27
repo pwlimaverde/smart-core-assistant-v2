@@ -186,6 +186,7 @@ def _registrar_icone(mcp: ServidorMcpFiltrado) -> None:
 
 
 def main() -> int:
+    telemetry.configurar_logs()
     cfg = config.carregar()
     if not cfg.oauth_public_key_pem:
         # Sem a chave pública nenhum token pode ser validado, e todo request

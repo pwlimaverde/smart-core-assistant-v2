@@ -10,7 +10,9 @@ série temporal por consentimento faria o Prometheus crescer sem teto, e o que s
 quer saber ("quais aplicativos estão mais ativos") já está na auditoria, com
 `client_name`, que é cardinalidade baixa.
 
-Os labels são `tool`, `result` e `motivo`, todos de domínio fechado.
+Os labels são `tool`, `categoria`, `result` e `motivo`, todos de domínio
+fechado. `categoria` é o que deixa o alerta de ações destrutivas valer para toda
+tool da categoria, e não só para as que casam com um padrão de nome.
 
 # Nome do histograma
 
@@ -22,7 +24,12 @@ exatamente o defeito corrigido no `otel-collector-config.yml`.
 
 from __future__ import annotations
 
+import json
 import os
+import sys
+import traceback
+from datetime import UTC
+from typing import Any
 
 from loguru import logger
 from opentelemetry import metrics, trace
@@ -35,6 +42,59 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 SERVICO = "mcp_server"
+
+
+def configurar_logs() -> None:
+    """Log em JSON, uma linha por evento, no stdout — como os serviços Rust.
+
+    O Loki recebe o stdout do container pelo promtail, e os painéis e alertas
+    consultam com `| json`: texto livre não era filtrável por `level`,
+    `tenant_id` nem `trace_id`, e o log de uma tool não levava ao trace dela.
+    `SMARTCORE_LOG_FORMAT=texto` volta ao formato legível para rodar local.
+    """
+    if os.getenv("SMARTCORE_LOG_FORMAT", "").lower() == "texto":
+        return
+    logger.remove()
+    logger.add(_escrever_json, level=os.getenv("LOG_LEVEL", "INFO").upper())
+
+
+def _escrever_json(mensagem: Any) -> None:
+    sys.stdout.write(linha_json(mensagem.record) + "\n")
+    sys.stdout.flush()
+
+
+def linha_json(registro: dict[str, Any]) -> str:
+    """Um registro do loguru como objeto JSON plano.
+
+    Os campos extras (`logger.info(..., tool=...)`) vão para o nível de cima,
+    onde o `| json` do Loki os encontra. Exceção sai com o traceback formatado
+    — sem os valores das variáveis locais, que podem ter dado de cliente.
+    """
+    linha: dict[str, Any] = {
+        "timestamp": registro["time"]
+        .astimezone(UTC)
+        .isoformat(timespec="milliseconds")
+        .replace("+00:00", "Z"),
+        "level": registro["level"].name,
+        "service": SERVICO,
+        "target": registro["name"],
+        "message": registro["message"],
+    }
+    contexto = trace.get_current_span().get_span_context()
+    if contexto.is_valid:
+        linha["trace_id"] = format(contexto.trace_id, "032x")
+        linha["span_id"] = format(contexto.span_id, "016x")
+    for chave, valor in registro["extra"].items():
+        if isinstance(valor, str | int | float | bool) or valor is None:
+            linha.setdefault(chave, valor)
+        else:
+            linha.setdefault(chave, str(valor))
+    excecao = registro["exception"]
+    if excecao is not None and excecao.type is not None:
+        linha["exception"] = "".join(
+            traceback.format_exception(excecao.type, excecao.value, excecao.traceback)
+        )
+    return json.dumps(linha, ensure_ascii=False)
 
 
 def inicializar() -> None:
@@ -85,18 +145,25 @@ class Metricas:
             description="Execuções recusadas por um guard, por motivo",
         )
 
-    def tool_executada(self, tool: str, resultado: str, duracao_s: float) -> None:
-        self._total.add(1, {"tool": tool, "result": resultado})
-        self._duracao.record(duracao_s * 1000.0, {"tool": tool})
+    def tool_executada(
+        self, tool: str, resultado: str, duracao_s: float, categoria: str = ""
+    ) -> None:
+        self._total.add(1, {"tool": tool, "result": resultado, "categoria": categoria})
+        # Simulação não chega ao backend: um zero no histograma puxaria a
+        # latência da tool para baixo sem ter medido nada.
+        if resultado != "dry_run":
+            self._duracao.record(
+                duracao_s * 1000.0, {"tool": tool, "categoria": categoria}
+            )
 
-    def negada(self, tool: str, motivo: str) -> None:
+    def negada(self, tool: str, motivo: str, categoria: str = "") -> None:
         """Recusa por guard.
 
         É a métrica que revela um agente em laço antes de o cliente perceber:
         um pico de `motivo="rate_limit"` ou `motivo="escopo"` num só tenant é a
         assinatura disso — e também a de um token vazado sendo sondado.
         """
-        self._negadas.add(1, {"tool": tool, "motivo": motivo})
+        self._negadas.add(1, {"tool": tool, "motivo": motivo, "categoria": categoria})
 
 
 def tracer() -> trace.Tracer:

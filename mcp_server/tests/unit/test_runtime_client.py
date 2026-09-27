@@ -133,9 +133,9 @@ async def test_metodo_inexistente_falha_antes_de_tocar_a_rede():
 async def test_metadata_leva_token_interno_e_marca_a_origem():
     """Duas propriedades num teste só, porque elas vivem na mesma lista.
 
-    O `user-agent` com prefixo `SmartCoreAssistant-MCP` é o que faz a trilha de
-    auditoria distinguir ação de agente de ação humana (N13.7), e o
-    `authorization` tem de levar o token INTERNO — nunca o do cliente.
+    O header `x-smartcore-agente` com prefixo `SmartCoreAssistant-MCP` é o que
+    faz a trilha de auditoria distinguir ação de agente de ação humana (N13.7),
+    e o `authorization` tem de levar o token INTERNO — nunca o do cliente.
     """
     capturado: dict[str, object] = {}
 
@@ -153,15 +153,37 @@ async def test_metadata_leva_token_interno_e_marca_a_origem():
 
     metadata = dict(capturado["metadata"])  # type: ignore[arg-type]
     assert metadata["authorization"] == "Bearer JWT-INTERNO"
-    assert metadata["user-agent"] == "SmartCoreAssistant-MCP/GetMyPainel"
+    assert metadata["x-smartcore-agente"] == "SmartCoreAssistant-MCP/GetMyPainel"
     assert metadata["traceparent"] == "00-abc-def-01"
 
 
-async def test_user_agent_diz_qual_aplicativo_agiu():
+async def test_origem_nao_vai_no_user_agent():
+    """O gRPC descarta o `user-agent` por chamada e põe o dele no lugar.
+
+    Foi assim que toda ação de agente chegou ao `audit_log` como
+    `grpc-python-asyncio/...`. A origem vai só no header próprio.
+    """
+    capturado: dict[str, object] = {}
+
+    class StubQueCaptura:
+        async def GetMyPainel(self, requisicao, metadata=None, timeout=None):
+            capturado["metadata"] = metadata
+            return "ok"
+
+    cliente = RuntimeApiClient("localhost:1")
+    cliente._stub = StubQueCaptura()
+
+    await cliente.chamar("GetMyPainel", object(), "JWT")
+
+    metadata = dict(capturado["metadata"])  # type: ignore[arg-type]
+    assert "user-agent" not in metadata
+
+
+async def test_origem_diz_qual_tool_e_qual_aplicativo_agiu():
     """B3: a trilha precisa responder "o que o Claude fez", não só "um agente".
 
-    O grant entra no user-agent depois do nome da tool, entre parênteses — é o
-    formato que o `data_postgres` lê para ligar a linha ao aplicativo.
+    A tool entra depois do prefixo, e o grant entre parênteses — é o formato
+    que o `data_postgres` lê para ligar a linha ao aplicativo e à tool.
     """
     capturado: dict[str, object] = {}
 
@@ -178,14 +200,14 @@ async def test_user_agent_diz_qual_aplicativo_agiu():
         object(),
         "JWT",
         grant_id="3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+        tool="get_painel",
     )
 
     metadata = dict(capturado["metadata"])  # type: ignore[arg-type]
     esperado = (
-        "SmartCoreAssistant-MCP/GetMyPainel "
-        "(grant 3f2504e0-4f89-11d3-9a0c-0305e82c3301)"
+        "SmartCoreAssistant-MCP/get_painel (grant 3f2504e0-4f89-11d3-9a0c-0305e82c3301)"
     )
-    assert metadata["user-agent"] == esperado
+    assert metadata["x-smartcore-agente"] == esperado
 
 
 async def test_sem_traceparent_o_metadata_nao_leva_a_chave_vazia():

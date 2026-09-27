@@ -206,6 +206,54 @@ groups:
                     params: [5]
 
       # ---------------------------------------------------------------------
+      # N2/N6 — Motor de IA
+      # ---------------------------------------------------------------------
+      - uid: ia-taxa-erro-alta
+        title: Taxa de erro do motor de IA alta
+        condition: C
+        for: 10m
+        # Sem tráfego o denominador some e a consulta fica vazia: é madrugada,
+        # não pane — o `servico-fora-do-ar` já cobre o processo caído.
+        noDataState: OK
+        execErrState: Alerting
+        labels:
+          severidade: alta
+        annotations:
+          resumo: >-
+            Mais de 20% das chamadas ao ia_engine falhando nos últimos 10
+            minutos (sem contar CANCELLED). O atendimento segue, mas degradado:
+            o bot responde a mensagem de fallback. Veja o dashboard "Motor de
+            IA" — o código gRPC diz se é chave do provedor, config do tenant
+            ou o provedor fora do ar.
+        data:
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange: { from: 600, to: 0 }
+            model:
+              # `or vector(0)` no numerador pelo motivo da regra de erro RPC
+              # acima; `> 0` no denominador para não dividir por zero.
+              expr: "100 * (sum(rate(smartcore_ia_rpc_total{result=\"erro\",codigo!=\"CANCELLED\"}[10m])) or vector(0)) / (sum(rate(smartcore_ia_rpc_total[10m])) > 0)"
+              instant: true
+              refId: A
+          - refId: B
+            datasourceUid: "__expr__"
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: "__expr__"
+            model:
+              type: threshold
+              expression: B
+              refId: C
+              conditions:
+                - evaluator:
+                    type: gt
+                    params: [20]
+
+      # ---------------------------------------------------------------------
       # N13 — Agentes de IA (servidor MCP)
       # ---------------------------------------------------------------------
       # Duas regras, dois riscos distintos. Nenhuma delas usa `grant_id` como
@@ -270,7 +318,7 @@ groups:
         annotations:
           resumo: >-
             Mais de 10 ações destrutivas executadas por agentes de IA na última
-            hora (desativar/remover). Em operação normal este número fica perto
+            hora (desativar, remover, revogar, desconectar). Em operação normal este número fica perto
             de zero. Confira no audit_log quais consentimentos executaram e, se
             não reconhecer, desconecte o aplicativo na tela do tenant.
         data:
@@ -278,7 +326,10 @@ groups:
             datasourceUid: prometheus
             relativeTimeRange: { from: 3600, to: 0 }
             model:
-              expr: "sum(increase(smartcore_mcp_tool_total{tool=~\"desativar_.*|remover_.*\",result=\"ok\"}[1h])) or vector(0)"
+              # Pela categoria, não pelo nome: o filtro antigo (`desativar_.*|remover_.*`)
+              # deixava de fora `revogar_convite` e `desconectar_conexao_whatsapp`, e
+              # toda tool destrutiva nova precisaria lembrar de casar o padrão.
+              expr: "sum(increase(smartcore_mcp_tool_total{categoria=\"destrutiva\",result=\"ok\"}[1h])) or vector(0)"
               instant: true
               refId: A
           - refId: B

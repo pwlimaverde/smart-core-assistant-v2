@@ -19,7 +19,7 @@ from ia_engine.contracts import ai_engine_pb2 as pb
 from ia_engine.contracts import ai_engine_pb2_grpc as pbg
 from ia_engine.servicer import IaEngineServicer
 from ia_engine.settings import Settings, get_settings
-from ia_engine.telemetry import setup_telemetry
+from ia_engine.telemetry import configurar_logs, setup_telemetry
 
 _SERVICE_NAME = pb.DESCRIPTOR.services_by_name["IaEngineService"].full_name
 
@@ -106,6 +106,7 @@ def _install_signal_handlers(stop: asyncio.Event) -> None:
 
 
 def main() -> None:
+    configurar_logs()
     try:
         asyncio.run(serve())
     except KeyboardInterrupt:

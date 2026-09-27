@@ -25,8 +25,31 @@ from typing import Any
 
 import grpc
 from loguru import logger
+from opentelemetry.propagate import inject
 
 from mcp_server.grpc.contracts import admin_pb2_grpc
+
+#: Prefixo que a trilha de auditoria reconhece como ação de agente
+#: (`infrastructure_postgres::auditoria::audit_log::PREFIXO_USER_AGENT_MCP`).
+PREFIXO_ORIGEM = "SmartCoreAssistant-MCP"
+
+#: Header em que a origem de cada chamada viaja (lido pelo `runtime_api`).
+HEADER_ORIGEM = "x-smartcore-agente"
+
+
+def origem_da_chamada(operacao: str, grant_id: str | None) -> str:
+    """`SmartCoreAssistant-MCP/<tool> (grant <id>)` — o formato que a trilha lê."""
+    origem = f"{PREFIXO_ORIGEM}/{operacao}"
+    if grant_id:
+        origem = f"{origem} (grant {grant_id})"
+    return origem
+
+
+def traceparent_atual() -> str | None:
+    """`traceparent` W3C do span em curso, ou `None` sem span (OTel desligado)."""
+    portador: dict[str, str] = {}
+    inject(portador)
+    return portador.get("traceparent")
 
 
 def _e_duplicidade(detalhe: str) -> bool:
@@ -68,7 +91,15 @@ class RuntimeApiClient:
         if self._stub is None:
             # `insecure_channel` porque o tráfego não sai da rede `mcp_net`; o
             # TLS público termina no Caddy, na borda.
-            self._canal = grpc.aio.insecure_channel(self._endpoint)
+            #
+            # `grpc.primary_user_agent` marca o canal inteiro como MCP. O
+            # `user-agent` por chamada não serve para isso: o core do gRPC o
+            # sobrescreve com `grpc-python-asyncio/...` (provado em produção —
+            # a trilha de auditoria nunca recebeu o valor que mandávamos).
+            self._canal = grpc.aio.insecure_channel(
+                self._endpoint,
+                options=[("grpc.primary_user_agent", PREFIXO_ORIGEM)],
+            )
             self._stub = admin_pb2_grpc.AdminServiceStub(self._canal)
             logger.info("canal gRPC com o runtime_api aberto em {}", self._endpoint)
         return self._stub
@@ -80,40 +111,38 @@ class RuntimeApiClient:
         token_interno: str,
         traceparent: str | None = None,
         grant_id: str | None = None,
+        tool: str | None = None,
     ) -> Any:
         """Executa um RPC do `AdminService`.
 
         `token_interno` é o JWT trocado; nunca o token do cliente. `grant_id` é
-        o consentimento em nome do qual o agente age (B3).
+        o consentimento em nome do qual o agente age (B3). `tool` é o nome da
+        tool MCP que pediu a chamada — é ele que a trilha mostra, não o RPC.
         """
         stub = await self._garantir_canal()
         rpc = getattr(stub, metodo, None)
         if rpc is None:
             raise ErroDoBackend(f"operação `{metodo}` não existe no backend")
 
-        # `user-agent` marca a ORIGEM da ação na trilha de auditoria.
+        # A ORIGEM da ação na trilha de auditoria.
         #
-        # O `runtime_api` copia este header para o campo `user_agent` do envelope,
-        # e de lá ele chega ao `audit_log`. É o que faz "o que o agente do fulano
-        # fez ontem" ser uma consulta de um filtro só, sem tabela nova e sem
-        # campo novo no contrato — o prefixo `SmartCoreAssistant-MCP` distingue
-        # ação de agente de ação humana, e o nome da tool diz qual foi.
+        # O `runtime_api` copia este header para o campo `user_agent` do
+        # envelope, e de lá ele chega ao `audit_log`. É o que faz "o que o agente
+        # do fulano fez ontem" ser uma consulta de um filtro só, sem tabela nova —
+        # o prefixo `SmartCoreAssistant-MCP` distingue ação de agente de ação
+        # humana, o nome da tool diz qual foi, e o grant (B3) diz QUAL
+        # aplicativo agiu. O grant é identificador, não segredo.
         #
-        # O grant vai junto, entre parênteses (B3): sem ele a trilha sabia QUE
-        # foi um agente, mas não QUAL aplicativo — e a pergunta do dono é "o que
-        # o Claude fez", não "o que algum agente fez". O token interno não
-        # carrega o grant, e o user-agent já chega ao `audit_log` sem mudança
-        # nenhuma no contrato. É um identificador, não segredo.
-        user_agent = f"SmartCoreAssistant-MCP/{metodo}"
-        if grant_id:
-            user_agent = f"{user_agent} (grant {grant_id})"
+        # Header próprio, e não `user-agent`: o gRPC descarta o `user-agent`
+        # passado por chamada.
         metadata = [
             ("authorization", f"Bearer {token_interno}"),
-            ("user-agent", user_agent),
+            (HEADER_ORIGEM, origem_da_chamada(tool or metodo, grant_id)),
         ]
+        # Continua o trace do agente até o Postgres: sem `traceparent` o
+        # `runtime_api` inventa um novo, e a chamada da tool some do trace.
+        traceparent = traceparent or traceparent_atual()
         if traceparent:
-            # Continua o trace do cliente MCP até o Postgres — é o que permite
-            # ver uma chamada de agente inteira num span só no Tempo.
             metadata.append(("traceparent", traceparent))
 
         try:

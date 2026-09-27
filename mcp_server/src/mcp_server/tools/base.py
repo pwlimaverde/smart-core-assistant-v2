@@ -20,6 +20,7 @@ from google.protobuf.json_format import MessageToDict
 from loguru import logger
 from mcp.server.auth.middleware.auth_context import get_access_token
 from mcp.server.mcpserver.exceptions import ToolError
+from opentelemetry.trace import Span, Status, StatusCode
 
 from mcp_server.auth.token_verifier import (
     IdentidadeMcp,
@@ -27,7 +28,7 @@ from mcp_server.auth.token_verifier import (
     TrocadorDeToken,
 )
 from mcp_server.grpc.runtime_client import ErroDoBackend, RuntimeApiClient
-from mcp_server.telemetry import Metricas
+from mcp_server.telemetry import Metricas, tracer
 from mcp_server.tools.guards import RateLimiter, exigir_escopo
 from mcp_server.tools.registry import Registro, ToolRegistrada
 
@@ -94,48 +95,122 @@ class Executor:
             )
 
         identidade, token_bruto, jti = self.identidade()
+
+        # Um span por execução, filho do `tools/call` que o SDK abre. O
+        # `traceparent` dele segue no metadata para o `runtime_api`, e o trace
+        # continua até o Postgres. Nada de argumento nem resposta no span.
+        with tracer().start_as_current_span(f"mcp.tool.{tool.nome}") as span:
+            span.set_attribute("mcp.tool", tool.nome)
+            span.set_attribute("mcp.categoria", tool.categoria.value)
+            span.set_attribute("mcp.rpc", metodo_grpc)
+            span.set_attribute("mcp.interna", not contabilizar)
+            span.set_attribute("tenant_id", identidade.tenant_id)
+            if identidade.grant_id:
+                span.set_attribute("mcp.grant_id", identidade.grant_id)
+            return await self._executar_no_span(
+                span,
+                tool,
+                metodo_grpc,
+                requisicao,
+                identidade,
+                token_bruto,
+                jti,
+                contabilizar=contabilizar,
+            )
+
+    async def _executar_no_span(
+        self,
+        span: Span,
+        tool: ToolRegistrada,
+        metodo_grpc: str,
+        requisicao: Any,
+        identidade: IdentidadeMcp,
+        token_bruto: str,
+        jti: str,
+        *,
+        contabilizar: bool,
+    ) -> Any:
         inicio = time.monotonic()
+        categoria = tool.categoria.value
+
+        def recusar(motivo: str) -> None:
+            # A recusa não chega ao backend, então não tem linha no
+            # `audit_log`: o log é o registro dela. Grant e tenant são
+            # identificadores; o token nunca entra aqui.
+            self.metricas.negada(tool.nome, motivo, categoria=categoria)
+            span.set_attribute("mcp.resultado", "negada")
+            span.set_attribute("mcp.motivo", motivo)
+            span.set_status(Status(StatusCode.ERROR, motivo))
+            logger.warning(
+                "tool recusada",
+                tool=tool.nome,
+                categoria=categoria,
+                motivo=motivo,
+                tenant_id=identidade.tenant_id,
+                grant_id=identidade.grant_id,
+            )
 
         try:
             exigir_escopo(tool, identidade.escopos)
         except ToolError:
-            self.metricas.negada(tool.nome, "escopo")
+            recusar("escopo")
             raise
 
         if contabilizar:
             try:
                 self.limitador.registrar(identidade.grant_id, tool)
             except ToolError:
-                self.metricas.negada(tool.nome, "rate_limit")
+                recusar("rate_limit")
                 raise
 
         try:
             interno = await self.trocador.obter(token_bruto, jti)
         except TokenInvalido as exc:
-            self.metricas.negada(tool.nome, "troca_de_token")
+            recusar("troca_de_token")
             raise ToolError(str(exc)) from None
 
         try:
-            # O grant segue para a trilha de auditoria (B3): é o que liga a
-            # linha do `audit_log` ao aplicativo que agiu.
+            # O grant e a tool seguem para a trilha de auditoria (B3): é o que
+            # liga a linha do `audit_log` ao aplicativo que agiu e ao que ele
+            # pediu.
             resposta = await self.cliente.chamar(
                 metodo_grpc,
                 requisicao,
                 interno,
                 grant_id=identidade.grant_id or None,
+                tool=tool.nome,
             )
         except ErroDoBackend as exc:
-            self.metricas.tool_executada(tool.nome, "erro", time.monotonic() - inicio)
+            self.metricas.tool_executada(
+                tool.nome, "erro", time.monotonic() - inicio, categoria=categoria
+            )
+            codigo = exc.codigo.name if exc.codigo is not None else "DESCONHECIDO"
+            span.set_attribute("mcp.resultado", "erro")
+            span.set_attribute("rpc.grpc.status", codigo)
+            span.set_status(Status(StatusCode.ERROR, codigo))
+            # O código gRPC, não a mensagem: ela é texto para o agente.
+            logger.warning(
+                "tool falhou no backend",
+                tool=tool.nome,
+                categoria=categoria,
+                rpc=metodo_grpc,
+                codigo=codigo,
+                tenant_id=identidade.tenant_id,
+            )
             raise ToolError(str(exc)) from None
 
         if contabilizar:
-            self.metricas.tool_executada(tool.nome, "ok", time.monotonic() - inicio)
+            self.metricas.tool_executada(
+                tool.nome, "ok", time.monotonic() - inicio, categoria=categoria
+            )
+        span.set_attribute("mcp.resultado", "ok")
         # `tenant_id` e nome da tool, nada mais: nem argumentos, nem resposta.
         logger.info(
             "tool executada",
             tool=tool.nome,
             tenant_id=identidade.tenant_id,
-            categoria=tool.categoria.value,
+            categoria=categoria,
+            rpc=metodo_grpc,
         )
         return resposta
 
@@ -146,7 +221,22 @@ class Executor:
         que se quer incentivar antes de uma ação irreversível, e cobrá-la do
         mesmo teto empurraria o agente a agir direto.
         """
-        self.metricas.tool_executada(tool.nome, "dry_run", 0.0)
+        self.metricas.tool_executada(
+            tool.nome, "dry_run", 0.0, categoria=tool.categoria.value
+        )
+        # A simulação não chega ao backend, então não tem linha no
+        # `audit_log`. O log é o registro de que o agente olhou antes de agir.
+        try:
+            identidade, _, _ = self.identidade()
+        except ToolError:
+            return
+        logger.info(
+            "tool simulada (dry_run)",
+            tool=tool.nome,
+            categoria=tool.categoria.value,
+            tenant_id=identidade.tenant_id,
+            grant_id=identidade.grant_id,
+        )
 
 
 #: Campos de data que o contrato manda em epoch ms. Viram ISO 8601 na saída:

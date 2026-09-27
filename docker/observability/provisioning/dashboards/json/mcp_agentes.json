@@ -243,7 +243,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(smartcore_mcp_tool_total{tool=~\"desativar_.*|remover_.*\",result=\"ok\"}[1h]))",
+          "expr": "sum(increase(smartcore_mcp_tool_total{categoria=\"destrutiva\",result=\"ok\"}[1h]))",
           "legendFormat": "destrutivas",
           "range": true,
           "refId": "A"
@@ -289,7 +289,7 @@
             "uid": "prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(increase(smartcore_mcp_tool_total{tool=\"send_message\",result=\"ok\"}[1h]))",
+          "expr": "sum(increase(smartcore_mcp_tool_total{categoria=\"envio\",result=\"ok\"}[1h]))",
           "legendFormat": "mensagens",
           "range": true,
           "refId": "A"

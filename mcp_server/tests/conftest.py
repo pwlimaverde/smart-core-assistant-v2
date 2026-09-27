@@ -64,6 +64,7 @@ class ClienteFalso:
         self.chamadas: list[tuple[str, Any, str]] = []
         # B3: o grant em nome do qual cada chamada foi feita.
         self.grants_recebidos: list[str | None] = []
+        self.tools_recebidas: list[str | None] = []
         self.respostas = respostas or {}
 
     async def chamar(
@@ -73,8 +74,11 @@ class ClienteFalso:
         token_interno: str,
         traceparent: str | None = None,
         grant_id: str | None = None,
+        tool: str | None = None,
     ) -> Any:
         self.grants_recebidos.append(grant_id)
+        # A tool que pediu a chamada: é ela que a trilha de auditoria mostra.
+        self.tools_recebidas.append(tool)
         self.chamadas.append((metodo, requisicao, token_interno))
         if metodo in self.respostas:
             return self.respostas[metodo]
@@ -102,12 +106,17 @@ class MetricasFalsas:
     def __init__(self) -> None:
         self.execucoes: list[tuple[str, str]] = []
         self.negacoes: list[tuple[str, str]] = []
+        self.categorias: list[str] = []
 
-    def tool_executada(self, tool: str, resultado: str, duracao_s: float) -> None:
+    def tool_executada(
+        self, tool: str, resultado: str, duracao_s: float, categoria: str = ""
+    ) -> None:
         self.execucoes.append((tool, resultado))
+        self.categorias.append(categoria)
 
-    def negada(self, tool: str, motivo: str) -> None:
+    def negada(self, tool: str, motivo: str, categoria: str = "") -> None:
         self.negacoes.append((tool, motivo))
+        self.categorias.append(categoria)
 
 
 @pytest.fixture

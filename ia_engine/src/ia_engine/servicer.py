@@ -89,6 +89,7 @@ from ia_engine.features.transcribe import (
 from ia_engine.llm.embeddings_factory import build_embeddings
 from ia_engine.llm.provider_factory import build_chat_model
 from ia_engine.shared.history import ChatTurnTuple
+from ia_engine.telemetry import observar_rpc
 
 ChatModelFactory = Callable[[LlmProviderSpec], BaseChatModel]
 EmbeddingsFactory = Callable[[LlmProviderSpec], Embeddings]
@@ -114,6 +115,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
         self._config_cache = config_cache
 
     # ---------------------------------------------------------------- RPCs
+    @observar_rpc("Transcribe", "ia.transcrever")
     async def Transcribe(
         self, request: pb.TranscribeRequest, context: grpc.aio.ServicerContext
     ) -> pb.TranscribeResponse:
@@ -154,6 +156,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
             case _:  # pragma: no cover - provado pelo mypy
                 assert_never(result)
 
+    @observar_rpc("InterpretMedia", "ia.interpretar_midia")
     async def InterpretMedia(
         self,
         request: pb.InterpretMediaRequest,
@@ -192,6 +195,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
             case _:  # pragma: no cover - provado pelo mypy
                 assert_never(result)
 
+    @observar_rpc("Analyse", "ia.analisar")
     async def Analyse(
         self, request: pb.AnalyseRequest, context: grpc.aio.ServicerContext
     ) -> pb.AnalyseResponse:
@@ -231,6 +235,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
             case _:  # pragma: no cover - provado pelo mypy
                 assert_never(result)
 
+    @observar_rpc("Embed", "ia.rag.embed")
     async def Embed(
         self, request: pb.EmbedRequest, context: grpc.aio.ServicerContext
     ) -> pb.EmbedResponse:
@@ -263,6 +268,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
             case _:  # pragma: no cover - provado pelo mypy
                 assert_never(result)
 
+    @observar_rpc("Responder", "ia.responder")
     async def Responder(
         self, request: pb.ResponderRequest, context: grpc.aio.ServicerContext
     ) -> pb.ResponderResponse:
@@ -336,6 +342,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
             case _:  # pragma: no cover - provado pelo mypy
                 assert_never(result)
 
+    @observar_rpc("Sentimento", "ia.sentimento")
     async def Sentimento(
         self, request: pb.SentimentoRequest, context: grpc.aio.ServicerContext
     ) -> pb.SentimentoResponse:
@@ -374,6 +381,7 @@ class IaEngineServicer(pbg.IaEngineServiceServicer):
             case _:  # pragma: no cover - provado pelo mypy
                 assert_never(result)
 
+    @observar_rpc("ExtrairTextoDocumento", "ia.extrair_texto")
     async def ExtrairTextoDocumento(
         self,
         request: pb.ExtrairTextoDocumentoRequest,
