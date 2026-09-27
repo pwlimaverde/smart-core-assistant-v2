@@ -92,7 +92,9 @@ jobs:
           DATABASE_URL: postgres://postgres:postgres@localhost:5434/smartcore_v2
         run: |
           cargo sqlx migrate run --source crates/infrastructure_postgres/migrations
-          cargo sqlx prepare --workspace
+          # `--all-targets`: sem ele o cache perde as consultas dos testes de
+          # integração (tests/), e o CI — que compila os testes offline — quebra.
+          cargo sqlx prepare --workspace -- --all-targets
 
       - name: Commit do cache
         run: |
